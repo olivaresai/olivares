@@ -45,7 +45,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const LOCALES = ['en', 'es', 'de', 'fr', 'it', 'ja', 'ru', 'zh', 'ko']
+const LOCALES = ['en', 'es', 'de', 'fr', 'it', 'ja', 'ru', 'zh', 'ko', 'uk', 'pt']
 // Shorter than this is a field name or a fragment, not a notice to a reader.
 const MIN_DISCLAIMER_LENGTH = 20
 

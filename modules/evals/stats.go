@@ -4,7 +4,10 @@
 
 package evals
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 // This file is the statistics layer adds (docs/EVAL-METHODOLOGY.md): closed-form
 // 95% confidence intervals for the scorecard/run aggregates, and the judge↔human
@@ -251,4 +254,49 @@ func pearson(x, y []float64) (r float64, ok bool) {
 		return 0, false
 	}
 	return sxy / math.Sqrt(sxx*syy), true
+}
+
+// TrialReliability reports empirical case success across independent trials.
+// Each interval uses cases as the denominator, rather than treating correlated
+// attempts on the same case as independent observations.
+type TrialReliability struct {
+	PassAt1    float64 `json:"pass_at_1"`
+	PassAtK    float64 `json:"pass_at_k"`
+	PassPowK   float64 `json:"pass_pow_k"`
+	PassAt1CI  *ciDTO  `json:"pass_at_1_ci"`
+	PassAtKCI  *ciDTO  `json:"pass_at_k_ci"`
+	PassPowKCI *ciDTO  `json:"pass_pow_k_ci"`
+}
+
+// SummarizeTrials takes one complete vector of case verdicts per trial, with
+// cases in the same order. Missing or unscored attempts must be false.
+func SummarizeTrials(trials [][]bool) (TrialReliability, error) {
+	if len(trials) == 0 || len(trials[0]) == 0 {
+		return TrialReliability{}, fmt.Errorf("evals: no trial results")
+	}
+	n := len(trials[0])
+	for _, trial := range trials {
+		if len(trial) != n {
+			return TrialReliability{}, fmt.Errorf("evals: incomplete trial results")
+		}
+	}
+	first, anyTrial, allTrials := 0, 0, 0
+	for i := 0; i < n; i++ {
+		if trials[0][i] {
+			first++
+		}
+		anyPassed, allPassed := false, true
+		for _, trial := range trials {
+			anyPassed = anyPassed || trial[i]
+			allPassed = allPassed && trial[i]
+		}
+		if anyPassed {
+			anyTrial++
+		}
+		if allPassed {
+			allTrials++
+		}
+	}
+	return TrialReliability{PassAt1: float64(first) / float64(n), PassAtK: float64(anyTrial) / float64(n), PassPowK: float64(allTrials) / float64(n),
+		PassAt1CI: passRateCI(first, n), PassAtKCI: passRateCI(anyTrial, n), PassPowKCI: passRateCI(allTrials, n)}, nil
 }

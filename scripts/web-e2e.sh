@@ -192,6 +192,7 @@ OTROS_RUNNERS=(
   "e2e/demo-graph.spec.ts"      # scripts/web-e2e-demo.sh — grafo y deriva sobre estate demo
   "e2e/docs-captures.spec.ts"   # scripts/docs-captures.sh — siembra el estate y captura
   "e2e/launch-states.spec.ts"   # scripts/launch-state-captures.sh — MUTA el estate, va al final
+  "e2e/console-keyboard-actions.spec.ts" # scripts/web-e2e-demo.sh — acciones de teclado sobre estate demo
 )
 for _o in "${OTROS_RUNNERS[@]}"; do
   [ -f "$ROOT/web/$_o" ] || { echo "web-e2e: COULD NOT LOOK: the exclusion names $_o, which does not exist" >&2; exit 2; }

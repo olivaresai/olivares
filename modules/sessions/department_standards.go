@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -52,13 +53,21 @@ type DepartmentAssignments interface {
 	AssignedTo(ctx context.Context, tenant model.TenantID, principal auth.Principal, departments []string, kind string) ([]string, error)
 	IsAssigned(ctx context.Context, tenant model.TenantID, template string) (bool, error)
 	DepartmentExists(ctx context.Context, tenant model.TenantID, department string) (bool, error)
+	// ADRFolder is the folder the department points its instructions at, "" when it names none.
+	// A setting that is not text is ErrADRFolderNotText.
+	ADRFolder(ctx context.Context, tenant model.TenantID, department string) (string, error)
 }
+
+// ErrADRFolderNotText is the ADRFolder answer for a department whose adr_folder setting holds
+// something other than text: the launch is refused (422) naming the setting.
+var ErrADRFolderNotText = errors.New("sessions: the adr_folder setting is not text")
 
 // The assignment kinds AssignedTo is asked about; they are the source types the assignments are
 // stored under.
 const (
 	assignedInstructions = "instructions"
 	assignedTemplate     = "template"
+	assignedRequired     = "required-template" // the templates assigned as mandatory, a subset of assignedTemplate
 )
 
 // maxDepartmentInstructions bounds the composed instructions a launch passes the tool as one
@@ -112,11 +121,33 @@ func (m *Module) errStandardsUnreadable(err error) error {
 	return &runErr{http.StatusServiceUnavailable, "department standards could not be read"}
 }
 
-// applyDepartmentDefaultTemplate names the default template of the caller's standing on a
-// launch that names none and is not a resume (a resume re-reads the template its run was
-// launched under). It reports whether it did, so a refusal can say where the template came from.
+// applyDepartmentDefaultTemplate names the template of the caller's standing on a launch that
+// names none and is not a resume (a resume re-reads the template its run was launched under):
+// the mandatory one when a department or group requires one, else the default. A launch that
+// names a template other than the mandatory one is refused (422): a department that requires a
+// template does not let a launch leave it. It reports whether it named the template, so a
+// refusal can say where the template came from.
 func (m *Module) applyDepartmentDefaultTemplate(ctx context.Context, tenant model.TenantID, p *CreateRunParams, st *launchStanding) (bool, error) {
-	if st == nil || p.resuming || strings.TrimSpace(p.TemplateID) != "" {
+	if st == nil || p.resuming {
+		return false, nil
+	}
+	named := strings.TrimSpace(p.TemplateID)
+	required, err := m.rt.Standards.AssignedTo(ctx, tenant, st.principal, st.departments, assignedRequired)
+	if err != nil {
+		return false, m.errStandardsUnreadable(err)
+	}
+	if len(required) > 0 {
+		// The outermost requirement governs (parents, then the department, then groups): imposing a
+		// requirement asks nobody, so a nearer one must not replace one farther out.
+		must := required[0]
+		if named != "" && named != must {
+			return false, &runErr{http.StatusUnprocessableEntity, st.label() + " requires the session template " + must +
+				"; launch without naming a template, or name that one"}
+		}
+		p.TemplateID = must
+		return named == "", nil
+	}
+	if named != "" {
 		return false, nil
 	}
 	refs, err := m.rt.Standards.AssignedTo(ctx, tenant, st.principal, st.departments, assignedTemplate)
@@ -189,6 +220,13 @@ func (m *Module) applyDepartmentInstructions(ctx context.Context, tenant model.T
 	if text == "" {
 		return nil
 	}
+	if !fromRun { // a resume re-reads its templates, which is all a run records
+		adr, err := m.adrPointers(ctx, tenant, st.departments)
+		if err != nil {
+			return err
+		}
+		text += adr
+	}
 	if own := p.Instructions; own != "" {
 		text += "\n" + own // the text ends with a newline: a blank line between the two
 	}
@@ -222,7 +260,50 @@ func (m *Module) DepartmentInstructions(ctx context.Context, tenant model.Tenant
 		return "", m.errStandardsUnreadable(err)
 	}
 	text, _, err := m.composeInstructions(ctx, tenant, st.label(), refs, false)
-	return text, err
+	if err != nil || text == "" {
+		return text, err
+	}
+	adr, err := m.adrPointers(ctx, tenant, st.departments)
+	return text + adr, err
+}
+
+// maxADRFolder bounds the folder a department points its instructions at.
+const maxADRFolder = 256
+
+// unfitForAPromptLine is a character that cannot sit in one visible line of a prompt: a backtick
+// (it ends the code span the folder is put in), a control character, a line or paragraph
+// separator (U+2028, U+2029), and a format character (a bidi override, a zero-width space).
+func unfitForAPromptLine(r rune) bool {
+	return r == '`' || unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf)
+}
+
+// adrPointers is the section of each department that names the folder of its architecture
+// decision records (the department's adr_folder setting), in the order of departments, each
+// ahead of a blank line; "" when none does. It follows the instructions it belongs to, in a
+// launch and in the department's file alike. The folder is text an administrator typed into a
+// setting and is put into a prompt, so it must be one visible line, without a backtick.
+func (m *Module) adrPointers(ctx context.Context, tenant model.TenantID, departments []string) (string, error) {
+	var out strings.Builder
+	for _, department := range departments {
+		folder, err := m.rt.Standards.ADRFolder(ctx, tenant, department)
+		if errors.Is(err, ErrADRFolderNotText) {
+			return "", &runErr{http.StatusUnprocessableEntity, "the adr_folder setting of department " + department + " must be text"}
+		}
+		if err != nil {
+			return "", m.errStandardsUnreadable(err)
+		}
+		folder = strings.TrimSpace(folder)
+		if folder == "" {
+			continue
+		}
+		if len(folder) > maxADRFolder || strings.ContainsFunc(folder, unfitForAPromptLine) {
+			return "", &runErr{http.StatusUnprocessableEntity, "the adr_folder setting of department " + department +
+				" must be one line of at most " + strconv.Itoa(maxADRFolder) + " bytes without a backtick or an invisible character"}
+		}
+		out.WriteString("\n# Architecture decisions of " + department + "\n\nThe decisions of this department are recorded in `" +
+			folder + "`. Read them before changing a design.\n")
+	}
+	return out.String(), nil
 }
 
 // composeInstructions is the text of the assigned instruction templates, each under a heading

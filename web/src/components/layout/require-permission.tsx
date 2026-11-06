@@ -11,8 +11,12 @@ import { useRouteAccess } from '@/features/navigation/authorization'
 import { viewLabel } from '@/features/navigation/model'
 import { PermittedVisit } from '@/features/navigation/permitted-visit'
 import type { FeatureView } from '@/features/registry'
+import { useAuth } from '@/lib/auth/context'
+import { cn } from '@/lib/utils'
 import { useModuleEnabled } from '@/stores/modules'
 import { ModuleOffPage } from './module-off-page'
+import { frameFor } from './page-frames'
+import { SystemAdminOnly } from './system-admin-only'
 // ⛔ THE MODULE THAT TRANSLATES REGISTERS ITS NAMESPACE. This gate renders four
 //    `communications:capability.*` sentences and never loaded their bundle, so in a chunk
 //    that had not already pulled the feature in they resolved to raw dotted keys — the
@@ -78,7 +82,7 @@ export function RequirePermission({
     access.kind === 'permitted' ? null : access.kind === 'checking' ? (
       <CheckingNotice />
     ) : access.kind === 'forbidden' ? (
-      <ForbiddenNotice />
+      <ForbiddenNotice systemOnly={view.permission === 'system:admin'} />
     ) : access.globalAccount ? (
       <GlobalAccountNotice />
     ) : (
@@ -99,6 +103,7 @@ export function RequirePermission({
       </>
     ) : (
       <>
+        <ReadOnlyNotice view={view} />
         {children}
         <PermittedVisit id={view.id} />
       </>
@@ -109,6 +114,25 @@ export function RequirePermission({
     </Continuity>
   ) : (
     body
+  )
+}
+
+/** One plain sentence above a page this person may read and holds nothing to change. */
+function ReadOnlyNotice({ view }: { view: FeatureView }) {
+  const { t } = useTranslation('nav')
+  const { can } = useAuth()
+  if (!view.changes || view.changes.some((c) => can(c.permission))) return null
+  return (
+    <p
+      data-slot="read-only-notice"
+      className={cn(
+        'shrink-0 text-caption text-muted-foreground',
+        // The work frame carries no padding of its own (page-frames.tsx).
+        frameFor(view.path) === 'work' ? 'px-4 py-2' : 'pt-1 pb-3',
+      )}
+    >
+      {t('readOnlyNotice')}
+    </p>
   )
 }
 
@@ -131,8 +155,11 @@ function CheckingNotice() {
 }
 
 /** The one case that may be shown as a refusal: the engine decided and said so. */
-function ForbiddenNotice() {
+function ForbiddenNotice({ systemOnly }: { systemOnly: boolean }) {
   const { t } = useTranslation('errors')
+  // The system-administrator notice is the same banner under the page heading everywhere;
+  // only the generic refusal is a centered state of its own.
+  if (systemOnly) return <SystemAdminOnly />
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <ForbiddenState

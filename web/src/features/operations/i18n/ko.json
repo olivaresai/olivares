@@ -1,0 +1,80 @@
+{
+  "title": "호스트와 세션",
+  "subtitle": "호스트와 디스크, 실행 중인 세션, 그리고 사용량.",
+  "range": {
+    "label": "기간",
+    "24h": "24시간",
+    "7d": "7일",
+    "30d": "30일"
+  },
+  "host": {
+    "heading": "호스트",
+    "keeps24": "호스트는 24시간의 기록을 보관하므로 차트는 최근 24시간을 보여 줍니다.",
+    "unavailable": "이 호스트에서는 호스트 지표를 사용할 수 없습니다. Linux만 보고합니다.",
+    "noHistory": "호스트가 아직 샘플을 기록하지 않았습니다.",
+    "noFilesystems": "크기를 보고한 파일 시스템이 없습니다.",
+    "noFolders": "세션 폴더가 없습니다.",
+    "facts": {
+      "load": "부하 {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "메모리 {{used}} / {{total}}",
+      "swap": "스왑 {{used}} / {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "최근 24시간의 CPU 사용률: 현재 {{now}}, 최고 {{peak}}, 평균 {{average}}."
+    },
+    "memory": {
+      "title": "메모리",
+      "total": "전체",
+      "summary": "최근 24시간의 메모리 사용량: 현재 {{total}} 중 {{used}}, 최고 {{peak}}."
+    },
+    "disks": {
+      "title": "파일 시스템",
+      "summary_other": "파일 시스템 {{count}}개. 가장 많이 찬 곳은 {{mount}}이며 {{pct}} 사용 중입니다."
+    },
+    "folders": {
+      "title": "세션 폴더",
+      "summary_other": "세션 폴더 {{count}}개가 {{total}}을(를) 사용합니다. 가장 큰 폴더는 {{largest}}({{size}})입니다.",
+      "floor": "측정이 한계에서 멈췄으므로 크기는 최솟값입니다."
+    },
+    "columns": {
+      "time": "시간",
+      "cpu": "CPU 사용률",
+      "memory": "메모리 사용량",
+      "swap": "스왑 사용량",
+      "mount": "마운트 위치",
+      "device": "장치",
+      "type": "유형",
+      "used": "사용",
+      "size": "크기",
+      "usedPercent": "사용률",
+      "folder": "폴더"
+    }
+  },
+  "live": {
+    "heading": "실행 중인 세션",
+    "loading": "실행 중인 세션을 읽는 중…",
+    "error": "실행 중인 세션을 읽을 수 없습니다.",
+    "none": "실행 중인 세션이 없습니다.",
+    "more": "목록이 잘렸습니다. 여기서 센 것보다 많은 세션이 열려 있으므로 개수는 최솟값입니다.",
+    "automation": "자동화",
+    "unknown": "기록 없음",
+    "columns": {
+      "tool": "도구",
+      "person": "사람",
+      "sessions": "세션"
+    },
+    "byTool": {
+      "title": "도구별 실행 중인 세션",
+      "summary_other": "도구별 실행 중인 세션 {{count}}개: {{list}}."
+    },
+    "byPerson": {
+      "title": "사람별 실행 중인 세션",
+      "summary_other": "사람별 실행 중인 세션 {{count}}개: {{list}}."
+    }
+  },
+  "usage": {
+    "heading": "사용량"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "title": "Beobachtbarkeit & Interoperabilität",
-  "description": "Standardbasierte Erfassungszustände und Hauptbuch-korrelierte Trace-Detailanalyse. Die Kennzahlen gelten engine-weit (prozessglobal), nicht pro Mandant; Standards sind auf die Versionen und Reifegrade festgelegt, die die zuständigen Gremien deklarieren.",
+  "description": "Zustand der Telemetrie-Annahme und Traces.",
   "tabs": {
     "ingestion": "Erfassungszustand",
     "traces": "Trace-Detailanalyse"
@@ -76,7 +76,7 @@
     "listTitle": "Aktuelle Traces",
     "listDescription": "Wählen Sie einen Trace aus, um seine aus dem Hauptbuch abgeleitete Span-Ansicht zu öffnen.",
     "empty": "Keine Traces",
-    "emptyHint": "Kein Audit-Hauptbuch-Ereignis im Auswertungsfenster (letzte 20.000 Ereignisse) trägt eine W3C-Trace-ID — die Aufrufer propagieren keinen traceparent, oder das Fenster ist über sie hinweggerollt.",
+    "emptyHint": "Traces erscheinen hier, sobald Werkzeuge mit ihren Anfragen eine Trace-ID senden.",
     "noResults": "Keine Traces entsprechen der Suche.",
     "filterNoResults": "Keine Traces entsprechen den aktiven Filtern.",
     "searchPlaceholder": "Nach Trace-ID suchen…",

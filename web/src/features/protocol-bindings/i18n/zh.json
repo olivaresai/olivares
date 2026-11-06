@@ -1,6 +1,6 @@
 {
   "title": "协议绑定",
-  "subtitle": "编排、检查并协调受治理的 A2A 和 MCP 绑定，不把不可用的证据当作成功。",
+  "subtitle": "组合、检查和协调 A2A 与 MCP 绑定。",
   "actions": {
     "newDraft": "新建草稿",
     "refresh": "刷新",

@@ -45,16 +45,19 @@ var corePermissions = map[string]string{
 	"getTOTPPolicy": "system:admin",
 	"setTOTPPolicy": "system:admin",
 	// Administrative step-up policy (handlers_stepup_policy.go: authzSystem system:admin).
-	"getStepUpPolicy":   "system:admin",
-	"setStepUpPolicy":   "system:admin",
-	"getUserTOTPStatus": "membership:read",
-	"resetUserTOTP":     string(auth.PermAuthenticatorWrite),
+	"getConsoleExposure": "system:admin",
+	"setConsoleExposure": "system:admin",
+	"getStepUpPolicy":    "system:admin",
+	"setStepUpPolicy":    "system:admin",
+	"getUserTOTPStatus":  "membership:read",
+	"resetUserTOTP":      string(auth.PermAuthenticatorWrite),
 	// Deployment tracing choices (server.go: systemRoute("system:admin"); the PUT
 	// additionally requires the configured step-up inside the handler).
 	"getSessionIdleSettings":  "system:admin",
 	"saveSessionIdleSettings": "system:admin",
 	"getTracingSettings":      "system:admin",
 	"saveTracingSettings":     "system:admin",
+	"getHostStatus":           "system:admin",
 	// Agents + access graph (handlers_core.go).
 	"listAgents":      "agent:read",
 	"getAgent":        "agent:read",
@@ -240,6 +243,8 @@ var corePermissionExempt = map[string]bool{
 	"deleteWebAuthnCredential":    true,
 	"getPIVStatus":                true,
 	"elevatePIV":                  true,
+	// Any authenticated operator can report a failed view; the engine decides whether telemetry is on.
+	"reportConsoleError": true,
 }
 
 // stampCorePermissions walks the built paths object and stamps

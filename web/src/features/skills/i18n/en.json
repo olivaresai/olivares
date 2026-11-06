@@ -103,6 +103,31 @@
     "acts": "{{skill}} now acts when loaded: {{items}}. Assigning it needs your approval.",
     "pinsKeep": "Existing assignments keep their revision until you move each one with “Use latest”.",
     "apply": "Apply this update",
-    "applied": "Update published as revision {{n}}"
+    "applied": "Update published as revision {{n}}",
+    "checked": "Checked",
+    "noDiff": "No text diff is available."
+  },
+  "catalog": {
+    "skills": "Skills",
+    "packs": "Packs",
+    "name": "Name",
+    "description": "Description",
+    "kind": "Kind",
+    "search": "Search names and descriptions",
+    "unassigned": "Not assigned",
+    "loading": "Loading…",
+    "incomplete": "Some revisions are not loaded; assignments may be incomplete.",
+    "skill": "Skill",
+    "agent": "Agent",
+    "command": "Command",
+    "rule": "Rule"
+  },
+  "selection": {
+    "loading": "Checking skills…",
+    "count_one": "This session gets {{count}} skill",
+    "count_other": "This session gets {{count}} skills",
+    "current_one": "Currently assigned: {{count}} skill",
+    "current_other": "Currently assigned: {{count}} skills",
+    "unavailable": "Skills could not be resolved for this department."
   }
 }

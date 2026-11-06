@@ -9,13 +9,13 @@ import {
   memo,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react'
-import type { TFunction } from 'i18next'
-import { Quote } from 'lucide-react'
+import { ArrowDown, Quote, GitFork } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useTranslation } from 'react-i18next'
@@ -23,18 +23,20 @@ import { agentOpsKeys } from '@/features/agentops/api'
 import { MessageImages } from '@/features/agentops/attachment-ui'
 import { readAttachPage, useRunAttach } from '@/features/agentops/attach'
 import { readsNativeRecord } from '@/features/agentops/provider-contract'
-import { modelName } from '@/features/agentops/model-name'
+import { useModelName } from '@/features/agentops/model-choices'
 import { useTurnInterrupt } from '@/features/agentops/turn-interrupt'
 import type { AttachFrame, RunDTO } from '@/features/agentops/types'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Button } from '@/components/ui/button'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
+import { forkContext } from './session-context'
+import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
 import {
   readSessionDraft,
   sessionDraftKey,
   writeSessionDraft,
 } from '@/lib/session-drafts'
-import { formatDuration, formatInt } from '@/lib/format'
 import { isTypingTarget } from '@/lib/keybindings/model'
 import '@/features/shared/i18n'
 import { cn } from '@/lib/utils'
@@ -51,12 +53,12 @@ import { ConversationApproval } from './conversation-approval'
 import { ConversationCard, ConversationTaskList } from './conversation-cards'
 import { systemFailed, systemText } from './conversation-text'
 import {
-  InspectButton,
   isRunning,
   KeyboardInspect,
   openOnWords,
   threadParts,
   type Part,
+  TurnRow,
   WorkRow,
 } from './conversation-work'
 import { MarkdownText } from './markdown-text'
@@ -91,23 +93,6 @@ const VIRTUAL_FROM = 500
 const ROW_ESTIMATE_PX = 64
 const TAIL_ROWS = 40
 
-/** How an ACP turn stopped, in words; an outcome this console does not know is shown as
- * the agent sent it. */
-function stopText(t: TFunction, reason: string): string {
-  switch (reason) {
-    case 'cancelled':
-      return t('conversation.stop.cancelled')
-    case 'refusal':
-      return t('conversation.stop.refusal')
-    case 'max_tokens':
-      return t('conversation.stop.maxTokens')
-    case 'max_turn_requests':
-      return t('conversation.stop.maxTurnRequests')
-    default:
-      return reason
-  }
-}
-
 export function SessionConversation(
   props: Parameters<typeof ConversationBody>[0],
 ) {
@@ -126,6 +111,7 @@ function ConversationBody({
   selectedId,
   onInspect,
   onFolder,
+  onUnknownFrames,
   onModel,
   composerId,
 }: {
@@ -134,12 +120,15 @@ function ConversationBody({
   onInspect?: (item: ConversationItem) => void
   /** The folder the tool's own first frame names, for the Context pane to say. */
   onFolder?: (cwd: string | null) => void
+  /** The raw frames this console does not read, for Details › Technical details. */
+  onUnknownFrames?: (frames: readonly string[]) => void
   /** The model the session's own turns run on now, for the header to say. */
   onModel?: (model: string | null) => void
   /** The work surface's own field; a preview without a composer only offers copying. */
   composerId?: string
 }) {
   const { t } = useTranslation('sessions')
+  const modelName = useModelName(run.provider_profile_ref)
   const { t: tShared } = useTranslation('shared')
   // The frames read here: the settled ones, folded once into the base, and the newest, folded on every frame.
   const [read, setRead] = useState<{
@@ -274,6 +263,35 @@ function ConversationBody({
       ).filter((item) => item.systemKind !== 'protocol' && !isQuiet(item)),
     [frames, restored],
   )
+  const contextItems = useRef(items)
+  useLayoutEffect(() => {
+    contextItems.current = items
+  }, [items])
+  const fork = useCallback(
+    (end: string) => {
+      if (
+        useSessionStore.getState().credentialGeneration !== generation ||
+        useTenantStore.getState().activeTenant !== tenant
+      )
+        return
+      try {
+        if (earlier || dropped) throw new Error('incomplete context')
+        const message = forkContext(run.run_ref, contextItems.current, end)
+        useNewSessionDialog.getState().openAdvanced({
+          message,
+          workspaceRef: run.workspace_ref,
+          profileRef: run.provider_profile_ref,
+          driver: run.provider_driver,
+          model: run.model_ref,
+          effort: run.effort,
+          runOn: run.run_on,
+        })
+      } catch {
+        toast.error(t('context.readFailed'))
+      }
+    },
+    [run, generation, tenant, earlier, dropped, t],
+  )
   // The first message the console sent, until the tool shows it itself.
   const sent = useRunSentTurns(run.run_ref)
   const { pending, echoed } = useMemo(
@@ -285,16 +303,40 @@ function ConversationBody({
     onFolder?.(frameCwd ?? null)
     return () => onFolder?.(null)
   }, [frameCwd, onFolder])
+  // A frame this console does not read is no row: its raw text goes to Details › Technical
+  // details, told once per change and not once per frame.
+  const unknownKey = useMemo(
+    () =>
+      JSON.stringify(
+        items
+          .filter((item) => item.kind === 'unknown')
+          .map((item) => item.raw.join('\n')),
+      ),
+    [items],
+  )
+  const unknownFrames = useMemo(
+    () => JSON.parse(unknownKey) as string[],
+    [unknownKey],
+  )
+  useEffect(() => {
+    onUnknownFrames?.(unknownFrames)
+    return () => onUnknownFrames?.([])
+  }, [unknownFrames, onUnknownFrames])
   const frameModel = conversationModel(items)
   useEffect(() => {
     onModel?.(frameModel ?? null)
     return () => onModel?.(null)
   }, [frameModel, onModel])
 
+  // Where the console last put or saw the view: a scroll event that finds it there was not
+  // the person's (onScroll).
+  const topRef = useRef(0)
   useEffect(() => {
     if (!autoscroll) return
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    topRef.current = el.scrollTop
   }, [items, autoscroll])
   // WHAT GROWS AFTER A FRAME is followed too: the request card that loads after the
   // transcript, a block opened at the end. Only while the person follows the end.
@@ -306,6 +348,7 @@ function ConversationBody({
       return
     const follow = new ResizeObserver(() => {
       el.scrollTop = el.scrollHeight
+      topRef.current = el.scrollTop
     })
     follow.observe(column)
     return () => follow.disconnect()
@@ -360,11 +403,23 @@ function ConversationBody({
     }
   }
 
+  // Back to the end, and following it again (T3's "Scroll to end").
+  const jumpToLatest = useCallback(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+    setAutoscroll(true)
+  }, [])
+
   const onScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24
-    setAutoscroll(atBottom)
+    // The event of the console's own scroll to the end comes a frame later; a row measured
+    // in that frame puts the end below the view without moving it. Only a view that moved
+    // leaves the end, and the follow then catches the row up.
+    const moved = el.scrollTop !== topRef.current
+    topRef.current = el.scrollTop
+    if (atBottom || moved) setAutoscroll(atBottom)
   }, [])
 
   // The message index is read again when the person has sent another message, not on
@@ -417,11 +472,19 @@ function ConversationBody({
   const tasks = useConversationTasks(run, tenant)
   const authoritativeTodos = !tasks.isError && tasks.data?.transcript === 'read'
   const parts = useMemo(
-    () => threadParts(items, authoritativeTodos),
+    () =>
+      threadParts(
+        items.filter((item) => item.kind !== 'unknown'),
+        authoritativeTodos,
+      ),
     [items, authoritativeTodos],
   )
   const live = isLiveRun(run) && !ended
   const last = parts[parts.length - 1]
+  const lastReplyId = parts.findLast(
+    (part): part is Extract<Part, { kind: 'item' }> =>
+      part.kind === 'item' && part.item.kind === 'assistant',
+  )?.item.id
   const runningNow =
     live && last?.kind === 'work' ? last.items.filter(isRunning) : []
   const turn = useTurnInterrupt(run)
@@ -451,19 +514,28 @@ function ConversationBody({
     // A row is never 0 px tall in a browser; a document without layout (a test) measures every one at 0, and
     // the estimate keeps the window to what a screen holds there too.
     measureElement: (el) =>
-      el.getBoundingClientRect().height || ROW_ESTIMATE_PX,
+      Math.round(el.getBoundingClientRect().height) || ROW_ESTIMATE_PX,
   })
-  const windowRows = virtual ? virtualizer.getVirtualItems() : []
+  const windowRows = virtualizer.getVirtualItems()
   // Until the scroller has a size (its first measure; a document without layout never has one), the window is the
   // end of the thread: what following the end shows.
   const tail = virtual && windowRows.length === 0
-  const shown = !virtual
-    ? parts.map((_, index) => index)
+  // The default virtual range is contiguous. Keep its indices stable when a measurement
+  // changes positions but not the rows: measuring again on that render feeds back into React.
+  const firstShown = !virtual
+    ? 0
     : tail
-      ? parts
-          .slice(-TAIL_ROWS)
-          .map((_, k) => parts.length - Math.min(parts.length, TAIL_ROWS) + k)
-      : windowRows.map((row) => row.index)
+      ? Math.max(0, parts.length - TAIL_ROWS)
+      : (windowRows[0]?.index ?? 0)
+  const shownCount = !virtual
+    ? parts.length
+    : tail
+      ? Math.min(parts.length, TAIL_ROWS)
+      : windowRows.length
+  const shown = useMemo(
+    () => Array.from({ length: shownCount }, (_, index) => firstShown + index),
+    [firstShown, shownCount],
+  )
   const lastRow = windowRows[windowRows.length - 1]
   const padTop = windowRows[0]
     ? Math.max(0, windowRows[0].start - listTop - 4)
@@ -482,23 +554,33 @@ function ConversationBody({
       scroller.getBoundingClientRect().top +
       scroller.scrollTop
     if (Math.abs(top - listTop) > 1) setListTop(top)
-    let k = 0
-    for (const el of Array.from(list.children)) {
-      if (!(el instanceof HTMLElement) || el.dataset.spacer !== undefined)
-        continue
-      const index = shown[k++]
-      if (index === undefined) break
-      el.dataset.index = String(index)
-      virtualizer.measureElement(el)
-    }
-  }, [virtual, listTop, shown, virtualizer])
+  }, [virtual, listTop, parts, earlier, paging, status, windowRows])
+  useLayoutEffect(() => {
+    const list = listRef.current
+    if (!virtual || !list) return
+    // A measure can update the window: never re-enter React's layout commit.
+    const frame = requestAnimationFrame(() => {
+      let k = 0
+      for (const el of Array.from(list.children)) {
+        if (!(el instanceof HTMLElement) || el.dataset.spacer !== undefined)
+          continue
+        const index = shown[k++]
+        if (index === undefined) break
+        el.dataset.index = String(index)
+        virtualizer.measureElement(el)
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [virtual, shown, virtualizer, parts])
   useLayoutEffect(() => {
     revealRef.current = async (itemId: string) => {
       if (!virtual) return
       const index = parts.findIndex((part) =>
         part.kind === 'work'
           ? part.items.some((item) => item.id === itemId)
-          : part.item.id === itemId,
+          : part.item.id === itemId ||
+            (part.kind === 'turn' &&
+              part.items.some((item) => item.id === itemId)),
       )
       if (index < 0) return
       virtualizer.scrollToIndex(index, { align: 'center' })
@@ -530,7 +612,7 @@ function ConversationBody({
   return (
     <div
       ref={rootRef}
-      className="flex min-h-0 flex-1 flex-col gap-2"
+      className="group/conv relative flex min-h-0 flex-1 flex-col gap-2"
       data-testid="session-conversation"
     >
       {dropped > 0 ? (
@@ -546,19 +628,21 @@ function ConversationBody({
           tabIndex={0}
           role="log"
           aria-label={t('conversation.log')}
-          className="min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
+          // A virtual list keeps the view in place itself when a row above it changes size;
+          // the browser's scroll anchoring doing it too moved the view back and forth every
+          // frame at some positions (#4128). A short list keeps the browser's.
+          className={cn(
+            'relative min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
+            virtual && '[overflow-anchor:none]',
+          )}
         >
           {/* ONE CENTERED COLUMN, 760 px: the transcript is read, not scanned, and a line
             longer than that is a line nobody follows. */}
-          {/* While the rail shows, the column keeps clear of it: a message's Copy sits at
-              its right edge on a narrow pane. */}
+          {/* The rail of marks sits in the column's left padding: the column keeps its width. */}
           <div
             ref={columnRef}
             data-slot="conversation-column"
-            className={cn(
-              'mx-auto w-full max-w-[760px] px-4 py-4',
-              messages.available && messages.marks.length > 0 && 'pe-12',
-            )}
+            className="mx-auto w-full max-w-[760px] px-4 py-4"
           >
             {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
               already read stay on the page. Without it a stale transcript reads as a
@@ -622,6 +706,23 @@ function ConversationBody({
                           .some((later) => later.kind === 'operator')
                       }
                     />
+                  ) : part.kind === 'turn' ? (
+                    <TurnRow
+                      key={part.item.id}
+                      item={part.item}
+                      items={part.items}
+                      nested={part.nested}
+                      runRef={run.run_ref}
+                      selectedId={selectedId}
+                      onInspect={onInspect}
+                      onFork={
+                        canQuote && can('sessions:run:output')
+                          ? fork
+                          : undefined
+                      }
+                      modelName={modelName}
+                      live={live}
+                    />
                   ) : part.kind === 'work' ? (
                     <WorkRow
                       key={`work-${part.items[0]!.id}`}
@@ -636,12 +737,19 @@ function ConversationBody({
                     />
                   ) : (
                     <ConversationRow
+                      modelName={modelName}
                       key={part.item.id}
                       item={part.item}
                       runRef={run.run_ref}
                       selected={selectedId === part.item.id}
                       onInspect={onInspect}
+                      onFork={
+                        canQuote && can('sessions:run:output')
+                          ? fork
+                          : undefined
+                      }
                       onQuote={quote}
+                      lastReply={part.item.id === lastReplyId}
                     />
                   )
                 })}
@@ -666,6 +774,16 @@ function ConversationBody({
             <ConversationApproval run={run} />
           </div>
         </div>
+        {autoscroll ? null : (
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-surface px-3 py-1 text-caption text-text-2 shadow-sm outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+          >
+            <ArrowDown aria-hidden className="size-3.5" />
+            {t('conversation.jumpToLatest')}
+          </button>
+        )}
         <MessageRail nav={messages} />
       </div>
       {ended ? (
@@ -690,17 +808,24 @@ function interrupts(e: KeyboardEvent): boolean {
 }
 
 function ConversationRowView({
+  modelName,
   item,
   runRef,
   selected,
   onInspect,
   onQuote,
+  onFork,
+  lastReply = false,
 }: {
+  modelName: (id: string) => string
   item: ConversationItem
   runRef: string
   selected: boolean
   onInspect?: (item: ConversationItem) => void
   onQuote?: (text: string) => void
+  onFork?: (end: string) => void
+  /** The reply the thread ends on keeps its actions shown; earlier ones reveal them. */
+  lastReply?: boolean
 }) {
   const { t } = useTranslation('sessions')
   const contentRef = useRef<HTMLDivElement>(null)
@@ -722,6 +847,12 @@ function ConversationRowView({
   if (item.kind === 'system') {
     return (
       <li>
+        {onFork && item.systemKind === 'rate_limit' ? (
+          <Button variant="ghost" size="sm" onClick={() => onFork(item.id)}>
+            <GitFork className="size-3.5" aria-hidden />
+            {t('context.fork')}
+          </Button>
+        ) : null}
         <div
           data-testid="conversation-item"
           data-item-id={item.id}
@@ -760,93 +891,10 @@ function ConversationRowView({
                   : undefined
             }
           >
-            {systemText(t, item)}
+            {systemText(t, item, undefined, modelName)}
           </span>
         </div>
         <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
-      </li>
-    )
-  }
-
-  if (item.kind === 'result') {
-    const facts = [
-      item.stopReason ? stopText(t, item.stopReason) : null,
-      item.inputTokens !== undefined || item.outputTokens !== undefined
-        ? t('conversation.tokens', {
-            input: formatInt(item.inputTokens ?? 0),
-            output: formatInt(item.outputTokens ?? 0),
-          })
-        : null,
-      item.costUsd !== undefined
-        ? new Intl.NumberFormat(undefined, {
-            style: 'currency',
-            currency: 'USD',
-            maximumFractionDigits: 4,
-          }).format(item.costUsd)
-        : null,
-    ].filter(Boolean)
-    // THE END OF A TURN IS A DIVIDER, not a bare "Result" button: "Finished in 8s" when
-    // the tool said how long, "Result" when it did not ("Worked for" is the work row's,
-    // the regression). It opens what the button showed inline: how the turn stopped, the model,
-    // the tokens, the cost and the raw frame. A failed turn keeps its duration:
-    // "Result · 8.0s", never a silent "Finished in". Every turn names the model that
-    // produced it.
-    const label = [
-      item.durationMs === undefined
-        ? t('conversation.result')
-        : item.resultFailed
-          ? `${t('conversation.result')} · ${formatDuration(item.durationMs)}`
-          : t('conversation.finishedIn', {
-              duration: formatDuration(item.durationMs),
-            }),
-      item.model && modelName(item.model),
-    ]
-      .filter(Boolean)
-      .join(' · ')
-    return (
-      <li>
-        <details
-          data-testid="conversation-item"
-          data-item-id={item.id}
-          data-kind="result"
-          className={cn('group my-2 rounded-ctl', selected && 'bg-active')}
-        >
-          <summary
-            className={cn(
-              'flex cursor-pointer list-none items-center gap-3 rounded-ctl px-2 py-1 outline-none',
-              'text-overline font-normal text-text-3 hover:text-text-2',
-              'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
-              '[&::-webkit-details-marker]:hidden',
-            )}
-          >
-            <span aria-hidden className="h-px flex-1 bg-line" />
-            <span
-              className={cn(
-                'tabular-nums',
-                item.resultFailed && 'font-medium text-danger',
-              )}
-              title={item.model}
-            >
-              {label}
-            </span>
-            <span aria-hidden className="h-px flex-1 bg-line" />
-          </summary>
-          <div className="flex flex-col items-center gap-1 px-2 pb-1 text-center text-caption text-text-2">
-            {facts.length > 0 ? <p>{facts.join(' · ')}</p> : null}
-            <InspectButton onClick={inspect} />
-          </div>
-        </details>
-        {/* A failed result's text IS the failure (F1C: a failed start showed only
-            "Result" while the run's stored reason and the CLI had the sentence). A
-            successful result's text repeats the last reply, so it stays out. */}
-        {item.resultFailed && item.text ? (
-          <p
-            data-slot="result-failure"
-            className="whitespace-pre-wrap break-words px-2 pb-1 text-caption text-danger"
-          >
-            {item.text}
-          </p>
-        ) : null}
       </li>
     )
   }
@@ -856,7 +904,7 @@ function ConversationRowView({
   // the assistant is the page itself.
   if (item.kind === 'operator')
     return (
-      <li className="my-2">
+      <li className="group/msg my-2">
         <div
           data-testid="conversation-item"
           data-item-id={item.id}
@@ -867,9 +915,7 @@ function ConversationRowView({
             selected && 'ring-1 ring-line-strong',
           )}
         >
-          <span className="whitespace-pre-wrap break-words">
-            {item.text || item.summary}
-          </span>
+          <UserMessage text={item.text || item.summary} />
         </div>
         <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
         {/* The images the person attached, from the engine's copy: they come back with
@@ -878,39 +924,15 @@ function ConversationRowView({
           <MessageImages runRef={runRef} attachments={item.attachments} />
         ) : null}
         {item.text ? (
-          <MessageActions align="end" text={() => item.text ?? ''} />
+          <MessageActions align="end" reveal text={() => item.text ?? ''} />
         ) : null}
-      </li>
-    )
-
-  if (item.kind === 'unknown')
-    return (
-      <li className="flex flex-col gap-0.5 py-1">
-        <span className="text-overline uppercase text-text-3">
-          {t('conversation.unknown')}
-        </span>
-        <div
-          data-testid="conversation-item"
-          data-item-id={item.id}
-          data-kind="unknown"
-          onClick={openFromWords}
-          className={cn(
-            'w-full rounded-md border border-line px-2.5 py-1.5 text-left text-body text-text',
-            selected && 'bg-active',
-          )}
-        >
-          <span className="whitespace-pre-wrap break-words">
-            {item.text || item.summary}
-          </span>
-        </div>
-        <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
       </li>
     )
 
   // THE ASSISTANT'S WORDS ARE MARKDOWN (#1784): lists, code and bold are shown as such. A
   // reply holds blocks and links, which a button cannot, so the row is the reply itself.
   return (
-    <li className="py-1">
+    <li className="group/msg py-1">
       <div
         data-testid="conversation-item"
         data-item-id={item.id}
@@ -922,12 +944,13 @@ function ConversationRowView({
           selected && 'bg-active',
         )}
       >
-        <MarkdownText text={item.text || item.summary} copyBlocks />
+        <MarkdownText text={item.text || item.summary} />
         <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
       </div>
       {item.text ? (
         <MessageActions
           align="start"
+          reveal={!lastReply}
           text={replyText}
           onQuote={
             onQuote && item.kind === 'assistant' ? quoteReply : undefined
@@ -945,9 +968,12 @@ function ConversationRowView({
 function SentTurnRow({ turn, ended }: { turn: SentTurn; ended: boolean }) {
   const { t } = useTranslation('sessions')
   return (
-    <li className="my-2 flex flex-col gap-1" data-testid="conversation-sent">
+    <li
+      className="group/msg my-2 flex flex-col gap-1"
+      data-testid="conversation-sent"
+    >
       <p className="rounded-[12px] bg-muted px-4 py-3 text-body-l text-text">
-        <span className="whitespace-pre-wrap break-words">{turn.text}</span>
+        <UserMessage text={turn.text} />
       </p>
       {turn.refused !== undefined ? (
         <p className="px-1 text-caption text-danger">
@@ -962,21 +988,72 @@ function SentTurnRow({ turn, ended }: { turn: SentTurn; ended: boolean }) {
           {t(ended ? 'conversation.sentNotTaken' : 'conversation.sentPending')}
         </p>
       )}
-      <MessageActions align="end" text={() => turn.text} />
+      <MessageActions align="end" reveal text={() => turn.text} />
     </li>
   )
 }
 
+/** The same eight-line preview for a sent turn and its stored echo. */
+function UserMessage({ text }: { text: string }) {
+  const { t } = useTranslation('sessions')
+  const id = useId()
+  const ref = useRef<HTMLSpanElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [long, setLong] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => {
+      const line = Number.parseFloat(getComputedStyle(el).lineHeight)
+      setLong(el.scrollHeight > line * 8 + 1)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [text])
+  return (
+    <>
+      <span
+        ref={ref}
+        id={id}
+        data-slot="user-message-text"
+        className={cn(
+          'block whitespace-pre-wrap break-words',
+          !expanded && 'line-clamp-8',
+        )}
+      >
+        {text}
+      </span>
+      {long ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {t(expanded ? 'conversation.showLess' : 'conversation.showAll')}
+        </Button>
+      ) : null}
+    </>
+  )
+}
+
 /** Copy the words as read; a writable reply can also be quoted into its composer.
- * A message without words has neither action. */
+ * A message without words has neither action. The transcript is text, not a column of
+ * controls: a `reveal` row shows on hover or focus of its message, and always on touch. */
 function MessageActions({
   align,
   text,
   onQuote,
+  reveal = false,
 }: {
   align: 'start' | 'end'
   text: () => string
   onQuote?: () => void
+  reveal?: boolean
 }) {
   const { t } = useTranslation('common')
   return (
@@ -984,6 +1061,8 @@ function MessageActions({
       className={cn(
         'mt-0.5 flex items-center gap-2',
         align === 'end' ? 'justify-end' : 'justify-start',
+        reveal &&
+          'opacity-0 transition-opacity group-focus-within/msg:opacity-100 group-hover/msg:opacity-100 pointer-coarse:opacity-100',
       )}
     >
       <CopyButton
@@ -1017,6 +1096,8 @@ const ConversationRow = memo(
     a.selected === b.selected &&
     a.onInspect === b.onInspect &&
     a.onQuote === b.onQuote &&
+    a.onFork === b.onFork &&
+    a.lastReply === b.lastReply &&
     samePlain(a.item, b.item),
 )
 

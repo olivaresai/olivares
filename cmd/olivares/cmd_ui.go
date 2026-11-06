@@ -23,8 +23,9 @@ import (
 
 // cmd_ui.go is the frame of CLI-CONCEPT §5: the same installation state the bare
 // `olivares` prints, laid out as a menu for a person at a terminal. It chooses
-// nothing itself — the rows name the commands that do the work, and Enter shows
-// the command instead of running it.
+// nothing itself — the rows name the commands that do the work, and each row
+// opens the screen that does it. A row whose engine or sign-in is missing shows
+// its command instead.
 
 func newUICmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -46,13 +47,15 @@ func newUICmd() *cobra.Command {
 			}
 			report := rootStatus(cmd.Context())
 			frame := mainMenuFrame(report)
-			tools := wireToolScreens(&frame, report)
-			wireSecurityScreens(&frame, cmd, tools)
+			tools := wireMainMenu(&frame, cmd, report)
 			if tools != nil {
 				frame.AfterSignal = func() { tools.sayKept(cmd.ErrOrStderr()) }
 			}
 			code, err := tui.Run(in, out, frame)
 			tools.sayKept(cmd.ErrOrStderr())
+			if err == nil && code == exitcode.OK && tools != nil && tools.launch != nil {
+				return tools.launch(in, out)
+			}
 			return uiExit(code, err)
 		},
 	}
@@ -133,13 +136,14 @@ func mainMenuFrame(report rootStatusReport) tui.Frame {
 	case report.Engine != "" && report.Reachable:
 		footer, role = oneRow(report.Engine)+" (running)", termrender.RoleOK
 	case report.Engine != "":
-		footer, role = oneRow(report.Engine)+" (not answering)", termrender.RoleWarn
+		footer, role = oneRow(report.Engine)+" ("+oneRow(report.engineState())+")", termrender.RoleWarn
 	}
 	next := oneRow(report.Next)
 	items := []tui.MenuItem{
 		{Label: "Get started", Detail: "Next: " + next, Command: next},
 		{Label: "AI tools", Detail: "install, sign in, API keys", Command: "olivares tool ls"},
 		{Label: "Sessions", Detail: "start, attach, stop", Command: "olivares session ls"},
+		{Label: "Ask Olivares", Detail: "a question in plain words", Command: "olivares ask"},
 		{Label: "Security", Detail: "approvals and policies", Command: "olivares governance approvals ls"},
 		{Label: "Settings", Detail: "this installation", Command: "olivares config"},
 	}
@@ -153,6 +157,17 @@ func mainMenuFrame(report rootStatusReport) tui.Frame {
 		Footer:     footer + " · version " + version,
 		FooterRole: role,
 	}
+}
+
+// wireMainMenu opens the rows of the main menu on their screens and returns the
+// state the tools screens share, or nil when the engine or the sign-in is missing.
+func wireMainMenu(frame *tui.Frame, cmd *cobra.Command, report rootStatusReport) *uiTools {
+	tools := wireToolScreens(frame, report)
+	wireSecurityScreens(frame, cmd, tools)
+	wireSessionScreens(frame, tools)
+	wireAskScreen(frame, tools)
+	wireSettingsScreen(frame, report)
+	return tools
 }
 
 // wireToolScreens opens the Get started and AI tools rows on their screens. They

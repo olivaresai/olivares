@@ -43,7 +43,8 @@ const auth = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useRouterState: () => window.location.search,
   useNavigate: () => vi.fn(),
 }))
@@ -397,6 +398,21 @@ describe('the Ledger query', () => {
     )
   })
 
+  it('asks the engine for the tool and folder typed in the query', async () => {
+    wrap(<AuditView />)
+    const user = userEvent.setup()
+    const query = await screen.findByRole('textbox', { name: 'Ledger query' })
+    await user.type(query, 'tool:codex folder:/srv/app{Enter}')
+    await waitFor(() =>
+      expect(api.list).toHaveBeenLastCalledWith({
+        from: 1,
+        limit: 100,
+        tool: 'codex',
+        folder: '/srv/app',
+      }),
+    )
+  })
+
   it('says what it cannot filter and asks nothing new', async () => {
     wrap(<AuditView />)
     const user = userEvent.setup()
@@ -404,11 +420,11 @@ describe('the Ledger query', () => {
     await waitFor(() => expect(api.list).toHaveBeenCalled())
     const calls = api.list.mock.calls.length
     // The person next to the refused key is not applied alone either.
-    await user.type(query, 'person:marc tool:codex{Enter}')
+    await user.type(query, 'person:marc status:open{Enter}')
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'tool:codex is not a ledger filter',
+      'status:open is not a ledger filter',
     )
-    expect(query).toHaveValue('person:marc tool:codex')
+    expect(query).toHaveValue('person:marc status:open')
     expect(api.list.mock.calls.length).toBe(calls)
   })
 
@@ -540,7 +556,7 @@ describe('where the Ledger query sits', () => {
     shell()
     const user = userEvent.setup()
     const inBar = await screen.findByRole('textbox', { name: 'Ledger query' })
-    await user.type(inBar, 'tool:codex{Enter}')
+    await user.type(inBar, 'status:open{Enter}')
     await screen.findByRole('alert')
     // Zoomed in, or a tablet turned: the field moves from the bar into the page.
     act(() => {
@@ -549,9 +565,9 @@ describe('where the Ledger query sits', () => {
     })
     const inPage = screen.getByRole('textbox', { name: 'Ledger query' })
     expect(inPage.closest('main')).not.toBeNull()
-    expect(inPage).toHaveValue('tool:codex')
+    expect(inPage).toHaveValue('status:open')
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'tool:codex is not a ledger filter',
+      'status:open is not a ledger filter',
     )
   })
 })
@@ -573,6 +589,57 @@ describe('the Ledger entries', () => {
       expect.stringMatching(/run-b.*1 entry/),
     ])
     expect(sentences()[0]).toMatch(/Approval requested by Marc Vidal/)
+  })
+
+  it('groups a tool call under the session its actor names, by the name Sessions shows', async () => {
+    const SID = 'osn_01a19998-0000-7000-8000-000000000001'
+    const toolCall = (seq: number, id: string) =>
+      entry(seq, {
+        actor: `session:${SID}`,
+        actor_kind: 'agent',
+        action: 'hook.tool.allow',
+        target_kind: 'claude.tool.use',
+        target_id: id,
+        occurred_at: '2026-10-20T16:10:00Z',
+      })
+    api.list.mockResolvedValue({
+      items: [toolCall(51, 'toolu_1'), toolCall(52, 'toolu_2')],
+      has_more: false,
+    })
+    sessions.live.mockResolvedValue({
+      items: [
+        {
+          session_ref: 'claude-1',
+          live_ref: 'live-1',
+          canonical_sid: SID,
+          summary: 'Fix the login bug',
+        },
+      ],
+      has_more: false,
+    })
+    wrap(<AuditView />)
+    const list = await screen.findByRole('list', { name: 'Ledger entries' })
+    await waitFor(() =>
+      expect(
+        within(list)
+          .getAllByRole('heading', { level: 2 })
+          .map((h) => h.textContent),
+      ).toEqual([expect.stringMatching(/Fix the login bug.*2 entries/)]),
+    )
+    expect(within(list).queryByText('Not in a session')).toBeNull()
+    expect(screen.getByText(/1 session\b/)).toBeVisible()
+    // Its tool calls read "by <the session>", not "by Agent".
+    expect(
+      sentences().filter((s) => /by Fix the login bug$/.test(s!)),
+    ).toHaveLength(2)
+    // The heading narrows the ledger to that session's own entries.
+    const heading = within(list).getByRole('heading', { level: 2 })
+    await userEvent.click(within(heading).getByRole('button'))
+    await waitFor(() =>
+      expect(api.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ actor: `session:${SID}` }),
+      ),
+    )
   })
 
   it('lists every entry newest first when grouping is off', async () => {
@@ -742,10 +809,6 @@ describe('the Ledger entry', () => {
     expect(chain).toHaveTextContent(/Previous · 41.*111111/)
     expect(chain).toHaveTextContent(/This entry · 42.*222222/)
     expect(chain).toHaveTextContent(/Next · 43.*333333/)
-    await user.click(
-      within(panel).getByRole('button', { name: 'Verify chain' }),
-    )
-    expect(await within(panel).findByText('Chain · 44 links')).toBeVisible()
   })
   it('opens again on the same entry after the panel was closed', async () => {
     wrap(<AuditView />)

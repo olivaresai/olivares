@@ -4,13 +4,12 @@
   "forbiddenTitle": "Sin autorización",
   "forbidden": "Ver el contrato de atestación requiere el permiso compliance:read.",
   "disclaimer": {
-    "tag": "Beta",
-    "body": "El proyecto está en beta: todavía no existe ningún release y la canalización de release está escrita pero no activada. El panel del binario en ejecución está MEDIDO desde este proceso; las pestañas del contrato son el contrato declarado, no un release publicado ni una verificación criptográfica en vivo; esta consola nunca reverifica firmas en el navegador.",
+    "body": "Esta compilación no es una versión publicada.",
     "declaredRef": "Referencia declarada — AsOf {{date}}. Tomada textualmente de docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml y los workflows de release, scorecard y patch-velocity. El motor no puede observar el estado del repositorio ni de la CI, así que esta mitad no se sirve en vivo."
   },
   "live": {
     "title": "Binario en ejecución (medido)",
-    "description": "Lo que ESTE proceso del motor puede demostrar sobre sí mismo — leído en vivo del binario (ldflags, debug.ReadBuildInfo, crypto/fips140, un autohash del ejecutable) — y el estado honesto del release: nada está publicado ni verificado hasta que una etiqueta v* dispare la canalización.",
+    "description": "Lo que esta compilación en ejecución informa sobre sí misma.",
     "status": {
       "measured": "Medido"
     },
@@ -58,11 +57,11 @@
   },
   "tabs": {
     "artifacts": "Artefactos",
-    "provenance": "Procedencia y VEX",
+    "provenance": "Procedencia",
     "sbom": "SBOM",
     "scorecard": "Scorecard",
     "remediation": "SLA de remediación",
-    "airgap": "Air-gap y chart"
+    "airgap": "Air-gap"
   },
   "artifacts": {
     "title": "Artefactos del release",

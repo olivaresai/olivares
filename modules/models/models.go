@@ -63,6 +63,8 @@ type Module struct {
 	availability       *availabilityCatalog
 	availabilityAccess func(ctx context.Context, tenant model.TenantID, principal auth.Principal, source AvailabilitySource) (bool, error)
 	connectorCatalogs  func(context.Context, model.TenantID) ([]ConnectorCatalog, error)
+	// ask connects Ask Olivares to the engine (ask_turn.go); unset, Ask refuses with 503.
+	ask AskPorts
 
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe

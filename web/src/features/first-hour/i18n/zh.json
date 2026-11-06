@@ -86,7 +86,6 @@
     "folderHint": "此服务器上的一个文件夹。留空则在新文件夹中开始。",
     "folderNew": "为此会话新建的文件夹",
     "folderTyped": "其他文件夹…",
-    "folderChange": "更改文件夹",
     "readingFolder": "正在读取上次会话的文件夹…",
     "prompt": "第一条消息（可选）",
     "promptPlaceholder": "它应该先做什么？",
@@ -118,16 +117,21 @@
     "chooseModel": "请选择一个模型：此密钥没有默认模型。",
     "noTestedModel": "此密钥的模型尚未通过连接测试：请在“提供商”中测试该密钥。",
     "openProviders": "打开提供商",
-    "profile": "配置文件",
+    "profile": "账户",
     "profileNotSignedIn": "未登录",
     "profileNeedsKey": "需要密钥",
     "foldersUnreadable": "无法读取已登记的文件夹。请输入此服务器上某个文件夹的路径。",
     "folderPermission": "将以“{{name}}”启动，这是此文件夹的默认权限。",
     "autoAsks": "{{tool}} 没有自动模式：每次操作前都会询问。"
   },
+  "composer": {
+    "toolPill": "工具和账户：{{value}}",
+    "modelPill": "模型：{{value}}",
+    "effortPill": "推理强度：{{value}}",
+    "folderPill": "文件夹：{{value}}",
+    "moreOptions": "更多选项"
+  },
   "lists": {
-    "runsTruncated": "最近会话：已加载 {{count}} 个；还有更多。",
-    "runsHint": "较早的会话未包含在此列表中。",
     "foldersTruncated": "已注册文件夹：已加载 {{count}} 个；还有更多。",
     "foldersHint": "部分已注册文件夹未包含在此列表中。"
   },
@@ -147,9 +151,7 @@
     "mcp": "添加 MCP 服务器",
     "budgets": "设置预算",
     "cli": "使用 olivares 命令行",
-    "cliHint": "此服务器上已安装 olivares 命令。在其他计算机上，可用以下命令安装：",
-    "copy": "复制",
-    "copied": "已复制"
+    "cliHint": "此服务器上已安装 olivares 命令。在其他计算机上，可用以下命令安装："
   },
   "permissionSummary": {
     "readOnly": "只读取和规划。所有更改都会被拒绝。",
@@ -158,5 +160,29 @@
     "editsAndCommands": "读取、编辑文件和运行命令无需询问，其他工具会被拒绝。",
     "auto": "由工具自带的、经过审查的自动模式决定。没有自动模式的工具会像“受监督”一样询问。需要运行管理权限。",
     "full": "不会询问任何内容。Olivares 仍会限制会话并记录每个操作。需要运行管理权限。"
+  },
+  "bring": {
+    "title": "导入你的文件夹",
+    "body": "你的工具已经工作过的文件夹，读取自各工具自身记录的项目路径和日期。在你确认之前不会注册任何内容。",
+    "error": "无法查找你的工具使用过的文件夹。",
+    "unreadable": "无法读取 {{tool}} 的记录。请改为手动添加文件夹。",
+    "cols": {
+      "folder": "文件夹",
+      "tool": "工具",
+      "lastUsed": "最近使用",
+      "conversations": "对话"
+    },
+    "pick": "注册 {{folder}}",
+    "confirm": "注册所选项（{{n}}）",
+    "skipStep": "暂不",
+    "skip": {
+      "missing": "文件夹已不存在",
+      "unreadable": "无法读取该文件夹",
+      "outside_allowed_roots": "不在允许的文件夹内：与受保护的文件夹重叠",
+      "already_registered": "已注册"
+    },
+    "failed": "无法注册。",
+    "toast": "已注册：{{n}}",
+    "result": "已注册：{{imported}}。已跳过：{{skipped}}。"
   }
 }

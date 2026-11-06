@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,7 +24,6 @@ import (
 	azureactivity "github.com/olivaresai/olivares/connectors/azure-activity"
 	azureblobaudit "github.com/olivaresai/olivares/connectors/azure-blob-audit"
 	azureopenai "github.com/olivaresai/olivares/connectors/azure-openai"
-	"github.com/olivaresai/olivares/connectors/azureaisearch"
 	"github.com/olivaresai/olivares/connectors/azurekeyvault"
 	"github.com/olivaresai/olivares/connectors/bedrock"
 	bedrockkb "github.com/olivaresai/olivares/connectors/bedrock-kb"
@@ -42,7 +42,6 @@ import (
 	"github.com/olivaresai/olivares/connectors/codex"
 	codexmanagedconfig "github.com/olivaresai/olivares/connectors/codex-managed-config"
 	"github.com/olivaresai/olivares/connectors/cohere"
-	"github.com/olivaresai/olivares/connectors/confluence"
 	"github.com/olivaresai/olivares/connectors/contentsource"
 	coworkanalytics "github.com/olivaresai/olivares/connectors/cowork-analytics"
 	"github.com/olivaresai/olivares/connectors/crossplane"
@@ -107,7 +106,6 @@ import (
 	runtimesource "github.com/olivaresai/olivares/connectors/runtime"
 	"github.com/olivaresai/olivares/connectors/s3cloudtrail"
 	"github.com/olivaresai/olivares/connectors/s3content"
-	snowflakecontent "github.com/olivaresai/olivares/connectors/snowflake"
 	snowflakeaudit "github.com/olivaresai/olivares/connectors/snowflake-audit"
 	"github.com/olivaresai/olivares/connectors/sops"
 	"github.com/olivaresai/olivares/connectors/ssf"
@@ -130,8 +128,8 @@ import (
 // It is also the kind→connector registry for the R/RW access-map DIFFERENTIAL
 // connectors: pgaudit/s3cloudtrail/ebpf/runtime/mcp are wired
 // here as in-process observation sources (buildInProcSource), and the knowledge
-// document sources (gdrive/confluence/notion/s3content/snowflake/azure_ai_search;
-// sharepoint/sap_odata/salesforce are Business) — which are contentsource.Source, not
+// document sources (gdrive/notion/s3content/postgres/filesystem; confluence, snowflake,
+// azure_ai_search, sharepoint, sap_odata and salesforce are Business) — which are contentsource.Source, not
 // sdk.SourceConnector — are resolved by knowledgeContentOptions for the knowledge
 // module (VIII) to drive, from the SAME operator config.
 //
@@ -161,8 +159,9 @@ type sourcesConfig struct {
 	// Identity are identity connectors whose roster snapshot feeds governance
 	// (the NHI roster), and which may additionally stream permitted-access edges.
 	Identity []identitySpec `json:"identity"`
-	// Documents are knowledge document-source connectors (gdrive/confluence/notion/
-	// s3content/snowflake/azure_ai_search; sharepoint/sap_odata/salesforce are Business). They
+	// Documents are knowledge document-source connectors (gdrive/notion/s3content/
+	// postgres/filesystem; confluence, snowflake, azure_ai_search, sharepoint, sap_odata and
+	// salesforce are Business). They
 	// are NOT observation sources: they emit no bus
 	// observation and produce no R/RW edge — the knowledge module (VIII) PULLS them
 	// (List/Fetch) on an ingest request — so they are wired into that module at
@@ -232,8 +231,8 @@ type identitySpec struct {
 
 // documentSpec provisions one knowledge document source. Name is the source name an
 // operator references in POST /v1/m/knowledge/kbs/{id}/ingest {"source":"<name>"};
-// Kind selects a first-party connector (gdrive/confluence/notion/s3content/
-// snowflake/azure_ai_search; sharepoint/sap_odata/salesforce are Business). Plugin provisions an
+// Kind selects a first-party connector (gdrive/notion/s3content/postgres/filesystem;
+// confluence, snowflake, azure_ai_search, sharepoint, sap_odata and salesforce are Business). Plugin provisions an
 // EXTERNAL (third-party) content-source plugin binary instead, using the same
 // trust/admission shape as sourceSpec.Plugin. Config carries connector settings —
 // an export path and/or a secret-store credential REFERENCE
@@ -474,7 +473,7 @@ func rosterSettings(kind string, settings map[string]string) map[string]string {
 }
 
 // buildContentSource constructs a knowledge DOCUMENT source by kind: the
-// gdrive/confluence/notion/s3content/snowflake/azure_ai_search connectors. Unlike buildInProcSource these implement
+// gdrive/notion/s3content/postgres/filesystem connectors. Unlike buildInProcSource these implement
 // contentsource.Source, NOT sdk.SourceConnector — they emit no bus observation and
 // produce no R/RW edge. The knowledge module (VIII) drives their List/Fetch on an
 // ingest request (knowledge.WithSource), so they are NEVER registered with the
@@ -482,22 +481,17 @@ func rosterSettings(kind string, settings map[string]string) map[string]string {
 // Each is read-only and minimal-data (it carries ACL/provenance, and the module —
 // not the connector — redacts the body before persisting). ok=false for an unknown
 // kind so the caller WARNS rather than silently dropping a configured source.
-// sharepoint, sap_odata and salesforce are Business: only the Business edition's
-// contentSource port builds them (sources_business.go names them in Community).
+// confluence, snowflake, azure_ai_search, sharepoint, sap_odata and salesforce are Business:
+// only the Business edition's contentSource port builds them (sources_business.go names
+// them in Community).
 func buildContentSource(kind string, richDoc contentsource.RichDocExtractor) (contentsource.Source, bool) {
 	switch kind {
 	case "gdrive":
 		return gdrive.New(), true
-	case "confluence":
-		return confluence.New(), true
 	case "notion":
 		return notion.New(), true
 	case "s3content":
 		return s3content.New(), true
-	case "snowflake":
-		return snowflakecontent.New(), true
-	case "azure_ai_search":
-		return azureaisearch.New(), true
 	case "postgres", "pgcontent":
 		// the operational-database content source. Materializes PostgreSQL rows
 		// as governed knowledge documents (read-only by construction, declared per-row
@@ -531,8 +525,9 @@ type contentSourceMode interface {
 
 type modeContentSource struct {
 	contentsource.Source
-	mode   string
-	public bool
+	mode      string
+	public    bool
+	maxDelete int
 }
 
 func (s modeContentSource) Mode() string { return normalizeContentSourceMode(s.mode) }
@@ -556,14 +551,31 @@ func (s modeContentSource) ListPage(ctx context.Context, cursor string, maxItems
 
 type modeLiveContentSource struct {
 	contentsource.LiveSource
-	mode   string
-	public bool
+	mode      string
+	public    bool
+	maxDelete int
+	// onlyACL, when set, replaces the ACL the source reports for every document: what
+	// was read with one person's credential is stored for that person alone.
+	onlyACL string
+}
+
+func (s modeLiveContentSource) Fetch(ctx context.Context, docID string) (contentsource.Document, error) {
+	doc, err := s.LiveSource.Fetch(ctx, docID)
+	if err == nil && s.onlyACL != "" {
+		doc.ACL = []string{s.onlyACL}
+	}
+	return doc, err
 }
 
 func (s modeLiveContentSource) Mode() string { return normalizeContentSourceMode(s.mode) }
 
 // Public: see modeContentSource.Public.
 func (s modeLiveContentSource) Public() bool { return s.public }
+
+// MaxDeletePercent is the operator's deletion safeguard (max_delete_percent): a sync
+// that would delete a larger share of the source's documents deletes none. 0 = none.
+func (s modeContentSource) MaxDeletePercent() int     { return s.maxDelete }
+func (s modeLiveContentSource) MaxDeletePercent() int { return s.maxDelete }
 
 func (s modeLiveContentSource) ListingComplete() bool { return wrappedListingComplete(s.LiveSource) }
 
@@ -603,22 +615,23 @@ func wrapContentSourceMode(src contentsource.Source, mode string) contentsource.
 	return modeContentSource{Source: src, mode: mode}
 }
 
-// wrapContentSourceConfig wraps a configured document source with its mode and its
-// operator-declared "public" setting. Only the literal "true" makes the source
-// public: a document it reports without an ACL is then stored as "anyone", and
-// every ingest or sync that does so leaves a knowledge.source.public ledger entry.
-// Any other value, or none, leaves such documents denied.
+// wrapContentSourceConfig wraps a configured document source with its mode, its
+// operator-declared "public" setting and its deletion safeguard. Only the literal
+// "true" makes the source public: a document it reports without an ACL is then
+// stored as "anyone", and every ingest or sync that does so leaves a
+// knowledge.source.public ledger entry. Any other value, or none, leaves such
+// documents denied. max_delete_percent (1-100; 0 or unset = off) caps the share of the source's
+// documents one sync may delete; above it the sync deletes none and says why.
 func wrapContentSourceConfig(src contentsource.Source, settings map[string]string) contentsource.Source {
 	wrapped := wrapContentSourceMode(src, settings["mode"])
-	if strings.TrimSpace(settings["public"]) != "true" {
-		return wrapped
-	}
+	public := strings.TrimSpace(settings["public"]) == "true"
+	maxDelete, _ := strconv.Atoi(strings.TrimSpace(settings["max_delete_percent"]))
 	switch w := wrapped.(type) {
 	case modeLiveContentSource:
-		w.public = true
+		w.public, w.maxDelete = public, maxDelete
 		return w
 	case modeContentSource:
-		w.public = true
+		w.public, w.maxDelete = public, maxDelete
 		return w
 	}
 	return wrapped

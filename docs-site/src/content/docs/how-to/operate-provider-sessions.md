@@ -35,7 +35,7 @@ uses its authorized tool login and needs neither variable. See
 ## Start and talk
 
 Open **Sessions → New session** and choose a ready tool. The engine fills the
-profile and folder. For the README Compose installation, choose **Change folder**
+profile and folder. For the README Compose installation, choose **Folder → Another folder…**
 and enter `/project` to work on your mounted host project. Leaving the default
 folder needs no typed path. Leave First message empty to start, then type in
 the conversation, or enter it before pressing **Start**.
@@ -80,11 +80,19 @@ docker compose exec olivares olivares session follow first-hour
 
 ## Approve, interrupt, stop and resume
 
-Under **More options**, **Supervised** makes the tool ask before
+Under **What the agent may do**, **Supervised** makes the tool ask before
 acting. In **Rules**, the request waiting for you is open beside the queue with
 its command, what it reaches and the rule that asked. Choose **Approve once**
 (`A`), or **Deny** (`D`) and add a note. A launch that requires an organization
 approval waits there too; send your message once the launch is approved.
+
+From a terminal, `olivares session start`, `send` and `follow` show the same request
+while a turn runs, with the command or path the tool will run. At a terminal they ask
+`Allow? [y/N]` (Enter denies). Without one they print the request and the commands that
+answer it, with its id filled in: `olivares session approve <session> <request>` or
+`olivares session deny <session> <request> --note "why"`. Each answers exactly that
+request and refuses one the session no longer waits on. The engine denies the tool call
+if nobody answers before its deadline.
 
 Use **Interrupt** to end the current turn while leaving the conversation open.
 Use **Stop** to end the process, confirming if asked. **Resume** restarts that
@@ -158,3 +166,47 @@ with the worktree. Worktrees share the repository's git metadata. See the
 [session CLI reference](/reference/cli/#command-olivares-session-start) for
 worktree options and [session runtime API](/reference/session-runtime-api/) for
 profile permissions, lifecycle calls and isolation limits.
+
+## Course AI-use presets
+
+The built-in template list includes five **AIAS** course presets. These are
+operational adaptations of the [AI Assessment Scale](https://researchonline.jcu.edu.au/87283/),
+not a certification or a claim that a model can police academic honesty.
+
+| Template | Session behavior |
+| --- | --- |
+| AIAS 1 — No AI | Refuses session launch and resume. |
+| AIAS 2 — Plan only tutor | Makes the session folder read-only; instructs the tutor to give hints and questions without code or a final answer. |
+| AIAS 3 — Scratch practice | Permits edits in a separately configured scratch workspace; attach the course folder read-only as described below. |
+| AIAS 4 — AI with review | Permits edits, asks the learner to review and attribute AI contributions, and requires conversation recording. |
+| AIAS 5 — Full AI | Permits full tool use within the session's filesystem boundary; run administration, governance approvals and conversation recording still apply. |
+
+Select the template when starting a session. Template terms are applied by the
+server on launch and resume. An explicitly narrower permission choice is kept;
+selecting Full cannot override the tutor's plan mode. Department defaults and
+assignment remain Business features, using the existing department template setting.
+A default is not a ban on selecting another template or starting a session elsewhere.
+
+For **Plan only tutor**, select the course folder. Native sessions use Linux
+Landlock; container sessions use a read-only workspace mount. The preset requires
+truncation protection: a native launch on a kernel older than Landlock ABI 3 is
+refused rather than permitting existing files to be truncated.
+
+For **Scratch practice**, register a separate, empty scratch folder as the
+workspace root (`root_path`, `mount_mode: "rw"`). Attach the course folder through
+that workspace's `read_only_folders`. Keep the two folders separate: the course
+folder must not contain the writable scratch folder, and neither may overlap a
+writable account home. Start the session in the scratch workspace using this
+preset. The existing confinement grants writes to scratch and reads to the
+course folder, while the tool's account state and private temporary directory
+remain writable. Missing confinement or truncation protection refuses the launch.
+The template does not create folders or change workspace registrations. It refuses
+a launch or resume without a registered workspace and read-only reference folders.
+The instructor must attach the actual course folder and grant the learner access
+to the scratch workspace; attaching an unrelated folder does not protect the course.
+
+Tutor guidance is a model instruction. The filesystem restriction prevents writes
+to the course folder even if the model disobeys, but cannot prevent it from
+printing solution text. Recording captures the conversation; it does not certify
+attribution or assessment compliance. The No AI template disables launches that
+use it, not other templates, external AI services, or already running sessions.

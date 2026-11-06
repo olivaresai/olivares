@@ -6,8 +6,12 @@ package gitpublish
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +19,8 @@ import (
 	gp "github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/security"
 )
 
 func TestPushAppliedRecordsRequestedObservedAcknowledged(t *testing.T) {
@@ -540,4 +546,106 @@ func TestPublicationKindCustomCustodyKeepsGitHubDefaults(t *testing.T) {
 		t.Fatalf("custom host mints %d, CI paths %v", h.host.mints, h.git.checkedPaths)
 	}
 	h.balanced()
+}
+
+func TestPublicationSecretRequiresRecordedApproval(t *testing.T) {
+	h := newHarness(t)
+	h.m.opts.ScanSecrets = func(_ context.Context, _, commit string) ([]string, error) {
+		if commit != shaCommit {
+			t.Fatal("scanned a different commit")
+		}
+		return []string{"config.txt"}, nil
+	}
+	for _, effect := range []string{"push", "pull_request"} {
+		var err error
+		if effect == "push" {
+			_, err = h.push(h.user(), "blocked-push", "refs/heads/olivares/secret", "")
+		} else {
+			_, err = h.m.OpenPullRequest(context.Background(), h.user(), PullRequestInput{Target: h.target.ID, OperationID: "blocked-pr", HeadRef: "olivares/run-1", Base: "main", Commit: shaCommit, Title: "Review"})
+		}
+		if codeOf(err) != "secret_detected" {
+			t.Fatalf("%s did not refuse credentials: %v", effect, err)
+		}
+	}
+	if h.git.count() != 0 || h.host.creates != 0 {
+		t.Fatal("secret publication dispatched")
+	}
+	r, err := h.m.Push(context.Background(), h.user(), PushInput{Target: h.target.ID, OperationID: "approved-publish", Ref: "refs/heads/olivares/secret", Commit: shaCommit, Tree: shaTree, Proposal: h.proposal()})
+	if err != nil || r.Intent.State != StateApplied || r.Intent.Proposal.Approval != approvalOne {
+		t.Fatalf("approved publication = %s %v", r.Intent.State, err)
+	}
+	h.balanced()
+	// Use actual Git objects and the existing catalog, then verify the receiving
+	// repository and the canonical ledger, not just the fake host's counters.
+	f := plainGitModule(t, "main", "main")
+	x := f.m.opts.Git.(*gp.Executor)
+	server := f.m.opts.Custody.(plainCustody).local
+	work := filepath.Join(t.TempDir(), "agent")
+	git := func(dir string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.test", "GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.test")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal("fixture git command failed")
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git(filepath.Dir(work), "clone", "-q", server, work)
+	git(work, "checkout", "-q", "main")
+	value := "AK" + "IA" + strings.Repeat("X", 16)
+	if err := os.WriteFile(filepath.Join(work, "config.txt"), []byte(value+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git(work, "add", "config.txt")
+	git(work, "commit", "-q", "-m", "configuration")
+	commit, tree := git(work, "rev-parse", "HEAD"), git(work, "rev-parse", "HEAD^{tree}")
+	if err := x.Fetch(t.Context(), server, work, commit); err != nil {
+		t.Fatal(err)
+	}
+	f.m.UseSecretScanner(func(ctx context.Context, repo, commit string) ([]string, error) {
+		var paths []string
+		err := x.AddedLines(ctx, repo, commit, func(path, text string) {
+			for _, hit := range security.ClassifySensitivity(text) {
+				if hit.Class == security.SensSecretCredential {
+					paths = append(paths, path)
+					break
+				}
+			}
+		})
+		return paths, err
+	})
+	in := PushInput{Target: f.tg.ID, OperationID: "checked-publish", Ref: "refs/heads/olivares/secret", Commit: commit, Tree: tree}
+	_, err = f.m.Push(t.Context(), f.c, in)
+	var refusal *Error
+	if !errors.As(err, &refusal) || refusal.Code != "secret_detected" || refusal.Path != "config.txt" || refusal.Class != "secret.credential" {
+		t.Fatalf("content refusal: %v", err)
+	}
+	if strings.Contains(err.Error(), value) {
+		t.Fatal("refusal exposed credential")
+	}
+	if got := git(filepath.Dir(work), "--git-dir="+f.remote, "for-each-ref", "--format=%(objectname)", in.Ref); got != "" {
+		t.Fatal("refused push reached remote")
+	}
+	in.Proposal = Proposal{SessionRun: runOne, Workspace: f.tg.Workspace, Approval: approvalOne}
+	rec, err := f.m.Push(t.Context(), f.c, in)
+	if err != nil || rec.Answer != StateApplied {
+		t.Fatalf("approved real push: %v %s", err, rec.Answer)
+	}
+	if got := git(filepath.Dir(work), "--git-dir="+f.remote, "rev-parse", in.Ref); got != commit {
+		t.Fatal("approved commit not at remote")
+	}
+	if err := f.m.data.View(t.Context(), f.c.Tenant, func(sc store.Scope) error {
+		return sc.Audit().(store.CanonicalWalker).WalkCanonical(t.Context(), 0, func(event model.AuditEvent, meta string, _ []byte) error {
+			encoded, _ := json.Marshal(event)
+			if strings.Contains(meta, value) || strings.Contains(string(encoded), value) {
+				t.Fatal("ledger exposed credential")
+			}
+			return nil
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("config.txt secret.credential refused; approved exact commit reached the remote; canonical ledger contains no credential")
 }

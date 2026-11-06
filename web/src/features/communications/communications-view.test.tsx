@@ -50,6 +50,16 @@ vi.mock('@/components/ui/toaster', () => ({
 vi.mock('@/lib/hooks/use-url-state', () => ({
   useUrlState: () => [urlState.value, vi.fn()],
 }))
+// NewSessionHost reads the location and navigates; this file renders it without a
+// RouterProvider, so it gets the shared location double (the estate view test does too).
+vi.mock('@tanstack/react-router', async (original) => {
+  const fake = (await import('@/test/fake-router')).fakeRouterModule()
+  return {
+    ...(await original<typeof import('@tanstack/react-router')>()),
+    useNavigate: fake.useNavigate,
+    useRouterState: fake.useRouterState,
+  }
+})
 // The launch dialog has its own tests (agentops/run-create-worktree-from.test.tsx); here
 // only what the room hands the shell's one host is measured, so it is a probe that records
 // its props.
@@ -327,9 +337,7 @@ describe('CommunicationsView — three doors, each on its own permission', () =>
     // The sheet is on screen because the url named a channel; it is EMPTY because the
     // engine refused this exact operation, and the read never left.
     expect(
-      within(sheet).getByText(
-        'The engine refused this for the current principal.',
-      ),
+      within(sheet).getByText('The engine refused this for you.'),
     ).toBeInTheDocument()
     expect(api.listChannelGrants).not.toHaveBeenCalled()
     expect(api.listAdministrableChannels).not.toHaveBeenCalled()
@@ -703,6 +711,34 @@ describe('CommunicationsView — the handoffs door', () => {
     // …and it is the ORDINARY inbox that was read, not the handoff page.
     await waitFor(() => expect(api.listInbox).toHaveBeenCalledTimes(1))
     expect(api.listHandoffInbox).not.toHaveBeenCalled()
+  })
+
+  it('an EMPTY inbox says what puts a message there and takes a person who can read channels to Channels, where one is sent', async () => {
+    auth.perms = new Set([DR, CR])
+    renderWithQuery(() => <CommunicationsView entrance="inbox" />)
+    expect(await screen.findByText('Your inbox is empty')).toBeInTheDocument()
+    expect(
+      screen.getByText(/send you through a channel appear here/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/choose Send notice/)).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Go to Channels' }),
+    )
+    expect(screen.getByRole('tab', { name: 'Channels' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await waitFor(() => expect(api.listChannels).toHaveBeenCalledTimes(1))
+  })
+
+  it('an empty inbox offers no way to Channels to a person who cannot read them, and still says what puts a message there', async () => {
+    auth.perms = new Set([DR])
+    renderWithQuery(() => <CommunicationsView entrance="inbox" />)
+    expect(await screen.findByText('Your inbox is empty')).toBeInTheDocument()
+    expect(
+      screen.getByText(/send you through a channel appear here/),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Go to Channels' })).toBeNull()
   })
 
   it('a deep link handoff=<carrier delivery> opens the protected detail on mount, through the Delivery-bound route', async () => {

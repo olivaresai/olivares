@@ -49,7 +49,7 @@ LIMIT = ("the lookup is by text under web/src, not by surface, so a literal that
 # translated catalog cannot stand in for the English copy. Same locale paths as
 # check-source-language.py: the displayed copy is not checked there either.
 NON_ENGLISH = re.compile(
-    r"(?:^|/)(?:i18n|locales)/(?:es|fr|de|it|ru|ja|zh|ko)(?:\.json|/.*\.json)$")
+    r"(?:^|/)(?:i18n|locales)/(?:es|fr|de|it|ru|ja|zh|ko|uk|pt)(?:\.json|/.*\.json)$")
 # Tests, fixtures and dev-only demos quote UI copy but render none of it.
 TEST_PATH = re.compile(
     r"(?:^|/)(?:__tests__|tests?|fixtures|__fixtures__|mocks|__mocks__|testdata|test-utils|dev|stories)(?:/|$)"

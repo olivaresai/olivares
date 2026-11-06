@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -24,7 +23,7 @@ func (pr *procRunner) command(ctx context.Context, spec LaunchSpec) (*exec.Cmd, 
 	none := confine.State{Mode: confine.ModeNone, Reason: "no confinement policy was given for this child (the engine was composed without WithConfinement)"}
 	if spec.Confinement == nil {
 		if spec.ConfinementRequired {
-			return nil, nil, none, nil, &runErr{http.StatusBadGateway, "this server has no session confinement policy; the session was not started"}
+			return nil, nil, none, nil, &runErr{http.StatusBadGateway, "this server has no session confinement policy: enable session confinement (Landlock and unprivileged user/network namespaces) for the filesystem confinement helper on the engine host; the session was not started"}
 		}
 		cmd := exec.CommandContext(ctx, spec.Program, spec.Args...) // #nosec G204 -- spec.Program/Args are operator-configured session runtime; env is sanitized and container/sandbox isolation is refused deny-closed
 		return cmd, spec.Env, none, func() {}, nil
@@ -33,15 +32,15 @@ func (pr *procRunner) command(ctx context.Context, spec LaunchSpec) (*exec.Cmd, 
 	if err != nil {
 		return nil, nil, none, nil, fmt.Errorf("sessions: the session's temporary directory: %w", err)
 	}
-	release := func() { _ = os.RemoveAll(tmp) }
+	release := func() { confine.RemoveChildTemp(tmp) }
 	policy := *spec.Confinement
 	policy.ReadWrite = append(append([]string{}, policy.ReadWrite...), tmp)
 	var cmd *exec.Cmd
 	var state confine.State
-	if len(spec.ConfinementFiles) > 0 || len(spec.ConfinementNoDelete) > 0 {
+	if len(spec.ConfinementFiles) > 0 || len(spec.ConfinementNoDelete) > 0 || len(spec.ConfinementReadFiles) > 0 {
 		// Held read-only grants require ABI 3, satisfying any strict template choice; a no-delete
-		// grant alone needs only Landlock.
-		cmd, state, err = confine.CommandWithNoDelete(ctx, policy, spec.ConfinementRequireTruncateProtection, spec.ConfinementFiles, spec.ConfinementNoDelete, spec.Program, spec.Args...)
+		// or read-file grant alone needs only Landlock.
+		cmd, state, err = confine.CommandWithReadFiles(ctx, policy, spec.ConfinementRequireTruncateProtection, spec.ConfinementFiles, spec.ConfinementNoDelete, spec.ConfinementReadFiles, spec.Program, spec.Args...)
 	} else {
 		cmd, state, err = confine.CommandWithTruncateProtection(ctx, policy, spec.ConfinementRequireTruncateProtection, spec.Program, spec.Args...)
 	}
@@ -56,6 +55,18 @@ func (pr *procRunner) command(ctx context.Context, spec LaunchSpec) (*exec.Cmd, 
 			err = fmt.Errorf("sessions: guard the folder's Git hooks and configuration: %w", mountErr)
 		case spec.ConfinementMountsNote != "":
 			state.Reason = joinReasons(state.Reason, "some of the folder's Git hooks and configuration stay writable ("+spec.ConfinementMountsNote+")")
+		}
+	}
+	if err == nil && state.Mode == confine.ModeLandlock && confine.UserBusExposed(cmd) {
+		// The engine user's user manager answers on a socket Landlock does not govern, and a
+		// unit started through it runs outside this child's confinement. Every confined child
+		// is kept away from it (the command constructors); a host that cannot do that starts
+		// no child that must be confined, and names the limit for any other.
+		const exposed = "the child can reach the engine user's user manager, which could start commands outside its confinement (this host gives it no user and mount namespace to hide the manager's sockets from it)"
+		if spec.ConfinementRequired {
+			err = &runErr{http.StatusBadGateway, "this server cannot keep a confined child away from the engine user's user manager (it needs user and mount namespaces; the session-confinement check of olivares doctor names the cause); the child was not started"}
+		} else {
+			state.Reason = joinReasons(state.Reason, exposed)
 		}
 	}
 	if err == nil && state.Mode == confine.ModeNone && spec.ConfinementRequired {

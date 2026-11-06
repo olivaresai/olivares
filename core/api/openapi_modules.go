@@ -294,19 +294,29 @@ func moduleResponses(r moduleRoute) map[string]any {
 // derived honestly (the namespace plus the permission the route declares — both
 // facts of the registration); no request/response semantics are invented.
 func moduleOperation(r moduleRoute) map[string]any {
-	summary := r.ns + " module route"
-	if r.perm != "" {
-		summary += " (requires " + string(r.perm) + ")"
-	}
-	o := oas.Obj(
-		"summary", summary,
-		"security", oaBearer(),
-		"responses", moduleResponses(r),
-	)
 	doc := r.documentation
 	if doc == nil {
 		doc = &ModuleOperationDocumentation{}
 	}
+	// x-required-permission is the route's one permission; the additional ones
+	// stay in x-also-requires-permission. Only the human summary joins them.
+	requires := string(r.perm)
+	if also, ok := doc.Extensions["x-also-requires-permission"].([]any); ok {
+		for _, additional := range also {
+			if p, ok := additional.(string); ok && p != "" {
+				if requires != "" {
+					requires += " and "
+				}
+				requires += p
+			}
+		}
+	}
+	summary := r.ns + " module route"
+	if requires != "" {
+		summary += " (requires " + requires + ")"
+	}
+	o := oas.Obj("summary", summary, "security", oaBearer(), "responses", moduleResponses(r))
+
 	if doc.RequiredAssurance > 0 {
 		o["x-required-assurance"] = doc.RequiredAssurance
 	}

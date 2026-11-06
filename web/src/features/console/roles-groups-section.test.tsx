@@ -8,12 +8,12 @@ import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
-const { api, authState } = vi.hoisted(() => ({
+const { api, authState, panels } = vi.hoisted(() => ({
   api: {
     listGroups: vi.fn(),
     setGroupRole: vi.fn(),
-    setGroupParent: vi.fn(),
   },
+  panels: {} as { groupParentActions?: unknown },
   authState: {
     activeTenant: 't1' as string | null,
     activeRole: 'admin' as string | null,
@@ -28,6 +28,19 @@ vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
   RequireAssurance: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    get PANEL_EXTENSIONS() {
+      // Set explicitly: a Business build composes its own nesting actions.
+      return {
+        ...actual.PANEL_EXTENSIONS,
+        groupParentActions: panels.groupParentActions,
+      }
+    },
+  }
+})
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, consoleApi: api }
@@ -54,6 +67,7 @@ const engineering = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  delete panels.groupParentActions
   api.listGroups.mockResolvedValue({ groups: [engineering] })
   api.setGroupRole.mockResolvedValue({
     id: 'g-eng',
@@ -80,7 +94,6 @@ describe('group role mapping', () => {
     ).toBeInTheDocument()
     expect(within(row).queryByRole('button')).not.toBeInTheDocument()
     expect(api.setGroupRole).not.toHaveBeenCalled()
-    expect(api.setGroupParent).not.toHaveBeenCalled()
   })
 
   it.each(['', 'operator'])(
@@ -93,20 +106,14 @@ describe('group role mapping', () => {
       expect(
         await screen.findByRole('button', { name: 'Map role' }),
       ).toBeEnabled()
-      expect(screen.getByRole('button', { name: 'Set parent' })).toBeEnabled()
       expect(screen.queryByText(/read-only/)).not.toBeInTheDocument()
     },
   )
 
-  // Removing a parent sends the empty parent the nesting route takes as
-  // "un-nest".
-  it('removes a stored parent through the nesting route', async () => {
-    const user = userEvent.setup()
-    api.setGroupParent.mockResolvedValue({
-      id: 'g-eng',
-      display_name: 'Engineering',
-      parent_group_id: '',
-    })
+  // Group nesting is Business: the Community engine answers 501 to the nesting
+  // route, so the Community console shows the parent read-only and offers no
+  // control for it.
+  it('shows the parent read-only, with no nesting control', async () => {
     api.listGroups.mockResolvedValue({
       groups: [
         { ...engineering, id: 'g-parent', display_name: 'Company' },
@@ -115,14 +122,45 @@ describe('group role mapping', () => {
     })
     wrap(<GroupHierarchySection canAdmin />)
     const row = (await screen.findByText('Engineering')).closest('tr')!
-    await user.click(within(row).getByRole('button', { name: 'Remove parent' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(
-      within(dialog).getByRole('button', { name: 'Remove parent' }),
+    expect(within(row).getByText('Company')).toBeInTheDocument()
+    expect(
+      within(row).queryByRole('button', { name: /parent/i }),
+    ).not.toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Map role' })).toBeEnabled()
+  })
+
+  // A Business build adds the nesting controls through its panel extension,
+  // given the row's group and the groups it may be nested under.
+  it('renders the edition nesting actions on operator rows only', async () => {
+    panels.groupParentActions = ({
+      group,
+      groups,
+    }: {
+      group: { display_name: string }
+      groups: readonly unknown[]
+    }) => (
+      <button type="button">
+        {`Nest ${group.display_name} among ${groups.length}`}
+      </button>
     )
-    await waitFor(() =>
-      expect(api.setGroupParent).toHaveBeenCalledWith('g-eng', ''),
-    )
+    api.listGroups.mockResolvedValue({
+      groups: [
+        engineering,
+        {
+          ...engineering,
+          id: 'g-dir',
+          display_name: 'Directory',
+          provisioned_by: 'directory-a',
+        },
+      ],
+    })
+    wrap(<GroupHierarchySection canAdmin />)
+    expect(
+      await screen.findByRole('button', { name: 'Nest Engineering among 2' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Nest Directory/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('states the blast radius before the operator commits', async () => {

@@ -101,8 +101,9 @@ das seine eigenen Grenzen benennt.
 
 ### Codieren Sie die Daten nicht fest — liefern Sie sie aus
 
-Die Anwendungszeitpläne für Hochrisiko sind **im Fluss** (die vorläufige
-Einigung zum Digital Omnibus vom 2026-05-07 hat mehrere verschoben). Daten in eine
+Die Anwendungsdaten für Hochrisiko haben sich bereits einmal verschoben: Die
+Verordnung (EU) 2026/1744 (Digital Omnibus zur KI, veröffentlicht am 2026-07-24)
+legt die Pflichten nach Anhang III ab 2027-12-02 und nach Anhang I ab 2028-08-02 fest. Daten in eine
 statische Datei zu kopieren, ist der Weg, auf dem Compliance-Dokumente veraltet und
 falsch werden. Die Control Plane liefert den regulatorischen Kalender **als Daten**
 aus — jeden Eintrag mit seiner Quelle und `verified_on`:

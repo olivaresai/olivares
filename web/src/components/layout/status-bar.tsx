@@ -5,18 +5,16 @@
 // THE STATUS BAR (#3161): one thin row under the work that says how things stand, the
 // way the editors people already use do. Left to right: the engine (a dot and a word), the
 // sessions open, each tool's 5-hour and weekly use as the tool reported it, the agent
-// stops while one is active, what Business adds, then Stop all while a session is open and
-// the version.
+// stops while one is active, what Business adds, then Stop all while a session works or waits
+// for a person. No version: Settings › About and the account menu carry it.
 //
 // ⛔ STOP ALL IS A SAFETY CONTROL, NOT CHROME. It left the top bar, where it sat on every
-//    page whether anything ran or not; it shows here only while a session is open and the
-//    person may engage the stop, and its click opens the kill switch's own confirmation,
-//    which says how many sessions stop. The palette and the kill switch page keep it
-//    within two actions whatever this bar shows.
-//
-// ⛔ THE VERSION IS THE DEPLOYMENT IDENTITY THE RELEASE GATE READS AT EVERY WIDTH
-//    (e2e-release/surface.ts): no width class hides it, and it is absent, never a dash,
-//    until the server says it.
+//    page whether anything ran or not; it shows here only while a session works or waits
+//    for a person, snoozed or archived too (an idle session left open does not keep it on
+//    screen), and the person may engage the stop. Its click opens the kill switch's own
+//    confirmation, which says how many sessions stop: every one alive, the idle ones too.
+//    The palette and the kill switch page keep it within two actions whatever this bar
+//    shows.
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { OctagonX } from 'lucide-react'
@@ -36,6 +34,7 @@ import {
 } from '@/features/agent-tools/use-background-providers'
 import { engineToolsQuery } from '@/features/agentops/api'
 import { toolName } from '@/features/agentops/engine-tools'
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import type * as EngageCard from '@/features/killswitch/engage-card'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
@@ -46,7 +45,6 @@ import {
 } from '@/features/navigation/command-actions'
 import { viewById } from '@/features/navigation/model'
 import { useAuth } from '@/lib/auth/context'
-import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { cn } from '@/lib/utils'
 import { EngineStatus } from './engine-status'
 import { KillSwitchStatus } from './killswitch-status'
@@ -79,21 +77,28 @@ function OpenKillSwitch() {
   return null
 }
 
-/** Each tool's 5-hour and weekly use, as its default login reported it. A tool that
- * reported nothing shows nothing: unknown is never 0%. */
+/** Each tool's 5-hour and weekly use, as its default login reported it, else as the
+ * first of its logins that reported any (the account quota the session header no longer
+ * repeats). A tool that reported nothing shows nothing: unknown is never 0%. */
 function ProviderUsage() {
   const { t } = useTranslation('nav')
   const providers = useBackgroundProviders()
-  const tools = (providers.data?.providers ?? [])
-    .filter((p) => p.default && p.state === 'ready')
+  const reported = (providers.data?.providers ?? [])
+    .filter((p) => p.state === 'ready')
     .map((p) => ({
       driver: p.driver,
+      isDefault: p.default,
       windows: p.limits.flatMap((limit) => {
         const key = USAGE_WINDOWS[limit.label as keyof typeof USAGE_WINDOWS]
         return key ? [{ key, percent: Math.round(limit.percent) }] : []
       }),
     }))
-    .filter((tool) => tool.windows.length > 0)
+    .filter((login) => login.windows.length > 0)
+  const tools = [...new Set(reported.map((login) => login.driver))].map(
+    (driver) =>
+      reported.find((l) => l.driver === driver && l.isDefault) ??
+      reported.find((l) => l.driver === driver)!,
+  )
   if (tools.length === 0) return null
   return (
     <>
@@ -144,8 +149,9 @@ function ToolsUnreadable() {
   )
 }
 
-/** Stop all, offered while a session is open to whoever may engage the stop. */
-function StopAll({ running }: { running: number }) {
+/** Stop all, offered while a session works or waits for a person to whoever may engage the
+ * stop; its confirmation counts every session it ends (`running`). */
+function StopAll({ active, running }: { active: number; running: number }) {
   const { t } = useTranslation('nav')
   const { listed } = useViewAccess()
   const { authorized } = useCommandActionAuthority()
@@ -155,7 +161,7 @@ function StopAll({ running }: { running: number }) {
   const view = viewById('killswitch')
   const action = commandActionOf('killswitch', 'engage')
   const offered =
-    running > 0 &&
+    active > 0 &&
     !!view &&
     !!action &&
     listed(view) &&
@@ -201,9 +207,9 @@ function StopAll({ running }: { running: number }) {
 
 export function StatusBar() {
   const { t } = useTranslation('nav')
-  const version = useServerInfo().data?.version
-  // The total the list shows; Stop all counts every session it would end, archived too.
-  const { running, open } = useSessionRail().sessionCounts
+  // The total the list shows; Stop all shows while one works or waits for a person, and
+  // counts every session it would end, idle and archived too.
+  const { active, running, open } = useSessionRail().sessionCounts
   const additions = useOfferedPanels(PANEL_EXTENSIONS.statusBarItems ?? [])
   return (
     <footer
@@ -214,8 +220,8 @@ export function StatusBar() {
         'flex h-6 min-h-6 shrink-0 items-center gap-3 border-t border-line bg-canvas px-3 text-text-2 print:hidden',
       )}
     >
-      {/* What can give way on a narrow screen is on the left; Stop all and the version
-          on the right never do. */}
+      {/* What can give way on a narrow screen is on the left; Stop all on the right
+          never does. */}
       <span className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
         <EngineStatus
           className={cn(META, 'flex-none gap-1.5 rounded-none p-0')}
@@ -232,20 +238,13 @@ export function StatusBar() {
         <ProviderUsage />
         <KillSwitchStatus />
         {additions.map(({ id, Component }) => (
-          <Component key={id} />
+          <PanelSlot key={id} className="flex items-center">
+            <Component />
+          </PanelSlot>
         ))}
       </span>
       <span className="flex shrink-0 items-center gap-3">
-        <StopAll running={running} />
-        {version ? (
-          <p
-            data-testid="deployment-identity"
-            className="flex shrink-0 tabular-nums text-text-3"
-          >
-            <span className="sr-only">{t('shell.status.version')} </span>
-            <span>{version}</span>
-          </p>
-        ) : null}
+        <StopAll active={active} running={running} />
       </span>
     </footer>
   )

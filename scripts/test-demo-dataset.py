@@ -350,6 +350,44 @@ class DataContract(unittest.TestCase):
                     self.assertIsNone(pattern.search(text.lower() if pattern in HARNESS_NAMES[:1] else text),
                                       "refused by the capture check: %r" % text[:80])
 
+    def test_the_estate_seeds_the_core_workspace_eval_suite_and_backup_the_captures_read(self):
+        # The workspace, evals and backups captures read data these three steps create through the product's routes.
+        posted = []
+
+        class Recorder(StubApi):
+            def call(self, method, path, body=None, headers=None, token=None, anonymous=False):
+                if method == "GET":
+                    return 200, {"items": []}
+                if method == "POST":
+                    posted.append((path, body))
+                    return (202 if path.endswith("/backup") else 201), {"id": "suite-1", "job_id": "job-1"}
+                raise AssertionError(method)
+
+            def events(self, path, timeout):
+                yield {"status": "completed"}
+
+        api = Recorder({})
+        for step in (SEEDER.step_core_workspaces, SEEDER.step_evals, SEEDER.step_backup):
+            step(api, {"root": tempfile.gettempdir()})
+        paths = [path for path, _ in posted]
+        self.assertIn(("Billing", "billing"), [(b["name"], b["slug"]) for p, b in posted if p == "/v1/workspaces"])
+        self.assertEqual(sum(p == "/v1/m/evals/suites/suite-1/cases" for p in paths), len(SEEDER.EVAL_CASES))
+        self.assertEqual(sum(p == "/v1/m/evals/runs" for p in paths), len(SEEDER.EVAL_RUNS))
+        self.assertIn("/v1/console/dr/backup", paths)
+
+    def test_a_backup_job_that_fails_stops_the_seed_with_its_error(self):
+        class Failing(StubApi):
+            def call(self, method, path, body=None, headers=None, token=None, anonymous=False):
+                if method == "GET":
+                    return 200, {"items": []}
+                return 202, {"job_id": "job-1"}
+
+            def events(self, path, timeout):
+                yield {"status": "failed", "error": "disk full"}
+
+        with self.assertRaisesRegex(SEEDER.SeedError, "disk full"):
+            SEEDER.step_backup(Failing({}), {"root": tempfile.gettempdir()})
+
     def test_the_steps_run_in_the_order_the_engine_needs(self):
         order = [name for name, _ in SEEDER.STEPS]
         self.assertEqual(len(order), len(set(order)))
@@ -905,6 +943,28 @@ class PublishBlock(unittest.TestCase):
         self.assertIn("NOT PUBLISHED 1 capture(s)", proc.stderr)
 
 
+class SeederWorkspaces(unittest.TestCase):
+    def test_the_engines_own_my_files_folder_is_not_a_sixth_estate_folder(self):
+        # On first boot the engine registers the signed-in person's "My files" folder under
+        # <data>/files/<user-id> and lists it to whoever asks: it is not part of the canonical estate.
+        with tempfile.TemporaryDirectory() as work:
+            ctx = {"root": os.path.realpath(work)}
+            items = []
+            for name, (folder, mode, dlp) in SEEDER.WORKSPACES.items():
+                root = SEEDER.make_repo(ctx["root"], folder, SEEDER.REPOS[folder])
+                items.append({"name": name, "root_path": root, "mount_mode": mode, "dlp_mode": dlp,
+                              "workspace_ref": "ws-" + folder})
+            personal = os.path.join(ctx["root"], "data", "files", "0f3c9a2e-1b7d-4c1e-9a55-2d6f0e8b7a10")
+            os.makedirs(personal)
+            items.append({"name": "My files", "root_path": os.path.realpath(personal), "mount_mode": "rw",
+                          "dlp_mode": "off", "workspace_ref": "ws-personal"})
+            # No POST route: the seed must reuse the five canonical registrations and create nothing.
+            api = StubApi({("GET", "/v1/m/sessions/workspaces"): (200, {"items": items, "has_more": False})})
+            SEEDER.step_workspaces(api, ctx)
+        self.assertEqual(ctx["workspaces"],
+                         {name: "ws-" + folder for name, (folder, _, _) in SEEDER.WORKSPACES.items()})
+
+
 class StubApi(SEEDER.Api):
     """The engine's answers for the seeder's own decisions, from a table: what the seeder does with a
     list, a decision or a refusal is its logic, and the product contract is exercised against a real
@@ -977,7 +1037,7 @@ class SeederLogic(unittest.TestCase):
         SEEDER.step_approvals(api, {})
         self.assertEqual(decided, [], "a decided request received a second decision")
 
-    def test_every_canonical_request_names_its_action_subject_session_and_asker(self):
+    def test_every_canonical_request_names_its_action_subject_and_human_asker(self):
         created = []
 
         def made(body):
@@ -1006,8 +1066,8 @@ class SeederLogic(unittest.TestCase):
             key = (body["action"], body["subject_ref"])
             state, session, _ = want[key]
             if state == "pending":
-                self.assertEqual(body.get("session_ref"), refs[session],
-                                 "%s %s does not name the session that asked" % key)
+                self.assertNotIn("session_ref", body,
+                                 "%s %s impersonates a session with a human token" % key)
             for field in ("expires_in_seconds", "escalate_in_seconds"):
                 self.assertNotIn(field, body,
                                  "%s %s carries an expiry, which would end a request the estate keeps "
@@ -1474,6 +1534,35 @@ class SeederLogic(unittest.TestCase):
 
 
 class LiveSnapshotCommand(unittest.TestCase):
+    def test_pending_human_approvals_have_no_session_reference(self):
+        script = (ROOT / "scripts" / "test-demo-dataset-live.sh").read_text(encoding="utf8")
+        program = re.search(r"<<'PY'\n(.*?)\nPY\n", script, re.S).group(1)
+        # Exercise the snapshot's queue validation without launching the sixteen sessions.
+        queue_check = program[program.index("COMMUNITY_QUEUE ="):]
+        approvals = [
+            {"action": action, "subject_ref": subject, "status": "pending"}
+            for action, _, subject, *_ in SEEDER.PENDING_APPROVALS
+            if SEEDER.keeps_action("community", action)
+        ] + [
+            {"action": action, "subject_ref": subject,
+             "status": "approved" if decision == "approve" else "rejected"}
+            for action, _, subject, _, _, decision in SEEDER.DECIDED_APPROVALS
+            if SEEDER.keeps_action("community", action)
+        ]
+        def check():
+            exec(compile(queue_check, "live-snapshot-queue", "exec"), {
+                "edition": "community", "problems": [], "sys": sys,
+                "get": lambda path: {"items": approvals},
+                "live_rows": [], "run_refs": set(),
+            })
+        check()
+        approvals[0]["session_ref"] = "unowned-session"
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as errors:
+            with self.assertRaises(SystemExit) as stopped:
+                check()
+        self.assertEqual(stopped.exception.code, 1)
+        self.assertIn("impersonates a session", errors.getvalue())
+
     def test_snapshot_passes_bearer_through_environment_only(self) -> None:
         script = (ROOT / "scripts" / "test-demo-dataset-live.sh").read_text(encoding="utf8")
         snapshot = script.split("snapshot() {", 1)[1].split("\nPY\n}\n", 1)[0] + "\nPY\n"

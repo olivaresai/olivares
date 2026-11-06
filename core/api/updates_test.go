@@ -161,13 +161,16 @@ func TestUpdatesApplyOutlastsTheServersWriteTimeout(t *testing.T) {
 	req := httptest.NewRequest("POST", "/v1/console/updates/apply", nil)
 	req.RemoteAddr = "10.0.0.1:1234"
 	req.Header.Set("Authorization", "Bearer "+admin)
-	rec := &deadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	// The server's 60 s write deadline, armed with the request headers, has passed by the
+	// time an install on a slow link returns.
+	rec := &deadlineRecorder{ResponseRecorder: httptest.NewRecorder(), deadline: time.Now()}
 	h.srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("apply = %d %s", rec.Code, rec.Body.String())
 	}
-	// The server's hardened WriteTimeout is 60s; an install that downloads a release must outlast it.
-	if until := time.Until(rec.deadline); until < 5*time.Minute {
-		t.Fatalf("write deadline is %v away, want the reply window to outlast a download", until)
+	// The install takes as long as its download keeps arriving (`olivares upgrade` ends a stalled
+	// one), so the reply has no window of its own: only the API's stall bound, armed for the write.
+	if until := time.Until(rec.deadline); until <= 0 || until > time.Minute {
+		t.Fatalf("write deadline is %v away, want the stall bound armed for the reply (0, 1m]", until)
 	}
 }

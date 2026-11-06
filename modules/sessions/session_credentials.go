@@ -22,6 +22,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // A SESSION'S MANAGED CREDENTIALS (Business).
@@ -254,10 +255,12 @@ func (m *Module) configureCredentials(ctx, runCtx context.Context, tenant model.
 		named = append(named, e.Name)
 	}
 	// Each file a confined child may read is checked on its own: one bad element refuses the list.
-	// The child is granted the file that was checked, where it really is.
-	var granted []string
+	// The child is granted the file that was checked, where it really is; the helper opens it again
+	// without a link when it grants it and requires the same file, so a name swapped since this
+	// check refuses the launch.
+	var granted []confine.ReadFile
 	for _, path := range got.Read {
-		real, err := m.credentialReadPath(path, runRef)
+		file, err := m.credentialReadPath(path, runRef)
 		if err != nil {
 			release()
 			if errors.Is(err, errReadUnchecked) {
@@ -265,13 +268,13 @@ func (m *Module) configureCredentials(ctx, runCtx context.Context, tenant model.
 			}
 			return breach(err)
 		}
-		granted = append(granted, real)
+		granted = append(granted, file)
 	}
 	context.AfterFunc(runCtx, release)
 	spec.OnStart = got.Bind
 	spec.Env = append(spec.Env, got.Env...)
-	for _, path := range granted {
-		spec.AllowRead(path)
+	for _, file := range granted {
+		spec.AllowReadFile(file)
 	}
 	p.credentialWithhold = withholdableLines(got.Withhold)
 	p.credentialDetail = got.Detail
@@ -283,33 +286,36 @@ func (m *Module) configureCredentials(ctx, runCtx context.Context, tenant model.
 // directory would grant its whole tree, a link would grant what it points at, and a hard link
 // would grant the file it is a second name for; the last name is the file itself, and folders on
 // the way are followed to where the file really is. Inside a protected folder only this run's own
-// directory in the engine data directory is allowed. The error names the rule, never the path.
-func (m *Module) credentialReadPath(path, runRef string) (string, error) {
+// directory in the engine data directory is allowed. The file judged is the file stat'ed: its
+// identity goes with the grant, and the helper grants no other. The error names the rule, never
+// the path.
+func (m *Module) credentialReadPath(path, runRef string) (confine.ReadFile, error) {
 	if strings.ContainsRune(path, 0) || !filepath.IsAbs(path) || filepath.Clean(path) != path || path == string(filepath.Separator) {
-		return "", errors.New("a file to read that is not an absolute, clean path")
+		return confine.ReadFile{}, errors.New("a file to read that is not an absolute, clean path")
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
-		return "", credentialStatErr(err)
+		return confine.ReadFile{}, credentialStatErr(err)
 	}
 	if !info.Mode().IsRegular() || !singleLink(info) {
-		return "", errors.New("a file to read that is not a regular file of its own")
+		return confine.ReadFile{}, errors.New("a file to read that is not a regular file of its own")
 	}
 	// The file is judged where it really is: the engine never resolves its data directory, so the
 	// broker's own path may run through a link, and the child is granted the resolved one.
 	real, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return "", errReadUnchecked
+		return confine.ReadFile{}, errReadUnchecked
 	}
+	file := confine.ReadFileOf(real, info)
 	if m.rt.credentialDataDir != "" && inBrokerRunDir(real, m.rt.credentialDataDir, runRef) {
-		return real, nil
+		return file, nil
 	}
 	for _, protected := range m.rt.confineProtect {
 		if pathsOverlap(real, protected) {
-			return "", errors.New("a file to read inside a protected folder")
+			return confine.ReadFile{}, errors.New("a file to read inside a protected folder")
 		}
 	}
-	return real, nil
+	return file, nil
 }
 
 // errReadUnchecked is a file the core could not check for a reason of the system, not of the

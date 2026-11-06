@@ -103,7 +103,8 @@ func (r *Resolver) ResolveForSession(ctx context.Context, tenant model.TenantID,
 
 // ResolveForAgent authorizes a source for the agent identified by agentRef (its
 // external id — a caller-declared, route-gated actor assertion). Same scope-derivation
-// and deny-closed semantics as ResolveForSession.
+// and deny-closed semantics as ResolveForSession. With no acting agent, a person
+// uses their authenticated department membership and its workspace lineage.
 //
 // when the principal carries an authenticated agent identity, that identity
 // overrides the caller-declared agentRef, closing the confused-deputy path documented
@@ -273,6 +274,17 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 		actor, err = resolveActorScope(ctx, sc, who)
 		if err != nil {
 			return err
+		}
+		// Person-only discovery has no agent row. Use the same authenticated
+		// department as DepartmentOf, including its ancestors for containment.
+		// Explicit unknown actors retain their empty, deny-closed scope.
+		if who.kind == actorAgent && who.ref == "" {
+			if ws, confined := principal.ConfinedWorkspaceIn(tenant); confined {
+				actor.workspaceSlug, actor.workspaceAbove, err = store.WorkspaceLineage(ctx, sc, ws)
+				if err != nil {
+					return err
+				}
+			}
 		}
 		// gate connector VISIBILITY for UNCONFINED sources — those
 		// with no enabled ALLOW binding (len==0 OR forbid-only). A confined source is

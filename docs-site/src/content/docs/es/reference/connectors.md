@@ -491,14 +491,14 @@ personal; el módulo expurga el cuerpo antes de persistir).
 | Kind | Ingesta |
 |---|---|
 | `gdrive` | Documentos de Google Drive (Docs/Sheets/Slides/ficheros) |
-| `confluence` | Espacios y páginas de Atlassian Confluence |
+| `confluence` | Espacios y páginas de Atlassian Confluence (Business) |
 | `notion` | Workspaces, bases de datos y páginas de Notion |
 | `sharepoint` | Sitios y documentos de Microsoft SharePoint / OneDrive (Business) |
 | `s3content` | Contenido de object-storage (objetos S3 / R2 / GCS) |
 | `sap_odata` | Entidades de servicios SAP OData como documentos gobernados (Business) |
 | `salesforce` | Objetos/registros de Salesforce como documentos gobernados (Business) |
-| `snowflake` | Tablas/filas de Snowflake como documentos gobernados (distinto del observador R/RW `snowflake-audit`) |
-| `azure_ai_search` | Documentos de índices de Azure AI Search |
+| `snowflake` | Tablas/filas de Snowflake como documentos gobernados (distinto del observador R/RW `snowflake-audit`) (Business) |
+| `azure_ai_search` | Documentos de índices de Azure AI Search (Business) |
 | `postgres` | Filas de PostgreSQL como documentos gobernados — solo lectura por construcción, ACL declarada por fila, clasificación por columna (distinto del observador R/RW `pgaudit`; no es NL-to-SQL). Consulta [Postgres como fuente de contexto gobernada](/es/how-to/govern-postgres-content/). |
 | `filesystem` | Contenido de servidor de ficheros (local / NFS / SMB) — lectura confinada a la raíz por construcción, owner/group/ACL POSIX mapeados a ACL de documentos, clasificación xattr (distinto del sink de logs `filelog`). Consulta [Gobierna tu servidor de ficheros](/es/how-to/govern-your-file-server/). |
 
@@ -506,8 +506,8 @@ personal; el módulo expurga el cuerpo antes de persistir).
 // OLIVARES_SOURCES_CONFIG — las fuentes de documentos van bajo "documents", nunca "sources"
 {
   "documents": [
-    { "name": "eng-wiki", "kind": "confluence",
-      "config": { "export_path": "/var/lib/olivares/confluence" } }
+    { "name": "eng-wiki", "kind": "notion",
+      "config": { "export_path": "/var/lib/olivares/notion" } }
   ]
 }
 ```

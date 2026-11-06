@@ -6,12 +6,7 @@
 // only those the operator can read) and the assign/unassign actions. Directory names come
 // from the console's own workspace, agent group and agent lists; an unreadable or deleted
 // target shows its ID.
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-  type QueryKey,
-} from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { type FormEvent, type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryErrorState } from '@/components/layout/query-error-state'
@@ -20,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field } from '@/components/ui/field'
+import { PathText } from '@/components/ui/path-text'
 import {
   Sheet,
   SheetContent,
@@ -29,26 +25,24 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ListTruncationBadge } from '@/features/_intel'
-import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
-import { profileLabel } from '@/features/agentops/types'
-import { consoleApi, consoleKeys } from '@/features/console/api'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/context'
-import { useModuleOn } from '@/stores/modules'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { skillsApi, skillsKeys } from './api'
-import type {
-  SkillAssignment,
-  SkillInstallResult,
-  SkillPack,
-  SkillRevision,
-  SkillTargetKind,
-  SkillUpdateCheck,
+import { SelectionPreview } from './selection-preview'
+import {
+  pinHolds,
+  type SkillAssignment,
+  type SkillInstallResult,
+  type SkillPack,
+  type SkillRevision,
+  type SkillTargetKind,
+  type SkillUpdateCheck,
 } from './types'
+import { useDirectory, type Directory } from './use-directory'
 import './i18n'
 
-const DIRECTORY_PAGE = { limit: 1000 }
 /** The targets the console assigns to; templates and sessions stay in the CLI. */
 const ASSIGNABLE: SkillTargetKind[] = [
   'workspace',
@@ -57,98 +51,8 @@ const ASSIGNABLE: SkillTargetKind[] = [
   'agent_group',
   'agent',
 ]
-const FOLDER_PAGE = { state: 'active', limit: 200 } as const
-const PROFILE_PAGE = { limit: 200 }
 const selectClass =
   'h-9 w-full min-w-0 rounded-md border border-ctl-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-
-interface DirectoryList {
-  items: Array<{ id: string; name: string }>
-  isLoading: boolean
-  error: unknown
-  hasMore?: boolean
-  isFetchingMore?: boolean
-  loadMore?: () => void
-}
-type Directory = Partial<Record<SkillTargetKind, DirectoryList>>
-
-function useDirectory(tenant: string | null): Directory {
-  const { can } = useAuth()
-  const boundary = useAuthBoundary()
-  // Session folders belong to the sessions module: without it there are none.
-  const sessionsOn = useModuleOn('sessions')
-  const workspaces = useQuery({
-    queryKey: consoleKeys.workspaces(tenant, DIRECTORY_PAGE),
-    queryFn: () => consoleApi.listWorkspaces(DIRECTORY_PAGE),
-    enabled: can('tenant:read'),
-  })
-  const groups = useQuery({
-    queryKey: consoleKeys.agentGroups(tenant, DIRECTORY_PAGE),
-    queryFn: () => consoleApi.listAgentGroups(DIRECTORY_PAGE),
-    enabled: can('agent:read'),
-  })
-  const agents = useQuery({
-    queryKey: consoleKeys.agents(tenant, DIRECTORY_PAGE),
-    queryFn: () => consoleApi.listAgents(DIRECTORY_PAGE),
-    enabled: can('agent:read'),
-  })
-  const folders = useQuery({
-    queryKey: agentOpsKeys.workspaces(tenant, FOLDER_PAGE),
-    queryFn: ({ signal }) =>
-      agentOpsApi.listWorkspaces(FOLDER_PAGE, { tenant, signal }),
-    enabled: sessionsOn && can('sessions:workspace:read'),
-  })
-  const profiles = useInfiniteQuery({
-    queryKey: [
-      ...agentOpsKeys.profiles(tenant, boundary.epoch, PROFILE_PAGE),
-      'skill-targets',
-    ],
-    queryFn: ({ pageParam, signal }) =>
-      agentOpsApi.listProfiles(
-        { ...PROFILE_PAGE, cursor: pageParam },
-        { signal },
-      ),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (page) => (page.has_more ? page.cursor : undefined),
-    enabled:
-      sessionsOn &&
-      can('sessions:profile:read') &&
-      can('sessions:profile:write'),
-  })
-  const entry = (q: typeof workspaces | typeof groups | typeof agents) => ({
-    items: q.data?.items ?? [],
-    isLoading: q.isLoading,
-    error: q.error,
-  })
-  return {
-    workspace: entry(workspaces),
-    profile: {
-      items: (profiles.data?.pages.flatMap((page) => page.items) ?? []).map(
-        (p) => ({ id: p.profile_ref, name: profileLabel(p) }),
-      ),
-      isLoading: profiles.isLoading,
-      error: profiles.error,
-      hasMore: profiles.hasNextPage,
-      isFetchingMore: profiles.isFetchingNextPage,
-      loadMore: () => {
-        void profiles.fetchNextPage()
-      },
-    },
-    // A folder is named by its workspace_ref; its label is the name it was
-    // registered under, else the last segment of its path.
-    folder: {
-      items: (folders.data?.items ?? []).map((w) => ({
-        id: w.workspace_ref,
-        name:
-          w.name || w.root_path.split('/').filter(Boolean).pop() || w.root_path,
-      })),
-      isLoading: folders.isLoading,
-      error: folders.error,
-    },
-    agent_group: entry(groups),
-    agent: entry(agents),
-  }
-}
 
 export function PackState({ state }: { state: string }) {
   const { t } = useTranslation('skills')
@@ -162,16 +66,22 @@ export function PackState({ state }: { state: string }) {
 export function PackSheet({
   pack,
   onOpenChange,
+  skill,
 }: {
   pack: SkillPack | null
   onOpenChange: (open: boolean) => void
+  skill?: string
 }) {
   const boundary = useAuthBoundary()
   return (
     <Sheet open={pack !== null} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
         {pack && (
-          <PackDetail key={`${pack.id}:${boundary.epoch}`} pack={pack} />
+          <PackDetail
+            key={`${pack.id}:${boundary.epoch}:${skill ?? ''}`}
+            pack={pack}
+            skill={skill}
+          />
         )}
       </SheetContent>
     </Sheet>
@@ -187,7 +97,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function PackDetail({ pack }: { pack: SkillPack }) {
+function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
   const { t } = useTranslation('skills')
   const { activeTenant, can } = useAuth()
   const queryClient = useQueryClient()
@@ -262,13 +172,17 @@ function PackDetail({ pack }: { pack: SkillPack }) {
   const targetName = (a: SkillAssignment) =>
     directory[a.target_kind]?.items.find((d) => d.id === a.target_id)?.name ??
     a.target_id
-  const pins = uses.data?.items ?? []
+  const allPins = uses.data?.items ?? []
+  const pins = skill
+    ? allPins.filter((pin) => pinHolds(pin, revisions, skill))
+    : allPins
 
   return (
     <>
       <SheetHeader>
-        <SheetTitle className="font-mono">{pack.name}</SheetTitle>
+        <SheetTitle className="break-words">{skill ?? pack.name}</SheetTitle>
         <SheetDescription className="flex items-center gap-2">
+          {skill && <span>{pack.name}</span>}
           <PackState state={pack.state} />
           {t('detail.revision', { n: pack.latest_revision })}
         </SheetDescription>
@@ -285,24 +199,28 @@ function PackDetail({ pack }: { pack: SkillPack }) {
           <>
             <Section title={t('detail.skills')}>
               <ul className="flex flex-col gap-1">
-                {(latest?.members ?? []).map((m) => (
-                  <li key={m.name} className="text-caption">
-                    <span className="font-mono text-foreground">{m.name}</span>
-                    {m.description && (
-                      <span className="text-muted-foreground">
-                        {' — '}
-                        {m.description}
+                {(latest?.members ?? [])
+                  .filter((m) => !skill || m.name === skill)
+                  .map((m) => (
+                    <li key={m.name} className="text-caption">
+                      <span className="font-mono text-foreground">
+                        {m.name}
                       </span>
-                    )}
-                    {m.active_content && m.active_content.length > 0 && (
-                      <Badge variant="warning" className="ml-2">
-                        {t('detail.activeContent', {
-                          items: m.active_content.join(', '),
-                        })}
-                      </Badge>
-                    )}
-                  </li>
-                ))}
+                      {m.description && (
+                        <span className="text-muted-foreground">
+                          {' — '}
+                          {m.description}
+                        </span>
+                      )}
+                      {m.active_content && m.active_content.length > 0 && (
+                        <Badge variant="warning" className="ml-2">
+                          {t('detail.activeContent', {
+                            items: m.active_content.join(', '),
+                          })}
+                        </Badge>
+                      )}
+                    </li>
+                  ))}
               </ul>
             </Section>
             <Section title={t('detail.revisions')}>
@@ -323,7 +241,8 @@ function PackDetail({ pack }: { pack: SkillPack }) {
         {canPublish && pack.state === 'enabled' && (
           <UpdateSection
             pack={pack}
-            pins={pins}
+            pins={allPins}
+            source={latest?.source.origin}
             assignmentsKey={assignmentsKey}
           />
         )}
@@ -345,7 +264,7 @@ function PackDetail({ pack }: { pack: SkillPack }) {
             />
           ) : pins.length === 0 ? (
             <p className="text-caption text-muted-foreground">
-              {t('uses.none')}
+              {skill ? t('catalog.unassigned') : t('uses.none')}
             </p>
           ) : (
             <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
@@ -409,7 +328,7 @@ function PackDetail({ pack }: { pack: SkillPack }) {
             key={pack.latest_revision_id}
             pack={pack}
             revisions={revisions}
-            pinned={pins}
+            pinned={allPins}
             directory={directory}
             assignmentsKey={assignmentsKey}
           />
@@ -530,6 +449,7 @@ function AssignForm({
   return (
     <Section title={t('assign.title')}>
       <form onSubmit={submit} className="flex flex-col gap-3">
+        {target && <SelectionPreview kind={kind} id={target} current />}
         <Field label={t('assign.kind')}>
           <select
             className={selectClass}
@@ -649,17 +569,21 @@ function AssignForm({
  * revision until each one is moved from its row.
  */
 function UpdateSection({
+  source,
   pack,
   pins,
   assignmentsKey,
 }: {
   pack: SkillPack
+  source?: string
   pins: SkillAssignment[]
   assignmentsKey: QueryKey
 }) {
   const { t } = useTranslation('skills')
   const { activeTenant } = useAuth()
   const [result, setResult] = useState<SkillUpdateCheck | null>(null)
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
   // One key per candidate: a retried apply replays the published revision.
   const [key, setKey] = useState('')
   const refresh = () => [
@@ -676,7 +600,14 @@ function UpdateSection({
         : t('update.availableToast'),
     onDone: (data) => {
       setResult(data)
+      setFailure(null)
+      setCheckedAt(new Date())
       setKey(crypto.randomUUID())
+    },
+    onError: (error) => {
+      setFailure(error instanceof Error ? error.message : String(error))
+      setResult(null)
+      return true
     },
   })
   const apply = usePrivilegedMutation<
@@ -687,12 +618,17 @@ function UpdateSection({
       skillsApi.updateApply(pack.id, digest, key, { tenant: activeTenant }),
     invalidateKeys: refresh,
     successMessage: (data) => t('update.applied', { n: data.revision.number }),
-    onDone: () => setResult(null),
+    onDone: () => {
+      setResult(null)
+      setCheckedAt(null)
+    },
     // A refused apply (the source moved, or nothing is new) leaves the panel with
     // a digest that can never pass: clear it so the operator checks again.
-    onError: () => {
+    onError: (error) => {
+      setFailure(error instanceof Error ? error.message : String(error))
       setResult(null)
-      return false
+      setCheckedAt(null)
+      return true
     },
   })
   const available = result?.state === 'available' ? result : null
@@ -707,7 +643,12 @@ function UpdateSection({
           variant="secondary"
           size="sm"
           disabled={check.isPending || apply.isPending}
-          onClick={() => check.mutate()}
+          onClick={() => {
+            setResult(null)
+            setFailure(null)
+            setCheckedAt(null)
+            check.mutate()
+          }}
         >
           {check.isPending ? t('update.checking') : t('update.check')}
         </Button>
@@ -717,6 +658,19 @@ function UpdateSection({
           </span>
         )}
       </div>
+      {checkedAt && (
+        <p className="text-caption text-muted-foreground">
+          {t('update.checked')}{' '}
+          <time dateTime={checkedAt.toISOString()}>
+            {checkedAt.toLocaleString()}
+          </time>
+        </p>
+      )}
+      {failure && (
+        <p role="alert" className="break-words text-caption text-destructive">
+          {source || pack.name}: {failure}
+        </p>
+      )}
       {available && available.candidate && (
         <div
           role="status"
@@ -743,6 +697,17 @@ function UpdateSection({
               </li>
             ))}
           </ul>
+          {available.diff?.files.map((file) => (
+            <details key={file.path} className="min-w-0 text-caption">
+              <summary className="cursor-pointer break-all">
+                <PathText value={file.path} wrap copy={false} /> ·{' '}
+                {t(`update.change.${file.change}`)}
+              </summary>
+              <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all p-2">
+                {file.diff || file.diff_omitted || t('update.noDiff')}
+              </pre>
+            </details>
+          ))}
           {acting.map((m) => (
             <p key={m.name} className="text-caption text-warning">
               {t('update.acts', {

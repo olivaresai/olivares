@@ -4,13 +4,12 @@
   "forbiddenTitle": "Not authorized",
   "forbidden": "Viewing the attestation contract requires the compliance:read permission.",
   "disclaimer": {
-    "tag": "Beta",
-    "body": "The project is beta: no releases exist yet and the release pipeline is written but not activated. The running-binary panel is MEASURED from this process; the contract tabs are the declared contract, not a published release or a live cryptographic verification — this console never re-verifies signatures in the browser.",
+    "body": "This build is not a published release.",
     "declaredRef": "Declared reference — AsOf {{date}}. Sourced verbatim from docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml and the release / scorecard / patch-velocity workflows. The engine cannot observe repository or CI state, so this half is not served live."
   },
   "live": {
     "title": "Running binary (measured)",
-    "description": "What THIS engine process can prove about itself — read live from the binary (ldflags, debug.ReadBuildInfo, crypto/fips140, a self-hash of the executable) — and the honest release state: nothing is published or verified until a v* tag fires the pipeline.",
+    "description": "What this running build reports about itself.",
     "status": {
       "measured": "Measured"
     },
@@ -58,11 +57,11 @@
   },
   "tabs": {
     "artifacts": "Artifacts",
-    "provenance": "Provenance & VEX",
+    "provenance": "Provenance",
     "sbom": "SBOM",
     "scorecard": "Scorecard",
     "remediation": "Remediation SLA",
-    "airgap": "Air-gap & chart"
+    "airgap": "Air-gap"
   },
   "artifacts": {
     "title": "Release artifacts",

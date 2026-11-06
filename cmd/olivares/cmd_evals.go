@@ -21,6 +21,8 @@ import (
 // cmd_evals.go is the CI-facing CLI of the eval-methodology surface
 // (docs/EVAL-METHODOLOGY.md):
 //
+//   - `evals run` — execute repeated governed sessions, score each batch with
+//     the existing gate, and gate on cases passing every trial.
 //   - `evals gate`  — run (or re-check) a regression gate against a running control
 //     plane and map the EFFECTIVE verdict onto the exit code: pass→0, warn→0 with a
 //     loud warning (the decision-3 honest degradation), fail→1 (the merge blocks).
@@ -30,8 +32,8 @@ import (
 //     verdict per item, and posts each label IMMEDIATELY (a long session never
 //     loses work). Already-labeled case keys are skipped on resume.
 //
-// Both are thin HTTP clients (Bearer token + tenant header) — all semantics live
-// server-side in modules/evals.
+// These commands use the same authenticated HTTP clients. Session governance and
+// scoring remain server-side; run composes the launches and trial reliability.
 
 // evalsClientConfig is the agent client configuration (flags, environment, the
 // saved sign-in, the shared transport) with a judged gate's longer timeout and
@@ -71,17 +73,18 @@ func newEvalsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "evals",
-		Short:       "Eval methodology tools: the CI regression gate and the judge-calibration labeler",
+		Short:       "Eval methodology tools: governed trials, regression gates and judge calibration",
 		Long: "evals holds the two halves of the eval methodology that a CI pipeline needs: the\n" +
 			"regression gate that decides whether a candidate's outputs may ship, and the\n" +
 			"guided labeling session that keeps an automated judge calibrated against human\n" +
 			"judgement.\n\n" +
 			"gate is the machine-facing verb — it exits non-zero on a fail so a pipeline can\n" +
-			"branch on it; label is the human-facing one.",
+			"branch on it; label is the human-facing one. run produces candidate outputs\n" +
+			"through repeated governed sessions and gates on all trials passing.",
 		Example: "  olivares evals gate --suite suite-123 --subject agent-v2 --outputs outputs.json\n" +
 			"  olivares evals label --set safety-v1 --in calibration-candidates.jsonl",
 	}
-	cmd.AddCommand(newEvalsGateCmd(), newEvalsLabelCmd())
+	cmd.AddCommand(newEvalsGateCmd(), newEvalsLabelCmd(), newEvalsRunCmd())
 	return cmd
 }
 

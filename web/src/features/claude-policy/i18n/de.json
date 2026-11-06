@@ -1,14 +1,15 @@
 {
-  "title": "Claude Code Governance",
+  "title": "Verwaltete Richtlinie",
   "subtitle": "Verwaltete Richtlinien, Hooks, MCP- und Sandbox-Kontrollen sowie Cedar/OPA-Policy-as-Code verfassen – und die vom Modul gemeldete Abweichung zwischen Richtlinie und Beobachtetem prüfen.",
   "tabs": {
-    "drift": "Abweichung & Sicherheitslage",
+    "drift": "Abweichung",
     "managedSettings": "Verwaltete Einstellungen",
     "hooks": "Hooks",
-    "managedMcp": "MCP & Plugins",
-    "sandbox": "Sandbox & Egress",
+    "managedMcp": "MCP",
+    "sandbox": "Sandbox",
     "policyAsCode": "Policy-as-Code",
-    "hitl": "HITL für verwaltete Agenten"
+    "hitl": "HITL für verwaltete Agenten",
+    "departmentInstructions": "Abteilungsanweisungen"
   },
   "seam": {
     "badge": "Backend ausstehend",
@@ -75,7 +76,7 @@
   },
   "drift": {
     "title": "Richtlinienabweichung & Sicherheitslage",
-    "subtitle": "ZULÄSSIGE Richtlinie vs. BEOBACHTETE Host-Konfiguration, gemeldet von den schreibgeschützten Konnektoren.",
+    "subtitle": "Wo die Einstellungen eines Hosts von der Richtlinie abweichen.",
     "listLabel": "Abweichungsbefunde",
     "subject": "Subjekt",
     "fingerprint": "Fingerabdruck",
@@ -294,5 +295,19 @@
     "contentUnknown": "Inhalt UNBEKANNT (nur Attestierung)",
     "openFindings_one": "{{count}} offener Befund",
     "openFindings_other": "{{count}} offene Befunde"
+  },
+  "department": {
+    "title": "Anweisungsdatei der Abteilung",
+    "hint": "Die Anweisungsdatei einer Abteilung, erzeugt aus dem, was die Abteilung trägt: derselbe Text, den ihre Sitzungen erhalten. Vorschau ansehen und dann für die Arbeitsplätze der Abteilung veröffentlichen. Eine Abteilung ohne Anweisungen zieht ihre veröffentlichte Datei zurück.",
+    "select": "Abteilung",
+    "selectPlaceholder": "Abteilung wählen",
+    "preview": "Vorschau",
+    "publish": "Veröffentlichen",
+    "published": "Anweisungsdatei veröffentlicht.",
+    "previewFailed": "Die Datei der Abteilung konnte nicht in der Vorschau angezeigt werden",
+    "fileLabel": "Anweisungsdatei der Abteilung",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_one": "{{count}} veröffentlichte Revision",
+    "revisions_other": "{{count}} veröffentlichte Revisionen"
   }
 }

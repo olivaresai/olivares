@@ -1,5 +1,5 @@
 {
-  "title": "Claude Code の導入状況",
+  "title": "導入状況",
   "description": "Claude Code がどれだけ使われ、その提案のうちどれだけを開発者が採用しているか。",
   "range": {
     "label": "期間",
@@ -15,7 +15,7 @@
     "trend": "トレンド"
   },
   "boundary": {
-    "note": "Claude API のトラフィック（管理用 Analytics フィードと OTLP テレメトリプレーン）のみを対象としています。{{providers}} が処理した利用は含まれないため、ここで導入が見られないことは未導入の証拠にはなりません。",
+    "note": "Claude API の利用のみ。対象外: {{providers}}。",
     "providers": {
       "claude-platform-aws": "Claude Platform on AWS",
       "microsoft-foundry": "Microsoft Foundry",
@@ -25,12 +25,12 @@
   },
   "lenses": {
     "analytics": {
-      "title": "開発者単位（管理用 Analytics）",
-      "description_other": "管理用 Analytics フィードから取得した、{{count}} 人の開発者にわたる開発者・日単位の信頼できる合計値。"
+      "title": "開発者別",
+      "description_other": "{{count}} 人の開発者の日別合計。"
     },
     "telemetry": {
-      "title": "セッション単位（リアルタイムテレメトリ）",
-      "description_other": "OTLP プレーンから取得した、{{count}} チームにわたるセッション単位のリアルタイム活動。アクティブ時間を含みます。"
+      "title": "セッション別",
+      "description_other": "{{count}} チームのリアルタイムのアクティビティとアクティブ時間。"
     }
   },
   "comparison": {

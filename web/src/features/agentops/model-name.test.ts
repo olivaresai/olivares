@@ -10,6 +10,20 @@ describe('modelName: one name for a model everywhere the console says it', () =>
     expect(modelName('claude-opus-5-5', listed)).toBe('Opus 5.5 (1M)')
   })
 
+  it('names a resolved session model by its catalog selector, preferring a concrete selector', () => {
+    const listed = [
+      {
+        id: 'default',
+        launch_model: 'claude-opus-5-5',
+        display_name: 'Default (recommended)',
+      },
+      { id: 'opus', launch_model: 'claude-opus-5-5', display_name: 'Opus 5.5' },
+      { id: 'claude-custom', display_name: 'Custom model' },
+    ]
+    expect(modelName('claude-opus-5-5', listed)).toBe(modelName('opus', listed))
+    expect(modelName('claude-custom', listed)).toBe('Custom model')
+  })
+
   it('names a model the tool did not list in words, not as its id', () => {
     expect(modelName('claude-opus-5-5')).toBe('Claude Opus 5.5')
     expect(modelName('claude-haiku-5-5')).toBe('Claude Haiku 5.5')

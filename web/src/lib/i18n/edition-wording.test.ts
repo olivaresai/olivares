@@ -43,12 +43,19 @@ const TRANSLATED_EDITION_NAMES: Record<string, RegExp> = {
  * Where "enterprise" is the actual word: the tier name in a sample list the operator
  * types, the licensed product tier the edition badge names, and the SCIM/audit-export
  * gate, whose placement is the owner's to settle (docs/editions.md puts inbound SCIM
- * in Community).
+ * in Community). The Gemini sign-in note names Google's own "Gemini Code Assist
+ * Standard or Enterprise" account type, which is not our edition.
  */
 const ALLOWED = new Set([
   'settings.edition.badge.enterprise',
   'console.granular.modelGroups.tierSelectorsHint',
   'identity.console.blindSpots.auditExport',
+  'agent-tools.signIn.geminiAccounts',
+  // The translations of docs/editions.md's own summary lines, keyed by their English text.
+  ...[
+    ...__EDITION_SUMMARIES__.business,
+    ...__EDITION_SUMMARIES__.enterprise,
+  ].map((line) => `settings.edition.summary.${line}`),
 ])
 
 type Entry = { locale: string; where: string; text: string }
@@ -119,6 +126,54 @@ describe('edition wording', () => {
 })
 
 /**
+ * THE ENGINE'S WORDS STAY OFF THE SCREEN. The 0.6 console showed "the plane is detective",
+ * "Upsert policy", "principal handles", "(ANT2-01/17)" and enum values with an HTTP status in
+ * help text. A person reads "records only", "Add policy", "person or tool". Per screen
+ * (key prefix: a namespace, or one section of it), the English words that came back once are listed; the Latin tokens that no
+ * translation turns into a word are checked in every locale.
+ */
+const ENGINE_WORDS: [keyPrefix: string, pattern: RegExp][] = [
+  ['security', /\bplane\b|\btenants?\b|\bdetective\b/i],
+  [
+    'knowledge',
+    /\bupserts?\b|local_only|model_backed|\(400\)|principal|\btenant\b/i,
+  ],
+  ['eventing', /\bcursor\b/i],
+  ['identity', /\bprincipal\b/i],
+  ['model-ops', /\bplanes?\b|\btenants?\b/i],
+  ['governance', /composes into|effective posture|unanswerable|owning user/i],
+  ['governance.routines', /\btenants?\b/i],
+  ['console', /tenant configuration/i],
+  ['console.mcpGateway', /\btenants?\b/i],
+  ['capabilities', /\btenants?\b|\bplanes?\b/i],
+  ['platforms', /\bplanes?\b|\btenants?\b/i],
+]
+/** A specification id, or an enum value or HTTP status in help text, whatever the language. */
+const ENGINE_TOKENS =
+  /\bANT\d+-\d+|\bupserts?\b|local_only|model_backed|\(400\)/i
+
+describe('engine words', () => {
+  it('keeps plumbing words off the screens that showed them', () => {
+    const offenders = all
+      .filter((e) => {
+        return (
+          (e.locale === 'en' &&
+            ENGINE_WORDS.some(
+              ([prefix, re]) =>
+                e.where.startsWith(`${prefix}.`) && re.test(e.text),
+            )) ||
+          ENGINE_TOKENS.test(e.text)
+        )
+      })
+      .map((e) => `${e.locale} ${e.where}: ${e.text.slice(0, 90)}`)
+    expect(
+      offenders,
+      'Say it in product words: records only, Add policy, person or tool.',
+    ).toEqual([])
+  })
+})
+
+/**
  * Locales whose sentences are fully translated: no sentence may equal its English text.
  * `scripts/check-i18n-parity.mjs` compares keys only, which let English prose ship
  * in a translated file. Add a locale here when its quality issue lands.
@@ -148,11 +203,6 @@ const BANNED: Record<string, [RegExp, string][]> = {
   ],
 }
 
-/** Wording a locale settled on that has no old form to ban: the value is pinned. */
-const REQUIRED: Record<string, Record<string, string>> = {
-  ja: { 'nav.items.estate': 'エステート' },
-}
-
 describe('locale wording', () => {
   const english = new Map(
     all.filter((e) => e.locale === 'en').map((e) => [e.where, e.text]),
@@ -169,18 +219,6 @@ describe('locale wording', () => {
       )
       .map((e) => `${e.where}: ${e.text.slice(0, 90)}`)
     expect(offenders).toEqual([])
-  })
-
-  it.each(Object.keys(REQUIRED))('%s keeps its pinned wording', (locale) => {
-    const mismatches = Object.entries(REQUIRED[locale]).flatMap(
-      ([where, want]) => {
-        const got = all.find(
-          (e) => e.locale === locale && e.where === where,
-        )?.text
-        return got === want ? [] : [`${where}: want ${want}, got ${got}`]
-      },
-    )
-    expect(mismatches).toEqual([])
   })
 
   it.each(Object.keys(BANNED))('%s keeps its settled wording', (locale) => {

@@ -93,6 +93,7 @@
     "driftFirm": "예상치 못한 액세스",
     "driftPending": "ID 연결 대기 중",
     "driftUnused": "사용되지 않은 부여",
+    "driftNoRules": "선언된 액세스 규칙이 없어 비교할 대상이 없습니다. 규칙을 선언하면 드리프트를 볼 수 있습니다.",
     "coverageNote": "일부 액세스는 부분 범위(근사 또는 불투명 캡처)로 관측되며 드리프트 수치는 하한입니다.",
     "driftTruncated": "드리프트 읽기가 부분적이며 액세스 드리프트 수치는 하한입니다.",
     "driftUnavailable": "액세스 드리프트를 읽지 못했습니다.",

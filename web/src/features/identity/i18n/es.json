@@ -1,6 +1,7 @@
 {
-  "title": "Identidad y acceso",
+  "title": "Identidad",
   "subtitle": "Quién puede iniciar sesión, qué puede hacer y cómo lo demuestra.",
+  "ownSignInOnly": "Aquí puedes configurar tus propios factores de inicio de sesión. Un administrador de la organización cambia el resto de esta página.",
   "sections": "Secciones de identidad",
   "groups": {
     "people": "Personas",
@@ -8,7 +9,7 @@
     "machines": "Identidades de máquina"
   },
   "tabs": {
-    "federation": "SSO y SCIM",
+    "federation": "Inicio de sesión único",
     "inventory": "Inventario de identidades",
     "mcp": "Auth MCP",
     "login": "Acceso privilegiado",
@@ -47,9 +48,9 @@
       "signing": "Activar o desactivar la firma de informes"
     },
     "aal": {
-      "aal1": "AAL1 (contraseña)",
-      "aal2": "AAL2 (multifactor)",
-      "aal3": "AAL3 (resistente al phishing)"
+      "aal1": "Inicio de sesión estándar",
+      "aal2": "Inicio de sesión único con segundo factor",
+      "aal3": "Llave de acceso o llave de seguridad"
     },
     "unenrolled": "Tu cuenta aún no tiene ninguna passkey registrada. Registra una passkey de tu dispositivo o una llave de seguridad en la pestaña de acceso privilegiado y después autentícate.",
     "unenrolledInline": "Tu cuenta aún no tiene ninguna passkey registrada. Registra una aquí.",
@@ -101,9 +102,9 @@
   },
   "sso": {
     "title": "Inicio de sesión único (OIDC / SAML)",
-    "description": "El inicio de sesión federado se configura en SSO / IdP, o por entorno al arranque. Este panel documenta la configuración, comprueba la redirect URI exacta y muestra el estado de la conexión; no escribe la configuración.",
+    "description": "El inicio de sesión único lo configura un superadministrador en SSO / IdP. Este panel comprueba la redirect URI exacta y muestra el estado de la conexión.",
     "notConfigured": "Sin configurar",
-    "notConfiguredHint": "No hay ningún proveedor de identidad configurado, por lo que las peticiones de federación devuelven 501. Define las variables de entorno de abajo y reinicia el motor para habilitar el SSO.",
+    "notConfiguredHint": "No hay ningún proveedor de identidad configurado, por lo que las peticiones de federación devuelven 501. Un superadministrador lo configura en SSO / IdP.",
     "seamWhat": "El resumen del estado de la conexión SSO",
     "protocol": "Protocolo",
     "state": "Conexión",
@@ -114,14 +115,7 @@
     "redirectCheckHint": "Pega la redirect/ACS URI configurada en tu proveedor de identidad. Debe coincidir exactamente con el valor de arriba (RFC 9700).",
     "redirectMatch": "Coincidencia exacta — esta redirect URI es válida.",
     "redirectMismatch": "No coincide exactamente. El IdP debe usar la redirect URI de arriba, carácter por carácter.",
-    "proto": {
-      "common": "Común",
-      "oidc": "OIDC",
-      "saml": "SAML"
-    },
-    "required": "Obligatoria",
-    "secret": "Secreto",
-    "envNote": "La configuración se lee una sola vez al arranque desde el entorno; no hay API de escritura de configuración. Los secretos nunca se vuelven a leer.",
+    "configure": "Abrir SSO / IdP",
     "testLogin": "Iniciar un inicio de sesión de prueba"
   },
   "scim": {
@@ -145,6 +139,7 @@
     "noLeaverHint": "Cuando se procesa una baja SCIM (delete / prov:delete), el backend revoca las sesiones y los tokens del usuario y lo registra aquí.",
     "leaverTruncated": "Últimos {{n}} eventos de baja; hay anteriores",
     "leaverTruncatedHint": "Hay más eventos de baja de los que se ven. Esta tarjeta lista los más recientes, así que lo que queda fuera son los más antiguos; que un usuario falte en esta lista no prueba que no se le diera de baja.",
+    "leaverWindow": "Esta tarjeta lee solo las últimas {{n}} entradas del registro, así que los eventos de baja anteriores no aparecen; que un usuario falte en esta lista no prueba que no se le diera de baja.",
     "revoked": "Sesiones y tokens revocados",
     "col": {
       "userName": "Usuario",
@@ -162,7 +157,7 @@
       "name": "Nombre",
       "externalId": "ID externo",
       "kind": "Tipo",
-      "principalType": "Tipo de principal",
+      "principalType": "Persona o herramienta",
       "source": "Origen",
       "state": "Estado"
     },
@@ -172,7 +167,7 @@
       "unknown": "Desconocida"
     },
     "filter": {
-      "principalType": "Filtrar por principal",
+      "principalType": "Filtrar por persona o herramienta",
       "kind": "Filtrar por tipo",
       "all": "Todas"
     }
@@ -223,8 +218,18 @@
     "currentAal": "Nivel actual",
     "methods": "Métodos",
     "methodsUnknown": "No reportado",
+    "methodNames": {
+      "pwd": "Contraseña",
+      "sso": "Inicio de sesión único",
+      "external": "Inicio de sesión externo",
+      "totp": "Código de autenticador",
+      "mfa": "Segundo factor",
+      "webauthn": "Llave de acceso",
+      "piv": "Tarjeta inteligente",
+      "pairing": "Dispositivo vinculado"
+    },
     "policy": {
-      "none": "Esta implantación no pide ninguna comprobación adicional antes de las acciones administrativas. Un administrador del sistema puede activarla en Ajustes › Inicio de sesión y seguridad.",
+      "none": "Esta implantación no pide ninguna comprobación adicional antes de las acciones administrativas. Un administrador del sistema puede activarla.",
       "totp": "Las acciones administrativas de esta implantación piden iniciar sesión con un código de la app de autenticación.",
       "passkey": "Las acciones administrativas de esta implantación piden una llave de acceso."
     },
@@ -256,7 +261,7 @@
       "registerFailed": "Falló el registro de la llave de acceso. Puede que tu navegador no admita WebAuthn, o el registro se canceló.",
       "unsupported": "Este navegador no soporta WebAuthn/FIDO2.",
       "none": "No hay passkeys registradas",
-      "noneHint": "Registra una passkey para habilitar un inicio de sesión resistente a phishing vinculado a hardware (AAL3).",
+      "noneHint": "Registra una passkey para habilitar un inicio de sesión resistente a phishing vinculado a hardware.",
       "colName": "Nombre",
       "colCreated": "Registrada",
       "colBackup": "Respaldo",
@@ -267,7 +272,7 @@
       "renamed": "Passkey renombrada.",
       "delete": "Eliminar",
       "deleteTitle": "Eliminar passkey",
-      "deleteBody": "¿Eliminar la passkey \"{{name}}\"? Esta acción es permanente. Necesitarás otra passkey registrada para mantener acceso AAL3.",
+      "deleteBody": "¿Eliminar la passkey \"{{name}}\"? Esta acción es permanente. Necesitarás otra passkey registrada para seguir iniciando sesión con una passkey.",
       "deleted": "Passkey eliminada.",
       "lastCredential": "No puedes eliminar tu única passkey. Registra otra primero."
     }
@@ -342,7 +347,7 @@
     "policyEnable": "Exigir a los administradores",
     "policyConfirmOn": "Confirmar: exigir",
     "policyDisable": "Desactivar",
-    "policyAal3Note": "Cambiar esta política requiere una sesión AAL3. Las cuentas sin factor se envían al registro en su próximo inicio de sesión; nunca quedan bloqueadas."
+    "policyAal3Note": "Las cuentas sin factor se envían al registro en su próximo inicio de sesión; nunca quedan bloqueadas."
   },
   "stepUpPolicy": {
     "title": "Verificación adicional para acciones administrativas",

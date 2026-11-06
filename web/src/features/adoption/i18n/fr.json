@@ -1,5 +1,5 @@
 {
-  "title": "Adoption de Claude Code",
+  "title": "Adoption",
   "description": "Dans quelle mesure Claude Code est utilisé, et quelle part de ce qu'il propose les développeurs conservent.",
   "range": {
     "label": "Plage temporelle",
@@ -15,7 +15,7 @@
     "trend": "Tendance"
   },
   "boundary": {
-    "note": "Couvre uniquement le trafic Claude API — le flux Analytics d'administration et le plan de télémétrie OTLP. L'utilisation servie par {{providers}} n'est pas incluse, donc l'absence d'adoption ici ne prouve pas son absence.",
+    "note": "Utilisation de Claude API uniquement. Non inclus : {{providers}}.",
     "providers": {
       "claude-platform-aws": "Claude Platform on AWS",
       "microsoft-foundry": "Microsoft Foundry",
@@ -25,16 +25,16 @@
   },
   "lenses": {
     "analytics": {
-      "title": "Par développeur (Analytics d'administration)",
-      "description_one": "Totaux faisant autorité par développeur et par jour issus du flux Analytics d’administration (développeur : {{count}}).",
-      "description_many": "Totaux faisant autorité par développeur et par jour issus du flux Analytics d’administration (développeurs : {{count}}).",
-      "description_other": "Totaux faisant autorité par développeur et par jour issus du flux Analytics d’administration (développeurs : {{count}})."
+      "title": "Par développeur",
+      "description_one": "Totaux quotidiens de {{count}} développeur.",
+      "description_many": "Totaux quotidiens de {{count}} développeurs.",
+      "description_other": "Totaux quotidiens de {{count}} développeurs."
     },
     "telemetry": {
-      "title": "Par session (télémétrie en direct)",
-      "description_one": "Activité en temps réel par session depuis le plan OTLP (équipe : {{count}}) ; inclut le temps actif.",
-      "description_many": "Activité en temps réel par session depuis le plan OTLP (équipes : {{count}}) ; inclut le temps actif.",
-      "description_other": "Activité en temps réel par session depuis le plan OTLP (équipes : {{count}}) ; inclut le temps actif."
+      "title": "Par session",
+      "description_one": "Activité en direct et temps actif de {{count}} équipe.",
+      "description_many": "Activité en direct et temps actif de {{count}} équipes.",
+      "description_other": "Activité en direct et temps actif de {{count}} équipes."
     }
   },
   "comparison": {

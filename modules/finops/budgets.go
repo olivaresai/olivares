@@ -784,7 +784,7 @@ func budgetStatus(ctx context.Context, sc store.Scope, p model.Policy, now time.
 // (zero and truncated, as budgetStatus answers it), while an agent_group budget is
 // always counted over its members. log, when set, hears about every group whose spend
 // could not be established or counted in full.
-func budgetStatusIn(ctx context.Context, sc store.Scope, p model.Policy, now time.Time, userGroups func(string) ([]string, error), log *slog.Logger) (budgetStatusDTO, error) {
+func budgetStatusIn(ctx context.Context, sc store.Scope, p model.Policy, now time.Time, userGroups func(string) (groupMemberRefs, error), log *slog.Logger) (budgetStatusDTO, error) {
 	spec := parseBudgetSpec(p.Spec)
 	spec.fillDefaults()
 	if err := spec.resolveWorkspace(ctx, sc); err != nil {
@@ -1486,12 +1486,12 @@ func resolveAgentGroups(ctx context.Context, sc store.Scope, attr *attribution) 
 	return nil
 }
 
-func userGroupMemberRefs(ctx context.Context, reader groupAuthReader, tenant model.TenantID, key string) ([]string, error) {
+func userGroupMemberRefs(ctx context.Context, reader groupAuthReader, tenant model.TenantID, key string) (groupMemberRefs, error) {
 	groupID, err := model.ParseID(key)
 	if err != nil {
-		return nil, fmt.Errorf("finops: user_group key %q must be a group id: %w: %w", key, errGroupUnresolved, err)
+		return groupMemberRefs{}, fmt.Errorf("finops: user_group key %q must be a group id: %w: %w", key, errGroupUnresolved, err)
 	}
-	var refs []string
+	var result groupMemberRefs
 	err = reader.AuthView(ctx, func(as store.AuthScope) error {
 		g, err := as.Groups().Get(ctx, groupID)
 		if errors.Is(err, store.ErrNotFound) {
@@ -1503,65 +1503,64 @@ func userGroupMemberRefs(ctx context.Context, reader groupAuthReader, tenant mod
 		if g.TargetTenantID != tenant {
 			return fmt.Errorf("finops: user_group %q is not scoped to tenant %s: %w", key, tenant, errGroupUnresolved)
 		}
-		seen := map[string]bool{}
-		q := model.Query{Filters: []model.Filter{eq("group_id", groupID.String())}, Limit: listCap}
-		for {
-			members, page, err := as.GroupMembers().List(ctx, q)
-			if err != nil {
-				return err
-			}
-			for _, member := range members {
-				ref := member.UserID.String()
-				if ref == "" || seen[ref] {
-					continue
-				}
-				seen[ref] = true
-				refs = append(refs, ref)
-			}
-			if !page.HasMore || page.Cursor == "" {
-				sort.Strings(refs)
-				return nil
-			}
-			q.Cursor = page.Cursor
+		members, page, err := as.GroupMembers().List(ctx, model.Query{
+			Filters: []model.Filter{eq("group_id", groupID.String())}, Limit: groupMemberCap + 1,
+		})
+		if err != nil {
+			return err
 		}
+		result.truncated = page.HasMore || len(members) > groupMemberCap
+		if len(members) > groupMemberCap {
+			members = members[:groupMemberCap]
+		}
+		seen := map[string]bool{}
+		for _, member := range members {
+			ref := member.UserID.String()
+			if ref != "" && !seen[ref] {
+				seen[ref] = true
+				result.refs = append(result.refs, ref)
+			}
+		}
+		sort.Strings(result.refs)
+		return nil
 	})
-	return refs, err
+	return result, err
 }
 
 type userGroupMemberLookup struct {
-	refs map[string][]string
+	refs map[string]groupMemberRefs
 	errs map[string]error
 }
 
-func (l userGroupMemberLookup) get(key string) ([]string, error) {
+func (l userGroupMemberLookup) get(key string) (groupMemberRefs, error) {
 	if err := l.errs[key]; err != nil {
-		return nil, err
+		return groupMemberRefs{}, err
 	}
 	if refs, ok := l.refs[key]; ok {
 		return refs, nil
 	}
-	return nil, fmt.Errorf("finops: user_group %q members were not resolved: %w", key, errGroupUnresolved)
+	return groupMemberRefs{}, fmt.Errorf("finops: user_group %q members were not resolved: %w", key, errGroupUnresolved)
 }
 
 // userGroupMembers resolves the members of a user_group budget p for its status read: nil
 // for any other dimension, and nil too (which the fan-out answers as errGroupUnresolved)
 // where the module's data handle carries no directory reader, the Community composition.
 // The caller's budgetStatusIn logs a group that cannot be established.
-func (m *Module) userGroupMembers(ctx context.Context, tenant model.TenantID, p model.Policy) func(string) ([]string, error) {
+func (m *Module) userGroupMembers(ctx context.Context, tenant model.TenantID, p model.Policy) func(string) (groupMemberRefs, error) {
 	spec := parseBudgetSpec(p.Spec)
 	reader := authGroupReader(m.data)
 	if spec.Dimension != "user_group" || reader == nil {
 		return nil
 	}
 	refs, err := userGroupMemberRefs(ctx, reader, tenant, spec.Key)
-	return func(string) ([]string, error) { return refs, err }
+	return func(string) (groupMemberRefs, error) { return refs, err }
 }
 
 // resolveMatchingUserGroupMembers resolves only the user_group budgets that already
 // match the request's supplied group refs. The cost read-model has no group column;
 // the later tenant scan fans out across these user ids via the actor column.
 func resolveMatchingUserGroupMembers(ctx context.Context, reader groupAuthReader, tenant model.TenantID, budgets []model.Policy, attr attribution) userGroupMemberLookup {
-	out := userGroupMemberLookup{refs: map[string][]string{}, errs: map[string]error{}}
+	out := userGroupMemberLookup{refs: map[string]groupMemberRefs{}, errs: map[string]error{}}
 	if len(attr.UserGroupRefs) == 0 || !hasEnforcingGroupBudget(budgets, "user_group") {
 		return out
 	}

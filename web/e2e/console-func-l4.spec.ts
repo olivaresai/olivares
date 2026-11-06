@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import {
   browserSessionHeaders,
-  journeyNowLink,
+  journeyShellLink,
   type BrowserSession,
 } from './browser-session'
 import { assertSessionAccepted } from './live-session'
@@ -69,7 +69,7 @@ async function loginDemo(page: Page): Promise<BrowserSession> {
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
-  await expect(journeyNowLink(page)).toBeVisible({ timeout: 15_000 })
+  await expect(journeyShellLink(page)).toBeVisible({ timeout: 15_000 })
   authHeaders(body)
   return body
 }
@@ -259,7 +259,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     )
 
     await page.goto('/identity?tab=inventory')
-    await selectTab('SSO & SCIM', 'federation')
+    await selectTab('Single sign-on', 'federation')
     await expect(
       page.getByRole('heading', { name: 'Single sign-on (OIDC / SAML)' }),
     ).toBeVisible()
@@ -720,7 +720,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
         // These exact sentinels do not exist in the fresh ledger. If the handler
         // ignores a filter, its unfiltered rows make this assertion red.
         expect(filteredBody.items).toHaveLength(0)
-        await expect(page.getByText('No evidence yet')).toBeVisible()
+        await expect(page.getByText('No matching evidence')).toBeVisible()
       }
       await page.getByRole('button', { name: `Remove ${typed}` }).click()
       await expect
@@ -744,7 +744,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       const filteredBody =
         (await filteredResponse.json()) as ListBody<AuditItem>
       expect(filteredBody.items).toHaveLength(0)
-      await expect(page.getByText('No evidence yet')).toBeVisible()
+      await expect(page.getByText('No matching evidence')).toBeVisible()
       await page
         .getByRole('button', { name: `Remove ${typed}:00.000Z` })
         .click()

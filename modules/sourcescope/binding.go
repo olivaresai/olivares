@@ -29,14 +29,20 @@ const maxNoteLen = 512
 // validSourceTypes are the connected-source kinds a binding may target.
 var validSourceTypes = map[string]bool{
 	sourceMCP: true, sourceModel: true, sourceProvider: true, sourceKnowledge: true, sourceData: true,
-	sourceProfile: true, sourceTool: true, sourceInstructions: true, sourceTemplate: true,
+	sourceProfile: true, sourceTool: true, sourceInstructions: true, sourceTemplate: true, sourceApprovalPolicy: true, sourceDLPRuleset: true,
 }
 
 // Binding effect, mirroring model-access vocabulary. An empty stored value
-// is an allow (back-compat). A forbid subtracts (forbid-overrides-allow, absolute).
+// is an allow (back-compat). A forbid subtracts (forbid-overrides-allow, absolute). A require
+// is a department's mandatory session template (standards.go): it assigns the template as an
+// allow does, and a launch under that department may not name another. A decline is a department's
+// opt-out of one standard it inherits (standards.go): it stops the departments above from assigning
+// that standard to it and to the departments below, and leaves what it or a department below assigns.
 const (
-	effectAllow  = "allow"
-	effectForbid = "forbid"
+	effectAllow   = "allow"
+	effectForbid  = "forbid"
+	effectRequire = "require"
+	effectDecline = "decline"
 )
 
 // validScopeTrees are the tree kinds a binding may bind to: the containment nodes
@@ -59,10 +65,17 @@ var subjectTrees = map[string]bool{
 // allow (the pre default), so a response always reads a concrete effect. Identical
 // semantics to normalizeEffect.
 func normalizeEffect(stored string) string {
-	if stored == effectForbid {
-		return effectForbid
+	if stored == effectForbid || stored == effectRequire || stored == effectDecline {
+		return stored
 	}
 	return effectAllow
+}
+
+// restricts reports whether an effect narrows what its scope may do (a forbid, a require, a
+// decline) instead of granting access. A restriction is neither stamped with a tenant lapse date nor
+// given one without a second administrator: either would make it lift itself.
+func restricts(effect string) bool {
+	return effect == effectForbid || effect == effectRequire || effect == effectDecline
 }
 
 // validRefKinds are the locator kinds a scoped credential reference may use (where
@@ -101,7 +114,7 @@ type bindingDTO struct {
 func (d *bindingDTO) validate() string {
 	d.SourceType = strings.TrimSpace(strings.ToLower(d.SourceType))
 	if !validSourceTypes[d.SourceType] {
-		return "source_type must be one of mcp, model, provider, knowledge, data, profile, tool, instructions, template"
+		return "source_type must be one of mcp, model, provider, knowledge, data, profile, tool, instructions, template, approval-policy, dlp-ruleset"
 	}
 	d.SourceRef = strings.TrimSpace(d.SourceRef)
 	if d.SourceRef == "" {
@@ -133,13 +146,19 @@ func (d *bindingDTO) validate() string {
 	if subjectTrees[d.ScopeTree] && d.ScopeRef == "" {
 		return "scope_ref is required for a " + d.ScopeTree + " binding"
 	}
-	// Effect: allow (default; empty ⇒ allow) or forbid.
+	// Effect: allow (default; empty ⇒ allow) or forbid; a template may also be required.
 	d.Effect = strings.TrimSpace(strings.ToLower(d.Effect))
 	if d.Effect == "" {
 		d.Effect = effectAllow
 	}
-	if d.Effect != effectAllow && d.Effect != effectForbid {
-		return "effect must be allow or forbid"
+	if d.Effect == effectRequire && d.SourceType != sourceTemplate {
+		return "effect require applies to a department's session template only (source_type template)"
+	}
+	if d.Effect == effectDecline && (!isStandardsSource(d.SourceType) || d.ScopeTree != scopeWorkspace) {
+		return "effect decline applies to a department's instructions or template only (source_type instructions or template, scope_tree workspace)"
+	}
+	if d.Effect != effectAllow && d.Effect != effectForbid && d.Effect != effectRequire && d.Effect != effectDecline {
+		return "effect must be allow or forbid (or require, for a template; decline, for instructions or a template)"
 	}
 	d.ExpiresAt = strings.TrimSpace(d.ExpiresAt)
 	if d.ExpiresAt != "" {

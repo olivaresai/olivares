@@ -273,6 +273,12 @@ export interface AuditListParams {
   target_id?: string
   /** Case-insensitive substring over action/actor/target fields. */
   q?: string
+  /** Entries about sessions run with this AI tool (its provider driver, e.g.
+   * `codex`), and the approvals those sessions name. The engine answers 501
+   * `audit_filter_unavailable` where the sessions module is absent. */
+  tool?: string
+  /** Entries about sessions working in this exact folder path (not a prefix). */
+  folder?: string
   /** Action prefixes to OMIT, using the same prefix rule as `action`. Repeatable —
    * pass an array and each entry becomes its own `exclude_action=` occurrence.
    *

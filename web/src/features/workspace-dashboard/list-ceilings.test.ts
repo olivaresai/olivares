@@ -3,8 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import {
-  mismatchesByFile,
-  etiquetasConLiteral,
+  avisosPorConsulta,
   leer,
   nombresDeLista,
   rutasSinTecho,
@@ -21,15 +20,15 @@ describe('workspace dashboard · both paginated lists declare truncation', () =>
     expect(sinTecho).toEqual([])
   })
 
-  it('both live queries have their own badge', () => {
+  // A capped preview ends with a Show more row, never a count of the rows it loaded.
+  it('both live queries end with their own Show more row', () => {
     const listas = nombresDeLista(leer('features/workspace-dashboard/api.ts'))
-    const { total, desajustes } = mismatchesByFile(
-      [{ nombre: VISTA, src: leer(VISTA) }],
-      listas,
-      'workspaceDashboardApi',
-    )
-    expect(total).toBe(2)
-    expect(desajustes).toEqual([])
-    expect(etiquetasConLiteral(leer(VISTA))).toEqual([])
+    const src = leer(VISTA)
+    const { deLista } = avisosPorConsulta(src, listas, 'workspaceDashboardApi')
+    const filas = [
+      ...src.matchAll(/<ShowMore[\s\S]{0,80}?query=\{(\w+)\}/g),
+    ].map((m) => m[1])
+    expect(deLista).toHaveLength(2)
+    expect([...filas].sort()).toEqual([...deLista].sort())
   })
 })

@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -94,17 +95,18 @@ func enterMountNamespace(cmd *exec.Cmd) {
 // WrapMounts makes cmd, a session helper command (modules/sessions/confine),
 // apply m before its Landlock stage. cmd.Args must be the helper's:
 // [path, HelperArg, ...]. The first stage that still holds the capability calls
-// ConsumeMounts; helpers that do not (Wrap's own, for plugin jails) never see
-// the layer. On a host without namespaces it leaves cmd unchanged and returns an
-// error wrapping ErrMountsUnavailable; any other error is the caller's fault.
+// ConsumeMounts: the session helper, the network supervisor and Wrap's own helper
+// (a plugin jail hides the user manager the same way). On a host without namespaces it
+// leaves cmd unchanged and returns an error wrapping ErrMountsUnavailable; any other
+// error is the caller's fault.
 func WrapMounts(cmd *exec.Cmd, m Mounts) error {
-	if len(m.ReadOnly)+len(m.Pin) == 0 {
+	if len(m.ReadOnly)+len(m.Pin)+len(m.Hide) == 0 {
 		return nil
 	}
 	if len(cmd.Args) < 3 || cmd.Args[1] != HelperArg {
 		return errors.New("confine: mounts apply to the confinement helper command")
 	}
-	paths := append(append([]string{}, m.ReadOnly...), m.Pin...)
+	paths := append(append(append([]string{}, m.ReadOnly...), m.Pin...), m.Hide...)
 	for _, n := range m.Create {
 		paths = append(paths, n.Path)
 	}
@@ -124,12 +126,95 @@ func WrapMounts(cmd *exec.Cmd, m Mounts) error {
 			return fmt.Errorf("%w: cannot create %s: %v", ErrMountsUnavailable, n.Path, err)
 		}
 	}
+	rest := cmd.Args[2:]
+	if earlier, ok := mountsLayer(cmd); ok {
+		// A layer an earlier call put in front (the user bus, hidden by every confined
+		// command) is joined, not wrapped again: the helper consumes one.
+		m = Mounts{
+			ReadOnly: append(slices.Clone(earlier.ReadOnly), m.ReadOnly...),
+			Pin:      append(slices.Clone(earlier.Pin), m.Pin...),
+			Hide:     append(slices.Clone(earlier.Hide), m.Hide...),
+		}
+		rest = cmd.Args[4:]
+	}
 	payload, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	cmd.Args = append([]string{cmd.Args[0], HelperArg, mountsArg, string(payload)}, cmd.Args[2:]...)
+	cmd.Args = append([]string{cmd.Args[0], HelperArg, mountsArg, string(payload)}, rest...)
 	enterMountNamespace(cmd)
+	return nil
+}
+
+// mountsLayer is the mount layer WrapMounts put in front of cmd's helper arguments.
+func mountsLayer(cmd *exec.Cmd) (Mounts, bool) {
+	var m Mounts
+	if len(cmd.Args) < 4 || cmd.Args[1] != HelperArg || cmd.Args[2] != mountsArg || json.Unmarshal([]byte(cmd.Args[3]), &m) != nil {
+		return Mounts{}, false
+	}
+	return m, true
+}
+
+// userManagerSockets are the sockets, relative to a runtime directory, a user manager
+// answers on: the D-Bus user bus (a separate package, dbus-user-session, which a minimal
+// image lacks) and systemd's own private socket, which `systemd-run --user` and
+// `systemctl --user` use without any bus.
+var userManagerSockets = []string{"bus", "systemd/private"}
+
+// UserBusDirs are the runtime directories of the engine's user that hold a user manager's
+// socket: the one XDG_RUNTIME_DIR names and the one systemd gives the user
+// (/run/user/<uid>), which a child can name itself. A user manager answers there, and a
+// unit started through it runs outside the child's confinement: Landlock does not govern
+// connect() to a socket at a path. None when the user has no user manager.
+func UserBusDirs() []string {
+	var dirs []string
+	for _, dir := range []string{os.Getenv("XDG_RUNTIME_DIR"), "/run/user/" + strconv.Itoa(os.Geteuid())} {
+		if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir || slices.Contains(dirs, dir) {
+			continue
+		}
+		for _, socket := range userManagerSockets {
+			if _, err := os.Lstat(filepath.Join(dir, socket)); err == nil {
+				dirs = append(dirs, dir)
+				break
+			}
+		}
+	}
+	return dirs
+}
+
+// UserBusExposed reports whether the engine user has a user bus that a child started with
+// cmd can reach: no mount layer of cmd's covers one of UserBusDirs.
+func UserBusExposed(cmd *exec.Cmd) bool {
+	layer, _ := mountsLayer(cmd)
+	for _, dir := range UserBusDirs() {
+		if !slices.Contains(layer.Hide, dir) {
+			return true
+		}
+	}
+	return false
+}
+
+// HideUserBus makes cmd, a confinement helper command, see an empty directory where the
+// engine user's user bus is. It is for every confined child, whatever it does: the bus
+// is the user's, not the launch's. It fails like WrapMounts does; a host without user and
+// mount namespaces leaves cmd as it was and UserBusExposed says so.
+func HideUserBus(cmd *exec.Cmd) error {
+	if !UserBusExposed(cmd) {
+		return nil
+	}
+	return WrapMounts(cmd, Mounts{Hide: UserBusDirs()})
+}
+
+// UserBusUnhideable is why a confined child on this host cannot be kept away from the
+// engine user's user manager: nil when there is no manager to hide or the host gives the
+// child the namespaces to hide it. HideUserBus fails for exactly this reason.
+func UserBusUnhideable() error {
+	if len(UserBusDirs()) == 0 {
+		return nil
+	}
+	if err := probeMounts(); err != nil {
+		return fmt.Errorf("%w: %v", ErrMountsUnavailable, err)
+	}
 	return nil
 }
 
@@ -171,11 +256,12 @@ func create(n Node) error {
 func IsMountsProbe(args []string) bool { return len(args) == 2 && args[0] == mountsProbeArg }
 
 // RunMountsProbe does what a real run does, on the directory the probe names:
-// make the mount namespace private, bind the directory and remount it read-only.
-// A host that refuses any step refuses the probe, so a run that passes it can
-// mount.
+// make the mount namespace private, bind the directory, remount it read-only and
+// cover it with an empty filesystem. A host that refuses any step (a seccomp
+// profile that allows only bind mounts) refuses the probe, so a run that passes it
+// can mount.
 func RunMountsProbe(args []string) int {
-	if err := applyMounts(Mounts{ReadOnly: []string{args[1]}}); err != nil {
+	if err := applyMounts(Mounts{ReadOnly: []string{args[1]}, Hide: []string{args[1]}}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 126
 	}
@@ -220,6 +306,25 @@ func applyMounts(m Mounts) error {
 		if err := bindOnto(path, true); err != nil {
 			return err
 		}
+	}
+	for _, path := range m.Hide {
+		if err := hide(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// hide covers the directory at path with an empty read-only tmpfs. Like bindOnto it
+// holds the node by descriptor and mounts through /proc/self/fd.
+func hide(path string) error {
+	node, err := openNode(path)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(node)
+	if err := unix.Mount("tmpfs", fmt.Sprintf("/proc/self/fd/%d", node), "tmpfs", unix.MS_RDONLY|unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, "size=4k,mode=0555"); err != nil {
+		return fmt.Errorf("hide %s: %w", path, err)
 	}
 	return nil
 }

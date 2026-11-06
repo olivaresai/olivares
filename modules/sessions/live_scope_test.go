@@ -26,7 +26,7 @@ import (
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
-// B2 acceptance (provider-session-identity-lot.md §8, B2 rows 1–5): scoped folds,
+// Scoped folds,
 // the managed row, and every read surface — list, detail, timeline, SSE, runs
 // lookup, exports — over rows that share one external id. The fold and managed
 // tables run on BOTH engines through profileBackends; the HTTP surfaces run on the

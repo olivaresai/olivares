@@ -133,20 +133,23 @@ func (m *Module) floorFor(ctx context.Context, modelIO bool) providerFloor {
 	return providerFloor{ProviderFloorDays: days, ProviderFloorKnown: true, ProviderFloorSource: source}
 }
 
+// recordToPolicyDTO reports a stored schedule. A Community engine applies no schedule
+// (records_edition.go), so it reports none as enabled; the stored row keeps its flag.
 func recordToPolicyDTO(ctx context.Context, m *Module, tenant model.TenantID, rec model.Record) retentionPolicyDTO {
 	dto := retentionPolicyDTO{
 		ID:            rec.String(model.ColID),
 		DataClass:     rec.String(colDataClass),
 		RetentionDays: rec.Int(colRPDays),
 		Disposition:   rec.String(colRPDisposition),
-		Enabled:       rec.Bool(colRPEnabled),
+		Enabled:       rec.Bool(colRPEnabled) && m.businessRecords,
 		Basis:         rec.String(colRPBasis),
 		ApprovalRef:   rec.String(colApprovalRef),
 	}
 	if dc, ok := dataClassByID[dto.DataClass]; ok {
 		dto.ModelIO = dc.ModelIO
 		dto.providerFloor = m.floorFor(ctx, dc.ModelIO)
-		if dto.ProviderFloorKnown {
+		// Only an engine that applies the schedule can state when its data is gone.
+		if dto.ProviderFloorKnown && m.businessRecords {
 			dto.EffectiveDisclosureDays = dto.RetentionDays
 			if int64(dto.ProviderFloorDays) > dto.EffectiveDisclosureDays {
 				dto.EffectiveDisclosureDays = int64(dto.ProviderFloorDays)
@@ -521,9 +524,33 @@ type RetentionClassResult struct {
 // (cmd/olivares, §6): SOLE enabled purge schedules, hold-checked, bounded
 // batches, an append-only certificate + self-audit per class with activity. The
 // loop has no ModuleContext, so the pass is attributed to the system actor; the
-// HTTP handler runs the same code attributed to the calling admin.
+// HTTP handler runs the same code attributed to the calling admin. Retention schedules are
+// Business (records_edition.go): a Community module runs none, so a schedule a Business engine
+// stored destroys nothing there and stays readable.
 func (m *Module) RunRetention(ctx context.Context, tenant model.TenantID) (RetentionSummary, error) {
+	if !m.businessRecords {
+		return RetentionSummary{Trigger: runTriggerSweep}, nil
+	}
 	return m.runRetention(ctx, tenant, runTriggerSweep, "system", model.ActorSystem)
+}
+
+// StoredPurgeSchedules counts the tenant's stored, enabled purge schedules. A Community engine
+// applies none of them; its boot warns with this count (cmd/olivares).
+func (m *Module) StoredPurgeSchedules(ctx context.Context, tenant model.TenantID) (int, error) {
+	if m.data == nil {
+		return 0, errors.New("compliance: no data handle; cannot read retention schedules")
+	}
+	n := 0
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(retentionPolicyKind)
+		if err != nil {
+			return err
+		}
+		recs, err := listAll(ctx, repo, eq(colRPDisposition, dispositionPurge), eq(colRPEnabled, true))
+		n = len(recs)
+		return err
+	})
+	return n, err
 }
 
 func (m *Module) runRetention(ctx context.Context, tenant model.TenantID, trigger, actor, actorKind string) (RetentionSummary, error) {

@@ -172,7 +172,7 @@ func TestDRScheduleOffsiteLockSurvivesRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	restarted := &Server{st: st, log: s.log, drSvc: newDRService(DRConfig{DataDir: t.TempDir()})}
-	if err := restarted.loadDRSchedule(ctx); err != nil {
+	if err := restarted.loadDRSchedule(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := restarted.drSvc.scheduleSnapshot().OffsiteLock; got != "no_default" {

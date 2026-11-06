@@ -74,6 +74,7 @@ export function systemText(
   t: TFunction,
   item: ConversationItem,
   now: Date = new Date(),
+  nameModel: (id: string) => string = modelName,
 ): string {
   if (item.systemKind === 'rate_limit') return limitText(t, item, now)
   if (item.systemKind === 'output')
@@ -89,8 +90,8 @@ export function systemText(
   if (item.systemKind === 'model') {
     // A model is named in words; its id stays on the row's hover.
     const words = {
-      from: item.fromModel && modelName(item.fromModel),
-      to: item.model && modelName(item.model),
+      from: item.fromModel && nameModel(item.fromModel),
+      to: item.model && nameModel(item.model),
     }
     return item.at
       ? t('sessions:conversation.modelChangedAt', {
@@ -101,7 +102,7 @@ export function systemText(
   }
   if (item.systemKind === 'init') {
     const parts = [t('sessions:conversation.started')]
-    if (item.model) parts.push(modelName(item.model))
+    if (item.model) parts.push(nameModel(item.model))
     if (item.toolCount)
       parts.push(
         t('sessions:conversation.startedTools', { count: item.toolCount }),

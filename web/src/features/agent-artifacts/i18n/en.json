@@ -1,5 +1,5 @@
 {
-  "title": "Agent Artifacts",
+  "title": "Agent artifacts",
   "subtitle": "Govern the tenant-wide registry, recorded posture and supply-chain BOM for artifacts agents execute.",
   "intro": "This registry stores identity, provenance and recorded posture only — never skill bodies, manifests or instruction text.",
   "tabs": {

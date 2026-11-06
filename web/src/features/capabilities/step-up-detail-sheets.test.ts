@@ -25,7 +25,7 @@
 //
 // This textual guard has the limits listed below. Behavioral tests in `knowledge`,
 // `governance`, and `console` verify handling when the error actually arrives.
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -60,12 +60,17 @@ const sinComentarios = (src: string): string[] => {
   })
 }
 
+// The Deployment page is Business: its source reaches this tree only when the private overlay
+// is assembled into it, so its two sheets are subjects only there (and a sheet missing from an
+// assembled `deploy/` folder still throws, loudly).
+const EN_OVERLAY = existsSync(join(FEATURES, 'deploy'))
 const SUJETOS = [
   'capabilities/server-detail.tsx',
   'catalog/entry-detail.tsx',
   'catalog/instance-detail.tsx',
-  'deploy/definition-detail.tsx',
-  'deploy/revisions.tsx',
+  ...(EN_OVERLAY
+    ? ['deploy/definition-detail.tsx', 'deploy/revisions.tsx']
+    : []),
 ]
 
 const leer = (rel: string) =>
@@ -126,7 +131,7 @@ describe('five detail sheets offer step-up before reporting a role denial', () =
   it('checks five files with one decision each', () => {
     // Count decisions, not only files: if a file gained a second decision, limit 1 would
     // stop covering it. This assertion makes that gap visible.
-    expect(SUJETOS.length).toBe(5)
+    expect(SUJETOS.length).toBe(EN_OVERLAY ? 5 : 3)
     for (const rel of SUJETOS) {
       const usos = leer(rel).filter((l) => l.includes('isForbidden')).length
       expect(usos, `${rel} tiene ${usos} decisiones de rol, no 1`).toBe(1)

@@ -31,7 +31,8 @@ module author programs against are **stable v1**:
 - `sdk/model`: the observation DTOs (`EdgeObservation`, `CostSample`,
   `FindingReport`), the sealed `Observation` sum type and the shared enums;
 - `sdk/event`: the `Event` envelope, `Type`, `Handler` and the typed helpers;
-- `sdk/siemwire`: stable, additive-only utility encoders.
+- `sdk/siemwire`: the SIEM format names, the OCSF version pin and the SARIF encoder
+  (stable, additive-only); the SIEM encoders ship in the Business build.
 
 **`sdk/plugin` — the author-facing transport surface.** `ServeSource`,
 `ServeOutput`, `Handshake`, `ProtocolVersion` and the dispense names are

@@ -249,6 +249,15 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 // consumers. Pass an engine-issued ModuleContext; selection, session attribution,
 // and another route's resource or witness never authorize model execution.
 func (m *Module) ExecuteText(ctx context.Context, mc api.ModuleContext, id model.ID, in TextExecutionInput) (result TextExecutionResult, operationErr error) {
+	return m.executeText(ctx, mc, id, in, permRoutingExecute, nil)
+}
+
+// executeText is ExecuteText admitted on perm. Only two callers exist: the published
+// operation above on routing-admin, and the Ask turn on its own permission against the
+// routing policy an administrator bound to Ask (ask_turn.go, design D3). Every gate below
+// is the same for both. Ask also passes pin, the routing spec digest the administrator bound:
+// a policy whose spec changed since is refused in the same read that resolves it.
+func (m *Module) executeText(ctx context.Context, mc api.ModuleContext, id model.ID, in TextExecutionInput, perm auth.Permission, pin *[32]byte) (result TextExecutionResult, operationErr error) {
 	ctx, mc, err := mc.ForModule(ctx, m)
 	if err != nil {
 		return textAdmissionError(err)
@@ -256,7 +265,7 @@ func (m *Module) ExecuteText(ctx context.Context, mc api.ModuleContext, id model
 	var complete func(api.RecordedResult)
 	mc, complete, err = mc.AdmitOperation(ctx, api.RecordedCall{
 		Namespace: Namespace, Method: http.MethodPost, Pattern: "/routing-policies/{id}/execute",
-		Permission: permRoutingExecute, Params: map[string]string{"id": id.String()},
+		Permission: perm, Params: map[string]string{"id": id.String()},
 	})
 	if err != nil {
 		return textAdmissionError(err)
@@ -290,6 +299,7 @@ func (m *Module) ExecuteText(ctx context.Context, mc api.ModuleContext, id model
 		spec           routingSpec
 		suspendedTiers []string
 		notRouting     bool
+		pinChanged     bool
 		profile        ExecutionProfile
 		profileErr     *executionProfileHTTPError
 		// C2B: the policy's identity, retained from THIS read. The version is the row's
@@ -308,7 +318,7 @@ func (m *Module) ExecuteText(ctx context.Context, mc api.ModuleContext, id model
 		if sc.Tenant() != mc.Tenant || p.TenantID != mc.Tenant || p.ID != id {
 			return store.ErrNotFound
 		}
-		resource = auth.ResourceFor(permRoutingExecute)
+		resource = auth.ResourceFor(perm)
 		resource.ID = p.ID.String()
 		if p.Kind != policyKindRouting {
 			notRouting = true
@@ -319,6 +329,10 @@ func (m *Module) ExecuteText(ctx context.Context, mc api.ModuleContext, id model
 		var derr error
 		if specDigest, derr = routingSpecDigest(spec); derr != nil {
 			return derr
+		}
+		if pin != nil && specDigest != *pin {
+			pinChanged = true
+			return nil
 		}
 		profile, profileErr = m.resolveExecutionProfile(ctx, mc.Tenant, spec)
 		if profileErr != nil {
@@ -353,8 +367,12 @@ func (m *Module) ExecuteText(ctx context.Context, mc api.ModuleContext, id model
 	if notRouting {
 		return textResponse(http.StatusNotFound, errorBody("not found"))
 	}
+	if pinChanged {
+		return textResponse(http.StatusConflict, api.ErrorBody("ask_model_changed",
+			"this model's routing policy changed after an administrator bound it to Ask; an administrator binds it again"))
+	}
 
-	if !mc.Admits(ctx, permRoutingExecute, resource) {
+	if !mc.Admits(ctx, perm, resource) {
 		return textAdmissionError(api.ErrModuleOperationAdmission)
 	}
 	mc.Resource = resource

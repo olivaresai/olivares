@@ -6,7 +6,7 @@
 //
 // Run with:  node --experimental-strip-types e2e-visual/at-run.ts <theme> <routes> <suffix>
 //   theme  = dark | light            (default dark)
-//   routes = all | auth | public | contrast | /a,/b,...   (default all)
+//   routes = all | auth | public | contrast | trust | /a,/b,...   (default all)
 //   suffix = report shard name        (default = theme)
 //
 // Why standalone (not `playwright test`): in this container the Playwright test
@@ -63,6 +63,7 @@ import { textfitScan, type TextFitHit } from './console-qa/textfit.ts'
 import { overlapScan, type OverlapHit } from './console-qa/overlap.ts'
 import { plantQA, PLANT_KINDS, type PlantKind } from './console-qa/plants.ts'
 import { qaBlocking } from './console-qa/verdicts.ts'
+import { auditTrust } from './at-trust.ts'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = join(HERE, '__at__')
@@ -1268,6 +1269,11 @@ async function main() {
   const theme = (process.argv[2] as Theme) || 'dark'
   const routesArg = process.argv[3] || 'all'
   const suffix = process.argv[4] || theme
+  const hostile = process.env.AT_HOSTILE_ACCENT ?? ''
+  if (hostile !== '' && hostile !== 'trust')
+    throw new Error(
+      'AT_HOSTILE_ACCENT must be trust; the gate runs the plain control itself',
+    )
   mkdirSync(OUT_DIR, { recursive: true })
 
   let routes: string[]
@@ -1374,6 +1380,27 @@ async function main() {
       )
     await serve(c, profile)
     return c
+  }
+  if (routesArg === 'trust') {
+    if (process.env.AT_HOSTILE_ACCENT !== 'trust')
+      throw new Error('the trust gate requires AT_HOSTILE_ACCENT=trust')
+    try {
+      const context = await makeContext(true)
+      const page = await context.newPage()
+      const anon = await makeContext(false)
+      await proveSessionRecovery(context, page, anon)
+      const results = await auditTrust(page, ORIGIN)
+      writeFileSync(
+        join(OUT_DIR, `at-trust-${suffix}.json`),
+        JSON.stringify(results, null, 2),
+      )
+      console.log(
+        `TRUST GATE PASS [${theme}]: approval, provenance, consent; plain control failed`,
+      )
+    } finally {
+      await browser.close()
+    }
+    return
   }
   // The communication pages are measured as a tenant member in a selected workspace, each with
   // the tab its body is: a global account gets no tenant-member admission, and without a

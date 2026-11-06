@@ -1,8 +1,10 @@
 <div align="center">
 
-<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth for enterprise AI" width="720"></a>
+<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI™ — Ground truth for enterprise AI" width="720"></a>
 
-**Языки:** [English](./README.md) · [Español](./README.es.md) · [简体中文](./README.zh.md) · **Русский** · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md)
+<a href="https://olivares.ai/business"><img src=".github/assets/film-poster-business.webp" alt="Смотреть фильм Olivares AI Business" width="720"></a>
+
+**Языки:** [English](./README.md) · [Español](./README.es.md) · [简体中文](./README.zh.md) · **Русский** · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md) · [Українська](./README.uk.md) · [한국어](./README.ko.md) · [Português](./README.pt.md)
 
 **Запускайте AI, которым уже пользуется ваша команда, с тем же контролем, что и над остальной инфраструктурой.**
 
@@ -10,7 +12,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.6](https://img.shields.io/badge/release-0.6-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.6)<!-- /release -->
+[![Next release: 0.7](https://img.shields.io/badge/release-0.7-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.7)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -55,20 +57,22 @@ Olivares AI собирает ответы в одном месте. Он под�
 <br><sub><b>Работа</b>: задачи, ответственные и решения, которые остаются после завершения сессии.</sub>
 </div>
 
+[Поддерживаемые инструменты](docs-site/src/content/docs/reference/supported-tools.md) (English).
+
 ## Что оно делает
 
 - **Знать, что работает.** Все агенты, сессии, модели, MCP-серверы и инструменты в одном реестре. Карта доступа показывает, что каждый читает и записывает, и отмечает доступ, который не разрешён ни одним правилом.
 - **Остановить действие до того, как оно причинит вред.** В Olivares AI есть **четыре закрытые по умолчанию (deny-closed) точки принуждения**, которые проверяют каждое действие перед выполнением: внутри Claude Code, в прокси моделей, при каждом вызове инструмента MCP и между агентами. Рискованное действие ждёт второго человека, запрещённое не выполняется. Один переключатель останавливает всех агентов сразу. Если проверка не может принять решение, действие не выполняется.
 - **Контролировать расходы на AI.** Бюджеты для команды, агента или модели предупреждают, замедляют или останавливают расходы до того, как придёт счёт.
-- **Безопасно открывать агентам знания компании.** Подключите Google Drive, Confluence, Notion, Snowflake, S3 и PostgreSQL; Business добавляет SharePoint, SAP и Salesforce. Каждый агент видит только то, к чему имеет доступ человек, который им пользуется.
+- **Безопасно открывать агентам знания компании.** Подключите Google Drive, Notion, S3 и PostgreSQL; Business добавляет Confluence, Snowflake, Azure AI Search, SharePoint, SAP и Salesforce. Каждый агент видит только то, к чему имеет доступ человек, который им пользуется.
 - **Продолжать работу между сессиями.** Задачи, ответственные и решения сохраняются после завершения сессии. Запускайте, подключайтесь и останавливайте сессии Claude Code, Codex и Grok из браузера, без SSH.
 - **Предоставлять доказательства по запросу.** Каждое решение попадает в подписанный журнал, в котором любое изменение задним числом можно обнаружить. Business Compliance Packs сопоставляет доказательства с 26 каталогами фреймворков и создаёт отчёты для команды безопасности и аудиторов. Community сохраняет доступ к сохранённым доказательствам и их экспорту в JSON/CSV.
 
 Работает с вашими инструментами: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands и локальными моделями через Ollama. **32 модуля** и **136 интеграций**: [все модули](docs-site/src/content/docs/reference/modules/overview.md) · [все коннекторы](connectors/README.md).
 
-Community сохраняет локальную наблюдаемость, настройки и экспорт резервных копий. Отправка в SIEM/ITSM, внешняя телеметрия и экспорт состояния безопасности входят в базовую редакцию Business.
+Community сохраняет локальную наблюдаемость, настройки и экспорт резервных копий. Отправка в SIEM/ITSM, внешняя телеметрия, экспорт состояния безопасности, маршрутизация к лидеру HA в режиме active-passive и граничный коллектор входят в базовую редакцию Business.
 
-**Сетевая изоляция сессий распространяется на сессии Claude Code, Codex и OpenCode, привязанные к ключу провайдера, и на сессии OpenCode со входом через собственную учётную запись инструмента.** Такая сессия достигает только конечной точки своего провайдера или хостов своего входа через прокси отдельной сессии в собственном сетевом пространстве имён — иначе она не запускается. Для OpenCode с ключом провайдера список хостов опирается на более раннюю инвентаризацию, а не на ход, показанный за прокси. Сессии Grok Build и сессии других инструментов со входом в учётную запись по-прежнему могут достичь любого хоста, который разрешает сеть. Прочитайте раздел [сетевая изоляция сессий](SECURITY.md#session-network-isolation), прежде чем запускать нагрузки, которым нужен исключительный доступ к одному провайдеру.
+Сетевая изоляция зависит от инструмента и подключения. Сессии Claude Code, Codex, OpenCode и Gemini CLI с ключом провайдера, а также поддерживаемые сессии учётных записей OpenCode и Cursor имеют границу из сетевого пространства имён и прокси. У Grok Build и других сессий учётных записей её нет. Область действия и ограничения проверок описаны в [таблице инструментов и изоляции](docs-site/src/content/docs/reference/supported-tools.md#confinement-depends-on-the-connection) (на английском).
 
 ## Установка
 
@@ -85,40 +89,56 @@ olivares quickstart
 
 <!-- release -->
 ```sh
-docker pull docker.io/olivaresai/olivares:0.6 &&
-img=$(docker image inspect --format '{{index .RepoDigests 0}}' docker.io/olivaresai/olivares:0.6) &&
+docker pull docker.io/olivaresai/olivares:0.7 &&
+img=$(docker image inspect --format '{{index .RepoDigests 0}}' docker.io/olivaresai/olivares:0.7) &&
 cosign verify "$img" \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.6 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null &&
-docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
+docker run --rm --entrypoint cat "$img" /usr/share/olivares/olivares-sessions.json >olivares-sessions.json &&
+apparmor= &&
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat "$img" /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null &&
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions &&
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi &&
+docker run -d --name olivares --hostname olivares -p 8443:8443 -p 8444:8444 \
+  --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   "$img" \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
 
+Сессиям нужны профили из проверенного образа: всегда seccomp-профиль, а на хостах, где AppArmor контролирует пользовательские пространства имён (Debian 13, Ubuntu 24.04 и новее), ещё и AppArmor-профиль, который блок загружает через `sudo`. См. [Docker](INSTALL.md#docker).
+
 **Docker Compose.** SQLite на одном узле, с необязательными Postgres и резервным копированием.
 
 ```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares &&
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  sudo install -m 0644 deploy/apparmor/olivares-sessions.conf /etc/apparmor.d/olivares-sessions &&
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions &&
+  export OLIVARES_APPARMOR_PROFILE=olivares-sessions
+fi &&
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-Сессии работают в одной папке хоста: задайте `OLIVARES_PROJECT_DIR` с её абсолютным путём до `up`, и Compose смонтирует её в `/project`. На хостах, где политика AppArmor ограничивает пользовательские пространства имён (Ubuntu 24.04 и новее), сначала загрузите профиль сессий: см. [Docker Compose](INSTALL.md#docker-compose).
+Сессии работают в одной папке хоста: задайте `OLIVARES_PROJECT_DIR` с её абсолютным путём до `up`, и Compose смонтирует её в `/project`. На хостах, где AppArmor контролирует пользовательские пространства имён (Debian 13, Ubuntu 24.04 и новее), блок сначала загружает AppArmor-профиль сессий через `sudo`: см. [Docker Compose](INSTALL.md#docker-compose).
 
 **Debian и Ubuntu.** Пакет добавляет пользователя `olivares` без возможности входа и службу с усиленной защитой; вы запускаете её сами.
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/olivares_0.6_linux_amd64.deb" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.deb" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.6 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.6_linux_amd64.deb$' checksums.txt | sha256sum -c &&
-sudo dpkg -i olivares_0.6_linux_amd64.deb && sudo systemctl enable --now olivares
+grep ' olivares_0.7_linux_amd64.deb$' checksums.txt | sha256sum -c &&
+sudo dpkg -i olivares_0.7_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -126,15 +146,15 @@ sudo dpkg -i olivares_0.6_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/olivares_0.6_linux_amd64.rpm" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.rpm" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.6 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.6_linux_amd64.rpm$' checksums.txt | sha256sum -c &&
-sudo rpm -i olivares_0.6_linux_amd64.rpm && sudo systemctl enable --now olivares
+grep ' olivares_0.7_linux_amd64.rpm$' checksums.txt | sha256sum -c &&
+sudo rpm -i olivares_0.7_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -142,19 +162,19 @@ sudo rpm -i olivares_0.6_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/olivares_0.6_linux_amd64.apk" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.apk" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.6 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.6_linux_amd64.apk$' checksums.txt | sha256sum -c &&
-sudo apk add --allow-untrusted olivares_0.6_linux_amd64.apk && sudo rc-service olivares start
+grep ' olivares_0.7_linux_amd64.apk$' checksums.txt | sha256sum -c &&
+sudo apk add --allow-untrusted olivares_0.7_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-На ARM-серверах используйте `arm64` вместо `amd64`. Все файлы релиза: <!-- release -->[страница релиза](https://github.com/olivaresai/olivares/releases/tag/0.6)<!-- /release -->.
+На ARM-серверах используйте `arm64` вместо `amd64`. Все файлы релиза: <!-- release -->[страница релиза](https://github.com/olivaresai/olivares/releases/tag/0.7)<!-- /release -->.
 
 **Homebrew.** macOS и Linux.
 

@@ -60,7 +60,7 @@ function tenantFor(principal: Whoami): string | null {
  * stored principal. When the cache is empty (the page is only rendering), the
  * hook is already current.
  */
-function permitsNow(
+export function permitsNow(
   client: QueryClient,
   hookCan: (permission: string) => boolean,
 ): (view: FeatureView) => boolean {
@@ -71,13 +71,14 @@ function permitsNow(
     !view.permission || rbacCan(view.permission, { principal, tenant })
 }
 
-/** Where sign-in lands. An unknown or refused destination stays on the home page. */
-function startPath(permits: (view: FeatureView) => boolean): string {
+/** Where sign-in lands. An unknown or refused destination opens Now, never back to `/`. */
+export function startPath(permits: (view: FeatureView) => boolean): string {
+  const homePath = viewById('home')!.path
   const choice = useClientSettings.getState().startPage
-  if (!(START_PAGE_IDS as readonly string[]).includes(choice)) return '/'
+  if (!(START_PAGE_IDS as readonly string[]).includes(choice)) return homePath
   const view = viewById(choice)
-  if (!view) return '/'
-  if (!permits(view)) return '/'
+  if (!view) return homePath
+  if (!permits(view)) return homePath
   return view.path
 }
 

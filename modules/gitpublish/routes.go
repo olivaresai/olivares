@@ -137,6 +137,9 @@ func writeErr(w http.ResponseWriter, err error) {
 		e = errUnavailable
 	}
 	body := api.ErrorBody(e.Code, e.Code)
+	if e.Path != "" {
+		body["path"], body["class"] = e.Path, e.Class
+	}
 	if e.Intent != "" {
 		body["intent_id"] = e.Intent.String()
 	}

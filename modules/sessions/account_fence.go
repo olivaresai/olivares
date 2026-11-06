@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sync/atomic"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -130,9 +131,7 @@ func writeAccountFenceRefusal(w http.ResponseWriter, err error) bool {
 	if !ok {
 		return false
 	}
-	writeJSON(w, http.StatusConflict, map[string]any{
-		"error": map[string]string{"code": code, "message": err.Error()},
-	})
+	writeJSON(w, http.StatusConflict, api.ErrorBody(code, err.Error()))
 	return true
 }
 

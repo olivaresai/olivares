@@ -125,8 +125,11 @@ func (m *Module) resolveProviderDefaultModel(ctx context.Context, tenant model.T
 	p.Model = selected
 	if p.ProviderHome.Driver == providerDriverOpenCode {
 		// Saved IDs belong to the endpoint. Translate once before admission and
-		// the run snapshot; an explicit native choice above is never translated.
-		p.Model = openCodeModelValue(BoundProvider{Kind: rec.Kind}, p.Model, true)
+		// the run snapshot; an explicit native choice above is never translated. The
+		// endpoint (not just the kind) decides the id for an openai_compatible preset
+		// catalog vendor (openCodeModelValue, modelprovider.LookupPresetByEndpoint).
+		endpoint, _ := recordEndpoint(rec)
+		p.Model = openCodeModelValue(BoundProvider{Kind: rec.Kind, Endpoint: endpoint}, p.Model, true)
 	}
 	return nil
 }

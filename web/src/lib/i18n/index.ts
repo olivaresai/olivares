@@ -43,6 +43,14 @@ import koCommon from './locales/ko/common.json'
 import koNav from './locales/ko/nav.json'
 import koErrors from './locales/ko/errors.json'
 import koSettings from './locales/ko/settings.json'
+import ukCommon from './locales/uk/common.json'
+import ukNav from './locales/uk/nav.json'
+import ukErrors from './locales/uk/errors.json'
+import ukSettings from './locales/uk/settings.json'
+import ptCommon from './locales/pt/common.json'
+import ptNav from './locales/pt/nav.json'
+import ptErrors from './locales/pt/errors.json'
+import ptSettings from './locales/pt/settings.json'
 // The auth dictionaries other than English, by URL (fetched on demand, see authBackend).
 import deAuthUrl from './locales/de/auth.json?url'
 import esAuthUrl from './locales/es/auth.json?url'
@@ -50,12 +58,14 @@ import frAuthUrl from './locales/fr/auth.json?url'
 import itAuthUrl from './locales/it/auth.json?url'
 import jaAuthUrl from './locales/ja/auth.json?url'
 import koAuthUrl from './locales/ko/auth.json?url'
+import ptAuthUrl from './locales/pt/auth.json?url'
 import ruAuthUrl from './locales/ru/auth.json?url'
+import ukAuthUrl from './locales/uk/auth.json?url'
 import zhAuthUrl from './locales/zh/auth.json?url'
 
 /**
  * i18n foundation. The console shipped EN + ES from day one (ES = Spain)
- * added ZH (Simplified) / JA / DE / RU / FR for the public launch, then IT and KO. The console bundles
+ * added ZH (Simplified) / JA / DE / RU / FR for the public launch, then IT, KO, UK and PT. The console bundles
  * the foundation namespaces below; a feature-module adds its OWN
  * namespace (no key collisions) by calling `registerTranslations('<module>', …)`
  * from its feature registration, so its strings live beside its code.
@@ -77,6 +87,8 @@ export const SUPPORTED_LANGUAGES = [
   { code: 'fr', label: 'Français' },
   { code: 'it', label: 'Italiano' },
   { code: 'ko', label: '한국어' },
+  { code: 'uk', label: 'Українська' },
+  { code: 'pt', label: 'Português' },
 ] as const
 
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]['code']
@@ -106,6 +118,8 @@ const authUrls = {
   fr: frAuthUrl,
   it: itAuthUrl,
   ko: koAuthUrl,
+  uk: ukAuthUrl,
+  pt: ptAuthUrl,
 }
 
 async function fetchDictionary(url: string): Promise<ResourceKey> {
@@ -196,6 +210,18 @@ const resources = {
     nav: koNav,
     errors: koErrors,
     settings: koSettings,
+  },
+  uk: {
+    common: ukCommon,
+    nav: ukNav,
+    errors: ukErrors,
+    settings: ukSettings,
+  },
+  pt: {
+    common: ptCommon,
+    nav: ptNav,
+    errors: ptErrors,
+    settings: ptSettings,
   },
 }
 

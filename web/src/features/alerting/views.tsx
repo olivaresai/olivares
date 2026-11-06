@@ -30,6 +30,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/xv-notify',
     icon: Siren,
     permission: 'notify:route:read',
+    changes: [
+      { permission: 'notify:route:write' },
+      { permission: 'notify:route:admin' },
+    ],
     commandActions: [{ id: 'createRoute', permission: 'notify:route:write' }],
     element: lazyView(AlertingView),
   },

@@ -30,6 +30,7 @@ function origin(
     data: {
       role: 'origin',
       label: id,
+      ref: id,
       kind: 'agent',
       bridged: true,
       dimmed: !!opts.dimmed,
@@ -48,6 +49,7 @@ function resource(
     data: {
       role: 'resource',
       label: id,
+      ref: id,
       kind: 'postgres.table',
       resourceKind: 'postgres.table',
       hasUnexpected: !!opts.hasUnexpected,

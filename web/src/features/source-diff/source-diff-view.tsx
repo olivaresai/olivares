@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
+import { AppLink } from '@/components/ui/app-link'
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -226,10 +227,6 @@ export function SourceDiffView({
           >
             {t('swap')}
           </Button>
-          <span className="text-sm text-muted-foreground">{t('requires')}</span>
-          <span className="rounded-md border border-border px-2 py-1 text-sm">
-            {t('permission')}
-          </span>
         </div>
         {(!query.base.trim() || !query.head.trim()) && (
           <p id="swap-reason" className="w-full text-sm text-muted-foreground">
@@ -719,7 +716,7 @@ export function SourceCompareControl({
   }
   return (
     <Button type="button" variant="ghost" size="sm" asChild>
-      <a href={href}>{t('compare')}</a>
+      <AppLink href={href}>{t('compare')}</AppLink>
     </Button>
   )
 }

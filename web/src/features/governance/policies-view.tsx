@@ -144,7 +144,14 @@ export function PoliciesView() {
 
       <DataTable
         columns={columns}
-        data={policies.data?.items ?? []}
+        // This table edits the three built-in kinds. A kind a composition registers
+        // is listed by the API but is managed where that composition says.
+        data={(policies.data?.items ?? []).filter(
+          (p) =>
+            p.kind === 'abac' ||
+            p.kind === 'approval' ||
+            p.kind === 'grant_expiry',
+        )}
         isLoading={policies.isLoading}
         error={policies.error}
         onRetry={() => policies.refetch()}

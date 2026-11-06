@@ -8,14 +8,20 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { accountLabel } from '@/features/agent-tools/account-marks'
 import {
   needsDefaultRow,
   useProfileList,
 } from '@/features/agent-tools/use-profiles'
 import '@/features/agent-tools/i18n'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { limitReached } from '@/features/agentops/account-usage'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
-import type { ProviderAccountUsage, RunDTO } from '@/features/agentops/types'
+import type {
+  ProviderAccountDTO,
+  ProviderAccountUsage,
+  RunDTO,
+} from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
 import { signInApi } from './api'
 import type { SignInTool } from './api'
@@ -47,12 +53,18 @@ export function useReuseProfile(tool: string | undefined, enabled: boolean) {
 export interface SessionProfileChoice {
   /** '' for the default login, else the profile's reference. */
   value: string
+  /** The account's display name, else its name; the default login is called what it is. */
   label: string
+  /** The account's stored accent, for the dot beside the label. */
+  accent?: string
   ready: boolean
   /** The windows the account's tool last reported; none for the default login. */
   usage?: ProviderAccountUsage[]
   /** Why it cannot start: its login is missing, or the key it runs on is. */
   missing?: 'signIn' | 'key'
+  /** A window its tool reported at 100 %: a first turn there fails with the tool's limit,
+   * so it is listed last, cannot be picked, and is never the one preselected. */
+  atLimit?: boolean
 }
 
 export interface SessionProfiles {
@@ -110,6 +122,19 @@ export function useSessionProfiles(
   // The default login is the profile without an account name; an engine without names
   // adopted it as a named profile, which is then the one choice, by its reference.
   const hasDefault = needsDefaultRow(accounts, list.data?.named ?? false)
+  // A display name is not unique: two accounts called "Work", or one called like the default
+  // login, would be one entry twice in a list that starts a session. The account name, which
+  // is unique, tells them apart again.
+  const labelCount = new Map<string, number>()
+  for (const l of [
+    ...(hasDefault ? [t('profiles.default')] : []),
+    ...accounts.map(accountLabel),
+  ])
+    labelCount.set(l, (labelCount.get(l) ?? 0) + 1)
+  const labelOf = (a: ProviderAccountDTO) =>
+    (labelCount.get(accountLabel(a)) ?? 0) > 1
+      ? `${accountLabel(a)} · ${a.name}`
+      : accountLabel(a)
   const choices: SessionProfileChoice[] = [
     ...(hasDefault
       ? [
@@ -131,9 +156,11 @@ export function useSessionProfiles(
             : true
       return {
         value: a.account_ref,
-        label: a.name,
+        label: labelOf(a),
+        accent: a.accent,
         ready,
         usage: a.usage,
+        ...(limitReached(a.usage) ? { atLimit: true } : {}),
         ...(ready
           ? {}
           : {
@@ -143,8 +170,10 @@ export function useSessionProfiles(
     }),
   ]
   if (!driver || (choices.length === 1 && choices[0].value === '')) return null
+  // Accounts at their limit go last, in their own order (the sort is stable).
+  choices.sort((x, y) => Number(!!x.atLimit) - Number(!!y.atLimit))
   const readyValues = new Set(
-    choices.filter((c) => c.ready).map((c) => c.value),
+    choices.filter((c) => c.ready && !c.atLimit).map((c) => c.value),
   )
   const knownRefs = new Set(accounts.map((a) => a.account_ref))
   const inactive = list.data?.inactive ?? new Set<string>()
@@ -164,7 +193,8 @@ export function useSessionProfiles(
           : undefined,
     )
     .find((value) => value !== undefined && readyValues.has(value))
-  const fallback = choices.find((c) => c.ready)?.value ?? choices[0].value
+  const fallback =
+    choices.find((c) => readyValues.has(c.value))?.value ?? choices[0].value
   const selected =
     pick?.scope === scope && choices.some((c) => c.value === pick.value)
       ? pick.value

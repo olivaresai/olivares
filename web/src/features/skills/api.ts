@@ -78,11 +78,19 @@ export const skillsApi = {
     id: string,
     signal?: AbortSignal,
     profileRef?: string,
+    folderRef?: string,
   ) =>
     http.get<SkillSelection>(`${BASE}/selection`, {
-      query: profileRef
-        ? { target: [`${kind}:${id}`, `profile:${profileRef}`] }
-        : { target_kind: kind, target_id: id },
+      query:
+        profileRef || folderRef
+          ? {
+              target: [
+                `${kind}:${id}`,
+                ...(profileRef ? [`profile:${profileRef}`] : []),
+                ...(folderRef ? [`folder:${folderRef}`] : []),
+              ],
+            }
+          : { target_kind: kind, target_id: id },
       signal,
     }),
   /** Read the pack's recorded source again: current, or available with its diff. */

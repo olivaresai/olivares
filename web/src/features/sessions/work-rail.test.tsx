@@ -12,9 +12,12 @@ import {
 } from '@testing-library/react'
 import axe from 'axe-core'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AccountMarksContext } from '@/features/agent-tools/account-marks'
 import type { RunDTO } from '@/features/agentops/types'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import engineTools from '@/features/agentops/engine-tools.fixture.json'
+import { ToolBox } from '@/features/agent-tools/tool-box'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { usePreferencesStore } from '@/stores/preferences'
 import { mergeSessions, type UnifiedSession } from './provenance'
@@ -48,6 +51,9 @@ function live(over: Partial<LiveDTO> = {}): LiveDTO {
 function row(over: Partial<LiveDTO>, runs: RunDTO[] = []): UnifiedSession {
   return mergeSessions([live(over)], runs)[0]
 }
+
+const undo = vi.hoisted(() => ({ undoLatest: vi.fn() }))
+vi.mock('./list-undo', () => undo)
 
 const working = row({
   session_ref: 'sess-a',
@@ -87,9 +93,9 @@ function launchedRow(ref: string): UnifiedSession {
 }
 
 /**
- * The rail as it is once the Working fold is open. The rows this file asserts on are
- * mostly running sessions, so each render opens the fold first; the fold's own behavior,
- * shut by default, is the last describe, which renders with `renderRaw`.
+ * The rail with the Working fold open. The rows this file asserts on are mostly running
+ * sessions, so each render opens the fold if a test left it shut; the fold's own behavior,
+ * open by default, is the last describe, which renders with `renderRaw`.
  */
 function render(ui: Parameters<typeof renderRaw>[0]) {
   const utils = renderRaw(ui)
@@ -123,8 +129,48 @@ async function tabIntoRows(user: ReturnType<typeof userEvent.setup>) {
   if (document.activeElement?.id === 'rail-group-active') await user.tab()
 }
 
+describe('WorkRail — which account a row runs under', () => {
+  const research = row({
+    session_ref: 'sess-r',
+    live_ref: 'lr-r',
+    cc_state: 'active',
+    provider: 'claude',
+    provider_profile_ref: 'ppf_research',
+  })
+  const marks = new Map([
+    ['ppf_research', { label: 'Research', accent: 'purple' }],
+  ])
+
+  it('puts the account on the row as a dot and a short label', () => {
+    render(
+      <AccountMarksContext.Provider value={marks}>
+        <WorkRail
+          sessions={[research, done]}
+          selected={null}
+          onOpen={vi.fn()}
+          pinned={new Set()}
+          onTogglePin={vi.fn()}
+        />
+      </AccountMarksContext.Provider>,
+    )
+    const [first, second] = rows()
+    const badge = within(first).getByTestId('account-badge')
+    expect(badge).toHaveTextContent('Research')
+    expect(
+      badge.querySelector('[data-provider-accent="purple"]'),
+    ).not.toBeNull()
+    // A session with no known account keeps the row it had.
+    expect(within(second).queryByTestId('account-badge')).toBeNull()
+  })
+
+  it('leaves the rows as they were where no account is known', () => {
+    renderRail({ sessions: [research] })
+    expect(screen.queryByTestId('account-badge')).toBeNull()
+  })
+})
+
 describe('WorkRail — what a row says', () => {
-  it('keeps a long name on one line, whole on the hover, with its reference', () => {
+  it('keeps a long name on two lines at most, whole on the hover, with its reference', () => {
     const name = 'dependency-audit-across-the-whole-estate'
     const long = mergeSessions(
       [],
@@ -164,14 +210,13 @@ describe('WorkRail — what a row says', () => {
     // identifier the row does not paint stays reachable from it.
     expect(nameEl.getAttribute('title')).toContain(name)
     expect(nameEl.getAttribute('title')).toContain('run-long')
-    // A row is one line at the list's standard row height: the title is cut with an
-    // ellipsis.
+    // The title leads on up to two lines (#3970), then is cut with an ellipsis; the
+    // row is at least the list's standard row height and grows for the second line.
     expect(nameEl.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['truncate', 'min-w-0']),
+      expect.arrayContaining(['line-clamp-2', 'min-w-0']),
     )
-    // Two short lines: the place and the state above, the name below.
     expect(rowEl.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['h-14', 'min-[761px]:h-12']),
+      expect.arrayContaining(['min-h-14', 'min-[761px]:min-h-12']),
     )
     // The state is a word, whole: a working session says how long it has worked.
     const state = within(rowEl).getByTestId('rail-row-state')
@@ -253,10 +298,10 @@ describe('WorkRail — what a row says', () => {
     )
     const first = rows()[0]
     // No permanent padding for the button from the shell breakpoint up (a title had 103 px
-    // of 300 left); a phone paints the button always and keeps its column.
+    // of 300 left), and none on a phone, which has no button (#3975).
     const cls = first.className.split(/\s+/)
     expect(cls).not.toContain('pr-12')
-    expect(cls).toContain('max-[760px]:pr-12')
+    expect(cls).not.toContain('max-[760px]:pr-12')
     // The time yields to the button by fading on hover: it is never `visibility:hidden`
     // (that leaves the row's accessible name) and a focused row keeps it.
     const time = first.querySelector('[data-testid="rail-row-state"]')!
@@ -265,20 +310,20 @@ describe('WorkRail — what a row says', () => {
     const timeCls = time.className.split(/\s+/)
     expect(timeCls).toContain('min-[761px]:group-hover/row:opacity-0')
     expect(time.className).not.toMatch(/invisible|focus-within/)
-    // The button yields the same way: it appears on hover (always on a phone) and NEVER on
-    // focus. A clicked or arrowed-to row matches `group-focus-within/row` with the pointer
+    // The button yields the same way: it appears on hover and NEVER on focus. A clicked or arrowed-to row matches `group-focus-within/row` with the pointer
     // elsewhere, and the button is absolutely placed over the time's last 40 px, with
     // the reserve gone: painting it there covered the time and state of the focused row.
     const button = first.parentElement?.querySelector('button')
     expect(button).not.toBeNull()
     const buttonCls = (button as HTMLElement).className.split(/\s+/)
     expect(buttonCls).toContain('group-hover/row:opacity-100')
-    expect(buttonCls).toContain('max-[760px]:opacity-100')
+    // A phone cannot open a session beside another (#3975): no button there.
+    expect(buttonCls).toContain('max-[760px]:hidden')
     expect((button as HTMLElement).className).not.toMatch(/focus-within/)
     // A touch screen has no hover to reveal it (`group-hover` is gated by
-    // `(hover: hover)`), and a tap used to reveal it by focus: a coarse pointer paints the
-    // button always and keeps its column, exactly as a phone does.
-    expect(cls).toContain('pointer-coarse:pr-12')
+    // `(hover: hover)`), and a tap used to reveal it by focus: a coarse pointer from the
+    // shell breakpoint up (a tablet) paints the button always and keeps its column.
+    expect(cls).toContain('min-[761px]:pointer-coarse:pr-12')
     expect(buttonCls).toContain('pointer-coarse:opacity-100')
   })
 
@@ -324,7 +369,7 @@ describe('WorkRail — what a row says', () => {
   })
 
   it.each(['compact', 'comfortable'] as const)(
-    'a row is one standard %s row high, from the shell breakpoint up',
+    'a row is at least one standard %s row high, from the shell breakpoint up',
     (density) => {
       usePreferencesStore.setState({ density })
       try {
@@ -333,8 +378,10 @@ describe('WorkRail — what a row says', () => {
           // Two short lines: a step taller than the shell's one-line row.
           expect(r.className.split(/\s+/)).toEqual(
             expect.arrayContaining([
-              'h-14',
-              density === 'compact' ? 'min-[761px]:h-11' : 'min-[761px]:h-12',
+              'min-h-14',
+              density === 'compact'
+                ? 'min-[761px]:min-h-11'
+                : 'min-[761px]:min-h-12',
             ]),
           )
         }
@@ -405,7 +452,7 @@ describe('WorkRail — what a row says', () => {
     expect(within(row).queryByText(/run-9/)).toBeNull()
   })
 
-  it('a session nobody named says so, and keeps only the distinguishing tail', () => {
+  it('a session nobody named says so, and paints no reference beside it', () => {
     // The rung the two cases above cannot reach: both of their rows ARE named — one by
     // the connector's reported action, one by the run the operator named — so neither
     // executes the rail's last rung, which is the one that used to paint `sess-…`.
@@ -413,9 +460,10 @@ describe('WorkRail — what a row says', () => {
     renderRail({ sessions: [bare] })
     const name = within(rows()[0]).getByTestId('rail-row-name')
     expect(name).toHaveTextContent('Untitled session')
-    expect(name.textContent).not.toContain('sess-coder-7a3f')
-    // Two untitled rows are still told apart, and the whole reference is one hover away.
-    expect(name).toHaveTextContent('coder-7a3f')
+    // The row is the title: the distinguishing tail is no mono text beside it, and stays
+    // in the row's accessible description and on the name's hover.
+    expect(name.textContent).not.toContain('7a3f')
+    expect(rows()[0]).toHaveAccessibleDescription(/coder-7a3f/)
     expect(name.getAttribute('title')).toContain('sess-coder-7a3f')
   })
 
@@ -471,6 +519,58 @@ describe('WorkRail — what a row says', () => {
     expect(screen.queryByText(/Nothing is waiting for you/)).toBeNull()
     expect(screen.queryByText(/No session has settled yet/)).toBeNull()
     expect(screen.getByRole('group', { name: /^Working\s*1$/ })).toBeTruthy()
+  })
+
+  it('nests the sessions of one workspace under it, "workspace · N agents", and a session in a worktree under that worktree\'s branch', () => {
+    const run = (
+      ref: string,
+      name: string,
+      workspace: string,
+      branch?: string,
+    ): RunDTO => ({
+      run_ref: ref,
+      name,
+      workspace_ref: workspace,
+      workspace_path: branch ? `/srv/worktrees/${ref}` : `/work/${workspace}`,
+      ...(branch ? { worktree_branch: branch } : {}),
+      provider_driver: 'claude',
+      transport: 'stream-json',
+      permission_mode: 'default',
+      isolation: 'native',
+      state: 'running',
+      last_event_seq: 0,
+      pep_provisioned: true,
+      record_io: false,
+      critical: false,
+      last_activity_at: '2026-09-18T09:01:00Z',
+    })
+    const sessions = mergeSessions(
+      [],
+      [
+        run('r-a', 'alpha', 'ws-1', 'feat-x'),
+        run('r-b', 'beta', 'ws-2'),
+        run('r-c', 'gamma', 'ws-1'),
+      ],
+    )
+    renderRail({ sessions, workspaceNames: new Map([['ws-1', 'shop']]) })
+    const shop = screen.getByRole('group', { name: 'shop · 2 agents' })
+    const rows = within(shop).getAllByRole('option')
+    expect(rows).toHaveLength(2)
+    // The worktree is a level of its own: its branch heads the group its session sits in,
+    // so the row does not say it again. A session in the workspace folder sits beside it.
+    const worktree = within(shop).getByRole('group', { name: 'feat-x' })
+    const inTree = within(worktree).getAllByRole('option')
+    expect(inTree).toHaveLength(1)
+    expect(within(inTree[0]!).getByText('alpha')).toBeTruthy()
+    expect(within(inTree[0]!).queryByText('feat-x')).toBeNull()
+    expect(within(rows[1]!).getByText('gamma')).toBeTruthy()
+    expect(within(worktree).queryByText('gamma')).toBeNull()
+    // A workspace's rows sit together where its first one was: the arrow keys walk what is drawn.
+    expect(
+      screen
+        .getAllByRole('option')
+        .map((o) => within(o).queryByText(/^(alpha|beta|gamma)$/)?.textContent),
+    ).toEqual(['alpha', 'gamma', 'beta'])
   })
 
   it('lists Needs you first, then Working, then Earlier', () => {
@@ -617,6 +717,26 @@ describe('WorkRail — arrows move, Enter opens', () => {
 })
 
 describe('WorkRail — no gesture without a keyboard path', () => {
+  it('takes back the last archive, snooze, done or unpin with Ctrl+Z', async () => {
+    const user = userEvent.setup()
+    undo.undoLatest.mockReturnValue(true)
+    renderRail({ sessions: [launchedRow('run-a')] })
+    await tabIntoRows(user)
+    const row = document.activeElement as HTMLElement
+    // The key is the rail's while a notice is waiting: the browser's own undo does not run.
+    expect(fireEvent.keyDown(row, { key: 'z', ctrlKey: true })).toBe(false)
+    expect(undo.undoLatest).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves Ctrl+Z to the browser when nothing is waiting to be undone', async () => {
+    const user = userEvent.setup()
+    undo.undoLatest.mockReturnValue(false)
+    renderRail({ sessions: [launchedRow('run-a')] })
+    await tabIntoRows(user)
+    const row = document.activeElement as HTMLElement
+    expect(fireEvent.keyDown(row, { key: 'z', ctrlKey: true })).toBe(true)
+  })
+
   it('pins the focused row with `p`', async () => {
     const user = userEvent.setup()
     const { onTogglePin } = renderRail({
@@ -638,14 +758,14 @@ describe('WorkRail — no gesture without a keyboard path', () => {
     expect(onTogglePin).toHaveBeenCalledWith('run:run-b')
   })
 
-  it('does nothing on `p` for a session with no run: the engine has nothing to pin it on', async () => {
-    // An observed session. The pin is kept by the engine against a run, so the key is
-    // not bound here rather than bound to a no-op.
+  it('pins an observed session with `p` under its live address', async () => {
+    // An observed session has no run, but the engine keeps its pin against `live:<live_ref>`,
+    // so the key pins it like a launched one.
     const user = userEvent.setup()
     const { onTogglePin } = renderRail()
     await tabIntoRows(user)
     await user.keyboard('p')
-    expect(onTogglePin).not.toHaveBeenCalled()
+    expect(onTogglePin).toHaveBeenCalledWith('live:lr-b')
   })
 
   it('does nothing on `p` when there is nowhere to store a preference', async () => {
@@ -677,15 +797,9 @@ describe('WorkRail — no gesture without a keyboard path', () => {
 })
 
 describe('WorkRail — nothing at all', () => {
-  it('says what the surface will show, and offers the one action', () => {
-    renderRail({
-      sessions: [],
-      emptyAction: <button type="button">Start a session</button>,
-    })
+  it('says what the surface will show', () => {
+    renderRail({ sessions: [] })
     expect(screen.getByText('No sessions yet')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Start a session' }),
-    ).toBeInTheDocument()
   })
 
   it('does not call an empty estate empty while it is still loading', () => {
@@ -751,6 +865,12 @@ describe('WorkRail — every row has one actions menu (#2795)', () => {
     expect(rows()[0].contains(more)).toBe(false)
     expect(more).toHaveAttribute('tabindex', '-1')
     expect(more).toHaveAttribute('aria-hidden', 'true')
+    // A phone has no ⋯ to see or tap (#3975), but the trigger stays laid out: the menu a
+    // long press opens is placed against it.
+    const moreCls = more.className.split(/\s+/)
+    expect(moreCls).toContain('max-[760px]:pointer-events-none')
+    expect(moreCls).not.toContain('max-[760px]:hidden')
+    expect(moreCls).not.toContain('pointer-coarse:opacity-100')
     await user.click(more)
     expect(
       within(screen.getByRole('menu')).getByRole('menuitem', {
@@ -864,7 +984,11 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
     expect(within(rowEl).getByTestId('rail-row-place')).toHaveTextContent(
       'payments-api',
     )
-    expect(within(rowEl).getByTestId('tool-mark')).toHaveTextContent('CC')
+    // Claude Code wears Claude's own mark, not its letters.
+    expect(within(rowEl).getByTestId('tool-mark')).toHaveAttribute(
+      'data-vendor',
+      'claude',
+    )
     expect(within(rowEl).getByTestId('tool-mark')).toHaveAccessibleName(
       'Claude Code',
     )
@@ -874,7 +998,7 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
   it.each([
     [{ state: 'failed' as const }, 'Failed'],
     [{ state: 'idle' as const }, 'Done'],
-    [{ state: 'stopped' as const, reason: 'stopped by a person' }, 'Stopped'],
+    [{ state: 'stopped' as const, reason: 'stopped by a person' }, 'Done'],
     [{ state: 'running' as const, pending_approval_ref: 'apr_1' }, 'Needs you'],
   ])('says %o as %s', (over, word) => {
     rail(launched(over))
@@ -904,14 +1028,36 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
     expect(state()).toHaveTextContent(/^Pending$/)
   })
 
-  it('times no turn it did not see start: a session up for hours says Working', () => {
-    rail(
+  // ONE STATUS SET (#4019): a finished session says Done whatever ended it, every working
+  // row has a clock, and each status has its colour on its mark and its word.
+  it('says one word per status, a clock on every working row and a colour per status', () => {
+    const up3h = rail(
       launched({
         run_ref: 'run-3h',
         started_at: new Date(Date.now() - 3 * 3_600_000).toISOString(),
       }),
     )
-    expect(state()).toHaveTextContent(/^Working$/)
+    // A turn the page did not see start is timed from the session's start.
+    expect(state()).toHaveTextContent(/^Working 3h/)
+    const mark = () => state().querySelector('[data-status]')!
+    expect(mark()).toHaveClass('bg-info')
+    up3h.unmount()
+    for (const [over, word, colour] of [
+      [{ state: 'stopped' as const, reason: 'exit 0' }, 'Done', 'text-success'],
+      [
+        { state: 'stopped' as const, reason: 'idle_policy' },
+        'Done',
+        'text-success',
+      ],
+      [{ state: 'cleaned' as const }, 'Done', 'text-success'],
+      [{ state: 'idle' as const }, 'Done', 'text-success'],
+      [{ state: 'failed' as const }, 'Failed', 'text-danger'],
+    ] as const) {
+      const view = rail(launched(over))
+      expect(state()).toHaveTextContent(new RegExp(`^${word}$`))
+      expect(mark()).toHaveClass(colour)
+      view.unmount()
+    }
   })
 
   it('times the turn it saw start, from that moment, in whole seconds', async () => {
@@ -927,10 +1073,11 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
       pinned: new Set<string>(),
       onTogglePin: vi.fn(),
     }
+    // The person folded Working, so the row is not drawn when the turn starts: the rail
+    // notes the moment anyway, and the row opened later reads it.
+    usePreferencesStore.setState({ workingFolded: true })
     const view = render(<WorkRail sessions={[at('idle')]} {...props} />)
     view.rerender(<WorkRail sessions={[at('running')]} {...props} />)
-    // The row is in the shut Working fold when the turn starts: the rail noted the
-    // moment, and the row opened later reads it.
     fireEvent.click(screen.getByRole('button', { name: /^Working\s*1$/ }))
     await waitFor(() => expect(state()).toHaveTextContent(/^Working [0-9]s$/))
     // The person leaves the list; back later, the session may be in another turn: the
@@ -938,7 +1085,7 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
     view.unmount()
     render(<WorkRail sessions={[at('running')]} {...props} />)
     await new Promise((r) => setTimeout(r, 20))
-    expect(state()).toHaveTextContent(/^Working$/)
+    expect(state()).toHaveTextContent(/^Working 3h/)
   })
 
   it('gives a working row its clock and every other row its age', () => {
@@ -949,9 +1096,24 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
     expect(screen.getByTestId('rail-row').querySelector('time')).not.toBeNull()
   })
 
-  it('draws every mark in capitals, a one-word tool too', () => {
+  it("draws a tool with the engine's one mark, the same one AI tools draws", () => {
+    // The mark is the engine's (GET /v1/m/sessions/tools), never a console guess:
+    // Codex was C on AI tools and CO here.
+    const codex = engineTools.tools.find((tool) => tool.key === 'codex')!
     rail(launched({ provider_driver: 'codex' }))
-    expect(screen.getByTestId('tool-mark')).toHaveTextContent(/^CO$/)
+    const listed = screen.getByTestId('tool-mark')
+    render(
+      <ToolBox driver="codex" name="Codex" onDetails={vi.fn()}>
+        {null}
+      </ToolBox>,
+    )
+    const boxed = within(screen.getByTestId('tool-codex')).getByTestId(
+      'tool-mark',
+    )
+    for (const mark of [listed, boxed]) {
+      expect(mark).toHaveTextContent(new RegExp(`^${codex.monogram}$`))
+      expect(mark).toHaveStyle({ backgroundColor: codex.color })
+    }
   })
 
   it('says a seen session that ended Done, the word the list uses for a finished turn', () => {
@@ -979,9 +1141,9 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
   })
 })
 
-// Working sessions fold into one shut group, so a running session never moves a row under
-// the pointer.
-/** The rail exactly as it arrives: the Working fold shut. */
+// The Working section arrives open (#3969): the sessions working now are the first thing a
+// person looks for. A fold is the person's own choice, and it is remembered.
+/** The rail exactly as it arrives. */
 function renderShut(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
   return renderRaw(
     <WorkRail
@@ -998,32 +1160,31 @@ function renderShut(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
 describe('WorkRail — the Working fold', () => {
   const addresses = () => rows().map((r) => r.getAttribute('data-address'))
   const toggle = () => screen.getByRole('button', { name: /^Working\s*1$/ })
+  beforeEach(() => usePreferencesStore.setState({ workingFolded: false }))
 
-  it('folds the working sessions behind one toggle, shut, with its count', () => {
+  it('arrives open, in place between Needs you and Earlier, with its count', () => {
     renderShut()
-    expect(toggle()).toHaveAttribute('aria-expanded', 'false')
-    expect(addresses()).toEqual(['live:lr-b', 'live:lr-c'])
-  })
-
-  it('opens in place, between Needs you and Earlier, and shuts again', async () => {
-    const user = userEvent.setup()
-    renderShut()
-    await user.click(toggle())
     expect(toggle()).toHaveAttribute('aria-expanded', 'true')
     expect(addresses()).toEqual(['live:lr-b', 'live:lr-a', 'live:lr-c'])
-    await user.click(toggle())
-    expect(addresses()).toEqual(['live:lr-b', 'live:lr-c'])
   })
 
-  it('arrives open when the session on screen is working', () => {
-    renderShut({ selected: 'live:lr-a' })
-    expect(toggle()).toHaveAttribute('aria-expanded', 'true')
-    expect(addresses()).toContain('live:lr-a')
+  it('shuts when the person folds it, and stays shut on the next visit', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderShut()
+    await user.click(toggle())
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false')
+    expect(addresses()).toEqual(['live:lr-b', 'live:lr-c'])
+    unmount()
+    renderShut()
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false')
+    await user.click(toggle())
+    expect(addresses()).toEqual(['live:lr-b', 'live:lr-a', 'live:lr-c'])
   })
 
   it('does not walk the folded rows with the arrow keys', async () => {
     const user = userEvent.setup()
     renderShut()
+    await user.click(toggle())
     rows()[0].focus()
     await user.keyboard('{ArrowDown}')
     expect(rows()[1]).toHaveFocus()
@@ -1033,15 +1194,14 @@ describe('WorkRail — the Working fold', () => {
   it('draws a rail whose every session is working as the toggle alone', async () => {
     const user = userEvent.setup()
     renderShut({ sessions: [working] })
+    await user.click(toggle())
     expect(screen.queryAllByRole('option')).toHaveLength(0)
     await user.click(toggle())
     expect(addresses()).toEqual(['live:lr-a'])
   })
 
   it('names the state in the row, with its mark, whatever its group', async () => {
-    const user = userEvent.setup()
     renderShut()
-    await user.click(toggle())
     const byAddress = (a: string) =>
       rows().find((r) => r.getAttribute('data-address') === a)!
     for (const [address, status, word] of [

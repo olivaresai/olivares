@@ -31,6 +31,7 @@ const AUTOMATIC = ' automatic'
 export function SessionDefaultsSettings() {
   const { t } = useTranslation('settings')
   const { t: firstHour } = useTranslation('firstHour')
+  const { t: agentops } = useTranslation('agentops')
   const defaults = useClientSettings((s) => s.sessionDefaults)
   const save = useClientSettings((s) => s.setSessionDefaults)
   const boundary = useAuthBoundary()
@@ -60,7 +61,7 @@ export function SessionDefaultsSettings() {
   const models = useModelChoices({
     profileRef: account || reuse.data?.profile?.profile_ref || '',
     driver: tool ?? '',
-    model: '',
+    model: defaults.model,
     enabled: !!tool,
   })
   const folders = useQuery({
@@ -90,6 +91,10 @@ export function SessionDefaultsSettings() {
           value: m.id,
           label: modelLabel(m),
         })),
+    effort: (models.efforts ?? []).map((e) => ({
+      value: e,
+      label: agentops(`effort.${e}`, { defaultValue: e }),
+    })),
     folder: (folders.data?.items ?? [])
       .filter((w) => w.state === 'active' && w.root_path)
       .map((w) => ({
@@ -107,55 +112,60 @@ export function SessionDefaultsSettings() {
           {t('newSessions.readFailed')}
         </p>
       ) : null}
-      {(['tool', 'account', 'model', 'folder'] as const).map((field) => {
-        const name = t(`newSessions.${field}`)
-        const value = defaults[field]
-        const items = choices[field]
-        const change = (value: string) =>
-          save({
-            [field]: value,
-            ...(field === 'tool'
-              ? { account: '', model: '' }
-              : field === 'account'
-                ? { model: '' }
-                : {}),
-          })
-        return (
-          <SettingsRow
-            key={field}
-            name={name}
-            description={t('newSessions.automatic')}
-            changed={!!value}
-            onReset={() => save({ [field]: '' })}
-            resetLabel={t('newSessions.reset', { name })}
-            control={
-              <Select
-                value={value || AUTOMATIC}
-                onValueChange={(v) => change(v === AUTOMATIC ? '' : v)}
-              >
-                <SelectTrigger aria-label={name} className="w-64 max-w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={AUTOMATIC}>
-                    {t('newSessions.automatic')}
-                  </SelectItem>
-                  {value && !items.some((item) => item.value === value) ? (
-                    <SelectItem value={value}>
-                      {t('newSessions.unavailable')}
+      {(['tool', 'account', 'model', 'effort', 'folder'] as const).map(
+        (field) => {
+          const name = t(`newSessions.${field}`)
+          const value = defaults[field]
+          const items = choices[field]
+          const change = (value: string) =>
+            save({
+              [field]: value,
+              // An effort is a level of a model: a change above it forgets it.
+              ...(field === 'tool'
+                ? { account: '', model: '', effort: '' }
+                : field === 'account'
+                  ? { model: '', effort: '' }
+                  : field === 'model'
+                    ? { effort: '' }
+                    : {}),
+            })
+          return (
+            <SettingsRow
+              key={field}
+              name={name}
+              description={t('newSessions.automatic')}
+              changed={!!value}
+              onReset={() => save({ [field]: '' })}
+              resetLabel={t('newSessions.reset', { name })}
+              control={
+                <Select
+                  value={value || AUTOMATIC}
+                  onValueChange={(v) => change(v === AUTOMATIC ? '' : v)}
+                >
+                  <SelectTrigger aria-label={name} className="w-64 max-w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={AUTOMATIC}>
+                      {t('newSessions.automatic')}
                     </SelectItem>
-                  ) : null}
-                  {items.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            }
-          />
-        )
-      })}
+                    {value && !items.some((item) => item.value === value) ? (
+                      <SelectItem value={value}>
+                        {t('newSessions.unavailable')}
+                      </SelectItem>
+                    ) : null}
+                    {items.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              }
+            />
+          )
+        },
+      )}
       <ListTruncationBadge
         query={folders}
         filas={folders.data?.items.length ?? 0}

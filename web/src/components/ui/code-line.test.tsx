@@ -89,6 +89,23 @@ describe('CodeLine', () => {
     expect(screen.queryByText('Same thing in a terminal')).toBeNull()
   })
 
+  it('keeps a long command on one line that scrolls, never wrapped inside a token', () => {
+    const long =
+      'olivares login --server https://192.168.8.17:8443 --pin-sha256 EfJGCm29hPXPzWvNkfbTyd7Iao9G3sGKgFcbQDZzkv4'
+    const { unmount } = render(<CodeLine command={long} />)
+    // jsdom has no layout, so the class is the check.
+    const block = screen.getByText(long)
+    expect(block).toHaveClass('whitespace-pre', 'overflow-x-auto')
+    expect(block.className).not.toMatch(/overflow-wrap|break-all/)
+    unmount()
+    render(<CodeLine inline command={long} />)
+    const chip = screen.getByText(long)
+    expect(chip).toHaveClass('whitespace-pre', 'overflow-x-auto')
+    expect(chip.className).not.toMatch(/overflow-wrap|break-all/)
+    // A region that scrolls takes the keyboard too (axe scrollable-region-focusable).
+    expect(chip).toHaveAttribute('tabindex', '0')
+  })
+
   it('refuses an empty command: a missing command is a parity gap, not a blank line', () => {
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     expect(() => render(<CodeLine command=" " />)).toThrow(/command/)

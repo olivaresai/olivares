@@ -13,6 +13,7 @@ export const PREFERENCE_KEYS = [
   'olivares.sessions.model-favorites',
   'olivares.notifications.lastSeen',
   'olivares.onboarding.dismissed',
+  'olivares.notices.dismissed',
   'olivares.compliance.opened',
   'olivares.sessions.sidePane',
 ] as const

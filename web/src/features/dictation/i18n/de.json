@@ -5,6 +5,7 @@
   "listening": "Hört zu. Drücken Sie erneut oder Esc zum Beenden.",
   "transcribing": "Wird transkribiert…",
   "nothing": "Keine Sprache erkannt.",
+  "unavailable": "Diktieren funktioniert, während die Sitzung läuft.",
   "failed": "Diktieren fehlgeschlagen. Versuchen Sie es erneut.",
   "blocked": "Der Browser hat das Mikrofon blockiert."
 }

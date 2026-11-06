@@ -1,0 +1,147 @@
+{
+  "title": "Artefactos de agentes",
+  "subtitle": "Governe o registo de todo o tenant, a postura registada e a BOM da cadeia de fornecimento dos artefactos que os agentes executam.",
+  "intro": "Este registo guarda apenas identidade, proveniência e postura registada — nunca corpos de skills, manifestos nem texto de instruções.",
+  "tabs": {
+    "registry": "Registo de artefactos",
+    "aibom": "AIBOM da cadeia de fornecimento de agentes"
+  },
+  "classes": {
+    "skill": "Skill",
+    "mcpb_extension": "Extensão MCPB",
+    "mcp_app_template": "Modelo de aplicação MCP",
+    "agents_md": "AGENTS.md"
+  },
+  "values": {
+    "none": "—",
+    "yes": "Sim",
+    "no": "Não"
+  },
+  "registry": {
+    "title": "Artefactos registados",
+    "description": "Identidades do parque do tenant, declarações de proveniência e resultados de análise registados.",
+    "new": "Registar artefacto",
+    "created": "Artefacto registado.",
+    "deleted": "Artefacto eliminado.",
+    "search": "Pesquisar artefactos registados…",
+    "empty": "Nenhum artefacto registado",
+    "emptyHint": "Um artefacto que nunca foi registado não consta da BOM da cadeia de fornecimento de agentes.",
+    "filter": {
+      "label": "Classe do artefacto",
+      "all": "Todas as classes de artefactos"
+    },
+    "columns": {
+      "class": "Classe",
+      "name": "Nome",
+      "version": "Versão",
+      "provenance": "Proveniência",
+      "posture": "Resultado de análise registado",
+      "issues": "Problemas",
+      "attestedAt": "Registado"
+    },
+    "provenance": {
+      "claim": "Declaração do operador",
+      "verified": "Proveniência revista",
+      "claimHint": "A proveniência é uma declaração do operador e não foi marcada como revista.",
+      "verifiedHint": "O operador reviu a declaração de proveniência; isto não é uma certificação da Olivares."
+    },
+    "posture": {
+      "notScanned": "Não analisado",
+      "grade": "Classificação {{grade}}",
+      "recorded": "Resultado de análise registado",
+      "hint": "Uma classificação regista o que um scanner de conector classificou ou o que um operador registou. A consola não executou nenhuma análise."
+    },
+    "drawer": {
+      "description": "Metadados guardados do registo e o respetivo estado de declaração versus revisão.",
+      "identityNotice": "Só são guardados metadados. Este registo não tem conteúdo do artefacto por trás.",
+      "postureNotice": "Uma classificação de postura é um resultado de análise registado, não uma análise executada por esta consola. «Não analisado» é neutro, não é uma falha.",
+      "id": "ID do registo",
+      "class": "Classe do artefacto",
+      "name": "Nome",
+      "version": "Versão",
+      "provenance": "Proveniência",
+      "sourceRef": "Referência de origem",
+      "contentHash": "Impressão digital do conteúdo",
+      "posture": "Resultado de análise registado",
+      "issues": "Problemas registados",
+      "verified": "Estado da proveniência",
+      "attestedBy": "Registado por",
+      "attestedAt": "Registado em",
+      "note": "Nota"
+    },
+    "create": {
+      "title": "Registar artefacto de agente",
+      "description": "Registe metadados de identidade, proveniência e postura. O conteúdo do artefacto nunca é carregado.",
+      "uniqueHint": "A classe e o nome formam uma identidade de registo única e imutável. Não existe rota de atualização.",
+      "class": "Classe do artefacto",
+      "name": "Nome",
+      "version": "Versão",
+      "provenance": "Declaração de proveniência",
+      "sourceRef": "Referência de origem",
+      "contentHash": "Hash do conteúdo",
+      "contentAlg": "Algoritmo de hash",
+      "posture": "Resultado de análise registado",
+      "issues": "Problemas registados",
+      "issuesHint": "Número de problemas do resultado registado. Desativado e a zero quando não analisado.",
+      "verified": "Proveniência revista pelo operador",
+      "verifiedHint": "Isto atesta que o operador reviu a declaração de proveniência; não é uma certificação da Olivares.",
+      "note": "Nota",
+      "errorTitle": "O artefacto não foi registado",
+      "duplicateTitle": "Artefacto já registado",
+      "duplicate": "Já existe um artefacto com esta classe e este nome. Não existe rota de atualização; escolha outra identidade ou elimine primeiro o registo existente."
+    },
+    "delete": {
+      "title": "Eliminar artefacto registado",
+      "description": "Eliminar «{{name}}» do registo? As futuras BOM em direto deixam de o incluir."
+    },
+    "truncated": "{{n}} artefactos carregados; existem mais",
+    "truncatedHint": "Existem mais artefactos registados do que os apresentados; esta página obtém as linhas por ID — atribuído na criação — pelo que faltam as linhas seguintes, normalmente as registadas mais recentemente. O filtro de classe é aplicado pelo MOTOR, por isso volta a consultar; a pesquisa e a ordenação da tabela aplicam-se apenas ao que está carregado. Um artefacto que não aparece aqui não prova que não esteja registado."
+  },
+  "aibom": {
+    "difference": "Esta BOM de todo o parque abrange os artefactos de agente registados; a AIBOM por modelo abrange a linhagem de um modelo próprio.",
+    "coverage": "A cobertura reflete o que foi registado: um artefacto que nunca foi registado não está representado.",
+    "live": {
+      "title": "BOM da cadeia de fornecimento de agentes em direto",
+      "description": "Gerada agora — em direto, não selada e não auditada.",
+      "notice": "A pré-visualização gera um novo documento CycloneDX 1.6 a partir do registo atual. É só de leitura e não cria evidências.",
+      "preview": "Pré-visualizar BOM em direto",
+      "loading": "A gerar BOM em direto…",
+      "dialogTitle": "BOM da cadeia de fornecimento de agentes em direto",
+      "dialogDescription": "Gerada agora a partir do registo. Este documento não está selado nem auditado.",
+      "jsonLabel": "JSON CycloneDX em direto",
+      "download": "Transferir BOM em direto"
+    },
+    "seal": {
+      "action": "Selar BOM atual",
+      "confirmTitle": "Selar BOM da cadeia de fornecimento de agentes",
+      "confirmDescription": "Isto volta a gerar a BOM e regista o seu hash de conteúdo canónico no registo de auditoria. O registo não arquiva o documento.",
+      "confirmBody": "Guarde o recibo devolvido: a respetiva AIBOM é a única cópia do documento selado.",
+      "confirm": "Selar e receber BOM",
+      "success": "BOM da cadeia de fornecimento de agentes selada. Transfira agora a BOM do recibo.",
+      "receiptTitle": "Recibo da BOM selada",
+      "receiptDescription": "O compromisso de hash é duradouro; este recibo contém a única cópia do documento selado.",
+      "download": "Transferir BOM selada"
+    },
+    "history": {
+      "title": "Histórico de selagens",
+      "description": "Compromissos models.agent_aibom só de acréscimo para o parque de artefactos de agente registados.",
+      "empty": "Nenhuma BOM da cadeia de fornecimento de agentes selada",
+      "emptyHint": "A selagem cria um compromisso de hash e devolve no recibo a única cópia do documento.",
+      "loadError": "Não foi possível carregar o histórico de selagens.",
+      "id": "ID da selagem",
+      "subject": "Assunto",
+      "serial": "Número de série",
+      "contentHash": "Hash do conteúdo",
+      "specVersion": "Versão do CycloneDX",
+      "components": "Componentes registados",
+      "ledgerSeq": "Sequência de auditoria anterior",
+      "ledgerHash": "Cabeça de auditoria anterior",
+      "scope": "Nota de cobertura",
+      "generatedBy": "Gerada por",
+      "generatedAt": "Gerada em",
+      "noPriorHead": "{{seq}} (sem cabeça de auditoria anterior)",
+      "truncated": "{{n}} selagens carregadas; existem mais",
+      "truncatedHint": "Existem mais AI-BOM seladas do que as apresentadas; esta página obtém as linhas por ID. A selagem acrescenta uma linha, pelo que o que falta são normalmente as evidências mais recentes."
+    }
+  }
+}

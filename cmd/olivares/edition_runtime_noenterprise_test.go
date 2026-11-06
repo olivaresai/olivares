@@ -11,6 +11,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/olivaresai/olivares/modules/agentroles"
 	"github.com/olivaresai/olivares/modules/aiterms"
 	"github.com/olivaresai/olivares/modules/sessioncockpit"
 )
@@ -38,14 +39,17 @@ func TestCommunityEditionIsTheZeroValuePlusItsBehaviors(t *testing.T) {
 		t.Fatalf("edition name %q, want community", thisEdition.name)
 	}
 	mods := thisEdition.moduleRegistrars(EditionConfig{})
-	if len(mods) != 2 {
-		t.Fatalf("Community mounts %d edition modules, want both schema placeholders", len(mods))
+	if len(mods) != 3 {
+		t.Fatalf("Community mounts %d edition modules, want all three schema placeholders", len(mods))
 	}
 	if _, ok := mods[0].(*sessioncockpit.Placeholder); !ok {
 		t.Fatalf("Community edition module is %T, want the session-cockpit placeholder", mods[0])
 	}
 	if _, ok := mods[1].(*aiterms.Placeholder); !ok {
 		t.Fatalf("Community edition module is %T, want the AI terms schema placeholder", mods[1])
+	}
+	if _, ok := mods[2].(*agentroles.Placeholder); !ok {
+		t.Fatalf("Community edition module is %T, want the agent roles schema placeholder", mods[2])
 	}
 	if limit, ok := thisEdition.seatPolicy(nil, nil).MaxActiveUsers(); ok || limit > 0 {
 		t.Fatalf("Community seat policy reports %d (ok=%v), want unlimited", limit, ok)

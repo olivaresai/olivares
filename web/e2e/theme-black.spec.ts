@@ -100,7 +100,7 @@ async function places(page: Page) {
     beside: (await rows.nth(1).getAttribute('data-address')) ?? '',
   })
   return [
-    ['now', '/'],
+    ['now', '/now'],
     ['sessions-split', `/sessions?${split}`],
     ['tools', '/agent-tools'],
     ['rules', '/permissions'],

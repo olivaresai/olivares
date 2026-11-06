@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { readFileSync } from 'node:fs'
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type ConsoleMessage, type Page, test } from '@playwright/test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Skeleton } from '../src/components/ui/skeleton'
@@ -10,6 +10,7 @@ import { StatusChip } from '../src/components/ui/status-chip'
 import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 import {
   expectReleaseVersion,
+  isExpectedNoRepositoryConsoleError,
   openToolInstall,
   RELEASE_VERSION,
   recordSlowLoads,
@@ -49,6 +50,67 @@ test('first-hour guard accepts live working sessions without a pending load', as
   expect(findings).toEqual([])
 })
 
+test('first-hour guard accepts a personal-folder switch but rejects a path text field', async ({
+  page,
+}) => {
+  const findings: string[] = []
+  await page.exposeFunction('__firstHourFinding', (message: string) =>
+    findings.push(message),
+  )
+  await page.setContent(`<label for="personal">Give each person a personal folder (My files)</label>
+    <input id="personal" type="checkbox">`)
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  expect(findings).toEqual([])
+  await page.setContent(
+    `<label for="path">Folder</label><input id="path" type="text">`,
+  )
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  expect(findings).toEqual(['blank: filesystem path field: Folder'])
+})
+
+test('first-hour console guard admits only the no-repository Git status 404', async ({
+  page,
+}) => {
+  const git = 'https://example.test/v1/m/sessions/runs/run-one/git'
+  const other = 'https://example.test/v1/m/sessions/runs/run-one/other'
+  const errors: ConsoleMessage[] = []
+  await page.route('https://example.test/**/*', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (
+      path === '/v1/m/sessions/runs/run-one/git' ||
+      path === '/v1/m/sessions/runs/run-one/other'
+    ) {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: '{"error":"not found"}',
+      })
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<p>ok</p>',
+      })
+    }
+  })
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message)
+  })
+  await page.goto('https://example.test/')
+  await page.evaluate(
+    async ([gitUrl, otherUrl]) => {
+      await Promise.all([fetch(gitUrl), fetch(otherUrl)])
+    },
+    [git, other],
+  )
+  await expect.poll(() => errors.length).toBe(2)
+  expect(
+    errors
+      .filter(isExpectedNoRepositoryConsoleError)
+      .map((message) => message.location().url),
+  ).toEqual([git])
+})
+
 test('first-hour guard still rejects a skeleton alongside live working sessions', async ({
   page,
 }) => {
@@ -75,61 +137,40 @@ test('first-hour guard still rejects a skeleton alongside live working sessions'
   await expect(page.getByText('Codex working')).toBeVisible()
 })
 
-test('release identity is read from the visible shell, including behind a dialog', async ({
-  page,
-}) => {
-  await page.setContent(`<p data-testid="deployment-identity" aria-hidden="true"><span>0.1</span></p>
-    <div role="dialog" aria-label="New session">Start a session</div>`)
-  await expectReleaseVersion(page, '0.1')
-  await page.setContent(
-    `<p data-testid="deployment-identity"><span>localhost:8443</span> · <span>0.1</span></p>`,
+/** A page on an engine whose GET /v1/server-info answers `info` (no answer: 404). */
+async function onEngine(page: Page, info: object | undefined, copy = '') {
+  await page.route('http://engine.test/**', (route) =>
+    new URL(route.request().url()).pathname === '/v1/server-info'
+      ? info
+        ? route.fulfill({ json: info })
+        : route.fulfill({ status: 404, body: 'not found' })
+      : route.fulfill({
+          contentType: 'text/html',
+          body: `<main>${copy}</main>`,
+        }),
   )
-  await expectReleaseVersion(page, '0.1')
-})
+  await page.goto('http://engine.test/sessions')
+}
 
-test('release identity waits for the server version to render', async ({
+test('the release version is read from /v1/server-info, with no version painted', async ({
   page,
 }) => {
-  await page.setContent('<p data-testid="deployment-identity"></p>')
-  await page.evaluate(() => {
-    setTimeout(() => {
-      document.querySelector('[data-testid="deployment-identity"]')!.innerHTML =
-        '<span>0.1</span>'
-    }, 100)
-  })
+  await onEngine(page, { version: '0.1', edition: 'community' })
   await expectReleaseVersion(page, '0.1')
 })
 
 // A MAJOR.MINOR release is a substring of many other versions: the match is exact.
-for (const [name, identity, release] of [
-  ['missing', '', '0.1'],
-  [
-    'mismatched',
-    '<p data-testid="deployment-identity"><span>0.2</span></p>',
-    '0.1',
-  ],
-  [
-    'hidden',
-    '<p data-testid="deployment-identity" hidden><span>0.1</span></p>',
-    '0.1',
-  ],
-  [
-    'longer',
-    '<p data-testid="deployment-identity"><span>10.1</span></p>',
-    '0.1',
-  ],
-  [
-    'three-part',
-    '<p data-testid="deployment-identity"><span>1.0.1</span></p>',
-    '1.0',
-  ],
+for (const [name, info, release] of [
+  ['missing', undefined, '0.1'],
+  ['empty', {}, '0.1'],
+  ['mismatched', { version: '0.2' }, '0.1'],
+  ['longer', { version: '10.1' }, '0.1'],
+  ['three-part', { version: '1.0.1' }, '1.0'],
 ] as const) {
-  test(`release identity rejects a ${name} shell version even when the page mentions the release`, async ({
+  test(`the release version rejects a ${name} server-info version even when the page mentions the release`, async ({
     page,
   }) => {
-    await page.setContent(
-      `${identity}<main>Release notes for ${release}</main>`,
-    )
+    await onEngine(page, info, `Release notes for ${release}`)
     await expect(expectReleaseVersion(page, release)).rejects.toThrow()
   })
 }

@@ -41,7 +41,7 @@ vi.mock('@/features/extensions', async (orig) => ({
 import { agentOpsApi } from '@/features/agentops/api'
 import { useTenantStore } from '@/stores/tenant'
 import { StartSessionForm } from './first-hour'
-import { readinessOf } from './readiness.fixture'
+import { readinessOf, chooseTool } from './readiness.fixture'
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -74,7 +74,7 @@ describe('the Run on node in the Advanced handover', () => {
     )
     const onAdvanced = vi.fn()
     wrap(<StartSessionForm onAdvanced={onAdvanced} />)
-    await user.click(await screen.findByRole('radio', { name: 'Codex' }))
+    await chooseTool(user, 'Codex')
     await user.click(screen.getByRole('button', { name: 'Pick node-remote' }))
     await user.click(screen.getByRole('button', { name: 'More options' }))
     await user.click(
@@ -109,7 +109,7 @@ describe('the Run on node in the Advanced handover', () => {
     })
     const onAdvanced = vi.fn()
     wrap(<StartSessionForm onAdvanced={onAdvanced} />)
-    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    await chooseTool(user, 'Claude Code')
     await user.click(screen.getByRole('button', { name: 'Pick node-remote' }))
     await user.click(screen.getByRole('button', { name: 'More options' }))
     await user.click(

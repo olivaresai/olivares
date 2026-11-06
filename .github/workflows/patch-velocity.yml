@@ -177,13 +177,17 @@ jobs:
       # So a HIGH/CRITICAL image finding failed nothing AND opened nothing, while
       # this file's header said "On any finding it opens/updates a tracking issue".
       # This step turns the two SARIF files into a verdict the issue step consumes.
+      # Both SARIF files hold every fixable finding, whatever its severity: grype's cutoff only
+      # sets its exit code, and trivy-action drops `severity` for SARIF. Both write High and
+      # Critical as level "error" and Medium as "warning", so only "error" counts here (run
+      # 41646803899 reported four Medium findings as HIGH by counting warnings too).
       - name: image scanner findings at or above HIGH
         id: scanners
         run: |
           set -uo pipefail
-          count_sarif() { # count_sarif <file> -> results whose level is error/warning
+          count_sarif() { # count_sarif <file> -> results whose level is error (High/Critical)
             [ -f "$1" ] || { echo "MISSING"; return; }
-            jq '[.runs[]?.results[]? | select((.level // "warning") == "error" or (.level // "warning") == "warning")] | length' "$1" 2>/dev/null | grep -E '^[0-9]+$' || echo "UNREADABLE"
+            jq '[.runs[]?.results[]? | select(.level == "error")] | length' "$1" 2>/dev/null | grep -E '^[0-9]+$' || echo "UNREADABLE"
           }
           g="$(count_sarif "${{ steps.grype.outputs.sarif }}")"
           t="$(count_sarif trivy.sarif)"

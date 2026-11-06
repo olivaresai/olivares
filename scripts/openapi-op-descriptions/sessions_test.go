@@ -76,3 +76,29 @@ func TestSessionGitPublishedContract(t *testing.T) {
 		})
 	}
 }
+
+// The workspace create route is registered through an alias of the registrar
+// (`create := reg`, reassigned through WithCollectionScope); the scan must follow it.
+func TestSessionWorkspaceCreateRouteThroughScopedAlias(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes, err := routesInPackage(filepath.Join(root, "modules", "sessions"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const key = "POST /v1/m/sessions/workspaces"
+	count := 0
+	for _, route := range routes {
+		if route.key() == key {
+			count++
+			if route.handler != "(*Module).handleCreateWorkspace" {
+				t.Errorf("%s mounts %q, want (*Module).handleCreateWorkspace", key, route.handler)
+			}
+		}
+	}
+	if count != 1 {
+		t.Errorf("%s: got %d registrations, want 1", key, count)
+	}
+}

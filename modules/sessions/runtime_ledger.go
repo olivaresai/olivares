@@ -57,6 +57,9 @@ type runEventInput struct {
 	// accessStopCause is stamped by exact-generation access-loss teardown. It
 	// becomes only a fixed cause code in the existing audit, never owner identity.
 	accessStopCause runtimeAccessStopCause
+	// launcher is the account that started the run, set only on a stop or interrupt
+	// by someone else (see transition).
+	launcher string
 }
 
 // The three observations P1 may record. They are separate values because the
@@ -187,6 +190,9 @@ func appendRunEvent(ctx context.Context, sc store.Scope, in runEventInput) (int6
 			meta[colEvRetiredLaunchID] = in.terminalEvidence.launchID.String()
 		}
 	}
+	if in.launcher != "" {
+		meta[colRunLauncherUserID] = in.launcher
+	}
 	ev, err := sc.Audit().Append(ctx, model.AuditDraft{
 		Actor:       orSystem(in.actor),
 		ActorKind:   orSystemKind(in.actorKind),
@@ -194,8 +200,10 @@ func appendRunEvent(ctx context.Context, sc store.Scope, in runEventInput) (int6
 		TargetKind:  runKind,
 		TargetID:    in.runID,
 		PayloadHash: payloadHash[:],
-		// Meta is non-sensitive: run_ref is an opaque UUID we mint (never a subject
-		// id / PII — safe in an immutable WORM ledger, docs/SECURITY-HARDENING.md).
+		// Meta is non-sensitive: run_ref is an opaque UUID we mint (no PII — safe in an
+		// immutable WORM ledger, docs/SECURITY-HARDENING.md). The launcher, set only on a person's stop
+		// or interrupt of a run they did not launch, is an account id of the kind the
+		// actor already carries, never a name or an email.
 		Meta: meta,
 	})
 	if err != nil {

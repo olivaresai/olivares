@@ -21,6 +21,15 @@ export const VIEWS = [
     helpHref: '/reference/modules/x-models',
     icon: Cpu,
     permission: 'models:catalog:read',
+    changes: [
+      { permission: 'models:gpai:write' },
+      { permission: 'models:keys:write' },
+      { permission: 'models:model-access:admin' },
+      { permission: 'models:routing:write' },
+      { permission: 'models:routing:admin' },
+      { permission: 'sessions:profile:write' },
+      { permission: 'sessions:provider:write' },
+    ],
     element: lazyView(ModelsView),
   },
 ] satisfies ViewEntry[]

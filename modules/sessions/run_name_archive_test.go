@@ -366,3 +366,49 @@ func TestRunArchivedAtUpgradesAPostgresDatabase(t *testing.T) {
 	pg := enginetest.IsolatedPostgres(t)
 	archiveUpgradeCase(t, store.Config{Engine: store.EnginePostgres, DSN: pg.App})
 }
+
+// TestRunRenameRefusesANameASessionHolds pins #2978: a rename onto a name a
+// session that is not cleaned carries is a 409, so a console rename or a direct
+// API call cannot give a second session a name that is already in use — the rule
+// `session rename` always had, owned by the engine now. A cleaned namesake holds
+// nothing, and the name the run already has changes nothing.
+func TestRunRenameRefusesANameASessionHolds(t *testing.T) {
+	m := New()
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "run-rename-held")
+	seedRunRows(t, h.st, tenant, stateRunning, "run-older", "run-newer")
+	seedRunRows(t, h.st, tenant, stateCleaned, "run-gone")
+	rename := func(ref, name string) resp {
+		return h.doJSON("PUT", "/v1/m/sessions/runs/"+ref+"/name", admin, map[string]any{"name": name}, tenantHdr(tenant))
+	}
+
+	if r := rename("run-older", "api"); r.code != http.StatusOK {
+		t.Fatalf("rename to a free name = %d %s", r.code, r.raw)
+	}
+	if r := rename("run-newer", "api"); r.code != http.StatusConflict || !strings.Contains(refusalMessage(r), `already named "api"`) {
+		t.Fatalf("rename onto a held name = %d %s, want 409 naming it", r.code, r.raw)
+	}
+	if r := rename("run-gone", "api"); r.code != http.StatusConflict {
+		t.Fatalf("a cleaned row cannot take a held name either = %d %s, want 409", r.code, r.raw)
+	}
+	if got := h.do("GET", "/v1/m/sessions/runs/run-newer", admin, tenantHdr(tenant)); got.body["name"] != nil {
+		t.Fatalf("the refused rename left the name %v", got.body["name"])
+	}
+	if r := rename("run-newer", "web"); r.code != http.StatusOK {
+		t.Fatalf("rename to another free name = %d %s", r.code, r.raw)
+	}
+	if r := rename("run-newer", " web "); r.code != http.StatusOK || r.body["name"] != "web" {
+		t.Fatalf("rename to the name it already has = %d %s, want the 200 no-op", r.code, r.raw)
+	}
+	if r := rename("run-gone", "legacy"); r.code != http.StatusOK {
+		t.Fatalf("a cleaned row takes a free name = %d %s", r.code, r.raw)
+	}
+	// A cleaned session holds nothing, so a name only it carries stays free.
+	if r := rename("run-newer", "legacy"); r.code != http.StatusOK {
+		t.Fatalf("a name only a cleaned session carries = %d %s, want 200", r.code, r.raw)
+	}
+	if n := len(runAuditEvents(t, h.st, tenant, "sessions.run.renamed")); n != 4 {
+		t.Fatalf("renamed audit rows = %d, want 4 (api, web, legacy, legacy)", n)
+	}
+}

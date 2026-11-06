@@ -8,12 +8,28 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
+
+// discardTypedAhead drops the keys typed on the terminal f before a question was shown,
+// so an Enter or a y pressed earlier is never taken as the answer to it.
+func discardTypedAhead(f *os.File) error { return flushInput(int(f.Fd())) }
+
+// waitReadable reports whether f has input to read within timeout.
+func waitReadable(f *os.File, timeout time.Duration) (bool, error) {
+	fds := []unix.PollFd{{Fd: int32(f.Fd()), Events: unix.POLLIN}}
+	n, err := unix.Poll(fds, int(timeout/time.Millisecond))
+	if errors.Is(err, unix.EINTR) {
+		return false, nil
+	}
+	return n > 0, err
+}
 
 // hideEcho turns echo off on the terminal f and returns what turns it back on.
 func hideEcho(f *os.File) (restore func(), err error) {

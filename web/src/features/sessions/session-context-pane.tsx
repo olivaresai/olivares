@@ -20,6 +20,7 @@
 //    `posture` is the WEAKEST value the engine saw across the producing connectors,
 //    `pep_provisioned` and `record_io` are stored on the run. A blank badge tells the
 //    truth where "enforced" by default would not (features/sessions/types.ts).
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -28,6 +29,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Compass } from 'lucide-react'
+import { useProfileList } from '@/features/agent-tools/use-profiles'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { sourceItemLabel } from './source-item'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
@@ -89,6 +91,7 @@ export function SessionContextPane({
   onExpandEvidence,
   peerSessions,
   frameCwd,
+  unknownFrames,
   panel,
   onPanel,
 }: {
@@ -100,6 +103,8 @@ export function SessionContextPane({
   /** The sessions on the surface, from which "Can message" offers this one's peers. */
   peerSessions?: readonly UnifiedSession[]
   frameCwd?: string | null
+  /** The raw frames the conversation does not read: counted under Technical details. */
+  unknownFrames?: readonly string[]
   /** The side pane's tab in front (`?panel=`); Context when absent or not one of the tabs. */
   panel?: string
   onPanel?: (panel: string) => void
@@ -153,6 +158,16 @@ export function SessionContextPane({
     enabled: canReadProfiles && !!activeTenant && !!profileRef,
   })
   const profile = profileQuery.data
+  // A profile that is not read (not allowed, or the read failed) is an account only if the
+  // account list, which holds named profiles alone, has it: an unnamed one answers 404.
+  const profileUnread =
+    !profile && !!profileRef && (!canReadProfiles || profileQuery.isError)
+  const accountList = useProfileList(profileUnread)
+  const unreadIsAccount =
+    profileUnread &&
+    !!accountList.data &&
+    (accountList.data.inactive.has(profileRef!) ||
+      accountList.data.accounts.some((a) => a.account_ref === profileRef))
   const profileLabel =
     (profile && profileName(profile)) ||
     profile?.driver ||
@@ -168,21 +183,34 @@ export function SessionContextPane({
       (p) => !(RESERVED_SESSION_PANEL_IDS as readonly string[]).includes(p.id),
     ),
   )
-  const [localTab, setLocalTab] = useState('context')
+  const [localTab, setLocalTab] = useState<string>()
   // Activity is read from the tool's native record in its account home.
   const hasActivity = !!run && readsNativeRecord(run)
+  // The same read the Changes tab makes, shared through its cache.
+  const changes = useQuery({
+    queryKey: agentOpsKeys.runChanges(activeTenant, run?.run_ref ?? ''),
+    queryFn: ({ signal }) => agentOpsApi.changes(run!.run_ref, { signal }),
+    enabled: !!run,
+  })
+  // What the session changed comes first; else what its tool is doing (its agents,
+  // background work and files); else its details. A tab a person or the address chose wins.
+  const firstTab = changes.data?.files.length
+    ? 'changes'
+    : hasActivity
+      ? 'activity'
+      : 'context'
   const options = [
-    { value: 'context', label: t('surface.pane.context') },
-    ...(hasActivity
-      ? [{ value: 'activity', label: t('context.tabActivity') }]
-      : []),
     { value: 'changes', label: t('context.tabChanges') },
     { value: 'files', label: t('context.tabFiles') },
-    // The app the session serves on a local port. Only a launched session has one.
-    ...(run ? [{ value: 'preview', label: t('preview.title') }] : []),
     // A shell in the folder. It writes to the folder, so it needs the right to.
     ...(run && can('sessions:workspace:write')
       ? [{ value: 'terminal', label: t('terminal.title') }]
+      : []),
+    // The app the session serves on a local port. Only a launched session has one.
+    ...(run ? [{ value: 'preview', label: t('preview.title') }] : []),
+    { value: 'context', label: t('surface.pane.context') },
+    ...(hasActivity
+      ? [{ value: 'activity', label: t('context.tabActivity') }]
       : []),
     ...registered.map((p) => ({
       value: p.id,
@@ -190,7 +218,7 @@ export function SessionContextPane({
       icon: <p.icon />,
     })),
   ]
-  const asked = onPanel ? (panel ?? 'context') : (panel ?? localTab)
+  const asked = onPanel ? (panel ?? firstTab) : (panel ?? localTab ?? firstTab)
   const tab = options.some((o) => o.value === asked) ? asked : 'context'
   const extension = registered.find((p) => p.id === tab)
   const display = sessionDisplayState({ runs: run ? [run] : [], live })
@@ -225,7 +253,7 @@ export function SessionContextPane({
             ? profile.account_name
               ? profile.profile_ref
               : undefined
-            : !canReadProfiles || profileQuery.isError
+            : unreadIsAccount
               ? profileRef
               : undefined
         }
@@ -241,11 +269,18 @@ export function SessionContextPane({
           onExpandEvidence={onExpandEvidence}
           peerSessions={peerSessions}
           frameCwd={frameCwd}
+          showMode={false}
         />
       ) : null}
-      <details data-testid="context-details">
+      {/* TECHNICAL DETAILS, last and closed: the references, the frames the conversation does
+          not read and the selected line as the tool sent it. A line a person inspects opens it. */}
+      <details
+        key={inspected?.id ?? ''}
+        open={!!inspected}
+        data-testid="context-details"
+      >
         <summary className="cursor-pointer text-caption font-medium text-foreground">
-          {t('context.details')}
+          {t('details.technical')}
         </summary>
         <section data-testid="context-scope">
           <h3 className="text-caption font-medium text-foreground">
@@ -507,28 +542,36 @@ export function SessionContextPane({
             ) : null}
           </dl>
         </section>
-      </details>
 
-      <section>
-        <h3 className="text-caption font-medium text-foreground">
-          {t('context.wireTitle')}
-        </h3>
-        <p className="text-caption text-muted-foreground">
-          {t('context.wireHint')}
-        </p>
+        {unknownFrames?.length ? (
+          <section data-testid="context-unknown-frames">
+            <h3 className="text-caption font-medium text-foreground">
+              {t('details.unknownFrames', { count: unknownFrames.length })}
+            </h3>
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 font-mono text-caption text-foreground">
+              {unknownFrames.join('\n')}
+            </pre>
+          </section>
+        ) : null}
+
+        {/* The line a person selected, as the tool sent it; nothing to explain until then. */}
         {inspected ? (
-          <pre
-            data-testid="context-wire"
-            className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 font-mono text-caption text-foreground"
-          >
-            {inspected.raw.join('\n')}
-          </pre>
-        ) : (
-          <p className="mt-2 text-caption text-muted-foreground">
-            {t('context.wireEmpty')}
-          </p>
-        )}
-      </section>
+          <section>
+            <h3 className="text-caption font-medium text-foreground">
+              {t('context.wireTitle')}
+            </h3>
+            <p className="text-caption text-muted-foreground">
+              {t('context.wireHint')}
+            </p>
+            <pre
+              data-testid="context-wire"
+              className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 font-mono text-caption text-foreground"
+            >
+              {inspected.raw.join('\n')}
+            </pre>
+          </section>
+        ) : null}
+      </details>
     </>
   )
   const changesBody = (
@@ -566,56 +609,71 @@ export function SessionContextPane({
   )
 
   return (
-    <div className="flex flex-col gap-4" data-testid="session-context">
-      {/* THE SIDE PANE HAS TABS: Context (what the header no longer says, the scope and
-          the references), Activity (what the tool is doing: its agents, background tasks,
-          files and task list), Changes (what the session changed, and publishing it) and Files
-          (the folder it works in), Preview (the app it serves on a local port), then whatever
-          a build registers (a terminal). A build with none shows exactly these. */}
-      <PaneTabs
-        label={t('context.panels')}
-        moreLabel={t('context.morePanels')}
-        options={options}
-        value={tab}
-        onValueChange={(value) => {
-          setLocalTab(value)
-          onPanel?.(value)
-        }}
-      />
-      {extension ? (
-        <extension.Component key={extension.id} session={panelSession} />
-      ) : null}
-      {/* Keyed by run: another session's activity is another read. */}
-      {!extension && tab === 'activity' && run ? (
-        <SessionActivity
-          key={run.run_ref}
-          run={run}
-          onOpenChanges={() => {
-            setLocalTab('changes')
-            onPanel?.('changes')
+    <div
+      className="flex min-h-0 flex-1 flex-col gap-4"
+      data-testid="session-context"
+    >
+      {/* THE SIDE PANE HAS TABS: Changes (what the session changed, and publishing it),
+          Files (the folder it works in), Terminal (a shell there), Preview (the app it serves
+          on a local port), Details (what the header no longer says, the scope and the
+          references), Activity (what the tool is doing: its agents, background tasks, files
+          and task list), then whatever a build registers. */}
+      <div className="shrink-0">
+        <PaneTabs
+          label={t('context.panels')}
+          moreLabel={t('context.morePanels')}
+          options={options}
+          value={tab}
+          onValueChange={(value) => {
+            setLocalTab(value)
+            onPanel?.(value)
           }}
         />
-      ) : null}
-      {!extension && tab === 'changes' ? changesBody : null}
-      {!extension && tab === 'files' ? filesBody : null}
-      {/* Keyed by run: another session's preview is another URL. */}
-      {!extension && tab === 'preview' && run ? (
-        <SessionPreview key={run.run_ref} run={run} />
-      ) : null}
-      {!extension && tab === 'terminal' && run ? (
-        <SessionTerminalTab
-          key={`${boundary.key}:${run.run_ref}`}
-          run={run}
-          workspace={workspace}
-          canRead={canReadWorkspaces}
-          loading={
-            workspacesQuery.isPending && workspacesQuery.fetchStatus !== 'idle'
-          }
-          failed={workspacesQuery.isError}
-          onRetry={() => void workspacesQuery.refetch()}
-        />
-      ) : null}
-      {!extension && tab === 'context' ? contextBody : null}
+      </div>
+      {/* THE TAB FILLS THE HEIGHT UNDER THE BAR AND SCROLLS ON ITS OWN: the bar never moves
+          between tabs, and the terminal or the Files split takes all of it. */}
+      <div
+        data-testid="session-pane-body"
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
+      >
+        {extension ? (
+          <PanelSlot key={extension.id} className="flex flex-1 flex-col">
+            <extension.Component session={panelSession} />
+          </PanelSlot>
+        ) : null}
+        {/* Keyed by run: another session's activity is another read. */}
+        {!extension && tab === 'activity' && run ? (
+          <SessionActivity
+            key={run.run_ref}
+            run={run}
+            onOpenChanges={() => {
+              setLocalTab('changes')
+              onPanel?.('changes')
+            }}
+          />
+        ) : null}
+        {!extension && tab === 'changes' ? changesBody : null}
+        {!extension && tab === 'files' ? filesBody : null}
+        {/* Keyed by run: another session's preview is another URL. */}
+        {!extension && tab === 'preview' && run ? (
+          <SessionPreview key={run.run_ref} run={run} />
+        ) : null}
+        {!extension && tab === 'terminal' && run ? (
+          <SessionTerminalTab
+            key={`${boundary.key}:${run.run_ref}`}
+            run={run}
+            workspace={workspace}
+            canRead={canReadWorkspaces}
+            loading={
+              workspacesQuery.isPending &&
+              workspacesQuery.fetchStatus !== 'idle'
+            }
+            failed={workspacesQuery.isError}
+            onRetry={() => void workspacesQuery.refetch()}
+          />
+        ) : null}
+        {!extension && tab === 'context' ? contextBody : null}
+      </div>
     </div>
   )
 }

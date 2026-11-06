@@ -52,10 +52,6 @@ export const MAY_USE: Readonly<
     steps: ['metadata-s'],
     why: 'the access-edge token counter',
   },
-  'features/home/live-cards.tsx': {
-    steps: ['metadata'],
-    why: "the live card's facts line",
-  },
 }
 
 /** A step name as a class: not part of a longer name, with or without a variant prefix. */

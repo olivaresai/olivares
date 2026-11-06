@@ -17,15 +17,20 @@ import {
 import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
 
-// K3 first increment (I1): ONE room with THREE doors, the pattern again. The
+// K3 first increment (I1): ONE room with FIVE doors, the pattern again. The
 // catalog (`/communications`, sessions:channel:read), the personal inbox
-// (`/communications/inbox`, sessions:delivery:read) and channel creation
-// (`/communications/new`, sessions:channel:write) mount the same view opened on a
-// different tab, because the engine declares those three tiers independently: a
-// principal holding only delivery:read must reach its own mailbox without the
-// catalog, and one holding only channel:write must be able to create with explicit
-// grants without reading anything. They are doors, not redirects — RequirePermission
-// blocks a route on the ONE permission its entry declares.
+// (`/communications/inbox`, sessions:delivery:read), channel creation
+// (`/communications/new`, sessions:channel:write), handoffs and administration mount
+// the same view opened on a different tab, because the engine declares those tiers
+// independently: a principal holding only delivery:read must reach its own mailbox
+// without the catalog, and one holding only channel:write must be able to create with
+// explicit grants without reading anything. They are doors, not redirects —
+// RequirePermission blocks a route on the ONE permission its entry declares.
+//
+// ONE ENTRY IN NAVIGATION. The catalog is the room's entry; every other door declares
+// `doorTo: 'communications'`, so a person who can read channels sees "Communications"
+// once and reaches the other tabs inside it, while a person who cannot still gets the
+// door their own permission opens. The routes stay mounted for bookmarks and deep links.
 const CommunicationsView = lazy(() =>
   import('./index').then((m) => ({
     default: m.CommunicationsView,
@@ -48,6 +53,11 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: MessagesSquare,
     permission: 'sessions:channel:read',
+    changes: [
+      { permission: 'sessions:channel:write' },
+      { permission: 'sessions:message-send:write' },
+      { permission: 'sessions:run:write' },
+    ],
     element: lazyView(CommunicationsView, { entrance: 'catalog' as const }),
   },
   {
@@ -58,6 +68,7 @@ export const VIEWS = [
     // sessions:message:read and the Ack on sessions:delivery:write inside.
     id: 'communicationsInbox',
     path: '/communications/inbox',
+    doorTo: 'communications',
     navigation: {
       kind: 'feature',
       areaId: 'work-communications',
@@ -66,6 +77,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: Inbox,
     permission: 'sessions:delivery:read',
+    changes: [
+      { permission: 'sessions:delivery:write' },
+      { permission: 'sessions:message-send:write' },
+    ],
     element: lazyView(CommunicationsView, { entrance: 'inbox' as const }),
   },
   {
@@ -74,6 +89,7 @@ export const VIEWS = [
     // by a principal that cannot read the catalog at all.
     id: 'communicationsNew',
     path: '/communications/new',
+    doorTo: 'communications',
     navigation: {
       kind: 'feature',
       areaId: 'work-communications',
@@ -95,6 +111,7 @@ export const VIEWS = [
     // distinct from the inbox's because every registered view needs its own glyph.
     id: 'communicationsHandoffs',
     path: '/communications/handoffs',
+    doorTo: 'communications',
     navigation: {
       kind: 'feature',
       areaId: 'work-communications',
@@ -103,6 +120,7 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: Handshake,
     permission: 'sessions:delivery:read',
+    changes: [{ permission: 'sessions:handoff-response:write' }],
     element: lazyView(CommunicationsView, {
       entrance: 'handoffs' as const,
     }),
@@ -117,6 +135,7 @@ export const VIEWS = [
     // without the catalog. The engine decides the local bit on every read.
     id: 'communicationsAdministration',
     path: '/communications/administration',
+    doorTo: 'communications',
     navigation: {
       kind: 'feature',
       areaId: 'work-communications',

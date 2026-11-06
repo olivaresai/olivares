@@ -90,6 +90,13 @@ func New() *Output {
 	}
 }
 
+// WithHTTPClient sets the transport deliveries use (an egress-guarded client, a test
+// double). nil keeps the default.
+func (o *Output) WithHTTPClient(c delivery.Doer) *Output {
+	o.doer = c
+	return o
+}
+
 // Descriptor returns the connector's self-description and declared configuration.
 func (o *Output) Descriptor() sdk.Descriptor {
 	return sdk.Descriptor{

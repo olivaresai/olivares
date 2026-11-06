@@ -19,6 +19,12 @@ export const VIEWS = [
     helpHref: '/reference/modules/xvii-sandbox',
     icon: FlaskConical,
     permission: 'sandbox:run:read',
+    changes: [
+      { permission: 'sandbox:run:write' },
+      { permission: 'sandbox:run:admin' },
+      { permission: 'sandbox:scenario:write' },
+      { permission: 'sandbox:scenario:admin' },
+    ],
     element: lazyView(SandboxView),
   },
 ] satisfies ViewEntry[]

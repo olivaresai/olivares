@@ -105,28 +105,8 @@ var skipDirNames = map[string]bool{
 	"dist":         true,
 	"build":        true,
 	".astro":       true,
-	// ⛔ RESUELTO EL 2026-08-20, Y LA CLAVE SE QUEDA. Another contributor la retiro esperando la mia y
-	// yo retire la mia tomando la suya, asi que por un momento NO QUEDO NINGUNA: los dos cedimos
-	// el paso y el arreglo desaparecio. Lo cazo `check-lot-heads` al re-traer la punta de #1279 y
-	// contar las claves del mapa, no al leer el diff. La entrada es UNA y esta aqui.
-	//
-	// Su diagnostico, que es el que vale y esta en el buzon (13:51Z y 14:11Z): dos entradas con la
-	// misma clave en un map literal de Go NO COMPILAN — `duplicate key ".export-tmp" in map
-	// literal`. Por eso solo puede haber una, y por eso ceder los dos era peor que chocar.
+	// Temporary export trees duplicate source configuration names; do not scan them.
 	".export-tmp": true,
-	// El texto original de P, conservado porque explica el sintoma si esto vuelve:
-	// AQUI IBA `".export-tmp": true` Y LO RETIRO YO, porque el carril de integración escribio el MISMO
-	// arreglo en `hub/r23-lote38` y **dos entradas con la misma clave en un map literal de Go no
-	// compilan** — `duplicate key ".export-tmp" in map literal`, verificado antes de afirmarlo. No es
-	// un duplicado tolerable que la union resuelva: es un lote roto lejos de su causa.
-	//
-	// El diagnostico es mio y esta en el buzon (13:51Z y 14:11Z) con su mutacion en las dos
-	// direcciones; el codigo es suyo porque su lote va delante. **Lo que no podia pasar es que
-	// sobrevivieran los dos**, y el que va detras es el que retira.
-	//
-	// ⚠ Si por lo que sea el lote 38 no aterriza, esto vuelve: el sintoma es `lint:public-counts`
-	// con «22 finding(s) — the published configuration reference and the code disagree» donde los 22
-	// son su propio reflejo, y el remedio de mano mientras tanto es `rm -rf .export-tmp`.
 }
 
 // skipRelDirs are named exclusions, each with its reason, in the shape

@@ -165,10 +165,12 @@ func guardAdmissionClassifyInventory(
 ) (guardEditionInventorySelection, error) {
 	trivial := guardEditionPathOf([]guardEditionNode{{Epoch: current.CodeEpoch}})
 	var mismatchedPath guardEditionPath
-	if revision, retained, err := verifyInventoryChainExact(ctx, q, dia, current); err == nil {
+	inventory := foldGuardInventory(ctx, q, dia, current)
+	currentErr := inventory.exact(current)
+	if currentErr == nil {
 		if path == trivial {
 			return guardEditionInventorySelection{
-				State: guardEditionInventoryCurrent, Path: trivial, Revision: revision, Retained: retained,
+				State: guardEditionInventoryCurrent, Path: trivial, Revision: inventory.revision, Retained: inventory.retained,
 			}, nil
 		}
 		mismatchedPath = trivial
@@ -179,7 +181,6 @@ func guardAdmissionClassifyInventory(
 	}
 	parents := guardAdmissionParentEpochs(graph, current.CodeEpoch)
 	if len(parents) == 0 {
-		_, _, currentErr := verifyInventoryChainExact(ctx, q, dia, current)
 		return guardEditionInventorySelection{}, currentErr
 	}
 
@@ -197,8 +198,7 @@ func guardAdmissionClassifyInventory(
 			return guardEditionInventorySelection{}, lerr
 		}
 		for _, lineage := range lineages {
-			revision, retained, xerr := verifyInventoryChainExpectations(
-				ctx, q, dia, current, guardAdmissionActivations(lineage))
+			xerr := inventory.expect(guardAdmissionActivations(lineage))
 			if xerr == nil {
 				if lineage.path() != path {
 					mismatchedPath = lineage.path()
@@ -206,7 +206,7 @@ func guardAdmissionClassifyInventory(
 				}
 				matches = append(matches, candidate{guardEditionInventorySelection{
 					State: guardEditionInventoryPredecessor, Path: lineage.path(),
-					ParentEpoch: parent, Revision: revision, Retained: retained,
+					ParentEpoch: parent, Revision: inventory.revision, Retained: inventory.retained,
 				}, lineage})
 				continue
 			}
@@ -222,8 +222,7 @@ func guardAdmissionClassifyInventory(
 		if len(lineage.Edges) == 0 {
 			continue // the trivial lineage is the exact-current case tried above
 		}
-		revision, retained, xerr := verifyInventoryChainExpectations(
-			ctx, q, dia, current, guardAdmissionActivations(lineage))
+		xerr := inventory.expect(guardAdmissionActivations(lineage))
 		if xerr == nil {
 			if lineage.path() != path {
 				mismatchedPath = lineage.path()
@@ -231,7 +230,7 @@ func guardAdmissionClassifyInventory(
 			}
 			matches = append(matches, candidate{guardEditionInventorySelection{
 				State: guardEditionInventoryMixed, Path: lineage.path(),
-				ParentEpoch: lineage.Nodes[len(lineage.Nodes)-2].Epoch, Revision: revision, Retained: retained,
+				ParentEpoch: lineage.Nodes[len(lineage.Nodes)-2].Epoch, Revision: inventory.revision, Retained: inventory.retained,
 			}, lineage})
 			continue
 		}
@@ -258,7 +257,6 @@ func guardAdmissionClassifyInventory(
 			ErrGuardManifestNoEdge, len(matches), strings.Join(paths, ", "))
 	}
 
-	_, _, currentErr := verifyInventoryChainExact(ctx, q, dia, current)
 	summary := fmt.Errorf("%w: inventory is neither current, a complete predecessor lineage, nor its authorized carry-forward (current: %v; predecessor: %s; carry-forward: %s)",
 		ErrGuardInventoryUnsupported, currentErr,
 		strings.Join(predecessorErrs, "; "), strings.Join(mixedErrs, "; "))

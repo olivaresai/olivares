@@ -32,7 +32,7 @@ Claude Code hook 路径仍为 `olivares claude-hook`（PreToolUse PEP）。那�
 |---|---|
 | `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `POST /runs/{ref}/pin`, `DELETE /runs/{ref}/pin` |
 | `sessions:output:read` | `GET /runs/{ref}/events`, `GET /runs/{ref}/attach`, `GET /runs/{ref}/changes`, `GET /runs/{ref}/changes/file`, `GET /runs/{ref}/git`, `GET /runs/{ref}/diff`, `GET /runs/{ref}/diff/file`, `GET /runs/{ref}/handoff`, `GET /runs/{ref}/activity`, `GET /runs/{ref}/activity/agents/{agent}`, `GET /runs/{ref}/messages`, `GET /runs/{ref}/attachments/{id}` |
-| `sessions:run:write` | `POST /runs`、`POST /runs/{ref}/input`、`POST /runs/{ref}/interrupt`、`POST /runs/{ref}/resume`、`POST /runs/{ref}/move`、`POST /runs/{ref}/handoff`, `PUT /runs/{ref}/name`, `POST /runs/{ref}/archive`, `DELETE /runs/{ref}/archive` |
+| `sessions:run:write` | `POST /runs`、`POST /runs/{ref}/input`、`POST /runs/{ref}/interrupt`、`POST /runs/{ref}/resume`、`POST /runs/{ref}/move`、`POST /runs/{ref}/handoff`、`PUT /runs/{ref}/name`、`POST /runs/{ref}/archive`、`DELETE /runs/{ref}/archive` |
 | `sessions:stop:write` | `POST /runs/{ref}/stop` |
 | `sessions:run:admin` | `POST /runs/{ref}/cleanup`、`DELETE /runs/{ref}` |
 
@@ -52,13 +52,15 @@ viewer 可以列出会话并为自己固定会话。创建和输入需要 `sessi
 | `POST` | `/runs/{ref}/stop` | 对进程组先发 SIGTERM，再发 SIGKILL。行上记录观察到的退出状态 |
 | `POST` | `/runs/{ref}/resume` | 新的进程世代。确切的已存储对话。不会静默回退为新对话 |
 | `POST` | `/runs/{ref}/interrupt` | 取消活动回合。进程保留 |
+| `POST`, `DELETE` | `/live/by-id/{live_ref}/pin` | 对仅由 Olivares 观察的会话（不属于任何运行的实时行）作同样的固定，需要 `sessions:live:read` 权限。回答 200 `{live_ref, pinned, pinned_at}`，两个方向都是幂等的。观察到的固定与启动的固定共享同一顺序和 20 个的上限；若某会话的固定已失效（会话已消失），则在达到上限时该固定被移除。`GET /live`、`GET /live/{ref}` 与 `GET /live/by-id/{live_ref}` 携带调用者自己的 `pinned` 与 `pinned_at`，`GET /live` 还会返回调用者位于本页之外的已固定会话。属于某个运行的实时行会读取该运行的固定，对其固定则回答 409：请固定该运行 |
 | `POST`, `DELETE` | `/runs/{ref}/pin` | 为调用者固定会话，或取消固定。该固定属于调用者本人，并跟随其到另一台浏览器或机器；它从不改变他人的列表。两次调用都是幂等的，均返回 200 `{run_ref, pinned, pinned_at}`。每人最多保留 20 个固定：固定第 21 个时，最旧的一个被移除。释放或删除会话会清除其上的所有固定。`GET /runs` 和 `GET /runs/{ref}` 携带调用者自己的 `pinned` 与 `pinned_at`；`GET /runs` 还会返回调用者落在本页之外的已固定会话（比 `limit` 多至多 20 行；`pagination=cursor` 不增加任何行，因为它本身一次就能遍历每个会话）。固定属于创建它的凭证：某人的控制台与 `olivares login` 会话共享固定，API 令牌则保留各自的固定。已释放的会话回答 409 |
-| `POST`, `DELETE` | `/runs/{ref}/snooze` | 为调用者将会话延后到某一时刻，或结束延后。`POST` 接受 `{until}`，即一个未来的 RFC 3339 时间（否则为 400）；再次 `POST` 会移动该时间。延后属于调用者本人，与固定一样：控制台会在 `until` 之前将该会话移出此人的列表，其他人的列表不变。两者均返回 200 `{run_ref, snoozed_until?, done}`。`GET /runs` 和 `GET /runs/{ref}` 仅在延后仍有效期间携带调用者的 `snoozed_until`。释放或删除会话会清除其上的所有延后。已释放的会话回答 409 |
-| `POST`, `DELETE` | `/runs/{ref}/done` | 为调用者将会话标记为已完成，或清除该标记。控制台会把已完成的会话归入此人列表中的「更早」。两者均幂等，并返回 200 `{run_ref, snoozed_until?, done}`。`GET /runs` 和 `GET /runs/{ref}` 携带调用者的 `done`。释放或删除会话会清除其上的所有标记。已释放的会话回答 409 |
+| `POST`, `DELETE` | `/runs/{ref}/snooze` | 为调用者将会话延后到某一时刻，或结束延后。`POST` 接受 `{until}`，即一个未来的 RFC 3339 时间（否则为 400）；再次 `POST` 会移动该时间。延后属于调用者本人，与固定一样：控制台会在 `until` 之前将该会话移出此人的列表，其他人的列表不变。两者均返回 200 `{run_ref, snoozed_until?, done, unread}`。`GET /runs` 和 `GET /runs/{ref}` 仅在延后仍有效期间携带调用者的 `snoozed_until`。释放或删除会话会清除其上的所有延后。已释放的会话回答 409 |
+| `POST`, `DELETE` | `/runs/{ref}/done` | 为调用者将会话标记为已完成，或清除该标记。控制台会把已完成的会话归入此人列表中的「更早」。两者均幂等，并返回 200 `{run_ref, snoozed_until?, done, unread}`。`GET /runs` 和 `GET /runs/{ref}` 携带调用者的 `done`。释放或删除会话会清除其上的所有标记。已释放的会话回答 409 |
+| `POST`, `DELETE` | `/runs/{ref}/unread` | 为调用者将会话标记为未读（`POST`）或已读（`DELETE`）。已读状态属于调用者本人，与固定相同：会话在调用者最后一次查看之后有任何动作，即为未读。控制台在打开会话时发送 `DELETE`；`POST` 则使会话无论做过什么都显示为未读。两者均幂等，并返回 200 `{run_ref, snoozed_until?, done, unread}`。`GET /runs` 和 `GET /runs/{ref}` 携带调用者的 `unread`。无人打开或标记过的会话没有基准，按已读处理。释放或删除会话会清除其上的所有标记。已释放的会话回答 409 |
 | `GET`、`POST`、`PUT` | `/runs/{ref}/queue` | 工具工作期间为会话排好的消息。`GET` 返回 `{run_ref, items, hold?, can_steer}`：按发送顺序排列的消息（`id`、`text`、`queued_by`、`queued_at`）、第一条尚未发出的原因（`hold`：`turn`、`approval`、`limit` 或 `stopped`；可立即发出时不出现），以及工具是否接受向进行中的轮次插入消息（`can_steer`）。`POST` 接受 `{text}`，返回 201 和该消息；会话不忙时立即发送。`PUT` 接受 `{ids}`，即队列中每个 id 按新顺序各出现一次（否则 400），返回队列。队列保存在服务器上，因此刷新页面后仍在，并显示在每台设备上。轮次结束时，第一条消息通过会话的输入只发送一次；已停止、被中断或达到额度的会话，以及等待批准的会话，会保留队列。写入权限和版本规则与 `/input` 相同；由工作项启动的会话和已释放的会话返回 409。释放会话会丢弃其队列，`POST /runs/{ref}/cleanup` 的返回以 `discarded_queue` 列出被丢弃的消息 |
 | `PATCH`、`DELETE` | `/runs/{ref}/queue/{id}` | 修改一条排队消息的文本（`{text}`，返回 200 和该消息），或将其移出队列而不发送（返回 200 和队列）。不在队列中的 id 返回 404 |
 | `POST` | `/runs/{ref}/queue/{id}/steer` | 立即通过会话的输入发送一条排队消息：工具接受时发入进行中的轮次（`can_steer`），否则作为下一条消息。消息先离开队列，因此只发送一次；在写入任何内容之前被拒绝时，它会回到原位。返回 202 `{accepted}`。不接受向进行中轮次插入消息的工具，在其轮次进行期间返回 409 |
-| `PUT` | `/runs/{ref}/name` | 请求体 `{name}`。重命名会话。名称会去除首尾空白；空名称会清除名称，客户端改用各自的命名。超过 200 个字符、包含控制字符或不可见字符（格式字符、行或段落分隔符：零宽空格、方向覆盖字符）或缺少 `name` 时回答 400。返回 200 及运行对象。名称属于会话，因此每个读取者都能看到。在审计账本中记录为 `sessions.run.renamed`，记录的是运行引用而不是名称；与会话现有名称相同的名称不改变任何内容，也不记录任何内容 |
+| `PUT` | `/runs/{ref}/name` | 请求体 `{name}`。重命名会话。名称会去除首尾空白；空名称会清除名称，客户端改用各自的命名。超过 200 个字符、包含控制字符或不可见字符（格式字符、行或段落分隔符：零宽空格、方向覆盖字符）或缺少 `name` 时回答 400；另一个未清理的会话已持有的名称同样回答 409。返回 200 及运行对象。名称属于会话，因此每个读取者都能看到。在审计账本中记录为 `sessions.run.renamed`，记录的是运行引用而不是名称；与会话现有名称相同的名称不改变任何内容，也不记录任何内容 |
 | `POST`, `DELETE` | `/runs/{ref}/archive` | 归档会话或取消归档。无请求体。返回 200 及运行对象，归档期间包含 `archived_at`。归档既不停止也不移除会话。该标记属于会话而非调用者：会话对所有人都处于归档状态。`GET /runs` 不因此缩小范围；由各客户端在其列表中省略已归档的会话。两个调用都是幂等的：归档已归档的会话会保留其 `archived_at`，且不记录任何内容。在审计账本中记录为 `sessions.run.archived` 和 `sessions.run.unarchived` |
 | `POST` | `/runs/{ref}/move` | 请求体 `{provider_profile_ref}`。将已停止或失败的 Claude Code 会话重新绑定到同一工具的另一个配置文件，并携带其对话。不启动任何内容。返回 200 及运行对象 |
 | `GET` | `/runs/{ref}/handoff` | 交接将从其开始的摘要：`summary`、`source_driver`、`turns`、`transcript_bytes`。只读，记录在审计账本中。运行中的会话按其当前状态读取；尚未启动的会话回答 409 |
@@ -153,6 +155,18 @@ Claude Code、Codex、Gemini CLI 或 OpenCode 会话的已存储对话（Grok �
 有工作树的会话会被释放；否则该调用会以 409 被拒绝（存在未合并的工作、分离的 HEAD，或节点无法访问的工作树），且运行保持已停止状态。
 此时可以带 `discard_worktree` 重复调用，以无论如何删除工作树与分支；对于节点无法访问的工作树，则释放会话并使工作树留在原处。
 账本的 `cleaned` 事件会记录工作树的处理结果，并附带分支顶端。
+
+### 引入你的工具已使用过的文件夹
+
+`GET /workspace-candidates` 列出该引擎所运行账户的工具已工作过的文件夹，因此首次运行不会从空白开始。它需要工作区管理权限，且只读：在个人通过 `POST /workspaces` 登记某个文件夹之前，不会登记任何内容；该接口对每个文件夹应用与其他任何文件夹相同的检查。
+
+它读取的是每个工具自身记录的项目路径与日期，从不读取凭据，也从不读取对话文本：Claude Code 的 `~/.claude` 目录中的 `projects` 目录（仅名称与修改时间），以及 Codex 的 `~/.codex/sessions` 下每个会话的第一行，用于获取其工作文件夹。没有记录的工具不会被列出。
+
+- `tools` 每个有记录的工具一行：`tool`、`name` 和 `readable`。`readable: false` 表示其记录存在但无法读取；该工具不添加任何文件夹，个人需手动添加文件夹。
+- `folders` 每个文件夹与工具的组合一行：`path`、`tool`、`last_used`（RFC 3339，UTC）、`conversations` 和 `preselected`。当某文件夹在过去 30 天内、至少 3 次对话中被使用，且没有 `skip` 时，它会被预先选中。
+- 当某文件夹当前无法登记时会出现 `skip`：`missing`、`unreadable`、`outside_allowed_roots`（它与受保护的引擎文件夹重叠）或 `already_registered`。
+
+所读取的 Codex 记录为最新的 5000 个会话。
 
 ### 批准文件夹的设置命令
 

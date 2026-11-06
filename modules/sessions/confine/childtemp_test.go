@@ -61,3 +61,29 @@ func TestChildTempDirCreatesAMissingRootPrivate(t *testing.T) {
 		t.Fatalf("root %s (%v, %v), want a 0700 directory", root, info, err)
 	}
 }
+
+// The sweep removes only what ChildTempDir makes there, direct s-<decimal> folders; anything else under the root (a
+// folder someone put there, a link) is left in place.
+func TestTheSweepRemovesOnlyTheChildTempDirsItMade(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "tool-tmp")
+	UseChildTempRoot(root)
+	t.Cleanup(func() { UseChildTempRoot("") })
+	outside := t.TempDir()
+	for _, d := range []string{"s-1234", "keep-me", "s-abc"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "s-999")); err != nil {
+		t.Fatal(err)
+	}
+	_ = SweepChildTemp()
+	if _, err := os.Lstat(filepath.Join(root, "s-1234")); !os.IsNotExist(err) {
+		t.Errorf("the child temporary directory s-1234 survives the sweep: %v", err)
+	}
+	for _, kept := range []string{"keep-me", "s-abc", "s-999"} {
+		if _, err := os.Lstat(filepath.Join(root, kept)); err != nil {
+			t.Errorf("the sweep removed %s, which ChildTempDir never makes: %v", kept, err)
+		}
+	}
+}

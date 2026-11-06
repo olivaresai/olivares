@@ -363,6 +363,8 @@ dockers:
       - packaging/container/data-dir
       - packaging/container/uv-LICENSE-MIT.txt
       - packaging/container/bashrc.sh
+      - deploy/seccomp/olivares-sessions.json
+      - deploy/apparmor/olivares-sessions.conf
     use: buildx
     goos: linux
     goarch: amd64
@@ -398,6 +400,8 @@ dockers:
       - packaging/container/data-dir
       - packaging/container/uv-LICENSE-MIT.txt
       - packaging/container/bashrc.sh
+      - deploy/seccomp/olivares-sessions.json
+      - deploy/apparmor/olivares-sessions.conf
     use: buildx
     goos: linux
     goarch: arm64

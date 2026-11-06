@@ -9,10 +9,14 @@ import { StepUpHost } from '@/components/layout/step-up-host'
 import { apiFetch, configureApiClient } from '@/lib/api/client'
 import { createQueryClient } from '@/lib/api/query'
 import { isolateCacheOnTenantChange } from '@/lib/api/tenant-cache-isolation'
-import { restoreOnPageLoad } from '@/lib/auth/browser-session'
+import {
+  restoreOnPageLoad,
+  retryWhileUnreachable,
+} from '@/lib/auth/browser-session'
 import { serverInfoQuery } from '@/lib/hooks/use-server-info'
 import { AuthProvider } from '@/lib/auth/context'
 import { AuthBoundaryCustody } from '@/features/agentops/auth-boundary'
+import { useSyncModulesNotEnabled } from '@/stores/modules'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -70,6 +74,13 @@ useTenantStore.subscribe((s) => {
   }
 })
 
+/** Which engine modules run here, known app-wide and not only inside the shell: a sign-in
+ * adopts its session on /login, before the shell mounts, and reads consoleviews there. */
+function ModulesSync() {
+  useSyncModulesNotEnabled()
+  return null
+}
+
 /** App-wide providers: server-state (TanStack Query), identity (AuthProvider),
  * tooltips, the toast surface and the step-up ceremony host. i18n is initialized
  * as a side-effect import in main.tsx before this renders.
@@ -88,14 +99,19 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
     // The same server-info read the shell makes (one request): a clean install with no
     // administrator has no session to restore, so the restore is not sent (first-hour check).
-    void restoreOnPageLoad(() => queryClient.fetchQuery(serverInfoQuery)).catch(
-      () => {
+    // An engine that is slow or restarting leaves the shell on its "can't reach the engine"
+    // screen; the retry runs until the engine answers.
+    const stop = new AbortController()
+    void restoreOnPageLoad(() => queryClient.fetchQuery(serverInfoQuery))
+      .catch(() => {
         useSessionStore.setState({ ready: true })
-      },
-    )
+      })
+      .then(() => retryWhileUnreachable(stop.signal))
+    return () => stop.abort()
   }, [queryClient])
   return (
     <QueryClientProvider client={queryClient}>
+      <ModulesSync />
       <AuthProvider>
         <AuthBoundaryCustody />
         <TooltipProvider delayDuration={300}>

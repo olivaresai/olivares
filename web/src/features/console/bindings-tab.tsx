@@ -47,6 +47,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { TrustChrome } from '@/components/ui/trust-chrome'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import type { AgentDTO } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
@@ -88,6 +89,8 @@ const SOURCE_TYPES: SourceScopeSourceType[] = [
   'data',
   'profile',
   'tool',
+  'instructions',
+  'template',
 ]
 
 const SCOPE_TREES: SourceScopeTree[] = [
@@ -787,6 +790,28 @@ function BindingForm({
               <ShieldOff />
               {t('console:bindings.effects.forbid')}
             </Button>
+            {sourceType === 'template' && (
+              <Button
+                type="button"
+                size="sm"
+                variant={effect === 'require' ? 'primary' : 'ghost'}
+                onClick={() => setEffect('require')}
+              >
+                <ShieldCheck />
+                {t('console:bindings.effects.require')}
+              </Button>
+            )}
+            {(sourceType === 'instructions' || sourceType === 'template') && (
+              <Button
+                type="button"
+                size="sm"
+                variant={effect === 'decline' ? 'destructive' : 'ghost'}
+                onClick={() => setEffect('decline')}
+              >
+                <ShieldOff />
+                {t('console:bindings.effects.decline')}
+              </Button>
+            )}
           </div>
         </Field>
 
@@ -1878,7 +1903,7 @@ function PostureQueue({
                   <td className="text-right">
                     {canReview && request.status === 'pending' && request.id ? (
                       <RequireAssurance minAal={AAL.HARDWARE} action="console">
-                        <div className="flex justify-end gap-1">
+                        <TrustChrome className="flex justify-end gap-1">
                           <Button
                             size="sm"
                             variant="secondary"
@@ -1907,7 +1932,7 @@ function PostureQueue({
                           >
                             {t('console:bindings.posture.approve')}
                           </Button>
-                        </div>
+                        </TrustChrome>
                       </RequireAssurance>
                     ) : null}
                   </td>
@@ -1942,7 +1967,11 @@ function QueuedNotice({ request }: { request: PostureRequestDTO }) {
 function EffectBadge({ effect }: { effect: BindingEffect }) {
   const { t } = useTranslation('console')
   return (
-    <Badge variant={effect === 'forbid' ? 'danger' : 'success'}>
+    <Badge
+      variant={
+        effect === 'forbid' || effect === 'decline' ? 'danger' : 'success'
+      }
+    >
       {t(`bindings.effects.${effect}`)}
     </Badge>
   )

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -44,10 +45,7 @@ func newSSOCompletionFixture(t *testing.T, st store.Store) *ssoCompletionFixture
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 	userID, _ := mustMember(t, ctx, a, super, tenant, ssoCompletionEmail, auth.RoleViewer)
-	g, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Engineering", ExternalID: "grp-eng"})
-	if err != nil {
-		t.Fatalf("create group: %v", err)
-	}
+	g := authtest.Group(t, st, tenant, "Engineering", "grp-eng")
 	if _, err := a.ConfigureGroupRole(ctx, super, tenant, g.Group.ID, auth.RoleEditor); err != nil {
 		t.Fatalf("map group role: %v", err)
 	}

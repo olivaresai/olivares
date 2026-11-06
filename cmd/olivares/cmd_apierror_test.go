@@ -72,6 +72,11 @@ func TestDescribeAPIRefusalLeadsWithWhatHappened(t *testing.T) {
 			"an empty body says so instead of trailing off", http.StatusForbidden, "",
 			"the engine refused this request, and said nothing about why (HTTP 403)",
 		},
+		{
+			"the engine's remedy is the second line", http.StatusNotImplemented,
+			`{"error":{"code":"business_required","message":"Session recording requires Olivares Business.","remedy":"Available in Olivares Business: https://olivares.ai/pricing"}}`,
+			"Session recording requires Olivares Business.\nAvailable in Olivares Business: https://olivares.ai/pricing",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

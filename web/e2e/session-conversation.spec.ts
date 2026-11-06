@@ -156,9 +156,14 @@ test.describe('the session surface is a conversation', () => {
     ).toBeTruthy()
     const title = page
       .getByTestId('rail-row-name')
-      .and(page.getByText(name!, { exact: true }))
+      .filter({ has: page.getByText(name!, { exact: true }) })
+    await expect(title).toBeVisible()
     await page.getByTestId('rail-row').filter({ has: title }).click()
     await composerReady(page)
     await expect(page.getByTestId('work-composer')).toBeVisible()
+    await expect(page.getByTestId('work-composer')).toHaveAttribute(
+      'data-attached',
+      'true',
+    )
   })
 })

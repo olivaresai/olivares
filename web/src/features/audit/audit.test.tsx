@@ -350,7 +350,39 @@ describe('AuditView — a page of internal records only', () => {
     api.list.mockResolvedValue({ items: [], has_more: false })
     wrap(<AuditView />)
     expect(await screen.findByText(EMPTY_TITLE)).toBeInTheDocument()
+    expect(
+      screen.getByText(/The ledger is empty for this scope/),
+    ).toBeInTheDocument()
   })
+
+  it.each([true, false])(
+    'describes no filtered matches with more=%s without claiming an empty ledger',
+    async (hasMore) => {
+      window.history.replaceState(null, '', '/audit?action=agent.')
+      api.list.mockResolvedValue({
+        items: [],
+        has_more: hasMore,
+        next_from: 500,
+        scan_complete: !hasMore,
+      })
+      wrap(<AuditView />)
+
+      expect(
+        await screen.findByText('No matching evidence'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          hasMore
+            ? 'Nothing matched in the events searched so far. Load more keeps searching.'
+            : 'No events match these filters. Try changing or removing a filter.',
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/The ledger is empty/)).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Load more' }) !== null).toBe(
+        hasMore,
+      )
+    },
+  )
 })
 
 describe('AuditView — ledger list', () => {
@@ -437,7 +469,7 @@ describe('AuditView — ledger list', () => {
     )
   })
 
-  it('continues a sparse filtered scan with next_from and shows its honest status', async () => {
+  it('continues a sparse filtered scan with next_from from Load more', async () => {
     window.history.replaceState(null, '', '/audit?action=agent.')
     api.list.mockImplementation(({ from }: { from?: number }) =>
       from === 1
@@ -456,12 +488,10 @@ describe('AuditView — ledger list', () => {
     )
     wrap(<AuditView />)
 
-    expect(
-      await screen.findByText(
-        /Scanned up to seq 499 — not the full ledger; Load more continues the scan/,
-      ),
-    ).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Load more' }),
+    )
+    expect(screen.queryByText(/Scanned up to seq/)).not.toBeInTheDocument()
 
     await waitFor(() =>
       expect(api.list).toHaveBeenCalledWith({

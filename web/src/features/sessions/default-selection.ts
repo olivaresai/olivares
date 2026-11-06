@@ -30,20 +30,43 @@
 //   3 · It moves only when its row leaves the list or is retired — and a retired address
 //       is never chosen, which is the R2 invariant (a read bit coming back cannot revive
 //       a target the operator never re-chose) holding by construction.
+//   4 · It is only ever the signed-in person's OWN session: every run of it acts for
+//       them (`acts_for`, from the run's launcher). An admin may read and steer other
+//       people's sessions by choosing their row; a default must never put someone
+//       else's live session, with its Stop, Esc and composer armed, in front of them.
+//       A session with no launch record (observed only) is nobody's for this rule.
 //
 // A real selection is never this function's business: the moment an operator opens a
 // row, the address is theirs and the view reads that instead.
+import type { RunDTO } from '@/features/agentops/types'
 import { addressOf } from './session-address'
+
+interface DefaultCandidate {
+  key: string
+  runs: readonly Pick<RunDTO, 'acts_for'>[]
+}
+
+/** Every run of the session acts for this person (rule 4). */
+function isOwnSession(s: DefaultCandidate, userId: string): boolean {
+  return (
+    s.runs.length > 0 &&
+    s.runs.every(
+      (r) => r.acts_for?.kind === 'user' && r.acts_for.user_id === userId,
+    )
+  )
+}
 
 export interface DefaultSelectionInput {
   /** True while either half of the list is still loading. */
   settling: boolean
   /** The rail's own reading order — needs attention, working, settled. */
-  order: readonly { key: string }[]
+  order: readonly DefaultCandidate[]
   /** An address this episode retired, which must never be defaulted to. */
   retiredAddress: string | null
   /** What this surface defaulted to already, if anything. */
   latched: string | null
+  /** The signed-in person's account; null while unknown, and then nothing is theirs. */
+  userId: string | null
 }
 
 export function chooseDefaultAddress({
@@ -51,13 +74,15 @@ export function chooseDefaultAddress({
   order,
   retiredAddress,
   latched,
+  userId,
 }: DefaultSelectionInput): string | null {
-  if (settling) return null
+  if (settling || userId === null) return null
+  const own = order.filter((s) => isOwnSession(s, userId))
   const holds =
     latched !== null &&
     latched !== retiredAddress &&
-    order.some((s) => addressOf(s) === latched)
+    own.some((s) => addressOf(s) === latched)
   if (holds) return latched
-  const first = order.find((s) => addressOf(s) !== retiredAddress)
+  const first = own.find((s) => addressOf(s) !== retiredAddress)
   return first ? addressOf(first) : null
 }

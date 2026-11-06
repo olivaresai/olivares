@@ -21,7 +21,12 @@ import type { LiveDTO } from './types'
 
 const perms = new Set<string>()
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: (p: string) => perms.has(p) }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (p: string) => perms.has(p),
+    // The signed-in person launched `launchedRun`: the default only opens their own.
+    principal: { user_id: 'u-me' },
+  }),
 }))
 
 // THE VIEW'S SELECTION IS NOW THE URL, so the router stub had to become a
@@ -82,6 +87,7 @@ vi.mock('@/features/agentops/run-create-dialog', async () => {
   }
 })
 vi.mock('@/features/first-hour/first-hour', () => ({
+  WorkStart: () => <textarea aria-label="First message (optional)" />,
   NewSessionDialog: ({
     open,
     onAdvanced,
@@ -132,6 +138,22 @@ import { NewSessionHost } from '@/features/first-hour/new-session-host'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { SessionsWorkspaceView } from './sessions-workspace-view'
 
+vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+import { notify, resolveNotice } from '@/lib/notify'
+
+// What the page has told: its notices are toasts now, not strips above the work.
+const toldNotice = (condition: string) =>
+  vi
+    .mocked(notify)
+    .mock.calls.map(([n]) => n)
+    .findLast((n) => n.condition === condition)
+const toldLinkIssues = () =>
+  vi
+    .mocked(notify)
+    .mock.calls.map(([n]) => n)
+    .filter((n) => n.condition === undefined)
+    .map((n) => n.message)
+
 const observed: LiveDTO = {
   session_ref: 'sess-found',
   live_ref: 'lr-found',
@@ -169,6 +191,7 @@ const launchedRun: RunDTO = {
   critical: false,
   created_at: '2026-08-10T10:01:00Z',
   last_activity_at: '2026-08-10T10:06:00Z',
+  acts_for: { kind: 'user', user_id: 'u-me' },
 }
 
 /**
@@ -257,6 +280,10 @@ describe('SessionsWorkspaceView — one destination, both origins', () => {
     // The launched one is titled by the name its operator typed at launch.
     const ours = await rowFor('nightly-indexer')
     expect(within(ours).getByText('Launched')).toBeInTheDocument()
+    // The provenance chip paints the accent: it is a trust surface, as the card's chip is.
+    expect(
+      within(ours).getByText('Launched').closest('[data-trust-chrome]'),
+    ).not.toBeNull()
     // …and it is ONE row, not two: the observed and operate halves folded together.
     // The session id stays ON that row so it remains searchable — naming the row after
     // the run must not hide the id the ledger, the API and any saved deep link use.
@@ -410,9 +437,9 @@ describe('SessionsWorkspaceView — the third answer', () => {
     // The observed rows that DID arrive are still shown — a failed run lookup must not
     // throw away data the other half returned.
     await screen.findAllByText('Untitled session')
-    expect(
-      screen.getByText(/started in Olivares could not be loaded/i),
-    ).toBeInTheDocument()
+    expect(toldNotice('sessions.run-lookup-failed')?.message).toMatch(
+      /started in Olivares could not be loaded/i,
+    )
     const table = screen.getByRole('grid')
     expect(within(table).queryAllByText('Discovered')).toHaveLength(0)
     expect(
@@ -504,7 +531,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
     const user = userEvent.setup()
     renderView('observe', { table: false })
     const footer = await screen.findByTestId('rail-footer')
-    expect(footer).toHaveTextContent(/^Showing the \d+ most recent/)
+    expect(footer).toHaveTextContent(/^\d+ most recent/)
     expect(
       screen.queryByText(/Only the most recent sessions are loaded/i),
     ).not.toBeInTheDocument()
@@ -528,6 +555,28 @@ describe('SessionsWorkspaceView — the third answer', () => {
       { limit: 400 },
       expect.anything(),
     )
+  })
+
+  // The foot is ONE line (#4032): the count and Load more whole at its end. A wrapping foot
+  // put "Showing the 202 most recent ·" on one line and Load more alone on the next; at the
+  // 264 px rail that sentence was then cut ("Showing the 200 most r…"), so the count is only
+  // "<n> most recent". jsdom has no layout, so this pins the arrangement and the short text.
+  it('keeps its foot on one line: the count cut to the width, Load more whole, no separator', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [launchedRun],
+      has_more: true,
+    })
+    renderView('observe', { table: false })
+    const footer = await screen.findByTestId('rail-footer')
+    const line = within(footer).getByTestId('rail-footer-line')
+    const classes = (el: Element) => el.className.split(/\s+/)
+    expect(classes(line)).not.toContain('flex-wrap')
+    expect(line).toHaveTextContent(/^\d+ most recentLoad more$/)
+    const count = within(line).getByText(/^\d+ most recent$/)
+    expect(classes(count)).toContain('truncate')
+    expect(count).toHaveAttribute('title', count.textContent)
+    const more = within(line).getByRole('button', { name: 'Load more' })
+    expect(classes(more)).toContain('shrink-0')
   })
 
   it('keeps the rows it read on screen while the longer page comes, and asks once', async () => {
@@ -870,8 +919,9 @@ describe('SessionsWorkspaceView — the surface opens on work, not on nothing', 
 
   it('never opens an archived session by default, however much it needs a person', async () => {
     // Archived sessions are out of the rail (#2795); a default that still picked one would
-    // fill the pane with a session no row of the list shows. The launched session waits
-    // for an approval, which ranks it first, and it is archived.
+    // fill the pane with a session no row of the list shows. The person's archived session
+    // waits for an approval, which ranks it first; their other session is the default.
+    // (The observed-only row has no launch record, so it is nobody's default.)
     vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
       items: [
         {
@@ -879,14 +929,19 @@ describe('SessionsWorkspaceView — the surface opens on work, not on nothing', 
           state: 'waiting_approval',
           archived_at: '2026-08-10T10:07:00Z',
         },
+        {
+          ...launchedRun,
+          run_ref: 'run-next',
+          name: 'next-indexer',
+          claude_session_id: 'sess-next',
+          state: 'stopped',
+        },
       ],
       has_more: false,
     })
     fakeRouter.reset('/sessions')
     renderView('observe', { table: false })
-    expect(await screen.findByTestId('card')).toHaveTextContent(
-      'card:sess-found|',
-    )
+    expect(await screen.findByTestId('card')).toHaveTextContent('sess-next')
   })
 
   it('does not write the default into the URL, so a link that named nothing still does', async () => {
@@ -970,9 +1025,7 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
     // what it was handed would show the recipient a different screen than the author.
     fakeRouter.reset('/sessions?session=nonsense&pane=diff')
     renderView()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /session/,
-    )
+    await waitFor(() => expect(toldLinkIssues().join('\n')).toMatch(/session/))
     expect(screen.queryByTestId('card')).not.toBeInTheDocument()
     await waitFor(() => expect(fakeRouter.url()).toBe('/sessions?tab=table'))
   })
@@ -1009,7 +1062,11 @@ describe('SessionsWorkspaceView — the address bar holds the session', () => {
         'sess-found',
       ),
     )
-    expect(await screen.findByTestId('sessions-address-retired')).toBeVisible()
+    await waitFor(() =>
+      expect(toldNotice('sessions.address-retired')?.message).toMatch(
+        /no longer available to you/,
+      ),
+    )
     await waitFor(() => expect(fakeRouter.url()).toBe('/sessions?tab=table'))
   })
 })
@@ -1087,6 +1144,36 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     expect(naked.map((el) => (el.textContent ?? '').slice(0, 40))).toEqual([])
   })
 
+  it('New session puts the start composer in front of the listed sessions until one is opened', async () => {
+    stubViewportWidth(390)
+    perms.add('sessions:run:write')
+    useNewSessionDialog.setState({ composing: false })
+    renderSurface()
+    const user = userEvent.setup()
+    await screen.findAllByTestId('rail-row')
+    const start = () =>
+      screen.queryByRole('textbox', { name: 'First message (optional)' })
+    expect(start()).toBeNull()
+    await user.click(screen.getByTestId('sessions-new'))
+    expect(
+      await screen.findByRole('textbox', { name: 'First message (optional)' }),
+    ).toBeVisible()
+    // On a phone the list stays under the composer: nothing hides a row below 761 px.
+    const rows = await screen.findAllByTestId('rail-row')
+    expect(rows[0].closest('.hidden')).toBeNull()
+    // Opening a row ends the start.
+    await user.click(rows[0])
+    await waitFor(() => expect(start()).toBeNull())
+    // Any session address ends it too (a Table row, a link), so Back shows the list.
+    await user.click(screen.getByTestId('sessions-new'))
+    await screen.findByRole('textbox', { name: 'First message (optional)' })
+    act(() => fakeRouter.go('/sessions?session=sess%3Asess-found'))
+    await waitFor(() => expect(start()).toBeNull())
+    act(() => fakeRouter.back())
+    await screen.findAllByTestId('rail-row')
+    expect(start()).toBeNull()
+  })
+
   it('names the icon buttons: New session and More, each with a hover', async () => {
     perms.add('sessions:run:write')
     renderSurface()
@@ -1158,7 +1245,12 @@ describe('SessionsWorkspaceView — an empty estate', () => {
       defaultOptions: { queries: { retry: false, gcTime: 0 } },
     })
     // The shell's one New session host, which the header's New session opens.
-    useNewSessionDialog.setState({ open: false, opener: null, advanced: null })
+    useNewSessionDialog.setState({
+      open: false,
+      opener: null,
+      advanced: null,
+      composing: false,
+    })
     return render(
       <QueryClientProvider client={qc}>
         <SessionsWorkspaceView entrance={entrance} />
@@ -1167,32 +1259,26 @@ describe('SessionsWorkspaceView — an empty estate', () => {
     )
   }
 
-  it('shows one empty state, in one line of plain words, with the one New session', async () => {
+  const composer = () =>
+    screen.findByRole('textbox', { name: 'First message (optional)' })
+
+  it('an empty list is the work screen: the composer in the work region, New session in the list header', async () => {
     renderEmpty()
-    const title = await screen.findByText('No sessions yet')
+    await composer()
     expect(screen.getAllByText('No sessions yet')).toHaveLength(1)
     expect(screen.queryByText('Select a session')).toBeNull()
     expect(screen.queryByText('No session selected')).toBeNull()
-    const empty = title.closest('[data-slot="empty-state"]') as HTMLElement
-    expect(empty).toHaveTextContent(
-      'Sessions you start, and the ones Olivares finds, appear here.',
-    )
+    // The list header stays as it is with sessions listed, and carries the one New session.
+    expect(screen.getByTestId('sessions-list-menu')).toBeInTheDocument()
+    expect(screen.getByTestId('sessions-new')).toBeInTheDocument()
     expect(
       screen.getAllByRole('button', { name: /New session/i }),
     ).toHaveLength(1)
-    const pill = within(empty).getByRole('button', { name: 'New session' })
-    expect(pill).toBeInTheDocument()
-    // The one primary action of an empty list is a pill in open space.
-    expect(pill.className).toContain('rounded-full')
-    expect(pill.className).toContain('bg-accent')
-    // The list header stays beside it, without a second New session.
-    expect(screen.getByTestId('sessions-list-menu')).toBeInTheDocument()
-    expect(screen.queryByTestId('sessions-new')).toBeNull()
   })
 
   it('keeps exactly one New session on the Table tab', async () => {
     renderEmpty()
-    await screen.findByText('No sessions yet')
+    await composer()
     openTable()
     const title = await screen.findByText('No sessions yet')
     const empty = title.closest('[data-slot="empty-state"]') as HTMLElement
@@ -1205,28 +1291,25 @@ describe('SessionsWorkspaceView — an empty estate', () => {
   })
 
   it.each(['Sessions', 'Table', 'Provider profiles'])(
-    'returns focus to the single New session action after Advanced launch closes on %s',
+    'New session on %s brings the start composer forward and asks for its focus',
     async (tab) => {
       const user = userEvent.setup()
       perms.add('sessions:profile:read')
       renderEmpty()
-      await screen.findByText('No sessions yet')
+      await composer()
       if (tab === 'Table') openTable()
       if (tab === 'Provider profiles') openView('Provider profiles')
-      const launch = screen.getByRole('button', { name: 'New session' })
-      await user.click(launch)
-      await user.click(
-        screen.getByRole('button', { name: 'Advanced launch options' }),
-      )
-      await screen.findByRole('dialog', { name: 'Advanced launch' })
-      await user.keyboard('{Escape}')
-      await waitFor(() =>
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
-      )
+      const asked = useNewSessionDialog.getState().composeRequest
+      await user.click(screen.getByRole('button', { name: 'New session' }))
+      expect(useNewSessionDialog.getState()).toMatchObject({
+        open: false,
+        composing: true,
+        composeRequest: asked + 1,
+      })
+      expect(await composer()).toBeVisible()
       expect(
         screen.getAllByRole('button', { name: 'New session' }),
       ).toHaveLength(1)
-      await waitFor(() => expect(launch).toHaveFocus())
     },
   )
 
@@ -1292,6 +1375,27 @@ describe('SessionsWorkspaceView — an empty estate', () => {
     },
   )
 
+  it('says the failure on the list itself, with Retry, when both reads failed and the toast is closed', async () => {
+    vi.mocked(sessionsApi.live).mockRejectedValue(new Error('live unavailable'))
+    vi.mocked(agentOpsApi.listRuns).mockRejectedValue(
+      new Error('runs unavailable'),
+    )
+    renderView('observe', { table: false })
+
+    // The toast is gone (never shown here: notify is a spy), so the list is all there is:
+    // it must not read "No sessions yet" over an engine that failed to answer.
+    const retry = await screen.findByRole('button', { name: /retry/i })
+    expect(document.getElementById('work-pane-rail')).toContainElement(retry)
+    expect(screen.queryByText('No sessions yet')).not.toBeInTheDocument()
+    const liveBefore = vi.mocked(sessionsApi.live).mock.calls.length
+    await act(async () => retry.click())
+    await waitFor(() =>
+      expect(vi.mocked(sessionsApi.live).mock.calls.length).toBeGreaterThan(
+        liveBefore,
+      ),
+    )
+  })
+
   it.each(['Sessions', 'Table'])(
     'keeps New session available while %s reads are pending',
     async (tab) => {
@@ -1310,7 +1414,7 @@ describe('SessionsWorkspaceView — an empty estate', () => {
 
   it('titles the page Sessions, as navigation names it, whichever door opened it', async () => {
     renderEmpty('operate')
-    await screen.findByText('No sessions yet')
+    await composer()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
       /^Sessions$/,
     )
@@ -1338,28 +1442,33 @@ describe('SessionsWorkspaceView — an empty estate', () => {
 // THE OBSERVED HALF HAS NO TIMER AND ITS STREAM OPENS ONLY OVER AN ANSWER: a first read that
 // failed stayed failed. The notice carries the way out.
 describe('SessionsWorkspaceView — a half that failed can be asked again', () => {
-  it('shows Retry on the live notice and asks the live half again, not the runs', async () => {
-    const user = userEvent.setup()
+  it('offers Retry on the live notice and asks the live half again, not the runs', async () => {
     vi.mocked(sessionsApi.live).mockRejectedValue(new Error('live unavailable'))
     renderView('observe', { table: false })
-    const notice = await screen.findByTestId('sessions-live-lookup-failed')
-    expect(notice).toHaveTextContent(
+    const notice = await waitFor(() => {
+      const told = toldNotice('sessions.live-lookup-failed')
+      expect(told).toBeDefined()
+      return told!
+    })
+    expect(notice.message).toMatch(
       /started outside Olivares could not be loaded/i,
     )
+    expect(notice.action?.label).toBe('Retry')
     const liveBefore = vi.mocked(sessionsApi.live).mock.calls.length
     const runsBefore = vi.mocked(agentOpsApi.listRuns).mock.calls.length
     vi.mocked(sessionsApi.live).mockResolvedValue({
       items: [observed],
       has_more: false,
     })
-    await user.click(within(notice).getByRole('button', { name: 'Retry' }))
+    await act(async () => notice.action!.onClick())
     await waitFor(() =>
       expect(vi.mocked(sessionsApi.live).mock.calls.length).toBeGreaterThan(
         liveBefore,
       ),
     )
+    // The condition is over: its toast is taken down.
     await waitFor(() =>
-      expect(screen.queryByTestId('sessions-live-lookup-failed')).toBeNull(),
+      expect(resolveNotice).toHaveBeenCalledWith('sessions.live-lookup-failed'),
     )
     // The guarded read asks the runs again too when this person may read them.
     expect(
@@ -1367,13 +1476,39 @@ describe('SessionsWorkspaceView — a half that failed can be asked again', () =
     ).toBeGreaterThanOrEqual(runsBefore)
   })
 
-  it('shows Retry on the runs notice', async () => {
-    const user = userEvent.setup()
+  it('keeps the failed read told while Retry asks again', async () => {
+    // A read that never answered goes back to pending for the length of a refetch: that is
+    // not the condition ending, and must not take the notice (or its dismissal) with it.
     vi.mocked(agentOpsApi.listRuns).mockRejectedValue(new Error('runs down'))
     renderView('observe', { table: false })
-    const notice = await screen.findByTestId('sessions-run-lookup-failed')
+    const notice = await waitFor(() => {
+      const told = toldNotice('sessions.run-lookup-failed')
+      expect(told).toBeDefined()
+      return told!
+    })
     const before = vi.mocked(agentOpsApi.listRuns).mock.calls.length
-    await user.click(within(notice).getByRole('button', { name: 'Retry' }))
+    vi.mocked(agentOpsApi.listRuns).mockImplementation(
+      () => new Promise(() => {}),
+    )
+    await act(async () => notice.action!.onClick())
+    await waitFor(() =>
+      expect(vi.mocked(agentOpsApi.listRuns).mock.calls.length).toBeGreaterThan(
+        before,
+      ),
+    )
+    expect(resolveNotice).not.toHaveBeenCalledWith('sessions.run-lookup-failed')
+  })
+
+  it('offers Retry on the runs notice', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockRejectedValue(new Error('runs down'))
+    renderView('observe', { table: false })
+    const notice = await waitFor(() => {
+      const told = toldNotice('sessions.run-lookup-failed')
+      expect(told).toBeDefined()
+      return told!
+    })
+    const before = vi.mocked(agentOpsApi.listRuns).mock.calls.length
+    await act(async () => notice.action!.onClick())
     await waitFor(() =>
       expect(vi.mocked(agentOpsApi.listRuns).mock.calls.length).toBeGreaterThan(
         before,
@@ -1419,4 +1554,17 @@ describe('URL views are authoritative', () => {
       await screen.findByTestId('sessions-list-menu')
     },
   )
+})
+
+describe('SessionsWorkspaceView — the work column never scrolls', () => {
+  it('clips its overflow, so nothing can scroll the composer away from the bottom', async () => {
+    // 0.6: a row's absolutely placed "Show in inspector" overflowed the column, which was
+    // overflow-hidden and so still scrollable; a send scrolled it and the composer rose.
+    fakeRouter.reset('/sessions?session=sess%3Asess-found')
+    renderView('observe', { table: false })
+    await screen.findByTestId('card')
+    const section = document.getElementById('work-pane-narrative')
+    expect(section?.className).toMatch(/\boverflow-clip\b/)
+    expect(section?.className).not.toMatch(/\boverflow-hidden\b/)
+  })
 })

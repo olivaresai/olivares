@@ -14,7 +14,9 @@ import ru from './ru.json'
 import fr from './fr.json'
 import it from './it.json'
 import ko from './ko.json'
+import uk from './uk.json'
+import pt from './pt.json'
 
-registerTranslations('vault', { en, es, zh, ja, de, ru, fr, it, ko })
+registerTranslations('vault', { en, es, zh, ja, de, ru, fr, it, ko, uk, pt })
 
-export { en, es, zh, ja, de, ru, fr, it, ko }
+export { en, es, zh, ja, de, ru, fr, it, ko, uk, pt }

@@ -57,6 +57,7 @@ import {
   type MCPToolPolicy,
 } from './mcp-gateway-api'
 import { MCPEnableDialog, toolTrust } from './mcp-enable-dialog'
+import { MonoMark } from '@/components/ui/mono-mark'
 import { mcpStarters, type MCPStarter } from './mcp-starters'
 import './i18n'
 
@@ -615,7 +616,10 @@ function StarterList({
         {open.map((s) => (
           <li key={s.key} className="min-w-0 rounded border border-border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-body font-semibold">{s.input.name}</span>
+              <span className="inline-flex min-w-0 items-center gap-2 text-body font-semibold">
+                <MonoMark name={s.input.name} vendor={s.key} size="sm" />
+                {s.input.name}
+              </span>
               <Button size="sm" variant="outline" onClick={() => onAdd(s)}>
                 <Plus />
                 {t('console:mcpGateway.starterAdd', { name: s.input.name })}

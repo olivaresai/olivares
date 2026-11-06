@@ -275,6 +275,13 @@ class ReleaseGeneration(unittest.TestCase):
             hits = CHECKER['scan'](['README.md'], lambda _: coordinate)
             self.assertTrue(CHECKER['judge']('1.0', hits, set(), set())[0], coordinate)
 
+    def test_openssh_and_samba_versions_are_not_product_coordinates(self):
+        # The OpenSSH and Samba version literals of two documents are dependency versions, never release coordinates.
+        text = ('measured 2026-11-04 with OpenSSH 9.2p1\n'
+                'gegen eine Samba-4.22-Freigabe (SMB 3.1.1).\n')
+        hits = CHECKER['scan'](['docs/design/workspace-sftp-v1.md'], lambda _: text)
+        self.assertEqual(CHECKER['judge']('0.6', hits, set(), set())[0], [])
+
     def test_third_party_tool_examples_are_not_release_coordinates(self) -> None:
         guide = (ROOT / 'docs/THIRD-PARTY-TOOLS.md').read_text()
         declaration = json.loads(guide.split('```json\n', 1)[1].split('```', 1)[0])

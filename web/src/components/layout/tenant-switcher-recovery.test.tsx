@@ -29,7 +29,7 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
-it('offers copyable recovery commands in a dialog outside the organization menu', async () => {
+it('shows the recovery commands as code in a dialog outside the organization menu', async () => {
   const user = userEvent.setup()
   render(<TenantSwitcher />)
   await user.click(screen.getByRole('button', { name: 'Default Organization' }))
@@ -42,9 +42,10 @@ it('offers copyable recovery commands in a dialog outside the organization menu'
   const dialog = await screen.findByRole('dialog', { name: 'Organization' })
   expect(dialog.textContent).not.toContain('`')
   expect(dialog.querySelectorAll('code')).toHaveLength(2)
+  // Both commands hold a <placeholder>: they are shown, not copied, because they do not run as written.
   expect(
-    within(dialog).getAllByRole('button', { name: 'Copy command' }),
-  ).toHaveLength(2)
+    within(dialog).queryAllByRole('button', { name: 'Copy command' }),
+  ).toHaveLength(0)
   expect(dialog.closest('[role="menu"]')).toBeNull()
   await user.keyboard('{Escape}')
   expect(screen.queryByRole('dialog')).toBeNull()

@@ -1,4 +1,23 @@
 {
+  "pathChip": {
+    "open": "In {{editor}} öffnen",
+    "copyRelative": "Relativen Pfad kopieren",
+    "copyFull": "Vollständigen Pfad kopieren"
+  },
+  "race": {
+    "cleanupFailed": "Der gewählte Branch wurde bereits übernommen. Einige andere Worktrees sind noch vorhanden; versuchen Sie es erneut, um sie zu verwerfen.",
+    "title": "Sitzungen vergleichen",
+    "hint": "Prüfen Sie jeden Branch und seine Kosten. Committen Sie Änderungen vor der Auswahl.",
+    "keep": "Diese behalten",
+    "confirm": "Alle Sitzungen stoppen, {{name}} ins Repository übernehmen und die anderen Worktrees samt nicht übernommenen Änderungen endgültig verwerfen?",
+    "confirmKeep": "Übernehmen und andere verwerfen",
+    "kept": "Der gewählte Branch wurde übernommen. Die anderen Worktrees wurden verworfen.",
+    "invalid": "Wählen Sie unterschiedliche Worktree-Sitzungen desselben Repositorys.",
+    "loadError": "Nicht alle Sitzungen konnten gelesen werden. Prüfen Sie den Zugriff und versuchen Sie es erneut.",
+    "notStopped": "Eine Sitzung wurde nicht gestoppt. Kein Branch wurde übernommen oder verworfen.",
+    "failed": "Diese Sitzung konnte nicht behalten werden.",
+    "uncommitted": "Nicht committete Änderungen und Git"
+  },
   "compact": {
     "context": "Kontext",
     "now": "Jetzt komprimieren",
@@ -9,6 +28,8 @@
     "failed": "Die Komprimierung wurde nicht bestätigt. Ihre Nachricht wurde nicht gesendet."
   },
   "git": {
+    "init": "Git initialisieren",
+    "noRepository": "Dieser Ordner ist kein Git-Repository.",
     "title": "Git",
     "branch": "Branch",
     "newBranch": "Neuer Branch",
@@ -94,7 +115,7 @@
     "lastSeen": "Letztes Ereignis",
     "minimalData": "Es werden nur Metadaten angezeigt. Die Engine führt hier prinzipbedingt niemals SQL, Nutzdaten oder Geheimnisse mit (Datenminimierung).",
     "viewAccess": "Zugriffskarte",
-    "viewInventory": "Inventar"
+    "viewInventory": "Erkannte Ressourcen"
   },
   "timeline": {
     "title": "Zeitleiste",
@@ -308,7 +329,18 @@
     "unsnooze": "Nicht mehr zurückstellen",
     "markDone": "Als erledigt markieren",
     "markNotDone": "Als nicht erledigt markieren",
+    "markUnread": "Als ungelesen markieren",
+    "markRead": "Als gelesen markieren",
+    "unreadMark": "Ungelesen",
     "markFailed": "Die Markierung konnte nicht geändert werden."
+  },
+  "undo": {
+    "archived": "„{{name}}“ archiviert",
+    "snoozed": "„{{name}}“ zurückgestellt",
+    "done": "„{{name}}“ als erledigt markiert",
+    "unpinned": "„{{name}}“ gelöst",
+    "changed": "Diese Sitzung hat sich geändert; es wurde nichts rückgängig gemacht.",
+    "failed": "Die Änderung konnte nicht rückgängig gemacht werden."
   },
   "surface": {
     "openBeside": "Daneben öffnen",
@@ -357,11 +389,6 @@
     "costUnknown": "Kosten nicht gemeldet",
     "costPartial": "{{cost}} (teilweise)",
     "viewCosts": "Kosten ansehen",
-    "planLabel": "Nutzungsfenster des Plans der Anmeldung dieser Sitzung",
-    "planNotRead": "Plan-Fenster nicht gelesen",
-    "resets": "Wird {{when}} zurückgesetzt ({{at}})",
-    "stale": "zuletzt bekannt",
-    "readAt": "Gelesen {{at}}",
     "permission": "{{name}}: {{what}}",
     "full": "Vollzugriff: läuft ohne Rückfrage, begrenzt durch die <policy>Olivares-Richtlinie</policy>"
   },
@@ -419,7 +446,6 @@
     "identifiersHint": "Referenzen zum Kopieren. Das sind nicht die Namen in der Bereichszeile.",
     "wireTitle": "Ausgewählte Zeile",
     "wireHint": "Die ausgewählte Zeile genau so, wie das Werkzeug sie gesendet hat. Die Unterhaltung ist die Standardansicht.",
-    "wireEmpty": "Wählen Sie eine Zeile in der Unterhaltung, um sie genau so zu sehen, wie das Werkzeug sie gesendet hat.",
     "thisNode": "Dieser Knoten",
     "workTitle": "Arbeitsberechtigung der Sitzung",
     "workHint": "Für den letzten Start aufgezeichnet. Jede Aktion prüft die aktuelle Berechtigung.",
@@ -442,7 +468,6 @@
       "worker": "Worker",
       "orchestrator": "Orchestrator"
     },
-    "details": "Referenzen",
     "echoes": "Auch gemeldet als",
     "folder": "Ordner",
     "temporaryFolder": "Temporärer Ordner dieser Sitzung",
@@ -467,12 +492,24 @@
       "cost": "Kosten"
     },
     "usage": {
-      "title": "Kontonutzung",
-      "fiveHour": "{{percent}} % von 5 Stunden",
-      "week": "{{percent}} % der Woche"
-    }
+      "title": "Kontonutzung"
+    },
+    "fork": "Ab hier verzweigen",
+    "readFailed": "Der vollständige Kontext konnte nicht gelesen werden. Laden Sie frühere Nachrichten oder wählen Sie einen kürzeren Schritt und versuchen Sie es erneut."
+  },
+  "details": {
+    "technical": "Technische Details",
+    "unknownFrames_one": "Unbekannter Rahmen: {{count}}",
+    "unknownFrames_other": "Unbekannte Rahmen: {{count}}"
+  },
+  "backgroundTasks": {
+    "label": "Hintergrundaufgaben",
+    "stop": "{{name}} stoppen",
+    "stopFailed": "Die Aufgabe konnte nicht gestoppt werden."
   },
   "conversation": {
+    "showAll": "Alles anzeigen",
+    "showLess": "Weniger anzeigen",
     "log": "Unterhaltung",
     "waiting": "Warten auf die Sitzung…",
     "empty": "Noch keine Nachrichten.",
@@ -482,8 +519,7 @@
     "lag_one": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
     "lag_other": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
     "tool": "Werkzeug",
-    "result": "Ergebnis",
-    "unknown": "Unbekannter Rahmen",
+    "answered": "Beantwortet",
     "inspect": "Im Inspektor zeigen",
     "args": "Argumente",
     "toolResult": "Ergebnis",
@@ -508,12 +544,14 @@
     "waitingApproval": "Wird gesendet, sobald die Sitzung bereit ist.",
     "workingFolder": "Arbeitsordner: <path />",
     "temporaryFolder": "Arbeitsordner: temporärer Ordner dieser Sitzung",
-    "workedFor": "Gearbeitet: {{duration}}",
+    "turnLine": "<work/> · {{duration}}",
+    "jumpToLatest": "Zum Neuesten springen",
     "modelChanged": "Modell gewechselt: {{from}} → {{to}}",
     "modelChangedAt": "Modell um {{time}} gewechselt: {{from}} → {{to}}",
     "sentPending": "Gesendet. Wartet darauf, dass das Werkzeug sie übernimmt.",
     "sentNotTaken": "Die Sitzung endete, bevor das Werkzeug sie übernahm.",
     "finishedIn": "Fertig in {{duration}}",
+    "interrupted": "Von Ihnen unterbrochen",
     "escToInterrupt": "Esc zum Unterbrechen",
     "background": "Im Hintergrund",
     "agentWorking": "Arbeitet",
@@ -588,6 +626,29 @@
     "fileTruncated": "Die ersten 256 KB werden angezeigt.",
     "truncated": "Die {{count}} neuesten Dateien werden angezeigt."
   },
+  "checkpoints": {
+    "title": "Runden",
+    "hint": "Was jede Nachricht dieser Sitzung in ihrem Ordner geändert hat. Zurückspulen stellt die Dateien so wieder her, wie sie vor einer Runde waren.",
+    "turn": "Runde {{n}}",
+    "filesChanged": "Geänderte Dateien: {{n}}",
+    "showFiles": "Dateien",
+    "status": {
+      "added": "hinzugefügt",
+      "modified": "geändert",
+      "deleted": "gelöscht"
+    },
+    "rewind": "Zurückspulen",
+    "undo": "Zurückspulen rückgängig machen",
+    "noWords": "(kein Text)",
+    "rewound": "Ordner zurückgespult ({{n}} Dateien wiederhergestellt oder entfernt). Ihre Nachricht steht im Nachrichtenfeld.",
+    "undone": "Zurückspulen rückgängig gemacht ({{n}} Dateien wiederhergestellt oder entfernt).",
+    "confirm": {
+      "title": "Auf den Stand vor Runde {{n}} zurückspulen?",
+      "description": "Betroffene Dateien: {{n}}. Sie werden so wiederhergestellt, wie sie vor dieser Runde waren; seitdem vom Agenten erstellte Dateien werden entfernt.",
+      "action": "Zurückspulen",
+      "conversation": "Nur Dateien ändern sich. Das Werkzeug behält seine Unterhaltung. Die Nachricht dieser Runde steht im Nachrichtenfeld, damit Sie sie bearbeiten und erneut senden können."
+    }
+  },
   "preview": {
     "title": "Vorschau",
     "hint": "Die App, die diese Sitzung auf einem lokalen Port bereitstellt. Sie läuft in Ihrem Browser, von der Konsole isoliert und außerhalb der Netzwerkgrenzen der Sitzung.",
@@ -602,7 +663,9 @@
     "reload": "Neu laden",
     "newTab": "In neuem Tab öffnen",
     "openError": "Die Vorschau konnte nicht geöffnet werden. Der Port wurde eventuell geschlossen.",
-    "frameTitle": "Vorschau von Port {{port}}"
+    "frameTitle": "Vorschau von Port {{port}}",
+    "annotate": "Anmerken",
+    "annotating": "Ein Element der Seite anklicken, um eine Notiz dazu zu schreiben."
   },
   "branchChanges": {
     "title": "Änderungen am Branch",
@@ -661,13 +724,16 @@
       "snoozed": "Zurückgestellt",
       "archived": "Archiviert"
     },
+    "agentCount_one": "{{count}} Agent",
+    "agentCount_other": "{{count}} Agenten",
     "more": "Mehr",
     "back": "Zurück zu den Sitzungen",
     "showTable": "Als Tabelle anzeigen",
     "filter": "Sitzungen filtern…",
-    "recent": "Die {{n}} neuesten werden angezeigt",
+    "recent": "Die {{n}} neuesten",
     "loadMore": "Mehr laden",
-    "noMatch": "Keine Sitzung passt."
+    "noMatch": "Keine Sitzung passt.",
+    "unnamedFolder": "Unbenannter Ordner"
   },
   "thread": {
     "copyReference": "Referenz kopieren",
@@ -788,7 +854,6 @@
     "cancel": "Abbrechen",
     "archive": "Archivieren",
     "unarchive": "Wiederherstellen",
-    "archived": "Archiviert. Sie steht unter „Archiviert“ am Ende der Liste.",
     "unarchived": "Wieder in der Liste.",
     "copyLink": "Link kopieren",
     "copyId": "Sitzungs-ID kopieren",
@@ -849,5 +914,15 @@
       "down": "Runter"
     },
     "closeLabel": "Terminal schließen"
+  },
+  "strip": {
+    "needYou_one": "{{count}} braucht Sie",
+    "needYou_other": "{{count}} brauchen Sie",
+    "running_one": "{{count}} läuft",
+    "running_other": "{{count}} laufen",
+    "failedToday_one": "{{count}} heute fehlgeschlagen",
+    "failedToday_other": "{{count}} heute fehlgeschlagen",
+    "costToday": "{{amount}} heute",
+    "label": "Sitzungen auf einen Blick"
   }
 }

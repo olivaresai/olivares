@@ -46,14 +46,25 @@ func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("PUT", "/workspaces/{ref}/setup-command", permWsAdmin, concealedFolder, m.handleSetWorkspaceSetup)
 	reg.HandleEntity("POST", "/workspaces/{ref}/setup-command/approve", permWsAdmin, concealedFolder, m.handleApproveWorkspaceSetup)
 	reg.HandleEntity("POST", "/workspaces/{ref}/wiki", permWsAdmin, concealedFolder, m.handleInitWiki)
-	reg.Handle("POST", "/workspaces", permWsAdmin, m.handleCreateWorkspace)
+	// A department's administrator registers a folder in it: the collection scope
+	// admits a scoped grant at the department the body names. A registrar without
+	// the capability keeps the tenant-wide admission, which grants less.
+	create := reg
+	if scoped, capable := reg.(api.CollectionScopeRouteRegistrar); capable {
+		create = scoped.WithCollectionScope(api.CollectionScopeRef{WorkspaceBodyField: "workspace_id", WorkspaceQueryParam: "workspace_id"})
+	}
+	create.Handle("POST", "/workspaces", permWsAdmin, m.handleCreateWorkspace)
 	reg.Handle("GET", "/workspaces", permWsRead, m.handleListWorkspaces)
+	reg.Handle("GET", "/workspace-candidates", permWsAdmin, m.handleWorkspaceCandidates)
+	reg.Handle("GET", "/personal-folders-settings", permWsRead, m.handlePersonalFoldersSettings)
+	reg.Handle("PUT", "/personal-folders-settings", permWsAdmin, m.handlePersonalFoldersSettings)
 	reg.HandleEntity("GET", "/workspaces/{ref}", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleGetWorkspace))
 	reg.HandleEntity("PATCH", "/workspaces/{ref}", permWsAdmin, folder, m.handlePatchWorkspace)
 	reg.HandleEntity("DELETE", "/workspaces/{ref}", permWsAdmin, folder, m.handleDeleteWorkspace)
 	reg.HandleEntity("GET", "/workspaces/{ref}/files", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleListFiles))
 	reg.HandleEntity("GET", "/workspaces/{ref}/files/stat", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleStatFile))
 	reg.HandleEntity("GET", "/workspaces/{ref}/files/raw", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleReadFile))
+	reg.HandleEntity("GET", "/workspaces/{ref}/files/archive", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleArchiveFiles))
 	reg.HandleEntity("PUT", "/workspaces/{ref}/files/raw", permWsWrite, folder, m.workspaceRight(permWsWrite, auth.TrusteeWrite, m.handleWriteFile))
 	reg.HandleEntity("POST", "/workspaces/{ref}/files/dir", permWsWrite, folder, m.workspaceRight(permWsWrite, auth.TrusteeCreate, m.handleMkdir))
 	reg.HandleEntity("POST", "/workspaces/{ref}/files/move", permWsWrite, folder, m.workspaceRight(permWsWrite, auth.TrusteeErase, m.handleMoveFile))
@@ -61,6 +72,7 @@ func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("GET", "/workspaces/{ref}/project-config", permWsAdmin, concealedFolder, m.handleGetProjectConfig)
 	reg.HandleEntity("POST", "/workspaces/{ref}/project-config/approve", permWsAdmin, concealedFolder, m.handleApproveProjectConfig)
 	m.terminalRoutes(reg, folder)
+	m.sftpRoutes(reg, folder)
 }
 
 // workspaceRight checks the canonical trustee action at the folder Resource.
@@ -107,6 +119,7 @@ func CheckFolderRight(ctx context.Context, data api.ModuleData, request auth.Req
 	if data == nil {
 		return &runErr{http.StatusServiceUnavailable, "folder resource is unavailable"}
 	}
+	var owned error
 	if err := data.View(ctx, request.Tenant, func(sc store.Scope) error {
 		resource, err := sc.Resources().Get(ctx, model.ID(request.Resource.ID))
 		if err != nil {
@@ -115,9 +128,13 @@ func CheckFolderRight(ctx context.Context, data api.ModuleData, request auth.Req
 		if resource.Kind != "folder" {
 			return store.ErrConflict
 		}
+		owned = personalFolderAdmits(resource, request.Principal, right)
 		return nil
 	}); err != nil {
 		return errors.Join(&runErr{http.StatusServiceUnavailable, "folder resource is unavailable"}, err)
+	}
+	if owned != nil {
+		return owned
 	}
 	canonical, ok := right.Question(request.Principal, request.Tenant, request.Resource)
 	if !ok || decide == nil {
@@ -186,9 +203,26 @@ func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	dto, err := m.createWorkspace(r.Context(), mc.Tenant, CreateWorkspaceParams{
-		Backup: body.Backup,
-		Name:   body.Name, RootPath: body.RootPath, MountMode: body.MountMode,
+	department := mc.Resource.WorkspaceID
+	if department.IsZero() {
+		department = model.ID(body.WorkspaceID)
+	}
+	var owner string
+	if body.Owner != "" {
+		// A module cannot read user rows, so the id's shape is all that is checked here: an
+		// owner that is no one leaves a folder only its administrators find.
+		id, err := model.ParseID(body.Owner)
+		if err != nil {
+			writeRunErr(w, badRequest("owner is the id of a person"))
+			return
+		}
+		owner = personalOwnerPrefix + id.String()
+	}
+	dto, err := m.createWorkspace(api.DepartmentAuthority(r.Context(), mc), mc.Tenant, CreateWorkspaceParams{
+		Department: department,
+		Owner:      owner,
+		Backup:     body.Backup,
+		Name:       body.Name, RootPath: body.RootPath, MountMode: body.MountMode,
 		ContainerTarget: body.ContainerTarget, AllowSubpaths: body.AllowSubpaths,
 		ReadOnlyFolders: body.ReadOnlyFolders,
 		MaxReadBytes:    body.MaxReadBytes, DLPMode: body.DLPMode, DataClass: body.DataClass,
@@ -216,6 +250,7 @@ func (m *Module) handlePatchWorkspace(w http.ResponseWriter, r *http.Request, mc
 	var body struct {
 		ReadOnlyFolders   *[]string `json:"read_only_folders"`
 		Backup            *bool     `json:"backup"`
+		RetentionDays     *int64    `json:"retention_days"`
 		DataClass         *string   `json:"data_class"`
 		DLPMode           *string   `json:"dlp_mode"`
 		DefaultPermission *string   `json:"default_permission"`
@@ -223,12 +258,12 @@ func (m *Module) handlePatchWorkspace(w http.ResponseWriter, r *http.Request, mc
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if body.ReadOnlyFolders == nil && body.DLPMode == nil && body.DefaultPermission == nil && body.DataClass == nil && body.Backup == nil {
-		writeRunErr(w, badRequest("send read_only_folders, dlp_mode, default_permission, data_class and/or backup"))
+	if body.ReadOnlyFolders == nil && body.DLPMode == nil && body.DefaultPermission == nil && body.DataClass == nil && body.Backup == nil && body.RetentionDays == nil {
+		writeRunErr(w, badRequest("send read_only_folders, dlp_mode, default_permission, data_class, backup and/or retention_days"))
 		return
 	}
 	mayRunUnrestricted := body.DefaultPermission != nil && m.mayRunUnrestricted(r.Context(), mc)
-	dto, err := m.patchWorkspace(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ReadOnlyFolders, body.DLPMode, body.DefaultPermission, mayRunUnrestricted, body.DataClass, body.Backup, mc.Principal.Actor(), mc.Principal.ActorKind())
+	dto, err := m.patchWorkspace(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ReadOnlyFolders, body.DLPMode, body.DefaultPermission, mayRunUnrestricted, body.DataClass, body.Backup, body.RetentionDays, mc.Principal.Actor(), mc.Principal.ActorKind())
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -237,6 +272,12 @@ func (m *Module) handlePatchWorkspace(w http.ResponseWriter, r *http.Request, mc
 }
 
 func (m *Module) handleListWorkspaces(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	// A person's first request for their folders makes their own (personal_folder.go);
+	// ponytail: created on first use, not at the sign-in itself, so no sign-in hook
+	// is needed; add one when a folder must exist before the person opens anything.
+	if _, err := m.ensurePersonalFolder(r.Context(), mc.Tenant, mc.Principal); err != nil {
+		m.warnf("sessions: could not make the personal folder", "err", redactErr(err))
+	}
 	q := listQuery(r)
 	for _, column := range []string{colWsRootPath, colWsState} {
 		if value := r.URL.Query().Get(column); value != "" {
@@ -250,7 +291,13 @@ func (m *Module) handleListWorkspaces(w http.ResponseWriter, r *http.Request, mc
 	}
 	visible := out.Items[:0]
 	for _, folder := range out.Items {
-		err := m.authorizeWorkspaceRight(r.Context(), mc, permWsRead, auth.TrusteeRead, auth.ResourceAttrs{Kind: "resource", ID: folder.resourceID.String()})
+		node := auth.ResourceAttrs{Kind: "resource", ID: folder.ResourceID.String()}
+		err := m.authorizeWorkspaceRight(r.Context(), mc, permWsRead, auth.TrusteeRead, node)
+		if missing := (*runErr)(nil); errors.As(err, &missing) && missing.status == http.StatusNotFound {
+			// Another person's folder: its content is not theirs, but an administrator
+			// of folders still finds it, to manage it.
+			err = m.authorizeWorkspaceRight(r.Context(), mc, permWsAdmin, auth.TrusteeModify, node)
+		}
 		if err == nil {
 			visible = append(visible, folder)
 		} else {

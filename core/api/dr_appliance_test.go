@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/dr"
 )
 
 func TestDRApplianceFirstBootDefaultsAndKeyCustody(t *testing.T) {
@@ -96,6 +97,74 @@ func TestDRApplianceFirstBootDefaultsAndKeyCustody(t *testing.T) {
 	}
 	if _, err := os.Stat(keyPath); !os.IsNotExist(err) {
 		t.Fatal("boot regenerated a lost key")
+	}
+}
+
+// Every install, not only the appliance, protects itself from its first start, and a
+// schedule an administrator emptied on purpose stays empty across a restart.
+func TestDRFirstStartDefaultsOnEveryInstall(t *testing.T) {
+	dir := t.TempDir()
+	st := openDRStore(t, dir)
+	h := newDRHarness(t, dir, st, "")
+	admin := h.adminLogin()
+	if info, err := os.Stat(filepath.Join(dir, "dr-recovery.key")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("first start left no private recovery key: %v", err)
+	}
+	if ran, err := h.srv.RunDueScheduledBackup(context.Background(), time.Date(2026, 10, 28, 2, 1, 0, 0, time.UTC)); err != nil || !ran {
+		t.Fatalf("default backup: %v %v", ran, err)
+	}
+	r := h.do("GET", "/v1/console/dr/schedule", admin, nil, nil)
+	if r.code != http.StatusOK || r.body["enabled"] != true || r.body["cron"] != "0 2 * * *" || r.body["verify_cron"] != "0 3 * * 0" {
+		t.Fatalf("first-start defaults = %d %s", r.code, r.raw)
+	}
+	if r := h.do("PUT", "/v1/console/dr/schedule", admin, map[string]any{"enabled": false, "cron": "", "retain_days": 0, "verify_cron": ""}, nil); r.code != http.StatusOK {
+		t.Fatal(r.raw)
+	}
+	r = newDRHarness(t, dir, st, "").do("GET", "/v1/console/dr/schedule", admin, nil, nil)
+	if r.body["enabled"] != false || r.body["cron"] != "" || r.body["verify_cron"] != nil {
+		t.Fatalf("restart replaced an emptied schedule: %s", r.raw)
+	}
+}
+
+// An install upgraded with bundles made on demand and no stored schedule keeps
+// them: the first-start default must not prune what the operator already holds,
+// even when another node on the same store, with no bundles, starts first.
+func TestDRFirstStartDefaultKeepsEarlierBundles(t *testing.T) {
+	dir := t.TempDir()
+	st := openDRStore(t, dir)
+	newDRHarness(t, t.TempDir(), st, "")
+	passFile := filepath.Join(dir, "dr-pass.txt")
+	if err := os.WriteFile(passFile, []byte("test-schedule-passphrase\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backupDir := filepath.Join(dir, "backups")
+	if err := os.MkdirAll(backupDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	old := filepath.Join(backupDir, "olivares-operator-old.drbundle")
+	f, err := os.Create(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = writeDRMetadataBundle(t, f, &dr.Manifest{
+		Format:     dr.ManifestFormat,
+		CreatedAt:  now.Add(-60 * 24 * time.Hour).Format(time.RFC3339),
+		EngineKind: "sqlite",
+		Store:      dr.StoreSnapshot{Method: dr.MethodPITR, File: "external"},
+	})
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newDRHarness(t, dir, st, passFile)
+	if ran, err := h.srv.RunDueScheduledBackup(context.Background(), now); err != nil || !ran {
+		t.Fatalf("scheduled run: ran=%v err=%v", ran, err)
+	}
+	if _, err := os.Stat(old); err != nil {
+		t.Fatalf("operator bundle from before the upgrade was deleted: %v", err)
 	}
 }
 

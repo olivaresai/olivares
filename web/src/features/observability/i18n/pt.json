@@ -1,0 +1,158 @@
+{
+  "title": "Observabilidade e interoperabilidade",
+  "description": "Estado da receção de telemetria e rastreios.",
+  "tabs": {
+    "ingestion": "Estado da ingestão",
+    "traces": "Análise de traces"
+  },
+  "engineScope": {
+    "badge": "Todo o motor",
+    "note": "Estes valores são do motor inteiro (globais ao processo), não por tenant. Os contadores do modelo de leitura acumulam desde o arranque do motor e são repostos ao reiniciar — o mesmo ciclo de vida do /metrics Prometheus do motor, nunca por tenant."
+  },
+  "ingestion": {
+    "title": "Estado da ingestão por norma",
+    "description": "Cada norma de interoperabilidade que o motor ingere ou emite, com a sua versão fixada, a maturidade declarada e o estado do canal.",
+    "liveNote": "Modelo de leitura em direto: o motor conta os registos por origem do barramento desde o arranque do motor. Uma linha por norma só apresenta um contador quando a atribuição é fiável — nunca se inventa um valor, e um valor ausente significa «não atribuível com fiabilidade», não zero.",
+    "columns": {
+      "standard": "Norma",
+      "direction": "Direção",
+      "version": "Versão",
+      "maturity": "Maturidade",
+      "status": "Estado",
+      "records": "Registos",
+      "lastSeen": "Visto pela última vez"
+    },
+    "direction": {
+      "in": "Ingerir",
+      "out": "Emitir"
+    },
+    "status": {
+      "active": "Ativa",
+      "available": "Disponível",
+      "opt_in_off": "Adesão desativada",
+      "blocked": "Bloqueada",
+      "unavailable": "Requer Business"
+    },
+    "optInOff": "Convenção em desenvolvimento — desativada por predefinição; ative-a através da barreira do conector.",
+    "gate": "Barreira",
+    "gateOff": "desativada",
+    "gateOn": "ativada",
+    "gateNoEvidence": "ainda sem evidências",
+    "blockedNote": "O transporte por envio está bloqueado na junção do coletor externo; a exportação por obtenção continua a ser o caminho de reverificação offline.",
+    "recordsPending": "—"
+  },
+  "sources": {
+    "title": "Contadores em direto por origem do barramento",
+    "description": "Uma linha por origem do barramento (conector/módulo) com os seus registos por tipo de observação e, para arestas, por sinal do coletor.",
+    "columns": {
+      "source": "Origem",
+      "records": "Registos",
+      "kinds": "Por tipo",
+      "signals": "Por sinal",
+      "firstSeen": "Visto pela primeira vez",
+      "lastSeen": "Visto pela última vez"
+    },
+    "kind": {
+      "edge": "Aresta",
+      "cost": "Custo",
+      "finding": "Deteção"
+    },
+    "empty": "Nenhum registo observado no barramento desde o arranque do motor",
+    "emptyHint": "Os contadores começam a zero em cada arranque do motor; ainda nada circulou — isto é uma observação, não uma falha.",
+    "sinceNote": "Os contadores são globais ao processo e acumulam desde o arranque do motor ({{since}}); são repostos ao reiniciar, como o /metrics."
+  },
+  "maturity": {
+    "title": "Maturidade",
+    "development": "Em desenvolvimento",
+    "ga": "GA",
+    "pre_1_0": "Pré-1.0",
+    "stable": "Estável",
+    "developmentHint": "convenção em desenvolvimento",
+    "preReleaseHint": "esquema pré-1.0"
+  },
+  "traces": {
+    "title": "Análise de W3C Trace Context",
+    "description": "Traces correlacionados pelos IDs de trace W3C registados nos eventos do registo de auditoria, agrupados por span do motor.",
+    "listTitle": "Traces recentes",
+    "listDescription": "Selecione um trace para abrir a sua vista de spans derivada do registo.",
+    "empty": "Sem traces",
+    "emptyHint": "Os rastreios aparecem aqui quando as ferramentas enviam um ID de rastreio com os pedidos.",
+    "noResults": "Nenhum trace corresponde à pesquisa.",
+    "filterNoResults": "Nenhum trace corresponde aos filtros ativos.",
+    "searchPlaceholder": "Pesquisar por ID de trace…",
+    "filters": {
+      "service": "Filtrar por serviço",
+      "servicePlaceholder": "Serviço (exato)…",
+      "status": "Filtrar por estado",
+      "allStatuses": "Todos os estados",
+      "from": "De",
+      "to": "Até"
+    },
+    "loadMore": "Carregar mais",
+    "loadingMore": "A carregar…",
+    "waterfallTitle": "Cascata de spans",
+    "selectPrompt": "Selecione um trace para ver a sua cascata de spans.",
+    "selectPromptHint": "Escolha um trace na lista para ver todos os spans que produziu, com a respetiva temporização e os respetivos erros.",
+    "exportBtn": "Exportar OTLP",
+    "exportTitle": "Transfira este trace como OTLP/JSON. Não testado com um backend específico.",
+    "legend": "Legenda de intervenientes",
+    "liveNote": "Modelo de leitura de correlação com o registo: as linhas derivam dos IDs de trace W3C registados nos eventos do registo de auditoria (janela de análise: os últimos 20 000 eventos). As barras são janelas de EVENTOS DO REGISTO agrupadas por ID de span do motor — o motor não guarda spans OTel; os spans exportados, sujeitos à taxa de amostragem e sem contagem de perdas, estão no coletor OTLP do operador.",
+    "columns": {
+      "trace": "Trace",
+      "started": "Início",
+      "duration": "Duração",
+      "spans": "Spans",
+      "agents": "Agentes",
+      "services": "Serviços",
+      "status": "Estado",
+      "span": "Span",
+      "actor": "Interveniente",
+      "service": "Serviço",
+      "kind": "Tipo",
+      "timing": "Temporização"
+    },
+    "detail": {
+      "title": "Detalhe do span",
+      "spanId": "ID do span",
+      "name": "Nome",
+      "timing": "Temporização",
+      "actor": "Interveniente",
+      "actorKind": "Tipo de interveniente",
+      "entityRef": "Entidade",
+      "kind": "Tipo",
+      "status": "Estado",
+      "attributes": "Atributos"
+    },
+    "chartSummary": "Cascata de spans: {{count}} spans ao longo de {{duration}}, indentados pela profundidade pai-filho e dimensionados pela duração.",
+    "level1Note": "O W3C Trace Context só é validado no seu Nível 1 Estável (traceparent / tracestate v00). Não se declara nenhuma semântica de Nível 2.",
+    "status": {
+      "ok": "OK",
+      "error": "Erro",
+      "unset": "Não definido"
+    },
+    "exportFailed": "A exportação do trace falhou"
+  },
+  "empty": {
+    "ingestionHealth": {
+      "title": "Nenhuma norma de ingestão declarada",
+      "description": "O inventário de normas compilado do motor tem de fornecer estas linhas; os operadores não as adicionam através da consola."
+    },
+    "ingestionSources": {
+      "title": "Nenhuma origem do barramento observada desde o arranque do motor",
+      "description": "Um conector ou módulo tem de publicar uma aresta, uma amostra de custo ou uma deteção no barramento de eventos antes de os seus contadores em direto aparecerem aqui."
+    },
+    "trace": {
+      "title": "Ainda nenhum trace W3C observado",
+      "description": "Os clientes têm de propagar o contexto de trace W3C para que os eventos do registo de auditoria entre as últimas 20 000 entradas tenham IDs de trace."
+    },
+    "traceWaterfallChart": {
+      "title": "Nenhuma temporização de span registada para este trace",
+      "description": "Os eventos do registo têm de ter IDs de span do motor para que esta vista possa mostrar o desvio de início, a duração, o interveniente e o estado de cada span."
+    }
+  },
+  "inferenceCoverage": {
+    "inference_metadata_only": "Só são retidos metadados da inferência. O contexto de trabalho do fornecedor não pode ser reconstruído.",
+    "provider_context_may_change": "Foi pedida compactação ou edição do contexto. Os metadados retidos não permitem reconstruir o contexto de trabalho do fornecedor.",
+    "provider_context_unknown": "A edição do contexto pelo fornecedor é desconhecida para esta inferência. Os metadados retidos não permitem reconstruir o contexto de trabalho do fornecedor."
+  }
+}

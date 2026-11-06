@@ -212,7 +212,7 @@ describe('HealthView — Checks tab RBAC', () => {
 describe('HealthView — status dashboard', () => {
   it('renders the header and the monitored subjects', async () => {
     renderView()
-    expect(await screen.findByText('Health & SLA')).toBeInTheDocument()
+    expect(await screen.findByText('Health')).toBeInTheDocument()
     expect(await screen.findByText('prod orchestrator')).toBeInTheDocument()
   })
 

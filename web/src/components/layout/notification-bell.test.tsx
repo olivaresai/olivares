@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { preferenceStorage } from '@/lib/preference-storage'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
+import { act, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLAG_ARM_MS } from '@/features/governance/approval-preview'
+import type { ApprovalDTO } from '@/features/governance/types'
+import { ApiError } from '@/lib/api/errors'
 
 const { identity } = vi.hoisted(() => ({
   identity: {
@@ -51,58 +53,73 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 // The engine's GET /v1/audit/recent, reproduced: newest first, no audit.read rows, and
-// the read itself appends nothing. The ledger is mutable so an event can arrive later.
-const { ledger, recentMock, listMock, appendEvent, resetLedger } = vi.hoisted(
-  () => {
-    const size = 30
-    const at = (seq: number) =>
-      new Date(Date.UTC(2026, 5, 26, 10, 0, 0) + seq * 60_000).toISOString()
-    const make = (seq: number, action = `event.${seq}`) => ({
-      id: `ev${seq}`,
-      seq,
-      occurred_at: at(seq),
-      actor: 'admin@test.com',
-      actor_kind: 'user',
-      action,
-      target_kind: 'core.api_token',
-      target_id: `tok-${seq}`,
-      prev_hash: '',
-      hash: `h${seq}`,
-    })
-    // Every third event is a person's ledger read: the bell must never show one.
-    const seed = () =>
-      Array.from({ length: size }, (_, i) =>
-        make(i + 1, (i + 1) % 3 === 0 ? 'audit.read' : `event.${i + 1}`),
-      )
-    const events = seed()
-    const recent = vi.fn(async (params?: { limit?: number }) => ({
-      items: events
-        .filter((e) => e.action !== 'audit.read')
-        .reverse()
-        .slice(0, params?.limit ?? 10),
-      head_seq: events.length,
-    }))
-    return {
-      ledger: events,
-      recentMock: recent,
-      listMock: vi.fn(),
-      appendEvent: () => {
-        const event = make(events.length + 1)
-        events.push(event)
-        return event
-      },
-      resetLedger: () => events.splice(0, events.length, ...seed()),
-    }
-  },
-)
+// the read itself appends nothing.
+const { ledger, recentMock, listMock, resetLedger } = vi.hoisted(() => {
+  const size = 30
+  const at = (seq: number) =>
+    new Date(Date.UTC(2026, 5, 26, 10, 0, 0) + seq * 60_000).toISOString()
+  const make = (seq: number, action = `event.${seq}`) => ({
+    id: `ev${seq}`,
+    seq,
+    occurred_at: at(seq),
+    actor: 'admin@test.com',
+    actor_kind: 'user',
+    action,
+    target_kind: 'core.api_token',
+    target_id: `tok-${seq}`,
+    prev_hash: '',
+    hash: `h${seq}`,
+  })
+  // Every third event is a person's ledger read: the bell must never show one.
+  const seed = () =>
+    Array.from({ length: size }, (_, i) =>
+      make(i + 1, (i + 1) % 3 === 0 ? 'audit.read' : `event.${i + 1}`),
+    )
+  const events = seed()
+  const recent = vi.fn(async (params?: { limit?: number }) => ({
+    items: events
+      .filter((e) => e.action !== 'audit.read')
+      .reverse()
+      .slice(0, params?.limit ?? 10),
+    head_seq: events.length,
+  }))
+  return {
+    ledger: events,
+    recentMock: recent,
+    listMock: vi.fn(),
+    resetLedger: () => events.splice(0, events.length, ...seed()),
+  }
+})
 
 vi.mock('@/lib/api/endpoints', () => ({
   auditApi: { recent: recentMock, list: listMock },
 }))
 
+// The approval queue's own pending read and decision route, as the engine answers them.
+const { approvalsMock, decideMock } = vi.hoisted(() => ({
+  approvalsMock: vi.fn(),
+  decideMock: vi.fn(),
+}))
+vi.mock('@/features/governance/api', async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import('@/features/governance/api')>()
+  return {
+    ...real,
+    governanceApi: {
+      ...real.governanceApi,
+      listApprovals: approvalsMock,
+      decide: decideMock,
+    },
+  }
+})
+
+// The sessions list's Needs you group: none waits unless a test says so.
+vi.mock('./use-session-rail', () => ({
+  useSessionRail: () => ({ groups: [] }),
+}))
+
 import { NotificationBell } from './notification-bell'
 
-const LAST_SEEN_KEY = 'olivares.notifications.lastSeen'
 const shown = () => ledger.filter((e) => e.action !== 'audit.read')
 const labelOf = (event: { action: string }) =>
   event.action.replace(/[._]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
@@ -120,11 +137,13 @@ const mount = () =>
   )
 
 beforeEach(() => {
-  preferenceStorage.clear()
   identity.activeTenant = 't1'
   identity.principal = { kind: 'user', user_id: 'u-self' }
   recentMock.mockClear()
   listMock.mockClear()
+  approvalsMock.mockReset()
+  approvalsMock.mockResolvedValue({ items: [], has_more: false })
+  decideMock.mockReset()
   resetLedger()
 })
 
@@ -136,62 +155,21 @@ describe('NotificationBell', () => {
     ).toHaveAttribute('title', 'Recent activity')
   })
 
-  it('keeps unread activity independent when the organization or user changes', async () => {
+  it('closes the popover on tenant switch', async () => {
+    identity.principal = { kind: 'token', user_id: 'u-self' }
     const user = userEvent.setup()
     const view = mount()
-    const dot = () => view.container.querySelector('.bg-primary')
-    const bell = () => screen.getByRole('button', { name: 'Recent activity' })
-    const redraw = () =>
-      view.rerender(
-        <Wrapper>
-          <NotificationBell />
-        </Wrapper>,
-      )
-    await waitFor(() => expect(dot()).not.toBeNull())
-    await user.click(bell())
-    expect(dot()).toBeNull()
-    await user.keyboard('{Escape}')
-
-    expect(preferenceStorage.getItem(LAST_SEEN_KEY)).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    expect(screen.getByRole('link', { name: /view all/i })).toBeVisible()
     identity.activeTenant = 't2'
-    redraw()
-    await waitFor(() => expect(dot()).not.toBeNull())
-    await user.click(bell())
-    expect(dot()).toBeNull()
-    await user.keyboard('{Escape}')
-
-    identity.activeTenant = 't1'
-    redraw()
-    await waitFor(() => expect(dot()).toBeNull())
-    identity.principal = { kind: 'user', user_id: 'u-other' }
-    redraw()
-    await waitFor(() => expect(dot()).not.toBeNull())
-  })
-
-  it('resets a token’s volatile read marker and closes the popover on tenant switch without storage writes', async () => {
-    identity.principal = { kind: 'token', user_id: 'u-self' }
-    const writes = vi.spyOn(Storage.prototype, 'setItem')
-    try {
-      const user = userEvent.setup()
-      const view = mount()
-      const dot = () => view.container.querySelector('.bg-primary')
-      await waitFor(() => expect(dot()).not.toBeNull())
-      await user.click(screen.getByRole('button', { name: 'Recent activity' }))
-      expect(dot()).toBeNull()
-      expect(screen.getByRole('link', { name: /view all/i })).toBeVisible()
-      ledger.splice(-10)
-      identity.activeTenant = 't2'
-      view.rerender(
-        <Wrapper>
-          <NotificationBell />
-        </Wrapper>,
-      )
-      await waitFor(() => expect(dot()).not.toBeNull())
-      expect(screen.queryByRole('link', { name: /view all/i })).toBeNull()
-      expect(writes).not.toHaveBeenCalled()
-    } finally {
-      writes.mockRestore()
-    }
+    view.rerender(
+      <Wrapper>
+        <NotificationBell />
+      </Wrapper>,
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: /view all/i })).toBeNull(),
+    )
   })
 
   it('reaches a work action behind ten internal records within the recent API bound', async () => {
@@ -270,59 +248,6 @@ describe('NotificationBell', () => {
     expect(screen.queryByText('audit read')).toBeNull()
     // The audited list appends an audit.read per call: the bell must not poll it.
     expect(listMock).not.toHaveBeenCalled()
-  })
-
-  it('lights the dot for a new event, then clears and keeps the newest timestamp on open', async () => {
-    const [previous, newest] = shown().slice(-2)
-    preferenceStorage.setItem(
-      `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
-      previous!.occurred_at,
-    )
-    const user = userEvent.setup()
-    const { container } = mount()
-    await waitFor(() =>
-      expect(container.querySelector('.bg-primary')).not.toBeNull(),
-    )
-    await user.click(screen.getByRole('button'))
-    expect(container.querySelector('.bg-primary')).toBeNull()
-    expect(preferenceStorage.getItem(LAST_SEEN_KEY)).toBeNull()
-    expect(
-      preferenceStorage.getItem(
-        `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
-      ),
-    ).toBe(newest!.occurred_at)
-  })
-
-  it('does not light the dot when the newest event was already seen', async () => {
-    preferenceStorage.setItem(
-      `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
-      shown().at(-1)!.occurred_at,
-    )
-    const { container } = mount()
-    await waitFor(() => expect(recentMock).toHaveBeenCalled())
-    await waitFor(() =>
-      expect(container.querySelector('.bg-primary')).toBeNull(),
-    )
-  })
-
-  it('keeps polling: an event that arrives later lights the dot with no reload', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    try {
-      preferenceStorage.setItem(
-        `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
-        shown().at(-1)!.occurred_at,
-      )
-      const { container } = mount()
-      await waitFor(() => expect(recentMock).toHaveBeenCalled())
-      expect(container.querySelector('.bg-primary')).toBeNull()
-      appendEvent()
-      // Far past the interval: a longer interval fails, a bell that stopped polling never fires.
-      await vi.advanceTimersByTimeAsync(5 * 60_000)
-      expect(container.querySelector('.bg-primary')).not.toBeNull()
-      expect(recentMock.mock.calls.length).toBeGreaterThan(1)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('shows the empty state for an empty ledger', async () => {
@@ -415,6 +340,54 @@ describe('NotificationBell', () => {
     expect(screen.getByText('Audit checkpoint created')).toBeInTheDocument()
     expect(screen.queryByText(/auth login|mcp gateway read/i)).toBeNull()
     expect(screen.queryByText(/system: system|user:u-/)).toBeNull()
+  })
+
+  it('opens with the request this person may decide; a refused decision keeps it and the dot', async () => {
+    const pending: ApprovalDTO = {
+      id: 'apr-1',
+      status: 'pending',
+      action: 'killswitch.release',
+      reason: 'Release the kill switch',
+      required_approvals: 1,
+      approve_count: 0,
+      reject_count: 0,
+      escalated: false,
+    }
+    // The server's read says this reader may decide it; the server still refuses.
+    approvalsMock.mockResolvedValue({
+      items: [{ ...pending, may_decide: true }],
+      has_more: false,
+    })
+    decideMock.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'This decision needs a fresh sign-in'),
+    )
+    const user = userEvent.setup()
+    mount()
+    // The dot means something needs the person, and says so to a screen reader.
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Recent activity, Needs you',
+      }),
+    )
+    const needs = screen.getByRole('heading', { name: 'Needs you' })
+    const recent = screen.getByRole('heading', { name: 'Recent activity' })
+    expect(
+      needs.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(screen.getByText('Release the kill switch')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeVisible()
+    await act(() => new Promise((done) => setTimeout(done, FLAG_ARM_MS + 50)))
+    await user.click(screen.getByRole('button', { name: 'Approve once' }))
+    await waitFor(() =>
+      expect(decideMock).toHaveBeenCalledWith('apr-1', { decision: 'approve' }),
+    )
+    // Refused: nothing was consumed, the request still waits and the bell still says so.
+    expect(
+      await screen.findByRole('button', { name: 'Approve once' }),
+    ).toBeEnabled()
+    expect(
+      screen.getByRole('button', { name: 'Recent activity, Needs you' }),
+    ).toBeInTheDocument()
   })
 
   it('links "view all" to the audit ledger', async () => {

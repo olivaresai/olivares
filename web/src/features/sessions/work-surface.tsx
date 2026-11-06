@@ -5,6 +5,7 @@ import { preferenceStorage } from '@/lib/preference-storage'
 import { ArrowLeft, PanelRight, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from '@tanstack/react-router'
 import { WorkComposer } from '@/components/layout/work-composer'
 import { COMPOSER_INPUT_ID } from '@/components/layout/work-composer-id'
 import { Button } from '@/components/ui/button'
@@ -32,9 +33,11 @@ import {
 } from './provenance'
 import {
   addressOf,
+  SESSION_PARAM,
   WORK_PANES,
   type EvidenceBlock,
   type SessionAddress,
+  type StripFilter,
   type WorkPane,
 } from './session-address'
 import { SessionContextPane } from './session-context-pane'
@@ -43,16 +46,20 @@ import { isPinnable, isPinned, preferenceStorageKey } from './session-pins'
 import { useAuth } from '@/lib/auth/context'
 import { IconTip } from './icon-tip'
 import { FILTER_FROM, filterSessions } from './session-filter'
-import { groupOf } from './session-groups'
+import { groupOf, inSection } from './session-groups'
+import { SessionStrip } from './session-strip'
 import { SessionNarrative } from './session-narrative'
 import { BESIDE_PANE, CONTEXT_PANE, LIST_PANE } from './surface-resize'
 import { useAutoTitle } from './use-auto-title'
+import { useFarSessionHits } from './far-session-hits'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkRail } from './work-rail'
 import './i18n'
 
 export interface WorkSurfaceProps {
   sessions: readonly UnifiedSession[]
+  /** The workspaces' names by ref, for the rail's workspace rows. */
+  workspaceNames?: ReadonlyMap<string, string>
   loading: boolean
   address: SessionAddress
   resolution: SessionResolution
@@ -67,14 +74,27 @@ export interface WorkSurfaceProps {
   onEvidence: (block: EvidenceBlock) => void
   onOpenDetail: () => void
 
-  /** The one action of an empty estate, already gated by the caller. */
+  /** The work region of an empty estate, gated by the caller: the composer that starts the
+   * first session. */
   emptyAction?: React.ReactNode
+  /** New session was asked for: `emptyAction` is in front of the sessions listed. */
+  starting?: boolean
+  /** Why the list could not be read, and the way to ask again; see WorkRail. */
+  error?: unknown
+  onRetry?: () => void
   /** The side pane's tab was chosen (`?panel=`). */
   onPanel?: (panel: string) => void
   /** The 48 px head of the list column: name, count, New session and the views menu. */
   listHeader?: React.ReactNode
   /** The foot of the list: what it does not show, and Load more. */
   listFooter?: React.ReactNode
+  /** The strip's facts: who waits, what runs, today's cost (session-strip.tsx). */
+  strip?: Omit<
+    React.ComponentProps<typeof SessionStrip>,
+    'show' | 'toList' | 'className'
+  >
+  /** The section the strip narrowed the list to (`?show=`). */
+  show?: StripFilter
 }
 
 const paneId = (pane: WorkPane) => `work-pane-${pane}`
@@ -87,21 +107,26 @@ function focusColumn(column: HTMLElement | null) {
 /** The name under which this browser remembers, per person, whether the side pane is open. */
 const PANEL_OPEN_KEY = 'olivares.sessions.sidePane'
 
-/** Whether this person left Details open. OPEN BY DEFAULT where it fits beside the
- * conversation: the session's facts, agents, files and account usage are part of the
- * screen (the regression design). A person who closed it keeps it closed; a principal with no
- * partition (a token) is never remembered and sees the default. */
-function storedPanelOpen(key: string | null): boolean {
-  if (!key) return true
+/** Where Details opens by default: from here the conversation keeps the main column with
+ * the navigation, the list and Details beside it. Narrower (a 1280 px laptop) it starts
+ * closed, one click away, so the conversation keeps the room. */
+const DETAILS_OPEN_BY_DEFAULT_PX = 1440
+
+/** Whether this person left Details open. A person who opened or closed it keeps that;
+ * with no choice yet it is open only where the window is at least
+ * DETAILS_OPEN_BY_DEFAULT_PX wide. A principal with no partition (a token) is never
+ * remembered and sees the default. */
+function storedPanelOpen(key: string | null, roomy: boolean): boolean {
+  if (!key) return roomy
   try {
     // A person with no choice yet keeps the one this browser saved for everyone before.
     const stored =
       preferenceStorage.getItem(key) ??
       preferenceStorage.getItem(PANEL_OPEN_KEY)
-    return stored !== 'closed'
+    return stored === null ? roomy : stored !== 'closed'
   } catch {
     // A browser that refuses storage keeps the default.
-    return true
+    return roomy
   }
 }
 
@@ -137,6 +162,7 @@ function returnFocus(...candidates: (Element | null | undefined)[]) {
 
 export function WorkSurface({
   sessions,
+  workspaceNames,
   loading,
   address,
   resolution,
@@ -151,9 +177,14 @@ export function WorkSurface({
   onEvidence,
   onOpenDetail,
   emptyAction,
+  starting = false,
+  error,
+  onRetry,
   listHeader,
   listFooter,
   onPanel,
+  strip,
+  show,
 }: WorkSurfaceProps) {
   const { t } = useTranslation('sessions')
   // The conversation in front and the one beside it each get a title from their first
@@ -174,6 +205,7 @@ export function WorkSurface({
   const focusedColumn = address.pane === 'beside' ? 'beside' : 'narrative'
   const [inspected, setInspected] = useState<ConversationItem | null>(null)
   const [frameCwd, setFrameCwd] = useState<string | null>(null)
+  const [unknownFrames, setUnknownFrames] = useState<readonly string[]>([])
   const closeBeside = useCallback(() => {
     onCloseBeside?.()
     requestAnimationFrame(() => focusColumn(primaryColumn.current))
@@ -193,14 +225,17 @@ export function WorkSurface({
           principal ?? null,
           activeTenant ?? null,
         )
+  const roomy = useMinWidth(DETAILS_OPEN_BY_DEFAULT_PX)
   const [contextOpen, setContextOpenState] = useState(
-    () => address.pane === 'context' || storedPanelOpen(panelKey),
+    () => address.pane === 'context' || storedPanelOpen(panelKey, roomy),
   )
   // Another person or organization: read that person's choice, never carry the last one.
   const [seenPanelKey, setSeenPanelKey] = useState(panelKey)
   if (seenPanelKey !== panelKey) {
     setSeenPanelKey(panelKey)
-    setContextOpenState(address.pane === 'context' || storedPanelOpen(panelKey))
+    setContextOpenState(
+      address.pane === 'context' || storedPanelOpen(panelKey, roomy),
+    )
   }
   const setContextOpen = (open: boolean | ((was: boolean) => boolean)) =>
     setContextOpenState((was) => {
@@ -365,12 +400,15 @@ export function WorkSurface({
   // rows show: by name, tool or folder, in this browser, with no request.
   const [query, setQuery] = useState('')
   const showFilter = sessions.length > FILTER_FROM
-  const shown = useMemo(
-    () =>
-      showFilter ? filterSessions(sessions, query, t('untitled')) : sessions,
-    [showFilter, sessions, query, t],
-  )
+  // The strip's need you and running links narrow the list to their section first. A
+  // section that empties has no strip part to clear it: the whole list is back.
+  const shown = useMemo(() => {
+    const section = show ? sessions.filter((s) => inSection(s, show)) : []
+    const inShow = section.length > 0 ? section : sessions
+    return showFilter ? filterSessions(inShow, query, t('untitled')) : inShow
+  }, [show, showFilter, sessions, query, t])
   const noMatch = showFilter && query.trim() !== '' && shown.length === 0
+  const farHits = useFarSessionHits(query, noMatch)
   const railSection = useRef<HTMLElement>(null)
   const menu = useSessionMenu(resolution.grants, (address) => {
     // Back to the row the dialog acted on; a row that left the list (archived, deleted)
@@ -385,6 +423,7 @@ export function WorkSurface({
   const rail = (
     <WorkRail
       sessions={shown}
+      workspaceNames={workspaceNames}
       selected={selected}
       onOpen={onOpen}
       onOpenBeside={selected ? onOpenBeside : undefined}
@@ -399,7 +438,8 @@ export function WorkSurface({
               : null,
         })
       }
-      emptyAction={emptyAction}
+      error={error}
+      onRetry={onRetry}
       loading={loading}
     />
   )
@@ -459,6 +499,7 @@ export function WorkSurface({
                   )
           }
           onFolder={beside ? undefined : setFrameCwd}
+          onUnknownFrames={beside ? undefined : setUnknownFrames}
           back={beside ? undefined : back}
           peerSessions={sessions}
         />
@@ -490,14 +531,71 @@ export function WorkSurface({
       onExpandEvidence={onEvidence}
       peerSessions={sessions}
       frameCwd={frameCwd}
+      unknownFrames={unknownFrames}
       panel={address.panel}
       onPanel={onPanel}
     />
   )
 
-  // NOTHING TO LIST IS ONE FACT. With no session listed and none open, the rail's empty
-  // state is the whole surface. A work pane saying "Select a session" beside it said the
-  // same fact again, with a New session of its own (26.10.1 review).
+  // THE FIRST SCREEN IS THE WORK SCREEN. A person who can start a session has the same three
+  // regions as with one open, the composer in the middle; on a phone, the composer under the
+  // list's header, or above the list when sessions are listed. No region says "Select a
+  // session" or offers a New session of its own (26.10.1 review).
+  if (
+    !loading &&
+    emptyAction &&
+    (starting || (sessions.length === 0 && !resolution.target))
+  )
+    return (
+      <div
+        data-testid="work-surface"
+        style={surfaceVars}
+        className="flex min-h-0 min-w-0 flex-1 flex-col [--ctx-w:304px] [--list-w:292px] max-[1350px]:[--ctx-w:280px] max-[1350px]:[--list-w:264px] min-[761px]:grid min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)] min-[1120px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]"
+      >
+        <section
+          id={paneId('rail')}
+          aria-label={t('surface.pane.rail')}
+          className={cn(
+            'flex min-h-0 min-w-0 shrink-0 flex-col border-line min-[761px]:border-r',
+            sessions.length > 0 &&
+              'max-[760px]:order-last max-[760px]:flex-1 max-[760px]:shrink max-[760px]:border-t',
+          )}
+        >
+          {listHeader}
+          <div
+            className={cn(
+              'min-h-0 flex-1 overflow-y-auto',
+              sessions.length === 0
+                ? 'hidden place-items-center min-[761px]:grid'
+                : 'block',
+            )}
+          >
+            {rail}
+          </div>
+          {listFooter}
+        </section>
+        <section
+          id={paneId('narrative')}
+          aria-label={t('surface.pane.narrative')}
+          className={cn(
+            'min-h-0 min-w-0 flex-1 overflow-y-auto',
+            sessions.length > 0 && 'max-[760px]:flex-none',
+          )}
+        >
+          {emptyAction}
+        </section>
+        <section
+          id={paneId('context')}
+          aria-label={t('surface.pane.context')}
+          className="hidden min-h-0 min-w-0 overflow-y-auto border-l border-line p-4 text-body text-text-2 min-[1120px]:block"
+        >
+          {t('activity.empty')}
+        </section>
+      </div>
+    )
+
+  // NOTHING TO LIST IS ONE FACT. For a person who cannot start a session, the rail's empty
+  // state is the whole surface.
   if (!loading && sessions.length === 0 && !resolution.target)
     return (
       <div
@@ -553,6 +651,7 @@ export function WorkSurface({
           )}
         >
           {listHeader}
+          {strip ? <SessionStrip {...strip} show={show} /> : null}
           {showFilter ? (
             <div className="shrink-0 px-3 pb-2">
               <Input
@@ -567,7 +666,22 @@ export function WorkSurface({
             </div>
           ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {noMatch ? (
+            {noMatch && farHits.length > 0 ? (
+              // Sessions older than the loaded page, found by the console's search.
+              <ul data-testid="rail-far-hits" className="flex flex-col">
+                {farHits.map((hit) => (
+                  <li key={hit.id}>
+                    <Link
+                      to={'/sessions' as never}
+                      search={{ [SESSION_PARAM]: hit.id } as never}
+                      className="line-clamp-2 px-3 py-2 text-body font-medium [overflow-wrap:anywhere] text-text outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
+                    >
+                      {hit.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : noMatch ? (
               <p
                 role="status"
                 data-testid="rail-no-match"
@@ -596,10 +710,20 @@ export function WorkSurface({
 
         <div
           className={cn(
-            'flex min-h-0 min-w-0 flex-col overflow-hidden',
+            'flex min-h-0 min-w-0 flex-col overflow-clip',
             address.pane === 'rail' && 'hidden min-[761px]:flex',
           )}
         >
+          {/* A phone shows one pane: the strip is above the conversation too, and its
+              filters bring the list in front. */}
+          {strip ? (
+            <SessionStrip
+              {...strip}
+              show={show}
+              toList
+              className="pt-2 min-[761px]:hidden"
+            />
+          ) : null}
           {split ? (
             <div
               role="group"
@@ -662,7 +786,7 @@ export function WorkSurface({
               }}
               data-focused={!split || focusedColumn === 'narrative'}
               className={cn(
-                'flex min-h-0 min-w-0 flex-col overflow-hidden',
+                'flex min-h-0 min-w-0 flex-col overflow-clip',
                 // The ring says which of two columns takes the keys; one narrative has no
                 // such question.
                 split &&
@@ -722,9 +846,11 @@ export function WorkSurface({
               ref={contextColumn}
               id={paneId('context')}
               aria-label={t('surface.pane.context')}
-              className="min-h-0 min-w-0 overflow-y-auto border-l border-line p-4"
+              // The column does not scroll: the pane's tab bar stays put and each tab
+              // fills the height below it (session-context-pane.tsx).
+              className="flex min-h-0 min-w-0 flex-col border-l border-line p-4"
             >
-              <div className="mb-2 flex items-center justify-end">
+              <div className="mb-2 flex shrink-0 items-center justify-end">
                 <Button
                   variant="ghost"
                   size="icon"

@@ -20,10 +20,18 @@ func newAccountCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "account", Short: "Manage your own account",
-		Long:    "Manage your signed-in account. Change your password and end your other sign-ins with account password.",
-		Example: "  olivares account password",
+		Long:    "Manage your signed-in account. See who you are signed in as with account show; change your password and end your other sign-ins with account password.",
+		Example: "  olivares account show\n  olivares account password",
 	}
 	flags.addPersistent(cmd)
+	cmd.AddCommand(&cobra.Command{
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "show", Short: "Show the account this CLI is signed in as",
+		Long:    "Print the actor, tenant, role, server and context of the current sign-in, the same answer as olivares auth status.",
+		Example: "  olivares account show",
+		Args:    cobra.NoArgs,
+		RunE:    func(cmd *cobra.Command, _ []string) error { return runAuthStatus(cmd, flags) },
+	})
 	cmd.AddCommand(newAccountPasswordCmd(bootstrapClient{flags: flags, surface: "account", carriesSecret: true}))
 	return cmd
 }

@@ -7,9 +7,11 @@ import { describe, expect, it } from 'vitest'
 import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { LANGUAGE_CODES } from '@/lib/i18n'
-import { en, es, zh, ja, de, ru, fr, it as itBundle, ko } from './index'
+import { en, es, zh, ja, de, ru, fr, it as itBundle, ko, uk, pt } from './index'
 
-const bundles = { en, es, zh, ja, de, ru, fr, it: itBundle, ko }
+// prettier-ignore
+const portugueseReports = 'Relatórios' // language-data: Portuguese Reports label
+const bundles = { en, es, zh, ja, de, ru, fr, it: itBundle, ko, uk, pt }
 const labels = {
   en: 'Reports',
   es: 'Informes',
@@ -20,6 +22,8 @@ const labels = {
   fr: 'Rapports',
   it: 'Report',
   ko: '보고서',
+  uk: 'Звіти',
+  pt: portugueseReports,
 }
 
 describe('reporting navigation edition boundary', () => {

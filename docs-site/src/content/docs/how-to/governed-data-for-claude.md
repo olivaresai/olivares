@@ -78,7 +78,7 @@ olivares quickstart --data-dir /var/lib/olivares
 Finish the first-run console setup if this is a fresh install.
 
 On a fresh install, `knowledge` and `sourcescope` are off. As an administrator, turn them on in
-**Settings > Edition & modules**, keeping the other selected modules on.
+**Settings > Modules**, keeping the other selected modules on.
 For the CLI, sign in to this engine as an administrator with `olivares login`,
 then run `olivares modules on knowledge` and `olivares modules on sourcescope`. Wait for each engine restart before continuing;
 running sessions stop and can be resumed. Otherwise these API calls return

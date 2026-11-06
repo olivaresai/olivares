@@ -23,6 +23,10 @@ import {
 } from './fixtures'
 import './i18n'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 // RBAC: the view gates the whole privileged read on `compliance:read`. A hoisted,
 // mutable auth lets the view tests flip `can` while the pure-component tests (which
 // never touch useAuth) are unaffected. vi.mock is hoisted above the imports by Vitest.
@@ -349,7 +353,7 @@ describe('AttestationView — RBAC + live flip', () => {
     expect(screen.getByText('checksums.txt')).toBeInTheDocument()
     // The beta disclaimer STAYS on a not-published binary — it is true for it.
     expect(
-      screen.getByText(/no releases exist yet and the release pipeline/i),
+      screen.getByText(/This build is not a published release/i),
     ).toBeInTheDocument()
     // And no red error anywhere.
     expect(screen.queryByText(/Something went wrong/i)).not.toBeInTheDocument()
@@ -368,7 +372,7 @@ describe('AttestationView — RBAC + live flip', () => {
     expect(await screen.findByText('Published')).toBeInTheDocument()
     // …so the sentence that denies any release exists is gone.
     expect(
-      screen.queryByText(/no releases exist yet and the release pipeline/i),
+      screen.queryByText(/This build is not a published release/i),
     ).not.toBeInTheDocument()
     // NOTHING EVERGREEN WAS LOST, and this is the measurement behind that claim:
     // the never-re-verify-in-the-browser honesty is in the page description, which
@@ -390,7 +394,7 @@ describe('AttestationView — RBAC + live flip', () => {
     api.binary.mockReturnValue(new Promise(() => {})) // never settles
     renderIntel(<AttestationView />)
     expect(
-      screen.getByText(/no releases exist yet and the release pipeline/i),
+      screen.getByText(/This build is not a published release/i),
     ).toBeInTheDocument()
   })
 })

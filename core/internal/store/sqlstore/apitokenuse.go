@@ -64,7 +64,7 @@ func (a *authScope) RecordAuthSessionUse(ctx context.Context, id model.ID, usedA
 	if err := a.ts.directoryWriter.prepare(ctx, func() ([]model.TenantID, error) { return nil, nil }); err != nil {
 		return err
 	}
-	repo := a.ts.repo(authSessionDescriptorV28)
+	repo := a.ts.repo(authSessionDescriptorV30)
 	if err := repo.noteWrite(id); err != nil {
 		return err
 	}

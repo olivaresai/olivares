@@ -282,7 +282,7 @@ async function templateIdFor(
 }
 
 /** The registered folder for a path, created when it is new. */
-async function ensureFolder(
+export async function ensureFolder(
   path: string,
   authority: LaunchAuthority,
 ): Promise<WorkspaceDTO> {

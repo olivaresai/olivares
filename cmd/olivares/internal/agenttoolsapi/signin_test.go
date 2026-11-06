@@ -37,6 +37,8 @@ import (
 // Codex prints a link and a one-time code and finishes on its own. Each writes
 // its login where the real tool does, and its status command reads it back.
 const stubClaude = `#!/bin/sh
+sources=all
+if [ "$1" = "--setting-sources" ]; then sources="$2"; shift 2; fi
 case "$1 $2" in
 "auth login")
   echo "Opening browser to sign in..."
@@ -46,7 +48,7 @@ case "$1 $2" in
   if [ "$code" = "good-code" ]; then mkdir -p "$CLAUDE_CONFIG_DIR"; echo '{}' > "$CLAUDE_CONFIG_DIR/.credentials.json"; echo "Login successful"; exit 0; fi
   echo "Invalid code"; exit 1;;
 "auth status")
-  if [ -f "$CLAUDE_CONFIG_DIR/.credentials.json" ]; then echo '{"loggedIn":true,"authMethod":"claude.ai","email":"fran@example.test"}'; exit 0; fi
+  if [ -f "$CLAUDE_CONFIG_DIR/.credentials.json" ] || { [ "$sources" = all ] && [ -f "$CLAUDE_CONFIG_DIR/settings.json" ]; }; then echo '{"loggedIn":true,"authMethod":"claude.ai","email":"fran@example.test"}'; exit 0; fi
   echo '{"loggedIn":false,"authMethod":"none"}'; exit 1;;
 esac
 exit 2
@@ -244,6 +246,15 @@ func newSignInServerWithStore(t *testing.T, configure ...func(m *Module, bin str
 		return w.Code, out
 	}
 	tenant = seedOrg(t, st, "Tools", "tools")
+	// Native-status fixtures need an existing credential file, even when empty.
+	// A missing OpenCode file answers signed out without starting the fixture.
+	authFile := filepath.Join(loginRoot, tenant.String(), "opencode", ".local", "share", "opencode", "auth.json")
+	if err := os.MkdirAll(filepath.Dir(authFile), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(authFile, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	return call, filepath.Join(loginRoot, tenant.String()), st
 }
 
@@ -454,6 +465,104 @@ func TestAFreshInstallIsNotSignedInWhateverTheEngineUserHas(t *testing.T) {
 	}
 }
 
+// A tool already signed in for the engine's user counts for the node's only person, as the
+// tool itself reports it under the environment a governed session gets, and only for them.
+// Nothing moves into the organization's home, whose own login wins and whose sign-in flow
+// is never completed by this one.
+func TestAToolAlreadySignedInOnTheServerServesTheOnlyPerson(t *testing.T) {
+	open := true
+	var mod *Module
+	call, home := newSignInServer(t, func(m *Module, _ string) {
+		mod = m
+		m.SetServerLoginOpen(func(context.Context, model.TenantID) bool { return open })
+	})
+	tenant := model.TenantID(filepath.Base(home))
+	engineHome := os.Getenv("HOME")
+	ctx := context.Background()
+	check := func(step, driver string, signedIn bool, serverHome string) {
+		t.Helper()
+		if code, st := call("GET", "/v1/m/agenttools/sign-in?driver="+driver, nil); code != 200 || st["signed_in"] != signedIn {
+			t.Fatalf("%s: %s status = %d %v, want signed_in %v", step, driver, code, st, signedIn)
+		}
+		if got, _ := mod.ServerLoginHome(ctx, tenant, driver); got != serverHome {
+			t.Fatalf("%s: %s server login home = %q, want %q", step, driver, got, serverHome)
+		}
+	}
+	for _, tc := range []struct{ driver, config, file string }{{"claude", ".claude", ".credentials.json"}, {"codex", ".codex", "auth.json"}} {
+		serverHome := filepath.Join(engineHome, tc.config)
+		if err := os.MkdirAll(serverHome, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(serverHome, tc.file), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		open = true
+		check("only person", tc.driver, true, serverHome)
+		if _, err := os.Stat(filepath.Join(home, tc.driver, tc.config, tc.file)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("the server login reached the organization's home: %v", err)
+		}
+		if st, err := mod.readStatus(ctx, tenant, tc.driver, ""); err != nil || st.SignedIn {
+			t.Fatalf("the organization's own login, which a sign-in flow confirms = %+v %v, want not signed in", st, err)
+		}
+		open = false
+		check("a second person or organization", tc.driver, false, "")
+		open = true
+		if err := os.MkdirAll(filepath.Join(home, tc.driver, tc.config), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(home, tc.driver, tc.config, tc.file), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		check("the organization signed in", tc.driver, true, "")
+		if err := os.Remove(filepath.Join(home, tc.driver, tc.config, tc.file)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A login only in the user's settings is one no governed session can use (--setting-sources "").
+	serverClaude := filepath.Join(engineHome, ".claude")
+	if err := os.Remove(filepath.Join(serverClaude, ".credentials.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(serverClaude, "settings.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	check("settings only", "claude", false, "")
+	const settingsOnly = "Claude Code authentication exists only in user settings, which governed sessions disable; sign in through AI tools or add an Anthropic key in Providers."
+	if _, st := call("GET", "/v1/m/agenttools/sign-in?driver=claude", nil); st["reason"] != settingsOnly {
+		t.Fatalf("settings only: status = %v, want the reason %q", st, settingsOnly)
+	}
+	if _, unusable := mod.ServerLoginHome(ctx, tenant, "claude"); unusable != settingsOnly {
+		t.Fatalf("settings only: the reason a session gets = %q, want %q", unusable, settingsOnly)
+	}
+	open = false
+	if _, st := call("GET", "/v1/m/agenttools/sign-in?driver=claude", nil); st["reason"] != nil {
+		t.Fatalf("a second person learned about the user's settings: %v", st)
+	}
+	open = true
+
+	// A profile on this login (the sessions module names it at boot) reads its status as its
+	// session would, so a launch and a resume can go on; a sign-in never runs over the login.
+	inRoot := testLoginHome(filepath.Dir(home))
+	mod.SetLoginHome(func(ctx context.Context, tenant model.TenantID, driver, accountRef string) (string, string, error) {
+		if accountRef == "ppf_server" {
+			return t.TempDir(), serverClaude, nil
+		}
+		return inRoot(ctx, tenant, driver, accountRef)
+	})
+	if code, st := call("GET", "/v1/m/agenttools/sign-in?driver=claude&account_ref=ppf_server", nil); code != 200 || st["signed_in"] != false {
+		t.Fatalf("settings only, named profile = %d %v, want not signed in", code, st)
+	}
+	if err := os.WriteFile(filepath.Join(serverClaude, ".credentials.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, st := call("GET", "/v1/m/agenttools/sign-in?driver=claude&account_ref=ppf_server", nil); code != 200 || st["signed_in"] != true {
+		t.Fatalf("named profile on the server login = %d %v, want signed in", code, st)
+	}
+	if code, flow := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "claude", "account_ref": "ppf_server"}); code != 409 {
+		t.Fatalf("a sign-in over the server login = %d %v, want 409", code, flow)
+	}
+}
+
 // Root on first-hour check: the own login is per tenant. One organization's sign-in lives in
 // its own home and does not sign the tool in for another organization.
 func TestEachOrganizationHasItsOwnLogin(t *testing.T) {
@@ -489,7 +598,7 @@ func TestTheStatusReadRunsInTheLoginHome(t *testing.T) {
 	var seen *exec.Cmd
 	previous := toolCommand
 	toolCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
-		seen = exec.CommandContext(ctx, "/bin/sh", "-c", "exit 1")
+		seen = exec.CommandContext(ctx, "/bin/sh", "-c", `echo '{"loggedIn":false}'`)
 		return seen
 	}
 	t.Cleanup(func() { toolCommand = previous })

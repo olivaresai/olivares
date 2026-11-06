@@ -36,7 +36,8 @@ const (
 	// A page of whole texts (text=1) is smaller: each item may be messageTextMax.
 	messagesTextPageMax = 50
 	messageFirstLineMax = 160 // runes
-	// One message read whole by id is bounded as a handoff turn is.
+	// Each text of a page is cut at messageTextMax, so a page stays small; one message
+	// read by id is whole, as it is one record of the transcript (activityLineMax).
 	messageTextMax  = 64 << 10 // bytes
 	messageQueryMax = 256      // bytes
 )
@@ -401,23 +402,19 @@ func (m *Module) runMessages(ctx context.Context, tenant model.TenantID, runRef 
 		return messagesDTO{}, err
 	}
 	defer tr.Close()
-	if tr.info.Size() > activityFileMax {
-		return messagesDTO{}, errActivityTooLarge
-	}
 
 	var one *messageDTO
 	var more bool
-	// ponytail: each read scans the whole transcript (bounded at 64 MiB) to count and
-	// to find the page; keep an index per run and read only the bytes appended since
-	// when sessions that large are common.
+	// ponytail: each read scans the whole transcript to count and to find the page;
+	// keep an index per run and read only the bytes appended since when a read of the
+	// longest transcripts is measured too slow.
 	out.Unreadable, err = scanMessages(ctx, io.LimitReader(tr.f, tr.info.Size()), out.Driver,
 		rec.String(colClaudeSessionID), redact, func(msg scannedMessage) {
 			if q.id != 0 {
 				out.Total++
 				switch {
 				case msg.id == q.id:
-					one = &messageDTO{ID: msg.id, Role: msg.role, At: msg.at, FirstLine: messageFirstLine(msg.text)}
-					one.wholeText(msg.text)
+					one = &messageDTO{ID: msg.id, Role: msg.role, At: msg.at, FirstLine: messageFirstLine(msg.text), Text: msg.text}
 				case one != nil && msg.role == one.Role && messageFirstLine(msg.text) == one.FirstLine:
 					one.LaterSame++
 				}
@@ -433,7 +430,7 @@ func (m *Module) runMessages(ctx context.Context, tenant model.TenantID, runRef 
 			item := func() messageDTO {
 				d := messageDTO{ID: msg.id, Role: msg.role, At: msg.at, FirstLine: messageFirstLine(msg.text)}
 				if q.text {
-					// Bounded as one message read by id is; a page never counts repeats.
+					// Cut at messageTextMax and marked; a page never counts repeats.
 					d.wholeText(msg.text)
 				}
 				return d

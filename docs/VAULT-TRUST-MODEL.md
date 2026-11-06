@@ -119,9 +119,21 @@ The trust model of the vault, stated plainly:
 - A zero-knowledge mode with a user-held key is a possible later option. It is not part of the
   planned vault, and nothing in the product or its documentation claims it.
 
-Business shares an item by adding access grants to the one stored row. The ciphertext is not
-copied per recipient and no per-recipient re-encryption happens, because the engine does the
-sealing.
+Business shares a vault, not a copy. A shared vault is a folder whose items are stored once, as
+`vault/<vault-id>/<item>`, and opened by the grants at the folder: a user or a directory group as
+viewer (reveal), editor (reveal and write) or owner (also shares). The ciphertext is not copied per
+recipient and no per-recipient re-encryption happens, because the engine does the sealing. The
+organization's role gives no access to a vault, the owner's included; only a grant does. The grant
+sits at the vault itself: a grant anchored above it, on a workspace or the tenant, opens no vault,
+so a role written for another purpose never reaches a password. Each open is one authorization
+decision like any other folder right, so a deny overlay (policy rules or an external policy engine)
+and a forbid refuse it and its evidence is kept. Removing a member from a group (by SCIM or a directory sync) or revoking a grant closes the
+vault at the next request. Creating a
+vault, sharing it and revoking a share are on the audit ledger with the actor and the target. A
+reveal of one of its items is a `secret.reveal` entry on the server's ledger and a `vault.reveal`
+entry (`vault.totp` for an authenticator code) on the organization's own ledger and audit export,
+with the person and the vault; none carries a value. A Community server keeps enforcing
+the grants it holds and answers the share routes with 501 `business_required`.
 
 ## 4. Where the key lives
 

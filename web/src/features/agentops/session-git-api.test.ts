@@ -25,7 +25,7 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
-it.each(['stage', 'unstage', 'commit', 'branch'] as const)(
+it.each(['stage', 'unstage', 'commit', 'branch', 'init'] as const)(
   'posts %s to its registered route with the action owner scope',
   async (action) => {
     const body = { paths: ['file.txt'], work_lease_fence: 7 }

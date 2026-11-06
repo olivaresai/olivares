@@ -25,13 +25,16 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
+import { fakeRouter } from '@/test/fake-router'
+
 vi.mock('@/features/extensions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/extensions')>()),
   PANEL_EXTENSIONS: { identityTabs: [] },
 }))
 
 const navigate = vi.fn()
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useNavigate: () => navigate,
   // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
   // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
@@ -65,9 +68,6 @@ vi.mock('@/features/console/api-keys-tab', () => ({
   ApiKeysTab: () => <div>ApiKeysTab mounted</div>,
 }))
 
-vi.mock('@/features/recordings/recording-notice', () => ({
-  RecordingNotice: () => null,
-}))
 vi.mock('./federation', () => ({
   FederationTab: () => <div>FederationTab mounted</div>,
 }))
@@ -86,7 +86,7 @@ vi.mock('./privileged-login', () => ({
 import IdentityView from './identity-view'
 
 function renderAt(search: string, client?: QueryClient) {
-  window.history.replaceState({}, '', `/identity${search}`)
+  fakeRouter.reset(`/identity${search}`)
   // The view listens for its ⌘K verb (Invite people), whose authority reads the query
   // cache, so it mounts inside a client as it does in the app.
   const qc =
@@ -99,7 +99,7 @@ function renderAt(search: string, client?: QueryClient) {
 }
 
 beforeEach(() => {
-  window.history.replaceState({}, '', '/identity')
+  fakeRouter.reset('/identity')
   navigate.mockClear()
   auth.admin = false
 })
@@ -140,6 +140,24 @@ describe('IdentityView — ?tab= deep link', () => {
   it('falls back to federation for a tab that does not exist', () => {
     renderAt('?tab=nope')
     expect(screen.getByText('FederationTab mounted')).toBeInTheDocument()
+  })
+})
+
+describe('IdentityView — what a person who does not administer can do here', () => {
+  // TOTP and passkeys are the person's own, on any role, so "read-only" would be false here.
+  const OWN = /You can set up your own sign-in factors here\./
+
+  it('says what they can do and who changes the rest', () => {
+    renderAt('')
+    expect(screen.getByText(OWN)).toHaveTextContent(
+      'An organization admin changes the rest of this page.',
+    )
+  })
+
+  it('says nothing to an administrator', () => {
+    auth.admin = true
+    renderAt('')
+    expect(screen.queryByText(OWN)).toBeNull()
   })
 })
 
@@ -189,15 +207,10 @@ describe('IdentityView — Identities & access (console remake slice 3)', () => 
     renderAt('')
     expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
-    for (const name of [
-      'Users & groups',
-      'Roles & delegation',
-      'SSO / IdP',
-      'API keys',
-    ])
+    for (const name of ['People', 'Roles', 'SSO / IdP', 'API keys'])
       expect(tabs).toContain(name)
     // The identity sections are all still there, after people and roles.
-    expect(tabs.indexOf('Users & groups')).toBe(0)
+    expect(tabs.indexOf('People')).toBe(0)
     expect(tabs).toContain('Identity inventory')
   })
 
@@ -205,7 +218,7 @@ describe('IdentityView — Identities & access (console remake slice 3)', () => 
     renderAt('')
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
     expect(tabs).toHaveLength(5)
-    expect(tabs).not.toContain('Users & groups')
+    expect(tabs).not.toContain('People')
     expect(
       screen.queryByText(/PeopleTab|RolesTab|SSOTab|ApiKeysTab/),
     ).toBeNull()

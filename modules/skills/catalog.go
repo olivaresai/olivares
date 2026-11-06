@@ -371,7 +371,7 @@ func OperationErrorStatus(err error) int { status, _, _ := operationError(err); 
 
 func respondError(w http.ResponseWriter, err error) {
 	status, code, message := operationError(err)
-	respond(w, status, map[string]any{"error": map[string]string{"code": code, "message": api.RequestBodyErrorMessage(err, message)}})
+	respond(w, status, api.ErrorBody(code, api.RequestBodyErrorMessage(err, message)))
 }
 
 // ownerRefusalCodes names the client refusals an owner outside this module (the

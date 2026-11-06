@@ -5,9 +5,11 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -377,6 +379,84 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request, mc Mo
 		"expires_at": sess.ExpiresAt.String(),
 		"return_to":  flow.returnTo,
 	})
+}
+
+// backchannelLogoutPath is the OIDC Back-Channel Logout 1.0 backchannel_logout_uri.
+const backchannelLogoutPath = "/v1/auth/federation/oidc/backchannel-logout"
+
+// handleBackchannelLogout receives an OpenID Provider's logout_token (OIDC
+// Back-Channel Logout 1.0 section 2.5) and ends the Olivares sessions it names. The
+// provider is selected exactly as the callback selects it, by the URL's tenant and idp
+// (the global scope and the default alias when absent), so the URL an operator pastes
+// names one provider; a malformed tenant is refused, never read as the global scope.
+// A token that fails verification, or is replayed, answers 400 and ends nothing; a
+// valid token answers 200 even when nobody it names is signed in. A valid token whose
+// sessions could not be ended answers the error and leaves its jti unconsumed, so the
+// provider's retry is applied (ending sessions twice is harmless).
+func (s *Server) handleBackchannelLogout(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	w.Header().Set("Cache-Control", "no-store")
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	scope := auth.GlobalFederationScope
+	if raw := r.URL.Query().Get("tenant"); raw != "" {
+		t, err := model.ParseTenantID(raw)
+		if err != nil {
+			s.badRequest(w, r, "invalid tenant")
+			return
+		}
+		scope = t
+	}
+	fed, resolved := s.resolveLoginCallback(r, scope, model.NormalizeFederationAlias(r.URL.Query().Get("idp")))
+	if fed.Protocol() == "" {
+		s.writeError(w, r, auth.ErrSSONotConfigured)
+		return
+	}
+	verifier, ok := fed.(interface {
+		ValidateLogoutToken(ctx context.Context, raw, replayScope string) (auth.LogoutToken, error)
+		ReleaseLogoutToken(replayScope string, tok auth.LogoutToken)
+	})
+	if !ok || fed.Protocol() != auth.ProtocolOIDC {
+		s.badRequest(w, r, "the selected identity provider is not an OpenID Connect provider")
+		return
+	}
+	raw := r.PostFormValue("logout_token")
+	if raw == "" {
+		s.badRequest(w, r, "missing logout_token")
+		return
+	}
+	replayScope := resolved.Scope.String() + "/" + resolved.Alias
+	tok, err := verifier.ValidateLogoutToken(r.Context(), raw, replayScope)
+	if err != nil {
+		s.log.Warn("federation: back-channel logout token refused", "scope", resolved.Scope.String(), "idp", resolved.Alias, "err", err)
+		s.badRequest(w, r, "invalid logout_token")
+		return
+	}
+	if _, err := s.authr.EndIdPSessions(r.Context(), resolved.Scope, resolved.Alias, tok); err != nil {
+		if errors.Is(err, auth.ErrInvalidLogoutToken) {
+			s.badRequest(w, r, "invalid logout_token")
+			return
+		}
+		verifier.ReleaseLogoutToken(replayScope, tok) // the provider's retry must not read as a replay
+		s.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// FederationBackchannelLogoutURL is the backchannel_logout_uri an operator pastes into
+// the OpenID Provider configured for scope and alias, built by the same rule as the
+// callback URL; the query names a tenant's or a non-default provider.
+func FederationBackchannelLogoutURL(r *http.Request, scope model.TenantID, alias string) string {
+	q := url.Values{}
+	if scope != "" && scope != auth.GlobalFederationScope {
+		q.Set("tenant", scope.String())
+	}
+	if alias = model.NormalizeFederationAlias(alias); alias != model.DefaultFederationAlias {
+		q.Set("idp", alias)
+	}
+	if len(q) == 0 {
+		return schemeHost(r) + backchannelLogoutPath
+	}
+	return schemeHost(r) + backchannelLogoutPath + "?" + q.Encode()
 }
 
 // federationCallbackURL builds the exact callback URL the provider must use as

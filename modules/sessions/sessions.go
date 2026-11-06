@@ -62,6 +62,10 @@ type Module struct {
 	// terminals are the open shells of the console's terminal (terminal.go).
 	terminals       terminalHub
 	profileCatalogs profileCatalogCache
+	// sftpCfg is the SFTP and SCP access to a folder, off unless WithSFTP named an address;
+	// sftp is the running listener, nil while it is off or could not start (sftp.go).
+	sftpCfg sftpConfig
+	sftp    atomic.Pointer[sftpService]
 	// protocolBindingSpecValidators are server-owned K5 capability witnesses,
 	// keyed by protocol. Browser/CLI input is never trusted as validation.
 	protocolBindingSpecValidators map[BindingProtocol][]ProtocolBindingSpecValidator
@@ -82,6 +86,8 @@ type Module struct {
 	// managedStopAdmissionTimeout is the configured T
 	// (WithManagedStopAdmissionTimeout); zero selects the module default.
 	managedStopAdmissionTimeout time.Duration
+	// holdGate is the legal-hold gate for folder edits (workspace_records.go); nil = no holds.
+	holdGate HoldGate
 
 	mu     sync.Mutex
 	cancel func()
@@ -172,6 +178,7 @@ func (m *Module) Start(ctx context.Context) error {
 	m.rt.approvalWorkersStopped = false
 	m.rt.mu.Unlock()
 	m.terminals.reopen()
+	m.startSFTP()
 	if m.Data == nil && m.log != nil {
 		m.log.Warn("sessions: started without a data handle; live operation will not persist")
 	}
@@ -224,6 +231,7 @@ func (m *Module) Stop(ctx context.Context) error {
 		m.stopPush(ctx)
 		m.stopStopSweep() // end the active kill-switch sweep before tearing down runs
 		m.terminals.closeAll("shutdown")
+		m.stopSFTP()
 		stopErr := m.stopAllRuns(ctx)
 		m.broker.close()
 		return stopErr

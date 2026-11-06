@@ -291,7 +291,8 @@ func assertReadGrantIsResolved(t *testing.T, fr *fakeRunner, name string) {
 		t.Fatal("the launch was not confined, so no read grant can be checked")
 	}
 	found := false
-	for _, granted := range spec.Confinement.ReadOnly {
+	for _, file := range spec.ConfinementReadFiles {
+		granted := file.Path
 		if filepath.Base(granted) != name {
 			continue
 		}
@@ -301,7 +302,7 @@ func assertReadGrantIsResolved(t *testing.T, fr *fakeRunner, name string) {
 		}
 	}
 	if !found {
-		t.Fatalf("no read grant named %q in %v", name, spec.Confinement.ReadOnly)
+		t.Fatalf("no read grant named %q in %v", name, spec.ConfinementReadFiles)
 	}
 }
 

@@ -7,6 +7,7 @@ package finops
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -166,4 +167,102 @@ func TestGroupBudgetStatusWithoutMembersStaysUnknown(t *testing.T) {
 			t.Errorf("spend=%d truncated=%v, want 0 and truncated", status.SpendMicroUSD, status.Truncated)
 		}
 	})
+}
+
+// Count the real ledger reads without changing its results or transaction lock.
+type groupScanData struct {
+	finopsTestData
+	scans *int
+}
+
+func (d groupScanData) View(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	return d.ModuleData.View(ctx, tenant, func(sc store.Scope) error { return fn(groupScanScope{sc, d.scans}) })
+}
+func (d groupScanData) Mutate(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	return d.ModuleData.Mutate(ctx, tenant, func(sc store.Scope) error { return fn(groupScanScope{sc, d.scans}) })
+}
+
+type groupScanScope struct {
+	store.Scope
+	scans *int
+}
+
+func (s groupScanScope) LockTransaction(ctx context.Context, key string) error {
+	return s.Scope.(store.TransactionLocker).LockTransaction(ctx, key)
+}
+func (s groupScanScope) Ext(kind model.Kind) (store.GenericRepo, error) {
+	repo, err := s.Scope.Ext(kind)
+	if err == nil && kind == costSampleKind {
+		return groupScanRepo{repo, s.scans}, nil
+	}
+	return repo, err
+}
+
+type groupScanRepo struct {
+	store.GenericRepo
+	scans *int
+}
+
+func (r groupScanRepo) List(ctx context.Context, q model.Query) ([]model.Record, model.Page, error) {
+	*r.scans++
+	return r.GenericRepo.List(ctx, q)
+}
+
+func TestGroupBudgetMemberCap(t *testing.T) {
+	// The cap is deliberately asserted as a product limit, including on the old code.
+	const cap = 100
+	for _, dimension := range []string{"user_group", "agent_group"} {
+		t.Run(dimension, func(t *testing.T) {
+			m, st, tenant, _ := newFin(t)
+			ids := make([]model.ID, cap+1)
+			for i := range ids {
+				name := fmt.Sprintf("member-%04d", i)
+				if dimension == "user_group" {
+					ids[i] = createCanonicalUser(t, st, name).ID
+				} else {
+					ids[i] = createAgent(t, st, tenant, name, name, "")
+				}
+				sample := mkCost("provider", "model", "", 1, 1, 1, m.clock.Now().Time())
+				if dimension == "user_group" {
+					sample.Actor = ids[i].String()
+				} else {
+					createSession(t, st, tenant, name, ids[i])
+					sample.SessionRef = name
+				}
+				m.ingest(t, tenant, sample)
+			}
+			var key string
+			dims := SpendDims{}
+			if dimension == "user_group" {
+				key = createUserGroup(t, st, tenant, "members", ids...).ID.String()
+				dims.UserGroupRefs = []string{key}
+			} else {
+				key = createAgentGroup(t, st, tenant, "members", ids...).Slug
+				dims.AgentGroupRefs = []string{key}
+			}
+			id := createBudget(t, st, tenant, "member cap", budgetSpec{Dimension: dimension, Key: key, Period: "monthly", LimitMicroUSD: 10000, Action: "block"})
+			scans := 0
+			m.UseData(groupScanData{finopsTestData{ModuleData: m.data, st: st}, &scans})
+			status := budgetStatusOverHTTP(t, m, st, tenant, id)
+			if status.SpendMicroUSD != cap || !status.Truncated || scans > cap {
+				t.Errorf("status spend=%d truncated=%v scans=%d; want %d, true, <=%d", status.SpendMicroUSD, status.Truncated, scans, cap, cap)
+			}
+			scans = 0
+			check, err := m.CheckBudget(context.Background(), tenant, dims)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if check.Allowed || check.SpendMicroUSD != cap || !strings.Contains(check.Reason, "truncated") || scans > cap {
+				t.Errorf("check=%+v scans=%d; want truncated deny at %d", check, scans, cap)
+			}
+			scans = 0
+			reserve, err := m.ReserveBudget(context.Background(), tenant, dims, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reserve.Allowed || reserve.SpendMicroUSD != cap || !strings.Contains(reserve.Reason, "truncated") || scans > cap {
+				t.Errorf("reserve=%+v scans=%d; want truncated deny at %d", reserve, scans, cap)
+			}
+		})
+	}
 }

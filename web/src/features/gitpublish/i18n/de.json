@@ -271,15 +271,16 @@
     "submit": "Ausliefern",
     "message": "Commit-Nachricht",
     "messageHint": "Wird nur verwendet, wenn der Ordner der Sitzung Änderungen hat. Standard ist der Titel.",
-    "shipped": "Ausgeliefert: {{branch}} ist gepusht.",
+    "shipped": "Ausgeliefert: <branch /> ist gepusht.",
+    "shippedToast": "Ausgeliefert.",
     "pullRequest": "Pull-Request #{{number}}",
     "pullRequestOpen": "Pull-Request öffnen",
     "awaitingTitle": "Wartet auf die Genehmigung einer anderen Person",
     "awaitingBody": "Ihre Änderungen sind committet. Eine andere Person muss den Push genehmigen (Genehmigung {{id}}), bevor er rausgeht. Liefern Sie danach erneut aus.",
     "again": "Erneut ausliefern",
     "incompleteTitle": "Die Auslieferung wurde nicht abgeschlossen",
-    "incompletePush": "Der Push von {{branch}} wurde nicht angewendet ({{state}}). Prüfen Sie die Absichten dieses Ziels und liefern Sie dann erneut aus.",
-    "incompletePullRequest": "{{branch}} ist gepusht, aber der Pull-Request wurde nicht geöffnet ({{code}}). Liefern Sie erneut aus, um es zu wiederholen.",
+    "incompletePush": "Der Push von <branch /> wurde nicht angewendet ({{state}}). Prüfen Sie die Absichten dieses Ziels und liefern Sie dann erneut aus.",
+    "incompletePullRequest": "<branch /> ist gepusht, aber der Pull-Request wurde nicht geöffnet ({{code}}). Liefern Sie erneut aus, um es zu wiederholen.",
     "pullRequests": "Pull-Requests"
   }
 }

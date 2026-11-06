@@ -30,6 +30,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/inferenceproxy',
     icon: Waypoints,
     permission: 'inferenceproxy:config:read',
+    changes: [
+      { permission: 'inferenceproxy:config:admin' },
+      { permission: 'inferenceproxy:dlp:admin' },
+    ],
     element: lazyView(InferenceProxyView),
   },
 ] satisfies ViewEntry[]

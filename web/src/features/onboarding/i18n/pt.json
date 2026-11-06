@@ -1,0 +1,10 @@
+{
+  "title": "Configuração",
+  "subtitle": "Três passos até uma sessão de agente a funcionar.",
+  "dismiss": "Dispensar",
+  "dismissed": {
+    "title": "Guia de configuração dispensado",
+    "description": "O guia está oculto neste navegador. Pode abri-lo novamente a qualquer momento.",
+    "resume": "Abrir o guia de configuração"
+  }
+}

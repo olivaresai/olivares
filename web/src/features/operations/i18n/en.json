@@ -1,0 +1,84 @@
+{
+  "title": "Host and sessions",
+  "subtitle": "The host, its disks, the live sessions and what they used.",
+  "range": {
+    "label": "Range",
+    "24h": "24 hours",
+    "7d": "7 days",
+    "30d": "30 days"
+  },
+  "host": {
+    "heading": "Host",
+    "keeps24": "The host keeps 24 hours of history, so its charts show the last 24 hours.",
+    "unavailable": "Host metrics are not available on this host. Only Linux reports them.",
+    "noHistory": "The host has not recorded a sample yet.",
+    "noFilesystems": "No filesystem reported its size.",
+    "noFolders": "No session folders.",
+    "facts": {
+      "load": "Load {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "Memory {{used}} of {{total}}",
+      "swap": "Swap {{used}} of {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "CPU use over the last 24 hours: now {{now}}, peak {{peak}}, average {{average}}."
+    },
+    "memory": {
+      "title": "Memory",
+      "total": "Total",
+      "summary": "Memory in use over the last 24 hours: {{used}} of {{total}} now, peak {{peak}}."
+    },
+    "disks": {
+      "title": "Filesystems",
+      "summary_one": "One filesystem, {{mount}}, {{pct}} used.",
+      "summary_other": "{{count}} filesystems; the fullest is {{mount}}, {{pct}} used."
+    },
+    "folders": {
+      "title": "Session folders",
+      "summary_one": "One session folder, {{largest}}, {{size}}.",
+      "summary_other": "{{count}} session folders using {{total}}; the largest is {{largest}} at {{size}}.",
+      "floor": "The measurement stopped at its limit, so the sizes are a minimum."
+    },
+    "columns": {
+      "time": "Time",
+      "cpu": "CPU use",
+      "memory": "Memory in use",
+      "swap": "Swap in use",
+      "mount": "Mount",
+      "device": "Device",
+      "type": "Type",
+      "used": "Used",
+      "size": "Size",
+      "usedPercent": "Used %",
+      "folder": "Folder"
+    }
+  },
+  "live": {
+    "heading": "Live sessions",
+    "loading": "Reading the live sessions…",
+    "error": "The live sessions could not be read.",
+    "none": "No live sessions.",
+    "more": "The live list was cut: more are open than counted here, so the counts are a minimum.",
+    "automation": "Automation",
+    "unknown": "Not recorded",
+    "columns": {
+      "tool": "Tool",
+      "person": "Person",
+      "sessions": "Sessions"
+    },
+    "byTool": {
+      "title": "Live sessions by tool",
+      "summary_one": "{{count}} live session by tool: {{list}}.",
+      "summary_other": "{{count}} live sessions by tool: {{list}}."
+    },
+    "byPerson": {
+      "title": "Live sessions by person",
+      "summary_one": "{{count}} live session by person: {{list}}.",
+      "summary_other": "{{count}} live sessions by person: {{list}}."
+    }
+  },
+  "usage": {
+    "heading": "Usage"
+  }
+}

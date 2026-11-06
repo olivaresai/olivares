@@ -1,0 +1,365 @@
+{
+  "title": "Modelos",
+  "description": "Modelos que as suas ferramentas e fornecedores podem executar agora, as sessões que os utilizam e a governação de modelos.",
+  "tabs": {
+    "available": "Disponíveis",
+    "catalog": "Catálogo",
+    "estate": "Parque",
+    "routing": "Encaminhamento",
+    "keys": "Chaves de fornecedor",
+    "gpai": "Postura GPAI",
+    "access": "Acesso",
+    "governance": "Governação",
+    "usage": "Utilização"
+  },
+  "catalog": {
+    "title": "Matriz de capacidades",
+    "description": "Capacidades de API declaradas por família de modelos.",
+    "pricingTitle": "Preços declarados",
+    "pricingDescription": "Predefinições de preços de tabela — referência, não verdade imutável. Confirme junto de cada fornecedor e substitua por modelo.",
+    "family": "Família",
+    "provider": "Fornecedor",
+    "context": "Contexto",
+    "maxOutput": "Saída máx.",
+    "modality": "Modalidade",
+    "inputPrice": "Entrada / MTok",
+    "outputPrice": "Saída / MTok",
+    "cacheRead": "Leitura de cache / MTok",
+    "cacheWrite1h": "Escrita de cache 1 h / MTok",
+    "residency": "Residência dos dados",
+    "tiers": "Níveis de serviço",
+    "residencyNotApplicable": "Não aplicável",
+    "tiersNotDeclared": "Não declarados",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "Capacidades a confirmar",
+    "capsToConfirmHint": "O conjunto de capacidades desta família ainda não foi verificado face a uma ficha de modelo. O modelo está listado, mas as suas capacidades são assinaladas como não confirmadas em vez de inventadas.",
+    "tier": {
+      "standard": "Padrão",
+      "batch": "Em lote",
+      "priority": "Prioritário",
+      "priority_on_demand": "Prioritário a pedido",
+      "flex": "Flex",
+      "flex_discount": "Flex com desconto"
+    },
+    "asOf": "Em {{date}}",
+    "noPricing": "Sem preço declarado",
+    "present": "Suportado",
+    "absent": "Não suportado"
+  },
+  "estate": {
+    "title": "Modelos governados",
+    "description": "Modelos no parque deste tenant, enriquecidos a partir do catálogo.",
+    "empty": "Nenhum modelo no parque",
+    "emptyHint": "Cada modelo que este tenant pode chamar está listado aqui com o seu fornecedor e os seus limites. Adicione um fornecedor para preencher o parque.",
+    "addProvider": "Adicionar um fornecedor",
+    "columns": {
+      "name": "Modelo",
+      "provider": "Fornecedor",
+      "family": "Família",
+      "context": "Contexto",
+      "inputCost": "Entrada µ$/tok",
+      "outputCost": "Saída µ$/tok",
+      "modality": "Modalidade",
+      "capabilities": "Capacidades",
+      "status": "Estado"
+    },
+    "notEnriched": "Ainda sem família declarada — sem preços",
+    "costNote": "O valor em µUSD por token é uma cifra aproximada de conveniência; o custo oficial da utilização real é o registo FinOps.",
+    "truncated": "Carregados {{n}} modelos; há mais",
+    "truncatedHint": "Há mais modelos governados do que os apresentados; esta página obtém as linhas por ID. A pesquisa e a ordenação da tabela aplicam-se apenas ao que está carregado."
+  },
+  "routing": {
+    "title": "Políticas de encaminhamento",
+    "description": "As políticas são definidas aqui e executadas pelo conector do gateway — a interface configura-as e apresenta-as.",
+    "new": "Nova política",
+    "empty": "Nenhuma política de encaminhamento",
+    "emptyHint": "Uma política de encaminhamento seleciona o modelo principal e a cadeia de recurso para uma estratégia.",
+    "strategy": "Estratégia",
+    "requiredCapabilities": "Capacidades exigidas",
+    "preferredProviders": "Fornecedores preferidos",
+    "minContext": "Janela de contexto mín.",
+    "pinnedModel": "Modelo fixado",
+    "allowDeprecated": "Permitir obsoletos",
+    "gateway": "Endpoint do gateway",
+    "viaGateway": "através do gateway",
+    "resolve": "Resolver",
+    "resolving": "A resolver…",
+    "enabled": "Ativada",
+    "disabled": "Desativada",
+    "strategies": {
+      "cost": "Custo",
+      "latency": "Latência",
+      "capability": "Capacidade",
+      "pinned": "Fixado"
+    },
+    "decision": {
+      "title": "Decisão resolvida",
+      "primary": "Principal",
+      "fallbacks": "Cadeia de recurso",
+      "unresolved": "Nenhum modelo governado satisfaz esta política",
+      "reason": "Motivo"
+    },
+    "dialog": {
+      "title": "Política de encaminhamento",
+      "name": "Nome",
+      "listHint": "Separados por vírgulas.",
+      "create": "Guardar política",
+      "created": "Política de encaminhamento guardada"
+    },
+    "execute": "Executar",
+    "executeConfirm": "Executar e gastar",
+    "input": "Entrada",
+    "executeHint": "Resolver é gratuito. Executar chama o fornecedor e gasta do seu orçamento.",
+    "executeWarning": "Isto executa a cadeia de modelos resolvida junto do fornecedor real e regista uma amostra de custo. Não é uma simulação — use Resolver para pré-visualizar a decisão sem gastar.",
+    "noExecutor": "Nenhum executor está aprovisionado. Isto não é uma falha: o plano de controlo resolve decisões de encaminhamento, mas nunca gasta junto de um fornecedor até um operador configurar um executor.",
+    "budgetDenied": "Um orçamento FinOps negou a despesa ANTES de qualquer chamada ao fornecedor. A barreira de governação funcionou — aumente ou reveja o orçamento em vez de tentar novamente.",
+    "fallbackUsed": "recurso utilizado",
+    "refusal": "recusa do fornecedor",
+    "tokens": "{{in}} de entrada · {{out}} de saída",
+    "outputNotStored": "A saída é devolvida a si e não é guardada em lado nenhum: só uma amostra de custo ocultada chega ao registo.",
+    "truncated": "Carregadas {{n}} políticas; há mais",
+    "truncatedHint": "Há mais políticas de encaminhamento do que as apresentadas; esta página obtém as linhas por ID. Uma política que não aparece aqui não prova que nenhuma política encaminhe um determinado pedido."
+  },
+  "keys": {
+    "title": "Referências de chaves de fornecedor",
+    "description": "Referências governadas a chaves de API e espaços de trabalho de fornecedores. Só é guardada uma pista mascarada — nunca o valor do segredo.",
+    "new": "Adicionar referência",
+    "empty": "Nenhuma referência de chave",
+    "emptyHint": "Uma referência de chave aponta para uma credencial que o motor guarda, nunca para o segredo em si. Não é necessária para chamar um modelo: adicione a própria chave como chave de API.",
+    "maskedOnly": "Apenas referência — o valor do segredo nunca é guardado nem apresentado.",
+    "columns": {
+      "name": "Nome",
+      "provider": "Fornecedor",
+      "kind": "Tipo",
+      "extId": "ID externo",
+      "hint": "Pista mascarada",
+      "owner": "Responsável",
+      "status": "Estado",
+      "created": "Criada"
+    },
+    "kind": {
+      "api_key": "Chave de API",
+      "workspace": "Espaço de trabalho"
+    },
+    "dialog": {
+      "title": "Adicionar referência",
+      "name": "Nome",
+      "provider": "Fornecedor",
+      "kind": "Tipo de referência",
+      "extId": "ID externo",
+      "extIdHint": "O ID da chave/espaço de trabalho junto do fornecedor (p. ex., apikey_01). Não é o segredo.",
+      "owner": "Responsável",
+      "noSecretNote": "Este formulário nunca aceita um segredo. A Olivares AI guarda apenas uma referência e uma pista mascarada.",
+      "create": "Adicionar referência",
+      "created": "Referência de chave adicionada"
+    },
+    "truncated": "Carregadas {{n}} chaves; há mais",
+    "truncatedHint": "Há mais referências de chaves de fornecedor do que as apresentadas; esta página obtém as linhas por ID. Uma chave que não aparece aqui não prova que não exista nenhuma credencial para esse fornecedor. A ordenação da tabela aplica-se apenas ao que está carregado."
+  },
+  "gpai": {
+    "title": "Postura GPAI do fornecedor",
+    "description": "Postura do fornecedor atestada pelo operador, registada uma vez por fornecedor.",
+    "notice": "Esta é a postura GPAI do fornecedor atestada pelo operador e alimenta as necessidades de evidências de fornecedores para a ISO/IEC 42001 A.10.3 e o NIST AI RMF GOVERN-6.1 / MAP-4.1. Não é uma determinação de conformidade da Olivares AI.",
+    "empty": "Nenhuma postura GPAI de fornecedor registada",
+    "emptyHint": "Ateste a postura de um fornecedor quando o material publicado do fornecedor tiver sido revisto ou for preciso registar uma declaração.",
+    "verifiedMeaning": "Revisto pelo operador face ao material publicado do fornecedor — é a atestação do próprio operador, não uma verificação feita pela Olivares AI nem uma determinação de conformidade.",
+    "actions": {
+      "attest": "Atestar postura",
+      "edit": "Editar postura",
+      "editProvider": "Editar postura de {{provider}}"
+    },
+    "columns": {
+      "provider": "Fornecedor",
+      "review": "Estado da revisão",
+      "attestedAt": "Atestada",
+      "actions": "Ações"
+    },
+    "claims": {
+      "cop_signatory": "Signatário do Código de Conduta",
+      "technical_docs": "Documentação técnica publicada",
+      "training_data_summary": "Resumo dos dados de treino publicado",
+      "copyright_policy": "Política de direitos de autor registada",
+      "downstream_info": "Informação a jusante fornecida",
+      "systemic_risk": "GPAI com risco sistémico",
+      "safety_report": "Relatório do modelo de segurança e proteção"
+    },
+    "states": {
+      "recorded": "Registada",
+      "notRecorded": "Declaração não registada",
+      "reviewed": "Atestação revista pelo operador",
+      "unreviewed": "Declaração do operador — não revista"
+    },
+    "detail": {
+      "title": "Postura GPAI: {{provider}}",
+      "description": "As declarações e os metadados de atestação registados pelo operador para este fornecedor.",
+      "claims": "Declarações do fornecedor",
+      "reviewState": "Estado da revisão",
+      "verificationMethod": "Método de verificação",
+      "attestedBy": "Atestada por",
+      "attestedAt": "Atestada em",
+      "note": "Nota",
+      "notProvided": "Não fornecido"
+    },
+    "form": {
+      "createTitle": "Atestar a postura GPAI do fornecedor",
+      "editTitle": "Editar a postura GPAI do fornecedor",
+      "description": "Registe as declarações do fornecedor e a atestação de revisão do próprio operador.",
+      "providerRef": "Referência do fornecedor",
+      "providerLocked": "A referência do fornecedor fica bloqueada durante a edição porque alterá-la criaria uma segunda postura.",
+      "providerRequired": "Introduza uma referência de fornecedor.",
+      "claimsTitle": "Declarações do fornecedor",
+      "claimsDescription": "Ative uma declaração apenas quando o operador a tiver registado para este fornecedor.",
+      "systemicRiskHint": "Classificação: o modelo está classificado como GPAI com risco sistémico.",
+      "safetyReportHint": "Este relatório aplica-se a modelos classificados como GPAI com risco sistémico.",
+      "verified": "Revisto face ao material publicado do fornecedor",
+      "verificationMethod": "Método de verificação",
+      "verificationMethodHint": "Obrigatório quando o operador marca esta postura como revista.",
+      "verificationMethodRequired": "Descreva como o material publicado do fornecedor foi revisto.",
+      "note": "Nota",
+      "requestRejected": "A postura não foi guardada. Reveja a resposta do servidor abaixo.",
+      "created": "Postura GPAI do fornecedor atestada",
+      "updated": "Postura GPAI do fornecedor atualizada",
+      "save": "Guardar atestação",
+      "saving": "A guardar…"
+    },
+    "truncated": "Carregadas {{n}} posturas; há mais",
+    "truncatedHint": "Há mais posturas GPAI do que as apresentadas; esta página obtém as linhas por ID. Um fornecedor que não aparece aqui não prova que nada tenha sido declarado para ele. A ordenação da tabela aplica-se apenas ao que está carregado."
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "Ainda sem referências de chaves de fornecedor adicionadas",
+      "description": "Adicione uma referência de chave de API ou de espaço de trabalho através do identificador do fornecedor; a consola nunca aceita nem guarda o valor da credencial."
+    },
+    "models": {
+      "title": "Ainda sem modelos governados observados",
+      "description": "Os modelos entram no parque quando um conector emite uma amostra de custo que indica o fornecedor e o modelo em utilização."
+    }
+  },
+  "residency": {
+    "title": "Residência do espaço de trabalho",
+    "description": "Onde cada espaço de trabalho processa a inferência e onde os seus dados ficam em repouso, tal como o fornecedor indica.",
+    "empty": "Nenhum espaço de trabalho comunica definições de residência",
+    "emptyHint": "As definições de residência indicam em que regiões um espaço de trabalho pode chamar modelos. Nenhum espaço de trabalho declarou qualquer definição.",
+    "unrestricted": "O fornecedor não indica nenhuma restrição",
+    "allowed": "Permitido: {{geos}}",
+    "unreported": "não comunicado",
+    "defaultGeo": "predefinição: {{geo}}",
+    "atRest": "em repouso: {{geo}}",
+    "truncated": "Carregados {{n}} espaços de trabalho; há mais",
+    "truncatedHint": "Há mais registos de residência de espaços de trabalho do que os apresentados; esta página obtém as linhas por ID — atribuído na criação — pelo que faltam as linhas mais recentes. Um espaço de trabalho que não aparece aqui não prova que o seu processamento seja irrestrito: pode simplesmente estar para lá desta página."
+  },
+  "access": {
+    "title": "Regras de acesso a modelos",
+    "description": "Quem pode usar que modelo, e onde.",
+    "empty": "Sem regras de acesso — todos os sujeitos estão sem restrições",
+    "emptyHint": "Uma regra de acesso indica que sujeitos podem chamar que modelos. Sem nenhuma, todos os sujeitos podem chamar todos os modelos do parque.",
+    "groupsTitle": "Grupos de modelos",
+    "groupsDescription": "Conjuntos com nome que uma regra pode visar em vez de um único modelo.",
+    "groupsEmpty": "Nenhum grupo de modelos",
+    "groupsEmptyHint": "Um grupo de modelos dá nome a um conjunto de modelos para que uma só regra possa governá-los a todos. Crie um para começar.",
+    "members": "{{n}} membros",
+    "confinementNotice": "⛔ Uma permissão não é apenas aditiva. Um sujeito NOMEADO por qualquer permissão fica CONFINADO às suas permissões — tudo o resto passa a ser negado para ele. Um sujeito não nomeado por nenhuma regra está sem restrições. Por isso, criar a PRIMEIRA permissão para alguém RETIRA-LHE o resto do catálogo.",
+    "effect": {
+      "allow": "permitir",
+      "forbid": "proibir"
+    },
+    "tenantWide": "em todo o tenant",
+    "inWorkspace": "em {{ws}}",
+    "allSurfaces": "todas as superfícies",
+    "onSurfaces": "em {{list}}",
+    "forbidSubtracts": "Esta proibição SUBTRAI: prevalece sobre qualquer permissão que nomeie o mesmo sujeito.",
+    "confinedSubject": "{{subject}} está confinado às suas permissões — tudo o que não está listado é negado para ele.",
+    "readOnlyNote": "Só de leitura: alterar quem pode usar um modelo exige administração do acesso a modelos, um nível superior ao de editar uma política de encaminhamento.",
+    "truncated": "Carregadas {{n}} regras; há mais",
+    "truncatedHint": "Há mais regras de acesso do que as apresentadas; esta página obtém as linhas por ID. As marcas nestas linhas refletem APENAS as regras carregadas: podem faltar permissões que introduziriam confinamento ou acrescentariam alvos permitidos, e podem faltar proibições que subtraem acesso — por isso esta página pode parecer mais ampla OU mais restrita do que a realidade, e um sujeito sem regra carregada nem sequer aparece. Não deduza daqui o acesso efetivo: o motor percorre todas as páginas antes de decidir e resolve um principal entre utilizador, função e grupo, o que uma linha não consegue mostrar.",
+    "groupsTruncated": "Carregados {{n}} grupos; há mais",
+    "groupsTruncatedHint": "Há mais grupos de modelos do que os apresentados; esta página obtém as linhas por ID. Um grupo que não aparece aqui não prova que não exista — uma regra pode continuar a visá-lo."
+  },
+  "usage": {
+    "byLabel": "Agrupar a utilização por",
+    "periodLabel": "Período",
+    "by": {
+      "model": "Modelo",
+      "account": "Conta",
+      "provider": "Fornecedor",
+      "tool": "Ferramenta"
+    },
+    "period": {
+      "days1": "24 horas",
+      "days7": "7 dias",
+      "days30": "30 dias"
+    },
+    "chartTitle": "Execuções por dia",
+    "chartSummary": "Execuções por dia. Agrupado por: {{by}}. Período: {{period}}. Total {{total}}; dia mais ativo {{day}} com {{peak}}.",
+    "totalsTitle": "Totais",
+    "columns": {
+      "day": "Dia",
+      "runs": "Execuções",
+      "input": "Tokens de entrada",
+      "output": "Tokens de saída",
+      "cost": "Custo"
+    },
+    "noKey": "Não registado",
+    "other": "Outros",
+    "empty": {
+      "title": "Sem utilização neste período",
+      "description": "A utilização aparece aqui depois de a primeira sessão ser executada."
+    }
+  },
+  "available": {
+    "title": "Disponíveis agora",
+    "description": "Os modelos que as suas ferramentas e fornecedores podem executar neste momento e as sessões que os utilizam.",
+    "columns": {
+      "model": "Modelo",
+      "runsOn": "Ferramenta ou fornecedor",
+      "source": "Origem",
+      "state": "Estado",
+      "sessions": "Sessões"
+    },
+    "source": {
+      "tool": "Lista em direto da ferramenta",
+      "ollama": "Instalado no Ollama",
+      "providerList": "Lista de modelos do fornecedor",
+      "provider": "Fornecedor de API",
+      "session": "Sessão ativa"
+    },
+    "state": {
+      "ready": "Pronto",
+      "checkingModels": "A verificar modelos",
+      "stopped": "Ollama parado",
+      "unlisted": "Não lista os seus modelos",
+      "listsNone": "Não lista modelos",
+      "failed": "Lista indisponível",
+      "starting": "Ollama a iniciar",
+      "ollamaFailed": "Ollama falhou"
+    },
+    "ownDefault": "O seu próprio modelo predefinido",
+    "providerModels": "Lista de modelos",
+    "ollamaModels": "Modelos instalados",
+    "openAiTools": "Abrir ferramentas de IA",
+    "sessions_one": "{{count}} sessão",
+    "sessions_many": "{{count}} de sessões",
+    "sessions_other": "{{count}} sessões",
+    "openSessions": "Sessões a executar {{model}}",
+    "empty": "Ainda não há nenhum modelo disponível",
+    "emptyHint": "Instale um modelo no Ollama ou adicione um fornecedor e ficará listado aqui.",
+    "noAccess": "Sem acesso às listas de modelos",
+    "noAccessHint": "A sua função não pode ler as listas de modelos das ferramentas, dos fornecedores, do Ollama nem das sessões. Peça acesso a um administrador.",
+    "installModel": "Instalar um modelo",
+    "addProvider": "Adicionar um fornecedor",
+    "sourceFailed": "Não foi possível ler {{source}}. As outras origens continuam a ser apresentadas.",
+    "sources": {
+      "tools": "As listas de modelos das ferramentas",
+      "ollama": "Ollama",
+      "availability": "Os modelos dos fornecedores",
+      "runs": "As sessões em curso"
+    },
+    "profilesTruncated": "São apresentados os primeiros {{n}} perfis de ferramentas; existem mais.",
+    "runsTruncated": "As contagens de sessões abrangem as {{n}} sessões mais recentes de cada estado; existem mais.",
+    "runsFailed": "Não foi possível ler as sessões em curso; faltam as contagens de sessões.",
+    "sessionsUnknown": "As contagens de sessões não estão disponíveis.",
+    "unmatched_one": "{{count}} sessão ativa executa um modelo que não está listado aqui.",
+    "unmatched_many": "{{count}} de sessões ativas executam modelos que não estão listados aqui.",
+    "unmatched_other": "{{count}} sessões ativas executam modelos que não estão listados aqui."
+  }
+}

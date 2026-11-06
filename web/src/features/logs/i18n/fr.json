@@ -1,5 +1,5 @@
 {
-  "title": "Visionneuse de logs",
+  "title": "Journaux",
   "controls": {
     "pause": "Pause",
     "resume": "Reprendre",
@@ -18,7 +18,7 @@
     "clearAria": "Effacer les filtres"
   },
   "capture": {
-    "debugUnavailable": "Les entrées DEBUG ne sont pas capturées au niveau de log actuel du moteur — définissez OLIVARES_LOG_LEVEL=debug."
+    "debugUnavailable": "Les entrées de débogage ne sont pas enregistrées au niveau de journal actuel."
   },
   "stream": {
     "empty": "Aucune entrée de log à afficher.",

@@ -242,8 +242,8 @@ func TestPatchWorkspaceMatchesItsOpenAPISchema(t *testing.T) {
 	if _, required := patch["required"]; required {
 		t.Fatalf("PATCH body requires a setting: %v", patch["required"])
 	}
-	if got := oastest.Keys(oastest.Map(t, patch["properties"], "properties")); !reflect.DeepEqual(got, []string{"backup", "data_class", "default_permission", "dlp_mode", "read_only_folders"}) {
-		t.Fatalf("PATCH properties = %v, want backup, data_class, default_permission, dlp_mode and read_only_folders", got)
+	if got := oastest.Keys(oastest.Map(t, patch["properties"], "properties")); !reflect.DeepEqual(got, []string{"backup", "data_class", "default_permission", "dlp_mode", "read_only_folders", "retention_days"}) {
+		t.Fatalf("PATCH properties = %v, want backup, data_class, default_permission, dlp_mode, read_only_folders and retention_days", got)
 	}
 	if !reflect.DeepEqual(enumOf(patch), enumOf(post)) {
 		t.Fatalf("PATCH dlp_mode enum %v differs from registration's %v", enumOf(patch), enumOf(post))

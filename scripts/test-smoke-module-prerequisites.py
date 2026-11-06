@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 
 
@@ -74,7 +75,8 @@ class SmokeModulePrerequisites(unittest.TestCase):
                 self.assertTrue(inline_selection or any(needed.issubset(running_modules(line)) for line in requests),
                                 "shared readers are queried before their optional modules are selected")
 
-    def exercise_helper(self, *, poll_responses=(), put_status=200, names=None, prelude="", conditional=False):
+    def exercise_helper(self, *, poll_responses=(), put_status=200, names=None, prelude="", conditional=False,
+                        initial_responses=(), selection_read_delay=0):
         """Labelled local HTTP fixture: transport/selection proof, never product proof."""
         selected = ["sessions", "finops"]
         required = ["inventory", "observability", "security", "accessmap"]
@@ -103,7 +105,12 @@ class SmokeModulePrerequisites(unittest.TestCase):
                     self.reply(401, {})
                     return
                 observed["gets"] += 1
-                poll = observed["gets"] - 2
+                if not observed["updates"]:
+                    time.sleep(selection_read_delay)
+                if observed["gets"] <= len(initial_responses):
+                    self.reply(*initial_responses[observed["gets"] - 1])
+                    return
+                poll = observed["gets"] - 2 - len(initial_responses)
                 if observed["updates"] and poll < len(poll_responses):
                     status, body = poll_responses[poll]
                     self.reply(status, body)
@@ -164,6 +171,19 @@ class SmokeModulePrerequisites(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(observed["updates"], [{"selected": ["sessions", "finops", "inventory", "observability", "security", "accessmap"]}])
         self.assertEqual(observed["gets"], 4, "wait for running readers after temporary restart responses")
+
+    def test_first_read_waits_for_a_slow_engine(self):
+        # The nightly drill on a loaded runner: the first read after login answered after the
+        # old 5 s request cap ("curl: (28) ... 0 bytes received"), and the helper gave up.
+        # Every read before the update is slow here, so a retry alone cannot pass it.
+        result, observed = self.exercise_helper(selection_read_delay=6)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(observed["updates"]), 1)
+
+    def test_first_read_retries_a_temporarily_unavailable_engine(self):
+        result, observed = self.exercise_helper(initial_responses=[(503, {})])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(observed["gets"], 3, "one 503, the selection read, one readiness poll")
 
     def test_permanent_update_and_readiness_failures_are_immediate(self):
         for status, polls, message in (

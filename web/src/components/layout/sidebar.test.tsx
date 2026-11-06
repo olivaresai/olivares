@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ONE LEFT NAVIGATION AS A PERSON USES IT: four named groups and Settings at the foot,
-// one current place, counts read from current state, a fold that works from the mouse and
-// the keyboard, and the same items in the same order in the narrow drawer.
+// THE ONE LEFT NAVIGATION AS A PERSON USES IT: Sessions, Files and Tools, then More with the
+// other places below it, no group headers, Settings at the foot; one current place, counts read
+// from current state, a fold that works from the mouse and the keyboard, and the same items in
+// the same order in the narrow drawer.
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComponentProps } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 
 const state = vi.hoisted(() => ({
-  pathname: '/',
+  pathname: '/now',
   search: {} as Record<string, unknown>,
   needsYou: 0,
   running: 0,
@@ -72,8 +73,9 @@ vi.mock('@/features/governance/use-pending-approvals', async (actual) => ({
 import { usePreferencesStore } from '@/stores/preferences'
 import { NavigationDrawer, Sidebar } from './sidebar'
 
+beforeEach(() => usePreferencesStore.setState({ navAll: true }))
 afterEach(() => {
-  state.pathname = '/'
+  state.pathname = '/now'
   state.search = {}
   state.needsYou = 0
   state.running = 0
@@ -85,40 +87,73 @@ afterEach(() => {
 })
 
 const PLACES = [
-  'Now',
   'Sessions',
-  'Files & workspaces',
-  'Work & communications',
-  'AI tools',
-  'Models',
-  'MCP & skills',
-  'Sources',
-  'Rules & approvals',
-  'Usage & cost',
-  'Activity & audit',
-  'Access map',
-  'People & groups',
+  'Files',
+  'Tools',
+  'Overview',
+  'Rules',
+  'Usage',
+  'Audit',
+  'People',
   'Security',
   'Operations',
-  'License',
   'Settings',
 ]
 
 const column = () => screen.getByRole('navigation', { name: 'Main navigation' })
+/** Document order: `a` comes before `b` in the navigation. */
+const isBefore = (a: Element, b: Element) =>
+  !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
 const names = (root: HTMLElement) =>
   within(root)
     .getAllByRole('link')
     .map((a) => a.textContent)
 
 describe('the left navigation', () => {
-  it('lists the four groups and every place once, in order, with Settings last', () => {
+  it('a new person sees Sessions, Files and Tools; More opens the rest below it, and what needs them stays', async () => {
+    const user = userEvent.setup()
+    usePreferencesStore.setState({ navAll: false })
+    state.pathname = '/workspace'
+    state.approvals = { items: [{}] }
+    const { unmount } = renderIntel(<Sidebar />)
+    // Rules waits for a decision, so it stays shown under More while folded.
+    expect(names(column()).map((n) => n?.replace(/\s*,.*$|\d+$/, ''))).toEqual([
+      'Sessions',
+      'Files',
+      'Tools',
+      'Rules',
+      'Settings',
+    ])
+    const more = within(column()).getByRole('button', { name: 'More' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    const rules = within(column()).getByRole('link', { name: /^Rules/ })
+    expect(isBefore(more, rules)).toBe(true)
+    await user.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(usePreferencesStore.getState().navAll).toBe(true)
+    const usage = within(column()).getByRole('link', { name: 'Usage' })
+    expect(usage).toBeVisible()
+    expect(isBefore(more, usage)).toBe(true)
+    expect(
+      isBefore(within(column()).getByRole('link', { name: 'Tools' }), more),
+    ).toBe(true)
+    unmount()
+    // A place opened by its address is marked, not hidden.
+    usePreferencesStore.setState({ navAll: false })
+    state.approvals = undefined
+    state.pathname = '/audit'
+    renderIntel(<Sidebar />)
+    expect(
+      within(column()).getByRole('link', { current: 'page' }),
+    ).toHaveTextContent('Audit')
+  })
+
+  it('lists every place once, in order, with Settings last and no group headers', () => {
     renderIntel(<Sidebar />)
     const nav = column()
-    expect(
-      within(nav)
-        .getAllByRole('region')
-        .map((g) => g.getAttribute('aria-label')),
-    ).toEqual(['Work', 'Tools', 'Control', 'Admin'])
+    expect(within(nav).queryAllByRole('region')).toEqual([])
+    expect(within(nav).queryAllByRole('heading')).toEqual([])
+    expect(nav.querySelectorAll('h2')).toHaveLength(0)
     expect(names(nav)).toEqual(PLACES)
     expect(within(nav).queryByText('All areas')).toBeNull()
   })
@@ -127,22 +162,23 @@ describe('the left navigation', () => {
     state.pathname = '/providers'
     renderIntel(<Sidebar />)
     const current = within(column()).getAllByRole('link', { current: 'page' })
-    expect(current.map((a) => a.textContent)).toEqual(['AI tools'])
+    expect(current.map((a) => a.textContent)).toEqual(['Tools'])
   })
 
-  it('marks License, not Settings, on the edition section', () => {
+  it('marks Settings on the edition section, and no link opens a Settings section', () => {
     state.pathname = '/settings'
     state.search = { section: 'edition' }
     renderIntel(<Sidebar />)
     expect(
       within(column()).getByRole('link', { current: 'page' }),
-    ).toHaveTextContent('License')
+    ).toHaveTextContent('Settings')
+    expect(column().querySelector('a[href*="section="]')).toBeNull()
   })
 
   it('opens Rules on the approval queue', () => {
     renderIntel(<Sidebar />)
     expect(
-      within(column()).getByRole('link', { name: 'Rules & approvals' }),
+      within(column()).getByRole('link', { name: 'Rules' }),
     ).toHaveAttribute('href', '/permissions?tab=approvals')
   })
 
@@ -160,7 +196,7 @@ describe('the left navigation', () => {
       }),
     ).toBeInTheDocument()
     expect(
-      within(nav).getByRole('link', { name: /^Rules & approvals\s*,\s*3$/ }),
+      within(nav).getByRole('link', { name: /^Rules\s*,\s*3$/ }),
     ).toBeInTheDocument()
   })
 
@@ -176,10 +212,13 @@ describe('the left navigation', () => {
     can.mockReturnValue(false)
     renderIntel(<Sidebar />)
     const offered = names(column())
-    expect(offered).toContain('Now')
+    expect(offered).toContain('Overview')
     expect(offered).toContain('Settings')
-    expect(offered).not.toContain('Sessions')
-    expect(offered).not.toContain('Rules & approvals')
+    // Sessions stays offered here through Channel administration, whose capability is not
+    // known without a workspace (navigation keeps an unknown visible).
+    expect(offered).not.toContain('Files')
+    expect(offered).not.toContain('Usage')
+    expect(offered).not.toContain('Rules')
   })
 
   it('folds to its icons and opens again, with the mouse and the keyboard', async () => {
@@ -192,8 +231,8 @@ describe('the left navigation', () => {
     expect(usePreferencesStore.getState().navCollapsed).toBe(true)
     // Folded, every place still has its name.
     expect(
-      within(column()).getByRole('link', { name: 'AI tools' }),
-    ).toHaveAttribute('title', 'AI tools')
+      within(column()).getByRole('link', { name: 'Tools' }),
+    ).toHaveAttribute('title', 'Tools')
 
     const expand = screen.getByRole('button', { name: 'Expand navigation' })
     expand.focus()
@@ -201,6 +240,21 @@ describe('the left navigation', () => {
     expect(column()).not.toHaveAttribute('data-folded')
     expect(usePreferencesStore.getState().navCollapsed).toBe(false)
   })
+
+  it.each([
+    ['/sessions', true],
+    ['/work', false],
+    ['/communications', false],
+  ])(
+    'with no fold chosen, folds at %s only on the work surface: %s',
+    (path, folded) => {
+      usePreferencesStore.setState({ navCollapsed: null })
+      state.pathname = path
+      renderIntel(<Sidebar />)
+      if (folded) expect(column()).toHaveAttribute('data-folded', 'true')
+      else expect(column()).not.toHaveAttribute('data-folded')
+    },
+  )
 })
 
 describe('the narrow drawer', () => {
@@ -210,7 +264,7 @@ describe('the narrow drawer', () => {
     renderIntel(<NavigationDrawer open onOpenChange={onOpenChange} />)
     const drawer = screen.getByRole('dialog', { name: 'Main navigation' })
     expect(names(drawer)).toEqual(PLACES)
-    await user.click(within(drawer).getByRole('link', { name: 'Models' }))
+    await user.click(within(drawer).getByRole('link', { name: 'Tools' }))
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 

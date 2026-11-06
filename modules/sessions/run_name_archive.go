@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -47,15 +48,21 @@ func (m *Module) handleSetRunName(w http.ResponseWriter, r *http.Request, mc api
 		writeRunErr(w, err)
 		return
 	}
-	m.changeRun(w, r, mc, "sessions.run.renamed", func(rec model.Record) bool {
+	m.changeRun(w, r, mc, "sessions.run.renamed", func(ctx context.Context, sc store.Scope, rec model.Record) (bool, error) {
 		if rec.String(colRunName) == name {
-			return false
+			return false, nil
+		}
+		// The one rule for every write of a name, under the run-name lock with the
+		// write that follows: a session that is not cleaned already holds it. The
+		// run's own row is excluded, so keeping its name is never refused.
+		if err := refuseHeldRunNameIn(ctx, sc, mc.Tenant, name, rec.String(colRunRef)); err != nil {
+			return false, err
 		}
 		rec[colRunName] = name
 		if name == "" {
 			rec[colRunName] = nil
 		}
-		return true
+		return true, nil
 	})
 }
 
@@ -65,16 +72,16 @@ func (m *Module) handleArchiveRun(w http.ResponseWriter, r *http.Request, mc api
 	if m.refuseForeignSteering(w, r, mc) {
 		return
 	}
-	m.changeRun(w, r, mc, "sessions.run.archived", func(rec model.Record) bool {
+	m.changeRun(w, r, mc, "sessions.run.archived", func(_ context.Context, _ store.Scope, rec model.Record) (bool, error) {
 		if rec.String(colRunArchivedAt) != "" {
-			return false
+			return false, nil
 		}
 		rec[colRunResumeCancelled] = rec.String(colRunResumeAt) != "" || rec.Bool(colRunResumeAfterLimit)
 		rec[colRunResumeAt] = nil
 		rec[colRunResumeAfterLimit] = false
 		rec[colRunResumeDismissed] = true
 		rec[colRunArchivedAt] = model.NewTimestamp(m.now()).String()
-		return true
+		return true, nil
 	})
 }
 
@@ -83,12 +90,12 @@ func (m *Module) handleUnarchiveRun(w http.ResponseWriter, r *http.Request, mc a
 	if m.refuseForeignSteering(w, r, mc) {
 		return
 	}
-	m.changeRun(w, r, mc, "sessions.run.unarchived", func(rec model.Record) bool {
+	m.changeRun(w, r, mc, "sessions.run.unarchived", func(_ context.Context, _ store.Scope, rec model.Record) (bool, error) {
 		if rec.String(colRunArchivedAt) == "" {
-			return false
+			return false, nil
 		}
 		rec[colRunArchivedAt] = nil
-		return true
+		return true, nil
 	})
 }
 
@@ -98,44 +105,51 @@ func (m *Module) handleUnarchiveRun(w http.ResponseWriter, r *http.Request, mc a
 // writes is recorded in the same transaction, with the run's reference and not
 // the value it set. A released run keeps its row until it is deleted and takes
 // both changes, as it takes a peers choice.
-func (m *Module) changeRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, action string, change func(model.Record) bool) {
-	ref := chi.URLParam(r, "ref")
-	release, err := m.rt.lockRunContext(r.Context(), liveKey(mc.Tenant, ref))
+func (m *Module) changeRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, action string, change func(context.Context, store.Scope, model.Record) (bool, error)) {
+	rec, err := m.applyRunChange(r.Context(), mc, chi.URLParam(r, "ref"), action, change)
 	if err != nil {
 		writeRunErr(w, err)
 		return
 	}
+	dto := m.toRunDTO(rec)
+	m.showTitle(r.Context(), mc, rec, &dto)
+	writeJSON(w, http.StatusOK, dto)
+}
+
+// applyRunChange is changeRun without the answer: the run row after change, written
+// and recorded only when change reports it changed something.
+func (m *Module) applyRunChange(ctx context.Context, mc api.ModuleContext, ref, action string, change func(context.Context, store.Scope, model.Record) (bool, error)) (model.Record, error) {
+	release, err := m.rt.lockRunContext(ctx, liveKey(mc.Tenant, ref))
+	if err != nil {
+		return nil, err
+	}
 	defer release()
-	var dto runDTO
 	var rec model.Record
-	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err = mc.Data.Mutate(ctx, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
 		}
-		rec, err = findRunRec(r.Context(), repo, ref)
+		rec, err = findRunRec(ctx, repo, ref)
 		if err != nil {
 			return err
 		}
-		if change(rec) {
-			if rec, err = repo.Update(r.Context(), rec); err != nil {
-				return err
-			}
-			if _, err := sc.Audit().Append(r.Context(), model.AuditDraft{
-				Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
-				Action: action, TargetKind: runKind, TargetID: model.ID(rec.String(model.ColID)),
-				Meta: map[string]any{"run_ref": ref},
-			}); err != nil {
-				return err
-			}
+		changed, cerr := change(ctx, sc, rec)
+		if cerr != nil {
+			return cerr
 		}
-		dto = m.toRunDTO(rec)
-		return nil
+		if !changed {
+			return nil
+		}
+		if rec, err = repo.Update(ctx, rec); err != nil {
+			return err
+		}
+		_, err = sc.Audit().Append(ctx, model.AuditDraft{
+			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
+			Action: action, TargetKind: runKind, TargetID: model.ID(rec.String(model.ColID)),
+			Meta: map[string]any{"run_ref": ref},
+		})
+		return err
 	})
-	if err != nil {
-		writeRunErr(w, err)
-		return
-	}
-	m.showTitle(r.Context(), mc, rec, &dto)
-	writeJSON(w, http.StatusOK, dto)
+	return rec, err
 }

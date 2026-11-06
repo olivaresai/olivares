@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { Selection } from './detail'
+import type { GroupMember } from './groups'
 
 type NodeSelection = Extract<NonNullable<Selection>, { type: 'node' }>
 
@@ -15,15 +16,18 @@ export function selectionFromNodeData(
   const node = data as {
     kind?: unknown
     label?: unknown
+    ref?: unknown
     role?: unknown
     cluster?: unknown
+    members?: GroupMember[]
   }
   return {
     type: 'node',
     id,
     kind: String(node.kind ?? ''),
-    ref: String(node.label ?? ''),
+    ref: String(node.ref ?? node.label ?? ''),
     role: node.role === 'resource' ? 'resource' : 'origin',
     cluster: node.cluster === true,
+    ...(node.cluster === true ? { members: node.members ?? [] } : {}),
   }
 }

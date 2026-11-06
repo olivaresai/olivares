@@ -101,7 +101,9 @@ describe('LogsView', () => {
       screen.getByRole('button', { name: /Filter DEBUG logs/i }),
     )
     expect(
-      await screen.findByText(/set OLIVARES_LOG_LEVEL=debug/i),
+      await screen.findByText(
+        /Debug entries are not recorded at the current log level/i,
+      ),
     ).toBeInTheDocument()
 
     await userEvent.click(
@@ -109,7 +111,9 @@ describe('LogsView', () => {
     )
     await waitFor(() =>
       expect(
-        screen.queryByText(/set OLIVARES_LOG_LEVEL=debug/i),
+        screen.queryByText(
+          /Debug entries are not recorded at the current log level/i,
+        ),
       ).not.toBeInTheDocument(),
     )
 
@@ -128,7 +132,9 @@ describe('LogsView', () => {
       }),
     )
     expect(
-      screen.queryByText(/set OLIVARES_LOG_LEVEL=debug/i),
+      screen.queryByText(
+        /Debug entries are not recorded at the current log level/i,
+      ),
     ).not.toBeInTheDocument()
   })
 

@@ -140,4 +140,16 @@ describe('self-hosted type: Inter, Space Grotesk and JetBrains Mono', () => {
       [INTER, GROTESK, MONO_400, MONO_500].every((f) => existsSync(f)),
     ).toBe(true)
   })
+
+  it('shows code as typed: no ligature turns >= into ≥ in machine text', () => {
+    // JetBrains Mono draws >=, != and -> as one glyph through its contextual
+    // alternates; a command or a script must show the characters it holds.
+    // Commands in tool rows are spans with the font-mono utility, not code elements.
+    const index = stripComments(readFileSync('src/index.css', 'utf8'))
+    const off = [...index.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter((m) => /font-variant-ligatures:\s*none;/.test(m[2]))
+      .flatMap((m) => m[1].split(',').map((s) => s.trim()))
+    for (const selector of ['code', 'kbd', 'samp', 'pre', '.font-mono'])
+      expect(off).toContain(selector)
+  })
 })

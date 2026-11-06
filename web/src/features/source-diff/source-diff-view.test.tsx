@@ -19,8 +19,6 @@ import type { GitHostDiff, GitHostDiffQuery } from './source-diff-model'
 import { FailureNotice, SourceDiffView } from './source-diff-view'
 
 const resources = {
-  requires: 'Requires',
-  permission: 'system:admin',
   host: 'Host',
   repository: 'Repository',
   base: 'Base',
@@ -46,9 +44,9 @@ const resources = {
     'A source is required. host, repository, base, and head are required.',
   unknownSource: 'This source is not on the roster.',
   forbidden:
-    'This comparison needs system:admin. Only a superadmin holds it. An owner or an admin cannot grant it.',
+    'Only a superadmin can run this comparison. An owner or an admin cannot grant it.',
   hostForbidden: 'The Git host refused the read.',
-  hostForbiddenBody: 'system:admin is not what is missing.',
+  hostForbiddenBody: 'Your access here is not what is missing.',
   unknownRef: 'unknown ref',
   upstream: 'git host read failed',
   tryAgain: 'Try again',
@@ -484,11 +482,13 @@ describe('source diff view', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows who can hold system:admin on a permission refusal', async () => {
+  it('says only a superadmin can compare on a permission refusal', async () => {
     renderView(async () => {
       throw new SourceDiffError('forbidden', 'forbidden')
     })
-    const message = await screen.findByText(/Only a superadmin holds it/)
+    const message = await screen.findByText(
+      /Only a superadmin can run this comparison/,
+    )
     expect(message).toHaveTextContent('cannot grant')
     expect(message).not.toHaveTextContent('ask an administrator')
     expect(
@@ -525,7 +525,7 @@ describe('source diff view', () => {
     expect(screen.queryByText(/git host read failed/i)).not.toBeInTheDocument()
   })
 
-  it('does not ask for system:admin when the host refused', async () => {
+  it('does not ask for a superadmin when the host refused', async () => {
     renderView(async () => {
       throw new SourceDiffError('hostForbidden', 'git_host_forbidden')
     })

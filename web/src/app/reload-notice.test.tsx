@@ -16,7 +16,10 @@ vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 vi.mock('@/lib/auth/context', () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => children,
 }))
-vi.mock('@/lib/auth/browser-session', () => ({ restoreOnPageLoad }))
+vi.mock('@/lib/auth/browser-session', () => ({
+  restoreOnPageLoad,
+  retryWhileUnreachable: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock('@/features/agentops/auth-boundary', () => ({
   AuthBoundaryCustody: () => null,
 }))

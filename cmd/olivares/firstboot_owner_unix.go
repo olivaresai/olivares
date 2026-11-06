@@ -12,6 +12,15 @@ import (
 	"syscall"
 )
 
+// infoOwner is the uid that owns the file or directory info describes.
+func infoOwner(info os.FileInfo) (uid int, known bool) {
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, false
+	}
+	return int(st.Uid), true
+}
+
 // fileOwner returns the uid and gid that own path, which must be a regular file: the
 // engine account controls the data directory, and a symlink there must not choose the
 // account root writes as.

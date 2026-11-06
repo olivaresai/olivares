@@ -54,6 +54,8 @@ func newScaleUpstream(t *testing.T) *scaleUpstream {
 		failInitialize := u.failInitialize
 		u.mu.Unlock()
 		switch method {
+		case "server/discover": // a handshake-era server refuses it before initialize
+			http.Error(w, "Bad Request: Server not initialized", http.StatusBadRequest)
 		case "initialize":
 			if failInitialize {
 				w.WriteHeader(http.StatusInternalServerError)

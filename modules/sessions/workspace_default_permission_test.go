@@ -255,7 +255,7 @@ func TestWorkspaceDefaultPermissionUpgradeSQLite(t *testing.T) {
 		t.Fatalf("upgraded folder default = %q err = %v, want none", got.DefaultPermission, err)
 	}
 	name := "supervised"
-	if _, err := m.patchWorkspace(ctx, tenant, folder.WorkspaceRef, nil, nil, &name, true, nil, nil, "user:upgrade", "user"); err != nil {
+	if _, err := m.patchWorkspace(ctx, tenant, folder.WorkspaceRef, nil, nil, &name, true, nil, nil, nil, "user:upgrade", "user"); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.Close(); err != nil {

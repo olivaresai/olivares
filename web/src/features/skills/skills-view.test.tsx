@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, waitFor } from '@testing-library/react'
 import {
   createTestQueryClient,
   renderIntel,
@@ -17,6 +18,12 @@ import { skillsApi } from './api'
 import { SkillsView } from './skills-view'
 import { PackSheet } from './pack-sheet'
 import type { SkillAssignment, SkillPack, SkillPackDetail } from './types'
+
+import { fakeRouter } from '@/test/fake-router'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 const auth = vi.hoisted(() => ({
   can: (_permission: string): boolean => true,
@@ -126,12 +133,41 @@ async function chooseWorkspace() {
 }
 
 async function openPack() {
+  fakeRouter.reset('/capabilities?tab=skills&catalog=packs')
   renderIntel(<SkillsView />)
   await userEvent.click(await screen.findByText('ecc'))
   return screen.findByRole('dialog')
 }
 
 describe('SkillsView', () => {
+  it('keeps the selected skill in the URL across remount and Back', async () => {
+    fakeRouter.reset('/capabilities?tab=skills')
+    const view = renderIntel(<SkillsView />)
+    await userEvent.click(await screen.findByText('code-review'))
+    const search = () => new URLSearchParams(fakeRouter.searchStr())
+    expect(search().get('skill')).toBe('code-review')
+    expect(search().get('tab')).toBe('skills')
+    expect(
+      await screen.findByRole('dialog', { name: 'code-review' }),
+    ).toBeInTheDocument()
+    view.unmount()
+    renderIntel(<SkillsView />)
+    expect(
+      await screen.findByRole('dialog', { name: 'code-review' }),
+    ).toBeInTheDocument()
+    act(() => fakeRouter.back())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+  it('lists skill descriptions before opening a pack', async () => {
+    renderIntel(<SkillsView />)
+    expect(await screen.findByText('Review a diff')).toBeInTheDocument()
+  })
+  it('offers Retry when the pack list fails to load', async () => {
+    vi.mocked(skillsApi.packs).mockRejectedValueOnce(new Error('Packs offline'))
+    renderIntel(<SkillsView />)
+    await userEvent.click(await screen.findByRole('button', { name: /retry/i }))
+    expect(await screen.findByText('Review a diff')).toBeInTheDocument()
+  })
   it('refreshes cached pins when installation assigns an existing pack', async () => {
     const queryClient = createTestQueryClient()
     queryClient.setDefaultOptions({
@@ -505,7 +541,7 @@ describe('SkillsView', () => {
   })
 
   it('opens the pack a ?pack= link names (AI tools > Installed here)', async () => {
-    window.history.pushState({}, '', '/capabilities?tab=skills&pack=pack-1')
+    fakeRouter.reset('/capabilities?tab=skills&pack=pack-1')
     try {
       renderIntel(<SkillsView />)
       const sheet = await screen.findByRole('dialog')
@@ -513,7 +549,7 @@ describe('SkillsView', () => {
         await within(sheet).findByText('code-review', { selector: 'span' }),
       ).toBeInTheDocument()
     } finally {
-      window.history.pushState({}, '', '/')
+      fakeRouter.reset('/')
     }
   })
 
@@ -678,6 +714,106 @@ describe('SkillsView', () => {
     )
   })
 
+  it('shows the resolved selection when choosing an assignment target', async () => {
+    const selection = vi.spyOn(skillsApi, 'selection').mockResolvedValue({
+      digest: 'resolved',
+      members: [
+        {
+          name: 'folder-review',
+          directory: 'folder-review',
+          pack_id: 'other-pack',
+          pack_revision_id: 'other-revision',
+        },
+      ],
+    })
+    const sheet = await openPack()
+    await userEvent.selectOptions(
+      within(sheet).getByLabelText('Target'),
+      'ws-1',
+    )
+    expect(
+      await within(sheet).findByText('Currently assigned: 1 skill'),
+    ).toBeInTheDocument()
+    expect(within(sheet).getByText('folder-review')).toBeInTheDocument()
+    expect(selection).toHaveBeenCalledWith(
+      'workspace',
+      'ws-1',
+      expect.any(AbortSignal),
+      undefined,
+      undefined,
+    )
+  })
+
+  it('keeps source failures beside the update action and drops the old check time', async () => {
+    const gitDetail = structuredClone(detail)
+    gitDetail.revisions[0].source = {
+      kind: 'git',
+      origin: 'https://example.com/skills',
+    }
+    vi.spyOn(skillsApi, 'pack').mockResolvedValue(gitDetail)
+    vi.spyOn(skillsApi, 'updateCheck')
+      .mockResolvedValueOnce({
+        state: 'current',
+        pack,
+        current: { revision_id: 'rev-2', number: 2 },
+      })
+      .mockRejectedValue(
+        new ApiError(
+          503,
+          'source_unavailable',
+          'The skills source could not be read. No revision was published.',
+        ),
+      )
+    const sheet = await openPack()
+    const check = await within(sheet).findByRole('button', {
+      name: 'Check for update',
+    })
+    await userEvent.click(check)
+    expect(await within(sheet).findByText('Checked')).toBeInTheDocument()
+    await userEvent.click(check)
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent(
+      'https://example.com/skills: The skills source could not be read. No revision was published.',
+    )
+    expect(within(sheet).queryByText('Checked')).not.toBeInTheDocument()
+  })
+
+  it('names the source when the reviewed update can no longer be applied', async () => {
+    const gitDetail = structuredClone(detail)
+    gitDetail.revisions[0].source = {
+      kind: 'git',
+      origin: 'https://example.com/skills',
+    }
+    vi.spyOn(skillsApi, 'pack').mockResolvedValue(gitDetail)
+    vi.spyOn(skillsApi, 'updateCheck').mockResolvedValue({
+      state: 'available',
+      pack,
+      current: { revision_id: 'rev-2', number: 2 },
+      candidate: { manifest_digest: 'd'.repeat(64) },
+      diff: { members: [], files: [] },
+    })
+    vi.spyOn(skillsApi, 'updateApply').mockRejectedValue(
+      new ApiError(
+        409,
+        'source_changed',
+        'The source changed after you reviewed it. Check again.',
+      ),
+    )
+    const sheet = await openPack()
+    await userEvent.click(
+      await within(sheet).findByRole('button', { name: 'Check for update' }),
+    )
+    await userEvent.click(
+      await within(sheet).findByRole('button', { name: 'Apply this update' }),
+    )
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent(
+      'https://example.com/skills: The source changed after you reviewed it. Check again.',
+    )
+    expect(
+      within(sheet).queryByRole('button', { name: 'Apply this update' }),
+    ).not.toBeInTheDocument()
+    expect(within(sheet).queryByText('Checked')).not.toBeInTheDocument()
+  })
+
   it('checks the recorded source, shows what changed and applies the reviewed digest', async () => {
     const digest = 'd'.repeat(64)
     vi.spyOn(skillsApi, 'updateCheck').mockResolvedValue({
@@ -689,7 +825,9 @@ describe('SkillsView', () => {
         members: [
           { name: 'plan', change: 'added', new_active_content: ['hooks'] },
         ],
-        files: [{ path: 'plan/SKILL.md', change: 'added' }],
+        files: [
+          { path: 'plan/SKILL.md', change: 'added', diff: '+Review carefully' },
+        ],
       },
     })
     const apply = vi.spyOn(skillsApi, 'updateApply').mockResolvedValue({
@@ -704,6 +842,7 @@ describe('SkillsView', () => {
     expect(
       await within(sheet).findByText('An update is available over revision 2.'),
     ).toBeInTheDocument()
+    expect(within(sheet).getByText('+Review carefully')).toBeInTheDocument()
     expect(
       within(sheet).getByText(
         'plan now acts when loaded: hooks. Assigning it needs your approval.',
@@ -731,6 +870,8 @@ describe('SkillsView', () => {
     expect(
       await within(sheet).findByText('Up to date at revision 2.'),
     ).toBeInTheDocument()
+    expect(within(sheet).getByText('Checked')).toBeInTheDocument()
+    expect(sheet.querySelector('time[datetime]')).toBeInTheDocument()
     expect(
       within(sheet).queryByRole('button', { name: 'Apply this update' }),
     ).not.toBeInTheDocument()

@@ -508,6 +508,39 @@ func TestGrokRuntimeUnauthenticatedProfileIsTruthfulAndRefusesTurns(t *testing.T
 	}
 }
 
+// A turn the provider refuses with auth_required (the account token expired) puts
+// required on the row, and the NEXT message still reaches the provider: the person
+// signs in again, and that turn is judged by its own result. Only a launch that
+// never authenticated refuses messages (the test above).
+func TestGrokRuntimeTurnAuthRequiredDoesNotRefuseTheNextMessage(t *testing.T) {
+	m, _, tenant, prof := grokHarness(t, AuthSourceAccountHome)
+	record := setGrokFixture(t, prof, grokFixture{SessionID: "conv-expired", PromptMode: "auth-once"})
+	ctx := context.Background()
+	dto, err := grokLaunch(t, m, tenant, prof)
+	if err != nil {
+		t.Fatalf("createRun: %v", err)
+	}
+	t.Cleanup(func() { _, _ = m.stopRun(context.Background(), tenant, dto.RunRef, "user:u1", model.ActorUser) })
+	stateIs := func(want string) func() bool {
+		return func() bool {
+			d, _ := m.getRun(ctx, tenant, dto.RunRef)
+			return d.ProviderAuthState == want
+		}
+	}
+	waitFor(t, "the launch authenticated", stateIs(AuthStateReady))
+	if err := m.sendTextInput(ctx, tenant, dto.RunRef, "first"); err != nil {
+		t.Fatalf("first message: %v", err)
+	}
+	waitFor(t, "the refused turn put required on the row", stateIs(AuthStateRequired))
+	if err := m.sendTextInput(ctx, tenant, dto.RunRef, "after sign-in"); err != nil {
+		t.Fatalf("the message after signing in again was refused: %v", err)
+	}
+	waitFor(t, "the message reached the provider", func() bool {
+		return len(readGrokFixtureRecord(t, record).PromptTexts) == 2
+	})
+	waitFor(t, "the answered turn put the launch readiness back on the row", stateIs(AuthStateReady))
+}
+
 // ⛔ AN EMPTY ADVERTISEMENT OFFERS NO USABLE METHOD, AND THAT IS `required`.
 //
 // The binding contract is explicit: a profile offering no usable advertised

@@ -5,6 +5,7 @@
   "listening": "Écoute en cours. Appuyez à nouveau ou sur Échap pour arrêter.",
   "transcribing": "Transcription…",
   "nothing": "Aucune parole entendue.",
+  "unavailable": "La dictée fonctionne pendant que la session est en cours.",
   "failed": "La dictée a échoué. Réessayez.",
   "blocked": "Le navigateur a bloqué le micro."
 }

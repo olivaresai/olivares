@@ -52,7 +52,7 @@ func newDRCmd() *cobra.Command {
 			"the per-tenant chain tips; restore re-verifies the chain end to end.",
 	}
 	root.AddCommand(drBackupCmd(), drRestoreCmd(), drVerifyCmd(), drInspectCmd(),
-		drPushCmd(), drPullCmd(), drListCmd(), drPruneCmd(), drDrillCmd(), drRestoreStatusCmd())
+		drPushCmd(), drPullCmd(), drListCmd(), drPruneCmd(), drDrillCmd(), drRestoreStatusCmd(), drStatusCmd())
 	return root
 }
 
@@ -415,12 +415,30 @@ func drBackupCmd() *cobra.Command {
 				return err
 			}
 			m.SealerProbes = probes
-
 			// Refuse to certify a backup over a chain that is NOT already green — a
 			// corrupt ledger must never be captured as if it were a good restore point.
 			if bad := unverifiedTenants(m); len(bad) > 0 && !allowUnverified {
 				return fmt.Errorf("backup ABORTED: %d tenant chain(s) did not verify at backup time (%s); fix the ledger or pass --allow-unverified to capture anyway", len(bad), strings.Join(bad, ", "))
 			}
+
+			// The files the database does not hold: the data directory's sign-ins and
+			// homes, and the registered folders. The folder list is read from the very
+			// snapshot the bundle carries.
+			sources, left, err := drTreeSources(cmd.Context(), dataDir, snapshotPath, store.Engine(sf.engineKind) == store.EngineSQLite)
+			if err != nil {
+				return err
+			}
+			// Sealed beside the bundle, where there is room for it, not in the temp dir.
+			packed, missing, err := dr.CollectTrees(cipher, sources, filepath.Dir(out))
+			if err != nil {
+				return err
+			}
+			defer func() {
+				for _, p := range packed {
+					p.Remove()
+				}
+			}()
+			m.DurationMS = time.Since(now).Milliseconds()
 
 			f, commit, abort, err := openBundleOutput(out)
 			if err != nil {
@@ -428,6 +446,7 @@ func drBackupCmd() *cobra.Command {
 			}
 			bundleInput := dr.BundleInput{
 				Manifest: m, KEK: cipher.Params(), SnapshotPath: snapshotPath, SealedKeys: sealed,
+				Trees: packed, NotIncluded: append(left, missing...),
 			}
 			if err := dr.WriteAuthenticatedBundle(f, bundleInput, cipher); err != nil {
 				abort()
@@ -438,6 +457,13 @@ func drBackupCmd() *cobra.Command {
 			}
 			fmt.Fprintf(human, "DR bundle written: %s\n  taken: %s (RPO basis)\n  engine: %s  tenants: %d  keys: %d\n",
 				out, m.CreatedAt, m.EngineKind, len(m.Tenants), len(m.Keys))
+			if line := drTreesSummary(m); line != "" {
+				fmt.Fprintln(human, line)
+			}
+			// On stderr: the text stdout of this command is a published form.
+			if line := m.NotIncludedLine(); line != "" {
+				drNote(cmd, line)
+			}
 			// Built from the SAME values the line above formats, at the same point in
 			// the run. Populated here rather than at the end because the offsite and
 			// retention steps below can fail or be skipped, and the five facts of the
@@ -744,7 +770,7 @@ func drRestoreCmd() *cobra.Command {
 	var sf drFlags
 	var kf kekFlags
 	var decl restoreDeclaration
-	var in string
+	var in, filesRoot string
 	var force, inPlace, allowLegacyUnsigned bool
 	var pgRestorePath, pgDumpPath, superuserDSN string
 	cmd := &cobra.Command{
@@ -860,6 +886,15 @@ func drRestoreCmd() *cobra.Command {
 				return err
 			}
 
+			// The files the bundle carries are placed before anything is written: a
+			// destination that already holds files is refused here, not after the store
+			// has been replaced.
+			treeTargets, err := dr.PlanTreeRestore(m, sf.dataDir, filesRoot, force, inPlace)
+			if err != nil {
+				return err
+			}
+			restoreFiles := func(ts string) error { return restoreTreeFiles(cmd, cipher, work, treeTargets, inPlace, ts) }
+
 			var inventoryDSN string
 			if superuserDSN != "" && !strings.HasPrefix(superuserDSN, "file:") && !strings.HasPrefix(superuserDSN, "env:") {
 				return fmt.Errorf("--superuser-dsn requires a file: or env: reference; keep the credential out of command arguments")
@@ -892,8 +927,11 @@ func drRestoreCmd() *cobra.Command {
 					return fmt.Errorf("--in-place does not apply to a PITR companion bundle")
 				}
 				ts := time.Now().UTC().Format("20060102-150405")
-				return restoreInPlaceSQLite(cmd.Context(), cmd, work, sf.dataDir, m, cipher, ts,
-					declaredRestore{required: replaces, decl: decl, bundle: in, verdict: why}, payload)
+				if err := restoreInPlaceSQLite(cmd.Context(), cmd, work, sf.dataDir, m, cipher, ts,
+					declaredRestore{required: replaces, decl: decl, bundle: in, verdict: why}, payload); err != nil {
+					return err
+				}
+				return restoreFiles(ts)
 			}
 
 			// 0) Everything below this point is destructive and IRREVERSIBLE, and the
@@ -1099,13 +1137,14 @@ func drRestoreCmd() *cobra.Command {
 				}
 			}
 			drNote(cmd, restoreCustodyNote("restore verified", m, sf.dataDir, same))
-			return nil
+			return restoreFiles("")
 		},
 	}
 	addDRStoreFlags(cmd, &sf)
 	addKEKFlags(cmd, &kf)
 	addRestoreDeclarationFlags(cmd, &decl)
 	cmd.Flags().StringVar(&in, "in", "", "DR bundle to restore (required)")
+	cmd.Flags().StringVar(&filesRoot, "files-root", "", "restore the registered folders under this directory (one subdirectory each) instead of their registered paths, for a new host")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing keys / store file in the data dir. Postgres: also replace the objects of an occupied target database, in one transaction (needs --operator and --reason; without it an occupied target is refused)")
 	cmd.Flags().BoolVar(&inPlace, "in-place", false, "replace a LIVE data dir safely: stage + verify BEFORE promoting, auto-preserving the current store/keys as *.pre-restore-<ts> (sqlite only)")
 	cmd.Flags().BoolVar(&allowLegacyUnsigned, "allow-legacy-unsigned", false, "accept a separately authenticated pre-v26.9 bundle without the keyed manifest signature (migration exception)")
@@ -1146,18 +1185,8 @@ func drVerifyCmd() *cobra.Command {
 				return err
 			}
 			defer func() { _ = os.RemoveAll(work) }()
-			m, kek, err := openAndCheckBundle(in, work)
+			m, cipher, err := openVerifiedBundle(in, work, kf, allowLegacyUnsigned)
 			if err != nil {
-				return err
-			}
-			cipher, err := kf.restoreCipher(kek)
-			if err != nil {
-				return err
-			}
-			if err := dr.CheckImportCompatibility(m, version); err != nil {
-				return err
-			}
-			if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, allowLegacyUnsigned); err != nil {
 				return err
 			}
 			if w := m.UnsealedSnapshotWarning(); w != "" {
@@ -1220,36 +1249,7 @@ func drVerifyCmd() *cobra.Command {
 				drNote(cmd, "DR drill PASSED: bundle restores to a continuity-safe ledger")
 				return nil
 			}
-			payload, err := classifyDRPayload(cmd.Context(), m.EngineKind, m.Store.Method, filepath.Join(work, m.Store.File), "")
-			if err != nil {
-				return err
-			}
-			if payload.sum != m.Store.SHA256 || payload.size != m.Store.SizeBytes {
-				return fmt.Errorf("store payload changed after bundle authentication")
-			}
-			vdir, err := os.MkdirTemp(work, "scratch-")
-			if err != nil {
-				return err
-			}
-			if err := restoreKeys(work, vdir, m, cipher, true); err != nil {
-				return err
-			}
-			if err := payload.unchanged(); err != nil {
-				return err
-			}
-			if err := dr.CopyFile(filepath.Join(work, m.Store.File), filepath.Join(vdir, "olivares.db")); err != nil {
-				return err
-			}
-			eng, err := drReadBoot(cmd.Context(), vdir, filepath.Join(vdir, "olivares.db"))
-			if err != nil {
-				return err
-			}
-			defer func() { _ = eng.Close() }()
-			cpv, err := eng.signer.CheckpointVerifier(cmd.Context())
-			if err != nil {
-				return err
-			}
-			rep, err := dr.RestoreVerifyFromReader(cmd.Context(), eng.ledger, m, eng.signer.PublicKey(), cpv)
+			rep, err := verifySQLiteBundle(cmd.Context(), work, m, cipher)
 			if err != nil {
 				return err
 			}
@@ -1270,6 +1270,66 @@ func drVerifyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&pgRestorePath, "pg-restore", "pg_restore", "pg_restore executable (PostgreSQL bundle with --scratch-dsn only)")
 	_ = cmd.MarkFlagRequired("in")
 	return cmd
+}
+
+// openVerifiedBundle extracts the bundle at in under work, opens its cipher with
+// the operator's KEK and authenticates it: the steps every bundle test starts with.
+func openVerifiedBundle(in, work string, kf kekFlags, allowLegacyUnsigned bool) (*dr.Manifest, *dr.KeyCipher, error) {
+	m, kek, err := openAndCheckBundle(in, work)
+	if err != nil {
+		return nil, nil, err
+	}
+	cipher, err := kf.restoreCipher(kek)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := dr.CheckImportCompatibility(m, version); err != nil {
+		return nil, nil, err
+	}
+	if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, allowLegacyUnsigned); err != nil {
+		return nil, nil, err
+	}
+	return m, cipher, nil
+}
+
+// verifySQLiteBundle restores an authenticated SQLite bundle into a throwaway
+// directory under work and re-verifies its ledger there. It starts no engine and
+// opens no network connection: the snapshot is only read.
+func verifySQLiteBundle(ctx context.Context, work string, m *dr.Manifest, cipher *dr.KeyCipher) (*dr.RestoreReport, error) {
+	payload, err := classifyDRPayload(ctx, m.EngineKind, m.Store.Method, filepath.Join(work, m.Store.File), "")
+	if err != nil {
+		return nil, err
+	}
+	if payload.sum != m.Store.SHA256 || payload.size != m.Store.SizeBytes {
+		return nil, fmt.Errorf("store payload changed after bundle authentication")
+	}
+	vdir, err := os.MkdirTemp(work, "scratch-")
+	if err != nil {
+		return nil, err
+	}
+	if err := restoreKeys(work, vdir, m, cipher, true); err != nil {
+		return nil, err
+	}
+	if err := payload.unchanged(); err != nil {
+		return nil, err
+	}
+	if err := dr.CopyFile(filepath.Join(work, m.Store.File), filepath.Join(vdir, "olivares.db")); err != nil {
+		return nil, err
+	}
+	eng, err := drReadBoot(ctx, vdir, filepath.Join(vdir, "olivares.db"))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = eng.Close() }()
+	cpv, err := eng.signer.CheckpointVerifier(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rep, err := dr.RestoreVerifyFromReader(ctx, eng.ledger, m, eng.signer.PublicKey(), cpv)
+	if err != nil {
+		return nil, err
+	}
+	return rep, nil
 }
 
 func drInspectCmd() *cobra.Command {
@@ -1298,6 +1358,12 @@ func drInspectCmd() *cobra.Command {
 			m, _, err := dr.ExtractBundle(f, work)
 			if err != nil {
 				return err
+			}
+			if w := m.UnsealedSnapshotWarning(); w != "" {
+				drNote(cmd, "warning: "+w)
+			}
+			if line := m.NotIncludedLine(); line != "" {
+				drNote(cmd, line)
 			}
 			return printManifest(cmd, m)
 		},

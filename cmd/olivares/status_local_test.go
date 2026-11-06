@@ -29,6 +29,10 @@ func TestStatusOnTheEnginesHostNeedsNoSignIn(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	dataDir := t.TempDir()
+	// The engine makes its data directory private; a temp directory follows the umask.
+	if err := os.Chmod(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	u, _ := url.Parse(srv.URL)
 	if err := writeConsoleState(dataDir, consoleState{Version: 1, Listen: u.Host}); err != nil {
 		t.Fatal(err)
@@ -47,5 +51,42 @@ func TestStatusOnTheEnginesHostNeedsNoSignIn(t *testing.T) {
 	}
 	if got := <-paths; got != "/status" {
 		t.Fatalf("status asked %q, want /status", got)
+	}
+}
+
+// A cloned repository (or an unpacked archive) with an olivares-data under the working
+// directory chose the engine the anonymous status (`olivares` alone, and the overview
+// `olivares status` prints) probed, trusted through the certificate planted next to it.
+func TestAnonymousStatusIgnoresADataDirectoryUnderTheWorkingDirectory(t *testing.T) {
+	asked := make(chan string, 8)
+	planted := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		asked <- r.URL.Path
+	}))
+	t.Cleanup(planted.Close)
+	work := t.TempDir()
+	dir := filepath.Join(work, legacyDataDirName)
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "install-id"), []byte("planted\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	crt := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: planted.Certificate().Raw})
+	if err := os.WriteFile(filepath.Join(dir, tlsCertFile), crt, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(planted.URL)
+	if err := writeConsoleState(dir, consoleState{Version: consoleStateVersion, Listen: u.Host}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_DATA_HOME", "")
+	for _, name := range []string{"OLIVARES_DATA_DIR", "OLIVARES_SERVER_URL", "OLIVARES_TOKEN", "OLIVARES_TENANT", cliConfigOverrideEnv} {
+		t.Setenv(name, "")
+	}
+	t.Chdir(work)
+	_, _, _ = execRoot(t)
+	if len(asked) != 0 {
+		t.Fatalf("a data directory a cloned repository put under the working directory chose the engine: it was asked %s", <-asked)
 	}
 }

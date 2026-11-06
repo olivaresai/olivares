@@ -12,6 +12,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -260,4 +261,29 @@ func splitMessage(t *testing.T, msg string) (map[string]string, []byte) {
 		}
 	}
 	return headers, []byte(msg[i+4:])
+}
+
+// A server that accepts the connection and never speaks must not hold the delivery
+// past the caller's deadline: the whole SMTP conversation runs under it, not only the dial.
+func TestDeliverHonorsTheContextDeadline(t *testing.T) {
+	client, server := net.Pipe()
+	t.Cleanup(func() { _ = server.Close() })
+	o := New().WithDialer(func(context.Context, string, string) (net.Conn, error) { return client, nil })
+	if err := o.Open(context.Background(), sdk.Config{Settings: map[string]string{
+		cfgSMTPHost: "smtp.acme.io", cfgFrom: "f@acme.io", cfgTo: "t@acme.io",
+	}}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- o.deliver(ctx, []byte("x"), "f@acme.io", []string{"t@acme.io"}) }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("deliver to a silent server succeeded")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("deliver to a silent server ignored the context deadline")
+	}
 }

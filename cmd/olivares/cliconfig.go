@@ -66,6 +66,9 @@ type cliResolutionOptions struct {
 	// rides along to whatever --server the operator pointed at — a credential
 	// leak to an arbitrary, possibly untrusted host.
 	SkipCredentials bool
+	// SkipLocalOperator keeps the local operator's credential out of the resolution
+	// (`olivares login`, which saves a sign-in of its own).
+	SkipLocalOperator bool
 }
 
 type cliResolvedConfig struct {
@@ -306,6 +309,26 @@ func resolveCLIConfig(opts cliResolutionOptions) (cliResolvedConfig, error) {
 		resolved.PinSHA256 = append([]string(nil), opts.PinSHA256...)
 	} else {
 		resolved.PinSHA256 = append([]string(nil), active.PinSHA256...)
+	}
+	// Nothing names an engine or a sign-in: the account that owns this host's data
+	// directory is the local operator and reaches the engine that directory recorded,
+	// trusted through its own certificate and signed in with the credential the
+	// engine left there. The credential is the install's superadmin, for the commands
+	// that change things as much as for the reads: that is the intended model of the
+	// account that holds the store and the keys. Anything the caller configured outranks
+	// this, except a tenant alone: --tenant reaches another organization as the local
+	// operator.
+	if resolved.Server == "" && resolved.Token == "" && !opts.SkipCredentials && !opts.SkipLocalOperator && !opts.ServerExplicit &&
+		!opts.TokenExplicit && len(resolved.PinSHA256) == 0 {
+		if origin, caCert, token, tenant := localOperatorEngine(); token != "" {
+			resolved.Server, resolved.Token = origin, token
+			if resolved.Tenant == "" {
+				resolved.Tenant = tenant
+			}
+			if resolved.CACert == "" {
+				resolved.CACert = caCert
+			}
+		}
 	}
 	if resolved.Server != "" {
 		resolved.Server, err = normalizeCLIServer(resolved.Server)

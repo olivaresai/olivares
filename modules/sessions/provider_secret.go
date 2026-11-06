@@ -74,24 +74,33 @@ var ErrProviderRefused = errors.New("sessions: the provider rejected this creden
 // duration of the call. An implementation must not log it, retain it, or put it in
 // a URL.
 type ProviderProbeRequest struct {
+	Deep    bool
+	Model   string
 	Kind    string
 	BaseURL string
 	APIKey  string
 }
 
-// ProviderProbeResult is what the provider answered: which models it serves, and a
-// bounded non-secret sentence for the operator.
-type ProviderProbeResult struct {
-	Models []string
-	Detail string
+// ProviderCapabilities is an observation of one model, not a catalog promise.
+// MaxContext is server-advertised; zero means unknown, never a measured limit.
+type ProviderCapabilities struct {
+	Model      string `json:"model"`
+	Tools      bool   `json:"tools"`
+	Streaming  bool   `json:"streaming"`
+	Usage      bool   `json:"usage"`
+	MaxContext int64  `json:"max_context"`
+	Detail     string `json:"detail,omitempty"`
 }
 
-// ProviderProbe asks a provider which models it serves, with a supplied credential.
-//
-// THE CONTRACT THAT MATTERS IS THE NEGATIVE ONE: an implementation must not send a
-// completion, must not create anything on the provider's side, and must not spend.
-// A connection test that spent would be a diagnostic with a bill attached, run on a
-// model the operator did not choose.
+// ProviderProbeResult contains listed models and an optional deep observation.
+type ProviderProbeResult struct {
+	Capabilities *ProviderCapabilities
+	Models       []string
+	Detail       string
+}
+
+// ProviderProbe lists models without generating tokens by default. Deep explicitly
+// opts into bounded generation on self-hosted OpenAI-compatible endpoints only.
 type ProviderProbe interface {
 	Probe(ctx context.Context, req ProviderProbeRequest) (ProviderProbeResult, error)
 }

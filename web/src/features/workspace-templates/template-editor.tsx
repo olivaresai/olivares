@@ -3,14 +3,16 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // TemplateEditor — Sheet-based form for creating or editing workspace templates.
-// Sections: Hooks (dynamic list of command entries), Settings (permission_mode,
-// effort, model, custom_instructions), Connectors (comma-separated IDs), and
-// Policies (dlp_mode, max_session_duration_minutes, allowed_tools, record_io).
+// The sheet asks a name and a description; Hooks (dynamic list of command entries),
+// Agent settings (permission_mode, effort, model, custom_instructions), Secrets
+// (secret_env), Connectors (comma-separated IDs) and Policies (dlp_mode,
+// max_session_duration_minutes, allowed_tools, record_io, …) are native <details>,
+// closed on open, each summarized by counts or the model name, never a secret.
 // Built-in templates cannot be edited; they render a read-only view.
 // Uses controlled state (no external form library dependency required).
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Lock, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronRight, Lock, Plus, Trash2 } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,7 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
   SheetContent,
@@ -95,6 +96,8 @@ interface FormState {
     max_session_duration_minutes: string
     allowed_tools: string // comma-separated
     record_io: boolean
+    sessions_disabled: boolean
+    require_read_only_folders: boolean
     require_truncate_protection: boolean
   }
   /** Sessions of this template may message each other (peers_rule same-template). */
@@ -126,6 +129,8 @@ function emptyFormState(): FormState {
       max_session_duration_minutes: '',
       allowed_tools: '',
       record_io: false,
+      sessions_disabled: false,
+      require_read_only_folders: false,
       require_truncate_protection: false,
     },
     peers_same_template: false,
@@ -163,6 +168,8 @@ function dtoToFormState(dto: TemplateDTO): FormState {
           : '',
       allowed_tools: (p.allowed_tools ?? []).join(', '),
       record_io: p.record_io ?? false,
+      sessions_disabled: p.sessions_disabled ?? false,
+      require_read_only_folders: p.require_read_only_folders ?? false,
       require_truncate_protection: p.require_truncate_protection ?? false,
     },
     peers_same_template: dto.body.peers_rule === 'same-template',
@@ -225,6 +232,9 @@ function formStateToBody(f: FormState): TemplateBody {
     .filter(Boolean)
   if (allowedTools.length) policies.allowed_tools = allowedTools
   if (f.policies.record_io) policies.record_io = true
+  if (f.policies.sessions_disabled) policies.sessions_disabled = true
+  if (f.policies.require_read_only_folders)
+    policies.require_read_only_folders = true
   if (f.policies.require_truncate_protection)
     policies.require_truncate_protection = true
 
@@ -271,6 +281,7 @@ export function TemplateEditor({
   }
 
   const [nameError, setNameError] = useState('')
+  const fieldsRef = useRef<HTMLDivElement>(null)
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setFormRaw((prev) => ({ ...prev, [key]: value }))
@@ -318,6 +329,20 @@ export function TemplateEditor({
       return
     }
     setNameError('')
+    // The browser's own constraint check (min, number input) on every control; a
+    // control in a closed section is opened and focused instead of being saved.
+    const invalid = Array.from(
+      fieldsRef.current?.querySelectorAll<
+        HTMLInputElement | HTMLTextAreaElement
+      >('input, textarea') ?? [],
+    ).find((el) => !el.checkValidity())
+    if (invalid) {
+      const section = invalid.closest('details')
+      if (section) section.open = true
+      invalid.focus()
+      invalid.reportValidity()
+      return
+    }
     if (template) {
       updateMutation.mutate()
     } else {
@@ -337,6 +362,9 @@ export function TemplateEditor({
             </SheetTitle>
             <SheetDescription className="flex items-center gap-1.5">
               <Badge variant="accent">{t('catalog.builtin')}</Badge>
+              {t('catalog.version', { version: template?.version })}
+              {' · '}
+              {t('catalog.author', { author: template?.author })}
             </SheetDescription>
           </SheetHeader>
           <p className="text-body text-muted-foreground">
@@ -345,6 +373,28 @@ export function TemplateEditor({
         </SheetContent>
       </Sheet>
     )
+  }
+
+  // Each closed section says what it holds, from the body that Save would send:
+  // counts and the model name only, never a secret or a free-text value.
+  const body = formStateToBody(form)
+  const { secret_env: secretEnv = [], ...agent } = body.settings ?? {}
+  const counted = (key: string, count: number) =>
+    count ? t(`editor.sections.summary.${key}`, { count }) : undefined
+  const summary = {
+    hooks: counted(
+      'hooks',
+      Object.values(body.hooks ?? {}).reduce((n, list) => n + list.length, 0),
+    ),
+    settings: agent.model
+      ? t('editor.sections.summary.model', { model: agent.model })
+      : counted('set', Object.keys(agent).length),
+    secrets: counted('secrets', secretEnv.length),
+    connectors: counted('connectors', body.connectors?.length ?? 0),
+    policies: counted(
+      'set',
+      Object.keys(body.policies ?? {}).length + (body.peers_rule ? 1 : 0),
+    ),
   }
 
   return (
@@ -364,7 +414,10 @@ export function TemplateEditor({
           )}
         </SheetHeader>
 
-        <div className="flex flex-1 flex-col gap-6 overflow-y-auto pb-4">
+        <div
+          ref={fieldsRef}
+          className="flex flex-1 flex-col gap-4 overflow-y-auto pb-4"
+        >
           {/* ── General ── */}
           <section className="flex flex-col gap-4">
             <Field
@@ -390,18 +443,12 @@ export function TemplateEditor({
             </Field>
           </section>
 
-          <Separator />
-
           {/* ── Hooks ── */}
-          <section className="flex flex-col gap-3">
-            <div>
-              <h3 className="text-body font-semibold text-foreground">
-                {t('editor.sections.hooks')}
-              </h3>
-              <p className="text-caption text-muted-foreground">
-                {t('editor.sections.hooksHint')}
-              </p>
-            </div>
+          <Section
+            title={t('editor.sections.hooks')}
+            summary={summary.hooks}
+            hint={t('editor.sections.hooksHint')}
+          >
             {HOOK_KINDS.map((kind) => (
               <HookSection
                 key={kind}
@@ -413,20 +460,14 @@ export function TemplateEditor({
                 }
               />
             ))}
-          </section>
-
-          <Separator />
+          </Section>
 
           {/* ── Settings ── */}
-          <section className="flex flex-col gap-3">
-            <div>
-              <h3 className="text-body font-semibold text-foreground">
-                {t('editor.sections.settings')}
-              </h3>
-              <p className="text-caption text-muted-foreground">
-                {t('editor.sections.settingsHint')}
-              </p>
-            </div>
+          <Section
+            title={t('editor.sections.settings')}
+            summary={summary.settings}
+            hint={t('editor.sections.settingsHint')}
+          >
             <Field label={t('editor.settings.permissionMode')}>
               <Select
                 value={form.settings.permission_mode}
@@ -499,6 +540,14 @@ export function TemplateEditor({
                 disabled={isPending}
               />
             </Field>
+          </Section>
+
+          {/* ── Secrets ── */}
+          <Section
+            title={t('editor.sections.secrets')}
+            summary={summary.secrets}
+            hint={t('editor.sections.secretsHint')}
+          >
             <Field
               label={t('editor.settings.secretEnv')}
               htmlFor="template-secret-env"
@@ -518,41 +567,30 @@ export function TemplateEditor({
                 mono
               />
             </Field>
-          </section>
-
-          <Separator />
+          </Section>
 
           {/* ── Connectors ── */}
-          <section className="flex flex-col gap-3">
-            <div>
-              <h3 className="text-body font-semibold text-foreground">
-                {t('editor.sections.connectors')}
-              </h3>
-              <p className="text-caption text-muted-foreground">
-                {t('editor.sections.connectorsHint')}
-              </p>
-            </div>
+          <Section
+            title={t('editor.sections.connectors')}
+            summary={summary.connectors}
+            hint={t('editor.sections.connectorsHint')}
+          >
             <Input
               value={form.connectors}
               onChange={(e) => set('connectors', e.target.value)}
               placeholder="connector-a, connector-b"
               disabled={isPending}
               mono
+              aria-label={t('editor.sections.connectors')}
             />
-          </section>
-
-          <Separator />
+          </Section>
 
           {/* ── Policies ── */}
-          <section className="flex flex-col gap-3">
-            <div>
-              <h3 className="text-body font-semibold text-foreground">
-                {t('editor.sections.policies')}
-              </h3>
-              <p className="text-caption text-muted-foreground">
-                {t('editor.sections.policiesHint')}
-              </p>
-            </div>
+          <Section
+            title={t('editor.sections.policies')}
+            summary={summary.policies}
+            hint={t('editor.sections.policiesHint')}
+          >
             <Field label={t('editor.policies.dlpMode')}>
               <Select
                 value={form.policies.dlp_mode}
@@ -669,7 +707,7 @@ export function TemplateEditor({
                 {t('editor.policies.peersSameTemplate')}
               </Label>
             </div>
-          </section>
+          </Section>
         </div>
 
         <SheetFooter>
@@ -686,6 +724,41 @@ export function TemplateEditor({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Section — a closed native <details> with its title and what it holds
+// ---------------------------------------------------------------------------
+
+interface SectionProps {
+  title: string
+  /** Counts or non-sensitive configuration; absent while the section is empty. */
+  summary?: string
+  hint: string
+  children: ReactNode
+}
+
+function Section({ title, summary, hint, children }: SectionProps) {
+  return (
+    <details className="group border-t border-line pt-3">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm text-body font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          aria-hidden
+          className="size-4 shrink-0 text-text-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+        />
+        <span>{title}</span>
+        {summary ? (
+          <span className="ms-auto text-caption font-normal text-muted-foreground">
+            {summary}
+          </span>
+        ) : null}
+      </summary>
+      <div className="mt-3 flex flex-col gap-3">
+        <p className="text-caption text-muted-foreground">{hint}</p>
+        {children}
+      </div>
+    </details>
   )
 }
 

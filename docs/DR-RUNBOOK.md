@@ -79,7 +79,29 @@ keys/kek.json      KDF parameters to re-derive the KEK (Argon2id salt; no secret
 keys/*.enc         installation custody, AES-256-GCM under the KEK.
 store/<snapshot>.enc   the consistent store snapshot, AES-256-GCM in chunks under the
                    KEK (absent in PITR mode).
+files/<kind>-<name>.tar.enc   one sealed tar per directory of files the database does
+                   not hold, in the same chunked format; the manifest lists every file
+                   by path, size, SHA-256 and mode.
 ```
+
+- **Files:** the bundle also carries the sign-ins and homes of the AI tools under the
+  data dir (`profile-homes`, `tool-logins`, `tools`, `session-skill-homes`,
+  `accounts`, `gitpublish`, `skills`) and every registered folder, read-only, so a
+  restore on another host returns the work and the sign-ins, not only the rows.
+  A folder registered with `backup: false` (a scratch folder) is not copied; it, and
+  the model files that download again (`ollama`, `model-servers`), are listed under
+  `not_included` in the manifest (`olivares dr inspect`). Owner, mode, times and POSIX
+  ACLs are restored as far as the restoring user may set them: run the restore as root
+  to keep owners. A file written to while it was copied is flagged
+  `changed_during_backup`; the copy of a running estate is crash-consistent for files,
+  so for a clean copy pause the sessions first. The PostgreSQL engine does not read the
+  folder registry: copy the registered folders separately (the manifest says so).
+- **Restore of files:** `dr restore` puts each folder back at its registered path and
+  the data subtrees into the data dir, and refuses before writing anything if a
+  destination already holds files; pass `--files-root <dir>` to restore the folders
+  under `<dir>/folder-<ref>` on a new host, or `--force` to replace files of the same
+  name. `--in-place` and the console restore move the live data subtrees aside as
+  `*.pre-restore-*`.
 
 - **Minimal data:** EVERY `*-signing.key` in the data dir (audit, catalog,
   policy, and any future signing-key class — captured by the glob, pinned by the
@@ -122,15 +144,29 @@ store/<snapshot>.enc   the consistent store snapshot, AES-256-GCM in chunks unde
   scratch directory first: a wrong KEK or an altered, truncated or reordered chunk fails
   there, before the data dir is touched. Sealing and opening each write a second copy of the
   snapshot in the temp directory (`TMPDIR`), so keep free space of about twice the snapshot
-  there during `dr backup`, `dr restore` and `dr verify`. Encrypted data does not compress:
-  a bundle is about as large as its snapshot. Measured on one host, the `dr drill` bundle
-  of a 20,000-event ledger went from 6.2 MB to 26.8 MB and the bundle of a small estate
-  from 0.36 MB to 11 MB. The drill's measured RTO did not change beyond its run-to-run
-  spread (2.1 to 2.7 s before, 2.2 to 2.4 s after).
+  there during `dr backup`, `dr restore` and `dr verify`.
+- **Snapshots are gzip-compressed before sealing.** The authenticated manifest records
+  `store.compression: "gzip"`. Restore and verify unseal, then decompress, check the
+  original plaintext size and digest, and refuse expansion beyond that declared size.
+  Bundles without `store.compression` still open as uncompressed snapshots. Use a binary
+  at least as new as the backup producer to restore a compressed bundle.
+  Compression reduces storage and upload size, but the sealed length reveals how well
+  the combined snapshot compressed. A tenant who can write chosen ledger data and observe
+  repeated bundle sizes may infer information about other data in the same snapshot.
+  This format accepts that length leak: compression covers the whole snapshot, with no
+  per-tenant separation or length padding. Keep bundle access and size observations limited
+  to trusted backup operators; do not expose a size oracle to tenants. Encryption still
+  protects snapshot contents, and `dr inspect` still needs no KEK.
 - **Bundles taken before the snapshot was sealed (manifest `olivares.dr.manifest.v1`)
   still restore and verify,** and both commands warn that the snapshot is not encrypted.
   Take a new backup to seal it; the old bundles and their offsite copies stay readable by
   anyone who holds them until you delete them.
+- **What the bundle leaves out is named.** The manifest lists the real path and the
+  reason of each directory it did not copy in `not_included`; `dr backup` and `dr inspect`
+  print the same list on one line on stderr (`not included in this bundle ...`, so the
+  text stdout stays as scripts know it) and the Backups page shows it in the backup's
+  detail. Back those paths up yourself when you need them. A bundle taken before this
+  list existed has no `not_included`: that means "not recorded", not "nothing left out".
 - **The key fingerprint is the public one** (one-way); the private key never appears in
   the manifest, only encrypted in `keys/*.enc`. Non-signing communication keyrings
   have no public-key fingerprint; the bundle authenticates their encrypted bytes.
@@ -576,7 +612,22 @@ The first boot seeds the existing schedule: daily at 02:00 UTC, 30 days of local
 retention, a 24-hour recovery point target, and a weekly scratch-restore test on
 Sunday at 03:00 UTC. Saved administrator choices survive restart. An existing
 schedule or backups never cause a lost recovery key to be silently replaced.
-Non-appliance installations keep their existing opt-in schedule behavior.
+
+Every other installation (packages, container, binary) creates the same
+recovery file in its data directory at its first start unless
+`OLIVARES_DR_PASSPHRASE_FILE` is set, and stores the same schedule at its first
+scheduled check (within a minute), when no schedule is stored. Only the active
+node stores it, from its own `backups/`. Its setup asks for no confirmation:
+`olivares dr status` reports that the backups are on the data disk until an
+offsite target or a managed backup disk is set. Earlier bundles made with an
+operator passphrase keep that passphrase, and none is pruned: when the active
+node's `backups/` already holds a bundle, or cannot be read, the stored schedule
+keeps every bundle (retention 0) until an administrator sets one. On an
+active-passive pair, the node that is active when the schedule is first stored
+decides for both: if the other node holds earlier bundles, set the retention
+before it becomes active, or copy them off first. The bundles share free space with the live data, so watch that disk on a
+large install. A stored schedule, including one emptied on purpose, is never
+replaced on upgrade.
 
 Backups → Schedule edits `verify_cron`, `rpo_hours` and the offsite destination.
 An empty verification cron disables only verification; an empty offsite bucket
@@ -632,7 +683,7 @@ expiry or revocation. It permits no other API access or writes.
 The restart applies again the erasures the backup predates before it serves
 (step 7 of the procedure above).
 
-The console refuses non-SQLite engines before staging any files. It stages
+The SQLite console restore stages
 all decrypted keys on the destination filesystem and checks their destination
 paths before stopping the store. An invalid key path leaves the live store and
 keys unchanged and available.
@@ -657,10 +708,46 @@ custody key from the same bundle with an offline CLI restore. The failed job
 names the rollback error and the preservation location; recovering only one
 key can leave signing or encryption custody from different installations.
 
+### PostgreSQL restore from the console
+
+Prepare a **separate, empty database** with `olivares db init`, including its
+backup administrator role. In Backups → Restore, upload a logical PostgreSQL
+bundle and enter the target application, optional owner, backup administrator,
+and scratch-maintenance connection references. Every value must be a `file:` or
+`env:` reference available to the serving engine; do not paste connection passwords.
+The scratch-maintenance credential needs permission to create databases and roles.
+
+PostgreSQL console restore always requires a second, distinct administrator account,
+including when the SQLite restore policy is disarmed. The pending request shows
+the references that will be used; approval supplies only the backup passphrase.
+An occupied or unreadable target is refused before writing it. To intentionally
+replace an occupied database, use `olivares dr restore --force --operator ...
+--reason ...` on the host instead.
+
+The restore authenticates a private copy of the uploaded bundle, restores and
+verifies it in a disposable PostgreSQL database, then runs the existing logical
+restore workflow against the approved empty target. That workflow uses
+`pg_restore --single-transaction`, restores the authority contracts, and verifies
+the recovered ledger. Scratch databases and roles are removed before target import.
+Bundles containing isolated directory inventory still require the CLI route,
+because the scratch verifier refuses their DBA-dependent reconciliation.
+
+The serving database and its keys remain available and unchanged. Restored keys
+and files go into a new `restored-postgres-*` recovery directory under the serving
+data directory. The job ends `completed` / `restart_required` and names that directory.
+Stop the engine, configure the target connections and recovered data directory,
+and restart on them. A failed target import retains its recovery directory for
+inspection; it never promotes keys into the serving installation.
+
+Measured on PostgreSQL 16: an installed engine restored its console backup into
+an empty `db init` target, rejected self-approval and an occupied retry, reported
+`restart_required`, then restarted and accepted the restored administrator login.
+The restored ledger passed the restore workflow's continuity verification.
+
 ### Who is allowed to restore — and where that control does and does not reach
 
 The console has a **dual-control restore** switch (Backups → Schedule): with it on, a
-restore started **from the console** is held until a **second, distinct administrator**
+SQLite restore started **from the console** is held until a **second, distinct administrator**
 approves it. Two things about it have to be stated plainly, because the product used to
 imply otherwise:
 
@@ -835,6 +922,32 @@ olivares dr drill --events 1000 --scratch-dsn env:OLIVARES_SCRATCH_DSN
 # --scratch-dsn the drill prints "postgres: not measured" instead of staying silent.
 ```
 Record the result and the measured RTO (§5). A failed drill is an incident.
+
+**c) Restore test of a real bundle, with a signed report against your targets** (SQLite bundles; no prod, no network):
+```sh
+olivares dr drill --from /backups/olivares-dr-<ts>.drbundle --passphrase-file /run/secrets/dr-pass \
+  --rto-target 30m --rpo-target 24h
+# Restores the bundle into a throwaway directory, re-verifies chain + per-event signatures +
+# checkpoints + tips, and prints one JSON report: the measured RTO (extract + authenticate +
+# decrypt + restore + verify), the RPO the bundle gives at that instant (now − taken_at), both
+# next to your targets, and the bundle's SHA-256. The restore starts no engine, no provider and
+# no connector and opens no network connection ("network": "none"). Afterwards the report is sealed
+# as one `dr.drill` event in the system tenant of the estate that ran it, followed by a signed
+# checkpoint (the off-box signer when OLIVARES_LEDGER_SIGNER is set), so `audit verify` checks it
+# with the rest of the ledger and the audit archive and the Business evidence bundle carry it.
+# Exit 7: the bundle restored but a target was missed (the report is sealed all the same).
+# Exit 1: the restore failed. --no-record is a dry run that seals nothing.
+```
+`--from` drills SQLite bundles. A PostgreSQL bundle is restored into a throwaway database by
+`dr verify --scratch-dsn` (a). Schedule `drill --from` from cron once a quarter or oftener: CIS
+Control 11 asks for a restore test every quarter, and the sealed events are the dated record.
+
+The scheduled restore test of the server (`verify_cron`, §3) measures the same way: set
+`rto_minutes` next to `rpo_hours` in **Backups > Schedule** (or `PUT /v1/console/dr/schedule`).
+Each completed test records `rto_ms`, `rto_target_ms` and `rto_exceeded` in its `dr.verify.*`
+ledger event and shows the measured time in the console. When it exceeds the target the console
+shows the schedule as exceeded (`rto_exceeded`) and a high-severity `dr_rto_exceeded` finding goes
+to each organization's notification routes.
 
 ---
 

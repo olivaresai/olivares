@@ -263,6 +263,29 @@ func (s *SecretStore) Delete(ctx context.Context, actor Principal, scope model.T
 // operator's own `vault/token` is an ordinary global secret.
 const PersonalVaultPrefix = "vault/"
 
+// IsVaultOwner reports whether p is a person who can own a vault. Only a signed-in
+// person is one: a token carries its owner's id but is never that person, neither is a
+// superadmin acting for someone else, and neither is an agent session, which is minted
+// with its launcher's id.
+func IsVaultOwner(p Principal) bool {
+	return p.Kind == KindUser && !p.UserID.IsZero() && p.AgentIdentity == "" && p.SessionIdentity == ""
+}
+
+// PersonalVaultName is the entry name of label in p's own vault, and false when p is not
+// a person who owns one.
+func PersonalVaultName(p Principal, label string) (string, bool) {
+	if !IsVaultOwner(p) {
+		return "", false
+	}
+	return PersonalVaultPrefix + p.UserID.String() + "/" + label, true
+}
+
+// SharedVaultURIPrefix marks a folder Resource as a shared vault: its URI is
+// vault:<name>. Its items are entries named vault/<resource-id>/<item>, one sealed
+// ciphertext each, and who may use one is the right the caller holds at that folder
+// (grants to users and groups, inheritance and forbids), never a copy per person.
+const SharedVaultURIPrefix = "vault:"
+
 // open loads a secret and opens its sealed value. It fails closed: a missing sealer is
 // ErrNoSecretSealer, a bad name ErrBadSecretName, a missing secret ErrSecretNotFound, a
 // value that does not open is the sealer's error. The returned bytes are a fresh copy

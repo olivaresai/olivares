@@ -4,6 +4,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '@/lib/auth/context'
+import { sessionsKeys } from '@/features/sessions/api'
 import { useSessionStore } from '@/stores/session'
 import { agentOpsKeys } from './api'
 
@@ -93,6 +94,11 @@ export function useAuthBoundary(): AuthBoundary {
       const scope = agentOpsKeys.boundaryScope(prev.tenant, prev.epoch)
       void queryClient.cancelQueries({ queryKey: scope })
       queryClient.removeQueries({ queryKey: scope })
+      // The sessions plane's observed pages (the rail, Business's fleet grid) hang under
+      // their own scope for the same boundary.
+      const sessionsScope = sessionsKeys.boundaryScope(prev.tenant, prev.epoch)
+      void queryClient.cancelQueries({ queryKey: sessionsScope })
+      queryClient.removeQueries({ queryKey: sessionsScope })
       const mutations = queryClient.getMutationCache()
       for (const mutation of mutations.findAll({ mutationKey: scope })) {
         mutations.remove(mutation)

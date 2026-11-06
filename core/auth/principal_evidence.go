@@ -202,7 +202,9 @@ func (a *Authenticator) ResolvePrincipalScope(
 		}
 		return Principal{}, principalEvidenceUnavailable("auth view failed", err)
 	}
-	return resolved, nil
+	// The same mark Authenticate gives a session, asked outside the AuthView; the
+	// authority seal does not cover it (a stale session loses only the step-up).
+	return a.withFreshness(ctx, resolved), nil
 }
 
 // principalEvidenceMaterial postpones all database-time-dependent checks until

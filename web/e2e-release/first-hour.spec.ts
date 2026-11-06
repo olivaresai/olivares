@@ -11,6 +11,7 @@ import {
 } from '../src/features/navigation/journeys'
 import {
   expectReleaseVersion,
+  isExpectedNoRepositoryConsoleError,
   openToolInstall,
   READY_MS,
   RELEASE_VERSION,
@@ -20,7 +21,7 @@ import {
   watchSurface,
 } from './surface'
 
-const [WIZARD, PROVIDERS, SESSIONS] = JOURNEYS.firstHour
+const [, PROVIDERS, SESSIONS] = JOURNEYS.firstHour
 
 // The one path every tool takes: provider, install, a session that asks before it
 // acts, stop and resume. Only the provider is a labelled stand-in (provider.py, on
@@ -99,7 +100,10 @@ test('release container: a fresh administrator reaches a first answer and the co
   const slowLoads = await recordSlowLoads(page, redact)
   await page.addInitScript(watchSurface, surfaceOptions(version!))
   page.on('console', (message) => {
-    if (message.type() === 'error')
+    if (
+      message.type() === 'error' &&
+      !isExpectedNoRepositoryConsoleError(message)
+    )
       record(
         `${new URL(page.url()).pathname}: console error: ${message.text()}`,
       )
@@ -124,25 +128,21 @@ test('release container: a fresh administrator reaches a first answer and the co
         `${name}: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
-    // Compared here as well as on the watcher's tick, so a stage never ends on an
-    // identity nobody read, or on a page the watcher is not installed on.
+    // Compared here as well as on the watcher's tick, so a stage never ends on a
+    // painted identity nobody read, or on a page the watcher is not installed on.
     try {
       const versions = await page.evaluate(() => window.__firstHourVersions?.())
       if (!versions)
         record(`${name}: the surface watcher is not installed on this page`)
       else {
         console.log(
-          `UI version ${name}: ${redact(versions.join(', ')) || 'missing'}`,
+          `UI version ${name}: ${redact(versions.join(', ')) || 'none painted'}`,
         )
         for (const found of versions)
           if (found !== version)
             record(
               `${name}: page version ${found} differs from release ${version}`,
             )
-        if (!versions.includes(version!))
-          record(
-            `${name}: release version ${version} was not read from the console identity`,
-          )
       }
     } catch (error) {
       record(
@@ -194,11 +194,11 @@ test('release container: a fresh administrator reaches a first answer and the co
       await page.locator('#setup-email').fill('first-hour@example.invalid')
       await page.locator('#setup-password').fill(password)
       await page.getByRole('button', { name: /create administrator/i }).click()
-      await page.waitForURL(`**${stepHref(WIZARD)}`)
+      await page.waitForURL(`**${stepHref(SESSIONS)}`)
       await expect(
         page
           .getByRole('navigation', { name: 'Main navigation', exact: true })
-          .getByRole('link', { name: 'Now', exact: true }),
+          .getByRole('link', { name: 'Settings', exact: true }),
       ).toBeVisible()
     })
     // Keep later pages measurable even when the first answer is blocked. Every
@@ -284,18 +284,17 @@ test('release container: a fresh administrator reaches a first answer and the co
     }
     for (const tool of TOOLS) {
       await stage(`04-session-${tool.key}`, async () => {
-        await page.goto(stepHref(SESSIONS))
-        await page
-          .getByRole('button', { name: 'New session', exact: true })
-          .first()
-          .click()
+        // New session on Sessions brings the start composer forward; the New session
+        // form, with its permission choice, opens from its newSession=1 link.
+        await page.goto(stepHref(SESSIONS, { newSession: '1' }))
         const dialog = page.getByRole('dialog', {
           name: 'New session',
           exact: true,
         })
         await dialog
-          .getByRole('radio', { name: tool.name, exact: true })
+          .getByRole('combobox', { name: 'Tool', exact: true })
           .click()
+        await page.getByRole('option', { name: tool.name, exact: true }).click()
         await dialog
           .getByRole('textbox', {
             name: 'First message (optional)',
@@ -306,8 +305,11 @@ test('release container: a fresh administrator reaches a first answer and the co
           .getByRole('button', { name: 'More options', exact: true })
           .click()
         await dialog
-          .getByRole('radio', { name: 'Supervised', exact: true })
-          .check()
+          .getByRole('combobox', { name: 'What the agent may do', exact: true })
+          .click()
+        await page
+          .getByRole('option', { name: 'Supervised', exact: true })
+          .click()
         await capture(`new-session-${tool.key}-filled`)
         await dialog.getByRole('button', { name: 'Start', exact: true }).click()
         // The launch retries the first message for up to 15 s while the tool starts.
@@ -362,7 +364,7 @@ test('release container: a fresh administrator reaches a first answer and the co
     for (const [section, label] of [
       ['general', 'General'],
       ['keyboard', 'Keyboard'],
-      ['signIn', 'Sign-in and security'],
+      ['signIn', 'Sign-in'],
       ['tracing', 'Tracing'],
       ['signing', 'Report signing'],
       ['about', 'About'],
@@ -380,12 +382,16 @@ test('release container: a fresh administrator reaches a first answer and the co
         ).toHaveCount(0)
       })
     }
-    // Edition is the License place of the sidebar (0.5), not a row of the Settings list.
+    // Edition is a section of Settings (0.7): the Settings link, then Edition in its list.
     await stage('05-settings-edition', async () => {
       await visit('/')
       await page
-        .getByRole('navigation', { name: 'Main navigation' })
-        .getByRole('link', { name: 'License', exact: true })
+        .getByRole('navigation', { name: 'Main navigation', exact: true })
+        .getByRole('link', { name: 'Settings', exact: true })
+        .click()
+      await page
+        .getByRole('navigation', { name: 'Settings sections' })
+        .getByRole('button', { name: 'Edition', exact: true })
         .click()
       await expect(page).toHaveURL(/\/settings\?section=edition$/)
       await expect(

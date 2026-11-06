@@ -3,9 +3,6 @@
   "subtitle": "Consulta el registro firmado de la actividad de IA.",
   "subtitleSystem": "La cadena del tenant de sistema con las operaciones administrativas entre tenants (solo lectura).",
   "searchLoaded": "Filtrar solo las filas cargadas (en el cliente)…",
-  "scan": {
-    "incomplete": "Recorrido hasta la seq {{seq}} — no es el registro completo; «Cargar más» continúa el recorrido."
-  },
   "scope": {
     "label": "Ámbito del registro",
     "tenant": "Registro del tenant",
@@ -75,6 +72,9 @@
     "actorMember": "Un miembro"
   },
   "empty": {
+    "filteredTitle": "No hay evidencias coincidentes",
+    "searching": "No hay coincidencias en los eventos consultados hasta ahora. Cargar más continúa la búsqueda.",
+    "noMatches": "Ningún evento coincide con estos filtros. Prueba a cambiar o quitar un filtro.",
     "title": "Aún no hay evidencia",
     "description": "El registro está vacío para este ámbito. Las operaciones gobernadas añaden eventos cuya manipulación puede detectarse a medida que ocurren."
   },
@@ -123,7 +123,7 @@
     "add": "Añadir {{token}} a la consulta",
     "commands": "Buscar y comandos",
     "problem": {
-      "key": "{{token}} no es un filtro del registro. Usa person:, action:, kind:, target:, since:, until: o palabras.",
+      "key": "{{token}} no es un filtro del registro. Usa person:, action:, kind:, target:, tool:, folder:, since:, until: o palabras.",
       "time": "{{token}} no es un tiempo. Usa 90m, 24h, 7d, 2w o una fecha como 2026-10-20.",
       "person": "Nadie coincide con {{token}}. Usa un nombre, un correo o user:<id>.",
       "several": "{{token}} coincide con varias personas. Usa el nombre completo, un correo o user:<id>.",

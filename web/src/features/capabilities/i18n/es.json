@@ -1,5 +1,5 @@
 {
-  "title": "MCP y skills",
+  "title": "Extensiones",
   "subtitle": "El catálogo de capacidades en vivo — servidores MCP, herramientas, skills y cómo están conectados.",
   "tabs": {
     "servers": "Servidores",
@@ -19,8 +19,9 @@
     "managed": "Gestionado",
     "managedRev": "Gestionado · rev {{rev}}",
     "discovered": "Descubierto",
+    "caption": "Servidores que los conectores observaron, los conecte Olivares o no.",
     "empty": "No se han descubierto servidores MCP",
-    "emptyHint": "Los servidores aparecen aquí a medida que los planos de inventario e introspección los descubren.",
+    "emptyHint": "Los servidores aparecen aquí a medida que el inventario y la introspección los descubren.",
     "truncated": "Cargados {{n}} servidores; hay más"
   },
   "connection": {
@@ -82,11 +83,10 @@
     "title": "Conexiones de capacidades",
     "mobileHint": "El grafo de conexiones ({{count}} conexiones) se ve mejor en una pantalla más grande.",
     "description": "Qué está conectado con qué — agentes y sesiones con los servidores MCP, herramientas, skills y recursos que usan.",
-    "notAccessMap": "Este es el grafo de conexión de capacidades, no el mapa de acceso R/RW a recursos (ver Mapa de acceso).",
     "observed": "Observado",
     "declared": "Declarado",
     "legend": "Procedencia",
-    "partial": "Mostrando un grafo parcial — afina los filtros para ver conexiones concretas.",
+    "partial": "Filtre para ver más conexiones.",
     "occurrences": "Ocurrencias",
     "firstSeen": "Primera vez",
     "lastSeen": "Última vez",
@@ -127,7 +127,7 @@
     "endpoint": "Endpoint",
     "endpointHint": "Solo una referencia — nunca incrustes una credencial en el endpoint.",
     "scope": "Ámbito",
-    "scopeHint": "Etiqueta opcional de ámbito de despliegue/tenant (p. ej. team-a).",
+    "scopeHint": "Etiqueta opcional de ámbito de despliegue/organización (p. ej. team-a).",
     "enabled": "Activa",
     "note": "Nota",
     "secretRefs": "Referencias a secretos",
@@ -188,7 +188,7 @@
     },
     "server": {
       "title": "Aún no se han descubierto servidores MCP",
-      "description": "Los servidores MCP aparecen cuando las observaciones de los conectores los identifican en el inventario del tenant."
+      "description": "Los servidores MCP aparecen cuando las observaciones de los conectores los identifican en el inventario de la organización."
     },
     "skill": {
       "title": "Sin skills descubiertas",
@@ -196,7 +196,7 @@
     },
     "tool": {
       "title": "Aún no se han descubierto herramientas MCP",
-      "description": "Las herramientas aparecen cuando se notifican al inventario del tenant mediante la introspección MCP o la actividad de herramientas observada."
+      "description": "Las herramientas aparecen cuando se notifican al inventario de la organización mediante la introspección MCP o la actividad de herramientas observada."
     }
   },
   "truncatedHint": "Hay más filas de las que se ven; esta página las coge por id de fila (asignado al crear), así que faltan las posteriores. Que un servidor, una herramienta, una habilidad o una configuración NO salga aquí no prueba que no exista."

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import type { InputHTMLAttributes } from 'react'
+import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
  * bespoke prop. `mono` switches to font-mono + tabular-nums for ids / hashes / tokens
  * / IPs / CIDRs where character alignment matters.
  */
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends ComponentProps<'input'> {
   /** Use the monospace, tabular-aligned face for ids / hashes / tokens / IP / CIDR. */
   mono?: boolean
 }

@@ -226,6 +226,58 @@ func TestAuthLogoutAndUseContext(t *testing.T) {
 	}
 }
 
+// Logout ends the sign-in on the engine before it forgets the token: a copy of
+// the bearer taken before `olivares logout` must stop working there. When the
+// engine cannot be reached the token is still removed here, and stderr says the
+// sign-in stays valid on the engine.
+func TestAuthLogoutRevokesTheSessionOnTheEngine(t *testing.T) {
+	var revoked []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/auth/logout" {
+			revoked = append(revoked, r.Header.Get("Authorization"))
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	t.Setenv("OLIVARES_CLI_CONFIG", path)
+	if err := writeCLIConfig(path, cliConfig{
+		CurrentContext: "one",
+		Contexts:       []cliContext{{Name: "one", Server: srv.URL, Token: "session-one"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, err := execRoot(t, "logout"); err != nil {
+		t.Fatalf("logout: %v\n%s", err, stderr)
+	}
+	if len(revoked) != 1 || revoked[0] != "Bearer session-one" {
+		t.Fatalf("engine revocations = %q, want one POST /v1/auth/logout with the saved token", revoked)
+	}
+
+	srv.Close()
+	if err := writeCLIConfig(path, cliConfig{
+		CurrentContext: "one",
+		Contexts:       []cliContext{{Name: "one", Server: srv.URL, Token: "session-one"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, err := execRoot(t, "logout")
+	if err != nil {
+		t.Fatalf("logout with the engine down: %v\n%s", err, stderr)
+	}
+	if !strings.Contains(stderr, "still valid on the engine") || strings.Contains(stderr, "session-one") {
+		t.Fatalf("stderr with the engine down = %q, want the still-valid warning without the token", stderr)
+	}
+	cfg, err := readCLIConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if one, _ := cfg.context("one"); one.Token != "" {
+		t.Fatalf("token kept after logout with the engine down: %#v", one)
+	}
+}
+
 func TestAuthHelpDocumentsPrecedenceAndConfigCollision(t *testing.T) {
 	out, _, err := execRoot(t, "auth", "--help")
 	if err != nil {

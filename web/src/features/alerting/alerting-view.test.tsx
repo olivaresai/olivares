@@ -21,6 +21,7 @@ const { toastMock } = vi.hoisted(() => ({
     error: vi.fn(),
     warning: vi.fn(),
     info: vi.fn(),
+    dismiss: vi.fn(),
   },
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }))
@@ -52,24 +53,6 @@ vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   notifyApi: api,
-}))
-
-// AlertingView mounts RecordingNotice (AC-8). Stub only its data seam so the real
-// component still renders — a mocked-away component could be deleted from the view
-// without a single cell noticing, which is the class of gap this suite exists to close.
-const { recordingApiMock } = vi.hoisted(() => ({
-  recordingApiMock: { notice: vi.fn(), acknowledge: vi.fn() },
-}))
-// The notice reads only once server-info says Recording runs (EU-CB02): here it does.
-vi.mock('@/lib/hooks/use-server-info', () => ({
-  useServerInfo: () => ({
-    isSuccess: true,
-    data: { edition: 'enterprise', modules_not_enabled: [] },
-  }),
-}))
-vi.mock('@/features/recordings/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/recordings/api')>()),
-  recordingApi: recordingApiMock,
 }))
 
 import { ApiError } from '@/lib/api/errors'
@@ -178,11 +161,6 @@ beforeEach(() => {
   api.restoreRoute.mockResolvedValue(route)
   api.listOutbox.mockResolvedValue({ items: [deadRow], has_more: false })
   api.redeliverOutbox.mockResolvedValue({ id: 'ob-1', status: 'queued' })
-  recordingApiMock.notice.mockResolvedValue({
-    recorded_namespaces: [],
-    consent_required: false,
-  })
-  recordingApiMock.acknowledge.mockResolvedValue({ acknowledged: true })
 })
 
 describe('AlertingView', () => {
@@ -778,34 +756,6 @@ describe('AlertingView · dead letters', () => {
     expect(loud.closest('[role="alert"]')).not.toBeNull()
   })
 
-  // The other half of contrast finding finding 2: naming the consent 403 correctly is useless
-  // if the operator has no way to answer it. AlertingView now mounts RecordingNotice,
-  // whose blocking dialog is how the acknowledgement is given — without it the engine
-  // stays deny-closed and the screen offers no exit.
-  it('offers the recording acknowledgement when the tenant requires consent', async () => {
-    recordingApiMock.notice.mockResolvedValue({
-      recorded_namespaces: ['notify'],
-      consent_required: true,
-    })
-    wrap(<AlertingView />)
-
-    expect(
-      await screen.findByRole('button', { name: /acknowledge and continue/i }),
-    ).toBeInTheDocument()
-  })
-
-  it('stays out of the way when notify is not a recorded namespace', async () => {
-    // CONTROL for the cell above: the strip and dialog must not appear for every tenant,
-    // or the assertion would pass on a component that always renders.
-    wrap(<AlertingView />)
-    expect(
-      await screen.findByRole('tab', { name: /dead letters/i }),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /acknowledge and continue/i }),
-    ).not.toBeInTheDocument()
-  })
-
   /* ── the ⌘K verb and the dialog it opens (A1, spec04 §1) ───────────────────── */
 
   // ⛔ THE MEASURED DEFECT. `notify:route:write` gates the "New route" button and every
@@ -997,7 +947,6 @@ describe('AlertingView · dead letters', () => {
   //      synchronously, so the stale control is fired exactly as a stale control is fired.
   async function settled() {
     await screen.findByText('sec-alerts')
-    await waitFor(() => expect(recordingApiMock.notice).toHaveBeenCalled())
     await act(async () => {})
   }
 

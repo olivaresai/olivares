@@ -22,10 +22,11 @@ func limitSentence(run map[string]any, now time.Time) string {
 		if !at.After(now) {
 			return "" // the limit has lifted; the next turn clears the fact
 		}
-		at = at.Local()
-		layout := "15:04"
+		// In UTC, as the tool's own limit line says it ("resets Nov 3, 3am (UTC)").
+		at, now = at.UTC(), now.UTC()
+		layout := "15:04 UTC"
 		if y, m, d := at.Date(); y != now.Year() || m != now.Month() || d != now.Day() {
-			layout = "2006-01-02 15:04"
+			layout = "2006-01-02 15:04 UTC"
 		}
 		return "Out of quota until " + at.Format(layout)
 	}

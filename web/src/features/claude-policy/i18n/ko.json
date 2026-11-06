@@ -1,14 +1,15 @@
 {
-  "title": "Claude Code 거버넌스",
+  "title": "관리형 정책",
   "subtitle": "관리형 정책, 훅, MCP 및 샌드박스 제어, Cedar/OPA 정책형 코드를 작성하고 엔진이 보고하는 정책 대 관측 드리프트를 검토합니다.",
   "tabs": {
-    "drift": "드리프트 및 태세",
+    "drift": "드리프트",
     "managedSettings": "관리형 설정",
     "hooks": "훅",
-    "managedMcp": "MCP 및 플러그인",
-    "sandbox": "샌드박스 및 이그레스",
+    "managedMcp": "MCP",
+    "sandbox": "샌드박스",
     "policyAsCode": "정책형 코드",
-    "hitl": "관리형 에이전트 HITL"
+    "hitl": "관리형 에이전트 HITL",
+    "departmentInstructions": "부서 지침"
   },
   "seam": {
     "badge": "백엔드 대기 중",
@@ -74,7 +75,7 @@
   },
   "drift": {
     "title": "정책 드리프트 및 태세",
-    "subtitle": "읽기 전용 커넥터가 보고하는 허용 정책 대 관측된 호스트 구성.",
+    "subtitle": "각 호스트의 설정이 정책과 다른 부분입니다.",
     "listLabel": "드리프트 발견",
     "subject": "주체",
     "fingerprint": "지문",
@@ -292,5 +293,18 @@
     "unverified": "검증되지 않음",
     "contentUnknown": "내용 알 수 없음(증명만 있음)",
     "openFindings_other": "열린 발견 {{count}}개"
+  },
+  "department": {
+    "title": "부서 지침 파일",
+    "hint": "부서가 가진 내용으로 생성되는 지침 파일입니다. 부서의 세션에 전달되는 것과 같은 텍스트입니다. 미리 본 뒤 부서의 워크스테이션용으로 게시합니다. 지침이 남지 않은 부서는 게시한 파일을 철회합니다.",
+    "select": "부서",
+    "selectPlaceholder": "부서 선택",
+    "preview": "미리보기",
+    "publish": "게시",
+    "published": "지침 파일을 게시했습니다.",
+    "previewFailed": "부서 파일을 미리 볼 수 없습니다",
+    "fileLabel": "부서 지침 파일",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_other": "게시된 리비전 {{count}}개"
   }
 }

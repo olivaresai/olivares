@@ -20,7 +20,7 @@ func TestProviderAccountOpenAPIMetadataContract(t *testing.T) {
 		t.Fatalf("metadata body must be closed and require at least one field: %v", body)
 	}
 	properties := schema["properties"].(map[string]any)
-	if len(properties) != 3 || properties["name"].(map[string]any)["type"] != "string" || properties["display_name"].(map[string]any)["type"] != "string" || !reflect.DeepEqual(properties["accent"].(map[string]any)["enum"], []any{"", "orange", "green", "amber", "red", "blue"}) {
+	if len(properties) != 3 || properties["name"].(map[string]any)["type"] != "string" || properties["display_name"].(map[string]any)["type"] != "string" || !reflect.DeepEqual(properties["accent"].(map[string]any)["enum"], []any{"", "orange", "green", "amber", "red", "blue", "purple", "pink", "teal", "slate"}) {
 		t.Fatalf("metadata patch accepts fields other than a string label: %v", properties)
 	}
 	responses := op["responses"].(map[string]any)

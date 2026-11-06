@@ -179,6 +179,24 @@ describe('nav labels for every registered view', () => {
     },
   )
 
+  // One MCP place: MCP servers are set up, tested and observed on Extensions' Servers tab,
+  // and "MCP & skills", its former name, is the word the palette finds it by. An entry
+  // that names MCP would be a second place to look for the same list.
+  it.each([...LANGUAGE_CODES])(
+    '"%s" names MCP in no navigation entry and keeps it as the Extensions search word',
+    (lng) => {
+      const items = navItems(lng)
+      const naming = FEATURE_VIEWS.filter((v) =>
+        /\bMCP\b/i.test(String(items[v.id] ?? '')),
+      ).map((v) => v.id)
+      expect(naming).toEqual([])
+      const aliases = JSON.parse(
+        readFileSync(join(LOCALES_ROOT, lng, 'nav.json'), 'utf8'),
+      ).aliases as Record<string, string>
+      expect(aliases.capabilities).toMatch(/\bMCP\b/)
+    },
+  )
+
   it.each([...LANGUAGE_CODES])(
     '"%s" carries no nav:items key without a view',
     (lng) => {

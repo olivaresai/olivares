@@ -33,8 +33,7 @@
     "urlRejected_other": "이 링크의 값 {{count}}개를 사용할 수 없습니다({{keys}}). 보기가 기본값으로 돌아갔습니다.",
     "savedViewRejected": "“{{name}}”에 저장된 값 {{count}}개를 사용할 수 없습니다({{keys}}). 보기가 기본값으로 돌아갔습니다.",
     "savedViewRejected_other": "“{{name}}”에 저장된 값 {{count}}개를 사용할 수 없습니다({{keys}}). 보기가 기본값으로 돌아갔습니다.",
-    "thisSavedView": "이 저장된 보기",
-    "dismiss": "닫기"
+    "thisSavedView": "이 저장된 보기"
   },
   "workspaceRequired": {
     "use": "{{name}} 사용",

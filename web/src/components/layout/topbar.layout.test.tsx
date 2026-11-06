@@ -11,7 +11,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
-import { renderIntel } from '@/test/intel'
+import { createTestQueryClient, renderIntel } from '@/test/intel'
 
 const routerState = vi.hoisted(() => ({
   pathname: '/console',
@@ -19,6 +19,8 @@ const routerState = vi.hoisted(() => ({
 }))
 const identity = vi.hoisted(() => ({ version: '1.0' }))
 const navigate = vi.hoisted(() => vi.fn())
+// How many organizations the person belongs to and how many workspaces the list holds.
+const scope = vi.hoisted(() => ({ orgs: 2, workspaces: 2 }))
 const authz = vi.hoisted(() => ({
   denied: new Set<string>(),
   estateStopped: false,
@@ -61,7 +63,7 @@ vi.mock('@/lib/auth/context', () => ({
     grants: [
       { tenant: '01a0776d-4e2c-4c1b-9f3a-000000000001', role: 'owner' },
       { tenant: '7b3c9e10-1111-4c1b-9f3a-000000000002', role: 'viewer' },
-    ],
+    ].slice(0, scope.orgs),
     activeTenant: '01a0776d-4e2c-4c1b-9f3a-000000000001',
     activeRole: 'owner',
     isSuperadmin: false,
@@ -93,7 +95,7 @@ vi.mock('@/features/console/api', () => ({
           status: 'active',
           is_default: false,
         },
-      ],
+      ].slice(0, scope.workspaces),
       has_more: false,
     }),
   },
@@ -143,6 +145,7 @@ vi.mock('@/lib/auth/capabilities', async (importOriginal) => ({
 }))
 
 import { afterEach } from 'vitest'
+import { consoleKeys } from '@/features/console/api'
 import { useCommandStore } from '@/stores/command'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { ScopeSwitcher } from './scope-switcher'
@@ -180,7 +183,7 @@ describe('the top bar holds the title and four controls, nothing else (0.5)', ()
     expect(within(header).queryAllByRole('link')).toEqual([])
     expect(
       header.querySelector('[data-slot="topbar-title"]'),
-    ).toHaveTextContent('Administration')
+    ).toHaveTextContent('People')
     await waitFor(() => expect(controls(header)).toHaveLength(4))
     const [menu, search, bell, account] = controls(header)
     expect(menu).toHaveAccessibleName('Open navigation')
@@ -204,7 +207,7 @@ describe('the top bar holds the title and four controls, nothing else (0.5)', ()
     const { container } = renderIntel(<Topbar onMenu={() => {}} />)
     expect(
       container.querySelector('[data-slot="topbar-title"]'),
-    ).toHaveTextContent('Rules & approvals')
+    ).toHaveTextContent('Rules')
   })
 
   it('moves the version, theme, favorites, the mark and Stop all out of the bar', () => {
@@ -261,6 +264,37 @@ describe('the top bar holds the title and four controls, nothing else (0.5)', ()
 
 // The scope moved from the bar to the left navigation (sidebar.tsx) with the same control.
 describe('the scope control', () => {
+  afterEach(() => Object.assign(scope, { orgs: 2, workspaces: 2 }))
+
+  it('draws nothing with one organization and one workspace, and the control once a second workspace is made', async () => {
+    Object.assign(scope, { orgs: 1, workspaces: 1 })
+    useWorkspaceStore.setState({
+      activeWorkspace: null,
+      activeWorkspaceName: null,
+    })
+    const queryClient = createTestQueryClient()
+    const { container } = renderIntel(<ScopeSwitcher />, { queryClient })
+    await waitFor(() =>
+      expect(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['workspaces'], exact: false })?.state.status,
+      ).toBe('success'),
+    )
+    // One choice is no choice: the slot stays empty.
+    expect(container).toBeEmptyDOMElement()
+
+    // A second workspace, invalidated the way the create dialog does it (scopes-tab.tsx).
+    scope.workspaces = 2
+    await queryClient.invalidateQueries({
+      queryKey: consoleKeys.workspaces('01a0776d-4e2c-4c1b-9f3a-000000000001'),
+    })
+    expect(await within(container).findByRole('button')).toHaveAttribute(
+      'title',
+      expect.stringContaining('All workspaces'),
+    )
+  })
+
   it('names the scope once: the workspace in force, or the organization when none is', async () => {
     useWorkspaceStore.setState({
       activeWorkspace: 'w2',
@@ -331,7 +365,7 @@ describe('the bar speaks the platform and names its icons (#3121)', () => {
     expect(search.textContent).toBe('Search')
   })
 
-  it('gives every control that shows only an icon a tooltip with its name', () => {
+  it('gives every control that shows only an icon a tooltip with its name', async () => {
     const { container } = renderIntel(<Topbar onMenu={() => {}} />)
     const header = container.querySelector('header') as HTMLElement
     /** The text a sighted person reads on the control: screen-reader-only text aside. */
@@ -351,8 +385,10 @@ describe('the bar speaks the platform and names its icons (#3121)', () => {
     expect(
       within(header).getByRole('button', { name: 'Search and commands' }),
     ).toHaveAttribute('title', 'Search and commands')
-    expect(
-      within(header).getByRole('button', { name: /, Account$/ }),
-    ).toHaveAttribute('title', 'Account')
+    // The account control names itself in the console's tooltip, not a native title.
+    const account = within(header).getByRole('button', { name: /, Account$/ })
+    expect(account).not.toHaveAttribute('title')
+    await userEvent.setup().hover(account)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Account')
   })
 })

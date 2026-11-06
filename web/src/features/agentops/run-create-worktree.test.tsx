@@ -161,7 +161,7 @@ describe('RunCreateDialog — new git worktree', () => {
     await user.click(screen.getByLabelText('Folder'))
     await user.click(
       await screen.findByRole('option', {
-        name: 'Temporary folder for this session',
+        name: 'Default (My files)',
       }),
     )
     expect(worktreeBox()).not.toBeInTheDocument()

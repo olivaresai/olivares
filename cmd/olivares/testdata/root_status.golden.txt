@@ -3,8 +3,10 @@ Olivares AI dev
 ENGINE     none found on this machine
 SIGNED IN  no
 NEXT       olivares quickstart
+To use an engine on another computer: olivares login --server <url>
 
 Start here:
+  ask        Ask Olivares: an assistant that acts for you on the model your administrator chose
   doctor     Check this host's installation and say what to fix
   login      Sign in to an engine and keep the sign-in for the next commands
   quickstart Start the engine for the first time and open the console

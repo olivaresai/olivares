@@ -4,54 +4,35 @@
 import { expect, test } from '@playwright/test'
 import { browserSession, fixtureFor } from './fixtures'
 
-for (const recorded of [false, true]) {
-  test(`access map has one notice with recording ${recorded ? 'on' : 'off'}`, async ({
-    page,
-  }, testInfo) => {
-    await page.route('**/v1/**', async (route) => {
-      const path = new URL(route.request().url()).pathname
-      if (path === '/v1/auth/browser-session')
-        return route.fulfill({ json: browserSession })
-      if (path.endsWith('/stream'))
-        return route.fulfill({
-          contentType: 'text/event-stream',
-          body: ': connected\n\n',
-        })
-      if (path === '/v1/m/recording/notice')
-        return route.fulfill({
-          json: {
-            recorded_namespaces: recorded ? ['accessmap'] : [],
-            consent_required: false,
-            consent_mode: 'notice',
-            acknowledged: false,
-          },
-        })
+// Recording is a Business capability: a Community build never asks the engine about it and
+// shows the access map's own notice. The recorded variant lives with the Business overlay.
+test('access map has one notice', async ({ page }, testInfo) => {
+  await page.route('**/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/v1/auth/browser-session')
+      return route.fulfill({ json: browserSession })
+    if (path.endsWith('/stream'))
       return route.fulfill({
-        json: fixtureFor(path) ?? { items: [], has_more: false },
+        contentType: 'text/event-stream',
+        body: ': connected\n\n',
       })
-    })
-    await page.addInitScript(() => {
-      localStorage.setItem('olivares.lang', 'en')
-      localStorage.setItem('olivares.theme', 'light')
-      localStorage.setItem(
-        'olivares.tenant',
-        JSON.stringify({ state: { activeTenant: 't-demo' }, version: 0 }),
-      )
-    })
-    await page.goto('/access-map')
-    await expect(page.locator('.react-flow__node').first()).toBeVisible()
-    await expect(
-      page.getByText(/privileged, audited action|recorded privileged surface/i),
-    ).toHaveCount(1)
-    await expect(
-      page.getByText(
-        recorded
-          ? /recorded privileged surface/i
-          : /privileged, audited action/i,
-      ),
-    ).toBeVisible()
-    await page.screenshot({
-      path: testInfo.outputPath('access-map-notice.png'),
+    return route.fulfill({
+      json: fixtureFor(path) ?? { items: [], has_more: false },
     })
   })
-}
+  await page.addInitScript(() => {
+    localStorage.setItem('olivares.lang', 'en')
+    localStorage.setItem('olivares.theme', 'light')
+    localStorage.setItem(
+      'olivares.tenant',
+      JSON.stringify({ state: { activeTenant: 't-demo' }, version: 0 }),
+    )
+  })
+  await page.goto('/access-map?view=graph')
+  await expect(page.locator('.react-flow__node').first()).toBeVisible()
+  await expect(page.getByText(/recorded in the audit ledger/i)).toHaveCount(1)
+  await expect(page.getByText(/recorded privileged surface/i)).toHaveCount(0)
+  await page.screenshot({
+    path: testInfo.outputPath('access-map-notice.png'),
+  })
+})

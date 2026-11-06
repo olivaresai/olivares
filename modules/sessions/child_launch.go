@@ -527,8 +527,12 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 		ConfinementRequireTruncateProtection: p.requireTruncateProtection,
 		// A read-only session's promise, like a no-delete folder's, is the operating
 		// system's: it does not start where it cannot be confined, whatever the node's
-		// own setting.
-		ConfinementRequired: m.rt.confineRequired || preset == PresetReadOnly || (d.ws != nil && (len(d.ws.readOnlyFolders) > 0 || d.ws.mountMode == mountNoDelete)),
+		// own setting. A native OpenCode child is the same: it loads the plugins, agents and
+		// configuration of every ancestor of its folder, and only the operating system keeps
+		// those out (a check before spawn would race their creation).
+		ConfinementRequired: m.rt.confineRequired || preset == PresetReadOnly || (driverKey == providerDriverOpenCode && p.Isolation != IsolationContainer) || (d.ws != nil && (len(d.ws.readOnlyFolders) > 0 || d.ws.mountMode == mountNoDelete)),
+		MemoryMax:           m.rt.limits.MemoryMax,
+		TasksMax:            m.rt.limits.TasksMax,
 	}
 }
 

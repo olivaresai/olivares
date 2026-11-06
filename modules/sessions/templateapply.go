@@ -116,6 +116,7 @@ type tplTerms struct {
 	unenforceable             []string
 	peersRule                 string
 	requireTruncateProtection bool
+	requireReadOnlyFolders    bool
 }
 
 // templateTerms reduces a template body to the terms a launch can impose, and names
@@ -125,6 +126,9 @@ type tplTerms struct {
 func templateTerms(body tplBody) tplTerms {
 	var t tplTerms
 	if s := body.Settings; s != nil {
+		if s.AIAttribution != "" && !validAIAttribution(s.AIAttribution) {
+			t.unenforceable = append(t.unenforceable, "settings.ai_attribution: want off, assisted-by or co-authored-by")
+		}
 		t.permissionMode = strings.TrimSpace(s.PermissionMode)
 		t.effort = strings.TrimSpace(s.Effort)
 		t.model = strings.TrimSpace(s.Model)
@@ -132,7 +136,11 @@ func templateTerms(body tplBody) tplTerms {
 		t.secretEnv = append([]SecretEnvRef(nil), s.SecretEnv...)
 	}
 	if p := body.Policies; p != nil {
+		if p.SessionsDisabled {
+			t.unenforceable = append(t.unenforceable, "policies.sessions_disabled: sessions are disabled by this template")
+		}
 		t.requireTruncateProtection = p.RequireTruncateProtection
+		t.requireReadOnlyFolders = p.RequireReadOnlyFolders
 		t.allowedTools = normalizeTools(p.AllowedTools)
 		if p.RecordIO != nil {
 			t.recordIO = *p.RecordIO
@@ -319,6 +327,7 @@ func (t tplTerms) applyTo(p *CreateRunParams) []mergeConflict {
 	// run's own peer choice, even if the template has changed in the meantime.
 	p.templatePeersRule = t.peersRule
 	p.requireTruncateProtection = t.requireTruncateProtection
+	p.requireReadOnlyFolders = t.requireReadOnlyFolders
 	var conflicts []mergeConflict
 	set := func(field string, cur *string, want string) {
 		if want == "" || *cur == want {
@@ -577,4 +586,12 @@ func (t tplTerms) refuseWiderTemplateMode(p *CreateRunParams) error {
 		return nil
 	}
 	return forbiddenErr("this template runs its allowed tools without asking (edits and commands), which is more than the permission you chose; choose edits and commands, or launch without this template")
+}
+
+// checkTemplateWorkspace checks the workspace snapshot actually used by the launch.
+func (p CreateRunParams) checkTemplateWorkspace(ws *resolvedWorkspace) error {
+	if p.requireReadOnlyFolders && (ws == nil || len(ws.readOnlyFolders) == 0) {
+		return badRequest("this template requires a scratch workspace with the course folder attached through read_only_folders")
+	}
+	return nil
 }

@@ -24,8 +24,8 @@ description: >-
 потому что это сервер — ограничивайте его осознанно, как показано ниже.
 
 <!-- release -->
-:::note[Olivares 0.6]
-Следующий выпуск — `0.6`; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в `docs/releases/0.6-install-surfaces.json`.
+:::note[Olivares 0.7]
+Следующий выпуск — `0.7`; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в `docs/releases/0.7-install-surfaces.json`.
 :::
 <!-- /release -->
 
@@ -40,7 +40,7 @@ description: >-
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.6
+docker pull docker.io/olivaresai/olivares:0.7
 ```
 <!-- /release -->
 
@@ -49,8 +49,8 @@ docker pull docker.io/olivaresai/olivares:0.6
 **анонимных** пулов; ghcr.io не ограничивает анонимные пулы публичных образов — поэтому
 `docker login` или координата ghcr.io и есть выход, если узел CI или большой парк упирается
 в лимит. Теги несут **без
-ведущего `v`**: <!-- release -->`:0.6`<!-- /release --> закрепляет релиз, `:latest` плавает, а <!-- release -->
-`:0.6-fips`<!-- /release --> / <!-- release -->`:0.6-stig`<!-- /release --> — усиленные варианты. Базовый тег и `:latest`
+ведущего `v`**: <!-- release -->`:0.7`<!-- /release --> закрепляет релиз, `:latest` плавает, а <!-- release -->
+`:0.7-fips`<!-- /release --> / <!-- release -->`:0.7-stig`<!-- /release --> — усиленные варианты. Базовый тег и `:latest`
 мультиархитектурные (`linux/amd64`, `linux/arm64`); `fips`/`stig` — только
 `amd64`.
 
@@ -62,7 +62,7 @@ Docker Hub через `cosign copy`, поэтому digest тот же:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.6")"
+DIGEST="$(crane digest "$IMAGE:0.7")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -92,17 +92,28 @@ cosign verify-attestation "$REF" --type spdxjson \
 <!-- release -->
 ```bash
 docker volume create olivares-data
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
 
 docker run -d --name olivares \
+  --hostname olivares \
   --user 65532:65532 \
   --read-only \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
+  --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.6 \
+  docker.io/olivaresai/olivares:0.7 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -118,6 +129,7 @@ docker run -d --name olivares \
 | `--tmpfs /tmp` | записываемый временный tmpfs, требуемый из-за того, что rootfs только для чтения |
 | `--cap-drop ALL` | движку не нужны Linux-capabilities |
 | `--security-opt no-new-privileges` | блокировка повышения привилегий через setuid-бинарники |
+| `--security-opt seccomp=olivares-sessions.json $apparmor` | seccomp-профиль сессий, прочитанный из образа первой командой: стандартный профиль Docker плюс пространства имён пользователя, сети и монтирования, в которых сессия изолирует свой инструмент (там, где AppArmor контролирует пользовательские пространства имён, как в Debian 13 и Ubuntu 24.04 и новее, `$apparmor` также выбирает AppArmor-профиль сессий, загруженный блоком) |
 | `-v olivares-data:/var/lib/olivares` | сохранение каталога данных (см. [§5](#5-операционные-заметки)) |
 | `-p 8443:8443` | публикация HTTPS (REST + веб-интерфейс) **на всех интерфейсах хоста** |
 | `-p 8444:8444` | публикация gRPC (приём / API ControlPlane) на всех интерфейсах хоста |
@@ -341,7 +353,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. Закрепление по digest для продакшена
 
-Изменяемые теги (<!-- release -->`:0.6`<!-- /release -->, `:latest`) — для оценки. В продакшене закрепляйте
+Изменяемые теги (<!-- release -->`:0.7`<!-- /release -->, `:latest`) — для оценки. В продакшене закрепляйте
 **digest**, который вы проверили — digest неизменяем и есть ровно то, что вы
 утвердили:
 

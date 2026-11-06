@@ -1,12 +1,13 @@
 {
-  "title": "承認と権限",
+  "title": "権限",
   "subtitle": "人の判断を待つリクエスト、アクションを許可または拒否するルール、そして誰が操作できるか。",
   "tabs": {
     "approvals": "承認",
     "policies": "ポリシー",
-    "identities": "アイデンティティとグループ",
+    "identities": "アイデンティティ",
     "breakGlass": "緊急アクセス",
-    "agentRisk": "エージェントリスク"
+    "agentRisk": "エージェントリスク",
+    "vaults": "共有ボルト"
   },
   "breakGlass": {
     "title": "緊急アクセス",
@@ -129,7 +130,7 @@
     "noSubject": "サブジェクトなし",
     "filterStatus": "ステータス",
     "statusAll": "すべてのステータス",
-    "runSweep": "期限切れのリクエストを失効させてエスカレーションする",
+    "runSweep": "期限切れのリクエストを処理",
     "newRequest": "新規要求",
     "empty": "承認要求はありません",
     "emptyHint": "アクションが人による承認を必要とする場合、ここにレビュー用として表示されます。",
@@ -222,7 +223,7 @@
     "decisionApproveForSession": "このセッション中は承認済み",
     "decisionReject": "却下",
     "reenableNeedsAdmins": "ほかの管理者アカウント 2 つの承認が必要です。「アイデンティティとアクセス」または `olivares users create` で作成してください。",
-    "openIdentity": "「アイデンティティとアクセス」を開く",
+    "openIdentity": "「アイデンティティ」を開く",
     "cannotDecideOwn": "自分のリクエストは承認できません。別の管理者が判断する必要があります。",
     "requesterCannotApprove": "リクエストした本人は、そのリクエストを承認できません。",
     "launchedBy": "起動したユーザー",
@@ -472,7 +473,7 @@
     "subtitle": "Claude Code ルーチンの実行間隔の下限、同時実行数の上限、承認要件、cron 許可リスト、ブロックする環境を定めます。重なるポリシーは常に最も厳しいものが優先される形で合成されます。",
     "search": "ルーチンポリシーを検索…",
     "newPolicy": "新しいポリシー",
-    "enforcementCaption": "これらの制御はルーチンの宣言時と、毎回の発火時に適用されます。無効なポリシーは保存されますが、合成には一切寄与しません。",
+    "enforcementCaption": "これらの制御はルーチンの宣言時と、毎回の発火時に適用されます。無効なポリシーは保存されますが、何にも適用されません。",
     "enabledYes": "有効",
     "enabledNo": "無効",
     "approvalYes": "必須",
@@ -491,7 +492,7 @@
       "envs": "ブロックされた環境"
     },
     "scope": {
-      "tenant": "テナント",
+      "tenant": "組織",
       "workspace": "ワークスペース",
       "user": "ユーザー"
     },
@@ -509,12 +510,12 @@
       "unreadableCaveat": "エンジンはこの保存列を解析できませんでした。適用側はそのようなポリシーを丸ごと拒否します。つまり何かを許可するのではなく、既定で拒否します。"
     },
     "posture": {
-      "title": "実効ポスチャ",
+      "title": "有効なルール",
       "counts": "{{total}} 件中 {{enabled}} 件が有効",
       "workspaceRef": "ワークスペース",
       "userRef": "ユーザー",
-      "defaultWorkspace": "テナントの既定",
-      "noUser": "所有ユーザーなし",
+      "defaultWorkspace": "組織の既定",
+      "noUser": "所有者なし",
       "resolve": "解決",
       "indeterminate": "この解決は {{axis}} 軸で不確定です。ここでは適用側が既定で拒否します。制御がないのではなく、拒否です。",
       "floor": "実行間隔の下限",
@@ -524,17 +525,17 @@
       "cap": "{{scope}} · 最大 {{max}}",
       "origin": "合成元:",
       "none": "このスコープを規制する有効なポリシーはありません。",
-      "failed": "ポスチャを読み取れませんでした",
+      "failed": "有効なルールを読み取れませんでした",
       "resolvedFor": "ワークスペース {{workspace}} · ユーザー {{user}} について解決",
       "stale": "上のスコープが変更されました。もう一度解決してください",
-      "unknownUser": "回答できないユーザー軸",
-      "unknownUserAxis": "ユーザー軸を回答不能にする",
+      "unknownUser": "所有者不明",
+      "unknownUserAxis": "所有者不明",
       "supersededByIndeterminate": "下の値はそこまでに合成されたものです。結果ではありません。不確定な解決は、そこに何が出ていても丸ごと拒否されます。",
-      "noneIndeterminate": "このスコープではポリシーが一つも構成されず、解決は回答不能な軸で拒否されました。ここに制御が適用されていないという意味ではありません。"
+      "noneIndeterminate": "このスコープにどのポリシーが適用されるかを Olivares が判断できなかったため、照会は拒否されました。ここに制御が適用されていないという意味ではありません。"
     },
     "remove": {
       "title": "ルーチンポリシーを削除",
-      "body": "「{{name}}」は実効ポスチャの合成から外れます。制限されていたルーチンは、残りのポリシーのみの対象になります。",
+      "body": "「{{name}}」は適用されなくなります。制限されていたルーチンは、残りのポリシーのみの対象になります。",
       "confirm": "ポリシーを削除",
       "done": "ルーチンポリシーを削除しました"
     },
@@ -550,7 +551,7 @@
       "scopeImmutable": "作成後は変更できません。",
       "scopeRef": "スコープ参照",
       "scopeRefRequired": "ワークスペースまたはユーザースコープのポリシーには参照が必要です。",
-      "tenantScopeRef": "テナントスコープのポリシーに参照を付けてはいけません。",
+      "tenantScopeRef": "組織スコープのポリシーに参照を付けてはいけません。",
       "enabled": "ポリシーを有効にする",
       "floorToggle": "実行間隔の下限を適用する",
       "floor": "最小間隔（秒）",
@@ -653,8 +654,7 @@
     "partialBody": "エクスポートは承認され実行されましたが、一部の書き込みが成功しませんでした。リモートのエンジンは変化しているため、プランを計算し直して残りを確認してください。",
     "applyFailed": "エクスポートを適用できませんでした。",
     "notWiredTitle": "このデプロイでは AgentCore エクスポートが構成されていません",
-    "notWiredBody": "このテナント用の AgentCore エクスポーターが構成されていないため、エンジンは要求を拒否します。オペレーターはホスト上で、この変数をエクスポート構成ファイルに向けることで有効化します:",
-    "notWiredCredentials": "このファイルはオペレーターのものであり、AWS の書き込み認証情報を含みます。コンソールがそれを表示・要求・編集することは決してありません。",
+    "notWiredBody": "管理者がサーバー設定で有効にします。",
     "deniedTitle": "エンジンがこのエクスポートを拒否しました",
     "pageTitle": "AgentCore エクスポート",
     "emptyAction": "最初のプランを計算"
@@ -666,6 +666,7 @@
     "askedBy": "要求元",
     "askedBySession": "セッション自身",
     "askedByForSession": "{{name}}（新しいセッション）",
+    "askedByThroughSession": "{{name}}（実行中のセッション）",
     "tool": "ツール",
     "willRun": "実行される内容",
     "noReview": "このリクエストには実行される内容が含まれていません。",
@@ -702,5 +703,31 @@
   },
   "queue": {
     "needsYou": "あなたの判断待ち"
+  },
+  "vaults": {
+    "heading": "共有ボルト",
+    "name": "ボルト名",
+    "create": "ボルトを作成",
+    "created": "ボルトを作成しました",
+    "empty": "共有ボルトはまだありません。",
+    "shares": "共有",
+    "sharesFor": "{{name}} の共有",
+    "noShares": "まだ誰とも共有していません。",
+    "sharedWith": "共有先",
+    "subjectKind": "種類",
+    "role": "権限",
+    "share": "共有",
+    "shared": "ボルトを共有しました",
+    "revoke": "取り消す",
+    "revoked": "共有を取り消しました",
+    "kind": {
+      "user": "ユーザー",
+      "group": "グループ"
+    },
+    "roles": {
+      "viewer": "閲覧者",
+      "editor": "編集者",
+      "owner": "所有者"
+    }
   }
 }

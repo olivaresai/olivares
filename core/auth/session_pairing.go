@@ -79,7 +79,8 @@ func (a *Authenticator) CreateSessionPairing(ctx context.Context, actor Principa
 			expires = source.ExpiresAt
 		}
 		pending, err = as.Sessions().Create(ctx, model.AuthSession{UserID: actor.UserID, Selector: credential.Selector, SecretHash: credential.SecretHash,
-			ExpiresAt: expires, TenantScope: source.TenantScope, AAL: 1, ClientKind: model.SessionClientPairing, DeviceName: name, PairingSourceID: source.ID})
+			ExpiresAt: expires, TenantScope: source.TenantScope, AAL: 1, ClientKind: model.SessionClientPairing, DeviceName: name, PairingSourceID: source.ID,
+			IdPSession: source.IdPSession})
 		if err != nil {
 			return err
 		}
@@ -129,6 +130,10 @@ func (a *Authenticator) AcceptSessionPairing(ctx context.Context, token, ip stri
 		if err := a.enforceRequireSSO(ctx, admittedUser); err != nil {
 			return "", model.AuthSession{}, err
 		}
+	}
+	// A paired device is a new sign-in: the freshness port may refuse it.
+	if err := a.requireFreshSignIn(ctx, admittedUser.ID, ip); err != nil {
+		return "", model.AuthSession{}, err
 	}
 	var result model.AuthSession
 	var bearer string

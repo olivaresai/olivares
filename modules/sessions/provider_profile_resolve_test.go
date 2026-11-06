@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
@@ -134,7 +136,7 @@ func TestResolve_RefusalSentenceNamesTheToolAndItsKey(t *testing.T) {
 	t.Run("incompatible_key_is_not_a_missing_provider", func(t *testing.T) {
 		m, tenant, _ := resolveHarness(t)
 		addRecord(t, m, tenant, ProviderKindOpenAICompatible, "Gateway", "https://gateway.example.test/v1", "fixture-compatible-provider-key")
-		want := "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama, or an OpenAI-compatible server at a local address)."
+		want := "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, an OpenRouter, DeepSeek, Mistral, Moonshot or Z.ai key at its documented address, or on a local model (Ollama, or an OpenAI-compatible server at a local address)."
 		for _, resolve := range []func(context.Context, model.TenantID, string) (ResolvedProfile, error){m.PreviewProfile, m.ResolveProfile} {
 			_, err := resolve(context.Background(), tenant, "opencode")
 			if statusOf(err) != http.StatusConflict || err.Error() != want {
@@ -483,6 +485,87 @@ func TestAProfileOnTheServerUserLoginIsShownAndNotUsed(t *testing.T) {
 	}
 }
 
+// The engine user's login runs a new session only for the node's only person, on a HOME
+// the product made, with the tool's configuration home the one place it reaches. When the
+// policy closes, the same profile is refused and shown as such, like any other.
+func TestResolve_TheServerLoginServesTheOnlyPersonOnAProductHome(t *testing.T) {
+	m, tenant, stub := resolveHarness(t)
+	ctx := context.Background()
+	stub.signedIn["claude"] = true
+	engineHome, err := filepath.EvalSymlinks(os.Getenv("HOME"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	userClaude := filepath.Join(engineHome, ".claude")
+	if err := os.MkdirAll(userClaude, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	open := true
+	m.ServerLoginOpen = func(context.Context, model.TenantID) bool { return open }
+	m.ServerToolLogin = func(context.Context, model.TenantID, string) (string, string) { return userClaude, "" }
+
+	if preview, err := m.PreviewProfile(ctx, tenant, "claude"); err != nil || preview.Reason != ResolveOwnLogin || preview.Profile.Ref != "" {
+		t.Fatalf("preview = %+v %v, want its own login and no profile yet", preview, err)
+	}
+	got, err := m.ResolveProfile(ctx, tenant, "claude")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	roots, _ := filepath.EvalSymlinks(m.profileHomesRoot)
+	if got.Profile.ConfigHome != userClaude || got.Profile.UserHome != filepath.Join(roots, got.Profile.Ref) {
+		t.Fatalf("homes = %q %q, want the tool's %q and the product's own HOME", got.Profile.ConfigHome, got.Profile.UserHome, userClaude)
+	}
+	if again, err := m.ResolveProfile(ctx, tenant, "claude"); err != nil || again.Created || again.Profile.Ref != got.Profile.Ref {
+		t.Fatalf("second resolve = %+v %v, want the same profile", again, err)
+	}
+	if _, err := m.snapshotForLaunch(tenant, got.Profile, m.ExecutionEnvironmentRef()); err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	if m.toProfileDTO(got.Profile).ServerUserLogin {
+		t.Fatal("a usable profile is marked as not launched")
+	}
+	// A launch and a resume read this profile's status in its own homes once it is named.
+	if _, config, err := m.ProviderLoginHome(ctx, tenant, "claude", got.Profile.Ref); err != nil || config != userClaude {
+		t.Fatalf("the profile's login home = %q %v, want %q", config, err, userClaude)
+	}
+
+	// A profile that names the engine user's HOME itself stays refused while the policy is open.
+	if onHome := (ProviderProfile{Driver: "claude", Ref: got.Profile.Ref, UserHome: engineHome}); m.serverLoginUsable(tenant, onHome) {
+		t.Fatal("a profile on the engine user's HOME may run on the server login")
+	}
+
+	// A login only in the user's settings says so, in the one sentence, when nothing else can run.
+	const settingsOnly = "Claude Code authentication exists only in user settings, which governed sessions disable; sign in through AI tools or add an Anthropic key in Providers."
+	m.ServerToolLogin = func(context.Context, model.TenantID, string) (string, string) { return "", settingsOnly }
+	stub.signedIn["claude"] = false
+	if ready, err := m.toolReadiness(ctx, tenant, "claude"); err != nil || ready.Ready || ready.Message != settingsOnly || ready.Code != resolveCodeNothingToRunOn {
+		t.Fatalf("readiness on a settings-only login = %+v %v, want the sentence", ready, err)
+	}
+	stub.signedIn["claude"] = true
+	m.ServerToolLogin = func(context.Context, model.TenantID, string) (string, string) { return userClaude, "" }
+
+	// What the person chose comes first: a key in Providers wins over a login nobody gave the
+	// product, unless its provider refused it, and then the login can still run the tool.
+	rec := addRecord(t, m, tenant, ProviderKindAnthropic, "Chosen key", "", testProviderKey)
+	if viaKey, err := m.ResolveProfile(ctx, tenant, "claude"); err != nil || viaKey.Reason != ResolveAPIKey || viaKey.Provider == nil || viaKey.Provider.Ref != rec.Ref {
+		t.Fatalf("resolve with a key = %+v %v, want the key", viaKey, err)
+	}
+	if _, err := m.recordProbeOutcome(ctx, tenant, rec, ProbeRefused, "refused", nil, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if refused, err := m.ResolveProfile(ctx, tenant, "claude"); err != nil || refused.Reason != ResolveOwnLogin || refused.Profile.ConfigHome != userClaude {
+		t.Fatalf("resolve with a refused key = %+v %v, want the server login", refused, err)
+	}
+
+	open = false
+	if _, err := m.snapshotForLaunch(tenant, got.Profile, m.ExecutionEnvironmentRef()); statusOf(err) != http.StatusConflict || err.Error() != serverUserLoginSentence {
+		t.Fatalf("launch once the policy closed = %v, want 409 %q", err, serverUserLoginSentence)
+	}
+	if !m.toProfileDTO(got.Profile).ServerUserLogin {
+		t.Fatal("a refused profile is not marked")
+	}
+}
+
 // Cursor also stores its credential below HOME, so a profile whose UserHome is the
 // engine user's HOME is a server-user login even when CURSOR_CONFIG_DIR points elsewhere.
 func TestCursorProfileOnTheServerUsersHomeIsShownAndNotUsed(t *testing.T) {
@@ -724,5 +807,63 @@ func TestResolve_CursorSignedOutNamesTheOfficialSignIn(t *testing.T) {
 	}
 	if !strings.Contains(coded.msg, "Sign it in under AI tools") || strings.Contains(coded.msg, "--profile") {
 		t.Fatalf("signed-out message = %q, want Cursor's official sign-in, not a manual profile workaround", coded.msg)
+	}
+}
+
+// A start that names no account took the own login even when its tool had reported a
+// plan window used up, while other accounts had room: the turn failed at once with
+// "You've hit your weekly limit". The rule takes the oldest account with room, and
+// with none it says so and names the first reset, before anything starts.
+func TestResolve_AnOwnLoginAtItsLimitGivesWayToAnAccountWithRoom(t *testing.T) {
+	m, tenant, stub := resolveHarness(t)
+	stub.signedIn["claude"] = true
+	ctx := context.Background()
+	own, err := m.ResolveProfile(ctx, tenant, "claude")
+	if err != nil {
+		t.Fatalf("resolve the own login: %v", err)
+	}
+	refs := map[string]string{"own": own.Profile.Ref}
+	for i, name := range []string{"claude-a", "claude-b"} {
+		dir, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		config, home := filepath.Join(dir, "config"), filepath.Join(dir, fmt.Sprintf("home-%d", i))
+		for _, d := range []string{config, home} {
+			if err := os.MkdirAll(d, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		p := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", AuthSource: AuthSourceAccountHome, ConfigHome: config, UserHome: home})
+		if _, err := m.AdoptProviderAccount(ctx, testActor(), tenant, p.Ref, name); err != nil {
+			t.Fatalf("adopt %s: %v", name, err)
+		}
+		refs[name] = p.Ref
+	}
+	now := time.Now()
+	resetA, resetOwn := now.Add(5*time.Hour), now.Add(15*time.Hour)
+	used := map[string]AccountUsage{
+		refs["own"]:      {Window: "seven_day", Utilization: 100, ResetsAt: &resetOwn},
+		refs["claude-a"]: {Window: "seven_day", Utilization: 100, ResetsAt: &resetA},
+		refs["claude-b"]: {Window: "seven_day", Utilization: 34},
+	}
+	m.rt.AccountUsage = func(_ context.Context, _ model.TenantID, _, ref string, _ bool) []AccountUsage {
+		return []AccountUsage{used[ref]}
+	}
+	for _, step := range []func() (ResolvedProfile, error){
+		func() (ResolvedProfile, error) { return m.ResolveProfile(ctx, tenant, "claude") },
+		func() (ResolvedProfile, error) { return m.PreviewProfile(ctx, tenant, "claude") },
+	} {
+		got, err := step()
+		if err != nil || got.Profile.Ref != refs["claude-b"] || got.Profile.AccountName != "claude-b" {
+			t.Fatalf("resolve = %+v %v, want claude-b, the account with room", got.Profile, err)
+		}
+	}
+	used[refs["claude-b"]] = AccountUsage{Window: "five_hour", Utilization: 100, ResetsAt: &resetOwn}
+	_, err = m.ResolveProfile(ctx, tenant, "claude")
+	var coded *codedRunErr
+	want := "the first to reset is claude-a, at " + resetA.UTC().Format("2006-01-02 15:04") + " UTC"
+	if statusOf(err) != http.StatusConflict || !errors.As(err, &coded) || coded.code != resolveCodeAtLimit || !strings.Contains(err.Error(), want) {
+		t.Fatalf("every account used up: %v, want a 409 %s naming %q", err, resolveCodeAtLimit, want)
 	}
 }

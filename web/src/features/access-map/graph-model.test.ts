@@ -226,6 +226,35 @@ describe('buildGraph — permitted vs observed overlay', () => {
     expect(stats.unused).toBe(1)
   })
 
+  it('draws an unused grant the graph also returned once, as unused', () => {
+    // /graph lists every edge, permitted-only grants included, and the overlay names
+    // the same edge again from /drift. Each id reaches the canvas once.
+    const grant = diff.unused_grants[0]!.edge
+    const withGrant: GraphResponse = {
+      nodes: [
+        ...graph.nodes,
+        { id: 'R5', kind: 'postgres.table', ref: 'appdb.public.unused' },
+      ],
+      edges: [...graph.edges, grant],
+      has_more: false,
+    }
+    const { nodes, edges, stats } = buildGraph({
+      graph: withGrant,
+      diff,
+      overlay: true,
+      filter: emptyFilter(),
+    })
+    const ids = (xs: { id: string }[]) => xs.map((x) => x.id)
+    expect(ids(edges)).toEqual([...new Set(ids(edges))])
+    expect(ids(nodes)).toEqual([...new Set(ids(nodes))])
+    expect(
+      edges
+        .filter((e) => e.id === 'g1')
+        .map((e) => (e.data as { category: string }).category),
+    ).toEqual(['unused'])
+    expect(stats.unused).toBe(1)
+  })
+
   it('marks the touched resource node as having unexpected access', () => {
     const { nodes } = buildGraph({
       graph,

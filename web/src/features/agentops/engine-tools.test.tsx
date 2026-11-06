@@ -8,6 +8,7 @@
 // with no console change.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth/context', () => ({
@@ -49,6 +50,9 @@ const NEW_TOOL: EngineTool = {
   key: 'hermes',
   name: 'Hermes Agent',
   name_stem: 'hermes',
+  vendor: 'nous',
+  monogram: 'HA',
+  color: '#888892',
   session: true,
   bindings: [{ kind: 'openai', egress: 'configured-endpoint' }],
 }
@@ -130,11 +134,14 @@ describe('a tool the engine adds', () => {
         <StartSessionForm />
       </QueryClientProvider>,
     )
+    // The Tool choice is a dropdown: open it, then the tool is an option by its name.
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('combobox', { name: 'Tool' }))
     expect(
-      await screen.findByRole('radio', { name: 'Hermes Agent' }),
+      await screen.findByRole('option', { name: 'Hermes Agent' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('radio', { name: 'Claude Code' }),
+      screen.getByRole('option', { name: 'Claude Code' }),
     ).toBeInTheDocument()
   })
 })

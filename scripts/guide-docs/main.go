@@ -126,6 +126,7 @@ func main() {
 	var (
 		root     = flag.String("root", ".", "repository root to read and write")
 		dumpPath = flag.String("dump", "", "path to the stage-1 console dump (JSON)")
+		provPath = flag.String("providers", "", "path to the stage-1b provider catalog dump (JSON)")
 		write    = flag.Bool("write", false, "regenerate the pages instead of checking them")
 		list     = flag.Bool("list", false, "print the enumerated rosters and exit")
 		selfTest = flag.Bool("self-test", false, "run the red/green battery and exit")
@@ -146,15 +147,24 @@ func main() {
 
 	code, err := run(abs, *dumpPath, *write, *list)
 	if err != nil {
-		if isCannotLook(err) {
-			fmt.Fprintf(os.Stderr, "guide-docs: CANNOT LOOK — %v\n", err)
-			fmt.Fprintf(os.Stderr, "  A roster that was not enumerated is not a roster that agrees with the docs.\n")
-			os.Exit(2)
-		}
-		fmt.Fprintf(os.Stderr, "guide-docs: %v\n", err)
+		exitOn(err)
+	}
+	providersCode, err := runProviders(abs, *provPath, *write, *list)
+	if err != nil {
+		exitOn(err)
+	}
+	os.Exit(max(code, providersCode))
+}
+
+// exitOn ends the run on an error: CANNOT LOOK or not, it is exit 2.
+func exitOn(err error) {
+	if isCannotLook(err) {
+		fmt.Fprintf(os.Stderr, "guide-docs: CANNOT LOOK — %v\n", err)
+		fmt.Fprintf(os.Stderr, "  A roster that was not enumerated is not a roster that agrees with the docs.\n")
 		os.Exit(2)
 	}
-	os.Exit(code)
+	fmt.Fprintf(os.Stderr, "guide-docs: %v\n", err)
+	os.Exit(2)
 }
 
 func run(root, dumpPath string, write, list bool) (int, error) {

@@ -20,6 +20,18 @@ func WrapMounts(*exec.Cmd, Mounts) error {
 // ConsumeMounts returns args unchanged: no other system produces the layer.
 func ConsumeMounts(args []string) ([]string, error) { return args, nil }
 
+// UserBusExposed is false off Linux: the user bus is systemd's.
+func UserBusExposed(*exec.Cmd) bool { return false }
+
+// HideUserBus does nothing off Linux.
+func HideUserBus(*exec.Cmd) error { return nil }
+
+// UserBusUnhideable is nil off Linux: there is no user manager to hide.
+func UserBusUnhideable() error { return nil }
+
+// UserBusDirs is empty off Linux.
+func UserBusDirs() []string { return nil }
+
 // IsMountsProbe is always false off Linux.
 func IsMountsProbe([]string) bool { return false }
 

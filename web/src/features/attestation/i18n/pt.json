@@ -1,0 +1,201 @@
+{
+  "title": "Atestação da cadeia de fornecimento",
+  "description": "A verdade medida sobre o binário em execução, mais o contrato declarado de verificação de versões — o que acompanha cada versão e exatamente como o verificar. Nada é reverificado no navegador.",
+  "forbiddenTitle": "Não autorizado",
+  "forbidden": "Ver o contrato de atestação exige a permissão compliance:read.",
+  "disclaimer": {
+    "body": "Esta compilação não é uma versão publicada.",
+    "declaredRef": "Referência declarada — AsOf {{date}}. Obtida textualmente de docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml e dos workflows de release / scorecard / patch-velocity. O motor não consegue observar o estado do repositório nem do CI, pelo que esta metade não é servida em direto."
+  },
+  "live": {
+    "title": "Binário em execução (medido)",
+    "description": "O que esta compilação em execução indica sobre si própria.",
+    "status": {
+      "measured": "Medido"
+    },
+    "fields": {
+      "commit": "Commit",
+      "buildDate": "Data de compilação",
+      "goVersion": "Versão do Go",
+      "platform": "SO / arquitetura",
+      "mainModule": "Módulo principal",
+      "moduleSums": "Somas dos módulos",
+      "vcsStamp": "Marca VCS",
+      "selfHash": "Auto-SHA256",
+      "capturedAt": "Capturado em",
+      "releaseReason": "Estado da versão",
+      "signature": "Assinatura",
+      "verifier": "Verificador",
+      "transparencyLog": "Registo de transparência",
+      "workflows": "Workflows do pipeline"
+    },
+    "fipsOn": "FIPS 140-3: ativo",
+    "fipsOff": "FIPS 140-3: inativo",
+    "sums": "{{n}} dependências externas têm hashes em go.sum",
+    "sumsAbsent": "nenhuma soma de dependências registada",
+    "vcsAvailable": "Definições VCS marcadas pela cadeia de ferramentas do Go",
+    "vcsUnavailable": "Sem marca VCS",
+    "selfHashHint": "O auto-SHA256 é um hash em fluxo do executável em execução, calculado uma vez na primeira leitura. Compare-o OFFLINE com um futuro checksums.txt assinado — o navegador nunca verifica assinaturas, e um hash por si só prova a identidade, não a proveniência.",
+    "published": "Publicada",
+    "notPublished": "Não publicada",
+    "verifierAvailable": "Verificador nativo incluído na compilação (core/secure/modelsign)",
+    "verifierUnavailable": "Nenhum verificador disponível",
+    "pipelineStatus": {
+      "declared": "Declarado."
+    }
+  },
+  "status": {
+    "declared": "Declarado",
+    "skip_when_absent": "Ignorar se ausente",
+    "not_run": "Ainda não executado"
+  },
+  "trust": {
+    "keyless": "Sem chave (Fulcio/Rekor)",
+    "key_based": "Com chave (air-gap)",
+    "both": "Sem chave + com chave",
+    "transitive": "Transitivo (checksums assinados)"
+  },
+  "tabs": {
+    "artifacts": "Artefactos",
+    "provenance": "Proveniência",
+    "sbom": "SBOM",
+    "scorecard": "Scorecard",
+    "remediation": "SLA de correção",
+    "airgap": "Air-gap"
+  },
+  "artifacts": {
+    "title": "Artefactos da versão",
+    "description": "O que acompanha uma versão e como a confiança de cada artefacto é estabelecida. A assinatura sem chave (Fulcio/Rekor) e com chave (air-gap) são ambas de primeira classe — nenhuma é a canónica.",
+    "identityNote": "Identidade de assinatura sem chave (declarada): emissor OIDC {{issuer}} · identidade do certificado cosign {{regexp}}",
+    "columns": {
+      "artifact": "Artefacto",
+      "producedBy": "Produzido por",
+      "signatureTrust": "Assinatura / confiança",
+      "mechanism": "Mecanismo",
+      "status": "Estado",
+      "control": "Controlo"
+    }
+  },
+  "slsa": {
+    "title": "Proveniência de compilação SLSA",
+    "description": "Proveniência in-toto / ITE-6 gerada pelo slsa-github-generator e verificada com o slsa-verifier.",
+    "buildLevel": "SLSA Build {{level}}",
+    "predicate": "Tipo de predicado",
+    "generator": "Gerador",
+    "pin": "Fixação do workflow reutilizável",
+    "pinKind": {
+      "semver_tag": "Etiqueta semver",
+      "sha": "SHA"
+    },
+    "verifyCommand": "Comando de verificação",
+    "honesty": "L3 por construção: a assinatura corre num contexto isolado ao qual os passos de compilação não têm acesso. O workflow reutilizável está fixado por etiqueta semver (não por SHA) — o slsa-verifier valida o ID do construtor face à etiqueta, pelo que uma fixação por SHA quebraria a verificação. Nem todas as dependências estão fixadas por SHA."
+  },
+  "sbom": {
+    "title": "Lista de materiais de software (SBOM)",
+    "description": "SPDX 2.3 e CycloneDX 1.6 por pacote comprimido e para a imagem de contentor, anexados como uma atestação in-toto assinada.",
+    "attestation": "Predicado da atestação",
+    "linter": "Linter CISA",
+    "cisa": {
+      "title": "Lista de verificação dos elementos mínimos da CISA",
+      "draftTag": "Rascunho",
+      "draft": "Os «elementos mínimos» de SBOM da CISA de 2025 são um rascunho (pré-decisório, em consulta pública) — NÃO são lei nem um requisito federal finalizado. O linter falha quando um tipo de campo está totalmente ausente (rigoroso) e avisa sobre as omissões por componente que o próprio rascunho permite (flexível).",
+      "columns": {
+        "element": "Elemento",
+        "enforcement": "Imposição",
+        "carriedBy": "Transportado por"
+      },
+      "enforcement": {
+        "hard": "Rigorosa",
+        "soft": "Flexível"
+      }
+    }
+  },
+  "vex": {
+    "title": "Declarações OpenVEX",
+    "description": "Declarações de explorabilidade baseadas em alcançabilidade (govulncheck), anexadas como uma atestação in-toto assinada.",
+    "columns": {
+      "vuln": "Vulnerabilidade",
+      "status": "Estado",
+      "justification": "Justificação",
+      "author": "Autor"
+    },
+    "status": {
+      "not_affected": "Não afetado",
+      "affected": "Afetado",
+      "fixed": "Corrigido",
+      "under_investigation": "Em investigação"
+    }
+  },
+  "scorecard": {
+    "title": "OpenSSF Scorecard",
+    "description": "As quatro verificações da cadeia de fornecimento que mais importam para um produto de segurança self-hosted.",
+    "checksTitle": "Verificações acompanhadas",
+    "schedule": "Agenda",
+    "gauge": {
+      "title": "Verificações do Scorecard declaradas",
+      "summary": "{{declared}} de {{total}} verificações acompanhadas do OpenSSF Scorecard estão declaradas no contrato. Esta é uma contagem de cobertura das verificações declaradas, não uma pontuação numérica do Scorecard.",
+      "caption": "declaradas"
+    },
+    "columns": {
+      "check": "Verificação",
+      "what": "O que avalia",
+      "evidence": "Evidência"
+    }
+  },
+  "sla": {
+    "title": "SLA de correção de CVE",
+    "description": "Objetivos de correção a partir do momento em que existe uma correção a montante para uma vulnerabilidade alcançável nos nossos artefactos distribuídos. Entram em vigor na primeira versão etiquetada.",
+    "cadenceTitle": "Cadência de velocidade de correção",
+    "schedule": "Agenda",
+    "columns": {
+      "severity": "Gravidade (CVSS v3.1)",
+      "cvss": "Intervalo de pontuação",
+      "target": "Prazo até à versão corrigida e assinada"
+    },
+    "severity": {
+      "critical": "Crítica",
+      "high": "Alta",
+      "medium": "Média",
+      "low": "Baixa"
+    }
+  },
+  "airgap": {
+    "title": "Pacote offline e pacote Helm Business",
+    "description": "Contratos de implementação privada: um pacote offline e um pacote de chart Business assinado. A publicação continua por verificar.",
+    "bundleTitle": "Pacote offline",
+    "bundleIntro": "O caminho com chave não precisa de Rekor nem de Fulcio. Os responsáveis constroem uma vez, online, um pacote autónomo a partir da distribuição privada montada; o local desligado verifica-o e espelha-o.",
+    "buildCommand": "Compilar (online, uma vez)",
+    "mirrorCommand": "Espelhar (sem internet)",
+    "chartTitle": "Pacote Helm Business",
+    "distribution": "Distribuição",
+    "cosignPackage": "cosign (pacote)",
+    "gpgProv": "GPG .prov",
+    "verifyCommand": "Comando de verificação"
+  },
+  "empty": {
+    "artifact": {
+      "title": "Nenhum artefacto de versão declarado",
+      "description": "Esta tabela é compilada a partir do contrato declarado de verificação de versões; as linhas só aparecem quando esse contrato lista artefactos de versão."
+    },
+    "checkChart": {
+      "title": "Nenhuma verificação do Scorecard declarada",
+      "description": "A cobertura das verificações declaradas só aparece quando o contrato de versão compilado lista verificações acompanhadas do OpenSSF Scorecard."
+    },
+    "sbom": {
+      "title": "Nenhum elemento da lista de verificação de SBOM declarado",
+      "description": "Esta lista de verificação é compilada a partir do contrato de SBOM declarado; as linhas só aparecem quando esse contrato lista os elementos mínimos do rascunho da CISA."
+    },
+    "scorecard": {
+      "title": "Nenhuma verificação acompanhada do Scorecard declarada",
+      "description": "Esta tabela é compilada a partir do contrato de versão declarado; as linhas só aparecem quando esse contrato lista verificações acompanhadas do OpenSSF Scorecard."
+    },
+    "sla": {
+      "title": "Nenhum objetivo de correção declarado",
+      "description": "Esta tabela é compilada a partir do contrato declarado de velocidade de correção; as linhas só aparecem quando este atribui objetivos de correção às faixas de gravidade de CVE."
+    },
+    "vex": {
+      "title": "Nenhuma declaração OpenVEX declarada",
+      "description": "Esta tabela é compilada a partir do contrato de versão declarado; as linhas só aparecem quando esse contrato inclui declarações OpenVEX ilustrativas."
+    }
+  }
+}

@@ -497,23 +497,23 @@ async function openDialog(page: Page) {
     .first()
   await expect(trigger).toBeVisible()
   await trigger.click()
-  const quick = page.getByRole('dialog')
-  await expect(quick).toBeVisible()
-  const advanced = quick.getByRole('button', {
-    name: 'Advanced launch options',
+  // New session focuses the start composer; its folder pill's More options opens the
+  // launch dialog, and focus comes back to the composer's text when it closes.
+  const composer = page.getByRole('textbox', {
+    name: 'First message (optional)',
   })
-  const more = quick.getByRole('button', { name: 'More options' })
-  // The form reads what each tool can run on first; wait for its answer.
-  await expect(advanced.or(more).first()).toBeVisible()
-  if (!(await advanced.isVisible())) await more.click()
+  await expect(composer).toBeFocused()
+  await page.getByRole('button', { name: /^Folder: / }).click()
   const preselected = readinessResponse(page)
-  await advanced.click()
+  await page
+    .getByRole('menuitem', { name: 'More options', exact: true })
+    .click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toHaveCount(1)
   await expect(
     dialog.getByRole('button', { name: 'Advanced options' }),
   ).toBeVisible()
-  return { dialog, trigger, preselected }
+  return { dialog, trigger: composer, preselected }
 }
 
 /** Every launch choice but the profile and the first message is under Advanced

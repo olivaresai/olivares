@@ -391,9 +391,8 @@ describe('the rule against the real tree and the committed baseline', () => {
 // for the worker that wrote the rule (the config-protection hook refuses any edit to it), so
 // registering it is the one step left for whoever may touch the config. When it lands, replace
 // this todo with the two checks below, which ask ESLint itself how it resolves the rule:
-//   - an error with `{ baseline }` (the committed file) for src/features/home/live-cards.tsx
-//     and src/components/layout/app-layout.tsx;
-//   - off for src/components/ui/button.tsx and src/features/home/live-cards.test.tsx;
+//   - an error with `{ baseline }` (the committed file) for src/components/layout/app-layout.tsx;
+//   - off for src/components/ui/button.tsx and its tests;
 // using `new ESLint({ cwd: WEB }).calculateConfigForFile(file)`.
 describe('the rule as ESLint resolves it for this repository', () => {
   it.todo(

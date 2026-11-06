@@ -259,7 +259,7 @@ func (az *Authorizer) AuthorizeRoute(ctx context.Context, req Request) (RouteAut
 		// step up is not told, by timing or by error, whether they would have been
 		// allowed afterwards.
 		az.RecordStepUpRefusal(ctx, req)
-		return RouteAuthorizationWitness{}, ErrStepUpRequired
+		return RouteAuthorizationWitness{}, staleOr(req.Principal, ErrStepUpRequired)
 	}
 
 	ev := az.AuthorizeEvidence(ctx, req)

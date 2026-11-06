@@ -17,6 +17,7 @@
 //   node    the selected node id        (`edge` wins when both are present)
 //   edge    the selected edge id
 //   expand  expanded nodes, `kind:id` entries joined by commas (id percent-encoded)
+//   view    `graph` = the graph; no key is the list
 //
 // A URL is untrusted input. The decoder is pure, never throws, and names every key it
 // refused so the view can say so; a refused key falls back to its default.
@@ -33,6 +34,7 @@ export const ACCESS_URL_KEYS = [
   'node',
   'edge',
   'expand',
+  'view',
 ] as const
 
 const MODES: readonly string[] = ['read', 'write', 'readwrite', 'unknown']
@@ -53,6 +55,8 @@ export interface AccessUrlView {
   node: string | null
   edge: string | null
   expanded: ExpandedNode[]
+  /** The graph instead of the list. */
+  graph: boolean
 }
 
 function bounded(v: string | undefined): v is string {
@@ -129,7 +133,13 @@ export function decodeAccessUrl(raw: UrlState): UrlStateDecoded<AccessUrlView> {
     else issues.push('expand')
   }
 
-  return { value: { filter, overlay, node, edge, expanded }, issues }
+  let graph = false
+  if (raw.view !== undefined) {
+    if (raw.view === 'graph') graph = true
+    else issues.push('view')
+  }
+
+  return { value: { filter, overlay, node, edge, expanded, graph }, issues }
 }
 
 /** The patch that makes the URL say `filter`. `focus` is cleared: `q` replaces it. */

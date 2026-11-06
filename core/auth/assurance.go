@@ -79,6 +79,11 @@ func (a *Authenticator) elevateSessionAt(ctx context.Context, actor Principal, m
 	if aal != AAL3 || (method != "webauthn" && method != "piv") || !validAuthenticationInstant(authenticatedAt.Time()) {
 		return model.AuthSession{}, ErrStepUpRequired
 	}
+	// The freshness port may refuse the ceremony; asked before any transaction.
+	if err := a.requireFresh(ctx, actor.UserID); err != nil {
+		a.auditStepUpFailure(ctx, actor, method, "rights_data_stale")
+		return model.AuthSession{}, err
+	}
 	exp := model.NewTimestamp(authenticatedAt.Time().Add(StepUpTTL))
 	var sess model.AuthSession
 	if err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {

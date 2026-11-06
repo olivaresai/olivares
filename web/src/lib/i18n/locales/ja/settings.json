@@ -1,4 +1,25 @@
 {
+  "exposure": {
+    "title": "コンソールへのアクセス",
+    "listen": "HTTPS / HTTP リスナー",
+    "grpc": "gRPC リスナー",
+    "addresses": "ローカルアドレス",
+    "url": "公開 URL",
+    "tls": "通信方式",
+    "encrypted": "TLS 有効",
+    "unencrypted": "暗号化されていない HTTP",
+    "policy": "管理操作の追加認証",
+    "unverified": "外部からの到達性は未確認です。",
+    "hint": "これはローカルの情報です。公開 URL やローカルアドレスがあっても、このネットワーク外のスマートフォンからコンソールにアクセスできるとは限りません。",
+    "guard": "公開アクセスを有効にする前に、「管理操作の追加認証」で認証アプリのコードまたはパスキーを有効にしてください。",
+    "saved": "コンソールへのアクセス設定を更新しました。",
+    "managed": "管理対象の公開アクセスは登録されています。",
+    "unmanaged": "管理対象の公開アクセスは登録されていません。",
+    "urlHint": "tailnet または名前付きトンネルのアドレスを指定してください。管理対象の公開 URL を削除するには空欄にします。",
+    "unchanged": "保存するには公開 URL を編集してください。",
+    "tunnelHint": "プライベートアクセスには tailnet クライアントを、公開アクセスには名前付き Cloudflare Tunnel を使用してください。トンネルには WAN からの受信ポートは不要です。",
+    "notSet": "未設定"
+  },
   "title": "設定",
   "restoreAll": "すべて既定に戻す",
   "search": "設定を検索",
@@ -15,9 +36,10 @@
     "aiTools": "AI ツール",
     "workspaces": "ワークスペース",
     "deploy": "デプロイと更新",
-    "signIn": "サインインとセキュリティ",
+    "signIn": "サインイン",
     "setup": "セットアップ",
-    "edition": "エディションとモジュール",
+    "edition": "エディション",
+    "modules": "モジュール",
     "about": "情報",
     "sections": "設定のセクション",
     "signing": "レポート署名",
@@ -36,13 +58,13 @@
     "density": "密度",
     "densityHint": "コンパクトは行を多く表示し、ゆったりは読みやすくなります。",
     "language": "言語",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "時刻",
     "timeHint": "時刻はあなたの地域（{{zone}}）で表示します。記録とエクスポートは UTC のままです。",
     "clock24": "24 時間",
     "clock12": "12 時間",
     "startPage": "開始ページ",
-    "startPageHint": "サインインしたときに開くページです。既定: ホーム。",
+    "startPageHint": "サインインしたときに開くページです。既定: セッション。",
     "confirmStop": "セッションを停止する前に確認する",
     "confirmStopHint": "作業中のセッションを停止が終える前に、一度確認します。",
     "editor": "ファイルリンクのエディター",
@@ -71,23 +93,22 @@
     "scope": "このインストールが応答するキーです。だれにとっても同じです。"
   },
   "edition": {
-    "title": "エディションとモジュール",
-    "scope": "このビルドのエディション、動かすモジュール、Business で追加される機能。",
+    "scope": "このビルドのエディション、そのライセンス、Business で追加される機能。",
     "label": "エディション",
-    "licenseAlias": "ライセンス",
     "unknown": "このエンジンは報告していません",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
     "businessAdds": "Business で追加されるもの",
-    "adds": {
-      "loginEnforcement": "ログインの強制：SSO の必須化とネットワーク許可リスト",
-      "identityProviders": "組織ごとの複数の ID プロバイダーと、メールドメインによるルーティング",
-      "groupMapping": "サインイン時にディレクトリグループをロールに対応付け",
-      "regulatory": "規制対応業務：DORA 登録簿、NIS 2 インシデント分類、OSCAL プロファイル、米国および業種別パック、継続的なコントロール監視",
-      "reports": "Business レポートと定期レポート",
-      "toolPins": "ツールのピン留め"
+    "summary": {
+      "Session cockpit and fleet deployment.": "セッションコックピットとフリートへのデプロイ。",
+      "Live session sharing with named, expiring guest access and owner-approved message proposals.": "名前付きで有効期限のあるゲストアクセスと、所有者が承認するメッセージ提案によるライブセッション共有。",
+      "Directories and several identity providers, departments and delegated administration.": "ディレクトリと複数の ID プロバイダー、部門、委任管理。",
+      "Compliance and reporting, regulated records.": "コンプライアンスとレポート、規制対象の記録。",
+      "Deeper runtime inspection and key management.": "より詳細なランタイム検査と鍵管理。",
+      "Integrations with enterprise systems, commercial license and support.": "エンタープライズシステムとの統合、商用ライセンス、サポート。",
+      "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise には Business のすべてに加え、契約で合意した条件とそれに依存する機能が含まれます。"
     },
     "badge": {
       "business": "Business",
@@ -243,7 +264,7 @@
     "activatedBy": "{{addons}} によって有効化されています。そのアドオンが有効な間はオンのままです。",
     "turnOnPlain": "オンにする",
     "alsoTurnsOn": "オンにすると {{names}} も一緒にオンになり、エンジンが再起動します。",
-    "openEdition": "「エディションとモジュール」を開く",
+    "openModules": "「モジュール」を開く",
     "askAdmin": "管理者にオンにするよう依頼してください。",
     "notSetUp": "この環境ではまだ設定されていません。",
     "stillRestarting": "まだ再起動中です。ページを再読み込みしてください。"
@@ -366,6 +387,7 @@
     "tool": "既定のツール",
     "account": "既定のアカウント",
     "model": "既定のモデル",
+    "effort": "既定の推論レベル",
     "folder": "既定のフォルダー",
     "automatic": "自動",
     "unavailable": "利用できなくなりました",
@@ -378,5 +400,9 @@
     "needsYou": "対応が必要",
     "finished": "完了",
     "failed": "失敗"
+  },
+  "aliases": {
+    "edition": "ライセンス",
+    "signIn": "サインインとセキュリティ"
   }
 }

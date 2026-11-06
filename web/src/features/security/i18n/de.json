@@ -1,12 +1,56 @@
 {
-  "title": "Sicherheit & Forensik",
-  "description": "Befunde der Schutzleitplanken, die Durchsetzungslage, die Anomalie-Warteschlange und manipulationssichere Vorfallforensik. Die Ebene ist standardmäßig detektivisch — sie zeichnet auf, sie blockiert nicht von sich aus, sofern die Durchsetzung nicht aktiviert und gesteuert ist.",
+  "title": "Sicherheit",
+  "description": "Befunde der Schutzleitplanken, die Durchsetzungslage, die Anomalie-Warteschlange und manipulationssichere Vorfallforensik. Standardmäßig wird nur aufgezeichnet: Nichts wird blockiert, bis Sie eine Regel aktivieren.",
   "tabs": {
+    "overview": "Übersicht",
     "safety": "Sicherheitslage",
     "findings": "Befunde",
     "guardrails": "Schutzleitplanken",
     "anomalies": "Anomalien",
     "forensics": "Forensik"
+  },
+  "posture": {
+    "title": "Aktuelle Angriffsfläche",
+    "description": "Live-Werte der Personen, Zugangsdaten und Kontrollen, die jetzt Aufmerksamkeit brauchen.",
+    "review": "Prüfen",
+    "notAvailable": "Nicht verfügbar",
+    "partialHint": "Ein Pluszeichen bedeutet, dass die Abfrage weitere Zeilen außerhalb dieser Seite hat; die Zahl ist ein Mindestwert.",
+    "secondFactor": {
+      "label": "Personen ohne zweiten Faktor",
+      "description": "Aktive Mitglieder ohne bestätigten Authenticator-Code oder registrierten Passkey."
+    },
+    "administrators": {
+      "label": "Administratoren",
+      "description": "Aktive Eigentümer und Administratoren dieser Organisation."
+    },
+    "apiKeys": {
+      "label": "API-Schlüssel ohne Ablauf oder ungenutzt",
+      "description": "Registrierte Schlüssel ohne Ablaufdatum oder ohne erfasste Nutzung. Widerrufene Schlüssel zählen nicht.",
+      "value": "{{noExpiry}} ohne Ablauf · {{unused}} ungenutzt"
+    },
+    "approvals": {
+      "label": "Ausstehende Genehmigungen",
+      "description": "Anfragen, die auf die Zustimmung oder Ablehnung durch eine Person warten."
+    },
+    "killSwitch": {
+      "label": "Not-Aus-Schalter",
+      "description": "Der aktuelle Stoppzustand des Estates und einzelner Agenten.",
+      "estateStopped": "Estate gestoppt",
+      "agentStops_one": "{{count}} Agent gestoppt",
+      "agentStops_other": "{{count}} Agenten gestoppt",
+      "notEngaged": "Nicht ausgelöst"
+    },
+    "providers": {
+      "label": "Anbieter mit Schlüssel",
+      "description": "Aktive Anbieter-Zugangsdatenregistrierungen. Geheime Werte werden nie gelesen."
+    },
+    "policy": {
+      "label": "Richtlinienmodus",
+      "description": "Ob die Zulassung signierter Modelle nicht konfiguriert, im Beobachtungs- oder im Durchsetzungsmodus ist.",
+      "unconfigured": "Nicht konfiguriert",
+      "observe": "Beobachten",
+      "enforce": "Durchsetzen"
+    }
   },
   "findings": {
     "title": "Befunde",
@@ -62,7 +106,7 @@
     "description": "Read-first-KI-Sicherheitslage aus den nativen Kontrollen der Anbieter — OpenAI Moderation, AWS Bedrock Guardrails und Azure Responsible AI. Die Plattform liest und protokolliert sie; die Durchsetzung bleibt beim Anbieter.",
     "empty": "Keine Befunde zur Sicherheitslage",
     "emptyHint": "Verbinden Sie die OpenAI-, AWS- oder Azure-Konnektoren mit aktivierten Sicherheitslesungen, um diese Ansicht zu füllen.",
-    "countsPartial": "Teil-Übersicht — dieser Mandant hat mehr Sicherheitslage-Befunde, als der Übersichts-Scan abdeckt.",
+    "countsPartial": "Teil-Übersicht — diese Organisation hat mehr Sicherheitslage-Befunde, als der Übersichts-Scan abdeckt.",
     "columns": {
       "open": "Offen"
     }
@@ -72,14 +116,14 @@
     "description": "Führen Sie den Prüfdienst der Schutzleitplanken über eine Oberfläche aus. Der Text wird redigiert gehasht und niemals gespeichert — das Ergebnis ist ein Entscheid samt minimalem, bereits redigiertem Nachweis.",
     "verdictTitle": "Entscheid",
     "clean": "Keine Erkennungen — sauber.",
-    "detectiveNote": "Dieser Entscheid stammt von der detektivischen Ebene: Der Vorfall wurde erkannt und aufgezeichnet, nicht blockiert. Eine Blockierung ist nur erreichbar, wenn die Durchsetzung aktiviert und gesteuert ist.",
+    "detectiveNote": "Dieser Entscheid hat den Vorfall nur aufgezeichnet: Er wurde erkannt, nicht blockiert. Eine Blockierung ist nur möglich, wenn die Durchsetzung aktiviert und gesteuert ist.",
     "wouldBlock": "Würde blockieren (durchgesetzt)",
     "detectOnly": "Nur erkennen",
     "findingsRecorded": "{{count}} Befund aufgezeichnet",
     "findingsRecorded_one": "{{count}} Befund aufgezeichnet",
     "findingsRecorded_other": "{{count}} Befunde aufgezeichnet",
     "enforcement": {
-      "detective": "Detektivisch",
+      "detective": "Nur Aufzeichnung",
       "enforced": "Durchgesetzt"
     },
     "class": {
@@ -108,10 +152,10 @@
   },
   "enforcement": {
     "title": "Durchsetzungslage",
-    "description": "Die eine Aktion, die die Produktion berührt. Jede Klasse von Schutzleitplanken ist standardmäßig detektivisch; das Aktivieren der Inline-Durchsetzung ist eine Administrator-Aktion, gesteuert dort, wo ein Tor eingerichtet ist.",
-    "defaultDetectiveNote": "Die Standardebene ist detektivisch: Klassen blockieren nur, wenn sie hier ausdrücklich aktiviert und gesteuert sind.",
-    "fullyDetective": "Keine Durchsetzung ist aktiviert — die Ebene ist vollständig detektivisch, die sichere Voreinstellung. Nichts blockiert von sich aus.",
-    "detective": "Detektivisch",
+    "description": "Die eine Aktion, die die Produktion berührt. Jede Klasse von Schutzleitplanken zeichnet standardmäßig nur auf; das Aktivieren der Inline-Durchsetzung ist eine Administrator-Aktion, gesteuert dort, wo ein Tor eingerichtet ist.",
+    "defaultDetectiveNote": "Standardmäßig wird nichts blockiert: Klassen blockieren nur, wenn sie hier ausdrücklich aktiviert und gesteuert sind.",
+    "fullyDetective": "Keine Durchsetzung ist aktiviert — es wird nur aufgezeichnet und nichts blockiert, bis Sie eine Regel aktivieren.",
+    "detective": "Nur Aufzeichnung",
     "enforced": "Durchgesetzt",
     "governed": "Gesteuert",
     "ungoverned": "Aktiviert ohne menschliche Governance",
@@ -127,7 +171,7 @@
     },
     "dialog": {
       "title": "Durchsetzung ändern",
-      "description": "Das Deaktivieren (zurück zu detektivisch) ist stets gestattet. Das Aktivieren der Inline-Durchsetzung wird dort gesteuert, wo ein Tor eingerichtet ist — eine Governance-Verweigerung wird als Grund angezeigt.",
+      "description": "Das Deaktivieren (zurück zu „nur Aufzeichnung“) ist stets gestattet. Das Aktivieren der Inline-Durchsetzung wird dort gesteuert, wo ein Tor eingerichtet ist — eine Governance-Verweigerung wird als Grund angezeigt.",
       "enabledLabel": "Inline-Durchsetzung aktivieren",
       "minSeverity": "Mindest-Schweregrad",
       "reason": "Grund",
@@ -205,7 +249,7 @@
   "empty": {
     "enforcement": {
       "title": "Keine Durchsetzungsklassen konfiguriert",
-      "description": "Zeilen erscheinen erst nach Festlegung der Lage einer Schutzleitplanken-Klasse; zuvor bleibt jede Klasse detektivisch und nichts blockiert inline."
+      "description": "Zeilen erscheinen erst nach Festlegung der Lage einer Schutzleitplanken-Klasse; zuvor zeichnet jede Klasse nur auf und nichts blockiert inline."
     },
     "findings": {
       "title": "Keine Sicherheitsbefunde",

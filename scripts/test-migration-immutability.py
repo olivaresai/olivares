@@ -758,7 +758,7 @@ class ReviewedBindings(unittest.TestCase):
         old, new = PAIRS[PLAN]
         _, _, gate = self.decide({'core/plan/example': old}, {'core/plan/example': new})
         gate.REVIEWED_MIGRATIONS = {'core/plan/example': (old, new)}
-        with self.assertRaisesRegex(ValueError, 'REVIEWED_MIGRATIONS may hold numeric core or runner migration keys only'):
+        with self.assertRaisesRegex(ValueError, 'REVIEWED_MIGRATIONS may hold numeric core, runner or module migration keys only'):
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                 gate.main()
 

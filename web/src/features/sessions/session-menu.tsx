@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A SESSION ROW'S ACTIONS MENU (#2795): rename, pin, archive, copy its link, id or
-// transcript, delete. The rail opens it (`work-rail.tsx`: right-click, `⋯`, Shift+F10);
+// A SESSION ROW'S ACTIONS MENU (#2795): rename, pin, unread, snooze, done, archive, copy its
+// link, id or transcript, delete. The rail opens it (`work-rail.tsx`: right-click, `⋯`, Shift+F10);
 // this file says what is in it and does it, against the engine's own routes.
 //
 // ⛔ THE MENU NAMES ONLY WHAT WILL WORK. An item the person's role cannot do is left out,
@@ -14,6 +14,7 @@
 //
 // ⛔ THE DIALOGS OUTLIVE THE MENU. The menu's content unmounts when an item is chosen,
 //    so Rename and Delete keep their state here, in the surface that owns the list.
+import { transcriptText, CopyRefused, type Copied } from './session-context'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Archive,
@@ -63,15 +64,19 @@ import {
   type TitleStyle,
 } from '@/stores/preferences'
 import { sessionsKeys } from './api'
+import { useOfferUndo } from './list-undo'
 import {
   isDeletableRun,
   primaryRun,
   sessionReference,
+  sessionTitle,
   type Grants,
   type UnifiedSession,
 } from './provenance'
 import { addressOf, SESSION_PARAM } from './session-address'
+import { SessionMarkItems } from './session-mark-items'
 import { DeleteRunDialog } from './run-actions'
+import { useSessionMarks } from './use-session-marks'
 import './i18n'
 
 /** What each title style is called in the menu (`rowActions` keys). */
@@ -81,80 +86,11 @@ const TITLE_STYLE_LABEL = {
   long: 'rowActions.titleLong',
 } as const satisfies Record<TitleStyle, string>
 
-/** A transcript page: whole texts, so a page is kept small. */
-const TRANSCRIPT_PAGE = 50
-
 /** The address that opens this session on the Sessions screen, as a whole URL. */
 function sessionLink(session: UnifiedSession): string {
   const url = new URL('/sessions', window.location.origin)
   url.searchParams.set(SESSION_PARAM, addressOf(session))
   return url.toString()
-}
-
-/** What a copy reads: the text, how many transcript records it had to leave out, and
- * how many messages the engine cut at its 64 KiB bound. */
-interface Copied {
-  text: string
-  unreadable: number
-  clipped: number
-}
-
-/** A copy refused for a reason the person is told in words (a `rowActions` key). */
-class CopyRefused extends Error {
-  readonly key: string
-  constructor(key: string) {
-    super(key)
-    this.key = key
-  }
-}
-
-/**
- * The session's conversation as plain text, oldest first, every page of it: each
- * message under its sender's name and a blank line between messages.
- *
- * ⛔ NOTHING IS COPIED SHORTER THAN IT SAYS. The records the engine could not read are
- *    counted and said, and so are the messages it cut at 64 KiB; a message without its
- *    whole text (an engine that ignores `text=1`) refuses the copy instead of pasting
- *    first lines; and a transcript that stops being readable after the first page, or
- *    hands back the cursor it was asked for, refuses it too.
- */
-async function transcriptText(
-  run: RunDTO,
-  you: string,
-  assistant: string,
-): Promise<Copied> {
-  const parts: string[] = []
-  let unreadable = 0
-  let clipped = 0
-  let cursor: string | undefined
-  do {
-    const page = await agentOpsApi.messages(run.run_ref, {
-      role: 'all',
-      order: 'asc',
-      text: 1,
-      limit: TRANSCRIPT_PAGE,
-      cursor,
-    })
-    if (page.transcript !== 'read')
-      throw new CopyRefused(
-        cursor === undefined
-          ? 'rowActions.noTranscript'
-          : 'rowActions.transcriptChanged',
-      )
-    unreadable += page.unreadable ?? 0
-    for (const m of page.items) {
-      if (m.text === undefined && m.first_line !== '')
-        throw new CopyRefused('rowActions.noWholeText')
-      if (m.clipped) clipped++
-      parts.push(`${m.role === 'user' ? you : assistant}:\n${m.text ?? ''}\n`)
-    }
-    // A page that points back at itself would be read forever.
-    if (page.next !== undefined && page.next === cursor)
-      throw new CopyRefused('rowActions.transcriptChanged')
-    cursor = page.next
-  } while (cursor)
-  if (parts.length === 0) throw new CopyRefused('rowActions.noTranscript')
-  return { text: parts.join('\n'), unreadable, clipped }
 }
 
 type MenuDialog = {
@@ -187,9 +123,12 @@ export function useSessionMenu(
   const { t } = useTranslation('sessions')
   const { activeTenant, can } = useAuth()
   const qc = useQueryClient()
+  const offerUndo = useOfferUndo()
   const [dialog, setDialog] = useState<MenuDialog>(null)
   const titleStyle = usePreferencesStore((s) => s.titleStyle)
   const setTitleStyle = usePreferencesStore((s) => s.setTitleStyle)
+  // The person's own unread, snooze and done: the hook the thread header's menu sends them with.
+  const marks = useSessionMarks()
 
   const invalidate = () =>
     Promise.all([
@@ -199,11 +138,12 @@ export function useSessionMenu(
   // A ROW THE ACTION TOOK OUT OF THE LIST (archived, deleted) leaves it only when the list
   // is read again, after focus went back to it: once that read lands, focus that fell
   // to the page goes to the row, or to the rail when the row is gone.
+  const refocus = (address: string) => {
+    const at = document.activeElement
+    if (!at || at === document.body) returnFocus?.(address)
+  }
   const settle = (address: string) =>
-    void invalidate().then(() => {
-      const at = document.activeElement
-      if (!at || at === document.body) returnFocus?.(address)
-    })
+    void invalidate().then(() => refocus(address))
   const onErr = (err: unknown) =>
     toast.error(err instanceof ApiError ? err.message : t('card.actionFailed'))
 
@@ -231,28 +171,32 @@ export function useSessionMenu(
       run: RunDTO
       on: boolean
       address: string
+      name: string
       tenant: string | null
     }) =>
       on
         ? agentOpsApi.archive(run.run_ref, tenant)
         : agentOpsApi.unarchive(run.run_ref, tenant),
-    onSuccess: (_, { run, on, address, tenant }) => {
-      // AN ARCHIVE CAN BE UNDONE until the person closes its notice: no timer takes Undo
-      // away from someone who is still reading, and a switch of organization meanwhile
-      // does not send it to the wrong one.
-      toast.success(
-        t(on ? 'rowActions.archived' : 'rowActions.unarchived'),
-        on
-          ? {
-              duration: Infinity,
-              action: {
-                label: t('rowActions.undo'),
-                onClick: () =>
-                  archive.mutate({ run, on: false, address, tenant }),
-              },
-            }
-          : undefined,
-      )
+    onSuccess: (archived, { run, on, address, name, tenant }) => {
+      // AN ARCHIVE IS UNDONE, NOT CONFIRMED: the notice offers Undo for a few seconds (and
+      // Ctrl+Z in the rail takes it), and a switch of organization meanwhile does not send
+      // it to the wrong one.
+      if (on)
+        offerUndo({
+          message: t('undo.archived', { name }),
+          expect: [
+            {
+              ref: run.run_ref,
+              still: (now) =>
+                !!archived.archived_at &&
+                now.archived_at === archived.archived_at,
+            },
+          ],
+          restore: () => agentOpsApi.unarchive(run.run_ref, tenant),
+          tenant,
+          then: () => refocus(address),
+        })
+      else toast.success(t('rowActions.unarchived'))
       settle(address)
     },
     onError: onErr,
@@ -365,6 +309,9 @@ export function useSessionMenu(
             </span>
           </DropdownMenuItem>
         ) : null}
+        {grants.runRead ? (
+          <SessionMarkItems session={session} marks={marks} />
+        ) : null}
         {run && grants.runWrite ? (
           <DropdownMenuItem
             onSelect={() =>
@@ -372,6 +319,7 @@ export function useSessionMenu(
                 run,
                 on: !run.archived_at,
                 address: addressOf(session),
+                name: sessionTitle(session, t('untitled')),
                 tenant: activeTenant,
               })
             }

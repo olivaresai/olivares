@@ -1,0 +1,373 @@
+{
+  "title": "Identidade",
+  "subtitle": "Quem pode iniciar sessão, o que pode fazer e como o comprova.",
+  "ownSignInOnly": "Aqui pode configurar os seus próprios fatores de início de sessão. Um administrador da organização altera o resto desta página.",
+  "sections": "Secções de identidade",
+  "groups": {
+    "people": "Pessoas",
+    "signIn": "Início de sessão",
+    "machines": "Identidades de máquina"
+  },
+  "tabs": {
+    "federation": "Início de sessão único",
+    "inventory": "Inventário de identidades",
+    "mcp": "Autenticação MCP",
+    "login": "Início de sessão privilegiado",
+    "totp": "Fator TOTP"
+  },
+  "seam": {
+    "badge": "Backend pendente",
+    "body": "{{what}} é um contrato declarado — o ponto de acesso do backend ainda não está ativo, pelo que não há nada para mostrar. Este painel será preenchido assim que estiver disponível; nunca inventa dados."
+  },
+  "assurance": {
+    "address": {
+      "addressTitle": "As chaves de acesso não estão disponíveis neste endereço.",
+      "ipBody": "Uma parte confiante de chaves de acesso tem de ser um nome de domínio que o verificador desta instalação aceite, e um endereço IP não o é. Aceda a esta consola por um nome de anfitrião para registar ou usar uma chave de acesso.",
+      "nameBody": "Uma parte confiante de chaves de acesso tem de ser um nome de domínio que o verificador desta instalação aceite, e este nome de anfitrião não o é: precisa de um ponto, e apenas de letras ASCII, algarismos e hífenes.",
+      "insecureTitle": "Esta página não é um contexto seguro.",
+      "insecureBody": "Os navegadores só executam a API de chaves de acesso num contexto seguro, pelo que aqui não é possível registar nem usar nenhuma chave de acesso. Aceda a esta consola por HTTPS, ou no anfitrião local.",
+      "unsupportedTitle": "Este navegador não suporta chaves de acesso.",
+      "unsupportedBody": "Este navegador não expõe nenhuma API WebAuthn, pelo que aqui não é possível registar nem usar uma chave de acesso. Use um navegador com suporte para chaves de acesso.",
+      "sameDevice": "Neste dispositivo, a mesma consola também responde em:"
+    },
+    "stepUpTitle": "Autenticação reforçada necessária",
+    "stepUpBody": "{{action}} exige {{required}}. A sua sessão é {{current}}. Use uma chave de acesso no seu dispositivo ou uma chave de segurança para continuar.",
+    "authenticate": "Autenticar com chave de acesso",
+    "authenticating": "A aguardar o seu autenticador…",
+    "seamWhat": "O início de sessão privilegiado com autenticação reforçada WebAuthn",
+    "unsupported": "Este navegador não suporta WebAuthn. Para ações privilegiadas é necessária uma plataforma que suporte autenticadores resistentes a phishing.",
+    "failed": "A autenticação reforçada não foi concluída. A ação continua negada.",
+    "relyingPartyUnusable": "As chaves de acesso não estão disponíveis nesta instalação: o motor não tem nenhuma parte confiante utilizável para o endereço em que a consola é servida. Um operador tem de configurar um domínio de parte confiante válido — um nome de anfitrião com ponto, ou localhost quando for adequado —, aceder à consola nessa origem segura declarada e reiniciar o motor após a alteração. Tentar de novo noutro endereço, por si só, não resolve o problema.",
+    "actions": {
+      "identity": "Gerir a identidade",
+      "providers": "Registar ou retirar uma credencial de fornecedor",
+      "generic": "Esta ação",
+      "console": "Gerir conectores",
+      "stepUpPolicy": "Alterar a verificação adicional para ações administrativas",
+      "modules": "Ativar ou desativar módulos",
+      "signing": "Ativar ou desativar a assinatura de relatórios"
+    },
+    "aal": {
+      "aal1": "Início de sessão normal",
+      "aal2": "Início de sessão único com um segundo fator",
+      "aal3": "Chave de acesso ou chave de segurança"
+    },
+    "unenrolled": "Ainda não há nenhuma chave de acesso registada para a sua conta. Registe uma chave de acesso no seu dispositivo ou uma chave de segurança no separador Início de sessão privilegiado e depois autentique-se.",
+    "unenrolledInline": "Ainda não há nenhuma chave de acesso registada para a sua conta. Registe uma abaixo.",
+    "enrollHint": "Registe a sua primeira chave de acesso neste dispositivo ou numa chave de segurança. O registo, por si só, não autentica a sua sessão nem conclui a ação pendente.",
+    "passkeyName": "Nome da chave de acesso",
+    "enrollUnsupported": "Este navegador não consegue registar uma chave de acesso. Use um navegador com suporte para chaves de acesso.",
+    "registered": "Chave de acesso registada. Autentique-se para verificar esta sessão e depois reveja e conclua a ação pendente.",
+    "registrationUnknown": "Não foi possível confirmar o registo. A chave de acesso pode ter sido guardada. Selecione Autenticar para verificar; o registo não será enviado de novo automaticamente.",
+    "authenticationUnknown": "Não foi possível confirmar a autenticação. A sua sessão pode já estar elevada. Verifique a sessão antes de tentar novamente.",
+    "needsAuthentication": "Uma chave de acesso existente tem de autenticar esta sessão antes de se poder registar outra. Selecione Autenticar.",
+    "checkSession": "Verificar sessão",
+    "sessionExpired": "Esta sessão foi recusada. Feche esta ação e inicie sessão novamente antes de tentar de novo.",
+    "verificationFailed": "Não foi possível verificar a sessão para esta ação. A autenticação pode ter sido concluída; a ação não prosseguiu.",
+    "cancelled": "A operação da chave de acesso foi dispensada ou excedeu o tempo limite. Pode iniciar uma nova tentativa. A ação não prosseguiu.",
+    "cancelHint": "Fechar cancela esta ação. Um registo ou uma autenticação já enviados ainda podem ser concluídos.",
+    "registrationUnknownElsewhere": "Não foi possível confirmar o registo. A chave de acesso pode ter sido guardada. Feche esta caixa de diálogo e verifique as suas chaves de acesso antes de iniciar outro registo.",
+    "code": {
+      "title": "Inicie sessão com o código do seu autenticador",
+      "body": "{{action}} exige um início de sessão com o código do seu autenticador nesta instalação. Inicie sessão novamente e introduza o seu código.",
+      "signInAgain": "Iniciar sessão novamente"
+    }
+  },
+  "references": {
+    "note": "Normas que este painel reflete. O painel observa e verifica; não afirma certificação.",
+    "labels": {
+      "scim": "SCIM 2.0 (RFC 7644)",
+      "prm": "Protected Resource Metadata (RFC 9728)",
+      "asMetadata": "Authorization Server Metadata (RFC 8414)",
+      "resourceIndicators": "Resource Indicators (RFC 8707)",
+      "pkce": "PKCE (RFC 7636)",
+      "oauthSecurityBcp": "OAuth 2.0 Security BCP (RFC 9700)",
+      "webauthn": "NIST SP 800-63B-4 (garantia do autenticador)",
+      "certManager": "cert-manager (CNCF)",
+      "pqc": "NIST SP 800-57 Part 1 r6 (gestão de chaves)",
+      "wifReference": "Referência de identidade de carga de trabalho da Anthropic",
+      "workloadIdentity": "Federação de identidade de carga de trabalho da Anthropic",
+      "externalKeys": "Chaves externas da Anthropic (CMEK)",
+      "workspaceUpdate": "Residência de dados do espaço de trabalho da Anthropic"
+    },
+    "sso": {
+      "title": "Normas de SSO e SCIM"
+    },
+    "mcpAuth": {
+      "title": "Normas de autorização MCP"
+    },
+    "login": {
+      "title": "Normas de início de sessão privilegiado"
+    }
+  },
+  "sso": {
+    "title": "Início de sessão único (OIDC / SAML)",
+    "description": "O início de sessão único é configurado em SSO / IdP, por um superadministrador. Este painel verifica o URI de redirecionamento exato e mostra o estado da ligação.",
+    "notConfigured": "Não configurado",
+    "notConfiguredHint": "Não há nenhum fornecedor de identidade configurado, pelo que os pedidos de federação devolvem 501. Um superadministrador configura um em SSO / IdP.",
+    "seamWhat": "O resumo do estado da ligação SSO",
+    "protocol": "Protocolo",
+    "state": "Ligação",
+    "redirectUri": "URI de redirecionamento (exato)",
+    "pkce": "PKCE",
+    "pkceValue": "Authorization Code + S256 (sempre)",
+    "redirectCheckLabel": "Verifique o URI de redirecionamento do seu IdP",
+    "redirectCheckHint": "Cole o URI de redirecionamento/ACS configurado no seu fornecedor de identidade. Tem de corresponder exatamente ao valor acima (RFC 9700).",
+    "redirectMatch": "Correspondência exata — este URI de redirecionamento é válido.",
+    "redirectMismatch": "Não corresponde exatamente. O IdP tem de usar o URI de redirecionamento acima, caráter por caráter.",
+    "configure": "Abrir SSO / IdP",
+    "testLogin": "Iniciar um teste de início de sessão"
+  },
+  "scim": {
+    "title": "Aprovisionamento SCIM 2.0",
+    "description": "Aprovisionamento de entrada de utilizadores e grupos. Estado só de leitura do fornecedor de serviços, dos utilizadores sincronizados e das evidências de saídas.",
+    "seamWhat": "A configuração do fornecedor de serviços SCIM",
+    "businessOnly": "O servidor SCIM de entrada requer Business. Remova uma pessoa da organização em Pessoas.",
+    "patch": "PATCH",
+    "filter": "Filtro",
+    "filterMax": "Suportado (máx. {{n}})",
+    "auth": "Autenticação",
+    "bearerName": "bearer SCIM do tenant",
+    "bearerNote": "A autenticação é um token bearer associado ao tenant. O valor do token nunca é apresentado — apenas a sua referência.",
+    "usersTitle": "Utilizadores sincronizados",
+    "noUsers": "Nenhum utilizador sincronizado",
+    "noUsersHint": "Quando o seu IdP aprovisionar utilizadores por SCIM, aparecem aqui. Um utilizador desativado (mudança/saída) aparece como inativo.",
+    "groupsSupported": "O aprovisionamento de grupos é suportado na entrada (grupos e associações). Mapear um grupo de diretório para uma função continua reservado ao operador, em Identidade → Grupos.",
+    "leaverTitle": "Evidências de saídas",
+    "leaverSeamWhat": "As evidências de auditoria de saídas",
+    "noLeaver": "Nenhum evento de desaprovisionamento",
+    "noLeaverHint": "Quando uma saída SCIM (eliminação / prov:delete) é processada, o backend revoga as sessões e os tokens do utilizador e regista-o aqui.",
+    "leaverTruncated": "Os {{n}} eventos de saída mais recentes; existem mais antigos",
+    "leaverTruncatedHint": "Há mais eventos de saída do que os mostrados. Este cartão lista os mais recentes, pelo que os eventos cortados são os mais antigos; um utilizador ausente desta lista não prova que nunca foi desaprovisionado.",
+    "leaverWindow": "Este cartão lê apenas as últimas {{n}} entradas do registo, pelo que os eventos de saída mais antigos não são listados. Um utilizador ausente desta lista não prova que nunca foi desaprovisionado.",
+    "revoked": "Sessões e tokens revogados",
+    "col": {
+      "userName": "Utilizador",
+      "state": "Estado",
+      "externalId": "ID externo",
+      "lastModified": "Última modificação"
+    }
+  },
+  "roster": {
+    "label": "Identidades não humanas e humanas",
+    "search": "Pesquisar identidades…",
+    "convergenceNote": "Esta identidade converge pelo seu ID externo — o mesmo ID que o lado observado usa — pelo que o mapa de acessos pode comparar o que lhe é PERMITIDO com o que é OBSERVADO a fazer.",
+    "openInAccessMap": "Ver no mapa de acessos",
+    "col": {
+      "name": "Nome",
+      "externalId": "ID externo",
+      "kind": "Tipo",
+      "principalType": "Pessoa ou ferramenta",
+      "source": "Origem",
+      "state": "Estado"
+    },
+    "principal": {
+      "nhi": "Não humana",
+      "human": "Humana",
+      "unknown": "Desconhecida"
+    },
+    "filter": {
+      "principalType": "Filtrar por pessoa ou ferramenta",
+      "kind": "Filtrar por tipo",
+      "all": "Todas"
+    }
+  },
+  "empty": {
+    "nhiRoster": {
+      "title": "Ainda não há identidades",
+      "description": "As identidades aparecem aqui à medida que os agentes acedem a recursos, ou quando associa um agente a uma identidade."
+    }
+  },
+  "mcp": {
+    "title": "Autorização MCP",
+    "description": "Se a associação do token OAuth de cada servidor MCP foi verificada. Apenas postura defensiva — o painel nunca encaminha nem repete um token.",
+    "seamWhat": "As deteções de autorização MCP",
+    "noFindings": "Nenhuma deteção de autorização MCP",
+    "noFindingsHint": "Quando é descoberto um servidor MCP protegido por OAuth, a sua postura de associação de token é registada aqui.",
+    "truncated": "Carregadas {{n}} deteções; há mais",
+    "truncatedHint": "Há mais deteções de autorização MCP do que as mostradas; esta página carrega uma única página de linhas. Um servidor ausente desta lista não prova que não existe nenhuma deteção para ele.",
+    "prmTitle": "Autorização associada ao destinatário (RFC 9728)",
+    "prmDescription": "Como um servidor MCP protegido por OAuth associa um token a um recurso concreto — para que um token emitido para um servidor não possa ser repetido noutro.",
+    "flow": {
+      "prm": {
+        "title": "Protected Resource Metadata",
+        "body": "O servidor anuncia os seus servidores de autorização em /.well-known/oauth-protected-resource (RFC 9728)."
+      },
+      "asDiscovery": {
+        "title": "Descoberta do servidor de autorização",
+        "body": "Os metadados do servidor de autorização anunciado são obtidos (RFC 8414)."
+      },
+      "pkce": {
+        "title": "PKCE S256",
+        "body": "O fluxo de código de autorização usa um desafio S256 (RFC 7636) — nunca plain."
+      },
+      "resourceBound": {
+        "title": "Token associado ao recurso",
+        "body": "O indicador de recurso (RFC 8707) é o URI canónico do servidor, pelo que o destinatário do token é um servidor concreto."
+      },
+      "introspect": {
+        "title": "Introspeção só de leitura",
+        "body": "A associação do token é verificada por introspeção só de leitura; o painel nunca chama ferramentas nem encaminha o token."
+      }
+    },
+    "noPassthrough": "A passagem direta de tokens é proibida por conceção: o painel observa e faz introspeção, nunca reencaminha nem repete um token MCP."
+  },
+  "login": {
+    "statusTitle": "Garantia da sessão",
+    "statusDescription": "Como iniciou sessão nesta sessão.",
+    "currentAal": "Nível atual",
+    "methods": "Métodos",
+    "methodsUnknown": "Não reportado",
+    "methodNames": {
+      "pwd": "Palavra-passe",
+      "sso": "Início de sessão único",
+      "external": "Início de sessão externo",
+      "totp": "Código do autenticador",
+      "mfa": "Segundo fator",
+      "webauthn": "Chave de acesso",
+      "piv": "Cartão inteligente",
+      "pairing": "Dispositivo emparelhado"
+    },
+    "policy": {
+      "none": "Esta instalação não pede nenhuma verificação adicional antes das ações administrativas. Um administrador do sistema pode ativar uma.",
+      "totp": "As ações administrativas nesta instalação pedem um início de sessão com um código do autenticador.",
+      "passkey": "As ações administrativas nesta instalação pedem uma chave de acesso."
+    },
+    "passkeyTitle": "Registar uma chave de acesso",
+    "passkeyDescription": "Registe uma chave de segurança de hardware ou um autenticador da plataforma (WebAuthn / FIDO2) para um início de sessão privilegiado resistente a phishing.",
+    "registerPasskey": "Registar uma chave de acesso",
+    "registering": "Siga as indicações do seu autenticador…",
+    "passkeySeamWhat": "O registo de chaves de acesso WebAuthn",
+    "registered": "Chave de acesso registada.",
+    "unsupported": "Este navegador não suporta WebAuthn.",
+    "registerFailed": "O registo não foi concluído.",
+    "ocsp": {
+      "good": "Válido",
+      "revoked": "Revogado",
+      "unknown": "Desconhecido"
+    },
+    "passkeys": {
+      "title": "Chaves de acesso registadas",
+      "description": "Gira os seus autenticadores FIDO2/WebAuthn. Cada chave de acesso oferece um início de sessão resistente a phishing e associado ao hardware.",
+      "register": "Registar chave de acesso",
+      "registerTitle": "Registar nova chave de acesso",
+      "registerHint": "Opcional. Deixe vazio para lhe dar o nome deste dispositivo.",
+      "nameLabel": "Nome da chave de acesso",
+      "namePlaceholder": "p. ex. YubiKey 5C, MacBook Touch ID",
+      "defaultName": "Chave de acesso em {{device}}",
+      "defaultNameNoDevice": "Chave de acesso",
+      "registering": "A registar a chave de acesso…",
+      "registered": "Chave de acesso registada.",
+      "registerFailed": "O registo da chave de acesso falhou. O navegador pode não suportar WebAuthn, ou o registo foi cancelado.",
+      "unsupported": "Este navegador não suporta WebAuthn/FIDO2.",
+      "none": "Nenhuma chave de acesso registada",
+      "noneHint": "Registe uma chave de acesso para ativar um início de sessão resistente a phishing e associado ao hardware.",
+      "colName": "Nome",
+      "colCreated": "Registada",
+      "colBackup": "Cópia de segurança",
+      "backupEligible": "Multidispositivo",
+      "backupBound": "Associada ao hardware",
+      "rename": "Mudar o nome",
+      "renameTitle": "Mudar o nome da chave de acesso",
+      "renamed": "Nome da chave de acesso alterado.",
+      "delete": "Eliminar",
+      "deleteTitle": "Eliminar chave de acesso",
+      "deleteBody": "Eliminar a chave de acesso «{{name}}»? Esta ação é permanente. Vai precisar de outra chave de acesso registada para continuar a iniciar sessão com uma chave de acesso.",
+      "deleted": "Chave de acesso eliminada.",
+      "lastCredential": "Não é possível eliminar a sua única chave de acesso. Registe primeiro outra."
+    }
+  },
+  "sessions": {
+    "title": "Os seus inícios de sessão",
+    "description": "Navegadores e clientes em que tem sessão iniciada. Termine qualquer sessão que já não use ou não reconheça.",
+    "endAll": "Terminar todas as outras",
+    "none": "Nenhum início de sessão ativo",
+    "noneHint": "Os seus inícios de sessão atuais e recentes aparecem aqui.",
+    "client": "Cliente",
+    "lastUsed": "Última utilização",
+    "created": "Criada",
+    "expires": "Expira",
+    "actionsColumn": "Ações",
+    "current": "Esta sessão",
+    "end": "Terminar",
+    "endLabel": "Terminar o início de sessão {{kind}} de {{created}}",
+    "endTitle": "Terminar o início de sessão?",
+    "endBody": "Este início de sessão deixará de funcionar nesse navegador ou cliente. Poderá iniciar sessão novamente aí mais tarde.",
+    "endAllTitle": "Terminar todos os outros inícios de sessão?",
+    "endAllBody": "Os outros inícios de sessão listados aqui vão terminar. Esta sessão continua ativa.",
+    "endAllFailed_one": "Não foi possível terminar {{count}} início de sessão. Reveja a lista e tente novamente.",
+    "endAllFailed_many": "Não foi possível terminar {{count}} de inícios de sessão. Reveja a lista e tente novamente.",
+    "endAllFailed_other": "Não foi possível terminar {{count}} inícios de sessão. Reveja a lista e tente novamente.",
+    "ended": "Início de sessão terminado.",
+    "kinds": {
+      "browser": "Navegador",
+      "token": "Token",
+      "unknown": "Desconhecido",
+      "pairing": "A aguardar emparelhamento"
+    },
+    "deviceName": "Nome do dispositivo",
+    "pair": "Emparelhar um dispositivo",
+    "pairLink": "Ligação de utilização única",
+    "pairHint": "Copie esta ligação privada para o dispositivo. Expira em 10 minutos e só funciona uma vez.",
+    "pairTitle": "Emparelhar este dispositivo",
+    "acceptHint": "Continue apenas se pediu esta ligação a partir da sua própria conta. Este dispositivo vai ganhar acesso a essa conta.",
+    "pairInvalid": "Esta ligação não existe, expirou ou já foi utilizada. Crie outra ligação nas definições de início de sessão.",
+    "accept": "Emparelhar este dispositivo"
+  },
+  "totp": {
+    "title": "Segundo fator TOTP",
+    "description": "Uma palavra-passe de utilização única baseada no tempo (RFC 6238) como fator adicional na sua conta local. Acrescenta-se às suas chaves de acesso — nunca as substitui.",
+    "state": "Fator",
+    "enrolled": "Registado",
+    "notEnrolled": "Não registado",
+    "algorithm": "Parâmetros",
+    "everySeconds": "Códigos de {{period}} s",
+    "activatedAt": "Ativado",
+    "recoveryRemaining": "Códigos de recuperação",
+    "recoveryCount": "{{count}} restantes",
+    "enrol": "Registar um fator",
+    "replace": "Substituir fator",
+    "remove": "Remover fator",
+    "confirmRemove": "Remover mesmo?",
+    "activate": "Ativar",
+    "scanPrompt": "Leia o código QR com a sua aplicação de autenticação, ou introduza o segredo manualmente, e depois introduza o código que ela mostra.",
+    "qrAlt": "Código QR com o URI de aprovisionamento TOTP",
+    "manualEntry": "Segredo para introdução manual",
+    "codeLabel": "Código da sua aplicação",
+    "recoveryWarning": "Estes códigos de recuperação são mostrados apenas uma vez. Guarde-os agora — cada um pode ser usado uma única vez se perder o seu dispositivo.",
+    "savedCodes": "Guardei os códigos",
+    "stepUpRequired": "Esta ação precisa da verificação adicional para ações administrativas que esta instalação exige. Conclua-a primeiro.",
+    "sealerUnavailable": "O selador de sementes TOTP não está disponível nesta instalação; o registo fica desativado até um operador o corrigir.",
+    "loadFailed": "Não foi possível carregar o estado do fator.",
+    "policyTitle": "Exigir TOTP aos administradores",
+    "policyDescription": "Quando ativa, os administradores (superadministradores e qualquer administrador ou proprietário do tenant) têm de registar um fator antes de concluírem o início de sessão com palavra-passe.",
+    "policyState": "Política",
+    "policyOn": "Exigido",
+    "policyOff": "Desligado",
+    "policyEnable": "Exigir aos administradores",
+    "policyConfirmOn": "Confirmar: exigir",
+    "policyDisable": "Desligar",
+    "policyAal3Note": "As contas sem código são convidadas a configurar um no início de sessão seguinte; nunca ficam bloqueadas."
+  },
+  "stepUpPolicy": {
+    "title": "Verificação adicional para ações administrativas",
+    "description": "Desligada por defeito. Ative-a para pedir um código do autenticador ou uma chave de acesso antes de alterações administrativas, como utilizadores, fornecedores de identidade, segredos ou instalações de ferramentas.",
+    "options": {
+      "none": "Desligada",
+      "totp": "Código do autenticador",
+      "passkey": "Chave de acesso"
+    },
+    "saved": "Guardado.",
+    "loadFailed": "Não foi possível ler esta definição. Atualize a página para tentar novamente.",
+    "note": "Para exigir uma chave de acesso, inicie primeiro sessão aqui com a sua chave de acesso. Para exigir um código do autenticador, inicie primeiro sessão com o seu código. Para a desligar ou reduzir, passe primeiro a verificação atual. Uma alteração entra em vigor em poucos segundos em todos os servidores.",
+    "refused": {
+      "passkey_not_enrolled": "Adicione primeiro uma chave de acesso à sua conta (Identidade > Chaves de acesso) e depois ative esta opção.",
+      "totp_sign_in_required": "Configure primeiro uma aplicação de autenticação e inicie sessão com o respetivo código, e depois ative esta opção."
+    }
+  },
+  "posture": {
+    "unavailable": {
+      "badge": "Não legível"
+    }
+  }
+}

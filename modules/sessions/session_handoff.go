@@ -574,6 +574,18 @@ func (m *Module) handoffRun(ctx context.Context, mc api.ModuleContext, runRef st
 	if err := checkRunName(name); err != nil {
 		return handoffResultDTO{}, err
 	}
+	// A name the engine derives gets -2, -3 … when it is taken, so handing one
+	// session to two tools needs no name; a name the caller gave is refused below.
+	if strings.TrimSpace(req.Name) == "" {
+		if name, err = m.freeDerivedRunName(ctx, tenant, name); err != nil {
+			return handoffResultDTO{}, err
+		}
+	}
+	// A name a session holds is refused with it, still before the source is
+	// stopped: a refusal after it stops the source for nothing.
+	if err := m.refuseHeldRunName(ctx, tenant, name); err != nil {
+		return handoffResultDTO{}, err
+	}
 	if live {
 		// A read that would be refused (no file, two files, too large, a record too
 		// large) is refused now, while the session still runs. OpenCode's is a

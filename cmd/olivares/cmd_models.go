@@ -5,9 +5,13 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
 // newModelsCmd wires the `models` module (modules/models/api.go) to the CLI:
@@ -47,6 +51,7 @@ func newModelsCmd() *cobra.Command {
 	cmd.AddCommand(newModelsReferenceCmds(c)...)
 	cmd.AddCommand(
 		newModelsRoutingCmd(c),
+		newModelsAskCmd(c),
 		newModelsKeysCmd(c),
 		newModelsResidencyCmd(c),
 		newModelsEntitlementsCmd(c),
@@ -282,6 +287,99 @@ func newModelsRoutingCmd(c modelstackClient) *cobra.Command {
 			Body:    modelstackBodyRequired,
 		}),
 	)
+	return cmd
+}
+
+// newModelsAskCmd is Ask Olivares' routes, one verb each: what Ask may use, the model an
+// administrator chooses for it, one raw turn and one approved proposal's run. `olivares ask`
+// is the conversational client of the same routes. Choosing the model authorizes its egress,
+// so the engine asks for the routed-execution permission there.
+func newModelsAskCmd(c modelstackClient) *cobra.Command {
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ask",
+		Short:       "Ask Olivares: its model, its tools, a turn and an approved proposal",
+		Long: "Show whether Ask Olivares is on, the models a person may pick and the tools with the\n" +
+			"permission each needs; choose the model Ask uses (an administrator); send one raw turn;\n" +
+			"or run an approved proposal once. `olivares ask` is the conversation on the same routes.",
+		Example: `  olivares models ask show
+  olivares models ask bind 018f2a10-0000-7000-8000-000000000001`,
+		Args: cobra.NoArgs,
+	}
+	cmd.AddCommand(
+		newModelstackGetCmd(c, modelstackGetSpec{
+			Use:     "show",
+			Short:   "Show whether Ask is on, its models and its tools",
+			Long:    "Show whether Ask Olivares is on, the model an administrator chose and the others a\nperson may pick, and each tool with the permission it needs and whether you hold it.",
+			Example: `  olivares models ask show -o json`,
+			Target:  modelstackTarget{Collection: "/ask"},
+		}),
+		newModelsAskBindCmd(c),
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			ChangesData: "write",
+			Use:         "turn",
+			Short:       "Send one raw Ask turn",
+			Long: "Send one turn as the JSON document the engine publishes (messages, optional model\n" +
+				"and allow) and print its answer, refusal or proposal. A write is only a proposal.",
+			Example: `  olivares models ask turn --data '{"messages":[{"role":"user","content":"which sessions are running?"}]}'`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/ask/turns"},
+			Body:    modelstackBodyRequired,
+		}),
+		newModelstackWriteCmd(c, modelstackWriteSpec{
+			ChangesData: "write",
+			Use:         "run <approval-id>",
+			Short:       "Run an approved Ask proposal once",
+			Long: "Run the action an approved Ask proposal is bound to, once. The document names the\n" +
+				"proposal's tool and arguments, unchanged; anything else is refused.",
+			Example: `  olivares models ask run 018f2a10-0000-7000-8000-000000000003 --data '{"tool":"run.start","args":{"name":"fix-tests"}}'`,
+			Method:  http.MethodPost,
+			Target:  modelstackTarget{Collection: "/ask/proposals", IDs: 1, Nested: "run"},
+			Body:    modelstackBodyRequired,
+		}),
+	)
+	return cmd
+}
+
+// newModelsAskBindCmd is how an administrator chooses the model Ask uses: a routing policy,
+// and optionally others a person may pick instead, or --off.
+func newModelsAskBindCmd(c modelstackClient) *cobra.Command {
+	var (
+		also []string
+		off  bool
+	)
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "bind <policy-id>",
+		Short:       "Choose the model Ask Olivares uses",
+		Long: "Bind Ask Olivares to one routing policy: the model `olivares ask` and the console's Ask\n" +
+			"panel use. --also lists other routing policies a person may pick instead. --off turns\n" +
+			"Ask off. Until a model is bound, Ask is off.",
+		Example: `  olivares models ask bind 018f2a10-0000-7000-8000-000000000001
+  olivares models ask bind 018f2a10-0000-7000-8000-000000000001 --also 018f2a10-0000-7000-8000-000000000002
+  olivares models ask bind --off`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if off == (len(args) == 1) {
+				return exitcode.New(exitcode.Usage, errors.New("give one routing policy id, or --off"))
+			}
+			binding := map[string]any{"model": "", "models": also}
+			if !off {
+				binding["model"] = args[0]
+			}
+			body, err := json.Marshal(binding)
+			if err != nil {
+				return err
+			}
+			res, err := c.do(cmd, http.MethodPut, "/ask/binding", "", body, http.StatusOK)
+			if err != nil {
+				return err
+			}
+			return modelstackRenderWriteResult(cmd, res)
+		},
+	}
+	cmd.Flags().StringSliceVar(&also, "also", nil, "other routing policy ids a person may pick, comma separated")
+	cmd.Flags().BoolVar(&off, "off", false, "turn Ask Olivares off")
 	return cmd
 }
 

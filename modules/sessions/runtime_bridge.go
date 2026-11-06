@@ -294,8 +294,15 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 			// (runtime_usage.go). It advances last_activity_at in its own row write, so
 			// a credited frame does not also need touchActivity — and a frame that
 			// carries no metering falls through to the ordinary activity path.
-			if sj.isResult() && m.recordTurnUsage(ctx, lr, data, at) {
-				return
+			if sj.Type == "assistant" {
+				lr.noteInflightUsage(data)
+			}
+			if sj.isResult() {
+				credited := m.recordTurnUsage(ctx, lr, data, at)
+				lr.endInflightUsage()
+				if credited {
+					return
+				}
 			}
 		}
 		m.touchActivity(ctx, lr, at)
@@ -475,6 +482,23 @@ func (m *Module) touchActivity(ctx context.Context, lr *liveRun, at time.Time) {
 	m.renewLaunchClaim(ctx, lr)
 }
 
+// stoppedBy is the reason of a stop a person asked for: by whom, as far as the run
+// records its launcher.
+func (m *Module) stoppedBy(ctx context.Context, lr *liveRun, actor string) string {
+	rec, err := m.loadRun(ctx, lr.tenant, lr.runRef)
+	launcher := ""
+	if err == nil {
+		launcher = rec.String(colRunLauncherUserID)
+	}
+	switch {
+	case launcher == "" || actor == "":
+		return "stopped on request"
+	case actor == "user:"+launcher:
+		return "stopped by the person who started it"
+	}
+	return "stopped by another person"
+}
+
 // finalize records the terminal transition exactly once when the process exits.
 // A process killed by an operator stop (SIGTERM → non-zero exit) is recorded as
 // STOPPED (intentional), not FAILED — the stopRequested flag distinguishes them.
@@ -568,6 +592,10 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		detail := "exit " + strconv.Itoa(exit)
 		if requestedReason != "" {
 			detail = requestedReason
+		} else if requested {
+			// A stop a person asked for ends the tool with a signal's exit code; the
+			// reason is the stop, never that code, which reads as a crash.
+			detail = m.stoppedBy(ctx, lr, stopActor)
 		}
 		if failureDetail != "" {
 			// A start that ended before the tool ran says why, as the synchronous start's refusal does.

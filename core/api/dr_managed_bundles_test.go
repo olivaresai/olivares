@@ -32,7 +32,7 @@ func TestApplianceRecoveryKeyIsNotRegeneratedWhileAManagedDiskHoldsBundles(t *te
 	}
 	s := &Server{drSvc: newDRService(DRConfig{DataDir: data, Appliance: true})}
 
-	err := s.prepareApplianceRecoveryKey(true)
+	err := s.prepareRecoveryKey(true)
 	if err == nil || !strings.Contains(err.Error(), "backups exist") {
 		t.Fatalf("a key was created beside bundles on a managed disk: %v", err)
 	}

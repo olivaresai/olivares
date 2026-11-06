@@ -78,6 +78,36 @@ function applyTheme(theme: Theme): ResolvedTheme {
   return dark ? 'dark' : 'light'
 }
 
+/**
+ * What a brand or a pack may set on the document: the accent family and the logo, and
+ * nothing else. Every other variable (surfaces, text, lines, status colours, focus) stays
+ * the host's, and the trust surfaces (`TrustChrome`) re-declare even the accent, so a
+ * pack cannot make a decision look like something else (#3140).
+ */
+export const THEME_SETTABLE_VARIABLES: readonly string[] = [
+  '--accent',
+  '--on-accent',
+  '--accent-text',
+  '--accent-soft',
+  '--accent-line',
+  '--accent-border',
+  '--brand-logo',
+]
+
+/** Sets the allowlisted variables on the document root and returns the names it refused. */
+export function applyThemeVariables(
+  variables: Readonly<Record<string, string>>,
+  root: HTMLElement = document.documentElement,
+): string[] {
+  const refused: string[] = []
+  for (const [name, value] of Object.entries(variables)) {
+    if (THEME_SETTABLE_VARIABLES.includes(name))
+      root.style.setProperty(name, value)
+    else refused.push(name)
+  }
+  return refused
+}
+
 interface ThemeState {
   theme: Theme
   resolved: ResolvedTheme

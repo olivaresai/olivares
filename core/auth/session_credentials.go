@@ -59,6 +59,10 @@ var ErrSessionAccessEnded = fmt.Errorf("%w: session owner access ended", ErrUnau
 // grants no credential authority and is not evidence of an owner withdrawal.
 var ErrSessionOwnerUnbound = fmt.Errorf("%w: session owner is not bound to this issuer", ErrUnauthenticated)
 
+// sessionCredentialTTL is the fixed lifetime of a session credential and of the
+// agent launch credential it may be minted from.
+const sessionCredentialTTL = 24 * time.Hour
+
 // SessionCredentialExpiryReason is shared by credential denial and its terminal
 // runtime record. Expiry requires a new session, without extending this bearer.
 const SessionCredentialExpiryReason = "Session credential expired after 24 hours. Start a successor session."
@@ -186,7 +190,7 @@ func (c *SessionCredentials) Mint(ctx context.Context, launcher Principal, scope
 		item.revoked = true
 		c.entries[previous] = item
 	}
-	c.entries[digest] = sessionCredential{launcher: ref, seal: seal, ceiling: launcher, scope: scope, expires: now.Add(24 * time.Hour)}
+	c.entries[digest] = sessionCredential{launcher: ref, seal: seal, ceiling: launcher, scope: scope, expires: now.Add(sessionCredentialTTL)}
 	c.runs[key] = digest
 	return token, nil
 }

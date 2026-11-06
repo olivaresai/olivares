@@ -157,8 +157,8 @@ func TestRuntimeCoreSessionInScopeIsTheTargetsOwnSession(t *testing.T) {
 	})
 }
 
-// A work launch's core Session names the agent that holds the work, the
-// agent the runtime target's work custody check requires, so the cockpit adopts it as is.
+// A work launch names the unique agent bound to the work owner identity.
+// The cockpit uses the same resolver when it adopts or validates that Session.
 func TestAWorkLaunchCoreSessionNamesItsWorkHolder(t *testing.T) {
 	for _, be := range managedStopBackends(t) {
 		t.Run(be.name, func(t *testing.T) {
@@ -174,8 +174,12 @@ func TestAWorkLaunchCoreSessionNamesItsWorkHolder(t *testing.T) {
 					t.Fatalf("core session in scope: %v", err)
 				}
 				core, err := sc.Sessions().Get(context.Background(), id)
-				if err != nil || core.AgentID != target.Work.HolderAgentID || core.ExternalID != target.ExpectedLaunch.String() {
-					t.Fatalf("core session = agent %q launch %q (%v), want agent %s launch %s", core.AgentID, core.ExternalID, err, target.Work.HolderAgentID, target.ExpectedLaunch)
+				if err != nil {
+					t.Fatalf("core session get: %v", err)
+				}
+				holder, err := WorkOwnerAgentInScope(context.Background(), sc, target.Work.HolderAgentID)
+				if err != nil || holder.IsZero() || core.AgentID != holder || core.ExternalID != target.ExpectedLaunch.String() {
+					t.Fatalf("core session = agent %q launch %q (%v), want agent %s launch %s", core.AgentID, core.ExternalID, err, holder, target.ExpectedLaunch)
 				}
 			})
 		})

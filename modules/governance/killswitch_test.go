@@ -198,7 +198,7 @@ func TestKillSwitchEstateStopRevokesSessionRequests(t *testing.T) {
 	open := func(action, subjectKind, subjectRef, sessionRef string) string {
 		body := map[string]any{"action": action, "subject_kind": subjectKind, "subject_ref": subjectRef}
 		if sessionRef != "" {
-			body["session_ref"] = sessionRef
+			return h.engineSessionApproval(tenant, action, subjectKind, subjectRef, sessionRef)
 		}
 		r := h.do("POST", "/v1/m/governance/approvals", admin, body, tenantHdr(tenant))
 		if r.code != http.StatusCreated {

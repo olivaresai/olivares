@@ -3,17 +3,21 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE SESSION, AS A PERSON READS IT, at the head of Details (the regression design): its state,
-// workspace, tool, account, model and access in words, then the account's 5-hour and weekly
-// use. A fact the engine did not send is left out, never replaced by an engine reference;
+// workspace, tool, account, model and access in words, then the account's share of the week
+// and of five hours. A fact the engine did not send is left out, never replaced by an engine reference;
 // the references stay in the pane's References block below.
 import { useQuery } from '@tanstack/react-query'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronRight } from 'lucide-react'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
-import { AccountUsage as AdditionalUsage } from '@/features/agentops/account-usage'
+import {
+  AccountUsage as UsageLine,
+  sharesOf,
+} from '@/features/agentops/account-usage'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
-import { modelName } from '@/features/agentops/model-name'
+import { useModelName } from '@/features/agentops/model-choices'
 import { toolName } from '@/features/agentops/engine-tools'
 import type { RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
@@ -40,6 +44,9 @@ export function SessionFacts({
   workspace: string | null
 }) {
   const { t, i18n } = useTranslation(['sessions', 'agentops'])
+  const modelName = useModelName(
+    run?.provider_profile_ref ?? session.profileRef,
+  )
   const titleId = useId()
   const live = session.live
   const driver = run?.provider_driver || live?.provider
@@ -48,24 +55,45 @@ export function SessionFacts({
     ? t(`agentops:effort.${run.effort}`, { defaultValue: run.effort })
     : ''
   const cost = live?.cost_micro_usd
+  // ONE PLACE PER FACT: the header and the composer already say the tool, account, model
+  // and access, and the status bar the account's use. Details shows what they do not
+  // (state, workspace, cost); the rest waits one click away under "Session ›".
   return (
-    <>
-      <section aria-labelledby={titleId} data-testid="session-facts">
-        <h3 id={titleId} className="text-body font-semibold text-text">
-          {t('context.facts.title')}
-        </h3>
-        <KvList className="[&_dt]:w-24 [&_dt]:shrink-0">
-          <KvRow label={t('context.facts.state')} align="start">
-            {/* The word and its age, apart, as the list's row spaces them. */}
-            <span className="inline-flex items-baseline gap-1.5">
-              <StateWord session={session} />
-            </span>
+    <section
+      aria-label={t('context.facts.title')}
+      data-testid="session-facts"
+      className="flex flex-col gap-2"
+    >
+      <KvList className="[&_dt]:w-24 [&_dt]:shrink-0">
+        <KvRow label={t('context.facts.state')} align="start">
+          {/* The word and its age, apart, as the list's row spaces them. */}
+          <span className="inline-flex items-baseline gap-1.5">
+            <StateWord session={session} />
+          </span>
+        </KvRow>
+        {workspace ? (
+          <KvRow label={t('context.facts.workspace')} align="start">
+            {workspace}
           </KvRow>
-          {workspace ? (
-            <KvRow label={t('context.facts.workspace')} align="start">
-              {workspace}
-            </KvRow>
-          ) : null}
+        ) : null}
+        {cost ? (
+          <KvRow label={t('context.facts.cost')} align="start">
+            {formatMicroUsd(cost, { locale: i18n.language })}
+          </KvRow>
+        ) : null}
+      </KvList>
+      <details data-testid="session-facts-more" className="group">
+        <summary
+          id={titleId}
+          className="flex cursor-pointer list-none items-center gap-1 text-caption font-medium text-foreground"
+        >
+          {t('context.facts.title')}
+          <ChevronRight
+            aria-hidden
+            className="size-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          />
+        </summary>
+        <KvList className="mt-1 [&_dt]:w-24 [&_dt]:shrink-0">
           {driver ? (
             <KvRow label={t('context.facts.tool')} align="start">
               {toolName(driver)}
@@ -78,24 +106,14 @@ export function SessionFacts({
           ) : null}
           {model ? (
             <KvRow label={t('context.facts.model')} align="start">
-              {[
-                modelName(model),
-                effort.charAt(0).toLocaleUpperCase() + effort.slice(1),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+              {[modelName(model), effort].filter(Boolean).join(' · ')}
             </KvRow>
           ) : null}
           {run ? <AccessRow run={run} /> : null}
-          {cost ? (
-            <KvRow label={t('context.facts.cost')} align="start">
-              {formatMicroUsd(cost, { locale: i18n.language })}
-            </KvRow>
-          ) : null}
         </KvList>
-      </section>
-      {accountRef ? <AccountUsage profileRef={accountRef} /> : null}
-    </>
+        {accountRef ? <AccountUsage profileRef={accountRef} /> : null}
+      </details>
+    </section>
   )
 }
 
@@ -109,11 +127,9 @@ function AccessRow({ run }: { run: RunDTO }) {
   )
 }
 
-/** The windows Details names, by the engine's stable window name. */
-const WINDOWS = { five_hour: 'fiveHour', seven_day: 'week' } as const
-
-/** The 5-hour and weekly use of the session's own account, as its tool last reported it;
- * nothing when it reported none, or when the profile is not an account. */
+/** The session's own account's share of the week and of five hours, as its tool last
+ * reported it, in the words every place that names the account uses; nothing when it
+ * reported neither, or when the profile is not an account. */
 function AccountUsage({ profileRef }: { profileRef: string }) {
   const { t } = useTranslation('sessions')
   const titleId = useId()
@@ -130,14 +146,8 @@ function AccountUsage({ profileRef }: { profileRef: string }) {
     retry: false,
     staleTime: 60_000,
   })
-  const windows = (account.data?.usage ?? []).flatMap((u) => {
-    const key = WINDOWS[u.window as keyof typeof WINDOWS]
-    return key && u.utilization !== undefined
-      ? [{ key, percent: Math.round(u.utilization) }]
-      : []
-  })
-  const additional = account.data?.usage?.filter((u) => !(u.window in WINDOWS))
-  if (windows.length === 0 && !additional?.length) return null
+  const usage = account.data?.usage
+  if (sharesOf(usage).length === 0) return null
   return (
     <section
       aria-labelledby={titleId}
@@ -147,25 +157,7 @@ function AccountUsage({ profileRef }: { profileRef: string }) {
       <h3 id={titleId} className="text-body font-semibold text-text">
         {t('context.usage.title')}
       </h3>
-      {windows.map((w) => {
-        const label = t(`context.usage.${w.key}`, { percent: w.percent })
-        return (
-          <div key={w.key} className="flex flex-col gap-1">
-            <meter
-              min={0}
-              max={100}
-              value={w.percent}
-              aria-valuenow={w.percent}
-              aria-label={label}
-              className="h-1.5 w-32"
-            />
-            <span className="text-caption tabular-nums text-text-2">
-              {label}
-            </span>
-          </div>
-        )
-      })}
-      <AdditionalUsage usage={additional} />
+      <UsageLine usage={usage} />
     </section>
   )
 }

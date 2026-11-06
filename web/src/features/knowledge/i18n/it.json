@@ -1,5 +1,5 @@
 {
-  "title": "Dati, conoscenza e contesto",
+  "title": "Conoscenza",
   "subtitle": "Basi di conoscenza governate, lineage del recupero, registro dei prompt, memoria degli agenti e policy di contesto.",
   "tabs": {
     "kbs": "Basi di conoscenza",
@@ -20,11 +20,11 @@
     "status": "Stato",
     "agentRef": "Agente",
     "acl": "ACL",
-    "aclHint": "Riferimenti di permesso (identificatori di gruppo / ruolo / principal), mai credenziali.",
+    "aclHint": "Riferimenti di permesso (gruppo, ruolo, persona o strumento): mai credenziali.",
     "aclNone": "Nessuna ACL",
     "addRef": "Aggiungi riferimento",
     "removeRef": "Rimuovi",
-    "credentialWarning": "Sembra il valore di una credenziale. Inserisci un riferimento di permesso (un identificatore di gruppo / ruolo / principal), mai un segreto.",
+    "credentialWarning": "Sembra un valore di credenziale. Inserisci un riferimento di permesso (un gruppo, un ruolo, una persona o uno strumento), mai un segreto.",
     "localHashLabel": "Lessicale, non semantico",
     "localHashHint": "Questo indice usa un embedder lessicale locale (hash), NON un modello vettoriale semantico. Le corrispondenze si basano sulle parole chiave, non sul significato.",
     "egressNo": "Nessun egress",
@@ -94,12 +94,12 @@
   "kbEditor": {
     "createTitle": "Nuova base di conoscenza",
     "editTitle": "Modifica governance",
-    "createBody": "Dichiara una base di conoscenza e registra l'embedder configurato. local_only vieta qualsiasi egress; model_backed richiede un embedder semantico. Registrato nel registro di audit con la tua identità.",
+    "createBody": "Dichiara una base di conoscenza e registra l'embedder configurato. «Solo locale» non invia nulla all'esterno; «Basata su modello» richiede un embedder semantico. Registrato nel registro di audit con la tua identità.",
     "editBody": "Aggiorna la governance di “{{name}}”. Cambiare classificazione, residenza o ACL cambia ciò che ogni identità può recuperare. embed_model e dimensione restano come registrati alla creazione. Registrato in audit con la tua identità.",
     "name": "Nome",
     "classificationHint": "Determina quali identità possono recuperare da questa KB.",
     "residencyHint": "Fissa dove i dati di questa KB possono essere elaborati.",
-    "embedPolicyHint": "local_only = indice lessicale a zero egress. model_backed = indice vettoriale semantico tramite il provider governato. auto = scelta in base all'embedder configurato. Il backend rifiuta una combinazione policy/embedder non valida (400).",
+    "embedPolicyHint": "Solo locale: indice lessicale che non lascia mai questa macchina. Basata su modello: indice semantico tramite il provider governato. Automatica: scelta in base all'embedder configurato. Una combinazione non adatta viene rifiutata.",
     "create": "Crea base di conoscenza",
     "save": "Salva modifiche",
     "created": "Base di conoscenza creata",
@@ -114,7 +114,7 @@
   },
   "ingest": {
     "title": "Acquisisci contenuti",
-    "body": "Acquisisce contenuti in “{{name}}”. Segreti / PII vengono oscurati prima dell'indicizzazione. In una KB model_backed il testo dei chunk viene incorporato tramite il provider governato (l'egress è registrato nel lineage).",
+    "body": "Acquisisce contenuti in “{{name}}”. Segreti / PII vengono oscurati prima dell'indicizzazione. In una KB “Basata su modello” il testo dei chunk viene incorporato tramite il provider governato (l'egress è registrato nel lineage).",
     "modeConnector": "Connettore registrato",
     "modeInline": "Documenti inline",
     "source": "Nome del connettore",
@@ -291,14 +291,14 @@
     "maxTokens": "Token massimi",
     "strategy": "Strategia",
     "redaction": "Oscuramento richiesto",
-    "newPolicy": "Salva policy",
+    "newPolicy": "Aggiungi policy",
     "caption": "Policy di contesto / compattazione. Vengono applicate al momento della chiamata al modello: questa vista governa solo i dati.",
     "empty": "Nessuna policy di contesto",
-    "emptyHint": "Salva una policy per governare come viene composto e compattato il contesto di un ambito.",
+    "emptyHint": "Aggiungi una policy per governare come viene composto e compattato il contesto di un ambito.",
     "scopeKinds": {
       "agent": "Agente",
       "kb": "Base di conoscenza",
-      "tenant": "Tenant"
+      "tenant": "Organizzazione"
     },
     "strategies": {
       "truncate": "Tronca",
@@ -307,7 +307,7 @@
     }
   },
   "contextEditor": {
-    "title": "Salva policy di contesto",
+    "title": "Policy di contesto",
     "body": "Imposta la policy di contesto per {{scopeKind}}:{{scopeRef}}. Governa come il contesto di quell'ambito viene composto / compattato e se l'oscuramento è richiesto. Registrato in audit con la tua identità.",
     "scopeKind": "Tipo di ambito",
     "scopeRef": "Riferimento ambito",
@@ -435,7 +435,7 @@
   "empty": {
     "context": {
       "title": "Ancora nessuna policy di contesto",
-      "description": "Salva una policy per governare dimensione del contesto, strategia di compattazione e oscuramento per un agente, una base di conoscenza o un tenant."
+      "description": "Aggiungi una policy per governare dimensione del contesto, strategia di compattazione e oscuramento per un agente, una base di conoscenza o l'organizzazione."
     },
     "dataProduct": {
       "title": "Ancora nessun prodotto dati definito",
@@ -456,20 +456,20 @@
   },
   "dlp": {
     "enabled": "La DLP è attiva: una classe etichettata senza regola esatta ricade nella regola \"*\" e, senza regola \"*\", viene NEGATA.",
-    "inert": "La DLP NON è configurata: il controllo è inerte e nulla viene bloccato. Non significa \"tutto negato\".",
+    "inert": "La DLP NON è configurata: nulla viene bloccato. Non significa \"tutto negato\".",
     "unscannedDenied": "Il contenuto non analizzato viene NEGATO: non ha un'etichetta, quindi la sua sensibilità non può essere provata.",
     "unscannedAllowed": "Il contenuto non analizzato è CONSENTITO da una regola esplicita. I contenuti che nessuno ha classificato possono uscire.",
     "unscannedUndetermined": "Non determinabile da questa pagina: l'elenco delle regole è troncato, quindi oltre di esso potrebbe esistere una regola che consente il contenuto non analizzato.",
     "empty": "Nessuna regola DLP",
-    "emptyHint": "Senza regole il controllo non applica nulla. Scrivere una sola regola abilita la DLP per questo tenant.",
+    "emptyHint": "Senza regole il controllo non applica nulla. Scrivere una sola regola abilita la DLP per questa organizzazione.",
     "anyScope": "corrisponde a qualsiasi classe ETICHETTATA: NON copre il contenuto non analizzato",
     "newRule": "Nuova regola DLP",
     "newRuleHint": "Una regola associa una classe di contenuto a consenti o nega in uscita.",
     "class": "Classe",
     "action": "Azione",
     "deleteRule": "Elimina la regola per {{class}}",
-    "willReplace": "⛔ Esiste già una regola per \"{{class}}\". Salvare la SOSTITUISCE: è un upsert per classe, non un'aggiunta. Sostituire una regola di blocco con una di consenso apre subito l'egress per quella classe.",
-    "mayReplace": "L'elenco delle regole è troncato: oltre questa pagina potrebbe già esistere una regola per \"{{class}}\". Salvare la SOSTITUIREBBE, perché il salvataggio fa upsert per classe.",
+    "willReplace": "⛔ Esiste già una regola per \"{{class}}\". Salvare la SOSTITUISCE: non ne aggiunge una seconda. Sostituire una regola di blocco con una di consenso apre subito l'egress per quella classe.",
+    "mayReplace": "L'elenco delle regole è troncato: oltre questa pagina potrebbe già esistere una regola per \"{{class}}\". Salvare la SOSTITUIREBBE, perché c'è una sola regola per classe.",
     "truncated": "Caricate {{n}} regole DLP; ce ne sono altre",
     "truncatedHint": "Questo elenco mostra la prima pagina caricata; esistono altre regole DLP."
   },

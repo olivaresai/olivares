@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Gauge, Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   Select,
@@ -46,8 +47,11 @@ function sinceFor(rangeId: string): string {
   return new Date(Date.now() - days * 86_400_000).toISOString()
 }
 
+const ADOPTION_TABS = ['overview', 'teams', 'developers', 'trend'] as const
+
 export function AdoptionView() {
   const { t } = useTranslation(['adoption', 'common'])
+  const [tab, setTab] = useTabParam(ADOPTION_TABS)
   const { activeTenant, can } = useAuth()
   const [rangeId, setRangeId] = useState('30d')
   const since = useMemo(() => sinceFor(rangeId), [rangeId])
@@ -87,7 +91,7 @@ export function AdoptionView() {
         {(summary) => <BoundaryBanner excludes={summary.boundary.excludes} />}
       </AsyncSection>
 
-      <Tabs defaultValue="overview">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">{t('tabs.overview')}</TabsTrigger>
           <TabsTrigger value="teams">{t('tabs.teams')}</TabsTrigger>

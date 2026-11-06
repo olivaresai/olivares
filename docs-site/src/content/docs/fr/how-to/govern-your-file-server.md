@@ -61,6 +61,10 @@ traversées de chemin.
 }
 ```
 
+### Depuis la console
+
+**Console → Connecteurs → Ajouter** propose le même connecteur sous le nom `fscontent` : nommez-le et renseignez `root` ; **Tester** liste les dix premiers fichiers avec l’ACL avec laquelle chacun serait stocké. Choisissez une **Base de connaissances** et le moteur y synchronise la source à l’enregistrement puis à chaque intervalle d’interrogation, sans redémarrage. Le **Garde-fou de suppression** (`max_delete_percent`, 20 % par défaut dans la console) arrête une synchronisation qui supprimerait une part plus grande des documents de la source : elle n’en supprime aucun et indique pourquoi. **Exporter** enregistre la définition sans identifiants ; **Importer** sur un autre serveur la crée, marquée *Identifiant manquant* jusqu’à ce qu’il y soit renseigné. La section `documents` du fichier est importée une fois dans le même registre, au premier démarrage qui n’y trouve aucune source de documents ; ensuite le registre fait foi.
+
 Chaque fichier devient un Document : son corps est le contenu du fichier, son DocID le
 chemin relatif à la racine, et ses attributs de provenance contiennent `owner`, `group`,
 `mode`, `size`, `world_readable` et `path`.

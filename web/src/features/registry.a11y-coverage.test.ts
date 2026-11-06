@@ -21,13 +21,18 @@ const authRoutes = new Set<string>(AUTH_ROUTES)
 /** Every path the authenticated shell mounts, with the session viewer's fixture id. */
 function mountedAuthenticatedPaths(): string[] {
   const router = createRouter({ routeTree })
-  return Object.keys(router.routesById)
-    .filter((id) => id === '/app/' || id.startsWith('/app/'))
-    .map((id) => (id === '/app/' ? '/' : id.slice(4)))
-    .map((path) =>
-      path === '/session-viewer/$id' ? SESSION_VIEWER_ROUTE : path,
-    )
-    .sort()
+  return (
+    Object.keys(router.routesById)
+      // The catch-all that draws a 404 inside the shell (routes.tsx) answers no address.
+      .filter(
+        (id) => id === '/app/' || (id.startsWith('/app/') && id !== '/app/$'),
+      )
+      .map((id) => (id === '/app/' ? '/' : id.slice(4)))
+      .map((path) =>
+        path === '/session-viewer/$id' ? SESSION_VIEWER_ROUTE : path,
+      )
+      .sort()
+  )
 }
 
 describe('authenticated accessibility route coverage', () => {

@@ -188,7 +188,7 @@ func TestSessionsRuntimeWorkControlOpenAPI(t *testing.T) {
 	// drift-clean the whole time, because the generator and the snapshot agreed on
 	// the same wrong answer.
 	if got := responseStatuses(t, input); !reflect.DeepEqual(got,
-		[]string{"202", "400", "401", "403", "404", "409", "429", "503"}) {
+		[]string{"202", "400", "401", "403", "404", "409", "413", "429", "503"}) {
 		t.Errorf("run input statuses = %v", got)
 	}
 	accepted := responseSchema(t, input, "202")

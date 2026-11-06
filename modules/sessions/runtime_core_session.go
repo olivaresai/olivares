@@ -21,10 +21,29 @@ import (
 // that stops or fails the run closes it. The managed identity (claim_sid) is reused;
 // this is no second identity.
 
+// WorkOwnerAgentInScope resolves a work owner's Identity ID to its unique Agent ID
+// in the caller's tenant scope. Zero means no unique binding; callers requiring an
+// agent must reject it. It grants no authority and must share the caller's transaction.
+func WorkOwnerAgentInScope(ctx context.Context, sc store.Scope, owner model.ID) (model.ID, error) {
+	if owner.IsZero() {
+		return "", nil
+	}
+	agents, page, err := sc.Agents().List(ctx, model.Query{
+		Filters: []model.Filter{eq("identity_id", owner.String())}, Limit: 2,
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(agents) != 1 || page.HasMore {
+		return "", nil
+	}
+	return agents[0].ID, nil
+}
+
 // openCoreSession opens the core Session of the launch attempt rec carries and records
 // it on the run. A row with no launch id (a launch waiting for approval) has none yet.
-// holder is the agent that holds a work launch's work (the item owner its lease is
-// acquired for), the Session's agent as in the cockpit's own launches; zero otherwise.
+// holder is the unique agent bound to a work owner's identity, the Session's
+// agent as in the cockpit's own launches; zero when no unique agent is known.
 func openCoreSession(ctx context.Context, sc store.Scope, rec model.Record, holder model.ID, at time.Time) error {
 	launch := rec.String(colRuntimeLaunchID)
 	if launch == "" {

@@ -4,6 +4,8 @@
 //
 // Test stand-in for the engine's readiness answer (GET provider-profiles/readiness): one
 // entry per session tool. A tool not named has nothing to run on.
+import { screen } from '@testing-library/react'
+import type userEvent from '@testing-library/user-event'
 import type {
   ResolveProviderSource,
   ToolReadinessDTO,
@@ -46,4 +48,14 @@ export function readinessOf(
       }
     }),
   }
+}
+
+/** Picks a tool in the New session form's Tool dropdown, as a person does: open it, click
+ * the tool. */
+export async function chooseTool(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+) {
+  await user.click(await screen.findByRole('combobox', { name: 'Tool' }))
+  await user.click(await screen.findByRole('option', { name }))
 }

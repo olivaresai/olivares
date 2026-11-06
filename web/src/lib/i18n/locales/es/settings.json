@@ -1,4 +1,25 @@
 {
+  "exposure": {
+    "title": "Acceso a la consola",
+    "listen": "Escucha HTTPS / HTTP",
+    "grpc": "Escucha gRPC",
+    "addresses": "Direcciones locales",
+    "url": "URL pública",
+    "tls": "Transporte",
+    "encrypted": "TLS activado",
+    "unencrypted": "HTTP sin cifrar",
+    "policy": "Autenticación reforzada administrativa",
+    "unverified": "No se ha verificado la accesibilidad externa.",
+    "hint": "Estos datos son locales; una URL pública o una dirección local no demuestra que un teléfono fuera de esta red pueda acceder a la consola.",
+    "guard": "Activa un código de autenticación o una clave de acceso en Autenticación reforzada administrativa antes de habilitar el acceso público.",
+    "saved": "Acceso a la consola actualizado.",
+    "managed": "El acceso público gestionado está registrado.",
+    "unmanaged": "No hay ningún acceso público gestionado registrado.",
+    "urlHint": "Usa la dirección de tu tailnet o túnel con nombre; déjala vacía para eliminar la URL pública gestionada.",
+    "unchanged": "Edita la URL pública para guardarla.",
+    "tunnelHint": "Usa un cliente de tailnet para el acceso privado o un Cloudflare Tunnel con nombre para el acceso público. Un túnel no necesita ningún puerto WAN de entrada.",
+    "notSet": "Sin configurar"
+  },
   "title": "Ajustes",
   "restoreAll": "Restablecer todo",
   "search": "Buscar ajustes",
@@ -15,9 +36,10 @@
     "aiTools": "Herramientas de IA",
     "workspaces": "Espacios de trabajo",
     "deploy": "Despliegue y actualizaciones",
-    "signIn": "Inicio de sesión y seguridad",
+    "signIn": "Inicio de sesión",
     "setup": "Configuración inicial",
-    "edition": "Edición y módulos",
+    "edition": "Edición",
+    "modules": "Módulos",
     "about": "Acerca de",
     "sections": "Secciones de ajustes",
     "signing": "Firma de informes",
@@ -36,13 +58,13 @@
     "density": "Densidad",
     "densityHint": "Compacto muestra más filas; cómodo se lee mejor.",
     "language": "Idioma",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Hora",
     "timeHint": "Las horas se muestran en tu zona ({{zone}}). Los registros y las exportaciones siguen en UTC.",
     "clock24": "24 horas",
     "clock12": "12 horas",
     "startPage": "Página de inicio",
-    "startPageHint": "Qué se abre al iniciar sesión. Predeterminado: Inicio.",
+    "startPageHint": "Qué se abre al iniciar sesión. Predeterminado: Sesiones.",
     "confirmStop": "Confirmar antes de detener una sesión",
     "confirmStopHint": "Preguntar una vez antes de que Detener acabe una sesión que sigue trabajando.",
     "editor": "Editor para enlaces de archivo",
@@ -71,23 +93,22 @@
     "scope": "Las teclas que responde esta instalación. Son las mismas para todos."
   },
   "edition": {
-    "title": "Edición y módulos",
-    "scope": "La edición de esta compilación, los módulos que ejecuta y lo que añade Business.",
+    "scope": "La edición de esta compilación, su licencia y lo que añade Business.",
     "label": "Edición",
-    "licenseAlias": "Licencia",
     "unknown": "Este motor no la indica",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
     "businessAdds": "Business añade",
-    "adds": {
-      "loginEnforcement": "Aplicación del inicio de sesión: exigir SSO y una lista de redes permitidas",
-      "identityProviders": "Varios proveedores de identidad, por organización y enrutados por dominio de correo",
-      "groupMapping": "Grupos de directorio asignados a roles al iniciar sesión",
-      "regulatory": "Operaciones regulatorias: registros DORA, clasificación de incidentes NIS 2, perfiles OSCAL, paquetes de EE. UU. y sectoriales, y supervisión continua de controles",
-      "reports": "Informes Business e informes programados",
-      "toolPins": "Fijación de herramientas"
+    "summary": {
+      "Session cockpit and fleet deployment.": "Cabina de sesiones y despliegue en flota.",
+      "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Compartición de sesiones en directo con acceso de invitados nominativo y con caducidad, y propuestas de mensajes que aprueba el propietario.",
+      "Directories and several identity providers, departments and delegated administration.": "Directorios y varios proveedores de identidad, departamentos y administración delegada.",
+      "Compliance and reporting, regulated records.": "Cumplimiento e informes, registros regulados.",
+      "Deeper runtime inspection and key management.": "Inspección más profunda del tiempo de ejecución y gestión de claves.",
+      "Integrations with enterprise systems, commercial license and support.": "Integraciones con sistemas empresariales, licencia comercial y soporte.",
+      "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise incluye todo lo de Business, más los términos acordados en un contrato y las capacidades que dependen de ellos."
     },
     "badge": {
       "business": "Business",
@@ -249,7 +270,7 @@
     "activatedBy": "Lo activa {{addons}}. Sigue activado mientras ese complemento esté activo.",
     "turnOnPlain": "Activar",
     "alsoTurnsOn": "Al activarlo también se activan {{names}} y el motor se reinicia.",
-    "openEdition": "Abrir Edición y módulos",
+    "openModules": "Abrir Módulos",
     "askAdmin": "Pide a un administrador que lo active.",
     "notSetUp": "Todavía no está configurado en esta instalación.",
     "stillRestarting": "Sigue reiniciándose. Recarga la página."
@@ -376,6 +397,7 @@
     "tool": "Herramienta predeterminada",
     "account": "Cuenta predeterminada",
     "model": "Modelo predeterminado",
+    "effort": "Esfuerzo predeterminado",
     "folder": "Carpeta predeterminada",
     "automatic": "Automático",
     "unavailable": "Ya no está disponible",
@@ -388,5 +410,9 @@
     "needsYou": "Te necesita",
     "finished": "Finalizada",
     "failed": "Fallida"
+  },
+  "aliases": {
+    "edition": "Licencia",
+    "signIn": "Inicio de sesión y seguridad"
   }
 }

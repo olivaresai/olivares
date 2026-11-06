@@ -4,13 +4,12 @@
   "forbiddenTitle": "Non autorizzato",
   "forbidden": "Per vedere il contratto di attestazione serve il permesso compliance:read.",
   "disclaimer": {
-    "tag": "Beta",
-    "body": "Il progetto è in beta: non esistono ancora release e la pipeline di release è scritta ma non attivata. Il pannello del binario in esecuzione è MISURATO da questo processo; le schede del contratto sono il contratto dichiarato, non una release pubblicata né una verifica crittografica in tempo reale — questa console non riverifica mai le firme nel browser.",
+    "body": "Questa build non è una release pubblicata.",
     "declaredRef": "Riferimento dichiarato — AsOf {{date}}. Tratto alla lettera da docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml e dai workflow di release / scorecard / patch-velocity. Il motore non può osservare lo stato del repository né della CI, quindi questa metà non viene servita in tempo reale."
   },
   "live": {
     "title": "Binario in esecuzione (misurato)",
-    "description": "Ciò che QUESTO processo del motore può provare su di sé — letto in tempo reale dal binario (ldflags, debug.ReadBuildInfo, crypto/fips140, un hash dell'eseguibile stesso) — e lo stato onesto della release: nulla è pubblicato o verificato finché un tag v* non fa partire la pipeline.",
+    "description": "Ciò che questa build in esecuzione riporta su sé stessa.",
     "status": {
       "measured": "Misurato"
     },
@@ -58,11 +57,11 @@
   },
   "tabs": {
     "artifacts": "Artefatti",
-    "provenance": "Provenienza e VEX",
+    "provenance": "Provenienza",
     "sbom": "SBOM",
     "scorecard": "Scorecard",
     "remediation": "SLA di remediation",
-    "airgap": "Air-gap e chart"
+    "airgap": "Air-gap"
   },
   "artifacts": {
     "title": "Artefatti della release",

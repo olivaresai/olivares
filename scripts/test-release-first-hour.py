@@ -129,7 +129,35 @@ elif name == 'docker':
 elif name == 'git':
     if 'rev-parse' in args: print('1' * 40)
     if 'status' in args and case == 'dirty': print(' M scripts/release-first-hour.sh')
-else: raise AssertionError(name)
+else:
+    if name == 'sudo':
+        command = args.index('env')
+        os.execvp(args[command], args[command:])
+    raise AssertionError(name)
+'''
+
+
+# Stands in for scripts/session-journey-smoke.sh: records its arguments and the bytes of the
+# binary it was handed, and fails the way a session ended by a long output line does.
+CHAT_LEG = r'''#!/usr/bin/env bash
+python3 - "$0" "$@" <<'PY'
+import json, os, pathlib, sys, tempfile
+args = sys.argv[2:]
+binary_dir = pathlib.Path(args[1]).resolve().parent
+script = pathlib.Path(sys.argv[1]).resolve()
+assert script == binary_dir / 'scripts/session-journey-smoke.sh', script
+assert (binary_dir / 'scripts/install-service.sh').is_file()
+assert binary_dir.stat().st_mode & 0o7777 == 0o755, 'executable directory must not be writable by nobody'
+assert (binary_dir / 'scripts').stat().st_mode & 0o022 == 0, 'scripts must not be replaceable by nobody'
+assert pathlib.Path(os.environ['TMPDIR']) == binary_dir / 'tmp'
+assert (binary_dir / 'tmp').stat().st_mode & 0o7777 == 0o1777
+with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as scratch:
+    pathlib.Path(scratch, 'write-probe').write_text('writable scratch')
+with pathlib.Path(os.environ['RUNNER_TEMP'], 'calls.jsonl').open('a') as calls:
+    calls.write(json.dumps(['session-journey', *args, pathlib.Path(args[1]).read_bytes().decode()]) + '\n')
+if os.environ.get('CASE') == 'chat':
+    sys.exit('session-journey: FAIL at large output: the session ended before its answer')
+PY
 '''
 
 
@@ -145,11 +173,17 @@ class ReleaseFirstHourTest(unittest.TestCase):
         shutil.copy(ROOT / 'scripts/release-first-hour.sh', root / 'scripts')
         shutil.copy(ROOT / 'scripts/assemble-runtime-context.sh', root / 'scripts')
         shutil.copy(ROOT / 'scripts/sanitize-first-hour.py', root / 'scripts')
+        shutil.copy(ROOT / 'scripts/install-service.sh', root / 'scripts')
+        # The chat leg is its own script, tested on a real engine elsewhere; here only what the
+        # orchestration hands it: the verified candidate binary, and a failure that stops the run.
+        journey = root / 'scripts/session-journey-smoke.sh'
+        journey.write_text(CHAT_LEG)
+        journey.chmod(0o755)
         shutil.copytree(ROOT / 'scripts/userspace', root / 'scripts/userspace')
         for name in ['.goreleaser.yaml', 'Dockerfile.release', 'LICENSE', 'NOTICE',
                      'LICENSING.md', 'DISCLAIMER.md']:
             shutil.copy(ROOT / name, root / name)
-        for name in ['LICENSES', 'packaging/container']:
+        for name in ['LICENSES', 'packaging/container', 'deploy/seccomp', 'deploy/apparmor']:
             shutil.copytree(ROOT / name, root / name)
         package = root / 'web/node_modules/@playwright/test/package.json'
         package.parent.mkdir(parents=True)
@@ -159,7 +193,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
         bindir.mkdir()
         # Any release metadata lookup would reintroduce the obsolete predecessor dependency.
         (bindir / 'sitecustomize.py').write_text("import urllib.request\ndef urlopen(*args, **kwargs):\n    raise AssertionError('first-hour must not require a published predecessor')\nurllib.request.urlopen = urlopen\n")
-        for name in ['docker', 'pnpm', 'goreleaser', 'git']:
+        for name in ['docker', 'pnpm', 'goreleaser', 'git', 'sudo']:
             tool = bindir / name
             tool.write_text(TOOL)
             tool.chmod(0o755)
@@ -197,12 +231,34 @@ class ReleaseFirstHourTest(unittest.TestCase):
                 self.assertNotIn('test-only-bearer', log)
                 if (root / 'browser-ran').exists():
                     self.assertIn('late engine warning: provider request stalled', log)
-            if expected and case not in ['copy', 'detect', 'browser', 'logs', 'setup-banner', 'pull', 'port-public', 'dirty', 'rm-busy', 'config-public', 'bind-all', 'browser-version', 'browser-rm', 'browser-interrupted'] and not case.startswith('releases-'):
+            if expected and case not in ['copy', 'detect', 'browser', 'logs', 'setup-banner', 'pull', 'port-public', 'dirty', 'rm-busy', 'config-public', 'bind-all', 'browser-version', 'browser-rm', 'browser-interrupted', 'chat'] and not case.startswith('releases-'):
                 self.assertIn('O1 J1-release-container: FAIL', result.stdout)
                 self.assertIn('O7 J7-release-container: FAIL', result.stdout)
             image = 'docker.io/olivaresai/olivares:'
             calls_file = root / 'calls.jsonl'
             calls = [json.loads(line) for line in calls_file.read_text().splitlines()] if calls_file.exists() else []
+            # The chat leg runs once, on the verified candidate bytes, only when the identity held,
+            # and before the browser; a failure of it stops the run there.
+            chat = [i for i, call in enumerate(calls) if call[0] == 'session-journey']
+            self.assertLessEqual(len(chat), 1)
+            if (root / 'browser-ran').exists() or case == 'chat':
+                self.assertEqual(len(chat), 1, 'the browser never runs without the chat leg before it')
+            if 'release-container: FAIL' in result.stdout:
+                self.assertEqual(chat, [], 'drifted bytes are not chatted with')
+            if chat:
+                *args, binary = calls[chat[0]][1:]
+                self.assertEqual([args[0], *args[2:]], ['--binary', '--label', 'release-candidate', '--large-output'])
+                self.assertRegex(args[1], r'/olivares-first-hour-nobody\.[^/]+/olivares$')
+                for source in ['scripts/release-first-hour.sh', '.github/workflows/pr-ci.yml']:
+                    text = (ROOT / source).read_text()
+                    self.assertNotIn('chmod 0777 "$nobody_dir"', text)
+                    self.assertIn('chmod 0755 "$nobody_dir"', text)
+                    self.assertIn('chmod 1777 "$nobody_dir/tmp"', text)
+                    self.assertIn('TMPDIR="$nobody_dir/tmp"', text)
+                self.assertEqual(binary, 'canonical release binary')
+                self.assertTrue(any(call[:6] == ['sudo', '-u', 'nobody', 'env', '-u', 'XDG_RUNTIME_DIR'] for call in calls))
+                self.assertLess(next(i for i, call in enumerate(calls) if call[:2] == ['docker', 'cp']), chat[0])
+                self.assertFalse(any(call[:2] == ['docker', 'create'] for call in calls[:chat[0]]))
             # Only the tags this run created are removed, after a build and on any outcome.
             tagged = any(call[:2] == ['docker', 'pull'] for call in calls) and case != 'pull'
             built = any(call[:2] == ['docker', 'build'] for call in calls)
@@ -244,6 +300,9 @@ class ReleaseFirstHourTest(unittest.TestCase):
 
     def test_release_image_needs_no_probe_utilities(self) -> None:
         self.run_case('', 0)
+
+    def test_a_session_ended_by_a_long_output_line_stops_the_release_before_the_browser(self) -> None:
+        self.run_case('chat', 1, message='ended before its answer')
 
     def test_runs_on_a_shared_self_hosted_daemon(self) -> None:
         self.run_case('', 0, RUNNER_ENVIRONMENT='self-hosted')

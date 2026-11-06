@@ -167,5 +167,12 @@ func (*PolicyConsole) OperationDocumentation(method, pattern string) (api.Module
 	case claudePolicyBodyNoDerivable, claudePolicyBodyPending:
 		// Undecided: published unclassified until the handler is read.
 	}
+	if pattern == "/{surface}/checkin" && len(checkinAlsoRequires) > 0 {
+		also := make([]string, 0, len(checkinAlsoRequires))
+		for _, perm := range checkinAlsoRequires {
+			also = append(also, string(perm))
+		}
+		doc.Extensions = map[string]any{"x-also-requires-permission": oas.Enum(also...)}
+	}
 	return doc, true
 }

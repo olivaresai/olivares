@@ -102,6 +102,11 @@ func (m *Module) handleSourceItem(w http.ResponseWriter, r *http.Request, mc api
 		m.warnf("sessions: an issue or pull request could not be read", "repository", ref.Owner+"/"+ref.Repo, "err", redactErr(err))
 		writeRunErr(w, &runErr{http.StatusServiceUnavailable, "the issue or pull request could not be read; try again"})
 	default:
+		m.auditWorkspaceRead(r.Context(), mc.Tenant, wsMutationInput{
+			op: "source-item", workspaceID: model.ID(rec.String(model.ColID)),
+			workspaceRef: r.URL.Query().Get("workspace_ref"), path: item.URL,
+			actor: mc.Principal.Actor(), actorKind: mc.Principal.ActorKind(),
+		})
 		kind := "issue"
 		if item.PullRequest {
 			kind = "pull_request"

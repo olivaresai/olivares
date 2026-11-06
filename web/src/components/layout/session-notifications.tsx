@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/toaster'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import {
   notificationOwner,

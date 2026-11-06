@@ -16,11 +16,13 @@ import (
 	"github.com/olivaresai/olivares/connectors/managedsettings"
 )
 
-// ClaudeHookPEPClientTimeout bounds the whole helper, including input, host path
-// resolution and a human wait. The outer command timeout includes startup headroom:
-// a vendor hook timeout discards its decision and can let PreToolUse proceed.
-const ClaudeHookPEPClientTimeout = 2 * time.Minute
-const ClaudeHookPEPCommandTimeout = 3 * time.Minute
+// ClaudeHookPEPClientTimeout bounds the whole helper: input, host path resolution,
+// the human wait (ApprovalWait) and the recheck after it. The outer command timeout
+// adds startup headroom: Claude Code discards a hook that reaches its per-hook timeout
+// and lets PreToolUse proceed (https://code.claude.com/docs/en/hooks), so each bound
+// must outlast the one inside it.
+const ClaudeHookPEPClientTimeout = ApprovalWait + 30*time.Second
+const ClaudeHookPEPCommandTimeout = ClaudeHookPEPClientTimeout + time.Minute
 
 // ConfigureClaudeHookPEP adds the engine's tool hooks to one Claude launch. Call
 // after the launch gate has supplied Env, for both create and resume. A native caller

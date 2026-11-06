@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/olivaresai/olivares/connectors/mcp"
@@ -180,22 +181,42 @@ func TestRetrievalUpstreamToolsList(t *testing.T) {
 	}
 }
 
+// The retrieval surface answers both client eras from the connector's one
+// declaration: initialize carries mcp.LegacyRevision and a 2026-07-28 client's
+// server/discover lists mcp.LatestRevision with the fields that revision requires.
 func TestRetrievalUpstreamInitialize(t *testing.T) {
 	ru := &retrievalUpstream{}
-	result, err := ru.handleInitialize()
+	res, err := ru.Forward(context.Background(), mcp.UpstreamRequest{Method: "initialize", Params: []byte(`{}`)})
 	if err != nil {
-		t.Fatalf("handleInitialize = %v", err)
+		t.Fatalf("initialize = %v", err)
 	}
-	var parsed map[string]any
-	if err := json.Unmarshal(result, &parsed); err != nil {
+	var init struct {
+		ProtocolVersion string `json:"protocolVersion"`
+		ServerInfo      struct {
+			Name string `json:"name"`
+		} `json:"serverInfo"`
+	}
+	if err := json.Unmarshal(res.Result, &init); err != nil {
 		t.Fatalf("unmarshal = %v", err)
 	}
-	if parsed["protocolVersion"] == nil {
-		t.Error("expected protocolVersion")
+	if init.ProtocolVersion != mcp.LegacyRevision || init.ServerInfo.Name != "olivares-retrieval" {
+		t.Fatalf("initialize = %q from %q, want %q from olivares-retrieval", init.ProtocolVersion, init.ServerInfo.Name, mcp.LegacyRevision)
 	}
-	info := parsed["serverInfo"].(map[string]any)
-	if info["name"] != "olivares-retrieval" {
-		t.Errorf("expected olivares-retrieval, got %q", info["name"])
+	res, err = ru.Forward(context.Background(), mcp.UpstreamRequest{Method: "server/discover", Params: []byte(`{}`)})
+	if err != nil {
+		t.Fatalf("server/discover = %v", err)
+	}
+	var disc struct {
+		ResultType        string   `json:"resultType"`
+		SupportedVersions []string `json:"supportedVersions"`
+		TTLMs             *int64   `json:"ttlMs"`
+		CacheScope        string   `json:"cacheScope"`
+	}
+	if err := json.Unmarshal(res.Result, &disc); err != nil {
+		t.Fatalf("unmarshal = %v", err)
+	}
+	if disc.ResultType != "complete" || !slices.Contains(disc.SupportedVersions, mcp.LatestRevision) || disc.TTLMs == nil || disc.CacheScope == "" {
+		t.Fatalf("server/discover = %+v, want resultType complete, ttlMs, cacheScope and %q listed", disc, mcp.LatestRevision)
 	}
 }
 

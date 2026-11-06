@@ -1,5 +1,5 @@
 {
-  "title": "Health & SLA",
+  "title": "Health",
   "subtitle": "Liveness, reliability and dependencies across your estate — derived from observed activity and the staleness sweep, never by probing infrastructure.",
   "auditedNote": "The live stream and any resolve/edit action are privileged, audited operations. Health is derived; the engine never carries error text or payloads here.",
   "refresh": "Refresh",
@@ -238,8 +238,7 @@
       "delegates_to": "Delegates to"
     },
     "observed": "Observed",
-    "truncated": "Showing first {{n}}",
-    "truncatedHint": "The dependency graph has more nodes than shown; this is the first keyset page.",
+    "truncated": "Not every dependency is shown.",
     "empty": {
       "title": "No dependencies discovered yet",
       "description": "Once agents call MCP servers and tools, the observed dependency graph appears here."

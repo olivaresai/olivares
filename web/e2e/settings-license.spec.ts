@@ -17,7 +17,7 @@ test('License is one page: its old Administration address and the Settings searc
   await page.locator('#setup-email').fill('settings-license@example.com')
   await page.locator('#setup-password').fill(`${randomUUID()}-Aa1!`)
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
 
   for (const theme of ['light', 'dark']) {
     await page.goto('/settings')
@@ -49,15 +49,17 @@ test('License is one page: its old Administration address and the Settings searc
         await page.keyboard.press('Escape')
       }
       await page.goto('/settings')
-      // License is a place of the sidebar (a drawer item at 390 px), not a row of Settings.
-      if (width < 761)
-        await page.getByRole('button', { name: /open navigation/i }).click()
+      // Edition is a section of Settings (0.7), in its list at every width; the module
+      // switches are the Modules section, not this one.
       await page
-        .getByRole('navigation', { name: 'Main navigation' })
-        .getByRole('link', { name: 'License', exact: true })
+        .getByRole('navigation', { name: 'Settings sections' })
+        .getByRole('button', { name: 'Edition', exact: true })
         .click()
       await expect(page.getByText('No license', { exact: true })).toBeVisible()
       await expect(page).toHaveURL(/section=edition/)
+      await expect(page.locator('[data-slot="modules-settings"]')).toHaveCount(
+        0,
+      )
       await page.screenshot({
         path: `playwright-report/settings-license-${theme}-${width}.png`,
         fullPage: true,
@@ -76,8 +78,7 @@ test('License is one page: its old Administration address and the Settings searc
     const palette = page.getByRole('dialog')
     await palette.getByRole('combobox').fill(term)
     await palette
-      .getByRole('option')
-      .filter({ hasText: 'Edition & modules' })
+      .locator('[role=option][data-value^="settings:edition "]')
       .click()
     await expect(page).toHaveURL(/\/settings\?section=edition/)
     await expect(page.getByText('No license', { exact: true })).toBeVisible()

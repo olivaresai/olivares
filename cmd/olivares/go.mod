@@ -7,6 +7,7 @@ module github.com/olivaresai/olivares/cmd/olivares
 go 1.26.6
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-jose/go-jose/v4 v4.1.6
@@ -38,6 +39,7 @@ require (
 	github.com/armon/go-proxyproto v0.0.0-20170620220930-48572f11356f // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/boombuler/barcode v1.1.0 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
@@ -50,6 +52,7 @@ require (
 	github.com/pydantic/genai-prices/packages/go v0.1.13 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/russellhaering/gosaml2 v0.12.0 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
@@ -57,11 +60,11 @@ require (
 	github.com/stripe/smokescreen v0.1.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require (
-	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/beevik/etree v1.8.1 // indirect
 	github.com/cedar-policy/cedar-go v1.8.0 // indirect

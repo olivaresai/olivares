@@ -21,6 +21,18 @@ export const VIEWS = [
     helpHref: '/reference/modules/viii-knowledge',
     icon: BookOpen,
     permission: 'knowledge:kb:read',
+    changes: [
+      { permission: 'knowledge:kb:write' },
+      { permission: 'knowledge:kb:admin' },
+      { permission: 'knowledge:context:write' },
+      { permission: 'knowledge:data_product:write' },
+      { permission: 'knowledge:data_product:admin' },
+      { permission: 'knowledge:dlp:admin' },
+      { permission: 'knowledge:memory:write' },
+      { permission: 'knowledge:memory:admin' },
+      { permission: 'knowledge:prompt:write' },
+      { permission: 'knowledge:scan:write' },
+    ],
     element: lazyView(KnowledgeView),
   },
 ] satisfies ViewEntry[]

@@ -32,6 +32,10 @@ vi.mock('@/features/shared/sse', () => ({
 import { BackupsView } from './backups-view'
 import './i18n'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 function show() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

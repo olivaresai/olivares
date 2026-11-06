@@ -292,6 +292,11 @@ type AuthSession struct {
 	// PairingSourceID marks a pending one-time link, not an authenticating session.
 	// Acceptance clears it only after validating the source session again.
 	PairingSourceID ID
+	// IdPSession is the issuer-qualified OpenID Connect `sid` of the identity
+	// provider session this sign-in came from (issuer, U+001F, sid), copied to a
+	// device paired from it. A back-channel logout naming that sid ends the session.
+	// Empty for any other sign-in.
+	IdPSession string
 }
 
 const (

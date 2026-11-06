@@ -7,6 +7,7 @@ package confine
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,7 +41,16 @@ func CommandWithHandles(ctx context.Context, p Policy, files []*os.File, program
 // granted by the caller and lie outside the folder.
 // required is CommandWithTruncateProtection's strict kernel requirement for p.Sealed.
 func CommandWithNoDelete(ctx context.Context, p Policy, required bool, files []*os.File, noDelete []string, program string, args ...string) (*exec.Cmd, State, error) {
-	if len(files) == 0 && len(noDelete) == 0 {
+	return CommandWithReadFiles(ctx, p, required, files, noDelete, nil, program, args...)
+}
+
+// CommandWithReadFiles is CommandWithNoDelete plus files the child may read that the caller
+// already checked (a credential broker's result). The helper opens each again when it grants it,
+// with no link in any name, and refuses the launch unless it is still that file, regular and of its own:
+// the published Policy would grant a link's target. On a host that cannot confine, a launch with
+// nothing else to hold runs as before and State says why, since nothing there limits what it reads.
+func CommandWithReadFiles(ctx context.Context, p Policy, required bool, files []*os.File, noDelete []string, readFiles []ReadFile, program string, args ...string) (*exec.Cmd, State, error) {
+	if len(files) == 0 && len(noDelete) == 0 && (len(readFiles) == 0 || Probe().Mode != ModeLandlock) {
 		return CommandWithTruncateProtection(ctx, p, required, program, args...)
 	}
 	state := Probe()
@@ -77,11 +87,13 @@ func CommandWithNoDelete(ctx context.Context, p Policy, required bool, files []*
 	}
 	q := sessionPolicy(p, cmd.Path)
 	q.SealedFiles = files
+	q.ReadFiles = readFiles
 	q.NoDelete = noDelete
 	q.KeepWritable = keep
 	if _, err = coreconfine.Wrap(cmd, q); err != nil {
 		return nil, state, err
 	}
+	hideUserBus(cmd)
 	return cmd, state, nil
 }
 
@@ -95,6 +107,12 @@ func gitDirs(folders []string) []string {
 	}
 	return dirs
 }
+
+// ReadFile is a file the caller checked, by the path where it really is and its identity then.
+type ReadFile = coreconfine.ReadFile
+
+// ReadFileOf is the file at path as info, its os.Lstat, describes it.
+func ReadFileOf(path string, info fs.FileInfo) ReadFile { return coreconfine.ReadFileOf(path, info) }
 
 // Mounts names paths of a writable grant that the child must see read-only. They
 // are applied in a mount namespace of the child's own, before Landlock.
@@ -112,3 +130,19 @@ var ErrMountsUnavailable = coreconfine.ErrMountsUnavailable
 // which is therefore the confinement helper's command. The Policy stays as it
 // was published; the mounts are a separate layer in front of its arguments.
 func WrapMounts(cmd *exec.Cmd, m Mounts) error { return coreconfine.WrapMounts(cmd, m) }
+
+// UserBusExposed reports whether the engine user has a user bus that the child cmd
+// starts can reach. Every confined command hides it when the host allows (Command and
+// its variants); a caller that must not start a child that can reach it asks here.
+func UserBusExposed(cmd *exec.Cmd) bool { return coreconfine.UserBusExposed(cmd) }
+
+// UserBusUnhideable is why this host cannot keep a confined child away from the engine
+// user's user manager (nil when it can, or there is none): the check `olivares doctor` runs.
+func UserBusUnhideable() error { return coreconfine.UserBusUnhideable() }
+
+// UserBusDirs are the runtime directories of the engine's user that hold its user bus.
+func UserBusDirs() []string { return coreconfine.UserBusDirs() }
+
+// hideUserBus is best effort by design: a host without user and mount namespaces
+// starts the child as before, and UserBusExposed tells the caller who must know.
+func hideUserBus(cmd *exec.Cmd) { _ = coreconfine.HideUserBus(cmd) }

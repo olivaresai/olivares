@@ -144,7 +144,11 @@ func (m *Module) admitIntent(ctx context.Context, c Caller, id model.ID, action 
 	case admin:
 		perm = permTargetAdmin
 	case action == actionReconcile:
-		perm = map[string]auth.Permission{effectPush: permPush, effectPullRequest: permPullRequest, effectMerge: permMerge, effectIssueComment: permIssueComment}[in.Effect]
+		known, ok := map[string]auth.Permission{effectPush: permPush, effectPullRequest: permPullRequest, effectMerge: permMerge, effectIssueComment: permIssueComment}[in.Effect]
+		if !ok {
+			return Intent{}, withIntent(refuse("unknown_effect", http.StatusServiceUnavailable), in.ID)
+		}
+		perm = known
 	}
 	if _, err := m.opts.Authority.Admit(ctx, c.Principal, c.Tenant, Question{Permission: perm, Action: action, MinimumAAL: aal, Target: in.Target, Workspace: in.Workspace}); err != nil {
 		return Intent{}, authError(err)

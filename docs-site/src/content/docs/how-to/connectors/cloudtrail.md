@@ -69,7 +69,7 @@ S3 buckets and objects join the **Access map** with clean-tier badges; reads
 and writes are colored from the `readOnly` flag. The drift panel crosses them
 against declared grants exactly as for any other source.
 
-In **Inventory**, the principals CloudTrail attributes calls to appear as
+In **Discovered resources**, the principals CloudTrail attributes calls to appear as
 identities, ready to be bound to agents — that binding is what turns a
 shared-role `approximate` into a per-agent `attributed`.
 

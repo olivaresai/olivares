@@ -8,12 +8,16 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/sdk/event"
 )
 
@@ -268,6 +272,96 @@ func TestApprovalPolicyIsAuthoritativeOverRequest(t *testing.T) {
 	if r.body["policy_ref"] == "" || r.body["policy_ref"] == nil {
 		t.Fatal("the matched policy should be recorded on the request")
 	}
+	governance.WithPolicyResolver(tenantPolicyFallback{})(h.gov)
+	fallback := h.createApproval(editor, tenant, map[string]any{"action": "deploy", "required_approvals": 1})
+	if fallback.code != http.StatusCreated || fallback.body["required_approvals"] != r.body["required_approvals"] || fallback.body["policy_ref"] != r.body["policy_ref"] {
+		t.Fatalf("delegating resolver changed tenant policy: %d %s", fallback.code, fallback.raw)
+	}
+}
+
+// A session proposes its own launch approval, so no person requests it: policy
+// selection asks for the person who launched the session, on open and on decide.
+func TestSessionLaunchApprovalSelectsTheLaunchersPolicy(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "launch-policy")
+	launcher, err := h.authr.Authenticate(context.Background(), admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := &launcherPolicy{user: launcher.UserID.String(), action: "sessions.run.launch"}
+	governance.WithPolicyResolver(resolver)(h.gov)
+	session := cancellationSession(t, h, tenant, admin, "launch")
+	a, err := h.gov.EngineApprovals().Request(context.Background(), tenant, session, governance.ApprovalRequest{
+		Action: "sessions.run.launch", SubjectKind: "sessions.run", SubjectRef: "launch", SessionRef: session.SessionIdentity, LaunchedBy: launcher.Actor(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.RequiredApprovals != 2 {
+		t.Fatalf("required_approvals = %d, want the launcher's policy (2)", a.RequiredApprovals)
+	}
+	if r := h.decide(admin, tenant, a.ID, "approve"); r.code != http.StatusOK || r.body["status"] != "pending" {
+		t.Fatalf("first of two approvals = %d %s", r.code, r.raw)
+	}
+	for _, u := range resolver.asked {
+		if u != resolver.user {
+			t.Fatalf("policy selection asked for %q, want the launcher %q (all asks: %q)", u, resolver.user, resolver.asked)
+		}
+	}
+}
+
+// A tool permission a session asks for, through the engine or over HTTP, selects the
+// policy of the person who launched the session, like its launch does.
+func TestSessionToolApprovalSelectsTheLaunchersPolicy(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "tool-policy")
+	launcher, err := h.authr.Authenticate(context.Background(), admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	governance.WithPolicyResolver(&launcherPolicy{user: launcher.UserID.String(), action: "sessions.provider.approval"})(h.gov)
+	session := cancellationSession(t, h, tenant, admin, "tool")
+	a, err := h.gov.EngineApprovals().Request(context.Background(), tenant, session, governance.ApprovalRequest{
+		Action: "sessions.provider.approval", SubjectKind: "session_run", SubjectRef: "tool", SessionRef: session.SessionIdentity,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.RequiredApprovals != 2 {
+		t.Fatalf("engine: required_approvals = %d, want the launcher's policy (2)", a.RequiredApprovals)
+	}
+	route := &approvalCreateRoute{}
+	h.gov.APIRoutes(route)
+	req := httptest.NewRequest(http.MethodPost, "/approvals", strings.NewReader(`{"action":"sessions.provider.approval","subject_kind":"session_run"}`))
+	rec := httptest.NewRecorder()
+	route.handler(rec, req, api.ModuleContext{Principal: session, Tenant: tenant, Data: api.NewScopedData(h.st, tenant)})
+	var got governance.Approval
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); rec.Code != http.StatusCreated || err != nil {
+		t.Fatalf("http: create = %d %s", rec.Code, rec.Body.String())
+	}
+	if got.RequiredApprovals != 2 {
+		t.Fatalf("http: required_approvals = %d, want the launcher's policy (2)", got.RequiredApprovals)
+	}
+}
+
+type launcherPolicy struct {
+	user, action string
+	asked        []string
+}
+
+func (r *launcherPolicy) ApprovalPolicies(_ context.Context, _ store.Scope, user string) ([]model.Policy, bool, error) {
+	r.asked = append(r.asked, user)
+	if user != r.user {
+		return nil, false, nil
+	}
+	spec := map[string]any{"required_approvals": 2, "match": map[string]any{"action": r.action}}
+	return []model.Policy{{BaseFields: model.BaseFields{ID: model.NewID()}, Name: "launcher two", Kind: "approval", Spec: spec, Enabled: true}}, true, nil
+}
+
+func (*launcherPolicy) DLPRules(context.Context, store.Scope, string) ([]model.Record, bool, error) {
+	return nil, false, nil
 }
 
 func TestApprovalDecisionTrail(t *testing.T) {
@@ -441,4 +535,84 @@ func TestEngineApprovalsDecisionsMatchRESTTrailAndStayInTenant(t *testing.T) {
 	if rows, err := service.Decisions(t.Context(), "", id); err == nil || len(rows) != 0 {
 		t.Fatalf("zero tenant read %d decisions (err=%v), want an error and none", len(rows), err)
 	}
+}
+
+func TestApprovalHTTPSessionRefRequiresSessionIdentity(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "approval-session-binding")
+	r := h.createApproval(admin, tenant, map[string]any{"action": "github.write", "session_ref": "another-session"})
+	if r.code != http.StatusForbidden {
+		t.Fatalf("unbound session_ref = %d %s, want 403", r.code, r.raw)
+	}
+	r = h.createApproval(admin, tenant, map[string]any{"action": "github.write"})
+	if r.code != http.StatusCreated || r.body["session_ref"] != nil {
+		t.Fatalf("human request outside a session = %d %s", r.code, r.raw)
+	}
+	principal := cancellationSession(t, h, tenant, admin, "http-own")
+	route := &approvalCreateRoute{}
+	h.gov.APIRoutes(route)
+	if route.handler == nil {
+		t.Fatal("approval create route is missing")
+	}
+	for _, tc := range []struct {
+		name, ref string
+		tenant    model.TenantID
+		want      int
+	}{
+		{"matching", principal.SessionIdentity, tenant, http.StatusCreated},
+		{"omitted", "", tenant, http.StatusCreated},
+		{"foreign session", "another-session", tenant, http.StatusForbidden},
+		{"foreign tenant", principal.SessionIdentity, model.NewTenantID(), http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/approvals", strings.NewReader(`{"action":"github.write","session_ref":"`+tc.ref+`"}`))
+			rec := httptest.NewRecorder()
+			route.handler(rec, req, api.ModuleContext{Principal: principal, Tenant: tc.tenant, Data: api.NewScopedData(h.st, tc.tenant)})
+			if rec.Code != tc.want {
+				t.Fatalf("create = %d %s, want %d", rec.Code, rec.Body.String(), tc.want)
+			}
+			if rec.Code == http.StatusCreated {
+				var got governance.Approval
+				if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+					t.Fatal(err)
+				}
+				if got.SessionRef != principal.SessionIdentity || got.RequestedBy != "session:"+principal.SessionIdentity {
+					t.Fatalf("unbound session request: %+v", got)
+				}
+			}
+		})
+	}
+
+}
+
+// Capture the registered handler to exercise session identities even though the
+// HTTP admission layer currently grants no session token approval-write access.
+type approvalCreateRoute struct{ handler api.ModuleHandler }
+
+func (c *approvalCreateRoute) Handle(method, path string, _ auth.Permission, handler api.ModuleHandler) {
+	if method == http.MethodPost && path == "/approvals" {
+		c.handler = handler
+	}
+}
+func (c *approvalCreateRoute) HandleEntity(method, path string, perm auth.Permission, _ api.EntityRef, handler api.ModuleHandler) {
+	c.Handle(method, path, perm, handler)
+}
+
+func (h *harness) engineSessionApproval(tenant model.TenantID, action, kind, subject, session string) string {
+	h.t.Helper()
+	out, err := h.gov.EngineApprovals().Request(context.Background(), tenant, auth.Principal{SessionIdentity: session}, governance.ApprovalRequest{Action: action, SubjectKind: kind, SubjectRef: subject, SessionRef: session})
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return out.ID
+}
+
+type tenantPolicyFallback struct{}
+
+func (tenantPolicyFallback) ApprovalPolicies(context.Context, store.Scope, string) ([]model.Policy, bool, error) {
+	return nil, false, nil
+}
+func (tenantPolicyFallback) DLPRules(context.Context, store.Scope, string) ([]model.Record, bool, error) {
+	return nil, false, nil
 }

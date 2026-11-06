@@ -16,7 +16,7 @@ public final class ApiMetadata {
     public static final String API_VERSION = "v1";
 
     /** SHA-256 binding the OpenAPI snapshots (stable core + beta module routes). */
-    public static final String SPEC_HASH = "47ca4a9c4613a4ca3dcb1436661767d6ecd9decad1a6214611d8669a7e4dbf20";
+    public static final String SPEC_HASH = "2cfa1f95bce606867c6174c04bfee88da70fa6acfefa921d9916676f49391827";
 
     /** The public versioning/deprecation/sunset policy governing this surface. */
     public static final String STABILITY_POLICY = "https://olivares.ai/docs";

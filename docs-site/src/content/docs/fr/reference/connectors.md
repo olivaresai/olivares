@@ -514,14 +514,14 @@ expurge le corps avant de persister).
 | Kind | Ingère |
 |---|---|
 | `gdrive` | Documents Google Drive (Docs/Sheets/Slides/fichiers) |
-| `confluence` | Espaces et pages Atlassian Confluence |
+| `confluence` | Espaces et pages Atlassian Confluence (Business) |
 | `notion` | Workspaces, bases de données et pages Notion |
 | `sharepoint` | Sites et documents Microsoft SharePoint / OneDrive (Business) |
 | `s3content` | Contenu d'object-storage (objets S3 / R2 / GCS) |
 | `sap_odata` | Entités de service SAP OData sous forme de documents gouvernés (Business) |
 | `salesforce` | Objets/enregistrements Salesforce sous forme de documents gouvernés (Business) |
-| `snowflake` | Tables/lignes Snowflake sous forme de documents gouvernés (distinct de l'observateur R/RW `snowflake-audit`) |
-| `azure_ai_search` | Documents d'index Azure AI Search |
+| `snowflake` | Tables/lignes Snowflake sous forme de documents gouvernés (distinct de l'observateur R/RW `snowflake-audit`) (Business) |
+| `azure_ai_search` | Documents d'index Azure AI Search (Business) |
 | `postgres` | Lignes PostgreSQL sous forme de documents gouvernés — lecture seule par construction, ACL déclarée par ligne, classification par colonne (distinct de l'observateur R/RW `pgaudit` ; pas de NL-to-SQL). Voir [Postgres comme source de contexte gouvernée](/fr/how-to/govern-postgres-content/). |
 | `filesystem` | Contenu de serveur de fichiers (local / NFS / SMB) — lecture confinée à la racine par construction, propriétaire/groupe/ACL POSIX transposés vers les ACL de documents, classification xattr (distinct du sink de logs `filelog`). Voir [Gouverner votre serveur de fichiers](/fr/how-to/govern-your-file-server/). |
 
@@ -529,8 +529,8 @@ expurge le corps avant de persister).
 // OLIVARES_SOURCES_CONFIG — document sources live under "documents", never "sources"
 {
   "documents": [
-    { "name": "eng-wiki", "kind": "confluence",
-      "config": { "export_path": "/var/lib/olivares/confluence" } }
+    { "name": "eng-wiki", "kind": "notion",
+      "config": { "export_path": "/var/lib/olivares/notion" } }
   ]
 }
 ```

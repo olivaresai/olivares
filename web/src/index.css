@@ -74,6 +74,16 @@
     font-feature-settings: 'zero' 1;
   }
 
+  /* Machine text shows the characters it holds: no ligature draws >= as ≥, in a
+   * code element or in a command line set with the font-mono utility. */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-variant-ligatures: none;
+  }
+
   /* Focus: a ring, never a glow. Components opt out with `outline-none` and draw
    * their own ring; native focusables (links, inputs) get this AA-visible outline. */
   :focus-visible {

@@ -27,7 +27,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// B1 acceptance rows 1, 4 (alias half) and 7 (schema half), on BOTH engines.
+// Provider aliases and profile schemas are checked on both storage engines.
 // SQLite alone does not prove the uniqueness/rollback behaviour this plane leans
 // on (identity_crossbackend_test.go says why), so every table here has a Postgres
 // leg that is logged as NOT exercised when no server is configured, never

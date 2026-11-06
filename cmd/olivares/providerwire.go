@@ -134,17 +134,14 @@ const anthropicVersionHeader = "2023-06-01"
 
 // providerProbe asks a provider which models it serves.
 //
-// ⛔ IT NEVER SENDS A COMPLETION. The whole surface is bounded GETs of a model list.
-// Ollama uses the local connector's model list and read-only show metadata.
-// A test that generated a token would spend the operator's money, on a model
-// nobody chose, to answer a question the list already answers: can this endpoint
-// be reached, and does it accept this credential. The HTTP client below has no
-// method other than GET reachable from here, which is the mechanical form of that
-// promise.
+// Ordinary probes send no completion. Deep explicitly adds three bounded requests
+// for a selected self-hosted OpenAI-compatible model.
 type providerProbe struct{ client *http.Client }
 
 type providerProbeModel struct {
-	ID string `json:"id"`
+	ID            string          `json:"id"`
+	MaxModelLen   json.RawMessage `json:"max_model_len"`
+	ContextLength json.RawMessage `json:"context_length"`
 }
 
 func newProviderProbe() providerProbe {
@@ -284,6 +281,7 @@ func (p providerProbe) ProbeService(ctx context.Context, req sessions.ProviderPr
 		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	}
 	var models []string
+	var modelMetadata []providerProbeModel
 	for page := 0; page < 10; page++ {
 		hreq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
@@ -361,6 +359,7 @@ func (p providerProbe) ProbeService(ctx context.Context, req sessions.ProviderPr
 				return sessions.ProviderProbeResult{}, errors.New("the provider returned unsafe model metadata")
 			}
 			models = append(models, md.ID)
+			modelMetadata = append(modelMetadata, md)
 		}
 		if len(models) > 1000 {
 			return sessions.ProviderProbeResult{}, errors.New("the provider model catalog exceeded its model bound")
@@ -391,7 +390,18 @@ func (p providerProbe) ProbeService(ctx context.Context, req sessions.ProviderPr
 			if len(models) == 0 {
 				detail = "the provider accepted the credential and listed no models"
 			}
-			return sessions.ProviderProbeResult{Models: models, Detail: detail}, nil
+			result := sessions.ProviderProbeResult{Models: models, Detail: detail}
+			if req.Deep {
+				if req.Kind != sessions.ProviderKindOpenAICompatible || service != "" {
+					result.Capabilities = &sessions.ProviderCapabilities{Model: req.Model, Detail: "Deep tests require a self-hosted openai_compatible provider."}
+					return result, nil
+				}
+				result.Capabilities, err = p.deepProviderProbe(ctx, req, modelMetadata)
+				if err != nil {
+					result.Capabilities = &sessions.ProviderCapabilities{Model: req.Model, Detail: "Deep qualification could not be completed; the model list was obtained."}
+				}
+			}
+			return result, nil
 		}
 		if (req.Kind != sessions.ProviderKindAnthropic && req.Kind != sessions.ProviderKindGemini) || payload.LastID == "" || len(payload.LastID) > 4096 {
 			return sessions.ProviderProbeResult{}, errors.New("the provider model list cannot be paged")

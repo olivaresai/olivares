@@ -15,9 +15,11 @@ zeichnet pro-Tenant-Kettenspitzen auf, die Wiederherstellung **schlägt mit
 ungleich null fehl, wenn das wiederhergestellte Ledger nicht
 kontinuitätssicher ist**, und `dr drill` prüft die Ledger-Kontinuität von
 Sicherung zu Wiederherstellung an einem synthetischen Ledger in einem
-Scratch-Verzeichnis und gibt die gemessene RTO aus. Er prüft keine
-Berechtigungen, keine Schlüsselverwahrung und keine Wirkungen nach dem
-Wiederherstellungspunkt, und er berührt kein Produktions-Datenverzeichnis.
+Scratch-Verzeichnis und gibt die gemessene RTO aus; mit `--scratch-dsn` führt er
+denselben Durchlauf auf PostgreSQL in Wegwerf-Datenbanken aus und gibt diese RTO
+neben der SQLite-RTO aus. Er prüft keine Berechtigungen, keine Schlüsselverwahrung
+und keine Wirkungen nach dem Wiederherstellungspunkt, und er berührt kein
+Produktions-Datenverzeichnis.
 
 Das Bundle wird unter einem **KEK verschlüsselt, den Sie bereitstellen** — einer
 Argon2id-abgeleiteten Passphrase (`--passphrase-file`) oder einem rohen 32-Byte-
@@ -68,9 +70,9 @@ das Helm-Chart einen
 [CronJob](/de/tutorials/getting-started/kubernetes/#4-geplante-verschlüsselte-backups);
 auf Bare Metal cronen Sie den obigen Befehl. Die Zahlen in der Tabelle sind
 Ziele. Für die Cron-Stufen ist das RPO-Ziel das Cron-Intervall. `dr drill`
-misst die SQLite-RTO an einem synthetischen Ledger (Wiederherstellung, Start
-und Prüfung). Er misst kein RPO und keine Postgres-Wiederherstellung. Die
-gemessenen SQLite-RTO-Werte, mit Ereigniszahl und Host, stehen in
+misst die RTO an einem synthetischen Ledger (Wiederherstellung, Start und
+Prüfung): SQLite immer, PostgreSQL, wenn Sie `--scratch-dsn` angeben. Er misst
+kein RPO. Die gemessenen RTO-Werte, mit Ereigniszahl und Host, stehen in
 `docs/DR-RUNBOOK.md`; sie sind nicht die Ziele dieser Tabelle.
 
 | Stufe | Mechanismus | Ziel-RPO | Ziel-RTO |
@@ -89,14 +91,25 @@ verschlüsselt.
 `dr verify` prüft ein Bundle, **ohne Ihr Data-Dir zu berühren**. Unter SQLite
 stellt es in einem Scratch-Verzeichnis wieder her und prüft die
 Ledger-Kontinuität; bei einem Fehlschlag endet es ungleich null. Unter
-Postgres prüft es den Bundle-Digest und die Entschlüsselung der Schlüssel.
-Die volle Kettenprüfung eines Postgres-Bundles braucht eine Wiederherstellung
-auf ein Scratch-Postgres. Führen Sie die Prüfung so aus:
+Postgres geben Sie ihm einen Scratch-Server mit `--scratch-dsn`: Dort legt es
+eine Wegwerf-Datenbank mit eigenen Rollen an, stellt das Bundle darin wieder her,
+prüft das Ledger und löscht die Datenbank und die Rollen wieder. Führen Sie die
+Prüfung so aus:
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \
   --passphrase-file <your-dr-passphrase-file>
+
+# Postgres: a maintenance DSN of a server where databases and roles may be created
+olivares dr verify --in /backups/olivares-pg-<ts>.drbundle \
+  --passphrase-file <your-dr-passphrase-file> \
+  --scratch-dsn file:/run/secrets/scratch.dsn
 ```
+
+Die DSN ist eine `file:`- oder `env:`-Referenz, nie Zugangsdaten inline. Ohne
+`--scratch-dsn` wird ein Postgres-Bundle nur auf seinen Digest und die
+Entschlüsselbarkeit seiner Schlüssel geprüft, und die Ausgabe sagt, dass das
+Ledger nicht wiederhergestellt wurde.
 
 `dr inspect --in <bundle>` gibt das Manifest aus (kein KEK nötig, keine Secrets
 gezeigt) — welche Engine, welche Tenants, welche Kettenspitzen. Führen Sie den
@@ -119,6 +132,16 @@ nicht sicher ist. Verifizieren Sie nach jeder Wiederherstellung erneut gegen
 Ihren **off-box** Checkpoint-Pin — ein wiederhergestellter älterer Snapshot kann
 einen naiven Walk bestehen, aber den Off-Box-Vergleich nicht
 ([Fehlerbehebung § Ledger](/de/how-to/troubleshooting/#das-ledger-besteht-die-verifizierung-nicht)).
+
+Bei Postgres wird eine Wiederherstellung in eine Datenbank, die bereits einen
+Datenbestand enthält, abgelehnt, es sei denn, Sie erklären das: `--operator` und
+`--reason` (werden im wiederhergestellten Ledger festgehalten) sowie `--force`.
+Dann ersetzen die Objekte des Backups die der Datenbank in einer einzigen
+Transaktion, sodass der alte Bestand entweder vollständig oder gar nicht ersetzt
+wird. Bevor die Wiederherstellung etwas anfasst, sichert sie einen `pg_dump` der
+Datenbank (über `--admin-dsn`, das hier erforderlich ist) neben den bisherigen
+Signierschlüsseln, die als `*.pre-restore-*` erhalten bleiben; entfernen Sie sie,
+sobald Sie damit zufrieden sind.
 
 ## Die zwei Schlüssel, die alles entscheiden
 

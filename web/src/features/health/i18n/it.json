@@ -1,5 +1,5 @@
 {
-  "title": "Stato e SLA",
+  "title": "Stato",
   "subtitle": "Disponibilità, affidabilità e dipendenze del tuo parco, ricavate dall'attività osservata e dalla scansione di obsolescenza, mai interrogando l'infrastruttura.",
   "auditedNote": "Il flusso live e ogni azione di risoluzione o modifica sono operazioni privilegiate e sottoposte ad audit. Lo stato è derivato; il motore non porta mai qui testo di errore né payload.",
   "refresh": "Aggiorna",
@@ -238,8 +238,7 @@
       "delegates_to": "Delega a"
     },
     "observed": "Osservato",
-    "truncated": "Mostrati i primi {{n}}",
-    "truncatedHint": "Il grafo delle dipendenze ha più nodi di quelli mostrati; questa è la prima pagina keyset.",
+    "truncated": "Non tutte le dipendenze sono mostrate.",
     "empty": {
       "title": "Ancora nessuna dipendenza individuata",
       "description": "Quando gli agenti chiamano server e strumenti MCP, il grafo delle dipendenze osservato compare qui."

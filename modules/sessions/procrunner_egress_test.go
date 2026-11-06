@@ -278,6 +278,28 @@ func TestProcRunnerNetworkBoundaryRejectsFailedExec(t *testing.T) {
 	}
 }
 
+// A container whose seccomp profile (fork/exec: operation not permitted) or AppArmor
+// profile (permission denied) refuses the session namespaces fails when the boundary
+// helper starts; a helper that cannot start for any reason takes the same path. The
+// reason names the Docker options that allow them, so the console and CLI show the
+// exact change to make.
+func TestProcRunnerNetworkBoundaryStartFailureNamesTheDockerOption(t *testing.T) {
+	folder := t.TempDir()
+	_, err := NewProcRunner().Launch(context.Background(), LaunchSpec{
+		Program: "/bin/true", Dir: filepath.Join(folder, "missing"),
+		Confinement: &confine.Policy{ReadWrite: []string{folder}}, ConfinementRequired: true,
+		NetworkPolicy: &egress.Policy{Providers: []string{"http://127.0.0.1:11434"}},
+	})
+	if err == nil {
+		t.Fatal("a helper that cannot start was reported launched")
+	}
+	for _, want := range []string{"unprivileged user and network namespaces and Landlock", "--security-opt seccomp=olivares-sessions.json", "--security-opt apparmor=olivares-sessions", "/usr/share/olivares/"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("boundary failure %q does not name %q", err, want)
+		}
+	}
+}
+
 func TestProcRunnerNetworkSupervisorPreservesSignalExit(t *testing.T) {
 	for _, signal := range []string{"TERM", "KILL", "ABRT"} {
 		t.Run(signal, func(t *testing.T) {

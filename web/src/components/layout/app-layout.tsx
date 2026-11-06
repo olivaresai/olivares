@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { AccountMarksProvider } from '@/features/agent-tools/account-marks'
+import { AskPanel } from '@/features/ask/ask-panel'
 import { NewSessionHost } from '@/features/first-hour/new-session-host'
 import { PreferencesSync } from '@/features/console/preferences-sync'
 import { PaneWidthsSync } from '@/features/console/pane-widths-sync'
@@ -22,14 +24,17 @@ import { useAuth } from '@/lib/auth/context'
 import { isSignInPath } from '@/lib/auth/return-path'
 import { useMinWidth } from '@/lib/hooks/use-min-width'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
-import { useSyncModulesNotEnabled } from '@/stores/modules'
+import { useSessionStore } from '@/stores/session'
 import { AppFrame } from './app-frame'
 import { BrandMark } from './brand'
+import { BusinessRows } from './business-rows'
 import { CommandMenu } from './command-menu'
 import { DestinationSections } from './destination-sections'
+import { EngineUnreachable } from './engine-unreachable'
 import { GlobalShortcuts } from './shortcuts'
 import { RouteFrame } from './page-frames'
 import { SidePanelProvider } from './side-panel'
+import { TitleGate } from './title-gate'
 import { NavigationDrawer, Sidebar } from './sidebar'
 import { TenantGate } from './tenant-gate'
 import { Topbar } from './topbar'
@@ -98,10 +103,13 @@ function Splash() {
  * otherwise sign-in, carrying the page that was asked for (never a sign-in page,
  * which would bring the person back to sign-in after signing in). Returns the
  * destination while one is pending, so the shell paints nothing else. */
-function useSignedOutRoute(status: string) {
+function useSignedOutRoute(status: string, engineUnreachable: boolean) {
   const navigate = useNavigate()
   const router = useRouter()
-  const signedOut = status === 'anonymous' || status === 'error'
+  // Recovery that could not reach the engine is not "signed out": no redirect (AppLayout
+  // shows the engine screen and recovery retries).
+  const signedOut =
+    (status === 'anonymous' || status === 'error') && !engineUnreachable
   const serverInfo = useServerInfo()
   const decided = signedOut && !serverInfo.isPending
   const target = !decided
@@ -147,60 +155,70 @@ export function AppLayout() {
     status === 'authenticated' &&
     !tools.data &&
     (tools.fetchStatus === 'fetching' || (!activeTenant && grants.length === 1))
-  // Which engine modules run here (server-info modules_not_enabled, ARCH C1): read once
-  // for the navigation gate, the route gate and the Home tiles.
-  useSyncModulesNotEnabled()
   // The frame is a function of the ROUTE, resolved here and not declared by each view:
   // how the viewport is divided is the shell's decision (page-frames.tsx).
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   // Where a signed-out browser goes, and the page it returns to (read in the guard's
   // effect, once).
-  const signInRoute = useSignedOutRoute(status)
+  const engineUnreachable = useSessionStore((s) => s.engineUnreachable)
+  const signInRoute = useSignedOutRoute(status, engineUnreachable)
   // The drawer exists only where the column does not: widening the window closes it.
   const [drawer, setDrawer] = useState(false)
   const wide = useMinWidth(761)
   if (wide && drawer) setDrawer(false)
+  if (engineUnreachable) return <EngineUnreachable />
   if (status === 'loading' || signInRoute || toolsComing) return <Splash />
 
   return (
     <PersonalNavigationProvider engineFavorites={engineFavorites}>
       <SessionNotifications />
-      <PreferencesSync>
-        <PaneWidthsSync />
-        <SidePanelProvider>
-          <TopbarSearchProvider>
-            <AppFrame
-              sidebar={<Sidebar />}
-              topbar={<Topbar onMenu={() => setDrawer(true)} />}
-              statusBar={<StatusBar />}
-              overlays={
-                <>
-                  <NavigationDrawer open={drawer} onOpenChange={setDrawer} />
-                  <CommandMenu />
-                  <GlobalShortcuts />
-                  <NewSessionHost />
-                </>
-              }
-            >
-              {/* No active tenant ⇒ the routed view is never mounted, so it cannot
+      {/* One read of the accounts: every list that names a session wears its account
+          (dot and short label) from it, and so does the New session picker's host. */}
+      <AccountMarksProvider>
+        <PreferencesSync>
+          <PaneWidthsSync />
+          <SidePanelProvider>
+            <TopbarSearchProvider>
+              <TitleGate>
+                <AppFrame
+                  sidebar={<Sidebar />}
+                  topbar={<Topbar onMenu={() => setDrawer(true)} />}
+                  statusBar={<StatusBar />}
+                  overlays={
+                    <>
+                      <NavigationDrawer
+                        open={drawer}
+                        onOpenChange={setDrawer}
+                      />
+                      <CommandMenu />
+                      <AskPanel />
+                      <GlobalShortcuts />
+                      <NewSessionHost />
+                    </>
+                  }
+                >
+                  {/* No active tenant ⇒ the routed view is never mounted, so it cannot
                 fire the tenant-scoped reads the engine would answer with 400
                 "tenant required". See TenantGate. */}
-              {/* One host per page for the verb a TABBED screen declares from
+                  {/* One host per page for the verb a TABBED screen declares from
                 inside its active tab. It wraps the routed content, so the header and
                 the tab that fills its primary-action slot share it. */}
-              <PageActionsProvider>
-                <RouteFrame pathname={pathname}>
-                  <TenantGate>
-                    <DestinationSections />
-                    <Outlet />
-                    <SettingsVisit />
-                  </TenantGate>
-                </RouteFrame>
-              </PageActionsProvider>
-            </AppFrame>
-          </TopbarSearchProvider>
-        </SidePanelProvider>
-      </PreferencesSync>
+                  <PageActionsProvider>
+                    <RouteFrame pathname={pathname}>
+                      <TenantGate>
+                        <DestinationSections />
+                        <Outlet />
+                        <BusinessRows />
+                        <SettingsVisit />
+                      </TenantGate>
+                    </RouteFrame>
+                  </PageActionsProvider>
+                </AppFrame>
+              </TitleGate>
+            </TopbarSearchProvider>
+          </SidePanelProvider>
+        </PreferencesSync>
+      </AccountMarksProvider>
     </PersonalNavigationProvider>
   )
 }

@@ -56,7 +56,10 @@ const { api, auth, signIn, launch, navigate } = vi.hoisted(() => ({
     cancel: vi.fn(),
   },
 }))
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }))
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
+  useNavigate: () => navigate,
+}))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 vi.mock('./api', async (orig) => ({
   ...(await orig<typeof import('./api')>()),

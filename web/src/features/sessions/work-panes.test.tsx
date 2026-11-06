@@ -10,7 +10,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
-import type { RunDTO } from '@/features/agentops/types'
+import type { RunActivityDTO, RunDTO } from '@/features/agentops/types'
 import { gitpublishApi } from '@/features/gitpublish/api'
 import { mergeSessions } from './provenance'
 import type { LiveDTO, TimelineDTO } from './types'
@@ -39,6 +39,8 @@ const ops = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   getWorkspace: vi.fn(),
   getProfile: vi.fn(),
+  activity: vi.fn(),
+  changes: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -132,6 +134,7 @@ beforeEach(() => {
   ops.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
   ops.getWorkspace.mockRejectedValue(new Error('folder lookup failed'))
   ops.getProfile.mockRejectedValue(new Error('not found'))
+  ops.changes.mockResolvedValue({ folder: 'main', files: [], truncated: false })
 })
 
 function renderNarrative(over: Partial<SessionResolution> = {}, props = {}) {
@@ -548,9 +551,20 @@ describe('SessionContextPane — the scope this session ran under', () => {
       configurable: true,
     })
     renderIntel(
-      <SessionContextPane resolution={resolution({ runs: [run()] })} />,
+      <SessionContextPane
+        resolution={resolution({ runs: [run()] })}
+        unknownFrames={['{"type":"a"}', '{"type":"b"}', '{"type":"c"}']}
+      />,
     )
-    await user.click(screen.getByText('References', { selector: 'summary' }))
+    // References and the frames the conversation does not read sit in one closed disclosure.
+    const technical = screen.getByTestId('context-details')
+    expect(technical).not.toHaveAttribute('open')
+    await user.click(
+      screen.getByText('Technical details', { selector: 'summary' }),
+    )
+    expect(
+      within(technical).getByRole('heading', { name: 'Unknown frames: 3' }),
+    ).toBeVisible()
     const identifiers = screen.getByTestId('context-identifiers')
     await user.click(
       within(identifiers).getByRole('button', { name: 'Copy ws-main' }),
@@ -601,6 +615,147 @@ function paintedIds(root: HTMLElement): string[] {
   }
   return out
 }
+
+// What the engine folded from a real Claude Code 2.1.316 session (claude -p, Haiku) that
+// spawned two background subagents, ran a background shell command and wrote a file.
+const realActivity: RunActivityDTO = {
+  driver: 'claude',
+  transcript: 'read',
+  model: 'claude-haiku-5-5',
+  context_tokens: 21_000,
+  compactions: [],
+  agents: [
+    {
+      tool_use_id: 'toolu_01RDg5E3vFjbDi6W1msyNogY',
+      agent_id: 'a6fefde1a513064b5',
+      type: 'general-purpose',
+      description: 'Write alpha to a.txt',
+      state: 'completed',
+      background: true,
+      started_at: '2026-11-01T15:01:04.323Z',
+      ended_at: '2026-11-01T15:01:09.979Z',
+      model: 'claude-haiku-5-5',
+      summary: 'Agent "Write alpha to a.txt" finished',
+    },
+    {
+      tool_use_id: 'toolu_01JZpXJf9zTAJfcn6KepRbGH',
+      agent_id: 'adcb61667065d3496',
+      type: 'general-purpose',
+      description: 'Write beta to b.txt',
+      state: 'running',
+      background: true,
+      started_at: '2026-11-01T15:01:04.939Z',
+      model: 'claude-haiku-5-5',
+    },
+  ],
+  tasks: [
+    {
+      tool_use_id: 'toolu_01D9AjyvC2zjPPMUXiCquZxP',
+      task_id: 'bn0yia2lg',
+      kind: 'shell',
+      description: 'Run sleep 20 then echo done in background',
+      command: 'sleep 20; echo done',
+      state: 'running',
+      started_at: '2026-11-01T15:01:09.686Z',
+    },
+  ],
+  files: [
+    {
+      path: '/work/c.txt',
+      added: 1,
+      removed: 0,
+      created: true,
+      edits: 1,
+      last_at: '2026-11-01T15:01:10.234Z',
+    },
+  ],
+  todos: [],
+  skills: [],
+  mcp_servers: [],
+}
+
+describe('SessionContextPane — what the tool is doing comes first', () => {
+  it('opens a Claude Code session on its agents and background work', async () => {
+    ops.activity.mockResolvedValue(realActivity)
+    renderIntel(
+      <SessionContextPane
+        resolution={resolution({ runs: [run({ provider_driver: 'claude' })] })}
+      />,
+    )
+    const agents = await screen.findByTestId('activity-agents')
+    expect(within(agents).getByText('Write alpha to a.txt')).toBeInTheDocument()
+    expect(within(agents).getByText('Write beta to b.txt')).toBeInTheDocument()
+    expect(
+      within(screen.getByTestId('activity-tasks')).getByText(
+        'Run sleep 20 then echo done in background',
+      ),
+    ).toBeInTheDocument()
+    expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
+  })
+
+  it('opens on Changes, listing what the session changed, before what its tool reports', async () => {
+    const user = userEvent.setup()
+    ops.activity.mockResolvedValue(realActivity)
+    ops.changes.mockResolvedValue({
+      folder: 'main',
+      files: [
+        { path: 'a.txt', size: 6, modified_at: '2026-11-01T15:01:09Z' },
+        { path: 'b.txt', size: 5, modified_at: '2026-11-01T15:01:10Z' },
+      ],
+      truncated: false,
+    })
+    renderIntel(
+      <SessionContextPane
+        resolution={resolution({ runs: [run({ provider_driver: 'claude' })] })}
+      />,
+    )
+    const changes = await screen.findByRole('radio', { name: 'Changes' })
+    await waitFor(() => expect(changes).toBeChecked())
+    expect(await screen.findByText('a.txt')).toBeInTheDocument()
+    expect(screen.getByText('b.txt')).toBeInTheDocument()
+    expect(screen.queryByTestId('activity-agents')).toBeNull()
+    // The tabs read in the order a person reviews the work.
+    expect(
+      within(screen.getByRole('radiogroup', { name: 'Panels' }))
+        .getAllByRole('radio')
+        .map((r) => r.textContent),
+    ).toEqual([
+      'Changes',
+      'Files',
+      'Terminal',
+      'Preview',
+      'Details',
+      'Activity',
+    ])
+    // And the arrow keys follow that order.
+    changes.focus()
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('radio', { name: 'Files' })).toBeChecked()
+  })
+
+  it('keeps the tab a person chose, Context included', async () => {
+    ops.activity.mockResolvedValue(realActivity)
+    renderIntel(
+      <SessionContextPane
+        resolution={resolution({ runs: [run({ provider_driver: 'claude' })] })}
+        panel="context"
+        onPanel={vi.fn()}
+      />,
+    )
+    expect(await screen.findByTestId('context-scope')).toBeInTheDocument()
+    expect(screen.queryByTestId('activity-agents')).toBeNull()
+  })
+
+  it('opens on Context when the tool keeps no record the engine reads', async () => {
+    renderIntel(
+      <SessionContextPane
+        resolution={resolution({ runs: [run({ provider_driver: 'gemini' })] })}
+      />,
+    )
+    expect(await screen.findByTestId('context-scope')).toBeInTheDocument()
+    expect(ops.activity).not.toHaveBeenCalled()
+  })
+})
 
 describe('the session panes paint names, never raw identifiers', () => {
   it('heads the narrative with the tail of the reference, not the reference', async () => {

@@ -14,6 +14,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import engineTools from '@/features/agentops/engine-tools.fixture.json'
 import { ApiError } from '@/lib/api/errors'
 import { useStepUpStore } from '@/stores/step-up'
 import './i18n'
@@ -44,6 +45,8 @@ const { providersApi, authState, toast, navigate, preparation } = vi.hoisted(
   }),
 )
 
+import { fakeRouter } from '@/test/fake-router'
+
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 vi.mock('@/lib/hooks/use-is-phone', () => ({
@@ -53,8 +56,8 @@ vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
   RequireAssurance: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
-vi.mock('@tanstack/react-router', () => ({
-  useRouterState: () => '',
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useNavigate: () => navigate,
   Link: ({ to, children }: { to: string; children: ReactNode }) => (
     <a href={to}>{children}</a>
@@ -120,6 +123,19 @@ describe('ApiKeys', () => {
     expect(
       within(hint).getByRole('button', { name: 'Copy command' }),
     ).toBeInTheDocument()
+  })
+
+  it("draws a key with its vendor's mark and color from the engine's tool table", async () => {
+    const claude = engineTools.tools.find(
+      (tool) => tool.vendor === 'anthropic',
+    )!
+    providersApi.list.mockResolvedValue({ items: [registered] })
+    wrap(<ApiKeys />)
+    await screen.findByText('Anthropic (prod)')
+    const mark = screen.getByTestId('provider-mark')
+    expect(mark).toHaveAttribute('data-vendor', 'claude')
+    expect(mark).not.toHaveTextContent('AP')
+    expect(mark.querySelector('svg')).toHaveAttribute('fill', claude.color)
   })
 
   // axe empty-table-header on AI tools (#3388): the actions column had an empty header.
@@ -588,7 +604,7 @@ describe('ApiKeys', () => {
     preparation.status.mockResolvedValue({ installed: false, signed_in: false })
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    window.history.pushState({}, '', '/providers?add=anthropic')
+    fakeRouter.reset('/providers?add=anthropic')
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -605,7 +621,7 @@ describe('ApiKeys', () => {
     expect(
       screen.queryByLabelText(/settings folder|user home|configuration home/i),
     ).not.toBeInTheDocument()
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it.each([
@@ -617,7 +633,7 @@ describe('ApiKeys', () => {
     const record = { ...registered, kind }
     providersApi.create.mockResolvedValue(record)
     providersApi.test.mockResolvedValue({ ...record, probe_state: 'ok' })
-    window.history.pushState({}, '', `/providers?add=${kind}`)
+    fakeRouter.reset(`/providers?add=${kind}`)
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     // The wizard's "Add a local model" lands here: its address is already filled in (#476).
@@ -633,7 +649,7 @@ describe('ApiKeys', () => {
     await waitFor(() => expect(preparation.resolve).toHaveBeenCalled())
     expect(preparation.resolve.mock.calls[0][0]).toBe(driver)
     expect(preparation.install.mock.calls[0][0]).toBe(driver)
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it('keeps the saved provider and retries setup after an installation fails', async () => {
@@ -645,7 +661,7 @@ describe('ApiKeys', () => {
     })
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    window.history.pushState({}, '', '/providers?add=anthropic')
+    fakeRouter.reset('/providers?add=anthropic')
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -665,7 +681,7 @@ describe('ApiKeys', () => {
     ).toBeVisible()
     expect(providersApi.create).toHaveBeenCalledTimes(1)
     expect(providersApi.test).toHaveBeenCalledTimes(1)
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it.each(['system:admin', 'sessions:profile:write'])(
@@ -675,7 +691,7 @@ describe('ApiKeys', () => {
       authState.can = (p) => p !== permission
       providersApi.create.mockResolvedValue(registered)
       providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-      window.history.pushState({}, '', '/providers?add=anthropic')
+      fakeRouter.reset('/providers?add=anthropic')
       wrap(<ApiKeys />)
       const dialog = await screen.findByRole('dialog')
       await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -686,7 +702,7 @@ describe('ApiKeys', () => {
       expect(preparation.status).not.toHaveBeenCalled()
       expect(preparation.install).not.toHaveBeenCalled()
       expect(preparation.resolve).not.toHaveBeenCalled()
-      window.history.pushState({}, '', '/')
+      fakeRouter.reset('/')
     },
   )
 
@@ -698,7 +714,7 @@ describe('ApiKeys', () => {
     )
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    window.history.pushState({}, '', '/providers?add=anthropic')
+    fakeRouter.reset('/providers?add=anthropic')
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -721,7 +737,7 @@ describe('ApiKeys', () => {
     })
     await waitFor(() => expect(preparation.resolve).toHaveBeenCalledOnce())
     expect(providersApi.create).toHaveBeenCalledOnce()
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it('shows the download instead of a spinner while the preparation installs (#1086)', async () => {
@@ -745,7 +761,7 @@ describe('ApiKeys', () => {
     )
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    window.history.pushState({}, '', '/providers?add=anthropic')
+    fakeRouter.reset('/providers?add=anthropic')
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -764,7 +780,7 @@ describe('ApiKeys', () => {
       .find((node) => node.textContent === installing)
     expect(status).toBeDefined()
     expect(status!.querySelector('.animate-spin')).toBeNull()
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it("forgets a failed preparation's download before Retry (#1086)", async () => {
@@ -788,7 +804,7 @@ describe('ApiKeys', () => {
       .mockImplementationOnce(() => new Promise(() => {}))
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    window.history.pushState({}, '', '/providers?add=anthropic')
+    fakeRouter.reset('/providers?add=anthropic')
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -802,7 +818,7 @@ describe('ApiKeys', () => {
       'Preparing Claude Code for your first session…',
     )
     expect(screen.queryByText(/^Installing Claude Code/)).toBeNull()
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it('does not install after the preparing page leaves during status', async () => {
@@ -815,7 +831,7 @@ describe('ApiKeys', () => {
     )
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    window.history.pushState({}, '', '/providers?add=anthropic')
+    fakeRouter.reset('/providers?add=anthropic')
     const view = wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -838,7 +854,7 @@ describe('ApiKeys', () => {
     await Promise.resolve()
     expect(preparation.install).not.toHaveBeenCalled()
     expect(preparation.resolve).not.toHaveBeenCalled()
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it('says the provider was added, and leaves the verdict to the test it runs (SC, binary 12)', async () => {
@@ -848,7 +864,7 @@ describe('ApiKeys', () => {
       ...registered,
       probe_state: 'refused',
     })
-    window.history.pushState({}, '', '/providers?add=anthropic')
+    fakeRouter.reset('/providers?add=anthropic')
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -869,18 +885,14 @@ describe('ApiKeys', () => {
     expect(toast.warning).toHaveBeenCalledTimes(1)
     expect(preparation.install).not.toHaveBeenCalled()
     expect(preparation.resolve).not.toHaveBeenCalled()
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it('goes back where the key was asked for once it passes its test', async () => {
     const user = userEvent.setup()
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    window.history.pushState(
-      {},
-      '',
-      '/providers?add=anthropic&returnTo=%2Fonboarding',
-    )
+    fakeRouter.reset('/providers?add=anthropic&returnTo=%2Fonboarding')
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -894,7 +906,7 @@ describe('ApiKeys', () => {
       }),
     )
     expect(preparation.install).not.toHaveBeenCalled()
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 
   it('stays when the new key is refused, and never goes to another origin', async () => {
@@ -904,11 +916,7 @@ describe('ApiKeys', () => {
       ...registered,
       probe_state: 'refused',
     })
-    window.history.pushState(
-      {},
-      '',
-      '/providers?add=anthropic&returnTo=%2Fonboarding',
-    )
+    fakeRouter.reset('/providers?add=anthropic&returnTo=%2Fonboarding')
     const first = wrap(<ApiKeys />)
     let dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -918,11 +926,7 @@ describe('ApiKeys', () => {
     await waitFor(() => expect(providersApi.test).toHaveBeenCalledTimes(1))
     first.unmount()
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    window.history.pushState(
-      {},
-      '',
-      '/providers?add=anthropic&returnTo=%2F%2Fevil.example',
-    )
+    fakeRouter.reset('/providers?add=anthropic&returnTo=%2F%2Fevil.example')
     wrap(<ApiKeys />)
     dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
@@ -930,8 +934,14 @@ describe('ApiKeys', () => {
       within(dialog).getByRole('button', { name: /^Add provider$/ }),
     )
     await waitFor(() => expect(providersApi.test).toHaveBeenCalledTimes(2))
-    expect(navigate).not.toHaveBeenCalled()
-    window.history.pushState({}, '', '/')
+    // Closing the form clears `?add=` in place (a search patch); nothing leaves the page.
+    const leaves = navigate.mock.calls.filter(
+      ([to]) =>
+        (to as { to?: string; href?: string }).to !== undefined ||
+        (to as { href?: string }).href !== undefined,
+    )
+    expect(leaves).toEqual([])
+    fakeRouter.reset('/')
   })
 
   it('keeps a table row to Test connection and its menu, where the other actions are', async () => {
@@ -985,20 +995,20 @@ describe('ApiKeys', () => {
   )
 
   it("opens the form on the provider ?add= names, and on nothing it doesn't know", async () => {
-    window.history.pushState({}, '', '/providers?add=openai')
+    fakeRouter.reset('/providers?add=openai')
     const first = wrap(<ApiKeys />)
     expect(await screen.findByRole('combobox')).toHaveTextContent('OpenAI')
     first.unmount()
-    window.history.pushState({}, '', '/providers?add=nope')
+    fakeRouter.reset('/providers?add=nope')
     wrap(<ApiKeys />)
     await screen.findByRole('button', { name: /add your first provider/i })
     expect(screen.queryByRole('combobox')).toBeNull()
-    window.history.pushState({}, '', '/')
+    fakeRouter.reset('/')
   })
 })
 
 it('explains Add an API key while another provider connection is being tested', async () => {
-  window.history.pushState({}, '', '/providers')
+  fakeRouter.reset('/providers')
   providersApi.list.mockResolvedValue({ items: [registered] })
   providersApi.test.mockImplementationOnce(() => new Promise(() => {}))
   wrap(<ApiKeys />)

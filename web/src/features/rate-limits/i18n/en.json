@@ -4,7 +4,7 @@
     "hint": "Only the loaded findings were searched for the rate-limit summary. A missing summary may exist beyond this page."
   },
   "title": "Rate Limits",
-  "description": "Read-only inventory of the organization- and workspace-scoped rate limits a gateway or proxy must keep in sync. Sourced from the Anthropic Rate Limits API (read-only); this view never changes a limit.",
+  "description": "Rate limits of your organization and workspaces. Read-only.",
   "caveats": {
     "keepInSync": "Gateways/proxies must keep in sync: these limits are the inventory an upstream gateway or proxy must mirror. They are not enforced here, and changing them is done at the provider, not in this console.",
     "managedAgents": "Managed Agents are NOT covered by the Rate Limits API. Their limits are a documented gap, not a value of zero — no Managed-Agents row is shown because the API does not report one."

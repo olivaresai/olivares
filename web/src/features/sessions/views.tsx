@@ -14,8 +14,8 @@ import type { ViewEntry } from '@/features/registry'
 // blocks a route on the one permission its entry declares, so pointing `/agentops` at
 // `/sessions` would hand a run-only operator a Forbidden page instead of their runs.
 const SessionsWorkspaceView = lazy(() =>
-  import('./sessions-workspace-view').then((m) => ({
-    default: m.SessionsWorkspaceView,
+  import('./session-race-route').then((m) => ({
+    default: m.RaceAwareSessionsView,
   })),
 )
 
@@ -31,6 +31,11 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: Activity,
     permission: 'sessions:live:read',
+    changes: [
+      { permission: 'sessions:run:write' },
+      { permission: 'sessions:run:admin' },
+      { permission: 'sessions:workspace:write' },
+    ],
     element: lazyView(SessionsWorkspaceView, {
       entrance: 'observe' as const,
     }),
@@ -50,6 +55,11 @@ export const VIEWS = [
     helpHref: '/how-to/run-claude-code-with-olivares',
     icon: Terminal,
     permission: 'sessions:run:read',
+    changes: [
+      { permission: 'sessions:run:write' },
+      { permission: 'sessions:run:admin' },
+      { permission: 'sessions:workspace:write' },
+    ],
     element: lazyView(SessionsWorkspaceView, {
       entrance: 'operate' as const,
     }),

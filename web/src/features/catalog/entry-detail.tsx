@@ -216,6 +216,7 @@ export function EntryDetailSheet({
                 )}
                 {(isDraft || isPending) && canAdmin && (
                   <Button
+                    data-trust-chrome=""
                     variant="primary"
                     size="sm"
                     onClick={() => setConfirmApprove(true)}

@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,15 +17,16 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
 
 // The enterprise-system connectors are Business (docs/editions.md): SAP OData,
-// Salesforce, ServiceNow CMDB, SharePoint, Oracle audit, KMIP and the Claude
-// Compliance API. The Community build does not construct them and says so by name.
+// Salesforce, SharePoint, Confluence, Snowflake, Azure AI Search, ServiceNow CMDB,
+// Oracle audit, KMIP and the Claude Compliance API. The Community build does not construct them and says so by name.
 var (
 	businessObservationKindsTest = []string{"claude-compliance", "kmip", "oracle-audit", "servicenow-cmdb", "conjur"}
-	businessContentKindsTest     = []string{"sharepoint", "sap_odata", "salesforce"}
+	businessContentKindsTest     = []string{"sharepoint", "sap_odata", "salesforce", "confluence", "snowflake", "azure_ai_search"}
 )
 
 func TestCommunityDoesNotConstructBusinessSourceKinds(t *testing.T) {
@@ -52,13 +54,13 @@ func TestCommunityDoesNotConstructBusinessSourceKinds(t *testing.T) {
 			}
 		}
 	}
-	// The neighbors stay: the cut is the seven kinds, nothing around them.
+	// The neighbors stay: the cut is the Business kinds, nothing around them.
 	for _, kind := range []string{"pgaudit", "snowflake-audit", "vault-audit", "claude-api", "mssql-audit"} {
 		if _, ok := buildInProcSource(kind); !ok {
 			t.Errorf("Community lost the observation source %q", kind)
 		}
 	}
-	for _, kind := range []string{"gdrive", "confluence", "notion", "s3content", "snowflake", "azure_ai_search", "postgres", "filesystem"} {
+	for _, kind := range []string{"gdrive", "notion", "s3content", "postgres", "filesystem"} {
 		if _, ok := buildContentSource(kind, nil); !ok {
 			t.Errorf("Community lost the document source %q", kind)
 		}
@@ -164,8 +166,8 @@ func TestCommunityWorkspaceIngestRefusesBusinessDocumentKinds(t *testing.T) {
 		if code != want {
 			t.Fatalf("%s %s = %d, want %d (%s)", method, path, code, want, raw)
 		}
-		if want == http.StatusNotImplemented && !strings.Contains(raw, "Business") {
-			t.Fatalf("%s %s refusal %s does not name Business", method, path, raw)
+		if want == http.StatusNotImplemented && (!strings.Contains(raw, "Business") || !strings.Contains(raw, `"code":"connector_unavailable"`)) {
+			t.Fatalf("%s %s refusal %s is not connector_unavailable naming Business", method, path, raw)
 		}
 		return out
 	}
@@ -176,5 +178,35 @@ func TestCommunityWorkspaceIngestRefusesBusinessDocumentKinds(t *testing.T) {
 			request(t, "POST", "/v1/m/sourcescope/workspace-connectors", map[string]any{"name": kind, "kind": kind, "workspace_ref": "default", "enabled": true, "config": map[string]string{"mode": "live"}, "secrets": map[string]string{}}, http.StatusCreated)
 			request(t, "POST", "/v1/m/knowledge/kbs/"+kb["id"].(string)+"/ingest", map[string]any{"source": "workspace:" + kind}, http.StatusNotImplemented)
 		})
+	}
+}
+
+// A document row a Business engine stored stays a document row in Community, though its kind is
+// not built here: the file's documents are not seeded back over the roster, and an ingest by the
+// row's name answers 501 connector_unavailable naming Business instead of "unknown source".
+func TestCommunityKeepsStoredBusinessDocumentRows(t *testing.T) {
+	eng, token, tenant := wireBoot(t, wireBackends(t)[0], t.TempDir())
+	ctx := context.Background()
+	actor, err := auth.NewSystemOperator("test/business-row", "a document row a Business engine stored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := eng.sourceStore.Put(ctx, actor, model.SourceDef{Scope: auth.GlobalSourceScope, Name: "wiki", Kind: "confluence", Tenant: tenant.String(), Enabled: true,
+		Config: map[string]string{"mode": "live", "base_url": "https://wiki.example.invalid", "space_key": "ENG"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	seedDocumentRosterIfEmpty(ctx, eng.sourceStore, sourcesConfig{Documents: []documentSpec{{Name: "deleted-in-console", Kind: "gdrive"}}}, slog.New(slog.DiscardHandler))
+	if _, seeded, err := eng.sourceStore.Get(ctx, auth.GlobalSourceScope, "deleted-in-console"); err != nil || seeded {
+		t.Fatalf("the file's document was seeded over a roster holding a document row (seeded=%v, err=%v)", seeded, err)
+	}
+
+	code, kb, raw := doDemoViewJSON(t, eng.api.Handler(), "POST", "/v1/m/knowledge/kbs", token, tenant.String(), map[string]any{"name": "kb", "classification": "public", "embed_policy": "local_only"})
+	if code != http.StatusCreated {
+		t.Fatalf("create kb = %d %s", code, raw)
+	}
+	code, _, raw = doDemoViewJSON(t, eng.api.Handler(), "POST", "/v1/m/knowledge/kbs/"+kb["id"].(string)+"/ingest", token, tenant.String(), map[string]any{"source": "wiki"})
+	if code != http.StatusNotImplemented || !strings.Contains(raw, "Business") || !strings.Contains(raw, `"code":"connector_unavailable"`) {
+		t.Fatalf("ingest of the stored confluence row = %d %s; want 501 connector_unavailable naming Business", code, raw)
 	}
 }

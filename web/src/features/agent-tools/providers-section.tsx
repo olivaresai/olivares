@@ -5,9 +5,9 @@ import { useTranslation } from 'react-i18next'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import { CodeLine } from '@/components/ui/code-line'
 import { PathText } from '@/components/ui/path-text'
+import { AccountUsage, snapshotUsage } from '@/features/agentops/account-usage'
 import { toolName } from '@/features/agentops/engine-tools'
-import { ConsumptionBar } from '@/features/_intel/consumption'
-import { formatDateTime, formatRelativeTime } from '@/lib/format'
+import { formatDateTime } from '@/lib/format'
 import type { ProviderSnapshot } from './api'
 import './i18n'
 
@@ -82,29 +82,9 @@ export function ProviderDetails({ snap }: { snap: ProviderSnapshot }) {
             : snap.error}
         </p>
       )}
-      {snap.limits.length > 0 && (
-        <ul className="flex flex-col gap-3">
-          {snap.limits.map((limit, i) => (
-            <li key={`${limit.label}-${i}`} className="flex flex-col gap-1">
-              <div className="flex flex-wrap justify-between gap-2 text-sm">
-                <span>{limit.label}</span>
-                {limit.resets_at && (
-                  <time
-                    dateTime={limit.resets_at}
-                    title={formatDateTime(limit.resets_at)}
-                    className="text-muted-foreground"
-                  >
-                    {t('providers.resets', {
-                      when: formatRelativeTime(limit.resets_at),
-                    })}
-                  </time>
-                )}
-              </div>
-              <ConsumptionBar consumedPct={limit.percent} label={limit.label} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* One share of the week, as every place that names an account says it; each
+          window by name is on Usage. */}
+      <AccountUsage usage={snapshotUsage(snap)} />
       {snap.notes?.length ? (
         <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
           {snap.notes.map((note, i) => (

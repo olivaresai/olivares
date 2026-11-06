@@ -106,10 +106,10 @@ ist — und genau das ist die entscheidende Frage.
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` arbeitet offline und löst die Lizenz mit derselben Rangfolge wie die Engine auf. Der
+Auf dem Host der Engine und mit `--data-dir` arbeitet `status` offline und löst die Lizenz mit derselben Rangfolge wie die Engine auf. Der
 Befehl beantwortet damit die entscheidende Frage — *welche Lizenz tatsächlich wirksam ist* —
 statt nur „existiert eine Datei?“. Er meldet die aufgelöste Quelle, den Inhaber, den Plan und
-das Ablaufdatum.
+das Ablaufdatum. Ist die CLI an einer Engine auf einem anderen Host angemeldet, fragt der Befehl stattdessen diese Engine.
 
 Führen Sie ihn nach jeder Installation und nach dem Entfernen eines Overrides aus.
 
@@ -171,6 +171,13 @@ das ein Secret oder eine Prüfung benötigt, wird bereitgestellt statt nur teilw
 `olivares enterprise status` meldet, was aktiv ist. Diese Befehle gibt es **nur im
 kommerziellen Binary** — wenn `olivares enterprise` kein Befehl ist, führen Sie noch den
 Community-Build aus, und der obige Austausch hat noch nicht stattgefunden.
+
+Die Konsole tut dasselbe für jede Familie: Die Ansicht **Edition & Lizenz** listet jede Familie
+mit der Anzahl ihrer eingeschalteten Module. **Einschalten** zeigt vor dem Anwenden denselben Diff,
+und **Ausschalten** nennt die Module, die anhalten. Bei einer Familie, die Ihre Lizenz nicht
+umfasst, bleibt **Einschalten** deaktiviert, und die Zeile sagt es: *Diese Lizenz umfasst* die
+Familie *nicht*. Die Engine prüft die Lizenz bei jedem Einschalten erneut, ob über die Konsole
+oder die CLI; eine abgelaufene oder fehlende Lizenz kann also keine Familie einschalten.
 
 :::caution[Vor dem Austausch sichern]
 Der Austausch ersetzt ein Binary, nicht Ihre Daten — erstellen Sie trotzdem dasselbe Backup,

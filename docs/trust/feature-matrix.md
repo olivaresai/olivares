@@ -89,7 +89,7 @@ in the commercial build and is never present in the public binary.
 |---|---|---|
 | Audit ledger | Append-only, hash-chained, Ed25519 per-event-signed; offline verification; 7-year default retention | — |
 | WORM archival | Directory archive with chained manifests; offline verifier | **Business: Regulated Operations.** S3 Object Lock COMPLIANCE-mode delivery |
-| WORM retention governor | Per-class retention schedules, hold-checked sweep, freely relaxable | **Business: Regulated Operations.** Named regulatory floors (SEC 17a-4, FINRA 4511, CFTC 1.31), compliance-mode lock (`enterprise/wormretention`) |
+| WORM retention governor | Reads the retention classes, stored schedules and destruction certificates; authoring schedules and the hold-checked sweep are Business (base line) | **Business: Regulated Operations.** Named regulatory floors (SEC 17a-4, FINRA 4511, CFTC 1.31), compliance-mode lock (`enterprise/wormretention`) |
 | WORM long-horizon hold | None (the legal-hold plane is Business, see above) | **Business: Regulated Operations.** Long-horizon legal-hold orchestration: object-lock legal holds on archived segments reconciled with engine holds (`enterprise/wormretention`) |
 | WORM evidence bundle | Archive export and offline verification | **Business: Regulated Operations.** Examiner-grade evidence bundle: native records + verification verdict + human-readable report + manifest + chain-of-custody (`enterprise/wormretention`) |
 | WORM archive sinks | Directory sink | **Business: Regulated Operations.** S3 Object Lock, Azure immutable-LOCKED and GCS Bucket-Lock WORM sinks (`enterprise/wormsinks`) |

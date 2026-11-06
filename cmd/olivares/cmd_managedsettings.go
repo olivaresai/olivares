@@ -134,7 +134,9 @@ func newAgentManagedSettingsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&out, "out", "-", "output path ('-' = stdout)")
 	cmd.Flags().StringVar(&matcher, "matcher", "", "tool-name matcher for the PEP hook (\"\" = all tools)")
 	cmd.Flags().IntVar(&timeoutSecs, "timeout", 5, "outer hook timeout in seconds (explicit: published 5s client shortened if needed)")
-	cmd.Flags().BoolVar(&pinHookEvents, "pin-hook-events", false, "pin each hook's event; for longer approvals use --pep-command 'olivares claude-hook --timeout 120s' --timeout 180")
+	// The recipe is the one a governed launch installs, so a static policy waits as
+	// long for a person as every driver does (sessions.ApprovalWait).
+	cmd.Flags().BoolVar(&pinHookEvents, "pin-hook-events", false, fmt.Sprintf("pin each hook's event; for longer approvals use --pep-command 'olivares claude-hook --timeout %s' --timeout %d", sessions.ClaudeHookPEPClientTimeout, int(sessions.ClaudeHookPEPCommandTimeout/time.Second)))
 	cmd.Flags().BoolVar(&redact, "redact", true, "also install the paired PostToolUse output-redaction hook")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "render env/telemetry only, no PEP hook")
 	cmd.Flags().StringVar(&otelEndpoint, "otel-endpoint", "", "managed OTEL collector endpoint (enables the sanctioned telemetry env)")

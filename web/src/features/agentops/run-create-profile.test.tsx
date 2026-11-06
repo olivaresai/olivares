@@ -199,7 +199,7 @@ describe('RunCreateDialog — provider profiles', () => {
     // The account that reported figures shows them; the one that did not shows none.
     expect(
       await screen.findByRole('option', { name: /Home A/ }),
-    ).toHaveTextContent('5-hour 100% · Weekly 62%')
+    ).toHaveTextContent('62% of the week · 100% of 5 hours')
     expect(
       screen.getByRole('option', { name: /Codex home/ }),
     ).not.toHaveTextContent('%')
@@ -373,7 +373,7 @@ describe('RunCreateDialog — provider profiles', () => {
     await user.click(screen.getByRole('button', { name: 'Model' }))
     await user.click(await screen.findByText('Claude Haiku 5.5'))
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(await screen.findByRole('option', { name: 'High' }))
     expect(screen.queryByLabelText('Fast mode')).not.toBeInTheDocument()
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
@@ -391,7 +391,7 @@ describe('RunCreateDialog — provider profiles', () => {
     {
       label: 'Folder',
       choice: /Workspace A/,
-      none: 'Temporary folder for this session',
+      none: 'Default (My files)',
     },
     { label: 'Template', choice: /Security Audit/, none: 'No template' },
   ])(
@@ -700,7 +700,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
     await user.click(screen.getByRole('button', { name: 'Model' }))
     await user.click(await screen.findByText('Claude Haiku 5.5'))
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(await screen.findByRole('option', { name: 'High' }))
     expect(advanced).toHaveAttribute('aria-expanded', 'false')
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
@@ -776,7 +776,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
     await user.click(screen.getByRole('button', { name: 'Model' }))
     await user.click(await screen.findByText('Claude Haiku 5.5'))
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(await screen.findByRole('option', { name: 'High' }))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
         'Claude Haiku 5.5',
@@ -850,7 +850,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
       ),
     )
     await waitFor(() =>
-      expect(screen.getByLabelText('Effort')).toHaveTextContent('low'),
+      expect(screen.getByLabelText('Effort')).toHaveTextContent('Low'),
     )
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),

@@ -16,7 +16,7 @@ bis der Diff still ist.
 ## 1. Den Drift abrufen
 
 Bei einer frischen Installation ist `accessmap` deaktiviert. Aktivieren Sie
-`accessmap` als Administrator unter **Settings > Edition & modules** und lassen
+`accessmap` als Administrator unter **Settings > Modules** und lassen
 Sie die anderen ausgewählten Module an. Für die CLI melden Sie sich zuerst
 mit `olivares login` als Administrator bei dieser Engine an und führen dann
 `olivares modules on accessmap` aus. Warten Sie vor dem Fortfahren auf jeden Neustart der Engine;

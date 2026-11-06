@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -339,6 +340,40 @@ func TestPublishReaderCredentialsStayARefusal(t *testing.T) {
 	_, err := publishReader(t, busy.addr, PublishOptions{Topic: "a", Timeout: 200 * time.Millisecond}).Read(t.Context())
 	if errors.Is(err, ErrBrokerRefused) {
 		t.Fatalf("a busy broker reads as a refusal: %v", err)
+	}
+}
+
+// A refused SUBSCRIBE gets the same classes as a refused CONNECT: Not authorized is credentials,
+// Quota exceeded is unavailable, and any other reason stays an unclassified refusal.
+func TestPublishReaderSubscriptionRefusalsKeepTheirClass(t *testing.T) {
+	for _, test := range []struct {
+		reason  byte
+		want    error
+		refused bool // errors.Is(err, ErrBrokerRefused)
+	}{
+		{0x80, ErrBrokerRefused, true},
+		{0x87, ErrBrokerCredentials, true},
+		{0x88, ErrBrokerUnavailable, false},
+		{0x89, ErrBrokerUnavailable, false},
+		{0x97, ErrBrokerUnavailable, false},
+	} {
+		b := newFakeBroker(t, connackOK, []byte{0x90, 0x04, 0x00, 0x01, 0x00, test.reason})
+		_, err := publishReader(t, b.addr, PublishOptions{Topic: "a", Timeout: 200 * time.Millisecond}).Read(t.Context())
+		if !errors.Is(err, test.want) {
+			t.Fatalf("SUBACK 0x%02x: error = %v, want %v", test.reason, err, test.want)
+		}
+		if got := errors.Is(err, ErrBrokerRefused); got != test.refused {
+			t.Fatalf("SUBACK 0x%02x: errors.Is(%v, ErrBrokerRefused) = %v, want %v", test.reason, err, got, test.refused)
+		}
+		if want := fmt.Sprintf("(reason 0x%02x)", test.reason); !strings.Contains(err.Error(), want) {
+			t.Fatalf("SUBACK 0x%02x: error %q does not carry %q", test.reason, err, want)
+		}
+	}
+	// A SUBACK whose property length runs past the packet is malformed: a plain refusal, never a panic.
+	malformed := newFakeBroker(t, connackOK, []byte{0x90, 0x04, 0x00, 0x01, 0x32, 0x87})
+	_, err := publishReader(t, malformed.addr, PublishOptions{Topic: "a", Timeout: 200 * time.Millisecond}).Read(t.Context())
+	if !errors.Is(err, ErrBrokerRefused) || errors.Is(err, ErrBrokerCredentials) {
+		t.Fatalf("malformed SUBACK: error = %v, want a plain refusal", err)
 	}
 }
 

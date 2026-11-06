@@ -24,8 +24,7 @@ import { formatInt } from '@/lib/format'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { cuentaConSuelo } from './count-floor'
 import { workspaceDashboardApi, workspaceDashboardKeys } from './api'
-import { SessionFolders } from './session-folders'
-import { WorkspaceContents } from './workspace-contents'
+import { SessionFolders, ShowMore } from './session-folders'
 import './i18n'
 
 /** Inventory is offered only where it opens: its module runs and the principal may read it. */
@@ -130,7 +129,6 @@ function WorkspaceDashboard({
   tenant: string | null
   t: ReturnType<typeof useTranslation>['t']
 }) {
-  const auth = useAuth()
   const inventoryOffered = useInventoryOffered()
   const summaryQ = useQuery({
     queryKey: workspaceDashboardKeys.summary(tenant, workspaceId),
@@ -151,19 +149,27 @@ function WorkspaceDashboard({
   })
 
   const s = summaryQ.data
-  const title = s?.name || workspaceName || t('workspaceDashboard:title')
+  // The heading names the page; the subtitle says which workspace this is.
+  const name = s?.name || workspaceName
 
   return (
     <IntelPage
       icon={Layers}
-      title={title}
+      title={t('workspaceDashboard:title')}
       description={
-        s?.slug ? (
+        name || s?.slug ? (
           <span className="flex min-w-0 items-center gap-2 text-caption text-muted-foreground">
-            <span className="truncate" title={s.slug}>
-              {s.slug}
-            </span>
-            {s.is_default && (
+            {name ? (
+              <span className="truncate font-medium text-text" title={name}>
+                {name}
+              </span>
+            ) : null}
+            {s?.slug ? (
+              <span className="truncate" title={s.slug}>
+                {s.slug}
+              </span>
+            ) : null}
+            {s?.is_default && (
               <Badge variant="neutral">
                 {t('workspaceDashboard:defaultBadge')}
               </Badge>
@@ -219,10 +225,6 @@ function WorkspaceDashboard({
         />
       </StatGrid>
 
-      {tenant && auth.can('tenant:admin') && (
-        <WorkspaceContents tenant={tenant} workspaceId={workspaceId} />
-      )}
-
       <SessionFolders tenant={tenant} />
 
       <section className="flex flex-col gap-2">
@@ -239,18 +241,6 @@ function WorkspaceDashboard({
             </Button>
           )}
         </div>
-        <ListTruncationBadge
-          query={agentsQ}
-          label={t('workspaceDashboard:truncation.label', {
-            n: agentsQ.data?.items?.length,
-          })}
-          hint={t(
-            inventoryOffered
-              ? 'workspaceDashboard:truncation.hint'
-              : 'workspaceDashboard:truncation.hintCapped',
-          )}
-          className="px-0 pt-0 pb-1"
-        />
         {agentsQ.data?.items.length === 0 ? (
           <EmptyState
             title={t('workspaceDashboard:noAgents')}
@@ -266,34 +256,47 @@ function WorkspaceDashboard({
             }
           />
         ) : (
-          <XScroll contentKey={agentsQ.data?.items.length}>
-            <StaticTable oneLine>
-              <thead>
-                <tr>
-                  <th>{t('workspaceDashboard:name')}</th>
-                  <th>{t('workspaceDashboard:kind')}</th>
-                  <th>{t('workspaceDashboard:status')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {agentsQ.data?.items.map((a) => (
-                  <tr key={a.id}>
-                    <td className="font-medium">{a.name}</td>
-                    <td>
-                      <Badge variant="outline">{a.kind}</Badge>
-                    </td>
-                    <td>
-                      <Badge
-                        variant={a.status === 'active' ? 'success' : 'neutral'}
-                      >
-                        {a.status}
-                      </Badge>
-                    </td>
+          <>
+            <XScroll contentKey={agentsQ.data?.items.length}>
+              <StaticTable oneLine>
+                <thead>
+                  <tr>
+                    <th>{t('workspaceDashboard:name')}</th>
+                    <th>{t('workspaceDashboard:kind')}</th>
+                    <th>{t('workspaceDashboard:status')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </StaticTable>
-          </XScroll>
+                </thead>
+                <tbody>
+                  {agentsQ.data?.items.map((a) => (
+                    <tr key={a.id}>
+                      <td className="font-medium">{a.name}</td>
+                      <td>
+                        <Badge variant="outline">{a.kind}</Badge>
+                      </td>
+                      <td>
+                        <Badge
+                          variant={
+                            a.status === 'active' ? 'success' : 'neutral'
+                          }
+                        >
+                          {a.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </StaticTable>
+            </XScroll>
+            {inventoryOffered ? (
+              <ShowMore query={agentsQ} to="/inventory" />
+            ) : (
+              <ListTruncationBadge
+                query={agentsQ}
+                label={t('workspaceDashboard:agentsCut')}
+                className="px-0 pt-0"
+              />
+            )}
+          </>
         )}
       </section>
 
@@ -309,14 +312,6 @@ function WorkspaceDashboard({
             </Link>
           </Button>
         </div>
-        <ListTruncationBadge
-          query={groupsQ}
-          label={t('workspaceDashboard:truncation.label', {
-            n: groupsQ.data?.items?.length,
-          })}
-          hint={t('workspaceDashboard:truncation.hint')}
-          className="px-0 pt-0 pb-1"
-        />
         {groupsQ.data?.items.length === 0 ? (
           <EmptyState
             title={t('workspaceDashboard:noGroups')}
@@ -333,32 +328,41 @@ function WorkspaceDashboard({
             }
           />
         ) : (
-          <XScroll contentKey={groupsQ.data?.items.length}>
-            <StaticTable oneLine>
-              <thead>
-                <tr>
-                  <th>{t('workspaceDashboard:name')}</th>
-                  <th>{t('workspaceDashboard:slug')}</th>
-                  <th>{t('workspaceDashboard:status')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groupsQ.data?.items.map((g) => (
-                  <tr key={g.id}>
-                    <td className="font-medium">{g.name}</td>
-                    <td className="font-mono text-caption">{g.slug}</td>
-                    <td>
-                      <Badge
-                        variant={g.status === 'active' ? 'success' : 'neutral'}
-                      >
-                        {g.status}
-                      </Badge>
-                    </td>
+          <>
+            <XScroll contentKey={groupsQ.data?.items.length}>
+              <StaticTable oneLine>
+                <thead>
+                  <tr>
+                    <th>{t('workspaceDashboard:name')}</th>
+                    <th>{t('workspaceDashboard:slug')}</th>
+                    <th>{t('workspaceDashboard:status')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </StaticTable>
-          </XScroll>
+                </thead>
+                <tbody>
+                  {groupsQ.data?.items.map((g) => (
+                    <tr key={g.id}>
+                      <td className="font-medium">{g.name}</td>
+                      <td className="font-mono text-caption">{g.slug}</td>
+                      <td>
+                        <Badge
+                          variant={
+                            g.status === 'active' ? 'success' : 'neutral'
+                          }
+                        >
+                          {g.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </StaticTable>
+            </XScroll>
+            <ShowMore
+              query={groupsQ}
+              to="/console"
+              search={{ tab: 'scopes' }}
+            />
+          </>
         )}
       </section>
     </IntelPage>

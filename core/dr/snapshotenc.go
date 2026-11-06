@@ -6,6 +6,7 @@ package dr
 
 import (
 	"bufio"
+	"compress/gzip"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
@@ -170,7 +171,7 @@ func (c *KeyCipher) openStream(dst io.Writer, src io.Reader) error {
 // and returns that path; the caller removes it. The copy needs as much room as the
 // snapshot itself, in the directory the caller staged the snapshot in; opening a
 // sealed snapshot (VerifyBundleIntegrity) needs the same again in the work directory.
-func sealSnapshotFile(c *KeyCipher, src string) (string, error) {
+func sealSnapshotFile(c *KeyCipher, src string, compress bool) (string, error) {
 	in, err := os.Open(src)
 	if err != nil {
 		return "", err
@@ -180,7 +181,28 @@ func sealSnapshotFile(c *KeyCipher, src string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := c.sealStream(out, in, snapshotChunkSize); err != nil {
+	var srcReader io.Reader = in
+	var done chan error
+	var pr *io.PipeReader
+	if compress {
+		var pw *io.PipeWriter
+		pr, pw = io.Pipe()
+		done = make(chan error, 1)
+		go func() {
+			gz := gzip.NewWriter(pw)
+			_, copyErr := io.Copy(gz, in)
+			err := errors.Join(copyErr, gz.Close())
+			_ = pw.CloseWithError(err)
+			done <- err
+		}()
+		srcReader = pr
+	}
+	sealErr := c.sealStream(out, srcReader, snapshotChunkSize)
+	if pr != nil {
+		_ = pr.CloseWithError(sealErr)
+		sealErr = errors.Join(sealErr, <-done)
+	}
+	if err := sealErr; err != nil {
 		_ = out.Close()
 		_ = os.Remove(out.Name())
 		return "", fmt.Errorf("dr: seal snapshot: %w", err)
@@ -195,7 +217,7 @@ func sealSnapshotFile(c *KeyCipher, src string) (string, error) {
 // openSnapshotFile decrypts the sealed snapshot at sealed to dst and returns the
 // size and SHA-256 of what it wrote. dst appears only when every chunk
 // authenticated: it is written under a temporary name and renamed.
-func openSnapshotFile(c *KeyCipher, sealed, dst string) (int64, string, error) {
+func openSnapshotFile(c *KeyCipher, sealed, dst string, snapshot StoreSnapshot) (int64, string, error) {
 	in, err := os.Open(sealed)
 	if err != nil {
 		return 0, "", err
@@ -206,7 +228,40 @@ func openSnapshotFile(c *KeyCipher, sealed, dst string) (int64, string, error) {
 		return 0, "", err
 	}
 	h := sha256.New()
-	if err := c.openStream(io.MultiWriter(out, h), in); err != nil {
+	var openErr error
+	if snapshot.Compression == "" {
+		openErr = c.openStream(io.MultiWriter(out, h), in)
+	} else {
+		// Reuse the tree restore's pipe: a failed decoder closes its reader,
+		// unblocking the decryptor, which is always joined before returning.
+		pr, pw := io.Pipe()
+		done := make(chan error, 1)
+		go func() {
+			err := c.openStream(pw, in)
+			_ = pw.CloseWithError(err)
+			done <- err
+		}()
+		gz, err := gzip.NewReader(pr)
+		if err == nil {
+			// Bound disk expansion by the authenticated plaintext size. Read
+			// one more byte to require EOF (including the gzip checksum and
+			// the seal's final chunk) before the temporary file is published.
+			_, err = io.CopyN(io.MultiWriter(out, h), gz, snapshot.SizeBytes)
+			if err == nil {
+				var n int64
+				n, err = io.CopyN(io.Discard, gz, 1)
+				if n != 0 {
+					err = errors.New("dr: decompressed snapshot exceeds declared size")
+				} else if err == io.EOF {
+					err = nil
+				}
+			}
+			err = errors.Join(err, gz.Close())
+		}
+		_ = pr.CloseWithError(err)
+		openErr = errors.Join(err, <-done)
+	}
+	if err := openErr; err != nil {
 		_ = out.Close()
 		_ = os.Remove(out.Name())
 		return 0, "", err

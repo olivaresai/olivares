@@ -113,7 +113,13 @@ type acpSession struct {
 	// cancellation is a fact about one generation, and a mark that outlived its turn
 	// would refuse approvals for a successor the operator never stopped.
 	cancelledTurn string
-	authState     string
+	// authState is the readiness the launch established, and the input gate: a
+	// required one refuses every message. reportedAuth is what the run row was last
+	// told. A turn the provider refuses with auth_required moves only reportedAuth,
+	// so the next message is still sent and judged by its own result: the person may
+	// have signed in again, and Stop + Resume must not be the only way back.
+	authState    string
+	reportedAuth string
 	// replayFor is the conversation a resume/load is REPLAYING, non-empty only
 	// while that request is in flight. The session/update frames that arrive during
 	// it are HISTORY, not new live output, and telling them apart is the difference
@@ -265,6 +271,18 @@ type acpServerRequest struct {
 	// the turn it was answered for can end, and the session can go on, while this
 	// request stays answered for as long as its resolver may still be running.
 	answered atomic.Bool
+	// wait is the authority's wait for this request, and stop ends it. The person
+	// sees the request as an approval card for as long as the wait runs, so the
+	// request's one answer, or its session's Close, ends the wait at once instead of
+	// leaving the card up until the approval deadline. They are set at registration,
+	// so a cancellation that lands before the resolver starts still ends the wait.
+	wait context.Context
+	stop context.CancelFunc
+}
+
+func newACPServerRequest(id json.RawMessage, method string) *acpServerRequest {
+	wait, stop := context.WithCancel(context.Background())
+	return &acpServerRequest{id: id, method: method, wait: wait, stop: stop}
 }
 
 type acpPermissionOption struct {
@@ -401,8 +419,12 @@ func (s *acpSession) ConversationID() string {
 func (s *acpSession) Close(err error) {
 	s.mu.Lock()
 	s.closed = true
+	pending := s.pending
 	s.pending = map[string]*acpServerRequest{}
 	s.mu.Unlock()
+	for _, req := range pending {
+		req.stop()
+	}
 	s.conn.close(err)
 }
 
@@ -472,11 +494,14 @@ func (s *acpSession) completeTurn(id string, result json.RawMessage, err error) 
 			// The provider's OWN statement that this profile is not authenticated. A
 			// launch-time readiness that could never be revoked would be the "a home path
 			// is proof of an account" mistake with a timestamp on it.
-			s.setAuthState(AuthStateRequired)
+			s.reportAuthState(AuthStateRequired)
 		}
 		s.creditTurn(nil)
 		return
 	}
+	// An answered turn: whatever an earlier refused turn reported, the provider
+	// took this one, so the row goes back to the launch's readiness.
+	s.reportAuthState(s.AuthState())
 	var resp acpPromptResponse
 	if json.Unmarshal(result, &resp) != nil {
 		s.creditTurn(nil)
@@ -707,13 +732,21 @@ func (s *acpSession) callTimeout() time.Duration {
 	return defaultDriverCallTimeout
 }
 
-// setAuthState records readiness and publishes the CHANGE to the runtime. Only a
-// change is published: a re-read that confirms what the row already says is not
-// news.
+// setAuthState records the launch's readiness, the input gate, and publishes it.
 func (s *acpSession) setAuthState(state string) {
 	s.mu.Lock()
-	changed := s.authState != state
 	s.authState = state
+	s.mu.Unlock()
+	s.reportAuthState(state)
+}
+
+// reportAuthState publishes a readiness CHANGE to the runtime without moving the
+// input gate. Only a change is published: a re-read that confirms what the row
+// already says is not news.
+func (s *acpSession) reportAuthState(state string) {
+	s.mu.Lock()
+	changed := s.reportedAuth != state
+	s.reportedAuth = state
 	s.mu.Unlock()
 	if changed && s.cfg.OnAuthState != nil {
 		s.cfg.OnAuthState(state)
@@ -738,6 +771,7 @@ func (s *acpSession) answer(req *acpServerRequest, reply any) {
 		// and is true: that read takes neither `s.mu` nor this once, so a resolver can
 		// still reject while this write is blocked on the child's stdin.
 		req.answered.Store(true)
+		req.stop()
 		if err := s.conn.respond(context.Background(), req.id, reply); err != nil &&
 			!errors.Is(err, errRPCClosed) {
 			s.warn("sessions: could not answer a provider permission request",

@@ -326,7 +326,7 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 	case "scim_delete", "ended_deadline", "ended_fallback":
 		deprovisionMember(t, h.authr, principalOfToken(t, h.authr, h.adminToken), model.TenantID(h.tenantA), owner.UserID)
 	case "directory_disable":
-		if err := patchDirectoryUserErr(h.authr, principalOfToken(t, h.authr, h.adminToken), model.TenantID(h.tenantA), owner.UserID, func(in *auth.SCIMUserInput) { in.Active = false }); err != nil {
+		if err := patchDirectoryUserErr(h.st, h.authr, principalOfToken(t, h.authr, h.adminToken), model.TenantID(h.tenantA), owner.UserID, func(in *directoryAttrs) { in.Active = false }); err != nil {
 			t.Fatalf("directory disable: %v", err)
 		}
 	case "global_directory_disable":

@@ -4,13 +4,12 @@
   "forbiddenTitle": "Nicht autorisiert",
   "forbidden": "Das Anzeigen des Attestierungsvertrags erfordert die Berechtigung compliance:read.",
   "disclaimer": {
-    "tag": "Beta",
-    "body": "Das Projekt befindet sich in der Beta-Phase: Es existieren noch keine Releases, und die Release-Pipeline ist geschrieben, aber nicht aktiviert. Das Panel zum laufenden Binärprogramm wird aus diesem Prozess GEMESSEN; die Vertragsreiter zeigen den deklarierten Vertrag, kein veröffentlichtes Release und keine Live-Kryptoverifizierung — diese Konsole verifiziert Signaturen niemals erneut im Browser.",
+    "body": "Dieser Build ist kein veröffentlichtes Release.",
     "declaredRef": "Deklarierte Referenz — Stand {{date}}. Wortwörtlich übernommen aus docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml sowie den Release-, Scorecard- und Patch-Velocity-Workflows. Die Engine kann den Zustand von Repository oder CI nicht beobachten, daher wird diese Hälfte nicht live bereitgestellt."
   },
   "live": {
     "title": "Laufendes Binärprogramm (gemessen)",
-    "description": "Was DIESER Engine-Prozess über sich selbst beweisen kann — live aus dem Binärprogramm gelesen (ldflags, debug.ReadBuildInfo, crypto/fips140, ein Selbst-Hash der ausführbaren Datei) — sowie der ehrliche Release-Zustand: Nichts wird veröffentlicht oder verifiziert, bis ein v*-Tag die Pipeline auslöst.",
+    "description": "Was dieser laufende Build über sich selbst meldet.",
     "status": {
       "measured": "Gemessen"
     },
@@ -58,11 +57,11 @@
   },
   "tabs": {
     "artifacts": "Artefakte",
-    "provenance": "Herkunft & VEX",
+    "provenance": "Herkunft",
     "sbom": "SBOM",
     "scorecard": "Scorecard",
     "remediation": "Behebungs-SLA",
-    "airgap": "Air-Gap & Chart"
+    "airgap": "Air-Gap"
   },
   "artifacts": {
     "title": "Release-Artefakte",

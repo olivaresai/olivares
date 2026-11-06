@@ -5,21 +5,31 @@
 // THE WORK BETWEEN TWO REPLIES. The conversation folds the calls between two
 // other rows into one work row that says what they did; open, it is one line per call, an
 // edit with its diff, a subagent under its Agent row; while the last row's calls run it is
-// one live line with their clock. session-conversation.tsx paints the rest of the thread.
+// one live line with their clock. A finished turn folds all its calls into its one end
+// line. session-conversation.tsx paints the rest of the thread.
 import {
   Bot,
   Check,
   ChevronRight,
   Eye,
+  GitFork,
   Pencil,
   Terminal,
   Wrench,
 } from 'lucide-react'
-import { memo, type MouseEvent, type ReactNode } from 'react'
+import {
+  Fragment,
+  memo,
+  useId,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
 import type { TFunction } from 'i18next'
 import { Trans, useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import { PathText } from '@/components/ui/path-text'
-import { formatDuration } from '@/lib/format'
+import { formatDuration, formatInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { ConversationItem } from './conversation-frames'
 import { MarkdownText } from './markdown-text'
@@ -40,12 +50,20 @@ export type Part =
   | { kind: 'item'; item: ConversationItem }
   | { kind: 'card'; item: ConversationItem }
   | { kind: 'work'; items: ConversationItem[]; nested: Nested }
+  | {
+      kind: 'turn'
+      item: ConversationItem
+      items: ConversationItem[]
+      nested: Nested
+    }
 
 /**
  * The items as the thread paints them. The calls between two other rows (a reply,
  * the person's turn, the end of a turn, a notice) are one work row; a subagent's calls and
- * replies belong to the Agent call that started it, wherever they arrive. Nothing is
- * dropped: every call is still in the document, one click away.
+ * replies belong to the Agent call that started it, wherever they arrive. A finished turn
+ * is one line at its end: its result holds the calls of every work row since the person
+ * spoke. Every call is still in the document, one click away. The session-start frame is
+ * no row: its model and folder are in the header, and it comes again before each later turn.
  */
 export function threadParts(
   items: readonly ConversationItem[],
@@ -56,6 +74,7 @@ export function threadParts(
   const place = new Map<ConversationItem, number>()
   const nested: Nested = { byCall, place }
   const parts: Part[] = []
+  let turnStart = 0
   // A todo call sends the whole list each time: only the newest list is a card, the older
   // calls stay in the work rows.
   const lastTodos = items
@@ -63,6 +82,7 @@ export function threadParts(
     .lastIndexOf(true)
   for (const [index, item] of items.entries()) {
     place.set(item, index)
+    if (item.kind === 'system' && item.systemKind === 'init') continue
     const parent = item.parentToolId
     if (item.kind === 'tool' && item.toolId) calls.add(item.toolId)
     if (parent && parent !== item.toolId && calls.has(parent)) {
@@ -72,8 +92,19 @@ export function threadParts(
       continue
     }
     const last = parts[parts.length - 1]
-    if (item.kind !== 'tool') parts.push({ kind: 'item', item })
-    else if (
+    if (item.kind === 'result') {
+      const turn = parts.splice(turnStart)
+      parts.push(...turn.filter((part) => part.kind !== 'work'), {
+        kind: 'turn',
+        item,
+        items: turn.flatMap((part) => (part.kind === 'work' ? part.items : [])),
+        nested,
+      })
+      turnStart = parts.length
+    } else if (item.kind !== 'tool') {
+      parts.push({ kind: 'item', item })
+      if (item.kind === 'operator') turnStart = parts.length
+    } else if (
       item.toolCard &&
       (item.toolCard.kind !== 'todos' ||
         (!authoritativeTodos && index === lastTodos))
@@ -209,16 +240,6 @@ function workWords(
   }
 }
 
-/** From the first call to the last answer, where the engine said when. */
-function workDuration(items: readonly ConversationItem[]): number | undefined {
-  const times = items
-    .flatMap((item) => [item.at, item.toolEndAt])
-    .flatMap((at) => (at ? [Date.parse(at)] : []))
-    .filter(Number.isFinite)
-  if (times.length < 2) return undefined
-  return Math.max(...times) - Math.min(...times)
-}
-
 const capitalized = (words: string) =>
   words.charAt(0).toLocaleUpperCase() + words.slice(1)
 
@@ -287,10 +308,11 @@ function liveWords(
 }
 
 /**
- * THE WORK BETWEEN TWO REPLIES IS ONE ROW (the regression, T3 "Worked for 22s ›"): "Worked for
- * 1m 12s · ran 3 commands, edited 2 files", closed. Open, it is one line per call, an edit
- * with its diff, a subagent under its Agent row. While its calls run it is the live line
- * instead: "Running 1 shell command · 1m 30s", with Esc to interrupt where the turn can be.
+ * THE WORK BETWEEN TWO REPLIES IS ONE ROW while the turn runs: "Ran 3 commands, edited 2
+ * files", closed. Open, it is one line per call, an edit with its diff, a subagent under its
+ * Agent row. While its calls run it is the live line instead: "Running 1 shell command ·
+ * 1m 30s", with Esc to interrupt where the turn can be. Once the turn ends, its rows fold
+ * into the turn's one line (TurnRowView).
  */
 function WorkRowView({
   items,
@@ -313,16 +335,8 @@ function WorkRowView({
 }) {
   const { t } = useTranslation('sessions')
   const words = workWords(t, items)
-  const duration = workDuration(items)
-  const label =
-    duration !== undefined && duration >= 1000
-      ? [
-          t('conversation.workedFor', { duration: formatDuration(duration) }),
-          words.done,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : capitalized(words.done)
+  // What the work did; how long the turn took is said once, on its end line.
+  const label = capitalized(words.done)
   return (
     <li>
       <details
@@ -369,6 +383,182 @@ function WorkRowView({
           ))}
         </ol>
       </details>
+    </li>
+  )
+}
+
+/** How an ACP turn stopped, in words; an outcome this console does not know is shown as
+ * the agent sent it. */
+function stopText(t: TFunction, reason: string): string {
+  switch (reason) {
+    case 'cancelled':
+      return t('conversation.stop.cancelled')
+    case 'refusal':
+      return t('conversation.stop.refusal')
+    case 'max_tokens':
+      return t('conversation.stop.maxTokens')
+    case 'max_turn_requests':
+      return t('conversation.stop.maxTurnRequests')
+    default:
+      return reason
+  }
+}
+
+const CENTS = new Intl.NumberFormat(undefined, {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+/** A turn's cost in cents; a turn under a cent is "<$0.01", never $0.00. */
+function turnCostText(usd: number): string {
+  return usd > 0 && usd < 0.005 ? `<${CENTS.format(0.01)}` : CENTS.format(usd)
+}
+
+/**
+ * A FINISHED TURN IS ONE LINE after its answer: what the agent did and how long, "Ran 2
+ * commands, edited 1 file · 43s", or "Answered · 8s" when no tool ran. A turn that did not
+ * simply finish (failed, interrupted, cancelled, at a limit) says so on that line. Open, it
+ * holds the turn's calls, the model, the tokens, the cost and Inspect; a failed result's
+ * text, which is the failure, stays under it.
+ */
+function TurnRowView({
+  item,
+  items,
+  nested,
+  runRef,
+  selectedId,
+  onInspect,
+  onFork,
+  modelName,
+  live,
+}: {
+  item: ConversationItem
+  items: ConversationItem[]
+  nested: Nested
+  runRef: string
+  selectedId?: string | null
+  onInspect?: (item: ConversationItem) => void
+  onFork?: (end: string) => void
+  modelName: (id: string) => string
+  live: boolean
+}) {
+  const { t } = useTranslation('sessions')
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  const calls = items.length > 0 ? workWords(t, items) : null
+  const words = [
+    calls?.done ? capitalized(calls.done) : null,
+    calls?.failed ? <span className="text-danger">{calls.failed}</span> : null,
+    item.interrupted
+      ? t('conversation.interrupted')
+      : item.resultFailed
+        ? t('conversation.toolFailed')
+        : item.stopReason
+          ? stopText(t, item.stopReason)
+          : calls
+            ? null
+            : t('conversation.answered'),
+  ].filter(Boolean)
+  const work = (
+    <span>
+      {words.map((word, i) => (
+        <Fragment key={i}>
+          {i > 0 ? ' · ' : null}
+          {word}
+        </Fragment>
+      ))}
+    </span>
+  )
+  const facts = [
+    item.model ? modelName(item.model) : null,
+    item.inputTokens !== undefined || item.outputTokens !== undefined
+      ? t('conversation.tokens', {
+          input: formatInt(item.inputTokens ?? 0),
+          output: formatInt(item.outputTokens ?? 0),
+        })
+      : null,
+    item.costUsd !== undefined ? turnCostText(item.costUsd) : null,
+  ].filter(Boolean)
+  return (
+    <li>
+      {onFork ? (
+        <Button variant="ghost" size="sm" onClick={() => onFork(item.id)}>
+          <GitFork className="size-3.5" aria-hidden />
+          {t('context.fork')}
+        </Button>
+      ) : null}
+      <div
+        data-testid="conversation-item"
+        data-item-id={item.id}
+        data-kind="result"
+        className={cn('rounded-ctl', selectedId === item.id && 'bg-active')}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen((value) => !value)}
+          className={cn(
+            'flex min-h-8 w-full items-center gap-2 rounded-ctl px-2 py-1 text-left',
+            'text-caption text-text-3 outline-none hover:bg-hover hover:text-text-2',
+            'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
+            item.resultFailed && 'font-medium text-danger',
+          )}
+        >
+          <span className="min-w-0 truncate tabular-nums" title={item.model}>
+            {item.durationMs === undefined ? (
+              work
+            ) : (
+              <Trans
+                t={t}
+                i18nKey="conversation.turnLine"
+                values={{ duration: formatDuration(item.durationMs) }}
+                components={{ work }}
+              />
+            )}
+          </span>
+          <ChevronRight
+            aria-hidden
+            className={cn(
+              'size-3.5 shrink-0 transition-transform motion-reduce:transition-none',
+              open && 'rotate-90',
+            )}
+          />
+        </button>
+        <div id={id} hidden={!open} className="pb-1">
+          {items.length > 0 ? (
+            <ol className="flex flex-col">
+              {items.map((call) => (
+                <CallRow
+                  key={call.id}
+                  item={call}
+                  nested={nested}
+                  runRef={runRef}
+                  selectedId={selectedId}
+                  onInspect={onInspect}
+                  live={live}
+                />
+              ))}
+            </ol>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 pt-1 text-caption text-text-2">
+            {facts.length > 0 ? <p>{facts.join(' · ')}</p> : null}
+            <InspectButton
+              onClick={onInspect ? () => onInspect(item) : undefined}
+            />
+          </div>
+        </div>
+      </div>
+      {item.resultFailed && item.text ? (
+        <p
+          data-slot="result-failure"
+          className="whitespace-pre-wrap break-words px-2 pb-1 text-caption text-danger"
+        >
+          {item.text}
+        </p>
+      ) : null}
     </li>
   )
 }
@@ -780,6 +970,22 @@ function paints(items: readonly ConversationItem[], nested: Nested): unknown[] {
     return own?.length ? [item, paints(own, nested)] : item
   })
 }
+
+type TurnRowProps = Parameters<typeof TurnRowView>[0]
+
+/** A finished turn paints again only when its result or its calls changed. */
+export const TurnRow = memo(
+  TurnRowView,
+  (a: TurnRowProps, b: TurnRowProps) =>
+    a.runRef === b.runRef &&
+    a.selectedId === b.selectedId &&
+    a.onInspect === b.onInspect &&
+    a.onFork === b.onFork &&
+    a.modelName === b.modelName &&
+    a.live === b.live &&
+    samePlain(a.item, b.item) &&
+    samePlain(paints(a.items, a.nested), paints(b.items, b.nested)),
+)
 
 type WorkRowProps = Parameters<typeof WorkRowView>[0]
 

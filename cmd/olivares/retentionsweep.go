@@ -145,3 +145,29 @@ func (l *retentionSweepLoop) runOnce(ctx context.Context) error {
 func (l *retentionSweepLoop) businessTenants(ctx context.Context) ([]model.TenantID, error) {
 	return servedBusinessTenants(ctx, l.st)
 }
+
+// warnStoredPurgeSchedules runs at a Community boot in place of the sweep loop. Retention
+// schedules are Business (docs/editions.md): Community applies none, so a purge schedule a
+// Business engine stored and enabled destroys nothing here, and the operator is told once.
+func warnStoredPurgeSchedules(ctx context.Context, st store.Store, comp *compliance.Module, log *slog.Logger) {
+	if comp == nil {
+		return // the compliance module does not run on this node
+	}
+	tenants, err := servedWorkTenants(ctx, st)
+	if err != nil {
+		log.Warn("retention: could not list the organizations to check for stored purge schedules", "err", err)
+		return
+	}
+	stored := 0
+	for _, t := range tenants {
+		n, err := comp.StoredPurgeSchedules(ctx, t)
+		if err != nil {
+			log.Warn("retention: could not read the stored purge schedules", "tenant", t.String(), "err", err)
+			continue
+		}
+		stored += n
+	}
+	if stored > 0 {
+		log.Warn("retention: stored purge schedules are not applied in Community, so nothing is purged; retention schedules require Olivares Business", "schedules", stored)
+	}
+}

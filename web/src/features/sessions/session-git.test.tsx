@@ -67,6 +67,50 @@ describe('Session Git', () => {
     )
     expect(await screen.findByLabelText('Branch')).toHaveValue('main')
   })
+  it('offers Initialize Git for a folder that is not a repository, in the panel and as the header button', async () => {
+    const { ApiError } = await import('@/lib/api/errors')
+    vi.mocked(agentOpsApi.gitStatus).mockRejectedValue(
+      new ApiError(
+        404,
+        'not_found',
+        'this session folder is not a Git repository',
+      ),
+    )
+    const user = userEvent.setup()
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <SessionGit run={run} variant="init" />
+      </QueryClientProvider>,
+    )
+    await user.click(
+      await screen.findByRole('button', { name: 'Initialize Git' }),
+    )
+    await waitFor(() =>
+      expect(agentOpsApi.gitAction).toHaveBeenCalledWith(
+        'run_1',
+        'init',
+        {},
+        expect.objectContaining({ tenant: 't1' }),
+      ),
+    )
+  })
+  it('shows no Initialize Git where the folder is a repository', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <SessionGit run={run} variant="init" />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(agentOpsApi.gitStatus).toHaveBeenCalled())
+    expect(
+      screen.queryByRole('button', { name: 'Initialize Git' }),
+    ).not.toBeInTheDocument()
+  })
   it('unstages without discarding the working file', async () => {
     vi.mocked(agentOpsApi.gitStatus).mockResolvedValue({
       ...status,

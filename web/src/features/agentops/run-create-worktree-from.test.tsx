@@ -162,7 +162,7 @@ describe('RunCreateDialog — opened for the work a handoff names', () => {
     await user.click(screen.getByLabelText('Folder'))
     await user.click(
       await screen.findByRole('option', {
-        name: 'Temporary folder for this session',
+        name: 'Default (My files)',
       }),
     )
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
@@ -239,7 +239,7 @@ describe('RunCreateDialog — opened for the work a handoff names', () => {
     await user.click(screen.getByLabelText('Folder'))
     await user.click(
       await screen.findByRole('option', {
-        name: 'Temporary folder for this session',
+        name: 'Default (My files)',
       }),
     )
     expect(

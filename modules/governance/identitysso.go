@@ -62,13 +62,17 @@ const (
 )
 
 // ssoStatusDTO mirrors web/src/features/identity/types.ts:167 (SsoStatus), plus the
-// `reason` that carries the third answer.
+// `reason` that carries the third answer and the OIDC `backchannel_logout_uri`, which
+// the console does not render yet.
 type ssoStatusDTO struct {
 	Protocol    string `json:"protocol"`
 	Configured  bool   `json:"configured"`
 	RedirectURI string `json:"redirect_uri,omitempty"`
-	PKCEMethod  string `json:"pkce_method,omitempty"`
-	Reason      string `json:"reason,omitempty"`
+	// BackchannelLogoutURI is the OIDC backchannel_logout_uri to paste into the
+	// provider, so a sign-out there ends the person's sessions here. OIDC only.
+	BackchannelLogoutURI string `json:"backchannel_logout_uri,omitempty"`
+	PKCEMethod           string `json:"pkce_method,omitempty"`
+	Reason               string `json:"reason,omitempty"`
 }
 
 // handleSsoStatus serves the SSO connection state. The redirect_uri is derived through
@@ -95,6 +99,9 @@ func (c *IdentityConsole) handleSsoStatus(w http.ResponseWriter, r *http.Request
 		}
 		out.Protocol = protocol
 		out.Configured = protocol != ""
+		if protocol == "oidc" {
+			out.BackchannelLogoutURI = api.FederationBackchannelLogoutURL(r, "", model.DefaultFederationAlias)
+		}
 	}
 	// Reading whether and how an estate federates is recon-relevant, on the same terms
 	// as the WIF graph and the CMEK posture next door: audited deny-closed before the

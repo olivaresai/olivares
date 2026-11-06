@@ -131,6 +131,8 @@ main.
 
 Pour `anthropic`, `openai` et `xai`, OpenCode accepte uniquement le point de terminaison du fournisseur : laissez `base_url` vide. Utilisez `codex` pour une passerelle `openai_compatible` ; utilisez `codex` ou `opencode` pour `ollama` et pour un serveur local `openai_compatible` dont la `base_url` est en `http` simple sur une adresse de bouclage ou privée, comme `http://127.0.0.1:8080/v1` (vLLM, llama.cpp). La `base_url` inclut `/v1`.
 
+Commencez par une clé d'API. Depuis le 18 juin 2026, Gemini CLI fonctionne avec une clé d'API Gemini payante ou avec un compte Gemini Code Assist Standard ou Enterprise ; les comptes Google personnels gratuits, Google AI Pro et Google AI Ultra ne fonctionnent plus. Pour un compte Google Code Assist, créez un profil Gemini et utilisez `olivares tool login gemini --account <name>` ; chaque profil a son propre répertoire d'authentification `.gemini` natif. Les profils à clé d'API refusent les réglages Google, Vertex ou passerelle natifs en conflit plutôt que de sélectionner une autre identité.
+
 ## 4. Lancez la première session
 
 ```sh
@@ -172,6 +174,18 @@ silencieusement de nommer quoi que ce soit se lirait comme un profil que personn
 configuré. Révoquer ici ne révoque pas la clé chez le fournisseur ; faites-le dans sa
 propre console.
 
+## Un runtime de modèle local sur le serveur Olivares
+
+Sur le serveur Olivares (l'appliance, SELinux en mode enforcing), une session liée à un fournisseur sur une adresse de bouclage ne peut l'atteindre que sur un port que la politique étiquette pour les runtimes de modèles locaux : 11434 (Ollama), 1234 (LM Studio), 8000 (vLLM) et 8080 (`llama-server` de llama.cpp). Pour un runtime sur un autre port, étiquetez-le une fois, en root :
+
+```bash
+semanage port -a -t olivares_model_runtime_port_t -p tcp 11435
+# If the base policy already labels that port (semanage port -l | grep -w 11435), modify it instead:
+semanage port -m -t olivares_model_runtime_port_t -p tcp 11435
+```
+
+Tant que ce n'est pas fait, la session ne démarre pas, et son erreur nomme cette commande.
+
 ## Ce que le moteur refuse, et pourquoi
 
 | Vous voyez | Cela veut dire |
@@ -194,6 +208,7 @@ et n’a besoin d’aucune des deux variables.
 
 ## Voir aussi
 
+- [Fournisseurs et outils](/reference/providers-and-tools/)
 - [Exploiter une session fournisseur](/fr/how-to/operate-provider-sessions/)
 - [Votre première heure](/fr/how-to/first-hour/)
 - [Référence de la CLI](/fr/reference/cli/)

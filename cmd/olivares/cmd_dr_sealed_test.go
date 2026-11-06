@@ -87,7 +87,9 @@ func downgradeToLegacyBundle(t *testing.T, bundle, out string, kekSecret []byte)
 			t.Fatal(err)
 		}
 	}
-	m.Format, m.Store.Encryption = dr.ManifestFormatV1, ""
+	m.Format, m.Store.Encryption, m.Store.Compression = dr.ManifestFormatV1, "", ""
+	// Legacy bundles carried the snapshot and keys, without folder payloads.
+	m.Trees, m.NotIncluded = nil, nil
 	input := dr.BundleInput{Manifest: m, KEK: kek, SnapshotPath: filepath.Join(work, m.Store.File), SealedKeys: sealedKeys}
 	if err := dr.AuthenticateBundle(input, cipher); err != nil {
 		t.Fatal(err)
@@ -201,6 +203,14 @@ func TestDRLegacyBundleStillRestoresAndWarns(t *testing.T) {
 	legacy := filepath.Join(t.TempDir(), "legacy.drbundle")
 	downgradeToLegacyBundle(t, sealed, legacy, make([]byte, 32))
 
+	manifest, _, err := openAndCheckBundle(legacy, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Trees) != 0 || len(manifest.NotIncluded) != 0 {
+		t.Fatal("a legacy snapshot-only bundle must not declare folder trees")
+	}
+
 	if out, err := runDR(t, "verify", "--in", legacy, "--kek-key-file", kekFile); err != nil || !strings.Contains(out, "DR drill PASSED") || !strings.Contains(out, "NOT encrypted") {
 		t.Fatalf("verify of an old-format bundle: %v\n%s", err, out)
 	}
@@ -209,6 +219,7 @@ func TestDRLegacyBundleStillRestoresAndWarns(t *testing.T) {
 	if err != nil || !strings.Contains(out, "restore verified") || !strings.Contains(out, "NOT encrypted") {
 		t.Fatalf("restore of an old-format bundle: %v\n%s", err, out)
 	}
+	t.Log(out)
 	if _, err := os.Stat(filepath.Join(dst, "olivares.db")); err != nil {
 		t.Fatalf("old-format restore wrote no store: %v", err)
 	}

@@ -1,5 +1,5 @@
 {
-  "title": "Sauvegarde et restauration",
+  "title": "Sauvegardes",
   "description": "Gérez les instantanés de reprise après sinistre d’Olivares AI.",
   "tabs": {
     "backups": "Sauvegardes",
@@ -30,6 +30,7 @@
       "date": "Date",
       "filename": "Nom du fichier",
       "size": "Taille",
+      "duration": "Durée",
       "engine": "Moteur",
       "tenants": "Tenants",
       "notes": "Notes"
@@ -88,6 +89,9 @@
     "freeSpace": "Espace libre sur la cible",
     "notAvailable": "Indisponible",
     "overdue": "Objectif de récupération dépassé",
+    "rtoMinutes": "Objectif de durée de restauration (minutes)",
+    "rtoExceeded": "Le dernier test de restauration a duré plus que l’objectif de {{minutes}} minutes",
+    "restoreTook": "Le test de restauration a duré {{seconds}} s",
     "age": "Il y a {{hours}} heures",
     "offsiteLockMissing": "Le bucket {{bucket}} ne verrouille pas les nouvelles copies en mode `COMPLIANCE` : les identifiants de ce serveur pourraient donc les supprimer. Activez S3 Object Lock avec une rétention `COMPLIANCE` par défaut et purgez avec des identifiants distincts.",
     "offsiteLockUnknown": "Impossible de lire l'Object Lock du bucket {{bucket}} : ces copies ne sont peut-être pas protégées contre la suppression."
@@ -126,6 +130,14 @@
     "confirmLabel": "Approuver et restaurer maintenant"
   },
   "restore": {
+    "postgres": {
+      "description": "Utilisez une cible db init distincte et vide et des références file: ou env: du serveur. Un second administrateur doit approuver.",
+      "dsn_ref": "Référence de connexion de l’application",
+      "owner_dsn_ref": "Référence du propriétaire (facultatif)",
+      "admin_dsn_ref": "Référence de l’administrateur des sauvegardes",
+      "scratch_dsn_ref": "Référence de maintenance temporaire",
+      "confirm": "Restaurez uniquement la cible vide approuvée. Après vérification, configurez le moteur avec le répertoire récupéré et les connexions cibles, puis redémarrez-le."
+    },
     "notAuthorized": "Non autorisé",
     "uploadFailed": "Échec du téléversement",
     "started": "Restauration démarrée",
@@ -166,6 +178,8 @@
     "tenants": "Tenants",
     "keys": "Clés scellées",
     "empty": "Aucune",
+    "notIncluded": "Absent de cette sauvegarde",
+    "notIncludedHint": "Ces chemins ne sont pas copiés. Sauvegardez-les vous-même.",
     "loadFailed": "Impossible de charger le détail de la sauvegarde."
   },
   "empty": {

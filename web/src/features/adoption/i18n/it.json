@@ -1,5 +1,5 @@
 {
-  "title": "Adozione di Claude Code",
+  "title": "Adozione",
   "description": "Quanto viene usato Claude Code e quanto di ciò che propone viene mantenuto dagli sviluppatori.",
   "range": {
     "label": "Intervallo di tempo",
@@ -15,7 +15,7 @@
     "trend": "Andamento"
   },
   "boundary": {
-    "note": "Copre solo il traffico dell'API Claude: il feed Analytics di amministrazione e il piano di telemetria OTLP. L'uso servito da {{providers}} non è incluso, quindi l'assenza di adozione qui non prova che non ci sia.",
+    "note": "Solo l’uso dell’API Claude. Non incluso: {{providers}}.",
     "providers": {
       "claude-platform-aws": "Claude Platform on AWS",
       "microsoft-foundry": "Microsoft Foundry",
@@ -25,16 +25,16 @@
   },
   "lenses": {
     "analytics": {
-      "title": "Per sviluppatore (Analytics di amministrazione)",
-      "description_one": "Totali autorevoli per sviluppatore e per giorno dal feed Analytics di amministrazione, su {{count}} sviluppatore.",
-      "description_many": "Totali autorevoli per sviluppatore e per giorno dal feed Analytics di amministrazione, su {{count}} sviluppatori.",
-      "description_other": "Totali autorevoli per sviluppatore e per giorno dal feed Analytics di amministrazione, su {{count}} sviluppatori."
+      "title": "Per sviluppatore",
+      "description_one": "Totali giornalieri di {{count}} sviluppatore.",
+      "description_many": "Totali giornalieri di {{count}} sviluppatori.",
+      "description_other": "Totali giornalieri di {{count}} sviluppatori."
     },
     "telemetry": {
-      "title": "Per sessione (telemetria in tempo reale)",
-      "description_one": "Attività per sessione in tempo reale dal piano OTLP, su {{count}} team; include il tempo attivo.",
-      "description_many": "Attività per sessione in tempo reale dal piano OTLP, su {{count}} team; include il tempo attivo.",
-      "description_other": "Attività per sessione in tempo reale dal piano OTLP, su {{count}} team; include il tempo attivo."
+      "title": "Per sessione",
+      "description_one": "Attività in tempo reale e tempo attivo di {{count}} team.",
+      "description_many": "Attività in tempo reale e tempo attivo di {{count}} team.",
+      "description_other": "Attività in tempo reale e tempo attivo di {{count}} team."
     }
   },
   "comparison": {

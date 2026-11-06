@@ -1,5 +1,5 @@
 {
-  "title": "MCP et compétences",
+  "title": "Extensions",
   "subtitle": "Le catalogue de capacités en temps réel — serveurs MCP, outils, compétences et leurs connexions.",
   "tabs": {
     "servers": "Serveurs",
@@ -19,8 +19,9 @@
     "managed": "Géré",
     "managedRev": "Géré · rév. {{rev}}",
     "discovered": "Découvert",
+    "caption": "Serveurs observés par les connecteurs, que Olivares s’y connecte ou non.",
     "empty": "Aucun serveur MCP découvert",
-    "emptyHint": "Les serveurs apparaissent ici à mesure que les plans d’inventaire et d’introspection les découvrent.",
+    "emptyHint": "Les serveurs apparaissent ici à mesure que l’inventaire et l’introspection les découvrent.",
     "truncated": "{{n}} serveurs chargés ; il y en a d'autres"
   },
   "connection": {
@@ -82,11 +83,10 @@
     "title": "Câblage des capacités",
     "mobileHint": "Le graphe de câblage ({{count}} connexions) se consulte mieux sur un écran plus grand.",
     "description": "Ce qui est connecté à quoi — les agents et sessions aux serveurs MCP, outils, compétences et ressources qu’ils utilisent.",
-    "notAccessMap": "Il s’agit du graphe de connexion des capacités, et non de la carte des accès aux ressources R/RW (voir Carte des accès).",
     "observed": "Observé",
     "declared": "Déclaré",
     "legend": "Provenance",
-    "partial": "Affichage d’un graphe partiel — affinez les filtres pour voir des connexions spécifiques.",
+    "partial": "Filtrez pour voir d’autres connexions.",
     "occurrences": "Occurrences",
     "firstSeen": "Première observation",
     "lastSeen": "Dernière observation",
@@ -127,7 +127,7 @@
     "endpoint": "Point de terminaison",
     "endpointHint": "Une référence uniquement — n’intégrez jamais d’identifiants dans le point de terminaison.",
     "scope": "Périmètre",
-    "scopeHint": "Étiquette de périmètre de déploiement/locataire facultative (par ex. team-a).",
+    "scopeHint": "Étiquette de périmètre de déploiement/organisation facultative (par ex. team-a).",
     "enabled": "Activé",
     "note": "Note",
     "secretRefs": "Références de secret",
@@ -188,7 +188,7 @@
     },
     "server": {
       "title": "Aucun serveur MCP découvert",
-      "description": "Les serveurs MCP apparaissent lorsque les observations des connecteurs les identifient dans l’inventaire du locataire."
+      "description": "Les serveurs MCP apparaissent lorsque les observations des connecteurs les identifient dans l’inventaire de l’organisation."
     },
     "skill": {
       "title": "Compétences non trouvées",
@@ -196,7 +196,7 @@
     },
     "tool": {
       "title": "Aucun outil MCP découvert",
-      "description": "Les outils apparaissent lorsque l’introspection MCP ou l’activité d’outil observée les signale dans l’inventaire du locataire."
+      "description": "Les outils apparaissent lorsque l’introspection MCP ou l’activité d’outil observée les signale dans l’inventaire de l’organisation."
     }
   },
   "truncatedHint": "Il y a plus de lignes que celles affichées ; cette page les prend par id de ligne (attribué à la création), les suivantes manquent donc. Un serveur, un outil, une compétence ou une configuration qui n'apparaît PAS ici ne prouve pas son inexistence."

@@ -93,7 +93,7 @@ export const inventoryResponseFixture: RateLimitInventory = {
 export const inventoryUnavailableFixture: RateLimitInventory = {
   available: false,
   reason:
-    'the Claude Admin-API connector is not wired; the rate-limit inventory is unavailable (provision the read-only Admin credential to enable it)',
+    'Not connected yet: this server has no Anthropic Admin key. Whoever runs the server sets it as OLIVARES_CLAUDE_ADMIN_KEY (see the configuration reference) and restarts.',
   rate_limits: [],
   caveat: RATE_LIMITS_CAVEAT,
 }

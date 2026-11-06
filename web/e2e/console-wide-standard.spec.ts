@@ -44,7 +44,7 @@ function ladderPx(step: string): string {
   return `${Number(declared[1]) * 16}px`
 }
 
-/** The nine the console ships; `lint:i18n` proves the resources exist for each. */
+/** The eleven the console ships; `lint:i18n` proves the resources exist for each. */
 const LANGUAGES = [
   'en',
   'es',
@@ -55,6 +55,8 @@ const LANGUAGES = [
   'ko',
   'ru',
   'zh',
+  'uk',
+  'pt',
 ] as const
 
 async function signIn(page: Page): Promise<BrowserSession> {

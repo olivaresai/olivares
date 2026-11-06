@@ -1,0 +1,88 @@
+{
+  "title": "Host y sesiones",
+  "subtitle": "El host, sus discos, las sesiones en vivo y lo que han consumido.",
+  "range": {
+    "label": "Rango",
+    "24h": "24 horas",
+    "7d": "7 días",
+    "30d": "30 días"
+  },
+  "host": {
+    "heading": "Host",
+    "keeps24": "El host guarda 24 horas de historial, así que sus gráficos muestran las últimas 24 horas.",
+    "unavailable": "Las métricas del host no están disponibles en este host. Solo Linux las informa.",
+    "noHistory": "El host aún no ha registrado ninguna muestra.",
+    "noFilesystems": "Ningún sistema de archivos informó su tamaño.",
+    "noFolders": "No hay carpetas de sesión.",
+    "facts": {
+      "load": "Carga {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "Memoria {{used}} de {{total}}",
+      "swap": "Swap {{used}} de {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "Uso de CPU en las últimas 24 horas: ahora {{now}}, pico {{peak}}, media {{average}}."
+    },
+    "memory": {
+      "title": "Memoria",
+      "total": "Total",
+      "summary": "Memoria en uso en las últimas 24 horas: ahora {{used}} de {{total}}, pico {{peak}}."
+    },
+    "disks": {
+      "title": "Sistemas de archivos",
+      "summary_one": "Un sistema de archivos, {{mount}}, {{pct}} usado.",
+      "summary_many": "{{count}} sistemas de archivos; el más lleno es {{mount}}, {{pct}} usado.",
+      "summary_other": "{{count}} sistemas de archivos; el más lleno es {{mount}}, {{pct}} usado."
+    },
+    "folders": {
+      "title": "Carpetas de sesión",
+      "summary_one": "Una carpeta de sesión, {{largest}}, {{size}}.",
+      "summary_many": "{{count}} carpetas de sesión usan {{total}}; la mayor es {{largest}} con {{size}}.",
+      "summary_other": "{{count}} carpetas de sesión usan {{total}}; la mayor es {{largest}} con {{size}}.",
+      "floor": "La medición se detuvo en su límite, así que los tamaños son un mínimo."
+    },
+    "columns": {
+      "time": "Hora",
+      "cpu": "Uso de CPU",
+      "memory": "Memoria en uso",
+      "swap": "Swap en uso",
+      "mount": "Punto de montaje",
+      "device": "Dispositivo",
+      "type": "Tipo",
+      "used": "Usado",
+      "size": "Tamaño",
+      "usedPercent": "Usado %",
+      "folder": "Carpeta"
+    }
+  },
+  "live": {
+    "heading": "Sesiones en vivo",
+    "loading": "Leyendo las sesiones en vivo…",
+    "error": "No se pudieron leer las sesiones en vivo.",
+    "none": "No hay sesiones en vivo.",
+    "more": "La lista se cortó: hay más sesiones abiertas de las contadas aquí, así que los recuentos son un mínimo.",
+    "automation": "Automatización",
+    "unknown": "Sin registrar",
+    "columns": {
+      "tool": "Herramienta",
+      "person": "Persona",
+      "sessions": "Sesiones"
+    },
+    "byTool": {
+      "title": "Sesiones en vivo por herramienta",
+      "summary_one": "{{count}} sesión en vivo por herramienta: {{list}}.",
+      "summary_many": "{{count}} sesiones en vivo por herramienta: {{list}}.",
+      "summary_other": "{{count}} sesiones en vivo por herramienta: {{list}}."
+    },
+    "byPerson": {
+      "title": "Sesiones en vivo por persona",
+      "summary_one": "{{count}} sesión en vivo por persona: {{list}}.",
+      "summary_many": "{{count}} sesiones en vivo por persona: {{list}}.",
+      "summary_other": "{{count}} sesiones en vivo por persona: {{list}}."
+    }
+  },
+  "usage": {
+    "heading": "Uso"
+  }
+}

@@ -16,7 +16,6 @@ import {
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
-import i18n from '@/lib/i18n'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { SessionConversation } from './session-conversation'
@@ -668,6 +667,30 @@ describe('SessionConversation', () => {
     expect(screen.queryByText('Unrecognised frame')).toBeNull()
   })
 
+  // A frame the console does not read is no row of the narrative: it is counted, with its
+  // raw text, under Details › Technical details.
+  it('paints no unknown frame and reports the unknown frames to Details', async () => {
+    const onUnknownFrames = vi.fn()
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <SessionConversation run={run} onUnknownFrames={onUnknownFrames} />
+      </QueryClientProvider>,
+    )
+    await screen.findByTestId('session-conversation')
+    const frames = [1, 2, 3].map((n) =>
+      JSON.stringify({ type: `mystery_${n}` }),
+    )
+    act(() => frames.forEach((line, i) => push(line, i + 1)))
+    await waitFor(() =>
+      expect(onUnknownFrames).toHaveBeenLastCalledWith(frames),
+    )
+    expect(screen.queryAllByTestId('conversation-item')).toHaveLength(0)
+    expect(screen.queryByText(/mystery/)).toBeNull()
+  })
+
   // The working folder is the Context pane's line (`session-overview.test.tsx`): the
   // transcript draws no line of it, and tells the pane the folder the tool's own first
   // frame names, for a session that recorded none.
@@ -701,35 +724,42 @@ describe('SessionConversation', () => {
     expect(screen.queryByText(/Working folder/)).toBeNull()
   })
 
-  // The first line of the thread is worded by the catalog of the console's language, not
-  // by the frame mapper: in German it reads "Sitzung gestartet · <model> · 4 Werkzeuge".
-  it('words the session-start line in the console language', async () => {
-    await i18n.changeLanguage('de')
-    try {
-      wrap()
-      await screen.findByTestId('session-conversation')
-      act(() => {
+  // The tool's start-up bookkeeping (its hooks, its session-start frame) is no row of the
+  // thread: a new conversation opens with the person's own message.
+  it('opens a new conversation with no start-up rows', async () => {
+    const onFolder = vi.fn()
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <SessionConversation run={run} onFolder={onFolder} />
+      </QueryClientProvider>,
+    )
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      for (const subtype of ['hook_started', 'hook_response'])
         push(
           JSON.stringify({
             type: 'system',
-            subtype: 'init',
-            cwd: '/engine/dir',
-            tools: ['Read', 'Bash', 'Write', 'Task'],
-            model: 'claude-opus-5',
+            subtype,
+            hook_name: 'SessionStart:startup',
+            hook_event: 'SessionStart',
           }),
         )
-      })
-      expect(
-        await screen.findByText(
-          'Sitzung gestartet · Claude Opus 5 · 4 Werkzeuge',
-        ),
-      ).toBeInTheDocument()
-      expect(screen.queryByText(/Session started/)).toBeNull()
-    } finally {
-      // Unmount first: restoring the language under a mounted tree re-renders it outside act.
-      cleanup()
-      await i18n.changeLanguage('en')
-    }
+      push(
+        JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          cwd: '/engine/dir',
+          tools: ['Read', 'Bash', 'Write', 'Task'],
+          model: 'claude-opus-5',
+        }),
+      )
+    })
+    await waitFor(() => expect(onFolder).toHaveBeenCalledWith('/engine/dir'))
+    expect(screen.queryAllByTestId('conversation-item')).toHaveLength(0)
+    expect(screen.queryByText(/Hook|Session started/)).toBeNull()
   })
 
   it('inspects a row by handing the raw frame to the caller', async () => {
@@ -779,8 +809,7 @@ describe('SessionConversation', () => {
     const footer = (await screen.findAllByTestId('conversation-item')).find(
       (el) => el.getAttribute('data-kind') === 'result',
     )
-    expect(footer).toHaveTextContent('Result')
-    expect(footer).toHaveTextContent('Cancelled')
+    expect(footer?.querySelector('button')).toHaveTextContent(/^Cancelled$/)
   })
 
   // acceptance: a failed Codex turn read as "Result · Turn completed".
@@ -1012,6 +1041,43 @@ describe('SessionConversation', () => {
     )
     expect(failure).toHaveClass('text-danger')
     expect(screen.queryByText('the reply, again')).toBeNull()
+  })
+
+  // Issue 3989: the interrupt button's two frames read as a user bubble and a red Result.
+  it('tells an interrupted turn as a quiet "Interrupted by you" marker, not a user bubble or a failure', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(
+        JSON.stringify({
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: '[Request interrupted by user]' }],
+          },
+        }),
+        1,
+      )
+      push(
+        JSON.stringify({
+          type: 'result',
+          subtype: 'error_during_execution',
+          is_error: true,
+          duration_ms: 9400,
+        }),
+        2,
+      )
+    })
+    const marker = await screen.findByRole('button', {
+      name: 'Interrupted by you · 9.4s',
+    })
+    expect(marker).not.toHaveClass('text-danger')
+    expect(screen.queryByText('[Request interrupted by user]')).toBeNull()
+    expect(
+      screen
+        .getAllByTestId('conversation-item')
+        .map((el) => el.getAttribute('data-kind')),
+    ).toEqual(['result'])
   })
 
   // An approval Olivares refused because the session's sign-in had ended read only as an
@@ -1254,39 +1320,81 @@ describe('SessionConversation — the thread reads as a thread', () => {
     expect(screen.getAllByTestId('conversation-work')).toHaveLength(1)
   })
 
-  it('ends a turn with a centered "Finished in" divider that opens the same content', async () => {
+  it('folds a finished turn with two commands into one line: what it did and how long', async () => {
     const userEv = userEvent.setup()
     wrap()
     await screen.findByTestId('session-conversation')
-    act(() =>
+    act(() => {
+      push(user('Run the tests'), 1)
+      push(toolUse('t1', 'Bash', { command: 'make test' }), 2)
+      push(toolResult('t1'), 3)
+      push(assistant('One more run.'), 4)
+      push(toolUse('t2', 'Bash', { command: 'make lint' }), 5)
+      push(toolResult('t2'), 6)
+      push(assistant('Both pass.'), 7)
       push(
         JSON.stringify({
           type: 'result',
           subtype: 'success',
           is_error: false,
-          result: 'done',
-          duration_ms: 8000,
+          result: 'Both pass.',
+          duration_ms: 43000,
           usage: { input_tokens: 12, output_tokens: 18 },
         }),
-        1,
-      ),
-    )
-    const [divider] = await waitFor(() => {
-      const found = item('result')
-      expect(found).toHaveLength(1)
-      return found
+        8,
+      )
     })
-    const summary = divider.querySelector('summary') as HTMLElement
-    expect(summary).toHaveTextContent('Finished in 8s')
-    expect(summary.className).toContain('text-overline')
-    expect(summary.className).toContain('items-center')
-    expect(divider.hasAttribute('open')).toBe(false)
-    await userEv.click(summary)
-    expect(divider.hasAttribute('open')).toBe(true)
-    expect(screen.queryByRole('button', { name: 'Result' })).toBeNull()
+    const line = await screen.findByRole('button', {
+      name: 'Ran 2 commands · 43s',
+    })
+    expect(line).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByTestId('conversation-work')).toBeNull()
+    expect(screen.queryByText(/Worked for/)).toBeNull()
+    const opened = document.getElementById(
+      line.getAttribute('aria-controls') ?? '',
+    ) as HTMLElement
+    expect(opened).not.toBeVisible()
+    await userEv.click(line)
+    expect(line).toHaveAttribute('aria-expanded', 'true')
+    expect(opened).toBeVisible()
+    expect(within(opened).getByText('12 in · 18 out')).toBeVisible()
+    expect(within(opened).getAllByTestId('conversation-item')).toHaveLength(2)
   })
 
-  it('says "Result" when no duration is known', async () => {
+  it("prices a turn by what it added to Claude Code's running total, in cents", async () => {
+    // total_cost_usd is the process's running total (a real session: 14.6948, then 14.9366).
+    const userEv = userEvent.setup()
+    wrap()
+    await screen.findByTestId('session-conversation')
+    const result = (total: number) =>
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        result: 'done',
+        duration_ms: 8000,
+        total_cost_usd: total,
+        usage: { input_tokens: 9, output_tokens: 921 },
+      })
+    act(() => {
+      push(result(14.6948), 1)
+      push(result(14.9366), 2)
+      push(result(14.9406), 3)
+    })
+    const dividers = await waitFor(() => {
+      const found = item('result')
+      expect(found).toHaveLength(3)
+      return found
+    })
+    await userEv.click(dividers[1]!.querySelector('button') as HTMLElement)
+    expect(dividers[1]).toHaveTextContent('$0.24')
+    expect(dividers[1]).not.toHaveTextContent('$14.9')
+    // A turn under a cent is not $0.00.
+    await userEv.click(dividers[2]!.querySelector('button') as HTMLElement)
+    expect(dividers[2]).toHaveTextContent('<$0.01')
+  })
+
+  it('says "Answered" when no tool ran and no duration is known', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() =>
@@ -1305,7 +1413,7 @@ describe('SessionConversation — the thread reads as a thread', () => {
       expect(found).toHaveLength(1)
       return found
     })
-    expect(divider.querySelector('summary')).toHaveTextContent(/^Result$/)
+    expect(divider.querySelector('button')).toHaveTextContent(/^Answered$/)
   })
 
   it.each([
@@ -1335,7 +1443,7 @@ describe('SessionConversation — the thread reads as a thread', () => {
     },
   )
 
-  it("keeps the duration on a failed turn's divider", async () => {
+  it("says a failed turn failed, with its duration, on the turn's line", async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() =>
@@ -1355,7 +1463,7 @@ describe('SessionConversation — the thread reads as a thread', () => {
       expect(found).toHaveLength(1)
       return found
     })
-    expect(divider.querySelector('summary')).toHaveTextContent('Result · 8s')
+    expect(divider.querySelector('button')).toHaveTextContent(/^Failed · 8s$/)
   })
 })
 
@@ -1586,10 +1694,14 @@ describe('SessionConversation — the assistant reply is rendered markdown (#178
     expect(steps.querySelector('ul li')).toHaveTextContent('nested')
   })
 
-  it('keeps the lines and indentation of a paragraph as they were written', async () => {
-    const row = await reply('Traceback:\n  File "a.py", line 3')
+  it('joins the soft line breaks of a paragraph and shows its hard ones', async () => {
+    const row = await reply(
+      'The run ended\n  because the tool stopped.  \nNext, the logs.',
+    )
     const paragraph = row.querySelector('p')!
-    expect(paragraph.textContent).toBe('Traceback:\n  File "a.py", line 3')
+    expect(paragraph.textContent).toBe(
+      'The run ended because the tool stopped.\nNext, the logs.',
+    )
     expect(paragraph.className).toContain('whitespace-pre-wrap')
   })
 
@@ -1762,10 +1874,12 @@ describe('SessionConversation — the message navigator', () => {
     })
     const marks = await screen.findAllByTestId('message-mark')
     expect(marks).toHaveLength(2)
-    // The column keeps clear of the rail, so a message's Copy is never under it (#2856).
+    // The rail sits in the column's left padding, away from a message's Copy at the
+    // right edge (#2856): the column keeps its width.
+    expect(screen.getByTestId('message-rail')).toHaveClass('left-0')
     expect(
       document.querySelector('[data-slot="conversation-column"]'),
-    ).toHaveClass('pe-12')
+    ).not.toHaveClass('pe-12')
     expect(marks[0]).toHaveAccessibleName(/Message 1, .*fix the failing test/)
 
     await userEvents.click(marks[0]!)
@@ -1781,6 +1895,29 @@ describe('SessionConversation — the message navigator', () => {
       { order: 'desc', limit: 200 },
       expect.anything(),
     )
+  })
+
+  // The bar and the notices it carries read in the same 760 px column as the thread, the
+  // way the composer does, not across the whole pane.
+  it('keeps the message bar inside the 760 px conversation column', async () => {
+    vi.spyOn(agentOpsApi, 'messages').mockResolvedValue({
+      driver: 'claude',
+      transcript: 'read',
+      total: 1,
+      items: [message(1, 'fix the failing test')],
+    })
+    wrap()
+    act(() => {
+      push(
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'fix the failing test' },
+        }),
+        1,
+      )
+    })
+    const bar = await screen.findByTestId('message-bar')
+    expect(bar).toHaveClass('mx-auto', 'w-full', 'max-w-[760px]')
   })
 
   it('draws nothing when the session has no messages the engine can read', async () => {
@@ -1904,9 +2041,12 @@ describe('SessionConversation — the model in use', () => {
       push(result, 2)
       push(reply('claude-opus-4-8', 'two'), 3, '2026-10-21T12:03:46Z')
     })
+    // The model is behind the turn's line, beside its tokens and cost.
     expect(
-      screen.getByText(/Finished in .+ · Claude Opus 5\.5/),
-    ).toBeInTheDocument()
+      screen
+        .getAllByTestId('conversation-item')
+        .find((el) => el.getAttribute('data-kind') === 'result'),
+    ).toHaveTextContent('Claude Opus 5.5')
     const notice = screen
       .getAllByTestId('conversation-item')
       .find((el) => el.getAttribute('data-kind') === 'system')
@@ -2168,21 +2308,25 @@ describe('SessionConversation — copying a message', () => {
     writeSessionDraft(key, '')
   })
 
-  it('copies one Markdown block with its original markers independently', async () => {
-    const user = userEvent.setup()
-    const writeText = vi
-      .spyOn(navigator.clipboard, 'writeText')
-      .mockResolvedValue(undefined)
+  it('gives a reply one copy, not one per paragraph, and shows an earlier reply’s actions only on hover or focus', async () => {
     wrap()
-    act(() => push(answered))
-    const buttons = await screen.findAllByRole('button', {
-      name: 'Copy Markdown block',
+    act(() => {
+      push(answered, 1)
+      push(asked, 2)
+      push(answered, 3)
     })
-    await user.click(buttons[1]!)
-    await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith('- **One** thing'),
-    )
-    writeText.mockRestore()
+    await screen.findByText('Look up the readme')
+    expect(
+      screen.queryByRole('button', { name: 'Copy Markdown block' }),
+    ).not.toBeInTheDocument()
+    const copies = screen.getAllByRole('button', { name: 'Copy message' })
+    expect(copies).toHaveLength(3)
+    // jsdom has no CSS, so the class is the check: the earlier reply and the person's
+    // message reveal their actions on hover or focus; the last reply keeps them shown.
+    const [earlier, mine, last] = copies.map((b) => b.parentElement!)
+    expect(earlier).toHaveClass('opacity-0', 'group-hover/msg:opacity-100')
+    expect(mine).toHaveClass('opacity-0', 'group-focus-within/msg:opacity-100')
+    expect(last).not.toHaveClass('opacity-0')
   })
 
   it('keeps copying available to a reader without offering a writable quote', async () => {
@@ -2373,21 +2517,21 @@ describe('SessionConversation — the work folds, one live line, nested subagent
       for (let i = 0; i < upTo; i++) push(REAL[i]!, i + 1, stamps[i])
     })
 
-  it('folds the work between the prompt and the reply into one row that says what it did', async () => {
+  it("folds a finished turn's work into its one line: what it did and how long", async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     pushReal()
-    const work = await screen.findByTestId('conversation-work')
-    expect(screen.getAllByTestId('conversation-work')).toHaveLength(1)
-    expect(work.hasAttribute('open')).toBe(false)
-    expect(work.querySelector('summary')).toHaveTextContent(
-      /^Worked for 1m \d+s · ran 3 commands, edited 1 file · 1 failed$/,
-    )
+    const line = await screen.findByRole('button', {
+      name: /^Ran 3 commands, edited 1 file · 1 failed · 1m 37s$/,
+    })
+    expect(line).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByTestId('conversation-work')).toBeNull()
+    const turn = line.closest('[data-kind="result"]') as HTMLElement
     const kinds = screen
       .getAllByTestId('conversation-item')
-      .filter((el) => !work.contains(el))
+      .filter((el) => el === turn || !turn.contains(el))
       .map((el) => el.getAttribute('data-kind'))
-    expect(kinds).toEqual(['system', 'operator', 'assistant', 'result'])
+    expect(kinds).toEqual(['operator', 'assistant', 'result'])
     for (const noise of [
       /task (started|progress|updated|notification)/,
       /background tasks/,
@@ -2420,7 +2564,9 @@ describe('SessionConversation — the work folds, one live line, nested subagent
     wrap()
     await screen.findByTestId('session-conversation')
     pushReal()
-    const work = await screen.findByTestId('conversation-work')
+    const work = (await screen.findAllByTestId('conversation-item')).find(
+      (el) => el.getAttribute('data-kind') === 'result',
+    ) as HTMLElement
     const failed = within(work)
       .getAllByTestId('conversation-item')
       .find((el) => el.textContent?.includes('&& false')) as HTMLElement
@@ -2432,7 +2578,9 @@ describe('SessionConversation — the work folds, one live line, nested subagent
     wrap()
     await screen.findByTestId('session-conversation')
     pushReal()
-    const work = await screen.findByTestId('conversation-work')
+    const work = (await screen.findAllByTestId('conversation-item')).find(
+      (el) => el.getAttribute('data-kind') === 'result',
+    ) as HTMLElement
     const edit = within(work)
       .getAllByTestId('conversation-item')
       .find((el) =>
@@ -2826,5 +2974,53 @@ describe('SessionConversation — it follows what grows at its end', () => {
     grow(log, 1400)
     act(() => resized?.())
     expect(log.scrollTop).toBe(100)
+  })
+
+  it('keeps following when a row measured after its scroll to the end lengthens the content', () => {
+    // A browser stops scrollTop at scrollHeight - clientHeight and sends the scroll event
+    // of a scroll to the end a frame later; a code block or a reply that measures in that
+    // frame leaves the end below the view (reload at 1280 px: 80 px short; at 390 px: 142).
+    wrap()
+    const log = screen.getByRole('log')
+    let top = 0
+    Object.defineProperty(log, 'clientHeight', {
+      value: 300,
+      configurable: true,
+    })
+    Object.defineProperty(log, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (v: number) => {
+        top = Math.max(0, Math.min(v, log.scrollHeight - 300))
+      },
+    })
+    grow(log, 1000)
+    act(() => resized?.())
+    expect(log.scrollTop).toBe(700)
+    grow(log, 1080)
+    fireEvent.scroll(log)
+    act(() => resized?.())
+    expect(log.scrollTop).toBe(780)
+  })
+
+  it('offers "Jump to latest" while the person reads above the end, and goes back to it', async () => {
+    const userEv = userEvent.setup()
+    wrap()
+    const log = screen.getByRole('log')
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull()
+    grow(log, 1000)
+    Object.defineProperty(log, 'clientHeight', {
+      value: 300,
+      configurable: true,
+    })
+    log.scrollTop = 100
+    fireEvent.scroll(log)
+    await userEv.click(screen.getByRole('button', { name: 'Jump to latest' }))
+    expect(log.scrollTop).toBe(1000)
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull()
+    // Following again, what grows at the end is followed.
+    grow(log, 1400)
+    act(() => resized?.())
+    expect(log.scrollTop).toBe(1400)
   })
 })

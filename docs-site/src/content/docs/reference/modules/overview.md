@@ -137,7 +137,7 @@ is the honest contract: the product **observes and governs broadly today, and
 actuates on a growing, mostly provision-gated subset** — see
 [Honesty & limits](/start/honesty-and-limits/). The selectable catalog comes from
 `core/modulespec/modules.json`, the same source used by `olivares modules ls`
-and the console’s **Edition & modules** list. `npm run test:modules` checks
+and the console’s **Settings > Modules** list. `npm run test:modules` checks
 each selectable namespace for a linked reference page and verifies the count.
 
 ## Edition availability seam (not counted among the 35 selectable modules)

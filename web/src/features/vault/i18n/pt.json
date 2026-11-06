@@ -1,0 +1,88 @@
+{
+  "title": "Cofre",
+  "subtitle": "As suas palavras-passe, notas e códigos de autenticação. Estão seladas neste servidor e só o utilizador as pode abrir.",
+  "add": "Adicionar item",
+  "search": "Procurar um item",
+  "noMatch": "Nenhum item corresponde a «{{query}}»",
+  "sealerUnavailable": "Este servidor ainda não consegue selar segredos, por isso não é possível guardar itens.",
+  "created": "Item adicionado",
+  "saved": "Item guardado",
+  "deleted": "Item eliminado",
+  "copyBlocked": "O navegador não permitiu a cópia",
+  "nothingToCopy": "Este item não tem nada para copiar",
+  "needPerson": "O cofre pertence a uma pessoa. Inicie sessão com a sua conta para usar o seu.",
+  "needOrganization": "Escolha uma organização para abrir aí o seu cofre.",
+  "copied": "Copiado: {{field}}. A área de transferência é limpa dentro de {{seconds}} s.",
+  "rowCopied": "Copiado: {{what}}. A área de transferência é limpa dentro de {{seconds}} s.",
+  "what": {
+    "password": "Palavra-passe",
+    "code": "Código",
+    "note": "Nota"
+  },
+  "kind": {
+    "login": "Início de sessão",
+    "note": "Nota",
+    "totp": "Autenticador",
+    "code": "Código"
+  },
+  "empty": {
+    "title": "O seu cofre está vazio",
+    "description": "Adicione um início de sessão, uma nota ou uma chave de autenticação. Abrir ou copiar um item fica registado no registo de auditoria."
+  },
+  "row": {
+    "open": "Abrir {{label}}",
+    "openItem": "Abrir",
+    "delete": "Eliminar",
+    "menu": "Ações para {{label}}",
+    "copyPassword": "Copiar a palavra-passe de {{label}}",
+    "copyNote": "Copiar a nota de {{label}}",
+    "copyCode": "Copiar o código de {{label}}"
+  },
+  "delete": {
+    "title": "Eliminar {{label}}?",
+    "body": "O item é removido definitivamente. Não é possível anular esta ação.",
+    "confirm": "Eliminar"
+  },
+  "detail": {
+    "locked": "Bloqueado. Revelar um item fica registado no registo de auditoria e volta a ocultar-se ao fim de um minuto.",
+    "hidden": "Oculto",
+    "reveal": "Revelar",
+    "edit": "Editar",
+    "totpKey": "Chave de autenticação",
+    "code": "Código",
+    "codeHidden": "Não apresentado",
+    "codeLeft": "Restam {{n}} s",
+    "showCode": "Mostrar código",
+    "copyField": "Copiar {{field}}",
+    "showField": "Mostrar {{field}}",
+    "hideField": "Ocultar {{field}}"
+  },
+  "form": {
+    "addTitle": "Adicionar um item",
+    "editTitle": "Editar {{label}}",
+    "name": "Nome",
+    "nameHint": "Letras, dígitos, pontos, hífenes e carateres de sublinhado. O item é encontrado por este nome, também na CLI.",
+    "nameTaken": "Já existe um item com este nome",
+    "nameInvalid": "Use letras, dígitos, pontos, hífenes e carateres de sublinhado",
+    "type": "Tipo",
+    "username": "Nome de utilizador",
+    "password": "Palavra-passe",
+    "show": "Mostrar palavra-passe",
+    "hide": "Ocultar palavra-passe",
+    "generate": "Gerar",
+    "generateOptions": "Opções do gerador",
+    "generateFailed": "Não foi possível gerar uma palavra-passe",
+    "length": "Comprimento",
+    "lower": "Letras minúsculas",
+    "upper": "Letras maiúsculas",
+    "digits": "Dígitos",
+    "symbols": "Símbolos",
+    "url": "Site",
+    "totp": "Chave de autenticação",
+    "totpHint": "Uma chave base32 ou a ligação otpauth:// por trás do código QR do serviço",
+    "note": "Nota",
+    "description": "Descrição",
+    "descriptionHint": "Apresentada na lista. Não é secreta.",
+    "save": "Guardar"
+  }
+}

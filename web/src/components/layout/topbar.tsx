@@ -8,14 +8,16 @@ import { Kbd } from '@/components/ui/kbd'
 import { chordHint } from '@/lib/keybindings/model'
 import { PALETTE_KEYS } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
-import { pageLabel } from './document-title'
+import { topBarLabel } from './document-title'
+import { HintBar } from './hint-bar'
 import { NotificationBell } from './notification-bell'
+import { frameFor } from './page-frames'
 import { SidePanelToggle } from './side-panel'
 import { TopbarSearchSlot } from './topbar-search'
 import { UserMenu } from './user-menu'
 
 /**
- * THE TOP BAR (0.5): one 56 px row with the page title, search with its key (⌘K on a Mac,
+ * THE TOP BAR (0.5): one 56 px row with the place's name, search with its key (⌘K on a Mac,
  * Ctrl+K elsewhere; the Ledger's query on the Ledger), notifications and the account. The
  * places live in the left navigation only; below 761 px the menu button opens it as a
  * drawer. The version, the engine, the stops and Stop all live in the status bar
@@ -28,9 +30,8 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   const { t } = useTranslation(['nav', 'common'])
   const setCommandOpen = useCommandStore((s) => s.setOpen)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const search = useRouterState({
-    select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
-  })
+  // The top bar names the place; the page's heading names the page.
+  const label = topBarLabel(t, pathname)
 
   return (
     <header
@@ -50,8 +51,11 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         data-slot="topbar-title"
         className="min-w-0 flex-1 truncate text-heading font-semibold text-text"
       >
-        {pageLabel(t, pathname, search)}
+        {/* A work page (Sessions) names itself in its list's heading: once. */}
+        {frameFor(pathname) === 'work' ? null : label}
       </p>
+
+      <HintBar />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         {/* A place whose list is a query (the Ledger) puts its own field here. */}

@@ -9,7 +9,8 @@
     "keys": "Clés de fournisseur",
     "gpai": "Posture GPAI",
     "access": "Access",
-    "governance": "Gouvernance"
+    "governance": "Gouvernance",
+    "usage": "Utilisation"
   },
   "catalog": {
     "title": "Matrice des capacités",
@@ -122,9 +123,9 @@
   "keys": {
     "title": "Références de clés de fournisseur",
     "description": "Références gouvernées vers les clés d'API et les espaces de travail des fournisseurs. Seul un indice masqué est stocké — jamais la valeur du secret.",
-    "new": "Ajouter une référence de clé",
+    "new": "Ajouter une référence",
     "empty": "Aucune référence de clé",
-    "emptyHint": "Une référence de clé pointe vers un identifiant détenu par le moteur, jamais vers le secret lui-même. Ajoutez-en une pour qu’un modèle puisse être appelé.",
+    "emptyHint": "Une référence de clé pointe vers un identifiant détenu par le moteur, jamais vers le secret lui-même. Elle n’est pas nécessaire pour appeler un modèle : ajoutez la clé elle-même comme clé d’API.",
     "maskedOnly": "Référence uniquement — la valeur du secret n'est jamais stockée ni affichée.",
     "columns": {
       "name": "Nom",
@@ -141,7 +142,7 @@
       "workspace": "Espace de travail"
     },
     "dialog": {
-      "title": "Ajouter une référence de clé",
+      "title": "Ajouter une référence",
       "name": "Nom",
       "provider": "Fournisseur",
       "kind": "Type de référence",
@@ -273,6 +274,37 @@
     "truncatedHint": "Il y a plus de règles d'accès que celles affichées ; cette page prend des lignes par id. Les marques de ces lignes ne reflètent QUE les règles chargées : des allow qui introduiraient un confinement ou ajouteraient des cibles autorisées peuvent manquer, et des forbid qui retirent de l'accès aussi — cette page peut donc paraître plus large OU plus étroite que la réalité, et un sujet sans aucune règle chargée n'apparaît même pas. N'en déduis pas l'accès effectif : le moteur parcourt toutes les pages avant de décider, et résout un principal par utilisateur, rôle et groupe à la fois, ce qu'une ligne ne peut pas montrer.",
     "groupsTruncated": "{{n}} groupes chargés ; il y en a d'autres",
     "groupsTruncatedHint": "Il y a plus de groupes de modèles que ceux affichés ; cette page prend des lignes par id. Un groupe absent ici ne démontre pas qu'il n'existe pas — une règle peut toujours le viser."
+  },
+  "usage": {
+    "byLabel": "Regrouper l'utilisation par",
+    "periodLabel": "Période",
+    "by": {
+      "model": "Modèle",
+      "account": "Compte",
+      "provider": "Fournisseur",
+      "tool": "Outil"
+    },
+    "period": {
+      "days1": "24 heures",
+      "days7": "7 jours",
+      "days30": "30 jours"
+    },
+    "chartTitle": "Exécutions par jour",
+    "chartSummary": "Exécutions par jour. Regroupement : {{by}}. Période : {{period}}. Total {{total}} ; jour le plus chargé {{day}} avec {{peak}}.",
+    "totalsTitle": "Totaux",
+    "columns": {
+      "day": "Jour",
+      "runs": "Exécutions",
+      "input": "Jetons en entrée",
+      "output": "Jetons en sortie",
+      "cost": "Coût"
+    },
+    "noKey": "Non enregistré",
+    "other": "Autres",
+    "empty": {
+      "title": "Aucune utilisation sur cette période",
+      "description": "L'utilisation apparaît ici après l'exécution de la première session."
+    }
   },
   "available": {
     "title": "Disponibles maintenant",

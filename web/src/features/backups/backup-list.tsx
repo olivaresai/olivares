@@ -14,7 +14,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
-import { formatDateTime } from '@/lib/format'
+import { formatDateTime, formatDuration } from '@/lib/format'
 import { toast } from '@/components/ui/toaster'
 import { apiFetchRaw } from '@/lib/api/client'
 import { downloadBlob } from '@/lib/api/download'
@@ -94,6 +94,17 @@ export function BackupList({
         cell: ({ row }) => (
           <span className="tabular-nums text-body">
             {formatBytes(row.original.size_bytes, t)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'duration_ms',
+        header: t('list.columns.duration'),
+        cell: ({ row }) => (
+          <span className="tabular-nums text-body">
+            {row.original.duration_ms
+              ? formatDuration(row.original.duration_ms)
+              : '—'}
           </span>
         ),
       },

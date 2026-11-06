@@ -3,14 +3,8 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useTranslation } from 'react-i18next'
 import { EditionSwitch } from '@/features/settings/edition-switch'
+import { useEditionSummary } from '@/features/settings/edition-summary'
 import type { LicenseStatusDTO } from './api'
-
-// Keep the capability wording in the edition contract, rather than maintaining a
-// second catalogue in the console. These are English documentation excerpts.
-declare const __EDITION_SUMMARIES__: {
-  business: string[]
-  enterprise: string[]
-}
 
 export function LicenseBuildGuidance({
   license,
@@ -18,6 +12,7 @@ export function LicenseBuildGuidance({
   license: LicenseStatusDTO
 }) {
   const { t } = useTranslation('console')
+  const summary = useEditionSummary()
   // The credential's product profile is separate from the build edition and the
   // legacy support relationship. A flat license has no profile, only a free-form
   // plan: anything but "business" or "enterprise" is named generically rather than
@@ -47,15 +42,17 @@ export function LicenseBuildGuidance({
         {t('license.switchDocs')}
       </a>
       <p>{t('license.editionAdds', { edition })}</p>
-      <ul lang="en" className="list-disc space-y-1 pl-5">
-        {__EDITION_SUMMARIES__.business.map((summary) => (
-          <li key={summary}>{summary}</li>
+      <ul className="list-disc space-y-1 pl-5">
+        {summary.business.map(({ text, lang }) => (
+          <li key={text} lang={lang}>
+            {text}
+          </li>
         ))}
       </ul>
       {isEnterprise &&
-        __EDITION_SUMMARIES__.enterprise.map((summary) => (
-          <p key={summary} lang="en">
-            {summary}
+        summary.enterprise.map(({ text, lang }) => (
+          <p key={text} lang={lang}>
+            {text}
           </p>
         ))}
     </section>

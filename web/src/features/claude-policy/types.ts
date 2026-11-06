@@ -11,6 +11,12 @@
 //    shows an honest "pending" seam and NEVER fakes success.
 import type { PolicySurface } from './schema'
 
+/** A department's instructions file, rendered by the engine from what the department carries
+ *  (Business): `managed-instructions@<department slug>`. */
+export type DepartmentSurface = `managed-instructions@${string}`
+/** Every surface the authoring routes take. */
+export type AuthoringSurface = PolicySurface | DepartmentSurface
+
 // --- REAL: drift Findings (→ /v1/m/security/findings) ------------------------
 
 /** A drift/posture Finding as emitted by the read-only Claude connectors.
@@ -37,7 +43,7 @@ export interface PolicyDriftFinding {
 /** A stored revision of an authored policy (declared version history). */
 export interface PolicyVersion {
   revision: number
-  surface: PolicySurface
+  surface: AuthoringSurface
   author?: string
   created_at?: string
   /** The authored document at this revision (JSON text). */
@@ -49,12 +55,16 @@ export interface PolicyVersion {
 /** Dry-run result: the resolved effect/precedence of a change BEFORE publishing.
  *  No host is touched. */
 export interface DryRunResult {
-  surface: PolicySurface
+  surface: AuthoringSurface
   /** Human-readable precedence/merge resolution lines (Managed > CLI > …). */
   resolved?: { scope: string; note: string }[]
   /** Keys that would change vs the currently-observed config. */
   changes?: { path: string; before?: unknown; after?: unknown }[]
   notes?: string[]
+  /** A department's instructions file as the engine rendered it, and its digest: the bytes a
+   *  publish signs and a workstation writes. Absent for the other surfaces. */
+  content?: string
+  sha256?: string
 }
 
 /** The signed distribution artifact summary a publish mints: the operator
@@ -70,7 +80,7 @@ export interface PolicyArtifactMeta {
  *  The UI shows the PERMITTED-policy-vs-OBSERVED-config Findings; it never writes
  *  host files itself. */
 export interface PublishResult {
-  surface: PolicySurface
+  surface: AuthoringSurface
   revision?: number
   /** Drift verification Findings produced by distribution (PERMITTED vs OBSERVED). */
   drift?: PolicyDriftFinding[]
@@ -107,7 +117,7 @@ export interface PolicyScopeStatus {
 /** The per-surface distribution truth view: published vs signed vs what
  *  every scope reports — real state only, every absence named in notes. */
 export interface PolicyDistributionView {
-  surface: PolicySurface
+  surface: AuthoringSurface
   latest_revision?: number
   artifact?: PolicyArtifactMeta
   scopes: PolicyScopeStatus[]

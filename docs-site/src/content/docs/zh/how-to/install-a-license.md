@@ -89,9 +89,9 @@ curl -X POST .../v1/console/runtime/reload    # the API half
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` 离线运行，并按引擎使用的相同优先级解析许可证，因此它回答的是关键问题——
+在引擎所在主机上，或使用 `--data-dir` 时，`status` 离线运行，并按引擎使用的相同优先级解析许可证，因此它回答的是关键问题——
 *实际生效的是哪一个许可证*——而不是“是否存在一个文件”。它会报告解析到的来源、持有者、
-套餐和到期时间。
+套餐和到期时间。如果已登录到另一台主机上的引擎，它会改为向该引擎查询。
 
 每次安装后以及移除 override 后都应运行它。
 
@@ -145,6 +145,11 @@ olivares enterprise enable <preset>     # starter | regulated | full
 暂存状态，而不是只启用一部分。`olivares enterprise status` 会报告哪些内容处于活动状态。
 这些命令**仅存在于 Business 二进制文件中**——如果 `olivares enterprise` 不是一个命令，
 说明你仍在运行 Community 构建，上述切换尚未发生。
+
+控制台也可以按系列执行同样的操作：**版本与许可证** 视图列出每个系列及其已开启的模块数量。
+**开启** 会在应用前显示同样的 diff，**关闭** 会列出将要停止的模块。许可证不包含的系列，其
+**开启** 按钮保持禁用，并注明 *此许可证不包含* 该系列。无论通过控制台还是 CLI，引擎每次开启时
+都会重新检查许可证，因此过期或缺失的许可证无法开启任何系列。
 
 :::caution[切换前先备份]
 切换替换的是二进制文件，而不是数据——但仍应执行[升级与回滚](/zh/how-to/upgrade-and-rollback/)

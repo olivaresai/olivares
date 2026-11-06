@@ -35,8 +35,7 @@
     "savedViewRejected": "{{count}} value saved in “{{name}}” could not be used ({{keys}}); the view fell back to its default.",
     "savedViewRejected_one": "{{count}} value saved in “{{name}}” could not be used ({{keys}}); the view fell back to its defaults.",
     "savedViewRejected_other": "{{count}} values saved in “{{name}}” could not be used ({{keys}}); the view fell back to its defaults.",
-    "thisSavedView": "this saved view",
-    "dismiss": "Dismiss"
+    "thisSavedView": "this saved view"
   },
   "workspaceRequired": {
     "use": "Use {{name}}",

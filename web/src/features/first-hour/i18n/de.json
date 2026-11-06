@@ -86,7 +86,6 @@
     "folderHint": "Ein Ordner auf diesem Server. Leer lassen, um in einem neuen Ordner zu beginnen.",
     "folderNew": "Ein neuer Ordner für diese Sitzung",
     "folderTyped": "Anderer Ordner …",
-    "folderChange": "Ordner ändern",
     "readingFolder": "Der Ordner der letzten Sitzung wird gelesen…",
     "prompt": "Erste Nachricht (optional)",
     "promptPlaceholder": "Was soll es zuerst tun?",
@@ -118,16 +117,21 @@
     "chooseModel": "Wählen Sie ein Modell: Dieser Schlüssel hat kein Standardmodell.",
     "noTestedModel": "Noch kein Modell dieses Schlüssels hat seinen Verbindungstest bestanden: Testen Sie den Schlüssel unter Anbieter.",
     "openProviders": "Anbieter öffnen",
-    "profile": "Profil",
+    "profile": "Konto",
     "profileNotSignedIn": "Nicht angemeldet",
     "profileNeedsKey": "Schlüssel fehlt",
     "foldersUnreadable": "Die registrierten Ordner konnten nicht gelesen werden. Geben Sie den Pfad eines Ordners auf diesem Server ein.",
     "folderPermission": "Startet als {{name}}, dem Standard dieses Ordners.",
     "autoAsks": "{{tool}} hat keinen Automatikmodus: Es fragt vor jeder Aktion nach."
   },
+  "composer": {
+    "toolPill": "Werkzeug und Konto: {{value}}",
+    "modelPill": "Modell: {{value}}",
+    "effortPill": "Aufwand: {{value}}",
+    "folderPill": "Ordner: {{value}}",
+    "moreOptions": "Weitere Optionen"
+  },
   "lists": {
-    "runsTruncated": "Letzte Sitzungen: {{count}} geladen; es gibt weitere.",
-    "runsHint": "Ältere Sitzungen sind nicht in dieser Liste enthalten.",
     "foldersTruncated": "Registrierte Ordner: {{count}} geladen; es gibt weitere.",
     "foldersHint": "Einige registrierte Ordner sind nicht in dieser Liste enthalten."
   },
@@ -147,9 +151,7 @@
     "mcp": "MCP-Server hinzufügen",
     "budgets": "Budgets festlegen",
     "cli": "Die olivares-Befehlszeile verwenden",
-    "cliHint": "Auf diesem Server ist der Befehl olivares bereits installiert. Auf einem anderen Computer installieren Sie ihn mit:",
-    "copy": "Kopieren",
-    "copied": "Kopiert"
+    "cliHint": "Auf diesem Server ist der Befehl olivares bereits installiert. Auf einem anderen Computer installieren Sie ihn mit:"
   },
   "permissionSummary": {
     "readOnly": "Liest und plant. Jede Änderung wird abgelehnt.",
@@ -158,5 +160,29 @@
     "editsAndCommands": "Liest, bearbeitet Dateien und führt Befehle ohne Rückfrage aus. Andere Werkzeuge werden abgelehnt.",
     "auto": "Der eigene, geprüfte Automatikmodus des Werkzeugs entscheidet. Ein Werkzeug ohne Automatikmodus fragt nach, wie bei „Beaufsichtigt“. Erfordert Run-Administration.",
     "full": "Nichts fragt nach. Olivares begrenzt die Sitzung weiterhin und protokolliert jede Aktion. Erfordert Run-Administration."
+  },
+  "bring": {
+    "title": "Ordner übernehmen",
+    "body": "Ordner, in denen Ihre Werkzeuge schon gearbeitet haben, gelesen aus den eigenen Aufzeichnungen der Werkzeuge über Projektpfade und Daten. Nichts wird registriert, bevor Sie bestätigen.",
+    "error": "Die Ordner Ihrer Werkzeuge konnten nicht gesucht werden.",
+    "unreadable": "Die Aufzeichnungen von {{tool}} konnten nicht gelesen werden. Fügen Sie Ordner stattdessen von Hand hinzu.",
+    "cols": {
+      "folder": "Ordner",
+      "tool": "Werkzeug",
+      "lastUsed": "Zuletzt verwendet",
+      "conversations": "Unterhaltungen"
+    },
+    "pick": "{{folder}} registrieren",
+    "confirm": "Ausgewählte registrieren ({{n}})",
+    "skipStep": "Jetzt nicht",
+    "skip": {
+      "missing": "Der Ordner existiert nicht mehr",
+      "unreadable": "Der Ordner kann nicht gelesen werden",
+      "outside_allowed_roots": "Außerhalb der erlaubten Ordner: Er überschneidet sich mit einem geschützten Ordner",
+      "already_registered": "Bereits registriert"
+    },
+    "failed": "Er konnte nicht registriert werden.",
+    "toast": "Registriert: {{n}}",
+    "result": "Registriert: {{imported}}. Übersprungen: {{skipped}}."
   }
 }

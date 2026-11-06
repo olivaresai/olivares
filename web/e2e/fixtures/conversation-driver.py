@@ -19,6 +19,7 @@ the catalog file (.fixture-commands.json in the session folder, a JSON object
 When the session folder holds a file named .fixture-echo-user, each turn also echoes the
 person's message as a user record, as Claude Code does with --replay-user-messages (#2129:
 the message navigator reaches the row of a message the tool has taken).
+If that file contains a transcript path, new user records are appended there too.
 
 It reports the model it was launched with (`--model`, else fixture-claude) on its init
 and replies; like Claude Code, its result footer names none. When the session folder holds a file named .fixture-model, the turns
@@ -164,13 +165,18 @@ while True:
         emit({"type": "result", "subtype": "success", "is_error": False, "result": "Ready for next turn", "session_id": SID})
         continue
     if os.path.exists(ECHO_USER_FILE):
-        emit(
-            {
-                "type": "user",
-                "session_id": SID,
-                "message": {"role": "user", "content": (request.get("message") or {}).get("content", "")},
-            }
-        )
+        user = {
+            "type": "user",
+            "session_id": SID,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
+            "message": {"role": "user", "content": (request.get("message") or {}).get("content", "")},
+        }
+        with open(ECHO_USER_FILE, encoding="utf-8") as handle:
+            transcript = handle.read().strip()
+        if transcript:
+            with open(transcript, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(user) + "\n")
+        emit(user)
     model = turn_model()
     for estimated in (120, 412):
         emit(

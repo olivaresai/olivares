@@ -4,7 +4,7 @@
     "hint": "速率限制摘要仅在已加载的发现中查找；未显示的摘要可能位于后续页面。"
   },
   "title": "速率限制",
-  "description": "网关或代理必须保持同步的、按组织和工作区范围限定的速率限制的只读清单。数据来源于 Anthropic Rate Limits API（只读）；此视图永不更改任何限制。",
+  "description": "您的组织和工作区的速率限制。只读。",
   "caveats": {
     "keepInSync": "网关／代理必须保持同步：这些限制构成上游网关或代理必须镜像的清单。它们不在此处强制执行，更改限制需在提供商进行，而非在本控制台。",
     "managedAgents": "Managed Agents 不在 Rate Limits API 的覆盖范围内。其限制属于已记录的缺口，而非数值为零——之所以不显示 Managed Agents 行，是因为 API 并未报告该项。"

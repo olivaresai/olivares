@@ -1,6 +1,7 @@
 {
   "title": "Kill switch",
   "subtitle": "Arresto di emergenza per tutti gli agenti AI di questo server, o per un solo agente. Fermare richiede un clic; riavviare richiede l'approvazione di due account utente diversi e una revisione successiva.",
+  "subtitleNoStop": "Arresto di emergenza per tutti gli agenti AI di questo server, o per un solo agente. Fermare richiede il ruolo di amministratore.",
   "banner": {
     "estateTitle": "TUTTI GLI AGENTI SONO FERMI",
     "estateBody": "Gli agenti non possono agire finché due account utente non approvano il riavvio: le sessioni terminano; chiamate agli strumenti, MCP, pianificazioni, voce, chiamate ai modelli, deployment e consegna degli eventi vengono rifiutati.",

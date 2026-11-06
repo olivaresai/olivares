@@ -104,10 +104,10 @@ question qui compte.
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` fonctionne hors ligne et résout la licence selon la même priorité que le moteur. Il
+Sur l'hôte du moteur et avec `--data-dir`, `status` fonctionne hors ligne et résout la licence selon la même priorité que le moteur. Il
 répond donc à la question qui compte — *quelle licence est réellement en vigueur* — plutôt
 qu'à « existe-t-il un fichier ? ». Il indique la source résolue, le titulaire, l'offre et la
-date d'expiration.
+date d'expiration. Connecté à un moteur situé sur un autre hôte, il interroge ce moteur.
 
 Exécutez-le après chaque installation et après le retrait d'un override.
 
@@ -168,6 +168,13 @@ tout module nécessitant un secret ou une revue au lieu de l'activer à moitié.
 `olivares enterprise status` indique ce qui est actif. Ces commandes existent **uniquement
 dans le binaire commercial** — si `olivares enterprise` n'est pas une commande, vous utilisez
 encore le build Community et le remplacement ci-dessus n'a pas encore eu lieu.
+
+La console fait de même pour chaque famille : la vue **Édition et licence** liste chaque famille
+avec le nombre de ses modules activés. **Activer** montre le même diff avant de l'appliquer, et
+**Désactiver** nomme les modules qui s'arrêtent. Une famille que votre licence n'inclut pas garde
+**Activer** désactivé et le dit : *Cette licence n'inclut pas* la famille. Le moteur vérifie à
+nouveau la licence à chaque activation, depuis la console ou la CLI ; une licence expirée ou
+absente ne peut donc activer aucune famille.
 
 :::caution[Sauvegardez avant le remplacement]
 Le remplacement porte sur un binaire, pas sur vos données — mais effectuez tout de même la

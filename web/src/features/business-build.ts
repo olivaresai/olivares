@@ -12,6 +12,9 @@ import census from './route-census.json' with { type: 'json' }
  */
 export const BUSINESS_BUILD = FEATURE_EXTENSIONS.length > 0
 
+/** About Business: where Community points for what only Business includes. */
+export const BUSINESS_URL = 'https://olivares.ai/business'
+
 /** The census paths as patterns: a `$param` segment stands for any one segment. A Business
  * console serves them (or has a real 404 where it does not): only Community says "not here". */
 const BUSINESS_PATTERNS = BUSINESS_BUILD

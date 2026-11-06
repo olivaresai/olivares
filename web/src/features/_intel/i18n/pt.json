@@ -1,0 +1,122 @@
+{
+  "severity": {
+    "label": "Gravidade",
+    "info": "Informação",
+    "low": "Baixa",
+    "medium": "Média",
+    "high": "Alta",
+    "critical": "Crítica"
+  },
+  "outcome": {
+    "pass": "Passou",
+    "fail": "Falhou",
+    "error": "Erro",
+    "skipped": "Ignorado",
+    "blocked": "Bloqueado",
+    "refused": "Recusado",
+    "complied": "Cumpriu",
+    "leaked": "Divulgado"
+  },
+  "verdict": {
+    "allow": "Permitir",
+    "flag": "Sinalizar",
+    "block": "Bloquear",
+    "detective": "Detetivo",
+    "enforced": "Imposto"
+  },
+  "integrity": {
+    "verified": "Integridade verificada",
+    "failed": "Integridade falhada",
+    "unavailable": "Assinatura indisponível",
+    "pending": "Ainda não atestado",
+    "tamperEvident": "Com deteção de adulteração",
+    "chainOk": "Cadeia de hash consistente",
+    "chainBroken": "Cadeia interrompida na seq {{seq}}",
+    "reverifyHint": "Cada evento transporta seq · hash · prev_hash para que um leitor possa voltar a verificar a ligação offline.",
+    "attestedSeq": "Atestado até à seq {{seq}}",
+    "headSeq": "Última seq do registo {{seq}}"
+  },
+  "consent": {
+    "registered": "Registado",
+    "authorized": "Autorizado",
+    "revoked": "Revogado",
+    "notAuthorizedHint": "Registar não é consentimento — uma execução fica bloqueada até que um alvo seja autorizado."
+  },
+  "risk": {
+    "unacceptable": "Inaceitável",
+    "high": "Alto",
+    "limited": "Limitado",
+    "minimal": "Mínimo",
+    "suggested": "Sugerido",
+    "approved": "Aprovado",
+    "overridden": "Substituído"
+  },
+  "control": {
+    "satisfied": "Satisfeito",
+    "by_design": "Pronto por conceção",
+    "partial": "Parcial",
+    "gap": "Lacuna",
+    "unmapped": "Não mapeado",
+    "operational": "Operacional",
+    "architectural": "Arquitetónico"
+  },
+  "hash": {
+    "fingerprint": "Impressão digital",
+    "hint": "Uma impressão digital unidirecional — nunca um conteúdo (dados mínimos).",
+    "copy": "Copiar valor completo",
+    "copied": "Copiado"
+  },
+  "notices": {
+    "truncated": "Dados parciais",
+    "truncatedHint": "Este agregado atingiu o limite de análise — é parcial, não um total exato.",
+    "truncatedBrief": "limite de análise atingido",
+    "seam": "Ainda não ligado",
+    "seamBody": "Contrato declarado — o(a) {{what}} ainda não está ligado(a) ao backend, pelo que isto mostra a forma declarada, não dados em direto.",
+    "minimalData": "Apenas agregados e metadados — sem prompts, saídas nem segredos.",
+    "declared": "Referência declarada",
+    "noConnector": "Sem conector — ausente, não zero.",
+    "listTruncated": "Carregadas {{n}} linhas; existem mais",
+    "listTruncatedHint": "O motor devolveu uma página, não o conjunto completo. O total NÃO PODE ser inferido a partir das linhas carregadas, e podem existir linhas que não são mostradas.",
+    "listTruncatedBrief": "uma página carregada; existem mais"
+  },
+  "badges": {
+    "signed": "Assinado",
+    "linked": "Cadeia de custódia",
+    "governed": "Governado",
+    "ungoverned": "Não governado",
+    "approximate": "Aproximado",
+    "attributed": "Atribuído",
+    "isolated": "Isolado",
+    "destroyed": "Destruído"
+  },
+  "timeline": {
+    "title": "Linha cronológica reconstruída",
+    "empty": "Sem eventos no intervalo.",
+    "emptyHint": "Os eventos de evidência aparecem aqui à medida que o motor os regista. Alargue o intervalo de tempo para chegar a eventos mais antigos.",
+    "seq": "seq"
+  },
+  "consumption": {
+    "projected": "projetado {{pct}}",
+    "label": "Consumo do orçamento",
+    "valueText": "{{consumed}} consumido, {{projected}} projetado"
+  },
+  "disclaimers": {
+    "aimsPack": "Pacote preliminar de preparação para certificação ISO/IEC 42001:2023, baseado na avaliação atual do Olivares AI e no contexto fornecido pelo operador. Todos os artefactos são rascunhos; uma pessoa competente deve revê-los antes da submissão a um organismo de certificação, auditor ou comprador. Este pacote não fornece certificação, garantia de conformidade nem aconselhamento jurídico. A certificação exige um organismo acreditado (ISO/IEC 42006:2025). O estado dos controlos reflete as evidências atuais do tenant; as lacunas continuam por satisfazer.",
+    "report": "Mapeamento técnico do estado dos controlos, derivado de evidências observadas na plataforma. NÃO é uma certificação e NÃO é aconselhamento jurídico."
+  },
+  "gate": {
+    "approved": "Aprovado",
+    "pending": "Pendente",
+    "rejected": "Rejeitado",
+    "expired": "Expirado",
+    "no_gate": "Sem ponto de aprovação",
+    "not_required": "Não necessário",
+    "approvedHint": "A governação aprovou este plano — execute para prosseguir.",
+    "pendingHint": "A aguardar uma decisão de governação (recusa por predefinição).",
+    "rejectedHint": "A governação rejeitou este plano — peça novamente com um plano novo.",
+    "expiredHint": "A aprovação expirou — planeie novamente e peça de novo.",
+    "no_gateHint": "Nenhum ponto de aprovação está configurado — a ação não pode prosseguir.",
+    "not_requiredHint": "Não é necessária aprovação para esta ação.",
+    "displayNotice": "O estado do ponto de aprovação é uma decisão comunicada, mostrada apenas aqui. A autorização é imposta no servidor; a consola nunca concede acesso a partir deste valor."
+  }
+}

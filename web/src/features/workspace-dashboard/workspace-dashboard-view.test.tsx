@@ -132,7 +132,7 @@ describe('WorkspaceDashboardView', () => {
   it('offers a next action when no workspace is selected', async () => {
     show()
     expect(
-      await screen.findByRole('link', { name: 'Open inventory' }),
+      await screen.findByRole('link', { name: 'Open discovered resources' }),
     ).toHaveAttribute('href', '/inventory')
     expect(screen.getByText(/or go to the tenant-wide inventory/)).toBeVisible()
   })
@@ -146,25 +146,17 @@ describe('WorkspaceDashboardView', () => {
     expect(await screen.findByText('7')).toBeInTheDocument()
   })
 
-  it('shows the contents read only to principals who hold the route tier', async () => {
+  // The engine's record kinds ("Sessions claim", "Sessions work outbox") are operator detail,
+  // read in the Estate view. This screen is for what a person owns: even an admin never sees them.
+  it('does not list the engine record kinds, even to an admin', async () => {
+    granted.add('tenant:admin')
     useWorkspaceStore.getState().setActiveWorkspace('w1')
-    const viewer = show()
+    show()
     expect(await screen.findByText('7')).toBeInTheDocument()
     expect(
       screen.queryByRole('region', { name: 'Workspace contents' }),
     ).not.toBeInTheDocument()
     expect(contentsMock).not.toHaveBeenCalled()
-    viewer.unmount()
-
-    granted.add('tenant:admin')
-    show()
-    expect(
-      await screen.findByRole('row', { name: 'Agent 7' }),
-    ).toBeInTheDocument()
-    expect(contentsMock).toHaveBeenCalledWith(
-      'w1',
-      expect.objectContaining({ tenant: 't1' }),
-    )
   })
 
   /**
@@ -187,7 +179,7 @@ describe('WorkspaceDashboardView', () => {
     expect(screen.queryByText('0')).not.toBeInTheDocument()
   })
 
-  it('mounts the agents truncation badge from the loaded rows only when has_more is true', async () => {
+  it('ends the agents preview with Show more when has_more is true', async () => {
     useWorkspaceStore.getState().setActiveWorkspace('w1')
     agentsMock.mockResolvedValue({
       items: Array.from({ length: 7 }, (_, i) => ({
@@ -200,11 +192,11 @@ describe('WorkspaceDashboardView', () => {
     })
     show()
     expect(
-      await screen.findByText(/Loaded 7 rows; there are more/i),
-    ).toHaveAttribute('title', expect.stringMatching(/Use View all/))
+      await screen.findByRole('link', { name: 'Show more' }),
+    ).toHaveAttribute('href', '/inventory')
   })
 
-  it('mounts the groups truncation badge from the loaded rows only when has_more is true', async () => {
+  it('ends the groups preview with Show more when has_more is true', async () => {
     useWorkspaceStore.getState().setActiveWorkspace('w1')
     groupsMock.mockResolvedValue({
       items: Array.from({ length: 6 }, (_, i) => ({
@@ -217,8 +209,8 @@ describe('WorkspaceDashboardView', () => {
     })
     show()
     expect(
-      await screen.findByText(/Loaded 6 rows; there are more/i),
-    ).toBeVisible()
+      await screen.findByRole('link', { name: 'Show more' }),
+    ).toHaveAttribute('href', '/console?tab=scopes')
   })
 
   it('keeps eleven complete rows when has_more is false instead of silently slicing to ten', async () => {
@@ -234,7 +226,9 @@ describe('WorkspaceDashboardView', () => {
     })
     show()
     expect(await screen.findByText('Agent 10')).toBeVisible()
-    expect(screen.queryByText(/there are more/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Show more' }),
+    ).not.toBeInTheDocument()
   })
 
   /**
@@ -278,9 +272,12 @@ describe('WorkspaceDashboardView', () => {
         has_more: true,
       })
       const page = show()
+      expect(await screen.findByText('Agent 6')).toBeVisible()
       expect(
-        await screen.findByText(/Loaded 7 rows; there are more/i),
-      ).toBeVisible()
+        screen.queryByRole('link', { name: 'Show more' }),
+      ).not.toBeInTheDocument()
+      // A capped list still says it is not whole, with no link to follow.
+      expect(screen.getByText('Not every agent is shown.')).toBeInTheDocument()
       expect(screen.queryByTitle(/View all|inventory/i)).not.toBeInTheDocument()
       expect(
         screen.getAllByRole('link').map((a) => a.getAttribute('href')),
@@ -302,7 +299,7 @@ describe('WorkspaceDashboardView', () => {
     useWorkspaceStore.getState().setActiveWorkspace('w1')
     show()
     expect(
-      await screen.findByRole('link', { name: 'Open inventory' }),
+      await screen.findByRole('link', { name: 'Open discovered resources' }),
     ).toHaveAttribute('href', '/inventory')
     expect(
       screen.getAllByRole('link').map((a) => a.getAttribute('href')),

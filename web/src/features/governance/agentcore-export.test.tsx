@@ -35,6 +35,7 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  dismiss: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
@@ -70,6 +71,10 @@ import { AgentCoreExportView } from './agentcore-export-view'
 import AgentCoreExportRoute from './agentcore-export-route'
 import GovernanceView from './governance-view'
 import { FEATURE_VIEWS } from '@/features/registry'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 /**
  * The bytes the engine's own tests POST at the real route, read from the SAME
@@ -497,7 +502,7 @@ describe('AgentCore export — the frontiers', () => {
     expect(http.postWithMeta).toHaveBeenCalledTimes(1)
   })
 
-  it('reports a 501 as a capability this deployment did not wire, naming the variable', async () => {
+  it('reports a 501 as a capability this deployment did not wire, without the host variable', async () => {
     http.post.mockRejectedValue(
       new ApiError(
         501,
@@ -513,8 +518,9 @@ describe('AgentCore export — the frontiers', () => {
       await screen.findByText(/not set up in this deployment/i),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('OLIVARES_AGENTCORE_EXPORT_CONFIG'),
+      screen.getByText('An admin turns it on in the server configuration.'),
     ).toBeInTheDocument()
+    expect(screen.queryByText(/OLIVARES_/)).not.toBeInTheDocument()
     // Not an error, not a permission wall, not a blank screen.
     expect(toast.error).not.toHaveBeenCalled()
     expect(screen.queryByText(/not authorized/i)).not.toBeInTheDocument()

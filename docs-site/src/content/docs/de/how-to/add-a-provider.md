@@ -134,6 +134,19 @@ scheitert.
 
 Für `anthropic`, `openai` und `xai` akzeptiert OpenCode nur den eigenen Endpunkt des Anbieters: Lassen Sie `base_url` leer. Verwenden Sie `codex` für ein `openai_compatible`-Gateway und `codex` oder `opencode` für `ollama` sowie für einen lokalen `openai_compatible`-Server, dessen `base_url` einfaches `http` an einer Loopback- oder privaten Adresse ist, etwa `http://127.0.0.1:8080/v1` (vLLM, llama.cpp). Die `base_url` enthält `/v1`.
 
+Gemini CLI verwendet einen `gemini`-Anbieterschlüssel an der eigenen API-Adresse
+von Google; es akzeptiert keinen eigenen Endpunkt. Installieren Sie es unter
+**KI-Werkzeuge** oder mit `olivares tool install gemini`. Das offizielle portable
+Bundle benötigt Node.js 20 oder neuer auf dem Engine-Host. Beginnen Sie mit einem
+API-Schlüssel. Seit dem 18. Juni 2026 funktioniert Gemini CLI mit einem bezahlten
+Gemini-API-Schlüssel oder einem Gemini-Code-Assist-Konto der Standard- oder
+Enterprise-Edition; kostenlose persönliche Google-Konten, Google AI Pro und Google
+AI Ultra funktionieren nicht mehr. Für ein Code-Assist-Google-Konto legen Sie ein
+Gemini-Profil an und verwenden `olivares tool login gemini --account <name>`; jedes
+Profil hat ein eigenes natives `.gemini`-Authentifizierungs-Home. API-Schlüssel-Profile
+lehnen widersprüchliche native Google-, Vertex- oder Gateway-Einstellungen ab, statt
+eine andere Identität zu wählen.
+
 ## 4. Die erste Sitzung starten
 
 ```sh
@@ -175,6 +188,18 @@ Profil, das stillschweigend nichts mehr benennt, läse sich als ein Profil, das 
 konfiguriert hat. Ein Widerruf hier widerruft den Schlüssel nicht beim Anbieter; das
 tun Sie in dessen eigener Konsole.
 
+## Eine lokale Modell-Laufzeit auf dem Olivares Server
+
+Auf dem Olivares Server (der Appliance, SELinux enforcing) erreicht eine Sitzung, die an einen Anbieter auf einer Loopback-Adresse gebunden ist, ihn nur auf einem Port, den die Richtlinie für lokale Modell-Laufzeiten kennzeichnet: 11434 (Ollama), 1234 (LM Studio), 8000 (vLLM) und 8080 (`llama-server` von llama.cpp). Für eine Laufzeit auf einem anderen Port kennzeichnen Sie ihn einmalig als root:
+
+```bash
+semanage port -a -t olivares_model_runtime_port_t -p tcp 11435
+# If the base policy already labels that port (semanage port -l | grep -w 11435), modify it instead:
+semanage port -m -t olivares_model_runtime_port_t -p tcp 11435
+```
+
+Bis dahin startet die Sitzung nicht, und ihre Fehlermeldung nennt diesen Befehl.
+
 ## Was die Engine ablehnt, und warum
 
 | Sie sehen | Es bedeutet |
@@ -197,6 +222,7 @@ und benötigt keine der beiden Variablen.
 
 ## Verwandt
 
+- [Anbieter und Tools](/reference/providers-and-tools/)
 - [Eine Anbieter-Session betreiben](/de/how-to/operate-provider-sessions/)
 - [Ihre erste Stunde](/de/how-to/first-hour/)
 - [CLI-Referenz](/de/reference/cli/)

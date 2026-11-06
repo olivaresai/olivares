@@ -8,7 +8,7 @@ import {
   type BrowserContext,
   type Page,
 } from '@playwright/test'
-import { journeyNowLink } from './browser-session'
+import { journeyShellLink } from './browser-session'
 
 // The demo estate asks for no step-up (policy `none`). To photograph the step-up notice a
 // password session sees under an AAL3 policy, the policy has to be `passkey`. The engine
@@ -98,7 +98,7 @@ export class Aal3Policy {
     await page.locator('#email').fill(this.demo.email)
     await page.locator('#password').fill(this.demo.password)
     await page.getByRole('button', { name: /^sign in$/i }).click()
-    await expect(journeyNowLink(page)).toBeVisible({ timeout: 60_000 })
+    await expect(journeyShellLink(page)).toBeVisible({ timeout: 60_000 })
 
     await page.goto(SETTINGS)
     // An estate that already asks for step-up is not this harness's to change, and restore()

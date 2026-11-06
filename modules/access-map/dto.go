@@ -168,7 +168,10 @@ type diffResponse struct {
 	UnexpectedCount    int        `json:"unexpected_count"`
 	UnusedCount        int        `json:"unused_count"`
 	InventoryCount     int        `json:"inventory_count"`
-	Truncated          bool       `json:"truncated,omitempty"`
+	// GrantsDeclared is false when the tenant has no grant at all: every observed
+	// access is then unexpected by construction, not a violation of a rule.
+	GrantsDeclared bool `json:"grants_declared"`
+	Truncated      bool `json:"truncated,omitempty"`
 }
 
 func toDiffResponse(d PrivilegeDiff) diffResponse {
@@ -184,6 +187,7 @@ func toDiffResponse(d PrivilegeDiff) diffResponse {
 	out.UnexpectedCount = len(out.UnexpectedAccesses)
 	out.UnusedCount = len(out.UnusedGrants)
 	out.InventoryCount = len(d.InventoryGrants)
+	out.GrantsDeclared = d.GrantsDeclared
 	out.Truncated = d.Truncated
 	return out
 }

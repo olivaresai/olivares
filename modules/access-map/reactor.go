@@ -51,6 +51,15 @@ func (m *Module) Ingest(ctx context.Context, tenantRef string, edge sdkmodel.Edg
 
 	var out model.AccessEdge
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		if edge.Source == sdkmodel.SignalSessionLaunch {
+			session, found, ambiguous, err := sessionByExternalID(ctx, sc, edge.OriginRef)
+			if err != nil {
+				return err
+			}
+			if !found || ambiguous || session.State != model.SessionRunning || session.EndedAt != nil {
+				return nil
+			}
+		}
 		attr, err := resolveOrigin(ctx, sc, edge)
 		if err != nil {
 			return err
@@ -116,6 +125,9 @@ func resolveResource(ctx context.Context, sc store.Scope, edge sdkmodel.EdgeObse
 	if edge.ResourceRef == "" || edge.ResourceKind == "" {
 		return "", nil
 	}
+	if edge.Source == sdkmodel.SignalSessionLaunch && edge.ResourceKind == "resource" {
+		return foResource(ctx, sc, "folder", edge.ResourceRef, edge.Labels[sdkmodel.LabelProjectFolder])
+	}
 	return foResource(ctx, sc, edge.ResourceKind, edge.ResourceRef, resourceName(edge.ResourceKind, edge.ResourceRef))
 }
 
@@ -127,6 +139,8 @@ func resolveResource(ctx context.Context, sc store.Scope, edge sdkmodel.EdgeObse
 // source (otel, pgAudit, CloudTrail, eBPF) is observed.
 func deriveObservedPermitted(source sdkmodel.SignalSource) (observed, permitted bool) {
 	switch source {
+	case sdkmodel.SignalSessionLaunch:
+		return false, true
 	case sdkmodel.SignalPolicy, sdkmodel.SignalScopedGrant:
 		// SignalScopedGrant: a FASE X source→scope binding projected as a
 		// PERMITTED edge — like an IdP-derived policy grant it is declared (not
@@ -168,6 +182,9 @@ func edgeMetadata(edge sdkmodel.EdgeObservation, attr attribution) map[string]an
 	}
 	if edge.ResourceRef != "" {
 		meta["resource_ref"] = edge.ResourceRef
+	}
+	if edge.Source == sdkmodel.SignalSessionLaunch && edge.ResourceKind == "resource" && edge.Labels[sdkmodel.LabelProjectFolder] != "" {
+		meta["resource_ref"] = edge.Labels[sdkmodel.LabelProjectFolder]
 	}
 	if edge.ToolRef != "" {
 		meta["tool_ref"] = edge.ToolRef

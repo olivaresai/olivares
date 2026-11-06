@@ -226,3 +226,16 @@ func TestIdentityOperationDescriptionsQualifyEditionUnavailability(t *testing.T)
 		})
 	}
 }
+
+func TestModuleOperationRequiredPermissionStaysOne(t *testing.T) {
+	op := moduleOperation(moduleRoute{ns: "policy", perm: "policy:write", documentation: &ModuleOperationDocumentation{Extensions: map[string]any{"x-also-requires-permission": []any{"policy:read"}}}})
+	if got := op["x-required-permission"]; got != "policy:write" {
+		t.Fatalf("x-required-permission = %v, want the route's one permission", got)
+	}
+	if also, _ := op["x-also-requires-permission"].([]any); len(also) != 1 || also[0] != "policy:read" {
+		t.Fatalf("x-also-requires-permission = %v, want [policy:read]", op["x-also-requires-permission"])
+	}
+	if summary := op["summary"]; summary != "policy module route (requires policy:write and policy:read)" {
+		t.Fatalf("summary = %v, want the joined human text", summary)
+	}
+}

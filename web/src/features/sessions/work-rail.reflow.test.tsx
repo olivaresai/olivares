@@ -60,16 +60,19 @@ function renderRow() {
   }
 }
 
-describe('a rail row is two short lines', () => {
-  it('the title is cut to one line and its whole text stays on the hover', () => {
+describe('a rail row leads with its title', () => {
+  // THE TITLE FIRST, ON UP TO TWO LINES (#3970): the badge, the folder and the state used
+  // to come first and left the title about 22 characters, even at 1920 px.
+  it('the title takes up to two lines and its whole text stays on the hover', () => {
     const { name, nameEl, rowEl } = renderRow()
     expect(nameEl).toHaveTextContent(name)
     expect(nameEl.getAttribute('title')).toContain(name)
     expect(classes(nameEl)).toEqual(
-      expect.arrayContaining(['truncate', 'min-w-0']),
+      expect.arrayContaining(['line-clamp-2', 'min-w-0']),
     )
+    expect(classes(nameEl)).not.toContain('truncate')
     expect(classes(rowEl)).toEqual(
-      expect.arrayContaining(['h-14', 'min-[761px]:h-12']),
+      expect.arrayContaining(['min-h-14', 'min-[761px]:min-h-12']),
     )
     expect(classes(rowEl)).not.toContain('flex-wrap')
   })
@@ -84,12 +87,51 @@ describe('a rail row is two short lines', () => {
     expect(classes(time)).not.toContain('truncate')
   })
 
-  // The order: the place, the state and its time on the first line, the
-  // name under them.
-  it('reads the state, then its time, then the name under them', () => {
+  // The order: the name, then the state and its time on a small line under it.
+  it('reads the name, then the state, then its time', () => {
     const { rowEl, nameEl, state, time } = renderRow()
     const order = Array.from(rowEl.querySelectorAll('*'))
+    expect(order.indexOf(nameEl)).toBeLessThan(order.indexOf(state))
     expect(order.indexOf(state)).toBeLessThan(order.indexOf(time))
-    expect(order.indexOf(time)).toBeLessThan(order.indexOf(nameEl))
+  })
+
+  // A FACT EVERY ROW SHARES IS SAID BY NONE (#3970): in a list where every session runs
+  // the same tool in the same folder, the mark and the folder repeat one fact per row.
+  it('drops the tool mark and the folder a whole list shares, and keeps them when rows differ', () => {
+    const at = (ref: string, project: string) =>
+      mergeSessions(
+        [
+          live({
+            session_ref: ref,
+            live_ref: `lr-${ref}`,
+            project,
+            provider: 'claude-code',
+            summary: ref,
+          }),
+        ],
+        [],
+      )[0]
+    const props = {
+      selected: null,
+      onOpen: vi.fn(),
+      pinned: new Set<string>(),
+      onTogglePin: vi.fn(),
+    }
+    const view = render(
+      <WorkRail
+        sessions={[at('a', 'workspace'), at('b', 'workspace')]}
+        {...props}
+      />,
+    )
+    expect(screen.queryAllByTestId('tool-mark')).toHaveLength(0)
+    expect(screen.queryAllByTestId('rail-row-place')).toHaveLength(0)
+    view.unmount()
+    render(
+      <WorkRail
+        sessions={[at('a', 'workspace'), at('b', 'billing')]}
+        {...props}
+      />,
+    )
+    expect(screen.getAllByTestId('rail-row-place')).toHaveLength(2)
   })
 })

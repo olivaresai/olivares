@@ -18,10 +18,12 @@ import (
 	"io/fs"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/release"
 	coreconfine "github.com/olivaresai/olivares/core/runtime/confine"
@@ -145,6 +147,9 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	// The edition and this host's license state are read when --version is asked, not
+	// on every command.
+	root.SetVersionTemplate("{{.DisplayName}} version {{versionLine}}\n")
 	// Exit contract: a flag-parse failure is a USAGE error — carry the
 	// code so scripts can distinguish a typo from a real failure. Cobra prints
 	// the usage hint itself; the wrapper only classifies.
@@ -163,7 +168,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().VarP(&outputFlagValue{value: "text"}, "output", "o",
 		"global output format: text or json (report commands keep json unless -o is given)")
 	_ = root.RegisterFlagCompletionFunc("output", completeOutput)
-	root.AddCommand(newUICmd(), newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newVaultCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newAdminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newPlaceInstallManifestCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newWorkspacesCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
+	root.AddCommand(newUICmd(), newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newHostCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newAskCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newVaultCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newAdminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newManCmd(), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newPlaceInstallManifestCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newWorkspacesCmd(), newNetfolderCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
 	root.AddCommand(newAccountCmd(), newModulesCmd())
 	// The observe-and-report lane: one top-level command per module namespace it
 	// covers, named after the namespace so `olivares <ns>` and /v1/m/<ns>/ are the
@@ -225,9 +230,10 @@ var commandGroups = map[string]string{
 	"modules": "manage",
 	"skills":  "beta",
 	"wiki":    "start",
+	"ask":     "start",
 	"ui":      "start", "quickstart": "start", "login": "start", "tool": "start", "session": "start", "status": "start", "doctor": "start",
 	"auth": "manage", "logout": "manage", "users": "manage", "members": "manage", "tenants": "manage", "workspaces": "manage", "tokens": "manage", "provider": "manage", "mcp": "manage", "audit": "manage", "license": "manage", "agent": "manage",
-	"serve": "engine", "setup": "engine", "config": "engine", "db": "engine", "migrate": "engine", "first-boot": "engine", "readyz": "engine", "keys": "engine", "dr": "engine", "support": "engine", "upgrade": "engine", "uninstall": "engine", "version": "engine", "completion": "engine", "superadmin": "engine", "admin": "engine", "openapi": "engine",
+	"serve": "engine", "setup": "engine", "config": "engine", "db": "engine", "migrate": "engine", "first-boot": "engine", "readyz": "engine", "keys": "engine", "dr": "engine", "support": "engine", "upgrade": "engine", "uninstall": "engine", "version": "engine", "completion": "engine", "superadmin": "engine", "admin": "engine", "openapi": "engine", "netfolder": "engine", "host": "engine",
 	"connector": "beta", "collector": "beta", "codex": "beta", "grok": "beta", "eventing": "beta", "sources": "beta",
 	"secrets": "beta", "work": "beta", "message": "beta", "hookpep": "beta", "claude-hook": "beta", "codex-hook": "beta",
 	"grok-hook": "beta", "hooks": "beta", "evals": "beta", "ddil": "beta", "compliance": "beta", "models": "beta",
@@ -349,7 +355,11 @@ func newExitCodesTopic() *cobra.Command {
 			" 11  session --wait: waiting for approval\n" +
 			" 12  session --wait: run timed out\n" +
 			" 13  session --wait: run cost cap reached\n" +
-			" 14  session --wait: another limit or stop ended the run",
+			" 14  session --wait: another limit or stop ended the run\n" +
+			" 15  the engine refused to boot on a configuration or store only an\n" +
+			"     operator can change (a store a newer release migrated; a\n" +
+			"     PostgreSQL package upgrade without --admin-dsn); systemd does not\n" +
+			"     restart it",
 	}
 }
 
@@ -358,8 +368,9 @@ func newVersionCmd() *cobra.Command {
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "version",
 		Short:       "Print the olivares version, build metadata and FIPS 140-3 mode",
-		Long: "version prints the binary's semantic version, git commit, build date, OS/arch and Go\n" +
-			"runtime, its FIPS 140-3 mode (self-reported, not a validation claim), and the origins +\n" +
+		Long: "version prints the binary's semantic version, its edition (Community or Business; a Business\n" +
+			"build adds this host's license state, as the offline `license status` reports it), git commit,\n" +
+			"build date, OS/arch and Go runtime, its FIPS 140-3 mode (self-reported, not a validation claim), and the origins +\n" +
 			"fingerprints of the independent license and OTA verification keys compiled into it.",
 		Example: "  olivares version",
 		Args:    cobra.NoArgs,
@@ -392,8 +403,8 @@ func newVersionCmd() *cobra.Command {
 			}
 			if err := renderOut(cmd, func(out io.Writer) error {
 				_, err := fmt.Fprintf(out,
-					"olivares %s (commit %s, built %s, %s/%s, %s, fips140=%s module=%s, license-key=%s, ota-key=%s)\n",
-					info.Version, info.Commit, info.Date, info.OS, info.Arch, info.Go,
+					"olivares %s %s (commit %s, built %s, %s/%s, %s, fips140=%s module=%s, license-key=%s, ota-key=%s)\n",
+					info.Version, editionSummary(), info.Commit, info.Date, info.OS, info.Arch, info.Go,
 					info.FIPS, info.Module, info.LicenseKey, info.OTAKey)
 				return err
 			}, info); err != nil {
@@ -421,6 +432,65 @@ type versionOutput struct {
 	// Edition is what `upgrade` asks of a binary it replaces: Business X.Y is cut from the
 	// same version as Community X.Y, so the version alone cannot say which one is installed.
 	Edition string `json:"edition"`
+}
+
+// versionLine is the --version text after "version". The stamped values reach it as
+// data, never as template text.
+func init() {
+	cobra.AddTemplateFunc("versionLine", func() string {
+		return fmt.Sprintf("%s %s (commit %s, built %s)", version, editionSummary(), commit, date)
+	})
+}
+
+// unitLicenseDataDir is where the packaged unit keeps its data (serve --data-dir in
+// the systemd and OpenRC units); tests point it elsewhere.
+var unitLicenseDataDir = defaultUnitDataDir
+
+// editionSummary is what both version lines print after the version: the edition and,
+// on a Business build, the state of the license on this host.
+func editionSummary() string {
+	if thisEdition.name == "community" {
+		return editionLabel(thisEdition.name)
+	}
+	return editionLabel(thisEdition.name) + ", license " + localLicenseState()
+}
+
+// localLicenseState is the offline `license status` word for the license on this host:
+// valid, grace or expired; none; invalid; or unknown when its source, its data directory
+// or a verification key is missing or unreadable. `license status` says why.
+//
+// With no OLIVARES_DATA_DIR and no license source in the account's data directory, it
+// reads the packaged unit's directory, where the documented install puts the license.
+// A shell the unit's 0750 directory refuses gets unknown, never none.
+func localLicenseState() string {
+	dir, err := defaultDataDir()
+	src := licenseSource{Kind: licenseSourceNone}
+	if err == nil {
+		src, err = resolveLicense("", dir, osGetenv)
+	}
+	if src.Kind == licenseSourceNone && envconfig.Get("OLIVARES_DATA_DIR") == "" {
+		dir = unitLicenseDataDir
+		src, err = resolveLicense("", dir, osGetenv)
+	}
+	if err != nil {
+		return "unknown"
+	}
+	if src.Blob == "" {
+		return "none"
+	}
+	kr, err := licenseKeyringForDataDir(dir)
+	if err != nil {
+		return "invalid"
+	}
+	if kr.Len() == 0 {
+		return "unknown"
+	}
+	now := time.Now().UTC()
+	lic, err := kr.Verify(src.Blob, now)
+	if err != nil {
+		return "invalid"
+	}
+	return string(lic.Status(now))
 }
 
 // keyDomainCollisionWarning reports, AT RUNTIME, that this binary was built with

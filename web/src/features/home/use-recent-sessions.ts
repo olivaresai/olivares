@@ -13,7 +13,7 @@ import { currentAnswer } from '@/features/executive/derive'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
 import { mergeSessions } from '@/features/sessions/provenance'
-import { dayIsFloor } from './now-sessions'
+import { dayIsFloorOf } from './now-sessions'
 
 /** How many runs are read for the recent sessions (Now shows the newest few). */
 const RECENT_RUN_PARAMS = { limit: 30 } as const
@@ -68,15 +68,8 @@ export function useRecentSessions() {
   // The minute clock moves "today" past midnight without a reload.
   const now = useMinuteClock()
   // A page cut short hides a day's sessions only if all it holds is from that day on.
-  const activity = {
-    live: (liveAnswer?.items ?? []).map((l) => Date.parse(l.last_event_at)),
-    runs: (runsAnswer?.items ?? []).map((r) =>
-      Date.parse(r.last_activity_at ?? r.started_at ?? r.created_at ?? ''),
-    ),
-  }
   const floor = (daysAgo: number) =>
-    dayIsFloor(liveAnswer?.has_more, activity.live, now, daysAgo) ||
-    dayIsFloor(runsAnswer?.has_more, activity.runs, now, daysAgo)
+    dayIsFloorOf(liveAnswer, runsAnswer, now, daysAgo)
   return {
     canSessions,
     canRuns,

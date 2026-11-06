@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -191,6 +192,88 @@ func TestPresetProbeOpenRouterVerifiesKeyBeforeSavingPublicModels(t *testing.T) 
 					}
 				}
 			})
+		}
+	}
+}
+
+// A listed model is not evidence that a coding agent can use its tools.
+func TestProviderDeepProbeQualifiesListedModel(t *testing.T) {
+	for _, selected := range []string{"", "removed-model"} {
+		t.Run("unlisted default="+selected, func(t *testing.T) {
+			var calls []presetProbeCall
+			p := presetProbe(http.StatusOK, `{"data":[{"id":"model-a"},{"id":"model-b"}]}`, &calls)
+			got, err := p.Probe(t.Context(), sessions.ProviderProbeRequest{
+				Kind: sessions.ProviderKindOpenAICompatible, BaseURL: "https://local.example/v1", Deep: true, Model: selected,
+			})
+			if err != nil || len(got.Models) != 2 || got.Capabilities == nil {
+				t.Fatalf("successful listing lost: result=%+v err=%v", got, err)
+			}
+			c := got.Capabilities
+			if len(calls) != 1 || c.Tools || c.Streaming || c.Usage || !strings.Contains(c.Detail, "default model") {
+				t.Fatalf("qualification without a listed default: calls=%d caps=%+v", len(calls), c)
+			}
+		})
+	}
+	for _, parser := range []bool{false, true} {
+		calls := 0
+		p := providerProbe{client: &http.Client{Transport: diagRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+			calls++
+			body := `{"data":[{"id":"local-model","max_model_len":8192}]}`
+			if !parser {
+				body = `{"data":[{"id":"local-model","max_model_len":"unknown","context_length":8192}]}`
+			}
+			status := 200
+			if r.Method == "POST" {
+				var req map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Fatal(err)
+				}
+				if req["model"] != "local-model" || req["max_tokens"].(float64) > 64 {
+					t.Fatalf("unbounded or wrong model: %v", req)
+				}
+				switch {
+				case req["tools"] != nil:
+					if !parser {
+						status = 400
+						body = `{"error":"auto tool choice requires parser"}`
+					} else {
+						body = `{"choices":[{"message":{"tool_calls":[{"type":"function","function":{"name":"olivares_probe","arguments":"{}"}}]}}]}`
+					}
+				case req["stream"] == true:
+					body = "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"}}]}\n\ndata: [DONE]\n\n"
+				default:
+					body = `{"choices":[{"message":{"content":"OK"}}],"usage":{"prompt_tokens":4,"completion_tokens":1,"total_tokens":5}}`
+				}
+			}
+			h := make(http.Header)
+			if strings.HasPrefix(body, "data:") {
+				h.Set("Content-Type", "text/event-stream")
+			}
+			return &http.Response{StatusCode: status, Header: h, Body: io.NopCloser(strings.NewReader(body))}, nil
+		})}}
+		var req sessions.ProviderProbeRequest
+		if err := json.Unmarshal([]byte(`{"Kind":"openai_compatible","BaseURL":"https://local.example/v1","Deep":true,"Model":"local-model"}`), &req); err != nil {
+			t.Fatal(err)
+		}
+		got, err := p.Probe(t.Context(), req)
+		b, _ := json.Marshal(got)
+		var result struct {
+			Capabilities *struct {
+				Tools      bool
+				Streaming  bool
+				Usage      bool
+				MaxContext int `json:"max_context"`
+			}
+		}
+		if err := json.Unmarshal(b, &result); err != nil {
+			t.Fatal(err)
+		}
+		if err != nil || calls != 4 || result.Capabilities == nil {
+			t.Fatalf("deep probe: calls=%d result=%s err=%v", calls, b, err)
+		}
+		c := result.Capabilities
+		if c.Tools != parser || !c.Streaming || !c.Usage || c.MaxContext != 8192 {
+			t.Fatalf("capabilities=%s", b)
 		}
 	}
 }

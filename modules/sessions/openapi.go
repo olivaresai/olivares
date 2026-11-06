@@ -57,9 +57,20 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 // sessionsResponses is the whole responses object of every sessions route
 // whose answers differ from the generic envelope.
 func sessionsResponses(method, pattern string) (map[string]any, bool) {
+	if pattern == "/git-attribution-settings" && (method == http.MethodGet || method == http.MethodPut) {
+		out := api.GenericModuleResponses()
+		out["200"] = oas.JSONRespSchema("Organization AI-assistance commit attribution", sessionsGitAttributionSchema())
+		return out, true
+	}
 	if pattern == "/limit-resume-settings" && (method == http.MethodGet || method == http.MethodPut) {
 		out := api.GenericModuleResponses()
 		out["200"] = oas.JSONRespSchema("The person's automatic usage-reset preference", sessionsClosureClosedObject(oas.Obj("automatic", oas.Obj("type", "boolean")), "automatic"))
+		return out, true
+	}
+
+	if pattern == "/personal-folders-settings" && (method == http.MethodGet || method == http.MethodPut) {
+		out := api.GenericModuleResponses()
+		out["200"] = oas.JSONRespSchema("Whether this organization gives each person a personal folder", sessionsClosureClosedObject(oas.Obj("enabled", oas.Obj("type", "boolean")), "enabled"))
 		return out, true
 	}
 
@@ -67,12 +78,15 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 		text := oas.Obj("type", "string")
 		row := sessionsClosureClosedObject(oas.Obj(
 			"ref", text, "title", text,
+			"monogram", oas.Obj("type", "string", "pattern", "^[A-Z]{1,2}$"),
+			"color", oas.Obj("type", "string", "pattern", "^#[0-9A-F]{6}$"),
 			"kind", oas.Obj("type", "string", "enum", oas.Enum(modelprovider.KindAnthropic, modelprovider.KindOpenAICompatible)),
 			"base_url", text, "models_url", text,
 			"auth", oas.Obj("type", "string", "enum", oas.Enum(string(modelprovider.AuthBearer), string(modelprovider.AuthAnthropicKey))),
 			"models", sessionsClosureClosedObject(oas.Obj("default", text)),
 			"docs_url", text, "key_url", text,
-		), "ref", "title", "kind", "base_url", "auth", "models", "docs_url")
+			"governed", oas.Obj("type", "boolean", "description", "The row registers the governed inference service, which no tool session uses."),
+		), "ref", "title", "monogram", "color", "kind", "base_url", "auth", "models", "docs_url")
 		responses := api.GenericModuleResponses()
 		responses["200"] = oas.JSONRespSchema("Vendor preset catalog", sessionsClosureClosedObject(oas.Obj(
 			"items", oas.Obj("type", "array", "items", row),
@@ -87,6 +101,14 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 		if method == http.MethodPost {
 			responses["409"] = oas.JSONResp("The setup command changed or is empty; review its current text and hash")
 		}
+		return responses, true
+	}
+	if method == http.MethodGet && pattern == "/workspaces/{ref}/files/archive" {
+		responses := api.GenericModuleResponses()
+		responses["200"] = oas.Obj("description", "The named entries as one zip",
+			"headers", oas.Obj(archiveSensitivityHeader, oas.Obj("description", "Comma-separated DLP classes found in the files of the zip, as the sensitivity labels of a single read; classes only, never matched values. Absent when none was found.", "schema", oas.Obj("type", "string"))),
+			"content", oas.Obj("application/zip", oas.Obj("schema", oas.Obj("type", "string", "format", "binary"))))
+		responses["413"] = oas.JSONResp("a file is over the workspace size limit, or the archive is over its size or entry ceiling")
 		return responses, true
 	}
 	if method == http.MethodGet && pattern == "/provider-profiles/{ref}/models" {
@@ -116,6 +138,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 	if responses, ok := sessionsRunFactsResponses(method, pattern); ok {
 		return responses, true
 	}
+	if responses, ok := sessionsRunUsageResponses(method, pattern); ok {
+		return responses, true
+	}
 	if responses, ok := sessionsRunAttachmentResponses(method, pattern); ok {
 		return responses, true
 	}
@@ -123,6 +148,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 		return responses, true
 	}
 	if responses, ok := sessionsProjectConfigResponses(method, pattern); ok {
+		return responses, true
+	}
+	if responses, ok := sessionsFolderCandidatesResponses(method, pattern); ok {
 		return responses, true
 	}
 	if responses, ok := sessionsPushResponses(method, pattern); ok {
@@ -138,11 +166,21 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 		)
 		return resp, true
 	}
-	if sessionsRunMarkRoute(method, pattern) {
-		// The caller's own snooze and done marks (run_mark.go): closed, like the pin's.
+	if pattern == "/live/by-id/{live_ref}/pin" && (method == http.MethodPost || method == http.MethodDelete) {
+		// The same toggle for a session the plane only observes (run_pin.go).
 		resp := api.GenericModuleResponses()
 		resp["200"] = oas.Obj(
-			"description", "the caller's snooze and done marks on the run",
+			"description", "the observed session's pin state for the caller",
+			"content", oas.Obj("application/json", oas.Obj("schema", sessionsLivePinStateSchema())),
+		)
+		resp["409"] = oas.JSONResp("The session was launched through Olivares: pin its run")
+		return resp, true
+	}
+	if sessionsRunMarkRoute(method, pattern) {
+		// The caller's own snooze, done and unread marks (run_mark.go): closed, like the pin's.
+		resp := api.GenericModuleResponses()
+		resp["200"] = oas.Obj(
+			"description", "the caller's snooze, done and unread marks on the run",
 			"content", oas.Obj("application/json", oas.Obj("schema", sessionsRunMarkStateSchema())),
 		)
 		return resp, true
@@ -159,6 +197,10 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 	}
 	if resp, ok := sessionsRunQueueResponses(method, pattern); ok {
 		// The message queue (run_queue.go): closed answers, like the marks'.
+		return resp, true
+	}
+	if resp, ok := sessionsRunCheckpointsResponses(method, pattern); ok {
+		// The turn checkpoints (run_checkpoints.go): closed answers too.
 		return resp, true
 	}
 	if !sessionsWorkRoute(pattern) && !sessionsProtocolBindingReconcile(method, pattern) &&
@@ -240,6 +282,7 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 				"description", "the input was accepted for the owned child; delivery is not confirmed by this response",
 				"content", oas.Obj("application/json", oas.Obj("schema", sessionsRunInputAcceptedSchema())),
 			)
+			resp["413"] = oas.JSONResp(messageOverRequest)
 		case "/runs/{ref}/interrupt", "/runs/{ref}/stop":
 			resp["200"] = oas.Obj(
 				"description", "the run resource after the control was applied",
@@ -274,6 +317,9 @@ func sessionsParameters(method, pattern string) []map[string]any {
 	}
 	if method == http.MethodGet && pattern == "/runs/{ref}/messages" {
 		return sessionsRunMessagesParameters()
+	}
+	if params := sessionsRunUsageParameters(method, pattern); params != nil {
+		return params
 	}
 
 	if sessionsResolvePreviewRoute(method, pattern) {
@@ -592,7 +638,7 @@ func sessionsRunMessagesParameters() []map[string]any {
 		oas.Param("limit", "query", "Page size; default 50, at most 200.", false, oas.Obj("type", "integer", "minimum", 1)),
 		oas.Param("cursor", "query", "The id a page continues from: next of the previous page.", false, oas.Obj("type", "integer", "minimum", 0)),
 		oas.Param("id", "query", "Reads one message whole, with text and later_same; the filters do not apply.", false, oas.Obj("type", "integer", "minimum", 1)),
-		oas.Param("text", "query", "1: every item of the page carries its whole text, bounded at 64 KiB per message as a read by id is, and the page holds at most 50 messages; later_same is not added.", false, oas.Obj("type", "string", "enum", oas.Enum("1"))),
+		oas.Param("text", "query", "1: every item of the page carries its text, cut at 64 KiB and marked clipped (read the message by id for the whole of it), and the page holds at most 50 messages; later_same is not added.", false, oas.Obj("type", "string", "enum", oas.Enum("1"))),
 	}
 }
 
@@ -610,23 +656,38 @@ func sessionsRunPinStateSchema() map[string]any {
 	)
 }
 
-// sessionsRunMarkRoute is the caller's own snooze and done marks (run_mark.go).
+// sessionsLivePinStateSchema is the exact body both observed-session pin routes answer
+// with, closed for the reason the run pin's is.
+func sessionsLivePinStateSchema() map[string]any {
+	return oas.Obj(
+		"type", "object", "additionalProperties", false,
+		"required", oas.Enum("live_ref", "pinned"),
+		"properties", oas.Obj(
+			"live_ref", oas.Obj("type", "string", "description", "The observed session row's own reference."),
+			"pinned", oas.Obj("type", "boolean", "description", "Whether THIS caller has the session pinned; both directions are idempotent."),
+			"pinned_at", oas.Obj("type", "string", "description", "When this caller pinned it; present when pinned is true. Live list and get reads carry the same per-caller fields."),
+		),
+	)
+}
+
+// sessionsRunMarkRoute is the caller's own snooze, done and unread marks (run_mark.go).
 func sessionsRunMarkRoute(method, pattern string) bool {
-	if pattern != "/runs/{ref}/snooze" && pattern != "/runs/{ref}/done" {
+	if pattern != "/runs/{ref}/snooze" && pattern != "/runs/{ref}/done" && pattern != "/runs/{ref}/unread" {
 		return false
 	}
 	return method == http.MethodPost || method == http.MethodDelete
 }
 
-// sessionsRunMarkStateSchema is the exact body all four mark routes answer with.
+// sessionsRunMarkStateSchema is the exact body all six mark routes answer with.
 func sessionsRunMarkStateSchema() map[string]any {
 	return oas.Obj(
 		"type", "object", "additionalProperties", false,
-		"required", oas.Enum("run_ref", "done"),
+		"required", oas.Enum("run_ref", "done", "unread"),
 		"properties", oas.Obj(
 			"run_ref", oas.Obj("type", "string", "description", "The operated session's stable reference."),
 			"snoozed_until", oas.Obj("type", "string", "format", "date-time", "description", "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields."),
 			"done", oas.Obj("type", "boolean", "description", "Whether THIS caller has marked the session done; every direction is idempotent."),
+			"unread", oas.Obj("type", "boolean", "description", "Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read."),
 		),
 	)
 }
@@ -951,4 +1012,8 @@ func protocolBindingPlanHashBodySchema(description string) map[string]any {
 		"additionalProperties", false,
 		"properties", oas.Obj("plan_hash", planHash),
 	)
+}
+
+func sessionsGitAttributionSchema() map[string]any {
+	return sessionsClosureClosedObject(oas.Obj("ai_attribution", oas.Obj("type", "string", "enum", oas.Enum("off", "assisted-by", "co-authored-by"))), "ai_attribution")
 }

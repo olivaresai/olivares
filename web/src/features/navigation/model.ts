@@ -101,7 +101,7 @@ export function viewById(id: string): FeatureView | undefined {
   return FEATURE_VIEWS.find((v) => v.id === id)
 }
 
-/** The area a view belongs to; `null` for the `/` root. */
+/** The area a view belongs to; `null` for the root view. */
 export function areaOfView(view: FeatureView): NavArea | null {
   return view.navigation.kind === 'root'
     ? null
@@ -188,7 +188,7 @@ export function resolveLocation(pathname: string): NavLocation {
   if (area) return { kind: 'area', area }
   let best: { view: FeatureView; len: number } | null = null
   for (const v of FEATURE_VIEWS) {
-    if (v.path === '/') continue
+    if (v.navigation.kind === 'root') continue
     const base = matchBase(v.path)
     if (pathname === base || pathname.startsWith(`${base}/`)) {
       if (!best || base.length > best.len) best = { view: v, len: base.length }
@@ -206,10 +206,8 @@ export function resolveLocation(pathname: string): NavLocation {
       parent,
     }
   }
-  if (pathname === '/') {
-    const home = FEATURE_VIEWS.find((v) => v.path === '/')
-    if (home) return { kind: 'home', view: home }
-  }
+  const home = viewById('home')
+  if (home && pathname === home.path) return { kind: 'home', view: home }
   return { kind: 'unknown' }
 }
 
@@ -284,7 +282,7 @@ export interface NavSearchEntry {
   path: string
   icon: LucideIcon
   label: string
-  /** `Group › Place` in the current language: where the left navigation holds it. */
+  /** The place that holds it in the left navigation, in the current language. */
   context: string
   description: string
   /** The Settings section an entry opens (`/settings?section=…`), when it is one. */

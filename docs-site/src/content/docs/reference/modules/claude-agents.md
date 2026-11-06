@@ -19,7 +19,7 @@ Event reads require `governance:approval:read`. Confirmations require
 cannot confirm a tool. With no thread-event source, the event list is empty;
 an error from a wired source is reported as an upstream failure.
 
-Use **Edition & modules** in the console, or the CLI:
+Use **Settings > Modules** in the console, or the CLI:
 
 ```sh
 olivares modules ls

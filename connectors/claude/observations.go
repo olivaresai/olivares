@@ -361,6 +361,10 @@ func findingFromPermissionMode(ev claudeEvent) (model.FindingReport, bool) {
 	if ev.name != evtPermissionMode || ev.sessionID == "" || ev.toMode == "" {
 		return model.FindingReport{}, false
 	}
+	observedMode := ev.toMode
+	if !PermissionMode(observedMode).Valid() {
+		observedMode = "unknown"
+	}
 	sev := model.SeverityLow
 	if s, ok := escalatedModes[ev.toMode]; ok {
 		sev = s
@@ -370,13 +374,14 @@ func findingFromPermissionMode(ev claudeEvent) (model.FindingReport, bool) {
 		trigger = "unspecified"
 	}
 	return model.FindingReport{
-		Kind:        findingKindPolicyChange,
-		Severity:    sev,
-		SubjectKind: originSession,
-		SubjectRef:  ev.sessionID,
-		Title:       "permission mode " + firstNonEmpty(ev.fromMode, "?") + " → " + ev.toMode + " (" + trigger + ")",
-		DetailHash:  redact.Hash(ev.sessionID + "|" + ev.fromMode + "|" + ev.toMode + "|" + ev.modeTrigger),
-		OccurredAt:  ev.at,
+		Kind:                   findingKindPolicyChange,
+		Severity:               sev,
+		SubjectKind:            originSession,
+		SubjectRef:             ev.sessionID,
+		Title:                  "permission mode " + firstNonEmpty(ev.fromMode, "?") + " → " + ev.toMode + " (" + trigger + ")",
+		ObservedPermissionMode: observedMode,
+		DetailHash:             redact.Hash(ev.sessionID + "|" + ev.fromMode + "|" + ev.toMode + "|" + ev.modeTrigger),
+		OccurredAt:             ev.at,
 	}, true
 }
 

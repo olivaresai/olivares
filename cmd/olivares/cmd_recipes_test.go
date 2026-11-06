@@ -14,6 +14,17 @@ import (
 // recipesDoc is the outcome-recipe page this test gates.
 const recipesDoc = "../../docs/CLI-RECIPES-BY-OUTCOME.md"
 
+// recipePages are the pages whose fenced commands TestRecipeInvocationsResolve resolves.
+// The docs-site CLI reference is read only above its generated region: the push gate
+// re-derives that region from the binary already (scripts/check-cli-ref-docs.sh).
+var recipePages = []struct {
+	path, stopAt string
+	min          int
+}{
+	{recipesDoc, "", 20},
+	{"../../docs-site/src/content/docs/reference/cli.md", "<!-- BEGIN GENERATED", 20},
+}
+
 // TestRecipeInvocationsResolve checks every command the outcome recipes tell an
 // operator to run against the tree that actually exists: the command path must
 // resolve and every long flag must be real.
@@ -29,34 +40,42 @@ const recipesDoc = "../../docs/CLI-RECIPES-BY-OUTCOME.md"
 //
 // ONLY FENCED CODE BLOCKS ARE CHECKED, and that is a decision rather than an
 // implementation shortcut: a command named in prose may deliberately be one that
-// does NOT exist — docs/CLI-VERB-PARITY.md names `olivares work ls` precisely to
-// record that it answers "unknown command". Extracting prose would make this test
-// fail on a page whose whole subject is verbs that are absent on purpose. Inside a
-// ```sh fence the meaning is unambiguous: this is a line an operator runs.
+// does NOT exist, such as a verb a page records as missing. Extracting prose would
+// make this test fail on a page whose subject is verbs that are absent on purpose.
+// Inside a ```sh fence the meaning is unambiguous: this is a line an operator runs.
 func TestRecipeInvocationsResolve(t *testing.T) {
 	root := newRootCmd()
-	raw, err := os.ReadFile(filepath.Clean(recipesDoc))
-	if err != nil {
-		t.Fatalf("read %s: %v", recipesDoc, err)
-	}
-	checked := 0
-	for _, line := range fencedLines(string(raw)) {
-		invocation, ok := invocationFrom(line)
-		if !ok {
-			continue
+	for _, page := range recipePages {
+		raw, err := os.ReadFile(filepath.Clean(page.path))
+		if err != nil {
+			t.Fatalf("read %s: %v", page.path, err)
 		}
-		checked++
-		verifyInvocation(t, root, recipesDoc, invocation)
+		doc := string(raw)
+		if page.stopAt != "" {
+			var found bool
+			if doc, _, found = strings.Cut(doc, page.stopAt); !found {
+				t.Fatalf("%s no longer carries %q; the hand-written part cannot be told from the generated one", page.path, page.stopAt)
+			}
+		}
+		checked := 0
+		for _, line := range fencedLines(doc) {
+			invocation, ok := invocationFrom(line)
+			if !ok {
+				continue
+			}
+			checked++
+			verifyInvocation(t, root, page.path, invocation)
+		}
+		// A guard on the guard. Without it, a fence-marker change (or a rename of the
+		// file) would leave this test extracting nothing and reporting green over an
+		// empty set — the failure mode that makes a gate worse than no gate, because
+		// it also silences the honest "I could not look".
+		if checked < page.min {
+			t.Fatalf("only %d recipe invocations extracted from %s; the extractor is not seeing the page",
+				checked, page.path)
+		}
+		t.Logf("verified %d recipe invocations in %s", checked, page.path)
 	}
-	// A guard on the guard. Without it, a fence-marker change (or a rename of the
-	// file) would leave this test extracting nothing and reporting green over an
-	// empty set — the failure mode that makes a gate worse than no gate, because
-	// it also silences the honest "I could not look".
-	if checked < 20 {
-		t.Fatalf("only %d recipe invocations extracted from %s; the extractor is not seeing the page",
-			checked, recipesDoc)
-	}
-	t.Logf("verified %d recipe invocations", checked)
 }
 
 // fencedLines returns the lines inside ``` fenced blocks, in order. A fence opens

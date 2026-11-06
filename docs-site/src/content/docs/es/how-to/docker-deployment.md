@@ -24,8 +24,8 @@ se publica en todas las interfaces, porque esto es un servidor: restríngelo del
 como se muestra abajo.
 
 <!-- release -->
-:::note[Olivares 0.6]
-La próxima release es `0.6`; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en `docs/releases/0.6-install-surfaces.json`.
+:::note[Olivares 0.7]
+La próxima release es `0.7`; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en `docs/releases/0.7-install-surfaces.json`.
 :::
 <!-- /release -->
 
@@ -40,7 +40,7 @@ La descarga principal del contenedor es **Docker Hub**:
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.6
+docker pull docker.io/olivaresai/olivares:0.7
 ```
 <!-- /release -->
 
@@ -49,7 +49,7 @@ digest, usado como copia de respaldo y como registry de build. Docker Hub limita
 descargas **anónimas**; ghcr.io no limita las descargas anónimas de imágenes públicas, así que
 `docker login` o la coordenada de ghcr.io es la salida si un nodo de CI o una flota grande topa
 con el límite. Las tags no llevan **ningún `v` inicial**: <!-- release -->
-`:0.6`<!-- /release --> fija una release, `:latest` flota, y <!-- release -->`:0.6-fips`<!-- /release --> / <!-- release -->`:0.6-stig`<!-- /release --> son
+`:0.7`<!-- /release --> fija una release, `:latest` flota, y <!-- release -->`:0.7-fips`<!-- /release --> / <!-- release -->`:0.7-stig`<!-- /release --> son
 las variantes endurecidas. Las tags base y `:latest` son multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` son solo `amd64`.
 
@@ -61,7 +61,7 @@ Docker Hub mediante `cosign copy`, de modo que el digest es el mismo:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.6")"
+DIGEST="$(crane digest "$IMAGE:0.7")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -89,17 +89,28 @@ non-root, de solo lectura, con todas las capabilities eliminadas:
 <!-- release -->
 ```bash
 docker volume create olivares-data
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
 
 docker run -d --name olivares \
+  --hostname olivares \
   --user 65532:65532 \
   --read-only \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
+  --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.6 \
+  docker.io/olivaresai/olivares:0.7 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -115,6 +126,7 @@ docker run -d --name olivares \
 | `--tmpfs /tmp` | un tmpfs de scratch escribible, requerido porque el rootfs es de solo lectura |
 | `--cap-drop ALL` | el motor no necesita ninguna capability de Linux |
 | `--security-opt no-new-privileges` | bloquea la escalada de privilegios vía binarios setuid |
+| `--security-opt seccomp=olivares-sessions.json $apparmor` | el perfil seccomp de sesiones, que el primer comando lee de la imagen: el de Docker por defecto más los espacios de nombres de usuario, red y montaje en los que una sesión confina su herramienta (donde AppArmor controla los espacios de nombres de usuario, como en Debian 13 y Ubuntu 24.04 y posteriores, `$apparmor` selecciona además el perfil AppArmor de sesiones que carga el bloque) |
 | `-v olivares-data:/var/lib/olivares` | persiste el directorio de datos (véase [§5](#5-notas-de-operación)) |
 | `-p 8443:8443` | publica HTTPS (REST + UI web) **en todas las interfaces del host** |
 | `-p 8444:8444` | publica gRPC (API de ingesta / ControlPlane) en todas las interfaces del host |
@@ -329,7 +341,7 @@ imagen antes de recrear.
 
 ## 8. Fija por digest para producción
 
-Las tags mutables (<!-- release -->`:0.6`<!-- /release -->, `:latest`) son para evaluación. En producción, fija el
+Las tags mutables (<!-- release -->`:0.7`<!-- /release -->, `:latest`) son para evaluación. En producción, fija el
 **digest** que verificaste — un digest es inmutable y es exactamente lo que aprobaste:
 
 ```bash

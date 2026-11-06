@@ -5,8 +5,9 @@
 // THE FRONT DOOR tells what happened, and never more than it was told.
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, renderIntel, screen } from '@/test/intel'
+import { DEFAULT_AUTH, fireEvent, renderIntel, screen } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
+import { AccountMarksContext } from '@/features/agent-tools/account-marks'
 import type { LiveDTO } from '@/features/sessions/types'
 import { RecentWork } from './recent-work'
 import { RECENT_WORK_ROWS, sessionNameLadder, workLine } from './work-line'
@@ -23,6 +24,7 @@ const asSessions = (rows: Parameters<typeof mergeSessions>[0]) =>
 // directory. Those drop `data-testid`, so a test that asks for a link by test id
 // finds nothing and the failure looks like a missing element rather than a missing
 // mock — measured here, twice, before this comment existed.
+vi.mock('@/lib/auth/context', () => ({ useAuth: () => DEFAULT_AUTH }))
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => '',
   // The row links carry a SEARCH param, so the double has to build the same href
@@ -172,6 +174,24 @@ describe('RecentWork', () => {
     expect(screen.getByText(/2 tool calls/)).toBeInTheDocument()
     expect(screen.getByText(/3 events/)).toBeInTheDocument()
     expectNoRawI18nKeys(container)
+  })
+
+  it('wears the account the work ran under, as a dot and a short label', () => {
+    renderIntel(
+      <AccountMarksContext.Provider
+        value={
+          new Map([['ppf_research', { label: 'Research', accent: 'pink' }]])
+        }
+      >
+        <RecentWork
+          sessions={asSessions([row({ provider_profile_ref: 'ppf_research' })])}
+          state="ready"
+        />
+      </AccountMarksContext.Provider>,
+    )
+    const badge = screen.getByTestId('account-badge')
+    expect(badge).toHaveTextContent('Research')
+    expect(badge.querySelector('[data-provider-accent="pink"]')).not.toBeNull()
   })
 
   it('leaves a figure out rather than printing a zero', () => {

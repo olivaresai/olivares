@@ -335,3 +335,130 @@ it('leaves a forbidden refusal to the shared reporter', async () => {
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   expect(warned).toHaveBeenCalled()
 })
+
+// The vendor presets come from the engine (GET /v1/m/sessions/provider-presets), never
+// from a list in the console. A preset fixes the kind and the endpoint, so the form
+// asks for the key only and posts the preset's ref as `service`.
+it('lists the engine presets and creates DeepSeek for Claude Code from a key', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(providersApi, 'presets').mockResolvedValue({
+    items: [
+      {
+        ref: 'deepseek',
+        title: 'DeepSeek',
+        monogram: 'DS',
+        color: '#6780F6',
+        kind: 'openai_compatible',
+        base_url: 'https://api.deepseek.com',
+        auth: 'bearer',
+        models: {},
+        docs_url: 'https://api-docs.deepseek.com/',
+        key_url: 'https://platform.deepseek.com/api_keys',
+        governed: true,
+      },
+      {
+        ref: 'deepseek-anthropic',
+        title: 'DeepSeek (Claude Code)',
+        monogram: 'DS',
+        color: '#6780F6',
+        kind: 'anthropic',
+        base_url: 'https://api.deepseek.com/anthropic',
+        auth: 'bearer',
+        models: { default: 'deepseek-flash' },
+        docs_url: 'https://api-docs.deepseek.com/',
+        key_url: 'https://platform.deepseek.com/api_keys',
+      },
+      {
+        ref: 'openrouter',
+        title: 'OpenRouter',
+        monogram: 'OR',
+        color: '#768BA3',
+        kind: 'openai_compatible',
+        base_url: 'https://openrouter.ai/api/v1',
+        auth: 'bearer',
+        models: {},
+        docs_url: 'https://openrouter.ai/docs/quickstart',
+      },
+    ],
+    has_more: false,
+  })
+  const create = vi.spyOn(providersApi, 'create').mockResolvedValue({
+    provider_ref: 'prv_ds',
+    kind: 'anthropic',
+    display_name: 'DeepSeek (Claude Code)',
+    state: 'active',
+  } as ProviderRecordDTO)
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ProviderCreateDialog open onOpenChange={() => {}} />
+    </QueryClientProvider>,
+  )
+  await user.click(screen.getByRole('combobox', { name: 'Provider' }))
+  // Each row says which tools it serves, by the engine's binding rule; the
+  // governed row serves no tool and is not offered; the six kinds stay below.
+  const deepseek = await screen.findByRole('option', {
+    name: /^DeepSeek \(Claude Code\)/,
+  })
+  expect(deepseek).toHaveTextContent('Works with Claude Code')
+  expect(screen.getByRole('option', { name: /^OpenRouter/ })).toHaveTextContent(
+    'Works with Codex',
+  )
+  expect(
+    screen.queryByRole('option', { name: /^DeepSeek$/ }),
+  ).not.toBeInTheDocument()
+  expect(screen.getByText(en.create.otherKinds)).toBeInTheDocument()
+  for (const k of PROVIDER_KINDS)
+    expect(
+      screen.getByRole('option', { name: en.kinds[k] }),
+    ).toBeInTheDocument()
+  await user.click(deepseek)
+  expect(
+    screen.queryByRole('textbox', { name: 'Endpoint' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Advanced: custom endpoint' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: /DeepSeek \(Claude Code\)/ }),
+  ).toHaveAttribute('href', 'https://platform.deepseek.com/api_keys')
+  await user.type(screen.getByLabelText(/^API key/), 'synthetic-deepseek-key')
+  await user.click(screen.getByRole('button', { name: 'Add provider' }))
+  await waitFor(() =>
+    expect(create).toHaveBeenCalledWith({
+      kind: 'anthropic',
+      service: 'deepseek-anthropic',
+      display_name: 'DeepSeek (Claude Code)',
+      api_key: 'synthetic-deepseek-key',
+    }),
+  )
+})
+
+// The engine refuses Codex for a vendor without the Responses API, whatever the kind says
+// (GET /tools refused_services): the row must not promise a tool the bind then refuses.
+it('does not promise Codex on a preset the engine refuses for it', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(providersApi, 'presets').mockResolvedValue({
+    items: [
+      {
+        ref: 'zai',
+        title: 'Z.ai',
+        monogram: 'Z',
+        color: '#329797',
+        kind: 'openai_compatible',
+        base_url: 'https://api.z.ai/api/paas/v4',
+        auth: 'bearer',
+        models: {},
+        docs_url: 'https://docs.z.ai/',
+      },
+    ],
+    has_more: false,
+  })
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ProviderCreateDialog open onOpenChange={() => {}} />
+    </QueryClientProvider>,
+  )
+  await user.click(screen.getByRole('combobox', { name: 'Provider' }))
+  const zai = await screen.findByRole('option', { name: /^Z\.ai/ })
+  expect(zai).not.toHaveTextContent('Codex')
+})

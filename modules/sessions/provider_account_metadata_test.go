@@ -374,14 +374,28 @@ func TestProviderAccount_MetadataAccentAdditiveUpgrade(t *testing.T) {
 	}
 }
 
+// The refusal and the CLI's --accent help say the one list the validator accepts.
+func TestProviderAccount_AccentChoicesNameEveryAccent(t *testing.T) {
+	const want = "orange, green, amber, red, blue, purple, pink, teal or slate"
+	if got := ProviderAccentChoices(); got != want {
+		t.Fatalf("ProviderAccentChoices() = %q, want %q", got, want)
+	}
+	_, err := normalizeAccountAccent("indigo")
+	if err == nil || err.Error() != "accent must be empty, "+want {
+		t.Fatalf("refusal = %v, want it to name %q", err, want)
+	}
+}
+
 func TestProviderAccount_MetadataAccentPalette(t *testing.T) {
-	for _, value := range []string{"", "orange", "green", "amber", "red", "blue"} {
+	// The first five are published (0.3) and keep working; the console palette and its
+	// tokens (web/src/features/agentops/provider-accent-palette.ts) carry the same nine.
+	for _, value := range []string{"", "orange", "green", "amber", "red", "blue", "purple", "pink", "teal", "slate"} {
 		got, err := normalizeAccountAccent(value)
 		if err != nil || got != value {
 			t.Fatalf("valid palette value %q = %q %v", value, got, err)
 		}
 	}
-	for _, value := range []string{"BLUE", "#fff", "url(x)", "red\x00"} {
+	for _, value := range []string{"BLUE", "#fff", "url(x)", "red\x00", "indigo"} {
 		if _, err := normalizeAccountAccent(value); err == nil {
 			t.Fatalf("invalid palette value %q accepted", value)
 		}

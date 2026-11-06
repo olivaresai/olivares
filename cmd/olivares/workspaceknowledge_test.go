@@ -14,8 +14,11 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/connectors/mcp"
+	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 func TestWorkspaceKnowledgeIngestAndScopedRetrieval(t *testing.T) {
@@ -37,10 +40,14 @@ func TestWorkspaceKnowledgeIngestAndScopedRetrieval(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				if strings.Contains(r.URL.Path, "/spaces/") {
-					_, _ = w.Write([]byte(`{"results":[{"id":"page-1","title":"Calibration"}]}`))
-				} else {
-					_, _ = w.Write([]byte(`{"id":"page-1","title":"Calibration","body":{"storage":{"value":"<p>Engineering turbine calibration note</p>"}},"space":{"key":"ENG"}}`))
+				switch {
+				case r.URL.Path == "/files":
+					_, _ = w.Write([]byte(`{"files":[{"id":"page-1","name":"Calibration","mimeType":"text/plain"}]}`))
+				case r.URL.Query().Get("alt") == "media":
+					w.Header().Set("Content-Type", "text/plain")
+					_, _ = w.Write([]byte("Engineering turbine calibration note"))
+				default:
+					_, _ = w.Write([]byte(`{"id":"page-1","name":"Calibration","mimeType":"text/plain"}`))
 				}
 			}))
 			t.Cleanup(srv.Close)
@@ -55,7 +62,7 @@ func TestWorkspaceKnowledgeIngestAndScopedRetrieval(t *testing.T) {
 				}
 				return out
 			}
-			// The mocked Confluence page carries no permissions, so its documents have no ACL
+			// The mocked Drive file carries no permissions, so its documents have no ACL
 			// and are denied unless the KB says otherwise: default_acl anyone is that decision.
 			kb := request("POST", "/v1/m/knowledge/kbs", map[string]any{"name": "engineering", "classification": "public", "embed_policy": "local_only", "default_acl": []string{"anyone"}}, http.StatusCreated)
 			kbID := kb["id"].(string)
@@ -63,22 +70,22 @@ func TestWorkspaceKnowledgeIngestAndScopedRetrieval(t *testing.T) {
 				"source_type": "knowledge", "source_ref": kbID, "scope_tree": "workspace", "scope_ref": "default", "enabled": true,
 			}, http.StatusCreated)
 			connector := request("POST", "/v1/m/sourcescope/workspace-connectors", map[string]any{
-				"name": "docs", "kind": "confluence", "workspace_ref": "default", "enabled": true,
-				"config":  map[string]string{"mode": "live", "base_url": srv.URL, "space_key": "ENG"},
+				"name": "docs", "kind": "gdrive", "workspace_ref": "default", "enabled": true,
+				"config":  map[string]string{"mode": "live", "api_base": srv.URL},
 				"secrets": map[string]string{"credential_ref": "workspace-credential-one"},
 			}, http.StatusCreated)
 			out := request("POST", "/v1/m/knowledge/kbs/"+kbID+"/ingest", map[string]any{"source": "workspace:docs"}, http.StatusOK)
-			if out["documents"] != float64(1) || calls.Load() != 2 {
+			if out["documents"] != float64(1) || calls.Load() != 3 {
 				t.Fatal("workspace connector was not pulled through the existing knowledge pipeline")
 			}
 			expected.Store("workspace-credential-two")
 			request("PUT", "/v1/m/sourcescope/workspace-connectors/"+connector["id"].(string), map[string]any{
-				"name": "docs", "kind": "confluence", "workspace_ref": "default", "enabled": true,
-				"config":  map[string]string{"mode": "live", "base_url": srv.URL, "space_key": "ENG"},
+				"name": "docs", "kind": "gdrive", "workspace_ref": "default", "enabled": true,
+				"config":  map[string]string{"mode": "live", "api_base": srv.URL},
 				"secrets": map[string]string{"credential_ref": "workspace-credential-two"},
 			}, http.StatusOK)
 			out = request("POST", "/v1/m/knowledge/kbs/"+kbID+"/ingest", map[string]any{"source": "workspace:docs"}, http.StatusOK)
-			if out["documents"] != float64(1) || calls.Load() != 4 {
+			if out["documents"] != float64(1) || calls.Load() != 6 {
 				t.Fatal("workspace ingest reused stale connector credentials")
 			}
 			failSource.Store(true)
@@ -213,12 +220,12 @@ func TestWorkspaceKnowledgeIngestRefusals(t *testing.T) {
 					}
 					kind, mode := tc.kind, tc.mode
 					if kind == "" {
-						kind = "confluence"
+						kind = "gdrive"
 					}
 					if mode == "" {
 						mode = "live"
 					}
-					config := map[string]string{"mode": mode, "base_url": srv.URL, "space_key": "ENG"}
+					config := map[string]string{"mode": mode, "api_base": srv.URL}
 					if tc.exportPath {
 						config["export_path"] = "/fixture-only/not-read.json"
 					}
@@ -234,5 +241,280 @@ func TestWorkspaceKnowledgeIngestRefusals(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// A workspace source set to identity "user" reads with the credential the requesting
+// person keeps in their own vault, never with a shared one: no credential in the vault
+// means "connect your account" and no request to the source, and what is read is stored
+// private to that person.
+func TestWorkspaceKnowledgeIngestReadsAsTheUser(t *testing.T) {
+	for _, cfg := range wireBackends(t) {
+		t.Run(string(cfg.Engine), func(t *testing.T) {
+			const personToken = "person-credential-one"
+			eng, token, tenant := wireBoot(t, cfg, t.TempDir())
+			person, err := eng.authr.Authenticate(context.Background(), token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var calls atomic.Int32
+			var seen atomic.Value
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				seen.Store(r.Header.Get("Authorization"))
+				if r.Header.Get("Authorization") != "Bearer "+personToken {
+					http.Error(w, "fixture authentication refused", http.StatusUnauthorized)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.URL.Path == "/files":
+					_, _ = w.Write([]byte(`{"files":[{"id":"page-1","name":"Calibration","mimeType":"text/plain"}]}`))
+				case r.URL.Query().Get("alt") == "media":
+					w.Header().Set("Content-Type", "text/plain")
+					_, _ = w.Write([]byte("Engineering turbine calibration note"))
+				default:
+					_, _ = w.Write([]byte(`{"id":"page-1","name":"Calibration","mimeType":"text/plain"}`))
+				}
+			}))
+			t.Cleanup(srv.Close)
+			request := func(method, path string, body any, want int) (map[string]any, string) {
+				t.Helper()
+				code, out, raw := doDemoViewJSON(t, eng.api.Handler(), method, path, token, tenant.String(), body)
+				if code != want {
+					t.Fatalf("%s %s = %d, want %d (%s)", method, path, code, want, raw)
+				}
+				if strings.Contains(raw, personToken) {
+					t.Fatal("a response disclosed the person's credential")
+				}
+				return out, raw
+			}
+			kb, _ := request("POST", "/v1/m/knowledge/kbs", map[string]any{"name": "engineering", "classification": "public", "embed_policy": "local_only", "default_acl": []string{"anyone"}}, http.StatusCreated)
+			kbID := kb["id"].(string)
+			request("POST", "/v1/m/sourcescope/bindings", map[string]any{
+				"source_type": "knowledge", "source_ref": kbID, "scope_tree": "workspace", "scope_ref": "default", "enabled": true,
+			}, http.StatusCreated)
+			connector := map[string]any{
+				"name": "docs", "kind": "gdrive", "workspace_ref": "default", "enabled": true,
+				"config": map[string]string{"mode": "live", "api_base": srv.URL, "identity": "user"},
+			}
+			request("POST", "/v1/m/sourcescope/workspace-connectors", connector, http.StatusCreated)
+			ingest := func(want int) (map[string]any, string) {
+				return request("POST", "/v1/m/knowledge/kbs/"+kbID+"/ingest", map[string]any{"source": "workspace:docs"}, want)
+			}
+
+			// No credential in the person's vault: fail closed, the source is never asked.
+			_, raw := ingest(http.StatusForbidden)
+			if !strings.Contains(raw, "connect your account") || calls.Load() != 0 {
+				t.Fatalf("without a credential: %s, source calls %d; want \"connect your account\" and no call", raw, calls.Load())
+			}
+
+			// With one, the source is read with that credential and with no other.
+			request("PUT", "/v1/console/secrets?scope=tenant", map[string]any{
+				"name":  "vault/" + person.UserID.String() + "/sources/docs",
+				"value": `{"type":"login","password":"` + personToken + `","url":"` + srv.URL + `"}`,
+			}, http.StatusOK)
+			out, _ := ingest(http.StatusOK)
+			if out["documents"] != float64(1) || seen.Load() != "Bearer "+personToken {
+				t.Fatalf("ingest as the user: documents=%v, source saw %v", out["documents"], seen.Load())
+			}
+
+			// What was read is private to the person: the source's own rights, not the KB default.
+			docs, _ := request("GET", "/v1/m/knowledge/kbs/"+kbID+"/documents", nil, http.StatusOK)
+			items := docs["items"].([]any)
+			acl, _ := items[0].(map[string]any)["acl"].([]any)
+			if len(items) != 1 || len(acl) != 1 || acl[0] != "user:"+person.UserID.String() {
+				t.Fatalf("documents read as the user must be private to them: %v", items)
+			}
+
+			// The token goes only where the person stored it: a connector later pointed at
+			// another host, or a login that names no host, is refused and nothing is sent.
+			var elsewhere atomic.Int32
+			other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				elsewhere.Add(1)
+				http.Error(w, "must not be reached", http.StatusTeapot)
+			}))
+			t.Cleanup(other.Close)
+			connector["name"] = "docs-moved"
+			connector["config"] = map[string]string{"mode": "live", "api_base": other.URL, "identity": "user"}
+			request("POST", "/v1/m/sourcescope/workspace-connectors", connector, http.StatusCreated)
+			for _, item := range []string{
+				`{"type":"login","password":"` + personToken + `","url":"` + srv.URL + `"}`,
+				`{"type":"login","password":"` + personToken + `"}`,
+			} {
+				request("PUT", "/v1/console/secrets?scope=tenant", map[string]any{
+					"name": "vault/" + person.UserID.String() + "/sources/docs-moved", "value": item,
+				}, http.StatusOK)
+				_, raw := request("POST", "/v1/m/knowledge/kbs/"+kbID+"/ingest", map[string]any{"source": "workspace:docs-moved"}, http.StatusForbidden)
+				if !strings.Contains(raw, "connect your account") || strings.Contains(raw, personToken) || elsewhere.Load() != 0 {
+					t.Fatalf("token bound to another origin: %s, requests to the other host %d; want a refusal and none", raw, elsewhere.Load())
+				}
+			}
+
+			// A stored credential that is not a login item is named, not called missing.
+			request("PUT", "/v1/console/secrets?scope=tenant", map[string]any{
+				"name": "vault/" + person.UserID.String() + "/sources/docs-moved", "value": `{"type":"note","note":"not a login"}`,
+			}, http.StatusOK)
+			_, raw = request("POST", "/v1/m/knowledge/kbs/"+kbID+"/ingest", map[string]any{"source": "workspace:docs-moved"}, http.StatusForbidden)
+			if !strings.Contains(raw, "not a login") {
+				t.Fatalf("a note stored as the credential: %s; want it named", raw)
+			}
+
+			// A shared credential on a source that reads as the user is ambiguous: refused.
+			connector["name"] = "docs-shared"
+			connector["config"] = map[string]string{"mode": "live", "api_base": srv.URL, "identity": "user"}
+			connector["secrets"] = map[string]string{"credential_ref": "workspace-credential-one"}
+			request("POST", "/v1/m/sourcescope/workspace-connectors", connector, http.StatusCreated)
+			before := calls.Load()
+			request("POST", "/v1/m/knowledge/kbs/"+kbID+"/ingest", map[string]any{"source": "workspace:docs-shared"}, http.StatusBadRequest)
+			if calls.Load() != before {
+				t.Fatal("a source holding both a shared credential and identity user reached the network")
+			}
+		})
+	}
+}
+
+// An object-store source set to identity "user" reads with temporary credentials the
+// storage issues for the person: their identity token, kept in their own vault, is
+// exchanged at the storage's token service, and only the result signs the reads, so the
+// storage's own log names the person. The token goes to that one origin and nowhere else.
+func TestWorkspaceKnowledgeIngestReadsS3AsTheUser(t *testing.T) {
+	for _, cfg := range wireBackends(t) {
+		t.Run(string(cfg.Engine), func(t *testing.T) {
+			const (
+				personToken = "person-identity-token-one"
+				roleARN     = "arn:aws:iam::123456789012:role/olivares-reader"
+				tempKeyID   = "ASIAPERSONFIXTURE"
+				tempSession = "temporary-session-token-one"
+			)
+			eng, token, tenant := wireBoot(t, cfg, t.TempDir())
+			person, err := eng.authr.Authenticate(context.Background(), token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var stsCalls, storageCalls atomic.Int32
+			var sessionName atomic.Value
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/xml")
+				if r.Method == http.MethodPost {
+					stsCalls.Add(1)
+					_ = r.ParseForm()
+					sessionName.Store(r.PostForm.Get("RoleSessionName"))
+					if r.URL.RawQuery != "" || r.PostForm.Get("Action") != "AssumeRoleWithWebIdentity" ||
+						r.PostForm.Get("WebIdentityToken") != personToken || r.PostForm.Get("RoleArn") != roleARN {
+						http.Error(w, `<ErrorResponse><Error><Code>InvalidIdentityToken</Code></Error></ErrorResponse>`, http.StatusBadRequest)
+						return
+					}
+					_, _ = w.Write([]byte(`<AssumeRoleWithWebIdentityResponse><AssumeRoleWithWebIdentityResult><Credentials>` +
+						`<AccessKeyId>` + tempKeyID + `</AccessKeyId><SecretAccessKey>temporary-secret-one</SecretAccessKey>` +
+						`<SessionToken>` + tempSession + `</SessionToken><Expiration>2099-01-01T00:00:00Z</Expiration>` +
+						`</Credentials></AssumeRoleWithWebIdentityResult></AssumeRoleWithWebIdentityResponse>`))
+					return
+				}
+				storageCalls.Add(1)
+				if !strings.Contains(r.Header.Get("Authorization"), "Credential="+tempKeyID+"/") || r.Header.Get("X-Amz-Security-Token") != tempSession {
+					http.Error(w, "fixture authentication refused", http.StatusForbidden)
+					return
+				}
+				switch {
+				case r.URL.Path == "/bucket":
+					_, _ = w.Write([]byte(`<ListBucketResult><IsTruncated>false</IsTruncated><Contents><Key>docs/one.md</Key><LastModified>2026-07-01T10:00:00Z</LastModified></Contents></ListBucketResult>`))
+				case r.URL.RawQuery == "acl":
+					_, _ = w.Write([]byte(`<AccessControlPolicy><AccessControlList></AccessControlList></AccessControlPolicy>`))
+				case r.URL.RawQuery == "tagging":
+					_, _ = w.Write([]byte(`<Tagging><TagSet></TagSet></Tagging>`))
+				default:
+					w.Header().Set("Content-Type", "text/markdown")
+					_, _ = w.Write([]byte("# Turbine calibration"))
+				}
+			}))
+			t.Cleanup(srv.Close)
+			request := func(method, path string, body any, want int) (map[string]any, string) {
+				t.Helper()
+				code, out, raw := doDemoViewJSON(t, eng.api.Handler(), method, path, token, tenant.String(), body)
+				if code != want {
+					t.Fatalf("%s %s = %d, want %d (%s)", method, path, code, want, raw)
+				}
+				if strings.Contains(raw, personToken) || strings.Contains(raw, tempSession) {
+					t.Fatal("a response disclosed a credential")
+				}
+				return out, raw
+			}
+			kb, _ := request("POST", "/v1/m/knowledge/kbs", map[string]any{"name": "engineering", "classification": "public", "embed_policy": "local_only", "default_acl": []string{"anyone"}}, http.StatusCreated)
+			kbID := kb["id"].(string)
+			request("POST", "/v1/m/sourcescope/bindings", map[string]any{
+				"source_type": "knowledge", "source_ref": kbID, "scope_tree": "workspace", "scope_ref": "default", "enabled": true,
+			}, http.StatusCreated)
+			connector := map[string]any{
+				"name": "bucket", "kind": "s3content", "workspace_ref": "default", "enabled": true,
+				"config": map[string]string{"mode": "live", "bucket": "bucket", "prefix": "docs/", "endpoint": srv.URL, "identity": "user"},
+			}
+			request("POST", "/v1/m/sourcescope/workspace-connectors", connector, http.StatusCreated)
+			ingest := func(name string, want int) (map[string]any, string) {
+				return request("POST", "/v1/m/knowledge/kbs/"+kbID+"/ingest", map[string]any{"source": "workspace:" + name}, want)
+			}
+			store := func(name, login string) {
+				request("PUT", "/v1/console/secrets?scope=tenant", map[string]any{"name": "vault/" + person.UserID.String() + "/sources/" + name, "value": login}, http.StatusOK)
+			}
+
+			// No identity token in the person's vault: fail closed, neither service is asked.
+			_, raw := ingest("bucket", http.StatusForbidden)
+			if !strings.Contains(raw, "connect your account") || stsCalls.Load()+storageCalls.Load() != 0 {
+				t.Fatalf("without a credential: %s, calls %d; want \"connect your account\" and none", raw, stsCalls.Load()+storageCalls.Load())
+			}
+
+			// With one, the token is exchanged and only the temporary credentials read the bucket.
+			store("bucket", `{"type":"login","username":"`+roleARN+`","password":"`+personToken+`","url":"`+srv.URL+`"}`)
+			out, _ := ingest("bucket", http.StatusOK)
+			if out["documents"] != float64(1) || stsCalls.Load() != 1 || storageCalls.Load() == 0 {
+				t.Fatalf("ingest as the user: documents=%v, token exchanges %d, storage reads %d", out["documents"], stsCalls.Load(), storageCalls.Load())
+			}
+			if name, _ := sessionName.Load().(string); !strings.Contains(name, person.UserID.String()) {
+				t.Fatalf("the exchange must name the person in the storage's log, session name %q", name)
+			}
+			docs, _ := request("GET", "/v1/m/knowledge/kbs/"+kbID+"/documents", nil, http.StatusOK)
+			items := docs["items"].([]any)
+			acl, _ := items[0].(map[string]any)["acl"].([]any)
+			if len(items) != 1 || len(acl) != 1 || acl[0] != "user:"+person.UserID.String() {
+				t.Fatalf("documents read as the user must be private to them: %v", items)
+			}
+
+			// A token stored for another origin is never sent to this storage's token service.
+			var elsewhere atomic.Int32
+			other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { elsewhere.Add(1) }))
+			t.Cleanup(other.Close)
+			connector["name"] = "moved"
+			connector["config"] = map[string]string{"mode": "live", "bucket": "bucket", "endpoint": other.URL, "identity": "user"}
+			request("POST", "/v1/m/sourcescope/workspace-connectors", connector, http.StatusCreated)
+			store("moved", `{"type":"login","username":"`+roleARN+`","password":"`+personToken+`","url":"`+srv.URL+`"}`)
+			_, raw = ingest("moved", http.StatusForbidden)
+			if !strings.Contains(raw, "connect your account") || elsewhere.Load() != 0 || stsCalls.Load() != 1 {
+				t.Fatalf("token bound to another origin: %s, requests to the other host %d, exchanges %d; want a refusal and none new", raw, elsewhere.Load(), stsCalls.Load())
+			}
+
+			// The token service refusing the token is the person's to fix, said so, with no read.
+			before := storageCalls.Load()
+			store("bucket", `{"type":"login","username":"`+roleARN+`","password":"expired-token","url":"`+srv.URL+`"}`)
+			_, raw = ingest("bucket", http.StatusForbidden)
+			if !strings.Contains(raw, "InvalidIdentityToken") || storageCalls.Load() != before {
+				t.Fatalf("a refused token: %s, storage reads %d->%d; want the storage's reason and no read", raw, before, storageCalls.Load())
+			}
+		})
+	}
+}
+
+// Only a signed-in person has a vault: an API token or an agent session asking to read as
+// the user is refused before the vault is touched (the nil vault would panic if it were).
+func TestPersonCredentialRefusesANonPerson(t *testing.T) {
+	id := model.NewID()
+	fields := map[string]sdk.ConfigField{"credential_ref": {Key: "credential_ref", Secret: true}}
+	for label, p := range map[string]auth.Principal{
+		"agent":   {Kind: auth.KindUser, UserID: id, AgentIdentity: "agent-1"},
+		"session": {Kind: auth.KindUser, UserID: id, SessionIdentity: "session-1"},
+	} {
+		_, refusal, status := workspaceKnowledgeSources{}.personCredential(context.Background(), api.ModuleContext{Principal: p}, "docs", "confluence", map[string]string{"base_url": "https://wiki.example"}, fields)
+		if status != http.StatusForbidden || !strings.Contains(refusal, "signed-in person") {
+			t.Errorf("%s: got %d %q, want 403 and the signed-in person refusal", label, status, refusal)
+		}
 	}
 }

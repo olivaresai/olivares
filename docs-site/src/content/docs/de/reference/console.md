@@ -16,22 +16,23 @@ Route** — keine Auswahl und nicht nur die Routen, an deren Dokumentation sich 
 erinnert hat — samt der Berechtigung, die ein Principal zum Öffnen benötigt, und der
 weiterführenden Dokumentation.
 
-Die Konsole hat **eine Navigation: die linke Seitenleiste**. Sie listet die Orte in vier
-Gruppen — **Arbeit** (Start, Sitzungen, Dateien & Arbeitsbereiche, Arbeit &
-Kommunikation), **Werkzeuge** (KI-Werkzeuge, Modelle, MCP & Skills, Quellen),
-**Kontrolle** (Regeln & Genehmigungen, Nutzung & Kosten, Aktivität & Audit, Zugriffskarte) und
-**Verwaltung** (Personen & Gruppen, Sicherheit, Betrieb, Lizenz) — und Einstellungen ganz
-unten. Jeder Bildschirm gehört zu einem Ort, und die Linkzeile über einem Bildschirm
-listet die anderen Bildschirme dieses Orts. Ein Ort erscheint nur, wenn Ihre
-Berechtigungen mindestens einen seiner Bildschirme erlauben, und ein Business-Bildschirm
-nur in der Business-Edition. Die Seitenleiste lässt sich auf ihre Symbole einklappen und
-wieder öffnen; auf einem schmalen Bildschirm öffnet sie sich als Schublade über die
-Menütaste. Die obere Leiste enthält den Seitentitel, die Suche (⌘K oder Strg+K), die
-Benachrichtigungen und das Kontomenü. Die Befehlspalette durchsucht dieselben Bildschirme
-mit denselben Berechtigungen. Die früheren Bereichsverzeichnis-Adressen (`/areas/…`)
-öffnen den Ort, der ihre Bildschirme jetzt enthält, und behalten Abfrage und Fragment.
+Die Konsole hat **eine Navigation: die linke Seitenleiste**. Sie listet **Sitzungen**,
+**Dateien** und **Werkzeuge**, dann **Mehr**, das darunter **Übersicht**, **Regeln**,
+**Nutzung**, **Audit**, **Personen**, **Sicherheit** und **Betrieb** öffnet, und
+Einstellungen ganz unten; Edition und Lizenz sind ein Abschnitt der Einstellungen. Mehr ist
+anfangs geschlossen, und ein Ort darunter bleibt sichtbar, solange Sie dort sind oder dort
+etwas auf Sie wartet (Regeln mit einer offenen Genehmigung). Jeder Bildschirm gehört zu
+einem Ort, und die Linkzeile über einem Bildschirm listet die anderen Bildschirme dieses
+Orts. Ein Ort erscheint nur, wenn Ihre Berechtigungen mindestens einen seiner Bildschirme
+erlauben, und ein Business-Bildschirm nur in der Business-Edition. Die Seitenleiste lässt
+sich auf ihre Symbole einklappen und wieder öffnen; auf einem schmalen Bildschirm öffnet sie
+sich als Schublade über die Menütaste. Die obere Leiste enthält den Seitentitel, die Suche
+(⌘K oder Strg+K), die Benachrichtigungen und das Kontomenü. Die Befehlspalette durchsucht
+dieselben Bildschirme mit denselben Berechtigungen. Die früheren
+Bereichsverzeichnis-Adressen (`/areas/…`) öffnen den Ort, der ihre Bildschirme jetzt
+enthält, und behalten Abfrage und Fragment.
 
-Eine neue Installation listet nur die erste Aufgabe: Start, Sitzungen, KI-Werkzeuge,
+Eine neue Installation listet nur die erste Aufgabe: Übersicht, Sitzungen, KI-Werkzeuge,
 Genehmigungen, den Einrichtungsassistenten und Einstellungen. Jeder andere
 Bildschirm ist dort eine Vorschau: Adresse, API und CLI funktionieren weiter, und Navigation,
 Befehlspalette und Tastenkürzel listen ihn nicht. Eine Installation, die vor dem Upgrade
@@ -45,7 +46,7 @@ Die Seite ist **generiert**. Das Verzeichnis stammt aus
 kann daher nicht hinzugefügt, verschoben oder verloren werden, ohne dass sich diese
 Seite mitändert. Name und Kurzbeschreibung jedes Bildschirms sind die **eigenen Strings
 der Konsole** aus demselben Übersetzungskatalog, den die Konsole rendert. Was Sie
-hier lesen, sehen Sie auch im Produkt. Die Tabellen darunter gruppieren diese Zeilen nach Bereichen, nach Start (der Übersicht)
+hier lesen, sehen Sie auch im Produkt. Die Tabellen darunter gruppieren diese Zeilen nach Bereichen, nach Übersicht
 und vor Anmeldung, Einrichtung und Konto. Die neun früheren Bereichsverzeichnis-Adressen stehen bei den
 Routen, die außerhalb der Feature-Registry gemountet sind; jede leitet jetzt zu ihrem Ort weiter.
 
@@ -76,21 +77,21 @@ Einstellungen.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Die Konsole veröffentlicht **66 Routen**. Jede steht mit der erforderlichen
+Die Konsole veröffentlicht **68 Routen**. Jede steht mit der erforderlichen
 Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen unten.
 
-### Start
+### Übersicht
 
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
-| Start | `/` | Estate-Übersicht und Zustand auf einen Blick | any signed-in user | [Dokumentationsstart](/de/) |
+| Übersicht | `/now` | Estate-Übersicht und Zustand auf einen Blick | any signed-in user | [Dokumentationsstart](/de/) |
 
 ### Infrastruktur
 
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
-| Umgebung | `/estate` | Prüfen Sie konfigurierte Ressourcen und ihre Beziehungen, einschließlich der Abhängigkeiten von Arbeitseinheiten. | `sessions:run:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
-| Inventar | `/inventory` | Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, erkennen und katalogisieren. | `inventory:catalog:read` | [reference/modules/i-inventory](/de/reference/modules/i-inventory/) |
+| Konfigurierte Ressourcen | `/estate` | Was Sie eingerichtet haben und wie die Teile voneinander abhängen, einschließlich Arbeitseinheiten. | `sessions:run:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Erkannte Ressourcen | `/inventory` | Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, und wann sie zuletzt gesehen wurden. | `inventory:catalog:read` | [reference/modules/i-inventory](/de/reference/modules/i-inventory/) |
 | Workspace | `/workspace` | Agenten, Sessions, Ressourcen und Aktivität im Scope eines Workspace | `tenant:read` | [reference/modules/xx-multi-tenancy](/de/reference/modules/xx-multi-tenancy/) |
 
 ### KI
@@ -173,6 +174,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Evals | `/evals` | Qualität, Evaluierungen und Regression | `evals:run:read` | [reference/modules/xii-evals](/de/reference/modules/xii-evals/) |
 | Health & SLA | `/health` | Uptime und SLAs für Agenten und MCP | `health:status:read` | [reference/modules/xxii-health](/de/reference/modules/xxii-health/) |
 | Observability | `/observability` | Ingestion-Zustand nach Standard und Trace-Drilldown | `health:status:read` | [reference/modules/observability](/de/reference/modules/observability/) |
+| Betrieb | `/operations` | Der Host, seine Laufwerke, die laufenden Sitzungen und ihre Nutzung, über 24 Stunden, 7 oder 30 Tage. | `sessions:run:read` | [reference/console](/de/reference/console/) |
 | Aufbewahrung | `/retention` | Wie lange jede Datenklasse aufbewahrt wird, der Lauf, der das umsetzt, und seine versiegelten Zertifikate | `compliance:retention:read` | [reference/modules/xiii-compliance](/de/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Verbrauch gegenüber jedem gespeicherten Limit. Reservierte Kapazität wird auf das Limit angerechnet. | `finops:budget:read` | [reference/modules/xi-finops](/de/reference/modules/xi-finops/) |
 | Nutzung | `/usage` | Die offiziellen 5-Stunden- und Wochenlimits jedes Kontos, das nächste zuerst, und die Tokens und Kosten von heute. | `sessions:run:read` | [reference/console](/de/reference/console/) |
@@ -197,6 +199,7 @@ bereitgestellt — nur diese Konsolenrouten verhalten sich so.
 
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
+| Startseite | `/` | Öffnet deine gespeicherte Startseite oder Sitzungen, wenn du keine gespeichert hast. | any signed-in user | — |
 | Einladung annehmen | `/accept-invite` | Ziel eines per E-Mail versendeten Einladungslinks: Der Eingeladene legt ohne vorherige Session ein Passwort fest und tritt dem Workspace bei. | **no sign-in** | — |
 | Anmelden | `/login` | Seite zur Anmeldung mit Zugangsdaten oder Token für ein bereits bereitgestelltes Konto. | **no sign-in** | — |
 | Gerät koppeln | `/pair` | Ziel eines einmaligen Links zur Gerätekopplung: Das neue Gerät meldet sich ohne vorherige Sitzung an. | **no sign-in** | — |

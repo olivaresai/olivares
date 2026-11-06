@@ -27,7 +27,6 @@ stage() {
 	cp "$ROOT/core/api/handlers_scim_noenterprise.go" "$TMP/tree/core/api/"
 	cp "$ROOT/core/auth/scim.go" "$TMP/tree/core/auth/"
 	cp "$ROOT/core/auth/scim_groups.go" "$TMP/tree/core/auth/"
-	cp "$ROOT/core/auth/scim_events.go" "$TMP/tree/core/auth/"
 }
 
 run() {

@@ -8,7 +8,7 @@
 // action. It is neither an error nor a refusal (that is a permission, and stays hidden).
 //
 //   · a person who may change modules: "Turn on", the same selection as Settings >
-//     Edition & modules (the engine restarts to apply it, after the usual confirmation when
+//     Modules (the engine restarts to apply it, after the usual confirmation when
 //     sessions run); the view appears here without a reload once the engine is back;
 //   · anyone else: whom to ask;
 //   · the communication plane is no module a switch turns on: only the sentence.

@@ -77,7 +77,7 @@ def git(*args):
 def is_source(path):
     # Locale JSON and generated locale bundles are data; check authored source instead.
     path = os.path.relpath(path)
-    if re.search(r"(?:^|/)(?:i18n|locales)/(?:es|fr|de|it|ru|ja|zh|ko)(?:\.json|/.*\.json)$", path):
+    if re.search(r"(?:^|/)(?:i18n|locales)/(?:es|fr|de|it|ru|ja|zh|ko|uk|pt)(?:\.json|/.*\.json)$", path):
         return False
     if path.startswith("core/internal/webui/dist/") or "testdata" in Path(path).parts:
         return False

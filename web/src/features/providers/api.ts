@@ -6,6 +6,7 @@ import type { ListResponse } from '@/lib/api/types'
 import type {
   CreateProviderRequest,
   PatchProviderRequest,
+  ProviderPreset,
   ProviderRecordDTO,
 } from './types'
 
@@ -46,6 +47,9 @@ export const providersApi = {
   /** The non-spending connection test: one model-list call, never a completion. */
   test: (r: string) =>
     http.post<ProviderRecordDTO>(`${PROVIDERS}/${ref(r)}/test`),
+  /** The engine's vendor presets: no secret and no tenant data. */
+  presets: () =>
+    http.get<ListResponse<ProviderPreset>>('/v1/m/sessions/provider-presets'),
   /** Irreversible for that reference. */
   revoke: (r: string) =>
     http.post<ProviderRecordDTO>(`${PROVIDERS}/${ref(r)}/revoke`),
@@ -59,6 +63,8 @@ export const providersApi = {
  * under a new boundary starts with nothing to paint.
  */
 export const providerKeys = {
+  /** The engine's own table, the same for every tenant. */
+  presets: ['provider-presets'] as const,
   all: (tenant: string | null) => ['providers', tenant] as const,
   boundaryScope: (tenant: string | null, epoch: number) =>
     ['providers', tenant, 'b', epoch] as const,

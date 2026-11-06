@@ -89,6 +89,10 @@ func (m *Module) handleSweep(w http.ResponseWriter, r *http.Request, mc api.Modu
 				return err
 			}
 			for _, rec := range recs {
+				pols, err := m.approvalPolicyLookup(r.Context(), sc, pols)(rec)
+				if err != nil {
+					return err
+				}
 				batchN++
 				didEscalate, didExpire := false, false
 				if esc, ok := tsValue(rec, colEscalateAt); ok && !now.Before(esc) && rec.String(colEscalatedAt) == "" {

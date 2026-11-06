@@ -5,39 +5,29 @@
 package governance_test
 
 import (
-	"context"
-
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 )
 
 // --- group-subject helpers (the auth partition is reached through the real
 // Authenticator the harness wires; the governance module never touches it) ----------
 
-// createGroup provisions a directory group in tenant with the given member user ids
-// (the members must already hold a tenant membership) and returns its id. The root
-// superadmin is the actor — the same operator path /v1/scim and /v1/groups drive.
+// createGroup stores a directory group in tenant with the given member user ids
+// (the members must already hold a tenant membership) and returns its id.
 func (h *harness) createGroup(super auth.Principal, tenant model.TenantID, name, externalID string, members ...string) model.ID {
 	h.t.Helper()
 	ids := make([]model.ID, len(members))
 	for i, m := range members {
 		ids[i] = model.ID(m)
 	}
-	g, err := h.authr.SCIMCreateGroup(context.Background(), super, tenant, auth.SCIMGroupInput{
-		DisplayName: name, ExternalID: externalID, Members: ids,
-	})
-	if err != nil {
-		h.t.Fatalf("create group %s: %v", name, err)
-	}
-	return g.Group.ID
+	return authtest.Group(h.t, h.st, tenant, name, externalID, ids...).Group.ID
 }
 
-// nestGroup nests child under parent (operator path, superadmin authority).
+// nestGroup nests child under parent.
 func (h *harness) nestGroup(super auth.Principal, tenant model.TenantID, child, parent model.ID) {
 	h.t.Helper()
-	if _, err := h.authr.ConfigureGroupParent(context.Background(), super, tenant, child, parent); err != nil {
-		h.t.Fatalf("nest group: %v", err)
-	}
+	authtest.Nest(h.t, h.st, child, parent)
 }
 
 // --- e2e: a group-subject grant authorizes every member within the scope -------------

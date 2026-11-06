@@ -22,8 +22,10 @@ export function browserSessionHeaders(
   }
 }
 
-export function journeyNowLink(page: Page) {
+/** Settings at the left navigation's foot: every sign-in paints it, for every person, on
+ * every page, with the navigation folded or not. */
+export function journeyShellLink(page: Page) {
   return page
     .getByRole('navigation', { name: 'Main navigation', exact: true })
-    .getByRole('link', { name: 'Now', exact: true })
+    .getByRole('link', { name: 'Settings', exact: true })
 }

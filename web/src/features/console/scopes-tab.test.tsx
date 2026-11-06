@@ -13,11 +13,16 @@ import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
+import { ApiError } from '@/lib/api/errors'
+import { useStepUpStore } from '@/stores/step-up'
 
-const { api, authState } = vi.hoisted(() => ({
+const { api, templates, authState, toastError } = vi.hoisted(() => ({
+  toastError: vi.fn(),
+  templates: { list: vi.fn() },
   api: {
     listWorkspaces: vi.fn(),
     createWorkspace: vi.fn(),
+    createBinding: vi.fn(),
     updateWorkspace: vi.fn(),
     listAgentGroups: vi.fn(),
     createAgentGroup: vi.fn(),
@@ -50,6 +55,14 @@ vi.mock('@/features/extensions', async (importOriginal) => {
     },
   }
 })
+vi.mock('@/components/ui/toaster', () => ({
+  toast: {
+    success: vi.fn(),
+    error: toastError,
+    warning: vi.fn(),
+    info: vi.fn(),
+  },
+}))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/lib/hooks/use-workspace-filter', () => ({
   useWorkspaceFilter: () => ({ workspaceId: undefined, queryKey: '__all__' }),
@@ -58,6 +71,11 @@ vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
   RequireAssurance: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
+vi.mock('@/features/workspace-templates/api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/workspace-templates/api')>()
+  return { ...actual, templatesApi: templates }
+})
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, consoleApi: api }
@@ -116,6 +134,10 @@ beforeEach(() => {
   api.listAgentGroups.mockResolvedValue(emptyList)
   api.listAgentGroupMembers.mockResolvedValue(emptyList)
   api.listAgents.mockResolvedValue(emptyList)
+  templates.list.mockResolvedValue({
+    items: [{ id: 'tpl-1', name: 'Read only', archived_at: null }],
+    has_more: false,
+  })
 })
 
 describe('ScopesTab agent-groups', () => {
@@ -189,6 +211,158 @@ describe('ScopesTab agent-groups', () => {
         name: 'Platform Team',
         slug: 'platform-team',
       }),
+    )
+  })
+
+  it('starts a workspace from a template and can make it mandatory', async () => {
+    api.createWorkspace.mockResolvedValue({
+      ...workspace,
+      slug: 'platform-team',
+    })
+    api.createBinding.mockResolvedValue({ kind: 'binding', status: 201 })
+    const user = userEvent.setup()
+    wrap(<ScopesTab />)
+
+    await user.click(
+      await screen.findByRole('button', { name: /new workspace/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/^name/i), 'Platform Team')
+    await user.click(
+      within(dialog).getByRole('combobox', { name: /start from a template/i }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Read only' }))
+    await user.click(within(dialog).getByRole('switch', { name: /mandatory/i }))
+    await user.click(
+      within(dialog).getByRole('button', { name: /new workspace/i }),
+    )
+
+    // The department exists first, then the template is assigned to it as its mandatory one.
+    await waitFor(() =>
+      expect(api.createBinding).toHaveBeenCalledWith({
+        source_type: 'template',
+        source_ref: 'tpl-1',
+        scope_tree: 'workspace',
+        scope_ref: 'platform-team',
+        effect: 'require',
+        enabled: true,
+      }),
+    )
+    expect(api.createWorkspace).toHaveBeenCalledWith({
+      name: 'Platform Team',
+      slug: 'platform-team',
+    })
+  })
+
+  it('asks for a step-up when assigning the template needs one and keeps the workspace it made', async () => {
+    api.createWorkspace.mockResolvedValue({
+      ...workspace,
+      slug: 'platform-team',
+    })
+    api.createBinding
+      .mockRejectedValueOnce(
+        new ApiError(403, 'step_up_required', 'assurance level too low'),
+      )
+      .mockResolvedValue({ kind: 'binding', status: 201 })
+    const user = userEvent.setup()
+    wrap(<ScopesTab />)
+
+    await user.click(
+      await screen.findByRole('button', { name: /new workspace/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/^name/i), 'Platform Team')
+    await user.click(
+      within(dialog).getByRole('combobox', { name: /start from a template/i }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Read only' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: /new workspace/i }),
+    )
+
+    await waitFor(() =>
+      expect(useStepUpStore.getState().request).not.toBeNull(),
+    )
+    useStepUpStore.getState().request?.retry?.()
+
+    await waitFor(() => expect(api.createBinding).toHaveBeenCalledTimes(2))
+    expect(api.createWorkspace).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not make a second workspace when the slug is edited after a step-up', async () => {
+    api.createWorkspace.mockResolvedValue({
+      ...workspace,
+      slug: 'platform-team',
+    })
+    api.createBinding
+      .mockRejectedValueOnce(
+        new ApiError(403, 'step_up_required', 'assurance level too low'),
+      )
+      .mockResolvedValue({ kind: 'binding', status: 201 })
+    const user = userEvent.setup()
+    wrap(<ScopesTab />)
+
+    await user.click(
+      await screen.findByRole('button', { name: /new workspace/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/^name/i), 'Platform Team')
+    await user.click(
+      within(dialog).getByRole('combobox', { name: /start from a template/i }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Read only' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: /new workspace/i }),
+    )
+    await waitFor(() =>
+      expect(useStepUpStore.getState().request).not.toBeNull(),
+    )
+
+    // The department exists; a new slug typed now must not make another one.
+    await user.clear(within(dialog).getByLabelText(/^slug/i))
+    await user.type(within(dialog).getByLabelText(/^slug/i), 'platform-eu')
+    await user.click(
+      within(dialog).getByRole('button', { name: /new workspace/i }),
+    )
+
+    await waitFor(() => expect(api.createBinding).toHaveBeenCalledTimes(2))
+    expect(api.createWorkspace).toHaveBeenCalledTimes(1)
+    expect(api.createBinding).toHaveBeenLastCalledWith(
+      expect.objectContaining({ scope_ref: 'platform-team' }),
+    )
+  })
+
+  it('says the department has no template when the dialog is cancelled after a refused step-up', async () => {
+    api.createWorkspace.mockResolvedValue({
+      ...workspace,
+      slug: 'platform-team',
+    })
+    api.createBinding.mockRejectedValue(
+      new ApiError(403, 'step_up_required', 'assurance level too low'),
+    )
+    const user = userEvent.setup()
+    wrap(<ScopesTab />)
+
+    await user.click(
+      await screen.findByRole('button', { name: /new workspace/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/^name/i), 'Platform Team')
+    await user.click(
+      within(dialog).getByRole('combobox', { name: /start from a template/i }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Read only' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: /new workspace/i }),
+    )
+    await waitFor(() =>
+      expect(useStepUpStore.getState().request).not.toBeNull(),
+    )
+
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }))
+
+    expect(toastError).toHaveBeenCalledWith(
+      expect.stringContaining('its template was not assigned'),
     )
   })
 

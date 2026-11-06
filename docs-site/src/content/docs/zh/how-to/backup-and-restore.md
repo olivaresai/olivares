@@ -9,7 +9,7 @@ description: >-
 控制平面的备份比大多数备份的任务更艰巨：它必须带着其**可证明完好无损、篡改可检测的
 账本**回来。`olivares dr` 正是围绕这一要求构建的——每个捆绑包都记录每个租户的
 链尖，恢复在**所恢复的账本不具备连续性安全时以非零状态失败**。`dr drill`
-在临时目录里的合成账本上检查从备份到恢复的账本连续性，并打印测得的 RTO。
+在临时目录里的合成账本上检查从备份到恢复的账本连续性，并打印测得的 RTO；带 `--scratch-dsn` 时，它会在 PostgreSQL 上、于一次性数据库中执行同样的往返，并把该 RTO 与 SQLite 的 RTO 并列打印。
 它不检查授权、密钥保管，也不检查恢复点之后的效果，并且不触及生产数据目录。
 
 捆绑包在**由你提供的 KEK** 下加密——一个 Argon2id 派生的口令
@@ -54,9 +54,9 @@ PITR 配置（`deploy/postgres/backup/pitr-setup.md`）配对使用；包装脚�
 Helm chart 提供了一个
 [CronJob](/zh/tutorials/getting-started/kubernetes/#4-定时加密备份)；
 在裸机上，把上面的命令放进 cron。表中的数字是目标。对于 cron 分级，RPO
-目标就是 cron 间隔。`dr drill` 在合成账本上测量 SQLite 的 RTO（恢复、启动
-与校验）。它不测量 RPO，也不测量 Postgres 恢复。测得的 SQLite RTO 连同
-事件数量和主机记在 `docs/DR-RUNBOOK.md`；它们不是本表中的目标。
+目标就是 cron 间隔。`dr drill` 在合成账本上测量 RTO（恢复、启动与校验）：
+SQLite 始终测量，给出 `--scratch-dsn` 时也测量 PostgreSQL。它不测量 RPO。
+测得的 RTO 值连同事件数量和主机记在 `docs/DR-RUNBOOK.md`；它们不是本表中的目标。
 
 | 分级 | 机制 | 目标 RPO | 目标 RTO |
 |---|---|---|---|
@@ -71,13 +71,21 @@ Helm chart 提供了一个
 
 `dr verify` 在**不触及你的数据目录**的情况下检查捆绑包。对 SQLite，它在
 临时目录中恢复并校验账本连续性，该检查失败时以非零状态退出。对 Postgres，
-它检查捆绑包摘要以及密钥能否解密。Postgres 捆绑包的完整链校验需要恢复到
-一个临时 Postgres。用下面的命令运行检查：
+请用 `--scratch-dsn` 给出一台临时服务器：它在那里创建一个带有自身角色的一次性数据库，
+把捆绑包恢复进去，校验账本，然后两者都删除。用下面的命令运行检查：
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \
   --passphrase-file <your-dr-passphrase-file>
+
+# Postgres: a maintenance DSN of a server where databases and roles may be created
+olivares dr verify --in /backups/olivares-pg-<ts>.drbundle \
+  --passphrase-file <your-dr-passphrase-file> \
+  --scratch-dsn file:/run/secrets/scratch.dsn
 ```
+
+DSN 是一个 `file:` 或 `env:` 引用，绝不是内联凭据。不带 `--scratch-dsn` 时，
+Postgres 捆绑包只检查其摘要以及密钥能否解密，输出会说明账本未被恢复。
 
 `dr inspect --in <bundle>` 会打印清单（无需 KEK，不显示任何机密）——用的是哪个
 引擎、哪些租户、哪些链尖。以与备份相同的节奏运行演练；一份未经验证的备份是一种
@@ -96,6 +104,12 @@ olivares dr restore --in /backups/olivares-dr-<ts>.drbundle \
 若链不安全则以非零状态退出。任何恢复之后，都要针对你的**离机**检查点固定值
 重新验证——一个恢复出来的较旧快照可能通过朴素的遍历，却在离机比对中失败
 （[故障排查 § 账本](/zh/how-to/troubleshooting/#ledger-验证失败)）。
+
+在 Postgres 上，若恢复目标数据库已含有 estate，除非你明确声明，否则会被拒绝：
+需要 `--operator` 和 `--reason`（记录在恢复后的账本中）以及 `--force`。随后，备份中的对象
+会在单个事务中替换该数据库中的对象，因此旧 estate 要么整体被替换，要么完全不变。在它动任何东西之前，
+它会对该数据库保存一份 `pg_dump`（通过 `--admin-dsn` 完成，此处为必需项），与先前的签名密钥放在一起，
+这些密钥会保留为 `*.pre-restore-*`；确认无误后请自行删除它们。
 
 ## 决定一切的那两把密钥
 

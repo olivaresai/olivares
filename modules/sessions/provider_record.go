@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -71,6 +72,7 @@ const (
 	colPRState        = "state"
 	colPRNameSlot     = "name_slot"
 	colPRModels       = "models"
+	colPRCapabilities = "capabilities"
 	colPRDefaultModel = "default_model"
 	colPRProbeState   = "probe_state"
 	// colPRProbeDetail is ONE bounded sentence about the last probe. It never
@@ -174,16 +176,17 @@ var (
 // ProviderRecord is the module's own view of one record row. It has no field for
 // the credential, and adding one would be the defect.
 type ProviderRecord struct {
-	ID          model.ID
-	Ref         string
-	Kind        string
-	DisplayName string
-	BaseURL     string
-	Service     string
-	SecretRef   string
-	KeyHint     string
-	State       string
-	Models      []string
+	ID           model.ID
+	Ref          string
+	Kind         string
+	DisplayName  string
+	BaseURL      string
+	Service      string
+	SecretRef    string
+	KeyHint      string
+	State        string
+	Models       []string
+	Capabilities *ProviderCapabilities
 	// nil preserves native behavior; empty awaits a new record's first usable test.
 	DefaultModel *string
 	ProbeState   string
@@ -248,6 +251,7 @@ func (m *Module) registerProviderRecordSchema(reg store.ExtensionRegistry) error
 			{Name: colPRKeyHint, Kind: model.KindText, Nullable: true, Principal: model.None("the last four characters of a registered key, never usable alone: provider_record.go:347-352, provider_record.go:448")},
 			{Name: colPRState, Kind: model.KindText, Indexed: true, Principal: model.None("a record lifecycle state, a closed set: provider_record.go:84-88, provider_record.go:449")},
 			{Name: colPRNameSlot, Kind: model.KindText, Principal: model.None("the uniqueness key of a live record built from its kind and folded name, or a revoked marker: provider_record.go:355-359")},
+			{Name: colPRCapabilities, Kind: model.KindJSON, Nullable: true, Principal: model.None("bounded capability observations of the tested model, read back as the record's capability list and written by the qualification: provider_record.go:636, provider_record.go:1179; never a credential or principal")},
 			{Name: colPRModels, Kind: model.KindJSON, Nullable: true, Principal: pdeclProviderRecordModels},
 			{Name: colPRDefaultModel, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen provider model identifier, not a principal: provider_default_model.go:15-24")},
 			{Name: colPRProbeState, Kind: model.KindText, Nullable: true, Principal: model.None("a probe outcome, a closed set: provider_record.go:111-117, provider_record.go:847")},
@@ -463,17 +467,59 @@ func validProviderRecordRef(ref string) bool {
 // has heard of. Until 26.10.1 an openai_compatible record served every driver because
 // it names what it injects; naming OPENAI_* holds no CLI to its address, so it now
 // serves only Codex, whose own provider configuration takes the endpoint. An unknown
-// driver serves nothing.
-func recordServesDriver(kind, baseURL, driver string) bool {
+// driver serves nothing. A Responses-only tool (Codex) is also not held to a preset whose
+// vendor does not serve the Responses API (refusedServices).
+//
+// OpenCode's own closed-endpoint rule (driverfacts.CanBind, EgressLocal) is "a local
+// model server" because that rule lives in core/driverfacts, which never imports a
+// connector; the provider preset catalog (connectors/modelprovider) is read here
+// instead, the one place that already imports both. OpenCode ships a native provider
+// for OpenRouter, DeepSeek, Mistral, Moonshot and Z.ai, each at the catalog's own
+// documented address (driver_opencode.go), so a BYO key at exactly that address is
+// confined the same way a local model server is, and nothing else of this kind. The
+// governed DeepSeek row (API use only, modelprovider.NativeService) serves no native
+// session, here as at launch.
+func recordServesDriver(kind, baseURL, service, driver string) bool {
 	facts, _ := driverfacts.Lookup(driver)
-	return facts.CanBind(kind, baseURL)
+	if slices.Contains(refusedServices(facts), service) {
+		return false
+	}
+	if facts.CanBind(kind, baseURL) {
+		return true
+	}
+	if driver != providerDriverOpenCode || kind != ProviderKindOpenAICompatible || !modelprovider.NativeService(service) {
+		return false
+	}
+	_, ok := modelprovider.LookupPresetByEndpoint(kind, baseURL)
+	return ok
+}
+
+// refusedServices is the presets whose endpoint a tool could be pointed at but whose API
+// is not the one it speaks: a Responses-only tool (Codex) and a preset that does not serve
+// the Responses API. A record with no preset is never listed, so it binds as it always did.
+// The bind rule, the refusal sentence and GET /tools all read this one list.
+func refusedServices(facts driverfacts.Facts) []string {
+	if !facts.ResponsesOnly {
+		return nil
+	}
+	var refs []string
+	for _, row := range modelprovider.Presets() {
+		if !row.Responses && facts.CanBind(row.Kind, row.BaseURL) {
+			refs = append(refs, row.Ref)
+		}
+	}
+	return refs
 }
 
 // recordDriverRefusal is the one sentence for a record a driver cannot be held to.
-func recordDriverRefusal(driver, recordName, kind string) string {
+func recordDriverRefusal(driver, recordName, kind, service string) string {
 	facts, ok := driverfacts.Lookup(driver)
 	if !ok || facts.BindingDescription == "" {
 		return "driver " + driver + " cannot be held to a provider from Providers; use its own sign-in"
+	}
+	if slices.Contains(refusedServices(facts), service) {
+		row, _ := modelprovider.LookupPreset(service)
+		return facts.Name + " needs the Responses API; " + row.Title + " offers Chat Completions. Use OpenCode or Claude Code."
 	}
 	return facts.BindingDescription + "; " + strconv.Quote(recordName) + " (kind " + kind + ") is not one of these, so the session does not start"
 }
@@ -586,6 +632,12 @@ func providerRecordFromRecord(rec model.Record) ProviderRecord {
 	if !rec.IsNull(colPRDefaultModel) {
 		value := rec.String(colPRDefaultModel)
 		out.DefaultModel = &value
+	}
+	if raw := rec.String(colPRCapabilities); raw != "" {
+		var caps ProviderCapabilities
+		if json.Unmarshal([]byte(raw), &caps) == nil {
+			out.Capabilities = &caps
+		}
 	}
 	if raw := strings.TrimSpace(rec.String(colPRModels)); raw != "" {
 		var models []string
@@ -860,6 +912,9 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 			return ErrProviderRecordChanged
 		}
 		resetProbe := p.APIKey != nil
+		if p.DefaultModel != nil {
+			rec[colPRCapabilities] = ""
+		}
 		if p.BaseURL != nil {
 			base, err := providerServiceBaseURL(rec.String(colPRKind), rec.String("service"), *p.BaseURL)
 			if err != nil {
@@ -893,6 +948,7 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 			rec[colPRProbeDetail] = ""
 			rec[colPRProbeLatency] = int64(0)
 			rec[colPRModels] = ""
+			rec[colPRCapabilities] = ""
 			rec[colPRProbedAt] = ""
 		}
 		updated, rerr := repo.Update(ctx, rec)
@@ -956,6 +1012,7 @@ func (m *Module) RevokeProviderRecord(ctx context.Context, actor auth.Principal,
 		rec[colPRProbeState] = ProbeNever
 		rec[colPRProbeDetail] = ""
 		rec[colPRModels] = ""
+		rec[colPRCapabilities] = ""
 		updated, rerr := repo.Update(ctx, rec)
 		if rerr != nil {
 			return rerr
@@ -985,10 +1042,8 @@ func (m *Module) RevokeProviderRecord(ctx context.Context, actor auth.Principal,
 // TestProviderRecord asks the provider which models it serves, with the registered
 // credential, and records the outcome on the row.
 //
-// It NEVER sends a completion. A test that generated a token would spend the
-// operator's money, on a model nobody chose, to answer a question a model LIST
-// already answers: is the endpoint reachable and does it accept this credential.
-func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, ref string) (ProviderRecord, error) {
+// Default tests send no completion. Deep explicitly opts into bounded generation.
+func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, ref string, deep ...bool) (ProviderRecord, error) {
 	if m.Data == nil {
 		return ProviderRecord{}, errNoData
 	}
@@ -1003,7 +1058,7 @@ func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, 
 		return ProviderRecord{}, ErrProviderRecordRevoked
 	}
 	started := m.now()
-	res, probeErr := m.probeProviderRecord(ctx, tenant, rec)
+	res, probeErr := m.probeProviderRecord(ctx, tenant, rec, deep...)
 	var refused *runErr
 	if errors.As(probeErr, &refused) {
 		return ProviderRecord{}, probeErr
@@ -1013,10 +1068,10 @@ func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, 
 		elapsed = 0
 	}
 	state, detail, models := classifyProbe(res, probeErr)
-	return m.recordProbeOutcome(ctx, tenant, rec, state, detail, models, elapsed)
+	return m.recordProbeOutcome(ctx, tenant, rec, state, detail, models, elapsed, res.Capabilities)
 }
 
-func (m *Module) probeProviderRecord(ctx context.Context, tenant model.TenantID, rec ProviderRecord) (ProviderProbeResult, error) {
+func (m *Module) probeProviderRecord(ctx context.Context, tenant model.TenantID, rec ProviderRecord, deep ...bool) (ProviderProbeResult, error) {
 	var key []byte
 	var err error
 	if rec.Kind != ProviderKindOllama {
@@ -1029,7 +1084,7 @@ func (m *Module) probeProviderRecord(ctx context.Context, tenant model.TenantID,
 		}
 	}
 	defer clear(key)
-	return m.probeProviderService(ctx, rec, string(key))
+	return m.probeProviderService(ctx, rec, string(key), deep...)
 }
 
 // classifyProbe turns a probe answer into the three-valued outcome. The split is
@@ -1084,6 +1139,7 @@ func (m *Module) recordProbeOutcome(
 	state, detail string,
 	models []string,
 	elapsed time.Duration,
+	capabilities ...*ProviderCapabilities,
 ) (ProviderRecord, error) {
 	encoded := ""
 	if len(models) > 0 {
@@ -1105,7 +1161,8 @@ func (m *Module) recordProbeOutcome(
 		// concurrent rotation/re-endpoint/revoke cannot inherit the old green.
 		if rec.String(colPRState) != ProviderRecordActive ||
 			rec.String(colPRSecretRef) != expected.SecretRef ||
-			rec.String(colPRBaseURL) != expected.BaseURL {
+			rec.String(colPRBaseURL) != expected.BaseURL ||
+			(len(capabilities) > 0 && capabilities[0] != nil && !sameProviderDefaultModel(rec, expected.DefaultModel)) {
 			return ErrProviderRecordChanged
 		}
 		keepCredentialVersion(rec, false)
@@ -1114,6 +1171,15 @@ func (m *Module) recordProbeOutcome(
 		rec[colPRProbeLatency] = elapsed.Milliseconds()
 		rec[colPRProbedAt] = model.NewTimestamp(m.now()).String()
 		rec[colPRModels] = encoded
+		if state == ProbeOK && len(capabilities) > 0 && capabilities[0] != nil {
+			b, err := json.Marshal(capabilities[0])
+			if err != nil {
+				return err
+			}
+			rec[colPRCapabilities] = string(b)
+		} else {
+			rec[colPRCapabilities] = ""
+		}
 		if state == ProbeOK && !rec.IsNull(colPRDefaultModel) && rec.String(colPRDefaultModel) == "" {
 			if selected := initialProviderModel(rec.String(colPRKind), rec.String("service"), models); selected != "" {
 				rec[colPRDefaultModel] = selected
@@ -1155,4 +1221,11 @@ func appendProviderRecordAudit(ctx context.Context, sc store.Scope, actor auth.P
 		return errors.New("provider key change audit was not persisted")
 	}
 	return err
+}
+
+func sameProviderDefaultModel(rec model.Record, expected *string) bool {
+	if expected == nil {
+		return rec.IsNull(colPRDefaultModel)
+	}
+	return !rec.IsNull(colPRDefaultModel) && rec.String(colPRDefaultModel) == *expected
 }

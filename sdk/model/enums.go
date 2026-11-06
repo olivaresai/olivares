@@ -119,6 +119,9 @@ const (
 	// ConfidenceApproximate unless a deployment terminates mTLS in front of the
 	// listener. Never trust a CoT uid as an authenticated identity.
 	SignalCoT SignalSource = "cot"
+	// SignalSessionLaunch is the final access grant carried by a managed launch.
+	// It records permitted reach, not tool activity, and expires with the launch.
+	SignalSessionLaunch SignalSource = "session_launch"
 )
 
 // Confidence is the qualitative trust in an observation. It is shown to the

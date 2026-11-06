@@ -1,0 +1,80 @@
+{
+  "title": "主机与会话",
+  "subtitle": "主机、它的磁盘、正在运行的会话，以及它们的用量。",
+  "range": {
+    "label": "范围",
+    "24h": "24 小时",
+    "7d": "7 天",
+    "30d": "30 天"
+  },
+  "host": {
+    "heading": "主机",
+    "keeps24": "主机保留 24 小时的历史，因此图表显示最近 24 小时。",
+    "unavailable": "此主机不提供主机指标。只有 Linux 会报告它们。",
+    "noHistory": "主机尚未记录任何样本。",
+    "noFilesystems": "没有文件系统报告其大小。",
+    "noFolders": "没有会话文件夹。",
+    "facts": {
+      "load": "负载 {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "内存 {{used}} / {{total}}",
+      "swap": "交换 {{used}} / {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "最近 24 小时的 CPU 使用率：当前 {{now}}，峰值 {{peak}}，平均 {{average}}。"
+    },
+    "memory": {
+      "title": "内存",
+      "total": "总量",
+      "summary": "最近 24 小时的内存使用量：当前 {{total}} 中的 {{used}}，峰值 {{peak}}。"
+    },
+    "disks": {
+      "title": "文件系统",
+      "summary_other": "{{count}} 个文件系统；最满的是 {{mount}}，已用 {{pct}}。"
+    },
+    "folders": {
+      "title": "会话文件夹",
+      "summary_other": "{{count}} 个会话文件夹共占用 {{total}}；最大的是 {{largest}}，{{size}}。",
+      "floor": "测量在其上限处停止，因此这些大小是最小值。"
+    },
+    "columns": {
+      "time": "时间",
+      "cpu": "CPU 使用率",
+      "memory": "内存使用量",
+      "swap": "交换使用量",
+      "mount": "挂载点",
+      "device": "设备",
+      "type": "类型",
+      "used": "已用",
+      "size": "大小",
+      "usedPercent": "已用 %",
+      "folder": "文件夹"
+    }
+  },
+  "live": {
+    "heading": "正在运行的会话",
+    "loading": "正在读取正在运行的会话…",
+    "error": "无法读取正在运行的会话。",
+    "none": "没有正在运行的会话。",
+    "more": "列表被截断：打开的会话比这里统计的更多，因此数量是最小值。",
+    "automation": "自动化",
+    "unknown": "未记录",
+    "columns": {
+      "tool": "工具",
+      "person": "人员",
+      "sessions": "会话"
+    },
+    "byTool": {
+      "title": "按工具统计的正在运行的会话",
+      "summary_other": "按工具统计的 {{count}} 个正在运行的会话：{{list}}。"
+    },
+    "byPerson": {
+      "title": "按人员统计的正在运行的会话",
+      "summary_other": "按人员统计的 {{count}} 个正在运行的会话：{{list}}。"
+    }
+  },
+  "usage": {
+    "heading": "用量"
+  }
+}

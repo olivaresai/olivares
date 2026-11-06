@@ -211,23 +211,12 @@ the policy, so a `.invalid` name fails with *«did not resolve»* and the test s
 instead of authorization. Loopback hosts (`127.0.0.1` authorized, `localhost` not) give two
 resolvable names on opposite sides of one policy.
 
-### `work list` has no `ls` alias — KERNEL, declared and NOT filled
+### `work list` answers to `ls` — filled
 
-Measured against the binary's own command dump (`olivares commands`): the tree has
-**13** listings named `ls` and **exactly one** named `list` — `olivares work list`. It
-carries **no aliases at all**, so `olivares work ls` answers `unknown command "ls" for
-"olivares work"`. It is the only listing in the CLI that cannot be reached at the
-canonical spelling this CLI settled on (`cmd_dr_offsite.go:298-301` states the rule while
-applying it: *«Canonical short verb first … the old name stays as an alias so nothing
-breaks»*).
-
-⚠ **The stronger version of this claim is false, and it is worth writing down so nobody
-re-derives it:** it is NOT true that every other `ls` carries a `list` alias. Six of the
-twelve `Use: "ls"` blocks in the package declare no alias at all — the four in
-`cmd_eventing.go` (`:120`, `:566`, `:650`, `:793`), plus `cmd_secrets.go:44` and
-`cmd_sources.go:61`. The alias is a courtesy some groups extend; the **spelling** is the
-convention, and `work` is the only group that breaks it.
-
-This is a one-line fix and it is **deliberately not made here**: the work kernel is owned
-by a separate track, and the change belongs with it. Recorded rather than applied, so the
-owner decides.
+`olivares work list` carries the alias `ls` (`cmd/olivares/cmd_work.go`, `Aliases:
+[]string{"ls"}`), so `olivares work ls` lists work items, decisions or leases like every
+other listing in this CLI. Both directions are enforced for the whole tree rather than
+group by group: every command named `list` must answer to `ls`, and
+`enforceSubcommandContract` (`cmd/olivares/subcommand_contract.go`) adds `list` to every
+`ls` that lacks it. `TestEveryListCommandAlsoAnswersToLs` and `TestWorkLsResolvesToWorkList`
+(`cmd/olivares/cmd_alias_integrity_test.go`) hold both.

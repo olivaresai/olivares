@@ -3,19 +3,19 @@
     "label": "已加载 {{n}} 个模板；还有更多",
     "hint": "此目录仅提供已加载的模板；未显示的模板可能位于后续页面。"
   },
-  "title": "工作区模板",
+  "title": "模板",
   "subtitle": "工作区会话的 Hooks、设置、连接器和策略的可复用快照。",
   "catalog": {
     "builtin": "内置",
     "version": "v{{version}}",
     "author": "作者：{{author}}",
     "archived": "已归档",
-    "noTemplates": "未找到模板。",
-    "noTemplatesHint": "创建您的第一个模板以复用工作区配置。",
-    "filterAll": "全部",
-    "filterBuiltin": "内置",
-    "filterCustom": "自定义",
     "showArchived": "显示已归档"
+  },
+  "groups": {
+    "yours": "你的模板",
+    "builtin": "内置模板（{{n}}）",
+    "yoursEmpty": "暂无模板。模板是新会话可重复使用的起点。"
   },
   "editor": {
     "nameLabel": "名称",
@@ -30,7 +30,16 @@
       "connectors": "连接器",
       "connectorsHint": "应用此模板时要附加的连接器 ID。",
       "policies": "治理策略",
-      "policiesHint": "DLP 模式、会话时长限制、允许的工具和 I/O 记录。"
+      "policiesHint": "DLP 模式、会话时长限制、允许的工具和 I/O 记录。",
+      "secrets": "密钥",
+      "secretsHint": "来自此模板的会话以环境变量形式接收的保管库密钥。",
+      "summary": {
+        "hooks_other": "{{count}} 个 Hook",
+        "secrets_other": "{{count}} 个变量",
+        "connectors_other": "{{count}} 个连接器",
+        "set_other": "已设置 {{count}} 项",
+        "model": "模型：{{model}}"
+      }
     },
     "hooks": {
       "preTool": "工具前",

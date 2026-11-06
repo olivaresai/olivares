@@ -27,3 +27,17 @@ func inputPending(fd int, ms int) bool {
 		return err == nil && n > 0 && fds[0].Revents&unix.POLLIN != 0
 	}
 }
+
+// waitInput blocks until fd has a byte, and reports false when done closes first.
+// A reader that waits here ends with its frame instead of staying in a read that
+// would swallow the first key of the next screen.
+func waitInput(fd int, done <-chan struct{}) bool {
+	for !inputPending(fd, 100) {
+		select {
+		case <-done:
+			return false
+		default:
+		}
+	}
+	return true
+}

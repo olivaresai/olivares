@@ -36,7 +36,7 @@ func (r *stdioCountReader) Read(p []byte) (int, error) {
 }
 
 func TestStdioFramingRejectsExcessWithoutDiscardOrRecovery(t *testing.T) {
-	const ceiling = 32 << 20
+	const ceiling = maxStdioFrame
 	r := &stdioCountReader{Reader: io.MultiReader(strings.NewReader("stray"), io.LimitReader(stdioPadding{}, ceiling+(1<<20)), strings.NewReader("\n{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n"))}
 	tr := &stdioTransport{out: bufio.NewReaderSize(r, 4096)}
 	result, err := tr.readResponse(1)
@@ -53,7 +53,7 @@ func TestStdioFramingRejectsExcessWithoutDiscardOrRecovery(t *testing.T) {
 }
 
 func TestStdioFramingCeilingAndMatching(t *testing.T) {
-	const ceiling = 32 << 20
+	const ceiling = maxStdioFrame
 	const prefix = `{"jsonrpc":"2.0","id":1,"result":{"ok":true}}`
 	for _, ending := range []string{"\n", "\r\n", ""} {
 		tr := &stdioTransport{out: bufio.NewReader(io.MultiReader(strings.NewReader(prefix), io.LimitReader(stdioPadding{}, ceiling-int64(len(prefix))), strings.NewReader(ending)))}

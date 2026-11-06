@@ -4,7 +4,11 @@
 package mqtt
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -262,6 +266,47 @@ func TestBuildSubscribeShape(t *testing.T) {
 	}
 	if 1+consumed+remainingLen(pkt, consumed) != len(pkt) {
 		t.Fatal("subscribe remaining length mismatch")
+	}
+}
+
+// The observer's SUBACK check names a refused subscription by the same class the publish reader
+// gives it, and keeps the reason byte in the text.
+func TestSubackRefusalNamesItsClass(t *testing.T) {
+	for _, test := range []struct {
+		reason byte
+		want   error
+	}{
+		{0x80, ErrBrokerRefused},
+		{0x86, ErrBrokerCredentials},
+		{0x87, ErrBrokerCredentials},
+		{0x88, ErrBrokerUnavailable},
+		{0x89, ErrBrokerUnavailable},
+		{0x97, ErrBrokerUnavailable},
+	} {
+		c := &conn{r: bufio.NewReader(bytes.NewReader(frame(pktSUBACK, 0, []byte{0, 1, 0, test.reason})))}
+		err := c.readSuback(1, 1)
+		if !errors.Is(err, test.want) {
+			t.Fatalf("SUBACK 0x%02x: error = %v, want %v", test.reason, err, test.want)
+		}
+		if test.want == ErrBrokerUnavailable && errors.Is(err, ErrBrokerRefused) {
+			t.Fatalf("SUBACK 0x%02x reads as a refusal: %v", test.reason, err)
+		}
+		if !strings.Contains(err.Error(), fmt.Sprintf("0x%02x", test.reason)) {
+			t.Fatalf("SUBACK 0x%02x: the reason byte is missing from %q", test.reason, err)
+		}
+	}
+	// Granted QoS 1 and 2 stay an error for the QoS 0 observer, without a refusal class.
+	for _, granted := range []byte{1, 2} {
+		c := &conn{r: bufio.NewReader(bytes.NewReader(frame(pktSUBACK, 0, []byte{0, 1, 0, granted})))}
+		err := c.readSuback(1, 1)
+		if err == nil || errors.Is(err, ErrBrokerRefused) || !strings.Contains(err.Error(), "not granted at QoS 0") {
+			t.Fatalf("granted QoS %d: error = %v, want the not-granted text without a refusal class", granted, err)
+		}
+	}
+	// A malformed SUBACK, with a property length past the packet, is an error and never a panic.
+	c := &conn{r: bufio.NewReader(bytes.NewReader(frame(pktSUBACK, 0, []byte{0, 1, 0x32, 0x87})))}
+	if err := c.readSuback(1, 1); err == nil {
+		t.Fatal("a malformed SUBACK was accepted")
 	}
 }
 

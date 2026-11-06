@@ -18,7 +18,7 @@
 #         SMOKE_REAL_RUNTIME=podman|docker [SMOKE_IMAGE=<image with /bin/sh>] scripts/smoke-container-isolation.sh
 # The second form uses the real runtime on this host instead of the stand-in: the proof that podman
 # or Docker accept the arguments. It still uses the stand-in claude, which needs only /bin/sh in the image.
-# Requires: go (to build if ./bin/olivares is absent), curl, python3.
+# Requires: go (to build if ./bin/olivares is absent), curl, python3, and unshare for the stand-in.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -122,7 +122,12 @@ case "\$1" in
     shift
     while [ "\$1" != '$IMAGE' ]; do shift; done
     shift
-    exec "\$@" ;;
+    # A container has a network of its own with its loopback up: so does this stand-in.
+    exec unshare --user --map-root-user --net python3 -c 'import fcntl, os, socket, struct, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+flags = struct.unpack("16sH14x", fcntl.ioctl(s, 0x8913, struct.pack("16sH14x", b"lo", 0)))[1] | 1
+fcntl.ioctl(s, 0x8914, struct.pack("16sH14x", b"lo", flags))
+os.execvp(sys.argv[1], sys.argv[1:])' "\$@" ;;
 esac
 exit 64
 SH
@@ -236,6 +241,9 @@ if [ -n "$REAL_RT" ]; then
   done
   case "$SEEN" in olivares-session-*) echo "    ok: container $SEEN is running under $REAL_RT" ;; *) fail "no running container carries the session label" ;; esac
   NAME="$SEEN"
+  MODE="$("$REAL_RT" inspect --format '{{.HostConfig.NetworkMode}}' "$NAME")"
+  [ "$MODE" != host ] || fail "a hook-governed container shares the host network"
+  echo "    ok: the container keeps the runtime's own network ($MODE)"
 else
   note "what Olivares asked of the container CLI"
   ARGV="$LOGD/argv"
@@ -243,11 +251,12 @@ else
   for want in run --rm -i --read-only --cap-drop=ALL --security-opt=no-new-privileges "$IMAGE" "$REAL_WS:/workspace"; do
     grep -qxF -- "$want" "$ARGV" || { cat "$ARGV" >&2; fail "argv lacks '$want'"; }
   done
-  # the host's program, by the path the engine resolved it to (the link or its target)
-  grep -qE "^$BINDIR/(fake-)?claude\$" "$ARGV" || { cat "$ARGV" >&2; fail "argv lacks the host's tool program"; }
+  # the host's program, by the path the engine resolved it to (the link or its target), as its own
+  # argument or as the read-only mount that carries it behind the relay
+  grep -qE "^$BINDIR/(fake-)?claude(:|\$)" "$ARGV" || { cat "$ARGV" >&2; fail "argv lacks the host's tool program"; }
   # The stock engine governs tool calls with hooks that call it on its loopback: the container
-  # carries the hook program and shares the host network to reach it.
-  grep -qxF -- "--network=host" "$ARGV" || { cat "$ARGV" >&2; fail "a hook-governed container does not share the host network"; }
+  # carries the hook program and reaches the engine through the relay, never the host network.
+  if grep -qxF -- "--network=host" "$ARGV"; then cat "$ARGV" >&2; fail "a hook-governed container shares the host network"; fi
   grep -qE '^.*/olivares:.*/olivares:ro$' "$ARGV" || { cat "$ARGV" >&2; fail "the hook program is not mounted read-only"; }
   echo "    ok: hardened run, image, the host's program, the folder mount, the hook program and the network it needs"
   if grep -qF 'smoke-dummy-bearer-not-a-real-secret' "$ARGV"; then fail "the session secret is in argv"; fi

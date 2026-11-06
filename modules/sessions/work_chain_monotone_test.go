@@ -13,30 +13,11 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// TestTheWorkChainIsMonotoneWithoutGaps pone bajo test la garantía de la tercera pata de B1 que
-// NADIE MÁS defiende — y deja fuera, a propósito, la que sí está defendida en otro sitio.
-//
-// El testigo de B1 —el registro de carril `…-b1-tres-motores.md:21`— publicó, de una
-// cadena de seis eventos conducida por tres CLIs distintos:
-//
-//	secuencia monótona sin huecos: sí   ·   cada evento con audit_hash: sí
-//
-// **Eso era una observación, no un control.** Una corrida manual dice que aquel día salió bien;
-// no dice que el motor lo garantice, y no vuelve a mirar nunca más. Aquí la misma cadena de seis
-// pasos —create → ready → block → unblock → block → unblock— se conduce por el módulo y las dos
-// afirmaciones se convierten en aserciones que pueden enrojecer.
-//
-// ⛔ LO QUE ESTE TEST NO CUBRE, Y NO LO DISIMULO. La pata de B1 valía por conducir TRES CLIs
-// reales; esto no los conduce. Las garantías que comprueba son de la CADENA —del libro—, no del
-// mando, así que son las mismas escriba quien escriba. Lo que se pierde al automatizarlo es
-// justamente lo que el testigo manual aportaba: que tres proveedores distintos hablan el mismo
-// plano. Eso sigue siendo un testigo de una corrida, y así está escrito allí.
-//
-// ⛔ Y TAMPOCO ASERTA LA ATRIBUCIÓN, que es el hueco que el propio testigo declara
-// (`…-b1-tres-motores.md:31-38`): los seis eventos llevan el mismo `actor_ref`, así que el libro
-// no sabe qué motor los escribió. Congelar eso en una aserción convertiría una LIMITACIÓN
-// declarada en un contrato defendido, y el día que llegue la credencial de sesión gestionada el
-// rojo señalaría al arreglo. Se queda como está: escrito donde se mide, no asertado aquí.
+// TestTheWorkChainIsMonotoneWithoutGaps checks that create, ready, block, unblock,
+// block and unblock produce a gap-free sequence with an audit hash on every event.
+// It exercises the module directly, not three separate provider CLIs.
+// All six events carry the same actor_ref; this test does not establish attribution
+// to individual providers or make that limitation a required behavior.
 func TestTheWorkChainIsMonotoneWithoutGaps(t *testing.T) {
 	t.Parallel()
 

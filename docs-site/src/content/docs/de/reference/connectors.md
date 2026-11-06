@@ -490,14 +490,14 @@ E-Mail; das Modul maskiert den Body vor dem Persistieren).
 | Kind | Nimmt auf |
 |---|---|
 | `gdrive` | Google Drive Dokumente (Docs/Sheets/Slides/Dateien) |
-| `confluence` | Atlassian Confluence Spaces & Pages |
+| `confluence` | Atlassian Confluence Spaces & Pages (Business) |
 | `notion` | Notion Workspaces, Databases & Pages |
 | `sharepoint` | Microsoft SharePoint / OneDrive Sites & Dokumente (Business) |
 | `s3content` | Object-Storage-Content (S3 / R2 / GCS Objekte) |
 | `sap_odata` | Entitäten eines SAP-OData-Service als governierte Dokumente (Business) |
 | `salesforce` | Salesforce-Objekte/-Records als governierte Dokumente (Business) |
-| `snowflake` | Snowflake-Tabellen/-Zeilen als governierte Dokumente (verschieden vom R/RW-Observer `snowflake-audit`) |
-| `azure_ai_search` | Dokumente in Azure-AI-Search-Indizes |
+| `snowflake` | Snowflake-Tabellen/-Zeilen als governierte Dokumente (verschieden vom R/RW-Observer `snowflake-audit`) (Business) |
+| `azure_ai_search` | Dokumente in Azure-AI-Search-Indizes (Business) |
 | `postgres` | PostgreSQL-Zeilen als governierte Dokumente — per Konstruktion read-only, deklarierte ACL pro Zeile, Klassifizierung pro Spalte (verschieden vom R/RW-Observer `pgaudit`; kein NL-to-SQL). Siehe [Postgres als governierte Kontextquelle](/de/how-to/govern-postgres-content/). |
 | `filesystem` | File-Server-Inhalte (lokal / NFS / SMB) — Lesen per Konstruktion auf das Root-Verzeichnis begrenzt, POSIX-Owner/-Group/-ACL auf Dokument-ACLs gemappt, xattr-Klassifizierung (verschieden vom `filelog`-Log-Sink). Siehe [File-Server governieren](/de/how-to/govern-your-file-server/). |
 
@@ -505,8 +505,8 @@ E-Mail; das Modul maskiert den Body vor dem Persistieren).
 // OLIVARES_SOURCES_CONFIG — Document-Quellen liegen unter "documents", niemals "sources"
 {
   "documents": [
-    { "name": "eng-wiki", "kind": "confluence",
-      "config": { "export_path": "/var/lib/olivares/confluence" } }
+    { "name": "eng-wiki", "kind": "notion",
+      "config": { "export_path": "/var/lib/olivares/notion" } }
   ]
 }
 ```

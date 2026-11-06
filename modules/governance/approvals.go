@@ -77,10 +77,14 @@ type createApprovalRequest struct {
 	RequiredApprovals int                        `json:"required_approvals,omitempty"`
 	ExpiresInSeconds  int64                      `json:"expires_in_seconds,omitempty"`
 	EscalateInSeconds int64                      `json:"escalate_in_seconds,omitempty"`
-	// LaunchedBy is the audit actor of the person who launched the session an engine
-	// launch approval is for. Internal only, never wire input. Display, and the
-	// person a policy that requires someone other than the launcher excludes.
+	// LaunchedBy is the audit actor of the person who launched the session that asks.
+	// Internal only, never wire input. Display, the person whose approval policies
+	// govern the request, and the person a policy that requires someone other than
+	// the launcher excludes.
 	LaunchedBy string `json:"-"`
+	// Origin is "ask" when Ask Olivares opens the request for the person. It is
+	// set from the requesting principal, never decoded from a body.
+	Origin string `json:"-"`
 	// ChangeClass and ChangePaths are the class of the change a publication
 	// proposes and the paths that decided it, set by the engine from the
 	// proposal's own commit. Internal only: a requester never picks its class.
@@ -102,6 +106,7 @@ type approvalDTO struct {
 	Action              string          `json:"action,omitempty"`
 	RequestedBy         string          `json:"requested_by,omitempty"`
 	LaunchedBy          string          `json:"launched_by,omitempty"`
+	Origin              string          `json:"origin,omitempty"`
 	Status              string          `json:"status"`
 	RiskTier            string          `json:"risk_tier"`
 	RequiredApprovals   int64           `json:"required_approvals"`
@@ -133,6 +138,7 @@ func toApprovalDTO(rec model.Record, now model.Timestamp, tier ActionRiskTier) a
 		SessionScopeAllowed: rec.Bool(colSessionScopeAllowed),
 		ID:                  rec.String(model.ColID), SessionRef: rec.String(colApprovalSessionRef), SubjectKind: rec.String(colSubjectKind), SubjectRef: rec.String(colSubjectRef),
 		Action: rec.String(colAction), RequestedBy: rec.String(colRequestedBy), LaunchedBy: rec.String(colLaunchedBy), Status: status,
+		Origin:            rec.String(colApprovalOrigin),
 		RiskTier:          string(tier),
 		RequiredApprovals: required, ApproveCount: rec.Int(colApproveCount), RejectCount: rec.Int(colRejectCount),
 		Reason: rec.String(colReason), PolicyRef: rec.String(colPolicyRef),
@@ -219,6 +225,22 @@ func (m *Module) handleCreateApproval(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusBadRequest, errorBody(err.Error()))
 		return
 	}
+	if mc.Principal.IsAskOrigin() {
+		in.Origin = approvalOriginAsk
+	}
+	// A session reference is authority-bearing: stop and cancellation use it.
+	// Only the authenticated session can name it; people file outside a session.
+	sid := mc.Principal.SessionIdentity
+	if (in.SessionRef != "" && in.SessionRef != sid) || (sid != "" && mc.Principal.SessionScope() != mc.Tenant) {
+		writeJSON(w, http.StatusForbidden, errorBody("session_ref must belong to the caller's session"))
+		return
+	}
+	in.SessionRef = sid
+	actor, actorKind, userID := mc.Principal.Actor(), mc.Principal.ActorKind(), mc.Principal.UserID.String()
+	if sid != "" {
+		actor, actorKind, userID = "session:"+sid, model.ActorAgent, ""
+		in.LaunchedBy = sessionLauncher(mc.Principal)
+	}
 	capacity, err := m.sessionApprovalQuorum(r.Context(), mc.Tenant, maxApprovalCount)
 	if err != nil {
 		writeStoreError(w, err)
@@ -228,7 +250,7 @@ func (m *Module) handleCreateApproval(w http.ResponseWriter, r *http.Request, mc
 	var out approvalDTO
 	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		var ierr error
-		out, ierr = m.openApprovalRecord(r.Context(), sc, mc.Principal.Actor(), mc.Principal.ActorKind(), mc.Principal.UserID.String(), in, 0, now, capacity)
+		out, ierr = m.openApprovalRecord(r.Context(), sc, actor, actorKind, userID, in, 0, now, capacity)
 		return ierr
 	})
 	if err != nil {
@@ -262,7 +284,8 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 	expiresIn, escalateIn := in.ExpiresInSeconds, in.EscalateInSeconds
 	policyRef := ""
 	spec, matched := approvalSpec{}, false
-	if pid, s, ok, err := matchApprovalPolicy(ctx, sc, in.Action, in.SubjectKind, in.ChangeClass); err != nil {
+	subject := cmp.Or(in.RequestedByUser.String(), userID, auth.PersonRefFromActor(in.LaunchedBy).User)
+	if pid, s, ok, err := m.matchApprovalPolicy(ctx, sc, subject, in.Action, in.SubjectKind, in.ChangeClass); err != nil {
 		return approvalDTO{}, err
 	} else if ok {
 		policyRef, spec, matched = pid, s, true
@@ -295,6 +318,9 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 	}
 	if in.LaunchedBy != "" {
 		rec[colLaunchedBy] = in.LaunchedBy
+	}
+	if in.Origin != "" {
+		rec[colApprovalOrigin] = in.Origin
 	}
 	if in.ChangeClass != "" {
 		encoded, err := json.Marshal(in.ChangePaths)
@@ -418,8 +444,8 @@ func requiresOtherThanLauncher(pols []model.Policy, action, subjectKind, changeC
 
 // matchApprovalPolicy returns the first enabled approval policy that governs the
 // (action, subjectKind, changeClass) — loadApprovalPolicies + matchApprovalSpec in one call.
-func matchApprovalPolicy(ctx context.Context, sc store.Scope, action, subjectKind, changeClass string) (string, approvalSpec, bool, error) {
-	pols, err := loadApprovalPolicies(ctx, sc)
+func (m *Module) matchApprovalPolicy(ctx context.Context, sc store.Scope, userID, action, subjectKind, changeClass string) (string, approvalSpec, bool, error) {
+	pols, err := m.approvalPolicies(ctx, sc, userID)
 	if err != nil {
 		return "", approvalSpec{}, false, err
 	}
@@ -445,23 +471,32 @@ func (m *Module) handleListApprovals(w http.ResponseWriter, r *http.Request, mc 
 		q.Filters = append(q.Filters, eq(colAction, v))
 	}
 	now := m.clock.Now()
-	out := listResponse[approvalDTO]{Items: []approvalDTO{}}
+	reader := m.newApprovalReader(r.Context(), mc)
+	out := listResponse[approvalReadDTO]{Items: []approvalReadDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(approvalKind)
 		if err != nil {
 			return err
 		}
-		// One policy load per list call; status and live tier share this snapshot.
+		// One tenant snapshot for Community; a configured resolver selects per requester.
 		pols, err := loadApprovalPolicies(r.Context(), sc)
 		if err != nil {
 			return err
 		}
-		recs, page, err := listEffectiveApprovals(r.Context(), repo, q, status, now, pols)
+		recs, page, err := listEffectiveApprovals(r.Context(), repo, q, status, now, m.approvalPolicyLookup(r.Context(), sc, pols))
 		if err != nil {
 			return err
 		}
 		for _, rec := range recs {
-			out.Items = append(out.Items, toApprovalDTO(rec, now, liveRiskTier(pols, rec)))
+			pols, err := m.approvalPolicyLookup(r.Context(), sc, pols)(rec)
+			if err != nil {
+				return err
+			}
+			item, err := reader.view(r.Context(), sc, rec, now, toApprovalDTO(rec, now, liveRiskTier(pols, rec)))
+			if err != nil {
+				return err
+			}
+			out.Items = append(out.Items, item)
 		}
 		out.Cursor, out.HasMore = page.Cursor, page.HasMore
 		return nil
@@ -481,8 +516,9 @@ func (m *Module) handleGetApproval(w http.ResponseWriter, r *http.Request, mc ap
 		return
 	}
 	now := m.clock.Now()
+	reader := m.newApprovalReader(r.Context(), mc)
 	var (
-		out   approvalDTO
+		out   approvalReadDTO
 		found bool
 	)
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
@@ -494,12 +530,13 @@ func (m *Module) handleGetApproval(w http.ResponseWriter, r *http.Request, mc ap
 		if err != nil {
 			return err
 		}
-		pols, err := loadApprovalPolicies(r.Context(), sc)
+		pols, err := m.approvalPolicies(r.Context(), sc, approvalPolicySubject(rec))
 		if err != nil {
 			return err
 		}
-		found, out = true, toApprovalDTO(rec, now, liveRiskTier(pols, rec))
-		return nil
+		found = true
+		out, err = reader.view(r.Context(), sc, rec, now, toApprovalDTO(rec, now, liveRiskTier(pols, rec)))
+		return err
 	})
 	if err != nil {
 		writeStoreError(w, err)
@@ -659,6 +696,11 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 	if mc.Principal.UserID.IsZero() {
 		return Approval{}, approvalDecisionError{Status: http.StatusForbidden, Message: "a stable user identity is required to decide; a system token cannot approve"}
 	}
+	// Only a person decides. Ask Olivares never does, even if its ceiling were
+	// ever widened to the decision permission (docs/design/ask-olivares-agent-v1.md, D2).
+	if mc.Principal.IsAskOrigin() {
+		return Approval{}, approvalDecisionError{Status: http.StatusForbidden, Message: "Ask Olivares cannot decide an approval; a person decides it"}
+	}
 	in.Note = redact.Clean(in.Note)
 	deciderUser := mc.Principal.UserID.String()
 
@@ -700,6 +742,10 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 				clientErr, clientCode = "approval is "+eff+"; no decision can be recorded", http.StatusConflict
 				return nil
 			}
+			if refusal := askDeciderRefusal(rec, signedInPerson(mc.Principal)); refusal != "" {
+				clientErr, clientCode = refusal, http.StatusForbidden
+				return nil
+			}
 			// SEPARATION OF DUTY, decided on the PERSON. AcceptWhenUndetermined here and
 			// only here: a request opened by automation has no person behind it, and
 			// refusing every decision on it would break the ordinary machine-opens /
@@ -717,14 +763,13 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 			// "knowably one party", so asking TwoDistinctPeople whether to refuse — rather
 			// than re-deciding from the verdict — is the whole rule. The verdict is read
 			// only to phrase the message.
-			requester := auth.PersonRef{User: rec.String(colRequestedByUser), Actor: rec.String(colRequestedBy)}
 			deciderRef := auth.PersonRef{User: deciderUser, Actor: mc.Principal.Actor()}
-			if ok, verdict := auth.TwoDistinctPeople(requester, deciderRef, auth.AcceptWhenUndetermined); !ok {
-				clientErr = "separation of duty: the requester cannot decide their own request"
-				if verdict == auth.PersonSameCredential {
-					clientErr = "separation of duty: this request was opened with the same credential you are deciding with, and no person stands behind it"
-				}
-				clientCode = http.StatusForbidden
+			pols, err := m.approvalPolicies(ctx, sc, approvalPolicySubject(rec))
+			if err != nil {
+				return err
+			}
+			if refusal := separationOfDutyRefusal(rec, deciderRef, pols); refusal != "" {
+				clientErr, clientCode = refusal, http.StatusForbidden
 				return nil
 			}
 			if _, dup, err := findOne(ctx, decRepo, eq(colApprovalID, id.String()), eq(colDeciderUser, deciderUser)); err != nil {
@@ -735,12 +780,9 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 			}
 			// re-derive the LIVE risk tier at the decision point, in the
 			// same transaction (a pre-check outside it would race a policy
-			// change). Derived BEFORE the decision insert so an under-assured
-			// decision is refused without leaving a decision row behind.
-			pols, err := loadApprovalPolicies(ctx, sc)
-			if err != nil {
-				return err
-			}
+			// change), from the policies read above. Derived BEFORE the decision
+			// insert so an under-assured decision is refused without leaving a
+			// decision row behind.
 			tier := liveRiskTier(pols, rec)
 			// A policy that requires someone other than the launcher: the person
 			// who launched the session that proposed this change does not approve
@@ -943,7 +985,7 @@ func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.M
 		if !canCancel(mc, rec, tenantAdmin) {
 			return approvalDecisionError{Status: http.StatusForbidden, Message: "only the requester or a tenant admin may cancel this request"}
 		}
-		pols, err := loadApprovalPolicies(ctx, sc)
+		pols, err := m.approvalPolicies(ctx, sc, approvalPolicySubject(rec))
 		if err != nil {
 			return err
 		}
@@ -1115,7 +1157,7 @@ func (m *Module) consumeApprovalAndAct(ctx context.Context, data approvalData, m
 				return nil
 			}
 
-			pols, err := loadApprovalPolicies(ctx, sc)
+			pols, err := m.approvalPolicies(ctx, sc, approvalPolicySubject(rec))
 			if err != nil {
 				return err
 			}
@@ -1142,8 +1184,14 @@ func (m *Module) consumeApprovalAndAct(ctx context.Context, data approvalData, m
 				case want == nil:
 					seen = nil
 				case !changeRecordCovers(want, seen, now):
+					if retryAt := m.changeRecordHeld(endpointForChangeRecord(mc.Tenant, *want), now); !retryAt.IsZero() {
+						needRead = want
+						return unavailableChangeRecord(*want, "the "+want.System+" destination did not answer recently; it is read again after "+retryAt.UTC().Format(time.RFC3339))
+					}
 					needRead = want
 					return errChangeRecordRead
+				default:
+					m.changeRecordOutages.Delete(endpointForChangeRecord(mc.Tenant, *want))
 				}
 				// FIRST consume: bind the grant to this caller under a version-checked
 				// update that serializes concurrent first-consumers to exactly one winner.
@@ -1213,10 +1261,20 @@ func (m *Module) consumeApprovalAndAct(ctx context.Context, data approvalData, m
 				}
 				return revoked, rerr
 			}
+			if read == nil {
+				// The system did not answer: wait before the next read, and write the outage
+				// to the ledger once, not once per sweep.
+				m.noteChangeRecordOutage(endpointForChangeRecord(mc.Tenant, *needRead), m.clock.Now())
+				m.recordChangeRecordOutage(ctx, data, mc, id, *needRead, verr)
+				return ApprovalConsumption{}, verr
+			}
 			m.recordChangeRecordRefusal(ctx, data, mc, id, "spend", *needRead, read, verr)
 			return ApprovalConsumption{}, verr
 		}
 		if err != nil {
+			if needRead != nil {
+				m.recordChangeRecordOutage(ctx, data, mc, id, *needRead, err)
+			}
 			if isConflict(err) {
 				seen = nil // a conflict can follow a state change: never reuse it
 				continue   // version race on the first-consume: reload and re-evaluate
@@ -1308,8 +1366,8 @@ func normalizeApprovalRequest(in *createApprovalRequest) error {
 	if len(in.SessionRef) > maxMatchLen || containsInlineCredential(in.SessionRef) {
 		return errors.New("invalid session_ref")
 	}
-	// A display-only fact never blocks an approval: anything but a person's actor on a
-	// session launch is dropped.
+	// The launcher never blocks an approval: anything but a person's actor on a
+	// session request is dropped.
 	if in.SessionRef == "" || len(in.LaunchedBy) > maxMatchLen ||
 		!(strings.HasPrefix(in.LaunchedBy, "user:") || strings.HasPrefix(in.LaunchedBy, "token:")) {
 		in.LaunchedBy = ""
@@ -1348,4 +1406,40 @@ func normalizeApprovalRequest(in *createApprovalRequest) error {
 		}
 	}
 	return nil
+}
+
+// approvalPolicySubject is the person whose policies govern a stored request: the person who
+// asked, or for a request a session proposed itself, the person who launched that session
+// (openApprovalRecord selects the same way). Separation of duty keeps reading requested_by_user.
+func approvalPolicySubject(rec model.Record) string {
+	return cmp.Or(rec.String(colRequestedByUser), auth.PersonRefFromActor(rec.String(colLaunchedBy)).User)
+}
+
+// sessionLauncher is the audit actor of the person a session principal acts for: the session
+// credential keeps its launcher's user. A session with no person behind it names no one.
+func sessionLauncher(p auth.Principal) string {
+	if p.UserID.IsZero() {
+		return ""
+	}
+	return "user:" + p.UserID.String()
+}
+
+func (m *Module) approvalPolicies(ctx context.Context, sc store.Scope, userID string) ([]model.Policy, error) {
+	if m.policyResolver != nil {
+		policies, selected, err := m.policyResolver.ApprovalPolicies(ctx, sc, userID)
+		if err != nil || selected {
+			return policies, err
+		}
+	}
+	return loadApprovalPolicies(ctx, sc)
+}
+
+// approvalPolicyLookup shares the tenant snapshot when no person resolver is wired.
+func (m *Module) approvalPolicyLookup(ctx context.Context, sc store.Scope, fallback []model.Policy) func(model.Record) ([]model.Policy, error) {
+	return func(rec model.Record) ([]model.Policy, error) {
+		if m.policyResolver == nil {
+			return fallback, nil
+		}
+		return m.approvalPolicies(ctx, sc, approvalPolicySubject(rec))
+	}
 }

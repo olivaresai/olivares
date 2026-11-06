@@ -106,6 +106,7 @@ var preferenceNames = map[string]bool{
 	"olivares:api-playground": true, "olivares.lang": true, "olivares.sessions.model-favorites": true,
 	"olivares.notifications.lastSeen": true, "olivares.onboarding.dismissed": true,
 	"olivares.compliance.opened": true, "olivares.sessions.sidePane": true,
+	"olivares.notices.dismissed": true,
 }
 
 func (b uiStateBody) validate() string {

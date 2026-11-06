@@ -15,7 +15,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { setPageTitle } from './document-title'
 import { SessionNotifications } from './session-notifications'
 import { useSessionRail } from './use-session-rail'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/toaster'
 
 const auth = vi.hoisted(() => ({
   tenant: 'tenant',

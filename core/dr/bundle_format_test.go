@@ -182,7 +182,7 @@ func TestSealSnapshotFileAtTheProductionChunkSize(t *testing.T) {
 	if err := os.WriteFile(src, plain, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	sealed, err := sealSnapshotFile(c, src)
+	sealed, err := sealSnapshotFile(c, src, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestSealSnapshotFileAtTheProductionChunkSize(t *testing.T) {
 		t.Fatalf("sealed size = %d, want %d (3 chunks of nonce+tag)", info.Size(), want)
 	}
 	dst := filepath.Join(dir, "opened.db")
-	size, sum, err := openSnapshotFile(c, sealed, dst)
+	size, sum, err := openSnapshotFile(c, sealed, dst, StoreSnapshot{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestSealingFailureLeavesNoSealedCopyAndWritesNothing(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(parent, "snap"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sealSnapshotFile(c, filepath.Join(parent, "snap")); err == nil {
+	if _, err := sealSnapshotFile(c, filepath.Join(parent, "snap"), false); err == nil {
 		t.Fatal("sealing a directory succeeded")
 	}
 	if got := dirNames(t, parent); len(got) != 1 || got[0] != "snap" {
@@ -279,4 +279,46 @@ func TestV1ManifestEncodingIsUnchanged(t *testing.T) {
 	if string(got) != want {
 		t.Fatalf("a v1 manifest no longer marshals as it did:\n got %s\nwant %s", got, want)
 	}
+}
+
+func TestBundleCompressesBeforeSealing(t *testing.T) {
+	c := testCipher(t, 1)
+	plain := make([]byte, 4<<20)
+	src := filepath.Join(t.TempDir(), "snapshot.db")
+	if err := os.WriteFile(src, plain, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(plain)
+	m := &Manifest{Store: StoreSnapshot{Method: MethodVacuumInto, File: "store/snapshot.db", SizeBytes: int64(len(plain)), SHA256: hex.EncodeToString(sum[:])}}
+	var bundle bytes.Buffer
+	if err := WriteAuthenticatedBundle(&bundle, BundleInput{Manifest: m, KEK: c.Params(), SnapshotPath: src}, c); err != nil {
+		t.Fatal(err)
+	}
+	work := t.TempDir()
+	got, kek, err := ExtractBundle(&bundle, work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(work, got.Store.memberPath()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() > 16<<10 {
+		t.Fatalf("4 MiB zero snapshot sealed to %d bytes, want <= 16 KiB", info.Size())
+	}
+	encoded, err := json.Marshal(got.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(encoded, []byte(`"compression":"gzip"`)) {
+		t.Fatalf("compression missing from manifest: %s", encoded)
+	}
+	if err := VerifyBundleIntegrity(work, got, kek, c, false); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := os.ReadFile(filepath.Join(work, got.Store.File))
+	if err != nil || !bytes.Equal(restored, plain) {
+		t.Fatalf("restore differs: %v", err)
+	}
+	t.Logf("4 MiB snapshot sealed to %d bytes and restored exactly", info.Size())
 }

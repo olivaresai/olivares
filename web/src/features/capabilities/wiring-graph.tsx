@@ -162,9 +162,6 @@ export function WiringGraph({ graph }: { graph: WiringGraphDTO }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-caption text-muted-foreground">
-        {t('wiring.notAccessMap')}
-      </p>
       {graph.truncated && (
         <p className="rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-caption text-warning">
           {t('wiring.partial')}

@@ -4,7 +4,7 @@
     "hint": "Die Rate-Limit-Zusammenfassung wurde nur in den geladenen Befunden gesucht. Eine fehlende Zusammenfassung kann auf einer späteren Seite liegen."
   },
   "title": "Ratenbegrenzungen",
-  "description": "Schreibgeschütztes Inventar der auf Organisations- und Arbeitsbereichsebene geltenden Ratenbegrenzungen, die ein Gateway oder Proxy synchron halten muss. Bezogen aus der Anthropic Rate Limits API (schreibgeschützt); diese Ansicht ändert niemals eine Begrenzung.",
+  "description": "Ratenlimits Ihrer Organisation und Arbeitsbereiche. Schreibgeschützt.",
   "caveats": {
     "keepInSync": "Gateways/Proxys müssen synchron gehalten werden: Diese Begrenzungen bilden das Inventar, das ein vorgelagertes Gateway oder ein Proxy spiegeln muss. Sie werden hier nicht durchgesetzt, und ihre Änderung erfolgt beim Anbieter, nicht in dieser Konsole.",
     "managedAgents": "Managed Agents werden NICHT von der Rate Limits API abgedeckt. Ihre Begrenzungen sind eine dokumentierte Lücke, kein Wert von null — es wird keine Zeile für Managed Agents angezeigt, weil die API keine meldet."

@@ -59,11 +59,37 @@ not the stable core contract; their field-level shapes live in the product's typ
   finding's already-safe display fields — title, kind, severity, subject reference and
   a correlation hash — **never** a payload, prompt, secret or PII. **Minimal-data is a
   property of the wire**, not an after-the-fact filter. The destination secret lives
-  only in the connector configuration, referenced here by a non-secret name. An
-  administrator adds Slack and Microsoft Teams destinations in the console
-  (**Alerting → Destinations**): the webhook URL is sealed in the secret store, shown
-  only as its host, and tested with a real message before it is saved. Every other
-  kind is provisioned by the operator in the file named by `OLIVARES_NOTIFY_CONFIG`.
+  only in the connector configuration, referenced here by a non-secret name.
+
+## Add, test and remove a destination
+
+A system administrator adds a Slack, Microsoft Teams, signed webhook, email (SMTP) or
+Twilio SMS destination from the CLI, the API (`/v1/console/notify-destinations`) or, for
+Slack and Teams, the console (**Alerting → Destinations**). It opens at once, without a
+restart. Each secret setting is sealed in the secret store and never shown again; the
+list shows only the host a destination sends to.
+
+```sh
+# A signed webhook: each delivery carries X-Olivares-Signature, HMAC-SHA256 over "<timestamp>.<body>".
+olivares notify destinations add ops-hook --kind webhook \
+  --set url=https://hooks.example.com/olivares --secret-file signing_secret=/run/secrets/hook
+# An SMTP server: the password comes from stdin, never from the command line.
+printf %s "$SMTP_PASSWORD" | olivares notify destinations add ops-mail --kind email \
+  --set smtp_host=smtp.example.com --set from=olivares@example.com --set to=oncall@example.com \
+  --secret-file smtp_username=/run/secrets/smtp-user --secret-file smtp_password=-
+olivares notify destinations test ops-hook          # one real test message, nothing saved
+olivares notify routes create --name criticals --destination ops-hook --min-severity critical
+olivares notify destinations ls                     # every destination, its owner and state
+olivares notify destinations rm ops-hook --yes      # delivery to it stops at once
+```
+
+`olivares notify destinations add --help` lists the settings of each kind, and
+`olivares notify destinations ls -o json` lists them with which are secret and required.
+A webhook or SMTP server whose host resolves to a private or reserved address is refused
+with that reason, and the engine's egress guard refuses those addresses again when it
+connects. An internal destination, a Business kind or a destination scoped to some
+tenants is provisioned by the operator in the file named by `OLIVARES_NOTIFY_CONFIG`,
+which keeps working as before; a name in both is the file's.
 
 :::caution[Honest limits]
 - **The default binary ships a deny-closed dispatcher.** Until an operator provisions

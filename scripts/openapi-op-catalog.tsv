@@ -30,6 +30,7 @@ DELETE	/v1/m/governance/rbac/grants/{id}	Revokes one scoped RBAC grant by id.
 DELETE	/v1/m/governance/rbac/inheritance-filters/{id}	Removes one inheritance filter by id. Only an admin of the filter's node may remove it.
 DELETE	/v1/m/governance/rbac/permission-groups/{name}	Deletes one permission group by name; the caller must be a tenant admin.
 DELETE	/v1/m/governance/rbac/roles/{name}	Deletes one custom role by name; the caller must be a tenant admin.
+DELETE	/v1/m/governance/vaults/{id}/shares	Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
 DELETE	/v1/m/knowledge/data-products/{id}	Deletes one data product by id.
 DELETE	/v1/m/models/agent-artifacts/{id}	Deletes one registered agent artifact by id.
 DELETE	/v1/m/models/datasets/{id}	Deletes one registered dataset by id.
@@ -134,6 +135,8 @@ GET	/v1/m/governance/rbac/permission-groups	Lists the permission groups defined 
 GET	/v1/m/governance/rbac/permission-groups/{name}	Returns one permission group by name.
 GET	/v1/m/governance/rbac/roles	Lists the custom roles defined for the tenant.
 GET	/v1/m/governance/rbac/roles/{name}	Returns one custom role by name.
+GET	/v1/m/governance/vaults	Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
+GET	/v1/m/governance/vaults/{id}/shares	Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
 GET	/v1/m/knowledge/data-products	Lists the data products, optionally filtered by status, owner_ref and kb_ref.
 GET	/v1/m/knowledge/data-products/{id}	Returns one data product with its full detail.
 GET	/v1/m/knowledge/data-products/{id}/contracts	Lists the data contracts authored for one data product.
@@ -217,6 +220,7 @@ GET	/v1/m/sessions/work-stream	Streams work events as server-sent events, resumi
 GET	/v1/m/sessions/workspaces	Lists the session workspaces of the tenant.
 GET	/v1/m/sessions/workspaces/{ref}	Returns one session workspace by reference.
 GET	/v1/m/sessions/workspaces/{ref}/files	Lists the files of a workspace under an optional path prefix, with paging.
+GET	/v1/m/sessions/workspaces/{ref}/files/archive	Returns the files and folders named by the repeated path query parameter as one zip, each file read under the same jail, size limit and DLP policy as a single read; one refused file refuses the whole archive.
 GET	/v1/m/sessions/workspaces/{ref}/files/raw	Reads the content of one workspace file named by the path query parameter, or with rev=HEAD the content git HEAD holds for it.
 GET	/v1/m/sessions/workspaces/{ref}/files/stat	Returns the metadata of one workspace entry named by the path query parameter, without its content.
 GET	/v1/m/sourcescope/resources	Lists the discovered resources, optionally filtered by kind, workspace, parent or subtree; a malformed id is refused before any store read.
@@ -259,6 +263,7 @@ POST	/v1/m/governance/rbac/grants	Creates one scoped RBAC grant from the posted 
 POST	/v1/m/governance/rbac/inheritance-filters	Stores one inheritance filter on a workspace, agent group or folder for one resource class. Only an admin of the node may set it. Rights that reach the node from above stop applying to that class there; grants at or below it and forbids are unchanged.
 POST	/v1/m/governance/rbac/permission-groups	Creates one permission group; the caller must be a tenant admin and every permission is validated. Requires Business; Community returns 501.
 POST	/v1/m/governance/rbac/roles	Creates one custom role; the caller must be a tenant admin, and a built-in role name is refused. Requires Business; Community returns 501.
+POST	/v1/m/governance/vaults	Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
 POST	/v1/m/health/incidents/{id}/resolve	Resolves one open incident manually.
 POST	/v1/m/inferenceproxy/device/approve	Approves or denies one device authorization by its user code; an expired or consumed code answers 410.
 POST	/v1/m/knowledge/data-products	Creates one data product from the posted document; the name must be free.
@@ -312,6 +317,7 @@ POST	/v1/m/sessions/runs	Creates one session run from the posted parameters, and
 POST	/v1/m/sessions/runs/{ref}/cleanup	Cleans up the resources of one finished session run.
 POST	/v1/m/sessions/runs/{ref}/git/branch	Switches the session's folder to the named branch, creating it first when requested.
 POST	/v1/m/sessions/runs/{ref}/git/commit	Commits the staged changes in the session's folder with the supplied message and authenticated author.
+POST	/v1/m/sessions/runs/{ref}/git/init	Makes the session's folder a Git repository on branch main when it is not one yet.
 POST	/v1/m/sessions/runs/{ref}/git/stage	Stages the selected paths in the session's folder for the next commit.
 POST	/v1/m/sessions/runs/{ref}/git/unstage	Removes the selected paths from the session's Git index while keeping their working-tree changes.
 POST	/v1/m/sessions/runs/{ref}/handoff	Starts a new session in the chosen provider profile, linked to one Claude Code, Codex, Gemini CLI or OpenCode session, from a reviewed summary and the attached transcript; a running session is stopped first and the answer says whether the first turn arrived.
@@ -345,6 +351,7 @@ PUT	/v1/m/finops/cost-centers/{id}	Returns HTTP 501 because FinOps is a Business
 PUT	/v1/m/finops/model-rates/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 PUT	/v1/m/governance/rbac/permission-groups/{name}	Replaces one permission group; the caller must be a tenant admin and every permission is validated. Requires Business; Community returns 501.
 PUT	/v1/m/governance/rbac/roles/{name}	Replaces one custom role; the caller must be a tenant admin, and the base role and its exclusions are validated together. Requires Business; Community returns 501.
+PUT	/v1/m/governance/vaults/{id}/shares	Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
 PUT	/v1/m/knowledge/data-products/{id}	Replaces one data product with the posted document.
 PUT	/v1/m/models/inference-deployments/{id}	Replaces one inference deployment; its references must resolve, and the admission policy can refuse it.
 PUT	/v1/m/models/model-access/{id}	Replaces one model-access rule; its subject and target references are validated.
@@ -384,6 +391,8 @@ GET	/v1/auth/whoami	Returns the calling principal, its tenant grants, and the ef
 GET	/v1/connectors/health	Returns per-connector health metrics and the fleet summary, compositing the live source roster status with the connector catalog metadata.
 GET	/v1/console/bus	Returns the privileged event-bus snapshot: subscribers, saturation, loss counters and the bridge state when one is configured.
 GET	/v1/console/config/effective	Returns the live effective configuration of the deployment with every secret-bearing value redacted.
+GET	/v1/console/exposure	Reports this node’s recorded console listeners, transport, effective and saved public URLs and administrative step-up policy without probing external reachability.
+PUT	/v1/console/exposure	Saves or removes the managed HTTPS public URL, refusing public exposure without administrative step-up; a restart applies the saved address.
 DELETE	/v1/console/connectors	Removes one configured connector instance.
 GET	/v1/console/connectors	Lists the connector types this build offers, each with the configuration fields it accepts.
 PUT	/v1/console/connectors	Onboards a connector instance, or replaces the configuration of an existing one.
@@ -393,15 +402,15 @@ GET	/v1/console/keys	Returns the non-secret custody inventory of the signing key
 DELETE	/v1/console/license	Removes the installed license and reverts the deployment to the community build.
 GET	/v1/console/license	Returns the current license status and the entitlements it grants.
 POST	/v1/console/license	Installs a commercial license from the posted document.
-DELETE	/v1/console/notify-destinations	Removes one console notification destination by the name carried in the body, closes it in the running engine and deletes its sealed webhook URL. A destination provisioned in the operator file is refused with 404.
-GET	/v1/console/notify-destinations	Lists every notification destination, console and operator file, with whether it is open and the host its webhook points at, plus the kinds the console can create. A webhook URL is never returned.
-PUT	/v1/console/notify-destinations	Creates or updates a Slack or Teams destination: the webhook URL is checked against the vendor's hosts, sealed, stored in the deployment settings and opened without a restart. A blank URL keeps the stored one.
-POST	/v1/console/notify-destinations/test	Sends one real test message through a candidate destination without saving it. A blank URL tests the stored one. Returns 422 when the destination does not accept it.
-DELETE	/v1/console/secrets	Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
-GET	/v1/console/secrets	Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/, env/ and credential/ names to its admins only, and to every member only their own vault/<user-id>/ items, whose hint is the item's kind (login, login+totp, note or totp).
-PUT	/v1/console/secrets	Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
-POST	/v1/console/secrets/reveal	Returns the plaintext of one item of the caller's own vault/<user-id>/ namespace, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; another user, the superadmin and every token are refused, and global, mcp/, env/ and credential/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.
-POST	/v1/console/secrets/totp	Returns the current RFC 6238 authenticator code and the seconds it stays valid for one item of the caller's own vault/<user-id>/ namespace, from the tenant scope only; the seed is never returned. Guarded and limited exactly like reveal (signed-in person with the deployment's step-up, owner only, rate limited per person), never cached, and recorded in the audit ledger without the code.
+DELETE	/v1/console/notify-destinations	Removes one added notification destination by the name carried in the body, closes it in the running engine and deletes its sealed settings. A destination provisioned in the operator file is refused with 404.
+GET	/v1/console/notify-destinations	Lists every notification destination, added and operator file, with whether it is open and the host it sends to, plus the kinds that can be added and their settings. A secret setting is never returned.
+PUT	/v1/console/notify-destinations	Creates or updates a Slack, Teams, signed webhook, email (SMTP) or Twilio destination: a Slack or Teams URL is checked against the vendor's hosts, a webhook or SMTP host must not resolve to a private or reserved address, secret settings are sealed, and the definition is stored in the deployment settings and opened without a restart. A blank secret keeps the stored one.
+POST	/v1/console/notify-destinations/test	Sends one real test message through a candidate destination without saving it: the given settings over the stored ones of that name, whose kind is used when none is given. Returns 422 when the destination does not accept it.
+DELETE	/v1/console/secrets	Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items and, where a Business grant gives the write right at the vault, the items of that shared vault (vault/<vault-id>/), which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
+GET	/v1/console/secrets	Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/, env/ and credential/ names to its admins only, and to every member only their own vault/<user-id>/ items and the items of the shared vaults granted to them, whose hint is the item's kind (login, login+totp, note or totp).
+PUT	/v1/console/secrets	Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items and, where a Business grant gives the write right at the vault, the items of that shared vault (vault/<vault-id>/), which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
+POST	/v1/console/secrets/reveal	Returns the plaintext of one item of the caller's own vault/<user-id>/ namespace or of a shared vault the caller was granted read on, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; a person with no grant at the vault, the superadmin and every token are refused, and global, mcp/, env/ and credential/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.
+POST	/v1/console/secrets/totp	Returns the current RFC 6238 authenticator code and the seconds it stays valid for one item of the caller's own vault/<user-id>/ namespace or of a shared vault the caller was granted read on, from the tenant scope only; the seed is never returned. Guarded and limited exactly like reveal (signed-in person with the deployment's step-up, the owner or a grantee, rate limited per person), never cached, and recorded in the audit ledger without the code.
 POST	/v1/console/secrets/generate	Returns a random password for the signed-in member: 8 to 128 characters (20 by default) with at least one character of every chosen kind (lowercase, uppercase, digits, symbols). Nothing is stored or recorded; any option left out keeps its default.
 GET	/v1/console/setup-status	Returns which first-run setup steps the deployment has completed, so the console wizard can resume onboarding at the right step.
 DELETE	/v1/console/sources	Removes one configured source connector.
@@ -493,6 +502,7 @@ DELETE	/v1/console/sso/tenants/{tenant}	Removes the tenant's primary IdP configu
 DELETE	/v1/console/sso/tenants/{tenant}/idps/{alias}	Removes one of the tenant's additional IdPs by alias. Step-up required.
 DELETE	/v1/invites/{id}	Deletes one pending invitation.
 GET	/v1/system/tracing	Reads saved tracing choices, the running node’s effective configuration and the names of environment overrides. Requires system administration. Override credential values are never returned.
+GET	/v1/system/host	Reads the host the engine runs on: load average, CPU percent, memory, swap, each mounted filesystem, the disk use of each session folder (cached for 60 seconds, bounded) and the last 24 hours of one-minute samples. Linux only; other hosts answer 501. Requires system administration.
 GET	/openapi.beta.json	Returns the beta module-route OpenAPI document: every /v1/m/<namespace>/ operation the mounted modules register, reflected from the routes themselves so it cannot drift from what the engine serves.
 GET	/v1/agent-groups	Lists the tenant's agent groups with their workspace scope, slug and status, keyset-paginated. A workspace-confined caller sees only its own workspace's groups; an optional workspace_id filter narrows a tenant-wide caller.
 GET	/v1/agent-groups/{id}	Returns one agent group. Authorization runs against the GROUP entity so a workspace-confined operator cannot read a cross-workspace group.
@@ -508,6 +518,7 @@ GET	/v1/console/dr/jobs	Lists the in-memory DR jobs (backup and restore) with ki
 GET	/v1/console/dr/jobs/{id}/stream	A Server-Sent Events stream of one DR job's progress: event: job frames carrying the DR job payload, comment heartbeats, ending when the job completes or fails.
 GET	/v1/console/dr/restore/pending	Lists restore requests awaiting a second approver under the dual-control gate, newest first, so a distinct administrator can find and approve one.
 GET	/v1/console/dr/schedule	Returns backup and verification schedules, reference-only offsite settings, run outcomes, backup age against the recovery point target, target free space and the effective dual-control restore gate.
+POST	/v1/console/errors	Records a console view's render failure (error id, error text, component stack, route) from a person's browser session in the engine log when telemetry is enabled, shortened to 16 KiB, 64 KiB and 2 KiB; otherwise it logs nothing. Either way it answers 204; API and machine tokens get 401.
 GET	/v1/console/logs/buffer	Returns the engine log's ring-buffer snapshot, newest last, filtered by module and level. total is the number of ring entries that matched the filter (not the page size) and truncated says older matches were left out.
 GET	/v1/console/logs/stream	A Server-Sent Events stream of the engine log: event: log frames carrying one entry's payload and comment heartbeats, filtered by the same parameters as the buffer.
 GET	/v1/console/modules	Returns the module catalog with, for each module, whether it is selected, running, always-on, holds data in this installation, and which modules require it, keep it on, or activate it.

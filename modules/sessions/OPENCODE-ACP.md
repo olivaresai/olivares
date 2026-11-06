@@ -64,3 +64,11 @@ or not, or with a `$ARGUMENTS` or `$1` placeholder next to `!`, a backtick or `@
 and capital letters (OpenCode replaces `$1` first, so `$ARG$1UMENTS` forms a new `$ARGUMENTS`), is
 refused at delivery. A prompt without the leading `/command` is not expanded and is sent as typed. Commands
 in the session folder's own `.opencode` require exact-hash project-configuration approval (#3076).
+
+Native confinement. Every native OpenCode launch requires filesystem confinement. OpenCode can
+load an ancestor's agents, commands, skills, plugins and JSON configuration, and checking for that
+configuration before spawn would race its later creation or replacement. Requiring the boundary is
+therefore unconditional for native launches; the refusal keeps the existing Landlock/doctor remedy.
+The session folder's own configuration still loads in a confined session, and container isolation
+does not acquire a host-Landlock requirement. The composed engine already refuses every native
+launch when confinement is unavailable; this also covers the standalone module's optional fallback.

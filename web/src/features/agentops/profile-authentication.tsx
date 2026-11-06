@@ -57,7 +57,8 @@ export function useProfileProviders(driver: string | null, enabled: boolean) {
       ? (query.data?.pages.flatMap((page) => page.items) ?? []).filter(
           (r) =>
             r.state === 'active' &&
-            (driver === null || recordServesDriver(r.kind, r.base_url, driver)),
+            (driver === null ||
+              recordServesDriver(r.kind, r.base_url, driver, r.service)),
         )
       : []
   return { query, records, allowed }

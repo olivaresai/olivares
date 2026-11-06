@@ -4,13 +4,12 @@
   "forbiddenTitle": "권한 없음",
   "forbidden": "증명 계약을 보려면 compliance:read 권한이 필요합니다.",
   "disclaimer": {
-    "tag": "베타",
-    "body": "이 프로젝트는 베타입니다: 아직 릴리스가 없으며 릴리스 파이프라인은 작성되었지만 활성화되지 않았습니다. 실행 바이너리 패널은 이 프로세스에서 측정된 값이고, 계약 탭은 선언된 계약이며 게시된 릴리스나 실시간 암호화 검증이 아닙니다 — 이 콘솔은 브라우저에서 서명을 다시 검증하지 않습니다.",
+    "body": "이 빌드는 게시된 릴리스가 아닙니다.",
     "declaredRef": "선언된 참조 — AsOf {{date}}. docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml 및 릴리스 / 스코어카드 / 패치 속도 워크플로에서 그대로 가져왔습니다. 엔진은 저장소나 CI 상태를 관찰할 수 없으므로 이 절반은 라이브로 제공되지 않습니다."
   },
   "live": {
     "title": "실행 중인 바이너리(측정됨)",
-    "description": "이 엔진 프로세스가 자신에 대해 증명할 수 있는 것 — 바이너리에서 라이브로 읽습니다(ldflags, debug.ReadBuildInfo, crypto/fips140, 실행 파일의 자체 해시) — 그리고 정직한 릴리스 상태: v* 태그가 파이프라인을 실행하기 전까지는 아무것도 게시되거나 검증되지 않습니다.",
+    "description": "실행 중인 이 빌드가 자신에 대해 보고하는 내용입니다.",
     "status": {
       "measured": "측정됨"
     },
@@ -58,11 +57,11 @@
   },
   "tabs": {
     "artifacts": "아티팩트",
-    "provenance": "출처 및 VEX",
+    "provenance": "출처",
     "sbom": "SBOM",
     "scorecard": "스코어카드",
     "remediation": "교정 SLA",
-    "airgap": "에어갭 및 차트"
+    "airgap": "에어갭"
   },
   "artifacts": {
     "title": "릴리스 아티팩트",

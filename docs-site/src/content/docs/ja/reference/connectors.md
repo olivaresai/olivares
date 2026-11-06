@@ -448,14 +448,14 @@ grant の OBSERVED 対応物を出力する。
 | Kind | 取り込み対象 |
 |---|---|
 | `gdrive` | Google Drive ドキュメント（Docs/Sheets/Slides/ファイル） |
-| `confluence` | Atlassian Confluence のスペース & ページ |
+| `confluence` | Atlassian Confluence のスペース & ページ (Business) |
 | `notion` | Notion ワークスペース、データベース & ページ |
 | `sharepoint` | Microsoft SharePoint / OneDrive のサイト & ドキュメント (Business) |
 | `s3content` | オブジェクトストレージの内容（S3 / R2 / GCS オブジェクト） |
 | `sap_odata` | SAP OData service entities を governed documents として (Business) |
 | `salesforce` | Salesforce objects/records を governed documents として (Business) |
-| `snowflake` | Snowflake tables/rows を governed documents として（`snowflake-audit` R/RW observer とは別） |
-| `azure_ai_search` | Azure AI Search index documents |
+| `snowflake` | Snowflake tables/rows を governed documents として（`snowflake-audit` R/RW observer とは別） (Business) |
+| `azure_ai_search` | Azure AI Search index documents (Business) |
 | `postgres` | PostgreSQL rows を governed documents として —— 構造上 read-only、行ごとの宣言 ACL、列ごとの classification（`pgaudit` R/RW observer とは別。NL-to-SQL ではない）。[Postgres を governed context source とする](/ja/how-to/govern-postgres-content/) を参照。 |
 | `filesystem` | file-server content（local / NFS / SMB）—— 構造上 root 内に読み取りを制限、POSIX owner/group/ACL を Document ACL にマップ、xattr classification（`filelog` log sink とは別）。[ファイルサーバーをガバナンスする](/ja/how-to/govern-your-file-server/) を参照。 |
 
@@ -463,8 +463,8 @@ grant の OBSERVED 対応物を出力する。
 // OLIVARES_SOURCES_CONFIG — document sources live under "documents", never "sources"
 {
   "documents": [
-    { "name": "eng-wiki", "kind": "confluence",
-      "config": { "export_path": "/var/lib/olivares/confluence" } }
+    { "name": "eng-wiki", "kind": "notion",
+      "config": { "export_path": "/var/lib/olivares/notion" } }
   ]
 }
 ```
@@ -479,7 +479,7 @@ grant の OBSERVED 対応物を出力する。
 `elastic`、`snmp`、`filelog`、`otlplog`（OTLP/HTTP logs）、`s3archive` (Business: Regulated Operations)（S3 Object Lock WORM sink ——
 通知ごとに不変の lock-verified object を 1 つ）、`teamsbot` (Business: Regulated Operations)（インシデント
 ループの登録済みボット型 Teams connector。Community バイナリはこの種類の宛先を、Business と記した
-ログ行を出してスキップします）。
+ログ行を出してスキップする）。
 
 3 つの broker egress kind は組み込みプラグインとして**プロセス外**で実行する（プラグインソースと
 同様、wire-protocol 依存ツリーが engine に link されることはない）: `kafka`、`amqp`、`cloudqueue` ——

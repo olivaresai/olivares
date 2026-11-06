@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A SESSION ROW'S ACTIONS (#2795): what each item does, against the engine's routes.
+// A SESSION ROW'S ACTIONS (#2795, #2866): what each item does, against the engine's routes.
 // How the menu opens (right-click, `⋯`, Shift+F10) is `work-rail.test.tsx`'s.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -31,6 +31,7 @@ const toasts = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  dismiss: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast: toasts }))
 
@@ -39,9 +40,16 @@ const ops = vi.hoisted(() => ({
   generateTitle: vi.fn(),
   archive: vi.fn(),
   unarchive: vi.fn(),
+  getRun: vi.fn(),
   messages: vi.fn(),
   cleanup: vi.fn(),
   deleteRun: vi.fn(),
+  markUnread: vi.fn(),
+  markRead: vi.fn(),
+  snooze: vi.fn(),
+  unsnooze: vi.fn(),
+  markDone: vi.fn(),
+  unmarkDone: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -171,12 +179,65 @@ describe('the session menu — what a row can do', () => {
       'Rename…',
       'Regenerate title',
       'Pin',
+      'Mark unread',
+      'Snooze for 1 hour',
+      'Snooze for 1 day',
+      'Snooze for 1 week',
+      'Mark done',
       'Archive',
       'Copy link',
       'Copy session id',
       'Copy transcript',
       'Delete…',
     ])
+  })
+
+  it('sends the person’s own marks from the row, the thread header’s way', async () => {
+    const fresh = await openMenu({ session: launched() })
+    await fresh.user.click(item(fresh.menu, 'Mark unread'))
+    expect(ops.markUnread).toHaveBeenCalledWith('run-a')
+    fresh.unmount()
+
+    // The engine answers a snooze with the mark it set; the Undo notice reads it.
+    ops.snooze.mockResolvedValue({
+      run_ref: 'run-a',
+      snoozed_until: '2030-01-02T09:00:00Z',
+      done: false,
+    })
+    const day = await openMenu({ session: launched() })
+    await day.user.click(item(day.menu, 'Snooze for 1 day'))
+    expect(ops.snooze).toHaveBeenCalledWith('run-a', expect.any(String))
+    day.unmount()
+
+    const done = await openMenu({ session: launched() })
+    await done.user.click(item(done.menu, 'Mark done'))
+    expect(ops.markDone).toHaveBeenCalledWith('run-a')
+    done.unmount()
+
+    // A session already marked offers the way back from each mark.
+    const marked = await openMenu({
+      session: launched({
+        unread: true,
+        done: true,
+        snoozed_until: '2030-01-02T09:00:00Z',
+      }),
+    })
+    const offered = within(marked.menu)
+      .getAllByRole('menuitem')
+      .map((el) => el.textContent)
+    expect(offered).toEqual(
+      expect.arrayContaining(['Mark read', 'Unsnooze', 'Mark not done']),
+    )
+    for (const gone of [
+      'Mark unread',
+      'Snooze for 1 hour',
+      'Snooze for 1 day',
+      'Snooze for 1 week',
+      'Mark done',
+    ])
+      expect(offered).not.toContain(gone)
+    await marked.user.click(item(marked.menu, 'Mark read'))
+    expect(ops.markRead).toHaveBeenCalledWith('run-a')
   })
 
   it('offers only the copies for a session Olivares observes and did not start', async () => {
@@ -342,8 +403,8 @@ describe('the session menu — pin and archive', () => {
     )
     await waitFor(() =>
       expect(toasts.success).toHaveBeenCalledWith(
-        'Archived. It is under Archived at the end of the list.',
-        expect.objectContaining({ duration: Infinity }),
+        'Archived "nightly"',
+        expect.objectContaining({ duration: 5000 }),
       ),
     )
     first.unmount()
@@ -358,8 +419,11 @@ describe('the session menu — pin and archive', () => {
     )
   })
 
-  it('offers Undo on the archive until the person dismisses it, and Undo brings it back', async () => {
-    ops.archive.mockResolvedValue(run({ archived_at: '2026-10-21T12:00:00Z' }))
+  const ARCHIVED = '2026-10-21T12:00:00Z'
+
+  /** Archives the session and returns the notice's Undo action. */
+  async function archiveAndGetUndo() {
+    ops.archive.mockResolvedValue(run({ archived_at: ARCHIVED }))
     ops.unarchive.mockResolvedValue(run())
     const { user, menu } = await openMenu({ session: launched() })
     await user.click(item(menu, 'Archive'))
@@ -368,9 +432,14 @@ describe('the session menu — pin and archive', () => {
       string,
       { duration: number; action: { label: string; onClick: () => void } },
     ]
-    // No timer takes Undo away: the toast stays until it is closed.
-    expect(options.duration).toBe(Infinity)
+    return options
+  }
+
+  it('offers Undo on the archive for 5 seconds, and Undo brings it back', async () => {
+    const options = await archiveAndGetUndo()
+    expect(options.duration).toBe(5000)
     expect(options.action.label).toBe('Undo')
+    ops.getRun.mockResolvedValue(run({ archived_at: ARCHIVED }))
     // The notice outlives a switch of organization: Undo still brings back the session it
     // archived, in the organization it lives in.
     auth.activeTenant = 'tnt-other'
@@ -378,6 +447,20 @@ describe('the session menu — pin and archive', () => {
     await waitFor(() =>
       expect(ops.unarchive).toHaveBeenCalledWith('run-a', 'tnt-demo'),
     )
+    expect(ops.getRun).toHaveBeenCalledWith('run-a', { tenant: 'tnt-demo' })
+  })
+
+  it('refuses Undo, and overwrites nothing, when the session changed meanwhile', async () => {
+    const options = await archiveAndGetUndo()
+    // Another device brought it back and archived it again: not the archive this notice made.
+    ops.getRun.mockResolvedValue(run({ archived_at: '2026-10-21T12:00:09Z' }))
+    options.action.onClick()
+    await waitFor(() =>
+      expect(toasts.warning).toHaveBeenCalledWith(
+        'This session changed; nothing was undone',
+      ),
+    )
+    expect(ops.unarchive).not.toHaveBeenCalled()
   })
 
   it('gives focus back to the list once an archived row has left it', async () => {
@@ -445,7 +528,41 @@ describe('the session menu — copy', () => {
     expect(await copied()).toBe('You:\nhi\n')
   })
 
-  it('says which messages the engine cut at 64 KiB, instead of plain Copied', async () => {
+  it('copies a message a page cut at 64 KiB whole, read again by id', async () => {
+    const page = {
+      driver: 'claude',
+      transcript: 'read',
+      total: 2,
+      items: [
+        {
+          id: 1,
+          role: 'user',
+          first_line: 'log',
+          text: 'log [...]',
+          clipped: true,
+        },
+        { id: 2, role: 'assistant', first_line: 'ok', text: 'ok' },
+      ],
+    }
+    ops.messages.mockImplementation(async (_ref: string, q: { id?: number }) =>
+      q.id === 1
+        ? {
+            ...page,
+            items: [
+              { id: 1, role: 'user', first_line: 'log', text: 'log whole' },
+            ],
+          }
+        : page,
+    )
+    const { user, menu } = await openMenu({ session: launched() })
+    await user.click(item(menu, 'Copy transcript'))
+    await waitFor(() => expect(toasts.success).toHaveBeenCalled())
+    expect(toasts.warning).not.toHaveBeenCalled()
+    expect(ops.messages).toHaveBeenCalledWith('run-a', { id: 1 })
+    expect(await copied()).toBe('You:\nlog whole\n\nClaude Code:\nok\n')
+  })
+
+  it('says which messages stay cut at 64 KiB, instead of plain Copied', async () => {
     ops.messages.mockResolvedValue({
       driver: 'claude',
       transcript: 'read',

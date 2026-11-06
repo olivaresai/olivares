@@ -13,17 +13,13 @@ import ru from '@/lib/i18n/locales/ru/nav.json'
 import zh from '@/lib/i18n/locales/zh/nav.json'
 
 // One name per thing: a place of the left navigation whose first page already has a name is
-// called by that name (AI tools, Sessions, Now), so the sidebar, the page title, the palette
-// and the row above a page read the same word in every language.
+// called by that name (Overview, Sessions, Security), so the sidebar, the page title, the
+// palette and the row above a page read the same word in every language.
 const SAME_NAME: Readonly<Record<string, string>> = {
   now: 'home',
   sessions: 'sessions',
-  'ai-tools': 'agent-tools',
-  models: 'models',
-  'mcp-skills': 'capabilities',
   security: 'security',
   settings: 'settings',
-  access: 'accessMap',
 }
 
 describe('a place and its first page share one name', () => {

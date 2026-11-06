@@ -39,7 +39,9 @@ func bootPostgresWithCompliance(t *testing.T, dsn, owner, admin string) []any {
 // The retention sweep must cover every tenant. On PostgreSQL with only the
 // application and owner roles and no tenant inventory, it cannot, so it stays
 // fail-closed and server-info says it does not run, and why. Each test boots one
-// engine: the commercial build refuses a second boot in one process.
+// engine: the commercial build refuses a second boot in one process. Retention
+// schedules are Business: a Community engine schedules no sweep on any store, so it
+// reports none that a database role could unblock.
 func TestDefaultPostgresServerInfoSaysRetentionDoesNotRun(t *testing.T) {
 	pg := enginetest.IsolatedPostgresSplitOwner(t)
 	jobs := bootPostgresWithCompliance(t, pg.App, pg.Owner, "")
@@ -49,8 +51,8 @@ func TestDefaultPostgresServerInfoSaysRetentionDoesNotRun(t *testing.T) {
 			found = true
 		}
 	}
-	if !found {
-		t.Fatalf("server-info jobs_not_running = %v, want retention with reason no_tenant_inventory", jobs)
+	if want := thisEdition.name != "community"; found != want {
+		t.Fatalf("server-info jobs_not_running = %v; want retention with reason no_tenant_inventory listed = %v", jobs, want)
 	}
 }
 

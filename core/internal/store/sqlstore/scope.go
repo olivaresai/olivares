@@ -447,7 +447,7 @@ func (sc *tenantScope) auditLog() *auditLog {
 			readOnly: sc.readOnly, signEvent: sc.s.signEvent,
 			spoolMaxBytes: sc.s.spoolMaxBytes, spoolOnFull: sc.s.spoolOnFull,
 			blindMeta: sc.s.blindMeta, directoryWriter: sc.directoryWriter,
-			writeGuard: sc.guardScopeWrite,
+			writeGuard: sc.guardScopeWrite, runFacts: sc.s.reg.hasAuditRunFacts(),
 		}
 	}
 	return sc.audit

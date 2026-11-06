@@ -1,14 +1,15 @@
 {
-  "title": "Gobernanza de Claude Code",
+  "title": "Política gestionada",
   "subtitle": "Redacta la política gestionada, los hooks, los controles de MCP y sandbox, y la policy-as-code Cedar/OPA — y revisa la deriva política-vs-observado que reporta el motor.",
   "tabs": {
-    "drift": "Deriva y postura",
+    "drift": "Deriva",
     "managedSettings": "Ajustes gestionados",
     "hooks": "Hooks",
-    "managedMcp": "MCP y plugins",
-    "sandbox": "Sandbox y egress",
+    "managedMcp": "MCP",
+    "sandbox": "Sandbox",
     "policyAsCode": "Policy-as-code",
-    "hitl": "HITL agente gestionado"
+    "hitl": "HITL agente gestionado",
+    "departmentInstructions": "Instrucciones de departamento"
   },
   "seam": {
     "badge": "Backend pendiente",
@@ -76,7 +77,7 @@
   },
   "drift": {
     "title": "Deriva de política y postura",
-    "subtitle": "Política PERMITIDA vs configuración OBSERVADA en el host, según los conectores de solo lectura.",
+    "subtitle": "Dónde la configuración de cada host difiere de la política.",
     "listLabel": "Hallazgos de deriva",
     "subject": "sujeto",
     "fingerprint": "huella",
@@ -296,5 +297,20 @@
     "openFindings_one": "{{count}} hallazgo abierto",
     "openFindings_many": "{{count}} hallazgos abiertos",
     "openFindings_other": "{{count}} hallazgos abiertos"
+  },
+  "department": {
+    "title": "Archivo de instrucciones del departamento",
+    "hint": "El archivo de instrucciones de un departamento, generado a partir de lo que el departamento lleva: el mismo texto que reciben sus sesiones. Previsualícelo y publíquelo para las estaciones del departamento. Un departamento sin instrucciones retira su archivo publicado.",
+    "select": "Departamento",
+    "selectPlaceholder": "Elija un departamento",
+    "preview": "Previsualizar",
+    "publish": "Publicar",
+    "published": "Archivo de instrucciones publicado.",
+    "previewFailed": "No se pudo previsualizar el archivo del departamento",
+    "fileLabel": "Archivo de instrucciones del departamento",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_one": "{{count}} revisión publicada",
+    "revisions_many": "{{count}} revisiones publicadas",
+    "revisions_other": "{{count}} revisiones publicadas"
   }
 }

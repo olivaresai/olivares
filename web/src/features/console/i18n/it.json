@@ -2,15 +2,15 @@
   "title": "Amministrazione",
   "subtitle": "Gli agenti, i workspace, le associazioni di origine, i segreti e i connettori di questa organizzazione. Persone, accesso e ruoli sono in Persone e gruppi.",
   "tabs": {
-    "people": "Utenti e gruppi",
+    "people": "Persone",
     "agents": "Agenti",
     "sso": "SSO / IdP",
     "scopes": "Workspace",
-    "roles": "Ruoli e deleghe",
+    "roles": "Ruoli",
     "secrets": "Segreti",
     "connectors": "Connettori",
     "apiKeys": "Chiavi API",
-    "license": "Edizione e licenza",
+    "license": "Edizione",
     "bindings": "Associazioni di origine",
     "wsConnectors": "Connettori del workspace"
   },
@@ -60,7 +60,6 @@
     "caption": "Edizione attuale, stato della licenza e azioni per questa installazione.",
     "helpSummary": "Applicare la licenza e sostituire questa build",
     "helpBody": "La sostituzione della licenza viene applicata a questo processo senza riavvio. Non equivale a sostituire il binario né ad aggiornare i dati: sono operazioni separate, con procedure proprie. Su Community, applicare una licenza verificata ne mostra qui i dettagli; la build non cambia.",
-    "superadminOnly": "Solo un superadmin può vedere o modificare la licenza.",
     "install": "Installa / aggiorna",
     "remove": "Rimuovi licenza",
     "edition": "Edizione",
@@ -200,7 +199,7 @@
     "mode": "Come accede",
     "modePassword": "Imposta una password iniziale",
     "modeInvite": "Invia un invito via email",
-    "inviteUnavailable": "Questo server non può inviare inviti via email (vedi OLIVARES_INVITE_MAIL_DESTINATION nel riferimento di configurazione): imposta una password iniziale.",
+    "inviteUnavailable": "Questo server non può inviare inviti via email: imposta una password iniziale.",
     "password": "Password iniziale",
     "passwordHint": "Almeno 8 caratteri. L'utente potrà cambiarla in seguito.",
     "submit": "Registra",
@@ -216,7 +215,6 @@
   "sso": {
     "title": "Single sign-on",
     "caption": "Collega il tuo identity provider (OIDC o SAML). I segreti sono cifrati a riposo e non vengono mai mostrati di nuovo. Configurare l'SSO è un'azione valida per l'intera installazione, riservata ai superadmin.",
-    "superadminOnly": "L'SSO è un'impostazione dell'intera installazione; solo un superadmin può vederla o modificarla.",
     "builderUnavailable": "Questa build può salvare la configurazione SSO ma non può attivarla: in questo motore non è disponibile nessun provider OIDC/SAML.",
     "statusConfigured": "Configurato",
     "statusNotConfigured": "Non configurato",
@@ -285,7 +283,6 @@
   "secrets": {
     "title": "Archivio dei segreti",
     "caption": "Segreti con nome nell'archivio sigillato dell'intera installazione. Richiamane uno dalla configurazione di un connettore come store:<name>; il valore viene risolto al momento della connessione, quindi riconfiguri senza riavviare. Il valore non viene mai mostrato: solo una breve impronta conferma che un segreto è impostato o cambiato.",
-    "superadminOnly": "L'archivio dei segreti è un'impostazione dell'intera installazione; solo un superadmin può vederlo o modificarlo.",
     "sealerUnavailable": "Questa build può elencare i segreti ma non ha un sealer configurato, quindi i valori non possono essere salvati. Configura un backend sealer per abilitare l'archivio.",
     "create": "Nuovo segreto",
     "colName": "Nome",
@@ -345,7 +342,6 @@
   "connectors": {
     "title": "Connettori",
     "caption": "Aggiungi e configura i connettori da cui il motore acquisisce i dati, con le credenziali sigillate a riposo. Una modifica viene applicata al motore in esecuzione senza riavvio. Vale per l'intera installazione ed è riservata ai superadmin.",
-    "superadminOnly": "I connettori sono un'impostazione dell'intera installazione; solo un superadmin può vederli o modificarli.",
     "unavailable": "Questa build non include l'onboarding dei connettori; i connettori si configurano dal file di avvio.",
     "sourcesUnavailable": "Questa build non espone l'elenco delle origini; i connettori in esecuzione non possono essere elencati qui.",
     "catalogForbidden": "Non hai l'autorizzazione per vedere il catalogo dei connettori",
@@ -365,7 +361,8 @@
       "failed": "Non riuscito",
       "stopped": "Fermato",
       "disabled": "Disabilitato",
-      "not_wired": "Non configurato"
+      "not_wired": "Non configurato",
+      "credential_missing": "Credenziale mancante"
     },
     "edit": "Modifica",
     "delete": "Elimina",
@@ -477,7 +474,24 @@
       "unknownHint": "Questo connettore non dichiara alcun endpoint, quindi non è stato determinato dove gira. NON significa che sia ospitato dal fornitore.",
       "vendor_hosted": "Cloud del fornitore",
       "vendor_hostedHint": "Un'API gestita dal fornitore: l'endpoint dichiarato dal connettore punta per impostazione predefinita all'URL del fornitore."
-    }
+    },
+    "import": "Importa definizione",
+    "export": "Esporta definizione",
+    "imported": "Origine importata.",
+    "importInvalid": "Quel file non è una definizione di origine esportata.",
+    "previewTitle": "Anteprima",
+    "previewEmpty": "L’origine non elenca alcun documento.",
+    "previewDocument": "Documento",
+    "previewAcl": "Accesso (ACL)",
+    "previewSkipped": "Saltato: non acquisibile",
+    "previewUnreadable": "Impossibile leggerlo",
+    "previewNoAcl": "Nessuna ACL: negato salvo che l’origine sia pubblica",
+    "scheduleTitle": "Pianificazione",
+    "kb": "Base di conoscenza",
+    "kbHint": "Sincronizzata al salvataggio e poi a ogni intervallo di polling. Senza, l’origine viene letta solo con un’acquisizione o una sincronizzazione esplicita.",
+    "kbNone": "Nessuna (acquisizione manuale)",
+    "maxDelete": "Protezione dalle eliminazioni (%)",
+    "maxDeleteHint": "Se una sincronizzazione eliminasse una quota maggiore dei documenti dell’origine, non ne elimina nessuno e spiega perché. 0 la disattiva."
   },
   "workspaces": {
     "title": "Workspace",
@@ -500,7 +514,12 @@
     "renamed": "Workspace rinominato.",
     "none": "Ancora nessun workspace.",
     "noneHint": "Un workspace delimita agenti, sessioni e assegnazioni all'interno di questa organizzazione. Creane uno per iniziare.",
-    "ownerOnly": "Solo il proprietario dell'organizzazione può creare workspace."
+    "ownerOnly": "Solo il proprietario dell'organizzazione può creare workspace.",
+    "template": "Parti da un modello",
+    "templateNone": "Nessun modello",
+    "templateHint": "Il modello di sessione predefinito del reparto: un avvio che non ne indica nessuno parte da questo.",
+    "templateMandatory": "Obbligatorio: un avvio non può indicare un altro modello",
+    "templateNotAssigned": "Area di lavoro creata, ma il modello non è stato assegnato: {{reason}}"
   },
   "agents": {
     "readOnlyNotice": "Serve l'accesso in lettura agli agenti per vederli.",
@@ -609,7 +628,9 @@
       "groupScope": "Gruppo di agenti: {{ref}}",
       "classLabel": "limitato a {{class}}",
       "loadError": "Impossibile caricare la tua autorità di delega. Riprova.",
-      "folderScope": "Cartella: {{ref}}"
+      "folderScope": "Cartella: {{ref}}",
+      "levelCount": "{{level}}: {{count}}",
+      "exactPermissions": "Permessi esatti"
     },
     "grants": {
       "title": "Assegnazioni con ambito",
@@ -748,7 +769,7 @@
     "groupSubjects": {
       "managedBy": "Gestito da {{provisioner}} · sola lettura",
       "title": "Gruppi come soggetti e gerarchia",
-      "caption": "Assegna ruoli ai gruppi di utenti sincronizzati e definisci la gerarchia dei gruppi. I membri di un gruppo figlio ereditano le assegnazioni del padre.",
+      "caption": "Assegna ruoli ai gruppi di utenti sincronizzati. I membri di un gruppo figlio ereditano le assegnazioni del padre.",
       "noGroups": "Nessun gruppo. I gruppi arrivano dal tuo identity provider.",
       "noGroupsHint": "La console non crea gruppi. Aggiungi un gruppo nel tuo identity provider e comparirà qui.",
       "colName": "Gruppo",
@@ -756,16 +777,7 @@
       "colMembers": "Membri",
       "colRole": "Ruolo associato",
       "noParent": "Nessuno (radice)",
-      "setParent": "Imposta padre",
-      "clearParent": "Rimuovi padre",
-      "setParentTitle": "Imposta il padre del gruppo",
-      "setParentBody": "I membri di {{child}} erediteranno le assegnazioni di {{parent}}. Il motore rivaluta alla richiesta successiva.",
-      "clearParentTitle": "Rimuovi il padre del gruppo",
-      "clearParentBody": "{{child}} non erediterà più le assegnazioni del suo padre.",
-      "parentSet": "Padre del gruppo aggiornato.",
-      "selectParent": "Seleziona il gruppo padre…",
       "selectGroup": "Seleziona un gruppo…",
-      "cycleError": "Impossibile impostare il padre: creerebbe un ciclo.",
       "mapRole": "Associa ruolo",
       "changeRole": "Cambia ruolo",
       "role": "Ruolo del tenant",
@@ -956,6 +968,7 @@
     "familyEnabled": "{{family}} è attiva.",
     "familyDisabled": "{{family}} è disattivata.",
     "familyChangeFailed": "Impossibile modificare {{family}}.",
+    "familyNotCovered": "Questa licenza non include {{family}}.",
     "familyWaiting_one": "{{count}} attende il tuo intervento",
     "familyWaiting_many": "{{count}} attendono il tuo intervento",
     "familyWaiting_other": "{{count}} attendono il tuo intervento"
@@ -974,7 +987,9 @@
       "knowledge": "Knowledge",
       "data": "Dati",
       "profile": "Profilo provider",
-      "tool": "Strumento IA"
+      "tool": "Strumento IA",
+      "instructions": "Istruzioni del dipartimento",
+      "template": "Modello di sessione predefinito"
     },
     "sourceRef": "Riferimento della sorgente",
     "sourceRefHint": "Usa il riferimento esatto della sorgente. Non esiste un unico catalogo per ogni tipo di sorgente.",
@@ -1026,7 +1041,9 @@
     "folderSelectedId": "ID risorsa selezionato: {{id}}",
     "effects": {
       "allow": "Consenti",
-      "forbid": "Vieta"
+      "forbid": "Vieta",
+      "require": "Richiedi",
+      "decline": "Escludi"
     },
     "credName": "Nome della credenziale",
     "credentialHint": "Facoltativo. Se un campo della credenziale è compilato, nome, tipo e localizzatore sono obbligatori.",
@@ -1167,7 +1184,7 @@
   },
   "mcpGateway": {
     "title": "Gateway MCP",
-    "caption": "Gestisci i server upstream e i tool di sessione di questo tenant. I test di connessione scoprono i tool; l'esecuzione richiede una policy esplicita.",
+    "caption": "Gestisci i server upstream e i tool di sessione di questa organizzazione. I test di connessione scoprono i tool; l'esecuzione richiede una policy esplicita.",
     "add": "Aggiungi server",
     "configure": "Configura",
     "test": "Prova la connessione",
@@ -1181,17 +1198,17 @@
     "emptyHint": "Aggiungi un server Streamable HTTP, testa la connessione, poi configura l'attendibilità e i permessi dei tool prima di attivarlo.",
     "source": {
       "file": "File dell'operatore",
-      "store": "Configurazione del tenant"
+      "store": "Impostazioni dell'organizzazione"
     },
     "fileOwned": "Il file dell'operatore governa MCP sul listener configurato. Questa vista è in sola lettura. La configurazione salvata resta inattiva; nulla viene unito né sovrascritto.",
-    "storeOwned": "La configurazione del tenant governa MCP sul listener HTTP di questa installazione. Non serve alcun file di configurazione.",
+    "storeOwned": "Le impostazioni dell'organizzazione governano MCP sul listener HTTP di questa installazione. Non serve alcun file di configurazione.",
     "sessionTitle": "Tool di sessione",
     "sessionHint": "Le sessioni possono scambiarsi messaggi e usare il lavoro che è stato loro assegnato. Non dà alle sessioni nessun nuovo permesso.",
     "tools": "Tool ({{count}})",
     "observationHint": "La scoperta non concede alcuna autorità. Consenti ogni tool con uno scope esplicito e indica se richiede l'approvazione per le azioni distruttive.",
     "destructive": "Richiede approvazione per azioni distruttive",
     "credentials": "Gestisci credenziali",
-    "credentialCaption": "Solo segreti MCP del tenant (nomi mcp/). Salva qui il valore completo dell'header Authorization upstream, ad esempio Bearer seguito dal suo token. I valori restano sigillati e non vengono mai restituiti.",
+    "credentialCaption": "Solo segreti MCP dell'organizzazione (nomi mcp/). Salva qui il valore completo dell'header Authorization upstream, ad esempio Bearer seguito dal suo token. I valori restano sigillati e non vengono mai restituiti.",
     "noCredential": "Nessun accesso",
     "name": "Nome",
     "url": "Indirizzo del server",
@@ -1216,7 +1233,7 @@
     "formHint": "Un nuovo server parte disattivato. Salvalo, testa la connessione, controlla i suoi tool e attivalo.",
     "saveDisabled": "Salva",
     "removeTitle": "Rimuovi il server MCP",
-    "removeHint": "Rimuovere {{name}} dal gateway di questo tenant? Le nuove richieste verranno rifiutate; la sua credenziale sigillata resta nel gestore dei segreti.",
+    "removeHint": "Rimuovere {{name}} dal gateway di questa organizzazione? Le nuove richieste verranno rifiutate; la sua credenziale sigillata resta nel gestore dei segreti.",
     "conflict": "La configurazione è cambiata. Aggiorna e controlla la versione attuale prima di inviare di nuovo.",
     "enableHint": "L'attivazione richiede un test attuale riuscito, attendibilità coerente di risorsa ed emittente e scope espliciti per i tool osservati.",
     "governance": "Governance applicata",
@@ -1247,8 +1264,8 @@
       "network_confinement": "Confinamento di rete"
     },
     "governanceValues": {
-      "tenant_store": "Archivio del tenant",
-      "tenant_sealed_reference": "Riferimenti sigillati del tenant stesso",
+      "tenant_store": "Impostazioni dell'organizzazione",
+      "tenant_sealed_reference": "Riferimenti sigillati dell'organizzazione stessa",
       "control_plane_http_listener": "Listener HTTP dell'installazione",
       "declared_inventory_and_consent": "Template dichiarati e controlli di consenso",
       "not_configured": "Non configurato",

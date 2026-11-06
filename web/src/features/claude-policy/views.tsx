@@ -22,6 +22,11 @@ export const VIEWS = [
     helpHref: '/how-to/connectors/claude-code-hooks-pep',
     icon: ScrollText,
     permission: 'governance:claude-policy:read',
+    changes: [
+      { permission: 'governance:claude-policy:admin' },
+      { permission: 'governance:approval:admin' },
+      { permission: 'governance:policy:admin' },
+    ],
     element: lazyView(ClaudePolicyView),
   },
 ] satisfies ViewEntry[]

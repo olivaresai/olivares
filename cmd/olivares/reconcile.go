@@ -17,11 +17,13 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/firstparty"
+	"github.com/olivaresai/olivares/connectors/contentsource"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/secret"
+	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 )
@@ -67,6 +69,16 @@ type sourceReconciler struct {
 	// without depending on real connector Open behavior.
 	prepare func(ctx context.Context, def model.SourceDef) (*runtime.PreparedSource, sdk.Config, string)
 
+	// knowledge is the module document rows are wired into (documentroster.go);
+	// nil rejects them with a reason. openDocument opens a document row, defaulting
+	// to openDocumentSource (a field for the same reason as prepare). schedules
+	// parents every scheduled document sync; stopSchedules ends them at shutdown.
+	knowledge     *knowledge.Module
+	richDoc       contentsource.RichDocExtractor
+	openDocument  func(ctx context.Context, def model.SourceDef) (contentsource.Source, string)
+	schedules     context.Context
+	stopSchedules context.CancelFunc
+
 	mu sync.Mutex
 	// applied maps each spec name to the runtime registration it is currently wired
 	// as + the config fingerprint it was wired from. It is the reconciler's view of
@@ -100,6 +112,10 @@ type appliedSource struct {
 	// here because the previous instance is what keeps running.
 	sourceID       model.ID
 	sourceRevision int64
+	// document marks a knowledge document source (wired on the knowledge module,
+	// not the runtime); stopSchedule ends its scheduled sync, nil when it has none.
+	document     bool
+	stopSchedule context.CancelFunc
 }
 
 // registrationFor builds the roster snapshot the runtime stamps on every event of
@@ -141,7 +157,7 @@ func (sr *sourceReconciler) appliedRevision(name string) (model.ID, int64, bool)
 // source roster is hot-reconfigurable; everything else here is not.
 var requiresRestartDomains = []string{
 	"identity / roster providers (OLIVARES_SOURCES_CONFIG.identity)",
-	"knowledge document sources (OLIVARES_SOURCES_CONFIG.documents)",
+	"external (plugin) knowledge document sources (OLIVARES_SOURCES_CONFIG.documents with a plugin)",
 	"external connector trust policy (OLIVARES_SOURCES_CONFIG.connector_trust)",
 	"HTTP/gRPC listeners and TLS",
 	"database DSN, the event bus, and the sealer key",
@@ -153,6 +169,7 @@ func newSourceReconciler(rt *runtime.Runtime, store *auth.SourceStore, resolver 
 		scope: auth.GlobalSourceScope, log: log, applied: map[string]appliedSource{},
 	}
 	sr.prepare = sr.defaultPrepare
+	sr.openDocument = sr.openDocumentSource
 	return sr
 }
 
@@ -210,7 +227,13 @@ func sourceStatus(d model.SourceDef, applied map[string]appliedSource, live map[
 	if !d.Enabled {
 		return "disabled"
 	}
+	if documentCredentialMissing(d) {
+		return "credential_missing"
+	}
 	if app, ok := applied[d.Name]; ok {
+		if app.document {
+			return string(runtime.StatusRunning)
+		}
 		if st, ok := live[app.registrationName]; ok {
 			return string(st)
 		}
@@ -240,7 +263,7 @@ func (sr *sourceReconciler) putSource(ctx context.Context, actor auth.Principal,
 	if !saved.Enabled {
 		res.Action = "disabled"
 		if app, ok := sr.applied[saved.Name]; ok {
-			if rerr := sr.rt.RemoveSourceLive(ctx, app.registrationName); rerr != nil {
+			if rerr := sr.removeAppliedLocked(ctx, app); rerr != nil {
 				res.Note = "persisted (disabled), but could not stop the running source live; it stops on next reload/restart: " + rerr.Error()
 				return res, nil
 			}
@@ -286,7 +309,7 @@ func (sr *sourceReconciler) DeleteSource(ctx context.Context, actor auth.Princip
 	defer sr.mu.Unlock()
 	res := api.SourceApplyResult{Name: name, Persisted: true, Action: "removed"}
 	if app, ok := sr.applied[name]; ok {
-		if rerr := sr.rt.RemoveSourceLive(ctx, app.registrationName); rerr != nil {
+		if rerr := sr.removeAppliedLocked(ctx, app); rerr != nil {
 			res.Note = "deleted from the roster, but could not stop the running source live; it stops on restart: " + rerr.Error()
 			return res, nil
 		}
@@ -331,7 +354,7 @@ func (sr *sourceReconciler) reconcile(ctx context.Context) (api.SourceReloadRepo
 			continue
 		}
 		app := sr.applied[specName]
-		if rerr := sr.rt.RemoveSourceLive(ctx, app.registrationName); rerr != nil {
+		if rerr := sr.removeAppliedLocked(ctx, app); rerr != nil {
 			report.Rejected = append(report.Rejected, api.SourceRejection{Name: specName, Reason: "remove failed: " + rerr.Error()})
 			continue
 		}
@@ -371,6 +394,9 @@ func (sr *sourceReconciler) reconcile(ctx context.Context) (api.SourceReloadRepo
 // error verbatim: a backend error can embed credential material (the wireSources
 // rule).
 func (sr *sourceReconciler) applyLocked(ctx context.Context, def model.SourceDef) (action, reject string) {
+	if def.Plugin == nil && isDocumentKind(def.Kind) {
+		return sr.applyDocumentLocked(ctx, def)
+	}
 	ps, cfg, rej := sr.prepare(ctx, def)
 	if rej != "" {
 		return "", rej
@@ -551,11 +577,18 @@ func checkInlineSecrets(def model.SourceDef) error {
 	if businessKindUnavailable(def.Kind) {
 		return errBusinessSourceKind(def.Kind) // a Community write never stores a Business kind
 	}
-	conn, ok := buildInProcSource(def.Kind)
-	if !ok {
+	var desc sdk.Descriptor
+	if conn, ok := buildInProcSource(def.Kind); ok {
+		desc = conn.Descriptor()
+	} else if src, ok := buildContentSource(def.Kind, nil); ok {
+		if err := checkDocumentSettings(def.Config); err != nil {
+			return err
+		}
+		desc = src.Descriptor()
+	} else {
 		return nil // unknown kind: the apply path reports it honestly; not a write concern
 	}
-	if err := secret.CheckNoInlineSecrets(conn.Descriptor(), sdk.Config{Settings: def.Config}); err != nil {
+	if err := secret.CheckNoInlineSecrets(desc, sdk.Config{Settings: def.Config}); err != nil {
 		return fmt.Errorf("%w: %v — store the value with `olivares secrets` and reference it (e.g. store:<name>)", auth.ErrBadSourceDef, err)
 	}
 	return nil

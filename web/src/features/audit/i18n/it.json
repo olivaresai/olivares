@@ -3,9 +3,6 @@
   "subtitle": "Consulta il registro firmato delle attività di IA.",
   "subtitleSystem": "La catena del tenant di sistema delle operazioni amministrative tra tenant (sola lettura).",
   "searchLoaded": "Filtra solo le righe caricate (lato client)…",
-  "scan": {
-    "incomplete": "Scansione fino al seq {{seq}}: non è l'intero registro; Carica altri prosegue la scansione."
-  },
   "scope": {
     "label": "Ambito del registro",
     "tenant": "Registro del tenant",
@@ -75,6 +72,9 @@
     "actorMember": "Un membro"
   },
   "empty": {
+    "filteredTitle": "Nessuna evidenza corrispondente",
+    "searching": "Nessuna corrispondenza negli eventi cercati finora. Carica altro continua la ricerca.",
+    "noMatches": "Nessun evento corrisponde a questi filtri. Prova a modificare o rimuovere un filtro.",
     "title": "Ancora nessuna evidenza",
     "description": "Il registro è vuoto per questo ambito. Le operazioni governate aggiungono eventi a prova di manomissione man mano che avvengono."
   },
@@ -123,7 +123,7 @@
     "add": "Aggiungi {{token}} alla query",
     "commands": "Cerca e comandi",
     "problem": {
-      "key": "{{token}} non è un filtro del registro. Usa person:, action:, kind:, target:, since:, until: o parole.",
+      "key": "{{token}} non è un filtro del registro. Usa person:, action:, kind:, target:, tool:, folder:, since:, until: o parole.",
       "time": "{{token}} non è un tempo. Usa 90m, 24h, 7d, 2w o una data come 2026-10-20.",
       "person": "Nessuno corrisponde a {{token}}. Usa un nome, un'email o user:<id>.",
       "several": "{{token}} corrisponde a più persone. Usa il nome completo, un'email o user:<id>.",

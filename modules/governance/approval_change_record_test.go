@@ -619,9 +619,59 @@ func TestChangeRecordOutageAtTheSpendDoesNotRevoke(t *testing.T) {
 	if st := c.status(); st != "approved" {
 		t.Fatalf("approval after an outage = %q, want approved", st)
 	}
+	// The dead system is not read again until its first retry window (30 seconds) passes.
+	c.h.clk.advance(30 * time.Second)
 	c.system.set(scheduled(), nil)
 	if got, err := c.h.gov.EngineApprovals().Consume(context.Background(), c.tenant, c.approval, "launch-1", ""); err != nil || !got.Granted {
 		t.Fatalf("consume after recovery = %+v %v, want granted", got, err)
+	}
+}
+
+// A dead change system is read once per backoff window for an approved grant, not once per
+// sweep, and its refusal is written to the ledger once per outage.
+func TestChangeRecordOutageBacksOffTheReadAndLogsOnce(t *testing.T) {
+	c := newChangeRecordHarness(t, serviceNowSpec())
+	c.system.set(scheduled(), nil)
+	if r := c.h.decide(c.second, c.tenant, c.approval, "approve"); r.code != http.StatusOK {
+		t.Fatalf("approve = %d %s", r.code, r.raw)
+	}
+	c.system.set(governance.ChangeRecord{}, errors.New("timeout"))
+	before := c.system.callCount()
+	for i := 0; i < 3; i++ {
+		if _, err := c.h.gov.EngineApprovals().Consume(context.Background(), c.tenant, c.approval, "launch-1", ""); err == nil {
+			t.Fatalf("consume %d with the system down was granted", i+1)
+		}
+	}
+	if reads := c.system.callCount() - before; reads != 1 {
+		t.Fatalf("three consumes against a dead system read the record %d times, want 1", reads)
+	}
+	if n := len(c.auditMeta("governance.approval.change_record_refused")); n != 1 {
+		t.Fatalf("three refused consumes wrote %d refusal rows, want 1 for the outage", n)
+	}
+}
+
+// A dead change system is retried 2 minutes after its last refusal at the latest, however
+// long it stays down: the wait doubles but stops at the cap.
+func TestChangeRecordOutageRetryWaitIsCapped(t *testing.T) {
+	c := newChangeRecordHarness(t, serviceNowSpec())
+	c.system.set(scheduled(), nil)
+	if r := c.h.decide(c.second, c.tenant, c.approval, "approve"); r.code != http.StatusOK {
+		t.Fatalf("approve = %d %s", r.code, r.raw)
+	}
+	c.system.set(governance.ChangeRecord{}, errors.New("timeout"))
+	consume := func() {
+		_, _ = c.h.gov.EngineApprovals().Consume(context.Background(), c.tenant, c.approval, "launch-1", "")
+	}
+	consume()
+	for i := 0; i < 8; i++ {
+		c.h.clk.advance(2 * time.Minute)
+		consume()
+	}
+	before := c.system.callCount()
+	c.h.clk.advance(2 * time.Minute)
+	consume()
+	if reads := c.system.callCount() - before; reads != 1 {
+		t.Fatalf("a read after a 2 minute wait made %d reads, want 1: the outage wait is not capped", reads)
 	}
 }
 

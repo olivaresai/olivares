@@ -19,13 +19,13 @@ func mainMenuLabels(frame tui.Frame) []string {
 	return labels
 }
 
-// A build that adds no screens draws the six rows of CLI-CONCEPT §5.1 and no
+// A build that adds no screens draws the rows of CLI-CONCEPT §5.1, Ask Olivares among them, and no
 // Business entry (issue 2574: "On Community the screens are not drawn").
 func TestMainMenuFrameWithoutBusinessScreensDrawsNoBusinessEntry(t *testing.T) {
 	asEdition(t, "community")
 	thisEdition.uiScreens = nil
 	got := mainMenuLabels(mainMenuFrame(rootStatusReport{Next: "olivares quickstart"}))
-	want := []string{"Get started", "AI tools", "Sessions", "Security", "Settings", "All commands"}
+	want := []string{"Get started", "AI tools", "Sessions", "Ask Olivares", "Security", "Settings", "All commands"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("main menu rows = %q, want %q", got, want)
 	}
@@ -42,7 +42,7 @@ func TestMainMenuFrameDrawsTheEditionsScreensBeforeAllCommands(t *testing.T) {
 		}
 	}
 	got := mainMenuLabels(mainMenuFrame(rootStatusReport{Next: "olivares quickstart"}))
-	want := []string{"Get started", "AI tools", "Sessions", "Security", "Settings", "Organization", "Cockpit", "All commands"}
+	want := []string{"Get started", "AI tools", "Sessions", "Ask Olivares", "Security", "Settings", "Organization", "Cockpit", "All commands"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("main menu rows = %q, want %q", got, want)
 	}

@@ -238,6 +238,17 @@ export function buildLanes({
         read: own !== undefined,
       }
     })
+    .sort((a, b) => ATTENTION[a.state] - ATTENTION[b.state])
+}
+
+/** The one live list reads by what needs a person first: a session waiting on someone,
+ * one that failed this hour, then those at work, then the idle ones. The sort is stable,
+ * so lanes keep the sessions' own order inside each state. */
+const ATTENTION: Record<LaneState, number> = {
+  waiting: 0,
+  failed: 1,
+  working: 2,
+  idle: 3,
 }
 
 /** Density in four tones: none, a few, steady, busy (tool calls in one minute). */

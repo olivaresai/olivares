@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -59,11 +60,19 @@ func assertOpenCodeConfined(t *testing.T, env map[string]string, provider string
 	if cfg["share"] != "disabled" {
 		t.Errorf("share = %v, want disabled", cfg["share"])
 	}
-	for name, want := range map[string]string{envOpenCodeDisableModelsFetch: "1", envOpenCodeDisableLSPDownload: "1", envNPMConfigOffline: "true",
+	for name, want := range map[string]string{envOpenCodeDisableModelsFetch: "1", envOpenCodeDisableLSPDownload: "1",
 		envOpenCodeDisableShare: "1"} {
 		if env[name] != want {
 			t.Errorf("%s = %q, want %q (a request to a host other than the bound provider)", name, env[name], want)
 		}
+	}
+	// #3122: OpenCode's shell runs the agent's commands with this environment, so the
+	// variable would make the agent's npm install fail and keep a profile's declared
+	// registries unreachable. OpenCode's background install of @opencode-ai/plugin is
+	// refused by the session's egress policy instead (it names only the bound provider
+	// and the declared registries).
+	if v, ok := env[envNPMConfigOffline]; ok {
+		t.Errorf("%s = %q: a record-bound launch turns npm offline for the agent's own commands", envNPMConfigOffline, v)
 	}
 }
 
@@ -373,5 +382,60 @@ func TestOpenCodeRefusesAnyHostManagedConfig(t *testing.T) {
 	}
 	if _, _, err := m.mintLaunchAuthority(context.Background(), tenant, "", p); err != nil {
 		t.Fatalf("own-login launch under a managed file = %v", err)
+	}
+}
+
+// #2985: OpenCode itself ships a native provider for OpenRouter, Mistral, Moonshot and
+// Z.ai, each at its own documented endpoint (opencode.ai/docs/providers). A BYO key
+// record at exactly that endpoint confines to OpenCode's own provider for it, read from
+// the preset catalog (connectors/modelprovider), not the generic local-server adapter
+// that any other openai_compatible address still gets.
+func TestOpenCodeOnAPresetKeyEnablesOpenCodesNativeProviderAtItsCatalogURL(t *testing.T) {
+	for _, tc := range []struct{ ref, provider string }{
+		{"openrouter", "openrouter"},
+		{"mistral", "mistral"},
+		{"moonshot", "moonshotai"}, // OpenCode's own id differs from the catalog ref
+		{"zai", "zai"},
+	} {
+		t.Run(tc.ref, func(t *testing.T) {
+			row, ok := modelprovider.LookupPreset(tc.ref)
+			if !ok {
+				t.Fatalf("no catalog preset %q", tc.ref)
+			}
+			env, err := openCodeKeyLaunch(t, CreateProviderRecordInput{
+				Kind: ProviderKindOpenAICompatible, DisplayName: row.Title, APIKey: testProviderKey, Service: tc.ref,
+			})
+			if err != nil {
+				t.Fatalf("launch on preset %s = %v", tc.ref, err)
+			}
+			assertOpenCodeConfined(t, env, tc.provider)
+			provider, _ := openCodeInline(t, env)["provider"].(map[string]any)
+			pinned, _ := provider[tc.provider].(map[string]any)
+			options, _ := pinned["options"].(map[string]any)
+			if options["baseURL"] != row.BaseURL {
+				t.Fatalf("provider.%s.options.baseURL = %v, want %s", tc.provider, options["baseURL"], row.BaseURL)
+			}
+			// The engine's one credential variable for this kind, by reference: OpenCode's
+			// own provider for this vendor does not read it by its usual name.
+			if options["apiKey"] != "{env:OPENAI_API_KEY}" {
+				t.Fatalf("provider.%s.options.apiKey = %v, want the engine's own key variable by reference", tc.provider, options["apiKey"])
+			}
+			if env["OPENAI_API_KEY"] == "" {
+				t.Fatal("the key does not reach the child as OPENAI_API_KEY")
+			}
+		})
+	}
+}
+
+// DeepSeek's openai_compatible preset is the governed service row (service=deepseek):
+// native sessions on it are refused regardless of driver (errServiceProviderNative), so
+// it never reaches OpenCode's confinement; the catalog still names its OpenCode id for
+// the day that service is opened to native sessions (openCodeNativeProviderID).
+func TestOpenCodeRefusesTheGovernedDeepSeekPreset(t *testing.T) {
+	_, err := openCodeKeyLaunch(t, CreateProviderRecordInput{
+		Kind: ProviderKindOpenAICompatible, DisplayName: "DeepSeek", APIKey: testProviderKey, Service: modelprovider.ServiceDeepSeek,
+	})
+	if err == nil || !strings.Contains(err.Error(), "native sessions cannot use it yet") {
+		t.Fatalf("launch on the governed deepseek preset = %v, want the native-session refusal", err)
 	}
 }

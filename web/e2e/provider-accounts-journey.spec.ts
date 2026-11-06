@@ -123,11 +123,11 @@ function content(page: Page) {
   return page.getByRole('main')
 }
 
-/** The Now place in the left navigation. */
-function nowLink(page: Page) {
+/** Settings at the left navigation's foot: every sign-in paints it, on every page. */
+function shellLink(page: Page) {
   return page
     .getByRole('navigation', { name: 'Main navigation', exact: true })
-    .getByRole('link', { name: 'Now', exact: true })
+    .getByRole('link', { name: 'Settings', exact: true })
 }
 
 async function signIn(page: Page, email: string, password: string) {
@@ -135,7 +135,7 @@ async function signIn(page: Page, email: string, password: string) {
   await page.locator('#email').fill(email)
   await page.locator('#password').fill(password)
   await page.getByRole('button', { name: /^sign in$/i }).click()
-  await expect(nowLink(page)).toBeVisible()
+  await expect(shellLink(page)).toBeVisible()
 }
 
 /** The engine's own account list, read by the administrator. */
@@ -245,10 +245,10 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await page.locator('#setup-email').fill(ADMIN_EMAIL)
       await page.locator('#setup-password').fill(ADMIN_PASSWORD)
       await page.getByRole('button', { name: /create administrator/i }).click()
-      await expect(page).toHaveURL(/\/onboarding$/)
+      await expect(page).toHaveURL(/\/sessions$/)
       await expect(
         content(page).getByRole('heading', {
-          name: 'Get started',
+          name: 'Start a session',
           exact: true,
         }),
       ).toBeVisible()
@@ -629,8 +629,8 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await member.keyboard.press('Escape')
       // Leave the accounts and come back (they are on Tools, #2552): the parked
       // creation survives the list unmounting, as it did a tab switch.
-      await nowLink(member).click()
-      await member.locator('[data-place="ai-tools"]').click()
+      await shellLink(member).click()
+      await member.locator('[data-place="tools"]').click()
       await content(member)
         .getByRole('button', { name: 'Retry creation', exact: true })
         .click()

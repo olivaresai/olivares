@@ -43,9 +43,11 @@ const auth = vi.hoisted(() => ({
 }))
 const location = vi.hoisted(() => ({ search: undefined as string | undefined }))
 const router = vi.hoisted(() => ({ navigate: vi.fn() }))
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
   useNavigate: () => router.navigate,
+  useRouter: () => undefined,
   useRouterState: () => location.search,
+  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
 }))
 
 // Setup is a room with its own tests; here it only has to open INSIDE Settings (#2905).
@@ -126,7 +128,7 @@ beforeEach(async () => {
   usePreferencesStore.setState({ density: 'comfortable', reduceMotion: false })
   useClientSettings.setState({
     clock: '24',
-    startPage: 'home',
+    startPage: 'sessions',
     confirmStop: true,
     editor: 'vscode',
     editorSsh: '',
@@ -136,7 +138,7 @@ beforeEach(async () => {
 })
 
 describe('Settings', () => {
-  it('opens the shared license status and actions as the License page, with no Settings list beside it', async () => {
+  it('opens the shared license status and actions as Settings › Edition, with the Settings list beside it', async () => {
     location.search = '?section=edition'
     render(<SettingsPage />)
     expect(
@@ -148,32 +150,37 @@ describe('Settings', () => {
     expect(
       screen.getByRole('button', { name: 'Remove license' }),
     ).toBeInTheDocument()
+    // Edition is a section of Settings (0.7): its row is the current one.
+    const list = screen.getByRole('navigation', { name: 'Settings sections' })
+    expect(
+      within(list).getByRole('button', { name: 'Edition' }),
+    ).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('shows the module switches in Settings › Modules and none in Settings › Edition', async () => {
+    location.search = '?section=modules'
+    const { unmount } = render(<SettingsPage />)
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Modules' }),
+    ).toBeInTheDocument()
     expect(
       screen.getByRole('region', { name: 'Modules list' }),
     ).toBeInTheDocument()
-    // License is its own place of the sidebar (IA.md), not a section of Settings.
+    const list = screen.getByRole('navigation', { name: 'Settings sections' })
     expect(
-      screen.queryByRole('navigation', { name: 'Settings sections' }),
-    ).toBeNull()
-  })
+      within(list).getByRole('button', { name: 'Modules' }),
+    ).toHaveAttribute('aria-current', 'page')
+    unmount()
 
-  it('leaves / to the rest of the console on the License page, which has no search to focus', async () => {
     location.search = '?section=edition'
-    const user = userEvent.setup()
     render(<SettingsPage />)
-    await screen.findByText('Settings License Owner')
-    const seen: KeyboardEvent[] = []
-    const listen = (event: KeyboardEvent) => seen.push(event)
-    window.addEventListener('keydown', listen)
-    try {
-      await user.keyboard('/')
-    } finally {
-      window.removeEventListener('keydown', listen)
-    }
-    expect(seen.map((e) => [e.key, e.defaultPrevented])).toEqual([['/', false]])
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Edition' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Modules list' })).toBeNull()
   })
 
-  it('lists only personal sections: no room another place of the sidebar holds (0.5 fold)', () => {
+  it('lists no room another place of the sidebar holds (0.5 fold)', () => {
     render(<SettingsPage />)
     const list = screen.getByRole('navigation', { name: 'Settings sections' })
     for (const name of [
@@ -181,7 +188,6 @@ describe('Settings', () => {
       'Workspaces',
       'Deploy and updates',
       'Updates',
-      'Edition & modules',
     ])
       expect(within(list).queryByRole('button', { name })).toBeNull()
     // No row of the list leaves /settings.
@@ -193,7 +199,7 @@ describe('Settings', () => {
     location.search = '?section=edition'
     render(<SettingsPage />)
     expect(
-      screen.getByText('Only a superadmin can view or change the license.'),
+      screen.getByText(/ask a system administrator to view or change it/i),
     ).toBeInTheDocument()
     expect(consoleApi.getLicense).not.toHaveBeenCalled()
     expect(screen.getByText('Community')).toBeInTheDocument()
@@ -363,6 +369,8 @@ describe('Settings', () => {
       'Français',
       'Italiano',
       '한국어',
+      'Українська',
+      'Português',
     ])
     // prettier-ignore
     const spanishName = 'Español' // language-data: native language name
@@ -405,6 +413,26 @@ describe('Settings', () => {
     await waitFor(() => expect(i18n.resolvedLanguage).toBe('ko'))
     expect(document.documentElement.lang).toBe('ko')
     expect(preferenceStorage.getItem('olivares.lang')).toBe('ko')
+
+    await user.click(trigger)
+    await user.click(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: 'Українська',
+      }),
+    )
+    await waitFor(() => expect(i18n.resolvedLanguage).toBe('uk'))
+    expect(document.documentElement.lang).toBe('uk')
+    expect(preferenceStorage.getItem('olivares.lang')).toBe('uk')
+
+    await user.click(trigger)
+    await user.click(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: 'Português',
+      }),
+    )
+    await waitFor(() => expect(i18n.resolvedLanguage).toBe('pt'))
+    expect(document.documentElement.lang).toBe('pt')
+    expect(preferenceStorage.getItem('olivares.lang')).toBe('pt')
   })
 
   it('focuses search on / and filters to Reduce motion', async () => {
@@ -493,7 +521,7 @@ describe('Settings', () => {
     expect(usePreferencesStore.getState().density).toBe('comfortable')
     expect(usePreferencesStore.getState().reduceMotion).toBe(false)
     expect(useClientSettings.getState().clock).toBe('24')
-    expect(useClientSettings.getState().startPage).toBe('home')
+    expect(useClientSettings.getState().startPage).toBe('sessions')
     expect(useClientSettings.getState().confirmStop).toBe(true)
     expect(useClientSettings.getState().editor).toBe('vscode')
     expect(useClientSettings.getState().editorSsh).toBe('')
@@ -547,21 +575,24 @@ describe('Settings', () => {
   })
 
   it('names the edition once, and on Community lists what a Business build adds', async () => {
-    // The License place of the sidebar opens this address.
+    // Settings › Edition opens this address.
     location.search = '?section=edition'
     server.edition = 'community'
     const { unmount } = render(<SettingsPage />)
     expect(
-      screen.getByRole('heading', { name: 'Edition & modules' }),
+      screen.getByRole('heading', { level: 1, name: 'Edition' }),
     ).toBeInTheDocument()
     expect(await screen.findByText('Community')).toBeInTheDocument()
+    // The list quotes the summary in docs/editions.md, not a console catalogue.
     const adds = screen.getByRole('heading', { name: 'Business adds' })
-    expect(adds.parentElement?.querySelectorAll('li')).toHaveLength(6)
-    expect(screen.getByText('Tool pins')).toBeInTheDocument()
-    // Every optional module is turned on and off here, by a system administrator.
+    const items = adds.parentElement?.querySelectorAll('li') ?? []
+    expect([...items].map((li) => li.textContent)).toEqual(
+      __EDITION_SUMMARIES__.business,
+    )
     expect(
-      screen.getByRole('region', { name: 'Modules list' }),
+      screen.getByText(__EDITION_SUMMARIES__.enterprise[0]),
     ).toBeInTheDocument()
+    expect(screen.queryByText('Tool pins')).toBeNull()
     unmount()
 
     // A Business build (the engine's "enterprise" build string) is named Business and
@@ -624,13 +655,21 @@ describe('Settings', () => {
     )
   })
 
-  it('offers Setup only where its page opens, and an address to it otherwise falls back to General (#474, #2905)', () => {
+  it('offers Setup only where its page opens, and an address to it otherwise says it is for a system administrator, not General (#474, #2905)', () => {
     auth.denied.add('system:admin')
     location.search = '?section=setup'
     render(<SettingsPage />)
     expect(screen.queryByRole('button', { name: 'Setup' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Setup wizard' })).toBeNull()
-    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Setup' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/ask a system administrator to view or change it/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('radiogroup', { name: 'Theme' })).toBeNull()
+    // The list does not say General is the page while another page's notice shows.
+    expect(screen.getByRole('button', { name: 'General' })).not.toHaveAttribute(
+      'aria-current',
+    )
     // the regression: Permissions is open to everyone, so the group keeps its heading for it.
     expect(
       screen.getByRole('button', { name: 'Permissions' }),
@@ -664,7 +703,7 @@ describe('Settings', () => {
     }
     const all = render(<SettingsPage />)
     expect(await startPages()).toEqual([
-      'Now',
+      'Overview',
       'Sessions',
       'Workspace',
       'Providers',
@@ -703,11 +742,8 @@ it('shows the active commercial badge and one visibility setting in Edition', as
 
 describe('Settings > section list', () => {
   const label = (id: string) => i18n.t(`nav.${id}`, { ns: 'settings' })
-  // A hosted page is listed only where that page opens: those rows are tested above. Edition
-  // is the License page of the sidebar, not a row of this list.
-  const own = SETTINGS_SECTIONS.filter(
-    (s) => !('view' in s) && s.id !== 'edition',
-  )
+  // A hosted page is listed only where that page opens: those rows are tested above.
+  const own = SETTINGS_SECTIONS.filter((s) => !('view' in s))
 
   it.each(own.map((s) => s.id))('lists %s for an administrator', (id) => {
     render(<SettingsPage />)
@@ -749,21 +785,23 @@ describe('Settings > section list', () => {
   })
 
   it.each(SETTINGS_SECTIONS.filter((s) => s.adminOnly).map((s) => s.id))(
-    'opens General, not an empty page, for the address of %s when the person is not an administrator',
+    'says the address of %s is for a system administrator, not General, when the person is not one',
     (id) => {
       auth.isSuperadmin = false
       location.search = `?section=${id}`
       render(<SettingsPage />)
       expect(
         screen.getByRole('heading', {
-          name: i18n.t('general.title', { ns: 'settings' }),
+          name: i18n.t(`nav.${id}`, { ns: 'settings' }),
         }),
       ).toBeInTheDocument()
       expect(
-        screen.getByRole('button', { name: label('general') }),
-      ).toHaveAttribute('aria-current', 'page')
+        screen.getByText(/ask a system administrator to view or change it/i),
+      ).toBeInTheDocument()
       expect(
-        screen.queryByRole('region', { name: 'Session idle panel' }),
+        screen.queryByRole('heading', {
+          name: i18n.t('general.title', { ns: 'settings' }),
+        }),
       ).toBeNull()
     },
   )

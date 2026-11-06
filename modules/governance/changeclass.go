@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/connectors/redact"
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -276,13 +277,14 @@ func sensitiveGlobs(specs []approvalSpec) []string {
 // proposal is neither classified nor shown a class, and nothing about its
 // approval changes.
 func (a *EngineApprovals) ChangeClassPolicyActive(ctx context.Context, tenant model.TenantID, action string) (bool, error) {
+	requester, _ := api.RequestPrincipal(ctx)
 	d, _, err := a.scope(tenant)
 	if err != nil {
 		return false, err
 	}
 	active := false
 	err = d.View(ctx, func(sc store.Scope) error {
-		pols, err := loadApprovalPolicies(ctx, sc)
+		pols, err := a.module.approvalPolicies(ctx, sc, requester.UserID.String())
 		if err != nil {
 			return err
 		}
@@ -296,13 +298,14 @@ func (a *EngineApprovals) ChangeClassPolicyActive(ctx context.Context, tenant mo
 // ClassifyChange classifies the paths of a proposed change by the tenant's
 // sensitive globs.
 func (a *EngineApprovals) ClassifyChange(ctx context.Context, tenant model.TenantID, action string, paths []string) (ChangeClassification, error) {
+	requester, _ := api.RequestPrincipal(ctx)
 	d, _, err := a.scope(tenant)
 	if err != nil {
 		return ChangeClassification{}, err
 	}
 	var out ChangeClassification
 	err = d.View(ctx, func(sc store.Scope) error {
-		pols, err := loadApprovalPolicies(ctx, sc)
+		pols, err := a.module.approvalPolicies(ctx, sc, requester.UserID.String())
 		if err != nil {
 			return err
 		}

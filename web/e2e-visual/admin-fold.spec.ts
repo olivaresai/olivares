@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ADMIN AND SETTINGS, FOLDED INTO THEIR PLACES (0.5 one navigation), in Chromium against the
-// mocked API. Administration repeats no tab People & groups, License or MCP & skills holds;
-// Settings lists personal sections only; system updates are a page of Operations; every old
-// address lands on its new page with its query and hash. The two measured tasks of the 0.5
-// table that this fold owns are counted here in clicks from Now.
+// ADMIN AND SETTINGS, FOLDED INTO THEIR PLACES (0.5 one navigation, 0.7 places), in Chromium
+// against the mocked API. Administration repeats no tab People, Settings › Edition or MCP &
+// skills holds; Settings lists Edition with this installation's sections and no room another
+// place holds; no sidebar link opens a Settings section; system updates are a page of
+// Operations; every old address lands on its new page with its query and hash. The two
+// measured tasks of the 0.5 table that this fold owns are counted here in clicks from Overview.
 import { writeFileSync } from 'node:fs'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
@@ -67,11 +68,11 @@ test('Administration repeats no tab another place holds', async ({ page }) => {
   const tabs = page.getByRole('tablist')
   await expect(tabs.getByRole('tab', { name: 'Agents' })).toBeVisible()
   for (const name of [
-    'Users & groups',
+    'People',
     'SSO / IdP',
-    'Roles & delegation',
+    'Roles',
     'API keys',
-    'Edition & license',
+    'Edition',
     'MCP gateway',
   ])
     await expect(tabs.getByRole('tab', { name, exact: true })).toHaveCount(0)
@@ -91,7 +92,7 @@ test('an old Administration tab lands on its place with its query and hash', asy
   await expect(page).toHaveURL(/\/capabilities\?tab=servers$/)
 })
 
-test('Settings lists personal sections only, and License is its own page', async ({
+test('Settings lists Edition among its sections, and no sidebar link opens a section', async ({
   page,
 }) => {
   await page.goto('/settings')
@@ -102,22 +103,24 @@ test('Settings lists personal sections only, and License is its own page', async
     'Workspaces',
     'Deploy and updates',
     'Updates',
-    'Edition & modules',
   ])
     await expect(list.getByRole('button', { name, exact: true })).toHaveCount(0)
   await capture(page, 'settings')
 
-  await sidebar(page)
-    .getByRole('link', { name: 'License', exact: true })
-    .click()
+  // License left the sidebar: More holds no link to a Settings section.
+  await sidebar(page).getByRole('button', { name: 'More', exact: true }).click()
+  await expect(sidebar(page).locator('a[href*="section="]')).toHaveCount(0)
+  await list.getByRole('button', { name: 'Edition', exact: true }).click()
   await expect(page).toHaveURL(/\/settings\?section=edition$/)
   await expect(
-    page.getByRole('navigation', { name: 'Settings sections' }),
-  ).toHaveCount(0)
-  await expect(
-    sidebar(page).getByRole('link', { name: 'License', exact: true }),
+    list.getByRole('button', { name: 'Edition', exact: true }),
   ).toHaveAttribute('aria-current', 'page')
-  await capture(page, 'license')
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Main navigation', exact: true })
+      .getByRole('link', { name: 'Settings', exact: true }),
+  ).toHaveAttribute('aria-current', 'page')
+  await capture(page, 'edition')
 })
 
 test('system updates are a page of Operations, and their old address lands there', async ({
@@ -149,7 +152,7 @@ for (const { width, theme } of [
   { width: 390, theme: 'light' },
   { width: 1280, theme: 'dark' },
 ])
-  test(`Operations › Updates and License at ${width} px ${theme}`, async ({
+  test(`Operations › Updates and Settings › Edition at ${width} px ${theme}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 })
@@ -168,22 +171,23 @@ for (const { width, theme } of [
 
     await page.goto('/settings?section=edition')
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Edition & modules' }),
+      page.getByRole('heading', { level: 1, name: 'Edition', exact: true }),
     ).toBeVisible()
     await expect(
       page.getByRole('navigation', { name: 'Settings sections' }),
-    ).toHaveCount(0)
-    await capture(page, 'license', variant)
+    ).toBeVisible()
+    await capture(page, 'edition', variant)
   })
 
-test('measures the two Admin and Settings tasks of the 0.5 table in clicks from Now', async ({
+test('measures the two Admin and Settings tasks of the 0.5 table in clicks from Overview', async ({
   page,
 }) => {
   const counted: Record<string, number> = {}
 
-  await page.goto('/')
+  await page.goto('/now')
   let clicks = 0
-  await sidebar(page)
+  await page
+    .getByRole('navigation', { name: 'Main navigation', exact: true })
     .getByRole('link', { name: 'Settings', exact: true })
     .click()
   clicks++
@@ -192,18 +196,19 @@ test('measures the two Admin and Settings tasks of the 0.5 table in clicks from 
   await expect(page.locator('html')).toHaveClass(/dark/)
   counted['Change a setting'] = clicks
 
-  await page.goto('/')
+  await page.goto('/now')
   clicks = 0
-  await sidebar(page)
-    .getByRole('link', { name: 'People & groups', exact: true })
-    .click()
+  // A new person's navigation holds the first places; People is under More.
+  await sidebar(page).getByRole('button', { name: 'More', exact: true }).click()
+  clicks++
+  await sidebar(page).getByRole('link', { name: 'People', exact: true }).click()
   clicks++
   await expect(page).toHaveURL(/\/identity/)
   await expect(
-    page.getByRole('tab', { name: 'Users & groups', selected: true }),
+    page.getByRole('tab', { name: 'People', selected: true }),
   ).toBeVisible()
   counted['Administer users and groups'] = clicks
-  await capture(page, 'people-and-groups')
+  await capture(page, 'people')
 
   if (SHOTS)
     writeFileSync(

@@ -393,3 +393,104 @@ func TestScopedGrantLauncherIsAdmittedAtToolCalls(t *testing.T) {
 		}
 	})
 }
+
+// scheduleApprovals answers ObserveScoped for one cron period's approval, as the local
+// governance bridge does, and records the question it was asked.
+type scheduleApprovals struct {
+	effectBridge
+	status string
+	asked  []string
+}
+
+func (s *scheduleApprovals) ObserveScoped(_ context.Context, _ model.TenantID, ref, planHash, action, kind, subject string) (string, string, error) {
+	s.asked = append(s.asked, strings.Join([]string{ref, planHash, action, kind, subject}, " "))
+	return s.status, "", nil
+}
+
+// An approved scheduled run has no person behind it: it launches as its work item's
+// owner agent, on that agent's own credential narrowed to the one session, and the
+// audit names the agent, the schedule and the approval. A period that is not approved
+// mints nothing.
+func TestScheduledLaunchRunsAsOwnerAgentOnlyAfterApproval(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	tenant := model.TenantID(h.tenantA)
+	c := newSessionHookCredentials(h.authr, h.st, h.set.sessions, h.set.gov)
+	if err := c.bindEndpoint("127.0.0.1:7777"); err != nil {
+		t.Fatal(err)
+	}
+	const agent, system = "agent-wiki-lint", "system:engine"
+	launch := func(run, status string) (sessions.LaunchDecision, *scheduleApprovals, sessions.LaunchIntent, error) {
+		hookTestRunID(t, h.st, tenant, run)
+		sid, err := h.set.sessions.ResolveSession(ctx, tenant, sessions.SessionBinding{Provider: sessions.ProviderOperated, ExternalID: run, Origin: sessions.OriginOperated})
+		if err != nil {
+			t.Fatal(err)
+		}
+		lease, err := h.set.sessions.Claim(ctx, tenant, sid, agent, time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		intent := sessions.LaunchIntent{Action: sessions.LaunchActionCreate, PermissionMode: "default", RunRef: run,
+			Actor: system, ActorKind: model.ActorSystem, AgentRef: agent, ClaimSID: sid, Holder: lease.Holder, Fence: lease.Fence,
+			Schedule: &sessions.ScheduledLaunch{ScheduleRef: "sched-" + run, ApprovalRef: "appr-" + run, PlanHash: "plan-" + run}}
+		approvals := &scheduleApprovals{status: status}
+		gate := &sessionLaunchGate{bridge: approvals, pep: c.provisioner(), clock: time.Now}
+		dec, err := gate.Authorize(ctx, tenant, intent)
+		return dec, approvals, intent, err
+	}
+
+	dec, approvals, intent, err := launch("cron-approved", "approved")
+	if err != nil || !dec.Allowed {
+		t.Fatalf("approved scheduled launch: %+v %v", dec, err)
+	}
+	if want := "appr-cron-approved plan-cron-approved orchestration.schedule.fire schedule sched-cron-approved"; len(approvals.asked) != 1 || approvals.asked[0] != want {
+		t.Fatalf("approval question: %q, want %q", approvals.asked, want)
+	}
+	var token string
+	for _, env := range dec.InjectEnv {
+		if env.Name == envHookPEPToken {
+			token = env.Value
+		}
+	}
+	principal, scope, err := c.Resolve(ctx, token)
+	if err != nil {
+		t.Fatalf("scheduled session credential: %v", err)
+	}
+	if role, _ := principal.RoleIn(tenant); principal.AgentIdentity != agent || !principal.UserID.IsZero() ||
+		principal.Superadmin || role != auth.RoleEditor || len(principal.Tenants()) != 1 ||
+		principal.SessionIdentity != intent.ClaimSID || principal.SessionRunRef != intent.RunRef ||
+		scope.RunRef != intent.RunRef || scope.SessionRef != intent.ClaimSID || scope.AgentRef != agent {
+		t.Fatalf("scheduled session is not its owner agent narrowed to the session: %+v %+v", principal, scope)
+	}
+	var issued []canonicalLedgerEvent
+	for _, ev := range canonicalLedgerEventsFrom(t, h.st, model.SystemTenantID, 0) {
+		if ev.event.Action == "agent_launch_credential.issue" {
+			issued = append(issued, ev)
+		}
+	}
+	if len(issued) != 1 || issued[0].event.ActorKind != model.ActorSystem || issued[0].meta["agent_ref"] != agent ||
+		issued[0].meta["schedule_ref"] != "sched-cron-approved" || issued[0].meta["approval_ref"] != "appr-cron-approved" ||
+		issued[0].meta["run_ref"] != intent.RunRef {
+		t.Fatalf("agent launch audit: %+v", issued)
+	}
+	if err := h.st.AuthView(ctx, func(as store.AuthScope) error {
+		row, err := as.Tokens().Get(ctx, issued[0].event.TargetID)
+		if err != nil {
+			return err
+		}
+		if row.Purpose != "agent-launch" || !row.UserID.IsZero() || row.AgentRef != agent ||
+			row.ExpiresAt == nil || row.ExpiresAt.Time().After(time.Now().Add(24*time.Hour)) {
+			t.Fatalf("agent launch credential outlives its session or names a person: %+v", row)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, status := range []string{"pending", "rejected", "expired"} {
+		dec, _, _, err := launch("cron-"+status, status)
+		if err != nil || dec.Allowed || len(dec.InjectEnv) != 0 {
+			t.Fatalf("%s scheduled launch started: %+v %v", status, dec, err)
+		}
+	}
+}

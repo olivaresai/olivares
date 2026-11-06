@@ -48,7 +48,7 @@ func startSecurity(t *testing.T, e *secEngine, extra ...string) (*os.File, *exec
 	env := cliProcessEnv(t, append([]string{"OLIVARES_SERVER_URL=" + e.URL, "OLIVARES_TOKEN=test-token", "OLIVARES_TENANT=tenant-a"}, extra...)...)
 	cmd := startCLI(t, env, slave, slave, slave, "ui")
 	first := readScreen(t, master, "Get started")
-	sendKeys(t, master, strings.Repeat(keyDown, 3))
+	sendKeys(t, master, strings.Repeat(keyDown, 4))
 	readScreen(t, master, "▸ Security")
 	sendKeys(t, master, "\r")
 	readScreen(t, master, "Kill switch")

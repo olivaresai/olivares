@@ -22,7 +22,7 @@ func TestManagedSettingsDefaultHookPinsDeadlineAndInvocation(t *testing.T) {
 	cmd.SetOut(&out)
 	// The protected longer-approval policy is an explicit choice; the omitted
 	// flags retain the published command bytes and 5s outer timeout.
-	cmd.SetArgs([]string{"--pep-command", "olivares claude-hook --timeout 2m0s", "--timeout", "180", "--pin-hook-events"})
+	cmd.SetArgs([]string{"--pep-command", "olivares claude-hook --timeout " + sessions.ClaudeHookPEPClientTimeout.String(), "--timeout", strconv.Itoa(int(sessions.ClaudeHookPEPCommandTimeout / time.Second)), "--pin-hook-events"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestManagedSettingsDefaultHookPinsDeadlineAndInvocation(t *testing.T) {
 		deadline, _ := client.Flags().GetDuration("timeout")
 		invocation, _ := client.Flags().GetString("hook-event")
 		if deadline != sessions.ClaudeHookPEPClientTimeout || hook.Timeout != int(sessions.ClaudeHookPEPCommandTimeout/time.Second) || invocation != event || time.Duration(hook.Timeout)*time.Second <= deadline {
-			t.Fatal("explicit static hook lacks the protected120s/180s pinned-event contract", event, deadline, hook.Timeout, invocation)
+			t.Fatal("explicit static hook lacks the protected client/hook deadline pinned-event contract", event, deadline, hook.Timeout, invocation)
 		}
 	}
 }

@@ -178,15 +178,6 @@ note "build edition: $BUILD_EDITION; graph HTTP $GRAPH_STATUS; identity inventor
 check_findings
 if [ "$GRAPH_STATUS" = 200 ]; then
 note "PATH A: assert the access graph (the hero) matches the quickstart"
-GRAPH="$(api_get '/v1/m/accessmap/graph?limit=200')"
-read -r A_NODES A_EDGES A_FIRM A_APPROX <<EOF
-$(printf '%s' "$GRAPH" | python3 -c '
-import sys,json
-from collections import Counter
-g=json.load(sys.stdin); E=g.get("edges",[])
-t=Counter(e.get("attribution_tier") for e in E)
-print(len(g.get("nodes",[])), len(E), t.get("firm",0), t.get("approximate",0))')
-EOF
 # The four numbers come from the canonical English quickstart guide, not literals
 # here. Keep its sentence shape explicit: a prose change must not silently stop
 # this script from checking the access graph and drift against the published claims.
@@ -219,6 +210,25 @@ $guide_line
 EOF
 [ -n "$R_UNUSED" ] || fail "could not take the four published counts from the quickstart guide"
 echo "    ok: quickstart guide publishes ${R_NODES} nodes / ${R_EDGES} edges, ${R_UNEXP} unexpected, ${R_UNUSED} unused"
+
+# The demo source's observations reach the graph through the bus, after the module restart that
+# the module selection causes: the modules are running a moment before the graph holds the estate
+# (nightly 2026-11-03: "got '0'"). Wait for the published counts, as Path B waits for its edges;
+# if they never arrive, the assertions below name the counts that did.
+A_NODES=''
+for _ in $(seq 1 "$SMOKE_INGEST_POLLS"); do
+GRAPH="$(api_get '/v1/m/accessmap/graph?limit=200')"
+read -r A_NODES A_EDGES A_FIRM A_APPROX <<EOF
+$(printf '%s' "$GRAPH" | python3 -c '
+import sys,json
+from collections import Counter
+g=json.load(sys.stdin); E=g.get("edges",[])
+t=Counter(e.get("attribution_tier") for e in E)
+print(len(g.get("nodes",[])), len(E), t.get("firm",0), t.get("approximate",0))')
+EOF
+[ "$A_NODES" = "$R_NODES" ] && [ "$A_EDGES" = "$R_EDGES" ] && break
+  sleep 0.25
+done
 
 assert_eq "demo graph nodes (quickstart guide says $R_NODES)" "$A_NODES" "$R_NODES"
 assert_eq "demo graph edges (quickstart guide says $R_EDGES)" "$A_EDGES" "$R_EDGES"

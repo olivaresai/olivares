@@ -1,5 +1,5 @@
 {
-  "title": "Webhooks & Ereignis-Abonnements",
+  "title": "Webhooks",
   "description": "Ausgehende Ereignis-Abonnements — Webhook-Endpunkte konfigurieren, zugestellte Ereignisse prüfen und die Dead-Letter-Warteschlange verwalten.",
   "tabs": {
     "subscriptions": "Abonnements",
@@ -106,7 +106,7 @@
   },
   "events": {
     "title": "Erfasste Ereignisse",
-    "description": "Ereignisprotokoll mit Sequenz-Cursor. Nach Ereignistyp filtern, um Ergebnisse einzugrenzen.",
+    "description": "Ereignisprotokoll. Nach Ereignistyp filtern, um Ergebnisse einzugrenzen.",
     "empty": "Keine erfassten Ereignisse",
     "emptyHint": "Jedes vom Bus erfasste Ereignis wird hier aufgeführt, das neueste zuerst. In diesem Zeitraum wurde nichts veröffentlicht.",
     "typeFilter": "Nach Typ filtern",

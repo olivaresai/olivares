@@ -3,19 +3,19 @@
     "label": "{{n}} modèles chargés ; il y en a d'autres",
     "hint": "Seuls les modèles chargés sont disponibles dans ce catalogue. Un modèle absent peut se trouver au-delà de cette page."
   },
-  "title": "Modèles d'espace de travail",
+  "title": "Gabarits",
   "subtitle": "Instantanés réutilisables de hooks, paramètres, connecteurs et politiques pour les sessions d'espace de travail.",
   "catalog": {
     "builtin": "Intégré",
     "version": "v{{version}}",
     "author": "Par {{author}}",
     "archived": "Archivé",
-    "noTemplates": "Aucun modèle trouvé.",
-    "noTemplatesHint": "Créez votre premier modèle pour réutiliser des configurations d'espace de travail.",
-    "filterAll": "Tous",
-    "filterBuiltin": "Intégrés",
-    "filterCustom": "Personnalisés",
     "showArchived": "Afficher les archivés"
+  },
+  "groups": {
+    "yours": "Vos modèles",
+    "builtin": "Modèles intégrés ({{n}})",
+    "yoursEmpty": "Aucun pour l'instant. Un modèle est un point de départ réutilisable pour les nouvelles sessions."
   },
   "editor": {
     "nameLabel": "Nom",
@@ -30,7 +30,24 @@
       "connectors": "Connecteurs",
       "connectorsHint": "Identifiants des connecteurs à associer lors de l'application de ce modèle.",
       "policies": "Politiques de gouvernance",
-      "policiesHint": "Mode DLP, limites de durée de session, outils autorisés et enregistrement E/S."
+      "policiesHint": "Mode DLP, limites de durée de session, outils autorisés et enregistrement E/S.",
+      "secrets": "Secrets",
+      "secretsHint": "Secrets du coffre que les sessions de ce modèle reçoivent en variables d’environnement.",
+      "summary": {
+        "hooks_one": "{{count}} hook",
+        "hooks_many": "{{count}} hooks",
+        "hooks_other": "{{count}} hooks",
+        "secrets_one": "{{count}} variable",
+        "secrets_many": "{{count}} variables",
+        "secrets_other": "{{count}} variables",
+        "connectors_one": "{{count}} connecteur",
+        "connectors_many": "{{count}} connecteurs",
+        "connectors_other": "{{count}} connecteurs",
+        "set_one": "{{count}} défini",
+        "set_many": "{{count}} définis",
+        "set_other": "{{count}} définis",
+        "model": "Modèle : {{model}}"
+      }
     },
     "hooks": {
       "preTool": "Avant l'outil",

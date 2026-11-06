@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"sort"
 	"time"
@@ -812,6 +813,7 @@ func stopServiceWithOps(m *Manifest, runner func(string, ...string) error, look 
 		if err := run(runner, "systemctl", "disable", "--now", "olivares"); err != nil {
 			return fmt.Errorf("stop/disable systemd service: %w", err)
 		}
+		releaseUserManager(m, runner)
 	case "systemd:user":
 		if err := run(runner, "systemctl", "--user", "disable", "--now", "olivares"); err != nil {
 			return fmt.Errorf("stop/disable user systemd service: %w", err)
@@ -848,14 +850,32 @@ func stopServiceWithOps(m *Manifest, runner func(string, ...string) error, look 
 	return nil
 }
 
+// releaseUserManager undoes what the package's postinstall gave an account it created:
+// a user manager that outlives every login (linger), which the sessions' scopes use. It
+// is stopped before the account can be removed, because userdel refuses an account whose
+// user manager still runs, and `systemctl stop` returns only when it has. It is best
+// effort: a host without logind never had the linger, and the removal must not fail
+// for one it never made. An account the package did not create is left as it is.
+func releaseUserManager(m *Manifest, runner func(string, ...string) error) {
+	if !m.Account.UserCreated || m.Account.User == "" {
+		return
+	}
+	account, err := user.Lookup(m.Account.User)
+	if err != nil {
+		return
+	}
+	_ = run(runner, "loginctl", "disable-linger", m.Account.User)
+	_ = run(runner, "systemctl", "stop", "user@"+account.Uid+".service")
+}
+
 // uninstallCommands is the CLOSED SET of programs this file may execute, and it is a set rather
 // than a comment because gosec G204 asked the right question about the wrong thing.
 //
 // The question G204 asks of `exec.Command(name, args...)` is "can an attacker choose what runs".
-// Here every call site passes a LITERAL name — six of them, counted: systemctl (4), launchctl (2),
-// rc-service, rc-update, userdel, groupdel — so the answer was already no. But "the callers all
+// Here every call site passes a LITERAL name — seven of them, counted: systemctl, launchctl,
+// rc-service, rc-update, loginctl, userdel, groupdel — so the answer was already no. But "the callers all
 // happen to pass literals" is a property of today's file, checked by reading it; the day someone
-// adds a seventh call with a name from the manifest, nothing would say so. The allowlist turns the
+// adds an eighth call with a name from the manifest, nothing would say so. The allowlist turns the
 // reading into an invariant, and a refusal names it.
 //
 // ARGS ARE NOT PART OF THIS BOUND, and the distinction matters. Two call sites pass manifest data
@@ -866,7 +886,7 @@ func stopServiceWithOps(m *Manifest, runner func(string, ...string) error, look 
 // whoever writes and verifies it, not by this seam.
 var uninstallCommands = map[string]struct{}{
 	"systemctl": {}, "launchctl": {}, "rc-service": {}, "rc-update": {},
-	"userdel": {}, "groupdel": {},
+	"loginctl": {}, "userdel": {}, "groupdel": {},
 }
 
 func run(runner func(string, ...string) error, name string, args ...string) error {
@@ -876,7 +896,7 @@ func run(runner func(string, ...string) error, name string, args ...string) erro
 	if _, ok := uninstallCommands[name]; !ok {
 		return fmt.Errorf("uninstall refuses to execute %q: not one of the service-manager commands this step may run", name)
 	}
-	// #nosec G204 -- name is bounded above to `uninstallCommands`, a closed set of six literals;
+	// #nosec G204 -- name is bounded above to `uninstallCommands`, a closed set of literals;
 	// args reach exec without a shell, so they cannot introduce a second command.
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = io.Discard

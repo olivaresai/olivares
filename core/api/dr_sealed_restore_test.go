@@ -87,7 +87,7 @@ func oldFormatTestBundle(t *testing.T, bundle string, cipher *dr.KeyCipher) stri
 			t.Fatal(err)
 		}
 	}
-	m.Format, m.Store.Encryption = dr.ManifestFormatV1, ""
+	m.Format, m.Store.Encryption, m.Store.Compression = dr.ManifestFormatV1, "", ""
 	in := dr.BundleInput{Manifest: m, KEK: kek, SnapshotPath: filepath.Join(work, m.Store.File), SealedKeys: sealedKeys}
 	if err := dr.AuthenticateBundle(in, cipher); err != nil {
 		t.Fatal(err)

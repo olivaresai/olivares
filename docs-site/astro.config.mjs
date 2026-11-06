@@ -8,7 +8,7 @@ import starlightOpenAPI, { createOpenAPISidebarGroup } from 'starlight-openapi'
 import starlightVersions from 'starlight-versions'
 import sitemap from '@astrojs/sitemap'
 import { localizeSidebar } from './src/sidebar-i18n.mjs'
-import { ARCHIVED_SLUGS, LOCALES, VERSIONS } from './src/site-locales.mjs'
+import { ARCHIVED_SLUGS, LOCALES, OPENAPI_BASES, VERSIONS } from './src/site-locales.mjs'
 import { satteri } from '@astrojs/markdown-satteri'
 import { corePathsPlugin } from './src/core-paths-plugin.mjs'
 
@@ -186,6 +186,8 @@ export default defineConfig({
         dark: './src/assets/olivares-mark-dark.svg',
         replacesTitle: false,
       },
+      // The one visible edge from this separate property to the apex site (scripts/check-header-link.mjs).
+      social: [{ icon: 'external', label: 'Olivares AI', href: 'https://olivares.ai' }],
       // English at the root, with six machine-translated locales. Every
       // non-root page carries a "machine-translated — English is authoritative,
       // native review pending" notice (src/components/Banner.astro); any page not
@@ -425,7 +427,9 @@ export default defineConfig({
               items: [apiSidebarGroup],
             },
             { label: 'API stability & deprecation policy', slug: 'reference/api-stability' },
+            { label: 'API errors', slug: 'reference/api-errors' },
             { label: 'Session permissions', slug: 'reference/permission-modes' },
+            { label: 'Providers & tools', slug: 'reference/providers-and-tools' },
             //the console had no section here at all — 57 published routes and no
             // way into any of them from the sidebar. Both pages are generated.
             { label: 'Console screens & permissions', slug: 'reference/console' },
@@ -527,7 +531,7 @@ export default defineConfig({
         }),
         starlightOpenAPI([
           {
-            base: 'reference/api',
+            base: OPENAPI_BASES[0],
             schema: OPENAPI_SCHEMA,
             sidebar: {
               group: apiSidebarGroup,
@@ -538,7 +542,7 @@ export default defineConfig({
           {
             // The beta module-route reference. Its overview page carries the
             // "beta, may change" banner from the document's own info.description.
-            base: 'reference/api-beta',
+            base: OPENAPI_BASES[1],
             schema: OPENAPI_BETA_SCHEMA,
             sidebar: {
               group: apiBetaSidebarGroup,

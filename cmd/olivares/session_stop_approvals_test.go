@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -36,9 +37,9 @@ func TestSessionStopCancelsPendingApprovalThroughAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			if legacy {
-				code := h.reqInto(http.MethodPost, "/v1/m/governance/approvals", h.adminToken, h.tenantA, map[string]any{"action": "github.write", "subject_kind": "repository", "subject_ref": "legacy-proof", "session_ref": "pending-approval-provider"}, &pending)
-				if code != http.StatusCreated {
-					t.Fatalf("legacy approval=%d", code)
+				pending, err = h.set.gov.EngineApprovals().Request(t.Context(), tenant, auth.Principal{SessionIdentity: "pending-approval-provider"}, governance.ApprovalRequest{Action: "github.write", SubjectKind: "repository", SubjectRef: "legacy-proof", SessionRef: "pending-approval-provider"})
+				if err != nil {
+					t.Fatal(err)
 				}
 			}
 			code, raw := h.req(http.MethodPost, "/v1/m/sessions/runs/"+f.run+"/stop", h.adminToken, h.tenantA, nil)

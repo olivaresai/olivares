@@ -5,20 +5,24 @@ import { Archive } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { IntelPage } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
+import { useCommunityBuild } from '@/lib/hooks/use-server-info'
 import { RetentionTab } from './retention-view'
 import './i18n'
 
 /**
- * Retention schedules and the hold-checked sweep are Community (docs/editions.md, "Records"); the
+ * Reading retention classes, schedules and certificates is Community; authoring a schedule and
+ * the hold-checked sweep are Business (docs/editions.md, "Records"), so a Community engine shows
+ * them read-only and applies none; the shell's closed Business row says so (businessRows). The
  * Compliance page that also mounts this tab is Business. This page reads only the retention routes.
  */
 export function RetentionView() {
   const { t } = useTranslation('compliance')
   const { can } = useAuth()
+  const community = useCommunityBuild()
   return (
     <IntelPage icon={Archive} title={t('tabs.retention')}>
       <RetentionTab
-        canAdmin={can('compliance:retention:admin')}
+        canAdmin={community === false && can('compliance:retention:admin')}
         canRead={can('compliance:retention:read')}
       />
     </IntelPage>

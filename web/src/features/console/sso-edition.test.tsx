@@ -135,7 +135,11 @@ describe('public SSO tab: one provider, no Business controls', () => {
     auth.isSuperadmin = false
     panels.ssoTab = () => <p>Business SSO</p>
     wrap(<SSOTab />)
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     expect(screen.queryByText('Business SSO')).toBeNull()
     expect(api.getSSO).not.toHaveBeenCalled()
   })
@@ -186,7 +190,7 @@ describe('public console build: no Business SSO UI', () => {
   it('the public console words carry no Business SSO string, in any language', () => {
     const dir = join(__dirname, 'i18n')
     const locales = readdirSync(dir).filter((f) => f.endsWith('.json'))
-    expect(locales).toHaveLength(9)
+    expect(locales).toHaveLength(11)
     const found = locales.flatMap((file) => {
       const words = JSON.parse(readFileSync(join(dir, file), 'utf8')) as {
         sso: Record<string, unknown>

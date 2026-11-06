@@ -9,7 +9,8 @@
     "keys": "Anbieterschlüssel",
     "gpai": "GPAI-Status",
     "access": "Access",
-    "governance": "Governance"
+    "governance": "Governance",
+    "usage": "Nutzung"
   },
   "catalog": {
     "title": "Fähigkeitsmatrix",
@@ -122,9 +123,9 @@
   "keys": {
     "title": "Anbieter-Schlüsselreferenzen",
     "description": "Gesteuerte Referenzen auf Anbieter-API-Schlüssel und Arbeitsbereiche. Es wird nur ein maskierter Hinweis gespeichert — niemals der Geheimniswert.",
-    "new": "Schlüsselreferenz hinzufügen",
+    "new": "Referenz hinzufügen",
     "empty": "Keine Schlüsselreferenzen",
-    "emptyHint": "Eine Schlüsselreferenz verweist auf eine von der Engine gehaltene Zugangsinformation, nie auf das Geheimnis selbst. Fügen Sie eine hinzu, damit ein Modell aufgerufen werden kann.",
+    "emptyHint": "Eine Schlüsselreferenz verweist auf eine von der Engine gehaltene Zugangsinformation, nie auf das Geheimnis selbst. Zum Aufrufen eines Modells ist sie nicht nötig: Fügen Sie den Schlüssel selbst als API-Schlüssel hinzu.",
     "maskedOnly": "Nur Referenz — der Geheimniswert wird niemals gespeichert oder angezeigt.",
     "columns": {
       "name": "Name",
@@ -141,7 +142,7 @@
       "workspace": "Arbeitsbereich"
     },
     "dialog": {
-      "title": "Schlüsselreferenz hinzufügen",
+      "title": "Referenz hinzufügen",
       "name": "Name",
       "provider": "Anbieter",
       "kind": "Referenzart",
@@ -273,6 +274,37 @@
     "truncatedHint": "Es gibt mehr Zugriffsregeln als angezeigt; diese Seite nimmt Zeilen nach ID. Die Markierungen dieser Zeilen spiegeln NUR die geladenen Regeln: Allows, die eine Einschränkung einführen oder erlaubte Ziele ergänzen, können fehlen, und Forbids, die Zugriff abziehen, ebenfalls — die Seite kann also weiter ODER enger wirken als die Wirklichkeit, und ein Subjekt ohne geladene Regel erscheint gar nicht. Leiten Sie hieraus keinen effektiven Zugriff ab: die Engine liest alle Seiten, bevor sie entscheidet, und löst ein Principal über Nutzer, Rolle und Gruppe zugleich auf, was eine Zeile nicht zeigen kann.",
     "groupsTruncated": "{{n}} Gruppen geladen; es gibt mehr",
     "groupsTruncatedHint": "Es gibt mehr Modellgruppen als angezeigt; diese Seite nimmt Zeilen nach ID. Eine hier fehlende Gruppe belegt nicht, dass sie nicht existiert — eine Regel kann sie weiterhin adressieren."
+  },
+  "usage": {
+    "byLabel": "Nutzung gruppieren nach",
+    "periodLabel": "Zeitraum",
+    "by": {
+      "model": "Modell",
+      "account": "Konto",
+      "provider": "Anbieter",
+      "tool": "Werkzeug"
+    },
+    "period": {
+      "days1": "24 Stunden",
+      "days7": "7 Tage",
+      "days30": "30 Tage"
+    },
+    "chartTitle": "Ausführungen pro Tag",
+    "chartSummary": "Ausführungen pro Tag. Gruppiert nach: {{by}}. Zeitraum: {{period}}. Gesamt {{total}}; aktivster Tag {{day}} mit {{peak}}.",
+    "totalsTitle": "Summen",
+    "columns": {
+      "day": "Tag",
+      "runs": "Ausführungen",
+      "input": "Eingabe-Tokens",
+      "output": "Ausgabe-Tokens",
+      "cost": "Kosten"
+    },
+    "noKey": "Nicht erfasst",
+    "other": "Andere",
+    "empty": {
+      "title": "Keine Nutzung in diesem Zeitraum",
+      "description": "Die Nutzung erscheint hier, nachdem die erste Sitzung gelaufen ist."
+    }
   },
   "available": {
     "title": "Jetzt verfügbar",

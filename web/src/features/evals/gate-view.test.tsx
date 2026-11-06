@@ -14,6 +14,10 @@ import { renderIntel, screen, userEvent, waitFor } from '@/test/intel'
 import '@/features/_intel'
 import './i18n'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 let permisos = new Set<string>()
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({

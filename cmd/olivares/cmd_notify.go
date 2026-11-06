@@ -677,20 +677,26 @@ type notifyDestinations struct {
 }
 
 func newNotifyDestinationsCmd(flags *authClientFlags) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "destinations",
 		Aliases:     []string{"dests"},
-		Short:       "List the destinations THIS tenant may address",
+		Short:       "List the destinations THIS tenant may address; add, test and remove them",
 		Long: "destinations lists the provisioned destination NAMES this tenant can route to.\n" +
 			"It never returns a credential — a route stores only a name.\n\n" +
 			"The list is scoped to your tenant, deliberately: destination names are what a\n" +
 			"route addresses, so showing another tenant's names would hand you the ability to\n" +
 			"address them.\n\n" +
 			"An empty list means no destination is configured yet. Routes may still be\n" +
-			"authored — with nothing wired, nothing delivers and the ledger records why.",
-		Example: "  olivares notify destinations\n  olivares notify destinations -o json",
-		Args:    cobra.NoArgs,
+			"authored — with nothing wired, nothing delivers and the ledger records why.\n\n" +
+			"A system administrator adds a Slack, Teams, signed webhook, email (SMTP) or Twilio\n" +
+			"destination with `add`, checks it with `test` and removes it with `rm`; each applies\n" +
+			"at once, without a restart. `ls` lists every destination with its kind and settings.",
+		Example: "  olivares notify destinations\n  olivares notify destinations -o json\n" +
+			"  olivares notify destinations add ops-hook --kind webhook --set url=https://hooks.example.com/olivares --secret-file signing_secret=/run/secrets/hook\n" +
+			"  olivares notify destinations test ops-hook\n" +
+			"  olivares notify destinations rm ops-hook --yes",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := observeCall{flags: flags, ns: notifyNS, method: http.MethodGet, path: "/destinations"}.do(cmd)
 			if err != nil {
@@ -715,6 +721,8 @@ func newNotifyDestinationsCmd(flags *authClientFlags) *cobra.Command {
 			}, observeJSON(res.raw))
 		},
 	}
+	cmd.AddCommand(newNotifyDestinationVerbs(flags)...)
+	return cmd
 }
 
 // ---- evaluate ----------------------------------------------------------------------

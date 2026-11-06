@@ -67,6 +67,10 @@ import { useTenantStore } from '@/stores/tenant'
 import { AgentToolsView } from './agent-tools-view'
 import type { ProviderSnapshot } from './api'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 const snap = (driver: string, over: Partial<ProviderSnapshot> = {}) =>
   ({
     instance: driver,
@@ -493,7 +497,7 @@ describe('AI tools: one boxed list per installed tool', () => {
     const claude = await screen.findByTestId('tool-claude')
     expect(
       await within(claude).findByTestId('profile-claude-b'),
-    ).toHaveTextContent('5-hour 41% · Weekly 17%')
+    ).toHaveTextContent('17% of the week · 41% of 5 hours')
     expect(
       within(claude).getByTestId('profile-claude-c'),
     ).not.toHaveTextContent('%')
@@ -774,6 +778,30 @@ describe('AI tools: one boxed list per installed tool', () => {
 })
 
 describe('AI tools: a profile row', () => {
+  it('is called by its display name with its accent dot, and keeps the account name beside the sign-in', async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
+      page([
+        account('ppf_b', 'claude-b', {
+          display_name: 'Research',
+          accent: 'purple',
+        }),
+        account('ppf_c', 'claude-c'),
+      ]),
+    )
+    mount()
+    const claude = await screen.findByTestId('tool-claude')
+    const row = await within(claude).findByTestId('profile-claude-b')
+    expect(
+      within(row).getByText('Research', { ignore: '.sr-only' }),
+    ).toBeInTheDocument()
+    expect(row.querySelector('[data-provider-accent="purple"]')).not.toBeNull()
+    expect(row).toHaveTextContent('claude-b')
+    // A profile with neither is the row it always was.
+    const plain = within(claude).getByTestId('profile-claude-c')
+    expect(within(plain).getByText('claude-c')).toBeInTheDocument()
+    expect(plain.querySelector('[data-provider-accent]')).toBeNull()
+  })
+
   it('opens the profile sheet from the arrow, with its reference under Details', async () => {
     mount()
     const row = await screen.findByTestId('profile-claude-b')

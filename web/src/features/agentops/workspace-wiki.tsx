@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
+import { AppLink } from '@/components/ui/app-link'
 import {
   useInfiniteQuery,
   useQuery,
@@ -441,9 +442,9 @@ function WikiContents({
           {canStart && tools.isSuccess && !ready && (
             <p role="status" className="text-body text-text-2">
               {t('wiki.needTool')}{' '}
-              <a className={linkClass} href="/agent-tools">
+              <AppLink className={linkClass} href="/agent-tools">
                 {t('wiki.tools')}
-              </a>
+              </AppLink>
             </p>
           )}
           {mode === 'ingest' && raw.isError && (
@@ -567,12 +568,12 @@ function WikiContents({
           )}
           {session && (
             <p role="status" className="text-body">
-              <a
+              <AppLink
                 className={linkClass}
                 href={`/sessions?${new URLSearchParams({ session: `run:${session}`, pane: 'narrative' })}`}
               >
                 {t('wiki.openSession')}
-              </a>
+              </AppLink>
             </p>
           )}
           <div className="flex min-w-0 items-center gap-3 text-caption text-text-2">

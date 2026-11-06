@@ -5,11 +5,14 @@
 package api_test
 
 import (
+	"context"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // TestListMembersRosterAuthzAndIsolation covers the console members-grid seam
@@ -95,5 +98,97 @@ func TestListMembersRosterAuthzAndIsolation(t *testing.T) {
 	// Unauthenticated is rejected before any read.
 	if u := h.do("GET", "/v1/members", "", nil, tenantHdr(tenantA)); u.code != http.StatusUnauthorized {
 		t.Fatalf("no-auth roster = %d, want 401", u.code)
+	}
+}
+
+func TestMemberSecondFactorsBounded(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "factors")
+	other := h.createOrg(admin, "other-factors")
+	ctx := context.Background()
+	wants := map[string]bool{}
+	for _, tc := range []struct {
+		name   string
+		factor string
+		status model.LifecycleStatus
+		tenant model.TenantID
+	}{
+		{"totp", "totp", model.StatusActive, tenant},
+		{"passkey", "passkey", model.StatusActive, tenant},
+		{"none", "", model.StatusActive, tenant},
+		{"inactive", "", model.StatusInactive, tenant},
+		{"pending", "pending", model.StatusActive, tenant},
+		{"foreign", "passkey", model.StatusActive, other},
+	} {
+		if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
+			u, err := as.Users().Create(ctx, model.User{Email: tc.name + "@example.com", Status: tc.status})
+			if err != nil {
+				return err
+			}
+			if _, err = as.Memberships().Create(ctx, model.Membership{UserID: u.ID, TargetTenantID: tc.tenant, Role: auth.RoleViewer}); err != nil {
+				return err
+			}
+			if tc.factor == "totp" || tc.factor == "pending" {
+				c := model.TOTPCredential{AccountID: u.ID, SeedSealed: "sealed-fixture", Algorithm: "SHA1", Digits: 6, Period: 30}
+				if tc.factor == "totp" {
+					now := (model.SystemClock{}).Now()
+					c.ConfirmedAt = &now
+				}
+				if _, err = as.TOTPCredentials().Create(ctx, c); err != nil {
+					return err
+				}
+			}
+			if tc.factor == "passkey" {
+				if _, err = as.WebAuthnCredentials().Create(ctx, model.WebAuthnCredential{UserID: u.ID, CredentialID: u.ID.String(), Credential: []byte(`{}`)}); err != nil {
+					return err
+				}
+			}
+			if tc.tenant == tenant {
+				wants[u.ID.String()] = tc.factor == "totp" || tc.factor == "passkey"
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seen := map[string]bool{}
+	cursor := ""
+	for page := 0; page < 4; page++ {
+		r := h.do("GET", "/v1/members?include_second_factors=true&limit=2&cursor="+url.QueryEscape(cursor), admin, nil, tenantHdr(tenant))
+		if r.code != http.StatusOK {
+			t.Fatalf("roster = %d %s", r.code, r.raw)
+		}
+		items := r.body["items"].([]any)
+		if len(items) > 2 {
+			t.Fatalf("unbounded page: %d", len(items))
+		}
+		for _, item := range items {
+			m := item.(map[string]any)
+			id := m["user_id"].(string)
+			want, ok := wants[id]
+			if !ok || seen[id] {
+				t.Fatalf("unexpected or repeated member: %s", id)
+			}
+			if got, ok := m["second_factor_enrolled"].(bool); !ok || got != want {
+				t.Errorf("enrollment for %s = %v, want %v", id, m["second_factor_enrolled"], want)
+			}
+			for _, key := range []string{"seed_sealed", "seed_hint", "credential", "recovery_codes", "otpauth_uri"} {
+				if _, ok := m[key]; ok {
+					t.Errorf("secret field %s", key)
+				}
+			}
+			seen[id] = true
+		}
+		if r.body["has_more"] == false {
+			break
+		}
+		cursor, _ = r.body["cursor"].(string)
+		if cursor == "" {
+			t.Fatal("missing cursor")
+		}
+	}
+	if len(seen) != len(wants) {
+		t.Fatalf("read %d members, want %d", len(seen), len(wants))
 	}
 }

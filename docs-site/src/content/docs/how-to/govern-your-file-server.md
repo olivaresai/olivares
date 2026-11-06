@@ -55,6 +55,10 @@ Adversarial tests prove the symlink-escape and traversal refusal.
 }
 ```
 
+### From the console
+
+**Console → Connectors → Add** offers the same connector as `fscontent`: name it and set `root`; **Test** lists the first ten files with the ACL each would be stored with. Pick a **Knowledge base** and the engine syncs the source into it on save and then every poll interval, with no restart. The **Deletion safeguard** (`max_delete_percent`, 20 % by default in the console) stops a sync that would delete a larger share of the source's documents: it deletes none and says why. **Export** saves the definition without credentials; **Import** on another server creates it, marked *Credential missing* until the credential is set there. The file's `documents` section is imported into the same roster once, on the first boot that finds no document source in it; after that the roster is authoritative.
+
 Each file becomes a Document: the body is the file content, the DocID is its
 root-relative path, and provenance attributes carry `owner`, `group`, `mode`, `size`,
 `world_readable` and `path`.

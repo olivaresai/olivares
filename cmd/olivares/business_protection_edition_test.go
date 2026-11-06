@@ -5,13 +5,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // A Business protection the operator configured must not be dropped in silence by a
@@ -346,4 +350,88 @@ func TestCommunityServeRefusesExternalPDPFromActivationManifest(t *testing.T) {
 	if !strings.Contains(err.Error(), "activation manifest") {
 		t.Errorf("refusal %q does not name the activation manifest as a place to remove the key", err)
 	}
+}
+
+// Reconciliation can restore a Business entry removed by hand from an older
+// node file. Neither a restart nor a restart-marker failure may permit serving.
+func TestCommunityRefusesBusinessActivationAfterReconcile(t *testing.T) {
+	clearBusinessProtectionEnv(t)
+	t.Setenv("OLIVARES_PDP_ENGINE", "")
+	dir := t.TempDir()
+	eng, err := bootAsEdition(t, "community", true, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"OLIVARES_REPORTING_CONFIG", "OLIVARES_PDP_ENGINE"} {
+		for _, marker := range []string{"absent", "restarted", "unwritable"} {
+			t.Run(key+"/"+marker, func(t *testing.T) {
+				p := newProductSettings(eng.store, dir)
+				entry := ActivationEntry{Addon: "reporting", Env: key, Value: "private-value", State: ActivationActive}
+				if key == "OLIVARES_PDP_ENGINE" {
+					entry.Value = "opa"
+				}
+				// The shared record is newer than the operator's hand-edited empty file.
+				p.now = func() time.Time { return productSettingsT.Add(time.Hour) }
+				if err := p.SaveActivation(t.Context(), operator(t), activationWith(entry), nil); err != nil {
+					t.Fatal(err)
+				}
+				saveFile(t, dir, activationWith())
+				path := filepath.Join(dir, settingsRestartMarker)
+				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+					t.Fatal(err)
+				}
+				originalStore := eng.store
+				t.Cleanup(func() { eng.store = originalStore })
+				switch marker {
+				case "restarted":
+					if err := os.WriteFile(path, nil, 0o600); err != nil {
+						t.Fatal(err)
+					}
+				case "unwritable":
+					if os.Geteuid() == 0 {
+						t.Skip("read-only directory needs an unprivileged process")
+					}
+					eng.store = &readOnlyAfterActivationStore{Store: eng.store, dir: dir}
+					t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+				}
+				var logs bytes.Buffer
+				err := reconcileBeforeServing(t.Context(), eng, slog.New(slog.NewTextHandler(&logs, nil)))
+				if marker == "unwritable" && !strings.Contains(logs.String(), "cannot mark the restart") {
+					t.Fatalf("marker write did not fail: %s", logs.String())
+				}
+				if err == nil || exitcode.From(err) != exitcode.Edition {
+					t.Fatalf("reconciled Community serve = %v; want Edition exit 9", err)
+				}
+				for _, want := range []string{key, "deployment settings record", "olivares enterprise disable"} {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("refusal %q omits %q", err, want)
+					}
+				}
+				if strings.Contains(err.Error(), "private-value") {
+					t.Errorf("refusal leaks the entry value: %v", err)
+				}
+				file, err := LoadActivationManifest(dir)
+				if err != nil || len(file.activeOverlay()) != 1 {
+					t.Fatalf("reconcile did not restore the entry: %v, %v", file, err)
+				}
+			})
+		}
+	}
+}
+
+// Reconcile reads the activation first, writes its node copy, then reads the
+// module selection. Make the directory read-only only after the activation write.
+type readOnlyAfterActivationStore struct {
+	store.Store
+	dir   string
+	reads int
+}
+
+func (s *readOnlyAfterActivationStore) AuthView(ctx context.Context, fn func(store.AuthScope) error) error {
+	err := s.Store.AuthView(ctx, fn)
+	s.reads++
+	if err == nil && s.reads == 2 {
+		return os.Chmod(s.dir, 0o500)
+	}
+	return err
 }

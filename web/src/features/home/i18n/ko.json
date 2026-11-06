@@ -9,24 +9,12 @@
     "unavailableDescription": "세션 읽기가 응답하지 않았습니다. 위의 에스테이트 수치는 영향을 받지 않습니다.",
     "untitled": "제목 없는 세션"
   },
-  "live": {
-    "title": "지금 라이브"
-  },
   "empty": {
     "title": "아직 표시할 것이 없습니다",
     "description": "현재 역할에 어떤 에스테이트 모듈에 대한 읽기 액세스 권한도 없습니다. 개요를 보려면 관리자에게 읽기 권한 부여를 요청하십시오."
   },
-  "start": {
-    "ready": "{{tool}}이(가) 준비되었습니다.",
-    "signIn": "세션을 시작하려면 {{tool}}에 로그인하십시오.",
-    "signInAction": "로그인",
-    "install": "세션을 시작하려면 Claude Code 또는 Codex를 설치하십시오.",
-    "installAction": "도구 설정",
-    "newSession": "새 세션"
-  },
   "swimlane": {
     "title": "최근 1시간",
-    "subtitle": "{{from}}~{{to}}. 각 막대는 한 번의 실행이며, 도구 호출이 많을수록 강하게 표시됩니다.",
     "lanes": "최근 1시간의 세션",
     "now": "지금 {{at}}",
     "range": "{{from}}~{{to}}",
@@ -60,32 +48,23 @@
     "waiting": "승인 대기 중",
     "needsYou": "내 조치 필요",
     "idle": "유휴",
-    "approvalsUnread": "승인을 읽지 못해 승인 대기는 표시하지 않습니다."
+    "approvalsUnread": "승인을 아직 읽지 못했거나 읽는 데 실패해 승인 대기는 표시하지 않습니다.",
+    "approvalsPartial": "승인의 일부만 읽었으므로 일부 승인 대기는 표시되지 않을 수 있습니다.",
+    "step": {
+      "Bash": "{{what}} 실행 중",
+      "Read": "{{what}} 읽는 중",
+      "Edit": "{{what}} 편집 중",
+      "Write": "{{what}} 쓰는 중",
+      "Grep": "{{what}} 검색 중",
+      "Glob": "파일 찾는 중 {{what}}",
+      "WebFetch": "{{what}} 읽는 중",
+      "WebSearch": "웹 검색 중 {{what}}",
+      "Task": "에이전트와 작업 중",
+      "Agent": "에이전트와 작업 중"
+    }
   },
-  "summary": {
-    "heading": "요약",
-    "nothingRunning": "실행 중인 것이 없습니다",
-    "running_other": "열린 세션 {{count}}개",
-    "runningFor_other": "{{people}}을 위해 열린 세션 {{count}}개",
-    "runningMore": "열린 세션 {{n}}개 이상",
-    "people_other": "{{count}}명",
-    "today": "오늘 {{amount}}",
-    "todayFloor": "오늘 최소 {{amount}}",
-    "needs_other": "{{count}}건이 기다립니다",
-    "needsMore": "{{n}}건 이상이 기다립니다",
-    "yesterday": "어제 {{amount}}",
-    "unpriced_other": "{{count}}개는 비용 미보고",
-    "month": "이번 달 {{limit}} 중 {{spent}}",
-    "monthFloor": "이번 달 {{limit}} 중 최소 {{spent}}",
-    "monthLabel": "이번 달 지출"
-  },
-  "state": {
-    "pendingIdle": "쿼리가 시작되지 않았습니다. 열어서 불러오십시오",
-    "pendingPaused": "쿼리가 일시 중지되었습니다. 재개를 기다리는 중입니다"
-  },
-  "proof": {
-    "verified": "{{time}}에 체인 검증됨",
-    "entries_other": "항목 {{n}}개",
-    "broken": "체인이 끊어짐: 원장 열기"
+  "overview": {
+    "running": "작업 중",
+    "recent": "최근"
   }
 }

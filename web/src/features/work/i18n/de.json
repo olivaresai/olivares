@@ -13,7 +13,6 @@
   },
   "apply": {
     "planning": "Die Änderung wird geplant. In diesem Schritt wird nichts geschrieben.",
-    "planTitle": "Plan",
     "command": "Befehl",
     "permission": "Berechtigung",
     "eventType": "Ereignis",
@@ -29,14 +28,14 @@
     "close": "Schließen",
     "appliedTitle": "Angewendet",
     "replayedTitle": "War bereits angewendet",
-    "replayedBody": "Die Engine hat diesen Idempotenzschlüssel erkannt und das ursprüngliche Ergebnis erneut ausgegeben. Es wurde nichts ein zweites Mal geschrieben.",
+    "replayedBody": "Diese Änderung wurde bereits angewendet. Sie wurde nicht doppelt ausgeführt.",
     "commandId": "Befehls-ID",
     "resultId": "Ergebnis-ID",
     "status": "Neuer Status",
     "etag": "Neues Versionskennzeichen",
     "auditSeq": "Audit-Sequenz",
     "reread": "Neu lesen und vergleichen",
-    "retrySameKey": "Mit demselben Schlüssel wiederholen",
+    "retrySameKey": "Erneut versuchen",
     "failure": {
       "conflict-version": "Jemand anderes hat diese Einheit geändert",
       "version-required": "Versions-Vorbedingung fehlt",
@@ -272,7 +271,7 @@
   "unavailable": {
     "title": "Konnte nicht nachsehen",
     "body": "Die Engine konnte diese Beobachtung nicht abschließen und meldet daher ein unbekanntes Ergebnis statt eines Resultats. Betrachten Sie nichts in diesem Bereich als bestätigt.",
-    "retryHint": "Ob die Änderung geschrieben wurde, ist ungeklärt. Wiederholen Sie den Versuch mit DEMSELBEN Idempotenzschlüssel — genau das macht die Wiederholung sicher, denn die Engine erkennt sie als dieselbe Absicht und nicht als eine zweite.",
+    "retryHint": "Das Ergebnis ist ungewiss. Versuchen Sie es hier erneut, um es sicher zu prüfen, ohne die Änderung zu wiederholen.",
     "code": "Engine-Code: {{code}}"
   },
   "verdict": {

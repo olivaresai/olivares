@@ -94,8 +94,9 @@ names its own boundaries.
 
 ### Don't hard-code the dates — serve them
 
-High-risk application timelines are **in flux** (the Digital Omnibus provisional
-agreement of 2026-05-07 moved several). Copying dates into a static file is how
+High-risk application dates have already moved once: Regulation (EU) 2026/1744
+(the Digital Omnibus on AI, published 2026-07-24) set Annex III obligations from
+2027-12-02 and Annex I obligations from 2028-08-02. Copying dates into a static file is how
 compliance documents go stale and wrong. The control plane serves the regulatory
 calendar **as data** — each entry with its source and `verified_on`:
 

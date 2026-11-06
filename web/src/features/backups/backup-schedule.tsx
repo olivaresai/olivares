@@ -56,7 +56,21 @@ function ProtectionStatus({ data }: { data: DRSchedule }) {
         {data.last_verify_status && (
           <> · {t(`job.status.${data.last_verify_status}`)}</>
         )}
+        {data.last_verify_rto_ms !== undefined && (
+          <>
+            {' '}
+            ·{' '}
+            {t('schedule.restoreTook', {
+              seconds: Math.max(1, Math.round(data.last_verify_rto_ms / 1000)),
+            })}
+          </>
+        )}
       </p>
+      {data.rto_exceeded && (
+        <p className="text-danger" role="alert">
+          {t('schedule.rtoExceeded', { minutes: data.rto_minutes })}
+        </p>
+      )}
       {data.last_verify_error && (
         <p className="text-danger">{data.last_verify_error}</p>
       )}
@@ -148,6 +162,7 @@ export function BackupSchedule() {
   const [dirty, setDirty] = useState(false)
   const [verifyCron, setVerifyCron] = useState('')
   const [rpoHours, setRpoHours] = useState(24)
+  const [rtoMinutes, setRtoMinutes] = useState<number | undefined>(undefined)
   const [offsite, setOffsite] = useState<DROffsite>(emptyOffsite)
 
   // Status-only refreshes must not erase a draft. Actual policy changes still
@@ -166,6 +181,7 @@ export function BackupSchedule() {
         seeded?.require_dual_control_restore ||
       data.verify_cron !== seeded?.verify_cron ||
       data.rpo_hours !== seeded?.rpo_hours ||
+      data.rto_minutes !== seeded?.rto_minutes ||
       data.offsite !== seeded?.offsite)
   ) {
     setSeeded(data)
@@ -176,6 +192,7 @@ export function BackupSchedule() {
     setDirty(false)
     setVerifyCron(data.verify_cron ?? '')
     setRpoHours(data.rpo_hours ?? 24)
+    setRtoMinutes(data.rto_minutes)
     setOffsite(data.offsite ?? emptyOffsite)
   }
 
@@ -188,6 +205,7 @@ export function BackupSchedule() {
         require_dual_control_restore: dualControl,
         verify_cron: verifyCron.trim(),
         rpo_hours: rpoHours,
+        rto_minutes: rtoMinutes ?? 0,
         offsite,
       }),
     invalidateKeys: [drKeys.schedule()],
@@ -295,6 +313,22 @@ export function BackupSchedule() {
           value={rpoHours}
           onChange={(e) => {
             setRpoHours(Number(e.target.value))
+            markDirty()
+          }}
+          className="w-32"
+        />
+      </Field>
+      <Field label={t('schedule.rtoMinutes')} htmlFor="rto-minutes">
+        <Input
+          id="rto-minutes"
+          type="number"
+          min={0}
+          max={10080}
+          value={rtoMinutes ?? ''}
+          onChange={(e) => {
+            setRtoMinutes(
+              e.target.value === '' ? undefined : Number(e.target.value),
+            )
             markDirty()
           }}
           className="w-32"

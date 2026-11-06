@@ -166,6 +166,8 @@ comes from a broader target stays there: disable it on that target, or pin your 
 skill of the same name on the narrower one. `selection` resolves the tree you name with
 the launch's own rules, so it shows what a new session there gets and from which target.
 The same read is `GET /v1/m/skills/selection?target=workspace:<id>&target=folder:<ref>`.
+The console shows it too: New session says "This session gets N skills" and lists them
+before you start, and a pack's Assign form lists what the chosen target gets today.
 
 ## Agents, commands and rules
 

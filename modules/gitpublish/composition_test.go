@@ -128,10 +128,8 @@ func TestProductionIntentAdmissionWithoutRequestDeadline(t *testing.T) {
 			t.Errorf("settled abandon = %d %s", code, raw)
 		}
 	})
-	// A timed-out write stays uncertain while the host has not observed it.
-	s.m.opts.DispatchTimeout = 20 * time.Millisecond
-	s.git.hold = make(chan struct{})
-	defer close(s.git.hold)
+	// An ambiguous write stays uncertain while the host has not observed it.
+	s.git.pushRes = &gp.Result{Class: gp.Ambiguous, Reason: "transport"}
 	unresolved := push("unresolved")
 	t.Run("uncertain reconcile and abandon", func(t *testing.T) {
 		path := base + "intents/" + unresolved
@@ -199,7 +197,7 @@ func newServer(t *testing.T) *server {
 	host := newFakeHost()
 	g := &fakeGit{host: host, treeFor: map[string]string{shaCommit: shaTree, shaBase: shaTree}}
 	custody := &fakeCustody{host: host, cbVer: 1, rbVer: 1, owners: []string{"acme"}, approved: map[string]bool{"cb1": true, "rb1": true}}
-	m := New(Options{Custody: custody, Git: g})
+	m := New(Options{ScanSecrets: cleanPublicationScan, Custody: custody, Git: g})
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, m.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)
@@ -400,11 +398,9 @@ func TestReconcileRouteRequiresAPublishPermission(t *testing.T) {
 
 	// One uncertain intent per effect, each opened through its own route by a
 	// caller who may run it: the editor pushes and opens the pull request, the
-	// stepped-up admin merges. The held git write and the ambiguous host
-	// answers leave all three uncertain.
-	s.m.opts.DispatchTimeout = 20 * time.Millisecond
-	s.git.hold = make(chan struct{})
-	defer close(s.git.hold)
+	// stepped-up admin merges. Ambiguous transport results leave all three
+	// uncertain without racing the final authority check against a short timeout.
+	s.git.pushRes = &gp.Result{Class: gp.Ambiguous, Reason: "transport"}
 	code, out, raw := s.do("POST", base+"/pushes", editor, map[string]any{
 		"operation_id": "op-push", "ref": "refs/heads/olivares/push", "commit": shaCommit, "tree": shaTree,
 	}, s.tenant)
@@ -443,7 +439,7 @@ func TestReconcileRouteRequiresAPublishPermission(t *testing.T) {
 	t.Run("publishers reconcile as before", func(t *testing.T) {
 		// The host's answer in a fresh observation is what "as before" means:
 		// the observe pipeline read the host and recorded its verdict, not a
-		// placeholder. push: the held dispatch never created the ref, so the
+		// placeholder. push: the ambiguous dispatch never created the ref, so the
 		// host cannot say (unknown); pull request and merge: change 7 is open
 		// with another head (absent_or_old).
 		for _, c := range []struct {
@@ -491,6 +487,9 @@ func TestReconcileRouteRequiresAPublishPermission(t *testing.T) {
 			}
 		}
 	})
+	if s.git.count() != 1 || s.host.creates != 1 || s.host.merges != 1 {
+		t.Fatalf("dispatches: pushes=%d creates=%d merges=%d, want one each", s.git.count(), s.host.creates, s.host.merges)
+	}
 	if s.host.mints != s.host.releases {
 		t.Fatalf("mints = %d releases = %d", s.host.mints, s.host.releases)
 	}

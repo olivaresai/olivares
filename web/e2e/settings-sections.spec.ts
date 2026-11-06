@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // SETTINGS HOLDS PERSONAL SECTIONS ONLY (0.5 one navigation), against a live `--seed-demo`
-// engine. AI tools and Files & workspaces are places of the sidebar; Settings' old addresses
+// engine. Tools and Files are places of the sidebar; Settings' old addresses
 // for them (#2905) land on those pages. Nothing on this path is intercepted. Like
 // console-keyboard-routes.spec.ts it needs the seeded estate (a demo login) and skips visibly
 // without it; scripts/web-e2e-demo.sh runs it.
@@ -69,6 +69,29 @@ test.describe('Settings sections', () => {
     ).toHaveCount(0)
     await page.locator('[role=option][data-value^="view:agent-tools "]').click()
     await expect(page).toHaveURL(/\/agent-tools$/)
+  })
+
+  test('Edition and Modules are two sections of this installation', async ({
+    page,
+  }) => {
+    await signInFixture(page, credentials, 20_000)
+    await page.goto('/settings')
+    const rows = sectionList(page)
+    await rows.getByRole('button', { name: 'Edition', exact: true }).click()
+    expect(section(page)).toBe('edition')
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Edition', exact: true }),
+    ).toBeVisible()
+    await expect(page.locator('[data-slot="modules-settings"]')).toHaveCount(0)
+
+    await rows.getByRole('button', { name: 'Modules', exact: true }).click()
+    expect(section(page)).toBe('modules')
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Modules', exact: true }),
+    ).toBeVisible()
+    const modules = page.locator('[data-slot="modules-settings"]')
+    await expect(modules.getByRole('switch').first()).toBeVisible()
+    await expect(modules.getByRole('button', { name: /^Apply/ })).toBeVisible()
   })
 
   const views = [

@@ -13,6 +13,10 @@ import '@/features/_intel'
 import { ApiError } from '@/lib/api/errors'
 import './i18n'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))

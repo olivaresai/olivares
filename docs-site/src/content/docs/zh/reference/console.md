@@ -12,9 +12,9 @@ description: >-
 本页是控制台的地图。它列出**应用挂载的每条路由**——不是选集，也不是某人记得
 写下的那些——以及主体进入路由所需的权限和更多信息所在的位置。
 
-控制台只有**一个导航：左侧边栏**。它把各个位置分为四组（**工作**（主页、会话、文件与工作区、工作与沟通）、**工具**（AI 工具、模型、MCP 与技能、来源）、**控制**（规则与审批、用量与成本、活动与审计、访问映射）、**管理**（人员与组、安全、运维、许可证）），设置位于底部。每个屏幕都属于一个位置，屏幕上方的链接行列出该位置的其他屏幕。只有当你的权限至少允许其中一个屏幕时，位置才会出现；Business 屏幕只在 Business 版本中出现。侧边栏可以收起为图标并重新展开；在窄屏上，同一个侧边栏通过菜单按钮以抽屉形式打开。顶栏包含页面标题、搜索（⌘K 或 Ctrl+K）、通知和账户菜单。命令面板用相同的权限搜索相同的屏幕。原区域目录地址（`/areas/…`）会打开现在包含其屏幕的位置，并保留查询和片段。
+控制台只有**一个导航：左侧边栏**。它列出**会话**、**文件**和**工具**，然后是**更多**，展开后在其下方显示**概览**、**规则**、**用量**、**审计**、**人员**、**安全**和**运维**，设置位于底部；版本及其许可证是设置中的一个部分。更多默认收起；当你位于其下某个位置，或该位置有等待你处理的事项（有待审批的规则）时，该位置会保持显示。每个屏幕都属于一个位置，屏幕上方的链接行列出该位置的其他屏幕。只有当你的权限至少允许其中一个屏幕时，位置才会出现；Business 屏幕只在 Business 版本中出现。侧边栏可以收起为图标并重新展开；在窄屏上，同一个侧边栏通过菜单按钮以抽屉形式打开。顶栏包含页面标题、搜索（⌘K 或 Ctrl+K）、通知和账户菜单。命令面板用相同的权限搜索相同的屏幕。原区域目录地址（`/areas/…`）会打开现在包含其屏幕的位置，并保留查询和片段。
 
-新安装只列出首要工作：主页、会话、AI 工具、审批、配置向导和设置。其他屏幕在新安装中
+新安装只列出首要工作：概览、会话、AI 工具、审批、配置向导和设置。其他屏幕在新安装中
 属于预览：其地址、API 和 CLI 照常可用，但导航、命令面板和快捷键不会列出它们。升级前已存在的
 安装会继续列出它原来列出的所有屏幕；管理员已选择模块的安装（自下次启动起）和使用演示数据的
 安装也是如此。
@@ -23,7 +23,7 @@ description: >-
 清单，`registry.route-conservation.test.ts` 会将它与构建后的路由器固定比对，因此
 任何屏幕的新增、移动或丢失都会引起本页变化。每个屏幕的名称和单行描述都是
 **控制台自己的字符串**，来自控制台使用的同一翻译目录，所以你在这里读到的就是
-在产品中看到的内容。下面的表格按区域分组这些行：主页（概览）在前，登录、设置和账户在后。九个原区域
+在产品中看到的内容。下面的表格按区域分组这些行：概览在前，登录、设置和账户在后。九个原区域
 目录地址与功能注册表之外挂载的路由列在同一张表中，现在各自重定向到所属位置。
 
 :::note[权限由引擎强制实施，而不是由此表实施]
@@ -46,21 +46,21 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **66 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **68 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
-### 主页
+### 概览
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
-| 主页 | `/` | 基础设施总览和健康情况 | 任何已登录用户 | [文档主页](/zh/) |
+| 概览 | `/now` | 基础设施总览和健康情况 | 任何已登录用户 | [文档主页](/zh/) |
 
 ### 基础设施
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
-| 环境 | `/estate` | 查看已配置的资源及其关系，包括工作项的依赖关系。 | `sessions:run:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
-| 清单 | `/inventory` | 发现并编目连接器观察到的智能体、MCP 服务器与模型。 | `inventory:catalog:read` | [reference/modules/i-inventory](/zh/reference/modules/i-inventory/) |
+| 已配置的资源 | `/estate` | 您已配置的内容，以及各部分（包括工作项）之间的依赖关系。 | `sessions:run:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 已发现的资源 | `/inventory` | 连接器观察到的智能体、MCP 服务器和模型，以及各自最后一次出现的时间。 | `inventory:catalog:read` | [reference/modules/i-inventory](/zh/reference/modules/i-inventory/) |
 | 工作区 | `/workspace` | 限定在一个工作区内的 Agent、会话、资源和活动 | `tenant:read` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
 
 ### AI
@@ -143,6 +143,7 @@ description: >-
 | 评估 | `/evals` | 质量、评估和回归 | `evals:run:read` | [reference/modules/xii-evals](/zh/reference/modules/xii-evals/) |
 | 健康与 SLA | `/health` | Agent 和 MCP 的运行时间及 SLA | `health:status:read` | [reference/modules/xxii-health](/zh/reference/modules/xxii-health/) |
 | 可观测性 | `/observability` | 按标准查看摄取健康状况和追踪下钻 | `health:status:read` | [reference/modules/observability](/zh/reference/modules/observability/) |
+| 运维 | `/operations` | 主机、它的磁盘、正在运行的会话及其用量，按 24 小时、7 天或 30 天查看。 | `sessions:run:read` | [reference/console](/zh/reference/console/) |
 | 保留策略 | `/retention` | 每类记录的保留期限、执行保留的清理以及已封存的证书 | `compliance:retention:read` | [reference/modules/xiii-compliance](/zh/reference/modules/xiii-compliance/) |
 | 预算 | `/stored-budgets` | 针对每个已保存限额的消耗情况。预留容量计入限额。 | `finops:budget:read` | [reference/modules/xi-finops](/zh/reference/modules/xi-finops/) |
 | 用量 | `/usage` | 每个账户的官方 5 小时和每周限额（最接近限额的在前），以及今天的令牌和费用。 | `sessions:run:read` | [reference/console](/zh/reference/console/) |
@@ -166,6 +167,7 @@ description: >-
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
+| 起始页 | `/` | 打开你保存的起始页；如果尚未保存，则打开会话。 | 任何已登录用户 | — |
 | 接受邀请 | `/accept-invite` | 电子邮件邀请链接的落点：受邀者设置密码并加入工作区，无需预先建立会话。 | **无需登录** | — |
 | 登录 | `/login` | 已配置账户使用凭据和令牌登录的页面。 | **无需登录** | — |
 | 配对设备 | `/pair` | 一次性设备配对链接的目标页面：新设备无需已有会话即可登录。 | **无需登录** | — |

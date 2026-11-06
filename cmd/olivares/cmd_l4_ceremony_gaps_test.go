@@ -113,7 +113,9 @@ func l4InstalledHead(source string) string {
 // l4InstalledTail is the operator instruction after the swap, which is what a deletion
 // of the `next:` pair would silently remove.
 const l4InstalledTail = "\ninstalled: <TARGET> is now olivares 26.800 (commit t, built t, L4 witness)\n" +
-	"rollback: the previous binary is backed up at <TARGET>.bak-<EPOCH>-<RAND> (restore it to revert)\n" +
+	"rollback: the previous binary is backed up at <TARGET>.bak-<EPOCH>-<RAND>; it does not open a store this release\n" +
+	"      has migrated, so take a DR bundle (olivares dr backup) before the restart and restore it\n" +
+	"      with that binary to revert (see docs/UPGRADE-AND-ROLLBACK.md, section 5).\n" +
 	"next: restart the service to run the new binary — for zero downtime use a drain +\n" +
 	"      handover (single node) or a rolling restart (HA); see docs/UPGRADE-AND-ROLLBACK.md.\n"
 

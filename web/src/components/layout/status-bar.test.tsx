@@ -17,10 +17,14 @@ const state = vi.hoisted(() => ({
   version: '1.0' as string | undefined,
   engineError: false,
   usagePercent: 58,
+  /** Whether the Claude login that reports its use is the tool's default. */
+  claudeDefault: true,
   refreshing: false,
   live: 0,
   /** What the list shows; null: the same sessions as `live`. */
   open: null as number | null,
+  /** What Stop all would end, idle ones too; null: the same sessions as `live`. */
+  running: null as number | null,
   estate: false,
   agentStops: 0,
   denied: new Set<string>(),
@@ -28,6 +32,24 @@ const state = vi.hoisted(() => ({
 }))
 const engage = vi.hoisted(() => vi.fn())
 const providersRead = vi.hoisted(() => vi.fn())
+/** The status-bar items an edition registers (none in the default console). */
+const registered = vi.hoisted(() => ({
+  items: [] as { id: string; Component: () => unknown }[],
+}))
+
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...original,
+    PANEL_EXTENSIONS: {
+      ...original.PANEL_EXTENSIONS,
+      get statusBarItems() {
+        return registered.items
+      },
+    },
+  }
+})
 
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({
@@ -68,7 +90,8 @@ vi.mock('./use-session-rail', () => ({
     sessionCounts: {
       needsYou: 0,
       live: state.live,
-      running: state.live,
+      active: state.live,
+      running: state.running ?? state.live,
       open: state.open ?? state.live,
     },
   }),
@@ -105,7 +128,7 @@ vi.mock('@/features/agent-tools/api', () => ({
           {
             instance: 'claude-default',
             driver: 'claude',
-            default: true,
+            default: state.claudeDefault,
             state: 'ready',
             limits: [
               { label: '5-hour', percent: state.usagePercent },
@@ -154,14 +177,17 @@ afterEach(() => {
     version: '1.0',
     engineError: false,
     usagePercent: 58,
+    claudeDefault: true,
     refreshing: false,
     live: 0,
     open: null,
+    running: null,
     estate: false,
     agentStops: 0,
     superadmin: false,
   })
   state.denied.clear()
+  registered.items = []
   engage.mockReset()
   providersRead.mockReset()
   useTenantStore.setState({ activeTenant: null })
@@ -171,18 +197,31 @@ afterEach(() => {
 const bar = () => screen.getByRole('contentinfo', { name: 'Status' })
 
 describe('the status bar says how things stand', () => {
-  it('paints the server version at every width, and never an invented one', () => {
-    const { rerender } = renderIntel(<StatusBar />)
-    const id = () => within(bar()).getByTestId('deployment-identity')
-    expect(within(id()).getByText('1.0', { exact: true })).toBeVisible()
-    // No width class hides it: the release gate reads it on desktop and phone alike.
-    expect(id().className).not.toMatch(/hidden/)
-    state.version = '26.10.1'
-    rerender(<StatusBar />)
-    expect(within(id()).getByText('26.10.1', { exact: true })).toBeVisible()
-    state.version = ''
-    rerender(<StatusBar />)
+  it('paints no version: Settings › About and the account menu carry it', () => {
+    // The server reports 1.0, and the bar still says nothing of it.
+    renderIntel(<StatusBar />)
     expect(within(bar()).queryByTestId('deployment-identity')).toBeNull()
+    expect(bar()).not.toHaveTextContent(/Olivares|Version|1\.0/)
+  })
+
+  // #3140: the bar is on every screen, so an item an edition registers here must not be
+  // able to paint over an approval or consent dialog. It gets a container of its own.
+  it('renders a registered item in its own panel container, inside the bar', () => {
+    registered.items = [
+      {
+        id: 'hostile',
+        Component: () => (
+          <div
+            data-testid="hostile-item"
+            style={{ position: 'fixed', inset: 0, zIndex: 2147483647 }}
+          />
+        ),
+      },
+    ]
+    renderIntel(<StatusBar />)
+    const slot = screen.getByTestId('hostile-item').closest('[data-panel-slot]')
+    expect(slot).not.toBeNull()
+    expect(bar().contains(slot)).toBe(true)
   })
 
   it('names the engine state with a dot and a word', () => {
@@ -230,6 +269,18 @@ describe('the status bar says how things stand', () => {
     expect(within(bar()).getByTestId('killswitch-status')).toHaveTextContent(
       'ALL AGENTS STOPPED',
     )
+  })
+
+  it("shows a tool's use from the login that reported it when the default login did not", async () => {
+    state.superadmin = true
+    state.claudeDefault = false
+    useTenantStore.setState({ activeTenant: 't1' })
+    renderIntel(<StatusBar />)
+    const usage = await within(bar()).findByRole('group', {
+      name: 'Claude Code usage',
+    })
+    expect(usage).toHaveTextContent('58% 5h')
+    expect(usage).toHaveTextContent('41% wk')
   })
 
   it("shows each tool's 5-hour and weekly use as the tool reported it, and no guess", async () => {
@@ -344,6 +395,23 @@ describe('Stop all lives in the status bar while a session runs', () => {
   it('is absent while no session runs', () => {
     renderIntel(<StatusBar />)
     expect(within(bar()).queryByRole('button', { name: 'Stop all' })).toBeNull()
+  })
+
+  it('is absent while the only sessions alive are idle, and offered once one works', async () => {
+    // Two pinned sessions wait for nothing: alive, so the stop would end them, but none
+    // works or waits for a person.
+    state.running = 2
+    const { rerender } = renderIntel(<StatusBar />)
+    expect(within(bar()).queryByRole('button', { name: 'Stop all' })).toBeNull()
+    state.live = 1
+    state.running = 3
+    rerender(<StatusBar />)
+    const user = userEvent.setup()
+    await user.click(within(bar()).getByRole('button', { name: 'Stop all' }))
+    // What it stops is unchanged: every session alive, the idle ones too.
+    expect(
+      await screen.findByRole('dialog', { name: 'Stop all agents?' }),
+    ).toHaveTextContent('3 open sessions stop.')
   })
 
   it('is present while one runs, as a quiet control', () => {

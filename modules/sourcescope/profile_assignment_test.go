@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/license"
@@ -511,5 +512,88 @@ func TestProfileAndToolAssignmentsNameWhatTheGateAsksAbout(t *testing.T) {
 				t.Fatalf("stored tool = %v, want claude", r.body["source_ref"])
 			}
 		})
+	}
+}
+
+func TestPolicyBindingsInheritAndRemainBusinessGated(t *testing.T) {
+	for _, typ := range []string{"approval-policy", "dlp-ruleset"} {
+		t.Run(typ, func(t *testing.T) {
+			h := newHarness(t)
+			admin := h.adminLogin()
+			tenant := h.createOrg(admin, "policy-bindings")
+			parent := h.createWorkspace(tenant, "parent")
+			child := h.createWorkspaceUnder(tenant, "child", parent)
+			bot := h.createAgent(tenant, "child-bot", child)
+			person := h.principalFor(admin, tenant, "reader@example.org", "")
+			body := map[string]any{"source_type": typ, "source_ref": "policy-one", "scope_tree": "workspace", "scope_ref": "parent", "enabled": true}
+			if r := h.createBinding(admin, tenant, body); r.code != http.StatusNotImplemented {
+				t.Fatalf("Community assignment = %d %s, want 501", r.code, r.raw)
+			}
+			sourcescope.WithProfileAssignment(func() error { return license.AddonRequired("federation", "assign-profiles") })(h.ss)
+			if r := h.createBinding(admin, tenant, body); r.code != http.StatusForbidden {
+				t.Fatalf("unlicensed assignment = %d %s", r.code, r.raw)
+			}
+			sourcescope.WithProfileAssignment(licensed)(h.ss)
+			if r := h.createBinding(admin, tenant, body); r.code != http.StatusCreated {
+				t.Fatalf("assignment = %d %s", r.code, r.raw)
+			}
+			if d := h.resolveAgent(tenant, person, bot.ExternalID, typ, "policy-one"); !d.Allowed || !d.Bound {
+				t.Fatalf("inherited policy = %+v", d)
+			}
+			owner := h.principalFor(admin, tenant, "owner@example.org", auth.RoleAdmin)
+			filter := h.do("POST", "/v1/m/governance/rbac/inheritance-filters", admin,
+				map[string]any{"scope_tree": "workspace", "scope_ref": "parent", "scope_class": "resource"}, tenantHdr(tenant))
+			if filter.code != http.StatusCreated {
+				t.Fatalf("filter = %d %s", filter.code, filter.raw)
+			}
+			if d := h.resolveHuman(tenant, owner, typ, "policy-one"); d.Allowed {
+				t.Fatalf("filtered policy = %+v", d)
+			}
+			if r := h.do("DELETE", "/v1/m/governance/rbac/inheritance-filters/"+filter.body["id"].(string), admin, nil, tenantHdr(tenant)); r.code != http.StatusNoContent {
+				t.Fatalf("delete filter = %d %s", r.code, r.raw)
+			}
+			body["scope_ref"], body["effect"] = "child", "forbid"
+			if r := h.createBinding(admin, tenant, body); r.code != http.StatusCreated {
+				t.Fatalf("forbid = %d %s", r.code, r.raw)
+			}
+			if d := h.resolveAgent(tenant, person, bot.ExternalID, typ, "policy-one"); d.Allowed {
+				t.Fatalf("forbidden policy = %+v", d)
+			}
+		})
+	}
+}
+
+// A policy stands where it is assigned nearest, read inside the caller's own transaction (a
+// second one would wait forever on the single SQLite connection): a group over the department,
+// the department over the one above it, and the binding that put it there is named.
+func TestPolicyAssignedInStandsNearestInCallerTransaction(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "policy-standing")
+	parent := h.createWorkspace(tenant, "company")
+	h.createWorkspaceUnder(tenant, "finance", parent)
+	group := "6f1c2a52-8f1e-4c55-9d43-3c1f0f0a7b11"
+	h.mustAssign(admin, tenant, "approval-policy", "pol-company", "workspace", "company")
+	h.mustAssign(admin, tenant, "approval-policy", "pol-finance", "workspace", "finance")
+	h.mustAssign(admin, tenant, "approval-policy", "pol-group", "user_group", group)
+	for _, c := range []struct {
+		groups []string
+		want   sourcescope.Standing
+	}{
+		{nil, sourcescope.Standing{Ref: "pol-finance", ScopeTree: "workspace", ScopeRef: "finance"}},
+		{[]string{group}, sourcescope.Standing{Ref: "pol-group", ScopeTree: "user_group", ScopeRef: group}},
+	} {
+		if err := h.st.View(t.Context(), tenant, func(sc store.Scope) error {
+			got, named, err := sourcescope.PolicyAssignedIn(t.Context(), sc, time.Now(), []string{"finance"}, c.groups, "approval-policy")
+			if err != nil {
+				return err
+			}
+			if len(got) == 0 || got[len(got)-1] != c.want || !named["pol-company"] || !named["pol-group"] {
+				t.Errorf("groups %v: standings %+v named %v, want last %+v", c.groups, got, named, c.want)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

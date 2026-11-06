@@ -6,7 +6,7 @@
 // and says Done for a tool that ended on its own, Stopped for a stop someone asked for.
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen } from '@/test/intel'
+import { DEFAULT_AUTH, renderIntel, screen } from '@/test/intel'
 import type { RunDTO, RunEventDTO } from '@/features/agentops/types'
 import { mergeSessions } from '@/features/sessions/provenance'
 import { RecentWork } from './recent-work'
@@ -14,6 +14,7 @@ import './i18n'
 import '@/features/sessions/i18n'
 import '@/features/agentops/i18n'
 
+vi.mock('@/lib/auth/context', () => ({ useAuth: () => DEFAULT_AUTH }))
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => '',
   Link: ({ children, to }: { children: ReactNode; to: string }) => (

@@ -1,6 +1,7 @@
 {
-  "title": "身份与访问",
+  "title": "身份",
   "subtitle": "谁可以登录、可以做什么，以及如何证明身份。",
+  "ownSignInOnly": "你可以在此设置自己的登录因素。此页面的其余内容由组织管理员更改。",
   "sections": "身份分区",
   "groups": {
     "people": "人员",
@@ -8,7 +9,7 @@
     "machines": "机器身份"
   },
   "tabs": {
-    "federation": "SSO 与 SCIM",
+    "federation": "单点登录",
     "inventory": "身份清单",
     "mcp": "MCP 认证",
     "login": "特权登录",
@@ -47,9 +48,9 @@
       "signing": "开启或关闭报告签名"
     },
     "aal": {
-      "aal1": "AAL1（密码）",
-      "aal2": "AAL2（多因素）",
-      "aal3": "AAL3（抗钓鱼）"
+      "aal1": "标准登录",
+      "aal2": "单点登录和第二验证因素",
+      "aal3": "通行密钥或安全密钥"
     },
     "unenrolled": "您的账户尚未注册通行密钥。请在“特权登录”选项卡中注册设备通行密钥或安全密钥，然后进行认证。",
     "unenrolledInline": "您的账户尚未注册通行密钥。请在下方注册。",
@@ -101,9 +102,9 @@
   },
   "sso": {
     "title": "单点登录（OIDC / SAML）",
-    "description": "联合身份登录在 SSO / IdP 中配置，或在启动时按环境配置。本面板记录该配置、校验精确的重定向 URI 并呈现连接状态——它不写入配置。",
+    "description": "单点登录由超级管理员在 SSO / IdP 中设置。本面板校验精确的重定向 URI 并显示连接状态。",
     "notConfigured": "未配置",
-    "notConfiguredHint": "未配置任何身份提供商，因此联合身份请求返回 501。请设置下方的环境密钥并重启引擎以启用 SSO。",
+    "notConfiguredHint": "未配置任何身份提供商，因此联合身份请求返回 501。超级管理员可在 SSO / IdP 中设置。",
     "seamWhat": "SSO 连接状态摘要",
     "protocol": "协议",
     "state": "连接",
@@ -114,14 +115,7 @@
     "redirectCheckHint": "粘贴在您的身份提供商中配置的重定向/ACS URI。它必须与上方的值完全一致（RFC 9700）。",
     "redirectMatch": "完全匹配——此重定向 URI 有效。",
     "redirectMismatch": "不完全匹配。IdP 必须逐字符使用上方的重定向 URI。",
-    "proto": {
-      "common": "通用",
-      "oidc": "OIDC",
-      "saml": "SAML"
-    },
-    "required": "必填",
-    "secret": "密钥",
-    "envNote": "配置在启动时从环境中读取一次；不存在配置写入 API。密钥永不回读。",
+    "configure": "打开 SSO / IdP",
     "testLogin": "发起一次测试登录"
   },
   "scim": {
@@ -145,6 +139,7 @@
     "noLeaverHint": "当处理一次 SCIM 离职（delete / prov:delete）时，后端会吊销该用户的会话与令牌并在此记录。",
     "leaverTruncated": "显示最近 {{n}} 个离职事件；还有更早的",
     "leaverTruncatedHint": "离职事件多于所示。此卡片列出最近的事件，因此被截掉的是更早的事件；此列表中没有某个用户，并不能证明其从未被解除预配。",
+    "leaverWindow": "此卡片仅读取账本中最近的 {{n}} 条记录，因此更早的离职事件不会列出；此列表中没有某个用户，并不能证明其从未被解除预配。",
     "revoked": "会话与令牌已吊销",
     "col": {
       "userName": "用户",
@@ -162,7 +157,7 @@
       "name": "名称",
       "externalId": "外部 ID",
       "kind": "类别",
-      "principalType": "主体",
+      "principalType": "人员或工具",
       "source": "来源",
       "state": "状态"
     },
@@ -172,7 +167,7 @@
       "unknown": "未知"
     },
     "filter": {
-      "principalType": "按主体筛选",
+      "principalType": "按人员或工具筛选",
       "kind": "按类别筛选",
       "all": "全部"
     }
@@ -223,8 +218,18 @@
     "currentAal": "当前级别",
     "methods": "方法",
     "methodsUnknown": "未报告",
+    "methodNames": {
+      "pwd": "密码",
+      "sso": "单点登录",
+      "external": "外部登录",
+      "totp": "验证器代码",
+      "mfa": "第二验证因素",
+      "webauthn": "通行密钥",
+      "piv": "智能卡",
+      "pairing": "已配对设备"
+    },
     "policy": {
-      "none": "此部署在执行管理操作前不要求额外验证。系统管理员可以在“设置 › 登录与安全”中开启。",
+      "none": "此部署在执行管理操作前不要求额外验证。系统管理员可以开启。",
       "totp": "此部署中的管理操作需要使用身份验证器应用的验证码登录。",
       "passkey": "此部署中的管理操作需要通行密钥。"
     },
@@ -256,7 +261,7 @@
       "registerFailed": "通行密钥注册失败。您的浏览器可能不支持 WebAuthn，或注册已被取消。",
       "unsupported": "此浏览器不支持 WebAuthn/FIDO2。",
       "none": "未注册通行密钥",
-      "noneHint": "注册通行密钥以启用抗钓鱼的硬件绑定登录 (AAL3)。",
+      "noneHint": "注册通行密钥以启用抗钓鱼的硬件绑定登录。",
       "colName": "名称",
       "colCreated": "注册时间",
       "colBackup": "备份",
@@ -267,7 +272,7 @@
       "renamed": "通行密钥已重命名。",
       "delete": "删除",
       "deleteTitle": "删除通行密钥",
-      "deleteBody": "删除通行密钥 \"{{name}}\"？此操作不可撤销。您需要另一个已注册的通行密钥来维持 AAL3 访问。",
+      "deleteBody": "删除通行密钥 \"{{name}}\"？此操作不可撤销。您需要另一个已注册的通行密钥才能继续使用通行密钥登录。",
       "deleted": "通行密钥已删除。",
       "lastCredential": "无法删除您唯一的通行密钥。请先注册另一个。"
     }
@@ -340,7 +345,7 @@
     "policyEnable": "对管理员启用",
     "policyConfirmOn": "确认：启用",
     "policyDisable": "关闭",
-    "policyAal3Note": "更改此策略需要 AAL3 会话。没有因子的账户会在下次登录时进入注册流程——不会被锁定。"
+    "policyAal3Note": "没有因子的账户会在下次登录时进入注册流程——不会被锁定。"
   },
   "stepUpPolicy": {
     "title": "管理操作的额外验证",

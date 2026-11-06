@@ -20,6 +20,9 @@ vi.mock('@/components/ui/toaster', () => ({
   toast: toastMock,
   Toaster: () => null,
 }))
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return {
@@ -51,6 +54,10 @@ import {
 } from './fixtures'
 import { SecurityView } from './security-view'
 import './i18n'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 /** Captured browser-download side effects: the test asserts on the EXACT bytes
  *  that reached the blob, since re-encoding a SARIF run is the failure to catch. */
@@ -297,9 +304,11 @@ describe('AnomalyList — approximate is never titled a firm violation', () => {
 })
 
 describe('EnforcementTable — detective by default, ungoverned flagged', () => {
-  it('reads an empty posture as fully detective (the safe default)', () => {
+  it('reads an empty posture as records only, blocking nothing (the safe default)', () => {
     renderIntel(<EnforcementTable entries={enforcementEmptyFixture} />)
-    expect(screen.getByText(/fully detective/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/records only and blocks nothing/i),
+    ).toBeInTheDocument()
   })
 
   it('flags a class enabled without human governance', () => {
@@ -314,21 +323,36 @@ describe('EnforcementTable — detective by default, ungoverned flagged', () => 
   })
 })
 
-describe('GuardrailVerdict — detective plane does not block on its own', () => {
-  it('explains that a flag came from the detective plane, not a block', () => {
+describe('GuardrailVerdict — a recorded flag does not block on its own', () => {
+  it('explains that a flag was recorded, not blocked', () => {
     renderIntel(<GuardrailVerdict result={inspectFlagFixture} />)
     expect(screen.getByText(/^Flag$/)).toBeInTheDocument()
-    expect(screen.getByText(/detective plane/i)).toBeInTheDocument()
+    expect(screen.getByText(/only recorded the trip/i)).toBeInTheDocument()
     // redacted excerpt is shown as a label, never the secret
     expect(screen.getByText(/\[redacted: email\]/i)).toBeInTheDocument()
     expect(screen.queryByText(/^Block$/)).not.toBeInTheDocument()
   })
 })
 
+describe('Security overview — current exposure before detective work', () => {
+  it('opens on the overview instead of findings', async () => {
+    wrapView(<SecurityView />)
+
+    expect(
+      await screen.findByRole('tab', { name: 'Overview', selected: true }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Export SARIF/i }),
+    ).not.toBeInTheDocument()
+  })
+})
+
 describe('Findings SARIF export — the server bytes, and an honest cap', () => {
   it('disables the action while there is nothing to export', async () => {
+    const user = userEvent.setup()
     findingsMock.mockResolvedValue({ items: [], total: 0 })
     wrapView(<SecurityView />)
+    await user.click(await screen.findByRole('tab', { name: 'Findings' }))
     const button = await screen.findByRole('button', { name: /Export SARIF/i })
     await waitFor(() => expect(button).toBeDisabled())
     expect(exportMock).not.toHaveBeenCalled()
@@ -338,6 +362,7 @@ describe('Findings SARIF export — the server bytes, and an honest cap', () => 
     const user = userEvent.setup()
     wrapView(<SecurityView />)
 
+    await user.click(await screen.findByRole('tab', { name: 'Findings' }))
     await user.click(
       await screen.findByRole('button', { name: /Export SARIF/i }),
     )
@@ -360,6 +385,7 @@ describe('Findings SARIF export — the server bytes, and an honest cap', () => 
     })
     wrapView(<SecurityView />)
 
+    await user.click(await screen.findByRole('tab', { name: 'Findings' }))
     await user.click(
       await screen.findByRole('button', { name: /Export SARIF/i }),
     )

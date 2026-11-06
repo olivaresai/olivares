@@ -25,7 +25,7 @@ objects. Unconfigured posture providers report their availability and reason;
 an empty declared graph is not proof that live federation is configured.
 The routes require `governance:idposture:read`.
 
-Use **Edition & modules** in the console, or the CLI:
+Use **Settings > Modules** in the console, or the CLI:
 
 ```sh
 olivares modules ls

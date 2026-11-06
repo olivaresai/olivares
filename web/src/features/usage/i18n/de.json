@@ -1,20 +1,17 @@
 {
-  "title": "Nutzung und Kosten, nach Konto",
+  "title": "Nutzung",
   "subtitle": "Offizielle 5-Stunden- und Wochenlimits neben den Tokens und Kosten von heute.",
-  "windows": {
-    "fiveHour": "5 Stunden",
-    "week": "wöchentlich"
+  "tabs": {
+    "accounts": "Konten",
+    "timeline": "Zeitachse"
   },
   "accounts": {
     "heading": "Konten",
     "loading": "Die Konten jedes Werkzeugs werden gelesen…",
     "error": "Die Limits der Konten konnten nicht gelesen werden.",
     "empty": "Noch kein Konto hat seine Limits gemeldet.",
-    "resets": "setzt {{when}} zurück",
-    "stale": "zuletzt gelesen {{at}}",
     "details": "Details",
-    "detailsFor": "Details zu {{account}}",
-    "adminOnly": "Die Kontolimits sieht ein Systemadministrator."
+    "detailsFor": "Details zu {{account}}"
   },
   "today": {
     "heading": "Heute",
@@ -23,11 +20,6 @@
     "sessions_one": "{{count}} Sitzung",
     "sessions_other": "{{count}} Sitzungen",
     "tokens": "{{input}} Eingabe · {{output}} Ausgabe",
-    "atLeast": "Mindestens",
-    "unpriced_one": "{{count}} Sitzung hat keine Kosten gemeldet.",
-    "unpriced_other": "{{count}} Sitzungen haben keine Kosten gemeldet.",
-    "untokened_one": "{{count}} Sitzung hat keine Tokens gemeldet.",
-    "untokened_other": "{{count}} Sitzungen haben keine Tokens gemeldet.",
     "viewSessions": "Sitzungen ansehen"
   }
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/modules/reporting"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sourcescope"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	"github.com/spf13/cobra"
@@ -134,6 +135,9 @@ type editionPorts struct {
 	siemSink func() error
 	// businessApprovals: an approval policy beyond the Community line (modules/governance policy.go).
 	businessApprovals func() error
+	// nil preserves tenant-wide approval and DLP policies in Community. A resolver that is also
+	// an api.Module is registered with the edition's modules.
+	policyResolver func(*sourcescope.Resolver) store.PolicyResolver
 	// profileAssignment: assigning provider profiles, AI tools and department instructions and
 	// templates (modules/sourcescope profile_assignment.go).
 	profileAssignment func() error

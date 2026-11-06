@@ -16,8 +16,9 @@ import (
 
 // Error is the closed refusal vocabulary of CONTRACT-J10-S3 §3.9.
 type Error struct {
-	Code   string
-	Status int
+	Path, Class string
+	Code        string
+	Status      int
 	// Intent names the intent the refusal concerns, when one exists.
 	Intent model.ID
 	// cause is why a host lookup failed (lookup_incomplete), for the operator's log

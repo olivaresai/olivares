@@ -1,5 +1,5 @@
 {
-  "title": "Webhook 与事件订阅",
+  "title": "Webhook",
   "description": "出站事件订阅 — 配置 Webhook 端点、检查已送达的事件并管理死信队列。",
   "tabs": {
     "subscriptions": "订阅",
@@ -106,7 +106,7 @@
   },
   "events": {
     "title": "已捕获事件",
-    "description": "带序列游标的事件日志。按事件类型过滤以缩小结果范围。",
+    "description": "事件日志。按事件类型过滤以缩小结果范围。",
     "empty": "暂无已捕获事件",
     "emptyHint": "总线捕获的每个事件按时间从新到旧列在这里。此时间范围内没有发布任何事件。",
     "typeFilter": "按类型过滤",

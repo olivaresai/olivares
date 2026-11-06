@@ -5,7 +5,9 @@
 // Destinations tab: add, test and remove the Slack and Microsoft Teams destinations a
 // route can send to, without editing OLIVARES_NOTIFY_CONFIG. The webhook URL is the
 // secret: it is typed into a masked field, sealed by the engine, and never shown again
-// (the list names only the host it points at). Destinations from the operator file are
+// (the list names only the host it points at). The dialog offers the kinds whose only
+// setting is that URL; a webhook, email or Twilio destination added from the CLI or the
+// API is listed, tested and removed here. Destinations from the operator file are
 // listed read-only; every other kind (Jira, PagerDuty, SIEM) stays in that file.
 // The engine owns the rules (vendor hosts only, superadmin, AAL3 step-up); this view
 // mirrors only what it needs to avoid offering an action the engine refuses.
@@ -65,7 +67,11 @@ export function DestinationsTab() {
     queryFn: () => notifyApi.listConsoleDestinations(),
     enabled: isAdmin,
   })
-  const kinds = listQ.data?.kinds ?? []
+  const allKinds = listQ.data?.kinds ?? []
+  // The dialog has one field, the webhook URL: it offers only the kinds that need nothing else.
+  const kinds = allKinds.filter(
+    (k) => k.fields.length === 1 && k.fields[0]?.key === 'webhook_url',
+  )
   const refresh = (): QueryKey[] => [
     notifyKeys.consoleDestinations(),
     // The route editor's selector lists the same destinations by name.
@@ -103,7 +109,7 @@ export function DestinationsTab() {
   }
 
   const kindTitle = (kind: string) =>
-    kinds.find((k) => k.kind === kind)?.title ?? kind
+    allKinds.find((k) => k.kind === kind)?.title ?? kind
   const columns: TableColumn<NotifyDestinationRow>[] = [
     {
       accessorKey: 'name',
@@ -168,14 +174,16 @@ export function DestinationsTab() {
             >
               <Send />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('destinations.editAction', { name: dest.name })}
-              onClick={() => setEditing(dest)}
-            >
-              <Pencil />
-            </Button>
+            {kinds.some((k) => k.kind === dest.kind) && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('destinations.editAction', { name: dest.name })}
+                onClick={() => setEditing(dest)}
+              >
+                <Pencil />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"

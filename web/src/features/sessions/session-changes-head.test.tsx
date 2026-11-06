@@ -7,6 +7,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import {
+  File,
+  FileBraces,
+  FileCode,
+  FileCog,
+  FileImage,
+  type LucideIcon,
+} from 'lucide-react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth/context', () => ({
@@ -221,5 +229,41 @@ describe('SessionChanges — against git HEAD', () => {
     expect(
       screen.queryByRole('button', { name: 'Changes since HEAD' }),
     ).toBeNull()
+  })
+})
+
+describe('SessionChanges — file kinds', () => {
+  it("marks each changed file with its kind's icon, by its extension", async () => {
+    vi.mocked(agentOpsApi.changes).mockResolvedValue({
+      folder: 'repo',
+      files: [
+        'main.go',
+        'package.json',
+        'logo.png',
+        'LICENSE',
+        '.env',
+        '.gitignore',
+      ].map((path) => ({
+        path,
+        size: 1,
+        modified_at: '2026-10-06T10:00:00Z',
+      })),
+      truncated: false,
+    })
+    show()
+    // The shapes lucide draws for an icon, to tell one glyph from another.
+    const shapes = (Icon: LucideIcon) =>
+      render(<Icon />).container.querySelector('svg')!.innerHTML
+    const drawn = async (path: string) =>
+      (await screen.findByText(path)).closest('button')!.querySelector('svg')!
+        .innerHTML
+    expect(await drawn('main.go')).toBe(shapes(FileCode))
+    expect(await drawn('package.json')).toBe(shapes(FileBraces))
+    expect(await drawn('logo.png')).toBe(shapes(FileImage))
+    // A name the table does not know keeps the plain file glyph.
+    expect(await drawn('LICENSE')).toBe(shapes(File))
+    // A dotfile is named by its extension alone.
+    expect(await drawn('.env')).toBe(shapes(FileCog))
+    expect(await drawn('.gitignore')).toBe(shapes(FileCog))
   })
 })

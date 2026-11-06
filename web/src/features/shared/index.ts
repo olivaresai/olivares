@@ -19,7 +19,12 @@ export {
 export { humanDurationSeconds, parseTs, ppmToPercent } from './format'
 export { LiveDot } from './live-dot'
 export { RelTime as RelTimeLabel } from './rel-time'
-export { UrlStateNotice, type UrlStateNoticeProps } from './url-state-notice'
+export {
+  UrlStateNotice,
+  useUrlStateNotice,
+  type UrlStateNoticeOptions,
+  type UrlStateNoticeProps,
+} from './use-url-state-notice'
 export { WorkspaceRequiredState } from './workspace-required'
 export {
   bareId,
@@ -49,10 +54,5 @@ export {
   createColorResolver,
   type ColorResolver,
 } from './graph/sigma-graph-build'
-export {
-  clusterByHost,
-  type ClusterOptions,
-  type ClusterResult,
-} from './graph/cluster'
 export { layeredLayout, type LayoutResult } from './graph/layout'
 export { useIsDark } from './graph/theme'

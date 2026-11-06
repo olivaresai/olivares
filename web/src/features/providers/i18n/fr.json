@@ -1,4 +1,5 @@
 {
+  "deepSummary": "{{model}} : outils {{tools}} · streaming {{streaming}} · utilisation {{usage}} · contexte {{context}} (serveur)",
   "title": "Fournisseurs",
   "subtitle": "Une clé de fournisseur cloud ou un point de terminaison de modèles locaux utilisé par les outils de vos agents.",
   "nav": "Fournisseurs",
@@ -95,7 +96,11 @@
     "localNameHint": "Votre nom pour ce point de terminaison. Il apparaît dans le sélecteur.",
     "advanced": "Advanced: custom endpoint",
     "missingFields": "Renseignez les champs manquants : {{fields}}.",
-    "requiredEndpointHint": "Saisissez le point de terminaison du service : https, ou http simple sur une adresse de bouclage ou de réseau privé."
+    "requiredEndpointHint": "Saisissez le point de terminaison du service : https, ou http simple sur une adresse de bouclage ou de réseau privé.",
+    "worksWith": "Fonctionne avec {{tools}}",
+    "otherKinds": "Autre (point de terminaison personnalisé)",
+    "keyLink": "Obtenir une clé d'API chez {{vendor}}",
+    "docsLink": "Guide de configuration de {{vendor}}"
   },
   "rotate": {
     "title": "Changer la clé de ce fournisseur",

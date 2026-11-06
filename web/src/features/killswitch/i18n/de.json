@@ -1,6 +1,7 @@
 {
   "title": "Not-Aus",
   "subtitle": "Notstopp für alle KI-Agenten auf diesem Server oder für einen einzelnen. Das Stoppen braucht einen Klick; der Neustart braucht die Genehmigung von zwei verschiedenen Benutzerkonten und danach eine Prüfung.",
+  "subtitleNoStop": "Notstopp für alle KI-Agenten auf diesem Server oder für einen einzelnen. Das Stoppen erfordert die Administratorrolle.",
   "banner": {
     "estateTitle": "ALLE AGENTEN GESTOPPT",
     "estateBody": "Agenten können nicht handeln, bis zwei Benutzerkonten den Neustart genehmigen: Sitzungen enden, und Werkzeugaufrufe, MCP, Zeitpläne, Sprache, Modellaufrufe, Bereitstellungen und Ereigniszustellung werden abgelehnt.",

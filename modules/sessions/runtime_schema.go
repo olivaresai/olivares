@@ -343,7 +343,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// A phrase cut from the first message (run_title.go), shown where the run has no name.
 			// Nullable for the expand-contract reason: an existing sessions_run gains it on the next
 			// boot (reconcileColumns) and a row that predates it has none.
-			{Name: colRunTitle, Kind: model.KindText, Nullable: true, Principal: model.None("a display title cut from the first message the person sent: text the person typed, shown to readers of the session's output: run_title.go:175, run_title.go:218, run_title.go:206")},
+			{Name: colRunTitle, Kind: model.KindText, Nullable: true, Principal: model.None("a display title cut from the first message the person sent: text the person typed, shown to readers of the session's output: run_title.go:176, run_title.go:254, run_title.go:207, run_title.go:226")},
 			// When the session was archived (run_name_archive.go): the session's own
 			// state, shared by everyone who reads it, not a person's mark. Nullable for
 			// the expand-contract reason: an existing sessions_run gains it on the next

@@ -248,7 +248,14 @@ const page = await ctx.newPage()
 // Requests that have not settled. A held-open stream lives here for the life of the screen,
 // which is what lets us tell "designed to stay open" from "stuck" by evidence instead of by a list.
 const inflight = new Set()
-page.on('request', (r) => inflight.add(r))
+page.on('request', (r) => {
+  // A new document replaces the old one, and Playwright reports neither `requestfinished` nor
+  // `requestfailed` for a request that had no response yet when its document went away. Left
+  // in, it was reported as STALLED on a later screen that never made it (the nightly of
+  // 2026-11-03: setup's readiness read, reported on /sessions, #4200).
+  if (r.isNavigationRequest() && r.frame() === page.mainFrame()) inflight.clear()
+  inflight.add(r)
+})
 // ⛔ `location` SE CAPTURA, y no es adorno: el texto del navegador para un recurso fallido es
 // «Failed to load resource: the server responded with a status of 501 ()» — NO nombra la URL.
 // Sin la localización, descontar el ruido de un 501 gateado obliga a descontar TODOS los 501

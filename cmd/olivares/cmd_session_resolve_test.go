@@ -7,6 +7,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -125,6 +127,27 @@ func TestSessionStartRefusalInJSONCarriesItsStatus(t *testing.T) {
 		}
 		if jerr := json.Unmarshal(out.Bytes(), &got); jerr != nil || got.Error.Status != status || got.Error.Message != f.resolveRefusal {
 			t.Fatalf("%d: -o json = %q (%v)", status, out.String(), jerr)
+		}
+	}
+}
+
+// TestSessionStartRefusalNamesTheCommandThatFixesIt: the engine's launch refusals send a
+// person to the console ("Sign it in under AI tools", "Install Grok Build first, under AI
+// tools"), and OpenCode's named no next step at all. In a terminal the step is a command.
+// The bodies are the engine's own (provider_profile_resolve.go).
+func TestSessionStartRefusalNamesTheCommandThatFixesIt(t *testing.T) {
+	for _, tc := range []struct{ tool, code, message, want string }{
+		{"codex", "nothing_to_run_on", "Codex is not signed in and Providers has nothing it can use. Sign it in under AI tools, or add an OpenAI key in Providers.",
+			"Codex is not signed in and Providers has nothing it can use. Sign it in: olivares tool login codex, or add a key: olivares provider add --kind openai < key.txt"},
+		{"grok", "tool_not_installed", "Install Grok Build first, under AI tools.",
+			"Grok Build is not installed here. Install it: olivares agent tool install --driver grok --yes"},
+		{"opencode", "nothing_to_run_on", "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, an OpenRouter, DeepSeek, Mistral, Moonshot or Z.ai key at its documented address, or on a local model (Ollama, or an OpenAI-compatible server at a local address).",
+			"OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, an OpenRouter, DeepSeek, Mistral, Moonshot or Z.ai key at its documented address, or on a local model (Ollama, or an OpenAI-compatible server at a local address). Sign it in: olivares tool login opencode, or add a key: olivares provider add --kind anthropic < key.txt"},
+	} {
+		body, _ := json.Marshal(map[string]any{"error": map[string]any{"code": tc.code, "message": tc.message}})
+		_, err := profileRefOf(io.Discard, tc.tool, http.StatusConflict, body, nil)
+		if err == nil || err.Error() != tc.want || exitcode.From(err) != exitcode.Conflict {
+			t.Errorf("%s: %v (exit %d)\nwant %s", tc.tool, err, exitcode.From(err), tc.want)
 		}
 	}
 }

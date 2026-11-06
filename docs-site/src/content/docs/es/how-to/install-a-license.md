@@ -102,10 +102,10 @@ pregunta importante.
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` funciona offline y resuelve la licencia con la misma precedencia que usa el motor,
+En el host del motor y con `--data-dir`, `status` funciona offline y resuelve la licencia con la misma precedencia que usa el motor,
 por lo que responde a la pregunta importante —*qué licencia está realmente en vigor*— en vez
 de limitarse a decir «hay un fichero». Informa de la fuente resuelta, el titular, el plan y la
-fecha de caducidad.
+fecha de caducidad. Con la sesión iniciada en un motor de otro host, consulta ese motor.
 
 Ejecútalo después de cada instalación y después de retirar un override.
 
@@ -167,6 +167,13 @@ cualquier módulo que necesite un secreto o una revisión, en lugar de activarlo
 `olivares enterprise status` informa de qué está activo. Estos comandos existen **solo en el
 binario comercial**: si `olivares enterprise` no es un comando, todavía ejecutas la
 compilación Community y el cambio anterior aún no se ha producido.
+
+La consola hace lo mismo para cada familia: la vista **Edición y licencia** lista cada familia
+con cuántos de sus módulos están activados. **Activar** muestra el mismo diff antes de aplicarlo,
+y **Desactivar** nombra los módulos que se detienen. Una familia que tu licencia no incluye
+mantiene **Activar** deshabilitado y lo dice: *Esta licencia no incluye* la familia. El motor
+vuelve a comprobar la licencia en cada activación, desde la consola o la CLI, de modo que una
+licencia caducada o ausente no puede activar una familia.
 
 :::caution[Haz una copia de seguridad antes del cambio]
 El cambio sustituye un binario, no tus datos, pero haz igualmente la misma copia de seguridad

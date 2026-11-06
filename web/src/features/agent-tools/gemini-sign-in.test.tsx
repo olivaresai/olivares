@@ -110,6 +110,10 @@ it('relays the native Google sign-in URL and pasted code from the Gemini row', a
   const dialog = await screen.findByRole('dialog', {
     name: /Sign in Gemini CLI/,
   })
+  // The key is offered first (#2990): the Google sign-in starts when it is chosen.
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Sign in with Google' }),
+  )
   await waitFor(() =>
     expect(signIn.start).toHaveBeenCalledWith('gemini-cli', 'tenant-a'),
   )
@@ -124,7 +128,6 @@ it('relays the native Google sign-in URL and pasted code from the Gemini row', a
       hidden: true,
     }),
   ).not.toBeInTheDocument()
-  await user.click(within(dialog).getByText('Other ways'))
   await user.click(
     within(dialog).getByRole('button', { name: 'Use an API key instead' }),
   )
@@ -138,6 +141,38 @@ it('relays the native Google sign-in URL and pasted code from the Gemini row', a
   await waitFor(() =>
     expect(signIn.code).toHaveBeenCalledWith('si-gemini', 'fixture-code'),
   )
+})
+
+it('names the accounts that work and offers the API key before the Google sign-in (#2990)', async () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={qc}>
+      <AgentToolsView />
+    </QueryClientProvider>,
+  )
+  const box = await screen.findByTestId('tool-gemini-cli')
+  await userEvent.click(
+    await within(box).findByRole('button', { name: /^Sign in/ }),
+  )
+  const dialog = await screen.findByRole('dialog', {
+    name: /Sign in Gemini CLI/,
+  })
+  expect(
+    within(dialog).getByText(
+      'Gemini CLI works with a paid Gemini API key or a Gemini Code Assist Standard or Enterprise account. Free personal Google accounts, Google AI Pro and Google AI Ultra stopped working on 18 June 2026.',
+    ),
+  ).toBeInTheDocument()
+  const key = within(dialog).getByRole('button', {
+    name: 'Use an API key instead',
+  })
+  const google = within(dialog).getByRole('button', {
+    name: 'Sign in with Google',
+  })
+  expect(
+    key.compareDocumentPosition(google) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+  // The person chooses: no Google sign-in is started under a key offer.
+  expect(signIn.start).not.toHaveBeenCalled()
 })
 
 it('starts the first Gemini session through its existing driver', async () => {

@@ -106,7 +106,20 @@
     "scope": "{{name}} 内",
     "footerMove": "移動",
     "footerOpen": "開く",
-    "footerCommands": "コマンドのみ"
+    "footerCommands": "コマンドのみ",
+    "objectActions": "{{name}} の操作",
+    "footerPeople": "ユーザー",
+    "footerSessions": "セッション",
+    "peopleHint": "名前を入力してください。",
+    "ask": "Olivaresに質問…"
+  },
+  "hintBar": {
+    "move": "移動",
+    "open": "開く",
+    "approve": "承認",
+    "deny": "拒否",
+    "launcher": "ランチャー",
+    "command": "コマンド"
   },
   "permissionWords": {
     "read": "読み取り権限",
@@ -327,11 +340,16 @@
         "last": "最後のセッション",
         "open": "セッションを開く",
         "pin": "ピン留め／解除",
+        "undo": "直前のアーカイブ・スヌーズ・完了・ピン解除を元に戻す",
         "menu": "セッションの操作メニューを開く"
       },
       "session": {
         "new": "新しいセッション",
         "previous": "前のセッションに戻る"
+      },
+      "list": {
+        "next": "次の行へ移動",
+        "previous": "前の行へ移動"
       },
       "sourceDiff": {
         "nextFile": "次のファイル",
@@ -342,15 +360,23 @@
       "approvals": {
         "approve": "開いているリクエストを今回だけ承認",
         "deny": "開いているリクエストを却下"
+      },
+      "accessMap": {
+        "fullScreen": "全画面マップを開く／閉じる"
+      },
+      "ask": {
+        "open": "Olivaresに質問"
       }
     },
     "when": {
       "railFocused": "セッションレール内",
+      "outsideList": "リストの外",
       "launcherFocused": "ランチャー入力欄内",
       "workSurface": "セッション画面",
       "sessionHistory": "前のセッションがある場合",
       "paletteRecent": "検索欄が空のパレットの結果で",
-      "approvalQueue": "承認キュー内"
+      "approvalQueue": "承認キュー内",
+      "accessMap": "アクセスマップ上"
     },
     "precedence": "同じキーを持つ行が 2 つある場合、該当する最後の行が優先されます。",
     "problems_other": "{{count}} 件のキー割り当てを読み取れず、動作しません: {{commands}}"
@@ -402,7 +428,6 @@
     },
     "quoteReply": "返信を引用",
     "copy": {
-      "markdown": "Markdown ブロックをコピー",
       "message": "メッセージをコピー",
       "code": "コードをコピー",
       "copied": "コピーしました",

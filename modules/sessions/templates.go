@@ -71,6 +71,7 @@ type tplHookEntry struct {
 }
 
 type tplSettings struct {
+	AIAttribution      string `json:"ai_attribution,omitempty"`
 	PermissionMode     string `json:"permission_mode,omitempty"`
 	Effort             string `json:"effort,omitempty"`
 	Model              string `json:"model,omitempty"`
@@ -82,6 +83,8 @@ type tplSettings struct {
 }
 
 type tplPolicies struct {
+	RequireReadOnlyFolders    bool     `json:"require_read_only_folders,omitempty"`
+	SessionsDisabled          bool     `json:"sessions_disabled,omitempty"`
 	DLPMode                   string   `json:"dlp_mode,omitempty"`
 	MaxSessionDurationMinutes int      `json:"max_session_duration_minutes,omitempty"`
 	AllowedTools              []string `json:"allowed_tools,omitempty"`
@@ -504,6 +507,24 @@ func (m *Module) handleApplyTemplate(w http.ResponseWriter, r *http.Request, mc 
 	}
 	p := req.Target.toParams()
 	conflicts := terms.applyTo(&p)
+	// The catalog previews before its launch dialog asks the person for a folder.
+	// A named folder is checked here; an unselected one is checked at launch.
+	if p.requireReadOnlyFolders && p.WorkspaceRef != "" {
+		if err := m.callerQuestions(r.Context(), mc).refuseWorkspace(p.WorkspaceRef); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		ws, err := m.resolveLaunchWorkspace(r.Context(), mc.Tenant, p.WorkspaceRef)
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		defer ws.closeReadOnlyHandles()
+		if err := p.checkTemplateWorkspace(ws); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
 	if conflicts == nil {
 		conflicts = []mergeConflict{}
 	}
@@ -575,6 +596,45 @@ var builtinTemplates = []struct {
 	desc string
 	body tplBody
 }{
+	{name: "University", desc: "Study sessions with AI-assistance provenance on commits.", body: tplBody{Settings: &tplSettings{AIAttribution: "assisted-by"}}},
+	{name: "Studio", desc: "Creative sessions with AI-assistance provenance on commits.", body: tplBody{Settings: &tplSettings{AIAttribution: "assisted-by"}}},
+	{
+		name: "AIAS 1 — No AI",
+		desc: "No AI sessions: starting or resuming with this template is refused.",
+		body: tplBody{Policies: &tplPolicies{SessionsDisabled: true}},
+	},
+	{
+		name: "AIAS 2 — Plan only tutor",
+		desc: "Read-only course folder. A tutor gives hints and questions, not solution code or final answers.",
+		body: tplBody{
+			Settings: &tplSettings{PermissionMode: "plan", CustomInstructions: "Act as a course tutor. Ask what the learner has tried, explain concepts, and give one hint or guiding question at a time. Do not write code, provide a final answer, or complete the assessment, even when asked. Help the learner reason toward their own solution."},
+			Policies: &tplPolicies{RequireTruncateProtection: true},
+		},
+	},
+	{
+		name: "AIAS 3 — Scratch practice",
+		desc: "Practice in a separate scratch workspace with the course folder attached read-only; requires that folder setup.",
+		body: tplBody{
+			Settings: &tplSettings{PermissionMode: "acceptEdits", CustomInstructions: "Help the learner experiment in the instructor-provided scratch workspace. Treat the attached course folder as read-only reference material. Explain changes and ask the learner to review them. Do not produce a final answer for submission; the learner must write and justify their own assessment."},
+			Policies: &tplPolicies{RequireTruncateProtection: true, RequireReadOnlyFolders: true},
+		},
+	},
+	{
+		name: "AIAS 4 — AI with review",
+		desc: "AI-assisted work with learner review and mandatory conversation recording.",
+		body: tplBody{
+			Settings: &tplSettings{PermissionMode: "acceptEdits", CustomInstructions: "Help complete the instructor-authorized work. Explain generated code, its assumptions, and how the learner can verify it. Ask the learner to review and acknowledge AI contributions before using a final answer. Preserve the learner's decisions and do not claim their independent authorship."},
+			Policies: &tplPolicies{RecordIO: boolPtr(true)},
+		},
+	},
+	{
+		name: "AIAS 5 — Full AI",
+		desc: "Full AI assistance inside the session's filesystem boundary; run administration and recording still apply.",
+		body: tplBody{
+			Settings: &tplSettings{PermissionMode: "bypassPermissions", CustomInstructions: "Full AI assistance is permitted for this assessment, including code and a final answer. Explain and verify the work with the learner, identify AI contributions, and follow the instructor's attribution requirements."},
+			Policies: &tplPolicies{RecordIO: boolPtr(true)},
+		},
+	},
 	{
 		name: "Secure Development",
 		desc: "DLP content classification, restricted tool set, mandatory I/O recording.",

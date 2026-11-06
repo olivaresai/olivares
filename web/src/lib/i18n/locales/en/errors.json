@@ -1,8 +1,7 @@
 {
   "notFound": {
     "title": "Page not found",
-    "description": "This page does not exist or has moved.",
-    "back": "Back to overview"
+    "description": "This page does not exist or has moved."
   },
   "businessOnly": {
     "title": "Part of Business",
@@ -17,6 +16,7 @@
     "nextStep": "Your roles or a group policy do not allow it. An owner or administrator of this organization can grant it.",
     "deniedByPolicy": "The policy “{{policy}}” denies it. An owner or administrator of this organization can change it."
   },
+  "systemAdminOnly": "This is set for the whole installation. Ask a system administrator to view or change it.",
   "serverError": {
     "title": "Something went wrong",
     "description": "Olivares hit an unexpected error. Please try again.",
@@ -30,14 +30,21 @@
     "title": "Control plane unreachable",
     "description": "We could not reach the control plane. Check your connection and that the engine is running."
   },
+  "engineRetrying": {
+    "title": "Can’t reach the engine",
+    "description": "Trying again automatically. This page opens as soon as the engine answers."
+  },
   "networkSecure": {
     "title": "Secure connection failed",
     "description": "Your browser could not open a secure connection to {{origin}}. If it does not trust the engine’s certificate, open that address in a new tab and trust it, or install the engine’s CA (tls.crt.ca in its data directory). Otherwise check your connection and that the engine is running."
   },
   "boundary": {
     "title": "This view crashed",
-    "description": "An unexpected error occurred while rendering. Reloading usually fixes it.",
-    "reload": "Reload"
+    "description": "An unexpected error occurred while rendering. Retrying usually fixes it.",
+    "reload": "Reload",
+    "errorId": "Error ID",
+    "copyErrorId": "Copy error ID",
+    "goToNow": "Go to Overview"
   },
   "generic": "Something went wrong.",
   "sessionTemplateUnavailable": "The “Edits and commands” template is unavailable, so the session was not started. Choose another permission or ask an administrator to restore the template.",

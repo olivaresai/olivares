@@ -13,6 +13,7 @@ import { Archive } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { KvList, KvRow } from '@/components/ui/kv'
+import { PathText } from '@/components/ui/path-text'
 import {
   Sheet,
   SheetContent,
@@ -139,6 +140,30 @@ export function BackupInspectSheet({
                 </div>
               )}
             </div>
+
+            {detail.manifest.not_included &&
+            detail.manifest.not_included.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-caption font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('inspect.notIncluded')}
+                </span>
+                <span className="text-body text-muted-foreground">
+                  {t('inspect.notIncludedHint')}
+                </span>
+                <div className="flex flex-col gap-1">
+                  {detail.manifest.not_included.map((left) => (
+                    <Badge
+                      key={left.path}
+                      variant="outline"
+                      className="h-auto max-w-full justify-start whitespace-normal break-all py-0.5 text-left font-mono"
+                      title={left.reason}
+                    >
+                      <PathText value={left.path} wrap />
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </SheetContent>

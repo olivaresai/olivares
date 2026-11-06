@@ -195,10 +195,9 @@ describe('SessionCard — offered routes', () => {
     expect(
       screen.queryByRole('link', { name: 'Access map' }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Inventory' })).toHaveAttribute(
-      'href',
-      '/inventory',
-    )
+    expect(
+      screen.getByRole('link', { name: 'Discovered resources' }),
+    ).toHaveAttribute('href', '/inventory')
   })
 
   it('offers the access map when the edition view is available', async () => {

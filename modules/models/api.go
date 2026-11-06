@@ -73,7 +73,7 @@ func (m *Module) Permissions() []auth.Permission {
 		permPlatformsRead,
 		permKeysRead, permKeysWrite,
 		permRegistryRead, permRegistryWrite, permGPAIRead, permGPAIWrite,
-		permAdmissionRead, permAdmissionWrite, permAdmissionAdmin,
+		permAdmissionRead, permAdmissionWrite, permAdmissionAdmin, permAskRead, permAskWrite,
 		permModelGroupRead, permModelGroupWrite, permModelAccessRead, permModelAccessAdmin,
 	}
 }
@@ -100,6 +100,13 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// Governed routing EXECUTION (resolve → act through the deny-closed Executor →
 	// emit CostSample). Admin-tier spend, distinct from the read-tier resolve.
 	reg.Handle("POST", "/routing-policies/{id}/execute", permRoutingExecute, m.handleExecuteRouting)
+	// Ask Olivares (ask_turn.go): whether it is on, its models and tools; one agent turn;
+	// running an approved proposal once; and the administrator's model binding, which
+	// authorizes its egress and so needs the routed-execution permission.
+	reg.Handle("GET", "/ask", permAskRead, m.handleAsk)
+	reg.Handle("POST", "/ask/turns", permAskWrite, m.handleAskTurn)
+	reg.Handle("POST", "/ask/proposals/{id}/run", permAskWrite, m.handleAskRunProposal)
+	reg.Handle("PUT", "/ask/binding", permRoutingExecute, m.handleSetAskBinding)
 
 	// Read-only Anthropic Rate Limits inventory (ANT2-05) a gateway/proxy must mirror.
 	reg.Handle("GET", "/rate-limits", permRatelimitsRead, m.handleRateLimits)

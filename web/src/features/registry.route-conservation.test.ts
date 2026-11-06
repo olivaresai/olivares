@@ -48,7 +48,8 @@ function mountedPaths(): string[] {
         ([, route]) => !(route.options.beforeLoad && !route.options.component),
       )
       .map(([id]) => id)
-      .filter((id) => id !== '__root__' && id !== '/app')
+      // The catch-all that draws a 404 inside the shell (routes.tsx) answers no address.
+      .filter((id) => id !== '__root__' && id !== '/app' && id !== '/app/$')
       .map((id) =>
         id === '/app/' ? '/' : id.startsWith('/app/') ? id.slice(4) : id,
       )

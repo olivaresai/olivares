@@ -83,7 +83,9 @@ describe('las reglas DLP', () => {
   it('sin reglas dice que la puerta está INERTE, no que todo se deniegue', async () => {
     const user = userEvent.setup()
     await abrirDlp(user)
-    expect(await screen.findByText(/gate is inert/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/nothing is being blocked/i),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/DLP is enabled/i)).toBeNull()
   })
 

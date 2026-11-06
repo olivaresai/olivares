@@ -86,3 +86,19 @@ it('shows the commercial badge in the search header outside the result list', as
   expect(badge.closest('[cmdk-input-wrapper]')).not.toBeNull()
   expect(badge.closest('[role="listbox"]')).toBeNull()
 })
+
+it('has zero axe violations while the palette is open', async () => {
+  useCommandStore.getState().setOpen(true)
+  renderIntel(<CommandMenu />)
+  const dialog = await screen.findByRole('dialog')
+  // Full ruleset, not runOnly: the exit criterion is axe 0 on this open state.
+  const results = await axe.run(dialog)
+  const detail = results.violations
+    .flatMap((v) => v.nodes)
+    .map(
+      (n) =>
+        `${n.target.join(' ')} ${n.html.slice(0, 180)} ${n.failureSummary}`,
+    )
+    .join('\n')
+  expect(results.violations, detail).toEqual([])
+})

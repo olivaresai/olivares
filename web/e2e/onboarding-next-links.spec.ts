@@ -24,7 +24,7 @@ test('the setup wizard next steps open pages that work on a fresh install', asyn
   await page.locator('#setup-email').fill('admin@example.com')
   await page.locator('#setup-password').fill('correct-horse-battery-staple-42')
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
 
   // The console learns which modules are off from server-info, and until that answer is
   // applied it shows every next step and mounts every gated panel. Open the wizard with the

@@ -5,6 +5,7 @@
   "listening": "Escuchando. Pulsa otra vez o Esc para terminar.",
   "transcribing": "Transcribiendo…",
   "nothing": "No se ha oído nada.",
+  "unavailable": "El dictado funciona mientras la sesión está en marcha.",
   "failed": "No se pudo dictar. Inténtalo de nuevo.",
   "blocked": "El navegador ha bloqueado el micrófono."
 }

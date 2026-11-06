@@ -6,6 +6,7 @@ import type {
   RBACCatalogDTO,
   CustomRoleDTO,
   PermGroupDTO,
+  GroupDTO,
   SourceScopeSourceType,
 } from './console/api'
 import type { PdpPublishResult, PdpRollbackResult } from './claude-policy/types'
@@ -197,6 +198,14 @@ export interface AccessRequestActionProps {
 }
 
 export interface PanelExtensions {
+  readonly effectiveRightsExtra?: ComponentType<{
+    subjectId: string
+    subjectKind: 'user' | 'token'
+  }>
+  /** Read-only engine restriction for launch pickers. Absent preserves all choices. */
+  readonly usePermissionRestriction?: (
+    enabled: boolean,
+  ) => import('./agentops/permission-restriction').PermissionRestriction
   readonly consoleAccess?: ConsoleAccessExtension
   readonly identityTabs: readonly IdentityTabExtension[]
   readonly executiveRiskCards: readonly PanelExtension[]
@@ -243,6 +252,14 @@ export interface PanelExtensions {
   /** Console › Scopes: cards below the workspaces. */
   readonly scopesCards: readonly PanelExtension[]
   /**
+   * Console › Roles › Groups: actions after Map role on a group row the console may change,
+   * given that group and every listed group. The default console has none.
+   */
+  readonly groupParentActions?: ComponentType<{
+    group: GroupDTO
+    groups: readonly GroupDTO[]
+  }>
+  /**
    * Console › SSO: a tab that replaces the single-provider SSO tab for a superadmin. It
    * may reuse `SSOOverview` and `SSOForm` from console/sso-tab.
    */
@@ -250,7 +267,7 @@ export interface PanelExtensions {
   /** AI tools › sign in a profile: further ways beside the terminal command. */
   readonly profileSignInWays?: readonly ProfileSignInExtension[]
   /**
-   * Estate › Last hour past `FLEET_SESSIONS` live sessions: drawn instead of the swimlanes, with
+   * Usage › Timeline past `FLEET_SESSIONS` live sessions: drawn instead of the swimlanes, with
    * their props. The default console keeps the swimlanes at any count.
    */
   readonly estateFleet?: ComponentType<import('./home/swimlane').SwimlaneProps>

@@ -1,5 +1,5 @@
 {
-  "title": "Claude Code Adoption",
+  "title": "Adoption",
   "description": "How much Claude Code is used, and how much of what it proposes developers keep.",
   "range": {
     "label": "Time range",
@@ -15,7 +15,7 @@
     "trend": "Trend"
   },
   "boundary": {
-    "note": "Covers only Claude API traffic — the admin Analytics feed and the OTLP telemetry plane. Usage served by {{providers}} is not included, so absence of adoption here is not proof of absence.",
+    "note": "Claude API usage only. Not included: {{providers}}.",
     "providers": {
       "claude-platform-aws": "Claude Platform on AWS",
       "microsoft-foundry": "Microsoft Foundry",
@@ -25,14 +25,14 @@
   },
   "lenses": {
     "analytics": {
-      "title": "Per developer (admin Analytics)",
-      "description_one": "Authoritative per-developer/day totals from the admin Analytics feed across {{count}} developer.",
-      "description_other": "Authoritative per-developer/day totals from the admin Analytics feed across {{count}} developers."
+      "title": "Per developer",
+      "description_one": "Daily totals for {{count}} developer.",
+      "description_other": "Daily totals for {{count}} developers."
     },
     "telemetry": {
-      "title": "Per session (live telemetry)",
-      "description_one": "Real-time per-session activity from the OTLP plane across {{count}} team; includes active time.",
-      "description_other": "Real-time per-session activity from the OTLP plane across {{count}} teams; includes active time."
+      "title": "Per session",
+      "description_one": "Live activity and active time for {{count}} team.",
+      "description_other": "Live activity and active time for {{count}} teams."
     }
   },
   "comparison": {

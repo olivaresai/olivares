@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
@@ -170,6 +171,12 @@ func workspacesGetCmd(client bootstrapClient) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := bootstrapPathID(args[0])
 			wsRaw, err := client.expect(cmd, http.MethodGet, workspacesPath+"/"+id, nil, http.StatusOK)
+			if err != nil && exitcode.From(err) == exitcode.NotFound {
+				// Not an id: the name or handle `ls` prints.
+				if id, err = workspaceIDOf(client, cmd, args[0]); err == nil {
+					wsRaw, err = client.expect(cmd, http.MethodGet, workspacesPath+"/"+id, nil, http.StatusOK)
+				}
+			}
 			if err != nil {
 				return err
 			}
@@ -228,6 +235,43 @@ func workspacesGetCmd(client bootstrapClient) *cobra.Command {
 		},
 	}
 	return cmd
+}
+
+// workspaceIDOf is the id of the one workspace whose handle or name is what the
+// person typed, read from the same list `ls` prints.
+func workspaceIDOf(client bootstrapClient, cmd *cobra.Command, typed string) (string, error) {
+	var ids []string
+	cursor := ""
+	for seen := map[string]bool{}; ; {
+		raw, err := client.expect(cmd, http.MethodGet, workspacesPath+listQuerySuffix(200, cursor), nil, http.StatusOK)
+		if err != nil {
+			return "", err
+		}
+		var list cliWorkspaceList
+		if err := decodeBootstrapJSON("workspaces", raw, &list); err != nil {
+			return "", err
+		}
+		for _, w := range list.Items {
+			if w.Slug == typed || w.Name == typed {
+				ids = append(ids, bootstrapPathID(w.ID))
+			}
+		}
+		if !list.HasMore {
+			break
+		}
+		if list.Cursor == "" || seen[list.Cursor] {
+			return "", sentence(exitcode.Server, "The workspace list could not be read completely. Use the workspace id from olivares workspaces ls.")
+		}
+		cursor = list.Cursor
+		seen[cursor] = true
+	}
+	switch len(ids) {
+	case 0:
+		return "", sentence(exitcode.NotFound, "No workspace has the id, name or handle %q. List them: olivares workspaces ls", termSafe(typed))
+	case 1:
+		return ids[0], nil
+	}
+	return "", sentence(exitcode.Conflict, "More than one workspace is called %q. Use its id from olivares workspaces ls.", termSafe(typed))
 }
 
 // workspaceContentsCell renders one contents count, marking a truncated page as

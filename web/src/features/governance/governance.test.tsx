@@ -10,6 +10,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ApprovalDTO, BindingDTO, PolicyDTO } from './types'
 import { ApiError } from '@/lib/api/errors'
 
+import { fakeRouter } from '@/test/fake-router'
+
 vi.mock('@/features/extensions', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/extensions')>()
   return {
@@ -24,6 +26,7 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  dismiss: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
@@ -79,6 +82,10 @@ import GovernanceView from './governance-view'
 import { PolicyEditorDialog } from './policy-editor'
 import { IdentitiesView } from './identities-view'
 import { GroupMembersSheet } from './group-members'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({
@@ -140,12 +147,12 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.clearAllMocks()
-  window.history.replaceState({}, '', '/')
+  fakeRouter.reset('/')
 })
 
 describe('GovernanceView — approval queue (HITL)', () => {
   it('Community omits the break-glass panel, including a stored deep link', () => {
-    window.history.replaceState({}, '', '/permissions?tab=break-glass')
+    fakeRouter.reset('/permissions?tab=break-glass')
     wrap(<GovernanceView />)
     expect(
       screen.queryByRole('tab', { name: /emergency access/i }),
@@ -216,10 +223,10 @@ describe('GovernanceView — approval queue (HITL)', () => {
     await waitFor(() => expect(queueRows()).toHaveLength(1))
     expect(screen.queryByRole('button', { name: /^approve once$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^deny$/i })).toBeNull()
-    // The sweep ("Expire and escalate overdue requests", SC item 7 wording) is also admin-only.
+    // The sweep ("Handle overdue requests") is also admin-only.
     expect(
       screen.queryByRole('button', {
-        name: /expire and escalate overdue requests/i,
+        name: /handle overdue requests/i,
       }),
     ).toBeNull()
   })
@@ -294,7 +301,7 @@ describe('GovernanceView — approval queue (HITL)', () => {
     wrap(<GovernanceView />)
     await userEvent.click(
       await screen.findByRole('button', {
-        name: /expire and escalate overdue requests/i,
+        name: /handle overdue requests/i,
       }),
     )
     const dialog = await screen.findByRole('dialog')
@@ -771,15 +778,15 @@ describe('GroupMembersSheet — bounded transitive walk', () => {
 
 describe('GovernanceView — ?tab= deep link (console remake slice 4)', () => {
   afterEach(() => {
-    window.history.replaceState({}, '', '/')
+    fakeRouter.reset('/')
     authState.can = () => true
   })
 
   it('opens the identity inventory from a ?tab=identities link, without a directory resync or agent registration', () => {
-    window.history.replaceState({}, '', '/permissions?tab=identities')
+    fakeRouter.reset('/permissions?tab=identities')
     wrap(<GovernanceView />)
     expect(
-      screen.getByRole('tab', { name: 'Identities & groups' }),
+      screen.getAllByRole('tab', { name: 'Identities' })[0],
     ).toHaveAttribute('aria-selected', 'true')
     expect(
       screen.queryByRole('button', { name: /resync roster/i }),
@@ -790,14 +797,14 @@ describe('GovernanceView — ?tab= deep link (console remake slice 4)', () => {
   })
 
   it('opens the section the link names, and the queue when it names nothing', () => {
-    window.history.replaceState({}, '', '/permissions?tab=policies')
+    fakeRouter.reset('/permissions?tab=policies')
     const first = wrap(<GovernanceView />)
     expect(screen.getByRole('tab', { name: 'Policies' })).toHaveAttribute(
       'aria-selected',
       'true',
     )
     first.unmount()
-    window.history.replaceState({}, '', '/permissions')
+    fakeRouter.reset('/permissions')
     wrap(<GovernanceView />)
     expect(screen.getByRole('tab', { name: 'Approvals' })).toHaveAttribute(
       'aria-selected',
@@ -808,7 +815,7 @@ describe('GovernanceView — ?tab= deep link (console remake slice 4)', () => {
   // AR hold07 finding 5: the list said an enabled policy may be inert, while the deny it
   // had just saved answered 403. The engine enforces an enabled policy from its save.
   it('the policies list says an enabled policy applies when saved, not that it may be inert', () => {
-    window.history.replaceState({}, '', '/permissions?tab=policies')
+    fakeRouter.reset('/permissions?tab=policies')
     wrap(<GovernanceView />)
     expect(
       screen.getByText(
@@ -820,7 +827,7 @@ describe('GovernanceView — ?tab= deep link (console remake slice 4)', () => {
 
   it('never opens the queue by link for a principal who may not read it', () => {
     authState.can = (p: string) => p !== 'governance:approval:read'
-    window.history.replaceState({}, '', '/permissions?tab=approvals')
+    fakeRouter.reset('/permissions?tab=approvals')
     wrap(<GovernanceView />)
     expect(screen.queryByRole('tab', { name: 'Approvals' })).toBeNull()
     expect(screen.getByRole('tab', { name: 'Policies' })).toHaveAttribute(

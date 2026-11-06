@@ -54,6 +54,41 @@ export default defineConfig([
     plugins: { olivares: { rules: { 'no-raw-palette': noRawPalette } } },
     rules: { 'olivares/no-raw-palette': 'error' },
   },
+  // A tab strip or an open sheet is a place in the address, not component memory: a reload,
+  // Back and a pasted link must restore it (useTabParam / useUrlState). Uncontrolled
+  // `<Tabs defaultValue>` and a one-time read of `window.location.search` are how ~14 views
+  // lost theirs. A genuinely ephemeral strip with nothing to restore into carries an
+  // `eslint-disable` with the reason.
+  {
+    files: ['src/features/**/*.{ts,tsx}'],
+    ignores: ['src/features/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "JSXOpeningElement[name.name='Tabs'] > JSXAttribute[name.name='defaultValue']",
+          message:
+            'Tabs must not keep the tab in memory: use useTabParam (lib/hooks/use-tab-param) so reload, Back and a pasted URL restore it.',
+        },
+        {
+          selector:
+            "NewExpression[callee.name='URLSearchParams'] > MemberExpression.arguments[property.name='search']",
+          message:
+            'Do not read window.location.search once: use useUrlState / useTabParam so the view follows the address (Back, a second link) and writes its state back.',
+        },
+      ],
+    },
+  },
+  // The API playground's request and response panes are the editor of one unsaved request:
+  // their sub-tabs (params, headers, body) have no address to restore into.
+  {
+    files: [
+      'src/features/api-playground/request-panel.tsx',
+      'src/features/api-playground/response-panel.tsx',
+    ],
+    rules: { 'no-restricted-syntax': 'off' },
+  },
   // The colors that must stay literal, each for its reason.
   {
     files: [

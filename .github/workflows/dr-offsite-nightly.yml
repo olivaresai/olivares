@@ -64,7 +64,6 @@ jobs:
         timeout-minutes: 5
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
@@ -74,10 +73,21 @@ jobs:
           printf 'Offsite bucket qualification failed.\n\nRun: %s\nSource: `%s`\n\nSee the job log and offsite-targets artifact.\n' \
             "$RUN_URL" "$SOURCE_SHA" > "$body"
           title='dr-offsite-nightly: qualification failed'
-          existing="$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
-            --jq '.[] | select(.title == "dr-offsite-nightly: qualification failed") | .number' | head -1)"
+          # Use the runner tools, as in drills-nightly; keep the token out of argv.
+          api="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}"
+          auth="$RUNNER_TEMP/offsite-api-auth"
+          (umask 077 && printf 'Authorization: Bearer %s\n' "$GH_TOKEN" > "$auth")
+          trap 'rm -f "$auth"' EXIT
+          existing="$(curl -fsS -H "@$auth" -H 'Accept: application/vnd.github+json' \
+            --get --data-urlencode "q=repo:${GITHUB_REPOSITORY} is:issue is:open in:title \"$title\"" \
+            "${GITHUB_API_URL}/search/issues" \
+            | python3 -c 'import json,sys; t=sys.argv[1]; print(next((str(i["number"]) for i in json.load(sys.stdin)["items"] if i["title"] == t), ""))' "$title")"
           if [[ -n "$existing" ]]; then
-            gh issue comment "$existing" --body-file "$body"
+            endpoint="$api/issues/$existing/comments"
+            python3 -c 'import json,sys; print(json.dumps({"body": sys.stdin.read()}))' < "$body" > "$body.json"
           else
-            gh issue create --title "$title" --body-file "$body"
+            endpoint="$api/issues"
+            python3 -c 'import json,sys; print(json.dumps({"title": sys.argv[1], "body": sys.stdin.read()}))' "$title" < "$body" > "$body.json"
           fi
+          curl -fsS -X POST -H "@$auth" -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' --data-binary "@$body.json" "$endpoint" > /dev/null

@@ -17,6 +17,10 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import { agentOpsApi } from '@/features/agentops/api'
+import {
+  AccountMarksContext,
+  type AccountMark,
+} from '@/features/agent-tools/account-marks'
 import type { ProviderAccountDTO, RunDTO } from '@/features/agentops/types'
 import { useClientSettings } from '@/features/settings/preferences'
 import { mergeSessions } from './provenance'
@@ -32,6 +36,11 @@ const auth = vi.hoisted(() => ({
   principal: { user_id: 'user-a' },
   can: (_: string): boolean => true,
 }))
+// SessionMeter draws its cost and policy links with the router's Link; this render has no
+// RouterProvider, so the fake router stands in for it (as the other console tests do).
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 
 vi.mock('./api', async (importOriginal) => ({
@@ -147,12 +156,15 @@ function resolutionFor(r: RunDTO): SessionResolution {
   }
 }
 
+/** The accounts the console knows, by profile reference: what the badge reads. */
+const accountMarks = new Map<string, AccountMark>()
+
 function renderThread(r: RunDTO = run(), props = {}) {
   const onOpenDetail = vi.fn()
   const onOpenContext = vi.fn()
   const resolution = resolutionFor(r)
   renderIntel(
-    <>
+    <AccountMarksContext.Provider value={accountMarks}>
       <SessionNarrative
         resolution={resolution}
         pinned={false}
@@ -170,7 +182,7 @@ function renderThread(r: RunDTO = run(), props = {}) {
           onExpandEvidence={() => {}}
         />
       </div>
-    </>,
+    </AccountMarksContext.Provider>,
   )
   return { onOpenDetail, onOpenContext }
 }
@@ -186,6 +198,7 @@ function openMenu() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  accountMarks.clear()
   auth.can = () => true
   useClientSettings.setState({ confirmStop: true })
   ops.interrupt.mockResolvedValue({ accepted: true })
@@ -196,7 +209,7 @@ beforeEach(() => {
 })
 
 describe('thread header — one line', () => {
-  it('says the state, the name, the folder, the tool and the usage once', () => {
+  it('says the state, the name, the folder and the tool once', () => {
     renderThread()
     const h = header()
     expect(h.className).toContain('h-12')
@@ -208,14 +221,13 @@ describe('thread header — one line', () => {
     const folder = within(h).getByTestId('narrative-folder')
     expect(folder).toHaveTextContent('demo')
     expect(folder.textContent).not.toContain('/home/olv')
+    // A breadcrumb as T3 draws it: the folder above, then the session's folder (#4014).
+    expect(folder.textContent).toBe('projects / demo')
     expect(folder).toHaveAttribute(
       'title',
       '/home/olv/work/W320/job-5cfa2f96/projects/demo',
     )
     expect(within(h).getByTestId('thread-tool').textContent).toBe('Codex')
-    expect(within(h).getByTestId('narrative-usage')).toHaveTextContent(
-      '12 in / 18 out tokens',
-    )
   })
 
   it('heads a session that has no name with the title the engine cut, and a name wins', () => {
@@ -228,6 +240,24 @@ describe('thread header — one line', () => {
     expect(
       within(header()).getByRole('heading', { level: 2 }),
     ).toHaveTextContent('calc-review')
+  })
+
+  it('names the account the session runs under with its dot and short label, in the header and the Context pane', () => {
+    accountMarks.set('ppf_codex', { label: 'Research', accent: 'teal' })
+    renderThread()
+    for (const place of [header(), screen.getByTestId('context-side')]) {
+      const badge = within(place).getByTestId('account-badge')
+      expect(badge).toHaveTextContent('Research')
+      expect(
+        badge.querySelector('[data-provider-accent="teal"]'),
+      ).not.toBeNull()
+    }
+  })
+
+  it('shows no account badge for a profile the console cannot place', () => {
+    accountMarks.set('ppf_other', { label: 'Other', accent: 'red' })
+    renderThread()
+    expect(within(header()).queryByTestId('account-badge')).toBeNull()
   })
 
   it('does not print the badges, the mode or the working-folder line in the header', () => {
@@ -546,7 +576,7 @@ describe('thread header — the session, then its tool', () => {
 // wide, the tool and the folder could not shrink, and the session's name was squeezed to
 // nothing while the controls were cut. The header measures its own pane, not the window.
 describe('thread header — in a narrow pane', () => {
-  it('keeps the name and gives way with the tool, the folder and the usage first', () => {
+  it('keeps the name and gives way with the tool and the folder first', () => {
     renderThread(run({ effort: 'high' }))
     const h = header()
     expect(h.className).toContain('@container/thread')
@@ -559,9 +589,6 @@ describe('thread header — in a narrow pane', () => {
     expect(within(h).getByTestId('narrative-folder').className).toContain(
       '@min-[40rem]/thread:inline-block',
     )
-    expect(
-      within(h).getByTestId('narrative-usage').parentElement!.className,
-    ).toContain('@min-[48rem]/thread:flex')
     // Nothing in the header follows the window's width any more.
     expect(h.innerHTML).not.toMatch(/min-\[(761|1100)px\]/)
   })
@@ -675,15 +702,27 @@ describe('thread header — the usage of the session account', () => {
     updated_at: '2026-10-01T10:00:00Z',
   })
 
-  it('says the 5-hour and weekly use of the session account beside its tool', async () => {
+  // THE TITLE IS THE ONE THING THE HEADER MUST LET A PERSON READ (#3938): the account's
+  // quota is the status bar's and the tokens are Details', not the header's, and the title
+  // keeps 16 characters before it gives way. jsdom has no layout, so this pins the arrangement.
+  it('keeps the account quota and the raw token totals out of the header and the title 16 characters wide', async () => {
     vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
       items: [account(41)],
       has_more: false,
     })
     renderThread()
-    const usage = await within(header()).findByTestId('account-usage')
-    expect(usage).toHaveTextContent('5-hour 41% · Weekly 17%')
+    await waitFor(() => expect(agentOpsApi.listAccounts).toHaveBeenCalled())
+    // The account read answers after the call: let it render before saying it is absent.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    // The header names the session, its tool and state; the account's 5-hour and weekly
+    // use is the status bar's, the tokens and cost are Details'.
+    expect(within(header()).queryByTestId('account-usage')).toBeNull()
+    expect(header()).not.toHaveTextContent(/Weekly|5-hour|tokens/)
     expect(within(header()).queryByText(/limit reached/)).toBeNull()
+    const title = within(header()).getByRole('heading', { level: 2 })
+    expect(title.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['min-w-[16ch]', 'truncate']),
+    )
   })
 
   it('marks the session account at its limit, with when it resets', async () => {

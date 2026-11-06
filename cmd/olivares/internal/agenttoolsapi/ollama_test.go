@@ -7,6 +7,7 @@ package agenttoolsapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -49,13 +50,34 @@ func TestFakeOllamaProcess(t *testing.T) {
 		}()
 	})
 	mux.HandleFunc("/api/tags", func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := os.Stat(filepath.Join(dir, "..", "tags-failure")); err == nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "tags unavailable"})
+			return
+		}
 		entries, _ := os.ReadDir(dir)
-		var models []map[string]string
+		var models []map[string]any
 		for _, e := range entries {
 			name, _ := url.QueryUnescape(e.Name())
-			models = append(models, map[string]string{"name": name})
+			info, _ := e.Info()
+			models = append(models, map[string]any{"name": name, "size": info.Size()})
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"models": models})
+	})
+	mux.HandleFunc("/api/delete", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		if in.Model == "busy:1" {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "model is in use"})
+			return
+		}
+		if r.Method != http.MethodDelete || os.Remove(filepath.Join(dir, url.QueryEscape(in.Model))) != nil {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "model '" + in.Model + "' not found"})
+		}
 	})
 	mux.HandleFunc("/api/pull", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -64,12 +86,29 @@ func TestFakeOllamaProcess(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		enc := json.NewEncoder(w)
 		_ = enc.Encode(map[string]any{"status": "pulling manifest"})
+		w.(http.Flusher).Flush()
+		switch in.Model {
+		case "hang:1": // never finishes; notes that the client went away
+			<-r.Context().Done()
+			_ = os.WriteFile(filepath.Join(dir, "..", "client-went-away"), nil, 0o600)
+			return
+		case "dies:1": // the stream ends without success
+			_ = enc.Encode(map[string]any{"status": "pulling 7c2f", "total": 100, "completed": 10})
+			return
+		case "broken:1": // Ollama's last line is not JSON: keep it for the error
+			_ = enc.Encode(map[string]any{"status": "pulling 7c2f"})
+			_, _ = w.Write([]byte("not-json\n"))
+			return
+		case "bad:1":
+			_ = enc.Encode(map[string]any{"error": "pull model manifest: file does not exist"})
+			return
+		}
 		for _, done := range []int{40, 100} {
 			_ = enc.Encode(map[string]any{"status": "pulling 7c2f", "digest": "sha256:7c2f", "total": 100, "completed": done})
 			w.(http.Flusher).Flush()
 			time.Sleep(50 * time.Millisecond)
 		}
-		if err := os.WriteFile(filepath.Join(dir, url.QueryEscape(in.Model)), nil, 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, url.QueryEscape(in.Model)), make([]byte, 100), 0o600); err != nil {
 			_ = enc.Encode(map[string]any{"error": "fixture model could not be stored"})
 			return
 		}
@@ -80,19 +119,19 @@ func TestFakeOllamaProcess(t *testing.T) {
 }
 
 type ollamaFixture struct {
-	addr      string
-	models    string
-	bin       string
-	cfg       OllamaConfig
-	mu        sync.Mutex
-	endpoint  string
-	tenant    model.TenantID
-	registers int
-	store     store.Store
-	mod       *Module
-	gate      chan struct{} // when set, Register waits for it to close
-	entered   int
-	// The fake container CLI and its call log, made on first use (ollama_container_test.go).
+	addr         string
+	models       string
+	bin          string
+	cfg          OllamaConfig
+	mu           sync.Mutex
+	endpoint     string
+	tenant       model.TenantID
+	registers    int
+	registerErr  error
+	store        store.Store
+	mod          *Module
+	gate         chan struct{} // when set, Register waits for it to close
+	entered      int
 	containerCLI string
 	containerLog string
 }
@@ -135,8 +174,9 @@ func newOllamaServer(t *testing.T) (call func(string, string, any) (int, map[str
 				f.mu.Lock()
 				f.endpoint, f.tenant = endpoint, tenant
 				f.registers++
+				err := f.registerErr
 				f.mu.Unlock()
-				return nil
+				return err
 			},
 		}
 		m.UseOllama(f.cfg)
@@ -232,6 +272,285 @@ func TestOllamaDownloadsAModelWithItsProgress(t *testing.T) {
 	_, st := call("GET", "/v1/m/agenttools/ollama", nil)
 	if models, _ := st["models"].([]any); len(models) != 1 || models[0] != "qwen2.5:0.5b" {
 		t.Fatalf("models = %v", st["models"])
+	}
+}
+
+// pullUntil polls one download until it leaves "running" (or the wanted state is read).
+func pullUntil(t *testing.T, call func(string, string, any) (int, map[string]any), id, want string) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		code, p := call("GET", "/v1/m/agenttools/ollama/pulls/"+id, nil)
+		if code == 200 && p["state"] == want {
+			return p
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the download never reached %q: %d %v", want, code, p)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// The installed list carries what each model takes on disk, from Ollama's own tags.
+func TestOllamaStatusReportsEachModelsSize(t *testing.T) {
+	call, _ := newOllamaServer(t)
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "qwen2.5:0.5b"})
+	pullUntil(t, call, p["id"].(string), "succeeded")
+	_, st := call("GET", "/v1/m/agenttools/ollama", nil)
+	sizes, _ := st["model_sizes"].(map[string]any)
+	if len(sizes) != 1 || sizes["qwen2.5:0.5b"] != float64(100) {
+		t.Fatalf("model_sizes = %v, want qwen2.5:0.5b=100 (status %v)", st["model_sizes"], st)
+	}
+}
+
+// Cancel ends the download, tells Ollama (the connection closes, so it stops pulling),
+// frees the slot for another download, and is safe to repeat.
+func TestOllamaCancelsADownloadAndTellsOllama(t *testing.T) {
+	call, f := newOllamaServer(t)
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "hang:1"})
+	id := p["id"].(string)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		_, p = call("GET", "/v1/m/agenttools/ollama/pulls/"+id, nil)
+		if p["status"] == "pulling manifest" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the download never started: %v", p)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	// The answer is the end state itself, not "running" until the worker notices.
+	if code, p := call("DELETE", "/v1/m/agenttools/ollama/pulls/"+id, nil); code != 200 || p["state"] != "failed" || p["error"] != "Download cancelled." {
+		t.Fatalf("cancel = %d %v, want failed with %q", code, p, "Download cancelled.")
+	}
+	p = pullUntil(t, call, id, "failed")
+	if p["error"] != "Download cancelled." {
+		t.Fatalf("cancelled download error = %v, want %q", p["error"], "Download cancelled.")
+	}
+	marker := filepath.Join(f.models, "..", "client-went-away")
+	deadline = time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(marker); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Ollama never saw the download end: cancel did not close its stream")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if code, again := call("DELETE", "/v1/m/agenttools/ollama/pulls/"+id, nil); code != 200 || again["error"] != "Download cancelled." {
+		t.Fatalf("second cancel = %d %v, want the same cancelled download", code, again)
+	}
+	if code, _ := call("DELETE", "/v1/m/agenttools/ollama/pulls/no-such-download", nil); code != 404 {
+		t.Fatalf("cancel of an unknown download = %d, want 404", code)
+	}
+	if code, q := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "qwen2.5:0.5b"}); code != 202 {
+		t.Fatalf("a download after a cancel = %d %v", code, q)
+	}
+}
+
+// Ollama has already downloaded the model when its success line arrives. Cancelling the
+// remaining provider synchronization cannot turn that installed model into a failed download.
+func TestOllamaCancelAfterDownloadSuccessDoesNotMarkItFailed(t *testing.T) {
+	call, f := newOllamaServer(t)
+	org := seedOrg(t, f.store, "Second", "second")
+	call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org.String()})
+	waitOllama(t, call, "running")
+
+	gate := make(chan struct{})
+	f.mu.Lock()
+	f.gate = gate
+	f.mu.Unlock()
+	var once sync.Once
+	release := func() { once.Do(func() { close(gate) }) }
+	t.Cleanup(release)
+	_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "qwen2.5:0.5b"})
+	id := p["id"].(string)
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		f.mu.Lock()
+		entered := f.entered
+		f.mu.Unlock()
+		if entered >= 2 { // the success line is in; registration has not returned
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the download never reached registration after its success line")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if code, cancelled := call("DELETE", "/v1/m/agenttools/ollama/pulls/"+id, nil); code != 200 || cancelled["state"] != "running" {
+		t.Fatalf("cancel after Ollama finished = %d %v, want synchronization to finish", code, cancelled)
+	}
+	release()
+	p = pullUntil(t, call, id, "succeeded")
+	if p["error"] != nil {
+		t.Fatalf("a completed download was marked failed: %v", p)
+	}
+}
+
+// Cancelling a download that already finished changes nothing: it stays succeeded.
+func TestOllamaCancelOfAFinishedDownloadKeepsItSucceeded(t *testing.T) {
+	call, _ := newOllamaServer(t)
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "qwen2.5:0.5b"})
+	id := p["id"].(string)
+	pullUntil(t, call, id, "succeeded")
+	if code, p := call("DELETE", "/v1/m/agenttools/ollama/pulls/"+id, nil); code != 200 || p["state"] != "succeeded" {
+		t.Fatalf("cancel of a finished download = %d %v, want it to stay succeeded", code, p)
+	}
+}
+
+// A failed download says what Ollama last said, never only a generic line.
+func TestOllamaFailedDownloadKeepsOllamasLastLine(t *testing.T) {
+	call, _ := newOllamaServer(t)
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	for model, want := range map[string]string{
+		"bad:1":    "Ollama: pull model manifest: file does not exist",
+		"dies:1":   "pulling 7c2f",
+		"broken:1": "not-json",
+	} {
+		_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": model})
+		p = pullUntil(t, call, p["id"].(string), "failed")
+		if got, _ := p["error"].(string); !strings.Contains(got, want) {
+			t.Errorf("%s: error = %q, want it to carry %q", model, got, want)
+		}
+	}
+}
+
+// Remove deletes the model from the Ollama the engine runs (its own models directory,
+// which a terminal's `ollama rm` would not reach), records who did it, and the list and
+// sizes follow.
+func TestOllamaRemovesAnInstalledModelAndRecordsIt(t *testing.T) {
+	call, _ := newOllamaServer(t)
+	_, caller := call("GET", "/v1/auth/whoami", nil)
+	actor, _ := caller["actor"].(string)
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "qwen2.5:0.5b"})
+	pullUntil(t, call, p["id"].(string), "succeeded")
+	code, st := call("DELETE", "/v1/m/agenttools/ollama/models", map[string]string{"model": "qwen2.5:0.5b"})
+	if models, _ := st["models"].([]any); code != 200 || len(models) != 0 || st["model_sizes"] != nil {
+		t.Fatalf("remove = %d %v, want 200 and no model left", code, st)
+	}
+	_, st = call("GET", "/v1/m/agenttools/ollama", nil)
+	if models, _ := st["models"].([]any); len(models) != 0 {
+		t.Fatalf("the model is still listed after remove: %v", st)
+	}
+	code, ledger := call("GET", "/v1/audit/system?action=agenttools.ollama.model_remove", nil)
+	items, _ := ledger["items"].([]any)
+	if code != 200 || len(items) != 1 {
+		t.Fatalf("audit = %d %v, want one model_remove event", code, ledger)
+	}
+	if ev, _ := items[0].(map[string]any); ev["actor"] != actor || ev["actor_kind"] != "user" {
+		t.Fatalf("model_remove event = %v, want actor %q", ev, actor)
+	}
+}
+
+func TestOllamaReadOnlyControlPlaneDoesNotRemoveModels(t *testing.T) {
+	call, f := newOllamaServer(t)
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "qwen2.5:0.5b"})
+	pullUntil(t, call, p["id"].(string), "succeeded")
+	f.mod.readOnly = true
+	code, st := call("DELETE", "/v1/m/agenttools/ollama/models", map[string]string{"model": "qwen2.5:0.5b"})
+	if code != 409 || st["error"].(map[string]any)["code"] != "read_only" {
+		t.Fatalf("read-only remove = %d %v, want read_only", code, st)
+	}
+	_, st = call("GET", "/v1/m/agenttools/ollama", nil)
+	if models, _ := st["models"].([]any); len(models) != 1 {
+		t.Fatalf("read-only remove deleted the model: %v", st)
+	}
+}
+
+func TestOllamaRemoveKeepsOllamasFailureAndTheInstalledModel(t *testing.T) {
+	call, _ := newOllamaServer(t)
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "busy:1"})
+	pullUntil(t, call, p["id"].(string), "succeeded")
+	code, st := call("DELETE", "/v1/m/agenttools/ollama/models", map[string]string{"model": "busy:1"})
+	message, _ := st["error"].(map[string]any)["message"].(string)
+	if code != 502 || !strings.Contains(message, "Ollama: model is in use") {
+		t.Fatalf("failed remove = %d %v, want Ollama's own error", code, st)
+	}
+	_, st = call("GET", "/v1/m/agenttools/ollama", nil)
+	if models, _ := st["models"].([]any); len(models) != 1 || models[0] != "busy:1" {
+		t.Fatalf("failed remove lost the installed model: %v", st)
+	}
+}
+
+func TestOllamaStatusSaysWhenTheModelListCannotBeRead(t *testing.T) {
+	call, f := newOllamaServer(t)
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	if err := os.WriteFile(filepath.Join(f.models, "..", "tags-failure"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, st := call("GET", "/v1/m/agenttools/ollama", nil)
+	message, _ := st["models_error"].(string)
+	if code != 200 || !strings.Contains(message, "tags unavailable") {
+		t.Fatalf("status with a failed tags read = %d %v, want models_error", code, st)
+	}
+	if models, _ := st["models"].([]any); len(models) != 0 {
+		t.Fatalf("failed tags read returned models: %v", models)
+	}
+}
+
+func TestOllamaRemoveRefusesWhatItCannotDo(t *testing.T) {
+	call, _ := newOllamaServer(t)
+	if code, _ := call("DELETE", "/v1/m/agenttools/ollama/models", map[string]string{"model": "qwen2.5:0.5b"}); code != 409 {
+		t.Fatalf("remove while stopped = %d, want 409", code)
+	}
+	call("POST", "/v1/m/agenttools/ollama/start", nil)
+	waitOllama(t, call, "running")
+	for _, bad := range []string{"", "-rm", "a b", "../../x"} {
+		if code, _ := call("DELETE", "/v1/m/agenttools/ollama/models", map[string]string{"model": bad}); code != 400 {
+			t.Errorf("remove %q = %d, want 400", bad, code)
+		}
+	}
+	code, st := call("DELETE", "/v1/m/agenttools/ollama/models", map[string]string{"model": "never-installed:1"})
+	if code != 404 {
+		t.Fatalf("remove of a model that is not installed = %d %v, want 404", code, st)
+	}
+}
+
+// A download and removal change Ollama even when the tenant's provider record cannot
+// follow. Report that partial result honestly instead of discarding the probe failure.
+func TestOllamaReportsProviderSyncFailuresWithoutLosingModelFacts(t *testing.T) {
+	call, f := newOllamaServer(t)
+	org := seedOrg(t, f.store, "Second", "second")
+	call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org.String()})
+	waitOllama(t, call, "running")
+	f.mu.Lock()
+	f.registerErr = errors.New("provider probe unavailable")
+	f.mu.Unlock()
+	_, p := call("POST", "/v1/m/agenttools/ollama/pulls", map[string]string{"model": "qwen2.5:0.5b"})
+	p = pullUntil(t, call, p["id"].(string), "succeeded")
+	syncError, _ := p["error"].(string)
+	if !strings.Contains(syncError, "provider probe unavailable") {
+		t.Fatalf("succeeded pull hid the provider sync failure: %v", p)
+	}
+	_, st := call("GET", "/v1/m/agenttools/ollama", nil)
+	if models, _ := st["models"].([]any); len(models) != 1 {
+		t.Fatalf("the model Ollama installed is missing: %v", st)
+	}
+	code, st := call("DELETE", "/v1/m/agenttools/ollama/models", map[string]string{"model": "qwen2.5:0.5b"})
+	message, _ := st["error"].(map[string]any)["message"].(string)
+	if code != 502 || !strings.Contains(message, "provider probe unavailable") {
+		t.Fatalf("remove hid the provider sync failure: %d %v", code, st)
+	}
+	_, st = call("GET", "/v1/m/agenttools/ollama", nil)
+	if models, _ := st["models"].([]any); len(models) != 0 {
+		t.Fatalf("the model was not removed from Ollama: %v", st)
 	}
 }
 

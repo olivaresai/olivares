@@ -23,6 +23,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/xxii-health',
     icon: HeartPulse,
     permission: 'health:status:read',
+    changes: [
+      { permission: 'health:check:write' },
+      { permission: 'health:check:admin' },
+    ],
     element: lazyView(HealthView),
   },
 ] satisfies ViewEntry[]

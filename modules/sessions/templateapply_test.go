@@ -217,7 +217,8 @@ func TestTemplateTerms_NamesEveryTermItCannotKeep(t *testing.T) {
 // assertion in this file is satisfied by a reducer that refuses everything — which would
 // refuse every template in the product and still look green.
 //
-// A seeded built-in that refuses its own launch is a defect we ship: it is written into
+// Except for the intentionally disabled No AI preset, a seeded built-in that refuses
+// its own launch is a defect we ship: it is written into
 // every tenant and its description is read as a security posture. Three of them do, and
 // the reasons are named here so the price is visible in the test rather than discovered
 // by an operator:
@@ -231,6 +232,7 @@ func TestBuiltinsAreLaunchableOrRefusedForAReasonWeWroteDown(t *testing.T) {
 	t.Parallel()
 
 	refusedFor := map[string][]string{
+		"AIAS 1 — No AI":     {"sessions_disabled"}, // intentionally refuses sessions
 		"Refactoring":        {"hooks"},
 		"Security Audit":     {"hooks", "dlp_mode"},
 		"Secure Development": {"dlp_mode"},

@@ -33,8 +33,8 @@ import (
 // scratch registry, and with it the guard edition, is the one the snapshot was written under.
 func verifyBundleScratch(ctx context.Context, tmpDir string, m *dr.Manifest, cipher *dr.KeyCipher, register func(store.ExtensionRegistry) error) (*dr.RestoreReport, error) {
 	if m.EngineKind != "sqlite" {
-		// The console DR surface is SQLite-only (Postgres uses the CLI + pg_restore);
-		// a scratch chain verify for Postgres needs a scratch Postgres (see the runbook).
+		// SQLite promotion uses this directory verifier. PostgreSQL console restore
+		// uses the composition root's scratch database verifier.
 		return nil, fmt.Errorf("scratch verify supports the sqlite engine only, bundle is %q", m.EngineKind)
 	}
 	priv, err := decryptAuditKey(tmpDir, m, cipher)

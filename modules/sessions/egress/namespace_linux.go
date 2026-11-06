@@ -353,6 +353,12 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 	}
 	argv := append([]string{"__olivares_confine", stage, strconv.Itoa(req.ReadyFD)}, helperArgs...)
 	child := exec.Command(self, argv...) // #nosec G204 -- reexecutes the engine's existing helper
+	if req.Policy.OwnNetwork {
+		// Only the relays stand between the tool and the engine: the tool runs as it
+		// would without them, on the runtime's own network, with no proxy variable and
+		// no socket filter.
+		child = exec.Command(req.Args[0], req.Args[1:]...) // #nosec G204 -- the engine's own container runner supplies the program and argv; no shell
+	}
 	child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
 	var caFile string
 	if len(req.CAPEM) != 0 {
@@ -367,7 +373,10 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 			return 126, err
 		}
 	}
-	child.Env = proxyEnvironment(os.Environ(), "http://"+proxyListener.Addr().String(), caFile, req.Policy.LoopbackPorts)
+	child.Env = os.Environ()
+	if !req.Policy.OwnNetwork {
+		child.Env = proxyEnvironment(child.Env, "http://"+proxyListener.Addr().String(), caFile, req.Policy.LoopbackPorts)
+	}
 	child.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	// Pdeathsig fires when the starting thread exits, not the process; keep
 	// this goroutine on that thread for the supervisor's whole life.
@@ -375,9 +384,16 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 	for i := 0; i < req.Files; i++ {
 		child.ExtraFiles = append(child.ExtraFiles, os.NewFile(uintptr(3+i), "session-grant"))
 	}
-	child.ExtraFiles = append(child.ExtraFiles, ready)
+	if !req.Policy.OwnNetwork { // the exec stage reports readiness once its filter is in place
+		child.ExtraFiles = append(child.ExtraFiles, ready)
+	}
 	if err := child.Start(); err != nil {
 		return 126, err
+	}
+	if req.Policy.OwnNetwork {
+		if _, err := ready.WriteString("ready\n"); err != nil {
+			return 126, err
+		}
 	}
 	_ = ready.Close()
 	for _, f := range child.ExtraFiles[:req.Files] {

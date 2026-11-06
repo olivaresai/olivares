@@ -9,24 +9,12 @@
     "unavailableDescription": "La lectura de sesiones no ha respondido. Las cifras de arriba no se ven afectadas.",
     "untitled": "Sesión sin título"
   },
-  "live": {
-    "title": "En curso"
-  },
   "empty": {
     "title": "Aún no hay nada que mostrar",
     "description": "Tu rol no concede acceso de lectura a ningún módulo del patrimonio. Pide a un administrador un permiso de lectura para ver el resumen."
   },
-  "start": {
-    "ready": "{{tool}} está listo.",
-    "signIn": "Inicia sesión en {{tool}} para empezar una sesión.",
-    "signInAction": "Iniciar sesión",
-    "install": "Instala Claude Code o Codex para empezar una sesión.",
-    "installAction": "Preparar una herramienta",
-    "newSession": "Nueva sesión"
-  },
   "swimlane": {
     "title": "Última hora",
-    "subtitle": "De {{from}} a {{to}}. Cada barra es una ejecución, más intensa donde hizo más llamadas a herramientas.",
     "lanes": "Sesiones de la última hora",
     "now": "Ahora {{at}}",
     "range": "{{from}} a {{to}}",
@@ -64,44 +52,23 @@
     "waiting": "Esperando aprobación",
     "needsYou": "Te necesita",
     "idle": "Inactiva",
-    "approvalsUnread": "No se pudieron leer las aprobaciones, así que no se dibujan las esperas de aprobación."
+    "approvalsUnread": "Las aprobaciones aún no se han leído o no se pudieron leer, así que no se dibujan las esperas de aprobación.",
+    "approvalsPartial": "Solo se leyó una parte de las aprobaciones, así que algunas esperas de aprobación podrían no dibujarse.",
+    "step": {
+      "Bash": "Ejecuta {{what}}",
+      "Read": "Lee {{what}}",
+      "Edit": "Edita {{what}}",
+      "Write": "Escribe {{what}}",
+      "Grep": "Busca {{what}}",
+      "Glob": "Busca archivos {{what}}",
+      "WebFetch": "Lee {{what}}",
+      "WebSearch": "Busca en la web {{what}}",
+      "Task": "Trabaja con un agente",
+      "Agent": "Trabaja con un agente"
+    }
   },
-  "summary": {
-    "heading": "Resumen",
-    "nothingRunning": "No hay nada en marcha",
-    "running_one": "{{count}} sesión abierta",
-    "running_many": "{{count}} sesiones abiertas",
-    "running_other": "{{count}} sesiones abiertas",
-    "runningFor_one": "{{count}} sesión abierta para {{people}}",
-    "runningFor_many": "{{count}} sesiones abiertas para {{people}}",
-    "runningFor_other": "{{count}} sesiones abiertas para {{people}}",
-    "runningMore": "{{n}}+ sesiones abiertas",
-    "people_one": "{{count}} persona",
-    "people_many": "{{count}} personas",
-    "people_other": "{{count}} personas",
-    "today": "{{amount}} hoy",
-    "todayFloor": "al menos {{amount}} hoy",
-    "needs_one": "{{count}} te necesita",
-    "needs_many": "{{count}} te necesitan",
-    "needs_other": "{{count}} te necesitan",
-    "needsMore": "{{n}}+ te necesitan",
-    "yesterday": "Ayer {{amount}}",
-    "unpriced_one": "{{count}} sin coste informado",
-    "unpriced_many": "{{count}} sin coste informado",
-    "unpriced_other": "{{count}} sin coste informado",
-    "month": "{{spent}} de {{limit}} este mes",
-    "monthFloor": "al menos {{spent}} de {{limit}} este mes",
-    "monthLabel": "Gasto de este mes"
-  },
-  "state": {
-    "pendingIdle": "Consulta no iniciada — abre para cargar",
-    "pendingPaused": "Consulta en pausa — esperando para reanudar"
-  },
-  "proof": {
-    "verified": "Cadena verificada a las {{time}}",
-    "entries_one": "{{n}} entrada",
-    "entries_many": "{{n}} entradas",
-    "entries_other": "{{n}} entradas",
-    "broken": "Cadena rota: abre el Registro"
+  "overview": {
+    "running": "En marcha",
+    "recent": "Recientes"
   }
 }

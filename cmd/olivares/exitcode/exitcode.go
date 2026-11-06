@@ -53,6 +53,12 @@ const (
 	CostCap = 13
 	// SessionLimit means another tool or policy limit stopped the run.
 	SessionLimit = 14
+	// Refused means the engine refused to boot on a configuration or a store that
+	// only an operator can change: a store whose core schema a newer release
+	// wrote, or a PostgreSQL package upgrade without the --admin-dsn its
+	// pre-migration snapshot needs. Starting the same binary again fails the same
+	// way, so the systemd unit does not restart `serve` on it.
+	Refused = 15
 )
 
 // coded wraps an error with the exit code the process must return.

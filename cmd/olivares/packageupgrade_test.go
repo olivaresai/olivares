@@ -16,7 +16,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -80,12 +82,72 @@ func TestPackageUpgradeSnapshotBeforeBootMigrations(t *testing.T) {
 	}
 }
 
+// A request whose migration already ran is done: deleting its snapshot, or a disk that can no longer
+// hold a copy, must not make a later start copy the migrated store again or refuse to boot. That holds
+// for a store the package never started too, whose first start creates and migrates it. A new request
+// (the next package transaction) still takes its own snapshot.
+func TestPackageUpgradeSnapshotConsumedAfterMigration(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		neverRun  bool
+		snapshots int
+	}{{"existing store", false, 1}, {"never-started store", true, 0}} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, request, cfg := packageSnapshotFixture(t)
+			if tc.neverRun {
+				if err := os.Remove(cfg.DSN); err != nil {
+					t.Fatal(err)
+				}
+			}
+			start := func() error {
+				eng, err := boot(context.Background(), bootConfig{DataDir: dir, Engine: "sqlite", DSN: cfg.DSN,
+					Version: "test", ServeMode: true, upgradeSnapshotRequest: request,
+					Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+				if eng != nil {
+					_ = eng.Close()
+				}
+				return err
+			}
+			if err := start(); err != nil {
+				t.Fatal(err)
+			}
+			if n := len(packageSnapshots(t, dir)); n != tc.snapshots {
+				t.Fatalf("first start published %d snapshots, want %d", n, tc.snapshots)
+			}
+			// The operator frees disk as the docs allow; a file named backups stands for a disk that
+			// cannot hold another copy.
+			backups := filepath.Join(dir, "backups")
+			if err := os.RemoveAll(backups); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(backups, []byte("full"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := start(); err != nil {
+				t.Fatalf("a start after the migration took a snapshot again: %v", err)
+			}
+			if err := os.Remove(backups); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(request, []byte("upgrade-snapshot.transaction2\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := start(); err != nil {
+				t.Fatal(err)
+			}
+			if n := len(packageSnapshots(t, dir)); n != 1 {
+				t.Fatalf("the next package transaction published %d snapshots, want 1", n)
+			}
+		})
+	}
+}
+
 func TestPackageUpgradeSnapshotRetryAndConcurrentBoots(t *testing.T) {
 	dir, request, cfg := packageSnapshotFixture(t)
 	var wg sync.WaitGroup
 	for range 2 {
 		wg.Go(func() {
-			if err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err != nil {
+			if _, err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err != nil {
 				t.Error(err)
 			}
 		})
@@ -104,7 +166,7 @@ func TestPackageUpgradeSnapshotRetryAndConcurrentBoots(t *testing.T) {
 		t.Fatalf("snapshot permissions: %v %v", st, err)
 	}
 	packageSnapshotSQL(t, cfg.DSN, "UPDATE upgrade_witness SET value='after'")
-	if err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err != nil {
+	if _, err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(files[0])
@@ -114,7 +176,7 @@ func TestPackageUpgradeSnapshotRetryAndConcurrentBoots(t *testing.T) {
 	if err := os.WriteFile(request, []byte("upgrade-snapshot.transaction2\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err != nil {
+	if _, err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err != nil {
 		t.Fatal(err)
 	}
 	if len(packageSnapshots(t, dir)) != 2 {
@@ -149,7 +211,7 @@ func TestPackageUpgradeSnapshotFailureBlocksMigrations(t *testing.T) {
 
 func TestPackageUpgradeSnapshotAbsentAndInvalidRequest(t *testing.T) {
 	dir, request, cfg := packageSnapshotFixture(t)
-	if err := snapshotPackageUpgrade(context.Background(), request+"-absent", dir, cfg); err != nil {
+	if _, err := snapshotPackageUpgrade(context.Background(), request+"-absent", dir, cfg); err != nil {
 		t.Fatal(err)
 	}
 	if len(packageSnapshots(t, dir)) != 0 {
@@ -158,7 +220,7 @@ func TestPackageUpgradeSnapshotAbsentAndInvalidRequest(t *testing.T) {
 	if err := os.WriteFile(request, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err == nil {
+	if _, err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err == nil {
 		t.Fatal("empty request silently bypassed the snapshot")
 	}
 }
@@ -169,7 +231,7 @@ func TestPackageUpgradeSnapshotPostgres(t *testing.T) {
 	source.exec(t, "CREATE TABLE package_upgrade_witness (value text); INSERT INTO package_upgrade_witness VALUES ('before')")
 	dir, request, _ := packageSnapshotFixture(t)
 	cfg := store.Config{Engine: store.EnginePostgres, DSN: source.dsn, AllowPrivilegedRole: true}
-	if err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err != nil {
+	if _, err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err != nil {
 		t.Fatal(err)
 	}
 	files, err := filepath.Glob(filepath.Join(dir, "backups", "pre-upgrade", "*", "dump.pgcustom"))
@@ -192,7 +254,7 @@ func TestPackageUpgradeSnapshotPostgres(t *testing.T) {
 	if err := os.WriteFile(request, []byte("upgrade-snapshot.wrongdatabase\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err == nil || !strings.Contains(err.Error(), "reached database") {
+	if _, err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err == nil || !strings.Contains(err.Error(), "reached database") {
 		t.Fatalf("wrong admin database was not refused: %v", err)
 	}
 	files, _ = filepath.Glob(filepath.Join(dir, "backups", "pre-upgrade", "*", "dump.pgcustom"))
@@ -217,7 +279,7 @@ func TestPackageUpgradeSnapshotPostgresInvalidOutput(t *testing.T) {
 			}
 			t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 			cfg := store.Config{Engine: store.EnginePostgres, DSN: source.dsn, AllowPrivilegedRole: true}
-			err := snapshotPackageUpgrade(t.Context(), request, dir, cfg)
+			_, err := snapshotPackageUpgrade(t.Context(), request, dir, cfg)
 			if missing {
 				var pathErr *os.PathError
 				if !errors.Is(err, os.ErrNotExist) || !errors.As(err, &pathErr) || pathErr.Op != "stat" {
@@ -241,7 +303,7 @@ func TestPackageUpgradeSnapshotPostgresSplitRoles(t *testing.T) {
 	source.seed(t, dir)
 	cfg := store.Config{Engine: store.EnginePostgres, DSN: source.appDSN,
 		OwnerDSN: source.ownerDSN, AdminDSN: source.adminDSN}
-	if err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err != nil {
+	if _, err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err != nil {
 		t.Fatal(err)
 	}
 	files, err := filepath.Glob(filepath.Join(dir, "backups", "pre-upgrade", "*", "dump.pgcustom"))
@@ -261,8 +323,13 @@ func TestPackageUpgradeSnapshotPostgresSplitRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.AdminDSN = ""
-	if err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err == nil || !strings.Contains(err.Error(), "--admin-dsn") {
+	_, err = snapshotPackageUpgrade(t.Context(), request, dir, cfg)
+	if err == nil || !strings.Contains(err.Error(), "--admin-dsn") {
 		t.Fatalf("ordinary app role silently used as backup fallback: %v", err)
+	}
+	// Only an operator can add the admin DSN, so the unit must not restart on it.
+	if got := exitcode.From(err); got != exitcode.Refused {
+		t.Fatalf("missing --admin-dsn exits %d, want Refused (%d)", got, exitcode.Refused)
 	}
 }
 
@@ -274,7 +341,7 @@ func TestPackageUpgradeSnapshotAncestorSyncFailure(t *testing.T) {
 			t.Run(fmt.Sprintf("retry=%t/%s", retry, ancestor), func(t *testing.T) {
 				dir, request, cfg := packageSnapshotFixture(t)
 				if retry {
-					if err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err != nil {
+					if _, err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -284,7 +351,7 @@ func TestPackageUpgradeSnapshotAncestorSyncFailure(t *testing.T) {
 					"data":        dir,
 				}
 				injected := errors.New("injected directory sync failure")
-				err := snapshotPackageUpgradeWithSync(t.Context(), request, dir, cfg, func(path string) error {
+				_, err := snapshotPackageUpgradeWithSync(t.Context(), request, dir, cfg, func(path string) error {
 					if path == paths[ancestor] {
 						return injected
 					}
@@ -302,7 +369,7 @@ func TestPackageUpgradeSnapshotAncestorSyncFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 				packageSnapshotSQL(t, cfg.DSN, "UPDATE upgrade_witness SET value='after'")
-				if err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err != nil {
+				if _, err := snapshotPackageUpgrade(t.Context(), request, dir, cfg); err != nil {
 					t.Fatal(err)
 				}
 				after, err := os.ReadFile(files[0])
@@ -311,5 +378,25 @@ func TestPackageUpgradeSnapshotAncestorSyncFailure(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// The pre-migration snapshot has no time limit of its own: a large store on a slow disk takes
+// as long as it takes, and the first start after the upgrade waits for it instead of failing.
+func TestPackageUpgradeSnapshotHasNoDeadline(t *testing.T) {
+	dir, request, cfg := packageSnapshotFixture(t)
+	prev := packageSnapshotSQLite
+	t.Cleanup(func() { packageSnapshotSQLite = prev })
+	packageSnapshotSQLite = func(ctx context.Context, src, dst string) error {
+		if deadline, ok := ctx.Deadline(); ok {
+			return fmt.Errorf("the snapshot would be cut at %s", deadline.Format(time.RFC3339))
+		}
+		return prev(ctx, src, dst)
+	}
+	if _, err := snapshotPackageUpgrade(context.Background(), request, dir, cfg); err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if got := packageSnapshots(t, dir); len(got) != 1 {
+		t.Fatalf("snapshots = %v, want one", got)
 	}
 }

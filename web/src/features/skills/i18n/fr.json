@@ -103,6 +103,33 @@
     "acts": "{{skill}} agit désormais au chargement : {{items}}. L’affecter demande votre approbation.",
     "pinsKeep": "Les affectations existantes gardent leur révision tant que vous ne déplacez pas chacune avec « Utiliser la dernière ».",
     "apply": "Appliquer cette mise à jour",
-    "applied": "Mise à jour publiée en révision {{n}}"
+    "applied": "Mise à jour publiée en révision {{n}}",
+    "checked": "Vérifié",
+    "noDiff": "Aucune différence textuelle disponible."
+  },
+  "catalog": {
+    "skills": "Compétences",
+    "packs": "Paquets",
+    "name": "Nom",
+    "description": "Description",
+    "kind": "Type",
+    "search": "Rechercher par nom et description",
+    "unassigned": "Non attribué",
+    "loading": "Chargement…",
+    "incomplete": "Certaines révisions manquent ; les attributions peuvent être incomplètes.",
+    "skill": "Compétence",
+    "agent": "Agent",
+    "command": "Commande",
+    "rule": "Règle"
+  },
+  "selection": {
+    "loading": "Vérification des compétences…",
+    "count_one": "Cette session reçoit {{count}} compétence",
+    "count_other": "Cette session reçoit {{count}} compétences",
+    "count_many": "Cette session reçoit {{count}} de compétences",
+    "current_one": "Actuellement attribuée : {{count}} compétence",
+    "current_other": "Actuellement attribuées : {{count}} compétences",
+    "current_many": "Actuellement attribuées : {{count}} de compétences",
+    "unavailable": "Impossible de déterminer les compétences de ce département."
   }
 }

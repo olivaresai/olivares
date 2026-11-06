@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE NAVIGATION AND THE NOW HEADER IN A REAL BROWSER (#3121, the one left navigation of
-// 0.5), on the seeded demo engine scripts/web-e2e-demo.sh boots. What jsdom cannot measure is
-// measured here: the Now header keeps its height while the page loads, the search hint names
-// this platform's key, the left navigation cuts no label and folds from the keyboard, the
-// narrow drawer holds the same places, and a retired area directory keeps its query and hash.
+// THE NAVIGATION AND THE OVERVIEW HEADER IN A REAL BROWSER (#3121, the one left navigation of
+// 0.5, its 0.7 places), on the seeded demo engine scripts/web-e2e-demo.sh boots. What jsdom
+// cannot measure is measured here: the Overview header keeps its height while the page loads,
+// the search hint names this platform's key, the left navigation shows Sessions, Files and Tools
+// then More, cuts no label and folds from the keyboard, the narrow drawer holds the same
+// places, and a retired area directory keeps its query and hash.
 //
 // With CAPTURE_DIR set it also photographs the navigation at 1440 px and its drawer at 390 px
 // (light), and Sessions at 1280 and 1920 px (dark), for the review.
@@ -56,10 +57,10 @@ async function shoot(page: Page, name: string) {
   await page.screenshot({ path: `${captureDir}/${name}.png` })
 }
 
-test.describe('the navigation and the Now header (#3121) @nav3121', () => {
+test.describe('the navigation and the Overview header (#3121) @nav3121', () => {
   test.skip(!demoTenant, 'needs the seeded demo engine (DEMO_TENANT)')
 
-  test('Now keeps its header block still while the page loads, New session first', async ({
+  test('Overview keeps its header block still while the page loads', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 })
@@ -89,10 +90,11 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
       await new Promise((done) => setTimeout(done, 800))
       await route.continue()
     })
-    await page.goto('/')
+    await page.goto('/now')
+    // Every answer is held 800 ms, and the shell reads several before it paints the page.
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Now' }),
-    ).toBeVisible()
+      page.getByRole('heading', { level: 1, name: 'Overview' }),
+    ).toBeVisible({ timeout: 20_000 })
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(1500)
     const frames = await page.evaluate(
@@ -101,22 +103,14 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
     expect(frames.length).toBeGreaterThan(10)
     const heights = [...new Set(frames.map(([h]) => Math.round(h)))]
     const tops = [...new Set(frames.map(([, top]) => Math.round(top)))]
-    expect(heights, 'the Now header changed height while loading').toHaveLength(
-      1,
-    )
+    expect(
+      heights,
+      'the Overview header changed height while loading',
+    ).toHaveLength(1)
     expect(
       tops,
       'the content under the header moved while loading',
     ).toHaveLength(1)
-    // The start line's verb is the first control of the page: New session, or the setup
-    // step that comes before it when no tool is ready.
-    const header = page.locator('[data-slot="page-header"]')
-    await expect(
-      header
-        .locator('a[href], button')
-        .first()
-        .locator('xpath=ancestor::*[@data-testid="now-start"]'),
-    ).toHaveCount(1)
     await page.unroute('**/v1/**')
     // "Partial data" at most once on the page.
     expect(
@@ -140,27 +134,66 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
     await expect(search).toHaveAttribute('title', 'Search and commands')
   })
 
-  test('the left navigation names each place once, in its groups, and wraps no word', async ({
+  test('the left navigation shows Sessions, Files and Tools, then More with the rest below it, and wraps no word', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await prefer(page, 'light')
     await signIn(page)
-    await page.goto('/')
+    await page.goto('/workspace')
     const nav = page.locator('[data-slot="sidebar"]')
     await expect(nav).toBeVisible()
-    const groups = await nav
-      .locator('section')
-      .evaluateAll((s) => s.map((g) => g.getAttribute('aria-label')))
-    expect(groups).toEqual(['Work', 'Tools', 'Control', 'Admin'])
+    // The places and the More button, in the order they are drawn.
+    const drawn = () =>
+      nav
+        .locator('a[data-place], button:has-text("More")')
+        .evaluateAll((items) =>
+          items.map((e) => e.getAttribute('data-place') ?? 'more'),
+        )
+    // The More state is the person's preference, kept with their account: start folded.
+    const more = nav.getByRole('button', { name: 'More', exact: true })
+    if ((await more.getAttribute('aria-expanded')) === 'true')
+      await more.click()
+    // A new person sees the first places and More; More opens the rest below it. Folded,
+    // only a place with something waiting shows under More (Rules, when the seed has a
+    // pending approval).
+    const folded = await drawn()
+    expect(folded.slice(0, 4)).toEqual(['sessions', 'files', 'tools', 'more'])
+    expect(folded.at(-1)).toBe('settings')
+    expect(folded.slice(4, -1).filter((p) => p !== 'rules')).toEqual([])
+    await more.click()
+    expect(await drawn()).toEqual([
+      'sessions',
+      'files',
+      'tools',
+      'more',
+      'now',
+      'rules',
+      'usage',
+      'activity',
+      'people',
+      'security',
+      'operations',
+      'settings',
+    ])
+    // One noun per place, and no group header above any of them.
+    await expect(nav.locator('section, h2')).toHaveCount(0)
     const places = await nav
-      .locator('a[data-place]')
-      .evaluateAll((links) => links.map((a) => a.textContent?.trim()))
-    // A navigation that rendered nothing would pass every check below.
-    expect(places.length).toBeGreaterThan(10)
-    expect(places.filter((p, i) => places.indexOf(p) !== i)).toEqual([])
-    expect(places[0]).toBe('Now')
-    expect(places.at(-1)).toBe('Settings')
+      .locator('a[data-place] > span:first-of-type')
+      .evaluateAll((spans) => spans.map((s) => s.textContent?.trim()))
+    expect(places).toEqual([
+      'Sessions',
+      'Files',
+      'Tools',
+      'Overview',
+      'Rules',
+      'Usage',
+      'Audit',
+      'People',
+      'Security',
+      'Operations',
+      'Settings',
+    ])
     // No second navigation: no places in the top bar, no All areas, no phone bar.
     await expect(page.locator('[data-slot="topbar"] nav')).toHaveCount(0)
     await expect(page.getByText('All areas', { exact: true })).toHaveCount(0)
@@ -183,8 +216,12 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await prefer(page, 'light')
     await signIn(page)
-    await page.goto('/')
+    // A document page: the work surface (/) starts folded when no fold is chosen.
+    await page.goto('/workspace')
     const nav = page.locator('[data-slot="sidebar"]')
+    await expect(
+      page.getByRole('button', { name: 'Collapse navigation' }),
+    ).toBeVisible()
     const wide = (await nav.boundingBox())!.width
     await page.getByRole('button', { name: 'Collapse navigation' }).focus()
     await page.keyboard.press('Enter')
@@ -202,6 +239,9 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
     await prefer(page, 'light')
     await signIn(page)
     await page.goto('/sessions')
+    await expect(
+      page.locator('[data-slot="sidebar"] a[data-place="sessions"]'),
+    ).toBeVisible()
     const desktop = await page
       .locator('[data-slot="sidebar"] a[data-place]')
       .evaluateAll((links) => links.map((a) => a.getAttribute('data-place')))
@@ -215,9 +255,13 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
       .evaluateAll((links) => links.map((a) => a.getAttribute('data-place')))
     expect(narrow).toEqual(desktop)
     await shoot(page, 'navigation-mobile-drawer-light')
-    await drawer.getByRole('link', { name: 'Now' }).click()
+    // The drawer's More opens the same places below it; the drawer stays open.
+    const more = drawer.getByRole('button', { name: 'More', exact: true })
+    if ((await more.getAttribute('aria-expanded')) === 'false')
+      await more.click()
+    await drawer.getByRole('link', { name: 'Overview', exact: true }).click()
     await expect(drawer).toBeHidden()
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/now$/)
   })
 
   test('a retired area directory lands on its place with its query and hash', async ({

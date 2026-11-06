@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ONE LEFT NAVIGATION (0.5): the places of features/navigation/places.ts in four groups
-// (Work, Tools, Control, Admin) and Settings at the foot. From 761 px it is a 228 px column
+// THE ONE LEFT NAVIGATION (0.5, its 0.7 places): the places of features/navigation/places.ts,
+// Sessions, Files and Tools, then More with the other places below it, no group headers, and
+// Settings at the foot. From 761 px it is a 228 px column
 // that folds to its 64 px icons and opens again; below that the same body opens as a drawer
 // from the top bar's menu button, with the same items in the same order. There is no other
 // navigation surface: no places in the top bar, no All areas sheet, no phone bar.
@@ -12,7 +13,7 @@
 // and the fold button answers Enter and Space. Each link names its place even folded (the
 // label stays for a screen reader and in the tooltip), and its count is part of its name.
 import { Link, useRouterState } from '@tanstack/react-router'
-import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CountBadge } from '@/components/ui/count-badge'
@@ -23,15 +24,17 @@ import {
 } from '@/features/governance/use-pending-approvals'
 import { useViewAccess } from '@/features/navigation/authorization'
 import {
+  FIRST_PLACES,
   currentPlace,
   settingsPlace,
-  sidebarGroups,
+  sidebarPlaces,
   type PlaceId,
   type SidebarPlace,
 } from '@/features/navigation/places'
 import { cn } from '@/lib/utils'
 import { usePreferencesStore } from '@/stores/preferences'
 import { BrandMark } from './brand'
+import { frameFor } from './page-frames'
 import { ScopeSwitcher } from './scope-switcher'
 import { useSessionRail } from './use-session-rail'
 
@@ -121,7 +124,7 @@ function PlaceLink({
   )
 }
 
-/** The navigation itself: brand, scope, the groups and Settings. The column and the drawer
+/** The navigation itself: brand, scope, the places and Settings. The column and the drawer
  * both render it, so the two cannot disagree about which places exist or which is current. */
 function SidebarBody({
   folded = false,
@@ -136,11 +139,33 @@ function SidebarBody({
   const { t } = useTranslation(['nav', 'common'])
   const { listed } = useViewAccess()
   const counts = usePlaceCounts()
+  const showAll = usePreferencesStore((s) => s.navAll)
+  const setShowAll = usePreferencesStore((s) => s.setNavAll)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const search = useRouterState({
-    select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
-  })
-  const here = currentPlace(pathname, search)
+  const here = currentPlace(pathname)
+  const places = sidebarPlaces(listed)
+  const first = places.filter((p) => FIRST_PLACES.has(p.id))
+  const more = places.filter((p) => !FIRST_PLACES.has(p.id))
+  // Folded away never means out of reach of what needs the person: the place they are on
+  // and a place with something waiting stay, below More.
+  const moreShown = more.filter(
+    (p) => showAll || p.id === here || counts[p.id]?.needsYou,
+  )
+  const list = (items: SidebarPlace[], className?: string) => (
+    <ul className={cn('flex flex-col gap-0.5', className)}>
+      {items.map((place) => (
+        <li key={place.id}>
+          <PlaceLink
+            place={place}
+            current={here === place.id}
+            count={counts[place.id]}
+            folded={folded}
+            onNavigate={onNavigate}
+          />
+        </li>
+      ))}
+    </ul>
+  )
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -160,47 +185,41 @@ function SidebarBody({
         {control}
       </div>
 
-      {/* The organization and workspace this navigation works in, one control. */}
+      {/* The organization and workspace this navigation works in, one control; the
+          slot hides when there is nothing to choose (scope-switcher.tsx). */}
       {!folded && (
         <div
           data-slot="sidebar-scope"
-          className="flex shrink-0 border-b border-line p-1.5"
+          className="flex shrink-0 border-b border-line p-1.5 empty:hidden"
         >
           <ScopeSwitcher />
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-        {sidebarGroups(listed).map((group) => (
-          <section
-            key={group.id}
-            aria-label={t(`nav:groups.${group.id}`)}
-            className="mb-3.5"
+      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
+        {first.length > 0 ? list(first) : null}
+        {more.length > 0 ? (
+          <button
+            type="button"
+            aria-expanded={showAll}
+            title={folded ? t('nav:shell.more') : undefined}
+            onClick={() => setShowAll(!showAll)}
+            className={cn(
+              ITEM_CLASS,
+              'w-full',
+              folded && 'justify-center px-0',
+            )}
           >
-            <h2
-              aria-hidden
-              className={cn(
-                'px-2.5 pb-1 text-[10px] font-semibold tracking-[0.07em] text-text-3 uppercase',
-                folded && 'sr-only',
-              )}
+            <ChevronDown aria-hidden className={cn(showAll && 'rotate-180')} />
+            <span
+              className={cn('min-w-0 flex-1 text-left', folded && 'sr-only')}
             >
-              {t(`nav:groups.${group.id}`)}
-            </h2>
-            <ul className="flex flex-col gap-0.5">
-              {group.places.map((place) => (
-                <li key={place.id}>
-                  <PlaceLink
-                    place={place}
-                    current={here === place.id}
-                    count={counts[place.id]}
-                    folded={folded}
-                    onNavigate={onNavigate}
-                  />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+              {t('nav:shell.more')}
+            </span>
+          </button>
+        ) : null}
+        {/* The places under More, below it: indented in the column, as they belong to it. */}
+        {moreShown.length > 0 ? list(moreShown, cn(!folded && 'pl-3')) : null}
       </div>
 
       <div className="shrink-0 border-t border-line p-2">
@@ -218,8 +237,13 @@ function SidebarBody({
 /** The column, from 761 px: 228 px, folding to its 64 px icons and back. */
 export function Sidebar() {
   const { t } = useTranslation(['nav', 'common'])
-  const folded = usePreferencesStore((s) => s.navCollapsed)
+  const chosen = usePreferencesStore((s) => s.navCollapsed)
   const setFolded = usePreferencesStore((s) => s.setNavCollapsed)
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  // A person's own fold wins everywhere. With none yet, the work surface (Sessions) folds
+  // the navigation to its icons, so the conversation keeps the main column beside the list;
+  // the document pages of the Sessions place (Work, Channels) keep it open.
+  const folded = chosen ?? frameFor(pathname) === 'work'
   const label = t(folded ? 'nav:shell.expand' : 'nav:shell.collapse')
   return (
     <nav

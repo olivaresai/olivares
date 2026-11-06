@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
+	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
 // Name is the module's globally unique identifier (the runtime registry key).
@@ -91,7 +92,7 @@ func (m *Module) SetLogger(l *slog.Logger) { m.log = l }
 // (fusion.go). It must not block.
 func (m *Module) Init(_ context.Context, host sdk.Host) error {
 	m.log = host.Logger()
-	cancel, err := host.Subscribe([]event.Type{event.TypeEdgeObserved}, m.onEvent)
+	cancel, err := host.Subscribe([]event.Type{event.TypeEdgeObserved, event.TypeSessionReachExpired}, m.onEvent)
 	if err != nil {
 		return err
 	}
@@ -129,8 +130,17 @@ func (m *Module) onEvent(ctx context.Context, e event.Event) error {
 	if m.data == nil {
 		return nil // not wired for persistence; drop (logged once in Start)
 	}
+	if e.Type == event.TypeSessionReachExpired {
+		if edge, ok := e.Payload.(sdkmodel.EdgeObservation); ok && e.SessionProjection && e.Source == "olivares.sessions" {
+			return m.expireSessionReach(ctx, e.Tenant, edge.OriginRef)
+		}
+		return nil
+	}
 	if e.Type == event.TypeEdgeObserved {
 		if edge, ok := event.EdgeOf(e); ok {
+			if edge.Source == sdkmodel.SignalSessionLaunch && (!e.SessionProjection || e.Source != "olivares.sessions") {
+				return nil
+			}
 			_, err := m.Ingest(ctx, e.Tenant, edge)
 			return err
 		}

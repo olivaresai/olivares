@@ -17,9 +17,27 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
+// sessionFolderDir is a fresh session folder: a temporary directory, or one under
+// OLIVARES_TEST_FOLDER_PARENT when it is set, so the same launch runs against a
+// folder on an NFS or SMB mount.
+func sessionFolderDir(t *testing.T) string {
+	t.Helper()
+	parent := os.Getenv("OLIVARES_TEST_FOLDER_PARENT")
+	if parent == "" {
+		return t.TempDir()
+	}
+	dir, err := os.MkdirTemp(parent, "folder-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 // The real launch path, with only the agent replaced by a shell: a session in a
 // write-without-delete workspace creates and changes files and is refused every
 // removal, rename and move, while the same shell in a read-write workspace is not.
+// Neither mode may write beside the folder, on the folder's own filesystem.
 func TestWriteNoDeleteSessionChangesFilesAndCannotRemoveOrMoveThem(t *testing.T) {
 	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
 		t.Skip("host cannot confine: " + state.Reason)
@@ -32,16 +50,17 @@ step modify  sh -c 'printf changed > keep.txt'
 step rename  /bin/mv keep.txt renamed.txt
 step unlink  /bin/rm new.txt
 step rmdir   /bin/rmdir sub
+step outside sh -c 'printf out > ../outside.txt'
 `
 	for _, tc := range []struct {
 		mode string
 		want string
 	}{
-		{mountNoDelete, "create=ok\nmodify=ok\nrename=denied\nunlink=denied\nrmdir=denied\n"},
-		{mountRW, "create=ok\nmodify=ok\nrename=ok\nunlink=ok\nrmdir=ok\n"},
+		{mountNoDelete, "create=ok\nmodify=ok\nrename=denied\nunlink=denied\nrmdir=denied\noutside=denied\n"},
+		{mountRW, "create=ok\nmodify=ok\nrename=ok\nunlink=ok\nrmdir=ok\noutside=denied\n"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
-			folder, data := t.TempDir(), t.TempDir()
+			folder, data := sessionFolderDir(t), t.TempDir()
 			if err := os.Mkdir(filepath.Join(folder, "sub"), 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -72,6 +91,9 @@ step rmdir   /bin/rmdir sub
 			report, _ := os.ReadFile(filepath.Join(folder, "report.txt"))
 			if string(report) != tc.want {
 				t.Fatalf("report:\n%s\nwant:\n%s", report, tc.want)
+			}
+			if _, err := os.Stat(filepath.Join(filepath.Dir(folder), "outside.txt")); err == nil {
+				t.Errorf("the session wrote a file next to its folder")
 			}
 			if tc.mode == mountNoDelete {
 				for _, name := range []string{"keep.txt", "new.txt", "sub"} {

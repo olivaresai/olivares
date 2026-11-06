@@ -11,5 +11,7 @@ import ja from './ja.json'
 import zh from './zh.json'
 import ru from './ru.json'
 import ko from './ko.json'
+import uk from './uk.json'
+import pt from './pt.json'
 
-registerTranslations('reach', { en, es, de, fr, ja, zh, ru, it, ko })
+registerTranslations('reach', { en, es, de, fr, ja, zh, ru, it, ko, uk, pt })

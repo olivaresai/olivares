@@ -9,14 +9,18 @@
 // holds the three other views of this page: the table, the workspaces and the provider
 // profiles. They were a strip of tabs on the title line; they are still the same views,
 // reached through the same `tab` state, one step further from the work they are not.
+// The name itself opens the other pages of the Sessions place (Work, Channels, Voice,
+// Sandbox and the rest): the work surface draws no row of pages above it.
 //
 // ⛔ THE LIST IS LIVE, AND SAYS NOTHING WHEN IT IS. There is no Refresh and no "Live"
 //    chip: a chip that says Live next to a button that says Refresh disagree with each
 //    other. A failed stream is the one thing worth a line, and it is a quiet one.
-import { ArrowLeft, MoreHorizontal, Plus } from 'lucide-react'
+import { ArrowLeft, ChevronDown, MoreHorizontal, Plus } from 'lucide-react'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { PagesMenu } from '@/components/layout/destination-sections'
 import { Button } from '@/components/ui/button'
+import type { PageLink } from '@/features/navigation/places'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +61,13 @@ export function SessionsListHeader({
   onView,
   streamFailed,
   focusMenu = false,
+  pages = [],
 }: {
+  /**
+   * The pages of the Sessions place this person may open (placePages). The work surface
+   * draws no row of pages, so the heading opens them as one menu.
+   */
+  pages?: readonly PageLink[]
   /** Sessions in the list; nothing is printed at zero. */
   count: number
   /** The count in words ("12 sessions · 3 working"), for the hover and the reader. */
@@ -87,7 +97,22 @@ export function SessionsListHeader({
           title={t('sessions:title')}
           className="min-w-0 truncate text-body font-semibold text-text"
         >
-          {t('sessions:title')}
+          {pages.length > 1 ? (
+            <PagesMenu pages={pages} currentId="sessions">
+              <button
+                type="button"
+                className="-mx-1 inline-flex max-w-full items-center gap-1 rounded-ctl px-1 outline-none transition-colors duration-fast hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus data-[state=open]:bg-hover"
+              >
+                <span className="truncate">{t('sessions:title')}</span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="size-3.5 shrink-0 text-text-3"
+                />
+              </button>
+            </PagesMenu>
+          ) : (
+            t('sessions:title')
+          )}
         </h1>
         <SessionsCount count={count} label={countLabel} />
         <span className="ml-auto flex items-center gap-0.5">

@@ -117,6 +117,7 @@ var topLevelNextCommands = map[string]string{
 	"grok":            "olivares grok managed-config",
 	"health":          "olivares health checks ls",
 	"hookpep":         "olivares hookpep explain",
+	"host":            "olivares host status",
 	"identity":        "olivares identity sso",
 	"inference-proxy": "olivares inference-proxy config get",
 	"inventory":       "olivares inventory summary",
@@ -128,6 +129,7 @@ var topLevelNextCommands = map[string]string{
 	"message":         "olivares message inbox --workspace-id <workspace-id>",
 	"migrate":         "olivares migrate status",
 	"models":          "olivares models ls",
+	"netfolder":       "olivares netfolder ls",
 	"notify":          "olivares notify destinations",
 	"observability":   "olivares observability ingestion-health",
 	"orchestration":   "olivares orchestration graph",
@@ -164,6 +166,7 @@ var topLevelNextCommands = map[string]string{
 // has nothing after it" and "nobody got to this verb" look identical in an empty
 // table, and only one of them is a decision.
 var nextCommandExempt = map[string]string{
+	"ask":        "ask takes the question itself; the answer it prints is the next step",
 	"wiki":       "Wiki operations require a folder; use wiki init, ingest, query or lint with its path.",
 	"help":       "cobra's own verb: what follows is the command you asked about, which it just printed",
 	"completion": "its output is evaluated by the shell, not run as a command",

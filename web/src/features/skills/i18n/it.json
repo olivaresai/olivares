@@ -103,6 +103,33 @@
     "acts": "{{skill}} ora agisce al caricamento: {{items}}. Assegnarla richiede la tua approvazione.",
     "pinsKeep": "Le assegnazioni esistenti mantengono la loro revisione finché non sposti ciascuna con “Usa l’ultima”.",
     "apply": "Applica questo aggiornamento",
-    "applied": "Aggiornamento pubblicato come revisione {{n}}"
+    "applied": "Aggiornamento pubblicato come revisione {{n}}",
+    "checked": "Verificato",
+    "noDiff": "Nessuna differenza di testo disponibile."
+  },
+  "catalog": {
+    "skills": "Competenze",
+    "packs": "Pacchetti",
+    "name": "Nome",
+    "description": "Descrizione",
+    "kind": "Tipo",
+    "search": "Cerca nomi e descrizioni",
+    "unassigned": "Non assegnato",
+    "loading": "Caricamento…",
+    "incomplete": "Alcune revisioni mancano; le assegnazioni possono essere incomplete.",
+    "skill": "Competenza",
+    "agent": "Agente",
+    "command": "Comando",
+    "rule": "Regola"
+  },
+  "selection": {
+    "loading": "Verifica delle competenze…",
+    "count_one": "Questa sessione riceve {{count}} competenza",
+    "count_other": "Questa sessione riceve {{count}} competenze",
+    "count_many": "Questa sessione riceve {{count}} di competenze",
+    "current_one": "Attualmente assegnata: {{count}} competenza",
+    "current_other": "Attualmente assegnate: {{count}} competenze",
+    "current_many": "Attualmente assegnate: {{count}} di competenze",
+    "unavailable": "Impossibile determinare le competenze di questo reparto."
   }
 }

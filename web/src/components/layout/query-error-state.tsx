@@ -38,7 +38,7 @@ const TurnOnModule = lazy(() =>
 )
 
 /** A module that is off on this installation, in one line, with the administrator's enable
- * action (the same selection and restart as Settings > Edition & modules). */
+ * action (the same selection and restart as Settings > Modules). */
 export function ModuleOffNotice({
   module,
   className,
@@ -70,7 +70,7 @@ export function ModuleOffNotice({
 }
 
 /** The administrator's way to turn a module on, where it is off (EU): the same selection and
- * restart as Settings > Edition & modules. Nothing for anyone else, or for no module. */
+ * restart as Settings > Modules. Nothing for anyone else, or for no module. */
 export function ModuleEnableAction({ module }: { module?: string }) {
   const { isSuperadmin } = useAuth()
   // Communication follows its channels probe, not the selection: no action.

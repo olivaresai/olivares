@@ -11,6 +11,7 @@ import {
   chordKeys,
   chordMatches,
   modKeyName,
+  isInsideList,
   parseChord,
   resolveBinding,
   type KeyRule,
@@ -329,4 +330,58 @@ describe('the Mod key, named as the platform names it (#3121)', () => {
     // Glyphs join; a word keeps its +.
     expect(chordHint('Mod+Shift+p')).toBe('⌘+Shift+P')
   })
+})
+describe('list movement', () => {
+  it('binds j/k to moving a list, and only outside one', () => {
+    expect(
+      resolveBinding(KEYBINDINGS, { key: 'j' }, { outsideList: true }),
+    ).toBe('list.next')
+    expect(
+      resolveBinding(KEYBINDINGS, { key: 'k' }, { outsideList: true }),
+    ).toBe('list.previous')
+    // A context nobody supplies is false, and outside a field is NOT outside a list.
+    expect(resolveBinding(KEYBINDINGS, { key: 'j' }, {})).toBeNull()
+    expect(
+      resolveBinding(KEYBINDINGS, { key: 'j' }, { outsideField: true }),
+    ).toBeNull()
+  })
+
+  it('moves the rail with j/k, and the rail rule wins when both contexts are true', () => {
+    expect(
+      resolveBinding(KEYBINDINGS, { key: 'j' }, { railFocused: true }),
+    ).toBe('rail.next')
+    expect(
+      resolveBinding(KEYBINDINGS, { key: 'k' }, { railFocused: true }),
+    ).toBe('rail.previous')
+    // The rail is a listbox, so a rail-focused j matches both rules; order decides.
+    expect(
+      resolveBinding(
+        KEYBINDINGS,
+        { key: 'j' },
+        { railFocused: true, outsideList: true },
+      ),
+    ).toBe('rail.next')
+  })
+})
+
+describe('isInsideList — what the shell will not move', () => {
+  it('is false for null and for elements outside any list surface', () => {
+    expect(isInsideList(null)).toBe(false)
+    const button = document.createElement('button')
+    document.body.appendChild(button)
+    expect(isInsideList(button)).toBe(false)
+  })
+
+  it.each(['grid', 'listbox', 'tree', 'tablist'])(
+    'is true inside a %s, even for a nested target',
+    (role) => {
+      const surface = document.createElement('div')
+      surface.setAttribute('role', role)
+      const cell = document.createElement('div')
+      surface.appendChild(cell)
+      document.body.appendChild(surface)
+      expect(isInsideList(cell)).toBe(true)
+      expect(isInsideList(surface)).toBe(true)
+    },
+  )
 })

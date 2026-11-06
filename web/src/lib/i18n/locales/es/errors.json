@@ -1,8 +1,7 @@
 {
   "notFound": {
     "title": "Página no encontrada",
-    "description": "Esta página no existe o se ha movido.",
-    "back": "Volver al resumen"
+    "description": "Esta página no existe o se ha movido."
   },
   "businessOnly": {
     "title": "Forma parte de Business",
@@ -17,6 +16,7 @@
     "nextStep": "Tus roles o una política de grupo no lo permiten. Un propietario o administrador de esta organización puede concederlo.",
     "deniedByPolicy": "La política «{{policy}}» lo deniega. Un propietario o administrador de esta organización puede cambiarla."
   },
+  "systemAdminOnly": "Esto se define para toda la instalación. Pida a un administrador del sistema que lo vea o lo cambie.",
   "serverError": {
     "title": "Algo ha salido mal",
     "description": "Olivares ha encontrado un error inesperado. Inténtalo de nuevo.",
@@ -30,14 +30,21 @@
     "title": "Control plane inaccesible",
     "description": "No hemos podido contactar con el control plane. Comprueba tu conexión y que el motor esté en ejecución."
   },
+  "engineRetrying": {
+    "title": "No se puede contactar con el motor",
+    "description": "Se reintenta automáticamente. Esta página se abre en cuanto el motor responda."
+  },
   "networkSecure": {
     "title": "Falló la conexión segura",
     "description": "Tu navegador no ha podido abrir una conexión segura con {{origin}}. Si no confía en el certificado del motor, abre esa dirección en una pestaña nueva y confía en él, o instala la CA del motor (tls.crt.ca en su directorio de datos). Si no es eso, comprueba tu conexión y que el motor esté en ejecución."
   },
   "boundary": {
     "title": "Esta vista ha fallado",
-    "description": "Se ha producido un error inesperado al renderizar. Recargar suele solucionarlo.",
-    "reload": "Recargar"
+    "description": "Se ha producido un error inesperado al renderizar. Reintentar suele solucionarlo.",
+    "reload": "Recargar",
+    "errorId": "ID de error",
+    "copyErrorId": "Copiar ID de error",
+    "goToNow": "Ir a Resumen"
   },
   "generic": "Algo ha salido mal.",
   "sessionTemplateUnavailable": "La plantilla «Edits and commands» no está disponible, por lo que no se ha iniciado la sesión. Elige otro permiso o pide a un administrador que restaure la plantilla.",

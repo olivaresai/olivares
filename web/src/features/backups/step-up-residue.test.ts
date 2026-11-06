@@ -52,15 +52,13 @@ const sinComentarios = (src: string): string[] => {
   })
 }
 
-// The five remaining subjects in the public console; RegOps and NIS 2 panels ship with
+// The three remaining subjects in the public console; RegOps and NIS 2 panels ship with
 // Business. Extend the list while fixing subjects, not afterward: a check that covers only
 // the initial subjects can silently pass without inspecting later ones.
 const SUJETOS = [
   'backups/restore-dialog.tsx',
   'claude-policy/cedar-opa-view.tsx',
   'inference-proxy/inference-proxy-view.tsx',
-  'recordings/recording-config-panel.tsx',
-  'session-viewer/session-viewer-page.tsx',
 ]
 
 const leer = (rel: string) =>
@@ -228,7 +226,7 @@ describe('el residuo de ceremonia: la acusación nunca va sin la salida delante'
 
   it('checks every subject in this edition with one decision each', () => {
     // Un cero sobre cero ficheros no es un cero.
-    expect(SUJETOS.length).toBe(5)
+    expect(SUJETOS.length).toBe(3)
     for (const rel of SUJETOS) {
       const l = leer(rel)
       expect(l.length, `${rel} vacío`).toBeGreaterThan(50)

@@ -56,10 +56,10 @@ describe('assurance step-up i18n', () => {
     ).toBeInTheDocument()
     // The body interpolates three translated fragments; each must be real copy.
     expect(
-      screen.getByText(/requires AAL3 \(phishing-resistant\)/),
+      screen.getByText(/requires Passkey or security key/),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/Your session is AAL1 \(password\)/),
+      screen.getByText(/Your session is Standard sign-in/),
     ).toBeInTheDocument()
     expectNoRawI18nKeys(container)
   })

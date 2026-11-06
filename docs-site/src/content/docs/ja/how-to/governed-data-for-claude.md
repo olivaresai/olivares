@@ -78,7 +78,7 @@ olivares quickstart --data-dir /var/lib/olivares
 新規インストールの場合は、初回のコンソール設定を完了します。
 
 新規インストールでは、`knowledge` と `sourcescope` は無効です。管理者として
-**Settings > Edition & modules** で `knowledge` と `sourcescope` を有効にし、ほかの選択済み
+**Settings > Modules** で `knowledge` と `sourcescope` を有効にし、ほかの選択済み
 モジュールも有効のままにしてください。CLI を使う場合は、まず `olivares login`
 でこのエンジンに管理者としてログインし、次に `olivares modules on knowledge` と `olivares modules on sourcescope` を実行します。
 続行する前に、毎回のエンジン再起動が完了するのを待ってください。実行中の

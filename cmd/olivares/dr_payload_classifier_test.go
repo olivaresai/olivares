@@ -109,7 +109,7 @@ func TestDRRestoreClassifiesAuthenticatedAndLegacyPayloadBeforeEffects(t *testin
 				err = dr.WriteAuthenticatedBundle(f, dr.BundleInput{Manifest: m, KEK: kek, SnapshotPath: path, SealedKeys: sealed}, cipher)
 			} else {
 				// A real pre-v2 bundle: the snapshot in the clear under a v1, unsigned manifest.
-				m.Format, m.Store.Encryption = dr.ManifestFormatV1, ""
+				m.Format, m.Store.Encryption, m.Store.Compression = dr.ManifestFormatV1, "", ""
 				m.Authentication = dr.ManifestAuthentication{}
 				m.Files = nil
 				gz := gzip.NewWriter(f)

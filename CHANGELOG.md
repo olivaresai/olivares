@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.6`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.7`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.6`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.7`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.6<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.7<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,127 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.7] - 2026-11-06
+
+### Changed
+
+- **Breaking: session names are unique.** Launch, rename and handoff refuse a name
+  held by another session with 409, from the console, API or CLI. A session an agent
+  workflow launches for a work item keeps the name its workflow gave it.
+  `olivares session <command> <name>` refuses a name held by two sessions and names
+  the id, instead of acting on the newest session. A handoff that gives no name is
+  called `Handoff from <name>`, numbered -2, -3 when that name is taken.
+
+- **Breaking: required confinement can refuse a session start.** Every confined
+  child sees an empty directory where the engine user's user manager listens,
+  including its bus and private socket. On a host with that manager, a child that
+  must be confined is not started when user and mount namespaces cannot hide it;
+  `olivares doctor` reports the refusal under `session-confinement`. Without a user
+  manager, or without Landlock plus a mount namespace, the session starts without
+  memory and task ceilings and says why.
+
+- **Console sidebar** lists **Sessions**, **Files** and **Tools**, then **More**, which opens
+  **Overview**, **Rules**, **Usage**, **Audit**, **People**, **Security** and **Operations**
+  below it, with **Settings** at the foot. The Work, Tools, Control and Admin headers are gone,
+  and each place has one noun: Now is **Overview**; AI tools, Models, MCP & skills and Sources
+  are **Tools**; Access map is a page of **Audit**; Work & communications is split between
+  **Sessions** (work items, channels, sandbox, Git publication, source diff) and **Operations**
+  (webhooks, alerting). License leaves the sidebar: **Settings › Edition** (the edition, the license and
+  what Business adds) and **Settings › Modules** (the module switches) are listed under This
+  installation. Every page keeps its address, and the command palette still finds a
+  page by its former place name.
+
+- **Editions:** the Confluence, Snowflake and Azure AI Search content sources and retention schedules
+  with the hold-checked sweep move to Business. In Community a configured source of those kinds
+  stops startup naming Business and its ingest answers `501 connector_unavailable` (CLI exit 9);
+  documents already ingested stay readable. Authoring or deleting a schedule and the sweep answer
+  `501 business_required`; stored schedules stay readable, none is applied or reported as enabled,
+  nothing is purged, and startup warns once when an enabled purge schedule is stored.
+- **Console › Roles › Groups** shows a group's parent read-only in Community. **Set parent** and
+  **Remove parent** are in the Business console, with group nesting itself, which Community
+  answers with `501 departments_unavailable` since 0.3.
+
+- The Go SDK package `sdk/siemwire` keeps the SIEM format names, the OCSF version pin and the
+  SARIF encoder. Its CEF, LEEF, syslog, OTLP and OCSF encoders are now part of the Business build,
+  which produces the same bytes. Community already answered a SIEM export or sink with exit 9 or
+  `501 business_required`, and it still does.
+
+- **Console › Sessions** reads as text again: a reply has one **Copy message**, and the **Copy
+  Markdown block** beside each paragraph, list or quote is gone (a code block keeps its own **Copy
+  code**). Under a message, **Copy message** (and **Quote reply** under a reply) shows when you
+  hover the message or focus it with the keyboard, and always on a touch screen. The last reply
+  keeps them shown.
+
+- Sessions uses one clearer work list, with workspace grouping, persistent navigation and readable thread headers, details and side panels. Message actions, Markdown code, long transcripts, turn duration and cost, and empty or interrupted states use one consistent presentation on desktop and mobile.
+
+- Provider and model setup brings tools, accounts, sign-ins, presets, usage and capacity into a consistent flow. New session defaults to your own sessions, an account with capacity, and simple provider, model and folder pickers. When provider accounts are configured, `olivares session start` without `--account` uses the first account with capacity rather than the host's own login; if every account is at its limit, the start is refused.
+
+- Installation, upgrade and licence prompts share a consistent interactive flow. Documentation redirects, localized pages, generated CLI references and provider guidance have been refreshed.
+
+### Added
+
+- **Business department templates.** A department can require a session template, start from one and point its instructions at its ADR
+  folder. `olivares sourcescope bindings create --effect require` on a `template` binding makes the template
+  mandatory: a launch of the department that names none runs under it, and one that names another is
+  refused (422) naming the required one. A forbid on a sub-department lifts it there, and turning a
+  mandatory template back into a default waits for a second administrator, as every relaxation does.
+  A sub-department can also stop one inherited standard, instructions or template, reaching it without
+  forbidding it: `--effect decline` on its binding drops what the departments above assigned, while what the
+  sub-department or a department below assigns still applies; a forbid stays absolute. A decline waits for a
+  second administrator, as a forbid does.
+  The console's new-workspace form can start a department from a template, default or mandatory; its
+  binding form assigns `instructions` and `template` and offers Require for a template; the
+  claude-policy view has a tab for `managed-instructions@<department>`; archiving an assigned template
+  says why (it is assigned; unassign it first). A department's ADR folder is its workspace setting
+  `adr_folder`: when set, its instructions end with a section naming it, in a new launch and in the
+  department's file alike. A forbid on that template still drops it for the sub-department and the
+  departments below it.
+
+- The workspace file browser uploads files into the displayed folder and downloads selected files and folders as one zip, with the same jail, size limit and DLP policy as a single read. `olivares agent workspace archive` provides the same download from the command line.
+
+- `olivares session usage` and `GET /v1/m/sessions/usage` total sessions, tokens and cost by model, account, provider or tool over a chosen time range. Missing reports stay null rather than becoming zero.
+
+- `olivares dr drill --from <bundle>` restores a real SQLite bundle into a throwaway directory with no network, measures the restore time (RTO) and the age of the restore point (RPO) against `--rto-target` and `--rpo-target`, and seals the report as a signed `dr.drill` event in the audit ledger unless `--no-record` is set (exit 7 when a target is missed). The scheduled restore test takes an `rto_minutes` target, records the measured time in its ledger event, flags a miss in **Backups > Schedule** and raises a `dr_rto_exceeded` finding.
+
+- Session rows offer unread, snooze, done and pin actions, including observed sessions. Undo reverses list actions without asking for confirmation; `olivares session unread`, `pin` and `unpin` provide the same operations from a terminal. `GET /runs` and `GET /runs/{ref}` report `unread`, with `POST` and `DELETE /runs/{ref}/unread` to change it. Observed live reads report `pinned` and `pinned_at`, and `POST` or `DELETE /v1/m/sessions/live/by-id/{live_ref}/pin` changes them.
+
+- A system administrator adds a signed webhook, email (SMTP) or Twilio SMS notification
+  destination, as well as Slack and Teams, from the CLI (`olivares notify destinations
+  add|test|rm|ls`) and the API (`/v1/console/notify-destinations` takes `settings`), without
+  editing `OLIVARES_NOTIFY_CONFIG` or restarting. Secret settings are read from a file or
+  stdin and sealed in the secret store. A webhook or SMTP host on a private or reserved
+  address is refused with the reason; internal destinations stay in the operator file, which
+  works as before. The console lists, tests and removes them; its add dialog still offers
+  Slack and Teams.
+
+- **Console › Operations** is one page for the host, the live sessions and what they used. A
+  system administrator sees CPU and memory over the last 24 hours, each filesystem and the
+  disk each session folder uses (Linux only; another host says it cannot be read). Anyone who
+  may read sessions sees the live sessions by tool and by person, and the usage by model,
+  account, provider or tool over 24 hours, 7 or 30 days, with one range control. Every chart
+  has a table and a sentence, and a figure no tool reported is left out, never shown as 0.
+  Now and Health › System link to it, and it opens the Operations place.
+
+- A runaway session no longer takes a shared host. Each session runs in its own
+  systemd scope, by default capped at half of the host's memory (swap included)
+  and 16384 tasks, so it is killed alone while the engine, console and other sessions
+  keep running. `OLIVARES_SESSION_MEMORY_MAX` and `OLIVARES_SESSION_TASKS_MAX` set
+  those ceilings. The engine's user needs a user manager for the scope: deb and
+  rpm packages enable it for the `olivares` account, while `olivares uninstall`
+  and package removal stop it. `OLIVARES_SESSION_MAX_PER_USER` is off by default;
+  when enabled, it limits how many sessions one person can have running and
+  refuses the next launch with 429 and one sentence.
+
+### Fixed
+
+- Session turns no longer fail on command-lifecycle frames, oversized single-line output, interrupted input, stop/resume transitions or long scrollback. Start refusals name the cause, and a full account or queue does not create a partial session.
+
+- Sign-in, passkey, approval and session-recovery flows handle existing credentials and cancellation correctly. Upgrade comparisons distinguish engine-maintained observed-use metadata from stored user data.
+
+- Docker and native packages apply the intended container identity, seccomp and AppArmor confinement, systemd limits and RPM installation roots. OpenCode retains history and provider-bound network access.
+
+- SQLite and PostgreSQL upgrades, backup restores, disaster-recovery drills and schema checks preserve stored data and report incomplete or refused operations explicitly.
 
 ## [0.6] - 2026-11-01
 

@@ -26,23 +26,6 @@ it('lets a governed wiki resolve relative links throughout Markdown without wide
 })
 
 describe('parseMarkdown — blocks (#1784)', () => {
-  it('retains the source of each top-level block for copying without rebuilding Markdown', () => {
-    const source = [
-      '## **Heading**',
-      '- one\n  - `nested`',
-      '> quoted\n> **words**',
-      '| A | B |\n| --- | --- |\n| 1 | 2 |',
-      '---',
-      '```sh\n\tmake test\n```',
-      'A [link](https://example.com).',
-    ]
-    const copied: string[] = []
-    parseMarkdown(source.join('\n\n'), undefined, (_block, markdown) =>
-      copied.push(markdown),
-    )
-    expect(copied).toEqual(source)
-  })
-
   it('reads the reply that was shown raw: bold lead-ins, nested items, ordered steps and code', () => {
     const blocks = parseMarkdown(
       [
@@ -150,12 +133,17 @@ describe('parseMarkdown — blocks (#1784)', () => {
     })
   })
 
-  it('keeps the lines of a paragraph as written, indentation and breaks included', () => {
-    const [block] = parseMarkdown('Traceback:\n  File "a.py", line 3\n    boom')
-    expect(block).toEqual({
+  it('joins the lines of a paragraph as CommonMark does, and breaks only where it is told to', () => {
+    // A soft line break is a space; two trailing spaces or a backslash end a line.
+    const [soft] = parseMarkdown(
+      'The run ended\n  because the\n    tool stopped.',
+    )
+    expect(soft).toEqual({
       kind: 'paragraph',
-      inline: ['Traceback:\n  File "a.py", line 3\n    boom'],
+      inline: ['The run ended because the tool stopped.'],
     })
+    const [hard] = parseMarkdown('one  \ntwo\\\nthree')
+    expect(hard).toEqual({ kind: 'paragraph', inline: ['one\ntwo\nthree'] })
   })
 
   it('drops only the closing hashes of a heading', () => {

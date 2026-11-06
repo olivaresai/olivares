@@ -105,13 +105,12 @@ func (rs *ResourceServer) enforceRevisionPreBody(ctx context.Context, w http.Res
 		switch {
 		case v == revision20260728:
 			return true, rs.enforceNextHeadersPreBody(ctx, w, r, tok)
-		case revisionIndex(v) >= 0 && revisionIndex(v) < revisionIndex(revision20260728):
+		case v == "" || revisionIndex(v) >= 0 && revisionIndex(v) < revisionIndex(revision20260728):
+			// A handshake-era request. Its initialize names no version, and the
+			// published versioning page has a dual-era server serve an initialize
+			// with legacy semantics; a 2025-11-25 server that receives no version
+			// assumes a handshake-era one. A named older version gets no more.
 			return false, false
-		case v == "":
-			// Nothing named: the client did not state a version at all, which is a
-			// header-level defect, not a version this server declines.
-			rs.writeHeaderMismatch(w, headerMCPProtocolVersion+" header required with accepted revisions: "+strings.Join(acceptedHTTPRevisions(), ", "))
-			return false, true
 		default:
 			// A version WAS named and this server does not implement it.
 			rs.writeUnsupportedProtocolVersion(w, v)

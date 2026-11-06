@@ -10,6 +10,10 @@ import { DEFAULT_AUTH, renderIntel, screen, userEvent } from '@/test/intel'
 import '@/features/_intel'
 import type { TabExtension } from '@/features/panels'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 let allowed = (_permission: string) => true
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ ...DEFAULT_AUTH, can: (p: string) => allowed(p) }),

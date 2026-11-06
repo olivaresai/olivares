@@ -23,6 +23,13 @@ vi.mock('@/features/agentops/api', async (importOriginal) => {
   }
 })
 
+const templates = vi.hoisted(() => ({ get: vi.fn() }))
+vi.mock('@/features/workspace-templates/api', async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import('@/features/workspace-templates/api')>()
+  return { ...real, templatesApi: { ...real.templatesApi, ...templates } }
+})
+
 const RUN: RunDTO = {
   run_ref: 'run_8f3a21c9',
   name: 'Reconcile invoice export',
@@ -89,6 +96,29 @@ describe('SessionFacts — the session as a person reads it', () => {
       expect(facts).not.toHaveTextContent(ref)
   })
 
+  it("never says the tool's private mode name while the launch template is read", () => {
+    // The template that words dontAsk has not answered yet.
+    templates.get.mockReturnValue(new Promise(() => {}))
+    render({
+      ...RUN,
+      permission_mode: 'dontAsk',
+      tool_mode: 'dontAsk',
+      template_id: 'tpl-ec',
+    })
+    const facts = screen.getByRole('region', { name: 'Session' })
+    expect(facts).not.toHaveTextContent('dontAsk')
+  })
+
+  it("says the access is not reported yet instead of the launch's internal name", () => {
+    // The tool has not reported its mode; the launch asked for "default".
+    render({ ...RUN, permission_mode: 'default', tool_mode: undefined })
+    const access = within(screen.getByRole('region', { name: 'Session' }))
+      .getByText('Access')
+      .closest('div')!
+    expect(access).toHaveTextContent('Access not reported')
+    expect(access).not.toHaveTextContent(/default/)
+  })
+
   it('leaves out a fact the engine did not send instead of printing a reference', () => {
     render({ ...RUN, model_ref: undefined, effort: undefined }, null)
     const facts = screen.getByRole('region', { name: 'Session' })
@@ -140,18 +170,10 @@ describe('SessionFacts — the session as a person reads it', () => {
       ],
     })
     render()
-    const meters = within(
+    // The share every place that names the account says; the other windows are on Usage.
+    expect(
       await screen.findByRole('region', { name: 'Account usage' }),
-    ).getAllByRole('meter')
-    expect(meters.map((m) => m.getAttribute('aria-valuenow'))).toEqual([
-      '58',
-      '37',
-    ])
-    expect(screen.getByText('58% of 5 hours')).toBeInTheDocument()
-    expect(screen.getByText('37% of the week')).toBeInTheDocument()
-    expect(screen.getByTestId('account-usage')).toHaveTextContent(
-      'Monthly spend 85% · Credits 12.50',
-    )
+    ).toHaveTextContent(/^Account usage37% of the week · 58% of 5 hours$/)
   })
 })
 

@@ -24,6 +24,10 @@ func TestManagedMCPStreamableSessionAndStrictSSE(t *testing.T) {
 		}
 		var method string
 		_ = json.Unmarshal(req["method"], &method)
+		if method == "server/discover" { // a handshake-era server refuses it before initialize
+			http.Error(w, "Bad Request: Server not initialized", http.StatusBadRequest)
+			return
+		}
 		if method == "initialize" {
 			w.Header().Set("Mcp-Session-Id", "fixture-session")
 			w.Header().Set("Content-Type", "application/json")
@@ -53,19 +57,19 @@ func TestManagedMCPStreamableSessionAndStrictSSE(t *testing.T) {
 			t.Fatalf("%s: %s %v", method, res.State, err)
 		}
 	}
-	if calls != 3 {
+	if calls != 4 {
 		t.Fatalf("calls=%d", calls)
 	}
 	for _, req := range []mcpc.UpstreamRequest{
 		{Method: "tools/list", Subject: "agent:A", ClientID: "other-client", Params: []byte(`{}`)},
 		{Method: "tools/list", Subject: "agent:A", Scopes: []string{"other:scope"}, Params: []byte(`{}`)},
 	} {
-		if res, err := f.Forward(context.Background(), req); err == nil || res.State != mcpc.DispatchNotSent || calls != 3 {
+		if res, err := f.Forward(context.Background(), req); err == nil || res.State != mcpc.DispatchNotSent || calls != 4 {
 			t.Fatal("client or scope reused foreign session")
 		}
 	}
 	// A different subject cannot inherit the first subject's transport session.
-	if res, err := f.Forward(context.Background(), mcpc.UpstreamRequest{Method: "tools/list", Subject: "agent:B", Params: []byte(`{}`)}); err == nil || res.State != mcpc.DispatchNotSent || calls != 3 {
+	if res, err := f.Forward(context.Background(), mcpc.UpstreamRequest{Method: "tools/list", Subject: "agent:B", Params: []byte(`{}`)}); err == nil || res.State != mcpc.DispatchNotSent || calls != 4 {
 		t.Fatal("foreign subject reused session")
 	}
 }
@@ -88,7 +92,8 @@ func TestManagedMCPSSEOutcomeUnknownDoesNotRetry(t *testing.T) {
 			f := &UpstreamForwarder{URL: srv.URL, Client: srv.Client()}
 			EnableManagedForwarding(f)
 			res, err := f.Forward(t.Context(), mcpc.UpstreamRequest{Method: "initialize", Subject: "agent:A", Params: []byte(`{}`)})
-			if err == nil || res.State != mcpc.DispatchUnknown || calls != 1 {
+			// The read-only server/discover probe, then the one initialize, never retried.
+			if err == nil || res.State != mcpc.DispatchUnknown || calls != 2 {
 				t.Fatalf("ambiguous response: state=%s calls=%d", res.State, calls)
 			}
 		})

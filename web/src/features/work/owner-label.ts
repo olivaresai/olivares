@@ -30,10 +30,12 @@ import { useAuth } from '@/lib/auth/context'
  * que pedirlo por fila serian cinco peticiones para una sola respuesta.
  */
 export function useOwnerLabel(): (kind: string, ref: string) => string {
-  const { activeTenant } = useAuth()
+  const { activeTenant, can } = useAuth()
   const { data } = useQuery({
     queryKey: ['work', activeTenant, 'owner-roster'] as const,
     queryFn: () => consoleApi.listMembers(),
+    // `/v1/members` answers 403 without `user:read` (an editor): do not ask, the ref stands.
+    enabled: can('user:read'),
     // El padron cambia poco y esto es decoracion de una lista: que un nombre tarde un minuto en
     // reflejarse no rompe nada, y releerlo en cada montaje si cuesta.
     staleTime: 60_000,

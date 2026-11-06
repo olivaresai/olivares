@@ -81,7 +81,7 @@ Schließen Sie bei einer frischen Installation die erstmalige Einrichtung in
 der Konsole ab.
 
 Bei einer frischen Installation sind `knowledge` und `sourcescope` deaktiviert. Aktivieren Sie
-`knowledge` und `sourcescope` als Administrator unter **Settings > Edition & modules** und lassen
+`knowledge` und `sourcescope` als Administrator unter **Settings > Modules** und lassen
 Sie die anderen ausgewählten Module an. Für die CLI melden Sie sich zuerst
 mit `olivares login` als Administrator bei dieser Engine an und führen dann
 `olivares modules on knowledge` und `olivares modules on sourcescope` aus. Warten Sie vor dem Fortfahren auf jeden Neustart der Engine;

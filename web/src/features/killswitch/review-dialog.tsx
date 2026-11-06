@@ -41,7 +41,7 @@ export interface ReviewDialogProps {
 export function ReviewDialog({ stop, open, onOpenChange }: ReviewDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent trust className="max-w-lg">
         {open && <ReviewForm stop={stop} onClose={() => onOpenChange(false)} />}
       </DialogContent>
     </Dialog>

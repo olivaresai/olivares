@@ -310,6 +310,7 @@ var (
 		model.Leaf("hooks.post_tool[].command", pdeclNoneTemplateHook),
 		model.Leaf("hooks.pre_session[].command", pdeclNoneTemplateHook),
 		model.Leaf("hooks.post_session[].command", pdeclNoneTemplateHook),
+		model.Leaf("settings.ai_attribution", model.None("an AI attribution mode, a closed set of off, assisted-by or co-authored-by: templateapply.go:130, git_attribution.go:117")),
 		model.Leaf("settings.permission_mode", model.None("a permission mode, checked against a closed set: templateapply.go:145, templateapply.go:180")),
 		model.Leaf("settings.effort", model.None("an effort level, checked against a closed set: templateapply.go:146, templateapply.go:183")),
 		model.Leaf("settings.model", model.None("a model id a launch passes to the child: templateapply.go:147")),

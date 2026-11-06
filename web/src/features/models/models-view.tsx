@@ -18,6 +18,7 @@ import { Link } from '@tanstack/react-router'
 import { Cpu, Plus, Wand2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { z } from 'zod'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -58,9 +59,11 @@ import {
   ModelsTable,
   PricingTable,
 } from './components'
+import { InstallModel } from './install-model'
 import { AvailableTab } from './available-tab'
 import { GpaiTab } from './gpai'
 import type { Decision, RoutingPolicy, RoutingStrategy } from './types'
+import { UsageTab } from './usage-tab'
 import './i18n'
 import { PagePrimaryAction } from '@/components/ui/page-actions'
 
@@ -378,9 +381,27 @@ function ModelAccessTab() {
   )
 }
 
+const MODEL_TABS = [
+  'available',
+  'usage',
+  'catalog',
+  'estate',
+  'governance',
+] as const
+const GOVERNANCE_TABS = ['routing', 'access', 'gpai', 'residency'] as const
+
 export function ModelsView() {
   const { t } = useTranslation('models')
   const { activeTenant, can } = useAuth()
+  // Usage is the sessions module's read of the runs the caller may read: offered only to
+  // whoever may read runs. The engine refuses it to anyone else.
+  const canUsage = can('sessions:run:read')
+  const [tab, setTab] = useTabParam(
+    canUsage ? MODEL_TABS : MODEL_TABS.filter((v) => v !== 'usage'),
+  )
+  const [governanceTab, setGovernanceTab] = useTabParam(GOVERNANCE_TABS, {
+    key: 'governance',
+  })
 
   const catalogQ = useQuery({
     queryKey: modelsKeys.catalog(activeTenant),
@@ -402,17 +423,27 @@ export function ModelsView() {
 
   return (
     <IntelPage icon={Cpu} title={t('title')} description={t('description')}>
-      <Tabs defaultValue="available">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="available">{t('tabs.available')}</TabsTrigger>
+          {canUsage ? (
+            <TabsTrigger value="usage">{t('tabs.usage')}</TabsTrigger>
+          ) : null}
           <TabsTrigger value="catalog">{t('tabs.catalog')}</TabsTrigger>
           <TabsTrigger value="estate">{t('tabs.estate')}</TabsTrigger>
           <TabsTrigger value="governance">{t('tabs.governance')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="available" className="flex flex-col gap-4">
+          <InstallModel />
           <AvailableTab />
         </TabsContent>
+
+        {canUsage ? (
+          <TabsContent value="usage" className="flex flex-col gap-4">
+            <UsageTab />
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="catalog" className="flex flex-col gap-4">
           <AsyncSection query={catalogQ} skeletonHeight={260}>
@@ -468,7 +499,7 @@ export function ModelsView() {
         </TabsContent>
 
         <TabsContent value="governance" className="flex flex-col gap-4">
-          <Tabs defaultValue="routing">
+          <Tabs value={governanceTab} onValueChange={setGovernanceTab}>
             <TabsList>
               <TabsTrigger value="routing">{t('tabs.routing')}</TabsTrigger>
               <TabsTrigger value="access">{t('tabs.access')}</TabsTrigger>

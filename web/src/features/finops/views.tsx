@@ -23,6 +23,7 @@ export const VIEWS = [
     helpHref: '/reference/modules/xi-finops',
     icon: Wallet,
     permission: 'finops:budget:read',
+    changes: [{ permission: 'finops:budget:write' }],
     element: lazyView(StoredBudgetsView),
   },
 ] satisfies ViewEntry[]

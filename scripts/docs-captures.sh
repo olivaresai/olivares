@@ -85,12 +85,15 @@ DATASET_ROOT="$(demo_dir)"
 # builds so a renamed demo session fails at its source rather than much later as a missing tab.
 bash "$ROOT/scripts/test-demo-agent.sh"
 
+# The capture spec runs playwright from web/ on every path, so the web deps install before the branch below;
+# a failed install stops the run here with pnpm's own message (it was skipped with a supplied binary, and its error was discarded).
+pnpm --dir "$ROOT/web" install --frozen-lockfile
+
 if [ -n "${OLIVARES_BIN:-}" ]; then
   [ -x "$BIN" ] || { echo 'ERROR: OLIVARES_BIN must name an executable release candidate' >&2; exit 1; }
   echo '==> Using the supplied release candidate'
 else
   echo "==> Building web bundle + olivares binary"
-  pnpm --dir "$ROOT/web" install --frozen-lockfile >/dev/null 2>&1 || true
   pnpm --dir "$ROOT/web" run build
   # Build connector plugins before the engine binary; go:embed requires their artifacts.
   bash "$ROOT/scripts/build-connectors.sh"
@@ -529,7 +532,8 @@ PATH=/usr/local/bin:/usr/bin:/bin HOME="$SETUP_DATA/home" \
 SETUP_PID=$!
 # Check that the owned engine remains alive so another service cannot satisfy readiness.
 SETUP_UP=0
-for _ in $(seq 1 40); do
+# Same bound as the seeded engine (240 s): a fresh store bootstraps slowly on a loaded host (20 s was too short).
+for _ in $(seq 1 480); do
   kill -0 "$SETUP_PID" 2>/dev/null || break
   if curl --noproxy '*' -sf --connect-timeout 2 --max-time 5 "http://127.0.0.1:$SETUP_PORT/healthz" >/dev/null 2>&1; then
     SETUP_UP=1
@@ -555,15 +559,19 @@ else
   redact_log "$SETUP_DATA/engine.log" <"$SETUP_DATA/engine.log" >&2 || true
 fi
 
-# Resolve the recording-session ID from the API and omit its viewer when none exists.
-DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
-  -H @- -H "X-Olivares-Tenant: $TENANT" \
-  | python3 -I -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
-if [ -n "$DEMO_SESSION_ID" ]; then
-  echo "==> Demo recording session: $DEMO_SESSION_ID"
-  export DEMO_SESSION_ID
-else
-  echo "==> ⚠ the seeded estate exposes no recording sessions — skipping /session-viewer capture" >&2
+# Recording is a Business capability: only a Business build has a recording session to open in
+# the viewer, so a Community build asks for none and the spec skips /session-viewer.
+if [ "$BUILD_EDITION" != community ]; then
+  # Resolve the recording-session ID from the API and omit its viewer when none exists.
+  DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
+    -H @- -H "X-Olivares-Tenant: $TENANT" \
+    | python3 -I -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
+  if [ -n "$DEMO_SESSION_ID" ]; then
+    echo "==> Demo recording session: $DEMO_SESSION_ID"
+    export DEMO_SESSION_ID
+  else
+    echo "==> ⚠ the seeded estate exposes no recording sessions — skipping /session-viewer capture" >&2
+  fi
 fi
 
 # Clear the output directory so filtered runs cannot publish captures left by an earlier

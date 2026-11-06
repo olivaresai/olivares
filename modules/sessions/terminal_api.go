@@ -61,17 +61,19 @@ func (m *Module) handleStartTerminal(w http.ResponseWriter, r *http.Request, mc 
 	})
 }
 
+// terminalRights are the folder rights, each asked under permWsWrite, that a terminal needs. SFTP
+// asks the same ones, at its door and at every rights check of a credential.
+var terminalRights = []auth.TrusteeRight{auth.TrusteeWrite, auth.TrusteeCreate, auth.TrusteeErase}
+
 // terminalAllowed applies the same current folder rights and assurance to every
 // request, including reconnects. A shell cannot keep a grant that was revoked.
 func (m *Module) terminalAllowed(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) bool {
 	if !auth.StepUpSatisfied(r.Context(), mc.Principal) {
-		writeJSON(w, http.StatusForbidden, map[string]any{"error": map[string]string{
-			"code":    "step_up_required",
-			"message": "a terminal needs the step-up this deployment requires; complete it and retry",
-		}})
+		writeJSON(w, http.StatusForbidden, api.ErrorBody("step_up_required",
+			"a terminal needs the step-up this deployment requires; complete it and retry"))
 		return false
 	}
-	for _, right := range []auth.TrusteeRight{auth.TrusteeWrite, auth.TrusteeCreate, auth.TrusteeErase} {
+	for _, right := range terminalRights {
 		if !m.workspaceAllowed(w, r, mc, permWsWrite, right) {
 			return false
 		}

@@ -50,6 +50,22 @@ describe('RequireAssurance follows the deployment step-up policy', () => {
     expect(screen.queryByText('the form')).not.toBeInTheDocument()
   })
 
+  it('marks the authenticator-code remedy as a trust surface, as the passkey panel is', () => {
+    authState.principal = {
+      aal: 1,
+      amr: ['pwd'],
+      admin_step_up: 'totp',
+      step_up_satisfied: false,
+    }
+    gate()
+    expect(screen.queryByText('the form')).not.toBeInTheDocument()
+    expect(
+      screen
+        .getByRole('button', { name: /sign in again/i })
+        .closest('[data-trust-chrome]'),
+    ).not.toBeNull()
+  })
+
   it('falls back to the hardware floor against an engine that does not say', () => {
     authState.principal = { aal: 1, amr: ['pwd'] }
     gate()

@@ -494,10 +494,8 @@ var errorBody = api.ModuleErrorBody
 // policy (auth.StepUpSatisfied). Tokens carry AAL0 and therefore fail closed too.
 func requireStepUp(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) bool {
 	if !auth.StepUpSatisfied(r.Context(), mc.Principal) {
-		writeJSON(w, http.StatusForbidden, map[string]any{"error": map[string]string{
-			"code":    "step_up_required",
-			"message": "this inference-proxy governance write needs the administrative step-up this deployment requires; complete it and retry",
-		}})
+		writeJSON(w, http.StatusForbidden, api.ErrorBody("step_up_required",
+			"this inference-proxy governance write needs the administrative step-up this deployment requires; complete it and retry"))
 		return false
 	}
 	return true

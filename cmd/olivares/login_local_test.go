@@ -49,6 +49,10 @@ func loginEngine(t *testing.T) (srv *httptest.Server, bodies chan map[string]any
 	}))
 	t.Cleanup(srv.Close)
 	dataDir := t.TempDir()
+	// The engine makes its data directory private; a temp directory follows the umask.
+	if err := os.Chmod(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	u, _ := url.Parse(srv.URL)
 	if err := writeConsoleState(dataDir, consoleState{Version: 1, Listen: u.Host}); err != nil {
 		t.Fatal(err)
@@ -242,5 +246,34 @@ func TestLoginWithEmailAsksForThePassword(t *testing.T) {
 	_, _, err := execRoot(t, "login", "--email", "ana@example.com")
 	if exitcode.From(err) != exitcode.Usage || err == nil || !strings.Contains(err.Error(), "--password-file") {
 		t.Fatalf("without a terminal: err = %v (exit %d), want the refusal naming --password-file", err, exitcode.From(err))
+	}
+}
+
+// TestLoginWithoutTerminalSaysItNeedsOne: `olivares login --server <address>` with the
+// email and password on standard input is how a script or a pipe would call it, and the
+// help says it asks. Without a terminal it cannot ask, and the refusal said only "no
+// credential" with nothing about the terminal. It must say asking needs a terminal and
+// name the scripted forms; the help must say so too.
+func TestLoginWithoutTerminalSaysItNeedsOne(t *testing.T) {
+	prepareModelstackCLITest(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
+	prevTTY := interactiveStdin
+	t.Cleanup(func() { interactiveStdin = prevTTY })
+	interactiveStdin = func(io.Reader) bool { return false }
+
+	_, _, err := execRootStdin(t, "ana@example.com\nsecret pw\n", "login", "--server", "https://127.0.0.1:1")
+	if err == nil {
+		t.Fatal("login without a terminal and without a credential succeeded")
+	}
+	for _, want := range []string{"no credential", "terminal", "--email", "--password-file", "--token-file"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err.Error(), want)
+		}
+	}
+
+	help, _, herr := execRootStdin(t, "", "login", "--help")
+	if herr != nil || !strings.Contains(help, "but only on a terminal") {
+		t.Errorf("login --help must say the prompt needs a terminal (err %v):\n%s", herr, help)
 	}
 }

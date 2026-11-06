@@ -15,7 +15,7 @@
 import { useTranslation } from 'react-i18next'
 import { CloudUpload } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
-import { RecordingNotice } from '@/features/recordings/recording-notice'
+import { RecordingNoticeSlot } from '@/features/recording-notice-slot'
 import { AgentCoreExportView } from './agentcore-export-view'
 import './i18n'
 
@@ -28,7 +28,7 @@ export default function AgentCoreExportRoute() {
         description={t('agentcoreExport.caption')}
         icon={CloudUpload}
       />
-      <RecordingNotice namespace="governance" />
+      <RecordingNoticeSlot namespace="governance" />
       <AgentCoreExportView />
     </div>
   )

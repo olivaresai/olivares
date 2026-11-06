@@ -226,16 +226,9 @@ func authorityCostStatement(
 	// can be answered index-only, while the real full-record read is an ordinary
 	// Index Scan with a heap fetch.
 	//
-	// ⚠ THAT DIFFERENCE IS WHY AN EARLIER DESCRIPTION OF THIS MEASUREMENT WAS
-	// WRONG, and it is recorded here rather than quietly dropped. The R3 report
-	// described the corrected plan as an "Index Only Scan" on PostgreSQL and a
-	// "COVERING" index on SQLite. Those labels came from the first, `SELECT id`
-	// version of this probe. Once the projection was widened to the descriptor —
-	// which is this function's whole point — the real plans are `Index Scan` and
-	// `SEARCH … USING INDEX`, confirmed by an independent reviewer and by the
-	// author's own retained final log. The measured cost (1 row present, 0 absent)
-	// is unchanged; what is NOT established is heap-free access, and this comment
-	// exists so nobody re-derives that claim from the stronger words.
+	// The full-record plans are Index Scan on PostgreSQL and SEARCH USING INDEX on
+	// SQLite. The measured cost is one row when present and zero when absent;
+	// this probe does not establish heap-free access.
 	projection := communicationDescriptor(t, communicationCaptureSchema(t), channelGrantKind).
 		AllColumns()
 	terms := []string{"tenant_id = ?"}

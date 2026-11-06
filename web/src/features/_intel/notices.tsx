@@ -6,7 +6,8 @@
 // every view applies them the same way: a `truncated` aggregate is flagged as
 // partial (never a fake exact total); a privileged read says it is self-audited; a
 // coverage caveat / not-yet-wired seam is shown, not hidden; a compliance disclaimer
-// is always rendered. They are quiet by default — a hairline strip, not an alarm.
+// is always rendered. They are quiet by default: a caption in the place they qualify, not a
+// boxed strip above the work: a notice is a toast with one action or an inline state.
 import type { ReactNode } from 'react'
 import { Info, Plug, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -20,13 +21,15 @@ import './i18n'
 
 type Tone = 'info' | 'warning' | 'neutral'
 
+// The tone is the icon's color; a warning also colors its words, because without a box
+// that is all that tells it from a plain note.
 const TONE_STYLES: Record<Tone, string> = {
-  info: 'border-info-line bg-info-soft text-info',
-  warning: 'border-warning-line bg-warning-soft text-warning',
-  neutral: 'border-border bg-muted text-muted-foreground',
+  info: 'text-info',
+  warning: 'text-warning',
+  neutral: 'text-muted-foreground',
 }
 
-/** The generic inline strip every specific notice composes. */
+/** The generic inline caption every specific notice composes: no box, no fill. */
 export function IntelNotice({
   tone = 'neutral',
   icon,
@@ -41,19 +44,28 @@ export function IntelNotice({
   return (
     <div
       className={cn(
-        'flex items-start gap-2 rounded-md border px-3 py-2 text-caption leading-relaxed',
-        TONE_STYLES[tone],
+        'flex items-start gap-2 text-caption leading-relaxed',
         className,
       )}
     >
       {/* Notice icons are decorative — the text body conveys the message — so hide them
           from the a11y tree to avoid a redundant screen-reader announcement (WCAG 1.1.1). */}
       {icon ? (
-        <span className="mt-px [&_svg]:size-3.5" aria-hidden>
+        <span
+          className={cn('mt-px [&_svg]:size-3.5', TONE_STYLES[tone])}
+          aria-hidden
+        >
           {icon}
         </span>
       ) : null}
-      <div className="min-w-0 text-foreground">{children}</div>
+      <div
+        className={cn(
+          'min-w-0',
+          tone === 'warning' ? TONE_STYLES.warning : 'text-foreground',
+        )}
+      >
+        {children}
+      </div>
     </div>
   )
 }
@@ -111,7 +123,7 @@ export function ListTruncationBadge({
    *  estrecho obligaría a castear en el llamante, que es justo donde no quiero decisiones. */
   query: { data?: unknown; error?: unknown }
   label: string
-  hint: ReactNode
+  hint?: ReactNode
   className?: string
   /** ⛔ FILAS CARGADAS, OPCIONAL A PROPOSITO. Con `{items: [], has_more: true}` el aviso se
    *  pintaba ENCIMA del estado vacio: «No active members» y «Loaded 0 rows; there are more» a la
@@ -133,7 +145,7 @@ export function ListTruncationBadge({
       >
         {label}
       </Badge>
-      {typeof hint !== 'string' && (
+      {hint != null && typeof hint !== 'string' && (
         <p className="mt-1 text-caption text-muted-foreground">{hint}</p>
       )}
     </div>

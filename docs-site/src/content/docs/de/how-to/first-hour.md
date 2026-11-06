@@ -22,8 +22,8 @@ auf Ihrem Docker-Host zutrifft.
 selbstsigniertes Zertifikat. Prüfen Sie, dass Sie Ihren eigenen Server öffnen,
 bevor Sie die Warnung des Browsers akzeptieren. Geben Sie das Setup-Token, Ihre
 E-Mail-Adresse und ein Passwort ein, um den ersten Administrator anzulegen. Halten
-Sie Token und Passwort geheim. Die Konsole meldet Sie an und öffnet den
-Einrichtungsassistenten.
+Sie Token und Passwort geheim. Die Konsole meldet Sie an und öffnet
+Sitzungen, mit dem Feld für Ihre erste Nachricht auf dem Bildschirm.
 
 Der Container führt Werkzeuge auf dem Server aus. Ein auf Ihrem Laptop angemeldetes
 Werkzeug gehört zu einer anderen Installation; seine Anmeldung wird nicht in den
@@ -31,7 +31,7 @@ Container kopiert.
 
 ## 2. Ein Werkzeug und seine Anmeldung wählen
 
-Verwenden Sie den Assistenten oder öffnen Sie **KI-Werkzeuge** (`/agent-tools`).
+Verwenden Sie die Karten unter Sitzungen oder öffnen Sie **KI-Werkzeuge** (`/agent-tools`).
 Jedes Werkzeug zeigt an, ob es installiert und angemeldet ist. Fehlt es, prüfen
 Sie die Installation und genehmigen Sie sie. Verwenden Sie die Anmeldeschaltfläche
 des Werkzeugs und schließen Sie dessen eigenen Anmeldeablauf ab. Für Claude Code
@@ -59,7 +59,7 @@ natives Standardmodell verwenden.
 1. Öffnen Sie **Sitzungen** (`/sessions`) und wählen Sie **Neue Sitzung**.
 2. Wählen Sie ein bereites Werkzeug. Das Formular zeigt einen Ordner und füllt ihn
    für Sie aus. Lassen Sie ihn für eine Sitzung in einem eigenen Ordner unverändert
-   oder wählen Sie **Ordner ändern** und geben `/project` ein, um den Host-Ordner
+   oder wählen Sie **Ordner → Anderer Ordner …** und geben `/project` ein, um den Host-Ordner
    zu verwenden, der mit der README-Installation eingebunden wird.
 3. Lassen Sie **First message** leer und drücken Sie **Starten**. Ihre Nachricht
    können Sie nach dem Öffnen in der Unterhaltung eingeben. Profil und Home-Pfade
@@ -78,7 +78,7 @@ zurück.
 ## 4. Eine Aktion genehmigen
 
 Um eine Genehmigung auszuprobieren, wählen Sie beim Starten der Sitzung
-**Weitere Optionen → Vor jeder Aktion nachfragen**. Bitten Sie das Werkzeug, einen
+**Was der Agent tun darf → Vor jeder Aktion nachfragen**. Bitten Sie das Werkzeug, einen
 harmlosen Befehl im Projekt auszuführen. Wenn es eine Berechtigung anfordert,
 öffnen Sie **Regeln**. Die Anfrage, die auf Sie wartet, ist orange markiert und
 steht offen neben der Warteschlange, mit dem Befehl, dem Ziel, das sie erreicht,

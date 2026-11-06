@@ -18,6 +18,8 @@ import i18n from 'i18next'
 import { afterEach, describe, expect, it } from 'vitest'
 import { routeTree } from '@/app/routes'
 import { BUSINESS_BUILD } from '@/features/business-build'
+import type { ViewGate } from '@/features/navigation/model'
+import { settingsPlace, sidebarPlaces } from '@/features/navigation/places'
 import { ROUTE_ALIASES } from '@/features/registry'
 import census from '@/features/route-census.json'
 // The title's root-closure import registers this dictionary too; the census reads it loaded.
@@ -27,6 +29,7 @@ import { LANGUAGE_CODES, registerTranslations } from '@/lib/i18n'
 import {
   pageLabel,
   setAttentionCount,
+  topBarLabel,
   setPageTitle,
   useDocumentTitle,
 } from './document-title'
@@ -44,8 +47,12 @@ const title = (path: string) => `${pageLabel(t, path, {})} · Olivares AI`
 describe('the document title of every census route', () => {
   // A Community build does not mount the Business paths: each answers one "Part of
   // Business" notice, so its title is that notice's, shared on purpose.
+  // The root only selects a start page; it has no page title of its own.
   const mounted = census.paths
-    .filter((p) => BUSINESS_BUILD || !census.business_paths.includes(p))
+    .filter(
+      (p) =>
+        p !== '/' && (BUSINESS_BUILD || !census.business_paths.includes(p)),
+    )
     .map((p) => p.replace(/\$\w+/g, 'sample'))
 
   // A Business console serves /deploy as the one leaf of its Deployment area: the area page
@@ -57,8 +64,18 @@ describe('the document title of every census route', () => {
       (a) => a.from,
     ),
   )
+  // An area directory named like the place it redirects to is that place (/areas/work-communications
+  // opens /work, "Work"): the same page, not a second one to tell apart.
+  const namedLikeLanding = new Set(
+    ROUTE_ALIASES.filter((a) => title(a.from) === title(a.to)).map(
+      (a) => a.from,
+    ),
+  )
   const titled = mounted.filter(
-    (p) => !(BUSINESS_BUILD && p === '/deploy') && !redirectsOnly.has(p),
+    (p) =>
+      !(BUSINESS_BUILD && p === '/deploy') &&
+      !redirectsOnly.has(p) &&
+      !namedLikeLanding.has(p),
   )
 
   it('is unique per mounted route', () => {
@@ -94,7 +111,47 @@ describe('the document title of every census route', () => {
     expect(title('/settings')).toBe('Settings · Olivares AI')
     expect(title('/login')).toBe('Sign in · Olivares AI')
     expect(title('/login/')).toBe('Sign in · Olivares AI')
-    expect(title('/')).toBe('Now · Olivares AI')
+    expect(title('/now')).toBe('Overview · Olivares AI')
+    expect(pageLabel(t, '/', {})).toBe('')
+  })
+
+  // The place you click is the place you land on. Every sidebar link opens a page whose top
+  // bar and tab title read the sidebar's own word, for whoever opens it: a fresh install has
+  // no Security or Health module, so its Security and Operations links open other pages.
+  const gates: [string, ViewGate][] = [
+    ['may open everything', () => true],
+    ['is on a fresh install', (v) => !['security', 'health'].includes(v.id)],
+  ]
+  it.each(gates)(
+    'names the page each sidebar place opens by the place for a person who %s',
+    (_who, gate) => {
+      const places = sidebarPlaces(gate)
+      expect(places).toHaveLength(10)
+      const wrong = [...places, settingsPlace()]
+        .map((p) => ({
+          place: p.id,
+          shown: pageLabel(t, p.path, p.search ?? {}, gate),
+          sidebar: t(`nav:places.${p.id}`),
+        }))
+        .filter((p) => p.shown !== p.sidebar)
+      expect(wrong).toEqual([])
+    },
+  )
+
+  // The top bar names the place and the page's heading names the page (the lead page's
+  // heading too), so "AI tools" is never under a top bar reading "AI tools".
+  it('names in the top bar the place of every page, and the page in the tab', () => {
+    const bar = (path: string) => topBarLabel(t, path)
+    expect(bar('/agent-tools')).toBe('Tools')
+    expect(bar('/models')).toBe('Tools')
+    expect(bar('/agentops')).toBe('Sessions')
+    expect(bar('/backups')).toBe('Operations')
+    expect(bar('/now')).toBe('Overview')
+    expect(bar('/permissions')).toBe('Rules')
+    expect(bar('/settings')).toBe('Settings')
+    // An address in no place is named by its heading alone (a 404, a Business notice).
+    expect(bar('/no-such-page')).toBe('')
+    expect(title('/models')).toBe('Models · Olivares AI')
   })
 
   it('names a door by its own entrance, not the room it opens', () => {
@@ -104,9 +161,7 @@ describe('the document title of every census route', () => {
 
   // The approval queue is the Rules place of the Estate top bar (APPROVALS_SECTION).
   it('names a section address by its place', () => {
-    expect(pageLabel(t, '/permissions', { tab: 'approvals' })).toBe(
-      'Rules & approvals',
-    )
+    expect(pageLabel(t, '/permissions', { tab: 'approvals' })).toBe('Rules')
   })
 
   it.skipIf(BUSINESS_BUILD)('names a Business bookmark in Community', () => {

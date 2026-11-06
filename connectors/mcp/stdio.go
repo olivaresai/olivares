@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,9 +20,9 @@ import (
 // wedge shutdown forever.
 const stdioWaitDelay = 5 * time.Second
 
-// maxStdioFrame matches the 32 MiB HTTP response ceiling. It excludes CRLF.
+// maxStdioFrame matches the HTTP response bound (MaxHTTPBody). It excludes CRLF.
 // Scanner stops at this ceiling plus framing bytes; excess is terminal.
-const maxStdioFrame = maxHTTPBody
+const maxStdioFrame = MaxHTTPBody
 
 // stdioTransport speaks MCP over a subprocess's stdin/stdout as newline-delimited
 // JSON-RPC (the MCP stdio transport). The subprocess is bound to the context it
@@ -154,7 +153,7 @@ func (t *stdioTransport) readResponse(id int64) (json.RawMessage, error) {
 		}
 		line := t.scanner.Bytes()
 		if len(line) > maxStdioFrame {
-			t.readErr = errors.New("mcp: stdio response line exceeds 32 MiB")
+			t.readErr = fmt.Errorf("mcp: stdio response line exceeds %d bytes", maxStdioFrame)
 			return nil, t.readErr
 		}
 		var msg rpcMessage

@@ -263,7 +263,10 @@ type DriverSession interface {
 	// in-flight turn and release the conversation. It never ends the OS process —
 	// the process-group teardown does that, and it is the caller's next act.
 	Shutdown(ctx context.Context)
-	// AuthState is the last readiness the provider reported.
+	// AuthState is the readiness the launch established, and the input gate: a
+	// required one refuses every message. What a turn reports later reaches the run
+	// row through OnAuthState and never closes the gate, so the next message is
+	// judged by its own result.
 	AuthState() string
 	// ActiveTurn is the in-flight turn id ("" when idle).
 	ActiveTurn() string
@@ -912,6 +915,14 @@ const defaultDriverCallTimeout = 30 * time.Second
 // turn forever; a bounded refusal is the honest outcome.
 const defaultDriverApprovalDeadline = 30 * time.Second
 
+// ApprovalWait is how long one governed tool call of any driver waits for a
+// person to answer its review: the owned drivers' server→client approval and
+// the Claude Code PreToolUse hook (ClaudeHookPEPCommandTimeout derives from it).
+// Past it the call is refused with a retry reason and the session continues.
+// Claude Code documents its hook timeout per hook, in seconds, with no maximum
+// (https://code.claude.com/docs/en/hooks), so no vendor limit shortens it.
+const ApprovalWait = 15 * time.Minute
+
 // ---------------------------------------------------------------------------
 // Runtime glue.
 // ---------------------------------------------------------------------------
@@ -1144,6 +1155,11 @@ func (m *Module) recordProviderAuthState(ctx context.Context, lr *liveRun, state
 	})
 }
 
+// authRequiredTurnRefusal is the 409 for a launch that did not authenticate. A
+// sign-in made after the launch reaches it only through a new handshake.
+const authRequiredTurnRefusal = "the provider reports that this profile is not authenticated (auth_required); " +
+	"a turn cannot be started: sign in to the provider, then stop and resume this session"
+
 // driverInput routes one operator input to the owned conversation. A driver run
 // never accepts a RAW protocol line: the child is an owned RPC peer, and letting
 // a caller write arbitrary frames onto its stdin would hand it the whole method
@@ -1162,7 +1178,7 @@ func (m *Module) driverInputImages(ctx context.Context, lr *liveRun, text string
 		return false, conflictErr("this session has no provider protocol driver")
 	}
 	if state := lr.session.AuthState(); state == AuthStateRequired {
-		return false, &runErr{http.StatusConflict, "the provider reports that this profile is not authenticated (auth_required); a turn cannot be started"}
+		return false, &runErr{http.StatusConflict, authRequiredTurnRefusal}
 	}
 	// The LAST thing before the bytes: the durable authority, re-proved with the
 	// claim row in the transaction's write set. A takeover that commits between
@@ -1201,7 +1217,7 @@ func (m *Module) driverInputAdmittedImages(ctx context.Context, lr *liveRun, tex
 		}
 	}
 	if state := lr.session.AuthState(); state == AuthStateRequired {
-		return false, &runErr{http.StatusConflict, "the provider reports that this profile is not authenticated (auth_required); a turn cannot be started"}
+		return false, &runErr{http.StatusConflict, authRequiredTurnRefusal}
 	}
 	// AuthState may wait on the driver's mutex. Check again after that wait.
 	if err := m.runtimeInputLiveCurrent(ctx, lr, launch, sid); err != nil {

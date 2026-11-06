@@ -534,11 +534,14 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 			"--tools reads this workstation's AI tools and their native sign-in state (Business\n" +
 			"inventory). Without it the check-in carries no tool list and the held report stays.\n\n" +
 			"TRUST MODEL, stated because it is easy to over-read this verb: the scope is the\n" +
-			"agent's SELF-ASSERTED host identity, and any principal with write rights may\n" +
+			"agent's SELF-ASSERTED host identity, and any principal with write and read rights\n" +
+			"(Business: the answer compares the host's file with the published policy) may\n" +
 			"report any scope. Every check-in therefore records WHO reported it — forgery is\n" +
 			"attributable, never silent.",
-		Example: "  olivares claude-policy checkin managed-settings --scope host-7 --revision 3 --artifact-sha256 abc123 --observed-file observed.json\n" +
-			"  olivares claude-policy checkin hooks --scope host-7 --revision 3 --artifact-sha256 abc123 --key-fingerprint SHA256:xyz",
+		Example: "  olivares claude-policy checkin managed-settings --scope host-7 --revision 3 \\\n" +
+			"    --artifact-sha256 \"$(sha256sum /etc/claude-code/managed-settings.json | cut -d' ' -f1)\" \\\n" +
+			"    --observed-file /etc/claude-code/managed-settings.json\n" +
+			"  olivares claude-policy checkin hooks --scope host-7 --revision 3 --artifact-sha256 \"$SHA\" --key-fingerprint 1a2b3c4d5e6f7a8b",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			surface, err := claudePolicySurface(args[0])
@@ -585,8 +588,8 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&scope, "scope", "", "the host id / distribution name this check-in reports for (required)")
 	cmd.Flags().Int64Var(&revision, "revision", 0, "the revision the agent applied")
-	cmd.Flags().StringVar(&artifactSHA, "artifact-sha256", "", "the artifact hash the agent verified")
-	cmd.Flags().StringVar(&keyFingerprint, "key-fingerprint", "", "the signing key fingerprint the agent verified against")
+	cmd.Flags().StringVar(&artifactSHA, "artifact-sha256", "", "the SHA-256 of the artifact the agent verified (64 hex)")
+	cmd.Flags().StringVar(&keyFingerprint, "key-fingerprint", "", "the signing key fingerprint the agent verified against (16 or 64 hex, as pinned for pull)")
 	cmd.Flags().StringVar(&observedFile, "observed-file", "", "the config observed on the host, '-' for stdin")
 	cmd.Flags().BoolVar(&reportTools, "tools", false, "also report this workstation's local AI tools and sign-in state")
 	_ = cmd.MarkFlagRequired("scope")

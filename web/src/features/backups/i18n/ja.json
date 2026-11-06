@@ -1,5 +1,5 @@
 {
-  "title": "バックアップと復元",
+  "title": "バックアップ",
   "description": "Olivares AI の災害復旧スナップショットを管理します。",
   "tabs": {
     "backups": "バックアップ",
@@ -30,6 +30,7 @@
       "date": "日時",
       "filename": "ファイル名",
       "size": "サイズ",
+      "duration": "所要時間",
       "engine": "エンジン",
       "tenants": "テナント",
       "notes": "メモ"
@@ -88,6 +89,9 @@
     "freeSpace": "保存先の空き容量",
     "notAvailable": "利用不可",
     "overdue": "目標復旧時点を超過",
+    "rtoMinutes": "目標復旧時間（分）",
+    "rtoExceeded": "直近の復元テストは目標復旧時間の {{minutes}} 分を超えました",
+    "restoreTook": "復元テストに {{seconds}} 秒かかりました",
     "age": "{{hours}}時間前",
     "offsiteLockMissing": "バケット {{bucket}} は新しいコピーを `COMPLIANCE` モードでロックしないため、このサーバーの認証情報で削除される可能性があります。既定の `COMPLIANCE` 保持期間付きで S3 Object Lock を有効にし、別の認証情報で整理してください。",
     "offsiteLockUnknown": "バケット {{bucket}} の Object Lock を読み取れなかったため、これらのコピーは削除から保護されていない可能性があります。"
@@ -126,6 +130,14 @@
     "confirmLabel": "今すぐ承認して復元"
   },
   "restore": {
+    "postgres": {
+      "description": "別の空の db init 復元先とサーバーの file: または env: 参照を指定します。別の管理者の承認が必要です。",
+      "dsn_ref": "アプリケーション接続の参照",
+      "owner_dsn_ref": "所有者の参照（任意）",
+      "admin_dsn_ref": "バックアップ管理者の参照",
+      "scratch_dsn_ref": "一時データベースの保守接続の参照",
+      "confirm": "承認された空の復元先のみを復元します。検証後、復旧したデータディレクトリと接続先をエンジンに設定し、再起動してください。"
+    },
     "notAuthorized": "権限がありません",
     "uploadFailed": "アップロードに失敗しました",
     "started": "復元を開始しました",
@@ -164,6 +176,8 @@
     "tenants": "テナント",
     "keys": "封印済みキー",
     "empty": "なし",
+    "notIncluded": "このバックアップに含まれないもの",
+    "notIncludedHint": "これらのパスはコピーされません。ご自身でバックアップしてください。",
     "loadFailed": "バックアップの詳細を読み込めませんでした。"
   },
   "empty": {

@@ -23,7 +23,7 @@ import (
 // The census of the model stack, as MEASURED from the three modules' route
 // tables on this tree:
 //
-//	modules/models/api.go:83-199              68 routes  GET 33 POST 15 PUT 11 DELETE 9
+//	modules/models/api.go:83-206              72 routes  GET 34 POST 17 PUT 12 DELETE 9
 //	modules/finops/api.go:54-126              48 routes  GET 29 POST 12 PUT  3 DELETE 4
 //	modules/inferenceproxy/…:APIRoutes         7 routes  GET  3 POST  1 PUT  2 DELETE 1
 //
@@ -39,7 +39,7 @@ import (
 // it does name still reaches the stub. A dropped route is invisible to both.
 // Only comparing the two sets against the engine's route tables sees it.
 const (
-	modelsRouteCount         = 68
+	modelsRouteCount         = 72
 	finopsRouteCount         = 48
 	inferenceProxyRouteCount = 7
 	modelstackRouteCount     = modelsRouteCount + finopsRouteCount + inferenceProxyRouteCount
@@ -101,6 +101,11 @@ func modelstackRoutes() []modelstackRoute {
 		del(m, mb+"/routing-policies/"+testID, "models", "routing", "rm", testID, "--yes"),
 		post(m, mb+"/routing-policies/"+testID+"/resolve", "models", "routing", "resolve", testID),
 		post(m, mb+"/routing-policies/"+testID+"/execute", "models", "routing", "execute", testID, "--data", "{}"),
+		// --- models: Ask Olivares (4) ---
+		get(m, mb+"/ask", "models", "ask", "show"),
+		put(m, mb+"/ask/binding", "models", "ask", "bind", testID),
+		post(m, mb+"/ask/turns", "models", "ask", "turn", "--data", "{}"),
+		post(m, mb+"/ask/proposals/"+testID+"/run", "models", "ask", "run", testID, "--data", "{}"),
 		// --- models: keys, residency, entitlements (8) ---
 		get(m, mb+"/keys", "models", "keys", "ls"),
 		post(m, mb+"/keys", "models", "keys", "create", "--data", "{}"),
@@ -352,7 +357,7 @@ func TestModelstackTableMatchesTheMeasuredCensus(t *testing.T) {
 		module string
 		counts
 	}{
-		{"models", counts{get: 33, post: 15, put: 11, del: 9}},
+		{"models", counts{get: 34, post: 17, put: 12, del: 9}},
 		{"finops", counts{get: 29, post: 12, put: 3, del: 4}},
 		{"inferenceproxy", counts{get: 3, post: 1, put: 2, del: 1}},
 	} {

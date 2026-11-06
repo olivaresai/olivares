@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { RefreshCw, Shield, TriangleAlert } from 'lucide-react'
+import { Check, Copy, RefreshCw, Shield, TriangleAlert } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
@@ -24,8 +25,14 @@ export interface ErrorStateProps extends Omit<
   icon?: ReactNode
   title?: ReactNode
   description?: ReactNode
+  /** Use a page-heading title for a full-view failure, not a panel error. */
+  heading?: boolean
   /** When provided, renders a "Retry" button wired to this callback. */
   retry?: () => void
+  /** When provided, renders a "Go to Overview" button that calls this callback. */
+  goToNow?: () => void
+  /** A short correlation id the operator can copy for support. Never the raw error. */
+  errorId?: string
   /**
    * El `X-Request-ID` de la respuesta que falló, si la trajo.
    *
@@ -44,12 +51,28 @@ export function ErrorState({
   icon,
   title,
   description,
+  heading = false,
   retry,
+  goToNow,
+  errorId,
   requestId,
   className,
   ...props
 }: ErrorStateProps) {
   const { t } = useTranslation(['errors', 'common'])
+  const [copied, setCopied] = useState(false)
+
+  const copyErrorId = async () => {
+    if (!errorId) return
+    try {
+      await navigator.clipboard.writeText(errorId)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2_000)
+    } catch {
+      // If the clipboard API is unavailable, the operator can still select the id.
+    }
+  }
+
   return (
     <div
       role="alert"
@@ -60,9 +83,15 @@ export function ErrorState({
       {...props}
     >
       <StateBanner tone="bad" icon={icon ?? <TriangleAlert />}>
-        <p className="m-0 font-semibold">
-          {title ?? t('errors:serverError.title')}
-        </p>
+        {heading ? (
+          <h1 className="m-0 font-semibold">
+            {title ?? t('errors:serverError.title')}
+          </h1>
+        ) : (
+          <p className="m-0 font-semibold">
+            {title ?? t('errors:serverError.title')}
+          </p>
+        )}
         <p className="m-0 text-text-2">
           {description ?? t('errors:serverError.description')}
         </p>
@@ -75,11 +104,40 @@ export function ErrorState({
           </span>
         </p>
       ) : null}
-      {retry ? (
-        <div>
-          <Button variant="secondary" size="sm" onClick={retry}>
-            <RefreshCw aria-hidden="true" />
-            {t('common:actions.retry')}
+      {retry || goToNow ? (
+        <div className="flex flex-wrap gap-2">
+          {retry ? (
+            <Button variant="secondary" size="sm" onClick={retry}>
+              <RefreshCw aria-hidden="true" />
+              {t('common:actions.retry')}
+            </Button>
+          ) : null}
+          {goToNow ? (
+            <Button variant="ghost" size="sm" onClick={goToNow}>
+              {t('errors:boundary.goToNow')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {errorId ? (
+        <div className="flex items-center gap-2 text-caption text-text-3">
+          <span>
+            {t('errors:boundary.errorId')}:{' '}
+            <span className="font-mono text-mono-s text-text-2 select-all">
+              {errorId}
+            </span>
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('errors:boundary.copyErrorId')}
+            onClick={() => void copyErrorId()}
+          >
+            {copied ? (
+              <Check aria-hidden="true" />
+            ) : (
+              <Copy aria-hidden="true" />
+            )}
           </Button>
         </div>
       ) : null}

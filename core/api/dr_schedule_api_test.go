@@ -213,6 +213,10 @@ func TestDRScheduleRunnerRefreshesStandbyBootState(t *testing.T) {
 	leader := newDRHarness(t, dir, st, "")
 	standby := newDRHarness(t, dir, st, "") // built before the schedule update
 	admin := leader.adminLogin()
+	// The promoted node holds no recovery key of its own.
+	if err := os.Remove(filepath.Join(dir, "dr-recovery.key")); err != nil {
+		t.Fatal(err)
+	}
 
 	if r := leader.do("PUT", "/v1/console/dr/schedule", admin, map[string]any{
 		"enabled": true, "cron": "* * * * *", "retain_days": 0,
@@ -373,6 +377,11 @@ func TestDRScheduledBackupWithoutPassphraseFailsLoudly(t *testing.T) {
 	st := openDRStore(t, dir)
 	h := newDRHarness(t, dir, st, "") // no passphrase file configured
 	admin := h.adminLogin()
+	// Without a passphrase file the first start made a recovery key; a lost one
+	// leaves the schedule with no passphrase at all.
+	if err := os.Remove(filepath.Join(dir, "dr-recovery.key")); err != nil {
+		t.Fatal(err)
+	}
 
 	if r := h.do("PUT", "/v1/console/dr/schedule", admin, map[string]any{
 		"enabled": true, "cron": "* * * * *", "retain_days": 0,

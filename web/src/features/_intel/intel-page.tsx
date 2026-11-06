@@ -22,6 +22,7 @@ import {
 export function IntelPage({
   icon: Icon,
   title,
+  titleHidden,
   description,
   actions,
   primaryAction,
@@ -31,6 +32,8 @@ export function IntelPage({
 }: {
   icon?: LucideIcon
   title: ReactNode
+  /** See PageHeader: the heading is kept for assistive technology, not painted. */
+  titleHidden?: boolean
   description?: ReactNode
   /** Right-aligned secondary controls (range picker, refresh, export…). */
   actions?: ReactNode
@@ -60,6 +63,7 @@ export function IntelPage({
         as="header"
         icon={Icon}
         title={title}
+        titleHidden={titleHidden}
         description={description}
         actions={actions}
         primaryAction={primaryAction}

@@ -2,148 +2,76 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, type Page, test } from '@playwright/test'
-import {
-  expectReleaseVersion,
-  surfaceOptions,
-  watchSurface,
-} from '../e2e-release/surface'
-import engineTools from '../src/features/agentops/engine-tools.fixture.json' with { type: 'json' }
+import { expectReleaseVersion } from '../e2e-release/surface'
+import settings from '../src/lib/i18n/locales/en/settings.json' with { type: 'json' }
 import { browserSession, fixtureFor, serverInfo } from './fixtures'
 
 test.use({ screenshot: 'only-on-failure' })
 
-// The first-hour gate compares what its watcher reads from the identity. Run it on
-// the real console, at every layout, so a nested or re-marked identity cannot
-// leave it reading nothing while the exact-text check still passes.
-async function expectIdentityRead(page: Page, version: string) {
-  await expectReleaseVersion(page, version)
-  expect(await page.evaluate(() => window.__firstHourVersions?.())).toEqual([
-    version,
-  ])
-}
-
-for (const theme of ['light', 'dark']) {
-  for (const width of [1280, 390]) {
-    test(`release identity stays painted on work pages and New session at ${width} in ${theme}`, async ({
-      page,
-    }, testInfo) => {
-      await page.setViewportSize({ width, height: 900 })
-      let version = '0.1'
-      await page.route('**/v1/**', async (route) => {
-        const path = new URL(route.request().url()).pathname
-        if (path.endsWith('/stream'))
-          return route.fulfill({
-            contentType: 'text/event-stream',
-            body: ': connected\n\n',
-          })
-        const json = path.endsWith('/server-info')
-          ? { ...serverInfo, version }
-          : path.endsWith('/auth/browser-session')
-            ? browserSession
-            : path === '/v1/m/sessions/provider-profiles/readiness'
-              ? {
-                  tools: engineTools.tools
-                    .filter((tool) => tool.session)
-                    .map(({ key: driver }) => ({
-                      driver,
-                      ready: true,
-                      reason: 'own_login',
-                    })),
-                }
-              : path.endsWith('/ui-state')
-                ? { stored: true, sidebar: 'rail' }
-                : (fixtureFor(path) ?? { items: [], has_more: false })
-        await route.fulfill({ json })
+/** A signed-in console on a Community engine that reports `version`. */
+async function engine(page: Page, version: string) {
+  await page.route('**/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path.endsWith('/stream'))
+      return route.fulfill({
+        contentType: 'text/event-stream',
+        body: ': connected\n\n',
       })
-      await page.exposeFunction('__firstHourFinding', () => undefined)
-      await page.addInitScript(watchSurface, surfaceOptions('0.1'))
-      await page.addInitScript(
-        ({ theme }) => {
-          localStorage.setItem(
-            'olivares.tenant',
-            JSON.stringify({ state: { activeTenant: 't-demo' }, version: 0 }),
-          )
-          localStorage.setItem('olivares.lang', 'en')
-          localStorage.setItem('olivares.theme', theme)
-        },
-        { theme },
-      )
-
-      for (const release of ['0.1', '1.0', '10.12']) {
-        version = release
-        for (const path of ['/sessions', '/health']) {
-          await page.goto(path)
-          await expect(page.locator('[data-slot="app-frame"]')).toBeVisible()
-          await expectIdentityRead(page, version)
-          await page.screenshot({
-            path: testInfo.outputPath(`${path.split('/')[1]}-${release}.png`),
-          })
+    const json = path.endsWith('/server-info')
+      ? {
+          ...serverInfo,
+          version,
+          edition: 'community',
+          license: { status: 'none' },
         }
-        // Workspaces is a Sessions tab, opened by the release journey's menu.
-        await page.goto('/sessions')
-        await page.getByTestId('sessions-list-menu').click()
-        await page
-          .getByRole('menuitem', { name: 'Workspaces', exact: true })
-          .click()
-        await expect(
-          page.getByRole('tabpanel', { name: 'Workspaces', exact: true }),
-        ).toBeVisible()
-        await page.mouse.move(width - 1, 899)
-        await expectIdentityRead(page, version)
-        await page.screenshot({
-          path: testInfo.outputPath(`workspaces-${release}.png`),
-        })
-        await page.goto('/sessions')
-        await page
-          .getByRole('button', { name: 'New session', exact: true })
-          .first()
-          .click()
-        await expect(
-          page.getByRole('dialog', { name: 'New session' }),
-        ).toBeVisible()
-        await page
-          .getByLabel('First message (optional)')
-          .fill('Check the release identity')
-        await page
-          .getByRole('button', { name: 'More options', exact: true })
-          .click()
-        await expectIdentityRead(page, version)
-        const identity = page
-          .locator('[data-testid="deployment-identity"]')
-          .getByText(version, { exact: true })
-        expect(
-          await identity.evaluate((el) => {
-            const box = el.getBoundingClientRect()
-            const dialog = document
-              .querySelector('[role="dialog"]')
-              ?.getBoundingClientRect()
-            return (
-              el.clientWidth > 0 &&
-              el.clientHeight > 0 &&
-              el.scrollWidth <= el.clientWidth &&
-              el.scrollHeight <= el.clientHeight &&
-              box.left >= 0 &&
-              box.right <= innerWidth &&
-              box.top >= 0 &&
-              box.bottom <= innerHeight &&
-              (!dialog ||
-                box.right <= dialog.left ||
-                box.left >= dialog.right ||
-                box.bottom <= dialog.top ||
-                box.top >= dialog.bottom)
-            )
-          }),
-        ).toBe(true)
-        await page.screenshot({
-          path: testInfo.outputPath(`identity-${release}.png`),
-        })
-      }
-      // The shell switches at 761, distinct from the page controls' sm breakpoint.
-      await page.keyboard.press('Escape')
-      for (const edge of [760, 761]) {
-        await page.setViewportSize({ width: edge, height: 900 })
-        await expectIdentityRead(page, version)
-      }
-    })
-  }
+      : path.endsWith('/auth/browser-session')
+        ? browserSession
+        : path.endsWith('/ui-state')
+          ? { stored: true, sidebar: 'rail' }
+          : (fixtureFor(path) ?? { items: [], has_more: false })
+    await route.fulfill({ json })
+  })
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'olivares.tenant',
+      JSON.stringify({ state: { activeTenant: 't-demo' }, version: 0 }),
+    )
+    localStorage.setItem('olivares.lang', 'en')
+    localStorage.setItem('olivares.theme', 'light')
+  })
 }
+
+/** Where a person reads the release: Settings › About names the version and the edition
+ * /v1/server-info reports, and that answer is the release the gate expects. */
+async function expectAbout(page: Page, release: string) {
+  await page.goto('/settings?section=about')
+  const fact = (label: string) =>
+    page
+      .getByRole('main')
+      .locator('dl > div')
+      .filter({ has: page.getByText(label, { exact: true }) })
+      .locator('dd')
+  await expect(fact(settings.about.version)).toHaveText(release)
+  await expect(fact(settings.about.edition)).toHaveText(
+    settings.about.community,
+  )
+  await expectReleaseVersion(page, release)
+}
+
+for (const release of ['0.1', '1.0', '10.12']) {
+  test(`Settings › About shows release ${release}, the version and edition server-info reports`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await engine(page, release)
+    await expectAbout(page, release)
+    await page.screenshot({ path: testInfo.outputPath(`about-${release}.png`) })
+  })
+}
+
+test('a console on another version fails the release identity', async ({
+  page,
+}) => {
+  await engine(page, '0.2')
+  await expect(expectAbout(page, '0.1')).rejects.toThrow()
+})

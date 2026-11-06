@@ -53,7 +53,7 @@ func TestRegistriesUseCurrentAuthSessionSchema(t *testing.T) {
 			t.Errorf("%s registry has no auth-session descriptor", tc.name)
 			continue
 		}
-		if !reflect.DeepEqual(d, authSessionDescriptorV28) {
+		if !reflect.DeepEqual(d, authSessionDescriptorV30) {
 			t.Errorf("%s registry uses historical auth-session schema", tc.name)
 		}
 	}

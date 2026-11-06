@@ -1,7 +1,8 @@
 {
   "title": "Mapa de acceso",
-  "subtitle": "Qué lee y escribe cada agente en tu infraestructura — orígenes a la izquierda, los recursos que tocan a la derecha, R/RW por color.",
-  "auditedNote": "Abrir este mapa es una acción privilegiada y auditada. Solo para revisión defensiva: muestra relaciones, nunca SQL, payloads ni secretos.",
+  "subtitle": "Quién lee y escribe qué. Abrirlo queda anotado en el registro de auditoría.",
+  "showGraph": "Ver como grafo",
+  "showList": "Ver como lista",
   "refresh": "Actualizar",
   "stats": {
     "origins": "Orígenes",
@@ -15,8 +16,10 @@
   },
   "webgl": {
     "badge": "Vista de alta densidad",
-    "hint": "Mostrando {{n}} nodos — se cambió al renderizador WebGL acelerado por escala.",
-    "clustered": "A esta escala los recursos se agrupan por host; un grupo se lee como «host (N)». No se oculta ningún hallazgo: todo grupo con acceso inesperado queda marcado."
+    "hint": "Mostrando {{n}} nodos — se cambió al renderizador WebGL acelerado por escala."
+  },
+  "lod": {
+    "grouped": "Grupos: haz clic en uno para abrirlo."
   },
   "filters": {
     "search": "Buscar origen, recurso, herramienta…",
@@ -157,6 +160,8 @@
     "description": "Cuando los conectores reporten actividad de los agentes, las relaciones R/RW aparecerán aquí."
   },
   "list": {
+    "title": "Acceso por origen",
+    "counts": "escribe {{writes}} · lee {{reads}}",
     "summary": "Mapa como lista",
     "hint": "Lista accesible por teclado de cada nodo de este mapa. Seleccionar una fila abre el mismo detalle que el grafo.",
     "node": "Nodo",
@@ -167,8 +172,13 @@
     "description": "Tu rol no incluye permiso para ver el grafo de acceso."
   },
   "mobile": {
-    "title": "El mapa necesita más ancho",
-    "hint": "Abre esta vista en una pantalla mayor para el grafo R/RW interactivo."
+    "title": "El mapa se abre a pantalla completa",
+    "hint": "Desplaza con un dedo y pellizca para acercar. La lista de abajo también sirve.",
+    "open": "Abrir el mapa a pantalla completa"
+  },
+  "fullscreen": {
+    "enter": "Pantalla completa",
+    "exit": "Salir de pantalla completa"
   },
   "attackPaths": {
     "chooseAgent": "Elige un agente en el grafo para ver sus caminos de ataque.",
@@ -202,6 +212,20 @@
     "retry": "Reintentar"
   },
   "graph": {
+    "label": "Qué lee y escribe cada agente en tu infraestructura — orígenes a la izquierda, los recursos que tocan a la derecha, R/RW por color.",
     "keyboardHint": "Enfoca un nodo, usa las flechas para pasar a un nodo conectado e Intro para abrirlo. La lista bajo el grafo hace lo mismo sin el lienzo."
+  },
+  "groupKinds": {
+    "session": "Sesiones",
+    "agent": "Agentes",
+    "identity": "Identidades"
+  },
+  "group": {
+    "items_one": "{{count}} elemento",
+    "items_many": "{{count}} de elementos",
+    "items_other": "{{count}} elementos",
+    "more": "+{{count}} más",
+    "close": "Cerrar {{name}}",
+    "members": "Miembros"
   }
 }

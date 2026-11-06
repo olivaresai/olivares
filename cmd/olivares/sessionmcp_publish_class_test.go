@@ -131,10 +131,11 @@ func TestSessionPublishProposalIsClassifiedWhenAPolicyMatchesTheClass(t *testing
 		return call(publishPushTool, map[string]any{"target_id": target, "ref": "refs/heads/olivares/" + ref, "commit": commit, "tree": tree})
 	}
 
-	// No class policy: the module is never asked and the card is what it was.
+	// No class policy: the module is never asked and the card has no class; it still names
+	// the launcher, whose approval policies govern it.
 	answer := push("plain")
 	plain := pending()
-	if plain.ChangeClass != "" || len(plain.ChangePaths) != 0 || plain.LaunchedBy != "" || strings.Contains(plain.Review.Text, "change class") || len(module.changeCallers) != 0 {
+	if plain.ChangeClass != "" || len(plain.ChangePaths) != 0 || plain.LaunchedBy != "user:"+admin.UserID.String() || strings.Contains(plain.Review.Text, "change class") || len(module.changeCallers) != 0 {
 		t.Fatalf("unclassified card = %+v, module asked %d times", plain, len(module.changeCallers))
 	}
 	decide(plain.ID, "approve")

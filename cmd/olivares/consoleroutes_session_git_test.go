@@ -21,7 +21,7 @@ func TestConsoleSessionGitActionRoutes(t *testing.T) {
 			got[call.path] = true
 		}
 	}
-	for _, action := range []string{"stage", "unstage", "commit", "branch"} {
+	for _, action := range []string{"stage", "unstage", "commit", "branch", "merge", "init"} {
 		path := "/v1/m/sessions/runs/{}/git/" + action
 		if !got[path] {
 			t.Errorf("console Git action must expose its literal registered route: POST %s (got %v)", path, got)

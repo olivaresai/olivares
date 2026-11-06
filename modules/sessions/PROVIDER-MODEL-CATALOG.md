@@ -7,13 +7,19 @@ models endpoint. It sends no prompts and creates no provider conversation.
 
 A successful read returns `profile_ref`, `driver`, `state`, `models`,
 `default_model`, `free_text`, `checked_at`, and `refresh_interval_seconds`.
-The catalog is cached per tenant and profile for 120 seconds. Add
-`?refresh=true` to read upstream again. Concurrent reads for the same profile
-share the in-flight read. HTTP responses use `Cache-Control: no-store`.
+The catalog is cached per tenant and profile for 120 seconds. After that, while
+the profile's login, record and tool are unchanged, a read answers at once with
+the last list (`checked_at` says when it was read) and the engine reads upstream
+again behind it; if that read fails the list is dropped and the next read says
+so. Add `?refresh=true` to read upstream now and wait for it. Concurrent reads
+for the same profile share the in-flight read. HTTP responses use
+`Cache-Control: no-store`.
 
 Each model has an `id`. The following fields appear only when reported by the
 tool: `display_name`, `effort_levels`, `default_effort`, `is_default`, `is_new`,
-`is_legacy`, `supports_fast_mode`, and `service_tiers`. Effort and service-tier
+`is_legacy`, `supports_fast_mode`, `service_tiers`, and, for a Claude Code selector
+(`default`, `opus`, ...) on the tool's own sign-in, `launch_model`: the exact id
+that selector launches on and a session records. Effort and service-tier
 values are open strings: a vendor can add one without an Olivares update.
 Missing markers mean unknown. No model name implies a capability or legacy status.
 An empty `default_model` delegates to the tool's own default; callers should

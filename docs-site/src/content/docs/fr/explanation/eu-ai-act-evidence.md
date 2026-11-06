@@ -101,8 +101,9 @@ document qui nomme ses propres frontières.
 
 ### Ne codez pas les dates en dur — servez-les
 
-Les calendriers des applications à haut risque sont **en flux** (l'accord
-provisoire Digital Omnibus du 2026-05-07 en a déplacé plusieurs). Copier des dates
+Les dates d'application à haut risque ont déjà changé une fois : le règlement
+(UE) 2026/1744 (Digital Omnibus sur l'IA, publié le 2026-07-24) fixe les obligations
+de l'annexe III à partir du 2027-12-02 et celles de l'annexe I à partir du 2028-08-02. Copier des dates
 dans un fichier statique est la façon dont les documents de conformité se périment et
 deviennent faux. Le control plane sert le calendrier réglementaire **sous forme de
 données** — chaque entrée avec sa source et son `verified_on` :

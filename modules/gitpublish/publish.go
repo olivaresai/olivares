@@ -385,6 +385,15 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 			return Receipt{}, refuse("content_mismatch", http.StatusUnprocessableEntity)
 		}
 	}
+	if s.effect == effectPush || s.effect == effectPullRequest {
+		paths, err := m.secretPaths(actx, rb.LocalPath, s.req.Commit)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if len(paths) > 0 && s.proposal == (Proposal{}) {
+			return Receipt{}, &Error{Code: "secret_detected", Status: http.StatusForbidden, Path: paths[0], Class: "secret.credential"}
+		}
+	}
 	host, err := m.opts.Custody.OpenHost(actx, c.Tenant, cb, rb)
 	if err != nil {
 		return Receipt{}, refuse("host_unavailable", http.StatusBadGateway)

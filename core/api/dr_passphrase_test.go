@@ -6,6 +6,7 @@ package api_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/dr"
 )
 
 // A DR bundle carries the estate's signing keys, and its ONLY protection at rest
@@ -32,50 +34,44 @@ func drHarness(t *testing.T) (*harness, string) {
 }
 
 // waitForDRJob holds the test until the DR job named by an accepted (202) backup,
-// restore-apply or restore-approve response reaches a terminal state, reading it
-// through GET /v1/console/dr/jobs as a console client would.
+// restore-apply or restore-approve response reaches a terminal state, following
+// its completion stream as a console client would.
 //
 // Those handlers answer 202 and run the job on a detached goroutine. A test that
 // returns on the 202 leaves the job writing into the data directory (the restore's
 // control lock, a backup's snapshot) while t.TempDir's cleanup is removing it, and
 // the cleanup then fails with "directory not empty". Waiting here keeps the job
-// inside the test that started it. Running out the bound fails the test.
+// inside the test that started it. The Go test timeout bounds a stuck job.
 func waitForDRJob(t *testing.T, h *harness, token string, accepted resp) {
 	t.Helper()
 	jobID, _ := accepted.body["job_id"].(string)
 	if jobID == "" {
 		t.Fatalf("the accepted response names no DR job to wait for: %d %s", accepted.code, accepted.raw)
 	}
-	const bound = 30 * time.Second
-	deadline := time.NewTimer(bound)
-	defer deadline.Stop()
-	poll := time.NewTicker(20 * time.Millisecond)
-	defer poll.Stop()
-	for {
-		r := h.do("GET", "/v1/console/dr/jobs", token, nil, nil)
-		if r.code != http.StatusOK {
-			t.Fatalf("list DR jobs while waiting for %s = %d %s", jobID, r.code, r.raw)
-		}
-		status, listed := "", false
-		items, _ := r.body["items"].([]any)
-		for _, it := range items {
-			if m, ok := it.(map[string]any); ok && m["id"] == jobID {
-				status, _ = m["status"].(string)
-				listed = true
-			}
-		}
-		if !listed {
-			t.Fatalf("DR job %s is missing from the job list, although it is registered before the 202: %s", jobID, r.raw)
-		}
-		if status == "completed" || status == "failed" {
-			return
-		}
-		select {
-		case <-deadline.C:
-			t.Fatalf("DR job %s is still %q after %s; it would outlive this test and race the TempDir cleanup", jobID, status, bound)
-		case <-poll.C:
+	stream := h.do("GET", "/v1/console/dr/jobs/"+jobID+"/stream", token, nil, nil)
+	if stream.code != http.StatusOK {
+		t.Fatalf("stream DR job %s = %d %s", jobID, stream.code, stream.raw)
+	}
+
+	r := h.do("GET", "/v1/console/dr/jobs", token, nil, nil)
+	if r.code != http.StatusOK {
+		t.Fatalf("list DR jobs while waiting for %s = %d %s", jobID, r.code, r.raw)
+	}
+	status, listed := "", false
+	items, _ := r.body["items"].([]any)
+	for _, it := range items {
+		if m, ok := it.(map[string]any); ok && m["id"] == jobID {
+			status, _ = m["status"].(string)
+			listed = true
 		}
 	}
+	if !listed {
+		t.Fatalf("DR job %s is missing from the job list, although it is registered before the 202: %s", jobID, r.raw)
+	}
+	if status == "completed" || status == "failed" {
+		return
+	}
+	t.Fatalf("DR job %s is still %q after its completion stream ended", jobID, status)
 }
 
 func TestDRBackupPassphraseFloor(t *testing.T) {
@@ -154,5 +150,30 @@ func TestStartupBackupPassphraseFloor(t *testing.T) {
 	err := h.srv.RunStartupBackup(context.Background(), "x", "notes", "actor")
 	if err == nil || !strings.Contains(err.Error(), "12") {
 		t.Fatalf("RunStartupBackup with 1-char passphrase error = %v, want the 12-char floor", err)
+	}
+}
+
+// The waiter must follow completion even when the runner takes longer than the
+// former polling bound. Keep the detached worker inside this test on failure too.
+func TestWaitForDRJobFollowsSlowCompletion(t *testing.T) {
+	finished := make(chan struct{})
+	dataDir := t.TempDir()
+	h := newHarnessOpts(t, func(o *api.Options) {
+		o.DR = &api.DRConfig{DataDir: dataDir, EngineKind: "sqlite", SealKeys: func(*dr.KeyCipher) (map[string][]byte, []dr.KeyRef, []dr.SealerProbe, error) {
+			defer close(finished)
+			time.Sleep(31 * time.Second)
+			return nil, nil, nil, errors.New("custody unavailable")
+		}}
+	})
+	admin := h.adminLogin()
+	r := h.do("POST", "/v1/console/dr/backup", admin, map[string]any{"passphrase": "long-enough-passphrase"}, nil)
+	if r.code != http.StatusAccepted {
+		t.Fatalf("backup = %d %s, want 202", r.code, r.raw)
+	}
+	defer func() { <-finished }()
+	waitForDRJob(t, h, admin, r)
+	jobs := h.do("GET", "/v1/console/dr/jobs", admin, nil, nil)
+	if jobs.code != http.StatusOK || !strings.Contains(jobs.raw, `"status":"failed"`) || !strings.Contains(jobs.raw, "custody unavailable") {
+		t.Fatalf("wait returned before the slow job failed: %d %s", jobs.code, jobs.raw)
 	}
 }

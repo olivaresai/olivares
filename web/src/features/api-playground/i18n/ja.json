@@ -1,5 +1,5 @@
 {
-  "title": "API プレイグラウンド",
+  "title": "API Playground",
   "description": "Olivares AI の API を探索・テストします。",
   "filterPlaceholder": "エンドポイントを絞り込む…",
   "selectEndpoint": "左パネルからエンドポイントを選択してください",

@@ -2197,6 +2197,11 @@ jobs:
             echo "DATABASE_EXPORTER_URL=postgres://cloud_cp_exporter_ro:${PW_exporter}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
             echo "DATABASE_IDEMPOTENCY_URL=postgres://cloud_cp_webhook_idempotency_ro:${PW_webhook_idempotency}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
           } >> "$GITHUB_ENV"
+      - name: Install OpenSSH tools for real SFTP tests
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends openssh-client openssh-sftp-server
       - name: the runner allows the session boundary's user and network namespaces
         # Every shard can start a bound session, which fails closed where the host refuses
         # the namespaces (SECURITY.md, Requirements). Same step as pr-ci.yml.
@@ -3376,6 +3381,11 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: bash scripts/ci-postgres-service.sh provision
+      - name: Install OpenSSH tools for real SFTP tests
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends openssh-client openssh-sftp-server
       - name: the runner allows the session boundary's user and network namespaces
         # This leg races the boundary reproducers, which fail closed where the host refuses
         # the namespaces (SECURITY.md, Requirements). Same step as pr-ci.yml.
@@ -3902,6 +3912,8 @@ jobs:
       # solo para invocarlos: menos piezas que puedan fallar por su cuenta en el runner.
       - name: axe-core WCAG 2.2 A+AA over both themes
         id: a11y-gate
+        env:
+          AT_HOSTILE_ACCENT: trust
         # GUARDA DE PASO, y no es adorno: `lint:ci-timeout-arithmetic` cuenta cuantos jobs con techo
         # la tienen (18 de 23 al escribir esto) porque un techo de JOB se reporta como `cancelled`,
         # se lee como flake y cancela los pasos siguientes sin decir cual murio — asi estuvo `web`

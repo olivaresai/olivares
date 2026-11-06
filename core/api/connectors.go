@@ -60,11 +60,11 @@ var ErrConnectorTestFailed = errors.New("the connector could not be opened with 
 // publish-then-activate honesty).
 type ConnectorOnboarding interface {
 	// ListConnectors returns the connector kinds this build can wire as live
-	// observation sources, each annotated for descriptor-driven form rendering. It
-	// never constructs nor contacts anything external. Only kinds the live roster
-	// can actually wire are listed (identity/roster providers and knowledge document
-	// sources are read once at boot — a restart domain — so they are not onboardable
-	// here, and are honestly absent rather than faked).
+	// observation or knowledge document sources, each annotated for
+	// descriptor-driven form rendering. It never constructs nor contacts anything
+	// external. Only kinds the live roster can actually wire are listed
+	// (identity/roster providers are read once at boot — a restart domain — so they
+	// are not onboardable here, and are honestly absent rather than faked).
 	ListConnectors(ctx context.Context) ([]ConnectorInfo, error)
 	// TestConnector builds a candidate connector from the input — resolving its
 	// secret references and using a just-typed inline value directly — and Opens it
@@ -138,6 +138,28 @@ type ConnectorInfo struct {
 	// Fields is the connector's declared configuration schema, projected from its
 	// Descriptor's ConfigFields. Empty when FieldsKnown is false.
 	Fields []ConnectorField `json:"fields,omitempty"`
+	// Class is "document" for a knowledge document source (its test previews
+	// documents; its "kb" setting schedules syncs into a knowledge base), empty for
+	// an observation source.
+	Class string `json:"class,omitempty"`
+}
+
+// ConnectorPreviewer is implemented by an onboarding surface that can also preview
+// what a document source would ingest. The test endpoint prefers it: one open
+// both tests the connection and lists the preview.
+type ConnectorPreviewer interface {
+	// PreviewConnector tests the candidate like TestConnector and, for a document
+	// source, returns its first documents with their ACLs. Nothing is stored.
+	PreviewConnector(ctx context.Context, actor auth.Principal, in ConnectorOnboardInput) ([]PreviewDocument, error)
+}
+
+// PreviewDocument is one document a source would ingest, as the test shows it.
+type PreviewDocument struct {
+	ID    string   `json:"id"`
+	Title string   `json:"title,omitempty"`
+	ACL   []string `json:"acl"`
+	// Note is "skipped" (not ingestable) or "unreadable"; empty when read.
+	Note string `json:"note,omitempty"`
 }
 
 // ConnectorField is the form-render projection of an sdk.ConfigField: enough for the

@@ -47,6 +47,24 @@ export const EVIDENCE_PARAM = 'evidence'
 export const PANEL_PARAM = 'panel'
 /** Which Sessions view is in front; an absent tab means the session list. */
 export const TAB_PARAM = 'tab'
+/** The section the list is narrowed to by the strip at its top; absent, the whole list. */
+export const SHOW_PARAM = 'show'
+
+/** The sections the strip can narrow the list to: what needs the person, what runs. */
+const STRIP_FILTERS = ['attention', 'active'] as const
+export type StripFilter = (typeof STRIP_FILTERS)[number]
+
+/** Decode `show`: one of the strip's two sections, else the whole list and the key named. */
+export function decodeShow(raw: { [key: string]: string | undefined }): {
+  value: StripFilter | undefined
+  issues: string[]
+} {
+  const asked = raw[SHOW_PARAM]
+  if (asked === undefined) return { value: undefined, issues: [] }
+  return (STRIP_FILTERS as readonly string[]).includes(asked)
+    ? { value: asked as StripFilter, issues: [] }
+    : { value: undefined, issues: [SHOW_PARAM] }
+}
 
 /** The keys this surface OWNS. Anything else on the route is left untouched. */
 export const SESSION_ADDRESS_KEYS = [

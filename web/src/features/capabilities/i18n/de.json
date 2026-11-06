@@ -1,5 +1,5 @@
 {
-  "title": "MCP & Skills",
+  "title": "Erweiterungen",
   "subtitle": "Der Live-Katalog der Fähigkeiten — MCP-Server, Werkzeuge, Skills und ihre Verbindungen.",
   "tabs": {
     "servers": "Server",
@@ -19,8 +19,9 @@
     "managed": "Verwaltet",
     "managedRev": "Verwaltet · Rev. {{rev}}",
     "discovered": "Erkannt",
+    "caption": "Server, die Konnektoren beobachtet haben, unabhängig davon, ob Olivares sie verbindet.",
     "empty": "Keine MCP-Server erkannt",
-    "emptyHint": "Server erscheinen hier, sobald die Inventar- und Introspektionsebenen sie erkennen.",
+    "emptyHint": "Server erscheinen hier, sobald Inventar und Introspektion sie erkennen.",
     "truncated": "{{n}} Server geladen; es gibt mehr"
   },
   "connection": {
@@ -82,11 +83,10 @@
     "title": "Fähigkeiten-Verkabelung",
     "mobileHint": "Der Verkabelungsgraph ({{count}} Verbindungen) lässt sich am besten auf einem größeren Bildschirm betrachten.",
     "description": "Was womit verbunden ist — Agenten und Sitzungen mit den MCP-Servern, Werkzeugen, Skills und Ressourcen, die sie nutzen.",
-    "notAccessMap": "Dies ist der Graph der Fähigkeiten-Verbindungen, nicht die R/RW-Zugriffskarte für Ressourcen (siehe Zugriffskarte).",
     "observed": "Beobachtet",
     "declared": "Deklariert",
     "legend": "Herkunft",
-    "partial": "Es wird ein Teilgraph angezeigt — verfeinern Sie die Filter, um bestimmte Verbindungen zu sehen.",
+    "partial": "Filtern Sie, um weitere Verbindungen zu sehen.",
     "occurrences": "Vorkommen",
     "firstSeen": "Zuerst gesehen",
     "lastSeen": "Zuletzt gesehen",
@@ -126,7 +126,7 @@
     "endpoint": "Endpunkt",
     "endpointHint": "Nur eine Referenz — betten Sie niemals Anmeldedaten in den Endpunkt ein.",
     "scope": "Geltungsbereich",
-    "scopeHint": "Optionales Label für Bereitstellungs-/Mandanten-Geltungsbereich (z. B. team-a).",
+    "scopeHint": "Optionales Label für Bereitstellungs-/Organisations-Geltungsbereich (z. B. team-a).",
     "enabled": "Aktiviert",
     "note": "Notiz",
     "secretRefs": "Geheimnis-Referenzen",
@@ -187,7 +187,7 @@
     },
     "server": {
       "title": "Noch keine MCP-Server erkannt",
-      "description": "MCP-Server erscheinen, sobald Konnektorbeobachtungen sie im Inventar des Mandanten identifizieren."
+      "description": "MCP-Server erscheinen, sobald Konnektorbeobachtungen sie im Inventar der Organisation identifizieren."
     },
     "skill": {
       "title": "Keine Skills entdeckt",
@@ -195,7 +195,7 @@
     },
     "tool": {
       "title": "Noch keine MCP-Werkzeuge erkannt",
-      "description": "Werkzeuge erscheinen, sobald MCP-Introspektion oder beobachtete Werkzeugaktivität sie an das Inventar des Mandanten meldet."
+      "description": "Werkzeuge erscheinen, sobald MCP-Introspektion oder beobachtete Werkzeugaktivität sie an das Inventar der Organisation meldet."
     }
   },
   "truncatedHint": "Es gibt mehr Zeilen als angezeigt; diese Seite nimmt sie nach Zeilen-ID (bei der Erstellung vergeben), daher fehlen die späteren. Ein hier NICHT aufgeführter Server, ein Werkzeug, eine Fähigkeit oder eine Konfiguration ist kein Beweis dafür, dass es sie nicht gibt."

@@ -56,6 +56,18 @@ func (s *Server) handleTestConnector(w http.ResponseWriter, r *http.Request, mc 
 		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
+	if pv, ok := svc.(ConnectorPreviewer); ok {
+		preview, err := pv.PreviewConnector(r.Context(), p, in)
+		if err != nil {
+			s.writeError(w, r, err)
+			return
+		}
+		if preview == nil {
+			preview = []PreviewDocument{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "preview": preview})
+		return
+	}
 	if err := svc.TestConnector(r.Context(), p, in); err != nil {
 		s.writeError(w, r, err)
 		return

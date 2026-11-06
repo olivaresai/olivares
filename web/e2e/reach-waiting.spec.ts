@@ -10,7 +10,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
   browserSessionHeaders,
-  journeyNowLink,
+  journeyShellLink,
   type BrowserSession,
 } from './browser-session'
 
@@ -69,7 +69,7 @@ test.describe('Reach real use', () => {
     const approval = (await created.json()) as { id: string; status: string }
     expect(approval.status).toBe('pending')
 
-    await page.goto('/reach')
+    await page.goto('/reach?view=graph')
     const graph = page.getByRole('img', { name: /Reach graph/ })
     await expect(graph).toHaveAccessibleName(SOLID_MCP)
     await expect(graph).toHaveAccessibleName(
@@ -88,7 +88,7 @@ test.describe('Reach real use', () => {
     })
 
     // Leave Reach inside the app, so coming back reads through its query cache.
-    await journeyNowLink(page).click()
+    await journeyShellLink(page).click()
     await page.waitForURL((url) => !url.pathname.startsWith('/reach'))
 
     const approver = await page.request.post('/v1/users', {
@@ -121,12 +121,17 @@ test.describe('Reach real use', () => {
     )
     await other.close()
 
-    await page
-      .getByRole('navigation', { name: 'Main navigation', exact: true })
-      .getByRole('link', { name: 'Access map', exact: true })
-      .click()
+    const nav = page.getByRole('navigation', {
+      name: 'Main navigation',
+      exact: true,
+    })
+    await nav.getByRole('button', { name: 'More', exact: true }).click()
+    // Access map and Reach are pages of Audit (0.7).
+    await nav.getByRole('link', { name: 'Audit', exact: true }).click()
     await page.getByRole('link', { name: 'Reach', exact: true }).click()
     await page.waitForURL((url) => url.pathname === '/reach')
+    // Reach opens on its table; the graph is its toggle.
+    await page.getByRole('button', { name: 'Graph', exact: true }).click()
     await expect(page.getByText(/destinations/).first()).toBeVisible()
     await expect(page.locator(`[data-dest="${HOST}"]`)).toHaveCount(0)
     await expect(

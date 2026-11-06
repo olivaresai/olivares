@@ -123,6 +123,16 @@ type Manifest struct {
 	TipMatch string `json:"tip_match"`
 	// Notes is free-form operator context (no secrets).
 	Notes string `json:"notes,omitempty"`
+	// DurationMS is the time from the start of the backup to the moment the bundle
+	// writer began, which is everything but the final copy into the archive.
+	DurationMS int64 `json:"duration_ms,omitempty"`
+	// Trees are the directories the bundle carries beside the store: the data
+	// directory's sign-ins and homes, and the registered folders (trees.go).
+	Trees []Tree `json:"trees,omitempty"`
+	// NotIncluded lists the directories the backup left out and why. A bundle
+	// taken before the list existed has none: that is "not recorded", not
+	// "nothing left out".
+	NotIncluded []NotIncluded `json:"not_included,omitempty"`
 	// Files binds every non-manifest payload in the bundle by path, size and
 	// digest. Authentication below covers this complete list.
 	Files []FileDigest `json:"files,omitempty"`
@@ -164,6 +174,8 @@ type StoreSnapshot struct {
 	// Encryption names how the snapshot member is sealed under the KEK:
 	// snapshotEncChunked, or "" for a pre-v2 bundle that carries it in the clear.
 	Encryption string `json:"encryption,omitempty"`
+	// Compression is applied before sealing: "gzip", or empty for older bundles.
+	Compression string `json:"compression,omitempty"`
 }
 
 // sealed reports whether the snapshot member is sealed under the KEK.

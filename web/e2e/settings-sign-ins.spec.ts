@@ -46,14 +46,14 @@ test('two browsers list and end other sign-ins accessibly', async ({
     await firstPage
       .getByRole('button', { name: /create administrator/i })
       .click()
-    await firstPage.waitForURL('**/onboarding')
+    await firstPage.waitForURL('**/sessions')
 
     await secondPage.goto('/login')
     await capturePublic(secondPage, 'login')
     await signInFixture(secondPage, credentials)
     await secondPage.goto('/settings')
     await secondPage
-      .getByRole('button', { name: 'Sign-in and security', exact: true })
+      .getByRole('button', { name: 'Sign-in', exact: true })
       .click()
     await expect(secondPage.getByText('Your sign-ins')).toBeVisible()
     await expect(
@@ -124,9 +124,7 @@ test('two browsers list and end other sign-ins accessibly', async ({
         .click()
       await page.waitForURL((url) => url.pathname !== '/pair')
       await page.goto('/settings')
-      await page
-        .getByRole('button', { name: 'Sign-in and security', exact: true })
-        .click()
+      await page.getByRole('button', { name: 'Sign-in', exact: true }).click()
       const currentRow = page
         .getByRole('row')
         .filter({ hasText: 'This session' })
@@ -141,7 +139,7 @@ test('two browsers list and end other sign-ins accessibly', async ({
     }
     await secondPage.goto('/settings')
     await secondPage
-      .getByRole('button', { name: 'Sign-in and security', exact: true })
+      .getByRole('button', { name: 'Sign-in', exact: true })
       .click()
     await expect(
       secondPage.getByRole('row').filter({ hasText: 'Spare tablet' }),

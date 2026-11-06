@@ -1,5 +1,5 @@
 {
-  "title": "MCP 与技能",
+  "title": "扩展",
   "subtitle": "实时能力目录 —— MCP 服务器、工具、技能及其连接方式。",
   "tabs": {
     "servers": "服务器",
@@ -19,8 +19,9 @@
     "managed": "已托管",
     "managedRev": "已托管 · rev {{rev}}",
     "discovered": "已发现",
+    "caption": "连接器观察到的服务器，无论 Olivares 是否连接它们。",
     "empty": "未发现 MCP 服务器",
-    "emptyHint": "当清单与自省平面发现服务器后，将在此处显示。",
+    "emptyHint": "当清单与自省发现服务器后，将在此处显示。",
     "truncated": "已加载 {{n}} 台服务器；还有更多"
   },
   "connection": {
@@ -82,11 +83,10 @@
     "title": "能力接线",
     "mobileHint": "接线图（{{count}} 个连接）在较大屏幕上查看效果更佳。",
     "description": "什么连接到了什么 —— 智能体与会话连接到其所用的 MCP 服务器、工具、技能与资源。",
-    "notAccessMap": "这是能力连接图，而非 R/RW 资源访问映射（参见「访问映射」）。",
     "observed": "已观测",
     "declared": "已声明",
     "legend": "溯源",
-    "partial": "显示的是部分图谱 —— 优化筛选条件以查看特定连接。",
+    "partial": "筛选以查看更多连接。",
     "occurrences": "出现次数",
     "firstSeen": "首次出现",
     "lastSeen": "最近出现",
@@ -125,7 +125,7 @@
     "endpoint": "端点",
     "endpointHint": "仅为引用 —— 切勿在端点中嵌入凭据。",
     "scope": "范围",
-    "scopeHint": "可选的部署 / 租户范围标签（例如 team-a）。",
+    "scopeHint": "可选的部署 / 组织范围标签（例如 team-a）。",
     "enabled": "已启用",
     "note": "备注",
     "secretRefs": "密钥引用",
@@ -186,7 +186,7 @@
     },
     "server": {
       "title": "尚未发现 MCP 服务器",
-      "description": "连接器观测到 MCP 服务器并将其纳入租户清单后，服务器才会显示。"
+      "description": "连接器观测到 MCP 服务器并将其纳入组织清单后，服务器才会显示。"
     },
     "skill": {
       "title": "尚未发现技能",
@@ -194,7 +194,7 @@
     },
     "tool": {
       "title": "尚未发现 MCP 工具",
-      "description": "工具通过 MCP 自省或活动观测上报至租户清单后，才会显示。"
+      "description": "工具通过 MCP 自省或活动观测上报至组织清单后，才会显示。"
     }
   },
   "truncatedHint": "行数多于此处所示；本页按行 id（创建时分配）取数，因此更靠后的会缺失。某个服务器、工具、技能或配置未列在此处，并不能证明它不存在。"

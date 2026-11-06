@@ -27,6 +27,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { useAuth } from '@/lib/auth/context'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import {
   consoleApi,
@@ -52,6 +53,11 @@ export function AccessReviewSection() {
   const { can } = useAuth()
   const canRead = can('authz:read')
   const canAdmin = can('authz:admin')
+  // The roles tab already owns `?tab=`; this strip keeps its own `?review=`.
+  const [reviewTab, setReviewTab] = useTabParam(
+    ['subject', 'resource', ...(canAdmin ? ['why', 'export'] : [])],
+    { key: 'review' },
+  )
 
   if (!canRead) {
     return (
@@ -84,7 +90,7 @@ export function AccessReviewSection() {
         </p>
       </div>
 
-      <Tabs defaultValue="subject">
+      <Tabs value={reviewTab} onValueChange={setReviewTab}>
         <TabsList>
           <TabsTrigger value="subject">
             {t('granular.accessReview.searchSubject')}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import {
   createTestQueryClient,
   renderIntel,
@@ -23,13 +24,18 @@ vi.mock('@/lib/auth/context', () => ({
     principal: { user_id: 'operator-a' },
   }),
 }))
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
   useNavigate: () => vi.fn(),
   useRouterState: () => '',
+  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
 }))
 
-const RUN_NOTICE = 'Recent sessions: 2 loaded; there are more.'
-const FOLDER_NOTICE = 'Registered folders: 1 loaded; there are more.'
+// The pages of the internal reads that feed the form are not the user's business: the
+// New session dialog shows what the user chooses, never a warning chip about a list it
+// does not show. Only a cut folder list is said, inside the folder picker.
+const RUN_NOTICE = /Recent sessions: \d+ loaded/
+const FOLDER_NOTICE = /Registered folders: \d+ loaded/
+const FOLDER_HINT = 'Some registered folders are outside this list.'
 const runs = {
   items: [
     { run_ref: 'run_2', state: 'failed', workspace_ref: 'ws_1' },
@@ -85,79 +91,37 @@ afterEach(() => {
 })
 
 describe('first-hour list truncation', () => {
-  it('declares the recent-session window used for setup progress even without a ready tool', async () => {
-    replies(true)
-    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
-    renderIntel(<FirstHourSteps />)
-    expect(await screen.findByText('2 of 3 done')).toBeInTheDocument()
-    expect(screen.getByText(RUN_NOTICE)).toBeInTheDocument()
-  })
-
-  it.each([
-    [true, false, RUN_NOTICE, FOLDER_NOTICE],
-    [false, true, FOLDER_NOTICE, RUN_NOTICE],
-  ])(
-    'declares only the truncated list in the folder form (%s, %s)',
-    async (runMore, folderMore, shown, absent) => {
-      replies(runMore, folderMore)
-      renderIntel(<StartSessionForm />)
-      await screen.findByText('/srv/work/repo')
-      expect(screen.getByText(shown)).toBeInTheDocument()
-      expect(screen.queryByText(absent)).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
-    },
-  )
-
-  it('declares both truncated responses with their loaded counts', async () => {
-    replies(true, true)
-    renderIntel(<StartSessionForm />)
-    await screen.findByText('/srv/work/repo')
-    expect(screen.getByText(RUN_NOTICE)).toBeInTheDocument()
-    expect(screen.getByText(FOLDER_NOTICE)).toBeInTheDocument()
-  })
-
   it.each([
     ['setup', FirstHourSteps],
     ['form', StartSessionForm],
   ] as const)(
-    'does not declare complete responses (%s)',
+    'shows no paging chip for cut internal lists (%s)',
     async (_name, View) => {
-      replies(false)
+      replies(true, true)
       const qc = createTestQueryClient()
       renderIntel(<View />, { queryClient: qc })
       await waitFor(() => expect(qc.isFetching()).toBe(0))
       expect(screen.queryByText(RUN_NOTICE)).not.toBeInTheDocument()
       expect(screen.queryByText(FOLDER_NOTICE)).not.toBeInTheDocument()
+      expect(screen.queryByText(FOLDER_HINT)).not.toBeInTheDocument()
     },
   )
 
   it.each([
-    ['setup', FirstHourSteps, '/v1/m/sessions/runs', RUN_NOTICE],
-    ['form', StartSessionForm, '/v1/m/sessions/runs', RUN_NOTICE],
-    ['form', StartSessionForm, '/v1/m/sessions/workspaces', FOLDER_NOTICE],
-  ] as const)(
-    'removes the notice when its list refetch fails (%s)',
-    async (_name, View, failed, notice) => {
-      replies(true, true)
-      const qc = createTestQueryClient()
-      renderIntel(<View />, { queryClient: qc })
-      expect(await screen.findByText(notice)).toBeInTheDocument()
-      replies(true, true, failed)
-      await qc.refetchQueries()
-      await waitFor(() =>
-        expect(screen.queryByText(notice)).not.toBeInTheDocument(),
-      )
-      // A failed refetch keeps its old truncated data; error-aware notice suppression is essential.
-      expect(
-        qc
-          .getQueryCache()
-          .getAll()
-          .some(
-            (q) =>
-              q.state.status === 'error' &&
-              (q.state.data as { has_more?: boolean })?.has_more === true,
-          ),
-      ).toBe(true)
+    [true, true],
+    [false, false],
+  ])(
+    'says a cut folder list inside the folder picker only (has_more=%s)',
+    async (folderMore, shown) => {
+      replies(true, folderMore)
+      const user = userEvent.setup()
+      renderIntel(<StartSessionForm />)
+      await screen.findByRole('combobox', { name: 'Folder' })
+      await user.click(screen.getByRole('combobox', { name: 'Folder' }))
+      expect(screen.queryByText(FOLDER_HINT) !== null).toBe(shown)
+      expect(screen.queryByText(RUN_NOTICE)).not.toBeInTheDocument()
+      await user.keyboard('{Escape}')
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
     },
   )
 })

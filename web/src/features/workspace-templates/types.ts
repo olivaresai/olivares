@@ -40,6 +40,8 @@ export interface TemplatePolicies {
   max_session_duration_minutes?: number
   allowed_tools?: string[]
   record_io?: boolean
+  sessions_disabled?: boolean
+  require_read_only_folders?: boolean
   require_truncate_protection?: boolean
 }
 

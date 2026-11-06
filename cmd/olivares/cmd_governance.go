@@ -113,6 +113,7 @@ func governanceKillSwitchStateCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "state",
+		Aliases:     []string{"status"},
 		Short:       "Whether the estate is stopped, and every kill switch active right now",
 		Long: "Report the enforcement plane's stop state in one call: whether the WHOLE estate is\n" +
 			"halted, and the kill switches currently active. The estate flag is not derivable from\n" +
@@ -414,6 +415,15 @@ type cliApproval struct {
 	ExpiresAt         string `json:"expires_at,omitempty"`
 	Escalated         bool   `json:"escalated"`
 	Reason            string `json:"reason,omitempty"`
+	// Review is what a tool call will run, as the engine proved it. The reason of a call
+	// that carries a description is the agent's own words; the command lives only here.
+	Review *cliApprovalReview `json:"review,omitempty"`
+}
+
+// cliApprovalReview mirrors governance.ApprovalReview.
+type cliApprovalReview struct {
+	Tool string `json:"tool"`
+	Text string `json:"text"`
 }
 
 type cliApprovalList struct {

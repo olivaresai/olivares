@@ -1,0 +1,88 @@
+{
+  "title": "Hôte et sessions",
+  "subtitle": "L'hôte, ses disques, les sessions en direct et ce qu'elles ont consommé.",
+  "range": {
+    "label": "Période",
+    "24h": "24 heures",
+    "7d": "7 jours",
+    "30d": "30 jours"
+  },
+  "host": {
+    "heading": "Hôte",
+    "keeps24": "L'hôte garde 24 heures d'historique : ses graphiques montrent donc les dernières 24 heures.",
+    "unavailable": "Les métriques de l'hôte ne sont pas disponibles sur cet hôte. Seul Linux les fournit.",
+    "noHistory": "L'hôte n'a pas encore enregistré d'échantillon.",
+    "noFilesystems": "Aucun système de fichiers n'a indiqué sa taille.",
+    "noFolders": "Aucun dossier de session.",
+    "facts": {
+      "load": "Charge {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "Mémoire {{used}} sur {{total}}",
+      "swap": "Swap {{used}} sur {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "Utilisation du CPU sur les dernières 24 heures : {{now}} maintenant, pic {{peak}}, moyenne {{average}}."
+    },
+    "memory": {
+      "title": "Mémoire",
+      "total": "Total",
+      "summary": "Mémoire utilisée sur les dernières 24 heures : {{used}} sur {{total}} maintenant, pic {{peak}}."
+    },
+    "disks": {
+      "title": "Systèmes de fichiers",
+      "summary_one": "Un système de fichiers, {{mount}}, {{pct}} utilisé.",
+      "summary_many": "{{count}} systèmes de fichiers ; le plus plein est {{mount}}, {{pct}} utilisé.",
+      "summary_other": "{{count}} systèmes de fichiers ; le plus plein est {{mount}}, {{pct}} utilisé."
+    },
+    "folders": {
+      "title": "Dossiers de session",
+      "summary_one": "Un dossier de session, {{largest}}, {{size}}.",
+      "summary_many": "{{count}} dossiers de session occupent {{total}} ; le plus gros est {{largest}} avec {{size}}.",
+      "summary_other": "{{count}} dossiers de session occupent {{total}} ; le plus gros est {{largest}} avec {{size}}.",
+      "floor": "La mesure s'est arrêtée à sa limite : les tailles sont donc un minimum."
+    },
+    "columns": {
+      "time": "Heure",
+      "cpu": "Utilisation du CPU",
+      "memory": "Mémoire utilisée",
+      "swap": "Swap utilisé",
+      "mount": "Point de montage",
+      "device": "Périphérique",
+      "type": "Type",
+      "used": "Utilisé",
+      "size": "Taille",
+      "usedPercent": "Utilisé %",
+      "folder": "Dossier"
+    }
+  },
+  "live": {
+    "heading": "Sessions en direct",
+    "loading": "Lecture des sessions en direct…",
+    "error": "Impossible de lire les sessions en direct.",
+    "none": "Aucune session en direct.",
+    "more": "La liste a été coupée : plus de sessions sont ouvertes que comptées ici, donc les totaux sont un minimum.",
+    "automation": "Automatisation",
+    "unknown": "Non renseigné",
+    "columns": {
+      "tool": "Outil",
+      "person": "Personne",
+      "sessions": "Sessions"
+    },
+    "byTool": {
+      "title": "Sessions en direct par outil",
+      "summary_one": "{{count}} session en direct par outil : {{list}}.",
+      "summary_many": "{{count}} sessions en direct par outil : {{list}}.",
+      "summary_other": "{{count}} sessions en direct par outil : {{list}}."
+    },
+    "byPerson": {
+      "title": "Sessions en direct par personne",
+      "summary_one": "{{count}} session en direct par personne : {{list}}.",
+      "summary_many": "{{count}} sessions en direct par personne : {{list}}.",
+      "summary_other": "{{count}} sessions en direct par personne : {{list}}."
+    }
+  },
+  "usage": {
+    "heading": "Utilisation"
+  }
+}

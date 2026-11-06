@@ -61,6 +61,17 @@ afterEach(() => {
 })
 
 describe('the account menu', () => {
+  it('names the account button in a tooltip that keeps inside the window, not a native title', async () => {
+    const user = userEvent.setup()
+    renderIntel(<UserMenu />)
+    const trigger = screen.getByRole('button', { name: /, Account$/ })
+    // A native title is drawn by the browser, wherever it falls: at the window's right
+    // edge it was cut to "Ac". The console's tooltip flips and shifts to stay inside.
+    expect(trigger).not.toHaveAttribute('title')
+    await user.hover(trigger)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Account')
+  })
+
   it('is no second navigation: no All areas and no favorites (0.5)', async () => {
     const user = userEvent.setup()
     renderIntel(<UserMenu />)

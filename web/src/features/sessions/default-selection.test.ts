@@ -6,7 +6,15 @@
 import { describe, expect, it } from 'vitest'
 import { chooseDefaultAddress } from './default-selection'
 
-const row = (key: string) => ({ key })
+const ME = 'user-me'
+// A session row as the rail orders it; its newest run says whom it acts for.
+const row = (
+  key: string,
+  actsFor: { kind: 'user' | 'automation'; user_id?: string } = {
+    kind: 'user',
+    user_id: ME,
+  },
+) => ({ key, runs: [{ acts_for: actsFor }] })
 
 describe('chooseDefaultAddress — the surface opens on work, once', () => {
   it('defaults to nothing while either half of the list is still loading', () => {
@@ -19,6 +27,7 @@ describe('chooseDefaultAddress — the surface opens on work, once', () => {
         order: [row('sess:a'), row('live:b')],
         retiredAddress: null,
         latched: null,
+        userId: ME,
       }),
     ).toBeNull()
   })
@@ -30,6 +39,7 @@ describe('chooseDefaultAddress — the surface opens on work, once', () => {
         order: [row('sess:a'), row('live:b')],
         retiredAddress: null,
         latched: null,
+        userId: ME,
       }),
     ).toBe('sess:a')
   })
@@ -43,6 +53,7 @@ describe('chooseDefaultAddress — the surface opens on work, once', () => {
         order: [row('live:new'), row('sess:a')],
         retiredAddress: null,
         latched: 'sess:a',
+        userId: ME,
       }),
     ).toBe('sess:a')
   })
@@ -54,6 +65,7 @@ describe('chooseDefaultAddress — the surface opens on work, once', () => {
         order: [row('live:new')],
         retiredAddress: null,
         latched: 'sess:a',
+        userId: ME,
       }),
     ).toBe('live:new')
   })
@@ -65,6 +77,7 @@ describe('chooseDefaultAddress — the surface opens on work, once', () => {
         order: [row('sess:a'), row('live:b')],
         retiredAddress: 'sess:a',
         latched: 'sess:a',
+        userId: ME,
       }),
     ).toBe('live:b')
     expect(
@@ -73,6 +86,7 @@ describe('chooseDefaultAddress — the surface opens on work, once', () => {
         order: [row('sess:a')],
         retiredAddress: 'sess:a',
         latched: null,
+        userId: ME,
       }),
     ).toBeNull()
   })
@@ -84,6 +98,54 @@ describe('chooseDefaultAddress — the surface opens on work, once', () => {
         order: [],
         retiredAddress: null,
         latched: 'sess:gone',
+        userId: ME,
+      }),
+    ).toBeNull()
+  })
+
+  // An admin with no session of their own opened /sessions and landed on a
+  // dispatcher worker's live session, its Stop, Esc and composer armed. The default
+  // only ever opens a session the signed-in person launched.
+  it("never opens on another person's or an automation's session", () => {
+    const theirs = row('run:theirs', { kind: 'user', user_id: 'user-admin-2' })
+    const automation = row('run:worker', { kind: 'automation' })
+    expect(
+      chooseDefaultAddress({
+        settling: false,
+        order: [theirs, automation, row('sess:mine')],
+        retiredAddress: null,
+        latched: null,
+        userId: ME,
+      }),
+    ).toBe('sess:mine')
+    expect(
+      chooseDefaultAddress({
+        settling: false,
+        order: [theirs, automation],
+        retiredAddress: null,
+        latched: null,
+        userId: ME,
+      }),
+    ).toBeNull()
+    // A latch on someone else's session (an older console, a list that changed hands)
+    // is dropped, not held.
+    expect(
+      chooseDefaultAddress({
+        settling: false,
+        order: [theirs, row('sess:mine')],
+        retiredAddress: null,
+        latched: 'run:theirs',
+        userId: ME,
+      }),
+    ).toBe('sess:mine')
+    // Who is signed in is not known yet: nothing is anyone's, so nothing opens.
+    expect(
+      chooseDefaultAddress({
+        settling: false,
+        order: [row('sess:mine')],
+        retiredAddress: null,
+        latched: null,
+        userId: null,
       }),
     ).toBeNull()
   })

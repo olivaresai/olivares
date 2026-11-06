@@ -7,7 +7,8 @@
 // is drawn and named, for the Sessions list, Now, the palette and the Business cockpit.
 //
 // ⛔ THE SHAPE DIFFERS PER STATUS AND THE WORD IS ALWAYS THERE, so colour never carries a
-//    state alone, and colour appears only where a person must look: Needs you and Failed.
+//    state alone. Each status has its colour (#4019): blue Working, amber Needs you,
+//    green Done, red Failed; Idle, the one at rest, is grey.
 import { CircleCheck, CircleX, Pause } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -52,7 +53,7 @@ export function SessionStatusMark({
         {...common}
         data-shape="disc"
         className={cn(
-          'm-0.5 inline-block size-2.5 shrink-0 rounded-full bg-text',
+          'm-0.5 inline-block size-2.5 shrink-0 rounded-full bg-info',
           className,
         )}
       />
@@ -78,7 +79,11 @@ export function SessionStatusMark({
       data-shape={shape}
       className={cn(
         'size-3.5 shrink-0',
-        status === 'failed' ? 'text-danger' : 'text-text-3',
+        status === 'failed'
+          ? 'text-danger'
+          : status === 'done'
+            ? 'text-success'
+            : 'text-text-3',
         className,
       )}
     />

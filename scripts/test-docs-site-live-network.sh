@@ -21,7 +21,12 @@ trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/bin" "$work/tree/docs-site/public" \
 	"$work/tree/docs-site/src/content/docs/reference" \
 	"$work/tree/docs-site/src/content/docs/es/how-to"
-printf '/old/* /new/ 301\n' >"$work/tree/docs-site/public/_redirects"
+# The three source shapes of the generated block: a splat with `:splat` in the destination, a bare
+# locale root, and an exact rule that ends in `/`. The platform matches an exact source by its
+# literal key, so the gate has to request the source as written.
+printf '%s\n' '/old/* /new/ 301' '/es /es/ 301' \
+	'/es/2026-06/how-to/x/ /es/how-to/x/ 301' \
+	'/es/reference/api/* /reference/api/:splat 301' >"$work/tree/docs-site/public/_redirects"
 printf '%s\n' '# reference' >"$work/tree/docs-site/src/content/docs/reference/index.mdx"
 printf '%s\n' '# español' >"$work/tree/docs-site/src/content/docs/es/index.mdx"
 
@@ -46,6 +51,9 @@ fi
 case "$url" in
 https://docs.example/) printf '%s ' "${FAKE_ROOT_CODE:-200}" ;;
 https://docs.example/old/olivares-splat-probe) printf '301 https://docs.example/new/' ;;
+https://docs.example/es) printf '301 https://docs.example/es/' ;;
+https://docs.example/es/2026-06/how-to/x/) printf '301 https://docs.example/es/how-to/x/' ;;
+https://docs.example/es/reference/api/olivares-splat-probe) printf '301 https://docs.example/reference/api/olivares-splat-probe' ;;
 https://docs.example/reference/|https://docs.example/es/) printf '200 ' ;;
 */olivares-negative-control-*/) printf '404 ' ;;
 *) printf '404 ' ;;
@@ -60,6 +68,11 @@ if [ "$rc" -ne 0 ]; then
 	echo "test-docs-site-live-network: exact bypass header expected rc=0, got $rc: $out" >&2
 	fails=$((fails + 1))
 fi
+for ok in '✓ /es -> 301 /es/' \
+	'✓ /es/2026-06/how-to/x/ -> 301 /es/how-to/x/' \
+	'✓ /es/reference/api/olivares-splat-probe -> 301 /reference/api/olivares-splat-probe'; do
+	case "$out" in *"$ok"*) ;; *) echo "test-docs-site-live-network: expected '$ok' in: $out" >&2; fails=$((fails + 1)) ;; esac
+done
 
 out=$(PATH="$work/bin:$PATH" OLIVARES_CLONE="$work/tree" DOCS_LIVE_PROBE= \
 	bash "$CHECK" --host docs.example 2>&1); rc=$?
@@ -101,4 +114,4 @@ if [ "$fails" -ne 0 ]; then
 	echo "test-docs-site-live-network: $fails failure(s)" >&2
 	exit 1
 fi
-echo "test-docs-site-live-network: 5/5 (header · WAF 403 · observed 500 · missing source · mutant)"
+echo "test-docs-site-live-network: 5/5 (header and rule shapes · WAF 403 · observed 500 · missing source · mutant)"

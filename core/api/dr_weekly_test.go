@@ -52,7 +52,7 @@ func TestDRWeeklyVerificationDetectsCorruptBundleAndAudits(t *testing.T) {
 	if _, err := s.RunDueScheduledBackup(ctx, now.Add(7*24*time.Hour)); err == nil {
 		t.Fatal("corrupted bundle passed verification")
 	}
-	if err := s.loadDRSchedule(ctx); err != nil {
+	if err := s.loadDRSchedule(ctx, false); err != nil {
 		t.Fatal(err)
 	}
 	got := s.drSvc.scheduleSnapshot()

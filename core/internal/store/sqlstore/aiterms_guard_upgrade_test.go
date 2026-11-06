@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -213,6 +214,114 @@ func TestAITermsGuardBusinessOpensPreviousCommunity(t *testing.T) {
 		if err := current.Close(); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// A directory Business 0.4 wrote (the three Business relations, no AI terms pair) crosses to the Community
+// and the Business registries that add the pair: Business X.Y-1 -> Community X.Y -> Business X.Y, and the plain
+// Business upgrade. Each keeps the data and the audit chain and guards the AI terms relations.
+func TestAITermsGuardOpensThePreviousBusinessStore(t *testing.T) {
+	ctx := context.Background()
+	for _, crossing := range [][]func(store.ExtensionRegistry) error{
+		{registerAITermsGuardFixture, registerBusinessAITermsGuardFixture, registerAITermsGuardFixture},
+		{registerBusinessAITermsGuardFixture, registerAITermsGuardFixture},
+	} {
+		cfg := store.Config{Engine: store.EngineSQLite, DSN: filepath.Join(t.TempDir(), "business.db")}
+		previous, err := Open(ctx, cfg, registerCommercialGuardFixture)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tenant := provisionTenant(t, previous, "aiterms-previous-business")
+		if err := previous.Close(); err != nil {
+			t.Fatal(err)
+		}
+		for step, register := range crossing {
+			current, err := Open(ctx, cfg, register)
+			if err != nil {
+				t.Fatalf("open %d of %d on the previous Business store: %.600s", step+1, len(crossing), err)
+			}
+			if err := current.View(ctx, tenant, func(sc store.Scope) error {
+				report, err := sc.Audit().Verify(ctx, 1)
+				if err == nil && !report.OK {
+					err = fmt.Errorf("audit continuity lost: %+v", report)
+				}
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			assertAITermsGuarded(t, current.(*sqlStore), tenant)
+			if err := current.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+// inventoryScanCounter counts the full reads of the guard inventory stream (the hash-chain scan).
+type inventoryScanCounter struct {
+	*sql.DB
+	scans int
+}
+
+func (q *inventoryScanCounter) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if strings.HasSuffix(query, guardInventoryEventsTable+" ORDER BY event_ordinal") {
+		q.scans++
+	}
+	return q.DB.QueryContext(ctx, query, args...)
+}
+
+// Every start of a directory another edition or release wrote verifies its guard history. The inventory
+// stream is read and hashed once per start, not once per compiled candidate lineage: an upgraded Business
+// 0.4 directory spent 41 s (SQLite) and 58 s (PostgreSQL) of each restart rescanning it.
+func TestGuardAdmissionScansTheInventoryOncePerStart(t *testing.T) {
+	ctx := context.Background()
+	communityWritten := func(t *testing.T) string {
+		previous, path := openInitializedSQLiteTestCopy(t, initializedSQLiteWidget)
+		if err := previous.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	businessWritten := func(t *testing.T) string { // the census Business 0.4 recorded
+		path := filepath.Join(t.TempDir(), "business.db")
+		previous, err := Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: path}, registerCommercialGuardFixture)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := previous.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	for _, tc := range []struct {
+		name     string
+		previous func(*testing.T) string
+		register func(store.ExtensionRegistry) error
+	}{
+		{"Community to Business", communityWritten, registerBusinessAITermsGuardFixture},
+		{"Community to Community", communityWritten, registerAITermsGuardFixture},
+		{"Business 0.4 to Business", businessWritten, registerBusinessAITermsGuardFixture},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := tc.previous(t)
+			current, err := Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: path}, tc.register)
+			if err != nil {
+				t.Fatalf("open the upgraded directory: %.600s", err)
+			}
+			defer current.Close()
+			st := current.(*sqlStore)
+			_, manifest, _, err := bootGuardCensus(ctx, st.db, st.dia, st.reg.appendOnlyTables())
+			if err != nil {
+				t.Fatal(err)
+			}
+			q := &inventoryScanCounter{DB: st.db}
+			if _, err := guardAdmissionVerifyHistory(ctx, q, st.dia, manifest); err != nil {
+				t.Fatalf("verify the upgraded history: %.600s", err)
+			}
+			if q.scans != 1 {
+				t.Fatalf("one start scanned the guard inventory %d times, want 1", q.scans)
+			}
+		})
 	}
 }
 

@@ -133,6 +133,8 @@
   "models:admission:admin": "ao",
   "models:admission:read": "veao",
   "models:admission:write": "eao",
+  "models:ask:read": "veao",
+  "models:ask:write": "eao",
   "models:catalog:read": "veao",
   "models:gpai:read": "veao",
   "models:gpai:write": "eao",

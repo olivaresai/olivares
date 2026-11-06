@@ -86,7 +86,6 @@
     "folderHint": "이 서버의 폴더입니다. 비워 두면 새 폴더에서 시작합니다.",
     "folderNew": "이 세션을 위한 새 폴더",
     "folderTyped": "다른 폴더…",
-    "folderChange": "폴더 변경",
     "readingFolder": "마지막 세션의 폴더를 읽는 중…",
     "prompt": "첫 메시지(선택 사항)",
     "promptPlaceholder": "먼저 무엇을 해야 합니까?",
@@ -118,16 +117,21 @@
     "chooseModel": "모델을 선택하십시오. 이 키에는 기본 모델이 없습니다.",
     "noTestedModel": "이 키의 어떤 모델도 아직 연결 테스트를 통과하지 못했습니다. 프로바이더에서 키를 테스트하십시오.",
     "openProviders": "프로바이더 열기",
-    "profile": "프로필",
+    "profile": "계정",
     "profileNotSignedIn": "로그인되지 않음",
     "profileNeedsKey": "키 필요",
     "foldersUnreadable": "등록된 폴더를 읽지 못했습니다. 이 서버의 폴더 경로를 입력하십시오.",
     "folderPermission": "{{name}}(으)로 시작합니다. 이 폴더의 기본값입니다.",
     "autoAsks": "{{tool}}에는 자동 모드가 없어 각 작업 전에 묻습니다."
   },
+  "composer": {
+    "toolPill": "도구 및 계정: {{value}}",
+    "modelPill": "모델: {{value}}",
+    "effortPill": "노력: {{value}}",
+    "folderPill": "폴더: {{value}}",
+    "moreOptions": "추가 옵션"
+  },
   "lists": {
-    "runsTruncated": "최근 세션: {{count}}개 로드됨, 더 있음.",
-    "runsHint": "오래된 세션은 이 목록 밖에 있습니다.",
     "foldersTruncated": "등록된 폴더: {{count}}개 로드됨, 더 있음.",
     "foldersHint": "일부 등록된 폴더가 이 목록 밖에 있습니다."
   },
@@ -147,9 +151,7 @@
     "mcp": "MCP 서버 추가",
     "budgets": "예산 설정",
     "cli": "olivares 명령줄 사용",
-    "cliHint": "이 서버에는 olivares 명령이 이미 설치되어 있습니다. 다른 컴퓨터에서는 다음으로 설치하십시오:",
-    "copy": "복사",
-    "copied": "복사됨"
+    "cliHint": "이 서버에는 olivares 명령이 이미 설치되어 있습니다. 다른 컴퓨터에서는 다음으로 설치하십시오:"
   },
   "permissionSummary": {
     "readOnly": "읽고 계획만 합니다. 모든 변경은 거부됩니다.",
@@ -158,5 +160,29 @@
     "editsAndCommands": "읽기, 파일 편집, 명령 실행을 묻지 않고 합니다. 다른 도구는 거부됩니다.",
     "auto": "도구 자체의 검토된 자동 모드가 결정합니다. 자동 모드가 없는 도구는 '감독'처럼 묻습니다. 실행 관리 권한이 필요합니다.",
     "full": "아무것도 묻지 않습니다. Olivares는 계속 세션을 제한하고 모든 작업을 기록합니다. 실행 관리 권한이 필요합니다."
+  },
+  "bring": {
+    "title": "폴더 가져오기",
+    "body": "사용 중인 도구가 이미 작업한 폴더를, 각 도구 자체의 프로젝트 경로와 날짜 기록에서 읽어 옵니다. 확인하기 전에는 아무것도 등록되지 않습니다.",
+    "error": "도구의 폴더를 찾지 못했습니다.",
+    "unreadable": "{{tool}}의 기록을 읽을 수 없습니다. 대신 폴더를 직접 추가하세요.",
+    "cols": {
+      "folder": "폴더",
+      "tool": "도구",
+      "lastUsed": "마지막 사용",
+      "conversations": "대화"
+    },
+    "pick": "{{folder}} 등록",
+    "confirm": "선택한 항목 등록 ({{n}})",
+    "skipStep": "나중에",
+    "skip": {
+      "missing": "폴더가 더 이상 없습니다",
+      "unreadable": "폴더를 읽을 수 없습니다",
+      "outside_allowed_roots": "허용된 폴더 밖: 보호된 폴더와 겹칩니다",
+      "already_registered": "이미 등록됨"
+    },
+    "failed": "등록하지 못했습니다.",
+    "toast": "등록됨: {{n}}",
+    "result": "등록: {{imported}}. 건너뜀: {{skipped}}."
   }
 }

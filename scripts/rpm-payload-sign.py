@@ -35,6 +35,7 @@ import contextlib
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -152,6 +153,20 @@ def run(command: list[str], env: dict[str, str] | None = None, check: bool = Fal
     )
 
 
+def signing_diagnostics(result: subprocess.CompletedProcess[bytes], home: Path, env: dict[str, str]) -> None:
+    # These commands carry only paths and key identifiers, never key bytes or passphrases.
+    stderr(f"command: {shlex.join(result.args)}; exit code: {result.returncode}")
+    stderr(f"stderr: {result.stderr.decode('utf-8', 'replace').rstrip()}")
+    gpgconf = shutil.which("gpgconf", path=env.get("PATH"))
+    if gpgconf is None:
+        stderr("gpgconf --list-dirs unavailable: gpgconf is not installed")
+        return
+    directories = run([gpgconf, "--homedir", str(home), "--list-dirs"], env)
+    stderr(f"command: {shlex.join(directories.args)}; exit code: {directories.returncode}")
+    stderr(directories.stdout.decode("utf-8", "replace").rstrip())
+    stderr(f"stderr: {directories.stderr.decode('utf-8', 'replace').rstrip()}")
+
+
 # gpg-agent binds $GNUPGHOME/S.gpg-agent* sockets; Linux sun_path holds 107 bytes
 # plus the terminating NUL. A long TMPDIR must not turn a check into a refusal.
 GPG_AGENT_SOCKET = "/S.gpg-agent.browser"
@@ -195,6 +210,7 @@ def import_secret(gpg: str, home: Path, secret: Path) -> dict[str, str]:
     env["LC_ALL"] = "C"
     imported = run([gpg, "--homedir", str(home), "--batch", "--import", str(secret)], env)
     if imported.returncode != 0:
+        signing_diagnostics(imported, home, env)
         blind("OpenPGP secret key import failed")
     return env
 
@@ -260,6 +276,7 @@ def unlock_for_rpmsign(gpg: str, home: Path, env: dict[str, str], fingerprint: s
         env,
     )
     if signed.returncode != 0:
+        signing_diagnostics(signed, home, env)
         blind("gpg cannot sign unattended with the repository key; rpmsign would stop at a passphrase prompt")
 
 
@@ -332,6 +349,7 @@ def sign_one(
     original = rpm_body(rpm_path.read_bytes(), rpm_path.name)
     signed = run(sign_command(rpmsign, fingerprint, home, rpm_path), env)
     if signed.returncode != 0:
+        signing_diagnostics(signed, home, env)
         refuse(f"rpmsign --addsign failed for {rpm_path.name}")
     if rpm_body(rpm_path.read_bytes(), rpm_path.name) != original:
         refuse(f"rpmsign changed {rpm_path.name} outside its signature header")

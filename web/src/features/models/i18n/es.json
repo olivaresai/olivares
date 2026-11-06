@@ -9,7 +9,8 @@
     "keys": "Claves de proveedor",
     "gpai": "Postura GPAI",
     "access": "Acceso",
-    "governance": "Gobernanza"
+    "governance": "Gobernanza",
+    "usage": "Uso"
   },
   "catalog": {
     "title": "Matriz de capacidades",
@@ -124,7 +125,7 @@
     "description": "Referencias gobernadas a claves de API y espacios de trabajo de proveedor. Solo se guarda una pista enmascarada — nunca el valor secreto.",
     "new": "Añadir referencia",
     "empty": "Sin referencias a claves",
-    "emptyHint": "Una referencia de clave apunta a una credencial que guarda el motor, nunca al secreto en sí. Añade una para poder llamar a un modelo.",
+    "emptyHint": "Una referencia de clave apunta a una credencial que guarda el motor, nunca al secreto en sí. No hace falta para llamar a un modelo: añade la propia clave como clave de API.",
     "maskedOnly": "Solo referencia — el valor secreto nunca se guarda ni se muestra.",
     "columns": {
       "name": "Nombre",
@@ -141,7 +142,7 @@
       "workspace": "Espacio de trabajo"
     },
     "dialog": {
-      "title": "Añadir referencia a clave",
+      "title": "Añadir referencia",
       "name": "Nombre",
       "provider": "Proveedor",
       "kind": "Tipo de referencia",
@@ -273,6 +274,37 @@
     "truncatedHint": "Hay más reglas de acceso de las que se ven; esta página coge filas por id. Las marcas de estas filas reflejan SÓLO las reglas cargadas: pueden faltar allows que introduzcan confinamiento o añadan destinos permitidos, y pueden faltar forbids que resten acceso — así que esta página puede leerse más ancha O más estrecha que la realidad, y un sujeto sin ninguna regla cargada no aparece siquiera. No deduzcas de aquí el acceso efectivo: el motor recorre todas las páginas antes de decidir, y resuelve un principal por usuario, rol y grupo a la vez, que una fila no puede enseñar.",
     "groupsTruncated": "Cargados {{n}} grupos; hay más",
     "groupsTruncatedHint": "Hay más grupos de modelos de los que se ven; esta página coge filas por id. Que un grupo no salga aquí no demuestra que no exista — una regla puede seguir apuntándole."
+  },
+  "usage": {
+    "byLabel": "Agrupar el uso por",
+    "periodLabel": "Periodo",
+    "by": {
+      "model": "Modelo",
+      "account": "Cuenta",
+      "provider": "Proveedor",
+      "tool": "Herramienta"
+    },
+    "period": {
+      "days1": "24 horas",
+      "days7": "7 días",
+      "days30": "30 días"
+    },
+    "chartTitle": "Ejecuciones por día",
+    "chartSummary": "Ejecuciones por día. Agrupado por: {{by}}. Periodo: {{period}}. Total {{total}}; día con más actividad {{day}} con {{peak}}.",
+    "totalsTitle": "Totales",
+    "columns": {
+      "day": "Día",
+      "runs": "Ejecuciones",
+      "input": "Tokens de entrada",
+      "output": "Tokens de salida",
+      "cost": "Coste"
+    },
+    "noKey": "Sin registrar",
+    "other": "Otros",
+    "empty": {
+      "title": "Sin uso en este periodo",
+      "description": "El uso aparece aquí después de que se ejecute la primera sesión."
+    }
   },
   "available": {
     "title": "Disponibles ahora",

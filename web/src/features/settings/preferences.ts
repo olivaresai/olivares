@@ -13,6 +13,7 @@ export interface SessionDefaults {
   tool: string
   account: string
   model: string
+  effort: string
   folder: string
 }
 export interface NotificationEvents {
@@ -37,7 +38,7 @@ export type StartPageId = (typeof START_PAGE_IDS)[number]
 
 export const CLIENT_SETTING_DEFAULTS = {
   clock: '24' as ClockFormat,
-  startPage: 'home' as StartPageId,
+  startPage: 'sessions' as StartPageId,
   confirmStop: true,
   editor: 'vscode' as EditorId,
   editorSsh: '',
@@ -46,6 +47,7 @@ export const CLIENT_SETTING_DEFAULTS = {
     tool: '',
     account: '',
     model: '',
+    effort: '',
     folder: '',
   } as SessionDefaults,
   notificationEvents: {

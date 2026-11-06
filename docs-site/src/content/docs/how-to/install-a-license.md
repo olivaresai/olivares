@@ -97,10 +97,10 @@ uses and tells you which source is actually in effect, which is the question tha
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` is offline and resolves the license by the same precedence the engine uses, so it
+On the engine's host, or with `--data-dir`, `status` is offline and resolves the license by the same precedence the engine uses, so it
 answers the question that matters — *which license is actually in effect* — rather than
 "is there a file". It reports the source it resolved, the holder, the plan and the
-expiry.
+expiry. Signed in to an engine on another host, it asks that engine instead.
 
 Run it after every install, and after removing an override.
 
@@ -174,6 +174,13 @@ needs a secret or a review rather than half-enabling it. `olivares enterprise st
 what is active. These commands exist **only in the commercial binary** — if
 `olivares enterprise` is not a command, you are still running the Community build and the
 swap above has not happened yet.
+
+The console does the same for each family: the **Edition & license** view lists every family
+with how many of its modules are on. **Turn on** shows the same diff before it applies, and
+**Turn off** names the modules that stop. A family your license does not include keeps
+**Turn on** disabled and says so: *This license does not include* the family. The engine checks
+the license again on every turn-on, from the console or the CLI, so a lapsed or missing
+license cannot turn a family on.
 
 :::caution[Back up before the swap]
 The swap replaces a binary, not your data — but take the backup anyway, the same one

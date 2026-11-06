@@ -37,8 +37,7 @@
     "savedViewRejected_one": "{{count}} valor guardado en «{{name}}» no se pudo usar ({{keys}}); la vista ha vuelto a su valor por defecto.",
     "savedViewRejected_many": "{{count}} valores guardados en «{{name}}» no se pudieron usar ({{keys}}); la vista ha vuelto a sus valores por defecto.",
     "savedViewRejected_other": "{{count}} valores guardados en «{{name}}» no se pudieron usar ({{keys}}); la vista ha vuelto a sus valores por defecto.",
-    "thisSavedView": "esta vista guardada",
-    "dismiss": "Descartar"
+    "thisSavedView": "esta vista guardada"
   },
   "workspaceRequired": {
     "use": "Usar {{name}}",

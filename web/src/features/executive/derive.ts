@@ -196,6 +196,9 @@ export interface RiskKpi {
 }
 
 export interface DriftKpi {
+  /** No grant is declared, so there is nothing to compare observed access against:
+   *  the figures below are not drift and the card must not headline them. */
+  noRules: boolean
   /** Reconciled, firm unexpected accesses (act on these). */
   unexpectedFirm: number
   /** Unexpected accesses awaiting an identity link — honest amber, not red. */
@@ -228,6 +231,7 @@ export function deriveDrift(drift?: DiffResponse): DriftKpi | null {
       d.edge?.coverage_tier === 'mixed',
   ).length
   return {
+    noRules: drift.grants_declared === false,
     unexpectedFirm: (drift.unexpected_count ?? 0) - unexpectedPending,
     unexpectedPending,
     unused: drift.unused_count ?? 0,

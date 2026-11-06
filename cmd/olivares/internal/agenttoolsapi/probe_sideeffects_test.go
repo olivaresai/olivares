@@ -5,6 +5,8 @@
 package agenttoolsapi
 
 import (
+	"context"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/driverfacts"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // readOnlyCommands is the one list of what a status, health, usage or sign-in
@@ -25,12 +28,17 @@ import (
 // them for these lines (opencode `models` ran the plugins until OPENCODE_PURE=1), and
 // cursor 2026.10.22-27dcf5f fired none for its two (a canary MCP server in the user's
 // and the project's .cursor/mcp.json started only under `agent mcp list`, the control).
+// claude 2.1.317 fired none for the governed status either, nor for `auth status --json`
+// with an apiKeyHelper in the settings, which it does not run (a session, the control,
+// fired them all).
 // A driver with a sign-in and no row fails the test below, and so does a command
 // that is not listed: adding a driver or a flag is a decision made here.
 var readOnlyCommands = map[string][]string{
 	"claude": {
 		"--version",
 		"auth status --json",
+		// The engine user's own login, as a governed session sees it.
+		governedClaudeStatus,
 		// A session that sends no prompt: initialize and get_usage only, hooks and MCP off.
 		`-p --input-format stream-json --output-format stream-json --verbose --no-session-persistence --settings {"disableAllHooks":true} --strict-mcp-config --mcp-config {"mcpServers":{}}`,
 	},
@@ -41,10 +49,15 @@ var readOnlyCommands = map[string][]string{
 	"cursor":     {"--version", "status --format json"},
 }
 
+// governedClaudeStatus is the read of the engine user's own login as a governed session
+// sees it (readServerLogin), as the stubs log it: its setting source is the empty argument.
+const governedClaudeStatus = "--setting-sources  auth status --json"
+
 // Every read of every driver, signed in and signed out, for the engine user's own
 // login and for a login made through Olivares, runs only listed commands and fires
 // no canary (the stubs fire one when hooks, plugins or MCP are left on or a
-// session is started).
+// session is started). The node's rule is open, so a read that finds no login of the
+// organization goes on to the engine user's.
 func TestStatusAndHealthReadsNeverStartAnything(t *testing.T) {
 	for _, f := range driverfacts.All() {
 		if _, ok := readOnlyCommands[f.Key]; !ok && f.SignIn != "" {
@@ -58,9 +71,10 @@ func TestStatusAndHealthReadsNeverStartAnything(t *testing.T) {
 	}
 
 	call, m, home := newProvidersServer(t)
+	m.SetServerLoginOpen(func(context.Context, model.TenantID) bool { return true })
 	bin := filepath.Dir(m.program("claude"))
 	tenant := "?tenant_id=" + url.QueryEscape(filepath.Base(home))
-	tenantLogins := []string{"claude/.claude/.credentials.json", "codex/.codex/auth.json", "grok/.grok/auth.json", "cursor/.config/cursor/auth.json"}
+	tenantLogins := []string{"claude/.claude/.credentials.json", "codex/.codex/auth.json", "grok/.grok/auth.json", "cursor/.config/cursor/auth.json", "opencode/.local/share/opencode/auth.json"}
 	for _, f := range tenantLogins {
 		p := filepath.Join(home, f)
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
@@ -113,25 +127,46 @@ func TestStatusAndHealthReadsNeverStartAnything(t *testing.T) {
 		}
 	}
 
-	readAll("signed in", readOnlyCommands)
+	// The organization is signed in, so its login answers and the governed read never runs.
+	organization := maps.Clone(readOnlyCommands)
+	organization["claude"] = slices.DeleteFunc(slices.Clone(readOnlyCommands["claude"]), func(c string) bool { return c == governedClaudeStatus })
+	readAll("signed in", organization)
 
-	// Signed out: the engine user's own logins and the tenant's are gone.
-	own := os.Getenv("HOME")
-	for _, f := range []string{".claude/.credentials.json", ".codex/auth.json", ".grok/auth.json", ".local/share/opencode/auth.json", ".config/cursor/auth.json"} {
-		if err := os.Remove(filepath.Join(own, f)); err != nil {
-			t.Fatal(err)
-		}
-	}
+	// The organization's logins are gone: the engine user's own answers.
 	for _, f := range tenantLogins {
 		if err := os.Remove(filepath.Join(home, f)); err != nil {
 			t.Fatal(err)
 		}
 	}
+	readAll("on the server's own login", map[string][]string{"claude": {"--version", "auth status --json", governedClaudeStatus}, "codex": {"--version", "login status"}})
+
+	// Claude Code's own login is gone and only its settings log it in: the governed read
+	// says signed out, and the tool is asked again with its settings on.
+	own := os.Getenv("HOME")
+	if err := os.Remove(filepath.Join(own, ".claude/.credentials.json")); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(own, ".claude/settings.json")
+	if err := os.WriteFile(settings, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	readAll("only in the user's settings", map[string][]string{"claude": {"--version", "auth status --json", governedClaudeStatus}})
+	if err := os.Remove(settings); err != nil {
+		t.Fatal(err)
+	}
+
+	// Signed out: the engine user's own logins are gone too.
+	for _, f := range []string{".codex/auth.json", ".grok/auth.json", ".local/share/opencode/auth.json", ".config/cursor/auth.json"} {
+		if err := os.Remove(filepath.Join(own, f)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// Signed out, a tool is asked its status and goes no further (Grok Build has no
-	// status command, so its own login is read through `models`).
+	// status command, so its own login is read through `models`). OpenCode has no
+	// credential file and does not need to start its runtime to answer signed out.
 	readAll("signed out", map[string][]string{
-		"claude": {"--version", "auth status --json"}, "codex": {"--version", "login status"},
-		"grok": {"--version", "models"}, "opencode": {"--version", "auth list"}, "gemini-cli": {"--version"},
+		"claude": {"--version", "auth status --json", governedClaudeStatus}, "codex": {"--version", "login status"},
+		"grok": {"--version", "models"}, "opencode": {"--version"}, "gemini-cli": {"--version"},
 		"cursor": {"--version", "status --format json"},
 	})
 }

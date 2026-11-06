@@ -108,7 +108,7 @@ beforeEach(() => {
   api.providers.mockResolvedValue({ providers: [claude, codex] })
 })
 
-it('shows each signed-in instance with its account, plan, usage windows and models', async () => {
+it('shows each signed-in instance with its account, plan, share of the week and models', async () => {
   mount()
   await openOptions('Claude Code')
   const card = await screen.findByRole('article', { name: /claude code/i })
@@ -122,12 +122,9 @@ it('shows each signed-in instance with its account, plan, usage windows and mode
   ).toBeInTheDocument()
   expect(within(card).getByText('2.1.289 (Claude Code)')).toBeInTheDocument()
   expect(within(card).getByText('/home/op/.claude')).toBeInTheDocument()
-  const session = within(card).getByRole('progressbar', { name: '5-hour' })
-  expect(session).toHaveAttribute('aria-valuenow', '37')
-  expect(
-    within(card).getByRole('progressbar', { name: 'Weekly' }),
-  ).toHaveAttribute('aria-valuenow', '77')
-  expect(within(card).getByText(/resets in 2 hours/i)).toBeInTheDocument()
+  expect(within(card).getByTestId('account-usage')).toHaveTextContent(
+    '77% of the week · 37% of 5 hours',
+  )
   expect(within(card).getByText('Models: 2')).toBeInTheDocument()
   expect(within(card).getByText('Opus')).toBeInTheDocument()
   expect(within(card).getByText(/^Checked /)).toBeInTheDocument()
@@ -146,7 +143,7 @@ it('gives a signed-out tool its own login command to copy, and no login form of 
     within(card).getByRole('button', { name: /copy command/i }),
   ).toBeInTheDocument()
   expect(within(card).queryByRole('textbox')).toBeNull()
-  expect(within(card).queryByRole('progressbar')).toBeNull()
+  expect(within(card).queryByTestId('account-usage')).toBeNull()
 })
 
 it('keeps a stale snapshot and names the command that failed', async () => {
@@ -269,9 +266,7 @@ it('keeps readable login details when inventory fails, without offering installa
   expect(
     within(card).getByText('Authenticated as c***@example.com · max'),
   ).toBeVisible()
-  expect(
-    within(card).getByRole('progressbar', { name: '5-hour' }),
-  ).toHaveAttribute('aria-valuenow', '37')
+  expect(within(card).getByTestId('account-usage')).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
   expect(
     screen.getByRole('button', { name: 'Review Claude Code install' }),

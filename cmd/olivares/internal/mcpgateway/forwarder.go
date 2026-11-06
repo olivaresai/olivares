@@ -41,10 +41,11 @@ type UpstreamForwarder struct {
 
 var _ mcpc.SubscriptionUpstream = (*UpstreamForwarder)(nil)
 
-// mcpForwardMaxResponse caps an upstream response body. The forwarder reads ONE
-// byte past it so an over-limit body is DETECTED (a truncated body can never be
-// validated, so it can never confirm an outcome).
-const mcpForwardMaxResponse = 8 << 20
+// mcpForwardMaxResponse caps an upstream response body: the bound every MCP client of
+// the engine reads to (mcpc.MaxHTTPBody). The forwarder reads ONE byte past it so an
+// over-limit body is DETECTED (a truncated body can never be validated, so it can
+// never confirm an outcome).
+const mcpForwardMaxResponse = mcpc.MaxHTTPBody
 
 // Forward classifies every leg per the dispatch contract (mcpc.Upstream):
 // errors BEFORE http.Client.Do are proven not_sent; after invoking Do, the ONLY
@@ -74,12 +75,46 @@ func (f *UpstreamForwarder) Forward(ctx context.Context, req mcpc.UpstreamReques
 			// The principal's one session object is reset, not replaced, so this initialize
 			// waits for the principal's calls in flight and the calls after it wait for this one.
 			session.id, session.version = "", ""
+			if res, done, err := f.discoverLatest(ctx, session); done {
+				return res, err
+			}
 		} else if session.version == "" {
 			return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, errManagedInitializeRequired
+		} else if session.version == mcpc.LatestRevision {
+			if req.Method == "notifications/initialized" {
+				return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, nil // no handshake to finish
+			}
+			params, err := mcpc.LatestParams(req.Params)
+			if err != nil {
+				return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, err
+			}
+			req.Params = params
 		}
 		return f.forward(ctx, req, session)
 	}
 	return f.forward(ctx, req, nil)
+}
+
+// discoverLatest answers a client's initialize from server/discover when the
+// upstream speaks mcpc.LatestRevision; the session then carries that revision
+// and no session id. done is false for any other answer: the upstream has not
+// moved and gets the client's initialize. A refused credential answer ends the
+// initialize instead of being retried.
+func (f *UpstreamForwarder) discoverLatest(ctx context.Context, session *managedMCPSession) (res mcpc.UpstreamResult, done bool, err error) {
+	params, err := mcpc.LatestParams(nil)
+	if err != nil {
+		return mcpc.UpstreamResult{}, false, nil
+	}
+	res, err = f.forward(ctx, mcpc.UpstreamRequest{Method: "server/discover", Params: params}, session)
+	if errors.Is(err, mcpc.ErrUpstreamCredentialDisclosure) {
+		return res, true, err
+	}
+	init, ok := mcpc.InitializeFromDiscover(res.Result)
+	if err != nil || !ok {
+		return mcpc.UpstreamResult{}, false, nil
+	}
+	session.version = mcpc.LatestRevision
+	return mcpc.UpstreamResult{Result: init, State: mcpc.DispatchCompleted}, true, nil
 }
 
 func (f *UpstreamForwarder) forward(ctx context.Context, req mcpc.UpstreamRequest, session *managedMCPSession) (mcpc.UpstreamResult, error) {
@@ -203,7 +238,7 @@ func (f *UpstreamForwarder) forward(ctx context.Context, req mcpc.UpstreamReques
 			var init struct {
 				ProtocolVersion string `json:"protocolVersion"`
 			}
-			if json.Unmarshal(result, &init) != nil || init.ProtocolVersion != "2025-11-25" {
+			if json.Unmarshal(result, &init) != nil || init.ProtocolVersion != mcpc.LegacyRevision {
 				return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, errors.New("mcp gateway: unsupported negotiated protocol")
 			}
 			sid := resp.Header.Get("Mcp-Session-Id")

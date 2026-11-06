@@ -6,7 +6,8 @@
 // applies to, in one menu, with one name on the bar: the workspace in force, or the
 // organization when the work spans every workspace. The other level is in the tooltip
 // and in the menu, where both are switched. It sits under the brand in the left
-// navigation (sidebar.tsx), the column and the drawer alike.
+// navigation (sidebar.tsx), the column and the drawer alike, and only when there is a
+// choice: one organization and one workspace draw nothing.
 import { ChevronsUpDown } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Dialog } from '@/components/ui/dialog'
@@ -25,8 +26,8 @@ import {
 import { useWorkspaceChoices, WorkspaceMenuItems } from './workspace-switcher'
 
 /**
- * The face both the control and the plain label wear: an initial, then the name. The
- * initial is drawn, not text, so the text on the control is its name (WCAG 2.5.3).
+ * The face of the control: an initial, then the name. The initial is drawn, not text,
+ * so the text on the control is its name (WCAG 2.5.3).
  */
 function ScopeFace({ name }: { name: string }) {
   return (
@@ -51,7 +52,11 @@ export function ScopeSwitcher() {
   const trigger = useRef<HTMLButtonElement>(null)
 
   const switchesTenant = !tenant.none && !tenant.fixed
-  const switchesWorkspace = workspace.workspaces.length > 0
+  // One workspace is no choice: All and it are the same work. A workspace in force that
+  // the list does not resolve, or no longer active, keeps the menu: the way back to All.
+  const switchesWorkspace =
+    workspace.workspaces.filter((w) => w.status === 'active').length > 1 ||
+    (!!workspace.activeWorkspace && workspace.active?.status !== 'active')
   // ⛔ A workspace in force that the list does not resolve is said, never hidden behind
   //    the organization's name: the views still send its filter (workspace-switcher.tsx).
   const name =
@@ -61,14 +66,7 @@ export function ScopeSwitcher() {
     ? workspace.label
     : `${tenant.activeLabel} › ${workspace.label}`
 
-  if (!switchesTenant && !switchesWorkspace) {
-    if (tenant.none) return null
-    return (
-      <span data-slot="scope-label" className={FACE_CLASS} title={title}>
-        <ScopeFace name={name} />
-      </span>
-    )
-  }
+  if (!switchesTenant && !switchesWorkspace) return null
 
   return (
     <Dialog open={showRecovery} onOpenChange={setShowRecovery}>

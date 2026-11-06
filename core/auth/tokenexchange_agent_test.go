@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -64,7 +65,7 @@ func newAgentExchangeFixture(t *testing.T) agentExchangeFixture {
 	const sponsorExtID = "idp-sponsor-1"
 
 	// 1. Create the sponsor user with a password (so we can log in), and
-	// 2. its tenant membership in the same create, so SCIMUpdateUser can find them.
+	// 2. its tenant membership in the same create.
 	sponsor, err := a.CreateUser(ctx, super, auth.NewUser{
 		Email:    "sponsor@acme.com",
 		Password: "sponsor-pass-123",
@@ -75,15 +76,10 @@ func newAgentExchangeFixture(t *testing.T) agentExchangeFixture {
 		t.Fatalf("CreateUser: %v", err)
 	}
 
-	// 3. Set ExternalID via SCIM update (the convergence anchor).
-	if _, err := a.SCIMUpdateUser(ctx, super, tenant, sponsor.ID, auth.SCIMUserInput{
-		UserName:    "sponsor@acme.com",
-		DisplayName: "Agent Sponsor",
-		ExternalID:  sponsorExtID,
-		Active:      true,
-	}); err != nil {
-		t.Fatalf("SCIMUpdateUser: %v", err)
-	}
+	// 3. Set ExternalID as a directory write leaves it (the convergence anchor).
+	authtest.EditUser(t, st, sponsor.ID, func(u *model.User) {
+		u.DisplayName, u.ExternalID = "Agent Sponsor", sponsorExtID
+	})
 
 	// 4. Login as the sponsor — the session token carries UserID = sponsor.ID,
 	// which is what resolveUserExternalID uses to look up the externalId.

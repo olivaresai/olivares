@@ -664,14 +664,9 @@ func (p *pkg) callsOn(fd *ast.FuncDecl, names []string) []*ast.CallExpr {
 		if !ok || len(as.Lhs) == 0 || len(as.Rhs) != 1 {
 			return true
 		}
-		ta, ok := as.Rhs[0].(*ast.TypeAssertExpr)
-		if !ok {
-			return true
-		}
-		if from, ok := ta.X.(*ast.Ident); ok && want[from.Name] {
-			if to, ok := as.Lhs[0].(*ast.Ident); ok && to.Name != "_" {
-				want[to.Name] = true
-			}
+		to, ok := as.Lhs[0].(*ast.Ident)
+		if ok && to.Name != "_" && derivesRegistrar(as.Rhs[0], want) {
+			want[to.Name] = true
 		}
 		return true
 	})
@@ -694,6 +689,26 @@ func (p *pkg) callsOn(fd *ast.FuncDecl, names []string) []*ast.CallExpr {
 		return true
 	})
 	return out
+}
+
+// derivesRegistrar reports whether expr yields a registrar from one the walk already
+// holds: a type assertion (`reg.(sealedRegistrar)`), a copy (`create := reg`) or a
+// method call on one (`create = scoped.WithCollectionScope(...)`).
+func derivesRegistrar(expr ast.Expr, held map[string]bool) bool {
+	heldIdent := func(x ast.Expr) bool {
+		id, ok := x.(*ast.Ident)
+		return ok && held[id.Name]
+	}
+	switch e := expr.(type) {
+	case *ast.TypeAssertExpr:
+		return heldIdent(e.X)
+	case *ast.Ident:
+		return held[e.Name]
+	case *ast.CallExpr:
+		sel, ok := e.Fun.(*ast.SelectorExpr)
+		return ok && heldIdent(sel.X)
+	}
+	return false
 }
 
 func (p *pkg) route(ns, recvName, recvType string, call *ast.CallExpr) (moduleRoute, error) {

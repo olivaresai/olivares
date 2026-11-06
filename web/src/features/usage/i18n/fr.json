@@ -1,20 +1,17 @@
 {
-  "title": "Usage et coût, par compte",
+  "title": "Usage",
   "subtitle": "Les limites officielles sur 5 heures et à la semaine, à côté des jetons et du coût du jour.",
-  "windows": {
-    "fiveHour": "5 heures",
-    "week": "hebdomadaire"
+  "tabs": {
+    "accounts": "Comptes",
+    "timeline": "Chronologie"
   },
   "accounts": {
     "heading": "Comptes",
     "loading": "Lecture des comptes de chaque outil…",
     "error": "Les limites des comptes n'ont pas pu être lues.",
     "empty": "Aucun compte n'a encore indiqué ses limites.",
-    "resets": "réinitialisation {{when}}",
-    "stale": "lu pour la dernière fois {{at}}",
     "details": "Détails",
-    "detailsFor": "Détails de {{account}}",
-    "adminOnly": "Les limites des comptes sont visibles par un administrateur système."
+    "detailsFor": "Détails de {{account}}"
   },
   "today": {
     "heading": "Aujourd'hui",
@@ -24,13 +21,6 @@
     "sessions_other": "{{count}} sessions",
     "sessions_many": "{{count}} de sessions",
     "tokens": "{{input}} en entrée · {{output}} en sortie",
-    "atLeast": "Au moins",
-    "unpriced_one": "{{count}} session n'a indiqué aucun coût.",
-    "unpriced_other": "{{count}} sessions n'ont indiqué aucun coût.",
-    "unpriced_many": "{{count}} de sessions n'ont indiqué aucun coût.",
-    "untokened_one": "{{count}} session n'a indiqué aucun jeton.",
-    "untokened_other": "{{count}} sessions n'ont indiqué aucun jeton.",
-    "untokened_many": "{{count}} de sessions n'ont indiqué aucun jeton.",
     "viewSessions": "Voir les sessions"
   }
 }

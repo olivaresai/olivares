@@ -68,7 +68,7 @@ func (s *Server) admit(ctx context.Context, req auth.Request, denial error, gove
 	}
 	if req.Route.RequiresStepUp(ctx, p) {
 		s.authz.RecordStepUpRefusal(ctx, req)
-		return none, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(ctx))
+		return none, auth.StepUpRefusal(ctx, p)
 	}
 
 	// ⛔ THE DOOR CHOOSES THE PATH, NOT THE METADATA. An UNGOVERNED route declared no policy at
@@ -130,6 +130,11 @@ func (s *Server) admit(ctx context.Context, req auth.Request, denial error, gove
 			}
 		}
 		return witness, nil
+
+	// The freshness port's refusal also matches ErrStepUpRequired, so it is asked
+	// first: it keeps its one stable code.
+	case errors.Is(aerr, auth.ErrRightsDataStale):
+		return none, auth.ErrRightsDataStale
 
 	// ⛔ STEP-UP KEEPS ITS OWN ANSWER: "prove who you are again" is not "you may not", and the
 	// two answers have different remedies. It was already served this way before the witness path.

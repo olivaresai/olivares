@@ -507,7 +507,7 @@ func chatExecutionErrorResponse(expected targetDTO, profile ExecutionProfile, re
 		if code == ChatErrExecutionUnavailable {
 			return textProfileError(chatExecutionUnavailable())
 		}
-		result, failure := textResponse(status, map[string]any{"error": map[string]string{"code": code, "message": message}})
+		result, failure := textResponse(status, api.ErrorBody(code, message))
 		result.retryAfter = retryAfter
 		return result, failure
 	}

@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/sheet'
 import { WorkspaceWiki } from '@/features/agentops/workspace-wiki'
 import type { WorkspaceDTO } from '@/features/agentops/types'
-import { ListTruncationBadge } from '@/features/_intel'
+import { ListTruncationBadge, listaRecortada } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { useViewAccess } from '@/features/navigation/authorization'
@@ -26,6 +26,7 @@ import { fold, viewById } from '@/features/navigation/model'
 import { TAB_PARAM } from '@/features/sessions/session-address'
 import { useAuth } from '@/lib/auth/context'
 import { useModuleOn } from '@/stores/modules'
+import { FolderConnect } from './folder-connect'
 import './i18n'
 
 /** Enough to see what sessions use; Sessions lists them all. */
@@ -56,6 +57,28 @@ export function SessionFolders({ tenant }: { tenant: string | null }) {
       tenant={tenant}
       epoch={boundary.epoch}
     />
+  )
+}
+
+/** The last row of a capped preview: it opens the full list. It shows only while the engine
+ *  says there are more rows, and it never counts the rows already loaded. */
+export function ShowMore({
+  query,
+  to,
+  search,
+}: {
+  query: { data?: unknown; error?: unknown }
+  to: string
+  search?: Record<string, string>
+}) {
+  const { t } = useTranslation('workspaceDashboard')
+  if (!listaRecortada(query)) return null
+  return (
+    <Button variant="ghost" size="sm" asChild className="self-start">
+      <Link to={to as never} search={search as never}>
+        {t('showMore')}
+      </Link>
+    </Button>
   )
 }
 
@@ -127,13 +150,6 @@ function SessionFoldersList({
         placeholder={t('sessionFolders.filter')}
         className="h-9 w-full max-w-sm rounded-ctl border border-ctl-border bg-background px-3 text-body outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-focus"
       />
-      <ListTruncationBadge
-        query={query}
-        filas={all.length}
-        label={t('truncation.label', { n: all.length })}
-        hint={t('sessionFolders.truncationHint')}
-        className="px-0 pt-0 pb-1"
-      />
       {query.isError ? (
         <p role="alert" className="text-body text-text-2">
           {t('sessionFolders.unavailable')}
@@ -190,6 +206,20 @@ function SessionFoldersList({
           </StaticTable>
         </XScroll>
       )}
+      {all.length > 0 &&
+        (manageable ? (
+          <ShowMore
+            query={query}
+            to="/agentops"
+            search={{ [TAB_PARAM]: 'workspaces' }}
+          />
+        ) : (
+          <ListTruncationBadge
+            query={query}
+            label={t('sessionFolders.cut')}
+            className="px-0 pt-0"
+          />
+        ))}
       <Sheet
         open={wiki !== null}
         onOpenChange={(open) => !open && setWiki(null)}
@@ -204,6 +234,7 @@ function SessionFoldersList({
                 </SheetDescription>
               </SheetHeader>
               <WorkspaceWiki workspace={wiki} />
+              <FolderConnect tenant={tenant} folderRef={wiki.workspace_ref} />
             </>
           )}
         </SheetContent>

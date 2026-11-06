@@ -35,14 +35,14 @@ test('fresh install opens its only workspace overview without a selection step',
     await page.locator('#setup-password').fill('')
   }
   expect(setup.ok(), `Setup HTTP status: ${setup.status()}`).toBe(true)
-  await page.waitForURL('**/onboarding', { timeout: 15_000 })
+  await page.waitForURL('**/sessions', { timeout: 15_000 })
   await expect(
     page
       .getByRole('navigation', { name: 'Main navigation', exact: true })
-      .getByRole('link', { name: 'Now', exact: true }),
+      .getByRole('link', { name: 'Settings', exact: true }),
   ).toBeVisible()
 
-  // A fresh install lists every place from the first sign-in: Files & workspaces opens the
+  // A fresh install lists every place from the first sign-in: Files opens the
   // Workspace page beside Sessions in the left navigation, and its address opens it.
   await page.reload()
   const nav = page.locator('[data-slot="sidebar"]')

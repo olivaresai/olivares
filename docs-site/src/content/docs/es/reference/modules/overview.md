@@ -143,7 +143,7 @@ tiene superficie de actuación. Esta división es el contrato honesto: el produc
 su mayoría restringido por aprovisionamiento** — consulta
 [Honestidad y límites](/es/start/honesty-and-limits/). El catálogo seleccionable procede de
 `core/modulespec/modules.json`, la misma fuente que usan `olivares modules ls`
-y la lista **Edición y módulos** de la consola. `npm run test:modules` comprueba
+y la lista **Módulos** de la consola. `npm run test:modules` comprueba
 que cada namespace seleccionable enlaza una página de referencia y verifica
 el recuento.
 

@@ -297,11 +297,11 @@ describe('ConsoleView — tabs another place owns (0.5 Admin fold)', () => {
     await mount(['/console'])
     const names = screen.getAllByRole('tab').map((tab) => tab.textContent)
     for (const gone of [
-      'Users & groups',
+      'People',
       'SSO / IdP',
-      'Roles & delegation',
+      'Roles',
       'API keys',
-      'Edition & license',
+      'Edition',
       'MCP gateway',
     ])
       expect(names).not.toContain(gone)
@@ -354,8 +354,6 @@ describe('ConsoleView — tabs another place owns (0.5 Admin fold)', () => {
     await act(async () => {})
     expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
     expect(locationOf(router).pathname).toBe('/console')
-    expect(
-      screen.getByRole('tab', { name: /roles & delegation/i }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /^roles$/i })).toBeInTheDocument()
   })
 })

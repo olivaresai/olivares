@@ -32,6 +32,19 @@ type accountProbeCall struct {
 	method, path, query, body string
 }
 
+// --accent says every color the engine accepts, so a person never guesses past five.
+func TestProviderAccountEditAccentHelpNamesTheWholePalette(t *testing.T) {
+	flag := newProviderAccountEditCmd().Flags().Lookup("accent")
+	if flag == nil {
+		t.Fatal("provider account edit has no --accent flag")
+	}
+	for _, name := range []string{"orange", "green", "amber", "red", "blue", "purple", "pink", "teal", "slate"} {
+		if !strings.Contains(flag.Usage, name) {
+			t.Errorf("--accent help %q does not name %q", flag.Usage, name)
+		}
+	}
+}
+
 func TestProviderAccountMetadataLabelKeepsStableIdentityVisible(t *testing.T) {
 	payload := strings.TrimSuffix(providerAccountJSON, "}") + `,"display_name":"Research account"}`
 	for _, verb := range []string{"get", "ls"} {

@@ -421,7 +421,10 @@ function ProvenanceBlock({
   const unknown = operateUnknown && !launched
   const badge = unknown ? 'unknown' : session.provenance
   return (
-    <section className="rounded-md border border-border bg-surface p-3">
+    <section
+      data-trust-chrome=""
+      className="rounded-md border border-border bg-surface p-3 text-foreground"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={cn(

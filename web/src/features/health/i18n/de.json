@@ -1,5 +1,5 @@
 {
-  "title": "Fehlerfreiheit & SLA",
+  "title": "Zustand",
   "subtitle": "Lebendigkeit, Zuverlässigkeit und Abhängigkeiten in Ihrem gesamten Bestand — abgeleitet aus beobachteter Aktivität und dem Veralterungs-Sweep, niemals durch Abfragen der Infrastruktur.",
   "auditedNote": "Der Live-Stream sowie jede Auflösungs- oder Bearbeitungsaktion sind privilegierte, auditierte Vorgänge. Die Fehlerfreiheit wird abgeleitet; die Engine führt hier niemals Fehlertexte oder Nutzdaten mit.",
   "refresh": "Aktualisieren",
@@ -175,8 +175,7 @@
       "delegates_to": "Delegiert an"
     },
     "observed": "Beobachtet",
-    "truncated": "Die ersten {{n}} werden angezeigt",
-    "truncatedHint": "Der Abhängigkeitsgraph hat mehr Knoten als angezeigt; dies ist die erste Keyset-Seite.",
+    "truncated": "Nicht alle Abhängigkeiten werden angezeigt.",
     "empty": {
       "title": "Noch keine Abhängigkeiten entdeckt",
       "description": "Sobald Agenten MCP-Server und Werkzeuge aufrufen, erscheint hier der beobachtete Abhängigkeitsgraph."

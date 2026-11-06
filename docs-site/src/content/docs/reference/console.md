@@ -14,20 +14,21 @@ This page is the map of the console. It lists **every route the application moun
 not a selection, not the ones somebody remembered to write up — with the permission a
 principal needs to enter it and where to read more.
 
-The console has **one navigation: the left sidebar**. It lists the places in four groups —
-**Work** (Now, Sessions, Files & workspaces, Work & communications), **Tools** (AI tools,
-Models, MCP & skills, Sources), **Control** (Rules & approvals, Usage & cost, Activity &
-audit, Access map) and **Admin** (People & groups, Security, Operations, License) — with
-Settings at the bottom. Every screen sits in one place, and the row of links above a screen
-lists the other screens of that place. A place appears only when your permissions allow at
-least one of its screens, and a Business screen only on the Business edition. The sidebar
-folds to its icons and opens again; on a narrow screen the same sidebar opens as a drawer
-from the menu button. The top bar holds the page title, search (⌘K or Ctrl+K), notifications
-and the account menu. The command palette searches the same screens with the same
-permissions. The former area directory addresses (`/areas/…`) open the place that now holds
-their screens, keeping the query and the fragment.
+The console has **one navigation: the left sidebar**. It lists **Sessions**, **Files** and
+**Tools**, then **More**, which opens **Overview**, **Rules**, **Usage**, **Audit**,
+**People**, **Security** and **Operations** below it, with Settings at the bottom; the
+edition and its license are a section of Settings. More starts closed, and a place under it
+stays shown while you are on it or while something there waits for you (Rules with a pending
+approval). Every screen sits in one place, and the row of links above a screen lists the
+other screens of that place. A place appears only when your permissions allow at least one
+of its screens, and a Business screen only on the Business edition. The sidebar folds to its
+icons and opens again; on a narrow screen the same sidebar opens as a drawer from the menu
+button. The top bar holds the page title, search (⌘K or Ctrl+K), notifications and the
+account menu. The command palette searches the same screens with the same permissions. The
+former area directory addresses (`/areas/…`) open the place that now holds their screens,
+keeping the query and the fragment.
 
-A new installation lists the first job only: Now, Sessions, AI tools,
+A new installation lists the first job only: Overview, Sessions, AI tools,
 Approvals, the setup wizard and Settings. Every other screen is a preview there: its
 address, API and CLI keep working, and navigation, the command palette and the shortcuts
 do not list it. An installation that existed before the upgrade lists every screen it did,
@@ -39,7 +40,7 @@ append-only census that `registry.route-conservation.test.ts` pins against the b
 router, so a screen cannot be added, moved or lost without this page changing with it.
 Each screen's name and one-line description are the **console's own strings**, taken from
 the same translation catalog the console renders, so what you read here is what you see in
-the product. The tables below group those rows by area, after Now (the overview) and
+the product. The tables below group those rows by area, after Overview and
 before sign-in, setup and account. The nine former area directory addresses sit with the
 routes mounted outside the feature registry; each now redirects to its place.
 
@@ -67,21 +68,21 @@ Delivery, Oversight, then System & settings.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The console publishes **66 routes**. Every one of them is in the tables below, with the
+The console publishes **68 routes**. Every one of them is in the tables below, with the
 permission it requires and the reference page its in-product help link opens.
 
-### Now
+### Overview
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Now | `/` | Estate overview and health at a glance | any signed-in user | [docs home](/) |
+| Overview | `/now` | Estate overview and health at a glance | any signed-in user | [docs home](/) |
 
 ### Infrastructure
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Estate | `/estate` | Inspect configured resources and their relationships, including work item dependencies. | `sessions:run:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
-| Inventory | `/inventory` | Discover and catalog the agents, MCP servers and models that connectors observed. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
+| Configured resources | `/estate` | What you have set up, and how its parts depend on each other, work items included. | `sessions:run:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
+| Discovered resources | `/inventory` | Agents, MCP servers and models that connectors have observed, and when each was last seen. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
 | Workspace | `/workspace` | Agents, sessions, resources and activity scoped to one workspace | `tenant:read` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
 
 ### AI
@@ -164,6 +165,7 @@ permission it requires and the reference page its in-product help link opens.
 | Evals | `/evals` | Quality, evals and regression | `evals:run:read` | [reference/modules/xii-evals](/reference/modules/xii-evals/) |
 | Health & SLA | `/health` | Agent and MCP uptime and SLAs | `health:status:read` | [reference/modules/xxii-health](/reference/modules/xxii-health/) |
 | Observability | `/observability` | Ingestion health by standard and trace drill-down | `health:status:read` | [reference/modules/observability](/reference/modules/observability/) |
+| Operations | `/operations` | The host, its disks, the live sessions and their usage, over 24 hours, 7 or 30 days. | `sessions:run:read` | [reference/console](/reference/console/) |
 | Retention | `/retention` | How long each class of record is kept, the sweep that applies it and its sealed certificates | `compliance:retention:read` | [reference/modules/xiii-compliance](/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Consumption against each stored limit. Reserved capacity counts toward the limit. | `finops:budget:read` | [reference/modules/xi-finops](/reference/modules/xi-finops/) |
 | Usage | `/usage` | Each account's official 5-hour and weekly limits, nearest first, and today's tokens and cost. | `sessions:run:read` | [reference/console](/reference/console/) |
@@ -187,6 +189,7 @@ served before there is a session — they are the only console routes that are.
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
+| Start page | `/` | Opens your saved start page, or Sessions when no start page has been saved. | any signed-in user | — |
 | Accept an invitation | `/accept-invite` | Where an emailed invitation link lands: the invitee sets a password and joins the workspace, with no prior session. | **no sign-in** | — |
 | Sign in | `/login` | The credential and token sign-in page for an already provisioned account. | **no sign-in** | — |
 | Pair a device | `/pair` | Where a one-time device-pairing link lands: the new device signs in with no prior session. | **no sign-in** | — |

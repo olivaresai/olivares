@@ -1,0 +1,173 @@
+{
+  "title": "Red team",
+  "description": "Testes de robustez adversarial — apenas contra os seus próprios agentes registados e autorizados. A API transporta taxonomia defensiva e quadros de pontuação, nunca um conteúdo de ataque.",
+  "tabs": {
+    "targets": "Alvos",
+    "runs": "Execuções",
+    "catalog": "Catálogo"
+  },
+  "suites": {
+    "all": "Todas as suites",
+    "injection": "Injeção de prompt",
+    "jailbreak": "Jailbreak",
+    "exfil": "Exfiltração de dados",
+    "tool_poisoning": "Envenenamento de ferramentas"
+  },
+  "targets": {
+    "title": "Alvos",
+    "description": "A superfície de consentimento. Uma execução só toca num agente que tenha registado e autorizado.",
+    "consentNote": "Registar um agente não é consentimento. Um alvo nasce não autorizado — autorize-o para conceder consentimento e revogue a qualquer momento.",
+    "register": "Registar agente",
+    "authorize": "Autorizar",
+    "revoke": "Revogar",
+    "authorizedBy": "por {{who}}",
+    "empty": "Nenhum alvo registado",
+    "emptyHint": "Registe um dos seus agentes como candidato e depois autorize-o a executar sondas.",
+    "columns": {
+      "name": "Alvo",
+      "endpoint": "Endpoint",
+      "scope": "Âmbito",
+      "consent": "Consentimento",
+      "actions": "Ações"
+    },
+    "dialog": {
+      "registerTitle": "Registar um agente candidato",
+      "registerHint": "Registe um dos seus agentes como candidato de red team.",
+      "registerCta": "Registar",
+      "notConsentNote": "Registar não é consentimento — o candidato é criado não autorizado e nenhuma execução lhe pode tocar até o autorizar.",
+      "registered": "Agente registado como candidato",
+      "agentRef": "Referência do agente",
+      "name": "Nome de apresentação",
+      "endpoint": "Endpoint",
+      "scope": "Âmbito",
+      "scopeHint": "Superfícies separadas por vírgulas (p. ex. input, output, tool_args).",
+      "authorizeTitle": "Autorizar este alvo",
+      "authorizeHint": "Conceder consentimento permite que as execuções de red team sondem {{name}}. Esta ação fica registada no registo de auditoria.",
+      "revokeTitle": "Revogar consentimento",
+      "revokeHint": "Revogar o consentimento impede novas execuções contra {{name}}. Esta ação fica registada no registo de auditoria.",
+      "granted": "Consentimento concedido",
+      "revoked": "Consentimento revogado"
+    },
+    "truncated": "Carregados {{n}} alvos; existem mais",
+    "truncatedHint": "Há mais alvos registados do que os apresentados; esta página obtém linhas por ID. Um alvo em falta nesta lista não prova que não esteja registado ou autorizado — pode estar simplesmente para além desta página."
+  },
+  "runs": {
+    "title": "Execuções",
+    "description": "Cada execução sonda um alvo autorizado e produz um quadro de pontuação de robustez. As sondas falhadas tornam-se deteções.",
+    "detailTitle": "Detalhe da execução",
+    "closeDetail": "Fechar",
+    "launch": "Iniciar execução",
+    "launchGatedHint": "O arranque está desativado até este alvo ser autorizado — registar um agente não é consentimento.",
+    "robustness": "robustez",
+    "noScore": "sem pontuação",
+    "degradedHint": "Todas as sondas foram ignoradas — não havia nenhuma sandbox disponível. Isto é sandbox pendente, não uma aprovação.",
+    "errorHint": "Todas as sondas falharam por erro de execução. Isto não é um veredicto de robustez; execute de novo depois de o problema ser resolvido.",
+    "empty": "Ainda sem execuções",
+    "emptyHint": "Inicie uma execução contra um alvo autorizado para produzir um quadro de pontuação.",
+    "status": {
+      "completed": "Concluída",
+      "degraded": "Sandbox pendente",
+      "error": "Erro de execução"
+    },
+    "columns": {
+      "started": "Início",
+      "target": "Alvo",
+      "suite": "Suite",
+      "status": "Estado",
+      "score": "Pontuação",
+      "passFail": "Aprovadas / reprovadas"
+    },
+    "stats": {
+      "passed": "Aprovadas",
+      "passedCaption": "bloqueado + recusado — a defesa resistiu",
+      "failed": "Reprovadas",
+      "failedCaption": "cedeu + vazou — vulnerabilidade real",
+      "errors": "Erros",
+      "skipped": "Ignoradas",
+      "excludedCaption": "excluídas da pontuação"
+    },
+    "scorecard": {
+      "title": "Quadro de pontuação",
+      "description": "Robustez = aprovadas / (aprovadas + reprovadas) × 100. Os erros e as sondas ignoradas são excluídos; quanto mais alto, melhor."
+    },
+    "byFamily": {
+      "title": "Falhas por família",
+      "description": "Famílias de sondas com pelo menos uma sonda reprovada.",
+      "empty": "Sem falhas nas famílias.",
+      "summary": "Falhas por família, {{count}} famílias com falhas, a pior é {{family}} com {{failed}} sondas reprovadas.",
+      "summaryEmpty": "Nenhuma família de sondas teve falhas.",
+      "colFamily": "Família",
+      "colFailed": "Reprovadas"
+    },
+    "owasp": {
+      "title": "Falhas OWASP",
+      "description": "Linhas OWASP com uma sonda reprovada (contagem por referência).",
+      "empty": "Nenhuma linha OWASP falhou."
+    },
+    "dialog": {
+      "title": "Iniciar execução",
+      "hint": "Sondar {{name}} com a suite selecionada. Esta ação adversarial fica registada no registo de auditoria.",
+      "suite": "Suite",
+      "launched": "Execução iniciada"
+    },
+    "truncated": "Carregadas {{n}} execuções; existem mais",
+    "truncatedHint": "Há mais execuções do que as apresentadas; esta página obtém linhas por ID, não por data, pelo que as mais recentes não estão necessariamente aqui. A ausência de uma execução não prova que um alvo nunca foi sondado."
+  },
+  "results": {
+    "title": "Resultados por sonda",
+    "description": "O resultado de cada sonda. A impressão digital é um hash unidirecional — nunca um conteúdo de ataque.",
+    "empty": "Sem resultados para esta execução.",
+    "emptyHint": "Todas as sondas da execução estão listadas aqui com o seu veredicto e a evidência que o sustenta. Esta execução não registou resultados.",
+    "columns": {
+      "probe": "Sonda",
+      "family": "Família",
+      "frameworks": "Referenciais",
+      "outcome": "Resultado",
+      "severity": "Gravidade",
+      "fingerprint": "Impressão digital",
+      "occurredAt": "Ocorrida em"
+    }
+  },
+  "catalog": {
+    "title": "Catálogo de sondas",
+    "description": "A taxonomia da bateria e a sua cobertura de referenciais — apenas metadados defensivos.",
+    "suiteLabel": "Filtrar por suite",
+    "metadataNote": "Isto são metadados defensivos, não um arsenal de explorações. A API não transporta nenhum conteúdo de ataque.",
+    "stats": {
+      "probes": "Sondas",
+      "families": "Famílias",
+      "owasp": "Refs. OWASP",
+      "atlas": "Refs. ATLAS"
+    },
+    "columns": {
+      "id": "ID da sonda",
+      "family": "Família",
+      "title": "Título",
+      "frameworks": "Referenciais",
+      "surface": "Superfície",
+      "severity": "Gravidade"
+    }
+  },
+  "empty": {
+    "catalog": {
+      "title": "Nenhuma sonda defensiva catalogada",
+      "description": "Esta taxonomia só de leitura é preenchida apenas por definições de sondas compiladas no plano de controlo."
+    },
+    "familyFailureChart": {
+      "title": "Nenhuma falha de família de sondas registada",
+      "description": "Uma família aparece quando uma sonda pontuada da execução selecionada falha por ceder a um pedido adversarial ou por vazar um marcador proibido."
+    },
+    "results": {
+      "title": "Ainda nenhum resultado de sondas registado",
+      "description": "Inicie uma suite contra um alvo autorizado; o resultado de cada sonda é registado aqui com uma impressão digital unidirecional, nunca o conteúdo do ataque."
+    },
+    "runs": {
+      "title": "Ainda nenhuma execução de red team iniciada",
+      "description": "Registe e autorize um agente próprio e depois inicie uma suite de sondas para registar o seu quadro de pontuação de robustez."
+    },
+    "targets": {
+      "title": "Ainda nenhum alvo de red team registado",
+      "description": "Registe como candidato um agente do inventário deste tenant; a autorização continua a ser um passo de consentimento separado."
+    }
+  }
+}

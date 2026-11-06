@@ -8,7 +8,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 Audit SIEM export, ledger verification (`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community retains the signed ledger and its reads; `olivares dr backup` remains available. See [edition placement](editions.md).
 
 S3 Object Lock archives and notification delivery require Business Regulated Operations.
-So do legal holds and right to erasure. Community keeps retention schedules and the hold-checked sweep, and a legal hold a Business engine stored keeps vetoing every purge there.
+So do legal holds and right to erasure. Retention schedules and the hold-checked sweep require Business: Community reads the stored schedules and certificates, refuses authoring and sweeping with `501 business_required`, and runs no sweep, so nothing is purged there and no stored schedule is reported as enabled; a legal hold a Business engine stored keeps vetoing every purge.
+Deleting your own data stays in Community: `olivares agent session cleanup <run>` releases a stopped session and `olivares agent session rm <run>` deletes its record; run them from cron or a systemd timer over `olivares agent session ls --state stopped` to keep sessions to a schedule. These commands do not consult a stored legal hold.
 Community keeps directory archives, offline verification and data export. An installation
 configured for S3 refuses to serve in Community; offline reads and exports remain available.
 Archive objects, configuration files and resume metadata are preserved for Business.

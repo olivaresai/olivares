@@ -1,0 +1,296 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+// Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+//
+// Operations: the host, its filesystems, the live sessions and the usage, on one page. Each
+// section reads only what the principal may read, every chart has a table and a sentence,
+// and a read that cannot answer says so instead of drawing nothing.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api/errors'
+import { renderIntel, screen, userEvent, within } from '@/test/intel'
+import '@/features/_intel'
+import './i18n'
+
+const GiB = 1024 ** 3
+
+const state = vi.hoisted(() => ({
+  perms: new Set<string>(),
+  recent: {
+    sessionsQ: { isError: false },
+    liveAnswer: { has_more: false } as { has_more: boolean } | undefined,
+    recentSessions: [] as unknown[] | undefined,
+  },
+}))
+
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (permission: string) => state.perms.has(permission),
+  }),
+}))
+vi.mock('@/features/home/use-recent-sessions', () => ({
+  useRecentSessions: () => state.recent,
+}))
+
+const hostMock = vi.fn()
+vi.mock('./api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./api')>()
+  return {
+    ...actual,
+    operationsApi: { host: (...a: unknown[]) => hostMock(...a) },
+  }
+})
+
+const usageMock = vi.fn()
+vi.mock('@/features/models/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/models/api')>()
+  return {
+    ...actual,
+    modelsApi: {
+      ...actual.modelsApi,
+      usage: (...a: unknown[]) => usageMock(...a),
+    },
+  }
+})
+vi.mock('@/features/agentops/api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/agentops/api')>()
+  return {
+    ...actual,
+    agentOpsApi: {
+      ...actual.agentOpsApi,
+      listProfiles: () => Promise.resolve({ items: [] }),
+    },
+  }
+})
+
+const { OperationsView } = await import('./operations-view')
+
+const sample = (at: string, cpu: number, memoryGiB: number) => ({
+  at,
+  cpu_percent: cpu,
+  load_1: 0.4,
+  memory_used_bytes: memoryGiB * GiB,
+  swap_used_bytes: 0,
+})
+
+const HOST = {
+  collected_at: '2026-11-03T10:00:00Z',
+  load: { one: 0.42, five: 0.5, fifteen: 0.4 },
+  cpu_percent: 12,
+  memory: {
+    total_bytes: 16 * GiB,
+    used_bytes: 6 * GiB,
+    available_bytes: 10 * GiB,
+  },
+  swap: { total_bytes: 0, used_bytes: 0 },
+  filesystems: [
+    {
+      mount: '/',
+      device: '/dev/sda1',
+      type: 'ext4',
+      total_bytes: 100 * GiB,
+      used_bytes: 80 * GiB,
+    },
+  ],
+  session_folders: {
+    root: '/var/lib/olivares/sessions',
+    measured_at: '2026-11-03T10:00:00Z',
+    total_bytes: 3 * GiB,
+    folders: [
+      { name: 'run_alpha', bytes: 2 * GiB },
+      { name: 'run_beta', bytes: 1 * GiB },
+    ],
+    truncated: false,
+  },
+  history: [
+    sample('2026-11-03T09:58:00Z', 10, 5),
+    sample('2026-11-03T09:59:00Z', 30, 6),
+    sample('2026-11-03T10:00:00Z', 12, 6),
+  ],
+}
+
+// A merged session as the Sessions page builds it: its run says the tool and whom it acts for.
+const session = (
+  key: string,
+  driver: string,
+  runState: string,
+  actsFor: { kind: string; user_id?: string; name?: string },
+) => ({
+  key,
+  runs: [
+    {
+      run_ref: key,
+      state: runState,
+      provider_driver: driver,
+      acts_for: actsFor,
+    },
+  ],
+  provenance: 'launched',
+  control: 'full',
+  lastActivityMs: 0,
+})
+
+const ANA = { kind: 'user', user_id: 'u1', name: 'Ana' }
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-11-03T10:00:00Z'))
+  state.perms = new Set()
+  state.recent = {
+    sessionsQ: { isError: false },
+    liveAnswer: { has_more: false },
+    recentSessions: [],
+  }
+  hostMock.mockReset().mockResolvedValue(HOST)
+  usageMock.mockReset().mockResolvedValue({ group_by: 'model', items: [] })
+})
+
+afterEach(() => vi.useRealTimers())
+
+describe('Operations: the host', () => {
+  it('charts CPU and memory with a sentence each, and the disks and folders as tables', async () => {
+    state.perms = new Set(['system:admin'])
+    const user = userEvent.setup()
+    renderIntel(<OperationsView />)
+
+    expect(
+      await screen.findByRole('img', { name: /CPU.*peak 30%/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', { name: /Memory.*6 GiB of 16 GiB/ }),
+    ).toBeInTheDocument()
+
+    const disks = screen.getByRole('figure', { name: 'Filesystems' })
+    await user.click(within(disks).getByRole('button', { name: /table/i }))
+    expect(
+      within(disks).getByRole('row', { name: /\/dev\/sda1.*80%/ }),
+    ).toBeInTheDocument()
+
+    const folders = screen.getByRole('figure', { name: 'Session folders' })
+    await user.click(within(folders).getByRole('button', { name: /table/i }))
+    expect(
+      within(folders).getByRole('row', { name: /run_alpha.*2 GiB/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('says a folder size is a minimum when the measurement stopped at its bound', async () => {
+    state.perms = new Set(['system:admin'])
+    hostMock.mockResolvedValue({
+      ...HOST,
+      session_folders: { ...HOST.session_folders, truncated: true },
+    })
+    renderIntel(<OperationsView />)
+    expect(await screen.findByText(/sizes are a minimum/i)).toBeInTheDocument()
+  })
+
+  it('says the host cannot be read where the engine answers 501, and still shows the rest', async () => {
+    state.perms = new Set(['system:admin', 'sessions:run:read'])
+    hostMock.mockRejectedValue(new ApiError(501, 'not_implemented', 'no'))
+    renderIntel(<OperationsView />)
+
+    expect(
+      await screen.findByText(/not available on this host/i),
+    ).toBeInTheDocument()
+    await vi.waitFor(() => expect(usageMock).toHaveBeenCalled())
+  })
+
+  it('does not ask for the host unless the person administers the system', async () => {
+    state.perms = new Set(['sessions:run:read'])
+    renderIntel(<OperationsView />)
+    await vi.waitFor(() => expect(usageMock).toHaveBeenCalled())
+    expect(hostMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('heading', { name: 'Host' })).toBeNull()
+  })
+})
+
+describe('Operations: live sessions', () => {
+  it('counts the live sessions by tool and by person, and leaves out the ended ones', async () => {
+    state.perms = new Set(['sessions:live:read'])
+    state.recent.recentSessions = [
+      session('a', 'claude', 'running', ANA),
+      session('b', 'claude', 'idle', ANA),
+      session('c', 'codex', 'running', { kind: 'automation' }),
+      session('d', 'claude', 'stopped', {
+        kind: 'user',
+        user_id: 'u2',
+        name: 'Bo',
+      }),
+    ]
+    const user = userEvent.setup()
+    renderIntel(<OperationsView />)
+
+    expect(
+      await screen.findByRole('img', { name: /3 live sessions by tool/ }),
+    ).toBeInTheDocument()
+
+    const byTool = screen.getByRole('figure', { name: 'Live sessions by tool' })
+    await user.click(within(byTool).getByRole('button', { name: /table/i }))
+    expect(
+      within(byTool).getByRole('row', { name: /Claude Code.*2/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(byTool).getByRole('row', { name: /Codex.*1/ }),
+    ).toBeInTheDocument()
+
+    const byPerson = screen.getByRole('figure', {
+      name: 'Live sessions by person',
+    })
+    await user.click(within(byPerson).getByRole('button', { name: /table/i }))
+    expect(
+      within(byPerson).getByRole('row', { name: /Ana.*2/ }),
+    ).toBeInTheDocument()
+    expect(
+      within(byPerson).getByRole('row', { name: /Automation.*1/ }),
+    ).toBeInTheDocument()
+    expect(within(byPerson).queryByRole('row', { name: /Bo/ })).toBeNull()
+  })
+
+  it('says no session is live rather than drawing an empty chart', async () => {
+    state.perms = new Set(['sessions:live:read'])
+    renderIntel(<OperationsView />)
+    expect(await screen.findByText(/No live sessions/i)).toBeInTheDocument()
+  })
+
+  it('says the count is a floor when the live page was cut', async () => {
+    state.perms = new Set(['sessions:live:read'])
+    state.recent.liveAnswer = { has_more: true }
+    state.recent.recentSessions = [session('a', 'claude', 'running', ANA)]
+    renderIntel(<OperationsView />)
+    expect(await screen.findByText(/more are open/i)).toBeInTheDocument()
+  })
+})
+
+describe('Operations: the range', () => {
+  it('asks for usage over the last 24 hours, then 30 days, from one control', async () => {
+    state.perms = new Set(['sessions:run:read'])
+    const user = userEvent.setup()
+    renderIntel(<OperationsView />)
+
+    await vi.waitFor(() =>
+      expect(usageMock).toHaveBeenCalledWith(
+        expect.objectContaining({ since: '2026-11-02T10:00:00Z' }),
+      ),
+    )
+    // Usage no longer carries a second period control of its own.
+    expect(screen.queryByRole('radiogroup', { name: 'Period' })).toBeNull()
+
+    await user.click(screen.getByRole('radio', { name: '30 days' }))
+    await vi.waitFor(() =>
+      expect(usageMock).toHaveBeenCalledWith(
+        expect.objectContaining({ since: '2026-10-05T00:00:00Z' }),
+      ),
+    )
+  })
+
+  it('says the host keeps 24 hours when a longer range is chosen', async () => {
+    state.perms = new Set(['system:admin'])
+    const user = userEvent.setup()
+    renderIntel(<OperationsView />)
+    await screen.findByRole('img', { name: /CPU/ })
+    expect(screen.queryByText(/keeps 24 hours/i)).toBeNull()
+
+    await user.click(screen.getByRole('radio', { name: '7 days' }))
+    expect(screen.getByText(/keeps 24 hours/i)).toBeInTheDocument()
+  })
+})

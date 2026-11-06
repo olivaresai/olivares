@@ -70,7 +70,7 @@ func (s *acpSession) onServerRequest(id json.RawMessage, method string, params j
 		}()
 		return
 	}
-	req := &acpServerRequest{id: id, method: method}
+	req := newACPServerRequest(id, method)
 	key := string(id)
 	// OpenCode names a call's file only in its tool_call_update (observeToolCall).
 	// Take that update's facts here, in the pump's order, before a later update or
@@ -159,7 +159,7 @@ func (s *acpSession) resolveServerRequest(req *acpServerRequest, key string, raw
 	if deadline <= 0 {
 		deadline = defaultDriverApprovalDeadline
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	ctx, cancel := context.WithTimeout(req.wait, deadline)
 	defer cancel()
 
 	offered := acpOfferedOptionIDs(params.Options)
@@ -175,6 +175,11 @@ func (s *acpSession) resolveServerRequest(req *acpServerRequest, key string, raw
 			EffectiveCommandLine: params.ToolCall.facts.EffectiveCommandLine,
 			EffectiveFilePaths:   params.ToolCall.facts.EffectiveFilePaths,
 		})
+		if req.wait.Err() != nil {
+			// An interrupt or stop answered the request, or its session closed: that
+			// ended the wait, and the request has nothing left to answer.
+			return
+		}
 		if err != nil {
 			s.warn("sessions: the provider approval authority failed; refusing deny-closed",
 				"run_ref", s.cfg.RunRef, "method", req.method, "cause", errorCause(err, "unavailable"))

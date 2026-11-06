@@ -1,4 +1,5 @@
 {
+  "deepSummary": "{{model}}: herramientas {{tools}} · streaming {{streaming}} · uso {{usage}} · contexto {{context}} (servidor)",
   "title": "Proveedores",
   "subtitle": "Una credencial de proveedor en la nube o un endpoint de modelos locales con el que trabajan tus herramientas de agentes.",
   "nav": "Proveedores",
@@ -95,7 +96,11 @@
     "localNameHint": "Opcional. Si lo dejas vacío, se usa el nombre del proveedor.",
     "advanced": "Advanced: custom endpoint",
     "missingFields": "Completa los campos que faltan: {{fields}}.",
-    "requiredEndpointHint": "Introduce el endpoint del servicio: https, o http sin cifrar en una dirección de loopback o de red privada."
+    "requiredEndpointHint": "Introduce el endpoint del servicio: https, o http sin cifrar en una dirección de loopback o de red privada.",
+    "worksWith": "Funciona con {{tools}}",
+    "otherKinds": "Otro (endpoint propio)",
+    "keyLink": "Obtén una clave de API de {{vendor}}",
+    "docsLink": "Guía de configuración de {{vendor}}"
   },
   "rotate": {
     "title": "Rotar la clave de este proveedor",

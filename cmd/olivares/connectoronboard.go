@@ -21,8 +21,8 @@ import (
 
 // Connector onboarding uses the reconciler's live roster and sealed secret store.
 // Stored definitions contain credential references, never inline secret values.
-// The catalog offers observation sources; roster providers and document sources
-// have separate boot lifecycles. Edition-specific kinds retain their file/CLI seam.
+// The catalog offers observation and document sources; roster providers have a
+// separate boot lifecycle. Edition-specific kinds retain their file/CLI seam.
 
 var _ api.ConnectorOnboarding = (*sourceReconciler)(nil)
 
@@ -48,6 +48,16 @@ func (sr *sourceReconciler) ListConnectors(_ context.Context) ([]api.ConnectorIn
 		out = append(out, api.ConnectorInfo{
 			Kind: kind, Transport: "plugin", FieldsKnown: false,
 			Hosting: api.HostingUnknown,
+		})
+	}
+	for _, kind := range documentCatalogKinds() {
+		src, _ := buildContentSource(kind, nil)
+		d := src.Descriptor()
+		out = append(out, api.ConnectorInfo{
+			Kind: kind, Title: d.Title, Description: d.Description, Class: "document",
+			Transport: "in_process", FieldsKnown: true,
+			Fields:  projectConfigFields(d.ConfigFields),
+			Hosting: hostingFromFields(d.ConfigFields),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Kind < out[j].Kind })
@@ -131,7 +141,7 @@ func connectorKindKnown(kind string) bool {
 		return true
 	}
 	_, ok := buildInProcSource(kind)
-	return ok
+	return ok || isDocumentKind(kind)
 }
 
 // requireKnownOnboardKind rejects an unknown kind before any side effect (so a typo
@@ -165,10 +175,48 @@ func ownedSecretRefPrefix(source string) string {
 // persisting anything or wiring it live, so the operator can confirm connectivity
 // before saving. It resolves secret references and uses a just-typed inline value
 // directly. A failure is a SAFE reason — never the raw connector error.
-func (sr *sourceReconciler) TestConnector(ctx context.Context, _ auth.Principal, in api.ConnectorOnboardInput) error {
+func (sr *sourceReconciler) TestConnector(ctx context.Context, actor auth.Principal, in api.ConnectorOnboardInput) error {
+	_, err := sr.PreviewConnector(ctx, actor, in)
+	return err
+}
+
+var _ api.ConnectorPreviewer = (*sourceReconciler)(nil)
+
+// PreviewConnector is TestConnector that, for a document source, also returns its
+// first documents with their ACLs. Nothing is persisted or wired.
+func (sr *sourceReconciler) PreviewConnector(ctx context.Context, _ auth.Principal, in api.ConnectorOnboardInput) ([]api.PreviewDocument, error) {
 	if err := requireKnownOnboardKind(in.Kind); err != nil {
-		return err
+		return nil, err
 	}
+	if isDocumentKind(in.Kind) {
+		return sr.previewDocumentConnector(ctx, in)
+	}
+	return nil, sr.testObservationConnector(ctx, in)
+}
+
+func (sr *sourceReconciler) previewDocumentConnector(ctx context.Context, in api.ConnectorOnboardInput) ([]api.PreviewDocument, error) {
+	if err := checkDocumentSettings(in.Config); err != nil {
+		return nil, err
+	}
+	src, _ := buildContentSource(in.Kind, sr.richDoc)
+	resolved, err := sr.resolveTestConfig(ctx, src.Descriptor(), in)
+	if err != nil {
+		return nil, err // already genericized
+	}
+	defer func() { _ = src.Close(ctx) }()
+	if err := src.Open(ctx, resolved); err != nil {
+		sr.log.Debug("connector onboarding: document source test open failed", "kind", in.Kind, "source", in.Name, "err", err)
+		return nil, api.ErrConnectorTestFailed
+	}
+	docs, err := previewDocuments(ctx, src)
+	if err != nil {
+		sr.log.Debug("connector onboarding: document source test list failed", "kind", in.Kind, "source", in.Name, "err", err)
+		return nil, api.ErrConnectorTestFailed
+	}
+	return docs, nil
+}
+
+func (sr *sourceReconciler) testObservationConnector(ctx context.Context, in api.ConnectorOnboardInput) error {
 	// An out-of-process connector cannot be Opened on the host without launching and
 	// wiring its subprocess; the honest answer is that it is validated WHEN SAVED (it
 	// is Opened in its subprocess and the live-apply result reports the outcome).
@@ -258,6 +306,11 @@ func (sr *sourceReconciler) PutConnector(ctx context.Context, actor auth.Princip
 	}
 	if strings.TrimSpace(in.Tenant) == "" {
 		return api.SourceApplyResult{}, fmt.Errorf("%w: a connector must name the business tenant its observations belong to", auth.ErrBadSourceDef)
+	}
+	if isDocumentKind(in.Kind) {
+		if err := checkDocumentSettings(in.Config); err != nil {
+			return api.SourceApplyResult{}, err
+		}
 	}
 	cfg, err := sr.sealOnboardSecrets(ctx, actor, in)
 	if err != nil {

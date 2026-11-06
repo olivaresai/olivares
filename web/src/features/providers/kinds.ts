@@ -66,28 +66,52 @@ export function isLocalHttpEndpoint(baseURL: string | undefined): boolean {
 }
 
 /**
+ * The provider preset catalog's own openai_compatible addresses (connectors/modelprovider
+ * presets.go): OpenCode ships a native provider for each of these vendors
+ * (opencode.ai/docs/providers), so a BYO key record at exactly one of these is confined
+ * to it the same way a local model server is (modules/sessions/driver_opencode.go), and
+ * `recordServesDriver` (modules/sessions/provider_record.go) accepts it the same way.
+ * Mirrored by hand; kinds.test.ts reads presets.go and fails when the two lists differ.
+ */
+export const OPENCODE_PRESET_ENDPOINTS: readonly string[] = [
+  'https://api.deepseek.com',
+  'https://api.z.ai/api/paas/v4',
+  'https://api.moonshot.ai/v1',
+  'https://openrouter.ai/api/v1',
+  'https://api.mistral.ai/v1',
+]
+
+/**
  * Whether a session of this driver can run on a record of this kind AND be held to the
  * record's endpoint: a session bound to a provider record reaches only that endpoint, or
  * it does not start. The kinds a tool runs on are the engine's (driverfacts Bindings, read
- * from GET /v1/m/sessions/tools); this applies each one's endpoint rule as CanBind does:
- * any endpoint, the provider's own address only (no base URL), or a local http address
- * only. A driver or rule the engine does not list serves nothing.
+ * from GET /v1/m/sessions/tools); this applies each one's endpoint rule as
+ * `recordServesDriver` (modules/sessions/provider_record.go, driverfacts.CanBind) does:
+ * any endpoint, the provider's own address only (no base URL), or a local http address or
+ * a preset catalog address. A driver or rule the engine does not list serves nothing, and
+ * neither does a preset the engine lists as refused for the tool (`service`: the record's
+ * preset).
  */
 export function recordServesDriver(
   kind: string,
   baseURL: string | undefined,
   driver: string,
+  service?: string,
 ): boolean {
-  const binding = engineTool(driver.trim().toLowerCase())?.bindings.find(
-    (b) => b.kind === kind,
-  )
+  const tool = engineTool(driver.trim().toLowerCase())
+  if (service && tool?.refused_services?.includes(service)) return false
+  const binding = tool?.bindings.find((b) => b.kind === kind)
   switch (binding?.egress) {
     case 'configured-endpoint':
       return true
     case 'vendor-default-only':
       return !baseURL?.trim()
     case 'local-endpoint-only':
-      return isLocalHttpEndpoint(baseURL)
+      return (
+        isLocalHttpEndpoint(baseURL) ||
+        (service !== 'deepseek' &&
+          OPENCODE_PRESET_ENDPOINTS.includes((baseURL ?? '').trim()))
+      )
     default:
       return false
   }

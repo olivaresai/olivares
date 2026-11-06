@@ -103,8 +103,8 @@ const (
 // a two-minute deadline that NewHTTPServer does not add.
 //
 // ⛔ AND IT IS ONE BUDGET FOR THE WHOLE BATCH, NOT ONE PER QUESTION. 32 independent
-// five-second horizons could occupy 160 seconds, past the server's 60-second write
-// timeout: a later question does not get a renewed window because an earlier one spent
+// five-second horizons could occupy 160 seconds for one answer: a later question
+// does not get a renewed window because an earlier one spent
 // the budget. An earlier caller deadline or a disconnect still wins, because the
 // horizon is DERIVED from the request context rather than replacing it.
 const capabilityBatchBudget = 5 * time.Second

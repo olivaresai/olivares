@@ -13,14 +13,16 @@ import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
-import { sessionsKeys } from './api'
-import { primaryRun, type UnifiedSession } from './provenance'
+import { sessionsApi, sessionsKeys } from './api'
+import { useOfferUndo } from './list-undo'
+import { primaryRun, sessionTitle, type UnifiedSession } from './provenance'
 import { addressOf, targetFromAddress } from './session-address'
 import {
   MAX_PINS,
   decodePins,
   encodePins,
   isPinnable,
+  observedLiveRef,
   pinStorageKey,
   pinnedKeys,
 } from './session-pins'
@@ -30,15 +32,23 @@ export interface SessionPins {
   pinned: ReadonlySet<string>
   /** Pin the session at this address, or unpin it when it is pinned. The open card
    * passes its own session, which a deep link can make one the list does not hold. A
-   * session the engine holds no run for is not offered the control. */
+   * session with neither a run nor an observed live row is not offered the control. */
   toggle: (address: string, session?: UnifiedSession) => void
 }
 
-/** The runs a stored address names, newest first, or none when it names none: an observed
- * session has no run to pin. `live:` and `sess:` ask the engine (exact lookups), so a
- * session past the loaded page moves too, and every run of the session comes back so one
- * the engine already pins is seen. */
-async function runRefsOf(address: string, tenant: string): Promise<string[]> {
+/** What the engine pins for an observed session: its live row, named as the engine names
+ * it in a pin list (`live:<live_ref>`), against a run's bare ref. */
+const LIVE_SUBJECT = 'live:'
+
+/** The pin subjects a stored address names: its runs, newest first, or the live row of a
+ * session with no run (one the plane only observes). `live:` and `sess:` ask the engine
+ * (exact lookups), so a session past the loaded page moves too, and every run of the
+ * session comes back so one the engine already pins is seen. None when it names nothing,
+ * and null when the exact lookup of its live row finds it gone (404): it never will pin. */
+async function subjectsOf(
+  address: string,
+  tenant: string,
+): Promise<string[] | null> {
   const target = targetFromAddress(address)
   if (target?.runRef) return [target.runRef]
   const lookup = target?.liveRef
@@ -51,24 +61,39 @@ async function runRefsOf(address: string, tenant: string): Promise<string[]> {
     { ...lookup, limit: MAX_PINS },
     { tenant },
   )
-  return answer.items.map((run) => run.run_ref)
+  if (answer.items.length > 0) return answer.items.map((run) => run.run_ref)
+  if (target?.liveRef) return [LIVE_SUBJECT + target.liveRef]
+  if (!target?.sessionRef) return []
+  try {
+    const row = await sessionsApi.liveOne(target.sessionRef, { tenant })
+    return row.live_ref ? [LIVE_SUBJECT + row.live_ref] : []
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null
+    throw err
+  }
 }
 
-/** Whether the engine will never pin this run: it is gone (404) or released (409). */
+/** Pin one subject on the engine, for the tenant its address was stored for. */
+function pinSubject(subject: string, tenant: string) {
+  return subject.startsWith(LIVE_SUBJECT)
+    ? sessionsApi.pinLive(subject.slice(LIVE_SUBJECT.length), { tenant })
+    : agentOpsApi.pin(subject, { tenant })
+}
+
+/** Whether the engine will never pin this session: it is gone (404) or released (409). */
 function isGone(err: unknown): boolean {
   return err instanceof ApiError && (err.status === 404 || err.status === 409)
 }
 
-/** Pin the runs the stored addresses name on the engine, oldest first, so the Pinned
+/** Pin the sessions the stored addresses name on the engine, oldest first, so the Pinned
  * section keeps the order the person gave it. Every call names the tenant the addresses
- * were stored for, so a tenant switch in between cannot send them elsewhere. A run the
- * engine already holds (`held`) takes no slot, two names of one run pin it once, and only
- * the newest `free` runs are pinned, as the ceiling lets the 20th pin push out the oldest
- * (none when the engine is full: they stay stored). Returns the addresses to keep stored: a run that is
- * gone or released (a 404 or 409 on the pin) never will pin and is dropped, but a failure
- * that may pass, a failed lookup, and a
- * session with no run at all (one the plane only observes, which the engine cannot pin
- * yet), stay stored, in the order they were. */
+ * were stored for, so a tenant switch in between cannot send them elsewhere. A subject the
+ * engine already holds (`held`) takes no slot, two names of one session pin it once, and
+ * only the newest `free` subjects are pinned, as the ceiling lets the 20th pin push out
+ * the oldest (none when the engine is full: they stay stored). Returns the addresses to
+ * keep stored: a session that is gone or released (a 404 or 409 on the pin, or a live row
+ * the exact lookup does not find) never will pin and is dropped, but a failure that may pass, such as the network, stays
+ * stored, in the order it was. */
 async function movePinsToEngine(
   addresses: readonly string[],
   tenant: string,
@@ -76,27 +101,30 @@ async function movePinsToEngine(
   free: number,
 ): Promise<string[]> {
   const keep = new Set<string>()
-  const movable: { address: string; ref: string }[] = []
+  const movable: { address: string; subject: string }[] = []
   for (const address of addresses) {
     try {
-      const refs = await runRefsOf(address, tenant)
-      if (refs.length === 0) keep.add(address)
-      else if (!refs.some((ref) => held.has(ref)))
-        movable.push({ address, ref: refs[0] })
+      const subjects = await subjectsOf(address, tenant)
+      if (subjects === null) continue // gone: nothing to move, ever
+      // Nothing to pin and nothing said it is gone: it stays stored.
+      if (subjects.length === 0) keep.add(address)
+      else if (!subjects.some((subject) => held.has(subject)))
+        movable.push({ address, subject: subjects[0] })
     } catch {
-      // A failed lookup says nothing about the run (a 404 can be a route or a tenant
+      // A failed lookup says nothing about the session (a 404 can be a route or a tenant
       // problem): the address stays stored for the next load.
       keep.add(address)
     }
   }
   const newest = movable.filter(
-    (pin, i) => !movable.slice(i + 1).some((later) => later.ref === pin.ref),
+    (pin, i) =>
+      !movable.slice(i + 1).some((later) => later.subject === pin.subject),
   )
   // With the engine full nothing can move: pinning would push out the engine's oldest.
   if (free <= 0) for (const { address } of newest) keep.add(address)
-  for (const { address, ref } of free > 0 ? newest.slice(-free) : []) {
+  for (const { address, subject } of free > 0 ? newest.slice(-free) : []) {
     try {
-      await agentOpsApi.pin(ref, { tenant })
+      await pinSubject(subject, tenant)
     } catch (err) {
       if (!isGone(err)) keep.add(address)
     }
@@ -115,25 +143,26 @@ export function useSessionPins(
   const { t } = useTranslation('sessions')
   const { principal, activeTenant } = useAuth()
   const qc = useQueryClient()
+  const offerUndo = useOfferUndo()
   const pinned = useMemo(() => pinnedKeys(sessions), [sessions])
 
   // ⛔ PINS KEPT IN THIS BROWSER BEFORE THE ENGINE KEPT THEM MOVE ONCE (#2130, linux rule
   //    1: stored data keeps working). Once per (origin, person, tenant), after the engine's
   //    own pins are known: the runs the browser stored are pinned there oldest first,
   //    within the ceiling the engine's existing pins leave, and the old key is removed. What
-  //    could not be pinned stays stored: a failure that may pass (the network), and a
-  //    session with no run, which the engine has nothing to pin yet.
-  //    ponytail: a session with no run is looked up again on every load while it stays
-  //    stored (at most 20 exact lookups); upgrade when the engine can pin it.
+  //    could not be pinned stays stored: a failure that may pass (the network).
   const moved = useRef<string | null>(null)
   const held = useMemo(
     () =>
       new Set(
-        sessions
-          .flatMap((session) =>
-            session.runs.filter((run) => run.pinned === true),
-          )
-          .map((run) => run.run_ref),
+        sessions.flatMap((session) => [
+          ...session.runs
+            .filter((run) => run.pinned === true)
+            .map((run) => run.run_ref),
+          ...(session.live?.pinned === true && observedLiveRef(session)
+            ? [LIVE_SUBJECT + session.live.live_ref]
+            : []),
+        ]),
       ),
     [sessions],
   )
@@ -166,17 +195,46 @@ export function useSessionPins(
   }, [runsReady, principal, activeTenant, held, free, qc])
 
   const change = useMutation({
+    // Returns what it unpinned (runs oldest pin first, and an observed session's live ref): an unpin is undone, a pin is its own undo.
     mutationFn: async (session: UnifiedSession) => {
-      const pinnedRuns = session.runs.filter((run) => run.pinned === true)
-      if (pinnedRuns.length > 0) {
-        await Promise.all(
-          pinnedRuns.map((run) => agentOpsApi.unpin(run.run_ref)),
-        )
-        return
+      const pinnedRuns = session.runs
+        .filter((run) => run.pinned === true)
+        .sort((a, b) => (a.pinned_at ?? '').localeCompare(b.pinned_at ?? ''))
+      const liveRef = observedLiveRef(session)
+      const livePinned = liveRef !== undefined && session.live?.pinned === true
+      if (pinnedRuns.length > 0 || livePinned) {
+        await Promise.all([
+          ...pinnedRuns.map((run) => agentOpsApi.unpin(run.run_ref)),
+          ...(livePinned ? [sessionsApi.unpinLive(liveRef)] : []),
+        ])
+        return { runs: pinnedRuns, liveRef: livePinned ? liveRef : undefined }
       }
-      // The primary run among those still listed: a released run cannot be pinned.
+      // The primary run among those still listed: a released run cannot be pinned. A
+      // session with no run is pinned on its live row.
       const run = primaryRun(session.runs.filter((r) => r.state !== 'cleaned'))
       if (run) await agentOpsApi.pin(run.run_ref)
+      else if (liveRef) await sessionsApi.pinLive(liveRef)
+      return { runs: [], liveRef: undefined }
+    },
+    // ponytail: Undo pins the runs again, so the session returns as the newest pin, not at its old
+    // place among the others; the engine stamps the moment itself. Upgrade when pin accepts one.
+    onSuccess: ({ runs, liveRef }, session) => {
+      if (runs.length === 0 && !liveRef) return
+      offerUndo({
+        message: t('undo.unpinned', {
+          name: sessionTitle(session, t('untitled')),
+        }),
+        // An observed session has no run to re-read; its pin is idempotent.
+        expect: runs.map((run) => ({
+          ref: run.run_ref,
+          still: (now) => now.pinned !== true,
+        })),
+        restore: async () => {
+          // One after the other, so the pins keep the order they had among themselves.
+          for (const run of runs) await agentOpsApi.pin(run.run_ref)
+          if (liveRef) await sessionsApi.pinLive(liveRef)
+        },
+      })
     },
     onError: (err) =>
       toast.error(err instanceof ApiError ? err.message : t('rail.pinFailed')),

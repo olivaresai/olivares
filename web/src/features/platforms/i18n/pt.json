@@ -1,0 +1,105 @@
+{
+  "title": "Plataformas",
+  "description": "Onde o Claude é executado e quando cada modelo é retirado.",
+  "tabs": {
+    "surfaces": "Superfícies e conformidade",
+    "lifecycle": "Ciclo de vida dos modelos"
+  },
+  "liveReference": "Referência fornecida pelo motor — AsOf {{date}}, origem {{source}}.",
+  "unavailable": "A referência de plataformas não está disponível neste motor",
+  "confirm": {
+    "confirmed": "Confirmado",
+    "toConfirm": "Por confirmar"
+  },
+  "surfaces": {
+    "title": "Superfícies de implementação",
+    "description": "As seis superfícies Claude modeladas. Cada uma difere no URL base, na autenticação, na forma do ID do modelo, na faturação, na residência e na postura de conformidade — não são intermutáveis.",
+    "matrixTitle": "Matriz de atributos das superfícies",
+    "matrixSummary": "Seis superfícies de implementação comparadas por operador, endpoint, autenticação, forma do ID do modelo, suporte de API, faturação, HIPAA, ZDR e residência.",
+    "unmodeled": "Superfície não modelada — sem matriz de atributos.",
+    "unmodeledHint": "Este gateway não é uma das seis superfícies Claude modeladas; os seus atributos de conformidade e residência não estão declarados nem são inferidos.",
+    "deprecatedBadge": "Descontinuada",
+    "noWorkspaceHeader": "nenhum",
+    "noSigv4": "n/d",
+    "apiSupportTitle": "Suporte da API Anthropic por superfície",
+    "apiSupportDescription": "Que famílias da API Anthropic se aplicam em cada superfície. Uma superfície sem as APIs Admin/Models/Compliance não consegue servir a ingestão de governação do lado da Anthropic — degrada-se com transparência, nunca comunica vazio como «sem deteções».",
+    "columns": {
+      "surface": "Superfície",
+      "operator": "Operador",
+      "baseUrl": "URL base",
+      "sigv4": "Serviço SigV4",
+      "workspaceHeader": "Cabeçalho do espaço de trabalho",
+      "modelIdForm": "Forma do ID do modelo",
+      "billing": "Faturação",
+      "hipaa": "HIPAA",
+      "fedramp": "FedRAMP / IL",
+      "zdr": "ZDR",
+      "residency": "Residência / geografia de inferência",
+      "apiSupport": "Suporte de API",
+      "messages": "Mensagens",
+      "admin": "Admin",
+      "compliance": "Conformidade",
+      "models": "Modelos",
+      "batches": "Lotes",
+      "mcp": "Conector MCP"
+    },
+    "api": {
+      "supported": "Suportada",
+      "unsupported": "Não suportada"
+    },
+    "fedramp": {
+      "eligible": "Elegível para HIPAA / FedRAMP / IL4-5",
+      "na": "Não declarado"
+    },
+    "notesTitle": "Notas da superfície",
+    "compliance": {
+      "title": "Postura de conformidade",
+      "description": "HIPAA / FedRAMP / IL / ZDR são um eixo por superfície (onde a inferência é executada), distinto da postura GPAI de um modelo ou fornecedor. Não os confunda.",
+      "hipaaNote": "O HIPAA é apresentado com o seu estado de confirmação. Uma postura «por confirmar» nunca é apresentada como um sim ou um não definitivo."
+    }
+  },
+  "lifecycle": {
+    "title": "Ciclo de vida dos modelos por plataforma",
+    "description": "A descontinuação de modelos é por plataforma, não global. As superfícies operadas pela Anthropic descontinuam um modelo numa data diferente do Bedrock e do Vertex — um único indicador «descontinuado» daria um prazo de migração falso em metade do parque.",
+    "datePending": "data não publicada / por confirmar",
+    "noSuccessor": "Nenhum sucessor declarado",
+    "noSuccessorHint": "A autoridade não indicou nenhum modelo de substituição para esta família. Nenhum é inferido.",
+    "matrixTitle": "Prazos de descontinuação por superfície",
+    "columns": {
+      "model": "Modelo",
+      "surface": "Superfície",
+      "retiresOn": "Descontinuado em",
+      "status": "Estado",
+      "replacement": "Substituição"
+    },
+    "paramDeprecation": {
+      "title": "Pré-aviso de descontinuação de parâmetros",
+      "badge": "Informativo",
+      "body": "{{affected}} rejeitam {{params}} com valor não predefinido com um HTTP {{status}}. Esta é uma descontinuação da Anthropic, não um erro do produto nem um erro corrigível — a Olivares retém estes parâmetros como pré-aviso.",
+      "paramsJoin": ", "
+    },
+    "notes": {
+      "title": "Notas sobre IDs e residência do Bedrock",
+      "declaredNote": "Referência declarada na web: estas notas citam factos de transparência de modules/models/bedrock.go que o endpoint de plataformas não fornece. Cada uma tem o seu próprio estado de confirmação.",
+      "crisIdFormat": "O formato do ID do perfil de inferência entre regiões é \"<geo>.anthropic.<model>\", geo ∈ {us, eu, apac, global}. A superfície Bedrock Mantle atual usa o ID simples \"anthropic.<model>\".",
+      "crisOpusId": "O ID concreto do perfil de inferência opus Global-CRIS do Bedrock não está verificado na página da AWS — o formato está confirmado, esse ID específico não é apresentado como oficial.",
+      "globalRegionalPremium": "A documentação da AWS indica que os perfis de inferência regionais têm um prémio de cerca de 10% sobre o global (o global é a base mais barata) — o oposto de um pressuposto de «global +10%»; o multiplicador exato não está verificado, por isso não se modela nenhum prémio.",
+      "usBurndown": "O consumo de inferência apenas nos EUA é de 1,1× (Opus 4.6 / Sonnet 4.6+, inference_geo=\"us\")."
+    }
+  },
+  "empty": {
+    "lifecycle": {
+      "title": "Nenhum calendário de descontinuação de modelos declarado",
+      "description": "A referência de ciclo de vida do Claude compilada no motor tem de fornecer estes prazos; a sua atividade e as suas entradas na consola não os preenchem."
+    },
+    "surface": {
+      "title": "Nenhuma superfície de implementação declarada",
+      "description": "A referência de superfícies do Claude compilada no motor tem de fornecer estas linhas; a sua atividade e as suas entradas na consola não as preenchem."
+    }
+  },
+  "effectiveState": {
+    "label": "Neste parque:",
+    "models": "Catálogo de modelos",
+    "modelOps": "Operações de modelos"
+  }
+}

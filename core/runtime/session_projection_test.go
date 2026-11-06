@@ -75,3 +75,28 @@ func TestCollectorIngestCannotCarryManagedSessionProjection(t *testing.T) {
 		t.Fatal("registered collector stamped managed projection")
 	}
 }
+
+func TestSessionReachExpiryRequiresRegisteredSessionsHost(t *testing.T) {
+	r, b := budgetRuntime(t)
+	owner, other := &budgetModule{name: "olivares.sessions"}, &budgetModule{name: "test.foreign"}
+	for _, m := range []*budgetModule{owner, other} {
+		if err := r.AddModule(m, sdk.Config{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	e := event.Event{Type: event.TypeSessionReachExpired, Tenant: "tenant-a", Source: "forged", SessionProjection: true,
+		Payload: model.EdgeObservation{OriginKind: "session", OriginRef: "launch", Source: model.SignalSessionLaunch}}
+	if err := other.host.Publish(t.Context(), e); !errors.Is(err, ErrReservedSessionProjection) {
+		t.Fatalf("foreign expiry accepted: %v", err)
+	}
+	if err := owner.host.Publish(t.Context(), e); err != nil {
+		t.Fatal(err)
+	}
+	got := b.snapshot()
+	if len(got) != 1 || got[0].Source != "olivares.sessions" {
+		t.Fatalf("expiry publisher not stamped: %+v", got)
+	}
+}

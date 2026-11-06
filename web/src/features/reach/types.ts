@@ -18,9 +18,12 @@ export interface ReachEdge {
   origin_id?: string
   /** The origin's already-redacted ref — the fallback join key when origin_id is absent. */
   origin_ref?: string
+  tool_ref?: string
+  signal_source?: string
   /** resource | mcp_server | provider | mcp.tool | … (sourcescope scopeableKindFor + observed kinds). */
   resource_kind?: string
   resource_ref?: string
+  resource_id?: string
 }
 
 /** The /v1/m/accessmap/graph response, reduced to what the reach view reads. */

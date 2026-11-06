@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -112,11 +113,13 @@ func TestManagedMCPAssignmentReachesOnlyItsTargets(t *testing.T) {
 		AliasCall    string   `json:"alias_call"`
 		DirectStatus int      `json:"direct_status"`
 	}
+	sessionNumber := 0
 	session := func(folder, ref, message string) catalogue {
 		t.Helper()
+		sessionNumber++
 		result := filepath.Join(folder, "catalogue-result.json")
 		_ = os.Remove(result)
-		run := do("POST", "/v1/m/sessions/runs", map[string]any{"name": "Assignment session", "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": ref, "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
+		run := do("POST", "/v1/m/sessions/runs", map[string]any{"name": fmt.Sprintf("Assignment session %d", sessionNumber), "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": ref, "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
 		runRef := run["run_ref"].(string)
 		defer do("POST", "/v1/m/sessions/runs/"+runRef+"/stop", map[string]any{}, http.StatusOK)
 		do("POST", "/v1/m/sessions/runs/"+runRef+"/input", map[string]any{"message": map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": message}}}, http.StatusAccepted)

@@ -94,7 +94,7 @@ func TestMaintenanceCanCreateAdminNeedsASuperuser(t *testing.T) {
 // An installation saved before db init provisioned an admin role still has none.
 // Its console backup says so, and the command it names must run as written.
 func TestConsoleBackupWithoutAnAdminRoleNamesARunnableRemedy(t *testing.T) {
-	config := consoleDRConfig(bootConfig{DataDir: t.TempDir()}, store.EnginePostgres, nil, nil)
+	config := consoleDRConfig(bootConfig{DataDir: t.TempDir()}, store.EnginePostgres, nil, nil, nil)
 	_, err := config.PostgresSnapshot(t.Context(), filepath.Join(t.TempDir(), "dump"))
 	if err == nil {
 		t.Fatal("a PostgreSQL console backup without an admin DSN must be refused")

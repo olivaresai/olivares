@@ -1,12 +1,57 @@
 {
-  "title": "Seguridad y forense",
-  "description": "Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.",
+  "title": "Seguridad",
+  "description": "Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. Por defecto solo registra: no bloquea nada hasta que actives una regla.",
   "tabs": {
+    "overview": "Resumen",
     "safety": "Postura de seguridad",
     "findings": "Hallazgos",
     "guardrails": "Guardrails",
     "anomalies": "Anomalías",
     "forensics": "Forense"
+  },
+  "posture": {
+    "title": "Exposición actual",
+    "description": "Lecturas en vivo de las personas, credenciales y controles que requieren atención ahora.",
+    "review": "Revisar",
+    "notAvailable": "No disponible",
+    "partialHint": "El signo más indica que la lectura tiene más filas fuera de esta página; el recuento es un mínimo.",
+    "secondFactor": {
+      "label": "Personas sin un segundo factor",
+      "description": "Miembros activos sin un código de autenticador confirmado ni una clave de acceso registrada."
+    },
+    "administrators": {
+      "label": "Administradores",
+      "description": "Propietarios y administradores activos de esta organización."
+    },
+    "apiKeys": {
+      "label": "Claves API sin caducidad o sin uso",
+      "description": "Claves registradas sin caducidad o sin uso registrado. Las revocadas no cuentan.",
+      "value": "{{noExpiry}} sin caducidad · {{unused}} sin uso"
+    },
+    "approvals": {
+      "label": "Aprobaciones pendientes",
+      "description": "Solicitudes que esperan que una persona las apruebe o rechace."
+    },
+    "killSwitch": {
+      "label": "Interruptor de corte",
+      "description": "El estado de parada actual del estate y de agentes individuales.",
+      "estateStopped": "Estate detenido",
+      "agentStops_one": "{{count}} agente detenido",
+      "agentStops_many": "{{count}} agentes detenidos",
+      "agentStops_other": "{{count}} agentes detenidos",
+      "notEngaged": "No activado"
+    },
+    "providers": {
+      "label": "Proveedores con una clave",
+      "description": "Registros activos de credenciales de proveedores. Nunca se leen los valores secretos."
+    },
+    "policy": {
+      "label": "Modo de política",
+      "description": "Si la admisión de modelos firmados está sin configurar, observando o aplicando.",
+      "unconfigured": "Sin configurar",
+      "observe": "Observar",
+      "enforce": "Aplicar"
+    }
   },
   "findings": {
     "title": "Hallazgos",
@@ -59,10 +104,10 @@
   },
   "safetyPosture": {
     "title": "Postura de seguridad del proveedor",
-    "description": "Postura de AI-safety en modo lectura, ingerida de los controles nativos de los proveedores: OpenAI Moderation, AWS Bedrock Guardrails y Azure Responsible AI. El plano la lee y la registra; el bloqueo sigue en el proveedor.",
+    "description": "Postura de AI-safety en modo lectura, ingerida de los controles nativos de los proveedores: OpenAI Moderation, AWS Bedrock Guardrails y Azure Responsible AI. Olivares la lee y la registra; el bloqueo sigue en el proveedor.",
     "empty": "Sin hallazgos de postura de seguridad",
     "emptyHint": "Conecta los conectores de OpenAI, AWS o Azure con sus lecturas de seguridad activadas para rellenar esta vista.",
-    "countsPartial": "Resumen parcial: este tenant tiene más hallazgos de postura de seguridad de los que cubre el escaneo del resumen.",
+    "countsPartial": "Resumen parcial: esta organización tiene más hallazgos de postura de seguridad de los que cubre el escaneo del resumen.",
     "columns": {
       "open": "Abiertos"
     }
@@ -72,7 +117,7 @@
     "description": "Ejecuta el servicio de inspección de guardrail sobre una superficie. El texto se hashea redactado y nunca se almacena — el resultado es un veredicto más evidencia mínima ya redactada.",
     "verdictTitle": "Veredicto",
     "clean": "Sin detecciones — limpio.",
-    "detectiveNote": "Este veredicto viene del plano detective: la activación se detectó y registró, no se bloqueó. Un bloqueo solo es alcanzable cuando el enforcement está habilitado y gobernado.",
+    "detectiveNote": "Este veredicto solo registró la activación: se detectó, no se bloqueó. Un bloqueo solo es posible cuando el enforcement está habilitado y gobernado.",
     "wouldBlock": "Bloquearía (enforced)",
     "detectOnly": "Solo detección",
     "findingsRecorded": "{{count}} hallazgo registrado",
@@ -80,7 +125,7 @@
     "findingsRecorded_many": "{{count}} hallazgos registrados",
     "findingsRecorded_other": "{{count}} hallazgos registrados",
     "enforcement": {
-      "detective": "Detective",
+      "detective": "Solo registra",
       "enforced": "Enforced"
     },
     "class": {
@@ -109,10 +154,10 @@
   },
   "enforcement": {
     "title": "Postura de enforcement",
-    "description": "La única acción que toca producción. Cada clase de guardrail es detective por defecto; habilitar enforcement inline es una acción de admin, gobernada donde haya un gate configurado.",
-    "defaultDetectiveNote": "El plano por defecto es detective: las clases solo bloquean cuando se habilitan aquí explícitamente y están gobernadas.",
-    "fullyDetective": "No hay enforcement habilitado — el plano es totalmente detective, el default seguro. Nada bloquea por su cuenta.",
-    "detective": "Detective",
+    "description": "La única acción que toca producción. Cada clase de guardrail solo registra por defecto; habilitar enforcement inline es una acción de admin, gobernada donde haya un gate configurado.",
+    "defaultDetectiveNote": "Por defecto no se bloquea nada: las clases solo bloquean cuando se habilitan aquí explícitamente y están gobernadas.",
+    "fullyDetective": "No hay enforcement habilitado — solo registra y no bloquea nada hasta que actives una regla.",
+    "detective": "Solo registra",
     "enforced": "Enforced",
     "governed": "Gobernado",
     "ungoverned": "Habilitado sin gobernanza humana",
@@ -128,7 +173,7 @@
     },
     "dialog": {
       "title": "Cambiar enforcement",
-      "description": "Deshabilitar (volver a detective) está siempre permitido. Habilitar enforcement inline está gobernado donde haya un gate configurado — una denegación de gobernanza se muestra como el motivo.",
+      "description": "Deshabilitar (volver a solo registrar) está siempre permitido. Habilitar enforcement inline está gobernado donde haya un gate configurado — una denegación de gobernanza se muestra como el motivo.",
       "enabledLabel": "Habilitar enforcement inline",
       "minSeverity": "Severidad mínima",
       "reason": "Motivo",
@@ -208,7 +253,7 @@
   "empty": {
     "enforcement": {
       "title": "No se han configurado clases de enforcement",
-      "description": "Las filas solo aparecen después de definir la postura de una clase de guardrail; hasta entonces, todas las clases siguen en modo detective y nada se bloquea inline."
+      "description": "Las filas solo aparecen después de definir la postura de una clase de guardrail; hasta entonces, todas las clases solo registran y nada se bloquea inline."
     },
     "findings": {
       "title": "Sin hallazgos de seguridad",

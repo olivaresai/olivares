@@ -16,6 +16,7 @@
 import { Layers } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
 import {
@@ -38,8 +39,11 @@ import { LIFECYCLE_NOTES } from './lifecycle.data'
 import type { PlatformsReference } from './types'
 import './i18n'
 
+const PLATFORM_TABS = ['surfaces', 'lifecycle'] as const
+
 export function PlatformsView() {
   const { t } = useTranslation(['platforms', 'common'])
+  const [tab, setTab] = useTabParam(PLATFORM_TABS)
   // Read-only reference; activeTenant scopes the query cache. No privileged write
   // here — the lead gates the route on `models:read`.
   const { activeTenant } = useAuth()
@@ -75,7 +79,7 @@ export function PlatformsView() {
         />
       }
     >
-      <Tabs defaultValue="surfaces">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="surfaces">{t('tabs.surfaces')}</TabsTrigger>
           <TabsTrigger value="lifecycle">{t('tabs.lifecycle')}</TabsTrigger>

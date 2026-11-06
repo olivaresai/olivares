@@ -1,8 +1,7 @@
 {
   "notFound": {
     "title": "Pagina non trovata",
-    "description": "Questa pagina non esiste o è stata spostata.",
-    "back": "Torna alla panoramica"
+    "description": "Questa pagina non esiste o è stata spostata."
   },
   "businessOnly": {
     "title": "Parte di Business",
@@ -17,6 +16,7 @@
     "nextStep": "I tuoi ruoli o una policy di gruppo non lo consentono. Un proprietario o un amministratore di questa organizzazione può concederti l'accesso.",
     "deniedByPolicy": "La policy “{{policy}}” lo nega. Un proprietario o un amministratore di questa organizzazione può modificarla."
   },
+  "systemAdminOnly": "Questa impostazione riguarda l'intera installazione. Chiedi a un amministratore di sistema di vederla o modificarla.",
   "serverError": {
     "title": "Qualcosa è andato storto",
     "description": "Olivares ha riscontrato un errore imprevisto. Riprova.",
@@ -30,14 +30,21 @@
     "title": "Control plane non raggiungibile",
     "description": "Non siamo riusciti a raggiungere il control plane. Controlla la connessione e che il motore sia in esecuzione."
   },
+  "engineRetrying": {
+    "title": "Impossibile raggiungere il motore",
+    "description": "Nuovo tentativo automatico. Questa pagina si apre non appena il motore risponde."
+  },
   "networkSecure": {
     "title": "Connessione sicura non riuscita",
     "description": "Il browser non è riuscito ad aprire una connessione sicura con {{origin}}. Se non considera attendibile il certificato del motore, apri quell’indirizzo in una nuova scheda e consideralo attendibile, oppure installa la CA del motore (tls.crt.ca nella sua directory dei dati). Altrimenti controlla la connessione e che il motore sia in esecuzione."
   },
   "boundary": {
     "title": "Questa vista è andata in crash",
-    "description": "Si è verificato un errore imprevisto durante la visualizzazione. Di solito si risolve ricaricando.",
-    "reload": "Ricarica"
+    "description": "Si è verificato un errore imprevisto durante la visualizzazione. Di solito si risolve riprovando.",
+    "reload": "Ricarica",
+    "errorId": "ID errore",
+    "copyErrorId": "Copia ID errore",
+    "goToNow": "Vai a Panoramica"
   },
   "generic": "Qualcosa è andato storto.",
   "sessionTemplateUnavailable": "Il template “Modifiche e comandi” non è disponibile, quindi la sessione non è stata avviata. Scegli un altro permesso o chiedi a un amministratore di ripristinare il template.",

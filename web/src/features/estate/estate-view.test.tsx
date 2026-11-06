@@ -7,8 +7,11 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useModulesStore } from '@/stores/modules'
 import type { EstateFamily, EstatePage } from './types'
+import type { FeatureView } from '@/features/registry'
+import i18n from 'i18next'
 
 const wire = vi.hoisted(() => ({
+  views: undefined as FeatureView[] | undefined,
   read: vi.fn(),
   tenant: 'tenant-a',
   lifetime: 1,
@@ -16,6 +19,15 @@ const wire = vi.hoisted(() => ({
   start: vi.fn(),
   navigate: vi.fn(),
 }))
+vi.mock('@/features/registry', async (original) => {
+  const registry = await original<typeof import('@/features/registry')>()
+  return {
+    ...registry,
+    get FEATURE_VIEWS() {
+      return wire.views ?? registry.FEATURE_VIEWS
+    },
+  }
+})
 vi.mock('./api', () => ({ readEstateFamily: wire.read }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
@@ -48,6 +60,9 @@ vi.mock('@/lib/auth/capabilities', async (original) => ({
 vi.mock('@tanstack/react-router', async (original) => ({
   ...(await original<typeof import('@tanstack/react-router')>()),
   useNavigate: () => wire.navigate,
+  useRouterState: (await import('@/test/fake-router')).fakeRouterModule()
+    .useRouterState,
+  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
 }))
 vi.mock('@/features/agentops/session-launch', async (original) => ({
   ...(await original<typeof import('@/features/agentops/session-launch')>()),
@@ -70,14 +85,14 @@ const empty: EstatePage = {
   hasMore: false,
   readAt: '2026-10-02T12:00:00Z',
 }
-function show() {
+function show(withLaunchHost = true) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   const element = () => (
     <QueryClientProvider client={client}>
       <EstateView />
-      <NewSessionHost />
+      {withLaunchHost && <NewSessionHost />}
     </QueryClientProvider>
   )
   return { ...render(element()), element }
@@ -85,6 +100,7 @@ function show() {
 
 beforeEach(() => {
   useNewSessionDialog.setState({ open: false, opener: null, advanced: null })
+  wire.views = undefined
   wire.read.mockReset()
   wire.tenant = 'tenant-a'
   wire.lifetime = 1
@@ -101,19 +117,47 @@ beforeEach(() => {
 })
 
 describe('estate list and inspector', () => {
+  it('opens the installed Organization directly and withdraws the link without permission or the view', async () => {
+    i18n.addResource('en', 'nav', 'items.organization', 'Organization')
+    wire.views = [
+      {
+        id: 'organization',
+        path: '/organization',
+        permission: 'tenant:read',
+      } as FeatureView,
+    ]
+    wire.allowed.add('tenant:read')
+    const view = show(false)
+    const link = await screen.findByRole('link', { name: 'Organization' })
+    expect(link).toHaveAttribute('href', '/organization')
+    await userEvent.click(link)
+    wire.allowed.delete('tenant:read')
+    view.rerender(view.element())
+    expect(
+      screen.queryByRole('link', { name: 'Organization' }),
+    ).not.toBeInTheDocument()
+    wire.allowed.add('tenant:read')
+    wire.views = []
+    view.rerender(view.element())
+    expect(
+      screen.queryByRole('link', { name: 'Organization' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('keeps native session launch in the page header and withdraws it when permission is revoked', async () => {
     wire.allowed.add('sessions:run:write')
     wire.allowed.add('orchestration:schedule:read')
     const view = show()
     await screen.findByRole('button', { name: /Disconnected folder/ })
     const header = screen
-      .getByRole('heading', { name: 'Estate', level: 1 })
+      .getByRole('heading', { name: 'Configured resources', level: 1 })
       .closest('[data-slot="page-header"]')
     const start = screen.getByRole('button', { name: 'Start session' })
     expect(header).toContainElement(start)
-    expect(header).toContainElement(
-      screen.getByRole('link', { name: 'Open automations' }),
-    )
+    // Automations are a Business page: Community offers no way into it.
+    expect(
+      screen.queryByRole('link', { name: 'Open automations' }),
+    ).not.toBeInTheDocument()
     await userEvent.click(start)
     expect(await screen.findByRole('dialog')).not.toHaveTextContent(
       'Provider profile',
@@ -148,9 +192,6 @@ describe('estate list and inspector', () => {
       screen.queryByRole('button', { name: 'Start session' }),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: 'Open automations' }),
-    ).toHaveAttribute('href', '/automations')
   })
 
   it('reads the list again when the New session form it opened closes', async () => {
@@ -199,7 +240,7 @@ describe('estate list and inspector', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent(
       'Disconnected folder',
     )
-    expect(screen.getByRole('link', { name: 'Open resource' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open Folder' })).toHaveAttribute(
       'href',
       '/agentops',
     )
@@ -281,6 +322,26 @@ describe('estate list and inspector', () => {
     )
   })
 
+  it('draws its filters with the console select, and a truncated list says how many it shows and which resource Open goes to', async () => {
+    wire.read.mockImplementation(async (family: EstateFamily) =>
+      family === 'folder'
+        ? { ...page('Disconnected folder'), hasMore: true, cursor: 'next' }
+        : empty,
+    )
+    show()
+    for (const name of ['Workspace', 'Resource type'])
+      expect(await screen.findByRole('combobox', { name })).toHaveAttribute(
+        'data-slot',
+        'select-trigger',
+      )
+    const row = (
+      await screen.findByRole('button', { name: 'Next page' })
+    ).closest('[role="status"]') as HTMLElement
+    expect(row).toHaveTextContent('Folder: Showing 1. More are available.')
+    expect(row).not.toHaveTextContent(/native/i)
+    expect(within(row).getByRole('link', { name: 'Open Folder' })).toBeVisible()
+  })
+
   it('shows the selected workspace contents from the engine read, for admins only', async () => {
     wire.allowed.add('tenant:read')
     wire.read.mockImplementation(async (family: EstateFamily) =>
@@ -305,10 +366,10 @@ describe('estate list and inspector', () => {
         kinds: [{ kind: 'wsc.item', count: 3, capped: false }],
       })
     const viewer = show()
-    await userEvent.selectOptions(
+    await userEvent.click(
       await screen.findByRole('combobox', { name: 'Workspace' }),
-      await screen.findByRole('option', { name: 'Alpha' }),
     )
+    await userEvent.click(await screen.findByRole('option', { name: 'Alpha' }))
     expect(
       screen.queryByRole('region', { name: 'Workspace contents' }),
     ).not.toBeInTheDocument()
@@ -317,10 +378,10 @@ describe('estate list and inspector', () => {
 
     wire.allowed.add('tenant:admin')
     show()
-    await userEvent.selectOptions(
+    await userEvent.click(
       await screen.findByRole('combobox', { name: 'Workspace' }),
-      await screen.findByRole('option', { name: 'Alpha' }),
     )
+    await userEvent.click(await screen.findByRole('option', { name: 'Alpha' }))
     const region = await screen.findByRole('region', {
       name: 'Workspace contents',
     })

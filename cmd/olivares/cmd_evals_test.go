@@ -9,12 +9,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
@@ -288,5 +290,108 @@ func TestEvalsGateOmitsIntervalWithoutDenominators(t *testing.T) {
 	}
 	if strings.Contains(out, "pass_rate_drop") {
 		t.Fatalf("interval line printed without denominators:\n%s", out)
+	}
+}
+
+// Five cases, three fresh sessions per case; a single late failure must block
+// even when every case succeeds on its first attempt and at least once overall.
+func TestEvalsRunGovernedTrials(t *testing.T) {
+	for _, broken := range []bool{false, true} {
+		t.Run(fmt.Sprint(broken), func(t *testing.T) {
+			const ref = "01a0f6dc-0000-7000-8000-000000000009"
+			var active atomic.Pointer[fakeSessionEngine]
+			engines := []*fakeSessionEngine{}
+			fresh := func() *fakeSessionEngine {
+				f := newFakeSessionEngine(t)
+				f.runs = []map[string]any{{"run_ref": ref, "state": "running", "provider_driver": "claude", "transport": "stream-json", "usage_model_ref": "eval-model"}}
+				f.reply = []string{`{"type":"result","is_error":false,"subtype":"success","result":"answer"}`}
+				engines = append(engines, f)
+				return f
+			}
+			active.Store(fresh())
+			var launches, gates atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") != "Bearer tok" || r.Header.Get("X-Olivares-Tenant") != "t1" {
+					t.Error("missing auth")
+				}
+				write := func(v any) { w.Header().Set("Content-Type", "application/json"); _ = json.NewEncoder(w).Encode(v) }
+				switch {
+				case r.URL.Path == "/v1/m/evals/suites/s1":
+					write(map[string]any{"pass_threshold": 1, "suite_version": 1})
+				case r.URL.Path == "/v1/m/evals/suites/s1/cases":
+					items := []map[string]any{}
+					for i := 0; i < 5; i++ {
+						items = append(items, map[string]any{"case_key": fmt.Sprint(i), "input": "say answer", "suite_version": 1})
+					}
+					write(map[string]any{"items": items})
+				case r.URL.Path == "/v1/m/evals/gate":
+					var req struct {
+						Outputs  map[string]string `json:"outputs"`
+						ModelRef string            `json:"model_ref"`
+					}
+					if json.NewDecoder(r.Body).Decode(&req) != nil || len(req.Outputs) != 5 || req.ModelRef != "eval-model" {
+						t.Error("not five outputs")
+					}
+					for _, out := range req.Outputs {
+						if out != "answer" {
+							t.Errorf("wrong collected reply %q", out)
+						}
+					}
+					trial := gates.Add(1)
+					scores := []map[string]any{}
+					for i := 0; i < 5; i++ {
+						pass := !(broken && trial == 2 && i == 0)
+						outcome := "pass"
+						if !pass {
+							outcome = "fail"
+						}
+						scores = append(scores, map[string]any{"case_key": fmt.Sprint(i), "passed": pass, "outcome": outcome})
+					}
+					write(map[string]any{"id": fmt.Sprint(trial), "effective_verdict": "pass", "run": map[string]any{"suite_version": 1, "cases": scores}})
+				case r.Method == "POST" && r.URL.Path == sessionRunsPath:
+					launches.Add(1)
+					f := fresh()
+					active.Store(f)
+					f.serve(w, r)
+				case strings.HasSuffix(r.URL.Path, "/diff"):
+					write(map[string]any{"base": "base-commit"})
+				default:
+					active.Load().serve(w, r)
+				}
+			}))
+			defer srv.Close()
+			cmd := newRootCmd()
+			var out, stderr bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&stderr)
+			cmd.SetArgs([]string{"evals", "run", t.TempDir(), "--suite", "s1", "--template", "t1", "--trials", "3", "--server", srv.URL, "--token", "tok", "--tenant", "t1", "-o", "json"})
+			err := cmd.Execute()
+			if broken && !errors.Is(err, errGateFailed) || !broken && err != nil {
+				t.Fatalf("err=%v out=%s stderr=%s", err, out.String(), stderr.String())
+			}
+			var result struct {
+				Pass1    float64            `json:"pass_at_1"`
+				PassK    float64            `json:"pass_at_k"`
+				Reliable float64            `json:"pass_pow_k"`
+				CI       map[string]float64 `json:"pass_pow_k_ci"`
+			}
+			if json.Unmarshal(out.Bytes(), &result) != nil {
+				t.Fatalf("bad JSON: %s", out.String())
+			}
+			want := 1.0
+			if broken {
+				want = .8
+			}
+			if result.Pass1 != 1 || result.PassK != 1 || result.Reliable != want || len(result.CI) != 2 || launches.Load() != 15 || gates.Load() != 3 {
+				t.Fatalf("result=%+v launches=%d gates=%d", result, launches.Load(), gates.Load())
+			}
+			for _, f := range engines {
+				for _, post := range f.postsTo(sessionRunsPath) {
+					if post["template_id"] != "t1" || post["worktree"] != true {
+						t.Errorf("ungoverned/shared launch: %v", post)
+					}
+				}
+			}
+		})
 	}
 }

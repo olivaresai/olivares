@@ -25,8 +25,10 @@ func newPolicyCmd() *cobra.Command {
 	root := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "policy",
-		Short:       "Reconstruct historical policy decisions from the evidence ledger",
-		Long: "policy answers historical authorization questions from the access-evidence\n" +
+		Short:       "Manage governance policies and reconstruct historical decisions",
+		Long: "Manage governance policy documents through the engine with ls, get, create, update\n" +
+			"and rm. The engine validates the linked policy kind and controls authorization.\n\n" +
+			"policy replay answers historical authorization questions from the access-evidence\n" +
 			"ledger: the recorded policy version and inputs, never the live PDP. When the\n" +
 			"record is not enough it prints COULD NOT RECONSTRUCT and names the missing fact.",
 		Example: "  olivares policy replay --at 2026-09-15T12:00:00Z --principal agent-7 --resource public.customers --action SELECT --resource-kind postgres.table\n" +
@@ -34,6 +36,7 @@ func newPolicyCmd() *cobra.Command {
 	}
 	flags.addPersistent(root)
 	root.AddCommand(newPolicyReplayCmd(flags))
+	addPolicyAuthoringCommands(root, flags)
 	return root
 }
 

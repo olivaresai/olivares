@@ -126,6 +126,8 @@ var routeClassifications = map[string]routeClassification{
 		reason: "SAML 2.0 metadata document for the engine's service-provider role; the SAML metadata schema is the contract."},
 	"GET /v1/auth/federation/callback":  federationCallbackClass,
 	"POST /v1/auth/federation/callback": federationCallbackClass,
+	"POST /v1/auth/federation/oidc/backchannel-logout": {class: classProtocol,
+		reason: "OpenID Connect Back-Channel Logout 1.0 backchannel_logout_uri: the OpenID Provider posts a signed logout_token (form field logout_token) and the engine ends the sessions of the sid, or of the sub when no sid is given; 200 on success, 400 for a token that fails verification or is replayed, 501 when SSO is not configured. ?tenant=&idp= name a tenant's or a non-default provider (each provider's backchannel_logout_uri in its SSO configuration carries them); a malformed tenant answers 400. The specification's request and response are the contract."},
 
 	// ── MCP transports (mounted only when the gateway runtime is wired) ────
 	"* /session/mcp": {class: classProtocol, optional: true,

@@ -7,9 +7,11 @@ from __future__ import annotations
 import argparse
 import copy
 import datetime
+import gzip
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import subprocess
@@ -24,6 +26,38 @@ def valid_version(version: str, snapshot: bool) -> bool:
     # carry a commit suffix. Production never admits that suffix.
     shape = r"[0-9]+\.[0-9]+(?:-SNAPSHOT-[A-Za-z0-9]+)?" if snapshot else r"[0-9]+\.[0-9]+"
     return bool(re.fullmatch(shape, version))
+
+
+# Debian's zsh reads vendor-completions; Fedora/RHEL and Alpine read site-functions.
+COMPLETIONS = (('bash', None, '/usr/share/bash-completion/completions/olivares'),
+               ('fish', None, '/usr/share/fish/vendor_completions.d/olivares.fish'),
+               ('zsh', 'deb', '/usr/share/zsh/vendor-completions/_olivares'),
+               ('zsh', 'rpm', '/usr/share/zsh/site-functions/_olivares'),
+               ('zsh', 'apk', '/usr/share/zsh/site-functions/_olivares'))
+
+
+def documentation(engine: Path, stage: Path, epoch: int, stamp: str) -> list[dict]:
+    """Man pages and completions written by the release binary itself, as nFPM contents."""
+    env = dict(os.environ, SOURCE_DATE_EPOCH=str(epoch))
+    man = stage / 'man'
+    man.mkdir()
+    subprocess.run([str(engine), '__man', str(man)], env=env, check=True)
+    if not (man / 'olivares.1').is_file():
+        raise ValueError('the release binary wrote no olivares.1 man page')
+    contents = []
+    for page in sorted(man.glob('*.1')):
+        packed = man / (page.name + '.gz')
+        packed.write_bytes(gzip.compress(page.read_bytes(), mtime=0))
+        contents.append({'src': str(packed), 'dst': f'/usr/share/man/man1/{packed.name}'})
+    for shell, packager, dst in COMPLETIONS:
+        script = stage / f'completion.{shell}'
+        script.write_bytes(subprocess.check_output([str(engine), 'completion', shell], env=env))
+        if script.stat().st_size == 0:
+            raise ValueError(f'the release binary wrote an empty {shell} completion')
+        contents.append({'src': str(script), 'dst': dst, **({'packager': packager} if packager else {})})
+    for content in contents:
+        content['file_info'] = {'mode': 0o644, 'mtime': stamp}
+    return contents
 
 
 def build(root: Path, dist: Path, version: str, epoch: int, recipe: Path, snapshot: bool) -> list[Path]:
@@ -72,6 +106,11 @@ def build(root: Path, dist: Path, version: str, epoch: int, recipe: Path, snapsh
                 binary.chmod(0o755)
                 os.utime(binary, (epoch, epoch))
                 binaries[arch] = binary
+        # Pages and completions do not depend on the architecture: the binary this host runs writes them.
+        host = {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(platform.machine())
+        if host is None:
+            raise ValueError('package on a linux amd64 or arm64 host: it runs the release binary for the man pages')
+        docs = documentation(binaries[host], stage, epoch, stamp)
         for spec in specs:
             formats = spec['formats']
             if formats not in (['deb', 'rpm', 'apk'], ['archlinux']):
@@ -93,6 +132,8 @@ def build(root: Path, dist: Path, version: str, epoch: int, recipe: Path, snapsh
                         content['src'] = str(binaries[arch])
                 config['contents'].append({'src': str(binaries[arch]), 'dst': f'{bindir}/olivares',
                                            'file_info': {'mode': 0o755, 'mtime': stamp}})
+                if formats == ['deb', 'rpm', 'apk']:
+                    config['contents'].extend(docs)
                 config_file = stage / f'config-{arch}.json'
                 config_file.write_text(json.dumps(config, indent=2) + '\n')
                 for fmt in formats:

@@ -248,3 +248,32 @@ func TestReleaseFailureWithoutIntentIsLogged(t *testing.T) {
 	_ = store.ErrConflict
 	_ = sync.Mutex{}
 }
+
+// #3416: an intent whose stored effect this module does not know is refused
+// on reconcile, never asked as the empty permission.
+func TestReconcileRefusesUnknownEffect(t *testing.T) {
+	h := newHarness(t)
+	h.m.opts.DispatchTimeout = 50 * time.Millisecond
+	h.git.hold = make(chan struct{})
+	defer close(h.git.hold)
+	r, _ := h.push(h.user(), "op-ue", "refs/heads/olivares/ue", "")
+	if r.Intent.State != StateUncertain {
+		t.Fatalf("setup: %+v", r.Intent)
+	}
+	ctx := context.Background()
+	if err := h.m.data.Mutate(ctx, h.tenant, func(sc store.Scope) error {
+		cur, err := loadIntent(ctx, sc, r.Intent.ID)
+		if err != nil {
+			return err
+		}
+		cur.Effect = "unknown_effect"
+		_, err = update(ctx, sc, cur)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rc, err := h.m.Reconcile(ctx, h.user(), r.Intent.ID)
+	if err == nil {
+		t.Fatalf("reconcile of an unknown effect answered %s, want a refusal", rc.Answer)
+	}
+}

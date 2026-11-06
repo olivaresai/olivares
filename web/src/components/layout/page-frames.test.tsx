@@ -79,7 +79,7 @@ describe('the frames themselves', () => {
     // 16 px of py-4 above the title made the first work row 16 px later than the
     // budget (header 48 + title 24 + composer 64 = 136) before anything else sat
     // on the page. Other document routes keep the padded frame.
-    const home = render(<RouteFrame pathname="/">home</RouteFrame>)
+    const home = render(<RouteFrame pathname="/now">home</RouteFrame>)
     const homeBody = home.container.querySelector(
       '[data-slot="console-page-body"]',
     ) as HTMLElement

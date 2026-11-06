@@ -6,6 +6,12 @@
 
 package main
 
+import "os"
+
+// infoOwner reports no owner where files carry no numeric uid: nothing is then trusted as
+// the account's own.
+func infoOwner(os.FileInfo) (uid int, known bool) { return 0, false }
+
 // fileOwner reports no owner where files carry no numeric uid. The release builds are
 // linux and darwin only (.goreleaser.yaml), both unix; here first-boot mints a
 // replacement setup token as itself, as it always has.

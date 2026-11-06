@@ -5,6 +5,7 @@
 // The setup wizard is three steps — install a tool, sign it in, start a session —
 // and nothing in it is blocked behind a step-up or demands optional work.
 import { FEATURE_EXTENSIONS } from '@/features/extensions'
+import { preferenceStorage } from '@/lib/preference-storage'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   cleanup,
@@ -19,24 +20,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const business = FEATURE_EXTENSIONS.some((view) => view.id === 'finops')
 const auth = vi.hoisted(() => ({ admin: true }))
+import { fakeRouter } from '@/test/fake-router'
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ can: () => auth.admin, isSuperadmin: auth.admin }),
 }))
 const navigate = vi.hoisted(() => vi.fn())
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useNavigate: () => navigate,
-  useRouterState: () => '',
   // The policy page's Tabs strip consults useRouter; there is no RouterProvider here.
   useRouter: () => undefined,
-  Link: ({ to, children }: { to: string; children: ReactNode }) => (
-    <a href={to}>{children}</a>
-  ),
 }))
 // The policy page's panels are stubbed: what is under test is which tab the wizard's link
 // opens and whether that tab is gated, not what an authoring panel renders.
-vi.mock('@/features/recordings/recording-notice', () => ({
-  RecordingNotice: () => null,
-}))
 vi.mock('@/features/claude-policy/policy-authoring-panel', () => ({
   PolicyAuthoringPanel: ({ surface }: { surface: string }) => (
     <div>PolicyAuthoringPanel {surface} mounted</div>
@@ -79,7 +76,10 @@ vi.mock('@/features/first-hour/api', async (orig) => {
 import { agentOpsApi } from '@/features/agentops/api'
 import type { ResolveProviderSource } from '@/features/agentops/types'
 import { signInApi, type SessionTool } from '@/features/first-hour/api'
-import { readinessOf } from '@/features/first-hour/readiness.fixture'
+import {
+  readinessOf,
+  chooseTool,
+} from '@/features/first-hour/readiness.fixture'
 import { NewSessionDialog } from '@/features/first-hour/first-hour'
 import ClaudePolicyView from '@/features/claude-policy/claude-policy-view'
 import { useModulesStore } from '@/stores/modules'
@@ -104,7 +104,7 @@ function wrap(ui: ReactNode) {
 }
 
 beforeEach(() => {
-  localStorage.clear()
+  preferenceStorage.clear()
   useModulesStore.getState().setOff([])
   auth.admin = true
   for (const s of Object.values(status)) {
@@ -236,8 +236,7 @@ describe('the setup wizard', () => {
       .getAttribute('href')
     cleanup()
 
-    const was = window.location.href
-    window.history.replaceState({}, '', href)
+    fakeRouter.reset(href ?? '/')
     try {
       const { container } = wrap(<ClaudePolicyView />)
       expect(
@@ -245,7 +244,7 @@ describe('the setup wizard', () => {
       ).toBeNull()
       expect(screen.getByText(/PolicyAuthoringPanel .* mounted/)).toBeVisible()
     } finally {
-      window.history.replaceState({}, '', was)
+      fakeRouter.reset()
     }
   })
 
@@ -459,12 +458,9 @@ describe('the setup wizard', () => {
     ).toBeInTheDocument()
     // The folder is filled in, not typed (a fresh install: a new folder of its own).
     expect(
-      await screen.findByText('A new folder for this session'),
-    ).toBeInTheDocument()
+      await screen.findByRole('combobox', { name: 'Folder' }),
+    ).toHaveTextContent('A new folder for this session')
     expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
-    expect(
-      screen.getByRole('button', { name: 'Change folder' }),
-    ).toBeInTheDocument()
     expect(
       screen.getByLabelText('First message (optional)'),
     ).toBeInTheDocument()
@@ -490,11 +486,11 @@ describe('the setup wizard', () => {
     const user = userEvent.setup()
     wrap(<OnboardingView />)
     await user.click(screen.getByRole('button', { name: 'Dismiss' }))
-    expect(localStorage.getItem(DISMISS_KEY)).toBe('true')
+    expect(preferenceStorage.getItem(DISMISS_KEY)).toBe('true')
     await user.click(
       screen.getByRole('button', { name: 'Open the setup guide' }),
     )
-    expect(localStorage.getItem(DISMISS_KEY)).toBeNull()
+    expect(preferenceStorage.getItem(DISMISS_KEY)).toBeNull()
     expect(screen.getByText('Install an agent tool')).toBeInTheDocument()
   })
 })
@@ -533,23 +529,22 @@ describe('the New session dialog: tool and preset', () => {
     const user = userEvent.setup()
     status.claude = { driver: 'claude', installed: true, signed_in: true }
     wrap(<NewSessionDialog open onOpenChange={() => {}} />)
-    const tools = await screen.findByRole('radiogroup', { name: 'Tool' })
-    expect(
-      [...tools.querySelectorAll('[role="radio"]')].map((r) => r.textContent),
-    ).toEqual([
+    const tool = await screen.findByRole('combobox', { name: 'Tool' })
+    expect(tool).toHaveTextContent('Claude Code')
+    await user.click(tool)
+    const options = await screen.findAllByRole('option')
+    expect(options).toHaveLength(6)
+    ;[
       'Claude Code',
       'Codex',
       'Grok Build',
       'OpenCode',
       'Gemini CLI',
       'Cursor CLI',
-    ])
-    expect(screen.getByRole('radio', { name: 'Claude Code' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
+    ].forEach((name, i) => expect(options[i]).toHaveAccessibleName(name))
+    await user.keyboard('{Escape}')
     expect(screen.queryByText(/nothing to run on yet/)).toBeNull()
-    await user.click(screen.getByRole('radio', { name: 'Grok Build' }))
+    await chooseTool(user, 'Grok Build')
     expect(screen.getAllByText(/nothing to run on yet/)).toHaveLength(1)
     expect(
       screen.getByText('Grok Build has nothing to run on yet.'),
@@ -585,9 +580,11 @@ describe('the New session dialog: tool and preset', () => {
     )
     launch.launchSession.mockResolvedValue({ run_ref: 'run_g' })
     wrap(<NewSessionDialog open onOpenChange={() => {}} />)
-    await user.click(await screen.findByRole('radio', { name: 'Grok Build' }))
-    await user.click(screen.getByRole('button', { name: 'More options' }))
-    await user.click(screen.getByRole('radio', { name: 'Read only' }))
+    await chooseTool(user, 'Grok Build')
+    await user.click(
+      screen.getByRole('combobox', { name: 'What the agent may do' }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Read only' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
     expect(launch.launchSession).toHaveBeenCalledWith(
       expect.objectContaining({

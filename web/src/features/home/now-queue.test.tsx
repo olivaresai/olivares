@@ -17,11 +17,13 @@ import {
 import { governanceApi } from '@/features/governance/api'
 import type { ApprovalDTO } from '@/features/governance/types'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
+import { AccountMarksContext } from '@/features/agent-tools/account-marks'
 import type { LiveDTO } from '@/features/sessions/types'
 import { sessionsApi } from '@/features/sessions/api'
 import * as communications from '@/features/communications/api'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { FLAG_ARM_MS, NowQueue, useFlaggedRequest } from './now-queue'
+import { FLAG_ARM_MS } from '@/features/governance/approval-preview'
+import { NowQueue, useFlaggedRequest } from './now-queue'
 import './i18n'
 
 const auth = vi.hoisted(() => ({
@@ -160,6 +162,33 @@ describe('NowQueue — what needs a person', () => {
     // It reads no sessions of its own: the page comes from Now.
     expect(spy).not.toHaveBeenCalled()
     expectNoRawI18nKeys(document.body)
+  })
+
+  it('wears the account a waiting session runs under, as a dot and a short label', () => {
+    renderIntel(
+      <AccountMarksContext.Provider
+        value={
+          new Map([['ppf_research', { label: 'Research', accent: 'red' }]])
+        }
+      >
+        <Queue
+          state="ready"
+          sessions={[
+            live({
+              session_ref: 's-silent',
+              live_ref: 'l2',
+              attribution: 'observed',
+              provider_profile_ref: 'ppf_research',
+              cc_state: 'silent_evasion',
+              goal: 'gone quiet',
+            }),
+          ]}
+        />
+      </AccountMarksContext.Provider>,
+    )
+    const badge = screen.getByTestId('account-badge')
+    expect(badge).toHaveTextContent('Research')
+    expect(badge.querySelector('[data-provider-accent="red"]')).not.toBeNull()
   })
 
   it('says so when nothing waits, instead of drawing an empty list', () => {
@@ -401,6 +430,8 @@ describe('NowQueue — what needs a person', () => {
       <Queue state="ready" sessions={[]} approvals={[MIGRATION, NETWORK]} />,
     )
     const flagged = screen.getByTestId('now-flagged-request')
+    // Approve once is an accent button: the card is a trust surface.
+    expect(flagged.closest('[data-trust-chrome]')).not.toBeNull()
     expect(flagged).toHaveTextContent('pnpm db:migrate --env payments-staging')
     expect(
       await within(flagged).findByText(

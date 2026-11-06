@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Boxes, RefreshCw } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import {
@@ -30,6 +32,8 @@ import './i18n'
 
 const ALL = '__all__'
 
+const INVENTORY_TABS = ['catalog', 'topology', 'coverage'] as const
+
 /**
  * InventoryView — the estate catalog, READ TENANT-WIDE.
  *
@@ -42,6 +46,7 @@ const ALL = '__all__'
  */
 export function InventoryView() {
   const { t } = useTranslation('inventory')
+  const [tab, setTab] = useTabParam(INVENTORY_TABS)
   const { activeTenant } = useAuth()
   const [kind, setKind] = useState<string>(ALL)
   const [status, setStatus] = useState<string>(ALL)
@@ -80,17 +85,29 @@ export function InventoryView() {
         description={t('subtitle')}
         notices={<CaveatNotice tone="info">{t('scope.note')}</CaveatNotice>}
         actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void summary.refetch()}
-            disabled={summary.isFetching}
-          >
-            <RefreshCw
-              className={cn('size-3.5', summary.isFetching && 'animate-spin')}
-            />
-            {t('refresh')}
-          </Button>
+          <>
+            {/* MCP servers are added and governed in one place; this page only lists
+                what the connectors found. */}
+            <Button variant="ghost" size="sm" asChild>
+              <Link
+                to={'/capabilities' as never}
+                search={{ tab: 'servers' } as never}
+              >
+                {t('mcpPointer')}
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void summary.refetch()}
+              disabled={summary.isFetching}
+            >
+              <RefreshCw
+                className={cn('size-3.5', summary.isFetching && 'animate-spin')}
+              />
+              {t('refresh')}
+            </Button>
+          </>
         }
       />
 
@@ -104,7 +121,7 @@ export function InventoryView() {
         {(data) => <SummaryTiles data={data} />}
       </AsyncSection>
 
-      <Tabs defaultValue="catalog" className="min-h-0 flex-1">
+      <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <TabsList>
             <TabsTrigger value="catalog">{t('tabs.catalog')}</TabsTrigger>

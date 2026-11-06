@@ -9,24 +9,12 @@
     "unavailableDescription": "Der Sitzungs-Lesevorgang hat nicht geantwortet. Die Kennzahlen oben sind davon nicht betroffen.",
     "untitled": "Unbenannte Sitzung"
   },
-  "live": {
-    "title": "Gerade aktiv"
-  },
   "empty": {
     "title": "Noch nichts anzuzeigen",
     "description": "Ihre Rolle gewährt keinen Lesezugriff auf ein Bestandsmodul. Bitten Sie einen Administrator um eine Lese-Gewährung, um die Übersicht zu sehen."
   },
-  "start": {
-    "ready": "{{tool}} ist bereit.",
-    "signIn": "Melden Sie {{tool}} an, um eine Sitzung zu starten.",
-    "signInAction": "Anmelden",
-    "install": "Installieren Sie Claude Code oder Codex, um eine Sitzung zu starten.",
-    "installAction": "Werkzeug einrichten",
-    "newSession": "Neue Sitzung"
-  },
   "swimlane": {
     "title": "Letzte Stunde",
-    "subtitle": "{{from}} bis {{to}}. Jeder Balken ist ein Lauf, kräftiger, wo er mehr Werkzeug-Aufrufe machte.",
     "lanes": "Sitzungen der letzten Stunde",
     "now": "Jetzt {{at}}",
     "range": "{{from}} bis {{to}}",
@@ -62,38 +50,23 @@
     "waiting": "Wartet auf Genehmigung",
     "needsYou": "Braucht Sie",
     "idle": "Untätig",
-    "approvalsUnread": "Die Genehmigungen konnten nicht gelesen werden, daher werden Wartezeiten auf Genehmigungen nicht gezeichnet."
+    "approvalsUnread": "Die Genehmigungen sind noch nicht gelesen oder konnten nicht gelesen werden, daher werden Wartezeiten auf Genehmigungen nicht gezeichnet.",
+    "approvalsPartial": "Nur ein Teil der Genehmigungen ist gelesen, daher werden manche Wartezeiten auf Genehmigungen möglicherweise nicht gezeichnet.",
+    "step": {
+      "Bash": "Führt {{what}} aus",
+      "Read": "Liest {{what}}",
+      "Edit": "Bearbeitet {{what}}",
+      "Write": "Schreibt {{what}}",
+      "Grep": "Sucht {{what}}",
+      "Glob": "Sucht Dateien {{what}}",
+      "WebFetch": "Liest {{what}}",
+      "WebSearch": "Sucht im Web nach {{what}}",
+      "Task": "Arbeitet mit einem Agenten",
+      "Agent": "Arbeitet mit einem Agenten"
+    }
   },
-  "summary": {
-    "heading": "Zusammenfassung",
-    "nothingRunning": "Es läuft nichts",
-    "running_one": "{{count}} Sitzung offen",
-    "running_other": "{{count}} Sitzungen offen",
-    "runningFor_one": "{{count}} Sitzung offen für {{people}}",
-    "runningFor_other": "{{count}} Sitzungen offen für {{people}}",
-    "runningMore": "{{n}}+ Sitzungen offen",
-    "people_one": "{{count}} Person",
-    "people_other": "{{count}} Personen",
-    "today": "{{amount}} heute",
-    "todayFloor": "mindestens {{amount}} heute",
-    "needs_one": "{{count}} wartet auf Sie",
-    "needs_other": "{{count}} warten auf Sie",
-    "needsMore": "{{n}}+ warten auf Sie",
-    "yesterday": "Gestern {{amount}}",
-    "unpriced_one": "{{count}} ohne gemeldete Kosten",
-    "unpriced_other": "{{count}} ohne gemeldete Kosten",
-    "month": "{{spent}} von {{limit}} in diesem Monat",
-    "monthFloor": "mindestens {{spent}} von {{limit}} in diesem Monat",
-    "monthLabel": "Ausgaben in diesem Monat"
-  },
-  "state": {
-    "pendingIdle": "Abfrage nicht gestartet — öffnen, um zu laden",
-    "pendingPaused": "Abfrage pausiert — wartet auf Fortsetzung"
-  },
-  "proof": {
-    "verified": "Kette geprüft um {{time}}",
-    "entries_one": "{{n}} Eintrag",
-    "entries_other": "{{n}} Einträge",
-    "broken": "Kette gebrochen: Ledger öffnen"
+  "overview": {
+    "running": "Läuft",
+    "recent": "Zuletzt"
   }
 }

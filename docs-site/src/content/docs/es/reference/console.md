@@ -15,22 +15,22 @@ Esta página es el mapa de la consola. Enumera **todas las rutas que monta la ap
 no una selección ni las que alguien recordó documentar, junto al permiso que necesita un
 principal para entrar y el lugar donde puede leer más.
 
-La consola tiene **una sola navegación: la barra lateral izquierda**. Enumera los lugares
-en cuatro grupos —**Trabajo** (Inicio, Sesiones, Archivos y espacios, Trabajo y
-comunicaciones), **Herramientas** (Herramientas de IA, Modelos, MCP y skills, Fuentes),
-**Control** (Reglas y aprobaciones, Uso y coste, Actividad y auditoría, Mapa de acceso) y
-**Administración** (Personas y grupos, Seguridad, Operaciones, Licencia)— con Ajustes al
-final. Cada pantalla está en un lugar, y la fila de enlaces sobre una pantalla enumera las
-demás pantallas de ese lugar. Un lugar aparece solo cuando tus permisos permiten al menos
-una de sus pantallas, y una pantalla Business solo en la edición Business. La barra
-lateral se pliega a sus iconos y vuelve a abrirse; en una pantalla estrecha, la misma
-barra se abre como un panel desde el botón de menú. La barra superior contiene el título
-de la página, la búsqueda (⌘K o Ctrl+K), las notificaciones y el menú de la cuenta. La
-paleta de comandos busca las mismas pantallas con los mismos permisos. Las antiguas
-direcciones de directorio de área (`/areas/…`) abren el lugar que ahora contiene sus
-pantallas y conservan la consulta y el fragmento.
+La consola tiene **una sola navegación: la barra lateral izquierda**. Enumera **Sesiones**,
+**Archivos** y **Herramientas**, luego **Más**, que abre debajo **Resumen**, **Reglas**,
+**Uso**, **Auditoría**, **Personas**, **Seguridad** y **Operaciones**, con Ajustes al final;
+la edición y su licencia son una sección de Ajustes. Más empieza cerrado, y un lugar bajo él
+sigue visible mientras estás en él o mientras algo te espera allí (Reglas con una aprobación
+pendiente). Cada pantalla está en un lugar, y la fila de enlaces sobre una pantalla enumera
+las demás pantallas de ese lugar. Un lugar aparece solo cuando tus permisos permiten al
+menos una de sus pantallas, y una pantalla Business solo en la edición Business. La barra
+lateral se pliega a sus iconos y vuelve a abrirse; en una pantalla estrecha, la misma barra
+se abre como un panel desde el botón de menú. La barra superior contiene el título de la
+página, la búsqueda (⌘K o Ctrl+K), las notificaciones y el menú de la cuenta. La paleta de
+comandos busca las mismas pantallas con los mismos permisos. Las antiguas direcciones de
+directorio de área (`/areas/…`) abren el lugar que ahora contiene sus pantallas y conservan
+la consulta y el fragmento.
 
-Una instalación nueva muestra solo el primer trabajo: Inicio, Sesiones, Herramientas de IA,
+Una instalación nueva muestra solo el primer trabajo: Resumen, Sesiones, Herramientas de IA,
 Aprobaciones, el asistente de configuración y Ajustes. Cualquier otra
 pantalla es allí una vista previa: su dirección, su API y su CLI siguen funcionando, y la
 navegación, la paleta de comandos y los atajos no la muestran. Una instalación que ya
@@ -43,7 +43,7 @@ el censo append-only que `registry.route-conservation.test.ts` coteja con el rou
 por lo que ninguna pantalla puede añadirse, moverse ni perderse sin que esta página cambie con
 ella. El nombre y la descripción de una línea de cada pantalla son **las propias cadenas de la
 consola**, tomadas del mismo catálogo de traducción que renderiza la consola: lo que lees
-aquí es lo que ves en el producto. Las tablas siguientes agrupan esas filas por área, después de Inicio (la vista general) y
+aquí es lo que ves en el producto. Las tablas siguientes agrupan esas filas por área, después de Resumen y
 antes de inicio de sesión, configuración y cuenta. Las nueve antiguas direcciones de directorio de área
 aparecen junto a las rutas montadas fuera del registro de funciones; cada una redirige ahora a
 su lugar.
@@ -75,21 +75,21 @@ Seguridad e identidad, Entrega, Supervisión, y Sistema y ajustes.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La consola publica **66 rutas**. Todas figuran en las tablas siguientes, con el permiso que
+La consola publica **68 rutas**. Todas figuran en las tablas siguientes, con el permiso que
 requieren y la página de referencia que abre su enlace de ayuda dentro del producto.
 
-### Inicio
+### Resumen
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
-| Inicio | `/` | Visión general del estado y la salud del estate | cualquier usuario autenticado | [inicio de la documentación](/es/) |
+| Resumen | `/now` | Visión general del estado y la salud del estate | cualquier usuario autenticado | [inicio de la documentación](/es/) |
 
 ### Infraestructura
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
-| Entorno | `/estate` | Inspecciona los recursos configurados y sus relaciones, incluidas las dependencias de los elementos de trabajo. | `sessions:run:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
-| Inventario | `/inventory` | Descubre y cataloga los agentes, servidores MCP y modelos que los conectores observaron. | `inventory:catalog:read` | [reference/modules/i-inventory](/es/reference/modules/i-inventory/) |
+| Recursos configurados | `/estate` | Lo que has configurado y cómo dependen entre sí sus partes, incluidos los elementos de trabajo. | `sessions:run:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Recursos descubiertos | `/inventory` | Agentes, servidores MCP y modelos que han observado los conectores, y cuándo se vio cada uno por última vez. | `inventory:catalog:read` | [reference/modules/i-inventory](/es/reference/modules/i-inventory/) |
 | Espacio de trabajo | `/workspace` | Agentes, sesiones, recursos y actividad con scope de un espacio de trabajo | `tenant:read` | [reference/modules/xx-multi-tenancy](/es/reference/modules/xx-multi-tenancy/) |
 
 ### IA
@@ -172,6 +172,7 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Evals | `/evals` | Calidad, evals y regresión | `evals:run:read` | [reference/modules/xii-evals](/es/reference/modules/xii-evals/) |
 | Salud y SLA | `/health` | Disponibilidad y SLA de agentes y MCP | `health:status:read` | [reference/modules/xxii-health](/es/reference/modules/xxii-health/) |
 | Observabilidad | `/observability` | Salud de la ingesta por estándar y exploración de trazas | `health:status:read` | [reference/modules/observability](/es/reference/modules/observability/) |
+| Operaciones | `/operations` | El host, sus discos, las sesiones en vivo y su uso, durante 24 horas, 7 o 30 días. | `sessions:run:read` | [reference/console](/es/reference/console/) |
 | Retención | `/retention` | Cuánto tiempo se conserva cada clase de registro, el barrido que lo aplica y sus certificados sellados | `compliance:retention:read` | [reference/modules/xiii-compliance](/es/reference/modules/xiii-compliance/) |
 | Presupuestos | `/stored-budgets` | Consumo frente a cada límite guardado. La capacidad reservada cuenta para el límite. | `finops:budget:read` | [reference/modules/xi-finops](/es/reference/modules/xi-finops/) |
 | Uso | `/usage` | Los límites oficiales de 5 horas y semanales de cada cuenta, la más cercana primero, y los tokens y el coste de hoy. | `sessions:run:read` | [reference/console](/es/reference/console/) |
@@ -195,6 +196,7 @@ sesión** se sirven antes de que exista una sesión; son las únicas rutas de co
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
+| Página de inicio | `/` | Abre tu página de inicio guardada, o Sesiones si no has guardado ninguna. | cualquier usuario autenticado | — |
 | Aceptar una invitación | `/accept-invite` | Destino de un enlace de invitación enviado por correo: la persona invitada define una contraseña y se une al workspace, sin sesión previa. | **sin inicio de sesión** | — |
 | Iniciar sesión | `/login` | Página de acceso con credenciales y token para una cuenta ya aprovisionada. | **sin inicio de sesión** | — |
 | Vincular un dispositivo | `/pair` | Destino de un enlace de vinculación de dispositivo de un solo uso: el nuevo dispositivo inicia sesión sin una sesión previa. | **sin inicio de sesión** | — |

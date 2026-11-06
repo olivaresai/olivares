@@ -483,11 +483,11 @@ func (m *Module) handleDeleteGuardianRule(w http.ResponseWriter, r *http.Request
 		}
 
 		if len(resolvedRecords) > 0 {
-			policies, err := loadApprovalPolicies(r.Context(), sc)
-			if err != nil {
-				return err
-			}
 			for _, approval := range resolvedRecords {
+				policies, err := m.approvalPolicies(r.Context(), sc, approvalPolicySubject(approval))
+				if err != nil {
+					return err
+				}
 				resolvedApprovals = append(resolvedApprovals, toApprovalDTO(approval, now, liveRiskTier(policies, approval)))
 			}
 		}
@@ -1153,7 +1153,7 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 			}
 			// The live tier, read in this transaction, decides whether an approved
 			// grant still meets its floor, the same rule every other consumer applies.
-			pols, err := loadApprovalPolicies(ctx, sc)
+			pols, err := m.approvalPolicies(ctx, sc, approvalPolicySubject(appr))
 			if err != nil {
 				return err
 			}

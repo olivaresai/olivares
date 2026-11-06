@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Control in the 0.5 map (#3389), in Chromium: Usage & cost is one click from the sidebar
+// Control in the 0.5 map (#3389, Usage in 0.7), in Chromium: Usage is one click from the sidebar
 // and leads with the account nearest its limit; the palette names each page by its place,
 // never by a retired area; Reach keeps graph or table in the address. Each page passes axe,
 // and its frame at 1280 px is kept as the review capture; the new Usage page is also kept
@@ -189,7 +189,7 @@ async function mockApi(page: Page, theme: 'light' | 'dark' = 'light') {
   await page.clock.setFixedTime(NOW)
 }
 
-/** What Usage & cost says on the fixtures: the nearest limit first, then today's figures. */
+/** What Usage says on the fixtures: the nearest limit first, then today's figures. */
 async function expectUsageFigures(page: Page) {
   const accounts = page.getByRole('region', { name: 'Accounts' })
   const rows = accounts.getByRole('listitem')
@@ -217,13 +217,14 @@ async function axeClean(page: Page, where: string) {
 // Today is the browser's local day: UTC, so the fixtures' dates are the day the page counts.
 test.use({ viewport: { width: 1280, height: 800 }, timezoneId: 'UTC' })
 
-test('Usage & cost is one click from the sidebar and leads with the account nearest its limit', async ({
+test('Usage is one click from the sidebar and leads with the account nearest its limit', async ({
   page,
 }, testInfo) => {
   await mockApi(page)
   await page.goto('/')
   const nav = page.getByRole('navigation', { name: 'Main navigation' })
-  await nav.getByRole('link', { name: /^Usage & cost/ }).click()
+  await nav.getByRole('button', { name: 'More', exact: true }).click()
+  await nav.getByRole('link', { name: /^Usage/ }).click()
   await expect(page).toHaveURL(/\/usage$/)
   await expectUsageFigures(page)
   await axeClean(page, '/usage')
@@ -236,7 +237,7 @@ for (const [theme, width] of [
   ['dark', 1280],
   ['light', 390],
 ] as const)
-  test(`Usage & cost in ${theme} at ${width} px says the same figures, axe 0`, async ({
+  test(`Usage in ${theme} at ${width} px says the same figures, axe 0`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 800 })
@@ -263,7 +264,9 @@ test('the palette names each page by its place and offers no retired area', asyn
     .click()
   await page.getByRole('combobox').fill('oversight')
   const usage = page.getByRole('option', { name: /^Usage/ })
-  await expect(usage).toContainText('Control › Usage & cost')
+  // The place alone: no group before it (0.7).
+  await expect(usage).toContainText('Usage')
+  await expect(usage).not.toContainText('›')
   await expect(page.getByRole('option', { name: /^Oversight/ })).toHaveCount(0)
   await page.screenshot({
     path: testInfo.outputPath('palette-oversight-light-1280.png'),

@@ -142,13 +142,19 @@ func (m *Module) sweepIdleAutoStop(ctx context.Context) {
 }
 
 // An unreadable setting is logged once per cause, like a per-run condition, and
-// again only after a read succeeded in between. Empty cause means the read worked.
+// again only after a read succeeded in between. A single missed read (a busy
+// store, a slow disk) heals at the next sweep and costs only that wait, so the
+// warning waits for a second miss in a row. Empty cause means the read worked.
 func (m *Module) noteIdleSettingRead(cause string) {
 	m.mu.Lock()
-	changed := m.rt.idleSettingWarned != cause
-	m.rt.idleSettingWarned = cause
+	persistent := cause != "" && m.rt.idleSettingMissed != ""
+	warn := persistent && m.rt.idleSettingWarned != cause
+	m.rt.idleSettingMissed = cause
+	if cause == "" || warn {
+		m.rt.idleSettingWarned = cause
+	}
 	m.mu.Unlock()
-	if cause != "" && changed {
+	if warn {
 		m.warnf("sessions: idle policy setting could not be read; no sessions reclaimed", "cause", cause)
 	}
 }

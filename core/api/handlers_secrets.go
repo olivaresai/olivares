@@ -116,14 +116,12 @@ func tenantSecretName(name string) bool {
 }
 
 // ownsVaultItem reports whether name is vault/<user-id>/<item> in p's own
-// namespace. Only a signed-in person owns one: a token carries its owner's id but
-// is never that person, neither is a superadmin acting for someone else, and
-// neither is an agent session, which is minted with its launcher's id.
+// namespace. Only a signed-in person owns one (auth.IsVaultOwner).
 func ownsVaultItem(p auth.Principal, name string) bool {
 	// The store trims a name before it writes, so a name with edges would be stored as
 	// another one than the one checked here: only the exact name is an owner's.
 	rest, ok := strings.CutPrefix(name, auth.PersonalVaultPrefix)
-	if !ok || name != strings.TrimSpace(name) || p.Kind != auth.KindUser || p.UserID.IsZero() || p.AgentIdentity != "" || p.SessionIdentity != "" {
+	if !ok || name != strings.TrimSpace(name) || !auth.IsVaultOwner(p) {
 		return false
 	}
 	owner, item, ok := strings.Cut(rest, "/")
@@ -164,14 +162,24 @@ func (s *Server) secretNameInScope(w http.ResponseWriter, r *http.Request, p aut
 		s.badRequest(w, r, "tenant secret names must begin with mcp/, env/, credential/ or vault/")
 		return false
 	}
-	// A vault name is decided by its owner alone; the admin question is for the rest.
-	admin := strings.HasPrefix(name, auth.PersonalVaultPrefix)
-	if !admin {
-		var err error
-		if admin, err = s.isTenantAdmin(r, p, scope); err != nil {
+	// A vault name is decided by its owner, or by the grant at its shared vault; the admin
+	// question is for the rest.
+	if strings.HasPrefix(name, auth.PersonalVaultPrefix) {
+		_, may, err := s.mayUseVaultItem(r.Context(), p, scope, name, auth.TrusteeWrite)
+		if err != nil {
 			s.writeError(w, r, err)
 			return false
 		}
+		if !may {
+			s.writeError(w, r, errForbidden)
+			return false
+		}
+		return true
+	}
+	admin, err := s.isTenantAdmin(r, p, scope)
+	if err != nil {
+		s.writeError(w, r, err)
+		return false
 	}
 	if !tenantSecretVisible(p, name, admin) {
 		s.writeError(w, r, errForbidden)
@@ -195,9 +203,21 @@ func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request, mc Mo
 	// Whether the caller administers the tenant matters only to its mcp/, env/ and credential/ names,
 	// so it is asked when the first one shows up.
 	var tenantAdmin, adminKnown bool
+	vaults := s.newVaultLister(mc.Principal, scope)
 	for _, v := range views {
 		if scope != auth.GlobalSecretScope {
-			if !adminKnown && !strings.HasPrefix(v.Name, auth.PersonalVaultPrefix) {
+			if strings.HasPrefix(v.Name, auth.PersonalVaultPrefix) {
+				visible, verr := vaults.visible(r.Context(), v.Name)
+				if verr != nil {
+					s.writeError(w, r, verr)
+					return
+				}
+				if visible {
+					out.Secrets = append(out.Secrets, toSecretDTO(v))
+				}
+				continue
+			}
+			if !adminKnown {
 				var aerr error
 				if tenantAdmin, aerr = s.isTenantAdmin(r, mc.Principal, scope); aerr != nil {
 					s.writeError(w, r, aerr)
@@ -310,12 +330,13 @@ func newRevealLimiter() *ratelimit.Limiter {
 	}, nil)
 }
 
-// handleRevealSecret returns the plaintext of one personal vault item to its owner:
+// handleRevealSecret returns the plaintext of one vault item to the person it belongs to:
 // the single place the sealed store hands a value to a person. It answers only a
-// signed-in person (a token never passes the step-up), only for an item in their
-// own vault/<user-id>/ namespace of the tenant scope: global, mcp/, env/ and credential/ names,
-// and everyone else's items, stay write-only. Each success is one ledger entry
-// without the value (SecretStore.Reveal), and the response is never cached.
+// signed-in person (a token never passes the step-up), and only for an item of their own
+// vault/<user-id>/ namespace or of a shared vault they hold a read grant at (mayUseVaultItem):
+// global, mcp/, env/ and credential/ names, and everyone else's items, stay write-only. Each
+// success is one ledger entry without the value (SecretStore.Reveal), plus one on the
+// organization's own ledger for a shared vault, and the response is never cached.
 func (s *Server) handleRevealSecret(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	w.Header().Set("Cache-Control", "no-store")
 	p := mc.Principal
@@ -331,7 +352,16 @@ func (s *Server) handleRevealSecret(w http.ResponseWriter, r *http.Request, mc M
 		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
-	if mc.Tenant == auth.GlobalSecretScope || !ownsVaultItem(p, in.Name) {
+	if mc.Tenant == auth.GlobalSecretScope {
+		s.writeError(w, r, errForbidden)
+		return
+	}
+	folder, may, merr := s.mayUseVaultItem(r.Context(), p, mc.Tenant, in.Name, auth.TrusteeRead)
+	if merr != nil {
+		s.writeError(w, r, merr)
+		return
+	}
+	if !may {
 		s.writeError(w, r, errForbidden)
 		return
 	}
@@ -345,14 +375,20 @@ func (s *Server) handleRevealSecret(w http.ResponseWriter, r *http.Request, mc M
 		s.writeError(w, r, err)
 		return
 	}
+	if err := s.recordSharedVaultUse(r.Context(), p, mc.Tenant, folder, "vault.reveal"); err != nil {
+		clear(value)
+		s.writeError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"name": strings.TrimSpace(in.Name), "value": string(value)})
 }
 
-// handleVaultTOTP returns the current authenticator code of one of the caller's own vault
-// items and the seconds it has left. It is guarded exactly like reveal (a signed-in person,
-// the deployment's step-up, the owner of the item, the same per-person budget), and it is
-// one ledger entry (secret.totp) without the code. The seed stays in the store: neither this
-// answer nor a list carries it.
+// handleVaultTOTP returns the current authenticator code of one of the caller's vault items
+// (their own or a shared vault's they may read) and the seconds it has left. It is guarded
+// exactly like reveal (a signed-in person, the deployment's step-up, the same per-person
+// budget), and it is one ledger entry (secret.totp) without the code, plus the organization's
+// own for a shared vault. The seed stays in the store: neither this answer nor a list
+// carries it.
 func (s *Server) handleVaultTOTP(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	w.Header().Set("Cache-Control", "no-store")
 	p := mc.Principal
@@ -368,7 +404,16 @@ func (s *Server) handleVaultTOTP(w http.ResponseWriter, r *http.Request, mc Modu
 		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
-	if mc.Tenant == auth.GlobalSecretScope || !ownsVaultItem(p, in.Name) {
+	if mc.Tenant == auth.GlobalSecretScope {
+		s.writeError(w, r, errForbidden)
+		return
+	}
+	folder, may, merr := s.mayUseVaultItem(r.Context(), p, mc.Tenant, in.Name, auth.TrusteeRead)
+	if merr != nil {
+		s.writeError(w, r, merr)
+		return
+	}
+	if !may {
 		s.writeError(w, r, errForbidden)
 		return
 	}
@@ -379,6 +424,10 @@ func (s *Server) handleVaultTOTP(w http.ResponseWriter, r *http.Request, mc Modu
 	}
 	code, err := svc.VaultTOTP(r.Context(), p, mc.Tenant, in.Name, time.Now())
 	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	if err := s.recordSharedVaultUse(r.Context(), p, mc.Tenant, folder, "vault.totp"); err != nil {
 		s.writeError(w, r, err)
 		return
 	}

@@ -7,6 +7,7 @@
  * engine asks each right of the Authorizer (GET /v1/auth/effective-rights), so the panel
  * only shows the answer; it computes nothing. Admin-only (authz:admin), read-only.
  */
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useMutation } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
@@ -24,12 +25,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import {
   consoleApi,
   type EffectiveRightState,
   type EffectiveRightsRequest,
   type EffectiveRightsResponse,
 } from './api'
+
+const EffectiveRightsExtra = PANEL_EXTENSIONS.effectiveRightsExtra
 
 const STATE_VARIANT: Record<EffectiveRightState, BadgeProps['variant']> = {
   held: 'success',
@@ -201,6 +205,14 @@ export function EffectiveRightsPanel() {
       )}
 
       {read.data && <EffectiveRightsAnswer answer={read.data} />}
+      {read.data && EffectiveRightsExtra ? (
+        <PanelSlot>
+          <EffectiveRightsExtra
+            subjectId={read.data.subject.id}
+            subjectKind={read.data.subject.kind as 'user' | 'token'}
+          />
+        </PanelSlot>
+      ) : null}
     </div>
   )
 }

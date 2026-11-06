@@ -126,6 +126,11 @@ function featuresQueLlaman(oid: string): string[] {
  *  una guarda que solo mirara `has_more` empezaria a acusar a features que SI avisan — un falso
  *  positivo nacido el dia que el arbol mejora. Se acepta cualquiera de las dos formas.
  *
+ *  Y una tercera: LLAMAR a `listaRecortada(…)`, la comprobacion compartida de `has_more` que el
+ *  propio `ListTruncationBadge` usa por dentro. Es la forma de quien dice el recorte con su
+ *  propia frase y no con la insignia —el selector de carpetas de `first-hour`—. Solo cuenta
+ *  una LLAMADA en codigo, no una mencion en un comentario.
+ *
  *  ⚠ Y lo que ninguna de las dos prueba: que el aviso sea ALCANZABLE. Eso solo lo prueba montar la
  *    vista, y es trabajo por pantalla, no de esta celda. Esta guarda dice «lo declara», nunca
  *    «lo enseña».
@@ -134,7 +139,15 @@ function avisaDelRecorte(feature: string): boolean {
   const dir = join(RAIZ_FEATURES, feature)
   return ficherosDeVista(dir).some((v) => {
     const src = readFileSync(v, 'utf8')
-    return src.includes('has_more') || src.includes('ListTruncationBadge')
+    const codigo = src
+      .split('\n')
+      .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+      .join('\n')
+    return (
+      src.includes('has_more') ||
+      src.includes('ListTruncationBadge') ||
+      /\blistaRecortada\(/.test(codigo)
+    )
   })
 }
 

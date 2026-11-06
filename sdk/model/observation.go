@@ -234,6 +234,9 @@ func (CostSample) isObservation()                   {}
 // security connector. It carries a hash of any sensitive detail, never the raw
 // detail itself (docs/SECURITY-HARDENING.md).
 type FindingReport struct {
+	// ObservedPermissionMode carries a tool's observed mode change, when this
+	// finding reports one. Empty means no mode observation; it grants no authority.
+	ObservedPermissionMode string `json:",omitempty"`
 	// Kind classifies the finding (e.g. "guardrail", "redteam", "forensic").
 	Kind string
 	// Severity grades the finding on the shared severity scale.

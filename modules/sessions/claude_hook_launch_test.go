@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConfigureClaudeHookPEPPreservesAccountSettings(t *testing.T) {
@@ -60,10 +62,10 @@ func TestConfigureClaudeHookPEPPreservesAccountSettings(t *testing.T) {
 	}
 	for _, event := range []string{"PreToolUse", "PostToolUse", "PostToolUseFailure"} {
 		groups := cfg.Hooks[event]
-		if len(groups) != 1 || len(groups[0].Hooks) != 1 || groups[0].Hooks[0].Type != "command" || groups[0].Hooks[0].Command != "'/opt/Olivares AI/olivares' claude-hook --server 'http://127.0.0.1:8447/' --timeout 2m0s --hook-event '"+event+"' || exit 2" {
+		if len(groups) != 1 || len(groups[0].Hooks) != 1 || groups[0].Hooks[0].Type != "command" || groups[0].Hooks[0].Command != "'/opt/Olivares AI/olivares' claude-hook --server 'http://127.0.0.1:8447/' --timeout "+ClaudeHookPEPClientTimeout.String()+" --hook-event '"+event+"' || exit 2" {
 			t.Fatalf("%s: %+v", event, groups)
 		}
-		if groups[0].Hooks[0].Timeout != 180 {
+		if groups[0].Hooks[0].Timeout != int(ClaudeHookPEPCommandTimeout/time.Second) {
 			t.Fatalf("vendor timeout must exceed client deadline: %d", groups[0].Hooks[0].Timeout)
 		}
 	}
@@ -111,6 +113,56 @@ func TestConfigureClaudeHookPEPPinsDeadlineRefusalEvent(t *testing.T) {
 		groups := settings.Hooks[event]
 		if len(groups) != 1 || len(groups[0].Hooks) != 1 || !strings.Contains(groups[0].Hooks[0].Command, " --hook-event '"+event+"'") {
 			t.Fatalf("%s invocation cannot render its deadline refusal without stdin: %+v", event, groups)
+		}
+	}
+}
+
+// Claude Code discards a hook that reaches its timeout and lets the tool call
+// through the normal permission flow (https://code.claude.com/docs/en/hooks).
+// The helper's own deadline and the hook timeout must therefore outlast the
+// approval wait, or a person's answer arrives after the vendor gave up.
+func TestConfigureClaudeHookPEPOutlastsTheApprovalWait(t *testing.T) {
+	dataDir := t.TempDir()
+	spec := LaunchSpec{Env: []EnvVar{
+		{Name: "OLIVARES_HOOK_PEP_URL", Value: "http://127.0.0.1:45678/"},
+		{Name: "OLIVARES_HOOK_PEP_TOKEN", Value: "test-launch-bearer"},
+	}}
+	if err := ConfigureClaudeHookPEP(&spec, dataDir, "approval-wait", "/opt/olivares"); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dataDir, "run", "approval-wait", "pep-settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string
+				Timeout int
+			}
+		}
+	}
+	if err := json.Unmarshal(body, &settings); err != nil {
+		t.Fatal(err)
+	}
+	clientFlag := regexp.MustCompile(` --timeout (\S+) `)
+	for _, event := range []string{"PreToolUse", "PostToolUse", "PostToolUseFailure"} {
+		groups := settings.Hooks[event]
+		if len(groups) != 1 || len(groups[0].Hooks) != 1 {
+			t.Fatalf("%s hook coverage changed: %+v", event, groups)
+		}
+		hook := groups[0].Hooks[0]
+		match := clientFlag.FindStringSubmatch(hook.Command)
+		if match == nil {
+			t.Fatalf("%s hook has no client deadline: %s", event, hook.Command)
+		}
+		client, err := time.ParseDuration(match[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		vendor := time.Duration(hook.Timeout) * time.Second
+		if client <= ApprovalWait || vendor <= client {
+			t.Fatalf("%s: approval wait %s, client deadline %s, Claude Code hook timeout %s; each must outlast the one before", event, ApprovalWait, client, vendor)
 		}
 	}
 }

@@ -215,7 +215,7 @@ test.describe('console review captures', () => {
       }) => {
         await prefer(page, framing.theme, demoTenant)
         await signIn(page)
-        await page.goto('/')
+        await page.goto('/now')
         await shellReady(page)
         await composerSettled(page)
         // The next-action row and the recent-work list are two separate reads; the
@@ -279,7 +279,7 @@ test.describe('console review captures', () => {
       }) => {
         await prefer(page, framing.theme, demoTenant)
         await signIn(page)
-        await page.goto('/')
+        await page.goto('/now')
         await shellReady(page)
         await composerSettled(page)
         // `Mod+k` is the declared row (`lib/keybindings/table.ts`), resolved by the
@@ -300,7 +300,7 @@ test.describe('console review captures', () => {
       }) => {
         await prefer(page, framing.theme, demoTenant)
         await signIn(page)
-        await page.goto('/')
+        await page.goto('/now')
         await shellReady(page)
         await composerSettled(page)
         // ARRIVING FROM THE ADDRESS BAR is exactly a fresh document with focus on the

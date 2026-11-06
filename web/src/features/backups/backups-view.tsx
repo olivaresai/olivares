@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { DatabaseBackup, Plus, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -20,8 +21,11 @@ import { PendingRestores } from './pending-restores'
 import { RestoreDialog } from './restore-dialog'
 import './i18n'
 
+const BACKUP_TABS = ['backups', 'schedule'] as const
+
 export function BackupsView() {
   const { t } = useTranslation('backups')
+  const [tab, setTab] = useTabParam(BACKUP_TABS)
   const [triggerOpen, setTriggerOpen] = useState(false)
   const [restoreOpen, setRestoreOpen] = useState(false)
 
@@ -50,7 +54,7 @@ export function BackupsView() {
         }
       />
 
-      <Tabs defaultValue="backups">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="backups">{t('tabs.backups')}</TabsTrigger>
           <TabsTrigger value="schedule">{t('tabs.schedule')}</TabsTrigger>

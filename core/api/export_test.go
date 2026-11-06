@@ -4,7 +4,11 @@
 
 package api
 
-import "google.golang.org/grpc"
+import (
+	"time"
+
+	"google.golang.org/grpc"
+)
 
 // Test-only seams for the black-box api_test package.
 
@@ -40,3 +44,7 @@ func (s *Server) LeaderGateStreamInterceptorForTest() grpc.StreamServerIntercept
 // it to its contract directly. Going through a handler would test one route's plumbing;
 // the property that matters is the MAPPING, which every route and both protocols share.
 func StatusForTest(err error) (int, string) { return statusFor(err) }
+
+// SetStallForTest shortens the gap an API request may leave between two body
+// reads or two reply writes, so the stall guard can be shown in a test.
+func (s *Server) SetStallForTest(d time.Duration) { s.stall = d }

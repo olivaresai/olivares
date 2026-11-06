@@ -12,7 +12,7 @@ const ComplianceView = lazy(() =>
   })),
 )
 
-/** Business only (docs/editions.md): registry.tsx registers these in a Business build, never in Community. */
+/** Business only (docs/editions.md): the Business extension (./extensions) registers these; Community never does. */
 export const VIEWS = [
   {
     order: 510,

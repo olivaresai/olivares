@@ -1,0 +1,114 @@
+{
+  "truncation": {
+    "label": "Carregados {{n}} modelos; há mais",
+    "hint": "Só os modelos carregados estão disponíveis neste catálogo. Um modelo que não apareça aqui pode existir para além desta página."
+  },
+  "title": "Templates",
+  "subtitle": "Instantâneos reutilizáveis de hooks, definições, conectores e políticas para sessões de espaço de trabalho.",
+  "catalog": {
+    "builtin": "Integrado",
+    "version": "v{{version}}",
+    "author": "Por {{author}}",
+    "archived": "Arquivado",
+    "showArchived": "Mostrar arquivados"
+  },
+  "groups": {
+    "yours": "Seus modelos",
+    "builtin": "Modelos integrados ({{n}})",
+    "yoursEmpty": "Nenhum ainda. Um modelo é um ponto de partida reutilizável para novas sessões."
+  },
+  "editor": {
+    "nameLabel": "Nome",
+    "namePlaceholder": "ex.: Sessão de programação segura",
+    "descriptionLabel": "Descrição",
+    "descriptionPlaceholder": "O que configura este modelo?",
+    "sections": {
+      "hooks": "Hooks",
+      "hooksHint": "Comandos executados antes/depois das ferramentas e das sessões.",
+      "settings": "Definições do agente",
+      "settingsHint": "Modo de permissões, nível de esforço, modelo e instruções personalizadas.",
+      "connectors": "Conectores",
+      "connectorsHint": "IDs de conectores a anexar quando este modelo for aplicado.",
+      "policies": "Políticas de governação",
+      "policiesHint": "Modo DLP, limites de duração da sessão, ferramentas permitidas e gravação de E/S.",
+      "secrets": "Segredos",
+      "secretsHint": "Segredos do cofre que as sessões deste modelo recebem como variáveis de ambiente.",
+      "summary": {
+        "hooks_one": "{{count}} hook",
+        "hooks_many": "{{count}} hooks",
+        "hooks_other": "{{count}} hooks",
+        "secrets_one": "{{count}} variável",
+        "secrets_many": "{{count}} variáveis",
+        "secrets_other": "{{count}} variáveis",
+        "connectors_one": "{{count}} conector",
+        "connectors_many": "{{count}} conectores",
+        "connectors_other": "{{count}} conectores",
+        "set_one": "{{count}} definido",
+        "set_many": "{{count}} definidos",
+        "set_other": "{{count}} definidos",
+        "model": "Modelo: {{model}}"
+      }
+    },
+    "hooks": {
+      "preTool": "Antes da ferramenta",
+      "postTool": "Depois da ferramenta",
+      "preSession": "Antes da sessão",
+      "postSession": "Depois da sessão",
+      "command": "Comando",
+      "timeoutMs": "Tempo limite (ms)",
+      "addHook": "Adicionar hook",
+      "removeHook": "Remover"
+    },
+    "settings": {
+      "permissionMode": "Modo de permissões",
+      "effort": "Nível de esforço",
+      "model": "Modelo",
+      "customInstructions": "Instruções personalizadas",
+      "secretEnv": "Segredos como variáveis de ambiente",
+      "secretEnvHint": "VARIABLE=env/secret, separados por vírgulas. As sessões deste modelo leem cada segredo do cofre a partir da sua variável; só quem gere os segredos do tenant as pode iniciar."
+    },
+    "policies": {
+      "dlpMode": "Modo DLP",
+      "maxDuration": "Duração máxima da sessão (minutos)",
+      "allowedTools": "Ferramentas permitidas",
+      "allowedToolsPlaceholder": "ex.: Bash,Read,Edit",
+      "requireTruncateProtection": "Exigir proteção contra truncamento em sessões só de leitura",
+      "truncateProtectionHint": "As sessões só de leitura deste modelo não iniciam em versões mais antigas do kernel que não a consigam impor.",
+      "recordIo": "Gravar E/S",
+      "peersSameTemplate": "As sessões deste modelo podem enviar mensagens entre si"
+    }
+  },
+  "actions": {
+    "create": "Novo modelo",
+    "edit": "Editar",
+    "duplicate": "Duplicar",
+    "archive": "Arquivar",
+    "restore": "Restaurar",
+    "apply": "Aplicar à sessão",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirmArchive": "Arquivar este modelo?",
+    "confirmArchiveHint": "Os modelos arquivados ficam ocultos do catálogo, mas podem ser restaurados.",
+    "confirmApply": "Aplicar o modelo?",
+    "confirmApplyHint": "Isto irá substituir as definições atuais da sessão pelos valores do modelo.",
+    "duplicateName": "Cópia de {{name}}"
+  },
+  "apply": {
+    "success": "Modelo aplicado.",
+    "conflicts_one": "Aplicado com {{count}} conflito.",
+    "conflicts_many": "Aplicado com {{count}} de conflitos.",
+    "conflicts_other": "Aplicado com {{count}} conflitos.",
+    "conflictField": "Campo",
+    "conflictOld": "Valor anterior",
+    "conflictNew": "Novo valor",
+    "unenforceable": "Este modelo não pode ser aplicado: {{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "Falha ao carregar os modelos.",
+    "saveFailed": "Falha ao guardar o modelo.",
+    "applyFailed": "Falha ao aplicar o modelo.",
+    "archiveFailed": "Falha ao arquivar o modelo.",
+    "duplicateFailed": "Falha ao duplicar o modelo."
+  },
+  "notFound": "Modelo não encontrado."
+}

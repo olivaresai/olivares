@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -129,7 +130,7 @@ func chatExecutionUnavailable() *executionProfileHTTPError {
 }
 
 func executionProfileErrorBody(e *executionProfileHTTPError) map[string]any {
-	return map[string]any{"error": map[string]string{"code": e.code, "message": e.message}}
+	return api.ErrorBody(e.code, e.message)
 }
 
 func writeExecutionProfileError(w http.ResponseWriter, e *executionProfileHTTPError) {

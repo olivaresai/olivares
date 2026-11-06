@@ -3,9 +3,6 @@
   "subtitle": "查看 AI 活动的签名记录。",
   "subtitleSystem": "记录跨租户管理操作的系统租户链（只读）。",
   "searchLoaded": "仅筛选已加载的行（客户端）…",
-  "scan": {
-    "incomplete": "已扫描至 seq {{seq}}——非完整账本；点击「加载更多」继续扫描。"
-  },
   "scope": {
     "label": "账本范围",
     "tenant": "租户账本",
@@ -75,6 +72,9 @@
     "actorMember": "成员"
   },
   "empty": {
+    "filteredTitle": "没有匹配的证据",
+    "searching": "目前已搜索的事件中没有匹配项。点击“加载更多”继续搜索。",
+    "noMatches": "没有事件符合这些筛选条件。请尝试更改或移除筛选条件。",
     "title": "暂无证据",
     "description": "此范围下账本为空。受治理的操作会在发生时追加防篡改事件。"
   },
@@ -123,7 +123,7 @@
     "add": "将 {{token}} 加入查询",
     "commands": "搜索与命令",
     "problem": {
-      "key": "{{token}} 不是账本筛选。请使用 person:、action:、kind:、target:、since:、until: 或关键词。",
+      "key": "{{token}} 不是账本筛选。请使用 person:、action:、kind:、target:、tool:、folder:、since:、until: 或关键词。",
       "time": "{{token}} 不是时间。请使用 90m、24h、7d、2w 或 2026-10-20 这样的日期。",
       "person": "没有人匹配 {{token}}。请使用姓名、邮箱或 user:<id>。",
       "several": "{{token}} 匹配多个人。请使用全名、邮箱或 user:<id>。",

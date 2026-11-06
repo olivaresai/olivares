@@ -293,9 +293,12 @@ else bad "split ignores a group's shards (rc=$(rc))"; fi
 # (pr-ci) The union check must run on the pull request that adds a test. It ran only after the
 #     merge until 2026-10-13, so tests added by two pull requests reached main in no shard and
 #     the next public race-full failed. Removing the step has to turn this bench red.
-if grep -qE '^[[:space:]]+run: task lint:race-groups$' "${ROOT}/.github/workflows/pr-ci.yml"; then
-  ok "pr-ci runs the race-groups union check on every pull request"
-else bad "pr-ci does not run task lint:race-groups: a new test could reach main in no race shard"; fi
+# pr-ci runs the shared lint task; require both links to the union check.
+rg_public="$(awk '/^  lint:public:$/{on=1;next} on && /^  [A-Za-z0-9_:-]+:$/{on=0} on' "${ROOT}/Taskfile.yml")"
+if grep -qE '^[[:space:]]+run: task lint:public$' "${ROOT}/.github/workflows/pr-ci.yml" \
+   && printf '%s\n' "${rg_public}" | grep -qE '^[[:space:]]+- task: lint:race-groups$'; then
+  ok "pr-ci runs the race-groups union check through lint:public on every pull request"
+else bad "pr-ci's lint:public -> lint:race-groups wiring failed: a new test could reach main in no race shard"; fi
 
 # main-suite is omitted from the public export. Development runs the union control
 # through lint:pr-fast; keep this bench tied to that existing job and task.

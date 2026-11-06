@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SIDE PANE HAS TABS: Context, Activity (Claude Code and Codex), Changes, Files, then whatever a
-// build registers.
+// THE SIDE PANE HAS TABS: Changes, Files, Terminal, Preview, Details, Activity (Claude Code and
+// Codex), then whatever a build registers.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
@@ -37,7 +37,9 @@ const ops = vi.hoisted(() => ({
   listProfiles: vi.fn(),
   getProfile: vi.fn(),
   getAccount: vi.fn(),
+  listAccounts: vi.fn(),
   runChanges: vi.fn(),
+  changes: vi.fn(),
   gitStatus: vi.fn(),
   previewPorts: vi.fn(),
   activity: vi.fn(),
@@ -198,8 +200,10 @@ beforeEach(() => {
     state: 'active',
   })
   ops.listProfiles.mockResolvedValue({ items: [], has_more: false })
+  ops.changes.mockResolvedValue({ folder: 'main', files: [], truncated: false })
   ops.getProfile.mockResolvedValue(UNNAMED_PROFILE)
   ops.getAccount.mockResolvedValue({ usage: [] })
+  ops.listAccounts.mockResolvedValue({ items: [], has_more: false })
   vi.mocked(sessionsApi.timelineById).mockResolvedValue({
     items: [],
     has_more: false,
@@ -220,11 +224,11 @@ describe('the side pane tabs', () => {
     renderPane()
     await screen.findByTestId('session-context')
     expect(tabs()).toEqual([
-      'Details',
       'Changes',
       'Files',
-      'Preview',
       'Terminal',
+      'Preview',
+      'Details',
     ])
     // Context is the one in front: the scope and the references, not the changes.
     expect(screen.getByTestId('context-details')).toBeInTheDocument()
@@ -239,20 +243,40 @@ describe('the side pane tabs', () => {
     expect(await screen.findByTestId('session-overview')).toBeInTheDocument()
   })
 
+  it('says once what the header and composer already say: tool, model, access and usage wait under Session, and no explainer stands in for an unselected line', async () => {
+    renderPane({
+      panel: 'context',
+      resolution: resolution([
+        { ...RUN, tool_mode: 'plan', model_ref: 'claude-opus-5-5' },
+      ]),
+    })
+    const facts = await screen.findByTestId('session-facts')
+    // The default view: what the conversation does not show.
+    expect(within(facts).getByText('State')).toBeVisible()
+    // The rest is one click away, closed.
+    const more = screen.getByTestId('session-facts-more') as HTMLDetailsElement
+    expect(more.open).toBe(false)
+    expect(within(more).getByText('Model')).not.toBeVisible()
+    // The composer's access chip says the mode; Details does not say it again.
+    expect(screen.queryByTestId('narrative-mode')).toBeNull()
+    // Nothing selected: no paragraph about what selecting would show.
+    expect(screen.queryByText('Selected line')).toBeNull()
+  })
+
   it("shows the same five tabs when a build's extension object has no sessionPanels at all", async () => {
     registered.panels = undefined
     renderPane()
     await screen.findByTestId('session-context')
     expect(tabs()).toEqual([
-      'Details',
       'Changes',
       'Files',
-      'Preview',
       'Terminal',
+      'Preview',
+      'Details',
     ])
   })
 
-  it('shows a registered panel after Files, and renders it for the session on screen', async () => {
+  it('shows a registered panel after the pane’s own, and renders it for the session on screen', async () => {
     const user = userEvent.setup()
     registered.panels = [
       {
@@ -267,11 +291,11 @@ describe('the side pane tabs', () => {
     renderPane()
     await screen.findByTestId('session-context')
     expect(tabs()).toEqual([
-      'Details',
       'Changes',
       'Files',
-      'Preview',
       'Terminal',
+      'Preview',
+      'Details',
       'Files',
     ])
     const radios = screen.getAllByRole('radio')
@@ -296,11 +320,11 @@ describe('the side pane tabs', () => {
     renderPane()
     await screen.findByTestId('session-context')
     expect(tabs()).toEqual([
-      'Details',
       'Changes',
       'Files',
-      'Preview',
       'Terminal',
+      'Preview',
+      'Details',
     ])
   })
 
@@ -372,11 +396,24 @@ describe('the side pane tabs', () => {
     )
   })
 
+  it('keeps the tab bar out of the part that scrolls, and lets the tab fill the height under it', async () => {
+    renderPane({ panel: 'terminal' })
+    const terminal = await screen.findByTestId('terminal-tab')
+    const body = screen.getByTestId('session-pane-body')
+    // The tab is a flex child of a body that fills the pane and scrolls on its own...
+    expect(body).toContainElement(terminal)
+    expect(body).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto')
+    // ...and the bar is not in it, so switching tabs never moves the bar.
+    const bar = document.querySelector('[data-slot="pane-tabs"]')
+    expect(bar).not.toBeNull()
+    expect(body).not.toContainElement(bar as HTMLElement)
+  })
+
   it('offers no Terminal to a person without the right to write the folder', async () => {
     auth.can = (p) => p !== 'sessions:workspace:write'
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Details', 'Changes', 'Files', 'Preview'])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
   })
 
   it('opens the Terminal of the registered worktree, never the original checkout', async () => {
@@ -536,7 +573,7 @@ describe('the side pane tabs', () => {
   })
 
   it.each(['claude', 'codex'])(
-    'offers Activity, after Context, for %s and reads it only once opened',
+    'opens a %s session on Activity, with Details one click away',
     async (driver) => {
       const user = userEvent.setup()
       const onPanel = vi.fn()
@@ -556,16 +593,22 @@ describe('the side pane tabs', () => {
       const view = renderPane({ resolution: claudeRun, onPanel })
       await screen.findByTestId('session-context')
       expect(tabs()).toEqual([
-        'Details',
-        'Activity',
         'Changes',
         'Files',
-        'Preview',
         'Terminal',
+        'Preview',
+        'Details',
+        'Activity',
       ])
-      expect(ops.activity).not.toHaveBeenCalled()
-      await user.click(screen.getByRole('radio', { name: 'Activity' }))
-      expect(onPanel).toHaveBeenLastCalledWith('activity')
+      // What the tool is doing is in front, read from the engine.
+      expect(screen.getByRole('radio', { name: 'Activity' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
+      expect(await screen.findByTestId('session-activity')).toBeInTheDocument()
+      expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
+      await user.click(screen.getByRole('radio', { name: 'Details' }))
+      expect(onPanel).toHaveBeenLastCalledWith('context')
       // The address holds the tab in front.
       view.rerender(
         <SessionContextPane
@@ -573,11 +616,11 @@ describe('the side pane tabs', () => {
           evidence="checks"
           onExpandEvidence={() => {}}
           onPanel={onPanel}
-          panel="activity"
+          panel="context"
         />,
       )
-      expect(await screen.findByTestId('session-activity')).toBeInTheDocument()
-      expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
+      expect(await screen.findByTestId('context-scope')).toBeInTheDocument()
+      expect(screen.queryByTestId('session-activity')).toBeNull()
     },
   )
 
@@ -587,11 +630,11 @@ describe('the side pane tabs', () => {
     })
     await screen.findByTestId('session-context')
     expect(tabs()).toEqual([
-      'Details',
       'Changes',
       'Files',
-      'Preview',
       'Terminal',
+      'Preview',
+      'Details',
     ])
     expect(ops.activity).not.toHaveBeenCalled()
   })
@@ -613,11 +656,11 @@ describe('the side pane tabs', () => {
     renderPane()
     await screen.findByTestId('session-context')
     expect(tabs()).toEqual([
-      'Details',
       'Changes',
       'Files',
-      'Preview',
       'Terminal',
+      'Preview',
+      'Details',
     ])
     expect(screen.queryByText('takeover')).toBeNull()
   })
@@ -650,12 +693,12 @@ describe('the side pane tabs at the pane’s own width', () => {
       const user = userEvent.setup()
       renderPane()
       await screen.findByTestId('session-context')
-      // 72 + 72 + 56 px of tabs and 28 px of More fit in 272; Preview would not.
-      expect(tabs()).toEqual(['Details', 'Changes', 'Files'])
+      // 72 + 72 + 56 px of tabs and 28 px of More fit in 272; Terminal would not.
+      expect(tabs()).toEqual(['Changes', 'Files', 'Details'])
       await user.click(screen.getByRole('button', { name: 'More panels' }))
       const hidden = screen.getAllByRole('menuitemradio')
-      expect(hidden.map((i) => i.textContent)).toEqual(['Preview', 'Terminal'])
-      await user.click(hidden[1]!)
+      expect(hidden.map((i) => i.textContent)).toEqual(['Terminal', 'Preview'])
+      await user.click(hidden[0]!)
       // The tab in front always shows, in the strip.
       expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
         'ws-main',
@@ -673,11 +716,11 @@ describe('the side pane tabs at the pane’s own width', () => {
       renderPane()
       await screen.findByTestId('session-context')
       expect(tabs()).toEqual([
-        'Details',
         'Changes',
         'Files',
-        'Preview',
         'Terminal',
+        'Preview',
+        'Details',
       ])
       expect(screen.queryByRole('button', { name: 'More panels' })).toBeNull()
     } finally {
@@ -899,8 +942,22 @@ describe('the account usage read', () => {
     )
   })
 
-  it('is still made when the profile cannot be read', async () => {
+  it('is not made for an unnamed profile when the profile cannot be read', async () => {
+    // The account list holds named profiles only: the ref is not in it.
     auth.can = (p) => p !== 'sessions:profile:read'
+    renderPane()
+    await screen.findByTestId('session-facts')
+    await settle()
+    expect(ops.getAccount).not.toHaveBeenCalled()
+    expect(ops.getProfile).not.toHaveBeenCalled()
+  })
+
+  it('is made for a named account when the profile cannot be read', async () => {
+    auth.can = (p) => p !== 'sessions:profile:read'
+    ops.listAccounts.mockResolvedValue({
+      items: [{ account_ref: 'ppf_team', name: 'team', state: 'active' }],
+      has_more: false,
+    })
     renderPane()
     await waitFor(() =>
       expect(ops.getAccount).toHaveBeenCalledWith(
@@ -911,8 +968,12 @@ describe('the account usage read', () => {
     expect(ops.getProfile).not.toHaveBeenCalled()
   })
 
-  it('is still made when the profile read fails', async () => {
+  it('is made for a named account when the profile read fails', async () => {
     ops.getProfile.mockRejectedValue(new Error('boom'))
+    ops.listAccounts.mockResolvedValue({
+      items: [{ account_ref: 'ppf_team', name: 'team', state: 'active' }],
+      has_more: false,
+    })
     renderPane()
     await waitFor(() =>
       expect(ops.getAccount).toHaveBeenCalledWith(

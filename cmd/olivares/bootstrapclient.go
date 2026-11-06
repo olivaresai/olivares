@@ -195,11 +195,12 @@ func (c bootstrapClient) expect(cmd *cobra.Command, method, path string, body an
 func bootstrapHTTPError(status int, raw []byte) error {
 	if status == http.StatusForbidden && bytes.Contains(raw, []byte("step-up")) {
 		return exitcode.New(exitcode.Auth, fmt.Errorf(
-			"the engine requires the administrative step-up for this operation (an administrator "+
-				"turned it on; it is off by default) and the credential you sent does not carry it. "+
-				"An API token never can (it has no assurance level); a USER SESSION that completed the "+
-				"step-up in the console does, for 15 minutes. Complete it in the console, then pass that "+
-				"session here with `olivares auth login --token-file <file>`. %s",
+			"the engine requires a person signed in, with the step-up the deployment asks for, for this operation, "+
+				"and the credential you sent does not carry it. An API token never does (the local operator's "+
+				"credential included): sign in with `olivares login`, which is enough unless an administrator asked "+
+				"for more. If the deployment asks for an authenticator code, sign in with it; if it asks for a "+
+				"passkey, complete the step-up in the console (it holds for 15 minutes) and pass that session here with "+
+				"`olivares auth login --token-file <file>`. %s",
 			describeAPIRefusal(status, []byte(trimAPIErrorBody(raw)))))
 	}
 	return httpErr(status, raw)

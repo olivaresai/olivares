@@ -1,0 +1,6 @@
+{
+  "integrations": "통합",
+  "catalogs": "프레임워크\\s*카탈로그",
+  "enforcement": "시행\\s*지점",
+  "modules": "모듈"
+}

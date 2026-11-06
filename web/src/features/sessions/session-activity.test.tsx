@@ -313,12 +313,25 @@ describe('SessionActivity', () => {
     expect(
       within(agents).getByRole('img', { name: 'Running' }),
     ).toBeInTheDocument()
+    // A finished item is a check, never the live dot a running one keeps.
+    expect(
+      within(agents)
+        .getByRole('img', { name: 'Completed' })
+        .querySelector('svg'),
+    ).not.toBeNull()
+    expect(
+      within(agents).getByRole('img', { name: 'Running' }).querySelector('svg'),
+    ).toBeNull()
 
     const tasks = screen.getByTestId('activity-tasks')
+    // One line: the title once, no "exit code 0" for a success, the command behind it.
     expect(
-      within(tasks).getByText('sleep 5; echo finished'),
-    ).toBeInTheDocument()
-    expect(within(tasks).getByText(/exit code 0/)).toBeInTheDocument()
+      within(tasks).getAllByText(
+        /Run sleep 5 then echo finished in background/,
+      ),
+    ).toHaveLength(1)
+    expect(within(tasks).queryByText(/exit code 0/)).toBeNull()
+    expect(within(tasks).getByText('sleep 5; echo finished')).not.toBeVisible()
 
     // Files inside the session's folder are named by their place in it.
     const files = screen.getAllByTestId('activity-file')
@@ -330,7 +343,7 @@ describe('SessionActivity', () => {
 
     const context = screen.getByTestId('activity-context')
     // The model by its name, its id on the hover.
-    const model = within(context).getByText('Claude Haiku 5.5 · medium')
+    const model = within(context).getByText('Claude Haiku 5.5 · Medium')
     expect(model).toHaveAttribute('title', 'claude-haiku-5-5')
     expect(
       within(context).getByText('78,582 tokens · window unknown'),
@@ -376,6 +389,40 @@ describe('SessionActivity', () => {
       'run_1',
       'a442c29bf1c636f28',
       expect.anything(),
+    )
+  })
+
+  it('reads a new file as "new +N", a changed one as "+N −M", each by its name first', async () => {
+    vi.mocked(agentOpsApi.activity).mockResolvedValue({
+      ...ACTIVITY,
+      files: [
+        // Written with 7 lines, then one of them edited: +8 −1 against nothing.
+        {
+          path: '/home/dev/demo/notes/root/to-root-t3-1.md',
+          added: 8,
+          removed: 1,
+          created: true,
+          edits: 2,
+        },
+        {
+          path: '/home/dev/demo/notes/secrets-session-section.md',
+          added: 12,
+          removed: 3,
+          edits: 1,
+        },
+      ],
+    })
+    show()
+    const [created, changed] = await screen.findAllByTestId('activity-file')
+    expect(created).toHaveTextContent(/new.*\+7$/)
+    expect(created).not.toHaveTextContent('−')
+    expect(changed).toHaveTextContent(/\+12\s*−3$/)
+    // The name comes first and whole; the folder after it, the whole path on the hover.
+    const name = within(created!).getByText('to-root-t3-1.md')
+    expect(name.nextElementSibling).toHaveTextContent('notes/root')
+    expect(created).toHaveAttribute(
+      'title',
+      '/home/dev/demo/notes/root/to-root-t3-1.md',
     )
   })
 

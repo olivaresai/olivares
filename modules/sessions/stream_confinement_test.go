@@ -537,8 +537,12 @@ func assertStreamDenied(t *testing.T, res *http.Response, status int, code, mess
 	if err != nil || res.StatusCode != status {
 		t.Fatalf("denial = %d %s err=%v, want %d", res.StatusCode, body, err, status)
 	}
-	if message != "" && strings.TrimSpace(string(body)) != `{"error":{"code":"`+code+`","message":"`+message+`"}}` {
-		t.Fatalf("denial body=%s", body)
+	if message != "" {
+		// The documented envelope for this code, error.remedy included.
+		want, err := json.Marshal(api.ErrorBody(code, message))
+		if err != nil || strings.TrimSpace(string(body)) != string(want) {
+			t.Fatalf("denial body=%s, want %s", body, want)
+		}
 	}
 	if strings.Contains(res.Header.Get("Content-Type"), "event-stream") || res.Header.Get("X-Accel-Buffering") != "" || res.Header.Get("Cache-Control") == "no-cache" || res.Header.Get("Connection") == "keep-alive" {
 		t.Fatalf("denial committed SSE headers: %v", res.Header)

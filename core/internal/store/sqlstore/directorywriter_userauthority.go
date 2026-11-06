@@ -573,7 +573,7 @@ func delegationHandleAuthorityRepo(
 		}
 		switch handle.SourceCredKind {
 		case "user":
-			sessions := newTypedRepo(ts.repo(authSessionDescriptorV28), authSessionCodec)
+			sessions := newTypedRepo(ts.repo(authSessionDescriptorV30), authSessionCodec)
 			session, err := sessions.Get(ctx, handle.SourceCredID)
 			if err != nil {
 				return unavailableAuthoritySource("delegation session", err)

@@ -1,0 +1,154 @@
+{
+  "title": "Voz e tempo real",
+  "description": "Sessões de voz e de tempo real governadas em todo o parque. A consola mostra apenas referências e agregados — nunca áudio, texto de transcrição, prompts nem PII.",
+  "tabs": {
+    "sessions": "Sessões",
+    "policies": "Políticas",
+    "ledger": "Decisões"
+  },
+  "refresh": "Atualizar",
+  "stats": {
+    "live": "Sessões em direto",
+    "liveCaption": "de {{total}} em vista",
+    "avgLatency": "Latência média",
+    "avgLatencyCaption": "média das médias por sessão",
+    "governed": "Proporção governada",
+    "governedCaption": "{{governed}} de {{total}} foram controladas por política"
+  },
+  "sessions": {
+    "title": "Sessões",
+    "description": "Cada sessão tal como o motor a comunica — o estado é derivado no momento da leitura. A transcrição é mostrada apenas como impressão digital; não existe áudio nem texto por trás.",
+    "empty": "Sem sessões de voz",
+    "emptyHint": "As sessões aparecem quando uma abertura governada é despachada contra uma política de voz.",
+    "governed": "Governada",
+    "ungoverned": "Não governada",
+    "transcriptLabel": "transcrição",
+    "turnsBreakdown": "{{user}}u / {{agent}}a",
+    "latencyAvg": "média {{value}}",
+    "latencyMax": "máx. {{value}}",
+    "columns": {
+      "state": "Estado",
+      "agent": "Agente",
+      "model": "Modelo / fornecedor",
+      "turns": "Turnos",
+      "duration": "Duração",
+      "latency": "Latência",
+      "governed": "Governada",
+      "transcript": "Transcrição",
+      "lastEvent": "Último evento"
+    }
+  },
+  "latency": {
+    "title": "Latência por sessão",
+    "description": "Latência média de resposta por sessão, ordenada. A tabela inclui o máximo ao lado — não é mostrado p50/p95 sem amostras por turno.",
+    "summary": "Latência média de resposta de {{count}} sessões, ordenada. A mais lenta é {{session}}, com {{latency}}.",
+    "summaryEmpty": "Sem sessões para ordenar por latência.",
+    "colSession": "Sessão",
+    "colLatency": "Latência média"
+  },
+  "honesty": {
+    "noContent": "Apenas referências e agregados — aqui não são expostos áudio, texto de transcrição, prompts nem PII.",
+    "findingsNote": "As violações de política, a degradação da latência e as aberturas não governadas surgem através do plano de deteções de segurança, não por estas rotas."
+  },
+  "policies": {
+    "title": "Políticas de voz",
+    "description": "Negação por omissão: uma política é o que PERMITE abrir uma sessão. Sem política correspondente, a abertura é negada.",
+    "empty": "Sem políticas de voz",
+    "emptyHint": "Defina uma política para permitir a abertura de sessões de voz para um agente — a negação por omissão significa que nada abre até que uma corresponda.",
+    "all": "Todos",
+    "minutes": "{{value}} min",
+    "new": "Nova política",
+    "edit": "Editar",
+    "columns": {
+      "agent": "Agente",
+      "model": "Modelo permitido",
+      "provider": "Fornecedor permitido",
+      "maxMinutes": "Sessão máx.",
+      "maxLatency": "Latência máx.",
+      "setBy": "Definida por",
+      "updated": "Atualizada"
+    },
+    "dialog": {
+      "title": "Política de voz",
+      "description": "Esta política PERMITE abrir sessões para o agente correspondente (negação por omissão). Use '*' para corresponder a todos os agentes, modelos ou fornecedores.",
+      "agent": "Agente",
+      "agentHint": "Uma referência de agente, ou '*' para todos os agentes.",
+      "model": "Modelo permitido",
+      "modelHint": "Uma referência de modelo, ou '*' para qualquer modelo.",
+      "provider": "Fornecedor permitido",
+      "providerHint": "Uma referência de fornecedor, ou '*' para qualquer fornecedor.",
+      "maxMinutes": "Minutos máximos por sessão",
+      "maxLatency": "Latência máxima (ms)",
+      "save": "Guardar política",
+      "saved": "Política de voz guardada"
+    }
+  },
+  "empty": {
+    "latencyByCategoryChart": {
+      "title": "Ainda não há latência de sessão para ordenar",
+      "description": "A latência média de resposta pode ser ordenada assim que uma abertura governada ou a telemetria em tempo real criar um registo de sessão de voz."
+    },
+    "policies": {
+      "title": "Ainda não há políticas de voz definidas",
+      "description": "Uma política permite as aberturas que correspondam a agente, modelo e fornecedor; sem ela, qualquer abertura de sessão de voz é negada. Defini-la é do nível de administrador."
+    },
+    "sessions": {
+      "title": "Ainda não foram observadas sessões de voz",
+      "description": "As sessões aparecem depois de uma abertura governada ser registada ou de o observador de tempo real configurado publicar telemetria de sessão."
+    }
+  },
+  "surface": {
+    "chooseSession": "Escolha uma sessão para ver o seu painel em direto.",
+    "loading": "A carregar…",
+    "decisionsError": "Não foi possível ler as decisões.",
+    "noDecisions": "Nenhuma decisão registada para esta sessão.",
+    "noReason": "nenhum motivo registado",
+    "frames_one": "{{count}} atualização em direto",
+    "frames_many": "{{count}} de atualizações em direto",
+    "frames_other": "{{count}} atualizações em direto",
+    "open": "Abrir sessão (governada)",
+    "stream": {
+      "connecting": "a ligar",
+      "open": "em direto",
+      "closed": "sem ligação",
+      "error": "falha no fluxo"
+    },
+    "outcome": {
+      "opened": "Aberta.",
+      "approval": "Aprovação pedida — volte a enviar com esta referência de aprovação:",
+      "denied": "Negada pela política: nenhuma política de voz permite isto (agente, modelo, fornecedor). É uma decisão de negação por omissão, não uma falha.",
+      "noGate": "Não há nenhuma porta de aprovação configurada nesta implementação, por isso a abertura continua negada. É uma lacuna do parque, não uma negação de política.",
+      "unavailable": "A porta de aprovação não respondeu, por isso nada foi decidido."
+    }
+  },
+  "ledger": {
+    "title": "Registo de decisões de abertura",
+    "description": "Cada decisão de abrir uma sessão de voz em todo o parque, só de acrescento e com as mais recentes primeiro — incluindo as que foram NEGADAS e por isso nunca chegaram a ser uma sessão.",
+    "caveat": "Uma abertura negada não cria uma linha de sessão própria, pelo que esta é a primeira vista dedicada que a mostra por inteiro apenas com permissão para ler sessões de voz. Outros caminhos mostram-na parcialmente ou exigem outra permissão: o espaço de testes da API (administrador do tenant), o explorador de auditoria (a ação, sem o motivo) e as deteções de segurança (só alguns caminhos).",
+    "empty": "Ainda não há decisões de abertura",
+    "emptyHint": "Isto regista as decisões que o motor conseguiu persistir. A escrita da evidência é de melhor esforço por conceção — uma negação mantém-se mesmo que a sua linha do registo se perca — por isso um registo vazio não prova que nada foi recusado.",
+    "truncated": "A mostrar as {{count}} decisões mais recentes e o motor indica que há mais: esta lista está TRUNCADA. Leia-a como uma amostra, não como o registo completo.",
+    "columns": {
+      "when": "Quando",
+      "outcome": "Resultado",
+      "session": "Sessão",
+      "agent": "Agente",
+      "actor": "Ator",
+      "reason": "Motivo do motor"
+    },
+    "opStatus": {
+      "requested": "Aprovação pedida",
+      "blocked": "Bloqueada",
+      "dispatched": "Despachada",
+      "declared_not_opened": "Declarada, não aberta",
+      "failed": "Falhou",
+      "budget_blocked": "Bloqueada — orçamento",
+      "budget_throttled": "Abertura negada — limitação por orçamento"
+    },
+    "op": {
+      "open_request": "Pedido de abertura",
+      "open": "Abrir",
+      "close": "Fechar"
+    }
+  }
+}

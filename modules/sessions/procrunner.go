@@ -130,6 +130,9 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	if err != nil {
 		return nil, err
 	}
+	release = withGoBuildCacheBound(release, spec.Env)
+	// Asked before the network boundary wraps the command: the mount layer is in its payload then.
+	busHidden := !confine.UserBusExposed(cmd)
 	cmd.Dir = spec.Dir
 	cmd.Env = sanitizedEnv(spec.EnvAllow, env)
 	var waitReady func() error
@@ -144,6 +147,9 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 		releaseFiles := release
 		release = func() { releaseNetwork(); releaseFiles() }
 	}
+	// The scope wraps the command as built above, the network boundary's stage
+	// included, so the whole session lives in it; the guard added below stays outside.
+	state.Reason = joinReasons(state.Reason, applySessionScope(cmd, spec.MemoryMax, spec.TasksMax, busHidden))
 	if spec.WaitDelay > 0 {
 		cmd.WaitDelay = spec.WaitDelay
 	}
@@ -156,7 +162,8 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	if err != nil {
 		release()
 		if waitReady != nil {
-			return nil, networkBoundaryErr(fmt.Errorf("the host or container must allow unprivileged user and network namespaces and Landlock: %w", err))
+			// Docker's default seccomp and AppArmor profiles refuse these namespaces; the image ships the ones that allow them.
+			return nil, networkBoundaryErr(fmt.Errorf("the host or container must allow unprivileged user and network namespaces and Landlock (in Docker, run the container with --security-opt seccomp=olivares-sessions.json and, where AppArmor controls user namespaces, --security-opt apparmor=olivares-sessions, the profiles the image ships in /usr/share/olivares/): %w", err))
 		}
 		return nil, err
 	}

@@ -440,8 +440,17 @@ func TestMCPUpstreamForwarderStrictResponseValidation(t *testing.T) {
 
 	t.Run("valid prefix with overflow data is unknown", func(t *testing.T) {
 		// A perfectly valid response followed by padding that pushes the body over
-		// the read limit: truncation must be DETECTED, never validated as a prefix.
-		srv := serve(t, `{"jsonrpc":"2.0","id":1,"result":{}}`+strings.Repeat(" ", 8<<20))
+		// the read limit (the connector's bound, streamed so the test holds no copy
+		// of it): truncation must be DETECTED, never validated as a prefix.
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
+			pad := strings.Repeat(" ", 1<<20)
+			for sent := 0; sent <= mcpc.MaxHTTPBody; sent += len(pad) {
+				if _, err := io.WriteString(w, pad); err != nil {
+					return
+				}
+			}
+		}))
 		defer srv.Close()
 		res, err := call(newForwarder(srv.URL))
 		if err == nil || res.State != mcpc.DispatchUnknown {

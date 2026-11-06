@@ -31,12 +31,12 @@ We will keep you updated through triage and fix, and we are glad to credit repor
 
 ## Supported versions
 
-The project is **beta**; the next release is <!-- release -->`0.6`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
+The project is **beta**; the next release is <!-- release -->`0.7`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
 
 | Version | Supported |
 |---|---|
 | `main` (development) | Yes |
-| Olivares <!-- release -->`0.6`<!-- /release --> (next release) | Yes — fixes ship as the next release |
+| Olivares <!-- release -->`0.7`<!-- /release --> (next release) | Yes — fixes ship as the next release |
 | Older tagged releases | No — upgrade to the latest release |
 
 This table grows into a real support matrix as releases accumulate.
@@ -132,17 +132,26 @@ namespaces.
 - The systemd units shipped in the packages allow exactly those two namespace types and a
   mount namespace, with the `mount` system call. The session helper uses it only inside
   its own user and mount namespace, to keep a folder's Git hooks and configuration
-  read-only; the engine itself holds no capability, so a mount outside that namespace fails.
+  read-only and to cover the runtime directory of the engine's user, where its user
+  manager listens (its D-Bus bus, when the host has one, and its own private socket,
+  `systemd/private`), with an empty read-only filesystem (Landlock does not govern a
+  connection to a socket at a path, and a unit started through either socket would run
+  outside the child's confinement); every confined child gets that, and a child that must
+  be confined is not started on a host that cannot give it (`olivares doctor` reports it
+  under `session-confinement`). The engine itself holds no
+  capability, so a mount outside that namespace fails.
 - On kernels with AppArmor's unprivileged user namespace restriction, the deb also
   installs and loads `/etc/apparmor.d/usr.bin.olivares` for `/usr/bin/olivares`.
   It permits `userns` with an otherwise unconfined profile, without changing the
   host's global restriction. Package removal unloads and removes this profile.
-  Hosts without that kernel restriction keep their existing AppArmor policy.
+  Hosts without that kernel restriction keep their existing AppArmor policy, and so does
+  a container, which has no AppArmor filesystem: the host's policy applies there.
 - Docker Compose uses `deploy/seccomp/olivares-sessions.json`: Docker's default
   profile plus those two namespace types, a mount namespace and the `mount` system call
   with the bind or private-propagation flag only, so a mount that creates a filesystem
   stays denied (the container drops every capability, so a mount outside the session
-  helper's own namespace still fails).
+  helper's own namespace still fails). A container has no user manager, so there is no
+  bus to cover there.
   AppArmor hosts that mediate user namespace creation also need the shipped
   `deploy/apparmor/olivares-sessions.conf` profile loaded and selected, as the
   [README install](README.md#install) shows. It retains Docker default restrictions
@@ -169,7 +178,7 @@ Out of scope: third-party dependencies (report upstream; tell us so we can pin/p
 For a security product, build integrity is part of the trust model, not an afterthought:
 
 - **Signed releases** with cosign / Sigstore, published **SBOMs** (syft), and checksums —
-  Olivares <!-- release -->0.6<!-- /release --> is the next release, not yet published. Once its artifacts are available,
+  Olivares <!-- release -->0.7<!-- /release --> is the next release, not yet published. Once its artifacts are available,
   `scripts/verify-release.sh` verifies their chain before use.
 - **Minimal, non-root** container images on a digest-pinned Debian 13 slim base (the STIG image on UBI 9 minimal), and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
 - **Minimal, pinned dependencies**; no `curl | bash` without checksums.

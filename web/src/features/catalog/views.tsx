@@ -21,6 +21,12 @@ export const VIEWS = [
     helpHref: '/reference/modules/xiv-catalog',
     icon: Library,
     permission: 'catalog:entry:read',
+    changes: [
+      { permission: 'catalog:entry:write' },
+      { permission: 'catalog:entry:admin' },
+      { permission: 'catalog:instance:write' },
+      { permission: 'catalog:instance:admin' },
+    ],
     element: lazyView(CatalogView),
   },
 ] satisfies ViewEntry[]

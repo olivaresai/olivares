@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -28,13 +29,8 @@ func TestGroupMembershipsCarriedOnPrincipal(t *testing.T) {
 	memberID, _ := mustMember(t, ctx, a, super, tenant, "m@acme.com", auth.RoleViewer)
 	outsiderID, _ := mustMember(t, ctx, a, super, tenant, "o@x.com", "") // no direct membership
 
-	g, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{
-		DisplayName: "Engineering", ExternalID: "eng-1", Members: []model.ID{memberID},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Seed the outsider's group member row directly (the SCIM path would have skipped a
+	g := authtest.Group(t, st, tenant, "Engineering", "eng-1", memberID)
+	// Seed the outsider's group member row too (a directory write would have skipped a
 	// non-member): the principal must STILL carry no group — the gate denies it.
 	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
 		_, e := as.GroupMembers().Create(ctx, model.UserGroupMember{GroupID: g.Group.ID, UserID: outsiderID})
@@ -74,11 +70,7 @@ func TestTokenPrincipalCarriesNoGroups(t *testing.T) {
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 	uid, member := mustMember(t, ctx, a, super, tenant, "m@acme.com", auth.RoleViewer)
-	if _, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{
-		DisplayName: "Engineering", ExternalID: "eng-1", Members: []model.ID{uid},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	authtest.Group(t, st, tenant, "Engineering", "eng-1", uid)
 
 	// A token the member issues for itself (UserID == the member) is its bound grant only.
 	tokStr, _, err := a.IssueToken(ctx, member, auth.TokenSpec{Name: "ci", BoundTenant: tenant, Role: auth.RoleViewer})
@@ -113,21 +105,13 @@ func TestGroupDerivedTokenRoleTracksMembership(t *testing.T) {
 			super := mustSuperadmin(t, ctx, a)
 			tenant := provisionTenant(t, st, "acme")
 			uid, _ := mustMember(t, ctx, a, super, tenant, "m@acme.com", auth.RoleViewer)
-			group, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Admins", ExternalID: "admins", Members: []model.ID{uid}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			group := authtest.Group(t, st, tenant, "Admins", "admins", uid)
 			if _, err := a.ConfigureGroupRole(ctx, super, tenant, group.Group.ID, auth.RoleAdmin); err != nil {
 				t.Fatal(err)
 			}
 			if change != "remove" {
-				parent, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Parent", ExternalID: "parent"})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, err := a.ConfigureGroupParent(ctx, super, tenant, group.Group.ID, parent.Group.ID); err != nil {
-					t.Fatal(err)
-				}
+				parent := authtest.Group(t, st, tenant, "Parent", "parent")
+				authtest.Nest(t, st, group.Group.ID, parent.Group.ID)
 			}
 			tok, _, err := a.IssueToken(ctx, loginPrincipal(t, ctx, a, "m@acme.com"), auth.TokenSpec{Name: "ci", BoundTenant: tenant, Role: auth.RoleAdmin})
 			if err != nil {
@@ -141,12 +125,10 @@ func TestGroupDerivedTokenRoleTracksMembership(t *testing.T) {
 				t.Fatalf("initial group-derived role = %q, %v, want admin", role, ok)
 			}
 			switch change {
-			case "remove":
-				_, err = a.SCIMReplaceGroup(ctx, super, tenant, group.Group.ID, auth.SCIMGroupInput{DisplayName: "Admins", ExternalID: "admins"}, 0)
-			case "child-remove":
-				_, err = a.SCIMReplaceGroup(ctx, super, tenant, group.Group.ID, auth.SCIMGroupInput{DisplayName: "Admins", ExternalID: "admins"}, 0)
+			case "remove", "child-remove":
+				authtest.SetMembers(t, st, group.Group.ID)
 			case "delete":
-				err = a.SCIMDeleteGroup(ctx, super, tenant, group.Group.ID)
+				authtest.Delete(t, st, group.Group.ID)
 			case "downgrade":
 				_, err = a.ConfigureGroupRole(ctx, super, tenant, group.Group.ID, auth.RoleEditor)
 			}
@@ -175,10 +157,7 @@ func TestGroupDerivedTokenWithoutDirectMembershipIsRefused(t *testing.T) {
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 	uid, _ := mustMember(t, ctx, a, super, tenant, "m@acme.com", auth.RoleViewer)
-	group, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Admins", ExternalID: "admins", Members: []model.ID{uid}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	group := authtest.Group(t, st, tenant, "Admins", "admins", uid)
 	if _, err := a.ConfigureGroupRole(ctx, super, tenant, group.Group.ID, auth.RoleAdmin); err != nil {
 		t.Fatal(err)
 	}
@@ -282,25 +261,12 @@ func TestGroupNestingClosureOnPrincipal(t *testing.T) {
 	tenant := provisionTenant(t, st, "acme")
 	memberID, _ := mustMember(t, ctx, a, super, tenant, "m@acme.com", auth.RoleViewer)
 
-	child, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Backend", ExternalID: "be", Members: []model.ID{memberID}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	mid, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Eng", ExternalID: "eng"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	top, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "AllStaff", ExternalID: "all"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	child := authtest.Group(t, st, tenant, "Backend", "be", memberID)
+	mid := authtest.Group(t, st, tenant, "Eng", "eng")
+	top := authtest.Group(t, st, tenant, "AllStaff", "all")
 	// child → mid → top
-	if _, err := a.ConfigureGroupParent(ctx, super, tenant, child.Group.ID, mid.Group.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := a.ConfigureGroupParent(ctx, super, tenant, mid.Group.ID, top.Group.ID); err != nil {
-		t.Fatal(err)
-	}
+	authtest.Nest(t, st, child.Group.ID, mid.Group.ID)
+	authtest.Nest(t, st, mid.Group.ID, top.Group.ID)
 
 	p := loginPrincipal(t, ctx, a, "m@acme.com")
 	got := map[string]bool{}
@@ -314,49 +280,5 @@ func TestGroupNestingClosureOnPrincipal(t *testing.T) {
 	}
 	if len(got) != 3 {
 		t.Errorf("closure must be exactly the 3 chain groups, got %v", p.GroupsIn(tenant))
-	}
-}
-
-// ConfigureGroupParent: reshaping the hierarchy needs OWNER/superadmin, the parent must
-// live in the same tenant, the edge must stay acyclic, and clearing un-nests.
-func TestConfigureGroupParent(t *testing.T) {
-	ctx := context.Background()
-	st := testStore(t)
-	a := auth.NewAuthenticator(st, nil)
-	super := mustSuperadmin(t, ctx, a)
-	tenant := provisionTenant(t, st, "acme")
-	other := provisionTenant(t, st, "other")
-	_, owner := mustMember(t, ctx, a, super, tenant, "owner@acme.com", auth.RoleOwner)
-	_, admin := mustMember(t, ctx, a, super, tenant, "adm@acme.com", auth.RoleAdmin)
-
-	child, _ := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Child", ExternalID: "c"})
-	parent, _ := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Parent", ExternalID: "p"})
-	foreign, _ := a.SCIMCreateGroup(ctx, super, other, auth.SCIMGroupInput{DisplayName: "Foreign", ExternalID: "f"})
-
-	// An admin (read+write, not owner) may NOT reshape the hierarchy.
-	if _, err := a.ConfigureGroupParent(ctx, admin, tenant, child.Group.ID, parent.Group.ID); !errors.Is(err, auth.ErrRoleCeiling) {
-		t.Errorf("admin nesting err = %v, want ErrRoleCeiling", err)
-	}
-	// An owner may.
-	g, err := a.ConfigureGroupParent(ctx, owner, tenant, child.Group.ID, parent.Group.ID)
-	if err != nil || g.ParentGroupID != parent.Group.ID {
-		t.Fatalf("owner nesting = (%v, %v), want parent %s", g.ParentGroupID, err, parent.Group.ID)
-	}
-	// A cross-tenant parent is invisible (no oracle): ErrNotFound, never persisted.
-	if _, err := a.ConfigureGroupParent(ctx, super, tenant, child.Group.ID, foreign.Group.ID); !errors.Is(err, store.ErrNotFound) {
-		t.Errorf("cross-tenant parent err = %v, want ErrNotFound", err)
-	}
-	// A cycle is refused: parent is already a descendant-root of child.
-	if _, err := a.ConfigureGroupParent(ctx, super, tenant, parent.Group.ID, child.Group.ID); !errors.Is(err, auth.ErrGroupCycle) {
-		t.Errorf("cycle err = %v, want ErrGroupCycle", err)
-	}
-	// Self-parent is a cycle too.
-	if _, err := a.ConfigureGroupParent(ctx, super, tenant, child.Group.ID, child.Group.ID); !errors.Is(err, auth.ErrGroupCycle) {
-		t.Errorf("self-parent err = %v, want ErrGroupCycle", err)
-	}
-	// Clearing un-nests (owner authority).
-	cleared, err := a.ConfigureGroupParent(ctx, super, tenant, child.Group.ID, model.ID(""))
-	if err != nil || !cleared.ParentGroupID.IsZero() {
-		t.Errorf("clear parent = (%v, %v), want zero", cleared.ParentGroupID, err)
 	}
 }

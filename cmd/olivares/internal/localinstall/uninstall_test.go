@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -88,6 +89,46 @@ func TestInitAdapterStopAndReloadCommands(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("adapter calls = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// The package gives the service account it creates a user manager that outlives every
+// login (linger), for the sessions' scopes. userdel refuses an account whose user
+// manager runs, so the stop that precedes a purge takes it down first, and waits for it.
+// An account the package did not create is not touched, and a host without logind
+// does not fail the stop.
+func TestSystemdStopReleasesTheUserManagerOfAnAccountThePackageCreated(t *testing.T) {
+	account, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		created bool
+		failing bool
+		want    []string
+	}{
+		{"created", true, false, []string{"systemctl disable --now olivares", "loginctl disable-linger " + account.Username, "systemctl stop user@" + account.Uid + ".service"}},
+		{"created, no logind", true, true, []string{"systemctl disable --now olivares", "loginctl disable-linger " + account.Username, "systemctl stop user@" + account.Uid + ".service"}},
+		{"an existing account", false, false, []string{"systemctl disable --now olivares"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			run := func(name string, args ...string) error {
+				got = append(got, strings.Join(append([]string{name}, args...), " "))
+				if tc.failing && got[len(got)-1] != "systemctl disable --now olivares" {
+					return fmt.Errorf("not available")
+				}
+				return nil
+			}
+			m := &Manifest{Mode: "system", Init: "systemd", Account: Account{User: account.Username, UserCreated: tc.created}}
+			if err := stopService(m, run); err != nil {
+				t.Fatalf("the stop failed: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("calls = %v, want %v", got, tc.want)
 			}
 		})
 	}

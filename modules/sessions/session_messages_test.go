@@ -244,8 +244,8 @@ func TestMessages_ARepeatedMessageSaysHowManyLaterOnesRepeatIt(t *testing.T) {
 	}
 }
 
-// text=1 is a page whose items carry their whole text, bounded as one message read by
-// id is, for a reader that copies the conversation; the index stays without it.
+// text=1 is a page whose items carry their text, cut at messageTextMax and marked, for a
+// reader that copies the conversation and reads a cut one by id; the index stays without it.
 func TestMessages_APageCarriesWholeTextsOnRequest(t *testing.T) {
 	long := strings.Repeat("x", messageTextMax+10)
 	f := messagesFixture(t, messagesTranscript+
@@ -278,7 +278,7 @@ func TestMessages_APageCarriesWholeTextsOnRequest(t *testing.T) {
 	if got.Items[0].Text == "" || got.Items[0].Clipped || got.Items[1].Text != clipBytes(long, messageTextMax) || !got.Items[1].Clipped {
 		t.Fatalf("newest texts = %+v", got.Items[0])
 	}
-	if one, r := f.messages(t, "id=6"); r.code != http.StatusOK || len(one.Items) != 1 || !one.Items[0].Clipped {
+	if one, r := f.messages(t, "id=6"); r.code != http.StatusOK || len(one.Items) != 1 || one.Items[0].Clipped || one.Items[0].Text != long {
 		t.Fatalf("one long message read by id = %s", r.raw[:min(len(r.raw), 300)])
 	}
 	if strings.Contains(r.raw, "later_same") {

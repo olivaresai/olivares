@@ -19,6 +19,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { StatusBadge } from '@/components/data/badges'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +32,7 @@ import { toast } from '@/components/ui/toaster'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { RelTimeLabel } from '@/features/shared'
+import { useOperationsPath } from '@/features/operations/use-operations-path'
 import {
   consoleApi,
   consoleKeys,
@@ -55,7 +57,9 @@ const REFETCH_INTERVAL = 30_000
 const WARN_PERCENT = 80
 
 export function SystemHealthTab() {
-  const { t } = useTranslation('health')
+  const { t } = useTranslation(['health', 'nav'])
+  // The host, its disks and the usage have their own page: linked, not repeated here.
+  const operationsPath = useOperationsPath()
 
   const summaryQuery = useQuery({
     queryKey: consoleKeys.healthSummary(),
@@ -109,6 +113,14 @@ export function SystemHealthTab() {
               {t('system.version')}:{' '}
               <span className="font-mono">{data.version}</span>
             </div>
+            {operationsPath ? (
+              <Link
+                to={operationsPath as never}
+                className="inline-flex w-fit rounded-ctl text-caption font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus"
+              >
+                {t('nav:items.operations')}
+              </Link>
+            ) : null}
           </div>
         ) : (
           <CardUnavailable />

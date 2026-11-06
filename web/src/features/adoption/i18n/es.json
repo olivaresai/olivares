@@ -1,5 +1,5 @@
 {
-  "title": "Adopción de Claude Code",
+  "title": "Adopción",
   "description": "Cuánto se usa Claude Code y qué parte de lo que propone conservan los desarrolladores.",
   "range": {
     "label": "Intervalo de tiempo",
@@ -15,7 +15,7 @@
     "trend": "Tendencia"
   },
   "boundary": {
-    "note": "Cubre solo el tráfico de Claude API: el feed de administración de Analytics y el plano de telemetría OTLP. El uso servido por {{providers}} no se incluye, así que la ausencia de adopción aquí no es prueba de su ausencia.",
+    "note": "Solo el uso de Claude API. No incluye: {{providers}}.",
     "providers": {
       "claude-platform-aws": "Claude Platform on AWS",
       "microsoft-foundry": "Microsoft Foundry",
@@ -25,16 +25,16 @@
   },
   "lenses": {
     "analytics": {
-      "title": "Por desarrollador (administración de Analytics)",
-      "description_one": "Totales fidedignos por desarrollador y día del feed de administración de Analytics en {{count}} desarrollador.",
-      "description_many": "Totales fidedignos por desarrollador y día del feed de administración de Analytics en {{count}} desarrolladores.",
-      "description_other": "Totales fidedignos por desarrollador y día del feed de administración de Analytics en {{count}} desarrolladores."
+      "title": "Por desarrollador",
+      "description_one": "Totales diarios de {{count}} desarrollador.",
+      "description_many": "Totales diarios de {{count}} desarrolladores.",
+      "description_other": "Totales diarios de {{count}} desarrolladores."
     },
     "telemetry": {
-      "title": "Por sesión (telemetría en vivo)",
-      "description_one": "Actividad por sesión en tiempo real del plano OTLP en {{count}} equipo; incluye el tiempo activo.",
-      "description_many": "Actividad por sesión en tiempo real del plano OTLP en {{count}} equipos; incluye el tiempo activo.",
-      "description_other": "Actividad por sesión en tiempo real del plano OTLP en {{count}} equipos; incluye el tiempo activo."
+      "title": "Por sesión",
+      "description_one": "Actividad en directo y tiempo activo de {{count}} equipo.",
+      "description_many": "Actividad en directo y tiempo activo de {{count}} equipos.",
+      "description_other": "Actividad en directo y tiempo activo de {{count}} equipos."
     }
   },
   "comparison": {

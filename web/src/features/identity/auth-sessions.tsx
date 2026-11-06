@@ -110,25 +110,15 @@ export function AuthSessionsSection() {
             value={deviceName}
             maxLength={80}
             required
+            pattern=".*\S.*"
             onChange={(event) => setDeviceName(event.target.value)}
           />
         </Field>
-        {!deviceName.trim() ? (
-          <p
-            id="pair-device-name-required"
-            className="text-caption text-text-2"
-          >
-            {t('identity:sessions.deviceName')}:{' '}
-            {t('common:validation.required')}
-          </p>
-        ) : null}
         <Button
           type="submit"
           variant="outline"
-          aria-describedby={
-            !deviceName.trim() ? 'pair-device-name-required' : undefined
-          }
-          disabled={pairing.isPending || !deviceName.trim()}
+          className="self-start"
+          disabled={pairing.isPending}
         >
           {t('identity:sessions.pair')}
         </Button>
@@ -201,6 +191,11 @@ export function AuthSessionsSection() {
                       <Badge variant="outline">
                         {t(`identity:sessions.kinds.${session.kind}`)}
                       </Badge>
+                      {session.created_ip ? (
+                        <span className="ml-2 text-caption text-text-2">
+                          {session.created_ip}
+                        </span>
+                      ) : null}
                     </td>
                     <td>
                       {session.last_used_at ? (
@@ -231,9 +226,14 @@ export function AuthSessionsSection() {
                           variant="ghost"
                           size="sm"
                           aria-label={t('identity:sessions.endLabel', {
-                            kind: session.name
-                              ? `${session.name} (${t(`identity:sessions.kinds.${session.kind}`)})`
-                              : t(`identity:sessions.kinds.${session.kind}`),
+                            kind: [
+                              session.name
+                                ? `${session.name} (${t(`identity:sessions.kinds.${session.kind}`)})`
+                                : t(`identity:sessions.kinds.${session.kind}`),
+                              session.created_ip,
+                            ]
+                              .filter(Boolean)
+                              .join(' '),
                             created: formatDateTime(session.created_at),
                           })}
                           onClick={() => setDeleting(session)}

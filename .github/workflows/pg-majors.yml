@@ -78,6 +78,11 @@ jobs:
       fail-fast: false
       matrix:
         major: ['15', '16', '17', '18']
+    # Reuse main-suite's bounded memory-backed fixture storage. Database
+    # creation forces checkpoints: runner disk syncs can take tens of seconds
+    # each and cumulatively exhaust the pass budget. Keep PostgreSQL's normal
+    # durability settings; only these disposable service data directories move.
+    # A 2 GiB memory cap includes the 1 GiB tmpfs; no swap-backed data pages.
     services:
       # Digests re-verified against the registry on 2026-07-31 (manifest-list
       # digests, Docker Hub API) — pg16 matches the
@@ -97,8 +102,9 @@ jobs:
           --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
-          --memory=1g
-          --memory-swap=1536m
+          --memory=2g
+          --memory-swap=2g
+          --tmpfs /var/lib/postgresql/data:rw,size=1g
           --cpus=2
           --pids-limit=512
       pg16:
@@ -112,8 +118,9 @@ jobs:
           --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
-          --memory=1g
-          --memory-swap=1536m
+          --memory=2g
+          --memory-swap=2g
+          --tmpfs /var/lib/postgresql/data:rw,size=1g
           --cpus=2
           --pids-limit=512
       pg17:
@@ -127,10 +134,12 @@ jobs:
           --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
-          --memory=1g
-          --memory-swap=1536m
+          --memory=2g
+          --memory-swap=2g
+          --tmpfs /var/lib/postgresql/data:rw,size=1g
           --cpus=2
           --pids-limit=512
+      # PostgreSQL 18 stores its versioned PGDATA beneath this parent mount.
       pg18:
         image: pgvector/pgvector:pg18@sha256:691673308c99d2161ba298736f3147f1f22d79de2fb7ec93ae9b4afcab870b62
         env:
@@ -142,8 +151,9 @@ jobs:
           --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
-          --memory=1g
-          --memory-swap=1536m
+          --memory=2g
+          --memory-swap=2g
+          --tmpfs /var/lib/postgresql:rw,size=1g
           --cpus=2
           --pids-limit=512
     env:

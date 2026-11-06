@@ -1,0 +1,84 @@
+{
+  "title": "Host und Sitzungen",
+  "subtitle": "Der Host, seine Laufwerke, die laufenden Sitzungen und was sie verbraucht haben.",
+  "range": {
+    "label": "Zeitraum",
+    "24h": "24 Stunden",
+    "7d": "7 Tage",
+    "30d": "30 Tage"
+  },
+  "host": {
+    "heading": "Host",
+    "keeps24": "Der Host speichert 24 Stunden Verlauf, daher zeigen seine Diagramme die letzten 24 Stunden.",
+    "unavailable": "Host-Metriken sind auf diesem Host nicht verfügbar. Nur Linux meldet sie.",
+    "noHistory": "Der Host hat noch keine Messung aufgezeichnet.",
+    "noFilesystems": "Kein Dateisystem hat seine Größe gemeldet.",
+    "noFolders": "Keine Sitzungsordner.",
+    "facts": {
+      "load": "Last {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "Arbeitsspeicher {{used}} von {{total}}",
+      "swap": "Swap {{used}} von {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "CPU-Auslastung in den letzten 24 Stunden: jetzt {{now}}, Spitze {{peak}}, Durchschnitt {{average}}."
+    },
+    "memory": {
+      "title": "Arbeitsspeicher",
+      "total": "Gesamt",
+      "summary": "Belegter Arbeitsspeicher in den letzten 24 Stunden: jetzt {{used}} von {{total}}, Spitze {{peak}}."
+    },
+    "disks": {
+      "title": "Dateisysteme",
+      "summary_one": "Ein Dateisystem, {{mount}}, {{pct}} belegt.",
+      "summary_other": "{{count}} Dateisysteme; am vollsten ist {{mount}} mit {{pct}} belegt."
+    },
+    "folders": {
+      "title": "Sitzungsordner",
+      "summary_one": "Ein Sitzungsordner, {{largest}}, {{size}}.",
+      "summary_other": "{{count}} Sitzungsordner belegen {{total}}; der größte ist {{largest}} mit {{size}}.",
+      "floor": "Die Messung hat ihr Limit erreicht, daher sind die Größen ein Minimum."
+    },
+    "columns": {
+      "time": "Zeit",
+      "cpu": "CPU-Auslastung",
+      "memory": "Belegter Arbeitsspeicher",
+      "swap": "Belegter Swap",
+      "mount": "Einhängepunkt",
+      "device": "Gerät",
+      "type": "Typ",
+      "used": "Belegt",
+      "size": "Größe",
+      "usedPercent": "Belegt %",
+      "folder": "Ordner"
+    }
+  },
+  "live": {
+    "heading": "Laufende Sitzungen",
+    "loading": "Laufende Sitzungen werden gelesen…",
+    "error": "Die laufenden Sitzungen konnten nicht gelesen werden.",
+    "none": "Keine laufenden Sitzungen.",
+    "more": "Die Liste wurde gekürzt: Mehr Sitzungen sind offen als hier gezählt, daher sind die Zahlen ein Minimum.",
+    "automation": "Automatisierung",
+    "unknown": "Nicht erfasst",
+    "columns": {
+      "tool": "Werkzeug",
+      "person": "Person",
+      "sessions": "Sitzungen"
+    },
+    "byTool": {
+      "title": "Laufende Sitzungen nach Werkzeug",
+      "summary_one": "{{count}} laufende Sitzung nach Werkzeug: {{list}}.",
+      "summary_other": "{{count}} laufende Sitzungen nach Werkzeug: {{list}}."
+    },
+    "byPerson": {
+      "title": "Laufende Sitzungen nach Person",
+      "summary_one": "{{count}} laufende Sitzung nach Person: {{list}}.",
+      "summary_other": "{{count}} laufende Sitzungen nach Person: {{list}}."
+    }
+  },
+  "usage": {
+    "heading": "Nutzung"
+  }
+}

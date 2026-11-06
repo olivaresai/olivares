@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useModelName } from './model-choices'
 import { useMutation } from '@tanstack/react-query'
 import { AlertTriangle, CirclePause, Radio, Send, Trash2 } from 'lucide-react'
 import {
@@ -259,7 +260,11 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
           </p>
         ) : (
           items.map((item) => (
-            <LiveConversationLine key={item.id} item={item} />
+            <LiveConversationLine
+              key={item.id}
+              item={item}
+              profileRef={run.provider_profile_ref}
+            />
           ))
         )}
       </div>
@@ -329,7 +334,14 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
   )
 }
 
-function LiveConversationLine({ item }: { item: ConversationItem }) {
+function LiveConversationLine({
+  item,
+  profileRef,
+}: {
+  item: ConversationItem
+  profileRef?: string
+}) {
+  const modelName = useModelName(profileRef)
   const { t } = useTranslation('sessions')
   if (item.kind === 'tool') {
     return (
@@ -379,7 +391,7 @@ function LiveConversationLine({ item }: { item: ConversationItem }) {
         )}
       >
         {item.kind === 'system'
-          ? systemText(t, item)
+          ? systemText(t, item, undefined, modelName)
           : item.resultFailed && item.text
             ? `${item.summary}: ${item.text}`
             : item.summary}

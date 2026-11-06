@@ -1,5 +1,5 @@
 {
-  "title": "Backup und Wiederherstellung",
+  "title": "Backups",
   "description": "Disaster-Recovery-Snapshots von Olivares AI verwalten.",
   "tabs": {
     "backups": "Backups",
@@ -30,6 +30,7 @@
       "date": "Datum",
       "filename": "Dateiname",
       "size": "Größe",
+      "duration": "Dauer",
       "engine": "Engine",
       "tenants": "Tenants",
       "notes": "Notizen"
@@ -88,6 +89,9 @@
     "freeSpace": "Freier Speicher am Ziel",
     "notAvailable": "Nicht verfügbar",
     "overdue": "Wiederherstellungspunktziel überschritten",
+    "rtoMinutes": "Wiederherstellungszeitziel (Minuten)",
+    "rtoExceeded": "Der letzte Wiederherstellungstest dauerte länger als das Ziel von {{minutes}} Minuten",
+    "restoreTook": "Wiederherstellungstest dauerte {{seconds}} s",
     "age": "{{hours}} Stunden alt",
     "offsiteLockMissing": "Bucket {{bucket}} sperrt neue Kopien nicht im `COMPLIANCE`-Modus, daher könnten die Zugangsdaten dieses Servers sie löschen. Aktivieren Sie S3 Object Lock mit einer standardmäßigen `COMPLIANCE`-Aufbewahrung und bereinigen Sie mit separaten Zugangsdaten.",
     "offsiteLockUnknown": "Der Object Lock von Bucket {{bucket}} konnte nicht gelesen werden, daher sind diese Kopien möglicherweise nicht vor dem Löschen geschützt."
@@ -126,6 +130,14 @@
     "confirmLabel": "Jetzt genehmigen und wiederherstellen"
   },
   "restore": {
+    "postgres": {
+      "description": "Verwenden Sie ein separates, leeres db init-Ziel und file:- oder env:-Referenzen des Servers. Ein zweiter Administrator muss zustimmen.",
+      "dsn_ref": "Verbindungsreferenz der Anwendung",
+      "owner_dsn_ref": "Eigentümerreferenz (optional)",
+      "admin_dsn_ref": "Referenz des Backup-Administrators",
+      "scratch_dsn_ref": "Wartungsreferenz für die temporäre Datenbank",
+      "confirm": "Stellen Sie nur das genehmigte leere Ziel wieder her. Verwenden Sie nach der Prüfung das wiederhergestellte Datenverzeichnis und die Zielverbindungen und starten Sie den Engine neu."
+    },
     "notAuthorized": "Nicht autorisiert",
     "uploadFailed": "Upload fehlgeschlagen",
     "started": "Wiederherstellung gestartet",
@@ -165,6 +177,8 @@
     "tenants": "Mandanten",
     "keys": "Versiegelte Schlüssel",
     "empty": "Keine",
+    "notIncluded": "Nicht in dieser Sicherung",
+    "notIncludedHint": "Diese Pfade werden nicht kopiert. Sichern Sie sie selbst.",
     "loadFailed": "Das Backup-Detail konnte nicht geladen werden."
   },
   "empty": {

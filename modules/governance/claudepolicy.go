@@ -302,7 +302,8 @@ func (c *PolicyConsole) noteAgainstPublished(r *http.Request, mc api.ModuleConte
 	default:
 		out.Notes = append(out.Notes, "differs from published revision "+itoa(int(latest.Revision))+", the file its workstations still have: publish to update them")
 	}
-	out.Notes = append(out.Notes, "instructions assigned to a directory group are given to its members' sessions; they are not in a department's file")
+	out.Notes = append(out.Notes, "instructions assigned to a directory group are given to its members' sessions; they are not in a department's file",
+		"the adr_folder setting of a department adds its section only to instructions the department carries")
 }
 
 // noInstructions is the diagnostic of a department that carries none.

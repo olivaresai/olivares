@@ -53,7 +53,7 @@ service); `--check` still shows the plan, and `--target` still replaces a path y
 
 ## 1. Versioning and the image coordinate
 
-Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.6`<!-- /release -->, image tags <!-- release -->`:0.6`<!-- /release --> and `:latest`;
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.7`<!-- /release -->, image tags <!-- release -->`:0.7`<!-- /release --> and `:latest`;
 FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
@@ -71,11 +71,11 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 <!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:0.6 \
+cosign verify docker.io/olivaresai/olivares:0.7 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:0.6   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.7   # -> sha256:<…>
 ```
 <!-- /release -->
 
@@ -271,7 +271,17 @@ Pull and **verify** the new image/package first (§1), then:
 **Docker (`docker run`)**
 ```sh
 docker stop olivares && docker rm olivares      # the named data volume is NOT removed
-docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares@sha256:<new-digest> \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json   # the new release's session profiles
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares@sha256:<new-digest> /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
+docker run -d --name olivares --hostname olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+  --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   docker.io/olivaresai/olivares@sha256:<new-digest> \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
@@ -336,7 +346,10 @@ to storage, blocks that boot before migration; correct the reported cause and re
 the service. A retry syncs the completed snapshot's directories again without replacing
 the original database copy. Package-manager success only means the restart was requested:
 verify `/readyz` and the new running version afterward. Keep sufficient disk space;
-snapshots are retained until the operator removes them. They protect the local package
+snapshots are retained until the operator removes them. Once that start has opened the
+migrated store, the engine records the request as done in `<data-dir>/upgrade-snapshot.consumed`,
+so removing the snapshot is safe: a later start neither copies the migrated store again nor
+refuses for lack of space. They protect the local package
 startup path, not concurrent migrations initiated by another binary or another host.
 They contain the database only, so retain a full DR backup with the installation's
 signing keys for disaster recovery. No automatic database rollback or additional
@@ -632,7 +645,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
 
   <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 0.6
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.7
   ```
   <!-- /release -->
 
@@ -768,7 +781,7 @@ preview-diff enable under the **Edition & license** tab (superadmin + AAL3).
 
 | Surface | How |
 |---|---|
-| **CLI** | `olivares license install <file\|->` writes `<data-dir>/license.key` (0600, atomically) after verifying it, and names the licence it replaced; `olivares license uninstall --yes` removes it and reports what the engine resolves afterwards; `olivares license status` prints the at-rest status as JSON. Both REFUSE while a `--license`/`OLIVARES_LICENSE*` override outranks the data-dir file (`install --force` stages it anyway) |
+| **CLI** | `olivares license install <file\|->` writes `<data-dir>/license.key` (0600, atomically) after verifying it, and names the licence it replaced; `olivares license uninstall --yes` removes it and reports what the engine resolves afterwards; `olivares license status` prints the at-rest status as JSON (signed in to an engine on another host, it prints that engine's license state instead) Both REFUSE while a `--license`/`OLIVARES_LICENSE*` override outranks the data-dir file (`install --force` stages it anyway) |
 | **Console** | **Edition & license** tab → paste or upload the blob (superadmin + AAL3 step-up) |
 | **File / env** | The engine reads, in precedence order, `--license <path>` > `OLIVARES_LICENSE_PATH` > `OLIVARES_LICENSE` (inline) > `<data-dir>/license.key` |
 | **Connected** | `olivares license connect start` creates the deployment's Ed25519 key under `<data-dir>/connect/` (0700; files 0600), requests the owner's approval and prints the approval URL and key fingerprint; running it again after approval completes the binding. `refresh`, `rotate-key`, `recover`, `reactivate`, `deactivate`, `status` and `abandon` follow. Every step is recorded before it is sent and repeated with the same operation id after a crash or timeout. A verified `rotate-key`, `recover` or `reactivate` is recorded before the new key replaces the old one; after an interruption, running the same command again completes it without contacting the service, and `abandon` refuses to discard it. A NEW `recover`, `reactivate` or `deactivate --owner-approval` request needs the current purchase credential with `--evidence <file>` (or `--evidence -` for stdin); the installed license is not used as that evidence, and finishing a recorded request repeats it without reading evidence again. No key, credential, token or approval reference is printed or placed in a URL or argument |

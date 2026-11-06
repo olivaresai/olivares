@@ -158,7 +158,7 @@ var anthropicSurfaces = map[model.Gateway]Surface{
 		ZDR:                "on-request",
 		Residency:          "per-request inference_geo (us|global); workspace data_residency policy",
 		AsOf:               surfacesAsOf,
-		Notes:              "The only surface exposing the full API set (Admin/Compliance/Models/Batches) and the Models-API source-of-truth (ANT2-16).",
+		Notes:              "The only surface exposing the full API set (Admin/Compliance/Models/Batches) and the Models-API source-of-truth.",
 	},
 	model.GatewayClaudePlatformAWS: {
 		Gateway:            model.GatewayClaudePlatformAWS,
@@ -177,7 +177,7 @@ var anthropicSurfaces = map[model.Gateway]Surface{
 		ZDR:                "opt-in (on-request)",
 		Residency:          "AWS region of the endpoint; ZDR opt-in",
 		AsOf:               surfacesAsOf,
-		Notes:              "Anthropic-operated, so the full Admin/Compliance/Models APIs apply (unlike Bedrock). HIPAA explicitly NOT supported (ANT2-01). IAM grants 65 actions with documented over-read in Get*. Env contract VERIFIED 2026-07-03 against code.claude.com/docs/en/claude-platform-on-aws: selector CLAUDE_CODE_USE_ANTHROPIC_AWS; workspace pinning via ANTHROPIC_AWS_WORKSPACE_ID -> anthropic-workspace-id; ANTHROPIC_AWS_BASE_URL overrides the endpoint; optional ANTHROPIC_AWS_API_KEY is sent as x-api-key and takes precedence over SigV4.",
+		Notes:              "Anthropic-operated, so the full Admin/Compliance/Models APIs apply (unlike Bedrock). HIPAA explicitly NOT supported. IAM grants 65 actions with documented over-read in Get*. Env contract VERIFIED 2026-07-03 against code.claude.com/docs/en/claude-platform-on-aws: selector CLAUDE_CODE_USE_ANTHROPIC_AWS; workspace pinning via ANTHROPIC_AWS_WORKSPACE_ID -> anthropic-workspace-id; ANTHROPIC_AWS_BASE_URL overrides the endpoint; optional ANTHROPIC_AWS_API_KEY is sent as x-api-key and takes precedence over SigV4.",
 	},
 	model.GatewayBedrockMantle: {
 		Gateway:            model.GatewayBedrockMantle,
@@ -194,7 +194,7 @@ var anthropicSurfaces = map[model.Gateway]Surface{
 		HIPAA:              "yes",
 		HIPAAStatus:        statusConfirmed,
 		ZDR:                "AWS-governed",
-		Residency:          "AWS region; HIPAA/FedRAMP/IL4-5 eligible (ANT2-17)",
+		Residency:          "AWS region; HIPAA/FedRAMP/IL4-5 eligible",
 		AsOf:               surfacesAsOf,
 		Notes:              "The CURRENT Bedrock surface and the build target. No Anthropic Admin/Models/Compliance API (AWS-governed) → Anthropic-side ingest degrades to CloudTrail/usage-derived; document, never fake. HIPAA/FedRAMP/IL4-5 live here.",
 	},
@@ -235,7 +235,7 @@ var anthropicSurfaces = map[model.Gateway]Surface{
 		ZDR:                "Google-governed",
 		Residency:          "GCP region; Google-governed retention",
 		AsOf:               surfacesAsOf,
-		Notes:              "Lifecycle dates differ from first-party (ANT2-03): e.g. Sonnet 4 retires 2026-09-14 on Vertex vs 2026-06-15 first-party. No Anthropic Admin/Models API.",
+		Notes:              "Lifecycle dates differ from first-party: e.g. Sonnet 4 retires 2026-09-14 on Vertex vs 2026-06-15 first-party. No Anthropic Admin/Models API.",
 	},
 	model.GatewayFoundry: {
 		Gateway:            model.GatewayFoundry,
@@ -254,7 +254,7 @@ var anthropicSurfaces = map[model.Gateway]Surface{
 		ZDR:                "yes",
 		Residency:          "Azure region of the resource",
 		AsOf:               surfacesAsOf,
-		Notes:              "NO Admin/Compliance/Models/Batches API (ANT2-01) — Anthropic-side governance ingest is unavailable here; model access is by deployment-name indirection, not model id. MCP connector IS available (mirrors MCPConnectorAvailability). ZDR supported. Env contract VERIFIED 2026-07-03 against code.claude.com/docs/en/microsoft-foundry: ANTHROPIC_FOUNDRY_RESOURCE computes https://{resource}.services.ai.azure.com/anthropic, ANTHROPIC_FOUNDRY_BASE_URL overrides it, and auth uses ANTHROPIC_FOUNDRY_API_KEY or DefaultAzureCredential.",
+		Notes:              "NO Admin/Compliance/Models/Batches API — Anthropic-side governance ingest is unavailable here; model access is by deployment-name indirection, not model id. MCP connector IS available (mirrors MCPConnectorAvailability). ZDR supported. Env contract VERIFIED 2026-07-03 against code.claude.com/docs/en/microsoft-foundry: ANTHROPIC_FOUNDRY_RESOURCE computes https://{resource}.services.ai.azure.com/anthropic, ANTHROPIC_FOUNDRY_BASE_URL overrides it, and auth uses ANTHROPIC_FOUNDRY_API_KEY or DefaultAzureCredential.",
 	},
 }
 

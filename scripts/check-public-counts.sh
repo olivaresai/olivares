@@ -605,7 +605,7 @@ for locale, required in (("es", ("selectable_modules", "modules", "twenty_one"))
     if any(not isinstance(data.get(key), str) for key in required):
         blind(f"UNVERIFIED check-public-counts: locale data {path} lacks required string vocabulary")
     COUNT_LOCALES[locale] = data
-JOIN = r"(?:[\s\-]|の|個の|个|件の|项|項|つの|间的)*"
+JOIN = r"(?:[\s\-]|の|個の|个|件の|项|項|つの|间的|개의|개)*"
 NOUN = {
     "selectable_modules": r"(?:selectable\s+modules?\b|auswählbar(?:e|en)\s+Modul(?:e|en)\b|" + COUNT_LOCALES["es"]["selectable_modules"] + r"|" + COUNT_LOCALES["fr"]["selectable_modules"] + r"|選択可能なモジュール|выбираемых\s+модул\w*|可选模块)",
     # "module dirs" is a DIFFERENT metric (31 incl. modules/example): the lookahead keeps a
@@ -658,6 +658,16 @@ NOUN = {
 # LOW count with these nouns is legitimate subset prose ("three modules make up X",
 # "11 content sources"); the wrong-count trap only exists near the canonical magnitude,
 # so each metric carries a floor.
+# README languages added after es/fr (uk, pt, ko): each adds its own count nouns from its locale data,
+# so the patterns above stay as written. An empty string adds nothing.
+for locale in ("uk", "pt", "ko"):
+    path = f"scripts/locales/{locale}/public-counts.json"
+    data = locale_data(path)
+    for metric in ("modules", "integrations", "catalogs", "enforcement"):
+        if not isinstance(data.get(metric), str):
+            blind(f"UNVERIFIED check-public-counts: locale data {path} lacks {metric}")
+        if data[metric]:
+            NOUN[metric] = NOUN[metric][:-1] + "|" + data[metric] + ")"
 DIGIT_UNIT = {m: re.compile(r"(?<![A-Za-z0-9.])(\d+)" + JOIN + NOUN[m]) for m in NOUN}
 FLOOR = {"modules": 15, "selectable_modules": 15, "integrations": 100, "catalogs": 10, "enforcement": 0, "paths": 20}
 
@@ -1455,9 +1465,10 @@ print(f"derived: modules={MODULES} integrations={INTEGRATIONS} ({CONN_DIRS} dirs
       f"paths={PATHS} "
       f"catalogs={CATALOGS} enforcement={ENFORCEMENT} kinds={KINDS}")
 
-# ═══ surface 1: README family (7 languages, hardcoded digits, identical structure) ══════
+# ═══ surface 1: README family (10 languages, hardcoded digits, identical structure) ══════
 README_FAMILY = ["README.md", "README.es.md", "README.de.md", "README.fr.md",
-                 "README.ja.md", "README.ru.md", "README.zh.md"]
+                 "README.ja.md", "README.ru.md", "README.zh.md",
+                 "README.uk.md", "README.ko.md", "README.pt.md"]
 # The spelled enforcement claim, per locale, REQUIRED — and keyed by the MEASURED count,
 # not hardcoded to four. This table used to be seven literals saying "four", which meant
 # the seven front pages spell the number as a WORD, check_units only matches (\d+), and so
@@ -1519,6 +1530,21 @@ ENFORCEMENT_PHRASE = {
         4: [r"四个\s*deny-closed\s*执行点"],
         3: [r"三个\s*deny-closed\s*执行点"],
         2: [r"两个\s*deny-closed\s*执行点"],
+    },
+    "README.uk.md": {
+        4: [r"чотири deny-closed точки застосування"],
+        3: [r"три deny-closed точки застосування"],
+        2: [r"дві deny-closed точки застосування"],
+    },
+    "README.ko.md": {
+        4: [r"4\s*개의\s*deny-closed\s*시행\s*지점"],
+        3: [r"3\s*개의\s*deny-closed\s*시행\s*지점"],
+        2: [r"2\s*개의\s*deny-closed\s*시행\s*지점"],
+    },
+    "README.pt.md": {
+        4: [r"quatro pontos de aplicação deny-closed"],
+        3: [r"três pontos de aplicação deny-closed"],
+        2: [r"dois pontos de aplicação deny-closed"],
     },
 }
 # ── C10-06: la cifra que vive DENTRO de un SVG ya renderizado ────────────────────────
@@ -1604,7 +1630,7 @@ check_framework_diagrams()
 
 for f in README_FAMILY:
     if not os.path.isfile(f):
-        fail("readme", f"{f} missing — the 7-language README family is a public invariant")
+        fail("readme", f"{f} missing — the 10-language README family is a public invariant")
         continue
     text = rd(f)
     require_nonempty("readme", f, text, 4000)

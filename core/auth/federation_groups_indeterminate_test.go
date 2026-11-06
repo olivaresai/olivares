@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -39,10 +40,7 @@ func newOverageFixture(t *testing.T) *overageFixture {
 	tenant := provisionTenant(t, f.st, "acme")
 	seedConfig(t, f.st, tenant, "default", "https://idp.acme.test", "acme.com")
 	mustMember(t, ctx, f.a, f.super, tenant, overageEmail, auth.RoleViewer)
-	g, err := f.a.SCIMCreateGroup(ctx, f.super, tenant, auth.SCIMGroupInput{DisplayName: "Engineering", ExternalID: "grp-eng"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := authtest.Group(t, f.st, tenant, "Engineering", "grp-eng")
 	if _, err := f.a.ConfigureGroupRole(ctx, f.super, tenant, g.Group.ID, auth.RoleEditor); err != nil {
 		t.Fatal(err)
 	}

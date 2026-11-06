@@ -160,28 +160,34 @@ func (m *Module) handleRunWorktreeDiff(w http.ResponseWriter, r *http.Request, m
 		writeRunErr(w, conflictErr("git could not list the changes of branch "+cmp.branch+": "+gitMessage(stderr)))
 		return
 	}
-	dto := runWorktreeDiffDTO{Branch: cmp.branch, Base: cmp.base, Head: cmp.head, Files: []worktreeDiffFile{}}
-	// -z: status NUL path NUL, repeated. Output past the cap of gitRun is cut, so a
-	// listing that fills it is incomplete, says so, and drops the record the cut may have
-	// split.
+	dto := runWorktreeDiffDTO{Branch: cmp.branch, Base: cmp.base, Head: cmp.head}
+	dto.Files, dto.Truncated = worktreeDiffFiles(out, cmp.inScope)
+	writeJSON(w, http.StatusOK, dto)
+}
+
+// worktreeDiffFiles reads what `diff-tree -r -z --name-status` printed: status NUL path
+// NUL, repeated, the paths keep accepts. Output past the cap of gitRun is cut, so a
+// listing that fills it is incomplete, says so, and drops the record the cut may have
+// split; so does one with more than worktreeDiffMaxFiles paths.
+func worktreeDiffFiles(out string, keep func(path string) bool) (files []worktreeDiffFile, truncated bool) {
+	files = []worktreeDiffFile{}
 	fields := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
 	if len(out) >= worktreeGitOutputLimit {
-		dto.Truncated = true
+		truncated = true
 		if len(fields) > 0 {
 			fields = fields[:len(fields)-1]
 		}
 	}
 	for i := 0; i+1 < len(fields); i += 2 {
-		if !cmp.inScope(fields[i+1]) {
+		if keep != nil && !keep(fields[i+1]) {
 			continue
 		}
-		if len(dto.Files) == worktreeDiffMaxFiles {
-			dto.Truncated = true
-			break
+		if len(files) == worktreeDiffMaxFiles {
+			return files, true
 		}
-		dto.Files = append(dto.Files, worktreeDiffFile{Path: fields[i+1], Status: worktreeStatusWord(fields[i])})
+		files = append(files, worktreeDiffFile{Path: fields[i+1], Status: worktreeStatusWord(fields[i])})
 	}
-	writeJSON(w, http.StatusOK, dto)
+	return files, truncated
 }
 
 // worktreeBlobAt reads path at commit as text. exists is false when the commit has no

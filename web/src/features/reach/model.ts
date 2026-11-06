@@ -58,6 +58,9 @@ export interface ReachModel {
   /** A session's tool is unknown (off the live page, unreadable, or no driver
    * declared), so the session is named by its ref: the view says so. */
   sessionsByRef: boolean
+  /** A tool has access-map edges that name no place (shell commands, searches,
+   * databases): they are not destinations, and the view says so. */
+  hasOtherReach: boolean
   /** The graph page was cut: this model is a subset, label it as such. */
   hasMore: boolean
 }
@@ -66,13 +69,18 @@ export interface ReachModel {
  * scopeableKindFor: folder sources are `resource`, MCP `mcp_server`, providers
  * `provider`). Observed telemetry spells the MCP kind `mcp.server` (the seeded
  * demo graph, cmd/olivares/seed/seed.go); both name the same family, so neither
- * spelling silently hides an MCP edge the access map shows. Everything else —
- * mcp.tool, postgres.table, s3.bucket — is not a destination family. */
+ * spelling silently hides an MCP edge the access map shows. A session's tool
+ * calls arrive as `file` (a path) and `http.url` (a web endpoint), the kinds of
+ * connectors/claude/resource.go. Everything else — shell (the program alone),
+ * web.search, mcp.tool, postgres.table, s3.bucket — names no place: the view
+ * says so (`hasOtherReach`) instead of dropping it silently. */
 const FAMILY_BY_KIND: Record<string, ReachFamily> = {
   resource: 'folders',
+  file: 'folders',
   mcp_server: 'mcp',
   'mcp.server': 'mcp',
   provider: 'providers',
+  'http.url': 'providers',
 }
 
 /** The canonical kind a family is stored under (approvals name families, not kinds). */
@@ -148,8 +156,8 @@ export function buildReach(
   const links = new Map<string, ReachLink>()
   const waitingLinks = new Map<string, ReachLink>()
 
-  const addDest = (family: ReachFamily, ref: string) => {
-    const id = destId(KIND_BY_FAMILY[family], ref)
+  const addDest = (family: ReachFamily, ref: string, resourceId?: string) => {
+    const id = destId(KIND_BY_FAMILY[family], resourceId || ref)
     if (!destinations.has(id))
       destinations.set(id, { id, ref, family, waiting: false })
     return id
@@ -167,6 +175,12 @@ export function buildReach(
 
   const edgeTool = (e: ReachEdge): ReachTool | undefined => {
     if (e.origin_kind === 'session') {
+      if (e.signal_source === 'session_launch' && e.tool_ref)
+        return {
+          id: `engine\u0000${e.tool_ref}`,
+          name: toolName(e.tool_ref),
+          kind: e.tool_ref,
+        }
       const ref = e.origin_ref || e.origin_id
       return ref ? sessionTool(ref) : undefined
     }
@@ -185,17 +199,28 @@ export function buildReach(
     )
   }
 
+  let hasOtherReach = false
   for (const e of graph.edges) {
     const family =
       e.resource_kind && Object.hasOwn(FAMILY_BY_KIND, e.resource_kind)
         ? FAMILY_BY_KIND[e.resource_kind]
         : undefined
-    if (!family || !e.resource_ref) continue
+    if (!family) {
+      if (edgeTool(e)) hasOtherReach = true
+      continue
+    }
+    if (!e.resource_ref) continue
     // Only TOOL reach makes a destination row: a resource reached by an identity
     // alone is not "what the tools reach" and would render as an orphan.
     const tool = edgeTool(e)
     if (!tool) continue
-    const destinationId = addDest(family, e.resource_ref)
+    const destinationId = addDest(
+      family,
+      e.resource_ref,
+      e.signal_source === 'session_launch' && family === 'folders'
+        ? e.resource_id
+        : undefined,
+    )
     tools.set(tool.id, tool)
     const key = `${tool.id}\u0000${destinationId}`
     if (!links.has(key))
@@ -234,6 +259,7 @@ export function buildReach(
       [...links.values(), ...waitingLinks.values()].map((l) => l.destinationId),
     ),
     sessionsByRef: [...tools.values()].some((t) => t.id.startsWith(BY_REF)),
+    hasOtherReach,
     hasMore: graph.has_more,
   }
 }

@@ -7,6 +7,7 @@ package governance
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -84,11 +85,12 @@ type guardianTransitionScope struct {
 
 type guardianAuditFault struct {
 	store.AuditLog
+	action    string
 	remaining int
 }
 
 func (a *guardianAuditFault) Append(ctx context.Context, draft model.AuditDraft) (model.AuditEvent, error) {
-	if a.remaining > 0 && draft.Action == "governance.guardian.execute" {
+	if a.remaining > 0 && (draft.Action == a.action || (a.action == "" && draft.Action == "governance.guardian.execute")) {
 		a.remaining--
 		return model.AuditEvent{}, store.ErrConflict
 	}
@@ -266,7 +268,7 @@ func TestGuardianSweepContinuesAfterATransientChangeRecordFailure(t *testing.T) 
 			Spec: map[string]any{
 				"required_approvals": 1,
 				"match":              map[string]any{"action": "security.guardian.stop_estate"},
-				"change_record":      map[string]any{"system": "servicenow", "key": "CHG-OK"},
+				"change_record":      map[string]any{"system": "servicenow", "key": "CHG-OK", "destination": "healthy"},
 			},
 		})
 		return err
@@ -675,5 +677,93 @@ func TestGuardianContainmentRefusesMovedApprovalBindingBetweenDiscoveryAndSpend(
 	}
 	if got := f.approvalByID(approvalID).String(colConsumedBy); got != "" {
 		t.Fatalf("approval was spent under a moved binding: %q", got)
+	}
+}
+
+func TestGuardianSweepBacksOffADeadDestinationAcrossTheQueue(t *testing.T) {
+	f := newGuardianChangeRecordFixture(t, "security.guardian.stop_agent")
+	ctx := context.Background()
+	for i := 1; i < 12; i++ {
+		f.fire("anomaly_detected", sdkmodel.SeverityHigh, "agent", fmt.Sprintf("queued-agent-%d", i), fmt.Sprintf("queued-detail-%d", i))
+	}
+	actions := f.actions()
+	if len(actions) != 12 {
+		t.Fatalf("queued actions = %d, want 12", len(actions))
+	}
+	if err := f.st.Mutate(ctx, f.tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(approvalKind)
+		if err != nil {
+			return err
+		}
+		for _, action := range actions {
+			rec, err := repo.Get(ctx, model.ID(action.String(colGAApprovalID)))
+			if err != nil {
+				return err
+			}
+			rec[colStatus], rec[colApproveCount] = statusApproved, int64(1)
+			if _, err := repo.Update(ctx, rec); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fault := &guardianAuditFault{remaining: 1, action: "governance.approval.change_record_refused"}
+	f.m.UseData(cedarEpochModuleData{st: f.st, mutateWrap: func(sc store.Scope) store.Scope {
+		return &guardianTransitionScope{Scope: sc, repo: &guardianRepoFault{}, audit: fault}
+	}})
+	reads := 0
+	f.m.UseChangeRecordReader(func(ctx context.Context, _ model.TenantID, _, _, _ string) (ChangeRecord, error) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("reader has no deadline")
+		}
+		reads++
+		f.clock.mu.Lock()
+		f.clock.t = f.clock.t.Add(changeRecordTimeout)
+		f.clock.mu.Unlock()
+		return ChangeRecord{}, context.DeadlineExceeded
+	})
+	for i := 0; i < 2; i++ {
+		res, err := f.m.GuardianSweep(ctx, f.tenant)
+		var refusal approvalDecisionError
+		if !errors.As(err, &refusal) || refusal.Code != codeChangeRecordUnavailable || res.Executed != 0 {
+			t.Fatalf("sweep %d = %+v %v, want unavailable and no execution", i, res, err)
+		}
+	}
+	if reads != 1 {
+		t.Fatalf("two sweeps over 12 approvals made %d timeout reads, want 1", reads)
+	}
+	rows := 0
+	if err := f.st.View(ctx, f.tenant, func(sc store.Scope) error {
+		return sc.Audit().(store.CanonicalWalker).WalkCanonical(ctx, 1, func(e model.AuditEvent, _ string, _ []byte) error {
+			if e.Action == "governance.approval.change_record_refused" {
+				rows++
+			}
+			return nil
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if fault.remaining != 0 || rows != 1 {
+		t.Fatalf("ledger after a failed first write: remaining=%d rows=%d, want 0 and 1", fault.remaining, rows)
+	}
+	for _, action := range f.actions() {
+		if action.String(colGAStatus) != gaStatusPending {
+			t.Fatal("outage made action terminal")
+		}
+		if rec := f.approvalByID(action.String(colGAApprovalID)); rec.String(colStatus) != statusApproved || rec.String(colConsumedBy) != "" {
+			t.Fatal("outage revoked or spent approval")
+		}
+	}
+	// A successful gate check ends the shared outage immediately, even during backoff.
+	f.m.UseChangeRecordReader(func(context.Context, model.TenantID, string, string, string) (ChangeRecord, error) {
+		return ChangeRecord{State: "Scheduled"}, nil
+	})
+	if status, err := f.m.EngineApprovals().StillHolds(ctx, f.tenant, actions[0].String(colGAApprovalID)); err != nil || status != statusApproved {
+		t.Fatalf("recovered check = %q %v", status, err)
+	}
+	if res, err := f.m.GuardianSweep(ctx, f.tenant); err != nil || res.Executed != 12 {
+		t.Fatalf("recovered sweep = %+v %v, want 12 executions", res, err)
 	}
 }

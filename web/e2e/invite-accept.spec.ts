@@ -47,7 +47,7 @@ test('accept-invite: public page renders without a session and rejects a bogus t
     await setupPage
       .getByRole('button', { name: /create administrator/i })
       .click()
-    await expect(setupPage).toHaveURL(/\/onboarding$/)
+    await expect(setupPage).toHaveURL(/\/sessions$/)
   } finally {
     await setupPage.close()
   }

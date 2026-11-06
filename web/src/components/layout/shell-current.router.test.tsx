@@ -80,15 +80,16 @@ const recordings = FEATURE_VIEWS.some((v) => v.id === 'recordings')
 
 describe('the router marks no second current link', () => {
   it.each([
-    ['/', ['now'], []],
-    ['/communications/inbox', ['work'], ['/communications/inbox']],
-    ['/console/sources/diff', ['work'], ['/console/sources/diff']],
-    // A door folded into a room (#2240) marks the room's place; AI tools has one page, so
-    // no row is drawn.
-    ['/provider-profiles', ['ai-tools'], []],
-    ['/provider-accounts', ['ai-tools'], []],
+    ['/now', ['now'], []],
+    // The inbox is a door into the one Communications room: the room's row is the current one.
+    ['/communications/inbox', ['sessions'], ['/communications']],
+    // Source diff sits under the row's More: the row marks no link, the menu marks it.
+    ['/console/sources/diff', ['sessions'], []],
+    // A door folded into a room (#2240) marks the room's place and, in its row, the room.
+    ['/provider-profiles', ['tools'], ['/agent-tools']],
+    ['/provider-accounts', ['tools'], ['/agent-tools']],
     // /mcp-servers now lands on MCP & skills' Servers tab (#3388).
-    ['/capabilities', ['mcp-skills'], ['/capabilities']],
+    ['/capabilities', ['tools'], ['/capabilities']],
     ['/inventory', ['files'], ['/inventory']],
     // A deep-link detail reads as its parent's page (Recordings is a Business page).
     [
@@ -101,7 +102,8 @@ describe('the router marks no second current link', () => {
     ['/permissions?tab=approvals', ['rules'], ['/permissions']],
     ['/sessions?session=s-1', ['sessions'], []],
     ['/settings', ['settings'], ['/settings']],
-    ['/settings?section=edition', ['license'], []],
+    // Edition is a section of Settings (0.7): Settings is the current place.
+    ['/settings?section=edition', ['settings'], ['/settings']],
   ])('at %s', async (address, places, row) => {
     const current = await currentAt(address)
     expect(current.places).toEqual(places)

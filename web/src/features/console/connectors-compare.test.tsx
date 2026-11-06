@@ -31,6 +31,9 @@ const { api, authState } = vi.hoisted(() => ({
   },
 }))
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
@@ -66,7 +69,7 @@ beforeEach(() => {
     {
       compare: 'Compare',
       forbidden:
-        'This comparison needs system:admin. Only a superadmin holds it. An owner or an admin cannot grant it.',
+        'Only a superadmin can run this comparison. An owner or an admin cannot grant it.',
     },
     true,
     true,
@@ -125,7 +128,7 @@ describe('compare on a source row', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('disables Compare and names system:admin when that permission is absent', () => {
+  it('disables Compare and says only a superadmin can compare', () => {
     wrap(
       <SourceCompareControl
         source={{ name: 'gh-main', kind: 'github' }}
@@ -133,9 +136,9 @@ describe('compare on a source row', () => {
       />,
     )
     expect(screen.getByRole('button', { name: 'Compare' })).toBeDisabled()
-    expect(screen.getByText(/Only a superadmin holds it/)).toHaveTextContent(
-      'cannot grant',
-    )
+    expect(
+      screen.getByText(/Only a superadmin can run this comparison/),
+    ).toHaveTextContent('cannot grant')
     expect(screen.queryByText(/ask an administrator/)).not.toBeInTheDocument()
   })
 

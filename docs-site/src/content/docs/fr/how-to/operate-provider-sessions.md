@@ -87,7 +87,7 @@ docker compose exec olivares olivares session follow first-hour
 
 ## Approuver, interrompre, arrêter et reprendre
 
-Sous **Plus d’options**, **Supervisé** fait demander à l’outil une
+Sous **Ce que l’agent peut faire**, **Supervisé** fait demander à l’outil une
 confirmation avant d’agir. Dans **Règles**, la demande qui attend votre décision est
 ouverte à côté de la file d’attente, avec sa commande, ce qu’elle atteint et la règle
 qui l’a déclenchée. Choisissez **Approuver une fois** (`A`), ou **Rejeter** (`D`) puis

@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { readableAction } from '@/components/layout/bell-events'
+import { AccountBadge } from '@/features/agent-tools/account-marks'
 import {
   railGroups,
   type RailRow,
@@ -42,9 +43,8 @@ import {
   ApprovalRequestCell,
   ApprovalWhatRuns,
   ApprovalWhy,
-  approvalCommandUnknown,
-  approvalExpectsCommand,
-  reviewIsLong,
+  FLAG_ARM_MS,
+  oneClickApprove,
   useApprovalSession,
 } from '@/features/governance/approval-preview'
 import { governanceApi, governanceKeys } from '@/features/governance/api'
@@ -104,6 +104,7 @@ function QueueRow({ row }: { row: RailRow }) {
             <span className="truncate text-caption text-text-2">{meta}</span>
           ) : null}
         </span>
+        <AccountBadge profileRef={row.profileRef} className="max-w-28" />
         {/* The state as the Sessions list says it: its word and how long ago. */}
         <span
           data-testid="now-needs-row-status"
@@ -119,22 +120,6 @@ function QueueRow({ row }: { row: RailRow }) {
 
 /** The permission that decides a request (governance-view.tsx `canDecide`). */
 const APPROVAL_DECIDE = 'governance:approval:admin'
-
-/** How long a request that just took the flagged place ignores Approve: the queue's poll
- * can swap the card under a pointer already on its way to the button. */
-export const FLAG_ARM_MS = 500
-
-/**
- * One click approves only what the card shows in full: a reviewed command short enough
- * not to be cut, or a request that runs nothing by itself. A long command, one the tool
- * did not name, or a tool call stored without its review opens the request beside the
- * queue, where the whole of it is read above Approve once.
- */
-function oneClickApprove(approval: ApprovalDTO): boolean {
-  if (approvalCommandUnknown(approval)) return false
-  const text = approval.review?.text
-  return text ? !reviewIsLong(text) : !approvalExpectsCommand(approval)
-}
 
 /** The request Estate's card holds, and whether the queue still holds it. */
 export interface FlaggedRequest {
@@ -253,7 +238,8 @@ function FlaggedCard({
     <article
       aria-labelledby={headingId}
       data-testid="now-flagged-request"
-      className="flex min-w-0 flex-col gap-3 rounded-lg border-l-2 border-accent bg-surface px-4 py-3"
+      data-trust-chrome=""
+      className="flex min-w-0 flex-col gap-3 rounded-lg border-l-2 border-accent bg-surface px-4 py-3 text-foreground"
     >
       <div className="flex min-w-0 flex-col gap-0.5">
         <h3 id={headingId} className="break-words text-heading text-text">

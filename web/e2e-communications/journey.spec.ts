@@ -993,7 +993,7 @@ test('changing the workspace ends the previous scope: no rows survive, and no K3
   await expect(
     b.getByRole('row').filter({ hasText: `Deploy window ${STAMP}` }),
   ).toHaveCount(0)
-  await expect(b.getByText('No deliveries')).toBeVisible()
+  await expect(b.getByText('Your inbox is empty')).toBeVisible()
   expect(k3Requests.every((u) => u.includes(`workspace_id=${wsDefault}`))).toBe(
     true,
   )

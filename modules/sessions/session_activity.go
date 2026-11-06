@@ -30,19 +30,21 @@ import (
 // and is the same for the console, the API and the CLI.
 
 const (
-	// A read repeats whenever the session writes, so its file bound is tighter than
-	// the handoff's one-off read; a real session is far below all of them. Large tool
-	// output is stored by the tool beside the transcript, not in it.
+	// A transcript is read whole, however long the session: the reads stream it one
+	// record at a time, and real Claude Code transcripts reach 172 MB (measured on our
+	// own hosts, 2026-11-01). activityFileMax bounds what a read holds in memory at
+	// once instead: the workflow records of one read, and a handoff's export.
 	activityFileMax = 64 << 20
 	// One record is one message of the tool, as long as a provider request
-	// (maxOutputLine, procrunner.go), and never longer than the file read.
+	// (maxOutputLine, procrunner.go), and never longer than what one read holds; a
+	// longer one is counted unreadable.
 	activityLineMax   = activityFileMax
 	activityAgentsMax = 256
 	// One summary is a line on a panel, not the agent's report.
 	activitySummaryMax = 300
 	// A read of one session by one person is recorded once per window: the console
-	// reads again whenever the session writes, and the ledger records who read what,
-	// not how often a panel refreshed.
+	// reads again whenever the session writes and its stream reconnects, and the ledger
+	// records who read what, not how often a panel refreshed.
 	activityAuditWindow = 15 * time.Minute
 )
 
@@ -334,9 +336,6 @@ func (m *Module) runActivity(ctx context.Context, tenant model.TenantID, runRef 
 		}
 	}()
 	if fold.dto.Driver == providerDriverCodex {
-		if tr.info.Size() > activityFileMax {
-			return activityDTO{}, errActivityTooLarge
-		}
 		codex := newCodexActivityFold(fold)
 		if err := codex.read(ctx, io.LimitReader(tr.f, tr.info.Size()), rec.String(colClaudeSessionID)); err != nil {
 			return activityDTO{}, err
@@ -540,7 +539,7 @@ func activitySessionDir(transcript string) string {
 }
 
 // readActivityState reads a file of the session's state under the transcript's
-// rules: inside the home, not a link, one name, a regular file, within the bound.
+// rules: inside the home, not a link, one name, a regular file.
 // It reads up to the size the file had when opened, as a live write may continue,
 // and reports whether the file changed meanwhile; that is not an error.
 func readActivityState(ctx context.Context, home *os.Root, rel string, read func(context.Context, io.Reader) error) (changed bool, err error) {
@@ -556,9 +555,6 @@ func readActivityState(ctx context.Context, home *os.Root, rel string, read func
 	if !info.Mode().IsRegular() || !singleLink(info) {
 		return false, errClaudeStateSpecial
 	}
-	if info.Size() > activityFileMax {
-		return false, errActivityTooLarge
-	}
 	if err := read(ctx, io.LimitReader(f, info.Size())); err != nil {
 		return false, err
 	}
@@ -572,9 +568,6 @@ func readActivityState(ctx context.Context, home *os.Root, rel string, read func
 // readActivityFile folds an open transcript, up to the size it had when opened: a
 // running session keeps writing, and the next read has the rest.
 func readActivityFile(ctx context.Context, fold *activityFold, f *os.File, info fs.FileInfo) error {
-	if info.Size() > activityFileMax {
-		return errActivityTooLarge
-	}
 	return fold.read(ctx, io.LimitReader(f, info.Size()))
 }
 
@@ -601,8 +594,8 @@ func (m *Module) handleRunAgentTranscript(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, dto)
 }
 
-// auditActivityRead records a read of the session's activity, which names what its
-// conversation did, once per person, session, kind of read and window. The window
+// auditActivityRead records a read of the session's conversation (its activity,
+// messages and attach stream), once per person, session, kind of read and window. The window
 // starts only once the record is written, so a failed write is tried again on the next
 // read.
 func (m *Module) auditActivityRead(r *http.Request, mc api.ModuleContext, ref, action string) {

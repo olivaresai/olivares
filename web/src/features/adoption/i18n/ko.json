@@ -1,5 +1,5 @@
 {
-  "title": "Claude Code 도입",
+  "title": "도입",
   "description": "Claude Code가 얼마나 사용되며, 제안한 것 중 개발자가 얼마나 유지하는지 보여줍니다.",
   "range": {
     "label": "기간",
@@ -15,7 +15,7 @@
     "trend": "추세"
   },
   "boundary": {
-    "note": "Claude API 트래픽만 포함합니다 — 관리자 Analytics 피드와 OTLP 텔레메트리 플레인입니다. {{providers}}에서 제공하는 사용량은 포함되지 않으므로 여기에 도입이 없다고 해서 실제로 없다는 증거가 되지는 않습니다.",
+    "note": "Claude API 사용량만 포함합니다. 제외: {{providers}}.",
     "providers": {
       "claude-platform-aws": "AWS의 Claude Platform",
       "microsoft-foundry": "Microsoft Foundry",
@@ -25,12 +25,12 @@
   },
   "lenses": {
     "analytics": {
-      "title": "개발자별(관리자 Analytics)",
-      "description_other": "관리자 Analytics 피드의 권위 있는 개발자별/일별 합계이며 {{count}}명의 개발자를 포함합니다."
+      "title": "개발자별",
+      "description_other": "개발자 {{count}}명의 일별 합계입니다."
     },
     "telemetry": {
-      "title": "세션별(실시간 텔레메트리)",
-      "description_other": "OTLP 플레인의 실시간 세션별 활동이며 {{count}}개 팀을 포함합니다. 활성 시간이 포함됩니다."
+      "title": "세션별",
+      "description_other": "팀 {{count}}개의 실시간 활동과 활성 시간입니다."
     }
   },
   "comparison": {

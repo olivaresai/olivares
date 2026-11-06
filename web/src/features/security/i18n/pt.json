@@ -1,0 +1,304 @@
+{
+  "title": "Segurança",
+  "description": "Deteções de guardrails, a postura de imposição, a fila de anomalias e a análise forense de incidentes com deteção de adulteração. Por predefinição, só regista: nada é bloqueado até ativar uma regra.",
+  "tabs": {
+    "overview": "Visão geral",
+    "safety": "Postura de segurança",
+    "findings": "Deteções",
+    "guardrails": "Guardrails",
+    "anomalies": "Anomalias",
+    "forensics": "Forense"
+  },
+  "posture": {
+    "title": "Exposição atual",
+    "description": "Leituras em direto das pessoas, credenciais e controlos que precisam de atenção agora.",
+    "review": "Rever",
+    "notAvailable": "Não disponível",
+    "partialHint": "Um sinal de mais significa que a leitura tem mais linhas para além desta página, pelo que a contagem é um mínimo.",
+    "secondFactor": {
+      "label": "Pessoas sem segundo fator",
+      "description": "Membros ativos sem um código de autenticador confirmado nem uma chave de acesso registada."
+    },
+    "administrators": {
+      "label": "Administradores",
+      "description": "Proprietários e administradores ativos nesta organização."
+    },
+    "apiKeys": {
+      "label": "Chaves de API sem validade ou por usar",
+      "description": "Chaves registadas sem validade ou sem utilização registada. As chaves revogadas não contam.",
+      "value": "{{noExpiry}} sem validade · {{unused}} por usar"
+    },
+    "approvals": {
+      "label": "Aprovações pendentes",
+      "description": "Pedidos a aguardar que uma pessoa os aprove ou rejeite."
+    },
+    "killSwitch": {
+      "label": "Kill switch",
+      "description": "A postura de paragem atual para o parque e para cada agente.",
+      "estateStopped": "Parque parado",
+      "agentStops_one": "{{count}} agente parado",
+      "agentStops_many": "{{count}} de agentes parados",
+      "agentStops_other": "{{count}} agentes parados",
+      "notEngaged": "Não acionado"
+    },
+    "providers": {
+      "label": "Fornecedores com chave",
+      "description": "Registos ativos de credenciais de fornecedor. Os valores dos segredos nunca são lidos."
+    },
+    "policy": {
+      "label": "Modo da política",
+      "description": "Se a admissão de modelos assinados está por configurar, em observação ou em imposição.",
+      "unconfigured": "Não configurada",
+      "observe": "Observar",
+      "enforce": "Impor"
+    }
+  },
+  "findings": {
+    "title": "Deteções",
+    "description": "Deteções de guardrails, anomalias e análise forense. A evidência é uma impressão digital — não há conteúdo para expandir.",
+    "empty": "Sem deteções",
+    "emptyHint": "As deteções aparecem à medida que os guardrails, a deteção de anomalias e a análise forense registam evidência.",
+    "namesUnread": "Não foi possível ler alguns nomes de sessões, por isso essas linhas mostram a sua referência.",
+    "export": {
+      "action": "Exportar SARIF",
+      "busy": "A exportar…",
+      "done": "Exportação SARIF transferida.",
+      "truncated": "Exportação SARIF transferida, mas parou no limite de resultados do servidor — é uma execução válida, não o conjunto completo."
+    },
+    "search": "Pesquisar deteções",
+    "fingerprint": "imp. dig.",
+    "columns": {
+      "severity": "Gravidade",
+      "kind": "Tipo",
+      "source": "Origem",
+      "title": "Deteção",
+      "evidence": "Evidência",
+      "status": "Estado",
+      "actions": "Ações"
+    },
+    "kind": {
+      "guardrail": "Guardrail",
+      "anomaly": "Anomalia",
+      "forensic": "Forense"
+    },
+    "status": {
+      "open": "Aberta",
+      "triaged": "Triada",
+      "resolved": "Resolvida",
+      "dismissed": "Dispensada"
+    },
+    "triage": {
+      "action": "Triar",
+      "title": "Triar deteção",
+      "description": "A triagem só altera o estado do fluxo. A evidência — tipo, gravidade e a impressão digital do detalhe — é imutável.",
+      "statusLabel": "Estado",
+      "submit": "Atualizar estado",
+      "updated": "Estado da deteção atualizado",
+      "immutableNote": "A gravidade, o tipo e a impressão digital do detalhe não podem ser alterados — apenas o estado do fluxo."
+    },
+    "subjectKinds": {
+      "local_residency": "Modelo local residente"
+    },
+    "truncated": "A mostrar as primeiras {{n}} ingeridas",
+    "truncatedHint": "Há mais deteções do que as apresentadas, e esta página está ordenada por ID de ingestão — NÃO por quando o problema ocorreu — pelo que podem faltar deteções recentes. O facto de o resto estar fora de vista não é evidência de que nada mais foi detetado."
+  },
+  "safetyPosture": {
+    "title": "Postura de segurança do fornecedor",
+    "description": "Postura de segurança de IA de leitura prioritária, ingerida a partir dos controlos próprios dos fornecedores — OpenAI Moderation, AWS Bedrock Guardrails e Azure Responsible AI. A Olivares lê-a e regista-a; a imposição fica com o fornecedor.",
+    "empty": "Sem deteções de postura de segurança",
+    "emptyHint": "Ligue os conectores OpenAI, AWS ou Azure com as respetivas leituras de segurança ativadas para preencher esta vista.",
+    "countsPartial": "A mostrar um resumo agregado parcial — esta organização tem mais deteções de postura de segurança do que a análise do resumo abrange.",
+    "columns": {
+      "open": "Abertas"
+    }
+  },
+  "guardrails": {
+    "title": "Inspeção de guardrails",
+    "description": "Execute o serviço de inspeção de guardrails sobre uma superfície. O texto é ocultado, convertido em hash e nunca guardado — o resultado é um veredicto mais evidência mínima já ocultada.",
+    "verdictTitle": "Veredicto",
+    "clean": "Sem deteções — limpo.",
+    "detectiveNote": "Este veredicto apenas registou o disparo: foi detetado, não bloqueado. Só é possível bloquear quando a imposição está ativada e sob governação.",
+    "wouldBlock": "Bloquearia (imposto)",
+    "detectOnly": "Apenas deteção",
+    "findingsRecorded": "{{count}} deteção registada",
+    "findingsRecorded_one": "{{count}} deteção registada",
+    "findingsRecorded_many": "{{count}} de deteções registadas",
+    "findingsRecorded_other": "{{count}} deteções registadas",
+    "enforcement": {
+      "detective": "Apenas regista",
+      "enforced": "Imposto"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "Injeção de prompt",
+      "jailbreak": "Jailbreak",
+      "content": "Conteúdo",
+      "output_validation": "Validação de saída",
+      "owasp_agentic": "OWASP agêntico"
+    },
+    "form": {
+      "surface": "Superfície",
+      "text": "Texto a inspecionar",
+      "textHint": "Inspecionado e com hash após ocultação — nunca é guardado nem devolvido.",
+      "enforce": "Pedir imposição",
+      "enforceHint": "Só bloqueia se a política de imposição tiver esta classe ativada e sob governação; caso contrário, o veredicto é apenas um alerta.",
+      "submit": "Inspecionar",
+      "running": "A inspecionar…",
+      "surfaceLabel": "Superfície"
+    },
+    "surface": {
+      "input": "Entrada",
+      "output": "Saída",
+      "tool_args": "Argumentos da ferramenta"
+    }
+  },
+  "enforcement": {
+    "title": "Postura de imposição",
+    "description": "A única ação que toca na produção. Por predefinição, cada classe de proteção apenas regista; ativar a imposição em linha é uma ação de administrador, sob governação quando existe uma porta configurada.",
+    "defaultDetectiveNote": "Por predefinição, nada é bloqueado: as classes só bloqueiam quando são ativadas aqui de forma explícita e estão sob governação.",
+    "fullyDetective": "Nenhuma imposição está ativada — apenas regista e não bloqueia nada até ativar uma regra.",
+    "detective": "Apenas regista",
+    "enforced": "Imposto",
+    "governed": "Sob governação",
+    "ungoverned": "Ativado sem governação humana",
+    "wildcard": "Todas as classes",
+    "change": "Alterar",
+    "columns": {
+      "class": "Classe",
+      "posture": "Postura",
+      "minSeverity": "Gravidade mín.",
+      "governance": "Governação",
+      "updated": "Atualizado",
+      "actions": "Ações"
+    },
+    "dialog": {
+      "title": "Alterar imposição",
+      "description": "Desativar (voltar a apenas registar) é sempre permitido. Ativar a imposição em linha está sob governação quando existe uma porta configurada — uma recusa da governação é apresentada como motivo.",
+      "enabledLabel": "Ativar imposição em linha",
+      "minSeverity": "Gravidade mínima",
+      "reason": "Motivo",
+      "reasonHint": "Registado com a alteração no registo de auditoria.",
+      "submit": "Aplicar",
+      "applied": "Postura de imposição atualizada",
+      "ungovernedWarning": "Ativar esta classe sem uma porta de governação configurada deixa-a sem governação — a alteração é permitida, mas fica assinalada.",
+      "deniedTitle": "A governação recusou esta alteração"
+    }
+  },
+  "anomalies": {
+    "title": "Fila de anomalias",
+    "description": "Desvios e deteções correlacionadas, ordenados por prioridade. As entradas aproximadas são desvios por reconciliar — nunca uma violação firme.",
+    "empty": "Sem anomalias na fila",
+    "emptyHint": "Uma anomalia é um comportamento que os detetores assinalaram para uma pessoa avaliar. A fila está vazia.",
+    "orderNote": "Ordenadas por prioridade, da mais alta para a mais baixa.",
+    "priority": "Prioridade",
+    "approximate": "Aproximada",
+    "suspectedTitle": "Suspeita: {{title}}",
+    "unreconciledNote": "Desvio por reconciliar — a autoridade reconciliada é o mapa de acessos. A prioridade é reduzida; não é uma violação confirmada.",
+    "kind": {
+      "access_drift": "Desvio de acesso",
+      "egress_exfil_suspected": "Exfiltração de saída (suspeita)",
+      "anti_evasion_correlated": "Evasão correlacionada"
+    }
+  },
+  "forensics": {
+    "title": "Casos forenses",
+    "description": "Resposta a incidentes — cada caso congela o seu estado de integridade na abertura, pelo que uma adulteração posterior é detetável. A cronologia é reconstruída a partir do registo apenas de acréscimo.",
+    "empty": "Sem casos forenses",
+    "emptyHint": "Um caso forense reúne a evidência de uma investigação. Abra um caso para iniciar uma.",
+    "openCase": "Abrir caso",
+    "back": "Voltar aos casos",
+    "summary": "Resumo",
+    "openedBy": "Aberto por",
+    "opened": "Aberto",
+    "closed": "Fechado",
+    "integrity": "Integridade da cadeia de custódia",
+    "timeline": "Cronologia reconstruída",
+    "timelineNote": "Cada evento inclui seq · hash · prev_hash para que um leitor possa voltar a verificar a ligação de forma independente. Nunca existe uma carga útil por trás de um evento.",
+    "columns": {
+      "severity": "Gravidade",
+      "title": "Caso",
+      "status": "Estado",
+      "opened": "Aberto"
+    },
+    "status": {
+      "open": "Aberto",
+      "investigating": "Em investigação",
+      "contained": "Contido",
+      "closed": "Fechado"
+    },
+    "truncated": "A mostrar os primeiros {{n}} abertos",
+    "truncatedHint": "Existem mais casos do que os apresentados e esta página está ordenada pelo id de abertura, pelo que podem faltar casos recentes. Uma investigação que não vê aqui não é uma investigação que não existe."
+  },
+  "integrity": {
+    "title": "Integridade do registo",
+    "description": "Dois veredictos: a cadeia de hashes é internamente consistente e os pontos de controlo assinados. A verificação fica ela própria registada na cadeia que verifica.",
+    "chain": "Cadeia de hashes",
+    "chainChecked": "{{count}} evento verificado",
+    "chainChecked_one": "{{count}} evento verificado",
+    "chainChecked_many": "{{count}} de eventos verificados",
+    "chainChecked_other": "{{count}} eventos verificados",
+    "checkpoints": "Pontos de controlo assinados",
+    "checkpointsCount": "{{count}} ponto de controlo verificado",
+    "checkpointsCount_one": "{{count}} ponto de controlo verificado",
+    "checkpointsCount_many": "{{count}} de pontos de controlo verificados",
+    "checkpointsCount_other": "{{count}} pontos de controlo verificados",
+    "signingUnavailable": "Não há nenhuma chave de assinatura configurada — a atestação assinada não é simulada.",
+    "checkpointsPendingNote": "Ainda não foi escrito nenhum ponto de controlo — o veredicto da cadeia é o que comprova este registo.",
+    "signingSeam": "Assinatura de pontos de controlo não configurada",
+    "attestedSeq": "Seq atestada",
+    "headSeq": "seq do topo do registo {{seq}}",
+    "reverifyNote": "Cada evento inclui seq · hash · prev_hash para que um leitor possa voltar a verificar a ligação offline num armazenamento WORM externo.",
+    "chainEmptyNote": "Ainda não há nada para verificar — o registo não contém eventos."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "Sem classes de imposição configuradas",
+      "description": "As linhas só aparecem depois de definida a postura de uma classe de proteção; até lá, todas as classes apenas registam e nada bloqueia em linha."
+    },
+    "findings": {
+      "title": "Ainda não há deteções de segurança registadas",
+      "description": "As deteções aparecem quando a inspeção de proteções, as verificações de desvio observado ou a postura de segurança dos fornecedores registam um sinal, ou quando outro módulo levanta um de gravidade elevada."
+    }
+  },
+  "cases": {
+    "new": "Novo caso",
+    "newHint": "Abre um caso forense. O motor define o estado como «aberto».",
+    "title": "Título",
+    "severity": "Gravidade",
+    "create": "Criar",
+    "cancel": "Cancelar",
+    "created": "Caso aberto",
+    "status": "Estado",
+    "save": "Guardar alterações",
+    "updated": "Caso atualizado",
+    "statusName": {
+      "open": "Aberto",
+      "investigating": "Em investigação",
+      "contained": "Contido",
+      "closed": "Fechado"
+    },
+    "exportFormat": "Formato de exportação",
+    "export": "Exportar",
+    "exported": "Exportação pedida",
+    "links": "Cadeia de custódia",
+    "linksHint": "Aquilo a que este caso está associado: deteções, sequências do registo, anomalias ou notas.",
+    "noLinks": "Ainda nada associado",
+    "noLinksHint": "Associe deteções, sessões e evidência a este caso para que toda a história fique num só lugar. Ainda não há nada associado.",
+    "link": "Associar",
+    "linked": "Associado",
+    "linkKindLabel": "Tipo",
+    "linkRef": "Referência",
+    "linkKind": {
+      "finding": "Deteção",
+      "audit_seq": "Sequência do registo",
+      "anomaly": "Anomalia",
+      "note": "Nota"
+    }
+  },
+  "severity": {
+    "low": "Baixa",
+    "medium": "Média",
+    "high": "Alta",
+    "critical": "Crítica"
+  }
+}

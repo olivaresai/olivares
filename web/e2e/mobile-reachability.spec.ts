@@ -51,7 +51,7 @@ test.describe('phone draft controls are reachable', () => {
 
   for (const surface of [
     { name: 'docked', url: '/sessions?pane=narrative' },
-    { name: 'Home', url: '/' },
+    { name: 'Overview', url: '/now' },
   ]) {
     for (const input of ['pointer', 'keyboard'] as const) {
       test(`${surface.name} profile through ${input}`, async ({ page }) => {

@@ -44,11 +44,8 @@ for (const [width, theme] of [
               : (fixtureFor(path) ?? { items: [], has_more: false })
       await route.fulfill({ json })
     })
-    await page.goto('/sessions')
-    await page
-      .locator('#work-pane-rail')
-      .getByRole('button', { name: 'New session', exact: true })
-      .click()
+    // The New session form, through its link (New session itself focuses the composer).
+    await page.goto('/sessions?newSession=1')
     await page
       .getByRole('dialog')
       .getByRole('button', { name: 'More options', exact: true })

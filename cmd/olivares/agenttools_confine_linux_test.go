@@ -25,6 +25,8 @@ import (
 // cannot read the engine data directory, and a root engine's child holds no
 // capability (#1114). Only an engine holding CAP_SETPCAP can empty the bounding
 // set; without it, no_new_privs keeps any exec from regaining the cleared sets.
+// A child that hides the engine user's user bus in its own user namespace
+// empties it there.
 func TestAgentToolChildIsConfinedLikeASessionChild(t *testing.T) {
 	if s := confine.Probe(); s.Mode != confine.ModeLandlock {
 		t.Fatal("this security reproducer requires Landlock: " + s.Reason)
@@ -82,7 +84,7 @@ func TestAgentToolChildIsConfinedLikeASessionChild(t *testing.T) {
 	bound := engine["CapBnd"]
 	if effective, err := strconv.ParseUint(engine["CapEff"], 16, 64); err != nil {
 		t.Fatal(err)
-	} else if effective&(1<<unix.CAP_SETPCAP) != 0 {
+	} else if effective&(1<<unix.CAP_SETPCAP) != 0 || (len(confine.UserBusDirs()) > 0 && confine.UserBusUnhideable() == nil) {
 		bound = none
 	}
 	t.Logf("engine euid %d: CapEff %s CapBnd %s", os.Geteuid(), engine["CapEff"], engine["CapBnd"])

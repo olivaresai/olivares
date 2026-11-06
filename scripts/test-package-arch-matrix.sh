@@ -467,6 +467,15 @@ import (
 )
 
 func main() {
+	// The native package builder runs these two for the man pages and completions.
+	if len(os.Args) == 3 && os.Args[1] == "__man" {
+		_ = os.WriteFile(os.Args[2]+"/olivares.1", []byte(".TH OLIVARES 1\n"), 0o644)
+		return
+	}
+	if len(os.Args) == 3 && os.Args[1] == "completion" {
+		_, _ = os.Stdout.WriteString("# olivares completion\n")
+		return
+	}
 	if f, err := os.OpenFile("/out/calls", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 		_, _ = f.WriteString("olivares " + strings.Join(os.Args[1:], " ") + "\n")
 		_ = f.Close()

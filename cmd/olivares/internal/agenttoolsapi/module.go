@@ -75,6 +75,7 @@ type Module struct {
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
 	mu              sync.Mutex
+	installing      sync.Mutex // admits one install request at a time (install)
 	plans           map[string]*Plan
 	jobs            map[model.ID]*savedJob
 	files           *os.Root
@@ -85,9 +86,12 @@ type Module struct {
 	resolveProgram func(driver string) string
 	// loginHome says where a tenant's own login of a tool lives (SetLoginHome);
 	// nil refuses every sign-in and status read.
-	loginHome   LoginHomeFunc
-	signIns     map[model.ID]*SignIn
-	statusReads map[statusSelection]*statusRead
+	loginHome LoginHomeFunc
+	// serverLoginOpen says the engine user's own login of a tool may serve this
+	// organization (SetServerLoginOpen); nil means it never does.
+	serverLoginOpen func(context.Context, model.TenantID) bool
+	signIns         map[model.ID]*SignIn
+	statusReads     map[statusSelection]*statusRead
 	// providerEntries caches each tool instance's snapshot (providers.go); probeSlots
 	// bounds how many instances are probed at once, however many readers ask.
 	providerEntries map[string]*providerEntry
@@ -209,6 +213,8 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	door.HandleSystem("POST", "/ollama/stop", m.handleOllamaStop)
 	door.HandleSystem("POST", "/ollama/pulls", m.handleOllamaPull)
 	door.HandleSystem("GET", "/ollama/pulls/{id}", m.handleOllamaPullGet)
+	door.HandleSystem("DELETE", "/ollama/pulls/{id}", m.handleOllamaPullCancel)
+	door.HandleSystem("DELETE", "/ollama/models", m.handleOllamaModelRemove)
 	door.HandleSystem("GET", "/model-servers", m.handleModelServers)
 	door.HandleSystem("POST", "/model-servers/{kind}/start", m.handleModelServerStart)
 	door.HandleSystem("POST", "/model-servers/{kind}/stop", m.handleModelServerStop)
@@ -256,7 +262,7 @@ func (m *Module) guard(stepUp bool, h api.ModuleHandler) api.ModuleHandler {
 			return
 		}
 		if stepUp && !auth.StepUpSatisfied(r.Context(), mc.Principal) {
-			fail(w, 403, "step_up_required", "Complete the administrative step-up this deployment requires before installing tools.")
+			stepUpFail(w, r, mc.Principal, "Complete the administrative step-up this deployment requires before installing tools.")
 			return
 		}
 		if _, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confined {
@@ -340,7 +346,7 @@ func (m *Module) detect(w http.ResponseWriter, r *http.Request, mc api.ModuleCon
 	selected := r.URL.Query().Get("probe_path")
 	if selected != "" {
 		if !auth.StepUpSatisfied(r.Context(), mc.Principal) {
-			fail(w, 403, "step_up_required", "Complete the administrative step-up this deployment requires before probing this host executable.")
+			stepUpFail(w, r, mc.Principal, "Complete the administrative step-up this deployment requires before probing this host executable.")
 			return
 		}
 		if m.readOnly {
@@ -525,14 +531,30 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 		fail(w, 400, "bad_request", "A canonical nonzero request ID is required.")
 		return
 	}
+	// One request is admitted at a time. m.mu guards only the maps: the sign-in
+	// output and every status read take it, so no audit, catalog read or journal
+	// fsync runs under it.
+	m.installing.Lock()
+	defer m.installing.Unlock()
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if old := m.jobs[id]; old != nil {
+	old := m.jobs[id]
+	var replay Job
+	if old != nil {
+		replay = old.Job
+	}
+	p := m.plans[mc.Tenant.String()+":"+in.Digest]
+	if p == nil {
+		if tenant, ok := tenantOf(r.Header.Get("X-Olivares-Tenant")); ok {
+			p = m.plans[mc.Tenant.String()+":"+in.Digest+":"+tenant.String()]
+		}
+	}
+	m.mu.Unlock()
+	if old != nil {
 		if old.Tenant != mc.Tenant {
 			fail(w, 404, "not_found", "Job not found.")
 			return
 		}
-		if old.Digest != in.Digest {
+		if replay.Digest != in.Digest {
 			fail(w, 409, "conflict", "This request ID already identifies a different plan.")
 			return
 		}
@@ -540,14 +562,8 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 			unavailable(w)
 			return
 		}
-		write(w, 202, old.Job)
+		write(w, 202, replay)
 		return
-	}
-	p := m.plans[mc.Tenant.String()+":"+in.Digest]
-	if p == nil {
-		if tenant, ok := tenantOf(r.Header.Get("X-Olivares-Tenant")); ok {
-			p = m.plans[mc.Tenant.String()+":"+in.Digest+":"+tenant.String()]
-		}
 	}
 	if p == nil || time.Now().After(p.expires) {
 		fail(w, 409, "plan_expired", "Preview the installation again before installing.")
@@ -564,11 +580,14 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 			return
 		}
 	}
-	if m.active {
+	m.mu.Lock()
+	busy, full := m.active, len(m.jobs) >= maxRetained
+	m.mu.Unlock()
+	if busy {
 		fail(w, 409, "install_busy", "Another host tool installation is running.")
 		return
 	}
-	if len(m.jobs) >= maxRetained {
+	if full {
 		fail(w, 409, "journal_full", "The tool job journal is full. Archive it before another installation.")
 		return
 	}
@@ -581,18 +600,25 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 		unavailable(w)
 		return
 	}
+	accepted := j.Job
+	m.mu.Lock()
 	m.jobs[id] = j
 	m.active = true
 	m.wg.Add(1)
+	m.mu.Unlock()
 	go m.run(j, p, mc)
 	w.Header().Set("Location", "/v1/m/agenttools/jobs/"+id.String())
-	write(w, 202, j.Job)
+	write(w, 202, accepted)
 }
 func (m *Module) job(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	j := m.jobs[id]
+	var snapshot Job
+	if j != nil {
+		snapshot = j.Job
+	}
+	m.mu.Unlock()
 	if j == nil || j.Tenant != mc.Tenant {
 		fail(w, 404, "not_found", "Job not found.")
 		return
@@ -601,7 +627,7 @@ func (m *Module) job(w http.ResponseWriter, r *http.Request, mc api.ModuleContex
 		unavailable(w)
 		return
 	}
-	write(w, 200, j.Job)
+	write(w, 200, snapshot)
 }
 func write(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -609,7 +635,17 @@ func write(w http.ResponseWriter, code int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 func fail(w http.ResponseWriter, status int, code, message string) {
-	write(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
+	write(w, status, api.ErrorBody(code, message))
+}
+
+// stepUpFail refuses a failed administrative step-up: the stable freshness code
+// when the account's rights data is stale, else the ordinary step-up message.
+func stepUpFail(w http.ResponseWriter, r *http.Request, p auth.Principal, message string) {
+	if err := auth.StepUpRefusal(r.Context(), p); errors.Is(err, auth.ErrRightsDataStale) {
+		fail(w, 403, "rights_data_stale", err.Error())
+		return
+	}
+	fail(w, 403, "step_up_required", message)
 }
 func unavailable(w http.ResponseWriter) {
 	fail(w, 503, "unavailable", "Tool operation storage or audit is unavailable. No new installation was started.")

@@ -355,6 +355,8 @@ describe('session rail read authority', () => {
       title: 'Operated rail session',
     })
     expect(result.current.sessionCounts).toMatchObject({ live: 0, needsYou: 0 })
+    // A snooze hides the row, never the agent: it still waits, so Stop all stays offered.
+    expect(result.current.sessionCounts.active).toBe(1)
     expect(result.current.attention).toEqual([])
   })
 

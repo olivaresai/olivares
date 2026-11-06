@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { Check } from 'lucide-react'
 import type { HTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -82,7 +83,13 @@ export function StatusGlyph({
         className={cn('inline-flex shrink-0 items-center', className)}
         {...props}
       >
-        <StatusDot tone={TONE[status]} />
+        {/* Without its word the shape alone tells the state: Done shares Working's
+            green, so it is a check, never the live dot. */}
+        {status === 'done' ? (
+          <Check aria-hidden strokeWidth={3} className="size-3 text-success" />
+        ) : (
+          <StatusDot tone={TONE[status]} />
+        )}
       </span>
     )
   }

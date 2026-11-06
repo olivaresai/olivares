@@ -6,6 +6,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+  useRouterState: () => '',
+}))
+
 const mounts = vi.hoisted(() => ({ advanced: 0 }))
 // The forms have their own tests; here only what the host mounts and hands them is
 // measured. The real modal keeps the focus lifecycle.

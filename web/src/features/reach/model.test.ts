@@ -378,6 +378,47 @@ describe('buildReach', () => {
     expect(m.destinations[0].ref).toBe('github')
   })
 
+  it('places what the Claude Code connector observes: files as folders, URLs as endpoints, and says the rest is not a destination', () => {
+    // connectors/claude/resource.go kinds as GET /v1/m/accessmap/graph returns
+    // them for a session: file and http.url carry a place, shell is the program
+    // alone (arguments are never stored) and web.search / claude.tool name no place.
+    const edge = (id: string, kind: string, ref: string): ReachEdge => ({
+      id,
+      origin_kind: 'session',
+      origin_id: 'sid-1',
+      origin_ref: 'sess-1',
+      resource_kind: kind,
+      resource_ref: ref,
+    })
+    const graph: ReachGraphResponse = {
+      edges: [
+        edge('f1', 'file', '/workspace/app/main.go'),
+        edge('u1', 'http.url', 'example.com/docs'),
+        edge('s1', 'shell', 'curl'),
+        edge('w1', 'web.search', 'web.search'),
+        edge('t1', 'claude.tool', 'TodoWrite'),
+      ],
+      has_more: false,
+    }
+    const sessions = [{ session_ref: 'sess-1', engine: 'claude' }]
+    const m = buildReach(graph, [], [], sessions)
+    expect(m.destinations.map((d) => [d.family, d.ref])).toEqual([
+      ['folders', '/workspace/app/main.go'],
+      ['providers', 'example.com/docs'],
+    ])
+    expect(m.links.map((l) => l.id)).toEqual(['f1', 'u1'])
+    expect(m.hasOtherReach).toBe(true)
+
+    // Only places: nothing is left out, so nothing is said.
+    const placesOnly = buildReach(
+      { edges: graph.edges.slice(0, 2), has_more: false },
+      [],
+      [],
+      sessions,
+    )
+    expect(placesOnly.hasOtherReach).toBe(false)
+  })
+
   it('marks a destination WAITING when a pending approval names it, and reached-and-waiting stays honest', () => {
     const m = buildReach(FIXTURE_GRAPH, FIXTURE_AGENTS, FIXTURE_APPROVALS, [])
     const byRef = new Map(m.destinations.map((d) => [d.ref, d]))
@@ -553,6 +594,61 @@ describe('buildReach', () => {
       },
     ])
     expect(m.sessionsByRef).toBe(false)
+  })
+
+  it('uses the server-proven driver on session launch edges, even without a live-session join', () => {
+    const graph: ReachGraphResponse = {
+      edges: [
+        {
+          id: 'launch-1',
+          origin_kind: 'session',
+          origin_id: 'core-1',
+          origin_ref: 'attempt-1',
+          tool_ref: 'claude',
+          signal_source: 'session_launch',
+          resource_kind: 'resource',
+          resource_ref: 'infra',
+        },
+        {
+          id: 'launch-2',
+          origin_kind: 'session',
+          origin_id: 'core-2',
+          origin_ref: 'attempt-2',
+          tool_ref: 'codex',
+          signal_source: 'session_launch',
+          resource_kind: 'mcp_server',
+          resource_ref: 'reach-fixture',
+        },
+      ],
+      has_more: false,
+    }
+    const m = buildReach(graph, [], [], [])
+    expect(m.tools.map((t) => t.name)).toEqual(['Claude Code', 'Codex'])
+    expect(m.links).toHaveLength(2)
+    expect(m.sessionsByRef).toBe(false)
+  })
+
+  it('keeps folders with the same display name separate by their resource IDs', () => {
+    const model = buildReach(
+      {
+        has_more: false,
+        edges: ['one', 'two'].map((id) => ({
+          id,
+          origin_kind: 'session',
+          origin_ref: id,
+          tool_ref: 'claude',
+          signal_source: 'session_launch',
+          resource_kind: 'resource',
+          resource_ref: 'project',
+          resource_id: id,
+        })),
+      },
+      [],
+      [],
+      [],
+    )
+    expect(model.destinations).toHaveLength(2)
+    expect(new Set(model.links.map((link) => link.destinationId)).size).toBe(2)
   })
 
   it('names a session by its ref when two live rows give it different drivers', () => {

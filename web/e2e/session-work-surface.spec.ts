@@ -32,7 +32,7 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
 
-/** The nine the console ships; `lint:i18n` proves the resources exist for each. */
+/** The eleven the console ships; `lint:i18n` proves the resources exist for each. */
 const LANGUAGES = [
   'en',
   'es',
@@ -43,6 +43,8 @@ const LANGUAGES = [
   'ko',
   'ru',
   'zh',
+  'uk',
+  'pt',
 ] as const
 
 async function signIn(page: Page) {
@@ -196,12 +198,9 @@ test.describe('the work surface', () => {
     // home screen now carries the address of the one session it tells.
     await prefer(page, 'dark', 'en')
     await signIn(page)
-    await page.goto('/')
-    // A live session is a card on Now and an ended one a row (#2245): either opens it.
-    const row = page
-      .getByTestId('now-live-card')
-      .or(page.getByTestId('home-recent-row'))
-      .first()
+    await page.goto('/now')
+    // A live session is a Running row on Overview and an ended one a Recent row (#4427).
+    const row = page.getByTestId('home-recent-row').first()
     await expect(row).toBeVisible()
     const href = await row.getAttribute('href')
     expect(href, 'the row addresses ONE session').toMatch(
@@ -331,19 +330,6 @@ test.describe('the work surface', () => {
     await expect.poll(pane).toBe('narrative')
     await page.keyboard.press('[')
     await expect.poll(pane).toBe('rail')
-  })
-
-  test('the shell says what the next action applies to, and offers it honestly', async ({
-    page,
-  }) => {
-    await prefer(page, 'dark', 'en')
-    await signIn(page)
-    await page.goto('/')
-    const start = page.getByTestId('now-start')
-    await expect(start).toBeVisible()
-    await expect(start).not.toContainText(demoTenant)
-    await expect(start.getByRole('button').first()).toBeVisible()
-    await expect(start).toContainText(/New session|Sign in|Install|Providers/i)
   })
 
   test('previous-session chord and numbered palette rows', async ({ page }) => {

@@ -23,6 +23,7 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
 import { cn } from '@/lib/utils'
@@ -471,7 +472,7 @@ export function KpiTiles({
       ) : null}
 
       {risk ? (
-        <LinkTile to="/security">
+        <LinkTile to="/security?tab=findings">
           <MetricStat
             icon={<ShieldAlert />}
             label={t('pillars.risk')}
@@ -572,7 +573,7 @@ export function RiskSection({
       description={description ?? t('risk.sharedDescription')}
       actions={
         risk ? (
-          <DrillLink to="/security">{t('risk.title')}</DrillLink>
+          <DrillLink to="/security?tab=findings">{t('risk.title')}</DrillLink>
         ) : undefined
       }
     >
@@ -605,7 +606,11 @@ export function RiskSection({
             <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
               {t('risk.drift')}
             </span>
-            {drift ? (
+            {drift?.noRules ? (
+              <span className="text-body text-muted-foreground">
+                {t('risk.driftNoRules')}
+              </span>
+            ) : drift ? (
               <>
                 <DriftRow
                   label={t('risk.driftFirm')}
@@ -633,7 +638,9 @@ export function RiskSection({
         ) : null}
 
         {panels.map(({ id, Component }) => (
-          <Component key={id} />
+          <PanelSlot key={id} className="grid">
+            <Component />
+          </PanelSlot>
         ))}
       </div>
       {drift && drift.coverageLimited > 0 ? (

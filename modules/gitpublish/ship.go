@@ -121,17 +121,21 @@ func (m *Module) Ship(ctx context.Context, c Caller, in ShipInput) (ShipResult, 
 	if len(read.paths) == 0 {
 		return res, refuse("nothing_to_ship", http.StatusConflict)
 	}
-	lease, seen, err := m.shipLease(ctx, c, tg.ID, push.OperationID, read.tip)
+	lease, seen, priorProposal, err := m.shipLease(ctx, c, tg.ID, push.OperationID, read.tip)
 	if err != nil {
 		return res, err
 	}
-	push.ExpectedOld = lease
+	push.ExpectedOld, push.Proposal = lease, priorProposal
+	reason := fmt.Sprintf("Push commit %s to %s on publication target %s, then open a pull request into %s.", push.Commit, push.Ref, tg.ID, in.Base)
+	if len(read.secrets) > 0 {
+		reason += " Detected secret.credential in " + read.secrets[0] + "."
+	}
 	// A ship the module has already pushed for is a retry: it replays that
 	// push's receipt and needs no second approval for it.
 	if !seen {
 		decision, err := m.opts.Gate.Authorize(ctx, c.Tenant, GateRequest{Action: shipGateAction, SubjectKind: shipGateSubject, SubjectRef: tg.ID.String(),
 			PlanHash: shipPlan(push), RequestedBy: c.Principal.Actor(), ConsumerID: in.OperationID,
-			Reason: fmt.Sprintf("Push commit %s to %s on publication target %s, then open a pull request into %s.", push.Commit, push.Ref, tg.ID, in.Base)})
+			Reason: reason, RequireApproval: len(read.secrets) > 0})
 		switch {
 		case err != nil:
 			return res, refuse("approval_unavailable", http.StatusServiceUnavailable)
@@ -140,6 +144,9 @@ func (m *Module) Ship(ctx context.Context, c Caller, in ShipInput) (ShipResult, 
 			return res, nil
 		case decision.State != GateGranted:
 			return res, refuse("approval_denied", http.StatusForbidden)
+		}
+		if decision.Ref != "" {
+			push.Proposal = Proposal{SessionRun: in.SessionRun, Workspace: tg.Workspace, Approval: decision.Ref}
 		}
 	}
 	pushed, err := m.Push(ctx, c, push)
@@ -155,7 +162,7 @@ func (m *Module) Ship(ctx context.Context, c Caller, in ShipInput) (ShipResult, 
 		return res, nil
 	}
 	pull, err := m.OpenPullRequest(ctx, c, PullRequestInput{Target: tg.ID, OperationID: in.OperationID + ":pr", HeadRef: branch, Base: in.Base,
-		Commit: head.Commit, Title: in.Title, Body: in.Body, Draft: in.Draft})
+		Commit: head.Commit, Title: in.Title, Body: in.Body, Draft: in.Draft, Proposal: pushed.Intent.Proposal})
 	var refused *Error
 	if errors.As(err, &refused) {
 		res.PullRequestError = refused.Code
@@ -217,20 +224,21 @@ func (m *Module) shipPreflight(ctx context.Context, c Caller, in *ShipInput) (Ta
 // push under this operation id. Such a ship keeps the lease it pushed with, so
 // its retry is the same request and replays its receipt, even though the host's
 // tip has moved to the commit that push made. A new ship leases the tip it just read.
-func (m *Module) shipLease(ctx context.Context, c Caller, target model.ID, op, tip string) (string, bool, error) {
+func (m *Module) shipLease(ctx context.Context, c Caller, target model.ID, op, tip string) (string, bool, Proposal, error) {
 	actx, cancel := m.admissionContext(ctx)
 	defer cancel()
 	lease, seen := tip, false
+	var proposal Proposal
 	if err := m.data.View(actx, c.Tenant, func(sc store.Scope) error {
 		prior, found, err := findByOperation(actx, sc, target, effectPush, op)
 		if found {
-			lease, seen = prior.Requested.ExpectedOld, true
+			lease, seen, proposal = prior.Requested.ExpectedOld, true, prior.Proposal
 		}
 		return err
 	}); err != nil {
-		return "", false, storeError(err)
+		return "", false, Proposal{}, storeError(err)
 	}
-	return lease, seen, nil
+	return lease, seen, proposal, nil
 }
 
 // commitError names why the folder could not be committed.

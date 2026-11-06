@@ -382,6 +382,12 @@ func launchDimsDigest(dims finops.SpendDims) string {
 }
 
 func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+	// 0. A scheduled run has no launcher: only the approval a second administrator
+	//    granted for its period lets it start, so that approval is verified first.
+	if intent.Schedule != nil && !g.scheduledLaunchApproved(ctx, tenant, intent) {
+		return denyLaunch("a scheduled launch needs its approved period (deny-closed)"), nil
+	}
+
 	// 1. Budget admission. A definitive cap always denies with 402 (block) / 429
 	//    (throttle) so a session/identity at its limit does not start. A ledger that
 	//    cannot be read answers deny, and the configured availability posture decides
@@ -1162,10 +1168,35 @@ func loadKillSwitchSweepInterval(getenv func(string) string, log *slog.Logger) t
 	return d
 }
 
+// approvalObserver reads an approval against the question it was opened for.
+type approvalObserver interface {
+	ObserveScoped(context.Context, model.TenantID, string, string, string, string, string) (string, string, error)
+}
+
+// The approval a cron period opens: the schedule's fire, bound to its plan hash.
+const (
+	scheduleFireAction  = "orchestration.schedule.fire"
+	scheduleSubjectKind = "schedule"
+)
+
+// scheduledLaunchApproved reports whether the launch's schedule period was approved:
+// the exact approval it names, for that schedule's fire and plan. Pending, rejected,
+// expired, another question, no approval service or a read error all refuse.
+func (g *sessionLaunchGate) scheduledLaunchApproved(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) bool {
+	s := intent.Schedule
+	reader, ok := g.bridge.(approvalObserver)
+	if !ok || s.ScheduleRef == "" || s.ApprovalRef == "" || s.PlanHash == "" || intent.AgentRef == "" {
+		return false
+	}
+	status, _, err := reader.ObserveScoped(ctx, tenant, s.ApprovalRef, s.PlanHash, scheduleFireAction, scheduleSubjectKind, s.ScheduleRef)
+	if err != nil && g.log != nil {
+		g.log.Warn("session launch-gate: scheduled launch approval unreadable", "approval", s.ApprovalRef, "err", err)
+	}
+	return err == nil && status == approvalbridge.Approved
+}
+
 func (g *sessionLaunchGate) ApprovalStatus(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent, ref string) (string, error) {
-	reader, ok := g.bridge.(interface {
-		ObserveScoped(context.Context, model.TenantID, string, string, string, string, string) (string, string, error)
-	})
+	reader, ok := g.bridge.(approvalObserver)
 	if !ok {
 		return "", errors.New("approval observer unavailable")
 	}

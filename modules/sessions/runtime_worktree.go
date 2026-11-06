@@ -346,6 +346,10 @@ func (m *Module) prepareRunWorktree(ctx context.Context, runRef string, ws *reso
 		return "", "", worktreeRefusal("%s", problem)
 	}
 	out, err := gitOK(ctx, ws.rootReal, "rev-parse", "--is-inside-work-tree", "--show-prefix")
+	if err != nil && strings.Contains(err.Error(), "not a git repository") {
+		// git's own refusal, in one sentence with the way out (both clients print it as is).
+		return "", "", worktreeRefusal("A worktree needs a git repository, and %s is not one: run git init there, or start without a worktree.", ws.rootReal)
+	}
 	if err != nil {
 		return "", "", worktreeRefusal("git cannot use the workspace folder for a new worktree: %v", err)
 	}

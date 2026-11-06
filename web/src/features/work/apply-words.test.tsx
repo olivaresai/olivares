@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
@@ -47,6 +48,7 @@ function show() {
 beforeEach(() => vi.resetAllMocks())
 
 it('keeps the engine plan and retry key behind closed Details before Apply', async () => {
+  const user = userEvent.setup()
   api.planWork.mockResolvedValue({
     verdict: 'LIMPIO',
     code: 'ok',
@@ -65,6 +67,7 @@ it('keeps the engine plan and retry key behind closed Details before Apply', asy
   ).toBeVisible()
   const details = screen.getByText('Details').closest('details')!
   expect(details).not.toHaveAttribute('open')
+  expect(screen.queryByText('Plan')).toBeNull()
   for (const text of [
     'item.ready',
     'sessions:work:write',
@@ -73,6 +76,10 @@ it('keeps the engine plan and retry key behind closed Details before Apply', asy
     intent.key,
   ])
     expect(within(details).getByText(text)).toBeInTheDocument()
+  await user.click(within(details).getByText('Details'))
+  expect(details).toHaveAttribute('open')
+  expect(within(details).getByText('abc123')).toBeVisible()
+  expect(within(details).getByText(intent.key)).toBeVisible()
 })
 
 it('names the unfinished predecessor first and retains the exact refusal behind Details', async () => {

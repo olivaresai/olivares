@@ -53,9 +53,17 @@ type runtimeState struct {
 	// (runtime_workspace_dir.go): the alternative is the engine's own working
 	// directory, which is the defect that root exists to remove.
 	sessionWorkspaceRoot string
+	// personalFilesRoot holds one folder per person (<root>/<user-id>), wired from the
+	// data directory (personal_folder.go). Empty leaves personal folders off, and
+	// personalMu keeps one person's first two requests from registering it twice.
+	personalFilesRoot string
+	personalMu        sync.Mutex
 	// attachmentRoot is where images attached to a message are kept (run_attachment.go).
 	// Empty refuses attaching with a 503.
 	attachmentRoot string
+	// checkpointRoot is where each session's turn checkpoints are kept (run_checkpoints.go).
+	// Empty takes none.
+	checkpointRoot string
 	// sessionWorkspaceRootRefusal is why a root the composition root OFFERED was
 	// not taken (runtime_workspace_dir.go, validateSessionWorkspaceRoot). It is
 	// kept so a refused wiring answers with the reason and its remedy instead of
@@ -81,8 +89,8 @@ type runtimeState struct {
 	// worktreeRootRefusal is why a worktree directory the composition root offered
 	// was not taken, kept so the refusal a launch gets names the value and its remedy.
 	worktreeRootRefusal error
-	// activityAudits is when each person's read of each session's activity was last
-	// recorded (session_activity.go).
+	// activityAudits is when each person's read of each session (activity, messages,
+	// attach) was last recorded (session_activity.go).
 	activityAudits sync.Map
 
 	program string // the executable to launch ("claude")
@@ -127,6 +135,7 @@ type runtimeState struct {
 	credentialHeartbeatInterval time.Duration
 	stopSweepInterval           time.Duration
 	idleAutoStopPolicy          func(context.Context) (time.Duration, error)
+	idleSettingMissed           string        // cause of the previous sweep's failed read; cleared when a read succeeds
 	idleSettingWarned           string        // cause of the last unreadable-setting warning; cleared when the read succeeds
 	idleSweepInterval           time.Duration // zero: idlePolicySweepInterval
 	sweepCancel                 func()
@@ -135,6 +144,8 @@ type runtimeState struct {
 	// directory); nil leaves children unconfined (runtime_confinement.go).
 	confineProtect  []string
 	confineRequired bool
+	// limits are the per-person cap and the per-session ceilings (session_ceilings.go).
+	limits SessionLimits
 	// credentialDataDir is the engine data directory, the one protected folder whose run
 	// directory a broker may grant from (session_credentials.go); empty grants from none.
 	credentialDataDir string
@@ -493,6 +504,9 @@ type liveRun struct {
 	// (runtime_usage.go). It lives on the live run because the provider's counters
 	// restart with every incarnation: the durable sum is on the row.
 	usage usageAccount
+	// inflight is what the turn in progress has used so far, from its assistant
+	// messages. It is read, never stored: the turn's result replaces it.
+	inflight inflightUsage
 	// limitClear says the stored limit column is known to be empty, so a successful
 	// turn costs no read; windowResetsAt is the latest reset among the account
 	// windows the tool called used up in this turn (runtime_limit.go).
@@ -662,6 +676,7 @@ type CreateRunParams struct {
 	codexSandboxFallback bool
 	queuedCredential     auth.QueuedCredential
 	queuedIntent         *LaunchIntent
+	schedule             *ScheduledLaunch
 	Name                 string
 	RepositoryURL        string  `json:"repository_url,omitempty"`
 	RepositoryRef        string  `json:"repository_ref,omitempty"`
@@ -792,6 +807,7 @@ type CreateRunParams struct {
 	templatePeersRule string
 	// Server-resolved from today's stored template; absent preserves compatibility.
 	requireTruncateProtection bool
+	requireReadOnlyFolders    bool
 
 	// MayRunUnrestricted is set by the server from the AUTHENTICATED caller's run
 	// administration permission, never from the wire. "full" (bypassPermissions) is
@@ -888,6 +904,7 @@ func launchIntentFor(ctx context.Context, action LaunchAction, runRef string, p 
 		RegistrySecrets: registryTokenRefs(p.profileRegistries),
 		GitRead:         p.GitRead,
 		Credentials:     slices.Clone(p.Credentials),
+		Schedule:        p.schedule,
 	}
 	intent.CostCapMicroUSD = p.CostCapMicroUSD
 	if !p.runDeadline.IsZero() {
@@ -1188,6 +1205,16 @@ func (m *Module) createRunInternal(
 			return m.toRunDTO(existing), nil
 		}
 	}
+	// A name a session holds is refused before anything is claimed, approved or
+	// made; persistNewRun repeats the check under the run-name lock, where a
+	// racing launch is caught. A launch an agent workflow makes for a work item is
+	// exempt: its name is the workflow's label for a step, which repeats across
+	// runs and retries, and no person picks a session by it.
+	if work == nil {
+		if err := m.refuseHeldRunName(ctx, tenant, p.Name); err != nil {
+			return runDTO{}, err
+		}
+	}
 	if err := m.resolveProviderDefaultModel(ctx, tenant, &p); err != nil {
 		return runDTO{}, err
 	}
@@ -1204,6 +1231,9 @@ func (m *Module) createRunInternal(
 		return runDTO{}, err
 	}
 	defer ws.closeReadOnlyHandles()
+	if err := p.checkTemplateWorkspace(ws); err != nil {
+		return runDTO{}, err
+	}
 	if ws != nil {
 		// A named workspace is the effective directory, and it is the OPERATOR's
 		// directory: this plane records it and never creates or removes it.
@@ -1217,6 +1247,11 @@ func (m *Module) createRunInternal(
 		agentRef = p.Actor
 	}
 	if err := m.preflightStop(ctx, tenant, StopDims{AgentRef: agentRef}); err != nil {
+		return runDTO{}, err
+	}
+	// The per-person cap comes before any claim, budget or approval is spent on a
+	// launch that will be refused anyway.
+	if err := m.refuseOverSessionCap(ctx, tenant, p.queuedCredential.UserID); err != nil {
 		return runDTO{}, err
 	}
 	// The work and communication credentials are one indivisible posture. Refuse incomplete
@@ -1612,6 +1647,7 @@ func (m *Module) createRunInternal(
 		completion := runtimeLaunchCompletion(tenant, runRef, runtimeCreds.launchID, rec)
 		dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, rec))
 		dto.Completion = completion
+		m.publishLaunchReach(wctx, lr, spec, launchDriverKey(p), ws)
 		m.observeRuntimeLaunch(wctx, completion)
 		return dto, nil
 	}
@@ -1637,8 +1673,16 @@ func (m *Module) createRunInternal(
 // session is resumed through the API, by a caller with run administration now.
 // It holds no authenticated tenant administration either, so a run that was given
 // vault secrets is refused here; the API resume asks (resumeRunAsCaller).
+//
+// A stopped session kept its queue (run_queue.go) and no turn ends to send it, so the
+// resume is the moment it goes, as after the API resume. The drain runs after the run's
+// lock is released: the queue's lock is always taken before it.
 func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind, agentIdentity string) (runDTO, error) {
-	return m.resumeRunInternal(ctx, tenant, runRef, actor, actorKind, agentIdentity, false, callerAsks{})
+	dto, err := m.resumeRunInternal(ctx, tenant, runRef, actor, actorKind, agentIdentity, false, callerAsks{})
+	if err == nil {
+		m.drainRunQueue(ctx, tenant, runRef)
+	}
+	return dto, err
 }
 
 // resumeRunAsCaller is a person's resume through the API: full permissions after
@@ -1880,9 +1924,23 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	if err != nil {
 		return runDTO{}, err
 	}
+	if err := p.checkTemplateWorkspace(ws); err != nil {
+		return runDTO{}, err
+	}
 	p.SecretEnv = storedSecretEnv
 	if err := validateSecretEnv(p.SecretEnv, p.EnvAllow); err != nil {
 		return runDTO{}, err
+	}
+	// The engine's resume after a restart continues the session it stopped with the time it
+	// had left; a person's resume, or the scheduled one after a usage reset, starts the
+	// template's time again.
+	if left, ok := ceilingLeft(rec); ok && engineResume && endedByTheEngine(rec.String(colReason)) {
+		if left <= 0 {
+			return runDTO{}, conflictErr("max session duration reached")
+		}
+		if p.MaxDuration <= 0 || left < p.MaxDuration {
+			p.MaxDuration = left
+		}
 	}
 	// The repository the run row names, asked again like its secrets; a fresh
 	// token is minted for this launch.
@@ -1948,6 +2006,10 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		agentRef = actor
 	}
 	if err := m.preflightStop(ctx, tenant, StopDims{RunRef: runRef, AgentRef: agentRef}); err != nil {
+		return runDTO{}, err
+	}
+	// Resuming starts a process too: a person at the cap cannot get around it by resuming.
+	if err := m.refuseOverSessionCap(ctx, tenant, model.ID(rec.String(colRunLauncherUserID))); err != nil {
 		return runDTO{}, err
 	}
 	if err := m.ensureRuntimeCredentialWiring(); err != nil {
@@ -2259,6 +2321,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	completion := runtimeLaunchCompletion(tenant, runRef, launchID, updated)
 	dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, updated))
 	dto.Completion = completion
+	m.publishLaunchReach(wctx, lr, spec, launchDriverKey(p), ws)
 	m.observeRuntimeLaunch(wctx, completion)
 	if _, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); scheduled {
 		if _, err := m.transition(wctx, tenant, runRef, transitionInput{event: "scheduled_message", actor: actor, actorKind: actorKind, keepReason: true, detail: limitResumeMessage}); err != nil {
@@ -2666,6 +2729,21 @@ func (m *Module) sendTextInputLoaded(
 	images []turnImage,
 	rec model.Record,
 ) (bool, error) {
+	// The folder as it is before the tool sees the message is the turn's checkpoint
+	// (run_checkpoints.go); the turn is kept once the tool took the message.
+	keep := m.beginCheckpoint(ctx, tenant, runRef, text, rec)
+	attempted, err := m.deliverTextInput(ctx, tenant, runRef, text, images, rec)
+	keep(attempted && err == nil)
+	return attempted, err
+}
+
+func (m *Module) deliverTextInput(
+	ctx context.Context,
+	tenant model.TenantID,
+	runRef, text string,
+	images []turnImage,
+	rec model.Record,
+) (bool, error) {
 	if _, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); !scheduled {
 		if err := m.cancelLimitResumeForInput(ctx, tenant, runRef); err != nil {
 			return false, err
@@ -2846,6 +2924,7 @@ func (m *Module) cleanupRunWith(ctx context.Context, tenant model.TenantID, runR
 	}); err != nil {
 		m.warnf("sessions: the pins and marks of a released session were not removed", "run_ref", runRef, "error", err)
 	}
+	m.removeCheckpoints(tenant, runRef) // copies of its files (run_checkpoints.go)
 	return m.toRunDTO(updated), nil
 }
 
@@ -2905,6 +2984,7 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef, a
 	}
 	// The images attached to its messages go with the session.
 	m.removeRunAttachments(tenant, runRef)
+	m.removeCheckpoints(tenant, runRef)
 	// So do the live rows the plane kept for it (#2328). They carry no workspace
 	// lineage, which a workspace-confined caller's scope refuses, so the engine removes
 	// them in a transaction of its own; the confined lookup above already proved the
@@ -2992,6 +3072,11 @@ func (m *Module) rawInputLive(tenant model.TenantID, runRef string, line []byte,
 	// (the {"message": …} path is already newline-free via json.Compact).
 	if bytes.IndexByte(line, '\n') >= 0 || bytes.IndexByte(line, '\r') >= 0 {
 		return nil, badRequest("input must be a single line (no embedded newlines)")
+	}
+	// The mode, model, tools and environment are the launch's. A raw line is input
+	// to the session, never a control of it.
+	if controlFrame(line) {
+		return nil, badRequest(`a JSON input line must be a stream-json user message ({"type":"user",...}): the session's permission mode, model, tools and environment stay as launched`)
 	}
 	lr, ok := m.rt.getLive(tenant, runRef)
 	if !ok {
@@ -3404,6 +3489,15 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 		if err != nil {
 			return err
 		}
+		// The held-name check again, under the run-name lock with the insert that
+		// follows: the check createRunInternal already made cannot see a launch
+		// racing this one between its read and this write. A work launch is exempt,
+		// as it is there.
+		if work == nil {
+			if err := refuseHeldRunNameIn(ctx, sc, tenant, p.Name, ""); err != nil {
+				return err
+			}
+		}
 		row := model.Record{
 			colRunRef:         runRef,
 			colTransport:      string(p.Transport),
@@ -3515,11 +3609,15 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 				return err
 			}
 		}
-		// A work launch's Session names the agent its work lease is acquired for
-		// (bindWorkLaunch: the item owner); an owner that is no agent id names none.
+		// Work owners are Identity IDs; core Sessions name Agent IDs. Attribute
+		// only an unambiguous binding, never one arbitrary agent of a shared identity.
 		var holder model.ID
 		if work != nil {
-			holder, _ = model.ParseID(work.ownerRef)
+			var err error
+			holder, err = WorkOwnerAgentInScope(ctx, sc, model.ID(work.ownerRef))
+			if err != nil {
+				return err
+			}
 		}
 		if err := openCoreSession(ctx, sc, row, holder, m.now()); err != nil {
 			return err
@@ -3869,6 +3967,21 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 		if in.detail != "" && !in.keepReason {
 			rec[colReason] = in.detail
 		}
+		// A stop or an interrupt by a person (a login or an API token) not provably the
+		// launcher names the launcher's account, so the audit shows whose session was
+		// halted without a join to the launch entry (whose actor, for a token launch, is
+		// the token). A run with no live process (a launch waiting for approval, an
+		// orphan) is stopped straight to stopped. A token's actor carries no account, so
+		// it is undetermined and names the launcher too. The runtime's own stops (system)
+		// name nobody.
+		var launcher string
+		if (in.event == "stopping" || in.event == "interrupting" || in.event == "stopped") &&
+			(in.actorKind == model.ActorUser || in.actorKind == string(auth.KindToken)) {
+			l := runLauncher(rec)
+			if other, _ := auth.TwoDistinctPeople(l, auth.PersonRefFromActor(in.actor), auth.AcceptWhenUndetermined); other {
+				launcher = l.User
+			}
+		}
 		runID := model.ID(rec.String(model.ColID))
 		seq, err := appendRunEvent(ctx, sc, runEventInput{
 			runID: runID, runRef: runRef, event: in.event,
@@ -3878,6 +3991,7 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 			accessStopCause:  in.accessStopCause,
 			policyStop:       in.policyStop,
 			confinement:      in.confinement,
+			launcher:         launcher,
 		})
 		if err != nil {
 			return err
@@ -3948,6 +4062,9 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 		m.warnf("sessions: a transition was refused by the admission plane",
 			"sid", in.lease.SID, "err", redactErr(refusal))
 		return nil, forbiddenErr("the session authority is no longer valid")
+	}
+	if in.toState == stateStopped || in.toState == stateFailed {
+		m.publishEndedReach(context.WithoutCancel(ctx), tenant, out)
 	}
 	return out, nil
 }
@@ -4098,9 +4215,9 @@ func (lr *liveRun) stopDeadline() {
 // The ceiling is not durable: it lives only in this process's timer. A non-graceful restart loses it, and
 // this runtime already says elsewhere that a native child can reparent and keep running
 // (reconcileTerminal). So the ceiling bounds a session while the engine that launched it
-// is alive, and nothing more. Closing it needs an absolute deadline persisted on the row
-// and reconciled at boot, which is a lifecycle change, not a line here — the applied
-// duration is persisted (colTemplateCeiling) so that work has its input.
+// is alive, and nothing more. The applied duration is persisted (colTemplateCeiling), and
+// the engine's own resume arms only what was left of it (ceilingLeft), so a restart never
+// grants the template's time again.
 func (m *Module) expireRun(lr *liveRun, d time.Duration) {
 	// Identity, because Timer.Stop does not wait for a callback that has ALREADY started:
 	// this can be in flight while the process finalizes and the run is RESUMED, at which
@@ -4350,6 +4467,21 @@ func findRunRec(ctx context.Context, repo store.GenericRepo, runRef string) (mod
 		return nil, notFoundErr()
 	}
 	return recs[0], nil
+}
+
+// runAuditTarget is the sessions.run row id an audit entry about runRef names as its
+// target: the audit list's tool: and folder: filters resolve a run through it, not
+// through meta.run_ref. Every caller has already authorized an existing row.
+func runAuditTarget(ctx context.Context, sc store.Scope, runRef string) (model.ID, error) {
+	repo, err := sc.Ext(runKind)
+	if err != nil {
+		return "", err
+	}
+	rec, err := findRunRec(ctx, repo, runRef)
+	if err != nil {
+		return "", err
+	}
+	return model.ID(rec.String(model.ColID)), nil
 }
 
 // RunningSessions is how many supervised session processes run now and have not been

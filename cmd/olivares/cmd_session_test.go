@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -28,6 +29,7 @@ type fakeSessionEngine struct {
 	*httptest.Server
 	mu         sync.Mutex
 	runs       []map[string]any
+	live       []map[string]any // GET /live: the sessions the plane only observes
 	workspaces []map[string]any
 	profiles   []map[string]any
 	posts      map[string][]map[string]any // path -> decoded bodies
@@ -113,6 +115,31 @@ type fakeSessionEngine struct {
 	shipTargets []map[string]any
 	shipStatus  int
 	shipAnswer  map[string]any
+	// approvals are the governance approvals GET …/approvals/{id} answers. While one is
+	// pending the attach stream holds the turn's reply until a decision arrives or
+	// approvalDeadline passes, as the engine holds a tool call for its human review.
+	approvals        map[string]map[string]any
+	approvalDeadline time.Duration
+	decided          chan struct{}
+	// approvalHits and approvalMisses count the GETs of an approval the engine knew and did not.
+	approvalHits, approvalMisses int
+}
+
+// approvalCopy is a copy of one governance approval, or nil when the engine does not know it.
+func (f *fakeSessionEngine) approvalCopy(id string) map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	a, ok := f.approvals[id]
+	if !ok {
+		f.approvalMisses++
+		return nil
+	}
+	f.approvalHits++
+	out := map[string]any{}
+	for k, v := range a {
+		out[k] = v
+	}
+	return out
 }
 
 // handoffStateOrDelivered is what POST …/handoff answers for the first turn.
@@ -136,7 +163,7 @@ func (f *fakeSessionEngine) handoffFirstTurn() any {
 // up, a write races with serve and the child's request gives -race no ordering edge.
 func newFakeSessionEngine(t *testing.T, setup ...func(*fakeSessionEngine)) *fakeSessionEngine {
 	t.Helper()
-	f := &fakeSessionEngine{posts: map[string][]map[string]any{}, sent: make(chan struct{})}
+	f := &fakeSessionEngine{posts: map[string][]map[string]any{}, sent: make(chan struct{}), decided: make(chan struct{})}
 	for _, s := range setup {
 		s(f)
 	}
@@ -276,6 +303,34 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		})
 	case r.Method == "GET" && path == providerAccountsPath:
 		writeJSON(200, map[string]any{"items": f.accounts})
+	case r.Method == "GET" && strings.HasPrefix(path, "/v1/m/governance/approvals/") && f.approvalCopy(strings.TrimPrefix(path, "/v1/m/governance/approvals/")) != nil:
+		writeJSON(200, f.approvalCopy(strings.TrimPrefix(path, "/v1/m/governance/approvals/")))
+	case r.Method == "POST" && strings.HasPrefix(path, "/v1/m/governance/approvals/") && strings.HasSuffix(path, "/decisions"):
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/m/governance/approvals/"), "/decisions")
+		f.mu.Lock()
+		a := f.approvals[id]
+		// A request that needs more than one approver stays pending after the first approve.
+		if need, _ := a["required_approvals"].(int); need > 1 && str(body, "decision") == "approve" {
+			a["approve_count"] = 1
+			out := map[string]any{}
+			for k, v := range a {
+				out[k] = v
+			}
+			f.mu.Unlock()
+			writeJSON(200, out)
+			return
+		}
+		a["status"] = map[string]string{"approve": "approved", "reject": "rejected"}[str(body, "decision")]
+		for _, run := range f.runs {
+			delete(run, "pending_approval_ref")
+		}
+		f.mu.Unlock()
+		select {
+		case <-f.decided:
+		default:
+			close(f.decided)
+		}
+		writeJSON(200, map[string]any{"id": id, "status": a["status"]})
 	case r.Method == "GET" && path == sessionRunsPath:
 		// The engine applies state and provider_profile_ref before it pages; so does this.
 		query := r.URL.Query()
@@ -290,6 +345,22 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		writeJSON(200, map[string]any{"items": items})
+	case r.Method == "GET" && path == sessionLivePath:
+		writeJSON(200, map[string]any{"items": append([]map[string]any{}, f.live...)})
+	case strings.HasPrefix(path, sessionLivePath+"/by-id/"):
+		ref, tail, _ := strings.Cut(strings.TrimPrefix(path, sessionLivePath+"/by-id/"), "/")
+		for _, row := range f.live {
+			if row["live_ref"] != ref {
+				continue
+			}
+			if tail == "pin" {
+				writeJSON(200, map[string]any{"live_ref": ref, "pinned": r.Method == "POST"})
+			} else {
+				writeJSON(200, row)
+			}
+			return
+		}
+		writeJSON(404, map[string]any{"error": map[string]any{"code": "not_found", "message": "no such session"}})
 	case r.Method == "POST" && path == sessionRunsPath && f.launchRefusal != "":
 		status := http.StatusUnprocessableEntity
 		if f.launchRefusalStatus != 0 {
@@ -461,6 +532,14 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 					f.mu.Unlock()
 					writeJSON(200, answer)
 					return
+				// The caller's own read state (#2866): POST marks the run unread, DELETE read.
+				case strings.HasSuffix(path, "/unread"):
+					unread := r.Method == http.MethodPost
+					f.mu.Lock()
+					run["unread"] = unread
+					f.mu.Unlock()
+					writeJSON(200, map[string]any{"run_ref": ref, "done": false, "unread": unread})
+					return
 				case strings.HasSuffix(path, "/stop"):
 					out["state"] = "stopped"
 				case strings.HasSuffix(path, "/cleanup"):
@@ -520,6 +599,14 @@ func (f *fakeSessionEngine) attach(w http.ResponseWriter, r *http.Request) {
 	case <-f.sent:
 	case <-r.Context().Done():
 		return
+	}
+	if f.approvals != nil {
+		select {
+		case <-f.decided:
+		case <-time.After(f.approvalDeadline):
+		case <-r.Context().Done():
+			return
+		}
 	}
 	for i, line := range f.reply {
 		frame(len(f.replay)+i+1, line)
@@ -625,13 +712,20 @@ func TestSessionTurnBodyFollowsTheConsoleRule(t *testing.T) {
 	}
 }
 
-func TestSessionNameResolvesToTheNewestSession(t *testing.T) {
+func TestSessionNameHeldByAStoppedSessionRequiresAnID(t *testing.T) {
 	f := newFakeSessionEngine(t)
 	f.runs = []map[string]any{
 		{"run_ref": "r-new", "name": "demo", "state": "running", "created_at": "2026-10-01T10:00:00Z"},
 		{"run_ref": "r-old", "name": "demo", "state": "stopped", "created_at": "2026-10-01T09:00:00Z"},
 	}
 	out, errb, err := execSessionCLI(t, nil, append([]string{"session", "stop", "demo"}, sessionCreds(f.URL)...)...)
+	if exitcode.From(err) != exitcode.Usage || !strings.Contains(err.Error(), "2 sessions match") || !strings.Contains(err.Error(), "by its id") {
+		t.Fatalf("stop by a shared name: %v, want the refusal naming the id", err)
+	}
+	if len(f.postsTo(sessionRunsPath+"/r-new/stop")) != 0 || len(f.postsTo(sessionRunsPath+"/r-old/stop")) != 0 {
+		t.Fatalf("an ambiguous name stopped a session: %v", f.hits)
+	}
+	out, errb, err = execSessionCLI(t, nil, append([]string{"session", "stop", "r-new"}, sessionCreds(f.URL)...)...)
 	if err != nil {
 		t.Fatalf("stop: %v\n%s", err, errb)
 	}
@@ -992,5 +1086,42 @@ func TestSessionSendAttachNamesAFileItCannotRead(t *testing.T) {
 	}
 	if n := len(f.postsTo(sessionRunsPath + "/r1/input")); n != 0 {
 		t.Fatalf("the message was sent without its image (%d inputs)", n)
+	}
+}
+
+// TestSessionViewAnInterruptedClaudeTurnAndItsOwnCost: Claude Code answers the engine's
+// interrupt and then ends the turn with an error_during_execution result, which send
+// printed as "— turn failed" with exit 1. Its total_cost_usd is the process's running
+// total, which every footer printed as the turn's cost: a 3.5 s "ok" turn read $0.6305.
+func TestSessionViewAnInterruptedClaudeTurnAndItsOwnCost(t *testing.T) {
+	var b strings.Builder
+	v := newSessionView(&b)
+	v.driver = "claude"
+	for _, f := range []string{
+		`{"type":"result","subtype":"success","is_error":false,"result":"hola","total_cost_usd":0.6122,"duration_ms":9000}`,
+		`{"type":"assistant","session_id":"s1","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}`,
+		`{"type":"result","subtype":"success","is_error":false,"result":"ok","total_cost_usd":0.6305,"duration_ms":3500}`,
+		`{"type":"assistant","session_id":"s1","message":{"role":"assistant","content":[{"type":"text","text":"1, 2, 3"}]}}`,
+		`{"type":"control_response","response":{"subtype":"success","request_id":"olv-interrupt-01a19a0d"}}`,
+		`{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.6305,"duration_ms":11500}`,
+	} {
+		v.render(f)
+	}
+	want := "— turn finished · $0.6122 · 9.0s\nok\n— turn finished · $0.0183 · 3.5s\n1, 2, 3\n— turn interrupted · 11.5s\n"
+	if got := b.String(); got != want || v.failed || !v.limited {
+		t.Fatalf("view =\n%s\nwant\n%s(failed %v limited %v)", got, want, v.failed, v.limited)
+	}
+	// The engine also interrupts a turn whose credential the provider refused: that turn
+	// stays a failure (exit 1), never an interrupt the person asked for.
+	b.Reset()
+	for _, f := range []string{
+		`{"type":"system","subtype":"api_retry","error":"authentication_failed","error_status":401,"session_id":"s1"}`,
+		`{"type":"control_response","response":{"subtype":"success","request_id":"olv-interrupt-01a19a0e"}}`,
+		`{"type":"result","subtype":"error_during_execution","is_error":true,"total_cost_usd":0.6305,"duration_ms":1200}`,
+	} {
+		v.render(f)
+	}
+	if got := b.String(); !strings.Contains(got, "— turn failed · 1.2s") || !v.failed {
+		t.Fatalf("a refused credential's interrupted turn =\n%s(failed %v), want turn failed", got, v.failed)
 	}
 }

@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ApiError } from '@/lib/api/errors'
 import type { TemplateDTO } from './types'
 
 // ---- Hoist mock objects (must appear before vi.mock calls) ----
@@ -99,34 +100,40 @@ describe('TemplatesView', () => {
     })
     wrap(<TemplatesView />)
 
-    // Both template names must appear in the card grid.
+    // Both template names must appear in the list.
     expect(await screen.findByText('Secure Coding Session')).toBeInTheDocument()
     expect(screen.getByText('My Custom Template')).toBeInTheDocument()
   })
 
-  it('filters by builtin', async () => {
+  it('lists your templates first and folds the built-ins in a closed group', async () => {
+    api.list.mockResolvedValue({
+      items: [builtinTemplate, customTemplate],
+      has_more: false,
+    })
+    const user = userEvent.setup()
     wrap(<TemplatesView />)
 
-    // Wait for initial list query.
-    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(1))
+    const yours = await screen.findByRole('heading', { name: 'Your templates' })
+    const summary = screen.getByText('Built-in templates (1)')
+    const fold = summary.closest('details')
+    expect(fold).not.toBeNull()
+    expect(
+      yours.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    // The built-in sits inside the closed fold; the person's own template does not.
+    expect(fold).not.toHaveAttribute('open')
+    expect(fold).toContainElement(screen.getByText('Secure Coding Session'))
+    expect(fold).not.toContainElement(screen.getByText('My Custom Template'))
+    // The groups replace the All / Built-in / Custom select.
+    expect(screen.queryByRole('combobox')).toBeNull()
 
-    // Open the filter Select and choose 'Built-in'.
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(
-      await screen.findByRole('option', { name: 'Built-in' }),
-    )
-
-    // The query must be re-issued with builtin: true.
-    await waitFor(() =>
-      expect(api.list).toHaveBeenCalledWith(
-        expect.objectContaining({ builtin: true }),
-      ),
-    )
+    await user.click(summary)
+    expect(fold).toHaveAttribute('open')
   })
 })
 
 describe('TemplateCard', () => {
-  it('shows lock icon for built-in', () => {
+  it('says Built-in once for a built-in', () => {
     wrap(
       <TemplateCard
         template={builtinTemplate}
@@ -135,8 +142,7 @@ describe('TemplateCard', () => {
       />,
     )
 
-    // The Lock SVG carries aria-label="Built-in" (from t('catalog.builtin')).
-    expect(screen.getByLabelText('Built-in')).toBeInTheDocument()
+    expect(screen.getAllByText('Built-in')).toHaveLength(1)
   })
 
   //"Apply to session" LAUNCHES a session under the template. Until then it
@@ -226,6 +232,34 @@ describe('TemplateCard', () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 
+  // A template that a department or group is assigned cannot be archived: the engine says why
+  // (409), and the administrator reads it, not only that the archive failed.
+  it('archiving an assigned template tells the administrator why', async () => {
+    const why =
+      'this template is assigned to a department or group; unassign it before archiving it'
+    api.remove.mockRejectedValue(new ApiError(409, 'conflict', why))
+    wrap(
+      <TemplateCard
+        template={customTemplate}
+        onEdit={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await userEvent.click(
+      await screen.findByRole('menuitem', { name: /archive/i }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Archive' }),
+    )
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Failed to archive template.', {
+        description: why,
+      }),
+    )
+  })
+
   it('duplicate creates new template', async () => {
     api.duplicate.mockResolvedValue({ ...customTemplate, id: 'tpl-copy' })
     wrap(
@@ -310,7 +344,13 @@ describe('TemplateEditor', () => {
         onOpenChange={vi.fn()}
         template={{
           ...customTemplate,
-          body: { policies: { require_truncate_protection: true } },
+          body: {
+            policies: {
+              require_truncate_protection: true,
+              sessions_disabled: true,
+              require_read_only_folders: true,
+            },
+          },
         }}
       />,
     )
@@ -322,6 +362,12 @@ describe('TemplateEditor', () => {
       api.update.mock.calls[0][1].body.policies?.require_truncate_protection ??
         false,
     ).toBe(false)
+    expect(api.update.mock.calls[0][1].body.policies.sessions_disabled).toBe(
+      true,
+    )
+    expect(
+      api.update.mock.calls[0][1].body.policies.require_read_only_folders,
+    ).toBe(true)
   })
 
   it('a template can let its sessions message each other (peers_rule, MC)', async () => {
@@ -344,6 +390,43 @@ describe('TemplateEditor', () => {
         }),
       ),
     )
+  })
+
+  // The sheet asks a name and a description; every other section is a closed disclosure whose
+  // summary counts what it holds (never a secret), and an invalid field inside a closed one
+  // opens it and takes the focus instead of saving.
+  it('opens on name and description; a field error opens its section', async () => {
+    const user = userEvent.setup()
+    wrap(<TemplateEditor open={true} onOpenChange={vi.fn()} />)
+    expect(screen.getByLabelText(/^Name/)).toBeVisible()
+    expect(screen.getByLabelText('Description')).toBeVisible()
+    const duration = screen.getByLabelText('Max session duration (minutes)')
+    for (const label of [
+      'Model',
+      'Secrets as environment variables',
+      'Max session duration (minutes)',
+      'Connectors',
+    ])
+      expect(screen.getByLabelText(label)).not.toBeVisible()
+
+    await user.click(screen.getByText('Secrets'))
+    await user.type(
+      screen.getByLabelText('Secrets as environment variables'),
+      'GITHUB_TOKEN=env/github',
+    )
+    const secrets = screen.getByText('Secrets').closest('summary')!
+    expect(secrets).toHaveTextContent('1 variable')
+    expect(secrets).not.toHaveTextContent('env/github')
+
+    await user.click(screen.getByText('Governance Policies'))
+    await user.type(duration, '0')
+    await user.click(screen.getByText('Governance Policies'))
+    expect(duration).not.toBeVisible()
+    await user.type(screen.getByLabelText(/^Name/), 'Short')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(duration).toBeVisible()
+    expect(duration).toHaveFocus()
+    expect(api.create).not.toHaveBeenCalled()
   })
 
   // Design first-hour check: a template names vault secrets (env/…) its sessions receive as

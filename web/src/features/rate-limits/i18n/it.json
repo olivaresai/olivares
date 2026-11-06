@@ -4,7 +4,7 @@
     "hint": "Il riepilogo dei limiti di frequenza è stato cercato solo tra i rilevamenti caricati. Un riepilogo mancante potrebbe esistere oltre questa pagina."
   },
   "title": "Limiti di frequenza",
-  "description": "Inventario in sola lettura dei limiti di frequenza a livello di organizzazione e di workspace che un gateway o un proxy deve mantenere sincronizzati. Proviene dall'API Rate Limits di Anthropic (sola lettura); questa vista non modifica mai un limite.",
+  "description": "Limiti di frequenza della tua organizzazione e dei workspace. Sola lettura.",
   "caveats": {
     "keepInSync": "Gateway e proxy devono restare sincronizzati: questi limiti sono l'inventario che un gateway o un proxy a monte deve rispecchiare. Qui non vengono imposti e si modificano presso il provider, non in questa console.",
     "managedAgents": "Managed Agents NON è coperto dall'API Rate Limits. I suoi limiti sono una lacuna documentata, non un valore pari a zero: non viene mostrata alcuna riga di Managed Agents perché l'API non ne riporta."

@@ -515,26 +515,32 @@ func waitExit(ctx context.Context, proc Process) error {
 	return nil
 }
 
-// openCodeExport is the part of `opencode export` a handoff reads.
+// openCodeExport is the part of `opencode export` a handoff and the session view
+// (openCodeHistory) read.
 type openCodeExport struct {
 	Messages []struct {
 		Info struct {
+			ID   string `json:"id"`
 			Role string `json:"role"`
 		} `json:"info"`
-		Parts []struct {
-			Type      string `json:"type"`
-			Text      string `json:"text"`
-			Synthetic bool   `json:"synthetic"`
-			Ignored   bool   `json:"ignored"`
-			Tool      string `json:"tool"`
-			State     struct {
-				Status string          `json:"status"`
-				Input  json.RawMessage `json:"input"`
-				Output string          `json:"output"`
-				Error  string          `json:"error"`
-			} `json:"state"`
-		} `json:"parts"`
+		Parts []openCodePart `json:"parts"`
 	} `json:"messages"`
+}
+
+type openCodePart struct {
+	Type      string `json:"type"`
+	Text      string `json:"text"`
+	Synthetic bool   `json:"synthetic"`
+	Ignored   bool   `json:"ignored"`
+	Tool      string `json:"tool"`
+	CallID    string `json:"callID"`
+	State     struct {
+		Status string          `json:"status"`
+		Title  string          `json:"title"`
+		Input  json.RawMessage `json:"input"`
+		Output string          `json:"output"`
+		Error  string          `json:"error"`
+	} `json:"state"`
 }
 
 func readOpenCodeExport(data []byte) (handoffConversation, error) {

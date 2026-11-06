@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE LAST-HOUR SWIMLANE IN A REAL BROWSER (#2547). Estate over the demo estate's event log
-// (src/features/home/swimlane.fixture.ts) with the clock held at its 16:42: the lanes match
-// the events, no label overlaps a bar and axe finds nothing at 1440 and 1024 in both
-// themes, and a drag across the lanes opens the Ledger on that range (since/until).
+// THE LAST-HOUR SWIMLANE IN A REAL BROWSER (#2547), on Usage › Timeline (#4427), over the demo
+// estate's event log (src/features/home/swimlane.fixture.ts) with the clock held at its 16:42:
+// the lanes match the events, no label overlaps a bar and axe finds nothing at 1440, 1024 and
+// 390 in both themes, and a drag across the lanes opens the Ledger on that range (since/until).
 //
 // Run: pnpm exec playwright test -c playwright.visual.config.ts e2e-visual/estate-swimlane.spec.ts
 import AxeBuilder from '@axe-core/playwright'
@@ -95,7 +95,7 @@ async function showEstate(page: Page, theme: string, ledger: string[] = []) {
     { theme },
   )
   await page.clock.setFixedTime(NOW)
-  await page.goto('/')
+  await page.goto('/usage?tab=timeline')
   const swimlane = page.getByTestId('estate-swimlane')
   await expect(swimlane.getByTestId('swimlane-lane')).toHaveCount(8)
   // Every lane read: the demo estate's 20 runs and the failed session's one, a bar each.
@@ -105,13 +105,16 @@ async function showEstate(page: Page, theme: string, ledger: string[] = []) {
 }
 
 for (const theme of ['dark', 'light'])
-  for (const width of [1440, 1024])
+  for (const width of [1440, 1024, 390])
     test(`the last-hour swimlane at ${width} in ${theme}: axe 0, overlap 0`, async ({
       page,
     }) => {
-      await page.setViewportSize({ width, height: 900 })
+      // Tall enough to show the whole card at 390, where its lanes stack: the page's fixed
+      // footer would otherwise lie over the lower lanes and the scan would measure the footer.
+      await page.setViewportSize({ width, height: 1400 })
       const swimlane = await showEstate(page, theme)
       await expect(swimlane.locator('[data-mark="ask-flagged"]')).toHaveCount(1)
+      await swimlane.scrollIntoViewIfNeeded()
       await swimlane.screenshot({
         path: test.info().outputPath(`swimlane-${width}-${theme}.png`),
       })
@@ -122,6 +125,27 @@ for (const theme of ['dark', 'light'])
         [],
       )
       expect(await page.evaluate(overlapScan)).toEqual([])
+      // Nothing of a lane runs past the card's right edge, and the plot keeps room to be
+      // read: at 390 the side columns once took all of its width (#3047).
+      const card = (await swimlane.boundingBox())!
+      for (const cell of await swimlane
+        .getByTestId('swimlane-lane')
+        .locator('> *')
+        .all()) {
+        const box = (await cell.boundingBox())!
+        expect(box.x + box.width).toBeLessThanOrEqual(card.x + card.width)
+      }
+      const axis = (await swimlane.getByTestId('swimlane-plot').boundingBox())!
+      expect(axis.width).toBeGreaterThan(200)
+      // Every lane's bars sit under the time axis, never in a name or state column.
+      for (const bars of await swimlane
+        .getByTestId('swimlane-lane')
+        .locator('[role="img"]')
+        .all()) {
+        const box = (await bars.boundingBox())!
+        expect(box.x).toBeCloseTo(axis.x, 0)
+        expect(box.width).toBeCloseTo(axis.width, 0)
+      }
       // The waiting-for-approval mark is a warn tint, not a gradient: no visible glow (#2946).
       expect(
         (await page.evaluate(orangeScan)).hits.filter((h) => h.visible),

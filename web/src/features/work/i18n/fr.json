@@ -13,7 +13,6 @@
   },
   "apply": {
     "planning": "Planification de la modification. Rien n'est écrit à cette étape.",
-    "planTitle": "Plan",
     "command": "Commande",
     "permission": "Permission",
     "eventType": "Événement",
@@ -29,14 +28,14 @@
     "close": "Fermer",
     "appliedTitle": "Appliquée",
     "replayedTitle": "Déjà appliquée",
-    "replayedBody": "Le moteur a reconnu cette clé d'idempotence et a rejoué le résultat d'origine. Rien n'a été écrit une seconde fois.",
+    "replayedBody": "Cette modification avait déjà été appliquée. Elle n’a pas été effectuée deux fois.",
     "commandId": "Id de commande",
     "resultId": "Id de résultat",
     "status": "Nouveau statut",
     "etag": "Nouvelle étiquette de version",
     "auditSeq": "Séquence d'audit",
     "reread": "Relire et comparer",
-    "retrySameKey": "Réessayer avec la même clé",
+    "retrySameKey": "Réessayer",
     "failure": {
       "conflict-version": "Quelqu'un d'autre a modifié cette unité",
       "version-required": "Précondition de version manquante",
@@ -272,7 +271,7 @@
   "unavailable": {
     "title": "Vérification impossible",
     "body": "Le moteur n'a pas pu mener cette observation à son terme ; il signale donc un résultat inconnu plutôt qu'un résultat. Ne considérez rien de ce panneau comme confirmé.",
-    "retryHint": "Il est indéterminé si la modification a été écrite. Réessayez avec la MÊME clé d'idempotence : c'est précisément ce qui rend la nouvelle tentative sûre, car le moteur la reconnaîtra comme la même intention et non comme une seconde.",
+    "retryHint": "Le résultat est incertain. Réessayez ici pour le vérifier sans répéter la modification.",
     "code": "Code du moteur : {{code}}"
   },
   "verdict": {

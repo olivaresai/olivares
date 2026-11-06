@@ -1,5 +1,5 @@
 {
-  "title": "Log Viewer",
+  "title": "Logs",
   "controls": {
     "pause": "Pause",
     "resume": "Resume",
@@ -18,7 +18,7 @@
     "clearAria": "Clear filters"
   },
   "capture": {
-    "debugUnavailable": "DEBUG entries are not captured at the engine's current log level — set OLIVARES_LOG_LEVEL=debug."
+    "debugUnavailable": "Debug entries are not recorded at the current log level."
   },
   "stream": {
     "empty": "No log entries to display.",

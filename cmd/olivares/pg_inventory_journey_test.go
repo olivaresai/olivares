@@ -122,8 +122,9 @@ func TestTenantInventoryJourneyChild(t *testing.T) {
 				listed = true
 			}
 		}
-		if !listed {
-			t.Fatalf("server-info without the inventory = %s, want retention listed with no_tenant_inventory", raw)
+		// Retention schedules are Business: a Community engine schedules no sweep to list.
+		if want := thisEdition.name != "community"; listed != want {
+			t.Fatalf("server-info without the inventory = %s; want retention listed with no_tenant_inventory = %v", raw, want)
 		}
 		if err := eng.signer.CheckpointAll(ctx, eng.store); !errors.Is(err, store.ErrEnumerationNotAuthoritative) {
 			t.Fatalf("checkpoints without the inventory = %v, want the non-authoritative refusal", err)

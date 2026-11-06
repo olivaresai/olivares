@@ -1,6 +1,7 @@
 {
-  "title": "Identity & access",
+  "title": "Identity",
   "subtitle": "Who can sign in, what they can do, and how they prove it.",
+  "ownSignInOnly": "You can set up your own sign-in factors here. An organization admin changes the rest of this page.",
   "sections": "Identity sections",
   "groups": {
     "people": "People",
@@ -8,7 +9,7 @@
     "machines": "Machine identities"
   },
   "tabs": {
-    "federation": "SSO & SCIM",
+    "federation": "Single sign-on",
     "inventory": "Identity inventory",
     "mcp": "MCP auth",
     "login": "Privileged login",
@@ -47,9 +48,9 @@
       "signing": "Turning report signing on or off"
     },
     "aal": {
-      "aal1": "AAL1 (password)",
-      "aal2": "AAL2 (multi-factor)",
-      "aal3": "AAL3 (phishing-resistant)"
+      "aal1": "Standard sign-in",
+      "aal2": "Single sign-on with a second factor",
+      "aal3": "Passkey or security key"
     },
     "unenrolled": "No passkey is registered for your account yet. Register a passkey on your device or a security key in the Privileged login tab, then authenticate.",
     "unenrolledInline": "No passkey is registered for your account yet. Register one below.",
@@ -101,9 +102,9 @@
   },
   "sso": {
     "title": "Single sign-on (OIDC / SAML)",
-    "description": "Federated login is configured in SSO / IdP, or by environment at boot. This panel documents the configuration, checks the exact redirect URI and surfaces the connection state — it does not write the configuration.",
+    "description": "Single sign-on is set up in SSO / IdP, by a superadmin. This panel checks the exact redirect URI and shows the connection state.",
     "notConfigured": "Not configured",
-    "notConfiguredHint": "No identity provider is configured, so federation requests return 501. Set the environment keys below and restart the engine to enable SSO.",
+    "notConfiguredHint": "No identity provider is configured, so federation requests return 501. A superadmin sets one up in SSO / IdP.",
     "seamWhat": "The SSO connection-state summary",
     "protocol": "Protocol",
     "state": "Connection",
@@ -114,14 +115,7 @@
     "redirectCheckHint": "Paste the redirect/ACS URI configured in your identity provider. It must match the value above exactly (RFC 9700).",
     "redirectMatch": "Exact match — this redirect URI is valid.",
     "redirectMismatch": "Does not match exactly. The IdP must use the redirect URI above, character-for-character.",
-    "proto": {
-      "common": "Common",
-      "oidc": "OIDC",
-      "saml": "SAML"
-    },
-    "required": "Required",
-    "secret": "Secret",
-    "envNote": "Configuration is read once at boot from the environment; there is no configuration write API. Secrets are never read back.",
+    "configure": "Open SSO / IdP",
     "testLogin": "Start a test login"
   },
   "scim": {
@@ -145,6 +139,7 @@
     "noLeaverHint": "When a SCIM leaver (delete / prov:delete) is processed, the backend revokes the user's sessions and tokens and records it here.",
     "leaverTruncated": "Newest {{n}} leaver events; there are older ones",
     "leaverTruncatedHint": "There are more leaver events than shown. This card lists the most recent ones, so the events cut off are the older ones; a user missing from this list is not proof that they were never deprovisioned.",
+    "leaverWindow": "This card reads only the latest {{n}} ledger entries, so older leaver events are not listed. A user missing from this list is not proof that they were never deprovisioned.",
     "revoked": "Sessions + tokens revoked",
     "col": {
       "userName": "User",
@@ -162,7 +157,7 @@
       "name": "Name",
       "externalId": "External ID",
       "kind": "Kind",
-      "principalType": "Principal",
+      "principalType": "Person or tool",
       "source": "Source",
       "state": "State"
     },
@@ -172,7 +167,7 @@
       "unknown": "Unknown"
     },
     "filter": {
-      "principalType": "Filter by principal",
+      "principalType": "Filter by person or tool",
       "kind": "Filter by kind",
       "all": "All"
     }
@@ -223,8 +218,18 @@
     "currentAal": "Current level",
     "methods": "Methods",
     "methodsUnknown": "Not reported",
+    "methodNames": {
+      "pwd": "Password",
+      "sso": "Single sign-on",
+      "external": "External sign-in",
+      "totp": "Authenticator code",
+      "mfa": "Second factor",
+      "webauthn": "Passkey",
+      "piv": "Smart card",
+      "pairing": "Paired device"
+    },
     "policy": {
-      "none": "This deployment asks for no extra check before administrative actions. A system administrator can turn one on under Settings › Sign-in and security.",
+      "none": "This deployment asks for no extra check before administrative actions. A system administrator can turn one on.",
       "totp": "Administrative actions on this deployment ask for a sign-in with an authenticator code.",
       "passkey": "Administrative actions on this deployment ask for a passkey."
     },
@@ -256,7 +261,7 @@
       "registerFailed": "Passkey registration failed. Your browser may not support WebAuthn, or registration was canceled.",
       "unsupported": "This browser does not support WebAuthn/FIDO2.",
       "none": "No passkeys registered",
-      "noneHint": "Register a passkey to enable phishing-resistant hardware-bound login (AAL3).",
+      "noneHint": "Register a passkey to enable phishing-resistant hardware-bound sign-in.",
       "colName": "Name",
       "colCreated": "Registered",
       "colBackup": "Backup",
@@ -267,7 +272,7 @@
       "renamed": "Passkey renamed.",
       "delete": "Delete",
       "deleteTitle": "Delete passkey",
-      "deleteBody": "Delete the passkey \"{{name}}\"? This is permanent. You will need another registered passkey to maintain AAL3 access.",
+      "deleteBody": "Delete the passkey \"{{name}}\"? This is permanent. You will need another registered passkey to keep signing in with a passkey.",
       "deleted": "Passkey deleted.",
       "lastCredential": "Cannot delete your only passkey. Register another one first."
     }

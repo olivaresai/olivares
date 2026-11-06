@@ -1,4 +1,23 @@
 {
+  "pathChip": {
+    "open": "在 {{editor}} 中打开",
+    "copyRelative": "复制相对路径",
+    "copyFull": "复制完整路径"
+  },
+  "race": {
+    "cleanupFailed": "所选分支已合并。仍有其他工作树未丢弃，请重试以完成清理。",
+    "title": "比较会话",
+    "hint": "查看每个分支及其费用。选择前请提交要保留的修改。",
+    "keep": "保留此会话",
+    "confirm": "停止所有会话，将 {{name}} 合并到仓库，并永久丢弃其他工作树及其未合并的更改？",
+    "confirmKeep": "合并并丢弃其他会话",
+    "kept": "已合并所选分支，并丢弃其他工作树。",
+    "invalid": "请选择同一仓库中不同的工作树会话。",
+    "loadError": "无法读取所有会话。请检查访问权限后重试。",
+    "notStopped": "有会话未停止。未合并或丢弃任何分支。",
+    "failed": "无法保留此会话。",
+    "uncommitted": "未提交的更改和 Git"
+  },
   "compact": {
     "context": "上下文",
     "now": "立即压缩",
@@ -9,6 +28,8 @@
     "failed": "未确认压缩完成。消息未发送。"
   },
   "git": {
+    "init": "初始化 Git",
+    "noRepository": "此文件夹不是 Git 仓库。",
     "title": "Git",
     "branch": "分支",
     "newBranch": "新建分支",
@@ -93,7 +114,7 @@
     "lastSeen": "最后事件",
     "minimalData": "此处仅显示元数据。按照设计，引擎绝不会在此携带 SQL、负载或密钥（最小化数据）。",
     "viewAccess": "访问映射",
-    "viewInventory": "清单"
+    "viewInventory": "已发现的资源"
   },
   "timeline": {
     "title": "时间线",
@@ -305,7 +326,18 @@
     "unsnooze": "取消延后",
     "markDone": "标记为完成",
     "markNotDone": "标记为未完成",
+    "markUnread": "标记为未读",
+    "markRead": "标记为已读",
+    "unreadMark": "未读",
     "markFailed": "未能更改标记。"
+  },
+  "undo": {
+    "archived": "已归档“{{name}}”",
+    "snoozed": "已延后“{{name}}”",
+    "done": "已将“{{name}}”标记为完成",
+    "unpinned": "已取消固定“{{name}}”",
+    "changed": "此会话已更改；未撤销任何内容。",
+    "failed": "无法撤销此更改。"
   },
   "surface": {
     "openBeside": "在旁边打开",
@@ -354,11 +386,6 @@
     "costUnknown": "未报告费用",
     "costPartial": "{{cost}}（部分）",
     "viewCosts": "查看费用",
-    "planLabel": "本会话登录的套餐用量窗口",
-    "planNotRead": "未读取套餐窗口",
-    "resets": "{{when}}重置（{{at}}）",
-    "stale": "最后已知",
-    "readAt": "读取于 {{at}}",
     "permission": "{{name}}：{{what}}",
     "full": "完全访问：无需询问即可运行，受 <policy>Olivares 策略</policy>约束"
   },
@@ -414,7 +441,6 @@
     "identifiersHint": "供复制的引用。它们不是范围行上的名称。",
     "wireTitle": "所选行",
     "wireHint": "所选行，与工具发送时完全一致。对话是默认视图。",
-    "wireEmpty": "在对话中选择一行，即可查看工具发送时的原样内容。",
     "thisNode": "本节点",
     "workTitle": "会话工作权限",
     "workHint": "记录于上次启动。每项操作都会检查当前授权。",
@@ -437,7 +463,6 @@
       "worker": "工作智能体",
       "orchestrator": "编排智能体"
     },
-    "details": "引用",
     "echoes": "也记录为",
     "folder": "文件夹",
     "temporaryFolder": "此会话的临时文件夹",
@@ -462,12 +487,23 @@
       "cost": "费用"
     },
     "usage": {
-      "title": "账户用量",
-      "fiveHour": "5 小时的 {{percent}}%",
-      "week": "本周的 {{percent}}%"
-    }
+      "title": "账户用量"
+    },
+    "fork": "从此处分支",
+    "readFailed": "无法读取完整上下文。请加载较早的消息或选择较短的轮次，然后重试。"
+  },
+  "details": {
+    "technical": "技术详情",
+    "unknownFrames_other": "未知帧：{{count}}"
+  },
+  "backgroundTasks": {
+    "label": "后台任务",
+    "stop": "停止 {{name}}",
+    "stopFailed": "无法停止该任务。"
   },
   "conversation": {
+    "showAll": "显示全部",
+    "showLess": "收起",
     "log": "对话",
     "waiting": "正在等待会话…",
     "empty": "还没有消息。",
@@ -476,8 +512,7 @@
     "ended": "会话已结束。",
     "lag_other": "丢失 {{count}} 帧 — 下方输出在缺口之后继续。",
     "tool": "工具",
-    "result": "结果",
-    "unknown": "无法识别的帧",
+    "answered": "已回答",
     "inspect": "在检查器中显示",
     "args": "参数",
     "toolResult": "结果",
@@ -501,12 +536,14 @@
     "waitingApproval": "会话就绪后发送。",
     "workingFolder": "工作文件夹：<path />",
     "temporaryFolder": "工作文件夹：此会话的临时文件夹",
-    "workedFor": "已运行 {{duration}}",
+    "turnLine": "<work/> · {{duration}}",
+    "jumpToLatest": "跳到最新",
     "modelChanged": "模型已更换：{{from}} → {{to}}",
     "modelChangedAt": "模型于 {{time}} 更换：{{from}} → {{to}}",
     "sentPending": "已发送。正在等待工具接收。",
     "sentNotTaken": "会话在工具接收之前已结束。",
     "finishedIn": "用时 {{duration}} 完成",
+    "interrupted": "已被你中断",
     "escToInterrupt": "按 Esc 中断",
     "background": "在后台",
     "agentWorking": "工作中",
@@ -571,6 +608,29 @@
     "fileTruncated": "显示前 256 KB。",
     "truncated": "显示最新的 {{count}} 个文件。"
   },
+  "checkpoints": {
+    "title": "回合",
+    "hint": "此会话的每条消息在其文件夹中改动了什么。回退会把文件恢复到某个回合之前的样子。",
+    "turn": "第 {{n}} 回合",
+    "filesChanged": "已更改文件:{{n}}",
+    "showFiles": "文件",
+    "status": {
+      "added": "新增",
+      "modified": "修改",
+      "deleted": "删除"
+    },
+    "rewind": "回退",
+    "undo": "撤销回退",
+    "noWords": "(无文字)",
+    "rewound": "文件夹已回退(恢复或删除了 {{n}} 个文件)。你的消息已放入消息框。",
+    "undone": "已撤销回退(恢复或删除了 {{n}} 个文件)。",
+    "confirm": {
+      "title": "回退到第 {{n}} 回合之前?",
+      "description": "涉及文件:{{n}}。它们会恢复到该回合之前的样子;此后由智能体创建的文件会被删除。",
+      "action": "回退",
+      "conversation": "只有文件会改变。工具保留它的对话。该回合的消息会放入消息框,你可以编辑后再次发送。"
+    }
+  },
   "preview": {
     "title": "预览",
     "hint": "此会话在本地端口上提供的应用。它在你的浏览器中运行，与控制台隔离，并且不受会话的网络限制。",
@@ -585,7 +645,9 @@
     "reload": "重新加载",
     "newTab": "在新标签页中打开",
     "openError": "无法打开预览。端口可能已关闭。",
-    "frameTitle": "端口 {{port}} 的预览"
+    "frameTitle": "端口 {{port}} 的预览",
+    "annotate": "批注",
+    "annotating": "点击页面中的元素，即可为它添加备注。"
   },
   "branchChanges": {
     "title": "分支更改",
@@ -643,13 +705,15 @@
       "snoozed": "已延后",
       "archived": "已归档"
     },
+    "agentCount_other": "{{count}} 个智能体",
     "more": "更多",
     "back": "返回会话",
     "showTable": "以表格显示",
     "filter": "筛选会话…",
-    "recent": "显示最近 {{n}} 个",
+    "recent": "最近 {{n}} 个",
     "loadMore": "加载更多",
-    "noMatch": "没有匹配的会话。"
+    "noMatch": "没有匹配的会话。",
+    "unnamedFolder": "未命名文件夹"
   },
   "thread": {
     "copyReference": "复制引用",
@@ -767,7 +831,6 @@
     "cancel": "取消",
     "archive": "归档",
     "unarchive": "取消归档",
-    "archived": "已归档。它在列表末尾的“已归档”中。",
     "unarchived": "已回到列表。",
     "copyLink": "复制链接",
     "copyId": "复制会话 ID",
@@ -828,5 +891,12 @@
       "down": "下"
     },
     "closeLabel": "关闭终端"
+  },
+  "strip": {
+    "needYou_other": "{{count}} 个需要你处理",
+    "running_other": "{{count}} 个运行中",
+    "failedToday_other": "今天 {{count}} 个失败",
+    "costToday": "今天 {{amount}}",
+    "label": "会话概览"
   }
 }

@@ -257,14 +257,14 @@ func TestTemplateList_FilterBuiltin(t *testing.T) {
 		"name": "Custom One",
 	}, hdr)
 
-	// List all (includes 9 builtins + 1 custom).
+	// List all (includes builtins + 1 custom).
 	r := h.do("GET", "/v1/m/sessions/templates", admin, hdr)
 	if r.code != http.StatusOK {
 		t.Fatalf("list all = %d %s", r.code, r.raw)
 	}
 	allItems := r.body["items"].([]any)
-	if len(allItems) < 10 {
-		t.Fatalf("expected at least 10 templates (9 builtins + 1 custom), got %d", len(allItems))
+	if want := len(builtinTemplates) + 1; len(allItems) != want {
+		t.Fatalf("all templates = %d, want %d (builtins + 1 custom)", len(allItems), want)
 	}
 
 	// Filter by builtin=true.
@@ -273,8 +273,8 @@ func TestTemplateList_FilterBuiltin(t *testing.T) {
 		t.Fatalf("list builtin = %d %s", r.code, r.raw)
 	}
 	builtinItems := r.body["items"].([]any)
-	if len(builtinItems) != 9 {
-		t.Errorf("builtin items = %d, want 9", len(builtinItems))
+	if want := len(builtinTemplates); len(builtinItems) != want {
+		t.Errorf("builtin items = %d, want %d", len(builtinItems), want)
 	}
 
 	// Filter by builtin=false.
@@ -384,7 +384,10 @@ func TestTemplateApply_RefusesWhatTheLaunchWouldRefuse(t *testing.T) {
 
 	cr := h.doJSON("POST", "/v1/m/sessions/templates", admin, map[string]any{
 		"name": "Retired",
-		"body": map[string]any{"settings": map[string]any{"effort": "high"}},
+		"body": map[string]any{
+			"settings": map[string]any{"effort": "high"},
+			"policies": map[string]any{"require_read_only_folders": true},
+		},
 	}, hdr)
 	if cr.code != http.StatusCreated {
 		t.Fatalf("create = %d %s", cr.code, cr.raw)
@@ -577,4 +580,80 @@ func countBuiltins(t *testing.T, m *Module, ctx context.Context, tenant model.Te
 		return nil
 	})
 	return count
+}
+
+// Course presets use the ordinary template merge and never widen a plan launch.
+func TestAIASPresets(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode                  string
+		disabled, recording, strict bool
+	}{
+		{"AIAS 1 — No AI", "", true, false, false},
+		{"AIAS 2 — Plan only tutor", "plan", false, false, true},
+		{"AIAS 3 — Scratch practice", "acceptEdits", false, false, true},
+		{"AIAS 4 — AI with review", "acceptEdits", false, true, false},
+		{"AIAS 5 — Full AI", "bypassPermissions", false, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &fakeRunner{}
+			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(r), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, false))
+			var body *tplBody
+			for i := range builtinTemplates {
+				if builtinTemplates[i].name == tc.name {
+					body = &builtinTemplates[i].body
+					break
+				}
+			}
+			if body == nil {
+				t.Fatal("missing course preset")
+			}
+			id := seedTemplate(t, m, tenant, tc.name, *body)
+			if tc.name == "AIAS 3 — Scratch practice" {
+				_, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{TemplateID: id, Actor: actorU, ActorKind: actorKindU})
+				if err == nil || !strings.Contains(err.Error(), "read_only_folders") {
+					t.Fatalf("unconfigured scratch launch: %v", err)
+				}
+			}
+			course, scratch := t.TempDir(), t.TempDir()
+			folder := course
+			var references []string
+			if tc.name == "AIAS 3 — Scratch practice" {
+				folder, references = scratch, []string{course}
+			}
+			ws := mkWorkspace(t, m, tenant, CreateWorkspaceParams{RootPath: folder, ReadOnlyFolders: references})
+			run, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{TemplateID: id, WorkspaceRef: ws.WorkspaceRef, Transport: TransportStreamJSON, PermissionMode: "bypassPermissions", MayRunUnrestricted: true, Actor: actorU, ActorKind: actorKindU})
+			if tc.disabled {
+				if err == nil || !strings.Contains(err.Error(), "sessions are disabled") {
+					t.Fatalf("no-AI launch: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			spec := r.lastSpec()
+			if mode, _ := argvFlag(spec.Args, "--permission-mode"); mode != tc.mode {
+				t.Fatalf("mode=%q want=%q", mode, tc.mode)
+			}
+			if run.RecordIO != tc.recording || spec.ConfinementRequireTruncateProtection != tc.strict {
+				t.Fatalf("recording=%v strict=%v", run.RecordIO, spec.ConfinementRequireTruncateProtection)
+			}
+			if tc.mode == "plan" && (spec.Confinement == nil || len(spec.Confinement.Sealed) == 0 || !spec.ConfinementRequired) {
+				t.Fatal("tutor folder is not confined read-only")
+			}
+			if len(references) > 0 {
+				if spec.Dir != scratch || len(spec.ConfinementFiles) != 1 || !spec.ConfinementRequired {
+					t.Fatal("scratch workspace did not carry the read-only course boundary")
+				}
+				for _, path := range spec.Confinement.ReadWrite {
+					if pathsOverlap(path, course) {
+						t.Fatal("course folder received a writable grant")
+					}
+				}
+			}
+			if !strings.Contains(body.Settings.CustomInstructions, "final answer") {
+				t.Fatal("missing assessment instructions")
+			}
+		})
+	}
 }

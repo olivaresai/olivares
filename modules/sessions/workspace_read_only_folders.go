@@ -88,8 +88,18 @@ type workspaceSettingChange struct {
 // hash commits to the new value, so a refused request changes and records nothing.
 // The DLP event also names the new and the previous mode: a downgrade must be
 // readable in the ledger.
-func (m *Module) patchWorkspace(ctx context.Context, tenant model.TenantID, ref string, folders *[]string, dlpMode, defaultPermission *string, mayRunUnrestricted bool, dataClass *string, backup *bool, actor, actorKind string) (workspaceDTO, error) {
+func (m *Module) patchWorkspace(ctx context.Context, tenant model.TenantID, ref string, folders *[]string, dlpMode, defaultPermission *string, mayRunUnrestricted bool, dataClass *string, backup *bool, retentionDays *int64, actor, actorKind string) (workspaceDTO, error) {
 	var changes []workspaceSettingChange
+	if retentionDays != nil {
+		if *retentionDays < 0 || *retentionDays > maxRetentionDays {
+			return workspaceDTO{}, badRequest(fmt.Sprintf("retention_days must be between 0 (none) and %d", maxRetentionDays))
+		}
+		raw, err := json.Marshal(*retentionDays)
+		if err != nil {
+			return workspaceDTO{}, err
+		}
+		changes = append(changes, workspaceSettingChange{colWsRetentionDays, *retentionDays, raw})
+	}
 	if backup != nil {
 		raw, err := json.Marshal(*backup)
 		if err != nil {
@@ -153,7 +163,7 @@ func (m *Module) patchWorkspace(ctx context.Context, tenant model.TenantID, ref 
 		if err != nil {
 			return err
 		}
-		previous := map[string]any{colWsDLPMode: rec.String(colWsDLPMode), colWsDefaultPermission: rec.String(colWsDefaultPermission), colWsDataClass: rec.String(colWsDataClass), colWsBackup: rec.IsNull(colWsBackup) || rec.Bool(colWsBackup)}
+		previous := map[string]any{colWsDLPMode: rec.String(colWsDLPMode), colWsDefaultPermission: rec.String(colWsDefaultPermission), colWsDataClass: rec.String(colWsDataClass), colWsBackup: rec.IsNull(colWsBackup) || rec.Bool(colWsBackup), colWsRetentionDays: rec.Int(colWsRetentionDays)}
 		for _, change := range changes {
 			rec[change.column] = change.value
 		}

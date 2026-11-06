@@ -20,7 +20,8 @@ vi.mock('@/features/models/api', async (importOriginal) => {
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useNavigate: () => vi.fn(),
   // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
   // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).

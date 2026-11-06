@@ -16,7 +16,7 @@ rythme régulier, jusqu'à ce que le diff soit silencieux.
 ## 1. Récupérer la dérive
 
 Sur une nouvelle installation, `accessmap` est désactivé. En tant
-qu’administrateur, activez `accessmap` dans **Settings > Edition & modules**,
+qu’administrateur, activez `accessmap` dans **Settings > Modules**,
 en conservant les autres modules sélectionnés. Pour la CLI, connectez-vous
 d’abord à ce moteur en tant qu’administrateur avec `olivares login`, puis
 exécutez `olivares modules on accessmap`. Attendez chaque redémarrage du moteur avant de continuer ;

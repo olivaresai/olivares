@@ -91,8 +91,6 @@ beforeEach(() => {
       head: 'Head',
       swap: 'Swap',
       swapDisabled: 'Enter both refs before swapping them.',
-      requires: 'Requires',
-      permission: 'system:admin',
       changedFiles: 'Changed files',
       keysHint: 'Alt and an arrow move between files and hunks.',
       loading: 'Loading the comparison…',

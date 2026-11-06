@@ -27,8 +27,9 @@ const systemAuthorityRole = "engine-system"
 
 // systemAuthoritySealDomain replaces the ordinary seal domain for the engine
 // system shape, the only sealed shape that carries local attribution. Every
-// human and token preimage stays byte-for-byte unchanged.
-const systemAuthoritySealDomain = "olivares.auth.engine-system-seal.v1\x00"
+// human and token preimage stays byte-for-byte unchanged. v2 follows the
+// principal seal's v5 field order.
+const systemAuthoritySealDomain = "olivares.auth.engine-system-seal.v2\x00"
 
 // ResolveSystemScope seals an engine system operator for exactly one business
 // tenant and exactly the permissions it names, so a path no human triggered can

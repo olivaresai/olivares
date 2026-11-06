@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { isoMinuteBound, UrlStateNotice } from '@/features/shared'
+import { isoMinuteBound, useUrlStateNotice } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import {
@@ -98,6 +98,7 @@ export function ObservabilityView() {
     OUTER_URL_KEYS,
     decodeOuterTab,
   )
+  useUrlStateNotice(outerIssues)
 
   // Canonicalise an inferred tab exactly once, with a replace. From then on the
   // tab is explicit, so neither the hook's cleanup of a refused filter nor a
@@ -113,7 +114,6 @@ export function ObservabilityView() {
       description={t('description')}
       actions={<SeamBadge label={t('engineScope.badge')} />}
     >
-      <UrlStateNotice issues={outerIssues} />
       <Tabs
         value={outer.tab}
         // An EXPLICIT choice is always written, even when it matches what the
@@ -252,6 +252,9 @@ function TracesTab({ tenant }: { tenant: string | null }) {
     TRACE_URL_KEYS,
     traceParamsFromUrl,
   )
+  // A rejected bound or status names itself instead of vanishing, so a shared trace link
+  // cannot look identical to a good one while querying something else.
+  useUrlStateNotice(filterIssues)
 
   const canDrill = can('observability:traces:read')
 
@@ -293,12 +296,6 @@ function TracesTab({ tenant }: { tenant: string | null }) {
         noPadding
       >
         <div className="p-4">
-          {/* Beside the filters it is about: a rejected bound or status now
-              names itself instead of vanishing, so a shared trace link cannot
-              look identical to a good one while querying something else. */}
-          <div className="mb-3">
-            <UrlStateNotice issues={filterIssues} />
-          </div>
           <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <div className="relative">
               <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

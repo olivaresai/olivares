@@ -1,5 +1,5 @@
 {
-  "title": "Claude Code 采用情况",
+  "title": "采用情况",
   "description": "Claude Code 的使用程度，以及开发者对其建议内容的保留比例。",
   "range": {
     "label": "时间范围",
@@ -15,7 +15,7 @@
     "trend": "趋势"
   },
   "boundary": {
-    "note": "仅涵盖 Claude API 流量——管理员 Analytics 数据源和 OTLP 遥测平面。由 {{providers}} 提供的使用情况不包含在内，因此此处没有采用记录并不能证明确实未使用。",
+    "note": "仅包含 Claude API 用量。不包括：{{providers}}。",
     "providers": {
       "claude-platform-aws": "Claude Platform on AWS",
       "microsoft-foundry": "Microsoft Foundry",
@@ -25,12 +25,12 @@
   },
   "lenses": {
     "analytics": {
-      "title": "按开发者（管理员 Analytics）",
-      "description_other": "来自管理员 Analytics 数据源、涵盖 {{count}} 名开发者的权威每位开发者/每日总计。"
+      "title": "按开发者",
+      "description_other": "{{count}} 位开发者的每日总计。"
     },
     "telemetry": {
-      "title": "按会话（实时遥测）",
-      "description_other": "来自 OTLP 平面、涵盖 {{count}} 个团队的实时每会话活动；包含活跃时间。"
+      "title": "按会话",
+      "description_other": "{{count}} 个团队的实时活动和活跃时间。"
     }
   },
   "comparison": {

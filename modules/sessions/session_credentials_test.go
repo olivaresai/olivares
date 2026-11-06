@@ -198,8 +198,8 @@ func TestCredentials_TheChildGetsTheHelperLocationsAndNeverTheSecret(t *testing.
 	if !ok {
 		t.Fatal("the child is not told where its service file is")
 	}
-	if spec.Confinement != nil && !strings.Contains(strings.Join(spec.Confinement.ReadOnly, "\n"), service) {
-		t.Fatalf("the confined child is not granted the service file: %v", spec.Confinement.ReadOnly)
+	if spec.Confinement != nil && !slices.ContainsFunc(spec.ConfinementReadFiles, func(f confine.ReadFile) bool { return f.Path == service }) {
+		t.Fatalf("the confined child is not granted the service file: %v", spec.ConfinementReadFiles)
 	}
 	for _, e := range spec.Env {
 		if strings.Contains(e.Value, credentialCanary) {
@@ -498,8 +498,8 @@ func TestCredentials_AConfinedChildIsGrantedTheBrokersFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	service, _ := specEnvValue(spec, "PGSERVICEFILE")
-	if service == "" || !slices.Contains(spec.Confinement.ReadOnly, service) {
-		t.Fatalf("service file %q is not granted to the confined child: %v", service, spec.Confinement.ReadOnly)
+	if service == "" || !slices.ContainsFunc(spec.ConfinementReadFiles, func(f confine.ReadFile) bool { return f.Path == service }) {
+		t.Fatalf("service file %q is not granted to the confined child: %v", service, spec.ConfinementReadFiles)
 	}
 	for _, line := range []string{credentialCanary, "KEYLINE-one-0123456789abcdef", "KEYLINE-two-0123456789abcdef", "-----BEGIN KEY-----"} {
 		if !slices.Contains(p.credentialWithhold, line) {

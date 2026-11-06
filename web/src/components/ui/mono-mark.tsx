@@ -3,12 +3,19 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
+import { VENDOR_MARKS } from './vendor-marks'
 
 /**
- * MonoMark — the letters of a tool, a workspace or an account in a rounded square, drawn in
- * the interface face: no vendor logo reaches the console. It stands beside the name it
- * abbreviates, so by default it is decoration (`aria-hidden`); `labelled` makes it an image
- * named by `name` for the rare place it stands alone.
+ * MonoMark — the mark of a tool, a provider, a workspace or an account. A `vendor` with a
+ * mark of its own (./vendor-marks: Claude, Gemini, Ollama, OpenCode, Cursor, GitHub,
+ * GitLab) is drawn as that mark; everything else is its letters in a rounded square, drawn
+ * in the interface face. It stands beside the name it marks, so by default it is decoration
+ * (`aria-hidden`); `labelled` makes it an image named by `name` for the rare place it
+ * stands alone.
+ *
+ * `color` is a catalog color (the engine's tool or vendor mark, #RRGGBB): white letters on
+ * it, or the fill of a colored vendor mark (a black one takes the text color). A test in
+ * modules/sessions holds every catalog color to 3:1 on both themes.
  *
  * `hue` (1 to 5) is the account color, drawn as a dot on the corner. An account color
  * always appears next to the account name, so the dot never carries meaning alone.
@@ -22,6 +29,11 @@ export interface MonoMarkProps extends Omit<
   /** One to three letters; by default the initials of the first two words of `name`. */
   letters?: string
   size?: 'sm' | 'base' | 'lg'
+  /** The vendor word of the engine's tool table (a tool's `vendor`, a provider's kind):
+   * its mark replaces the letters when the console has one. */
+  vendor?: string
+  /** The catalog color the letters sit on; without it, the neutral raised square. */
+  color?: string
   hue?: 1 | 2 | 3 | 4 | 5
   /** An image named by `name`, for a mark that stands without its name. */
   labelled?: boolean
@@ -44,7 +56,7 @@ const HUE = {
 
 function initialsOf(name: string): string {
   const words = name
-    .split(/[\s\-_./]+/)
+    .split(/[^\p{L}\p{N}]+/u)
     .map((w) => w.trim())
     .filter(Boolean)
   const first = words.slice(0, 2).map((w) => Array.from(w)[0] ?? '')
@@ -55,11 +67,19 @@ export function MonoMark({
   name,
   letters,
   size = 'base',
+  vendor,
+  color,
   hue,
+  style,
   labelled = false,
   className,
   ...props
 }: MonoMarkProps) {
+  // Own keys only: an engine word such as `constructor` is no mark.
+  const mark =
+    vendor && Object.hasOwn(VENDOR_MARKS, vendor)
+      ? VENDOR_MARKS[vendor]
+      : undefined
   const text = (letters ?? initialsOf(name)).slice(0, 3)
   return (
     <span
@@ -67,15 +87,33 @@ export function MonoMark({
       {...(labelled
         ? { role: 'img', 'aria-label': name }
         : { 'aria-hidden': true })}
+      data-vendor={mark?.slug}
       className={cn(
-        'relative inline-grid shrink-0 place-items-center border border-line-strong bg-raised',
-        'leading-none font-bold tracking-[0.02em] text-text',
+        'relative inline-grid shrink-0 place-items-center leading-none font-bold tracking-[0.02em]',
+        mark
+          ? 'text-text'
+          : color
+            ? 'border border-transparent text-white'
+            : 'border border-line-strong bg-raised text-text',
         SIZE[size],
         className,
       )}
+      style={!mark && color ? { backgroundColor: color, ...style } : style}
       {...props}
     >
-      {text}
+      {mark ? (
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+          className="size-[80%]"
+          fill={mark.mono ? 'currentColor' : (color ?? 'currentColor')}
+        >
+          <path d={mark.d} />
+        </svg>
+      ) : (
+        text
+      )}
       {hue ? (
         <span
           data-slot="mono-mark-hue"

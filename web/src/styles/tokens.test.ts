@@ -7,7 +7,7 @@
 // BOTH themes, so a token edit can never shift it silently:
 //   - the palette: four neutrals (frame, canvas, surface, raised), three text tones, the
 //     single brand orange #f08000 and its roles, the status colors and their soft fills,
-//     the four tool data colors and two neutral shadows;
+//     the four tool data colors, the nine account accent colors and two neutral shadows;
 //   - the role names the components use today, each equal to the palette token it aliases;
 //   - the contrast contract of the palette, measured the way the design measures it: every
 //     text token on 30 backgrounds per theme (the four bases, each base under the selection
@@ -96,6 +96,15 @@ const PALETTE_DARK: Record<string, string> = {
   'tool-codex': '#199e70',
   'tool-opencode': '#9085e9',
   'tool-gemini': '#d55181',
+  'account-orange': '#ff9831',
+  'account-green': '#7cd06a',
+  'account-amber': '#d6b529',
+  'account-red': '#ff7881',
+  'account-blue': '#66b9ff',
+  'account-purple': '#d296ff',
+  'account-pink': '#ff82c7',
+  'account-teal': '#55cec0',
+  'account-slate': '#adb9c8',
   'shadow-raised':
     '0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7)',
   'shadow-pop':
@@ -138,6 +147,15 @@ const PALETTE_LIGHT: Record<string, string> = {
   'tool-codex': '#1baf7a',
   'tool-opencode': '#6250d6',
   'tool-gemini': '#d55181',
+  'account-orange': '#a63f00',
+  'account-green': '#227702',
+  'account-amber': '#7e5f00',
+  'account-red': '#ba022f',
+  'account-blue': '#0060c1',
+  'account-purple': '#7c3eb3',
+  'account-pink': '#a82571',
+  'account-teal': '#00776b',
+  'account-slate': '#5a6472',
   'shadow-raised':
     '0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22)',
   'shadow-pop':
@@ -245,6 +263,33 @@ function contrast(fg: RGBA, bg: RGBA): number {
 const show = (ratio: number) =>
   `${(Math.round(ratio * 100) / 100).toFixed(2)}:1`
 
+/** Distance between two opaque colors in OKLab: how far apart two dots look. */
+function okDistance(a: RGBA, b: RGBA): number {
+  const lab = ([r, g, bl]: RGBA) => {
+    const lin = (c: number) => {
+      const s = c / 255
+      return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+    }
+    const [lr, lg, lb] = [r, g, bl].map(lin)
+    const l = Math.cbrt(
+      0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb,
+    )
+    const m = Math.cbrt(
+      0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb,
+    )
+    const s = Math.cbrt(
+      0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb,
+    )
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+    ]
+  }
+  const [x, y] = [lab(a), lab(b)]
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2])
+}
+
 interface Pair {
   theme: string
   fg: string
@@ -253,8 +298,8 @@ interface Pair {
   required: number
 }
 
-/** The design's contrast method: 250 required pairs per theme. */
-function requiredPairs(theme: string, t: Record<string, string>): Pair[] {
+/** What a row can sit on: the four bases, each under the selection and hover fills. */
+function rowSurfaces(t: Record<string, string>): Record<string, RGBA> {
   const c = (n: string) => parseColor(t[n])
   const bases: Record<string, RGBA> = {}
   for (const b of ['canvas', 'surface', 'raised', 'frame']) bases[b] = c(b)
@@ -265,6 +310,15 @@ function requiredPairs(theme: string, t: Record<string, string>): Pair[] {
     bgs[`${b}+hover`] = over(c('hover'), bases[b])
     bgs[`${b}+selected+hover`] = over(c('hover'), bgs[`${b}+selected`])
   }
+  return bgs
+}
+
+/** The design's contrast method: 250 required pairs per theme. */
+function requiredPairs(theme: string, t: Record<string, string>): Pair[] {
+  const c = (n: string) => parseColor(t[n])
+  const bases: Record<string, RGBA> = {}
+  for (const b of ['canvas', 'surface', 'raised', 'frame']) bases[b] = c(b)
+  const bgs = rowSurfaces(t)
   for (const s of [
     'accent-soft',
     'ok-soft',
@@ -510,6 +564,53 @@ describe('v26.10 design tokens — the generated file is the approved system', (
       contrast(parseColor(light['accent-border']), parseColor(light.canvas)),
     ).toBeGreaterThanOrEqual(3)
     expect(light.accent).toBe(dark.accent)
+  })
+
+  it('gives an account nine accent colors that hold 3:1 on every surface and stay apart', () => {
+    // The server's closed list (modules/sessions/provider_account.go), in its order. The
+    // dot is a non-text mark (SC 1.4.11): 3:1 on the four bases, selected, hovered and both.
+    const NAMES = [
+      'orange',
+      'green',
+      'amber',
+      'red',
+      'blue',
+      'purple',
+      'pink',
+      'teal',
+      'slate',
+    ]
+    for (const [themeName, t] of [
+      ['light', light],
+      ['dark', dark],
+    ] as const) {
+      // The theme holds these nine and no other, so a tenth cannot skip the checks below.
+      expect(
+        Object.keys(t)
+          .filter((k) => k.startsWith('account-'))
+          .map((k) => k.slice('account-'.length)),
+      ).toEqual(NAMES)
+      const surfaces = rowSurfaces(t)
+      const weak: string[] = []
+      for (const name of NAMES) {
+        const dot = parseColor(t[`account-${name}`])
+        for (const [bn, bv] of Object.entries(surfaces)) {
+          const r = contrast(dot, bv)
+          if (r < 3) weak.push(`${themeName} ${name} on ${bn}: ${show(r)}`)
+        }
+      }
+      expect(weak).toEqual([])
+      // Two dots of one list are told apart by color as well as by their label.
+      for (let i = 0; i < NAMES.length; i++)
+        for (let j = i + 1; j < NAMES.length; j++)
+          expect(
+            okDistance(
+              parseColor(t[`account-${NAMES[i]}`]),
+              parseColor(t[`account-${NAMES[j]}`]),
+            ),
+            `${themeName} ${NAMES[i]}/${NAMES[j]}`,
+          ).toBeGreaterThanOrEqual(0.08)
+    }
   })
 
   it('the chart fallback palette is the dark token set, field by field', () => {

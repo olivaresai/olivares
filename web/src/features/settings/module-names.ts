@@ -9,7 +9,7 @@ export function readable(id: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-/** A module's name as Settings > Edition & modules shows it; undefined for no module. Kept
+/** A module's name as Settings > Modules shows it; undefined for no module. Kept
  * apart from the Modules screen so a panel's "not enabled" line does not load that screen. */
 export function useModuleName(id?: string): string | undefined {
   const { t } = useTranslation('settings')

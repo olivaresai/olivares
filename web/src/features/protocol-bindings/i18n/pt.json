@@ -1,0 +1,336 @@
+{
+  "title": "Associações de protocolo",
+  "subtitle": "Componha, inspecione e reconcilie as associações A2A e MCP.",
+  "actions": {
+    "newDraft": "Novo rascunho",
+    "refresh": "Atualizar",
+    "activate": "Ativar",
+    "disable": "Desativar",
+    "reconcile": "Reconciliar",
+    "test": "Testar estado remoto",
+    "recordObservation": "Registar observação",
+    "retrySameKey": "Tentar novamente com a mesma chave",
+    "rereadReplan": "Reler e replanear"
+  },
+  "common": {
+    "back": "Voltar",
+    "next": "Seguinte",
+    "remove": "Remover"
+  },
+  "workspace": {
+    "requiredTitle": "Selecione um espaço de trabalho",
+    "requiredBody": "As associações de protocolo exigem um âmbito de espaço de trabalho explícito. Escolha um no seletor de espaços de trabalho.",
+    "scope": "Âmbito do espaço de trabalho"
+  },
+  "tabs": {
+    "specs": "Especificações",
+    "bindings": "Instâncias"
+  },
+  "specs": {
+    "title": "Especificações de associação",
+    "description": "Gerações pretendidas imutáveis e a respetiva testemunha de ativação observada pelo servidor.",
+    "emptyTitle": "Sem especificações de associação",
+    "emptyBody": "Nenhuma especificação corresponde a este espaço de trabalho e filtro."
+  },
+  "bindings": {
+    "title": "Instâncias de associação",
+    "description": "Instâncias de execução fixadas a uma geração exata de especificação.",
+    "emptyTitle": "Sem instâncias de associação",
+    "emptyBody": "Nenhuma instância de execução corresponde a este espaço de trabalho e filtro."
+  },
+  "filters": {
+    "protocol": "Filtro de protocolo",
+    "state": "Filtro de estado",
+    "verdict": "Filtro de veredicto de evidência",
+    "allProtocols": "Todos os protocolos",
+    "allStates": "Todos os estados",
+    "allVerdicts": "Todos os veredictos"
+  },
+  "state": {
+    "draft": "Rascunho",
+    "active": "Ativa",
+    "disabled": "Desativada",
+    "superseded": "Substituída"
+  },
+  "verdict": {
+    "CLEAN": "Limpo",
+    "BROKEN": "Com falha",
+    "UNKNOWN": "Não observado",
+    "LIMPIO": "Limpo",
+    "ROTO": "Com falha",
+    "NO_HE_PODIDO_MIRAR": "Não foi possível observar"
+  },
+  "outcome": {
+    "unknownTitle": "Não foi feita nenhuma afirmação de estado",
+    "unknownBody": "Não foi possível concluir a observação. Atualize a evidência antes de decidir.",
+    "brokenTitle": "A condição pedida não foi cumprida",
+    "brokenBody": "Reveja o código e o plano comunicados antes de continuar.",
+    "replayed": "Devolveu o resultado confirmado anteriormente. Não foi aplicada nenhuma segunda alteração."
+  },
+  "composer": {
+    "title": "Compor rascunho de associação de protocolo",
+    "description": "Defina uma geração A2A ou MCP declarativa e fixada. A validação e o planeamento não gravam estado.",
+    "progress": "Progresso do compositor",
+    "steps": {
+      "connection": "Ligação",
+      "resources": "Recursos",
+      "mapping": "Mapeamento",
+      "governance": "Governação",
+      "review": "Revisão"
+    },
+    "pinnedVersionHelp": "Use uma versão exata do protocolo; latest, current e * são rejeitados.",
+    "pinnedVersionError": "Introduza uma versão fixada exata.",
+    "peerHelp": "Use a autoridade do par integrado. Não cole credenciais nem URLs com segredos.",
+    "resourceHelp": "O seletor local é guardado como um seletor de ID exato. A referência remota permanece opaca e não contém credenciais.",
+    "ruleRefsHelp": "Uma referência de regra duradoura por linha.",
+    "intentKey": "Chave de idempotência",
+    "generationMode": {
+      "label": "Fluxo de geração",
+      "help": "Crie a geração 1 ou derive uma sucessora imutável de uma especificação ativa.",
+      "initial": "Geração inicial (geração 1)",
+      "successor": "Sucessora de uma geração ativa",
+      "predecessor": "Antecessora ativa",
+      "predecessorHelp": "A sucessora copia a configuração pretendida exata, incrementa a geração e nunca copia evidências de validação.",
+      "partialCatalog": "Só é apresentada a página carregada de especificações ativas; atualize a lista se a antecessora não aparecer.",
+      "selectPredecessor": "Selecione uma especificação ativa"
+    },
+    "endpointCatalog": {
+      "label": "Par conhecido de especificação ativa",
+      "help": "As opções vêm de especificações ativas visíveis para si. São referências, não um sinal de vida de um endpoint em direto.",
+      "select": "Reutilizar um par e um recurso remoto conhecidos",
+      "none": "Não há nenhum par conhecido disponível"
+    },
+    "resourceCatalog": {
+      "label": "Catálogo de recursos locais autorizados",
+      "help": "O seletor usa a API de produto existente, filtrada por permissões.",
+      "loading": "A carregar recursos autorizados…",
+      "unavailable": "Não há API de listagem nem permissão de leitura efetiva para este tipo de recurso.",
+      "truncated": "O servidor comunicou mais recursos do que os que esta página contém; continua disponível um ID exato abaixo.",
+      "select": "Selecione um recurso local",
+      "exactFallback": "Os IDs exatos continuam a ser verificados pela validação do servidor e não concedem acesso."
+    },
+    "mapping": {
+      "title": "Mapeamentos tipados",
+      "help": "Só podem ser enviadas as transformações declarativas da lista de permitidos abaixo; não é aceite código executável.",
+      "add": "Adicionar mapeamento"
+    },
+    "losses": {
+      "title": "Perdas semânticas conhecidas",
+      "help": "Cada perda aceite precisa de uma referência de aceitação explícita e duradoura antes da ativação.",
+      "add": "Adicionar perda",
+      "none": "Não é declarada nenhuma perda semântica conhecida."
+    },
+    "coverage": {
+      "title": "Matriz de mapeamento versus perdas aceites",
+      "help": "Cada linha vem do catálogo de mapeamentos executável. As linhas obrigatórias têm de estar mapeadas ou apoiadas por uma referência de perda aceite.",
+      "route": "Rota",
+      "field": "Campo do catálogo",
+      "result": "Cobertura",
+      "action": "Ação",
+      "source": "origem",
+      "target": "destino",
+      "required": "Obrigatório",
+      "declareLoss": "Declarar perda",
+      "status": {
+        "mapped": "Mapeado",
+        "accepted_loss": "Perda aceite",
+        "declared_loss": "Perda por aceitar",
+        "missing": "Falta a cobertura obrigatória",
+        "optional": "Opcional, não mapeado"
+      }
+    },
+    "permissions": {
+      "title": "Pré-visualização das permissões efetivas",
+      "help": "Estas pertenças vêm do conjunto de permissões whoami emitido pelo motor. A política exata do recurso e a capacidade continuam a ser decididas pela validação do servidor.",
+      "granted": "No conjunto efetivo",
+      "notGranted": "Fora do conjunto efetivo",
+      "unknown": "Não observado",
+      "knownProfiles": "Perfis de permissões conhecidos",
+      "knownProfilesHelp": "Os perfis só são reutilizados a partir de especificações ativas visíveis; a referência exata continua editável.",
+      "selectProfile": "Selecione um perfil conhecido"
+    },
+    "review": {
+      "unverifiedTitle": "Este navegador não pode emitir a testemunha de ativação",
+      "unverifiedBody": "O navegador omite a testemunha só de leitura. A validação e o plano mostram o resultado derivado do servidor; a ativação continua a exigir evidência CLEAN com data e hora, guardada pelo servidor.",
+      "resources": "Recursos",
+      "mappings": "Mapeamentos",
+      "losses": "Perdas conhecidas",
+      "validation": "Validação derivada do servidor",
+      "plan": "Escrita planeada",
+      "result": "Resultado da aplicação",
+      "exportJSON": "Exportar a especificação pretendida e a evidência do servidor como JSON"
+    },
+    "diff": {
+      "title": "Comparação plano → aplicação",
+      "plannedHelp": "O plano do servidor fixa esta operação, linhagem e conjunto de hashes exatos antes de qualquer escrita.",
+      "appliedHelp": "A escrita devolvida é comparada campo a campo com o plano fixado.",
+      "match": "Corresponde ao plano",
+      "mismatch": "O valor devolvido difere",
+      "fields": {
+        "operation": "Operação",
+        "workspace_id": "Espaço de trabalho",
+        "generation": "Geração",
+        "prior_active_id": "Especificação ativa anterior",
+        "plan_hash": "Hash do plano",
+        "spec_hash": "Hash da especificação",
+        "mapping_hash": "Hash do mapeamento",
+        "losses_hash": "Hash das perdas"
+      }
+    },
+    "flow": {
+      "validating": "A validar o rascunho sem gravar…",
+      "planning": "A calcular o plano canónico e os hashes…",
+      "applying": "A criar o rascunho planeado exato…",
+      "failed": "O pedido falhou. Não é afirmado nenhum estado do rascunho.",
+      "created": "Rascunho criado",
+      "createdVerified": "O servidor devolveu uma testemunha CLEAN com data e hora. O recurso continua a ser um rascunho até uma ativação separada ter êxito.",
+      "createdUnverified": "O recurso devolvido é um rascunho e continua por verificar; não está ativo.",
+      "createDraft": "Criar rascunho planeado",
+      "retrySameKey": "Repetir a aplicação com a mesma chave",
+      "inspect": "Validar e planear"
+    }
+  },
+  "fields": {
+    "id": "ID",
+    "bindingKey": "Chave da associação",
+    "generation": "Geração",
+    "supersedesId": "ID da especificação que substitui",
+    "protocol": "Protocolo",
+    "protocolVersion": "Versão do protocolo",
+    "direction": "Direção",
+    "peerAuthority": "Autoridade do par",
+    "localKind": "Tipo de recurso local",
+    "localRef": "ID do recurso local",
+    "remoteResourceKind": "Tipo de recurso remoto",
+    "remoteResourceRef": "Referência do recurso remoto",
+    "mappingSchema": "Esquema de mapeamento",
+    "source": "Caminho de origem",
+    "target": "Caminho de destino",
+    "cardinality": "Cardinalidade",
+    "transform": "Transformação",
+    "lossField": "Campo perdido",
+    "reasonCode": "Código do motivo",
+    "lossAccepted": "Perda aceite explicitamente",
+    "acceptanceRef": "Referência de aceitação",
+    "ruleRefs": "Referências de regras",
+    "permissionProfile": "Referência do perfil de permissões",
+    "currency": "Política de atualidade",
+    "code": "Código",
+    "planHash": "Hash do plano",
+    "specHash": "Hash da especificação",
+    "mappingHash": "Hash do mapeamento",
+    "lossesHash": "Hash das perdas",
+    "etag": "Versão",
+    "priorActive": "Especificação ativa anterior",
+    "bindingSpec": "Especificação fixada"
+  },
+  "direction": {
+    "inbound": "Entrada",
+    "outbound": "Saída",
+    "bidirectional": "Bidirecional"
+  },
+  "localKind": {
+    "work_item": "Item de trabalho",
+    "agent": "Agente",
+    "model": "Modelo",
+    "channel": "Canal"
+  },
+  "cardinality": {
+    "one_to_one": "Um para um",
+    "one_to_many": "Um para muitos",
+    "many_to_one": "Muitos para um"
+  },
+  "transform": {
+    "identity": "Identidade",
+    "text": "Texto",
+    "reference": "Referência",
+    "metadata": "Metadados",
+    "status": "Estado"
+  },
+  "currency": {
+    "pinned": "Fixada"
+  },
+  "detail": {
+    "specTitle": "Especificação de associação",
+    "specDescription": "Geração pretendida, hashes, perdas e evidência de ativação.",
+    "bindingTitle": "Instância de associação",
+    "bindingDescription": "Identidade de execução fixada, estado e evidência de observação.",
+    "localResource": "Recurso local",
+    "remoteResource": "Recurso remoto",
+    "validation": "Testemunha de ativação",
+    "notObserved": "Nenhuma observação concluída",
+    "mapping": "Mapeamento tipado",
+    "losses": "Perdas conhecidas",
+    "noLosses": "Não é declarada nenhuma perda conhecida.",
+    "accepted": "Aceite com evidência",
+    "notAccepted": "Não aceite",
+    "lifecycle": "Ciclo de vida"
+  },
+  "activation": {
+    "blocker": {
+      "state": "Só um rascunho pode ser ativado.",
+      "witness": "A ativação exige uma testemunha CLEAN com data e hora emitida pelo servidor.",
+      "currency": "A ativação exige atualidade fixada.",
+      "losses": "Cada perda conhecida tem de ser aceite com uma referência duradoura.",
+      "disable": "Só um rascunho ou uma especificação ativa pode ser desativado."
+    }
+  },
+  "transition": {
+    "activate": {
+      "title": "Ativar especificação",
+      "description": "Releia, valide e planeie o rascunho exato antes de o ativar.",
+      "applied": "A especificação devolvida está ativa."
+    },
+    "disable": {
+      "title": "Desativar especificação",
+      "description": "Releia, valide e planeie a especificação exata antes de a desativar.",
+      "applied": "A especificação devolvida está desativada."
+    },
+    "phase": {
+      "refreshing": "A ler a especificação e a versão mais recentes…",
+      "validating": "A validar sem gravar…",
+      "planning": "A calcular o plano de transição exato…",
+      "applying": "A aplicar o plano aprovado…"
+    },
+    "plan": "Plano de transição",
+    "broken": "As pré-condições da transição não foram cumpridas.",
+    "failed": "A transição falhou. O estado anterior continua a ser o único estado apresentado.",
+    "conflict": "A especificação mudou depois de ser lida. Releia e reveja um novo plano."
+  },
+  "binding": {
+    "terminal": "Terminal",
+    "nonTerminal": "Não terminal",
+    "external": "Identidade externa",
+    "states": "Estado local / remoto",
+    "owner": "Detentor / fencing",
+    "evidenceTitle": "Evidência de observação",
+    "created": "Instância criada",
+    "lastObservation": "Última observação concluída",
+    "lastEvent": "Último evento / comando duradouro"
+  },
+  "reconcile": {
+    "title": "Reconciliar instância de associação",
+    "description": "Valide e planeie localmente, teste o par sem gravar e registe depois o resultado exato observado.",
+    "phase": {
+      "refreshing": "A ler a instância e a versão mais recentes…",
+      "validating": "A validar a reconciliação sem gravar…",
+      "planning": "A calcular o plano de reconciliação canónico…",
+      "testing": "A ler o estado remoto sem alterar o estado local…",
+      "applying": "A registar a observação testada…"
+    },
+    "plan": "Plano de reconciliação",
+    "testResult": "Resultado do teste remoto",
+    "recordedResult": "Observação registada",
+    "rowEffects": "Efeitos planeados nas linhas",
+    "externalCalls": "Leituras remotas",
+    "noExternalCalls": "Não está planeada nenhuma leitura remota",
+    "checks": "Verificações de evidência",
+    "unknown": "Não foi possível concluir a observação remota. Nada é registado como limpo nem como avariado.",
+    "broken": "A validação ou o planeamento locais encontraram uma pré-condição com falha.",
+    "failed": "A reconciliação falhou. Não é afirmada nenhuma nova observação.",
+    "conflict": "A instância mudou depois de ser lida. Releia e reveja um novo plano."
+  },
+  "pagination": {
+    "truncated": "Existem mais resultados. Restrinja os filtros para inspecionar o conjunto relevante completo."
+  }
+}

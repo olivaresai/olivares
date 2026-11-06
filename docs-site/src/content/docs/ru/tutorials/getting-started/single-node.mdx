@@ -24,7 +24,7 @@ quickstart, а затем вернитесь сюда за реальной ус
 ## Предварительные требования
 
 - Linux-хост с systemd и `curl`.
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.6`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.7`{/* /release */} is the next release, not yet published.
 
 ## 1. Сборка и установка бинарника
 
@@ -57,6 +57,8 @@ Description=Olivares AI — self-hosted engine for enterprise AI
 Documentation=https://olivares.ai/docs
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -68,6 +70,8 @@ ExecStart=/usr/local/bin/olivares serve \
   --data-dir /var/lib/olivares
 Restart=on-failure
 RestartSec=5
+RestartPreventExitStatus=15
+KillMode=mixed
 
 # The data directory holds the SQLite store, the audit signing key and the TLS
 # material. StateDirectory creates /var/lib/olivares owned by the service user.
@@ -241,7 +245,7 @@ ingest: wired source (in-process fast-path) name=salesdb-pgaudit kind=pgaudit
 ## 6. Достигните графа
 
 В новой установке `accessmap` отключён. Как администратор включите
-`accessmap` в **Settings > Edition & modules**, сохранив остальные выбранные
+`accessmap` в **Settings > Modules**, сохранив остальные выбранные
 модули включёнными. Для CLI сначала войдите в этот движок как администратор
 через `olivares login`, затем выполните `olivares modules on accessmap`. Перед продолжением
 дождитесь каждого перезапуска движка; работающие сессии остановятся, и их

@@ -1,12 +1,57 @@
 {
-  "title": "Sécurité et investigation",
-  "description": "Constats de garde-fous, posture d’application, file des anomalies et investigation d’incidents inviolable. Le plan est détectif par défaut — il enregistre, il ne bloque pas de lui-même tant que l’application n’est pas activée et gouvernée.",
+  "title": "Sécurité",
+  "description": "Constats de garde-fous, posture d’application, file des anomalies et investigation d’incidents inviolable. Par défaut, il enregistre seulement : rien n’est bloqué tant que vous n’activez pas une règle.",
   "tabs": {
+    "overview": "Vue d’ensemble",
     "safety": "Posture de sécurité",
     "findings": "Constats",
     "guardrails": "Garde-fous",
     "anomalies": "Anomalies",
     "forensics": "Investigation"
+  },
+  "posture": {
+    "title": "Exposition actuelle",
+    "description": "Lectures en direct des personnes, identifiants et contrôles qui demandent une attention immédiate.",
+    "review": "Examiner",
+    "notAvailable": "Non disponible",
+    "partialHint": "Le signe plus indique que la lecture contient d’autres lignes au-delà de cette page ; le nombre est un minimum.",
+    "secondFactor": {
+      "label": "Personnes sans second facteur",
+      "description": "Membres actifs sans code d’authentification confirmé ni clé d’accès enregistrée."
+    },
+    "administrators": {
+      "label": "Administrateurs",
+      "description": "Propriétaires et administrateurs actifs de cette organisation."
+    },
+    "apiKeys": {
+      "label": "Clés d'API sans expiration ou inutilisées",
+      "description": "Clés enregistrées sans expiration ou sans utilisation consignée. Les clés révoquées ne comptent pas.",
+      "value": "{{noExpiry}} sans expiration · {{unused}} inutilisées"
+    },
+    "approvals": {
+      "label": "Approbations en attente",
+      "description": "Demandes attendant qu’une personne les approuve ou les rejette."
+    },
+    "killSwitch": {
+      "label": "Coupe-circuit",
+      "description": "L’état d’arrêt actuel de l’estate et de chaque agent.",
+      "estateStopped": "Estate arrêté",
+      "agentStops_one": "{{count}} agent arrêté",
+      "agentStops_many": "{{count}} agents arrêtés",
+      "agentStops_other": "{{count}} agents arrêtés",
+      "notEngaged": "Non déclenché"
+    },
+    "providers": {
+      "label": "Fournisseurs avec une clé",
+      "description": "Enregistrements actifs d’identifiants fournisseur. Les valeurs secrètes ne sont jamais lues."
+    },
+    "policy": {
+      "label": "Mode de politique",
+      "description": "L’admission des modèles signés est non configurée, en observation ou en application.",
+      "unconfigured": "Non configurée",
+      "observe": "Observer",
+      "enforce": "Appliquer"
+    }
   },
   "findings": {
     "title": "Constats",
@@ -59,10 +104,10 @@
   },
   "safetyPosture": {
     "title": "Posture de sécurité du fournisseur",
-    "description": "Posture de sûreté de l'IA en lecture seule, issue des contrôles natifs des fournisseurs — OpenAI Moderation, AWS Bedrock Guardrails et Azure Responsible AI. Le plan la lit et l'enregistre ; l'application reste chez le fournisseur.",
+    "description": "Posture de sûreté de l'IA en lecture seule, issue des contrôles natifs des fournisseurs — OpenAI Moderation, AWS Bedrock Guardrails et Azure Responsible AI. Olivares la lit et l'enregistre ; l'application reste chez le fournisseur.",
     "empty": "Aucun constat de posture de sécurité",
     "emptyHint": "Connectez les connecteurs OpenAI, AWS ou Azure avec leurs lectures de sécurité activées pour alimenter cette vue.",
-    "countsPartial": "Récapitulatif partiel — ce locataire a plus de constats de posture de sécurité que ce que couvre l’analyse récapitulative.",
+    "countsPartial": "Récapitulatif partiel — cette organisation a plus de constats de posture de sécurité que ce que couvre l’analyse récapitulative.",
     "columns": {
       "open": "Ouverts"
     }
@@ -72,7 +117,7 @@
     "description": "Exécutez le service d’inspection des garde-fous sur une surface. Le texte est haché et expurgé, jamais stocké — le résultat est un verdict accompagné de preuves minimales, déjà expurgées.",
     "verdictTitle": "Verdict",
     "clean": "Aucune détection — propre.",
-    "detectiveNote": "Ce verdict provient du plan détectif : le déclenchement a été détecté et enregistré, non bloqué. Un blocage n’est possible que lorsque l’application est activée et gouvernée.",
+    "detectiveNote": "Ce verdict a seulement enregistré le déclenchement : il a été détecté, non bloqué. Un blocage n’est possible que lorsque l’application est activée et gouvernée.",
     "wouldBlock": "Bloquerait (appliqué)",
     "detectOnly": "Détection seule",
     "findingsRecorded": "{{count}} constat enregistré",
@@ -80,7 +125,7 @@
     "findingsRecorded_many": "{{count}} constat enregistré",
     "findingsRecorded_other": "{{count}} constats enregistrés",
     "enforcement": {
-      "detective": "Détectif",
+      "detective": "Enregistrement seul",
       "enforced": "Appliqué"
     },
     "class": {
@@ -109,10 +154,10 @@
   },
   "enforcement": {
     "title": "Posture d’application",
-    "description": "La seule action qui touche la production. Chaque classe de garde-fou est détective par défaut ; activer l’application en ligne est une action d’administration, gouvernée là où une barrière est configurée.",
-    "defaultDetectiveNote": "Le plan par défaut est détectif : les classes ne bloquent que lorsqu’elles sont explicitement activées ici et gouvernées.",
-    "fullyDetective": "Aucune application n’est activée — le plan est entièrement détectif, le réglage sûr par défaut. Rien ne bloque de lui-même.",
-    "detective": "Détectif",
+    "description": "La seule action qui touche la production. Chaque classe de garde-fou enregistre seulement par défaut ; activer l’application en ligne est une action d’administration, gouvernée là où une barrière est configurée.",
+    "defaultDetectiveNote": "Par défaut, rien n’est bloqué : les classes ne bloquent que lorsqu’elles sont explicitement activées ici et gouvernées.",
+    "fullyDetective": "Aucune application n’est activée — il enregistre seulement et ne bloque rien tant que vous n’activez pas une règle.",
+    "detective": "Enregistrement seul",
     "enforced": "Appliqué",
     "governed": "Gouverné",
     "ungoverned": "Activé sans gouvernance humaine",
@@ -128,7 +173,7 @@
     },
     "dialog": {
       "title": "Modifier l’application",
-      "description": "La désactivation (retour au détectif) est toujours autorisée. Activer l’application en ligne est gouverné là où une barrière est configurée — un refus de gouvernance est affiché comme motif.",
+      "description": "La désactivation (retour à l’enregistrement seul) est toujours autorisée. Activer l’application en ligne est gouverné là où une barrière est configurée — un refus de gouvernance est affiché comme motif.",
       "enabledLabel": "Activer l’application en ligne",
       "minSeverity": "Gravité minimale",
       "reason": "Motif",
@@ -208,7 +253,7 @@
   "empty": {
     "enforcement": {
       "title": "Aucune classe de garde-fou configurée",
-      "description": "Les lignes n’apparaissent qu’après la définition de la posture d’une classe de garde-fou ; jusque-là, toutes les classes restent détectives et rien ne bloque en ligne."
+      "description": "Les lignes n’apparaissent qu’après la définition de la posture d’une classe de garde-fou ; jusque-là, toutes les classes enregistrent seulement et rien ne bloque en ligne."
     },
     "findings": {
       "title": "Aucun constat de sécurité",

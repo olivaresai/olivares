@@ -10,7 +10,9 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/lib/api/query'
-import { renderIntel } from '@/test/intel'
+import type { QueryClient } from '@tanstack/react-query'
+import { agentOpsKeys } from '@/features/agentops/api'
+import { createTestQueryClient, renderIntel } from '@/test/intel'
 
 const auth = vi.hoisted(() => ({
   activeTenant: 'tnt-demo' as string | null,
@@ -26,6 +28,7 @@ vi.mock('@/lib/api/endpoints', async (importOriginal) => {
 })
 
 const api = vi.hoisted(() => ({
+  listRuns: vi.fn(),
   listProfiles: vi.fn(),
   listWorkspaces: vi.fn(),
   input: vi.fn(),
@@ -33,6 +36,7 @@ const api = vi.hoisted(() => ({
   getRun: vi.fn(),
   commands: vi.fn(),
   activity: vi.fn(),
+  listFiles: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
@@ -97,6 +101,7 @@ beforeEach(() => {
   auth.activeTenant = 'tnt-demo'
   auth.can = () => true
   listOrgs.mockResolvedValue({ items: [], has_more: false })
+  api.listRuns.mockResolvedValue({ items: [], has_more: false })
   api.listProfiles.mockResolvedValue({ items: [], has_more: false })
   api.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
   api.input.mockResolvedValue({ accepted: true })
@@ -822,5 +827,136 @@ describe('context compaction', () => {
       undefined,
     )
     expect(field).toHaveValue('Send after compaction')
+  })
+})
+
+describe('the "@" and "$" pickers', () => {
+  const entry = (name: string, path: string, type: 'file' | 'dir') => ({
+    name,
+    path,
+    type,
+    size: 0,
+    mode: '',
+    mtime: '',
+  })
+  function renderInFolder(queryClient?: QueryClient) {
+    api.listFiles.mockImplementation(
+      async (_ws: string, params?: { path?: string }) =>
+        params?.path === 'src/'
+          ? {
+              path: 'src',
+              entries: [entry('app.ts', 'src/app.ts', 'file')],
+              has_more: false,
+            }
+          : {
+              path: '',
+              entries: [
+                entry('README.md', 'README.md', 'file'),
+                entry('src', 'src', 'dir'),
+                entry('.git', '.git', 'dir'),
+              ],
+              has_more: false,
+            },
+    )
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, workspace_ref: 'ws_app' },
+          group: 'active',
+        }}
+      />,
+      { queryClient },
+    )
+    return screen.getByRole('textbox', { name: 'Session turn' })
+  }
+
+  it('names only the pickers it has in the placeholder', () => {
+    const box = renderComposer()
+    expect(box).toHaveAttribute(
+      'placeholder',
+      'Ask anything, @ for context, / for commands and skills',
+    )
+  })
+
+  it('lists the files and folders of the session folder after "@", opens a folder and mentions a file', async () => {
+    const user = userEvent.setup()
+    const box = renderInFolder()
+    await user.type(box, 'Look at @')
+    const list = await screen.findByRole('listbox', {
+      name: 'Context',
+    })
+    expect(api.listFiles).toHaveBeenCalledWith(
+      'ws_app',
+      expect.objectContaining({ path: undefined }),
+      expect.anything(),
+    )
+    // Folders first; a hidden entry only when its dot is typed.
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual([
+      expect.stringContaining('@src/'),
+      expect.stringContaining('@README.md'),
+    ])
+    await user.type(box, 's')
+    await user.keyboard('{Enter}')
+    expect(box).toHaveValue('Look at @src/')
+    const inside = await screen.findByRole('option', { name: /@src\/app\.ts/ })
+    expect(inside).toBeInTheDocument()
+    await user.keyboard('{Enter}')
+    expect(box).toHaveValue('Look at @src/app.ts ')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(api.input).not.toHaveBeenCalled()
+  })
+
+  it("keeps its folder read apart from the Files browser's paged read of the same folder", async () => {
+    const user = userEvent.setup()
+    const queryClient = createTestQueryClient()
+    const box = renderInFolder(queryClient)
+    await user.type(box, '@')
+    await screen.findByRole('listbox', { name: 'Context' })
+    // The Files browser reads this key with an infinite query ({ pages }): a plain read
+    // written under it would break the browser open beside the composer.
+    expect(
+      queryClient.getQueryData(agentOpsKeys.files('tnt-demo', 'ws_app', '')),
+    ).toBeUndefined()
+  })
+
+  it('lists after "$" the skills the tool invokes with "$", and stays closed for a tool without them', async () => {
+    const user = userEvent.setup()
+    api.commands.mockResolvedValue({
+      ...CATALOG,
+      tool: 'codex',
+      commands: [
+        ...CATALOG.commands,
+        {
+          name: 'plan',
+          description: 'Plan the change',
+          insert_text: '$plan',
+          source: 'user',
+          kind: 'command',
+        },
+      ],
+    })
+    const box = renderComposer()
+    await user.type(box, '$')
+    const list = await screen.findByRole('listbox', { name: 'Skills' })
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual([expect.stringContaining('$plan')])
+    await user.keyboard('{Enter}')
+    expect(box).toHaveValue('$plan ')
+  })
+
+  it('opens nothing after "$" when the tool has no "$" skills', async () => {
+    const user = userEvent.setup()
+    const box = renderComposer()
+    await user.type(box, '$5 is the price')
+    await waitFor(() => expect(api.commands).toHaveBeenCalled())
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('slash-menu')).not.toBeInTheDocument()
   })
 })

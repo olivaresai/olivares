@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -39,15 +41,13 @@ const (
 	// maxAttachmentBody is the JSON upload: the base64 form of the largest image
 	// plus its envelope.
 	maxAttachmentBody = 5<<20 + 4<<10
-	// maxTurnAttachments bounds one message, so one stdin line stays far below the
-	// tool's own request limit.
-	maxTurnAttachments = 4
+	// maxTurnAttachments is the most images one message carries: one message reaches
+	// the model in one request, which takes 100 images on a model with a 200k-token
+	// context window and 600 on the others
+	// (https://platform.claude.com/docs/en/build-with-claude/vision#request-limits).
+	// Their bytes, with the text, are bounded by toolRequestMaxBytes.
+	maxTurnAttachments = 100
 	attachmentIDPrefix = "att_"
-	// A session keeps at most this many images, and this many bytes of them. Images
-	// stay until the session is deleted, so a bound keeps one writer from filling the
-	// data directory; a person at a console reaches neither.
-	maxStoredAttachments = 32
-	maxStoredBytes       = 64 << 20
 	// attachmentUploadSlots bounds the uploads in flight on a node: each holds about
 	// three copies of its image while it is decoded.
 	attachmentUploadSlots = 4
@@ -106,6 +106,13 @@ func (m *Module) attachmentRunDir(tenant model.TenantID, runRef string) (string,
 	if root == "" {
 		return "", &runErr{http.StatusServiceUnavailable, "attaching images is not available on this node"}
 	}
+	return runDirUnder(root, tenant, runRef)
+}
+
+// runDirUnder is <root>/<tenant>/<run_ref>, the place a run keeps what the engine holds for
+// it outside its folder. The tenant and the run come from the authorized run, never from
+// the request; a segment that could leave the root is the same 404 as an unknown run.
+func runDirUnder(root string, tenant model.TenantID, runRef string) (string, error) {
 	for _, part := range []string{tenant.String(), runRef} {
 		if part == "" || part == "." || part == ".." || filepath.Base(part) != part || strings.ContainsAny(part, "\\\x00") {
 			return "", notFoundErr()
@@ -214,8 +221,9 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 		writeRunErr(w, err)
 		return
 	}
-	if files, size := storedUsage(dir); files >= maxStoredAttachments || size+int64(len(data)) > maxStoredBytes {
-		writeJSON(w, http.StatusInsufficientStorage, errorBody("this session holds as many images as it keeps; start a new session to attach more"))
+	if err := makeRoom(dir, int64(len(data))); err != nil {
+		m.warnf("session attachments not removed", "run_ref", ref, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorBody("the image could not be stored"))
 		return
 	}
 	id := attachmentIDPrefix + string(model.NewID())
@@ -232,20 +240,44 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusCreated, attachmentDTO{ID: id, MediaType: body.MediaType, SizeBytes: len(data)})
 }
 
-// storedUsage counts the images a session holds and their bytes. A directory not yet
-// made holds none.
-func storedUsage(dir string) (files int, size int64) {
+// makeRoom removes a session's oldest images until one of incoming bytes fits with the
+// rest in one model request (toolRequestMaxBytes). Every request resends the whole
+// conversation (https://platform.claude.com/docs/en/build-with-claude/vision), so an
+// image older than a request's worth of newer ones no longer reaches the model with
+// them; the console shows a removed image as unavailable. The bound keeps one writer
+// from filling the data directory. A directory not yet made holds none.
+func makeRoom(dir string, incoming int64) error {
 	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return 0, 0
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
+	if err != nil {
+		return err
+	}
+	type stored struct {
+		name string
+		size int64
+		at   time.Time
+	}
+	var images []stored
+	total := incoming
 	for _, e := range entries {
 		if info, err := e.Info(); err == nil && e.Type().IsRegular() {
-			files++
-			size += info.Size()
+			images = append(images, stored{e.Name(), info.Size(), info.ModTime()})
+			total += info.Size()
 		}
 	}
-	return files, size
+	slices.SortFunc(images, func(a, b stored) int { return a.at.Compare(b.at) })
+	for _, img := range images {
+		if total <= toolRequestMaxBytes {
+			break
+		}
+		if err := os.Remove(filepath.Join(dir, img.name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		total -= img.size
+	}
+	return nil
 }
 
 // handleRunAttachmentGet returns an image stored with a session, as it was uploaded.
@@ -289,13 +321,16 @@ func (m *Module) readAttachment(tenant model.TenantID, runRef, id string) (turnI
 	return turnImage{}, &runErr{http.StatusNotFound, "attachment not found"}
 }
 
-// loadTurnImages resolves the ids of one message to stored images, in order.
-func (m *Module) loadTurnImages(tenant model.TenantID, runRef string, ids []string) ([]turnImage, error) {
+// loadTurnImages resolves the ids of one message to stored images, in order. The
+// message travels as one model request: its images as base64 and its text (textBytes)
+// fit in toolRequestMaxBytes.
+func (m *Module) loadTurnImages(tenant model.TenantID, runRef string, ids []string, textBytes int) ([]turnImage, error) {
 	if len(ids) > maxTurnAttachments {
 		return nil, badRequest(fmt.Sprintf("attach at most %d images to one message", maxTurnAttachments))
 	}
 	seen := map[string]bool{}
 	images := make([]turnImage, 0, len(ids))
+	size := textBytes
 	for _, id := range ids {
 		if seen[id] {
 			return nil, badRequest("an image is attached twice")
@@ -304,6 +339,10 @@ func (m *Module) loadTurnImages(tenant model.TenantID, runRef string, ids []stri
 		img, err := m.readAttachment(tenant, runRef, id)
 		if err != nil {
 			return nil, err
+		}
+		if size += base64.StdEncoding.EncodedLen(len(img.Data)); size > toolRequestMaxBytes {
+			return nil, &runErr{http.StatusRequestEntityTooLarge, fmt.Sprintf(
+				"the images and text of this message are over the %d MB one request to the model takes", toolRequestMaxBytes/1_000_000)}
 		}
 		images = append(images, img)
 	}
@@ -360,7 +399,6 @@ func sessionsRunAttachmentResponses(method, pattern string) (map[string]any, boo
 			))))
 		resp["413"] = oas.JSONResp("the image is over the size the tools take")
 		resp["429"] = oas.JSONResp("other images are being stored on this node; retry")
-		resp["507"] = oas.JSONResp("the session already holds as many images as it keeps")
 		resp["415"] = oas.JSONResp("the file is not a PNG, JPEG, WebP or GIF image")
 		resp["422"] = oas.JSONResp("the session's tool does not take images")
 		resp["503"] = oas.JSONResp("attaching images is not available on this node")

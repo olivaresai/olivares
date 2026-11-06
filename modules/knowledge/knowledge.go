@@ -14,6 +14,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -127,7 +128,7 @@ func WithRetrievalContentScanner(s RetrievalContentScanner) Option {
 
 // WithSource registers a named contentsource.Source (a data connector) the module
 // can drive from POST /kbs/{id}/ingest {"source":"<name>"}. The composition root
-// registers the real gdrive/confluence/notion/s3content connectors (sharepoint in Business);
+// registers the real gdrive/notion/s3content connectors (confluence and sharepoint in Business);
 // tests register a fake source. A source whose Kind() is not ClassDocument is
 // rejected at ingest (the boundary).
 func WithSource(name string, src contentsource.Source) Option {
@@ -139,18 +140,38 @@ func WithSource(name string, src contentsource.Source) Option {
 	}
 }
 
-// AddSource registers a content source AFTER construction. The composition root
-// uses it to wire a document source whose secret-bearing config (a credential_ref)
-// can only be resolved and opened once the engine's secret store exists —
-// which is after this module is built but BEFORE it starts. It must be called
-// before Start (no ingest is in flight), so it needs no lock; a source that fails
-// to resolve/open is simply never added (the same "only openable sources are
+// AddSource registers an opened content source under name, at boot or while the
+// engine runs (the live source roster adds and rotates document sources without a
+// restart). It returns the source it replaced, or nil; the caller closes it. A
+// source that fails to resolve/open is never added (the "only openable sources are
 // wired" contract WithSource had at boot).
-func (m *Module) AddSource(name string, src contentsource.Source) {
+func (m *Module) AddSource(name string, src contentsource.Source) contentsource.Source {
+	m.sourcesMu.Lock()
+	defer m.sourcesMu.Unlock()
 	if m.sources == nil {
 		m.sources = map[string]contentsource.Source{}
 	}
+	prev := m.sources[name]
 	m.sources[name] = src
+	return prev
+}
+
+// RemoveSource unregisters the source wired under name and returns it, or nil
+// when none was. The caller closes it. An ingest already holding it finishes.
+func (m *Module) RemoveSource(name string) contentsource.Source {
+	m.sourcesMu.Lock()
+	defer m.sourcesMu.Unlock()
+	prev := m.sources[name]
+	delete(m.sources, name)
+	return prev
+}
+
+// source returns the content source wired under name.
+func (m *Module) source(name string) (contentsource.Source, bool) {
+	m.sourcesMu.RLock()
+	defer m.sourcesMu.RUnlock()
+	src, ok := m.sources[name]
+	return src, ok
 }
 
 // Module is module VIII — data, knowledge & context: the GOVERNED DATA PLANE for
@@ -158,6 +179,7 @@ func (m *Module) AddSource(name string, src contentsource.Source) {
 // (customer data is governed, NEVER exfiltrated), and the deny-/local-closed
 // defaults of its composition-root seams.
 type Module struct {
+	policyResolver store.PolicyResolver
 	log            *slog.Logger
 	data           api.ModuleData
 	host           sdk.Host
@@ -170,6 +192,7 @@ type Module struct {
 	redactor       Redactor
 	holdGate       HoldGate
 	contentScanner RetrievalContentScanner
+	sourcesMu      sync.RWMutex
 	sources        map[string]contentsource.Source
 	sourceOpener   SourceOpener
 
@@ -396,4 +419,10 @@ func (m *Module) errorf(msg string, args ...any) {
 	if m.log != nil {
 		m.log.Error(msg, args...)
 	}
+}
+
+// WithPolicyResolver supplies person-specific policy selection. Without it,
+// the module uses the existing tenant-wide policies.
+func WithPolicyResolver(r store.PolicyResolver) Option {
+	return func(m *Module) { m.policyResolver = r }
 }

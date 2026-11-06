@@ -105,6 +105,7 @@ it('restores session defaults and event choices in a second browser from the ser
     tool: 'codex',
     account: 'account-one',
     model: 'model-one',
+    effort: '',
     folder: 'folder-one',
   })
   expect(useClientSettings.getState().notificationEvents).toEqual({
@@ -135,6 +136,7 @@ it('uses defaults for malformed nested settings received from the server', async
     tool: '',
     account: '',
     model: '',
+    effort: '',
     folder: '',
   })
   expect(useClientSettings.getState().notificationEvents).toEqual({

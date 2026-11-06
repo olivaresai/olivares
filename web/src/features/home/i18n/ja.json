@@ -9,24 +9,12 @@
     "unavailableDescription": "セッションの読み取りが応答しませんでした。上の数値には影響しません。",
     "untitled": "無題のセッション"
   },
-  "live": {
-    "title": "稼働中"
-  },
   "empty": {
     "title": "まだ表示できるものがありません",
     "description": "お使いのロールには、いずれのエステートモジュールに対する読み取りアクセスも付与されていません。概要を表示するには、管理者に読み取りの付与を依頼してください。"
   },
-  "start": {
-    "ready": "{{tool}} の準備ができています。",
-    "signIn": "セッションを始めるには {{tool}} にサインインしてください。",
-    "signInAction": "サインイン",
-    "install": "セッションを始めるには Claude Code か Codex をインストールしてください。",
-    "installAction": "ツールを設定",
-    "newSession": "新しいセッション"
-  },
   "swimlane": {
     "title": "直近1時間",
-    "subtitle": "{{from}}〜{{to}}。各バーは1回の実行で、ツール呼び出しが多いほど強く表示されます。",
     "lanes": "直近1時間のセッション",
     "now": "現在 {{at}}",
     "range": "{{from}}〜{{to}}",
@@ -60,32 +48,23 @@
     "waiting": "承認待ち",
     "needsYou": "あなたの対応待ち",
     "idle": "待機中",
-    "approvalsUnread": "承認を読み込めなかったため、承認待ちは表示していません。"
+    "approvalsUnread": "承認をまだ読み込めていないか、読み込めなかったため、承認待ちは表示していません。",
+    "approvalsPartial": "承認の一部しか読めていないため、承認待ちの一部は表示されない場合があります。",
+    "step": {
+      "Bash": "{{what}} を実行中",
+      "Read": "{{what}} を読み込み中",
+      "Edit": "{{what}} を編集中",
+      "Write": "{{what}} を書き込み中",
+      "Grep": "{{what}} を検索中",
+      "Glob": "ファイルを検索中 {{what}}",
+      "WebFetch": "{{what}} を読み込み中",
+      "WebSearch": "Web を検索中 {{what}}",
+      "Task": "エージェントと作業中",
+      "Agent": "エージェントと作業中"
+    }
   },
-  "summary": {
-    "heading": "概要",
-    "nothingRunning": "実行中のものはありません",
-    "running_other": "開いているセッション {{count}} 件",
-    "runningFor_other": "{{people}}のために開いているセッション {{count}} 件",
-    "runningMore": "開いているセッション {{n}}+ 件",
-    "people_other": "{{count}} 人",
-    "today": "今日 {{amount}}",
-    "todayFloor": "今日 {{amount}} 以上",
-    "needs_other": "{{count}} 件があなたを待っています",
-    "needsMore": "{{n}}+ 件があなたを待っています",
-    "yesterday": "昨日 {{amount}}",
-    "unpriced_other": "{{count}} 件はコスト未報告",
-    "month": "今月 {{limit}} のうち {{spent}}",
-    "monthFloor": "今月 {{limit}} のうち {{spent}} 以上",
-    "monthLabel": "今月の支出"
-  },
-  "state": {
-    "pendingIdle": "クエリ未開始 — 開いて読み込んでください",
-    "pendingPaused": "クエリ一時停止中 — 再開を待っています"
-  },
-  "proof": {
-    "verified": "{{time}} にチェーンを検証済み",
-    "entries_other": "{{n}} 件のエントリ",
-    "broken": "チェーンが壊れています: 台帳を開く"
+  "overview": {
+    "running": "実行中",
+    "recent": "最近"
   }
 }

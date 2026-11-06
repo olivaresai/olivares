@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -349,6 +350,25 @@ func TestReadNamesWhatItCouldNotRead(t *testing.T) {
 	}
 }
 
+// An organization admin may not read the tool inventory, but the console shows them the
+// accounts and keys: the screen shows them too, and says who installs the tools.
+func TestReadShowsAnOrganizationAdminTheAccountsAndKeys(t *testing.T) {
+	e := newUIEngine(t)
+	e.inventoryForbidden = true
+	e.accounts = []map[string]any{{"name": "claude-a", "driver": "claude", "state": "active"}}
+	d, err := uiToolsOn(t, e).read(context.Background())
+	if err != nil {
+		t.Fatalf("read refused an organization admin: %v", err)
+	}
+	frame, _ := (&uiTools{}).toolsFrame(d, "AI tools", false, nil)
+	if !slices.ContainsFunc(frame.Items, func(i tui.MenuItem) bool { return i.Label == "claude-a" }) {
+		t.Errorf("the account is not on the screen: %+v", frame.Items)
+	}
+	if !strings.Contains(frame.Footer, "A system administrator installs the tools") {
+		t.Errorf("the footer is %q; it must say who installs the tools", frame.Footer)
+	}
+}
+
 func TestReadFailsWhenTheToolsCannotBeRead(t *testing.T) {
 	e := newUIEngine(t)
 	e.inventoryDown = true
@@ -469,8 +489,8 @@ func TestSafeLinkIsAPlainHTTPSAddress(t *testing.T) {
 		// link on the screen is a link nobody can use.
 		"https://auth.example.com/" + strings.Repeat("a", 900): false,
 	} {
-		if got := safeLink(link); got != want {
-			t.Errorf("safeLink(%q) = %v, want %v", link, got, want)
+		if got := plainHTTPS(link); got != want {
+			t.Errorf("plainHTTPS(%q) = %v, want %v", link, got, want)
 		}
 	}
 }
@@ -513,11 +533,14 @@ func TestSignInLinkIsOnlyJudgedWhereItIsShown(t *testing.T) {
 	}{
 		{"a plain https link", toolSignIn{State: "waiting", URL: uiClaudeLink}, false},
 		{"a link that is not https", toolSignIn{State: "waiting", URL: "http://x.example/a"}, true},
+		{"https on another host", toolSignIn{State: "waiting", URL: "https://x.example/a"}, true},
+		{"a lookalike host", toolSignIn{State: "waiting", URL: "https://claude.ai.x.example/a"}, true},
+		{"another tool's host", toolSignIn{State: "waiting", URL: "https://auth.openai.com/codex/device"}, true},
 		{"a code asked for at an odd link", toolSignIn{State: "needs_code", URL: "javascript:alert(1)"}, true},
 		{"no link yet", toolSignIn{State: "starting"}, false},
 		{"signed in, with a stale odd link", toolSignIn{State: "signed_in", URL: "http://x.example/a"}, false},
 	} {
-		if got := linkRefused(tc.s); got != tc.want {
+		if got := linkRefused("claude", tc.s); got != tc.want {
 			t.Errorf("%s: linkRefused = %v, want %v", tc.name, got, tc.want)
 		}
 	}
@@ -784,13 +807,19 @@ func TestSignInTextBesideTheLinkNamesNoOtherAddress(t *testing.T) {
 		"punycode host":            {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Open claude-login.xn--p1ai/auth now."}, true},
 		"address of a machine":     {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Open 192.168.0.7/login now."}, true},
 		"a version is not a host":  {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Claude Code 2.1.286 asked for a new code."}, false},
-		"sentences end in a dot":   {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Not accepted.Paste it again. Try the newest one."}, false},
-		"code with a link":         {toolSignIn{State: "waiting", URL: "https://auth.openai.com/codex/device", UserCode: "ABCD https://evil.example"}, true},
-		"code that is not a code":  {toolSignIn{State: "waiting", URL: "https://auth.openai.com/codex/device", UserCode: strings.Repeat("A", 40)}, true},
-		"failed keeps its reason":  {toolSignIn{State: "failed", Message: "See https://help.example/codes"}, false},
-		"signed in is not judged":  {toolSignIn{State: "signed_in", Message: "https://old.example"}, false},
+		"sentences end in a dot":   {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Not accepted. Paste it again. Try the newest one."}, false},
+		// A host name alone is a host: no path, port or query is needed to open it.
+		"host name alone":         {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Go to claude-login.example."}, true},
+		"host an invisible char":  {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Open claude-login​.example/x."}, true},
+		"lookalike of the tool":   {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Open claude.com.evil.example/x now."}, true},
+		"the tool's own host":     {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Open https://claude.com/cai/oauth/authorize instead."}, false},
+		"another tool's host":     {toolSignIn{State: "needs_code", URL: uiClaudeLink, Message: "Open auth.openai.com/codex/device instead."}, true},
+		"code with a link":        {toolSignIn{State: "waiting", URL: "https://auth.openai.com/codex/device", UserCode: "ABCD https://evil.example"}, true},
+		"code that is not a code": {toolSignIn{State: "waiting", URL: "https://auth.openai.com/codex/device", UserCode: strings.Repeat("A", 40)}, true},
+		"failed keeps its reason": {toolSignIn{State: "failed", Message: "See https://help.example/codes"}, false},
+		"signed in is not judged": {toolSignIn{State: "signed_in", Message: "https://old.example"}, false},
 	} {
-		if got := textRefused(tc.in); got != tc.want {
+		if got := textRefused("claude", tc.in); got != tc.want {
 			t.Errorf("%s: textRefused = %v, want %v", name, got, tc.want)
 		}
 	}

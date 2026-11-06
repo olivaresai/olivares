@@ -14,7 +14,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ApprovalDTO } from './types'
 
 vi.mock('@/components/ui/toaster', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    dismiss: vi.fn(),
+  },
   Toaster: () => null,
 }))
 const auth = vi.hoisted(() => ({
@@ -50,6 +55,10 @@ import {
 } from './approval-preview'
 import { ApprovalPreview, AskedByName } from './approval-preview'
 import { consoleApi } from '@/features/console/api'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -502,6 +511,34 @@ it('names the launcher of a new session in both requester displays and withdraws
   expect(screen.queryByText('Ada for a new session')).toBeNull()
   expect(screen.getAllByText('A member for a new session')).toHaveLength(2)
   expect(members).toHaveBeenCalledTimes(reads)
+})
+
+it('names the launcher of the running session a tool permission comes from', async () => {
+  vi.spyOn(consoleApi, 'listMembers').mockResolvedValue({
+    items: [
+      {
+        user_id: 'u-7',
+        email: 'ada@example.test',
+        display_name: 'Ada',
+        status: 'active',
+        sso_only: false,
+        role: 'admin',
+      },
+    ],
+    has_more: false,
+  })
+  wrap(
+    <AskedByName
+      approval={{
+        ...hookRequest,
+        action: 'sessions.provider.approval',
+        subject_kind: 'session_run',
+        requested_by: 'session:osn_01a0fc45',
+        launched_by: 'user:u-7',
+      }}
+    />,
+  )
+  expect(await screen.findByText('Ada through their session')).toBeVisible()
 })
 
 // Issue #2269 (permissions capture): the note repeated under every request,

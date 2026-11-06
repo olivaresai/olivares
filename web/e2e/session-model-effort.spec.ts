@@ -150,18 +150,18 @@ test.describe('cached sign-in eligibility in the launch forms', () => {
         },
       )
       await signIn(page)
-      await page.goto('/sessions')
-      await page
-        .locator('#work-pane-rail')
-        .getByRole('button', { name: 'New session', exact: true })
-        .click()
+      // The New session form, through its link (New session itself focuses the composer).
+      await page.goto('/sessions?newSession=1')
       const form = page.getByRole('dialog')
       await expect(form).toBeVisible()
       // Store an explicit tool choice; the first-ready fallback would move to Codex
       // when Claude becomes unavailable and would not exercise Claude's cached data.
-      await form.getByRole('radio', { name: 'Codex', exact: true }).click()
-      await form
-        .getByRole('radio', { name: 'Claude Code', exact: true })
+      const tool = form.getByRole('combobox', { name: 'Tool', exact: true })
+      await tool.click()
+      await page.getByRole('option', { name: 'Codex', exact: true }).click()
+      await tool.click()
+      await page
+        .getByRole('option', { name: 'Claude Code', exact: true })
         .click()
       await expect.poll(() => catalogReads).toBeGreaterThan(0)
       await expect(

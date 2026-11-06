@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { Fragment, useEffect, type ReactNode } from 'react'
+import { SystemAdminOnly } from '@/components/layout/system-admin-only'
+import { AppLink } from '@/components/ui/app-link'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,12 +34,15 @@ import { SignInSettings } from '@/features/settings/sign-in-settings'
 import { LimitResumePreference } from '@/features/sessions/limit-resume-preference'
 import { SessionNotificationSetting } from '@/features/settings/session-notification-setting'
 import { ModulesSettings } from '@/features/settings/modules-settings'
+import { useEditionSummary } from '@/features/settings/edition-summary'
 import { LicenseTab } from '@/features/console/license-tab'
 // The license panel's strings: this page registers the namespace itself, the
 // way the console view does for its own tab.
 import '@/features/console/i18n'
 import {
+  SETTINGS_SECTIONS,
   settingsSections,
+  type SettingsSection,
   type SettingsSectionId,
 } from '@/features/settings/sections'
 import { useUrlState } from '@/lib/hooks/use-url-state'
@@ -193,10 +198,21 @@ export function SettingsPage() {
   const [url, patchUrl] = useUrlState(['section', 'q', 'add', 'returnTo'])
   // A page this installation does not run, or this principal may not open, is neither a
   // section nor offered as a start page: the same gate the sidebar uses (#474).
-  const { navigable } = useViewAccess()
+  const { navigable, state } = useViewAccess()
   const offered = settingsSections(isSuperadmin, navigable)
   // An address to a section this person is not offered, or that does not exist, shows General.
   const section = offered.find((s) => s.id === url.section)?.id ?? 'general'
+  // A section only a system administrator is offered, asked for by address: it says so, and
+  // never opens General in its place. Its own mark or the permission of the page it hosts.
+  const refused = (s: SettingsSection) => {
+    const hosted = s.view ? viewById(s.view) : undefined
+    return (
+      (s.adminOnly && !isSuperadmin) || (!!hosted && state(hosted) === 'denied')
+    )
+  }
+  const withheld = SETTINGS_SECTIONS.find(
+    (s) => s.id === url.section && refused(s),
+  )?.id
   const hostedView = offered.find((s) => s.id === section)?.view
   const query = url.q ?? ''
   // The wizard's address stays behind when the hosted room goes away (another section, or a
@@ -212,7 +228,7 @@ export function SettingsPage() {
     const Icon = entry.icon
     return (
       <NavButton
-        current={section === id && query.trim().length === 0}
+        current={section === id && !withheld && query.trim().length === 0}
         onClick={() => setSection(id)}
         icon={<Icon aria-hidden className="size-3.5" />}
       >
@@ -231,7 +247,6 @@ export function SettingsPage() {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey)
         return
       if (isTypingTarget(event.target)) return
-      // The License page mounts no list, so no search: leave / to the rest of the console.
       const search = document.getElementById('settings-search')
       if (!search) return
       event.preventDefault()
@@ -566,61 +581,58 @@ export function SettingsPage() {
     ) : null,
   ].filter(Boolean)
 
-  const showGeneral = q.length > 0 || section === 'general'
+  const showGeneral = q.length > 0 || (section === 'general' && !withheld)
   const licenseLabel = t('console:license.title')
   const showLicenseResult =
     q.length > 0 &&
     rowMatches(licenseLabel, t('console:license.title', { lng: 'en' }))
-  // Edition is the License place of the sidebar: its page, without the list of Settings.
-  const licensePage = q.length === 0 && section === 'edition'
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div
-        className={
-          licensePage
-            ? 'grid min-h-0 flex-1 grid-cols-1'
-            : 'grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)]'
-        }
-      >
-        {licensePage ? null : (
-          <nav
-            aria-label={t('nav.sections')}
-            className="flex flex-col gap-0.5 border-b border-line p-2.5 md:border-r md:border-b-0"
-          >
-            <label className="mb-2 flex h-8 items-center gap-2 rounded-ctl border border-ctl-border bg-canvas px-2 has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus">
-              <span className="sr-only">{t('search')}</span>
-              <input
-                id="settings-search"
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('search')}
-                className="w-full bg-transparent text-caption text-text outline-none placeholder:text-text-3"
-              />
-              <Kbd>/</Kbd>
-            </label>
-            <NavGroup label={t('groups.you')}>
-              {sectionButton('general')}
-              {sectionButton('newSessions')}
-              {sectionButton('notifications')}
-              {sectionButton('keyboard')}
-            </NavGroup>
-            <NavGroup label={t('groups.work')}>
-              {sectionButton('permissions')}
-            </NavGroup>
-            <NavGroup label={t('groups.installation')}>
-              {sectionButton('signIn')}
-              {sectionButton('setup')}
-              {sectionButton('sessionIdle')}
-              {sectionButton('tracing')}
-              {sectionButton('signing')}
-              {sectionButton('about')}
-            </NavGroup>
-          </nav>
-        )}
+      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)]">
+        <nav
+          aria-label={t('nav.sections')}
+          className="flex flex-col gap-0.5 border-b border-line p-2.5 md:border-r md:border-b-0"
+        >
+          <label className="mb-2 flex h-8 items-center gap-2 rounded-ctl border border-ctl-border bg-canvas px-2 has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus">
+            <span className="sr-only">{t('search')}</span>
+            <input
+              id="settings-search"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('search')}
+              className="w-full bg-transparent text-caption text-text outline-none placeholder:text-text-3"
+            />
+            <Kbd>/</Kbd>
+          </label>
+          <NavGroup label={t('groups.you')}>
+            {sectionButton('general')}
+            {sectionButton('newSessions')}
+            {sectionButton('notifications')}
+            {sectionButton('keyboard')}
+          </NavGroup>
+          <NavGroup label={t('groups.work')}>
+            {sectionButton('permissions')}
+          </NavGroup>
+          <NavGroup label={t('groups.installation')}>
+            {sectionButton('signIn')}
+            {sectionButton('setup')}
+            {sectionButton('edition')}
+            {sectionButton('modules')}
+            {sectionButton('sessionIdle')}
+            {sectionButton('tracing')}
+            {sectionButton('signing')}
+            {sectionButton('about')}
+          </NavGroup>
+        </nav>
         <div className="min-w-0 overflow-auto">
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-2 px-7 py-6">
+            {q.length === 0 && withheld ? (
+              <>
+                <PageHeader title={t(`nav.${withheld}`)} />
+                <SystemAdminOnly />
+              </>
+            ) : null}
             {showGeneral ? (
               <>
                 <PageHeader
@@ -634,16 +646,12 @@ export function SettingsPage() {
                   <p className="text-body text-text-2">{t('noMatches')}</p>
                 )}
                 {showLicenseResult ? (
-                  <a
+                  <AppLink
                     href="/settings?section=edition"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      setSection('edition')
-                    }}
                     className="text-body font-medium text-accent-text hover:underline"
                   >
                     {licenseLabel}
-                  </a>
+                  </AppLink>
                 ) : null}
               </>
             ) : null}
@@ -677,19 +685,28 @@ export function SettingsPage() {
               </>
             ) : null}
             {hostedRoom}
-            {licensePage ? (
+            {q.length === 0 && section === 'edition' ? (
               <>
                 {/* The section's h1 precedes the license panel's h2: heading
                     order must read h1 → h2, as it does under the console's h1. */}
                 <PageHeader
-                  title={t('edition.title')}
+                  title={t('nav.edition')}
                   description={t('edition.scope')}
                 />
                 <LicenseTab />
                 <Edition
                   edition={serverInfo.data?.edition}
-                  manageModules={isSuperadmin}
+                  superadmin={isSuperadmin}
                 />
+              </>
+            ) : null}
+            {q.length === 0 && section === 'modules' ? (
+              <>
+                <PageHeader
+                  title={t('nav.modules')}
+                  description={t('modules.description')}
+                />
+                <ModulesSettings />
               </>
             ) : null}
             {q.length === 0 && section === 'permissions' ? (
@@ -828,40 +845,28 @@ function KeyboardList() {
   )
 }
 
-/** What a Business build adds, in the order the console places it. Each entry is a
- * surface a Community build does not offer, because its engine routes answer 501 there
- * or report the control unavailable (WEB slice 5, EDITION-CENSUS.md). */
-const BUSINESS_ADDS = [
-  'loginEnforcement',
-  'identityProviders',
-  'groupMapping',
-  'regulatory',
-  'reports',
-  'toolPins',
-] as const
-
-/** EDITION & MODULES: the one place that names the build's edition and, on a Community
- * build, what a Business build adds — stated once, with no prompt elsewhere. The edition
- * is the engine's own build fact from server-info, never the license. A superadmin
- * already reads it on the license panel above, so the row is only for everyone else. The
- * engine's paid build string is "enterprise"; the product names that build Business (Enterprise is a
- * negotiated scope, not a build). */
+/** EDITION: the one place that names the build's edition and, on a Community build, what
+ * a Business build adds — stated once, with no prompt elsewhere. The edition is the
+ * engine's own build fact from server-info, never the license. A superadmin already reads
+ * it on the license panel above, so the row is only for everyone else. The engine's paid
+ * build string is "enterprise"; the product names that build Business (Enterprise is a
+ * negotiated scope, not a build). The module switches are the Modules section. */
 function Edition({
   edition,
-  manageModules,
+  superadmin,
 }: {
   edition?: string
-  /** A system administrator turns modules on and off here (ARCH C1). */
-  manageModules: boolean
+  superadmin: boolean
 }) {
   const { t } = useTranslation('settings')
+  const summary = useEditionSummary()
   const name =
     edition === 'community' || edition === 'enterprise'
       ? t(`edition.editions.${edition}`)
       : (edition ?? t('edition.unknown'))
   return (
     <>
-      {!manageModules ? (
+      {!superadmin ? (
         <dl className="divide-y divide-line">
           <div className="flex items-center justify-between gap-4 py-2">
             <dt className="text-body text-text-2">{t('edition.label')}</dt>
@@ -870,8 +875,6 @@ function Edition({
         </dl>
       ) : null}
       <EditionBadgeSetting />
-      {/* Every optional module can be turned on and off from the product. */}
-      {manageModules ? <ModulesSettings /> : null}
       {edition === 'community' ? (
         <section
           aria-labelledby="edition-adds"
@@ -880,11 +883,19 @@ function Edition({
           <h2 id="edition-adds" className="text-body font-medium text-text">
             {t('edition.businessAdds')}
           </h2>
+          {/* The summary of docs/editions.md, as on the license panel. */}
           <ul className="flex list-disc flex-col gap-1 pl-5 text-body text-text-2">
-            {BUSINESS_ADDS.map((key) => (
-              <li key={key}>{t(`edition.adds.${key}`)}</li>
+            {summary.business.map(({ text, lang }) => (
+              <li key={text} lang={lang}>
+                {text}
+              </li>
             ))}
           </ul>
+          {summary.enterprise.map(({ text, lang }) => (
+            <p key={text} lang={lang} className="text-body text-text-2">
+              {text}
+            </p>
+          ))}
         </section>
       ) : null}
     </>

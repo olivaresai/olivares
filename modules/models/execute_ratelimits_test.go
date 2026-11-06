@@ -203,6 +203,16 @@ func TestRateLimitsDegradesWithoutProvider(t *testing.T) {
 	if caveat, _ := r.body["caveat"].(string); caveat == "" {
 		t.Error("the Managed-Agents caveat must always be present")
 	}
+	// The console shows this reason as it is: it must read as a next step, not as engine wiring.
+	reason, _ := r.body["reason"].(string)
+	if strings.Contains(reason, "wired") {
+		t.Errorf("reason names engine wiring, say what to connect: %q", reason)
+	}
+	// The Admin key is read only from the server's environment at boot; AI tools has no
+	// field for it (and its API-key form would hand the key to agent sessions).
+	if !strings.Contains(reason, "OLIVARES_CLAUDE_ADMIN_KEY") || strings.Contains(reason, "AI tools") {
+		t.Errorf("reason must name the server setting, not AI tools: %q", reason)
+	}
 }
 
 // TestRateLimitsMaterializesInventory proves a wired provider materializes the v2

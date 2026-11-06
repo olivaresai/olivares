@@ -107,6 +107,10 @@ type doctorDeps struct {
 	lookupUID   func(string) (int, error)
 	homeDir     func() (string, error)
 	goos        string
+	// userBusUnhideable says why a confined child cannot be kept away from the engine
+	// user's user manager on this host; nil means it can (or there is none). A nil seam
+	// means doctor does not ask.
+	userBusUnhideable func() error
 	// toolSignIn asks the engine of the saved sign-in whether a tool is signed in,
 	// the answer `olivares tool ls` shows. nil means doctor does not ask.
 	toolSignIn func(driver string) doctorToolState
@@ -149,8 +153,9 @@ func doctorExecutable(name string) error {
 
 func defaultDoctorDeps() doctorDeps {
 	return doctorDeps{
-		toolSignIn:  doctorToolSignIn,
-		confinement: confine.Probe,
+		toolSignIn:        doctorToolSignIn,
+		confinement:       confine.Probe,
+		userBusUnhideable: confine.UserBusUnhideable,
 		containerImage: func(ctx context.Context, rt sessions.ContainerRuntime) (sessions.RunnerImageState, error) {
 			if err := doctorExecutable(rt.Path); err != nil {
 				return sessions.RunnerImageUnknown, err
@@ -318,6 +323,11 @@ func newDoctorCmd() *cobra.Command {
 			"not_applicable instead of failing, because they measure a posture that\n" +
 			"installation never claimed. A manifest that exists and cannot be READ still\n" +
 			"counts as a service install: 'I cannot look' is never 'there is nothing there'.\n\n" +
+			"A host that only runs the CLI (install_shape=client) has no data directory and a saved\n" +
+			"sign-in to an engine elsewhere. There doctor checks what that host needs: the engine\n" +
+			"answers over a certificate this computer trusts, it takes the saved sign-in, and its\n" +
+			"version is this CLI's. Naming --data-dir, --config, --unit, --server or --ca-cert (or\n" +
+			"OLIVARES_DATA_DIR) asks for the local checks instead.\n\n" +
 			"Exit 0 means healthy, 1 a measured defect, and 2 that a required check could not\n" +
 			"be measured. `health` remains the separate remote subject-health namespace.",
 		Example: "  olivares doctor --mode system --data-dir /var/lib/olivares\n" +
@@ -386,6 +396,10 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 		return doctorReport{}, 0, doctorUsage("systemd/OpenRC require linux")
 	}
 
+	// Naming any local path, the origin or the data-directory variable asks for the local
+	// checks; only a host that named nothing can be judged as a client host (below).
+	named := o.dataDir != "" || o.config != "" || o.unit != "" || o.caCert != "" || o.serverExplicit ||
+		deps.getenv("OLIVARES_DATA_DIR") != ""
 	if err := resolveDoctorPaths(&o, deps); err != nil {
 		return doctorReport{}, 0, err
 	}
@@ -399,6 +413,14 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 			Arch: runtime.GOARCH, LicenseKey: licKey, OTAKey: otaKey},
 		Paths: doctorPaths{Binary: o.binary, DataDir: o.dataDir, Config: o.config,
 			Unit: o.unit, Manifest: manifestPath},
+	}
+	if !named {
+		if resolved, ok := doctorClientContext(deps, o); ok {
+			report.InstallShape = installShapeClient
+			report.Paths = doctorPaths{Binary: o.binary}
+			report.Checks = doctorClientChecks(ctx, o, resolved, doctorBuildCheck(licKey, otaKey))
+			return report, doctorVerdict(&report), nil
+		}
 	}
 	add := func(c doctorCheck) { report.Checks = append(report.Checks, c) }
 
@@ -453,6 +475,7 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 		add(check)
 	}
 	add(doctorBackgroundJobsCheck(ctx, deps, o, ca))
+	add(doctorExposureCheck(ctx, deps, o))
 	add(doctorAuditCheck(ctx, deps, o))
 	add(doctorChannelCheck(ctx, deps, o))
 	agentHour := doctorFirstHourCodingAgent(deps, o.dataDir)
@@ -468,32 +491,34 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	// The required set depends on HOW this installation was made, and the relaxation
 	// runs BEFORE the verdict so a correct local install can reach healthy.
 	report.Checks = relaxLocalInstallChecks(shape, report.Checks)
+	return report, doctorVerdict(&report), nil
+}
 
-	code := exitcode.OK
+// doctorVerdict sets the report's overall word from its checks and returns the exit code:
+// a failing check is unhealthy (1), else a required check that could not be measured is
+// unmeasurable (2).
+func doctorVerdict(report *doctorReport) int {
 	for _, c := range report.Checks {
 		if c.Status == "fail" {
 			report.Overall = "unhealthy"
-			code = exitcode.Err
-			break
+			return exitcode.Err
 		}
 	}
-	if code == exitcode.OK {
-		for _, c := range report.Checks {
-			if c.Required && c.Status == "unknown" {
-				report.Overall = "unmeasurable"
-				code = exitcode.Usage // DIST-24-04's command-specific rc=2 contract.
-				break
-			}
+	for _, c := range report.Checks {
+		if c.Required && c.Status == "unknown" {
+			report.Overall = "unmeasurable"
+			return exitcode.Usage // DIST-24-04's command-specific rc=2 contract.
 		}
 	}
-	return report, code, nil
+	return exitcode.OK
 }
 
 // This probes the CLI host, which may differ from a remote engine host.
 func doctorSessionConfinement(deps doctorDeps) doctorCheck {
-	c := doctorCheck{Name: "session-confinement", Status: "unknown", Required: false,
-		Detail: "session filesystem confinement on this local host was not checked"}
+	c := doctorCheck{Name: "session-confinement", Required: false}
 	if deps.confinement == nil {
+		c.Status, c.Detail = "unknown", "session filesystem confinement on this local host was not checked"
+		c.Remediation = "run olivares doctor on the engine host to check it"
 		return c
 	}
 	state := deps.confinement()
@@ -508,6 +533,18 @@ func doctorSessionConfinement(deps doctorDeps) doctorCheck {
 			c.Status = "warn"
 			c.Detail += "; sessions are not confined by Landlock on " + deps.goos
 		}
+		return c
+	}
+	// Landlock does not govern connect() to a socket at a path: a child that can reach the
+	// engine user's user manager starts units outside its confinement, so the server hides
+	// that manager's runtime directory from every confined child, and refuses a terminal,
+	// setup command, MCP server, Git run or tool read it cannot hide it from.
+	if deps.userBusUnhideable != nil {
+		if err := deps.userBusUnhideable(); err != nil {
+			c.Status = "fail"
+			c.Detail += "; the engine user's user manager is reachable from a confined child (" + err.Error() + "), so a terminal, setup command, MCP server, Git run or tool read cannot start here"
+			c.Remediation = "allow unprivileged user and mount namespaces for the engine (on Ubuntu, the AppArmor profile the package installs; SECURITY.md), or stop the user manager (loginctl disable-linger <user>)"
+		}
 	}
 	return c
 }
@@ -520,6 +557,7 @@ func doctorContainerRuntime(ctx context.Context, deps doctorDeps) doctorCheck {
 	c := doctorCheck{Name: "container-runtime", Status: "pass", Required: false}
 	if deps.getenv == nil || deps.lookPath == nil {
 		c.Status, c.Detail = "unknown", "the container runtime on this host was not checked"
+		c.Remediation = "run olivares doctor on the engine host to check it"
 		return c
 	}
 	rt, err := sessions.DetectContainerRuntime(deps.getenv, deps.lookPath)
@@ -1558,6 +1596,7 @@ func doctorFirstHourHookPEP(deps doctorDeps, ready doctorCheck) doctorCheck {
 	if ready.Status != "pass" {
 		c.Status = "unknown"
 		c.Detail = "the engine is not answering; it runs the hook PEP for sessions while it is up"
+		c.Remediation = "start the service, then rerun doctor"
 		return c
 	}
 	c.Status = "pass"
@@ -1846,9 +1885,16 @@ func doctorSummaryClause(report doctorReport) string {
 // to change; the command that re-measures them is doctor itself. With the install
 // healthy, the next step is the first hour's: the command the first-hour-next-step
 // row measured, else doctor's own annotation from the table the help section uses.
+//
+// A failing check whose remediation ends in ": olivares …" (a client host's sign-in, whose
+// fix is a different command) names that command: sending the operator back to doctor
+// would loop: doctor pointing back to doctor.
 func doctorNextCommand(report doctorReport) string {
 	for _, check := range report.Checks {
 		if check.Required && check.Status != "pass" {
+			if command := doctorTrailingCommand(check.Remediation); command != "" {
+				return command
+			}
 			return "olivares doctor"
 		}
 	}
@@ -1856,11 +1902,20 @@ func doctorNextCommand(report doctorReport) string {
 		if check.Name != "first-hour-next-step" {
 			continue
 		}
-		if i := strings.LastIndex(check.Detail, ": "); i >= 0 && strings.HasPrefix(check.Detail[i+2:], "olivares ") {
-			return check.Detail[i+2:]
+		if command := doctorTrailingCommand(check.Detail); command != "" {
+			return command
 		}
 	}
 	return firstHourNextCommands["doctor"]
+}
+
+// doctorTrailingCommand is the "olivares …" command a text ends with after its last ": ",
+// or "" when it does not end with one.
+func doctorTrailingCommand(text string) string {
+	if i := strings.LastIndex(text, ": "); i >= 0 && strings.HasPrefix(text[i+2:], "olivares ") {
+		return text[i+2:]
+	}
+	return ""
 }
 
 // drawDoctor writes the whole text form. It takes a renderer rather than a writer
@@ -1948,4 +2003,36 @@ func doctorOriginFromConsoleState(state consoleState) string {
 		scheme = "http"
 	}
 	return scheme + "://" + net.JoinHostPort(host, port)
+}
+
+// doctorExposureCheck uses this installation's recorded listeners. It never
+// probes an external address; even an answering local endpoint proves no WAN path.
+func doctorExposureCheck(ctx context.Context, deps doctorDeps, o doctorOptions) doctorCheck {
+	c := doctorCheck{Name: "console-exposure", Status: "unknown", Detail: "External reachability not verified.", Remediation: "Start this installation and sign in with olivares login to read its current exposure policy."}
+	body, err := deps.readFile(filepath.Join(o.dataDir, consoleStateFile))
+	if err != nil {
+		return c
+	}
+	state, err := parseConsoleState(o.dataDir, body)
+	if err != nil {
+		return c
+	}
+	publicURL := ""
+	if state.Declared {
+		publicURL = state.Browse
+	}
+	facts := api.ConsoleExposure{Listen: state.Listen, GRPCListen: state.GRPCListen, PublicURL: publicURL, TLS: !state.Insecure, AdminStepUp: "not read", ExternalReachability: "not verified", Addresses: state.Addresses}
+	// A saved login may add the live policy only for this exact local origin.
+	// Never forward a credential selected for a different engine.
+	resolved, err := resolveCLIConfig(cliResolutionOptions{})
+	if err == nil && resolved.Token != "" && strings.TrimRight(resolved.Server, "/") == strings.TrimRight(o.server, "/") {
+		var live api.ConsoleExposure
+		if status, err := engineGet(ctx, resolved, "/v1/console/exposure", true, &live, o.timeout); err == nil && status == http.StatusOK {
+			facts = live
+			c.Status = "pass"
+			c.Remediation = ""
+		}
+	}
+	c.Detail = fmt.Sprintf("Recorded HTTP listener=%s; gRPC listener=%s; public URL=%s; TLS=%t; admin_step_up=%s; external reachability=not verified", facts.Listen, facts.GRPCListen, facts.PublicURL, facts.TLS, facts.AdminStepUp)
+	return c
 }

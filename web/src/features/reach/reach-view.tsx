@@ -14,7 +14,7 @@ import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
-import { UrlStateNotice } from '@/features/shared'
+import { useUrlStateNotice } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import {
   type UrlState,
@@ -34,25 +34,28 @@ const SESSIONS_READ = 'sessions:live:read'
 
 type ReachMode = 'graph' | 'table'
 
-/** `?view=table` is the table; no key is the graph. Anything else is refused and said. */
+/** No key is the table; `?view=graph` is the graph and `?view=table`, the older link to
+ * the table, still opens it. Anything else is refused and said. */
 function decodeReachView(raw: UrlState): UrlStateDecoded<ReachMode> {
-  if (raw.view === undefined) return { value: 'graph', issues: [] }
-  if (raw.view === 'table') return { value: 'table', issues: [] }
-  return { value: 'graph', issues: ['view'] }
+  if (raw.view === undefined || raw.view === 'table')
+    return { value: 'table', issues: [] }
+  if (raw.view === 'graph') return { value: 'graph', issues: [] }
+  return { value: 'table', issues: ['view'] }
 }
 
 export default function ReachView() {
   const auth = useAuth()
   const { t } = useTranslation('reach')
   const off = useModulesStore((state) => state.off)
-  // Graph or table is part of the view, so it lives in the address: a pasted link opens
+  // Table or graph is part of the view, so it lives in the address: a pasted link opens
   // the same one, and Access map keeps its own selection and filters there too.
   const [mode, setView, viewIssues] = useValidatedUrlState(
     ['view'],
     decodeReachView,
   )
+  useUrlStateNotice(viewIssues)
   const setMode = (next: ReachMode) =>
-    setView({ view: next === 'table' ? 'table' : undefined })
+    setView({ view: next === 'graph' ? 'graph' : undefined })
   const canReadApprovals = auth.can(APPROVAL_READ)
   const canReadSessions = auth.can(SESSIONS_READ)
   const on = moduleEnabled(off, REACH_READ, 'reach')
@@ -130,24 +133,23 @@ export default function ReachView() {
           <div className="flex items-center gap-1">
             <Button
               size="sm"
-              variant={mode === 'graph' ? 'secondary' : 'ghost'}
-              aria-pressed={mode === 'graph'}
-              onClick={() => setMode('graph')}
-            >
-              {t('toggleGraph')}
-            </Button>
-            <Button
-              size="sm"
               variant={mode === 'table' ? 'secondary' : 'ghost'}
               aria-pressed={mode === 'table'}
               onClick={() => setMode('table')}
             >
               {t('toggleTable')}
             </Button>
+            <Button
+              size="sm"
+              variant={mode === 'graph' ? 'secondary' : 'ghost'}
+              aria-pressed={mode === 'graph'}
+              onClick={() => setMode('graph')}
+            >
+              {t('toggleGraph')}
+            </Button>
           </div>
         }
       />
-      <UrlStateNotice issues={viewIssues} />
       {!loading && !graphFailed && (
         <p className="text-caption text-text-2">
           {waitingKnown
@@ -166,7 +168,10 @@ export default function ReachView() {
       {!loading && !graphFailed && !canReadApprovals && (
         <p role="status">{t('waitingHidden')}</p>
       )}
-      {empty && <p role="status">{t('empty')}</p>}
+      {empty && !model.hasOtherReach && <p role="status">{t('empty')}</p>}
+      {!loading && !graphFailed && model.hasOtherReach && (
+        <p role="status">{t('otherReach')}</p>
+      )}
       {!loading && !graphFailed && !empty && (
         <>
           {mode === 'graph' ? (

@@ -194,7 +194,7 @@ describe('ComposeDialog — immutable intention', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm and send' }))
     expect(await screen.findByText('Send refused')).toBeInTheDocument()
     expect(
-      screen.getByText('The engine refused this for the current principal.'),
+      screen.getByText('The engine refused this for you.'),
     ).toBeInTheDocument()
     expect(screen.getByText('req-4')).toBeInTheDocument()
     expect(api.sendNotice).toHaveBeenCalledTimes(1)

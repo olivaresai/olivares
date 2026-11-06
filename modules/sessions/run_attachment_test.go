@@ -424,34 +424,14 @@ func TestCodexReportsOfOneMessageAreOneTurn(t *testing.T) {
 	}
 }
 
-// The limits are said in a sentence, whichever way the image is too big, and a session
-// keeps a bounded number of images.
+// The limits are said in a sentence, whichever way the image is too big, and a node
+// stores a bounded number of images at once.
 func TestUploadLimitsAreSaidAndKept(t *testing.T) {
 	f := newCodexTextFixture(t, "attach-limits", "thread-limits")
 	// Far over the limit: the request is refused whole, with the limit named.
 	huge := f.upload("image/png", append(tinyPNGBytes(t), make([]byte, 2*maxAttachmentBytes)...))
 	if huge.code != http.StatusRequestEntityTooLarge || !strings.Contains(errorMessageOf(huge), "3.8 MB") {
 		t.Fatalf("a huge image = %d %s, want 413 naming the 3.8 MB limit", huge.code, huge.raw)
-	}
-	// A session that holds as many images as it keeps takes no more.
-	dir, err := f.m.attachmentRunDir(f.tenant, f.runRef)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < maxStoredAttachments; i++ {
-		if err := os.WriteFile(filepath.Join(dir, attachmentIDPrefix+string(model.NewID())+".png"), tinyPNGBytes(t), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	full := f.upload("image/png", tinyPNGBytes(t))
-	if full.code != http.StatusInsufficientStorage || !strings.Contains(errorMessageOf(full), "as many images as it keeps") {
-		t.Fatalf("a full session = %d %s, want 507 and a sentence", full.code, full.raw)
-	}
-	if n := f.storedFiles(t); n != maxStoredAttachments {
-		t.Fatalf("%d images stored, want the %d it already held", n, maxStoredAttachments)
 	}
 	// Too many uploads at once on a node: the caller is told to retry.
 	for i := 0; i < attachmentUploadSlots; i++ {
@@ -573,16 +553,16 @@ func TestMessageShapeOfAttachments(t *testing.T) {
 		}
 		ids = append(ids, id)
 	}
-	if _, err := m.loadTurnImages(tenant, "run-shape", ids); err == nil || !strings.Contains(err.Error(), "at most 4") {
-		t.Fatalf("five images: err = %v, want a refusal that names the limit", err)
+	if _, err := m.loadTurnImages(tenant, "run-shape", ids, 0); err == nil || !strings.Contains(err.Error(), "at most 100") {
+		t.Fatalf("101 images: err = %v, want a refusal that names the limit", err)
 	}
-	if _, err := m.loadTurnImages(tenant, "run-shape", []string{ids[0], ids[0]}); err == nil {
+	if _, err := m.loadTurnImages(tenant, "run-shape", []string{ids[0], ids[0]}, 0); err == nil {
 		t.Fatal("the same image twice was accepted")
 	}
-	if _, err := m.loadTurnImages(tenant, "another-run", ids[:1]); err == nil {
+	if _, err := m.loadTurnImages(tenant, "another-run", ids[:1], 0); err == nil {
 		t.Fatal("an image of another session was accepted")
 	}
-	if got, err := m.loadTurnImages(tenant, "run-shape", ids[:2]); err != nil || len(got) != 2 || got[0].ID != ids[0] || got[1].ID != ids[1] {
+	if got, err := m.loadTurnImages(tenant, "run-shape", ids[:2], 0); err != nil || len(got) != 2 || got[0].ID != ids[0] || got[1].ID != ids[1] {
 		t.Fatalf("two images: %v %v, want them in the order given", got, err)
 	}
 }

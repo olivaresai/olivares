@@ -22,7 +22,7 @@ version tag or a digest in production; never rely on `latest` for a reproducible
 
 | Tag | Contents | Architectures |
 |-----|----------|---------------|
-| <!-- release -->`0.6`<!-- /release -->, `latest` | Base engine + embedded web console | amd64, arm64 |
+| <!-- release -->`0.7`<!-- /release -->, `latest` | Base engine + embedded web console | amd64, arm64 |
 
 FIPS and STIG images are available through the Business deployment channel.
 
@@ -39,17 +39,31 @@ setup token and there are no default credentials. Mount a persistent data volume
 
 <!-- release -->
 ```sh
-docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+docker run --rm --entrypoint cat olivaresai/olivares:0.7 \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat olivaresai/olivares:0.7 /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
+docker run -d --name olivares --hostname olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
   -v olivares-data:/var/lib/olivares \
   --user 65532:65532 --read-only --tmpfs /tmp --cap-drop ALL \
-  --security-opt no-new-privileges \
-  olivaresai/olivares:0.6 \
+  --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
+  olivaresai/olivares:0.7 \
   serve --listen 0.0.0.0:8443 --grpc-listen 0.0.0.0:8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
 
 (Inside the container the engine must listen on every interface, which is its default,
 written out here; the `-p 127.0.0.1:…` host mapping keeps it loopback-only on the host.)
+
+The first command reads the session seccomp profile from the image: Docker's default profile
+plus the user, network and mount namespaces a session confines its agent tool in. On hosts whose
+AppArmor controls user namespaces (Debian 13, Ubuntu 24.04 and later), the next lines load the
+session AppArmor profile the image ships, with `sudo`, and select it.
 
 Open `https://127.0.0.1:8443` and read the one-time first-boot setup token from the logs
 (`docker logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'`). The data directory holds the SQLite
@@ -79,7 +93,7 @@ provenance attestations — all preserved on this registry by digest:
 
 <!-- release -->
 ```sh
-cosign verify olivaresai/olivares:0.6 \
+cosign verify olivaresai/olivares:0.7 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

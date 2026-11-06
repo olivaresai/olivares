@@ -1,6 +1,6 @@
 {
   "title": "可观测性与互操作",
-  "description": "基于标准的摄取健康度，以及与账本关联的追踪下钻。各项数据为引擎级（进程全局），而非按租户统计；标准固定到上游机构所声明的版本与成熟度。",
+  "description": "遥测接收状况和追踪。",
   "tabs": {
     "ingestion": "摄取健康度",
     "traces": "追踪下钻"
@@ -76,7 +76,7 @@
     "listTitle": "近期追踪",
     "listDescription": "选择一条追踪以打开其源自账本的 span 视图。",
     "empty": "无追踪",
-    "emptyHint": "遍历窗口（最近 20,000 条事件）内没有任何审计账本事件携带 W3C 追踪 ID——调用方未传播 traceparent，或这些事件已滚出窗口。",
+    "emptyHint": "工具在请求中发送追踪 ID 后，追踪会显示在这里。",
     "noResults": "没有匹配搜索的追踪。",
     "filterNoResults": "没有匹配当前筛选器的追踪。",
     "searchPlaceholder": "按追踪 ID 搜索…",

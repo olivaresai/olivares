@@ -3,9 +3,6 @@
   "subtitle": "Consultez le registre signé de l’activité de l’IA.",
   "subtitleSystem": "La chaîne du locataire système contenant les opérations administratives inter-locataires (lecture seule).",
   "searchLoaded": "Filtrer uniquement les lignes chargées (côté client)…",
-  "scan": {
-    "incomplete": "Analysé jusqu’à la seq {{seq}} — pas l’intégralité du registre ; « Charger plus » poursuit l’analyse."
-  },
   "scope": {
     "label": "Portée du registre",
     "tenant": "Registre du locataire",
@@ -75,6 +72,9 @@
     "actorMember": "Un membre"
   },
   "empty": {
+    "filteredTitle": "Aucune preuve correspondante",
+    "searching": "Aucun résultat dans les événements parcourus jusqu’ici. Charger plus poursuit la recherche.",
+    "noMatches": "Aucun événement ne correspond à ces filtres. Essayez de modifier ou de supprimer un filtre.",
     "title": "Aucune preuve pour l’instant",
     "description": "Le registre est vide pour cette portée. Les opérations gouvernées ajoutent des événements inviolables au fur et à mesure."
   },
@@ -123,7 +123,7 @@
     "add": "Ajouter {{token}} à la requête",
     "commands": "Recherche et commandes",
     "problem": {
-      "key": "{{token}} n'est pas un filtre du registre. Utilisez person:, action:, kind:, target:, since:, until: ou des mots.",
+      "key": "{{token}} n'est pas un filtre du registre. Utilisez person:, action:, kind:, target:, tool:, folder:, since:, until: ou des mots.",
       "time": "{{token}} n'est pas une durée. Utilisez 90m, 24h, 7d, 2w ou une date comme 2026-10-20.",
       "person": "Personne ne correspond à {{token}}. Utilisez un nom, un e-mail ou user:<id>.",
       "several": "{{token}} correspond à plusieurs personnes. Utilisez le nom complet, un e-mail ou user:<id>.",

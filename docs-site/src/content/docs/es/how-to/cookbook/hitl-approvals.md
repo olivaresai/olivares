@@ -90,6 +90,8 @@ tu SIEM. No puedes hacer un cambio gobernado que el ledger olvide en silencio.
 
 ## Notas
 
+En las solicitudes de permisos de Codex compatibles, **Aprobar para esta sesión** concede el permiso revisado para la sesión actual. **Aprobar una vez** mantiene su comportamiento de uso único. La misma elección está disponible en la conversación y en la cola de aprobaciones. Los clientes de la API pueden enviar `{"decision":"approve","scope":"session"}` cuando la solicitud informa `session_scope_allowed: true`. Las demás solicitudes rechazan este alcance con HTTP 400 y no registran ninguna decisión. El rastro de decisiones y el evento de auditoría conservan el alcance; cuando varias personas deben aprobar, una decisión de uso único mantiene la concesión de uso único.
+
 - `escalate_in_seconds` notifica al equipo de SoD si una petición queda sin
   decidir — úsalo para acciones críticas en producción.
 - Cancelar (`POST …/{id}/cancel`) es para el solicitante o un admin sobre una

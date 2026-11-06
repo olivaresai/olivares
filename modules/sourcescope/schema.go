@@ -64,19 +64,24 @@ const (
 	// (standards.go).
 	sourceInstructions = "instructions"
 	sourceTemplate     = "template"
+	// Policies use the resource scope class for grants and inheritance filters.
+	sourceApprovalPolicy = "approval-policy"
+	sourceDLPRuleset     = "dlp-ruleset"
 )
 
 // Exported source-type identifiers, for composition-root adapters building Resolve
 // requests (the model ScopeGate, the knowledge RetrievalScopeGate) without magic
 // strings.
 const (
-	SourceMCP       = sourceMCP
-	SourceModel     = sourceModel
-	SourceProvider  = sourceProvider
-	SourceKnowledge = sourceKnowledge
-	SourceData      = sourceData
-	SourceProfile   = sourceProfile
-	SourceTool      = sourceTool
+	SourceMCP            = sourceMCP
+	SourceModel          = sourceModel
+	SourceProvider       = sourceProvider
+	SourceKnowledge      = sourceKnowledge
+	SourceData           = sourceData
+	SourceProfile        = sourceProfile
+	SourceTool           = sourceTool
+	SourceApprovalPolicy = sourceApprovalPolicy
+	SourceDLPRuleset     = sourceDLPRuleset
 )
 
 // Scope-tree kinds a binding is bounded to. Two families:

@@ -99,9 +99,22 @@ describe('unwalked', () => {
   const base = 'http://127.0.0.1:8456'
 
   it('is empty when the addresses pass every step in order', () => {
+    // The release gate's walk: setup opens Sessions, a key is added on Tools, a tool is
+    // installed, a session starts. No wizard: setup no longer sends a person there.
     expect(
       unwalked(JOURNEYS.firstHour, [
         `${base}/setup`,
+        `${base}/sessions`,
+        `${base}/providers`,
+        `${base}/agent-tools`,
+        `${base}/sessions?session=run%3Aabc`,
+      ]),
+    ).toEqual([])
+    // The console spec's walk, which also opens the wizard and returns to it.
+    expect(
+      unwalked(JOURNEYS.firstHour, [
+        `${base}/setup`,
+        `${base}/sessions`,
         `${base}/onboarding`,
         `${base}/providers?add=ollama&returnTo=%2Fonboarding`,
         `${base}/onboarding`,
@@ -112,15 +125,15 @@ describe('unwalked', () => {
 
   it('returns the steps from the first one never reached', () => {
     expect(
-      unwalked(JOURNEYS.firstHour, [`${base}/onboarding`, `${base}/sessions`]),
-    ).toEqual(JOURNEYS.firstHour.slice(1))
+      unwalked(JOURNEYS.firstHour, [`${base}/sessions`, `${base}/providers`]),
+    ).toEqual(JOURNEYS.firstHour.slice(2))
   })
 
   it('does not count a step reached out of order', () => {
     expect(
       unwalked(JOURNEYS.firstHour, [
+        `${base}/providers`,
         `${base}/sessions`,
-        `${base}/onboarding`,
         `${base}/providers`,
       ]),
     ).toEqual(JOURNEYS.firstHour.slice(2))

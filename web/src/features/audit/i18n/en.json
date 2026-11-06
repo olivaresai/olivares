@@ -3,9 +3,6 @@
   "subtitle": "Read the signed record of AI activity.",
   "subtitleSystem": "The system-tenant chain of cross-tenant administrative operations (read-only).",
   "searchLoaded": "Filter loaded rows only (client-side)…",
-  "scan": {
-    "incomplete": "Scanned up to seq {{seq}} — not the full ledger; Load more continues the scan."
-  },
   "scope": {
     "label": "Ledger scope",
     "tenant": "Tenant ledger",
@@ -75,6 +72,9 @@
     "actorMember": "A member"
   },
   "empty": {
+    "filteredTitle": "No matching evidence",
+    "searching": "Nothing matched in the events searched so far. Load more keeps searching.",
+    "noMatches": "No events match these filters. Try changing or removing a filter.",
     "title": "No evidence yet",
     "description": "The ledger is empty for this scope. Governed operations append tamper-evident events as they happen."
   },
@@ -123,7 +123,7 @@
     "add": "Add {{token}} to the query",
     "commands": "Search and commands",
     "problem": {
-      "key": "{{token}} is not a ledger filter. Use person:, action:, kind:, target:, since:, until: or plain words.",
+      "key": "{{token}} is not a ledger filter. Use person:, action:, kind:, target:, tool:, folder:, since:, until: or plain words.",
       "time": "{{token}} is not a time. Use 90m, 24h, 7d, 2w or a date such as 2026-10-20.",
       "person": "No one matches {{token}}. Use a name, an email or user:<id>.",
       "several": "{{token}} fits several people. Use the full name, an email or user:<id>.",

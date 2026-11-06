@@ -106,7 +106,20 @@
     "scope": "{{name}} 내",
     "footerMove": "이동",
     "footerOpen": "열기",
-    "footerCommands": "명령 전용"
+    "footerCommands": "명령 전용",
+    "objectActions": "{{name}} 작업",
+    "footerPeople": "사용자",
+    "footerSessions": "세션",
+    "peopleHint": "이름을 입력하세요.",
+    "ask": "Olivares에게 질문…"
+  },
+  "hintBar": {
+    "move": "이동",
+    "open": "열기",
+    "approve": "승인",
+    "deny": "거부",
+    "launcher": "실행기",
+    "command": "명령"
   },
   "permissionWords": {
     "read": "읽기 액세스",
@@ -327,11 +340,16 @@
         "last": "마지막 세션",
         "open": "세션 열기",
         "pin": "고정 또는 고정 해제",
+        "undo": "마지막 보관, 일시 중지, 완료 또는 고정 해제 실행 취소",
         "menu": "세션 작업 메뉴 열기"
       },
       "session": {
         "new": "새 세션",
         "previous": "이전 세션으로 돌아가기"
+      },
+      "list": {
+        "next": "다음 행으로 이동",
+        "previous": "이전 행으로 이동"
       },
       "sourceDiff": {
         "nextFile": "다음 파일",
@@ -342,15 +360,23 @@
       "approvals": {
         "approve": "열린 요청을 이번만 승인",
         "deny": "열린 요청 거부"
+      },
+      "accessMap": {
+        "fullScreen": "전체 화면 맵 열기 또는 닫기"
+      },
+      "ask": {
+        "open": "Olivares에게 질문"
       }
     },
     "when": {
       "railFocused": "세션 레일 내",
+      "outsideList": "목록 밖",
       "launcherFocused": "런처 입력란 내",
       "workSurface": "세션 화면에서",
       "sessionHistory": "이전 세션을 사용할 수 있을 때",
       "paletteRecent": "검색어가 비어 있는 팔레트 결과에서",
-      "approvalQueue": "승인 대기열에서"
+      "approvalQueue": "승인 대기열에서",
+      "accessMap": "접근 맵에서"
     },
     "precedence": "두 행이 같은 키를 사용하면 마지막으로 적용되는 행이 우선합니다.",
     "problems_other": "{{count}}개의 바인딩을 읽을 수 없어 실행되지 않습니다: {{commands}}"
@@ -402,7 +428,6 @@
     },
     "quoteReply": "답변 인용",
     "copy": {
-      "markdown": "Markdown 블록 복사",
       "message": "메시지 복사",
       "code": "코드 복사",
       "copied": "복사했습니다",
