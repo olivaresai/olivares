@@ -6,8 +6,8 @@
 // session they belong to (an entry on a `sessions.run`, or a tool call the session itself
 // made) with the entries of no session in
 // their own group, and the requests that still need a person first, under their own
-// heading, with the one orange edge however many there are. The edge belongs to the
-// requests, never to the selection: selection is the tone step.
+// heading, marked by their "Needs you" label, never by a coloured edge. Selection is
+// the tone step.
 //
 // Every value under a sentence (who acted, what it acted on) is a button that adds itself to the
 // query, so a person narrows the ledger by pointing at it.
@@ -95,13 +95,7 @@ export function LedgerEntries({
               </span>
             </h2>
           ) : null}
-          <ul
-            className={cn(
-              'relative flex flex-col',
-              g.key === 'needs' &&
-                'before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-accent',
-            )}
-          >
+          <ul className="flex flex-col">
             {g.entries.map((e) => {
               const flagged = needsPerson(e, pending)
               const selected = e.id === selectedId

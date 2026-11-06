@@ -25,36 +25,16 @@ Olivares AI reúne las respuestas en un solo lugar. Se conecta a los agentes y h
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
-  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="La pantalla Cockpit de la consola de Olivares AI">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-overview-dark.webp">
+  <img src=".github/assets/console-overview-light.webp" width="840" alt="La pantalla Vista general de la consola de Olivares AI: una aprobación que coincide con una regla y cinco agentes trabajando con su coste y cuenta">
 </picture>
-<br><sub><b>Cockpit</b> — qué hace ahora cada agente, las aprobaciones que te esperan y los límites de uso de cada cuenta.</sub>
+<br><sub><b>Vista general</b>: qué espera tu aprobación según tus reglas, y cada agente en marcha con su coste.</sub>
 <br><br>
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
-  <img src=".github/assets/console-session-light.webp" width="840" alt="La pantalla Sesión de la consola de Olivares AI">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-changed-files-dark.webp">
+  <img src=".github/assets/console-changed-files-light.webp" width="840" alt="Una sesión en marcha en la consola de Olivares AI, con su panel de Cambios abierto">
 </picture>
-<br><sub><b>Sesión</b> — la conversación junto a su plan, agentes, tareas en segundo plano, archivos cambiados y límites de uso.</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
-  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="La pantalla Sesiones en paralelo de la consola de Olivares AI">
-</picture>
-<br><sub><b>Sesiones en paralelo</b> — seis agentes trabajando a la vez, cada uno en su propia rama, con su última salida, su coste y su límite de uso.</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
-  <img src=".github/assets/console-access-map-light.webp" width="840" alt="La pantalla Mapa de acceso de la consola de Olivares AI">
-</picture>
-<br><sub><b>Mapa de acceso</b> — qué lee y escribe cada agente, comparado con lo que se le concedió.</sub>
-</div>
-
-<div align="center">
-<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
-<br><sub><b>Catálogo</b>: agentes, servidores MCP, skills y conectores aprobados, cada uno con su estado y si está firmado.</sub>
-<br><br>
-<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
-<br><sub><b>Trabajo</b>: tareas, responsables y decisiones que se conservan cuando termina una sesión.</sub>
+<br><sub><b>Sesión</b>: la conversación junto a los archivos que ha cambiado.</sub>
 </div>
 
 [Herramientas compatibles](docs-site/src/content/docs/reference/supported-tools.md) (English).

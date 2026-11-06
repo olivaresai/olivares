@@ -118,7 +118,7 @@ Führen Sie ihn nach jeder Installation und nach dem Entfernen eines Overrides a
 Wenn Sie eine gültige Business- oder Enterprise-Lizenz auf einem Community-Build installieren,
 läuft dieser Build weiter. Das Session-Cockpit und die übrigen kommerziellen Seiten erscheinen
 erst, nachdem Sie diese Installation auf Business umgestellt haben. Die Ansicht
-**Settings › Edition** der Konsole nennt die installierte Lizenz getrennt vom Build. **Expires**
+**Einstellungen › Edition** der Konsole nennt die installierte Lizenz getrennt vom Build. **Expires**
 ist die bezahlte Laufzeit; **Lease until**, sofern angezeigt, ist die davon getrennte
 vorläufige Instanz-Lease. Läuft die Installation in Docker? Gehen Sie unten zu
 [Docker und Compose](#docker-und-compose).
@@ -138,7 +138,7 @@ export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is c
 olivares upgrade --edition business
 ```
 
-`olivares license install` und `olivares license status` geben den genauen Befehl für die Art aus, wie diese Installation installiert wurde, und die Ansicht **Settings › Edition** der Konsole zeigt denselben Schritt als einen Button, **Zu Business wechseln**: Die Engine lädt den Build herunter, prüft ihn, tauscht ihn an Ort und Stelle aus und startet damit neu. Das Download-Token steht auf der Seite **Downloads** des lizenzierten Download-Portals ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), neben diesen Befehlen, und in Ihrer Lizenz-E-Mail; übergeben Sie es wie oben über den Namen, damit es nicht in der Prozessliste erscheint. Eine verbundene Installation (`olivares license connect start`) braucht kein Token. `--enterprise` ist die ältere Schreibweise derselben Route. Der Button der Konsole braucht eines von beiden, das Token in der Umgebung der Engine selbst oder diese Verbindung; ohne beides zeigt die Ansicht stattdessen den Befehl.
+`olivares license install` und `olivares license status` geben den genauen Befehl für die Art aus, wie diese Installation installiert wurde, und die Ansicht **Einstellungen › Edition** der Konsole zeigt denselben Schritt als einen Button, **Zu Business wechseln**: Die Engine lädt den Build herunter, prüft ihn, tauscht ihn an Ort und Stelle aus und startet damit neu. Das Download-Token steht auf der Seite **Downloads** des lizenzierten Download-Portals ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), neben diesen Befehlen, und in Ihrer Lizenz-E-Mail; übergeben Sie es wie oben über den Namen, damit es nicht in der Prozessliste erscheint. Eine verbundene Installation (`olivares license connect start`) braucht kein Token. `--enterprise` ist die ältere Schreibweise derselben Route. Der Button der Konsole braucht eines von beiden, das Token in der Umgebung der Engine selbst oder diese Verbindung; ohne beides zeigt die Ansicht stattdessen den Befehl.
 
 :::caution[Paketinstallationen]
 Bei einer deb-, rpm-, apk- oder AUR-Installation gehört `/usr/bin/olivares` dem Paketmanager, daher wird
@@ -172,7 +172,7 @@ das ein Secret oder eine Prüfung benötigt, wird bereitgestellt statt nur teilw
 kommerziellen Binary** — wenn `olivares enterprise` kein Befehl ist, führen Sie noch den
 Community-Build aus, und der obige Austausch hat noch nicht stattgefunden.
 
-Die Konsole tut dasselbe für jede Familie: Die Ansicht **Settings › Edition** listet jede Familie
+Die Konsole tut dasselbe für jede Familie: Die Ansicht **Einstellungen › Edition** listet jede Familie
 mit der Anzahl ihrer eingeschalteten Module. **Einschalten** zeigt vor dem Anwenden denselben Diff,
 und **Ausschalten** nennt die Module, die anhalten. Bei einer Familie, die Ihre Lizenz nicht
 umfasst, bleibt **Einschalten** deaktiviert, und die Zeile sagt es: *Diese Lizenz umfasst* die
@@ -246,7 +246,7 @@ erstellen Sie diesen Dienst dann mit `docker compose up -d --no-deps --force-rec
 neu. Erstellen Sie bei eigenständigem Docker den Container mit diesem Image und demselben Volume
 und denselben Argumenten neu. Behalten Sie das Datenvolume: Verwenden Sie nicht `down --volumes`.
 
-Prüfen Sie nach dem Neustart **Settings › Edition**: Die Edition sollte **Business** anzeigen, und
+Prüfen Sie nach dem Neustart **Einstellungen › Edition**: Die Edition sollte **Business** anzeigen, und
 die installierte Lizenz bleibt im Datenvolume. Enterprise-Verträge verwenden ebenfalls diesen
 kommerziellen Build; ein vertragsspezifisches Artefakt folgt den Anweisungen seines Downloads.
 

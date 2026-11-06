@@ -25,36 +25,16 @@ Olivares AI は、その答えを一か所にまとめます。すでに使っ�
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
-  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Olivares AI コンソールのコックピット画面">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-overview-dark.webp">
+  <img src=".github/assets/console-overview-light.webp" width="840" alt="Olivares AI コンソールの概要画面: ルールに一致した承認と、コストとアカウント付きで作業中の5つのエージェント">
 </picture>
-<br><sub><b>コックピット</b> — 各エージェントが今していること、あなたの承認を待つ操作、アカウントごとの使用量上限。</sub>
+<br><sub><b>概要</b>: 承認が必要なもの、ルールに照らして一致したもの、コスト付きで作業中のすべてのエージェント。</sub>
 <br><br>
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
-  <img src=".github/assets/console-session-light.webp" width="840" alt="Olivares AI コンソールのセッション画面">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-changed-files-dark.webp">
+  <img src=".github/assets/console-changed-files-light.webp" width="840" alt="Olivares AI コンソールで作業中のセッション。変更ペインを開いた状態">
 </picture>
-<br><sub><b>セッション</b> — 会話の横に、計画、エージェント、バックグラウンドタスク、変更されたファイル、使用量上限。</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
-  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Olivares AI コンソールの並列セッション画面">
-</picture>
-<br><sub><b>並列セッション</b> — 6 つのエージェントが並んで作業し、それぞれ専用のブランチで、最新の出力、コスト、使用量上限を表示。</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
-  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Olivares AI コンソールのアクセスマップ画面">
-</picture>
-<br><sub><b>アクセスマップ</b> — 各エージェントが何を読み書きするかを、付与された権限と照らし合わせて表示。</sub>
-</div>
-
-<div align="center">
-<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
-<br><sub><b>カタログ</b>： 承認済みのエージェント、MCP サーバー、スキル、コネクタ。それぞれの状態と署名の有無を表示。</sub>
-<br><br>
-<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
-<br><sub><b>ワーク</b>： セッションが終わっても残るタスク、担当者、決定。</sub>
+<br><sub><b>セッション</b>: 変更したファイルと並んだ会話。</sub>
 </div>
 
 [対応ツール](docs-site/src/content/docs/reference/supported-tools.md) (English).

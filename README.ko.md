@@ -22,36 +22,16 @@ Olivares AI는 이 질문에 한곳에서 답합니다. 이미 쓰고 있는 에
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
-  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Olivares AI 콘솔의 콕핏 화면">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-overview-dark.webp">
+  <img src=".github/assets/console-overview-light.webp" width="840" alt="Olivares AI 콘솔의 개요 화면: 규칙과 일치한 승인 하나와 비용 및 계정이 표시된 작업 중 에이전트 다섯 개">
 </picture>
-<br><sub><b>콕핏</b> — 모든 에이전트가 지금 하는 일, 승인을 기다리는 항목, 계정별 사용량 한도.</sub>
+<br><sub><b>개요</b>: 승인이 필요한 항목, 규칙에 맞춘 결과, 그리고 비용과 함께 작업 중인 모든 에이전트.</sub>
 <br><br>
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
-  <img src=".github/assets/console-session-light.webp" width="840" alt="Olivares AI 콘솔의 세션 화면">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-changed-files-dark.webp">
+  <img src=".github/assets/console-changed-files-light.webp" width="840" alt="Olivares AI 콘솔에서 작업 중인 세션, 변경 패널이 열린 상태">
 </picture>
-<br><sub><b>세션</b> — 대화 옆에 계획, 에이전트, 백그라운드 작업, 변경된 파일, 사용량 한도.</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
-  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Olivares AI 콘솔의 병렬 세션 화면">
-</picture>
-<br><sub><b>병렬 세션</b> — 에이전트 6개가 나란히 작업하며, 각자 자기 브랜치에서 최근 출력, 비용, 사용량 한도를 보여 줍니다.</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
-  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Olivares AI 콘솔의 액세스 맵 화면">
-</picture>
-<br><sub><b>액세스 맵</b> — 각 에이전트가 읽고 쓰는 항목을 부여된 권한과 대조해 확인합니다.</sub>
-</div>
-
-<div align="center">
-<img src=".github/assets/console-catalog-light.png" width="840" alt="카탈로그 페이지: 승인된 에이전트, MCP 서버, 스킬, 커넥터, 템플릿, 모델과 각각의 버전, 상태, 서명.">
-<br><sub><b>카탈로그</b>: 승인된 에이전트, MCP 서버, 스킬, 커넥터와 각각의 상태, 서명 여부.</sub>
-<br><br>
-<img src=".github/assets/console-work-light.png" width="840" alt="작업 페이지: 공유 작업 항목과 각각의 유형, 담당자, 상태.">
-<br><sub><b>작업</b>: 세션이 끝나도 남는 작업, 담당자, 결정.</sub>
+<br><sub><b>세션</b>: 변경한 파일과 나란히 보이는 대화.</sub>
 </div>
 
 [지원 도구](docs-site/src/content/docs/reference/supported-tools.md) (영어): 통합 깊이, 여러 에이전트를 한 작업에 경쟁시키기, 리뷰와 배포.

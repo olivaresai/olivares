@@ -93,6 +93,9 @@ See [versioning](INSTALL.md#versioning) for the release policy.
 - Provider and model setup brings tools, accounts, sign-ins, presets, usage and capacity into a consistent flow. New session defaults to your own sessions, an account with capacity, and simple provider, model and folder pickers. When provider accounts are configured, `olivares session start` without `--account` uses the first account with capacity rather than the host's own login; if every account is at its limit, the start is refused.
 
 - Installation, upgrade and licence prompts share a consistent interactive flow. Documentation redirects, localized pages, generated CLI references and provider guidance have been refreshed.
+- **Skill assignment changes reach running sessions.** Pinning, updating or removing a skill assignment refreshes matching live sessions without restarting their tools, and a resumed session uses the current assignments.
+- **Behavior change: confined sessions get their own HOME.** A supported native confined session gets an engine-made, read-only discovery HOME even with no skill assigned, so HOME is no longer the account home. Tools reach other dotfiles in the account home only through what they are granted.
+- **Template editor:** a template with a tool allowlist and no stated permission mode shows `dontAsk`, the mode a launch from it runs under.
 
 ### Added
 
@@ -147,6 +150,7 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   and package removal stop it. `OLIVARES_SESSION_MAX_PER_USER` is off by default;
   when enabled, it limits how many sessions one person can have running and
   refuses the next launch with 429 and one sentence.
+- **Console skill-pack upload:** install a skill pack from a local `.zip` or `.tar.gz` archive, or from a folder that is zipped on upload.
 
 ### Fixed
 

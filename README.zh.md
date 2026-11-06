@@ -25,36 +25,16 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
-  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Olivares AI 控制台的驾驶舱页面">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-overview-dark.webp">
+  <img src=".github/assets/console-overview-light.webp" width="840" alt="Olivares AI 控制台的概览页面：一项与规则匹配的审批，以及五个正在工作的代理及其费用和账户">
 </picture>
-<br><sub><b>驾驶舱</b> — 每个 agent 正在做什么、等待你审批的操作，以及每个账户的用量限制。</sub>
+<br><sub><b>概览</b>：需要您审批的事项、与您的规则匹配的结果，以及每个正在工作的代理及其费用。</sub>
 <br><br>
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
-  <img src=".github/assets/console-session-light.webp" width="840" alt="Olivares AI 控制台的会话页面">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-changed-files-dark.webp">
+  <img src=".github/assets/console-changed-files-light.webp" width="840" alt="Olivares AI 控制台中正在工作的会话，已打开“更改”面板">
 </picture>
-<br><sub><b>会话</b> — 对话旁边是它的计划、agent、后台任务、已更改的文件和用量限制。</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
-  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Olivares AI 控制台的并行会话页面">
-</picture>
-<br><sub><b>并行会话</b> — 六个 agent 并排工作，各自在自己的分支上，显示最新输出、成本和用量限制。</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
-  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Olivares AI 控制台的访问图页面">
-</picture>
-<br><sub><b>访问图</b> — 每个 agent 读取和写入了什么，并与授予它的权限对照。</sub>
-</div>
-
-<div align="center">
-<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
-<br><sub><b>目录</b>： 已批准的 agent、MCP 服务器、skill 和连接器，每项都有状态和签名情况。</sub>
-<br><br>
-<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
-<br><sub><b>工作</b>： 会话结束后仍然保留的任务、负责人和决定。</sub>
+<br><sub><b>会话</b>：对话与其所更改的文件并列显示。</sub>
 </div>
 
 [支持的工具](docs-site/src/content/docs/reference/supported-tools.md) (English).

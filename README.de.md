@@ -25,36 +25,16 @@ Olivares AI beantwortet diese Fragen an einem Ort. Es verbindet sich mit den Age
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
-  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Die Ansicht Cockpit der Olivares-AI-Konsole">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-overview-dark.webp">
+  <img src=".github/assets/console-overview-light.webp" width="840" alt="Die Übersicht der Olivares-AI-Konsole: eine Freigabe, die einer Regel entspricht, und fünf Agenten bei der Arbeit mit ihren Kosten und ihrem Konto">
 </picture>
-<br><sub><b>Cockpit</b> — was jeder Agent gerade tut, welche Freigaben auf Sie warten und die Nutzungslimits jedes Kontos.</sub>
+<br><sub><b>Übersicht</b>: was auf Ihre Freigabe wartet, abgeglichen mit Ihren Regeln, und jeder Agent bei der Arbeit mit seinen Kosten.</sub>
 <br><br>
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
-  <img src=".github/assets/console-session-light.webp" width="840" alt="Die Ansicht Sitzung der Olivares-AI-Konsole">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-changed-files-dark.webp">
+  <img src=".github/assets/console-changed-files-light.webp" width="840" alt="Eine Sitzung bei der Arbeit in der Olivares-AI-Konsole, mit geöffnetem Bereich Änderungen">
 </picture>
-<br><sub><b>Sitzung</b> — das Gespräch neben Plan, Agenten, Hintergrundaufgaben, geänderten Dateien und Nutzungslimits.</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
-  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Die Ansicht Parallele Sitzungen der Olivares-AI-Konsole">
-</picture>
-<br><sub><b>Parallele Sitzungen</b> — sechs Agenten arbeiten nebeneinander, jeder in seinem eigenen Branch, mit letzter Ausgabe, Kosten und Nutzungslimit.</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
-  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Die Ansicht Access Map der Olivares-AI-Konsole">
-</picture>
-<br><sub><b>Access Map</b> — was jeder Agent liest und schreibt, abgeglichen mit dem, was ihm gewährt wurde.</sub>
-</div>
-
-<div align="center">
-<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
-<br><sub><b>Katalog</b>: freigegebene Agenten, MCP-Server, Skills und Konnektoren, jeweils mit Status und Signatur.</sub>
-<br><br>
-<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
-<br><sub><b>Arbeit</b>: Aufgaben, Verantwortliche und Entscheidungen, die bleiben, wenn eine Sitzung endet.</sub>
+<br><sub><b>Sitzung</b>: das Gespräch neben den Dateien, die es geändert hat.</sub>
 </div>
 
 [Unterstützte Werkzeuge](docs-site/src/content/docs/reference/supported-tools.md) (English).

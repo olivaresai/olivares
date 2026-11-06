@@ -99,7 +99,7 @@ olivares license status --data-dir /var/lib/olivares
 
 在 Community 构建上安装有效的 Business 或 Enterprise 许可证，该构建会继续运行。
 会话驾驶舱（session cockpit）和其他商业页面只有在你把这个安装切换到 Business 之后才会出现。
-控制台的 **Settings › Edition** 视图会把已安装的许可证与构建分开显示。**Expires** 是付费期限；
+控制台的 **设置 › 版本** 视图会把已安装的许可证与构建分开显示。**Expires** 是付费期限；
 **Lease until**（显示时）是另一个独立的临时实例租约。在 Docker 中运行？请看下面的
 [Docker 与 Compose](#docker-与-compose)。
 
@@ -117,7 +117,7 @@ export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is c
 olivares upgrade --edition business
 ```
 
-`olivares license install` 和 `olivares license status` 会按这套安装的安装方式打印确切的命令，控制台的 **Settings › Edition** 视图也以一个按钮 **切换到 Business** 显示同一步骤：引擎下载构建、验证、原地替换并在其上重启。下载令牌在许可下载门户的 **Downloads** 页面（[https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)）中，与这些命令并列，也在您的许可邮件里；如上按名称传递，以免它出现在进程列表中。已连接的安装（`olivares license connect start`）不需要令牌。`--enterprise` 是同一路由的旧写法。控制台按钮需要二者之一：引擎自身环境中的令牌，或这次连接；两者都没有时，视图会改为显示命令。
+`olivares license install` 和 `olivares license status` 会按这套安装的安装方式打印确切的命令，控制台的 **设置 › 版本** 视图也以一个按钮 **切换到 Business** 显示同一步骤：引擎下载构建、验证、原地替换并在其上重启。下载令牌在许可下载门户的 **Downloads** 页面（[https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)）中，与这些命令并列，也在您的许可邮件里；如上按名称传递，以免它出现在进程列表中。已连接的安装（`olivares license connect start`）不需要令牌。`--enterprise` 是同一路由的旧写法。控制台按钮需要二者之一：引擎自身环境中的令牌，或这次连接；两者都没有时，视图会改为显示命令。
 
 :::caution[软件包安装]
 在 deb、rpm、apk 或 AUR 安装上，`/usr/bin/olivares` 由包管理器拥有，因此该命令会被拒绝：它在下载任何内容
@@ -146,7 +146,7 @@ olivares enterprise enable <preset>     # starter | regulated | full
 这些命令**仅存在于 Business 二进制文件中**——如果 `olivares enterprise` 不是一个命令，
 说明你仍在运行 Community 构建，上述切换尚未发生。
 
-控制台也可以按系列执行同样的操作：**Settings › Edition** 视图列出每个系列及其已开启的模块数量。
+控制台也可以按系列执行同样的操作：**设置 › 版本** 视图列出每个系列及其已开启的模块数量。
 **开启** 会在应用前显示同样的 diff，**关闭** 会列出将要停止的模块。许可证不包含的系列，其
 **开启** 按钮保持禁用，并注明 *此许可证不包含* 该系列。无论通过控制台还是 CLI，引擎每次开启时
 都会重新检查许可证，因此过期或缺失的许可证无法开启任何系列。
@@ -204,7 +204,7 @@ docker build --build-arg COMMUNITY_IMAGE=docker.io/olivaresai/olivares@sha256:<d
 `docker compose up -d --no-deps --force-recreate olivares` 重新创建该服务。对于独立的 Docker，
 请用这个镜像以及相同的数据卷和参数重新创建容器。保留数据卷：不要使用 `down --volumes`。
 
-重启后请检查 **Settings › Edition**：版本应显示为 **Business**，已安装的许可证仍保存在数据卷中。
+重启后请检查 **设置 › 版本**：版本应显示为 **Business**，已安装的许可证仍保存在数据卷中。
 Enterprise 合同也使用这个商业构建；合同特定的制品按其下载说明处理。
 
 ## 移除许可证

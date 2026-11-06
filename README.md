@@ -24,10 +24,10 @@ Olivares AI answers them in one place. It connects to the agents and tools you a
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-sessions-dark.webp">
-  <img src=".github/assets/console-sessions-light.webp" width="840" alt="The Sessions screen of the Olivares AI console, with sessions that need you, sessions working and today's cost">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-overview-dark.webp">
+  <img src=".github/assets/console-overview-light.webp" width="840" alt="The Overview screen of the Olivares AI console: an approval matched to a rule, and five agents at work with their cost and account">
 </picture>
-<br><sub><b>Sessions</b>: what needs you, what is working and what it cost today.</sub>
+<br><sub><b>Overview</b>: what needs your approval, matched to your rules, and every agent at work with its cost.</sub>
 <br><br>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-changed-files-dark.webp">

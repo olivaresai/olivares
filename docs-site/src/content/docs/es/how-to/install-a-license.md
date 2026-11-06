@@ -113,7 +113,7 @@ Ejecútalo después de cada instalación y después de retirar un override.
 
 Instalar una licencia Business o Enterprise válida en una compilación Community no
 detiene esa compilación. El cockpit de sesiones y las demás páginas comerciales solo
-aparecen después de que cambies esta instalación a Business. La vista **Settings › Edition**
+aparecen después de que cambies esta instalación a Business. La vista **Ajustes › Edición**
 de la consola nombra la licencia instalada por separado de la compilación. **Expires** es el
 plazo de pago; **Lease until**, cuando se muestra, es el arrendamiento provisional de la
 instancia, que es independiente. ¿Ejecutas en Docker? Ve a
@@ -134,7 +134,7 @@ export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is c
 olivares upgrade --edition business
 ```
 
-`olivares license install` y `olivares license status` muestran el comando exacto para la forma en que se instaló esta instalación, y la vista **Settings › Edition** de la consola ofrece el mismo paso como un botón, **Cambiar a Business**: el motor descarga el build, lo verifica, lo sustituye en su sitio y se reinicia con él. El token de descarga está en la página **Downloads** del portal de descargas con licencia ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), junto a estos comandos, y en tu correo de licencia; pásalo por su nombre, como arriba, para que no aparezca en la lista de procesos. Una instalación conectada (`olivares license connect start`) no necesita token. `--enterprise` es la grafía antigua de la misma ruta. El botón de la consola necesita una de las dos cosas, el token en el entorno del propio motor o esta conexión; sin ninguna de las dos, la vista muestra el comando.
+`olivares license install` y `olivares license status` muestran el comando exacto para la forma en que se instaló esta instalación, y la vista **Ajustes › Edición** de la consola ofrece el mismo paso como un botón, **Cambiar a Business**: el motor descarga el build, lo verifica, lo sustituye en su sitio y se reinicia con él. El token de descarga está en la página **Downloads** del portal de descargas con licencia ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), junto a estos comandos, y en tu correo de licencia; pásalo por su nombre, como arriba, para que no aparezca en la lista de procesos. Una instalación conectada (`olivares license connect start`) no necesita token. `--enterprise` es la grafía antigua de la misma ruta. El botón de la consola necesita una de las dos cosas, el token en el entorno del propio motor o esta conexión; sin ninguna de las dos, la vista muestra el comando.
 
 :::caution[Instalaciones por paquete]
 En una instalación deb, rpm, apk o AUR el gestor de paquetes es el dueño de `/usr/bin/olivares`, así que
@@ -168,7 +168,7 @@ cualquier módulo que necesite un secreto o una revisión, en lugar de activarlo
 binario comercial**: si `olivares enterprise` no es un comando, todavía ejecutas la
 compilación Community y el cambio anterior aún no se ha producido.
 
-La consola hace lo mismo para cada familia: la vista **Settings › Edition** lista cada familia
+La consola hace lo mismo para cada familia: la vista **Ajustes › Edición** lista cada familia
 con cuántos de sus módulos están activados. **Activar** muestra el mismo diff antes de aplicarlo,
 y **Desactivar** nombra los módulos que se detienen. Una familia que tu licencia no incluye
 mantiene **Activar** deshabilitado y lo dice: *Esta licencia no incluye* la familia. El motor
@@ -240,7 +240,7 @@ ese servicio con `docker compose up -d --no-deps --force-recreate olivares`. Con
 independiente, recrea el contenedor con esta imagen y el mismo volumen y los mismos
 argumentos. Conserva el volumen de datos: no uses `down --volumes`.
 
-Comprueba **Settings › Edition** tras el reinicio: la edición debe indicar **Business**, y la
+Comprueba **Ajustes › Edición** tras el reinicio: la edición debe indicar **Business**, y la
 licencia instalada permanece en el volumen de datos. Los contratos Enterprise usan también esta
 compilación comercial; cualquier artefacto específico del contrato sigue las instrucciones de su descarga.
 

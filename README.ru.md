@@ -25,36 +25,16 @@ Olivares AI собирает ответы в одном месте. Он под�
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
-  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Экран «Кокпит» консоли Olivares AI">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-overview-dark.webp">
+  <img src=".github/assets/console-overview-light.webp" width="840" alt="Экран «Обзор» консоли Olivares AI: запрос на одобрение, совпавший с правилом, и пять агентов в работе с их стоимостью и аккаунтом">
 </picture>
-<br><sub><b>Кокпит</b> — что сейчас делает каждый агент, какие одобрения ждут вас и лимиты использования каждой учётной записи.</sub>
+<br><sub><b>Обзор</b>: что ждёт вашего одобрения по вашим правилам и каждый агент в работе с его стоимостью.</sub>
 <br><br>
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
-  <img src=".github/assets/console-session-light.webp" width="840" alt="Экран «Сессия» консоли Olivares AI">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-changed-files-dark.webp">
+  <img src=".github/assets/console-changed-files-light.webp" width="840" alt="Сессия в работе в консоли Olivares AI с открытой панелью «Изменения»">
 </picture>
-<br><sub><b>Сессия</b> — разговор рядом с планом, агентами, фоновыми задачами, изменёнными файлами и лимитами использования.</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
-  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Экран «Параллельные сессии» консоли Olivares AI">
-</picture>
-<br><sub><b>Параллельные сессии</b> — шесть агентов работают рядом, каждый в своей ветке, с последним выводом, стоимостью и лимитом использования.</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
-  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Экран «Карта доступа» консоли Olivares AI">
-</picture>
-<br><sub><b>Карта доступа</b> — что каждый агент читает и записывает, в сравнении с тем, что ему разрешено.</sub>
-</div>
-
-<div align="center">
-<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
-<br><sub><b>Каталог</b>: утверждённые агенты, MCP-серверы, навыки и коннекторы, у каждого статус и подпись.</sub>
-<br><br>
-<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
-<br><sub><b>Работа</b>: задачи, ответственные и решения, которые остаются после завершения сессии.</sub>
+<br><sub><b>Сессия</b>: разговор рядом с файлами, которые она изменила.</sub>
 </div>
 
 [Поддерживаемые инструменты](docs-site/src/content/docs/reference/supported-tools.md) (English).

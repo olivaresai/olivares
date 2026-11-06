@@ -653,7 +653,7 @@ describe('the Ledger entries', () => {
     ])
   })
 
-  it('paints one orange mark however many requests wait for a person', async () => {
+  it('marks the requests that need a person with words, not an orange edge', async () => {
     const askedAgain = entry(45, {
       action: 'governance.approval.create',
       target_kind: 'governance.approval',
@@ -679,11 +679,14 @@ describe('the Ledger entries', () => {
         expect.stringMatching(/Approval requested/),
       ]),
     )
-    // The accent is the one thing that needs a person: the group, once.
+    // No coloured edge or accent in the list: the "Needs you" label carries the state.
     const orange = [...list.querySelectorAll('*')].filter((el) =>
-      /\b(bg|text|border)-accent/.test(el.getAttribute('class') ?? ''),
+      /\b(before:)?(bg|text|border)-accent/.test(
+        el.getAttribute('class') ?? '',
+      ),
     )
-    expect(orange).toHaveLength(1)
+    expect(orange).toHaveLength(0)
+    expect(within(list).getAllByText('Needs you')[0]).toBeVisible()
     // That mark is the list's own, so every list holds items only (axe `list`).
     for (const ul of list.querySelectorAll('ul'))
       for (const child of ul.children) expect(child.tagName).toBe('LI')
