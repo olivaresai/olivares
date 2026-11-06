@@ -112,6 +112,9 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 			return workspaceDTO{}, err
 		}
 	}
+	if err := m.guardRecordsRegistration(ctx, tenant, rootReal); err != nil {
+		return workspaceDTO{}, err
+	}
 	if p.MountMode != mountRO {
 		// Probe as the engine user: mode bits alone miss ACLs and read-only mounts.
 		probe, err := os.MkdirTemp(rootReal, ".olivares-write-check-")
@@ -251,7 +254,14 @@ func (m *Module) getWorkspace(ctx context.Context, tenant model.TenantID, ref st
 // inherit grants through it. The deregister audit and row delete are ATOMIC (deny-closed:
 // no deregistration without recorded evidence).
 func (m *Module) deleteWorkspace(ctx context.Context, tenant model.TenantID, ref, actor, actorKind string) error {
-	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	rec, err := m.loadWorkspaceRec(ctx, tenant, ref)
+	if err != nil {
+		return err
+	}
+	if err := m.guardRecordsRegistration(ctx, tenant, rec.String(colWsRootPath)); err != nil {
+		return err
+	}
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err

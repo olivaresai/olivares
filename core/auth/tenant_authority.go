@@ -401,3 +401,100 @@ func joinOrConsent(ctx context.Context, as store.AuthScope, u model.User, t mode
 	}
 	return false, false, ErrConsentRequired
 }
+
+// RevokeTenantCredentials ends existing credential authority in one tenant,
+// without removing membership or changing the account's other organizations.
+// Account-wide sessions receive only a tenant-specific exclusion, so their
+// bindings cannot continue there; the person may sign in afresh as a mover.
+// A leaver may already have no membership when this idempotent step runs.
+func (a *Authenticator) RevokeTenantCredentials(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID) error {
+	if a == nil || a.st == nil || !ownSessionActor(actor) || user.IsZero() {
+		return ErrUnauthenticated
+	}
+	if tenant.IsZero() || tenant.IsSystem() {
+		return ErrInvalidToken
+	}
+	if _, confined := actor.ConfinedWorkspaceIn(tenant); confined {
+		return ErrWorkspaceConfined
+	}
+	if actor.UserID == user {
+		return ErrCurrentSession
+	}
+	ctx = a.withStepUpPolicy(ctx)
+	_ = StepUpPolicyFrom(ctx)
+	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := prepareUserAuthorityWrite(ctx, as, actor.UserID, user); err != nil {
+			return err
+		}
+		session, err := as.Sessions().Get(ctx, actor.CredID)
+		if err != nil {
+			return err
+		}
+		current, err := a.principalFromSession(ctx, as, session)
+		if err != nil {
+			return err
+		}
+		ref, valid := actor.Ref()
+		if !valid || ref.version != session.Version || !ownsSession(actor, session) {
+			return ErrUnauthenticated
+		}
+		if !current.SessionScope().IsZero() && current.SessionScope() != tenant {
+			return ErrInvalidToken
+		}
+		if _, confined := current.ConfinedWorkspaceIn(tenant); confined {
+			return ErrWorkspaceConfined
+		}
+		if current.ExcludedFrom(tenant) {
+			return ErrUnauthenticated
+		}
+		if !StepUpSatisfied(ctx, current) {
+			return ErrStepUpRequired
+		}
+		role, _ := current.RoleIn(tenant)
+		if !current.Superadmin && role != RoleOwner && role != RoleAdmin {
+			return ErrRoleCeiling
+		}
+		target, err := as.Users().Get(ctx, user)
+		if err != nil {
+			return err
+		}
+		grants, _, _, err := loadGrants(ctx, as, user, target.IsSuperadmin)
+		if err != nil {
+			return err
+		}
+		ceiling := grants[tenant]
+		if target.IsSuperadmin {
+			ceiling = RoleOwner
+		}
+		if err := checkRoleCeiling(current, tenant, ceiling); err != nil {
+			return err
+		}
+		if err := revokeTenantTokens(ctx, as, current, user, tenant); err != nil {
+			return err
+		}
+		if err := excludeAccountSessions(ctx, as, current, user, tenant); err != nil {
+			return err
+		}
+		return metaAudit(ctx, as, current, "auth.credentials.tenant_revoke", "core.user", user, map[string]any{"tenant": tenant.String()})
+	})
+}
+
+// AccountGovernedByTenant reports the native account-governance rule for a
+// trusted caller's known tenant subject, including after a scoped departure.
+// The caller must authorize this read and establish the subject's tenant link;
+// the method returns no global account attributes and makes no changes.
+func (a *Authenticator) AccountGovernedByTenant(ctx context.Context, tenant model.TenantID, user model.ID) (bool, error) {
+	if a == nil || a.st == nil || tenant.IsZero() || tenant.IsSystem() || user.IsZero() {
+		return false, ErrInvalidToken
+	}
+	var governed bool
+	err := a.st.AuthView(ctx, func(as store.AuthScope) error {
+		u, err := as.Users().Get(ctx, user)
+		if err != nil {
+			return err
+		}
+		governed, err = tenantGoverned(ctx, as, u, tenant)
+		return err
+	})
+	return governed, err
+}

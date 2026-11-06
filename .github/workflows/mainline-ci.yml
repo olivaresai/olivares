@@ -56,8 +56,8 @@ jobs:
     # job does not need classify and keeps running on every push.
     #
     # A repository that sets OLIVARES_DEV_CI to 'true' (the opt-in pr-ci.yml reads) is selected
-    # as well. Without it a development repository ran this workflow as one job, `secrets`, and
-    # reported success with the functional shards skipped.
+    # as well. Without it a development repository runs this workflow as one job, `secrets`, whose
+    # last step ends that run red: a run with the functional shards skipped never reports success.
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
     # CI_RUNNER_LIGHT FIRST (2026-08-01). This job gates every other one through
     # `needs`, so a run cannot start while it queues — and measured today, it was
@@ -5060,6 +5060,14 @@ jobs:
         uses: ./.github/actions/pr-failure-report
         with:
           steps-json: ${{ toJSON(steps) }}
+      # Where classify is not selected this scan is the whole run: end it red, not green, so a skipped
+      # suite is never read as a passed one.
+      - name: the suite behind classify ran in this repository
+        if: ${{ !(github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true') }}
+        timeout-minutes: 1
+        run: |
+          echo "::error::mainline-ci ran only its secrets scan: classify and every job behind it are not selected in this repository (set OLIVARES_DEV_CI to 'true' to run them)."
+          exit 1
 
   # Source-level SAST (E1): gosec over every module, blocking only the curated
   # high-signal rules (injection, SSRF, weak crypto, TLS misconfig). Needs gosec, so it

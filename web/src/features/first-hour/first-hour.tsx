@@ -1651,37 +1651,60 @@ function StartSessionChoices({
           ) : (
             <Loader2 aria-hidden className="size-4 animate-spin text-text-3" />
           )}
-          <Button
-            type="submit"
-            variant="primary"
-            size="icon"
-            className="ms-auto pointer-coarse:size-11"
-            aria-label={
-              start.isPending ? t('start.starting') : t('start.start')
-            }
-            aria-describedby={
-              tool && !toolReady
-                ? notReadyId
-                : needsKeyModel
-                  ? keyModelId
-                  : undefined
-            }
+          <DisabledReason
+            className="ms-auto max-w-full"
+            mode="native"
             disabled={
               !current ||
               defaultsLoading ||
               permissionBlocked ||
               start.isPending ||
-              !toolReady ||
-              speedUnavailable ||
-              (noDefault && !model)
+              speedUnavailable
+            }
+            reason={
+              start.isPending
+                ? t('start.starting')
+                : permissionBlocked
+                  ? restriction.reason || t('common:commandPalette.deniedHelp')
+                  : speedUnavailable
+                    ? t('agentops:create.speedUnavailable')
+                    : defaultsLoading
+                      ? t('common:states.loading')
+                      : t('start.readingFolder')
             }
           >
-            {start.isPending ? (
-              <Loader2 aria-hidden className="animate-spin" />
-            ) : (
-              <ArrowUp aria-hidden />
-            )}
-          </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="icon"
+              className="ms-auto pointer-coarse:size-11"
+              aria-label={
+                start.isPending ? t('start.starting') : t('start.start')
+              }
+              aria-describedby={
+                tool && !toolReady
+                  ? notReadyId
+                  : needsKeyModel
+                    ? keyModelId
+                    : undefined
+              }
+              disabled={
+                !current ||
+                defaultsLoading ||
+                permissionBlocked ||
+                start.isPending ||
+                !toolReady ||
+                speedUnavailable ||
+                (noDefault && !model)
+              }
+            >
+              {start.isPending ? (
+                <Loader2 aria-hidden className="animate-spin" />
+              ) : (
+                <ArrowUp aria-hidden />
+              )}
+            </Button>
+          </DisabledReason>
         </div>
         {fallbackNote}
         {notReadyNote}
@@ -2037,16 +2060,22 @@ function StartSessionChoices({
         <DisabledReason
           className="w-full"
           disabled={
-            permissionBlocked || !current || speedUnavailable || needsKeyModel
+            permissionBlocked ||
+            !current ||
+            defaultsLoading ||
+            speedUnavailable ||
+            needsKeyModel
           }
           reason={
             permissionBlocked
               ? (restriction.reason ?? '')
               : speedUnavailable
                 ? t('agentops:create.speedUnavailable')
-                : !current
-                  ? t('start.readingFolder')
-                  : keyModelReason
+                : defaultsLoading
+                  ? t('common:states.loading')
+                  : !current
+                    ? t('start.readingFolder')
+                    : keyModelReason
           }
           mode="native"
         >

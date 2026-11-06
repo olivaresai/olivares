@@ -65,7 +65,7 @@ func personalFolderAdmits(resource model.Resource, p auth.Principal, right auth.
 }
 
 // UsePersonalFilesRoot late-binds the directory that holds one folder per person
-// (<root>/<user-id>), wired by the composition root inside the data directory so
+// (scoped by organization and person), wired inside the data directory so
 // the backup and the pre-upgrade snapshot cover it. Empty leaves personal folders
 // off on this node.
 func (m *Module) UsePersonalFilesRoot(dir string) error {
@@ -95,52 +95,95 @@ func (m *Module) ensurePersonalFolder(ctx context.Context, tenant model.TenantID
 	}
 	m.rt.personalMu.Lock()
 	defer m.rt.personalMu.Unlock()
-	dir := filepath.Join(root, p.UserID.String())
-	if err := os.MkdirAll(dir, personalFolderMode); err != nil {
-		return "", fmt.Errorf("create personal folder: %w", err)
+	if err := os.MkdirAll(root, personalFolderMode); err != nil {
+		return "", fmt.Errorf("create personal files root: %w", err)
 	}
-	// An existing directory may carry another mode (a umask, a restore): bring it to
-	// the private one rather than report a mode this plane did not check.
-	if err := os.Chmod(dir, personalFolderMode); err != nil {
-		return "", fmt.Errorf("make personal folder private: %w", err)
-	}
-	real, err := filepath.EvalSymlinks(dir)
+	canonicalRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return "", fmt.Errorf("resolve personal folder: %w", err)
+		return "", fmt.Errorf("resolve personal files root: %w", err)
 	}
-	var ref string
-	err = m.Data.View(ctx, tenant, func(sc store.Scope) error {
-		repo, err := sc.Ext(workspaceKind)
+	primary := filepath.Join(canonicalRoot, p.UserID.String())
+	dir := primary
+	for generation := 0; generation < ownershipInventoryLimit; generation++ {
+		real := dir
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			real = resolved
+		} else if !os.IsNotExist(err) {
+			return "", fmt.Errorf("resolve personal folder: %w", err)
+		}
+		var ref string
+		var transferred model.ID
+		registered := false
+		err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
+			repo, err := sc.Ext(workspaceKind)
+			if err != nil {
+				return err
+			}
+			rows, _, err := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colWsRootPath, real)}, Limit: 1})
+			if err != nil || len(rows) == 0 {
+				return err
+			}
+			registered = true
+			resource, err := sc.Resources().Get(ctx, recordID(rows[0]))
+			if err != nil {
+				return err
+			}
+			if resource.Owner != owner {
+				if rows[0].Bool(colWsTransferred) && strings.HasPrefix(resource.Owner, personalOwnerPrefix) {
+					transferred = resource.ID
+					return nil
+				}
+				return errors.New("the personal folder path is registered as another folder")
+			}
+			ref = rows[0].String(colWsRef)
+			return nil
+		})
 		if err != nil {
-			return err
+			return "", err
 		}
-		recs, _, err := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colWsRootPath, real)}, Limit: 1})
-		if err != nil || len(recs) == 0 {
-			return err
+		if !registered && dir == primary {
+			// Only an existing registration in this organization may reuse the old
+			// account-only path. New allocations always have a tenant namespace,
+			// including two organizations allocating the person's first folder at once.
+			dir = filepath.Join(canonicalRoot, "tenant-"+tenant.String(), p.UserID.String())
+			continue
 		}
-		resource, err := sc.Resources().Get(ctx, model.ID(recs[0].String(model.ColID)))
+		if !transferred.IsZero() {
+			// Siblings keep the successor's folder from enclosing the mover's new files.
+			// The prior registration ID makes concurrent nodes choose one stable path.
+			dir = filepath.Join(filepath.Dir(dir), p.UserID.String()+"-"+transferred.String())
+			continue
+		}
+		if !registered && real != dir {
+			return "", errors.New("a new personal folder must stay in its tenant namespace")
+		}
+		if err := os.MkdirAll(dir, personalFolderMode); err != nil {
+			return "", fmt.Errorf("create personal folder: %w", err)
+		}
+		resolved, err := filepath.EvalSymlinks(dir)
 		if err != nil {
-			return err
+			return "", fmt.Errorf("resolve personal folder: %w", err)
 		}
-		// A folder an administrator registered at this path is not the person's own:
-		// it would be shared, so it is refused, never adopted.
-		if resource.Owner != owner {
-			return errors.New("the personal folder path is registered as another folder")
+		if !registered && resolved != dir {
+			return "", errors.New("a new personal folder must stay in its tenant namespace")
 		}
-		ref = recs[0].String(colWsRef)
-		return nil
-	})
-	if err != nil || ref != "" {
-		return ref, err
+		// Repair modes only on this person's registered folder or on its new,
+		// tenant-scoped allocation, never while probing another owner's old path.
+		if err := os.Chmod(resolved, personalFolderMode); err != nil {
+			return "", fmt.Errorf("make personal folder private: %w", err)
+		}
+		if ref != "" {
+			return ref, nil
+		}
+		department, _ := p.ConfinedWorkspaceIn(tenant)
+		created, err := m.createWorkspace(ctx, tenant, CreateWorkspaceParams{Department: department, Name: personalFolderName, RootPath: resolved, MountMode: mountRW, Owner: owner, Actor: p.Actor(), ActorKind: p.ActorKind()})
+		if err != nil {
+			return "", err
+		}
+		return created.WorkspaceRef, nil
 	}
-	created, err := m.createWorkspace(ctx, tenant, CreateWorkspaceParams{
-		Name: personalFolderName, RootPath: real, MountMode: mountRW, Owner: owner,
-		Actor: p.Actor(), ActorKind: p.ActorKind(),
-	})
-	if err != nil {
-		return "", err
-	}
-	return created.WorkspaceRef, nil
+
+	return "", errors.New("personal folder ownership history is too long")
 }
 
 // orgSettingPersonalFolders is the tenant's Org.Settings key for personal folders.

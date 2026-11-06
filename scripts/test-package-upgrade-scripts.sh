@@ -612,6 +612,32 @@ if seed_install deb new; then
 	elif [[ ! -s "$box/var/lib/olivares-package/upgrade-snapshot" ]]; then not_ok "$case_id: the request is gone"
 	else ok "$case_id: rc=0, the relabel named on stderr, the request kept"; fi
 fi
+# The transaction owner holds the lock on the root-only snapshot directory through DNF; a request it
+# left behind is not this transaction's once the lock is free (a later plain rpm or dnf upgrade). A
+# lock on the world-readable package state directory, which any local user can take, is not the owner's.
+for owner in held free other; do
+	case_id="upgrade with the transaction lock $owner and a completed data snapshot request"
+	new_box "pretransaction-request-$owner"
+	seed_install rpm new || continue
+	digest=0123456789abcdef0123456789abcdef
+	mkdir -p "$box/var/lib/olivares-snapshots/$digest" "$box/var/lib/olivares-package"
+	printf 'upgrade-snapshot.%s\n' "$digest" >"$box/var/lib/olivares-package/upgrade-snapshot"
+	set_state enabled active
+	case "$owner" in
+	held) exec 9<"$box/var/lib/olivares-snapshots" ;;
+	other) exec 9<"$box/var/lib/olivares-package" ;;
+	esac
+	[[ "$owner" == free ]] || flock -n 9 || could_not_look "could not hold the $owner lock"
+	run new postinstall.sh 2
+	[[ "$owner" == free ]] || exec 9<&-
+	request=$(cat "$box/var/lib/olivares-package/upgrade-snapshot" 2>/dev/null || true)
+	if [[ "$last_rc" != 0 ]]; then not_ok "$case_id: rc=$last_rc"
+	elif [[ "$owner" == held && "$request" != "upgrade-snapshot.$digest" ]]; then
+		not_ok "$case_id: the package replaced the request of the data snapshot"
+	elif [[ "$owner" != held && ( "$request" == "upgrade-snapshot.$digest" || "$request" != upgrade-snapshot.* ) ]]; then
+		not_ok "$case_id: the package kept a request no owner transaction holds ('$request'); its migration gets no snapshot"
+	else ok "$case_id: request '$request'"; fi
+done
 # A failed request or restart must be visible, with no start past a failed request.
 for failure in request request-sync directory-sync parent-sync restart; do
 	case_id="upgrade $failure failure"

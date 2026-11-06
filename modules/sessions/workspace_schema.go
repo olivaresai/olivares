@@ -32,6 +32,7 @@ const (
 	colWsRef             = "workspace_ref"
 	colWsName            = "name"
 	colWsRootPath        = "root_path"
+	colWsTransferred     = "ownership_transferred"
 	colWsMountMode       = "mount_mode"        // rw | ro | write_no_delete
 	colWsContainerTgt    = "container_target"  // e.g. /workspace
 	colWsAllowSubpaths   = "allow_subpaths"    // JSON array of relative subpaths (empty = whole root)
@@ -94,6 +95,7 @@ func (m *Module) registerWorkspaceSchema(reg store.ExtensionRegistry) error {
 			{Name: colWsRef, Kind: model.KindText, Principal: model.None("an opaque workspace registry id (a UUID) minted by this module: workspace.go:82, workspace_dto.go:27")},
 			{Name: colWsName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen workspace label, shown only: workspace_dto.go:28")},
 			{Name: colWsRootPath, Kind: model.KindText, Principal: model.None("the canonical host root path of the workspace: workspace.go:73, workspace_dto.go:29")},
+			{Name: colWsTransferred, Kind: model.KindBool, Nullable: true},
 			{Name: colWsMountMode, Kind: model.KindText, Principal: model.None("a mount mode, a closed set: workspace.go:545, workspace_schema.go:41-42")},
 			{Name: colWsContainerTgt, Kind: model.KindText, Nullable: true, Principal: model.None("an absolute in-container mount path: workspace.go:554-558, workspace_dto.go:31")},
 			{Name: colWsAllowSubpaths, Kind: model.KindJSON, Nullable: true, Principal: pdeclWorkspaceSubpaths},

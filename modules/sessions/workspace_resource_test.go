@@ -342,7 +342,7 @@ func TestPersonalFolderIsPrivateToItsOwner(t *testing.T) {
 	if len(mine) != 1 {
 		t.Fatalf("first sign-in: ann sees %d folders, want her own", len(mine))
 	}
-	if info, err := os.Stat(filepath.Join(files, annUser.UserID.String())); err != nil || info.Mode().Perm() != 0o700 {
+	if info, err := os.Stat(filepath.Join(files, "tenant-"+tenant.String(), annUser.UserID.String())); err != nil || info.Mode().Perm() != 0o700 {
 		t.Fatalf("ann's directory = %v, %v; want mode 0700", info, err)
 	}
 	if again := refs(ann); len(again) != 1 || again[0] != mine[0] {

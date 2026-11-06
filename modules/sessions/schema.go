@@ -112,6 +112,7 @@ const (
 	colTplName        = "name"
 	colTplDescription = "description"
 	colTplAuthor      = "author"
+	colTplOwner       = "owner"
 	colTplBuiltin     = "builtin"
 	colTplArchivedAt  = "archived_at"
 	colTplBody        = "body"
@@ -219,6 +220,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colTplName, Kind: model.KindText, Principal: model.None("an operator-chosen template name, the natural key, shown only: templates.go:85, templates.go:675")},
 			{Name: colTplDescription, Kind: model.KindText, Principal: model.None("template prose, shown only: templates.go:86")},
 			{Name: colTplAuthor, Kind: model.KindText, Principal: pdeclActorRef},
+			{Name: colTplOwner, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserRef, model.ClassObligation)},
 			{Name: colTplBuiltin, Kind: model.KindBool},
 			{Name: colTplArchivedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colTplBody, Kind: model.KindText, Principal: pdeclTemplateBody},

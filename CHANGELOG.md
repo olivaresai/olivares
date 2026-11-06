@@ -32,6 +32,10 @@ See [versioning](INSTALL.md#versioning) for the release policy.
 
 ### Changed
 
+- **Business department folders:** a department administrator gets 403 for host folders outside the department’s registered folders or beyond their mount mode and allowed subpaths.
+
+- **Business policy assignments:** assigning, changing or removing a department or group approval policy or DLP ruleset requires `governance:policy:admin` and approval by a second person.
+
 - **Breaking: session names are unique.** Launch, rename and handoff refuse a name
   held by another session with 409, from the console, API or CLI. A session an agent
   workflow launches for a work item keeps the name its workflow gave it.
@@ -145,6 +149,10 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   refuses the next launch with 429 and one sentence.
 
 ### Fixed
+
+- `olivares skills update <pack-id> --apply` moves eligible pins from the previous latest revision to the new one; pins needing review stay put and appear in `pins_not_moved`.
+
+- Choosing a Codex skill with `/` sends `/name` and runs it as a skill instead of plain text.
 
 - Session turns no longer fail on command-lifecycle frames, oversized single-line output, interrupted input, stop/resume transitions or long scrollback. Start refusals name the cause, and a full account or queue does not create a partial session.
 

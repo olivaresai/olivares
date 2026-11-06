@@ -271,8 +271,8 @@ class ReporterTest(unittest.TestCase):
         report.reconcile_run(self.run, repo, self.github.request)
         self.assertEqual(self.github.issues[0]["state"], "closed")
 
-    def scheduled_run(self, run_id, jobs):
-        self.run.update(id=run_id, name="merge-gate-check main batteries", event="schedule",
+    def scheduled_run(self, run_id, jobs, event="schedule"):
+        self.run.update(id=run_id, name="merge-gate-check main batteries", event=event,
                         head_repository={"full_name": "owner/development"})
         self.github.jobs = [{"name": name, "conclusion": conclusion, "steps": [], "html_url": "https://example.com/job"}
                             for name, conclusion in jobs]
@@ -302,11 +302,22 @@ class ReporterTest(unittest.TestCase):
         self.assertEqual([issue["title"] for issue in self.github.issues],
                          ["mainline-ci: job community-partition failed on main"])
 
+    def test_a_merge_battery_reports_a_red_and_only_the_whole_schedule_recovers_it(self):
+        # A merge to main runs cmd/olivares' name groups and the contracts, not every shard: its red
+        # is filed at once, and its green, which proves nothing about the shards it skipped, closes nothing.
+        self.scheduled_run(100, [("community-functional (root-a)", "failure"), ("check", "skipped")], "push")
+        self.assertEqual([(issue["title"], issue["state"]) for issue in self.github.issues],
+                         [("mainline-ci: job community-functional failed on main", "open")])
+        self.scheduled_run(101, [("community-functional (root-a)", "success")], "push")
+        self.assertEqual(self.github.issues[0]["state"], "open")
+        self.scheduled_run(102, [("community-functional (root-a)", "success"),
+                                 ("community-functional (store-a)", "success")])
+        self.assertEqual(self.github.issues[0]["state"], "closed")
+
     def test_only_the_scheduled_battery_pass_of_a_gate_workflow_reports(self):
         # A gate dispatch on a candidate, an unnamed workflow and mainline-ci outside the public
         # repository never write, whatever their events.
         for name, event, repo in [("merge-gate-check mg-1-abc", "workflow_dispatch", "owner/development"),
-                                  ("merge-gate-check", "push", "owner/development"),
                                   ("mainline-ci", "push", "owner/development"),
                                   ("mainline-ci", "schedule", "olivaresai/olivares"),
                                   ("other", "schedule", "owner/development"),

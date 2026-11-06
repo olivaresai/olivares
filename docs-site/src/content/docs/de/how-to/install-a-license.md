@@ -172,7 +172,7 @@ das ein Secret oder eine Prüfung benötigt, wird bereitgestellt statt nur teilw
 kommerziellen Binary** — wenn `olivares enterprise` kein Befehl ist, führen Sie noch den
 Community-Build aus, und der obige Austausch hat noch nicht stattgefunden.
 
-Die Konsole tut dasselbe für jede Familie: Die Ansicht **Edition & Lizenz** listet jede Familie
+Die Konsole tut dasselbe für jede Familie: Die Ansicht **Settings › Edition** listet jede Familie
 mit der Anzahl ihrer eingeschalteten Module. **Einschalten** zeigt vor dem Anwenden denselben Diff,
 und **Ausschalten** nennt die Module, die anhalten. Bei einer Familie, die Ihre Lizenz nicht
 umfasst, bleibt **Einschalten** deaktiviert, und die Zeile sagt es: *Diese Lizenz umfasst* die

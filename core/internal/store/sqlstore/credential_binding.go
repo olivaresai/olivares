@@ -298,3 +298,26 @@ func (s credentialBindingStore) RevokeOSAccount(ctx context.Context, current mod
 	_, err = s.g.Update(ctx, rec)
 	return err
 }
+
+// ListByUser lists a person's current bindings without exposing a write seam.
+func (s credentialBindingStore) ListByUser(ctx context.Context, target model.TenantID, user model.ID) ([]model.CredentialBinding, error) {
+	if target.IsZero() || target.IsSystem() || user.IsZero() {
+		return nil, store.ErrInvalidID
+	}
+	rows, page, err := s.g.List(ctx, model.Query{Filters: []model.Filter{{Column: "target_tenant_id", Op: model.OpEq, Value: target.String()}, {Column: "subject_user_id", Op: model.OpEq, Value: user.String()}, {Column: "superseded_by", Op: model.OpIsNull}, {Column: "superseded_at", Op: model.OpIsNull}}, Limit: 1001})
+	if err != nil {
+		return nil, err
+	}
+	if page.HasMore || len(rows) > 1000 {
+		return nil, fmt.Errorf("sqlstore: credential binding inventory exceeds 1000 rows")
+	}
+	out := make([]model.CredentialBinding, 0, len(rows))
+	for _, row := range rows {
+		binding, err := s.decode(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, binding)
+	}
+	return out, nil
+}

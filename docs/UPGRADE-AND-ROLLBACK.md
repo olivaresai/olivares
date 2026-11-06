@@ -333,6 +333,23 @@ Directories are private and snapshot files are mode `0600`. A service restart re
 that transaction's completed snapshot; another package upgrade retains it and creates
 a new one. An installation that has never created its SQLite store has nothing to copy.
 
+On the Olivares appliance, the update (`olivares-appliance-update.service`) and the edition
+swap (`olivares-edition.service`) also take a read-only btrfs snapshot of the whole
+`/var/lib/olivares` volume **before** the package manager starts, when the channel offers a
+package to install: they stop a running product, write the snapshot to
+`/var/lib/olivares-snapshots/<request-digest>` and start the product again afterwards. The
+package request they publish names that volume snapshot, and the engine takes its database
+snapshot from that request; a later upgrade outside them (`rpm -Uvh` or `dnf upgrade` by
+hand) gets a new request, as above. An edition swap installs another package rather than
+upgrading one, so it takes the volume snapshot only. The last three volume snapshots are
+kept. With the data volume 95% full or more, the update refuses before it stops the
+product or starts the package manager, and says so in its journal; free space and run it
+again. The kept snapshots still hold the blocks of data deleted since they were taken, so
+deleting files may not bring the volume under 95%: as root, `btrfs subvolume delete
+/var/lib/olivares-snapshots/<oldest-digest>` frees the oldest (digests sort by time).
+These snapshots are local restore points, not backups: they live on the same disk, so
+keep the DR bundle. No appliance command restores one yet.
+
 For PostgreSQL, install the matching PostgreSQL client (`pg_dump`) and configure the
 service's `--admin-dsn` with a cross-tenant backup role on the same live database as
 `--dsn`/`--owner-dsn` (see [DR-RUNBOOK.md](DR-RUNBOOK.md)). Secret `file:`/`env:` references

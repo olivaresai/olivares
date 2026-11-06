@@ -169,7 +169,7 @@ tout module nécessitant un secret ou une revue au lieu de l'activer à moitié.
 dans le binaire commercial** — si `olivares enterprise` n'est pas une commande, vous utilisez
 encore le build Community et le remplacement ci-dessus n'a pas encore eu lieu.
 
-La console fait de même pour chaque famille : la vue **Édition et licence** liste chaque famille
+La console fait de même pour chaque famille : la vue **Settings › Edition** liste chaque famille
 avec le nombre de ses modules activés. **Activer** montre le même diff avant de l'appliquer, et
 **Désactiver** nomme les modules qui s'arrêtent. Une famille que votre licence n'inclut pas garde
 **Activer** désactivé et le dit : *Cette licence n'inclut pas* la famille. Le moteur vérifie à

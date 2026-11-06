@@ -571,13 +571,36 @@ write_pending() {
     "condition=$1" "reason=$2" "prior=$3" "instruction=$4" || true
 }
 
+# On the appliance, the product transaction owner publishes this request before the package
+# transaction, with the digest of the read-only data snapshot it took then, and holds the lock on
+# the root-only snapshot directory until the transaction ends (the package state directory is
+# world-readable, so any local user could hold a lock on it). Keep that identity while the lock is
+# held and the completed snapshot exists. Any other request, such as one left by an earlier owner
+# transaction under a later plain rpm or dnf upgrade, is minted below.
+pretransaction_request=no
+if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ] &&
+  [ -f "$package_state_dir/upgrade-snapshot" ] && [ ! -L "$package_state_dir/upgrade-snapshot" ] &&
+  [ -d /var/lib/olivares-snapshots ] && [ ! -L /var/lib/olivares-snapshots ] &&
+  command -v flock >/dev/null 2>&1 && ! flock -n /var/lib/olivares-snapshots true; then
+  olv_request=
+  read -r olv_request <"$package_state_dir/upgrade-snapshot" || olv_request=
+  olv_digest=${olv_request#upgrade-snapshot.}
+  case "$olv_digest" in
+    *[!0-9a-f]*) ;;
+    *)
+      if [ "$olv_digest" != "$olv_request" ] && [ "${#olv_digest}" -eq 32 ] &&
+        [ -d "/var/lib/olivares-snapshots/$olv_digest" ] && [ ! -L "/var/lib/olivares-snapshots/$olv_digest" ]; then
+        pretransaction_request=yes
+      fi ;;
+  esac
+fi
 # The installed binary consumes this request with its resolved store configuration,
 # before opening/migrating the store. Keep it outside the service-owned data tree;
 # the completed snapshot lives under that installation's backups/pre-upgrade.
 if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = install ]; then
   rm -f "$package_state_dir/upgrade-snapshot"
 fi
-if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ]; then
+if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ] && [ "$pretransaction_request" = no ]; then
   snapshot_request=$(mktemp "$package_state_dir/upgrade-snapshot.XXXXXXXX") ||
     refuse snapshot-request-failed "cannot stage a pre-migration snapshot request"
   if ! { printf '%s\n' "${snapshot_request##*/}" >"$snapshot_request" &&

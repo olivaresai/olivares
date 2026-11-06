@@ -17,15 +17,16 @@ import (
 )
 
 type recordsHoldGate struct {
-	held bool
-	err  error
-	kind string
-	ref  string
+	held    bool
+	heldRef string
+	err     error
+	kind    string
+	ref     string
 }
 
 func (g *recordsHoldGate) Check(_ context.Context, _ model.TenantID, kind, ref string) (bool, error) {
 	g.kind, g.ref = kind, ref
-	return g.held, g.err
+	return g.held && (g.heldRef == "" || g.heldRef == ref), g.err
 }
 
 // A folder's records class is a legal hold and a retention period. Either one
@@ -72,7 +73,28 @@ func TestFolderRecordsRefuseDestruction(t *testing.T) {
 	// Legal hold: overwrite, move and delete are refused, the file is intact, the gate was asked
 	// about this folder, and a new file is still allowed.
 	a := file("a.md")
+	other := h.doJSON("POST", "/v1/m/sessions/workspaces", admin, map[string]any{"root_path": root}, tenantHdr(tenant))
+	if other.code != http.StatusCreated {
+		t.Fatalf("register before hold=%d %s", other.code, other.raw)
+	}
+	otherBase := "/v1/m/sessions/workspaces/" + other.body["workspace_ref"].(string)
+	gate.heldRef = ref
 	gate.held = true
+	// A second reference must not grant access to the held bytes, including
+	// through a parent, child or symlink. Deregistration must preserve the hold.
+	child := filepath.Join(root, "child")
+	if err := os.Mkdir(child, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{root, filepath.Dir(root), child, alias} {
+		refused(h.doJSON("POST", "/v1/m/sessions/workspaces", admin, map[string]any{"root_path": path}, tenantHdr(tenant)), http.StatusLocked, "legal_hold")
+	}
+	refused(call("DELETE", "", nil), http.StatusLocked, "legal_hold")
+	refused(h.do("DELETE", otherBase+"/files?path=a.md", admin, tenantHdr(tenant)), http.StatusLocked, "legal_hold")
 	refused(call("PUT", "/files/raw?path=a.md", nil), http.StatusLocked, "legal_hold")
 	refused(call("POST", "/files/move", map[string]string{"from": "a.md", "to": "b.md"}), http.StatusLocked, "legal_hold")
 	refused(call("DELETE", "/files?path=a.md", nil), http.StatusLocked, "legal_hold")
@@ -99,6 +121,8 @@ func TestFolderRecordsRefuseDestruction(t *testing.T) {
 	if r := call("PATCH", "", map[string]any{"retention_days": -1}); r.code != http.StatusBadRequest {
 		t.Fatalf("PATCH retention_days=-1 = %d %s, want 400", r.code, r.raw)
 	}
+	refused(h.doJSON("POST", "/v1/m/sessions/workspaces", admin, map[string]any{"root_path": root}, tenantHdr(tenant)), http.StatusLocked, "retention_period")
+	refused(call("DELETE", "", nil), http.StatusLocked, "retention_period")
 	c := file("c.md")
 	refused(call("DELETE", "/files?path=c.md", nil), http.StatusLocked, "retention_period")
 	refused(call("PUT", "/files/raw?path=c.md", nil), http.StatusLocked, "retention_period")

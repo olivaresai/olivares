@@ -175,6 +175,24 @@ afterEach(() => {
 })
 
 describe('the quick New session launch authority', () => {
+  it('explains disabled composer Start while its folder is loading', async () => {
+    vi.spyOn(agentOpsApi, 'listRuns').mockImplementation(
+      () => new Promise(() => {}),
+    )
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <StartSessionForm composer />
+      </QueryClientProvider>,
+    )
+    const button = await screen.findByRole('button', { name: 'Start' })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAccessibleDescription(
+      "Reading the last session's folder…",
+    )
+    qc.clear()
+  })
+
   it('offers access request on a refused quick launch', async () => {
     startWithRetry()
     vi.spyOn(agentOpsApi, 'createRun').mockRejectedValue(

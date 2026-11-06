@@ -38,6 +38,7 @@ type templateDTO struct {
 	Description string  `json:"description"`
 	Version     int64   `json:"version"`
 	Author      string  `json:"author"`
+	Owner       string  `json:"owner,omitempty"`
 	Builtin     bool    `json:"builtin"`
 	ArchivedAt  string  `json:"archived_at,omitempty"`
 	Body        tplBody `json:"body"`
@@ -101,6 +102,7 @@ func toTemplateDTO(rec model.Record) templateDTO {
 		Description: rec.String(colTplDescription),
 		Version:     rec.Int(model.ColVersion),
 		Author:      rec.String(colTplAuthor),
+		Owner:       templateOwner(rec),
 		Builtin:     rec.Bool(colTplBuiltin),
 		ArchivedAt:  rec.String(colTplArchivedAt),
 		CreatedAt:   rec.String(model.ColCreatedAt),
@@ -210,7 +212,7 @@ func (m *Module) handleCreateTemplate(w http.ResponseWriter, r *http.Request, mc
 	bodyJSON, _ := json.Marshal(req.Body)
 
 	var dto templateDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, []model.ID{mc.Principal.UserID}, auth.FenceDirectory, func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }, func(sc store.Scope, _ bool) error {
 		repo, rerr := sc.Ext(templateKind)
 		if rerr != nil {
 			return rerr
@@ -219,6 +221,7 @@ func (m *Module) handleCreateTemplate(w http.ResponseWriter, r *http.Request, mc
 			colTplName:        req.Name,
 			colTplDescription: req.Description,
 			colTplAuthor:      mc.Principal.Actor(),
+			colTplOwner:       nullableString(personalFolderOwner(mc.Principal)),
 			colTplBuiltin:     false,
 			colTplBody:        string(bodyJSON),
 		})
@@ -361,7 +364,7 @@ func (m *Module) handleDuplicateTemplate(w http.ResponseWriter, r *http.Request,
 	}
 
 	var dto templateDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := auth.FencedWrite(r.Context(), mc.Standing, mc.Tenant, []model.ID{mc.Principal.UserID}, auth.FenceDirectory, func(fn func(store.Scope) error) error { return mc.Data.Mutate(r.Context(), fn) }, func(sc store.Scope, _ bool) error {
 		repo, rerr := sc.Ext(templateKind)
 		if rerr != nil {
 			return rerr
@@ -374,6 +377,7 @@ func (m *Module) handleDuplicateTemplate(w http.ResponseWriter, r *http.Request,
 			colTplName:        nameReq.Name,
 			colTplDescription: src.String(colTplDescription),
 			colTplAuthor:      mc.Principal.Actor(),
+			colTplOwner:       nullableString(personalFolderOwner(mc.Principal)),
 			colTplBuiltin:     false,
 			colTplBody:        src.String(colTplBody),
 		})

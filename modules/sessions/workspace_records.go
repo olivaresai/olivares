@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // A folder's records class is a legal hold plus a retention period (retention_days).
@@ -54,15 +55,102 @@ func (m *Module) guardRecords(ctx context.Context, tenant model.TenantID, ws *re
 	if len(existing) == 0 {
 		return nil
 	}
+	if err := m.guardFolderRecords(ctx, tenant, ws, existing...); err != nil {
+		return err
+	}
+	// References registered before a policy was set must not bypass it either.
+	folders, err := m.recordsFolders(ctx, tenant)
+	if err != nil {
+		return err
+	}
+	for _, folder := range folders {
+		if folder.ref == ws.ref {
+			continue
+		}
+		for _, target := range existing {
+			if !pathsOverlap(target, folder.rootReal) {
+				continue
+			}
+			if pathWithin(folder.rootReal, target) {
+				target = folder.rootReal
+			}
+			if err := m.guardFolderRecords(ctx, tenant, folder, target); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// recordsFolders reads every registration in this tenant, including disabled
+// folders: disabling a reference must not disable preservation of its bytes.
+// Complete the view before consulting the hold gate (another module's store).
+func (m *Module) recordsFolders(ctx context.Context, tenant model.TenantID) ([]*resolvedWorkspace, error) {
+	var folders []*resolvedWorkspace
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(workspaceKind)
+		if err != nil {
+			return err
+		}
+		q := model.Query{Limit: 500}
+		for {
+			rows, page, err := repo.List(ctx, q)
+			if err != nil {
+				return err
+			}
+			for _, row := range rows {
+				folders = append(folders, &resolvedWorkspace{ref: row.String(colWsRef), rootReal: row.String(colWsRootPath), retentionDays: row.Int(colWsRetentionDays)})
+			}
+			if !page.HasMore {
+				return nil
+			}
+			if page.Cursor == "" || page.Cursor == q.Cursor {
+				return fmt.Errorf("folder records registry pagination did not advance")
+			}
+			q.Cursor = page.Cursor
+		}
+	})
+	return folders, err
+}
+
+// A registration may not grant a fresh reference to preserved bytes, or drop
+// their policy. Retention must be explicitly removed before deregistration.
+func (m *Module) guardRecordsRegistration(ctx context.Context, tenant model.TenantID, root string) error {
+	folders, err := m.recordsFolders(ctx, tenant)
+	if err != nil {
+		return err
+	}
+	for _, folder := range folders {
+		if !pathsOverlap(root, folder.rootReal) {
+			continue
+		}
+		if err := m.guardFolderHold(ctx, tenant, folder.ref); err != nil {
+			return err
+		}
+		if folder.retentionDays > 0 {
+			return &codedRunErr{&runErr{http.StatusLocked, "this folder has a retention period; overlapping registrations cannot be changed"}, "retention_period"}
+		}
+	}
+	return nil
+}
+
+func (m *Module) guardFolderHold(ctx context.Context, tenant model.TenantID, ref string) error {
 	if m.holdGate != nil {
-		held, err := m.holdGate.Check(ctx, tenant, holdSubjectFolder, ws.ref)
+		held, err := m.holdGate.Check(ctx, tenant, holdSubjectFolder, ref)
 		if err != nil {
 			m.warnf("sessions: legal-hold check failed; refusing the folder edit (fail closed)", "err", redactErr(err))
 			return &codedRunErr{&runErr{http.StatusServiceUnavailable, "legal-hold check unavailable; the edit is refused"}, "legal_hold_unavailable"}
 		}
 		if held {
-			return &codedRunErr{&runErr{http.StatusLocked, "this folder is under a legal hold; its files cannot be overwritten, moved or deleted"}, "legal_hold"}
+			return &codedRunErr{&runErr{http.StatusLocked, "this folder is under a legal hold; its files and registration cannot be changed"}, "legal_hold"}
 		}
+	}
+	return nil
+}
+
+func (m *Module) guardFolderRecords(ctx context.Context, tenant model.TenantID, ws *resolvedWorkspace, existing ...string) error {
+	if err := m.guardFolderHold(ctx, tenant, ws.ref); err != nil {
+		return err
 	}
 	if ws.retentionDays <= 0 {
 		return nil

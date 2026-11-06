@@ -168,7 +168,7 @@ cualquier módulo que necesite un secreto o una revisión, en lugar de activarlo
 binario comercial**: si `olivares enterprise` no es un comando, todavía ejecutas la
 compilación Community y el cambio anterior aún no se ha producido.
 
-La consola hace lo mismo para cada familia: la vista **Edición y licencia** lista cada familia
+La consola hace lo mismo para cada familia: la vista **Settings › Edition** lista cada familia
 con cuántos de sus módulos están activados. **Activar** muestra el mismo diff antes de aplicarlo,
 y **Desactivar** nombra los módulos que se detienen. Una familia que tu licencia no incluye
 mantiene **Activar** deshabilitado y lo dice: *Esta licencia no incluye* la familia. El motor
