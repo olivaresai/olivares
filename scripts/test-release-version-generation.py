@@ -976,7 +976,8 @@ class ReleaseGeneration(unittest.TestCase):
                     result = run('--stamp')
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 for path, old, new in (('INSTALL.md', '', 'Olivares 1.0.1 is out.\n'),
-                                       ('scripts/test-rpm-repository.sh', '', 'FIXTURE=olivares-1.0-1.x86_64.rpm\n'),
+                                       ('scripts/test-rpm-repository.sh', '',
+                                        '# release\nFIXTURE=olivares-1.0.1-1.x86_64.rpm\n# /release\n'),
                                        ('deploy/compose/.env.example', '', '# olivares 1.0.1 is required\n')):
                     with self.subTest(red=path):
                         target = Path(folder, path)

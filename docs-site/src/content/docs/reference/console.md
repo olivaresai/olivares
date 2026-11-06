@@ -81,8 +81,8 @@ permission it requires and the reference page its in-product help link opens.
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Configured resources | `/estate` | What you have set up, and how its parts depend on each other, work items included. | `sessions:run:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
-| Discovered resources | `/inventory` | Agents, MCP servers and models that connectors have observed, and when each was last seen. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
+| Resources | `/estate` | What you have set up, and how its parts depend on each other, work items included. | `sessions:run:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
+| Inventory | `/inventory` | Agents, MCP servers and models that connectors have observed, and when each was last seen. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
 | Workspace | `/workspace` | Agents, sessions, resources and activity scoped to one workspace | `tenant:read` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
 
 ### AI
@@ -91,7 +91,7 @@ permission it requires and the reference page its in-product help link opens.
 |---|---|---|---|---|
 | AI tools | `/agent-tools` | See the accounts and API keys sessions run as; installing and signing in the tools is for deployment administrators | `sessions:account:read` | [how-to/add-a-provider](/how-to/add-a-provider/) |
 | Operate sessions | `/agentops` | Start sessions and follow what each one does, including the ones Olivares finds | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/how-to/run-claude-code-with-olivares/) |
-| Model Operations | `/model-operations` | Owned models, admission and deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
+| Model operations | `/model-operations` | Owned models, admission and deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
 | Models | `/models` | Models, routing and governance | `models:catalog:read` | [reference/modules/x-models](/reference/modules/x-models/) |
 | Platforms | `/platforms` | Provider platform surfaces, compliance matrix and per-platform model lifecycle — reference, not your servers | `models:platforms:read` | [reference/modules/x-models](/reference/modules/x-models/) |
 | Provider accounts | `/provider-accounts` | List named provider accounts and adopt an existing provider profile as an account | `sessions:account:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
@@ -103,14 +103,14 @@ permission it requires and the reference page its in-product help link opens.
 | Sandbox | `/sandbox` | Isolated agent testing and replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/reference/modules/xvii-sandbox/) |
 | Sessions | `/sessions` | Start sessions and follow what each one does, including the ones Olivares finds | `sessions:live:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Voice | `/voice` | Voice and realtime sessions | `voice:session:read` | [reference/modules/xvi-voice](/reference/modules/xvi-voice/) |
-| Workspace templates | `/workspace-templates` | Reusable snapshots of hooks, settings, connectors and policies for workspace sessions | `sessions:template:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
+| Templates | `/workspace-templates` | Reusable snapshots of hooks, settings, connectors and policies for workspace sessions | `sessions:template:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 
 ### Data & context
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Agent Artifacts | `/agent-artifacts` | Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
-| MCP & skills | `/capabilities` | Govern MCP servers, skills and tools | `capabilities:catalog:read` | [reference/modules/v-capabilities](/reference/modules/v-capabilities/) |
+| Agent artifacts | `/agent-artifacts` | Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
+| Extensions | `/capabilities` | Govern MCP servers, skills and tools | `capabilities:catalog:read` | [reference/modules/v-capabilities](/reference/modules/v-capabilities/) |
 | Catalog | `/catalog` | Curated, approved agents and capabilities | `catalog:entry:read` | [reference/modules/xiv-catalog](/reference/modules/xiv-catalog/) |
 | Knowledge | `/knowledge` | Knowledge bases, RAG and data lineage | `knowledge:kb:read` | [reference/modules/viii-knowledge](/reference/modules/viii-knowledge/) |
 
@@ -118,7 +118,7 @@ permission it requires and the reference page its in-product help link opens.
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Communications | `/communications` | Channels, direct notices and the personal inbox of the selected workspace | `sessions:channel:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
+| Channels | `/communications` | Channels, direct notices and the personal inbox of the selected workspace | `sessions:channel:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Channel administration | `/communications/administration` | Administer channels: configuration and grant history | `sessions:channel:admin` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Handoffs | `/communications/handoffs` | Offers of work responsibility addressed to you: read the context and accept or reject | `sessions:delivery:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Communications inbox | `/communications/inbox` | Messages addressed to you: open and acknowledge each one | `sessions:delivery:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
@@ -131,7 +131,7 @@ permission it requires and the reference page its in-product help link opens.
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
 | Alerting | `/alerting` | Route findings to destinations and inspect deliveries | `notify:route:read` | [reference/modules/xv-notify](/reference/modules/xv-notify/) |
-| Webhooks & events | `/eventing` | Outbound webhook subscriptions, the captured event log, deliveries and the dead-letter queue | `eventing:subscription:read` | [reference/modules/eventing](/reference/modules/eventing/) |
+| Webhooks | `/eventing` | Outbound webhook subscriptions, the captured event log, deliveries and the dead-letter queue | `eventing:subscription:read` | [reference/modules/eventing](/reference/modules/eventing/) |
 
 ### Security & identity
 
@@ -140,7 +140,7 @@ permission it requires and the reference page its in-product help link opens.
 | Access map | `/access-map` | What each agent reads and writes (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/reference/modules/iii-access-map/) |
 | Policy export | `/agentcore-export` | Plan, review and apply the projection of this tenant's governance rules onto AWS AgentCore as Cedar policies; planning writes nothing | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Managed policy | `/claude-policy` | Managed policy, hooks, MCP, sandbox and policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/how-to/connectors/claude-code-hooks-pep/) |
-| Identity & access | `/identity` | SSO, SCIM and the identities your agents use | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
+| Identity | `/identity` | SSO, SCIM and the identities your agents use | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Inference proxy | `/inference-proxy` | Proxy gates, egress DLP rules and device approvals | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/reference/modules/inferenceproxy/) |
 | Kill switch | `/killswitch` | Emergency stop, dual-control recovery and guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/how-to/cookbook/kill-switch-drill/) |
 | Permissions | `/permissions` | Identity, roles and approvals | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
@@ -160,10 +160,10 @@ permission it requires and the reference page its in-product help link opens.
 |---|---|---|---|---|
 | Adoption | `/adoption` | Productivity, acceptance & model mix | `adoption:metrics:read` | [reference/modules/claudeadoption](/reference/modules/claudeadoption/) |
 | Supply chain | `/attestation` | Release attestation — SLSA, SBOM, VEX and Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/how-to/verify-a-release/) |
-| Audit ledger | `/audit` | Tamper-evident evidence ledger | `audit:read` | [reference/modules/ix-security](/reference/modules/ix-security/) |
+| Ledger | `/audit` | Tamper-evident evidence ledger | `audit:read` | [reference/modules/ix-security](/reference/modules/ix-security/) |
 | Dashboards | `/dashboards` | Executive KPIs and reporting | any signed-in user | [reference/modules/xxi-executive-dashboards](/reference/modules/xxi-executive-dashboards/) |
 | Evals | `/evals` | Quality, evals and regression | `evals:run:read` | [reference/modules/xii-evals](/reference/modules/xii-evals/) |
-| Health & SLA | `/health` | Agent and MCP uptime and SLAs | `health:status:read` | [reference/modules/xxii-health](/reference/modules/xxii-health/) |
+| Health | `/health` | Agent and MCP uptime and SLAs | `health:status:read` | [reference/modules/xxii-health](/reference/modules/xxii-health/) |
 | Observability | `/observability` | Ingestion health by standard and trace drill-down | `health:status:read` | [reference/modules/observability](/reference/modules/observability/) |
 | Operations | `/operations` | The host, its disks, the live sessions and their usage, over 24 hours, 7 or 30 days. | `sessions:run:read` | [reference/console](/reference/console/) |
 | Retention | `/retention` | How long each class of record is kept, the sweep that applies it and its sealed certificates | `compliance:retention:read` | [reference/modules/xiii-compliance](/reference/modules/xiii-compliance/) |
@@ -174,12 +174,12 @@ permission it requires and the reference page its in-product help link opens.
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| API Playground | `/api-playground` | Interactively explore and test the control-plane API | `tenant:admin` | [reference/modules/xix-api-manage-as-code](/reference/modules/xix-api-manage-as-code/) |
+| API playground | `/api-playground` | Interactively explore and test the control-plane API | `tenant:admin` | [reference/modules/xix-api-manage-as-code](/reference/modules/xix-api-manage-as-code/) |
 | Backups | `/backups` | Encrypted disaster-recovery snapshots of the control plane: create, schedule, download and restore | `system:admin` | [how-to/backup-and-restore](/how-to/backup-and-restore/) |
 | Administration | `/console` | Users, SSO/IdP, workspaces, agent groups, roles, secrets, connectors, API keys and this installation's license | `tenant:admin` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
 | Source diff | `/console/sources/diff` | Compare a base and a head revision of a connected Git repository, file by file | `system:admin` | [reference/console](/reference/console/) |
 | Logs | `/logs` | The live engine log stream, with level and module filters, search and pause | `system:admin` | [how-to/troubleshooting](/how-to/troubleshooting/) |
-| Setup wizard | `/onboarding` | Step-by-step deployment configuration | `system:admin` | [start/quickstart](/start/quickstart/) |
+| Setup | `/onboarding` | Step-by-step deployment configuration | `system:admin` | [start/quickstart](/start/quickstart/) |
 | Updates | `/updates` | The version this engine runs, the newest signed release in its channel, and one action to install it | `system:admin` | [how-to/upgrade-and-rollback](/how-to/upgrade-and-rollback/) |
 
 ### Sign-in, setup and account
