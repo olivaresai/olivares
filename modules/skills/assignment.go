@@ -401,6 +401,9 @@ func (m *Module) pinAssignment(ctx context.Context, mc api.ModuleContext, body A
 		result, err = m.pinAssignmentInScope(ctx, sc, mc, body, nil, id, version, idempotent, revision)
 		return err
 	})
+	if err == nil {
+		err = m.refreshDelivery(ctx, mc.Tenant)
+	}
 	return result, err
 }
 
@@ -597,6 +600,10 @@ func (m *Module) deleteAssignment(w http.ResponseWriter, r *http.Request, mc api
 		return catalogAudit(r.Context(), sc, mc, "skills.assignment.unpin", AssignmentKind, id, map[string]any{"target_kind": a.Kind, "target_id": a.Target.ID, "revision_id": a.RevisionID, "assignment_version": a.Version})
 	})
 	if err != nil {
+		respondError(w, err)
+		return
+	}
+	if err := m.refreshDelivery(r.Context(), mc.Tenant); err != nil {
 		respondError(w, err)
 		return
 	}

@@ -486,6 +486,30 @@ describe('TemplateEditor', () => {
     ).toHaveTextContent('Agent settingsModel: x · bypassPermissions')
   })
 
+  // A tool allowlist with no stated mode launches as dontAsk (the server derives it,
+  // templateapply.go): the editor shows that mode in the select and the closed summary.
+  it('shows the dontAsk an allowlist implies when the template states no mode', () => {
+    wrap(
+      <TemplateEditor
+        open={true}
+        onOpenChange={vi.fn()}
+        template={{
+          ...customTemplate,
+          body: {
+            settings: { model: 'x' },
+            policies: { allowed_tools: ['Bash'] },
+          },
+        }}
+      />,
+    )
+    expect(
+      screen.getByText('Agent settings').closest('summary'),
+    ).toHaveTextContent('Agent settingsModel: x · dontAsk')
+    expect(screen.getByLabelText('Permission mode')).toHaveTextContent(
+      'dontAsk',
+    )
+  })
+
   // Design first-hour check: a template names vault secrets (env/…) its sessions receive as
   // environment variables, by name only.
   it('saves the vault secrets a session receives, by name', async () => {

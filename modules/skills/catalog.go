@@ -65,12 +65,13 @@ type Options struct {
 	// per selected member of a saved assignment (issue #429).
 	Tracer SkillLoadTracer
 	// RefuseReferencedPack is supplied with native target integration. It must
-	// fence recorded conversation pins and live uses through this transaction.
+	// fence live deliveries through this transaction.
 	// Catalog-only installations have no native pins; connecting Targets without
 	// this check refuses retirement even after assignments are removed.
 	RefuseReferencedPack func(context.Context, store.Scope, model.ID) error
 }
 type Module struct {
+	refreshLive          func(context.Context, model.TenantID) error
 	opts                 Options
 	data                 api.ModuleData
 	assignmentTargetRefs map[string]api.EntityRef
@@ -101,6 +102,19 @@ func (m *Module) UseTargets(targets TargetAuthority, refuseReferenced func(conte
 		m.assignmentTargetRefs = authority.AssignmentTargetRefs()
 	}
 }
+
+// UseLiveDelivery binds the engine-owned refresh after committed changes.
+func (m *Module) UseLiveDelivery(refresh func(context.Context, model.TenantID) error) {
+	m.refreshLive = refresh
+}
+
+func (m *Module) refreshDelivery(ctx context.Context, tenant model.TenantID) error {
+	if m.refreshLive == nil {
+		return nil
+	}
+	return m.refreshLive(ctx, tenant)
+}
+
 func (m *Module) APINamespace() string { return Namespace }
 func (m *Module) Permissions() []auth.Permission {
 	return []auth.Permission{permRead, permWrite, permAdmin, permAssign}
@@ -479,6 +493,10 @@ func (m *Module) retirePack(w http.ResponseWriter, r *http.Request, mc api.Modul
 		return catalogAudit(r.Context(), sc, mc, "skills.catalog.retire", PackKind, id, map[string]any{"pack_version": result.Version})
 	})
 	if err != nil {
+		respondError(w, err)
+		return
+	}
+	if err := m.refreshDelivery(r.Context(), mc.Tenant); err != nil {
 		respondError(w, err)
 		return
 	}

@@ -26,7 +26,7 @@ import (
 
 // This peer reports delivered bytes rather than implementing native discovery.
 // Discovery itself is qualified separately against the official tool binaries.
-func TestSkillsSessionAssignmentsDeliverOnResumeAndRetainPins(t *testing.T) {
+func TestSkillsSessionAssignmentsResolveCurrentPinsOnResume(t *testing.T) {
 	if state := confine.Probe(); state.Mode != confine.ModeLandlock || state.ABI < 3 {
 		t.Skip("truncate-protected Landlock required")
 	}
@@ -36,6 +36,7 @@ printf '{"type":"system","subtype":"init","session_id":"skill-test-%s"}\n' "$$"
 if [ -f "$HOME/.claude/skills/research/SKILL.md" ]; then
   cat "$HOME/.claude/skills/research/SKILL.md" > delivered.md
 fi
+printf ready > launched
 while IFS= read -r line; do :; done
 `
 	if err := os.WriteFile(agent, []byte(script), 0700); err != nil {
@@ -102,23 +103,24 @@ while IFS= read -r line; do :; done
 	if err := os.Remove(filepath.Join(folder, "delivered.md")); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Remove(filepath.Join(folder, "launched")); err != nil {
+		t.Fatal(err)
+	}
 	do("POST", path+"/resume", nil, http.StatusOK)
 	deadline = time.Now().Add(10 * time.Second)
 	for {
-		if _, err := os.Stat(filepath.Join(folder, "delivered.md")); err == nil {
+		if _, err := os.Stat(filepath.Join(folder, "launched")); err == nil {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("recorded pin was lost on resume after unassign")
+			t.Fatal("resumed child did not start")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	do("POST", path+"/stop", nil, http.StatusOK)
-	detail := do("GET", "/v1/m/skills/packs/"+binding.Assignment.PackID, nil, http.StatusOK)
-	version := strconv.FormatInt(int64(detail["pack"].(map[string]any)["version"].(float64)), 10)
-	if code, raw := c.doHeader("DELETE", "/v1/m/skills/packs/"+binding.Assignment.PackID, c.token, version, nil); code != http.StatusConflict {
-		t.Fatalf("recorded use retirement fence: %d %s", code, raw)
+	if _, err := os.Stat(filepath.Join(folder, "delivered.md")); !os.IsNotExist(err) {
+		t.Fatalf("unassigned skill returned on resume: %v", err)
 	}
+	do("POST", path+"/stop", nil, http.StatusOK)
 
 	// Actual agent target IDs differ from the runtime's external identity, and
 	// omitted agent/group workspaces inherit the tenant's default workspace.
@@ -321,5 +323,114 @@ done
 			}
 
 		})
+	}
+}
+
+func TestSkillsChangesReachLiveSessionWithoutRestart(t *testing.T) {
+	if state := confine.Probe(); state.Mode != confine.ModeLandlock || state.ABI < 3 {
+		t.Skip("truncate-protected Landlock required")
+	}
+	agent := filepath.Join(t.TempDir(), "claude")
+	script := `#!/bin/sh
+printf '%s' "$HOME" > skill-home
+printf '{"type":"system","subtype":"init","session_id":"live-skills"}\n'
+while IFS= read -r line; do :; done
+`
+	if err := os.WriteFile(agent, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(envSessionClaudeBin, agent)
+	c := bootSkillsComposition(t)
+	pep, err := buildClaudeHookPEPServer(c.eng, discardLog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooks := httptest.NewServer(pep.Handler)
+	t.Cleanup(hooks.Close)
+	if err := c.eng.hookCredentials().bindEndpoint(hooks.Listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
+	do := func(method, route string, body any, want int) map[string]any {
+		t.Helper()
+		code, raw := c.do(method, route, c.token, body)
+		if code != want {
+			t.Fatalf("%s %s: %d %s", method, route, code, raw)
+		}
+		var out map[string]any
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	folder := t.TempDir()
+	workspace := do("POST", "/v1/m/sessions/workspaces", map[string]any{"root_path": folder, "name": "live skills"}, 201)
+	accountHome := t.TempDir()
+	personal := filepath.Join(accountHome, ".claude", "skills", "personal")
+	if err := os.MkdirAll(personal, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(personal, "SKILL.md"), []byte("account skill"), 0444); err != nil {
+		t.Fatal(err)
+	}
+	profile := do("POST", "/v1/m/sessions/provider-profiles", map[string]any{"driver": "claude", "auth_source": sessions.AuthSourceAccountHome, "config_home": t.TempDir(), "user_home": accountHome, "display_name": "live skills"}, 201)
+	run := do("POST", "/v1/m/sessions/runs", map[string]any{"transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": workspace["workspace_ref"], "provider_profile_ref": profile["profile_ref"]}, 201)
+	ref := run["run_ref"].(string)
+	t.Cleanup(func() { _, _ = c.do("POST", "/v1/m/sessions/runs/"+ref+"/stop", c.token, nil) })
+	var home string
+	deadline := time.Now().Add(10 * time.Second)
+	for home == "" {
+		b, _ := os.ReadFile(filepath.Join(folder, "skill-home"))
+		home = string(b)
+		if time.Now().After(deadline) {
+			t.Fatal("child did not report HOME")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude", "skills")); err != nil {
+		t.Fatalf("empty discovery tree: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(home, ".claude", "skills", "personal", "SKILL.md")); err != nil || string(got) != "account skill" {
+		t.Fatalf("account skill hidden: %q %v", got, err)
+	}
+	revision := c.installPackMembers("live-native", "research", "review")
+	code, raw := c.assign(c, "session", ref, revision)
+	if code != 201 {
+		t.Fatalf("pin: %d %s", code, raw)
+	}
+	var binding skills.AssignmentResult
+	if err := json.Unmarshal(raw, &binding); err != nil {
+		t.Fatal(err)
+	}
+	delivered := filepath.Join(home, ".claude", "skills", "research", "SKILL.md")
+	if _, err := os.ReadFile(delivered); err != nil {
+		t.Fatalf("live pin: %v", err)
+	}
+	code, raw = c.doHeader("PUT", "/v1/m/skills/assignments/"+binding.Assignment.ID, c.token, strconv.FormatInt(binding.Assignment.Version, 10), map[string]any{"target_kind": "session", "target_id": ref, "pack_revision_id": revision, "members": []string{"review"}})
+	if code != 200 {
+		t.Fatalf("update: %d %s", code, raw)
+	}
+	if err := json.Unmarshal(raw, &binding); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(delivered); !os.IsNotExist(err) {
+		t.Fatalf("update retained deselected skill: %v", err)
+	}
+	delivered = filepath.Join(home, ".claude", "skills", "review", "SKILL.md")
+	if _, err := os.ReadFile(delivered); err != nil {
+		t.Fatalf("updated member missing: %v", err)
+	}
+	if code, raw := c.doHeader("DELETE", "/v1/m/skills/assignments/"+binding.Assignment.ID, c.token, strconv.FormatInt(binding.Assignment.Version, 10), nil); code != 200 {
+		t.Fatalf("unpin: %d %s", code, raw)
+	}
+	if _, err := os.Stat(delivered); !os.IsNotExist(err) {
+		t.Fatalf("live unpin retained skill: %v", err)
+	}
+	detail := do("GET", "/v1/m/skills/packs/"+binding.Assignment.PackID, nil, 200)
+	version := strconv.FormatInt(int64(detail["pack"].(map[string]any)["version"].(float64)), 10)
+	if code, raw := c.doHeader("DELETE", "/v1/m/skills/packs/"+binding.Assignment.PackID, c.token, version, nil); code != 200 {
+		t.Fatalf("retire after unpin: %d %s", code, raw)
+	}
+	if b, err := os.ReadFile(filepath.Join(folder, "skill-home")); err != nil || string(b) != home {
+		t.Fatalf("session restarted: %q %v", b, err)
 	}
 }

@@ -44,6 +44,8 @@ type runtimeState struct {
 
 	launchObserver        runtimeLaunchObserverState
 	factsCache            runFactsCache
+	skillsMu              sync.Mutex
+	skillDeliveries       map[string]*sessionSkillDelivery
 	sessionSkills         SessionSkillsSource
 	sessionSkillHomesRoot string
 

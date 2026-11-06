@@ -388,8 +388,12 @@ export function TemplateEditor({
   const counted = (key: string, count: number, empty: 'none' | 'defaults') =>
     t(`editor.sections.summary.${count ? key : empty}`, { count })
   // plan and default ask before every change; every other mode asks less. It
-  // reads as the tool takes it, as the select below lists it.
-  const mode = agent.permission_mode
+  // reads as the tool takes it, as the select below lists it. A tool allowlist
+  // with no stated mode launches as dontAsk (the server's derivation), so both
+  // the summary and the select show that mode.
+  const mode =
+    agent.permission_mode ||
+    (body.policies?.allowed_tools?.length ? 'dontAsk' : '')
   const wideMode = mode && mode !== 'default' && mode !== 'plan' ? mode : ''
   const summary = {
     hooks: counted(
@@ -487,7 +491,7 @@ export function TemplateEditor({
           >
             <Field label={t('editor.settings.permissionMode')}>
               <Select
-                value={form.settings.permission_mode}
+                value={mode}
                 onValueChange={(v) =>
                   set('settings', {
                     ...form.settings,

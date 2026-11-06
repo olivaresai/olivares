@@ -2286,6 +2286,7 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 		b.set.skills.UseTargets(skillsTargetAuthority{principals: b.authr, st: b.st, authz: b.authz, sessions: b.set.sessions}, b.set.sessions.RefuseReferencedSkillsPack)
 	}
 	if b.running.skills != nil && b.running.sessions != nil {
+		b.set.skills.UseLiveDelivery(b.set.sessions.RefreshSessionSkills)
 		b.set.sessions.UseWikiSkills(b.ensureWikiSkills)
 		if err := b.set.sessions.UseSessionSkills(sessionSkillsSource{st: b.st, sessions: b.set.sessions, catalog: b.set.skills}, filepath.Join(b.cfg.DataDir, "session-skill-homes")); err != nil {
 			return err

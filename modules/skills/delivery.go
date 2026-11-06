@@ -35,7 +35,7 @@ type DeliveryFile struct {
 
 // ReadSelectionFiles reads only an admitted immutable selection. Every revision
 // is reconstructed with the import validator and its original manifest digest.
-// Retiring a pack disables new selections; existing conversations keep their pin.
+// Historical delivery evidence remains readable after a pack is retired.
 func (m *Module) ReadSelectionFiles(ctx context.Context, sc store.Scope, selection Selection) ([]DeliveryFile, error) {
 	encoded, err := json.Marshal(selection.Members)
 	if err != nil || selection.Digest != digest(encoded) || len(selection.Members) > MaxSelectedMembers {

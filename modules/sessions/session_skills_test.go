@@ -129,10 +129,10 @@ func TestRuntimeSkillsDeliveryIsNativeIsolatedAndAudited(t *testing.T) {
 	}
 }
 
-func TestRuntimeSkillsNoAssignmentPreservesHomeAndErrorsRefuseSpawn(t *testing.T) {
+func TestRuntimeSkillsNoAssignmentReservesDiscoveryAndErrorsRefuseSpawn(t *testing.T) {
 	for _, cause := range []error{nil, errors.New("catalog unavailable")} {
 		runner := &fakeRunner{initSID: "no-skills"}
-		m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
+		m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, true))
 		ref := ensureRuntimeTestProfileRef(t, m, tenant)
 		if err := m.UseSessionSkills(sessionSkillsFixture{err: cause}, t.TempDir()); err != nil {
 			t.Fatal(err)
@@ -147,18 +147,116 @@ func TestRuntimeSkillsNoAssignmentPreservesHomeAndErrorsRefuseSpawn(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		if slices.Contains(runner.lastSpec().Args, "--plugin-dir") {
-			t.Fatal("unassigned launch received skills")
+		if !slices.Contains(runner.lastSpec().Args, "--plugin-dir") {
+			t.Fatal("unassigned launch did not reserve native discovery")
 		}
 		profile, err := m.GetProfile(t.Context(), tenant, ref)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, env := range runner.lastSpec().Env {
-			if env.Name == "HOME" && env.Value != profile.UserHome {
-				t.Fatal("unassigned HOME changed")
+			if env.Name == "HOME" && env.Value == profile.UserHome {
+				t.Fatal("unassigned HOME was not isolated")
 			}
 		}
+	}
+}
+
+// An account skills directory is child-writable. Its symlink target must never
+// become a new named confinement grant, even if the engine can read it.
+func TestRuntimeSkillsAccountSymlinkDoesNotExpandConfinement(t *testing.T) {
+	runner := &fakeRunner{initSID: "account-skills-symlink"}
+	protected := t.TempDir()
+	target := filepath.Join(protected, "files")
+	if err := os.Mkdir(target, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "private.txt"), []byte("private"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	account := t.TempDir()
+	original := filepath.Join(account, ".claude", "skills")
+	if err := os.MkdirAll(filepath.Dir(original), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, original); err != nil {
+		t.Fatal(err)
+	}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{protected}, true))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverClaude, ConfigHome: filepath.Dir(original), UserHome: account, DisplayName: "skills", AuthSource: AuthSourceAccountHome})
+	if err := m.UseSessionSkills(sessionSkillsFixture{}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref, Actor: "user:u1", ActorKind: model.ActorUser}); err != nil {
+		t.Fatal(err)
+	}
+	spec := runner.lastSpec()
+	for _, env := range spec.Env {
+		if env.Name == envUserHome {
+			entries, err := os.ReadDir(filepath.Join(env.Value, ".claude", "skills"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, entry := range entries {
+				if entry.Name() == "private.txt" {
+					t.Fatal("account skills symlink leaked a protected filename")
+				}
+			}
+		}
+	}
+	if !slices.Contains(spec.Confinement.ReadWrite, account) {
+		t.Fatal("account home lost its existing grant")
+	}
+	for _, grant := range append(slices.Clone(spec.Confinement.ReadOnly), spec.Confinement.ReadWrite...) {
+		real, err := filepath.EvalSymlinks(grant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pathWithin(real, protected) {
+			t.Fatalf("account skills symlink expanded confinement: %s -> %s", grant, real)
+		}
+	}
+}
+
+func TestRuntimeSkillsAccountSymlinkEntryRemainsDiscoverable(t *testing.T) {
+	runner := &fakeRunner{initSID: "account-skill-entry"}
+	account := t.TempDir()
+	source := filepath.Join(account, "pack", "research")
+	if err := os.MkdirAll(source, 0700); err != nil {
+		t.Fatal(err)
+	}
+	original := filepath.Join(account, ".claude", "skills", "research")
+	if err := os.MkdirAll(filepath.Dir(original), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(source, original); err != nil {
+		t.Fatal(err)
+	}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, true))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverClaude, ConfigHome: t.TempDir(), UserHome: account, DisplayName: "skills", AuthSource: AuthSourceAccountHome})
+	if err := m.UseSessionSkills(sessionSkillsFixture{}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref, Actor: "user:u1", ActorKind: model.ActorUser}); err != nil {
+		t.Fatal(err)
+	}
+	home := ""
+	for _, env := range runner.lastSpec().Env {
+		if env.Name == envUserHome {
+			home = env.Value
+		}
+	}
+	if home == "" || home == account {
+		t.Fatal("unassigned launch did not reserve discovery HOME")
+	}
+	if got, err := os.Readlink(filepath.Join(home, ".claude", "skills", "research")); err != nil || got != original {
+		t.Fatalf("symlinked account skill missing from discovery: %q %v", got, err)
 	}
 }
 

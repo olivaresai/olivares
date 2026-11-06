@@ -15,7 +15,7 @@ import (
 
 // The runtime has already admitted this stored run. Its inherited skill pins
 // include the tenant catalog, which confined HTTP handlers cannot administer.
-// This bridge exposes only its immutable selection and verified files.
+// This bridge exposes only its current selection and verified files.
 type sessionSkillsSource struct {
 	st       store.Store
 	sessions *sessions.Module
