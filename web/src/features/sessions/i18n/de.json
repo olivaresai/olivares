@@ -724,8 +724,6 @@
       "snoozed": "Zurückgestellt",
       "archived": "Archiviert"
     },
-    "agentCount_one": "{{count}} Agent",
-    "agentCount_other": "{{count}} Agenten",
     "more": "Mehr",
     "back": "Zurück zu den Sitzungen",
     "showTable": "Als Tabelle anzeigen",

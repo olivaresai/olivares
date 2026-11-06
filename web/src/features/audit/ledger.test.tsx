@@ -627,7 +627,6 @@ describe('the Ledger entries', () => {
       ).toEqual([expect.stringMatching(/Fix the login bug.*2 entries/)]),
     )
     expect(within(list).queryByText('Not in a session')).toBeNull()
-    expect(screen.getByText(/1 session\b/)).toBeVisible()
     // Its tool calls read "by <the session>", not "by Agent".
     expect(
       sentences().filter((s) => /by Fix the login bug$/.test(s!)),
@@ -785,6 +784,54 @@ describe('the Ledger histogram', () => {
     expect(
       within(strip).getAllByRole('button', { name: /, Now$/ }),
     ).toHaveLength(1)
+  })
+  it('draws every bar in one quiet tone: the hour of now is no solid block', async () => {
+    // Every loaded entry in the current hour made that one bar a full-ink block.
+    wrap(<AuditView />)
+    const strip = await screen.findByRole('group', { name: /Entries per hour/ })
+    await within(strip).findAllByRole('button', { name: /, Now$/ })
+    expect(strip.querySelector('.bg-text')).toBeNull()
+    // A bar stays a bar however wide its hour is (JSDOM has no layout: its class is the check).
+    expect(strip.querySelector('span[aria-hidden]')).toHaveClass('max-w-3')
+  })
+})
+
+describe('the Ledger rows', () => {
+  it('name an action without a label by what changed, never by its record name', async () => {
+    api.list.mockResolvedValue({
+      items: [
+        entry(45, {
+          action: 'availability.create',
+          target_kind: 'models.availability',
+          target_id: 'av-1',
+          actor: 'system',
+          actor_kind: 'system',
+        }),
+        entry(46, {
+          action: 'governance.killswitch.engage',
+          target_kind: 'governance.killswitch',
+          target_id: 'ks-1',
+        }),
+        // A run's own record, and a provider's tool-call decision (<driver>.approval.<d>).
+        entry(47, { action: 'sessions.run.created' }),
+        entry(48, {
+          action: 'codex.approval.ask',
+          target_kind: 'codex.tool.use',
+          target_id: 'run-a',
+        }),
+      ],
+      has_more: false,
+    })
+    wrap(<AuditView />)
+    await screen.findByRole('list', { name: 'Ledger entries' })
+    await waitFor(() =>
+      expect([...sentences()].sort()).toEqual([
+        'Availability created by System',
+        'Kill switch engaged by Marc Vidal',
+        'Session created by Marc Vidal',
+        'Tool call held for approval by Marc Vidal',
+      ]),
+    )
   })
 })
 

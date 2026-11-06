@@ -486,44 +486,127 @@ func TestDepartmentAdminRegistersAFolderInItsDepartment(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	created := f.doJSON("POST", "/v1/users", admin, map[string]any{"email": "dept-admin@test.io", "password": "folder-member-pass1", "tenant": tenant.String(), "role": auth.RoleViewer, "workspace_id": slugs["engineering"].String()}, nil)
-	if created.code != http.StatusCreated {
-		t.Fatalf("confined member: %d %s", created.code, created.raw)
-	}
-	login := f.doJSON("POST", "/v1/auth/login", "", map[string]any{"email": "dept-admin@test.io", "password": "folder-member-pass1"}, nil)
-	if login.code != http.StatusOK {
-		t.Fatalf("login: %d %s", login.code, login.raw)
-	}
-	token := login.body["token"].(string)
-	testsupport.SeedCedar(t, f.st, tenant, fmt.Sprintf(`permit(principal in User::"%s", action, resource) when { resource in Workspace::"engineering" };`, created.body["id"]), f.gov)
-	register := func(department model.ID) resp {
-		body := map[string]any{"name": "Delegated", "root_path": t.TempDir()}
-		if !department.IsZero() {
-			body["workspace_id"] = department.String()
+	engineeringRoot, salesRoot := t.TempDir(), t.TempDir()
+	for slug, root := range map[string]string{"engineering": engineeringRoot, "sales": salesRoot} {
+		r := f.doJSON("POST", "/v1/m/sessions/workspaces", admin, map[string]any{"root_path": root, "workspace_id": slugs[slug].String()}, tenantHdr(tenant))
+		if r.code != http.StatusCreated {
+			t.Fatalf("seed folder: %d %s", r.code, r.raw)
 		}
-		return f.doJSON("POST", "/v1/m/sessions/workspaces", token, body, tenantHdr(tenant))
 	}
-	ok := register(slugs["engineering"])
-	if ok.code != http.StatusCreated {
-		t.Fatalf("department admin registers a folder in its department = %d %s, want 201", ok.code, ok.raw)
+	restricted := map[string]string{}
+	for _, mode := range []string{mountRO, mountNoDelete, "subpaths"} {
+		root := t.TempDir()
+		restricted[mode] = root
+		if err := os.Mkdir(filepath.Join(root, "src"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		body := map[string]any{"root_path": root, "workspace_id": slugs["engineering"].String(), "mount_mode": mode}
+		if mode == "subpaths" {
+			body["mount_mode"] = mountRW
+			body["allow_subpaths"] = []string{"src"}
+		}
+		if r := f.doJSON("POST", "/v1/m/sessions/workspaces", admin, body, tenantHdr(tenant)); r.code != http.StatusCreated {
+			t.Fatalf("seed restricted folder: %d %s", r.code, r.raw)
+		}
 	}
-	rec, err := f.m.loadWorkspaceRec(t.Context(), tenant, ok.body["workspace_ref"].(string))
-	if err != nil {
+	child := filepath.Join(engineeringRoot, "child")
+	if err := os.Mkdir(child, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.st.View(t.Context(), tenant, func(sc store.Scope) error {
-		resource, err := sc.Resources().Get(t.Context(), model.ID(rec.String(model.ColID)))
-		if err == nil && resource.WorkspaceID != slugs["engineering"] {
-			t.Errorf("folder resource department = %q, want %s", resource.WorkspaceID, slugs["engineering"])
-		}
-		return err
-	}); err != nil {
+	escape := filepath.Join(engineeringRoot, "escape")
+	if err := os.Symlink(salesRoot, escape); err != nil {
 		t.Fatal(err)
 	}
-	if r := register(slugs["sales"]); r.code != http.StatusForbidden {
-		t.Errorf("registering in a sibling department = %d %s, want 403", r.code, r.raw)
-	}
-	if r := register(""); r.code != http.StatusForbidden {
-		t.Errorf("registering with no department = %d %s, want 403", r.code, r.raw)
+	for _, confined := range []bool{true, false} {
+		email := fmt.Sprintf("dept-admin-%t@test.io", confined)
+		placement := ""
+		if confined {
+			placement = slugs["engineering"].String()
+		}
+		created := f.doJSON("POST", "/v1/users", admin, map[string]any{"email": email, "password": "folder-member-pass1", "tenant": tenant.String(), "role": auth.RoleViewer, "workspace_id": placement}, nil)
+		if created.code != http.StatusCreated {
+			t.Fatalf("confined member: %d %s", created.code, created.raw)
+		}
+		login := f.doJSON("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "folder-member-pass1"}, nil)
+		if login.code != http.StatusOK {
+			t.Fatalf("login: %d %s", login.code, login.raw)
+		}
+		token := login.body["token"].(string)
+		testsupport.SeedCedar(t, f.st, tenant, fmt.Sprintf(`permit(principal in User::"%s", action, resource) when { resource in Workspace::"engineering" };`, created.body["id"]), f.gov)
+		register := func(department model.ID) resp {
+			body := map[string]any{"name": "Delegated", "root_path": child, "read_only_folders": []string{engineeringRoot}}
+			if !department.IsZero() {
+				body["workspace_id"] = department.String()
+			}
+			return f.doJSON("POST", "/v1/m/sessions/workspaces", token, body, tenantHdr(tenant))
+		}
+		ok := register(slugs["engineering"])
+		if ok.code != http.StatusCreated {
+			t.Fatalf("department admin registers a folder in its department = %d %s, want 201", ok.code, ok.raw)
+		}
+		for _, body := range []map[string]any{
+			{"root_path": salesRoot},
+			{"root_path": escape},
+			{"root_path": engineeringRoot, "read_only_folders": []string{salesRoot}},
+			{"root_path": engineeringRoot, "owner": created.body["id"]},
+		} {
+			body["workspace_id"] = slugs["engineering"].String()
+			r := f.doJSON("POST", "/v1/m/sessions/workspaces", token, body, tenantHdr(tenant))
+			if r.code != http.StatusForbidden {
+				t.Errorf("department host authority %v = %d %s, want 403", body, r.code, r.raw)
+			}
+		}
+		for _, body := range []map[string]any{
+			{"root_path": restricted[mountRO], "mount_mode": mountRW},
+			{"root_path": restricted[mountNoDelete], "mount_mode": mountRW},
+			{"root_path": restricted["subpaths"]},
+			{"root_path": child, "read_only_folders": []string{restricted["subpaths"]}},
+		} {
+			body["workspace_id"] = slugs["engineering"].String()
+			if r := f.doJSON("POST", "/v1/m/sessions/workspaces", token, body, tenantHdr(tenant)); r.code != http.StatusForbidden {
+				t.Errorf("widen restricted folder %v = %d %s, want 403", body, r.code, r.raw)
+			}
+		}
+		for _, body := range []map[string]any{
+			{"root_path": restricted[mountRO], "mount_mode": mountRO},
+			{"root_path": restricted[mountNoDelete], "mount_mode": mountNoDelete},
+			{"root_path": filepath.Join(restricted["subpaths"], "src")},
+			{"root_path": child, "read_only_folders": []string{restricted[mountRO], filepath.Join(restricted["subpaths"], "src")}},
+		} {
+			body["workspace_id"] = slugs["engineering"].String()
+			if r := f.doJSON("POST", "/v1/m/sessions/workspaces", token, body, tenantHdr(tenant)); r.code != http.StatusCreated {
+				t.Errorf("preserve restricted folder %v = %d %s, want 201", body, r.code, r.raw)
+			}
+		}
+		if !confined { // Confined PATCH was already refused by workspaceAllowed before host admission.
+			for _, folders := range [][]string{{engineeringRoot}, {}} {
+				if r := f.doJSON("PATCH", "/v1/m/sessions/workspaces/"+ok.body["workspace_ref"].(string), token, map[string]any{"read_only_folders": folders}, tenantHdr(tenant)); r.code != http.StatusOK {
+					t.Errorf("patch department mounts %v = %d %s, want 200", folders, r.code, r.raw)
+				}
+			}
+		}
+		r := f.doJSON("PATCH", "/v1/m/sessions/workspaces/"+ok.body["workspace_ref"].(string), token, map[string]any{"read_only_folders": []string{salesRoot}}, tenantHdr(tenant))
+		if r.code != http.StatusForbidden {
+			t.Errorf("patch sibling mount = %d %s, want 403", r.code, r.raw)
+		}
+		rec, err := f.m.loadWorkspaceRec(t.Context(), tenant, ok.body["workspace_ref"].(string))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.st.View(t.Context(), tenant, func(sc store.Scope) error {
+			resource, err := sc.Resources().Get(t.Context(), model.ID(rec.String(model.ColID)))
+			if err == nil && resource.WorkspaceID != slugs["engineering"] {
+				t.Errorf("folder resource department = %q, want %s", resource.WorkspaceID, slugs["engineering"])
+			}
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if r := register(slugs["sales"]); r.code != http.StatusForbidden {
+			t.Errorf("registering in a sibling department = %d %s, want 403", r.code, r.raw)
+		}
+		if r := register(""); r.code != http.StatusForbidden {
+			t.Errorf("registering with no department = %d %s, want 403", r.code, r.raw)
+		}
 	}
 }

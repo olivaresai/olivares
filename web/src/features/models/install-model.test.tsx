@@ -105,9 +105,13 @@ it('points to AI tools when Ollama is not installed', async () => {
   expect(
     await screen.findByText(/Ollama is not installed on this server\./),
   ).toBeInTheDocument()
-  expect(
-    screen.getByRole('link', { name: 'Install it in AI tools' }),
-  ).toHaveAttribute('href', '/agent-tools')
+  const installLink = screen.getByRole('link', {
+    name: 'Install it in AI tools',
+  })
+  expect(installLink).toHaveAttribute('href', '/agent-tools')
+  // One orange control per view: the inline link is neutral text with an underline.
+  expect(installLink).toHaveClass('text-foreground', 'underline')
+  expect(installLink).not.toHaveClass('text-accent-text')
   expect(screen.queryByLabelText('Model name')).not.toBeInTheDocument()
 })
 

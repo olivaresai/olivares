@@ -144,7 +144,8 @@ describe('the document title of every census route', () => {
     const bar = (path: string) => topBarLabel(t, path)
     expect(bar('/agent-tools')).toBe('Tools')
     expect(bar('/models')).toBe('Tools')
-    expect(bar('/agentops')).toBe('Sessions')
+    // A work page (Sessions) names itself in its list's heading: the top bar says nothing.
+    expect(bar('/agentops')).toBe('')
     expect(bar('/backups')).toBe('Operations')
     expect(bar('/now')).toBe('Overview')
     expect(bar('/permissions')).toBe('Rules')

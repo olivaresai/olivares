@@ -14,9 +14,8 @@ import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 /** The release grammar: bare MAJOR.MINOR, the one scripts/release-first-hour.sh admits. */
 export const RELEASE_VERSION = /^\d+\.\d+$/
 
-/** Where the console paints which deployment this is: the signed-out line. A signed-in
- * page shows no version (Settings › About does), so the watcher finds none there. */
-const IDENTITY = '[data-testid="deployment-identity"]'
+/** The signed-in Settings > About version; public screens carry no identity. */
+const IDENTITY = '[data-testid="about-version"]'
 
 /** An identity element that is only a version (0.1, v1.0, 26.10.1, 1.0-rc1), never a host
  * such as 127.0.0.1:8443. A bare MAJOR.MINOR elsewhere is prose (CVSS v3.1, SCIM 2.0). */
@@ -36,6 +35,23 @@ export async function expectReleaseVersion(
   expect(reported, `/v1/server-info must report release ${version}`).toBe(
     version,
   )
+}
+
+/** The signed-in About stage must paint the release identity, never an empty read. */
+export async function expectPaintedReleaseVersion(
+  page: Page,
+  version: string,
+): Promise<string[]> {
+  const versions = await page.evaluate(() => window.__firstHourVersions?.())
+  expect(
+    versions?.length,
+    'Settings > About must display a version',
+  ).toBeGreaterThan(0)
+  for (const found of versions!)
+    expect(found, `page version ${found} differs from release ${version}`).toBe(
+      version,
+    )
+  return versions!
 }
 
 // Like src/test/i18n-keys.ts, use the real dictionaries. Playwright runs in

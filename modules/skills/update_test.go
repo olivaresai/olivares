@@ -5,6 +5,7 @@
 package skills_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/skills"
 )
 
@@ -174,7 +177,8 @@ func TestSkillsUpdateChecksTheRecordedSourceAndAppliesOnlyWhatWasReviewed(t *tes
 		t.Fatalf("the selected subdirectory is not recorded: %+v", installed.Revision.Source)
 	}
 	packRoute := "/v1/m/skills/packs/" + installed.Pack.ID
-	h.assign(t, h.workspace(t, false), installed.Revision.ID)
+	target := h.workspace(t, false)
+	assigned := h.assign(t, target, installed.Revision.ID)
 
 	// Nothing new upstream: the check says so and publishes nothing.
 	var current updateReply
@@ -240,10 +244,25 @@ func TestSkillsUpdateChecksTheRecordedSourceAndAppliesOnlyWhatWasReviewed(t *tes
 	if replay := h.update("apply-3", installed.Pack.ID, apply); replay.Code != http.StatusOK || replay.Body.String() != published.Body.String() {
 		t.Fatalf("replay: %d %s", replay.Code, replay.Body.String())
 	}
-	// Applying never moves a pin: the one made before the update keeps its revision.
+	// Apply moves pins on the previous latest revision exactly once, including on replay.
 	pins := h.packUses(t, installed.Pack.ID, url.Values{"limit": {"10"}})
-	if len(pins.Items) != 1 || pins.Items[0].RevisionID != installed.Revision.ID {
-		t.Fatalf("an update moved a pin: %+v", pins.Items)
+	if len(pins.Items) != 1 || pins.Items[0].RevisionID != result.Revision.ID || pins.Items[0].Version != assigned.Version+1 {
+		t.Fatalf("update did not move its pin once: %+v", pins.Items)
+	}
+	var selection skills.Selection
+	if code := h.get(t, "/v1/m/skills/selection?target_kind=workspace&target_id="+target.ID, &selection); code != http.StatusOK || len(selection.Members) != 1 || selection.Members[0].ManifestDigest != result.Revision.ManifestDigest {
+		t.Fatalf("selection after apply: %d %+v", code, selection)
+	}
+	pinAudits := 0
+	if err := h.store.View(context.Background(), h.tenant, func(sc store.Scope) error {
+		return sc.Audit().Walk(context.Background(), 1, func(row model.AuditEvent) error {
+			if row.Action == "skills.assignment.pin" {
+				pinAudits++
+			}
+			return nil
+		})
+	}); err != nil || pinAudits != 2 {
+		t.Fatalf("pin audits = %d, want 2: %v", pinAudits, err)
 	}
 	// The old revision is retained and the check is current again.
 	if code := h.get(t, packRoute, &detail); code != http.StatusOK || len(detail.Revisions) != 2 || detail.Pack.LatestRevisionID != result.Revision.ID {
@@ -257,6 +276,107 @@ func TestSkillsUpdateChecksTheRecordedSourceAndAppliesOnlyWhatWasReviewed(t *tes
 	if again := h.update("apply-4", installed.Pack.ID, apply); again.Code != http.StatusConflict {
 		t.Fatalf("apply of the current revision: %d %s", again.Code, again.Body.String())
 	}
+	// A deliberately older pin stays put when the next update advances the latest pin.
+	older := h.assign(t, h.workspace(t, false), installed.Revision.ID)
+	commitFixture(t, repo, "extra.md", "third revision support\n")
+	reply = h.update("check-third", installed.Pack.ID, map[string]any{})
+	if err := json.Unmarshal(reply.Body.Bytes(), &available); err != nil || reply.Code != http.StatusOK || available.Candidate == nil {
+		t.Fatalf("third check: %d %s", reply.Code, reply.Body.String())
+	}
+	reply = h.update("apply-third", installed.Pack.ID, map[string]any{"apply": true, "expected_digest": available.Candidate.ManifestDigest})
+	var third skills.InstallResult
+	if err := json.Unmarshal(reply.Body.Bytes(), &third); err != nil || reply.Code != http.StatusCreated {
+		t.Fatalf("third apply: %d %s", reply.Code, reply.Body.String())
+	}
+	pins = h.packUses(t, installed.Pack.ID, url.Values{"limit": {"10"}})
+	if len(pins.Items) != 2 {
+		t.Fatalf("pins after third apply: %+v", pins.Items)
+	}
+	for _, pin := range pins.Items {
+		want := third.Revision.ID
+		if pin.ID == older.ID {
+			want = installed.Revision.ID
+		}
+		if pin.RevisionID != want {
+			t.Fatalf("pin %s revision = %s, want %s", pin.ID, pin.RevisionID, want)
+		}
+	}
+
+}
+
+func TestSkillsUpdatePreservesApprovalForUnchangedActiveMembers(t *testing.T) {
+	repo, _, source := gitFixture(t)
+	g, _ := gitImporter(t, source)
+	h := catalogOptions(t, skills.Options{Git: &g, Targets: workspaceAuthority{}})
+	var installed skills.InstallResult
+	initial := h.installJSON("install-active-fixture", "/v1/m/skills/packs", map[string]any{"name": "fixture", "source": map[string]string{"kind": "git", "url": "https://example.com/fixture.git", "ref": "HEAD"}})
+	if err := json.Unmarshal(initial.Body.Bytes(), &installed); err != nil || initial.Code != http.StatusCreated {
+		t.Fatalf("install: %d %s", initial.Code, initial.Body.String())
+	}
+	commitFixture(t, repo, "SKILL.md", strings.Replace(harmless, "description:", "allowed-tools: Bash\ndescription:", 1))
+	apply := func(key string) skills.InstallResult {
+		t.Helper()
+		var check updateReply
+		reply := h.update(key+"-check", installed.Pack.ID, map[string]any{})
+		if err := json.Unmarshal(reply.Body.Bytes(), &check); err != nil || check.Candidate == nil {
+			t.Fatalf("check: %d %s", reply.Code, reply.Body.String())
+		}
+		reply = h.update(key, installed.Pack.ID, map[string]any{"apply": true, "expected_digest": check.Candidate.ManifestDigest})
+		var result skills.InstallResult
+		if err := json.Unmarshal(reply.Body.Bytes(), &result); err != nil || reply.Code != http.StatusCreated {
+			t.Fatalf("apply: %d %s", reply.Code, reply.Body.String())
+		}
+		if replay := h.update(key, installed.Pack.ID, map[string]any{"apply": true, "expected_digest": check.Candidate.ManifestDigest}); replay.Code != http.StatusOK || replay.Body.String() != reply.Body.String() {
+			t.Fatalf("replay: %d %s", replay.Code, replay.Body.String())
+		}
+		return result
+	}
+	active := apply("active")
+	target := h.workspace(t, false)
+	reply := h.request("POST", "/v1/m/skills/assignments", skills.AssignmentRequest{Target: target, RevisionID: active.Revision.ID, ApproveActiveContent: true}, "")
+	if reply.Code != http.StatusCreated {
+		t.Fatalf("approved pin: %d %s", reply.Code, reply.Body.String())
+	}
+	denied := h.workspace(t, false)
+	reply = h.request("POST", "/v1/m/skills/assignments", skills.AssignmentRequest{Target: denied, RevisionID: active.Revision.ID, ApproveActiveContent: true}, "")
+	if reply.Code != http.StatusCreated {
+		t.Fatalf("second pin: %d %s", reply.Code, reply.Body.String())
+	}
+	if err := h.store.Mutate(context.Background(), h.tenant, func(sc store.Scope) error {
+		workspace, err := sc.Workspaces().Get(context.Background(), model.ID(denied.ID))
+		if err != nil {
+			return err
+		}
+		workspace.Settings["skills_denied"] = true
+		_, err = sc.Workspaces().Update(context.Background(), workspace)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A file outside the selected member changes the pack, not its approved content.
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("new pack metadata\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fixtureGit(t, repo, nil, "add", "README.md")
+	fixtureGit(t, repo, nil, "commit", "--quiet", "-m", "update pack readme")
+	updated := apply("unchanged-active")
+	var selection skills.Selection
+	if code := h.get(t, "/v1/m/skills/selection?target_kind=workspace&target_id="+target.ID, &selection); code != http.StatusOK || len(selection.Members) != 1 || selection.Members[0].ManifestDigest != updated.Revision.ManifestDigest {
+		t.Fatalf("selection: %d %+v", code, selection)
+	}
+	if len(updated.PinsNotMoved) != 1 || !strings.HasPrefix(updated.PinsNotMoved[0].Reason, "target_unavailable:") {
+		t.Fatalf("unwritable pin: %+v", updated.PinsNotMoved)
+	}
+	// Approval must not carry to changed support bytes, even with identical SKILL.md.
+	commitFixture(t, repo, "support.md", "changed support for active member\n")
+	changed := apply("changed-active")
+	if len(changed.PinsNotMoved) != 1 || !strings.HasPrefix(changed.PinsNotMoved[0].Reason, "active_content_unapproved:") {
+		t.Fatalf("changed active pin: %+v", changed.PinsNotMoved)
+	}
+	if code := h.get(t, "/v1/m/skills/selection?target_kind=workspace&target_id="+target.ID, &selection); code != http.StatusOK || selection.Members[0].ManifestDigest != updated.Revision.ManifestDigest {
+		t.Fatalf("unapproved bytes reached selection: %d %+v", code, selection)
+	}
+
 }
 
 func TestSkillsUpdateReadsASourceItCanReadAgainOnly(t *testing.T) {

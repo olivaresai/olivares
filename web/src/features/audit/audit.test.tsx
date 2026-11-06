@@ -250,7 +250,7 @@ describe('AuditView — first work row', () => {
   it('keeps the filters in the query field, not a card above the ledger', async () => {
     api.list.mockResolvedValue({ items: [ev1], has_more: false })
     wrap(<AuditView />)
-    const row = await screen.findByRole('button', { name: /^Agent create by/ })
+    const row = await screen.findByRole('button', { name: /^Agent created by/ })
     expect(row.closest('ul[aria-label="Ledger entries"]')).toBeTruthy()
     expect(screen.queryByRole('textbox', { name: 'Actor' })).toBeNull()
     expect(screen.getByRole('textbox', { name: 'Ledger query' })).toBeVisible()
@@ -310,10 +310,11 @@ describe('AuditView — what happened, in words', () => {
     expect(
       await screen.findByRole('button', { name: /^Signed in by/ }),
     ).toBeInTheDocument()
-    expect(entryTexts()).toContainEqual(expect.stringMatching(/^Agent create/))
+    expect(entryTexts()).toContainEqual(expect.stringMatching(/^Agent created/))
     expect(entryTexts().join()).not.toMatch(/Authorization decision recorded/)
     expect(entryTexts().join()).not.toMatch(/Audit read/)
-    expect(screen.getByText('Internal records hidden: 2')).toBeInTheDocument()
+    // The fold is the one control; the page does not count what it keeps out of sight.
+    expect(screen.queryByText(/Internal records hidden/)).toBeNull()
     await userEvent.click(
       screen.getByRole('button', { name: 'Show internal records' }),
     )
@@ -391,7 +392,7 @@ describe('AuditView — ledger list', () => {
     wrap(<AuditView />)
 
     const row1 = (
-      await screen.findByRole('button', { name: 'Agent create by A member' })
+      await screen.findByRole('button', { name: 'Agent created by A member' })
     ).closest('li')!
     expect(within(row1).getByText('A member')).toBeInTheDocument()
     // The hash is shown as its short fingerprint; the whole value is on its title.
@@ -437,7 +438,7 @@ describe('AuditView — ledger list', () => {
     wrap(<AuditView />)
 
     expect(
-      await screen.findByRole('button', { name: /^Agent create/ }),
+      await screen.findByRole('button', { name: /^Agent created/ }),
     ).toBeInTheDocument()
     // The last window of the ledger, read forward and shown newest first.
     expect(api.list).toHaveBeenCalledWith({ from: 1, limit: 100 })
@@ -446,7 +447,7 @@ describe('AuditView — ledger list', () => {
     )
     const rows = entryTexts()
     expect(rows[0]).toMatch(/Audit read/)
-    expect(rows[1]).toMatch(/Agent create/)
+    expect(rows[1]).toMatch(/Agent created/)
   })
 
   it('sends the typed filters as validated server-side filters and RFC3339 UTC bounds', async () => {
@@ -530,20 +531,20 @@ describe('AuditView — ledger list', () => {
     )
     wrap(<AuditView />)
 
-    const firstRow = (await entry(/^Agent create/)).closest('li')
+    const firstRow = (await entry(/^Agent created/)).closest('li')
     expect(firstRow).not.toHaveClass('feed-enter')
 
     // The browser's own event, as a tab coming back to the front sends it.
     fireEvent(document, new Event('visibilitychange', { bubbles: true }))
 
-    // The sentences lead with readable action labels: "Person invite", "Policy create".
+    // The sentences lead with readable action labels: "Person invite", "Policy created".
     const arrived = (await entry(/^Person invite/)).closest('li')
     expect(arrived).toHaveClass('feed-enter')
     expect(
-      screen.getByRole('button', { name: /^Policy create/ }).closest('li'),
+      screen.getByRole('button', { name: /^Policy created/ }).closest('li'),
     ).toHaveClass('feed-enter')
     expect(
-      screen.getByRole('button', { name: /^Agent create/ }).closest('li'),
+      screen.getByRole('button', { name: /^Agent created/ }).closest('li'),
     ).not.toHaveClass('feed-enter')
 
     // Once the slide has had time to finish, the marks clear: a virtualized row
@@ -554,7 +555,7 @@ describe('AuditView — ledger list', () => {
           screen.getByRole('button', { name: /^Person invite/ }).closest('li'),
         ).not.toHaveClass('feed-enter')
         expect(
-          screen.getByRole('button', { name: /^Policy create/ }).closest('li'),
+          screen.getByRole('button', { name: /^Policy created/ }).closest('li'),
         ).not.toHaveClass('feed-enter')
       },
       { timeout: 3000 },
@@ -581,7 +582,7 @@ describe('AuditView — ledger list', () => {
         : Promise.resolve({ items: [ev1, ev2], has_more: true }),
     )
     wrap(<AuditView />)
-    await entry(/^Agent create/)
+    await entry(/^Agent created/)
 
     await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
     expect((await entry(/^Person invite/)).closest('li')).not.toHaveClass(
@@ -595,7 +596,7 @@ describe('AuditView — ledger list', () => {
     api.recent.mockResolvedValue({ items: [], head_seq: 13 })
     api.list.mockResolvedValue({ items: [ev1, ev2], has_more: false })
     wrap(<AuditView />)
-    await entry(/^Agent create/)
+    await entry(/^Agent created/)
     await userEvent.click(
       screen.getByRole('button', { name: 'Show internal records' }),
     )
@@ -680,11 +681,11 @@ describe('AuditView — the entry beside the list', () => {
     api.list.mockResolvedValue({ items: [ev1], has_more: false })
     wrap(<AuditView />)
     await userEvent.click(
-      await screen.findByRole('button', { name: /^Agent create by/ }),
+      await screen.findByRole('button', { name: /^Agent created by/ }),
     )
     const entry = await screen.findByRole('complementary', { name: 'Entry 12' })
     expect(
-      within(entry).getByRole('heading', { name: 'Agent create by A member' }),
+      within(entry).getByRole('heading', { name: 'Agent created by A member' }),
     ).toBeInTheDocument()
     expect(within(entry).getByText('12')).toBeInTheDocument()
     expect(within(entry).getByText('Previous hash')).toBeInTheDocument()
@@ -741,7 +742,7 @@ describe('P3 — the time of an entry does not split', () => {
     api.list.mockResolvedValue({ items: [ev1], has_more: false })
     wrap(<AuditView />)
     const row = (
-      await screen.findByRole('button', { name: /^Agent create by/ })
+      await screen.findByRole('button', { name: /^Agent created by/ })
     ).closest('li')!
     const time = row.querySelector('time')?.parentElement as HTMLElement
     expect(time.className.split(/\s+/)).toContain('whitespace-nowrap')
@@ -858,7 +859,7 @@ it('hides cached member names in both the Audit row and the entry when roster pe
   expect(screen.queryByText('Alice Ng')).toBeNull()
   expect(screen.getByText('A member')).toBeVisible()
   await userEvent.click(
-    screen.getByRole('button', { name: /^Agent create by/ }),
+    screen.getByRole('button', { name: /^Agent created by/ }),
   )
   expect(
     within(
@@ -878,7 +879,7 @@ describe.skipIf(AUDIT_EVIDENCE_AVAILABLE)(
       expect(screen.queryByRole('button', { name: /^export$/i })).toBeNull()
       expect(api.verify).not.toHaveBeenCalled()
       expect(exp.fetchAuditExport).not.toHaveBeenCalled()
-      await userEvent.click(await entry(/^Agent create/))
+      await userEvent.click(await entry(/^Agent created/))
       const panel = await screen.findByRole('complementary', {
         name: 'Entry 12',
       })

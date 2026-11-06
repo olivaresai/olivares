@@ -3,11 +3,6 @@
   "subtitle": "Quién puede iniciar sesión, qué puede hacer y cómo lo demuestra.",
   "ownSignInOnly": "Aquí puedes configurar tus propios factores de inicio de sesión. Un administrador de la organización cambia el resto de esta página.",
   "sections": "Secciones de identidad",
-  "groups": {
-    "people": "Personas",
-    "signIn": "Inicio de sesión",
-    "machines": "Identidades de máquina"
-  },
   "tabs": {
     "federation": "Inicio de sesión único",
     "inventory": "Inventario de identidades",
@@ -102,9 +97,9 @@
   },
   "sso": {
     "title": "Inicio de sesión único (OIDC / SAML)",
-    "description": "El inicio de sesión único lo configura un superadministrador en SSO / IdP. Este panel comprueba la redirect URI exacta y muestra el estado de la conexión.",
+    "description": "El inicio de sesión único lo configura un superadministrador en Proveedor de identidad. Este panel comprueba la redirect URI exacta y muestra el estado de la conexión.",
     "notConfigured": "Sin configurar",
-    "notConfiguredHint": "No hay ningún proveedor de identidad configurado, por lo que las peticiones de federación devuelven 501. Un superadministrador lo configura en SSO / IdP.",
+    "notConfiguredHint": "No hay ningún proveedor de identidad configurado, por lo que las peticiones de federación devuelven 501. Un superadministrador lo configura en Proveedor de identidad.",
     "seamWhat": "El resumen del estado de la conexión SSO",
     "protocol": "Protocolo",
     "state": "Conexión",
@@ -115,7 +110,7 @@
     "redirectCheckHint": "Pega la redirect/ACS URI configurada en tu proveedor de identidad. Debe coincidir exactamente con el valor de arriba (RFC 9700).",
     "redirectMatch": "Coincidencia exacta — esta redirect URI es válida.",
     "redirectMismatch": "No coincide exactamente. El IdP debe usar la redirect URI de arriba, carácter por carácter.",
-    "configure": "Abrir SSO / IdP",
+    "configure": "Abrir Proveedor de identidad",
     "testLogin": "Iniciar un inicio de sesión de prueba"
   },
   "scim": {

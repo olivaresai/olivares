@@ -4,7 +4,8 @@
     "description": "이 배포가 관찰한 최근 세션 다섯 개입니다.",
     "openAll": "모든 세션",
     "emptyTitle": "아직 세션이 없습니다",
-    "emptyDescription": "연결된 엔진이 수행한 모든 실행이 무엇을 했는지, 얼마나 걸렸는지, 비용은 얼마인지와 함께 여기에 표시됩니다.",
+    "emptyDescription": "시작한 세션이 모두 여기에 표시됩니다.",
+    "emptyAction": "세션 시작",
     "unavailableTitle": "최근 작업을 불러오지 못했습니다",
     "unavailableDescription": "세션 읽기가 응답하지 않았습니다. 위의 에스테이트 수치는 영향을 받지 않습니다.",
     "untitled": "제목 없는 세션"
@@ -65,6 +66,8 @@
   },
   "overview": {
     "running": "작업 중",
-    "recent": "최근"
+    "recent": "최근",
+    "wantsToRun": "{{session}}에서 실행하려는 명령:",
+    "approvals": "승인: {{required}} 중 {{approved}}"
   }
 }

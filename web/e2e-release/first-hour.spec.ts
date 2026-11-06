@@ -11,6 +11,7 @@ import {
 } from '../src/features/navigation/journeys'
 import {
   expectReleaseVersion,
+  expectPaintedReleaseVersion,
   isExpectedNoRepositoryConsoleError,
   openToolInstall,
   READY_MS,
@@ -128,26 +129,16 @@ test('release container: a fresh administrator reaches a first answer and the co
         `${name}: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
-    // Compared here as well as on the watcher's tick, so a stage never ends on a
-    // painted identity nobody read, or on a page the watcher is not installed on.
-    try {
-      const versions = await page.evaluate(() => window.__firstHourVersions?.())
-      if (!versions)
-        record(`${name}: the surface watcher is not installed on this page`)
-      else {
-        console.log(
-          `UI version ${name}: ${redact(versions.join(', ')) || 'none painted'}`,
+    // Only About paints a version. Its empty read is a failure, not a skipped check.
+    if (name === '05-settings-about') {
+      try {
+        const versions = await expectPaintedReleaseVersion(page, version!)
+        console.log(`UI version ${name}: ${redact(versions.join(', '))}`)
+      } catch (error) {
+        record(
+          `${name}: ${error instanceof Error ? error.message : String(error)}`,
         )
-        for (const found of versions)
-          if (found !== version)
-            record(
-              `${name}: page version ${found} differs from release ${version}`,
-            )
       }
-    } catch (error) {
-      record(
-        `${name}: identity versions unreadable: ${error instanceof Error ? error.message : String(error)}`,
-      )
     }
     const path = info.outputPath(`${name}.png`)
     await page.screenshot({
@@ -375,6 +366,10 @@ test('release container: a fresh administrator reaches a first answer and the co
           .getByRole('navigation', { name: 'Settings sections', exact: true })
           .getByRole('button', { name: label, exact: true })
           .click()
+        if (section === 'about')
+          await expect(page.getByTestId('about-version')).toHaveText(
+            RELEASE_VERSION,
+          )
         await expect(
           page.locator(
             '.animate-spin:visible, .animate-pulse:visible, [aria-busy=true]:visible',

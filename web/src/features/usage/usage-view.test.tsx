@@ -145,6 +145,14 @@ afterEach(() => {
 })
 
 describe('UsageView', () => {
+  it('does not paint its name under the top bar that already says Usage', () => {
+    renderIntel(<UsageView />)
+    // Still the page's h1 for assistive technology; only the painted word is dropped.
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Usage' }),
+    ).toHaveClass('sr-only')
+  })
+
   it("shows an organization admin the accounts' limits, the account nearest its limit first", () => {
     state.profiles.data.accounts = [
       account({

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE STRIP AT THE TOP OF THE LIST: "2 need you · 5 running · $14 today", one line.
+// THE STRIP AT THE TOP OF THE LIST: "2 need you · 5 working · $14 today", one line.
 //
-// Each part is a link. Need you and running narrow the list to their section (`?show=`,
+// Each part is a link. Need you and working narrow the list to their section (`?show=`,
 // a second press shows the whole list again); the cost opens Usage. A part with nothing to
-// say is left out, and with nothing at all there is no strip. An unknown cost is left out
-// too: never "$0" for a cost nobody reported, never "at least" for part of one.
+// say is left out, and with nothing at all there is no strip. The cost is what today's
+// sessions reported; one that reported none is left out of it, never counted as $0, and
+// with none reported there is no cost part.
 // Overview shows the same strip with what failed today, its filters opening Sessions.
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -36,7 +37,7 @@ export function SessionStrip({
   running: number | null
   /** Sessions that failed today (Overview); null when not said. */
   failed?: number | null
-  /** What today's sessions cost, only when every one of them reported it; 0 is left out. */
+  /** What today's sessions reported they cost; null when none did, and 0 is left out. */
   costMicroUsd: number | null
   /** The Usage page when the person may open it; else the cost is plain text. */
   usagePath: string | null

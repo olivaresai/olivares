@@ -70,11 +70,14 @@ func normalizeStandardsSourceRef(sourceType, ref string) string {
 	return ""
 }
 
-// checkStandardsScope refuses a binding of the department's standards on anything but the
-// organization tree or a directory group.
+// checkStandardsScope refuses a binding of the department's standards, or of an approval policy or
+// DLP ruleset, on anything but the organization tree or a directory group: selection reads no other.
 func checkStandardsScope(sourceType, scopeTree string) string {
 	if isStandardsSource(sourceType) && scopeTree != scopeWorkspace && scopeTree != scopeUserGroup {
 		return "instructions and templates are assigned to a department or a directory group: scope_tree must be workspace or user_group"
+	}
+	if isPolicySource(sourceType) && scopeTree != scopeWorkspace && scopeTree != scopeUserGroup {
+		return "approval policies and DLP rulesets are assigned to a department or a directory group: scope_tree must be workspace or user_group"
 	}
 	return ""
 }
@@ -142,10 +145,10 @@ type Standing struct {
 
 // PolicyAssignedIn answers, inside the caller's transaction, which approval-policy or dlp-ruleset
 // sources reach the departments (slugs) and directory groups, in AssignedTo's order: the last
-// stands. named is every source an active binding assigns anywhere, so a caller keeps the policies
-// no department or group was given tenant-wide. Any other source type is refused.
+// stands. named is every source an active binding assigns to a department or group, so a caller
+// keeps the policies no department or group was given tenant-wide. Any other source type is refused.
 func PolicyAssignedIn(ctx context.Context, sc store.Scope, now time.Time, departments, groups []string, sourceType string) (standings []Standing, named map[string]bool, err error) {
-	if sourceType != sourceApprovalPolicy && sourceType != sourceDLPRuleset {
+	if !isPolicySource(sourceType) {
 		return nil, nil, errNotAPolicy
 	}
 	standings, active, err := assignedIn(ctx, sc, now, departments, groups, sourceType, false)
@@ -154,7 +157,8 @@ func PolicyAssignedIn(ctx context.Context, sc store.Scope, now time.Time, depart
 	}
 	named = map[string]bool{}
 	for _, rec := range active {
-		if rec.Bool(colEnabled) && !liftsEffect(normalizeEffect(rec.String(colEffect))) {
+		tree := rec.String(colScopeTree)
+		if rec.Bool(colEnabled) && !liftsEffect(normalizeEffect(rec.String(colEffect))) && (tree == scopeWorkspace || tree == scopeUserGroup) {
 			named[rec.String(colSourceRef)] = true
 		}
 	}

@@ -108,7 +108,7 @@ Run it after every install, and after removing an override.
 
 Installing a valid Business or Enterprise license on a Community build keeps that
 build running. The session cockpit and the other commercial pages appear only after
-you switch this installation to Business. The console's **Edition & license** view
+you switch this installation to Business. The console's **Settings › Edition** view
 names the installed license separately from the build. **Expires** is the paid term;
 **Lease until**, when shown, is the separate provisional instance lease. Running in
 Docker? Go to [Docker and Compose](#docker-and-compose) below.
@@ -116,7 +116,7 @@ Docker? Go to [Docker and Compose](#docker-and-compose) below.
 With a license installed, the commercial binary is one command away. Nothing is
 reinstalled and no data moves. `olivares license install` and `olivares license status`
 print the exact command for how this installation was installed, and the console's
-**Edition & license** view shows the same step as one button, **Switch to Business**: the
+**Settings › Edition** view shows the same step as one button, **Switch to Business**: the
 engine downloads the build, verifies it, swaps it in place and restarts on it.
 
 ```sh
@@ -175,7 +175,7 @@ what is active. These commands exist **only in the commercial binary** — if
 `olivares enterprise` is not a command, you are still running the Community build and the
 swap above has not happened yet.
 
-The console does the same for each family: the **Edition & license** view lists every family
+The console does the same for each family: the **Settings › Edition** view lists every family
 with how many of its modules are on. **Turn on** shows the same diff before it applies, and
 **Turn off** names the modules that stop. A family your license does not include keeps
 **Turn on** disabled and says so: *This license does not include* the family. The engine checks
@@ -256,7 +256,7 @@ that service with `docker compose up -d --no-deps --force-recreate olivares`. Fo
 standalone Docker, recreate the container with this image and the same volume and
 arguments. Keep the data volume: do not use `down --volumes`.
 
-Check **Edition & license** after the restart: the edition should read **Business**, and
+Check **Settings › Edition** after the restart: the edition should read **Business**, and
 the installed license remains in the data volume. Enterprise contracts use this
 commercial build too; any contract-specific artifact follows its download instructions.
 

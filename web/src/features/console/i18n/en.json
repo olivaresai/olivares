@@ -4,7 +4,7 @@
   "tabs": {
     "people": "People",
     "agents": "Agents",
-    "sso": "SSO / IdP",
+    "sso": "Identity provider",
     "scopes": "Workspaces",
     "roles": "Roles",
     "secrets": "Secrets",
@@ -56,11 +56,11 @@
     "truncatedHint": "There are more API tokens than shown; this page takes rows by id — assigned at creation — so later rows are missing. These are LIVE credentials: a token you cannot see here still authenticates, and you cannot revoke it from this screen. A key not listed does not demonstrate that it does not exist."
   },
   "license": {
-    "title": "Edition & license",
+    "title": "License",
     "caption": "Current edition, license status and actions for this installation.",
     "helpSummary": "License apply versus this build",
     "helpBody": "Replacing the license applies on this process without a restart. That is not a binary swap or a data upgrade: those are separate operations with their own procedures. On Community, applying a verified license displays its details here; it does not change this build.",
-    "install": "Install / update",
+    "install": "Install license",
     "remove": "Remove license",
     "edition": "Edition",
     "editions": {
@@ -1194,11 +1194,9 @@
     "empty": "No upstream servers",
     "emptyHint": "Add a Streamable HTTP server, test its connection, then configure trust and tool permissions before enabling it.",
     "source": {
-      "file": "Operator file",
-      "store": "Organization settings"
+      "file": "Operator file"
     },
     "fileOwned": "The operator file governs MCP on its configured listener. This view is read-only. Stored configuration stays inactive; nothing is merged or overridden.",
-    "storeOwned": "The organization’s settings govern MCP on this installation’s HTTP listener. No configuration file is required.",
     "sessionTitle": "Session tools",
     "sessionHint": "Sessions can message each other and use their assigned work. It gives sessions no new permissions.",
     "tools": "Tools ({{count}})",
@@ -1336,8 +1334,8 @@
       "notAllowed": "not allowed (change it in Configure)",
       "confirm": "Turn on"
     },
-    "sessionOn": "On: turn it off to stop it.",
-    "sessionOff": "Off: sessions cannot message each other or use their assigned work.",
+    "sessionOn": "On",
+    "sessionOff": "Off",
     "startersTitle": "Starter servers",
     "startersHint": "Curated servers, each with its confinement and network limits. Add fills in the form; the server is saved off and runs nothing until you test and enable it.",
     "starterAdd": "Add {{name}}",

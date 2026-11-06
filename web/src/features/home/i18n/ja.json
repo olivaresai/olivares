@@ -4,7 +4,8 @@
     "description": "このデプロイメントが観測した直近 5 件のセッションです。",
     "openAll": "すべてのセッション",
     "emptyTitle": "セッションはまだありません",
-    "emptyDescription": "接続したエンジンの実行がここに表示されます。何をしたか、どれだけかかったか、いくらかかったかが分かります。",
+    "emptyDescription": "開始したセッションはここに表示されます。",
+    "emptyAction": "セッションを開始",
     "unavailableTitle": "最近の作業を読み込めませんでした",
     "unavailableDescription": "セッションの読み取りが応答しませんでした。上の数値には影響しません。",
     "untitled": "無題のセッション"
@@ -65,6 +66,8 @@
   },
   "overview": {
     "running": "実行中",
-    "recent": "最近"
+    "recent": "最近",
+    "wantsToRun": "{{session}} が次を実行しようとしています:",
+    "approvals": "承認: {{required}} 件中 {{approved}} 件"
   }
 }

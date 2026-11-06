@@ -45,7 +45,12 @@
     "moved": "Zuweisung auf die neueste Revision verschoben",
     "approveTitle": "Skills genehmigen, die beim Laden wirken?",
     "approveDescription": "Die neueste Revision weist {{target}} Skills zu, auf die ihr Werkzeug ohne Rückfrage reagiert: {{skills}}. Genehmigen Sie sie erst nach der Prüfung.",
-    "approve": "Genehmigen und neueste verwenden"
+    "approve": "Genehmigen und neueste verwenden",
+    "disable": "Deaktivieren",
+    "disabled": "Skill deaktiviert",
+    "disableFor": "{{skill}} für {{target}} deaktivieren",
+    "disableTitle": "Diesen Skill deaktivieren?",
+    "disableDescription": "Neue Sitzungen von {{target}} erhalten {{skill}} nicht mehr aus dieser Zuweisung. Andere Skills bleiben zugewiesen. Gespeicherte Gespräche behalten ihren Stand."
   },
   "assign": {
     "title": "Zuweisen",
@@ -85,7 +90,15 @@
     "gitSubmit": "Aus Git installieren",
     "name": "Paketname",
     "nameHint": "Optional; standardmäßig der Repository-Name. Wählen Sie einen anderen Namen für ein weiteres Paket aus demselben Repository.",
-    "held": "Skill-Paket installiert. Es enthält Skills, die beim Laden wirken, daher wurde es nicht zugewiesen: Prüfen Sie es und weisen Sie es im Paketblatt zu."
+    "held": "Skill-Paket installiert. Es enthält Skills, die beim Laden wirken, daher wurde es nicht zugewiesen: Prüfen Sie es und weisen Sie es im Paketblatt zu.",
+    "local": "Ordner oder Archiv",
+    "archive": "Archiv",
+    "archiveHint": "ZIP oder tar.gz, bis zu 32 MiB. Archiv oder Ordner auswählen.",
+    "folder": "Ordner",
+    "uploadSubmit": "Auswahl installieren",
+    "selectedFiles": "Ausgewählte Dateien: {{count}}",
+    "uploadLimit": "Importgrenzen überschritten (32 MiB, 4096 Dateien, 8 MiB pro Datei).",
+    "uploadName": "Name des hochgeladenen Pakets"
   },
   "update": {
     "title": "Updates",

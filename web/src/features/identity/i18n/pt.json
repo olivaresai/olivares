@@ -3,11 +3,6 @@
   "subtitle": "Quem pode iniciar sessão, o que pode fazer e como o comprova.",
   "ownSignInOnly": "Aqui pode configurar os seus próprios fatores de início de sessão. Um administrador da organização altera o resto desta página.",
   "sections": "Secções de identidade",
-  "groups": {
-    "people": "Pessoas",
-    "signIn": "Início de sessão",
-    "machines": "Identidades de máquina"
-  },
   "tabs": {
     "federation": "Início de sessão único",
     "inventory": "Inventário de identidades",
@@ -102,9 +97,9 @@
   },
   "sso": {
     "title": "Início de sessão único (OIDC / SAML)",
-    "description": "O início de sessão único é configurado em SSO / IdP, por um superadministrador. Este painel verifica o URI de redirecionamento exato e mostra o estado da ligação.",
+    "description": "O início de sessão único é configurado em Fornecedor de identidade, por um superadministrador. Este painel verifica o URI de redirecionamento exato e mostra o estado da ligação.",
     "notConfigured": "Não configurado",
-    "notConfiguredHint": "Não há nenhum fornecedor de identidade configurado, pelo que os pedidos de federação devolvem 501. Um superadministrador configura um em SSO / IdP.",
+    "notConfiguredHint": "Não há nenhum fornecedor de identidade configurado, pelo que os pedidos de federação devolvem 501. Um superadministrador configura um em Fornecedor de identidade.",
     "seamWhat": "O resumo do estado da ligação SSO",
     "protocol": "Protocolo",
     "state": "Ligação",
@@ -115,7 +110,7 @@
     "redirectCheckHint": "Cole o URI de redirecionamento/ACS configurado no seu fornecedor de identidade. Tem de corresponder exatamente ao valor acima (RFC 9700).",
     "redirectMatch": "Correspondência exata — este URI de redirecionamento é válido.",
     "redirectMismatch": "Não corresponde exatamente. O IdP tem de usar o URI de redirecionamento acima, caráter por caráter.",
-    "configure": "Abrir SSO / IdP",
+    "configure": "Abrir Fornecedor de identidade",
     "testLogin": "Iniciar um teste de início de sessão"
   },
   "scim": {

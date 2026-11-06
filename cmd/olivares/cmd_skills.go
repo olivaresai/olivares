@@ -281,7 +281,7 @@ func newSkillsImportCmd(client datalaneClient, update bool) *cobra.Command {
 	if update {
 		cmd.Flags().BoolVar(&apply, "apply", false, "with no source flag: publish the update the check showed (needs --expected-digest)")
 		cmd.Flags().BoolVar(&showDiff, "diff", false, "with no source flag: print the unified text diff of each changed file")
-		cmd.Long = "Publish a new immutable revision of a pack. With --builtin, --git, --folder or --archive it publishes that source. With none it reads the pack's recorded source again, shows what changed and the digest to apply; then run it again with --apply --expected-digest <digest>. Existing pins keep their revision until you move them with olivares skills pin."
+		cmd.Long = "Publish a new immutable revision of a pack. With --builtin, --git, --folder or --archive it publishes that source. With none it reads the pack's recorded source again, shows what changed and the digest to apply; then run it again with --apply --expected-digest <digest>. Apply also moves pins on the previous latest revision; pins on older revisions stay put. Publishing with a source flag keeps existing pins; move those with olivares skills pin."
 	}
 	return cmd
 }

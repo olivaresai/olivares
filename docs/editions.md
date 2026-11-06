@@ -12,7 +12,7 @@ terms agreed in a contract and the few capabilities that depend on them. Prices 
 [offer page](https://olivares.ai/pricing).
 
 An active commercial license displays a small Business or Enterprise badge in the navigation,
-Search and commands, Settings > Edition, and Edition & license. Turn off **Show edition badge** in
+Search and commands, and Settings > Edition. Turn off **Show edition badge** in
 Settings > Edition to hide it; the choice follows your account within the organization. Community
 and installations without a valid commercial license show no badge.
 

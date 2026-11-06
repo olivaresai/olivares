@@ -89,6 +89,7 @@ not in it.
 | `host_metrics_unavailable` |  |
 | `host_unavailable` |  |
 | `idempotency_key_reused` |  |
+| `identity_mismatch` |  |
 | `import_limit` |  |
 | `install_busy` |  |
 | `integrity_violation` |  |

@@ -705,7 +705,6 @@
       "snoozed": "スヌーズ中",
       "archived": "アーカイブ済み"
     },
-    "agentCount_other": "エージェント {{count}} 件",
     "more": "その他",
     "back": "セッションに戻る",
     "showTable": "テーブルで表示",

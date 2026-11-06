@@ -228,27 +228,38 @@ function FlaggedCard({
     if (decidedByMe) onSettled()
   }, [decidedByMe, onSettled])
   const toolCall = approval.subject_kind?.endsWith('.tool')
+  // A request a person raised leads with their own words (the queue's rule,
+  // ApprovalRequestCell): the card then names itself by them, and its kind ("Db migrate")
+  // heads it only when they wrote none.
+  const words = !toolCall && !!approval.reason
   const head =
     [approval.review?.tool, session.name].filter(Boolean).join(' · ') ||
-    (!toolCall && approval.action
-      ? readableAction(approval.action)
-      : t('governance:preview.requestSummary'))
+    (words
+      ? ''
+      : !toolCall && approval.action
+        ? readableAction(approval.action)
+        : t('governance:preview.requestSummary'))
   const headingId = `now-flagged-${approval.id}`
   return (
     <article
-      aria-labelledby={headingId}
+      aria-labelledby={head ? headingId : undefined}
+      aria-label={head ? undefined : approval.reason}
       data-testid="now-flagged-request"
       data-trust-chrome=""
-      className="flex min-w-0 flex-col gap-3 rounded-lg border-l-2 border-accent bg-surface px-4 py-3 text-foreground"
+      className="flex min-w-0 flex-col gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-foreground"
     >
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <h3 id={headingId} className="break-words text-heading text-text">
-          {head}
-        </h3>
-        {session.folder ? (
-          <PathText value={session.folder} tone="muted" />
-        ) : null}
-      </div>
+      {head || session.folder ? (
+        <div className="flex min-w-0 flex-col gap-0.5">
+          {head ? (
+            <h3 id={headingId} className="break-words text-heading text-text">
+              {head}
+            </h3>
+          ) : null}
+          {session.folder ? (
+            <PathText value={session.folder} tone="muted" />
+          ) : null}
+        </div>
+      ) : null}
       <ApprovalWhatRuns approval={approval} />
       {/* The rule that asked and what it reaches: the queue's own two lines. */}
       <ApprovalWhy approval={approval} reaches={session.reaches} />
@@ -310,7 +321,16 @@ function FlaggedCard({
 }
 
 function ApprovalRow({ approval }: { approval: ApprovalDTO }) {
-  const { t } = useTranslation(['governance'])
+  const { t } = useTranslation(['home', 'governance'])
+  const session = useApprovalSession(approval)
+  // One line, as the sketch says it: "<session> wants to run <command>". The kind of tool,
+  // the folder and the full review stay on the request itself.
+  const command =
+    approval.review?.tool === 'Command' ? approval.review.text : undefined
+  const wants =
+    command && session.name
+      ? t('home:overview.wantsToRun', { session: session.name })
+      : null
   return (
     <li className="border-b border-line last:border-b-0">
       <Link
@@ -324,17 +344,33 @@ function ApprovalRow({ approval }: { approval: ApprovalDTO }) {
           <ShieldCheck aria-hidden className="size-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <ApprovalRequestCell
-            approval={approval}
-            className="w-full max-w-full"
-          />
+          {wants && command ? (
+            <span
+              className="block truncate"
+              title={`${wants} ${command}`}
+              data-slot="now-approval-wants"
+            >
+              <span className="font-medium text-text">{wants}</span>{' '}
+              <code className="font-mono text-caption text-text">
+                {command.replace(/\s*\n\s*/g, ' ')}
+              </code>
+            </span>
+          ) : (
+            <ApprovalRequestCell
+              approval={approval}
+              className="w-full max-w-full"
+            />
+          )}
         </span>
-        <span className="shrink-0 text-caption text-text-3 tabular-nums">
-          {t('governance:approvals.progressOf', {
-            approved: approval.approve_count,
-            required: approval.required_approvals,
-          })}
-        </span>
+        {/* A count only where more than one person decides, and with its noun. */}
+        {approval.required_approvals > 1 ? (
+          <span className="shrink-0 text-caption text-text-3 tabular-nums">
+            {t('home:overview.approvals', {
+              approved: approval.approve_count,
+              required: approval.required_approvals,
+            })}
+          </span>
+        ) : null}
       </Link>
     </li>
   )

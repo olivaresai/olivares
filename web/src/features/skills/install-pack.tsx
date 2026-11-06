@@ -21,7 +21,7 @@ import type {
 } from './types'
 
 interface InstallIntent {
-  input: SkillInstallRequest
+  input: SkillInstallRequest | FormData | { files: File[]; name: string }
   workspace: string
   key: string
   // Retained on the intent itself so assurance continuation and explicit retries
@@ -48,6 +48,8 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
   const [packName, setPackName] = useState('')
   const [ref, setRef] = useState('')
   const [subdir, setSubdir] = useState('')
+  const [localFiles, setLocalFiles] = useState<File[]>([])
+  const [uploadName, setUploadName] = useState('')
   const [intent, setIntent] = useState<InstallIntent | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
@@ -69,6 +71,13 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
   const install = usePrivilegedMutation<InstallIntent, SkillInstallResult>({
     mutationFn: async (action, authority) => {
       const request = { tenant: activeTenant, ...authority }
+      if ('files' in action.input) {
+        action.input = await prepareUpload(
+          action.input.files,
+          action.input.name,
+        )
+        authority.dispatchGuard()
+      }
       const previouslyPublished = !!action.result
       const result =
         action.result ??
@@ -149,7 +158,7 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
           ? 'install.assigned'
           : 'install.done',
     )
-  const begin = (input: SkillInstallRequest) => {
+  const begin = (input: InstallIntent['input']) => {
     const action = { input, workspace, key: crypto.randomUUID() }
     setIntent(action)
     setFailure(null)
@@ -174,6 +183,54 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
         subdir: subdir.trim(),
       },
     })
+  }
+  const prepareUpload = async (
+    localFiles: File[],
+    name: string,
+  ): Promise<FormData> => {
+    const first = localFiles[0]
+    if (!first) throw new Error(t('install.unavailable'))
+    let archive: Blob = first
+    let format = /\.zip$/i.test(first.name) ? 'zip' : 'tar.gz'
+    const folder = !!first.webkitRelativePath
+    if (folder) {
+      if (
+        localFiles.length > 4096 ||
+        localFiles.some((file) => file.size > 8 * 1024 * 1024) ||
+        localFiles.reduce((size, file) => size + file.size, 0) >
+          32 * 1024 * 1024
+      )
+        throw new Error(t('install.uploadLimit'))
+      const { ZipWriter, BlobWriter, BlobReader } =
+        await import('@zip.js/zip.js')
+      const writer = new ZipWriter(new BlobWriter('application/zip'), {
+        level: 0,
+        useWebWorkers: false,
+      })
+      try {
+        for (const file of localFiles)
+          await writer.add(
+            file.webkitRelativePath.split('/').slice(1).join('/'),
+            new BlobReader(file),
+          )
+      } finally {
+        archive = await writer.close()
+      }
+      format = 'zip'
+    }
+    if (archive.size > 32 * 1024 * 1024)
+      throw new Error(t('install.uploadLimit'))
+    const body = new FormData()
+    body.set(
+      'name',
+      name.trim() ||
+        (folder
+          ? first.webkitRelativePath.split('/')[0]
+          : first.name.replace(/\.(zip|tar\.gz|tgz)$/i, '')),
+    )
+    body.set('format', format)
+    body.set('archive', archive, `pack.${format}`)
+    return body
   }
   const busy =
     install.isPending ||
@@ -276,6 +333,65 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
           </ul>
         )}
       </details>
+      {canInstall && (
+        <details>
+          <summary className="cursor-pointer font-medium">
+            {t('install.local')}
+          </summary>
+          <form
+            className="mt-3 flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault()
+              begin({ files: localFiles, name: uploadName })
+            }}
+          >
+            <Field
+              label={t('install.archive')}
+              description={t('install.archiveHint')}
+            >
+              <Input
+                type="file"
+                accept=".zip,.tar.gz,.tgz"
+                disabled={busy}
+                onChange={(e) => {
+                  setLocalFiles(Array.from(e.target.files ?? []))
+                }}
+              />
+            </Field>
+            <Field label={t('install.folder')}>
+              <Input
+                type="file"
+                multiple
+                {...{ webkitdirectory: '' }}
+                disabled={busy}
+                onChange={(e) => {
+                  setLocalFiles(Array.from(e.target.files ?? []))
+                }}
+              />
+            </Field>
+            <Field label={t('install.uploadName')}>
+              <Input
+                value={uploadName}
+                onChange={(e) => setUploadName(e.target.value)}
+                maxLength={128}
+                disabled={busy}
+              />
+            </Field>
+            {localFiles.length > 0 && (
+              <p role="status">
+                {t('install.selectedFiles', { count: localFiles.length })}
+              </p>
+            )}
+            <Button
+              type="submit"
+              disabled={busy || !localFiles.length}
+              className="self-start"
+            >
+              {t('install.uploadSubmit')}
+            </Button>
+          </form>
+        </details>
+      )}
       {canInstall && (
         <details>
           <summary className="cursor-pointer font-medium">

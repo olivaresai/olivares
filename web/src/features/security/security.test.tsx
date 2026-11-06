@@ -335,6 +335,14 @@ describe('GuardrailVerdict — a recorded flag does not block on its own', () =>
 })
 
 describe('Security overview — current exposure before detective work', () => {
+  it('does not paint its name under the top bar that already says Security', async () => {
+    wrapView(<SecurityView />)
+    // Still the page's h1 for assistive technology; only the painted word is dropped.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Security' }),
+    ).toHaveClass('sr-only')
+  })
+
   it('opens on the overview instead of findings', async () => {
     wrapView(<SecurityView />)
 

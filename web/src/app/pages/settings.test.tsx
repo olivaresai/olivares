@@ -145,7 +145,7 @@ describe('Settings', () => {
       await screen.findByText('Settings License Owner'),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Install / update' }),
+      screen.getByRole('button', { name: 'Install license' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Remove license' }),
@@ -180,6 +180,34 @@ describe('Settings', () => {
     expect(screen.queryByRole('region', { name: 'Modules list' })).toBeNull()
   })
 
+  it('names Edition and Modules with one noun each, and no empty license source (C21)', async () => {
+    vi.spyOn(consoleApi, 'getLicense').mockResolvedValue({
+      edition: 'community',
+      hot_apply: true,
+      status: 'none',
+      source: 'none',
+      managed_externally: false,
+      max_users: 0,
+      seat_limit: 0,
+      seat_limited: false,
+      active_users: 7,
+    })
+    location.search = '?section=edition'
+    render(<SettingsPage />)
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'License' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Install license' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/ & |Install \/ update/)).toBeNull()
+    expect(screen.queryByText('Source')).toBeNull()
+    // A module is named as the page it serves: capabilities is Extensions.
+    expect(i18n.t('modules.names.capabilities', { ns: 'settings' })).toBe(
+      i18n.t('items.capabilities', { ns: 'nav' }),
+    )
+  })
+
   it('lists no room another place of the sidebar holds (0.5 fold)', () => {
     render(<SettingsPage />)
     const list = screen.getByRole('navigation', { name: 'Settings sections' })
@@ -203,9 +231,7 @@ describe('Settings', () => {
     ).toBeInTheDocument()
     expect(consoleApi.getLicense).not.toHaveBeenCalled()
     expect(screen.getByText('Community')).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Install / update' }),
-    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Install license' })).toBeNull()
   })
 
   it.each(['License', 'Edition'])(
@@ -213,13 +239,14 @@ describe('Settings', () => {
     async (term) => {
       location.search = `?q=${term}`
       render(<SettingsPage />)
-      expect(
-        screen.getByRole('link', { name: 'Edition & license' }),
-      ).toHaveAttribute('href', '/settings?section=edition')
+      expect(screen.getByRole('link', { name: 'Edition' })).toHaveAttribute(
+        'href',
+        '/settings?section=edition',
+      )
     },
   )
 
-  const spanishEditionLabel = 'Edición y licencia' // language-data: Spanish expected label
+  const spanishEditionLabel = 'Edición' // language-data: Spanish expected label
   it('finds the license section in Settings search without diacritics in Spanish', async () => {
     await i18n.changeLanguage('es')
     location.search = '?q=edicion'

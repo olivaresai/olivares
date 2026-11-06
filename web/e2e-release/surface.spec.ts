@@ -10,6 +10,7 @@ import { StatusChip } from '../src/components/ui/status-chip'
 import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 import {
   expectReleaseVersion,
+  expectPaintedReleaseVersion,
   isExpectedNoRepositoryConsoleError,
   openToolInstall,
   RELEASE_VERSION,
@@ -642,7 +643,7 @@ test('first-hour guard detects the recorded defects, including replaced loaders'
   await page.exposeFunction('__firstHourFinding', (message: string) =>
     findings.push(message),
   )
-  await page.setContent(`<p data-testid="deployment-identity"><span>0.2</span></p><p>keys.command.session.new</p>
+  await page.setContent(`<p data-testid="about-version"><span>0.2</span></p><p>keys.command.session.new</p>
     <p>Plan and Apply answer 503</p><label>Configuration home<input placeholder="/home/user" /></label>
     <button type="submit" disabled>Start</button><div id="loading"><i class="animate-pulse"></i></div>`)
   // A 5 s bound here keeps this test short; the release bound is READY_MS.
@@ -673,7 +674,7 @@ test('first-hour guard accepts translated copy and a visible disabled reason', a
   await page.exposeFunction('__firstHourFinding', (message: string) =>
     findings.push(message),
   )
-  await page.setContent(`<p data-testid="deployment-identity"><span>0.1</span></p><p>New session</p>
+  await page.setContent(`<p data-testid="about-version"><span>0.1</span></p><p>New session</p>
     <p>github.com docs.example.com release.tar.gz 127.0.0.1</p>
     <p>https://settings.example.com user@workspaces.example.com</p>
     <p>https://example.com/setup.title?next=login.subtitle user@setup.title</p>
@@ -713,9 +714,9 @@ async function watch(
 }
 
 const shell = (version: string) =>
-  `<p data-testid="deployment-identity"><span>${version}</span></p>`
+  `<p data-testid="about-version"><span>${version}</span></p>`
 const deployment = (version: string) =>
-  `<p data-testid="deployment-identity"><span>127.0.0.1:8443</span> · <span>${version}</span></p>`
+  `<p data-testid="about-version"><span>127.0.0.1:8443</span> · <span>${version}</span></p>`
 const stale = (release: string, other: string) => [
   `page version ${other} differs from release ${release}`,
 ]
@@ -797,7 +798,7 @@ for (const [place, identity] of [
 test('first-hour guard names a stale shell behind a dialog', async ({
   page,
 }) => {
-  const behind = `<p data-testid="deployment-identity" aria-hidden="true"><span>0.2</span></p>
+  const behind = `<p data-testid="about-version" aria-hidden="true"><span>0.2</span></p>
     <div role="dialog" aria-label="New session">Start a session</div>`
   const { findings } = await watch(page, behind, '0.1')
   expect(findings).toEqual(stale('0.1', '0.2'))
@@ -810,11 +811,11 @@ test('first-hour guard names an identity that is painted after it started', asyn
   await page.exposeFunction('__firstHourFinding', (message: string) =>
     findings.push(message),
   )
-  await page.setContent('<p data-testid="deployment-identity"></p>')
+  await page.setContent('<p data-testid="about-version"></p>')
   await page.evaluate(watchSurface, surfaceOptions('0.1'))
   await page.evaluate(() => {
     setTimeout(() => {
-      document.querySelector('[data-testid="deployment-identity"]')!.innerHTML =
+      document.querySelector('[data-testid="about-version"]')!.innerHTML =
         '<span>0.2</span>'
     }, 300)
   })
@@ -827,7 +828,7 @@ test('first-hour guard reads a bare IP host as a host, not as a version', async 
   page,
 }) => {
   // A console served on the default port shows its host without a port.
-  const identity = `<p data-testid="deployment-identity"><span>10.0.0.5</span> · <span>0.1</span></p>`
+  const identity = `<p data-testid="about-version"><span>10.0.0.5</span> · <span>0.1</span></p>`
   expect(await watch(page, identity, '0.1')).toEqual({
     findings: [],
     versions: ['0.1'],
@@ -837,7 +838,7 @@ test('first-hour guard reads a bare IP host as a host, not as a version', async 
 test('first-hour guard compares only an identity the user can see', async ({
   page,
 }) => {
-  const hidden = `<p data-testid="deployment-identity" hidden><span>0.2</span></p>`
+  const hidden = `<p data-testid="about-version" hidden><span>0.2</span></p>`
   expect(await watch(page, `${hidden}${deployment('0.1')}`, '0.1')).toEqual({
     findings: [],
     versions: ['0.1'],
@@ -891,3 +892,22 @@ for (const [state, markup, item] of [
     await expect(review).toHaveText(item)
   })
 }
+
+test('About version is required when the signed-out footer has no identity', async ({
+  page,
+}) => {
+  await page.setContent(
+    '<main><span data-testid="about-version">0.1</span></main>',
+  )
+  await page.exposeFunction('__firstHourFinding', () => undefined)
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  await expectPaintedReleaseVersion(page, '0.1')
+  await page.getByTestId('about-version').evaluate((el) => el.remove())
+  await expect(expectPaintedReleaseVersion(page, '0.1')).rejects.toThrow(
+    /About must display a version/,
+  )
+  await page.setContent('<span data-testid="about-version">0.2</span>')
+  await expect(expectPaintedReleaseVersion(page, '0.1')).rejects.toThrow(
+    /differs from release/,
+  )
+})

@@ -4,7 +4,8 @@
     "description": "此部署观测到的最近五个会话。",
     "openAll": "全部会话",
     "emptyTitle": "还没有会话",
-    "emptyDescription": "已接入引擎的每次运行都会出现在这里：做了什么、用了多久、花了多少。",
+    "emptyDescription": "您启动的每个会话都会显示在这里。",
+    "emptyAction": "启动会话",
     "unavailableTitle": "无法加载近期工作",
     "unavailableDescription": "会话读取没有响应。上方的数字不受影响。",
     "untitled": "未命名会话"
@@ -65,6 +66,8 @@
   },
   "overview": {
     "running": "运行中",
-    "recent": "近期"
+    "recent": "近期",
+    "wantsToRun": "{{session}} 想要运行",
+    "approvals": "批准：{{required}} 个中的 {{approved}} 个"
   }
 }

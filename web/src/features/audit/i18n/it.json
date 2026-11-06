@@ -104,20 +104,21 @@
     "membership_offboard": "Persona rimossa",
     "token_issue": "Token API creato",
     "token_revoke": "Token API revocato",
-    "secret_delete": "Secret eliminato"
+    "secret_delete": "Secret eliminato",
+    "governance_killswitch_engage": "Kill switch attivato",
+    "sessions_run_created": "Sessione creata"
   },
   "targets": {
     "core_policy": "Policy"
   },
   "internal": {
-    "hidden": "Record interni nascosti: {{count}}",
     "show": "Mostra i record interni",
     "hide": "Nascondi i record interni",
     "allHidden": "Tutto ciò che è stato caricato finora è un record interno."
   },
   "ledger": {
     "query": "Query del registro",
-    "placeholder": "person:  action:  since:7d  o parole",
+    "placeholder": "Cerca",
     "addFilter": "Aggiungi un filtro",
     "remove": "Rimuovi {{token}}",
     "add": "Aggiungi {{token}} alla query",
@@ -150,16 +151,6 @@
       "bar_one": "{{at}}, {{count}} voce",
       "bar_many": "{{at}}, {{count}} voci",
       "bar_other": "{{at}}, {{count}} voci",
-      "loaded_one": "{{count}} voce caricata",
-      "loaded_many": "{{count}} voci caricate",
-      "loaded_other": "{{count}} voci caricate",
-      "sessions_one": "{{count}} sessione",
-      "sessions_many": "{{count}} sessioni",
-      "sessions_other": "{{count}} sessioni",
-      "people_one": "{{count}} persona",
-      "people_many": "{{count}} persone",
-      "people_other": "{{count}} persone",
-      "more": "altre da caricare",
       "now": "Ora"
     },
     "entry": {
@@ -173,5 +164,15 @@
       "chainHint": "Ogni voce porta l'hash della precedente. Cambiarne una rompe ogni hash successivo.",
       "signedEntry": "La voce firmata"
     }
+  },
+  "verbs": {
+    "create": "Creazione: {{what}}",
+    "update": "Aggiornamento: {{what}}",
+    "delete": "Eliminazione: {{what}}"
+  },
+  "toolApproval": {
+    "allow": "Chiamata al tool consentita",
+    "ask": "Chiamata al tool in attesa di approvazione",
+    "deny": "Chiamata al tool negata"
   }
 }

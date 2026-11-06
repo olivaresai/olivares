@@ -37,13 +37,13 @@ test('License is one page: its old Administration address and the Settings searc
         await page.goto(path)
         await expect(page).toHaveURL(/\/settings\?section=edition/)
         await expect(
-          page.getByRole('heading', { name: 'Edition & license', exact: true }),
+          page.getByRole('heading', { name: 'License', exact: true }),
         ).toBeVisible()
         await expect(
           page.getByText('No license', { exact: true }),
         ).toBeVisible()
         await page
-          .getByRole('button', { name: 'Install / update', exact: true })
+          .getByRole('button', { name: 'Install license', exact: true })
           .click()
         await expect(page.getByRole('dialog')).toBeVisible()
         await page.keyboard.press('Escape')
@@ -70,9 +70,7 @@ test('License is one page: its old Administration address and the Settings searc
   for (const term of ['License', 'Edition']) {
     await page.goto('/settings')
     await page.getByRole('searchbox').fill(term)
-    await page
-      .getByRole('link', { name: 'Edition & license', exact: true })
-      .click()
+    await page.getByRole('link', { name: 'Edition', exact: true }).click()
     await expect(page.getByText('No license', { exact: true })).toBeVisible()
     await page.keyboard.press('Control+k')
     const palette = page.getByRole('dialog')

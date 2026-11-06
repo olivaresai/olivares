@@ -104,20 +104,21 @@
     "membership_offboard": "Pessoa removida",
     "token_issue": "Token de API criado",
     "token_revoke": "Token de API revogado",
-    "secret_delete": "Segredo eliminado"
+    "secret_delete": "Segredo eliminado",
+    "governance_killswitch_engage": "Kill switch acionado",
+    "sessions_run_created": "Sessão criada"
   },
   "targets": {
     "core_policy": "Política"
   },
   "internal": {
-    "hidden": "Registos internos ocultos: {{count}}",
     "show": "Mostrar registos internos",
     "hide": "Ocultar registos internos",
     "allHidden": "Tudo o que foi carregado até agora é um registo interno."
   },
   "ledger": {
     "query": "Consulta ao registo",
-    "placeholder": "person:  action:  since:7d  ou palavras",
+    "placeholder": "Pesquisar",
     "addFilter": "Adicionar um filtro",
     "remove": "Remover {{token}}",
     "add": "Adicionar {{token}} à consulta",
@@ -150,16 +151,6 @@
       "bar_one": "{{at}}, {{count}} entrada",
       "bar_many": "{{at}}, {{count}} de entradas",
       "bar_other": "{{at}}, {{count}} entradas",
-      "loaded_one": "{{count}} entrada carregada",
-      "loaded_many": "{{count}} de entradas carregadas",
-      "loaded_other": "{{count}} entradas carregadas",
-      "sessions_one": "{{count}} sessão",
-      "sessions_many": "{{count}} de sessões",
-      "sessions_other": "{{count}} sessões",
-      "people_one": "{{count}} pessoa",
-      "people_many": "{{count}} de pessoas",
-      "people_other": "{{count}} pessoas",
-      "more": "mais para carregar",
       "now": "Agora"
     },
     "entry": {
@@ -173,5 +164,15 @@
       "chainHint": "Cada entrada contém o hash da anterior. Altere uma e todos os hashes seguintes deixam de coincidir.",
       "signedEntry": "A entrada assinada"
     }
+  },
+  "verbs": {
+    "create": "Criação: {{what}}",
+    "update": "Atualização: {{what}}",
+    "delete": "Eliminação: {{what}}"
+  },
+  "toolApproval": {
+    "allow": "Chamada de ferramenta permitida",
+    "ask": "Chamada de ferramenta a aguardar aprovação",
+    "deny": "Chamada de ferramenta negada"
   }
 }

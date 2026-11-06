@@ -265,18 +265,17 @@ function GatewayInner({ titled }: { titled: boolean }) {
           </Button>
         </div>
       </div>
-      <div className="rounded-lg border border-border bg-surface p-3 text-body">
-        <Badge variant={data.read_only ? 'warning' : 'neutral'}>
-          {t(`console:mcpGateway.source.${data.source}`)}
-        </Badge>
-        <p className="mt-2 text-muted-foreground">
-          {t(
-            data.read_only
-              ? 'console:mcpGateway.fileOwned'
-              : 'console:mcpGateway.storeOwned',
-          )}
-        </p>
-      </div>
+      {/* Only a read-only view needs saying why; editable settings are simply editable. */}
+      {data.read_only && (
+        <div className="rounded-lg border border-border bg-surface p-3 text-body">
+          <Badge variant="warning">
+            {t(`console:mcpGateway.source.${data.source}`)}
+          </Badge>
+          <p className="mt-2 text-muted-foreground">
+            {t('console:mcpGateway.fileOwned')}
+          </p>
+        </div>
+      )}
       <section
         className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border p-3"
         aria-label={t('console:mcpGateway.sessionTitle')}
@@ -295,9 +294,6 @@ function GatewayInner({ titled }: { titled: boolean }) {
               ? t('console:mcpGateway.sessionOn')
               : t('console:mcpGateway.sessionOff')}
           </p>
-          <code className="break-all text-caption">
-            {data.session_endpoint}
-          </code>
         </div>
         <Switch
           aria-label={t('console:mcpGateway.sessionTitle')}
@@ -320,176 +316,175 @@ function GatewayInner({ titled }: { titled: boolean }) {
           icon={<PlugZap />}
         />
       ) : (
-        <div className="grid min-w-0 gap-3 xl:grid-cols-2">
+        // One list of rows, one server per row: not a grid of cards.
+        <ul className="min-w-0 divide-y divide-border rounded-lg border border-border">
           {data.servers.map((row) => (
-            <article
-              key={row.id}
-              className="min-w-0 rounded-lg border border-border p-3"
-              aria-label={row.name}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Section className="text-body font-semibold">
-                  {row.name}
-                </Section>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={row.enabled ? 'success' : 'neutral'}>
+            <li key={row.id}>
+              <article className="min-w-0 p-3" aria-label={row.name}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Section className="text-body font-semibold">
+                    {row.name}
+                  </Section>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={row.enabled ? 'success' : 'neutral'}>
+                      {t(
+                        row.enabled
+                          ? 'console:mcpGateway.enabled'
+                          : 'console:mcpGateway.disabled',
+                      )}
+                    </Badge>
+                    <Badge
+                      variant={row.probe.state === 'ok' ? 'success' : 'warning'}
+                    >
+                      {t(`console:mcpGateway.verdict.${row.probe.state}`)}
+                    </Badge>
+                  </div>
+                </div>
+                <p className="mt-2 break-all font-mono text-caption text-muted-foreground">
+                  {row.transport === 'stdio'
+                    ? [row.command, ...(row.args ?? [])].join(' ')
+                    : row.url}
+                </p>
+                <p className="mt-1 break-all text-caption text-muted-foreground">
+                  {row.credential_ref || t('console:mcpGateway.noCredential')}
+                  {row.probe.tested_at && ` · ${row.probe.tested_at}`}
+                </p>
+                {row.probe.state !== 'ok' &&
+                  row.probe.state !== 'never_tested' && (
+                    // The failure in plain words with the next step; the engine names the
+                    // cause of an unreachable test when it can (DNS, TLS, timeout, ...).
+                    <p className="mt-2 text-body text-warning">
+                      {row.transport === 'stdio' &&
+                      row.probe.state !== 'credential_unavailable'
+                        ? row.probe.detail
+                          ? // The engine's own line for why the command did not run
+                            // (MC: one redacted stderr line or OS error, ≤ 512 bytes).
+                            t('console:mcpGateway.why.stdioDetail', {
+                              detail: row.probe.detail,
+                            })
+                          : t('console:mcpGateway.why.stdio')
+                        : t(
+                            `console:mcpGateway.why.${row.probe.reason ?? row.probe.state}`,
+                            {
+                              host: hostOf(row.url),
+                              status: row.probe.http_status,
+                              defaultValue: t(
+                                'console:mcpGateway.why.unreachable',
+                                {
+                                  host: hostOf(row.url),
+                                },
+                              ),
+                            },
+                          )}
+                    </p>
+                  )}
+                {!row.enabled &&
+                  row.probe.state === 'ok' &&
+                  !trustComplete(row.trust) && (
+                    <p className="mt-2 text-caption text-muted-foreground">
+                      {t('console:mcpGateway.enableNeedsTrust')}
+                    </p>
+                  )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={disabled}
+                    onClick={() => act('test', row)}
+                  >
+                    <RefreshCw />
+                    {t('console:mcpGateway.test')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={disabled}
+                    onClick={() => setEditing(row)}
+                  >
+                    <Pencil />
+                    {t('console:mcpGateway.configure')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      disabled ||
+                      (!row.enabled &&
+                        (row.probe.state !== 'ok' || !trustComplete(row.trust)))
+                    }
+                    onClick={() =>
+                      // Off is one click; on is a choice made with the tools in view.
+                      row.enabled ? act('toggle', row) : setEnabling(row)
+                    }
+                  >
                     {t(
                       row.enabled
-                        ? 'console:mcpGateway.enabled'
-                        : 'console:mcpGateway.disabled',
+                        ? 'console:mcpGateway.disable'
+                        : 'console:mcpGateway.enable',
                     )}
-                  </Badge>
-                  <Badge
-                    variant={row.probe.state === 'ok' ? 'success' : 'warning'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={disabled}
+                    onClick={() => setRemove(row)}
                   >
-                    {t(`console:mcpGateway.verdict.${row.probe.state}`)}
-                  </Badge>
+                    <Trash2 />
+                    {t('console:mcpGateway.remove')}
+                  </Button>
                 </div>
-              </div>
-              <p className="mt-2 break-all font-mono text-caption text-muted-foreground">
-                {row.transport === 'stdio'
-                  ? [row.command, ...(row.args ?? [])].join(' ')
-                  : row.url}
-              </p>
-              <p className="mt-1 break-all text-caption text-muted-foreground">
-                {row.credential_ref || t('console:mcpGateway.noCredential')}
-                {row.probe.tested_at && ` · ${row.probe.tested_at}`}
-              </p>
-              {row.probe.state !== 'ok' &&
-                row.probe.state !== 'never_tested' && (
-                  // The failure in plain words with the next step; the engine names the
-                  // cause of an unreachable test when it can (DNS, TLS, timeout, ...).
-                  <p className="mt-2 text-body text-warning">
-                    {row.transport === 'stdio' &&
-                    row.probe.state !== 'credential_unavailable'
-                      ? row.probe.detail
-                        ? // The engine's own line for why the command did not run
-                          // (MC: one redacted stderr line or OS error, ≤ 512 bytes).
-                          t('console:mcpGateway.why.stdioDetail', {
-                            detail: row.probe.detail,
-                          })
-                        : t('console:mcpGateway.why.stdio')
-                      : t(
-                          `console:mcpGateway.why.${row.probe.reason ?? row.probe.state}`,
-                          {
-                            host: hostOf(row.url),
-                            status: row.probe.http_status,
-                            defaultValue: t(
-                              'console:mcpGateway.why.unreachable',
-                              {
-                                host: hostOf(row.url),
-                              },
-                            ),
-                          },
-                        )}
-                  </p>
-                )}
-              {!row.enabled &&
-                row.probe.state === 'ok' &&
-                !trustComplete(row.trust) && (
-                  <p className="mt-2 text-caption text-muted-foreground">
-                    {t('console:mcpGateway.enableNeedsTrust')}
-                  </p>
-                )}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={disabled}
-                  onClick={() => act('test', row)}
-                >
-                  <RefreshCw />
-                  {t('console:mcpGateway.test')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={disabled}
-                  onClick={() => setEditing(row)}
-                >
-                  <Pencil />
-                  {t('console:mcpGateway.configure')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={
-                    disabled ||
-                    (!row.enabled &&
-                      (row.probe.state !== 'ok' || !trustComplete(row.trust)))
-                  }
-                  onClick={() =>
-                    // Off is one click; on is a choice made with the tools in view.
-                    row.enabled ? act('toggle', row) : setEnabling(row)
-                  }
-                >
-                  {t(
-                    row.enabled
-                      ? 'console:mcpGateway.disable'
-                      : 'console:mcpGateway.enable',
-                  )}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={disabled}
-                  onClick={() => setRemove(row)}
-                >
-                  <Trash2 />
-                  {t('console:mcpGateway.remove')}
-                </Button>
-              </div>
-              {row.enabled ? (
-                // As the CLI says it after mcp enable (CLX copy 19).
-                <div className="mt-3 text-body" data-slot="mcp-callable">
-                  {(['allow', 'ask', 'deny'] as const).map((k) => {
-                    const tools = toolTrust(row)[k]
-                    return tools.length ? (
-                      <p key={k}>
-                        {t(`console:mcpGateway.trust.${k}`, {
-                          tools: tools.join(', '),
-                        })}
-                      </p>
-                    ) : null
-                  })}
-                </div>
-              ) : (
-                <p className="mt-3 text-body" data-slot="mcp-callable">
-                  {t('console:mcpGateway.callableOff')}
-                </p>
-              )}
-              <details className="mt-1 text-body">
-                <summary className="cursor-pointer font-medium">
-                  {t('console:mcpGateway.tools', {
-                    count: row.probe.tools?.length ?? 0,
-                  })}
-                </summary>
-                <ul className="mt-2 space-y-2">
-                  {(row.probe.tools ?? []).map((tool) => {
-                    const policy = row.allowed_tools?.find(
-                      (p) => p.name === tool.name,
-                    )
-                    return (
-                      <li key={tool.name} className="break-all">
-                        <code>{tool.name}</code>
-                        <p className="text-caption text-muted-foreground">
-                          {!row.enabled || !policy
-                            ? t('console:mcpGateway.toolNotCallable')
-                            : policy.destructive
-                              ? t('console:mcpGateway.toolAsks')
-                              : t('console:mcpGateway.toolCallable')}
+                {row.enabled ? (
+                  // As the CLI says it after mcp enable (CLX copy 19).
+                  <div className="mt-3 text-body" data-slot="mcp-callable">
+                    {(['allow', 'ask', 'deny'] as const).map((k) => {
+                      const tools = toolTrust(row)[k]
+                      return tools.length ? (
+                        <p key={k}>
+                          {t(`console:mcpGateway.trust.${k}`, {
+                            tools: tools.join(', '),
+                          })}
                         </p>
-                      </li>
-                    )
-                  })}
-                </ul>
-                <p className="mt-2 text-caption text-muted-foreground">
-                  {t('console:mcpGateway.observationHint')}
-                </p>
-              </details>
-            </article>
+                      ) : null
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-body" data-slot="mcp-callable">
+                    {t('console:mcpGateway.callableOff')}
+                  </p>
+                )}
+                <details className="mt-1 text-body">
+                  <summary className="cursor-pointer font-medium">
+                    {t('console:mcpGateway.tools', {
+                      count: row.probe.tools?.length ?? 0,
+                    })}
+                  </summary>
+                  <ul className="mt-2 space-y-2">
+                    {(row.probe.tools ?? []).map((tool) => {
+                      const policy = row.allowed_tools?.find(
+                        (p) => p.name === tool.name,
+                      )
+                      return (
+                        <li key={tool.name} className="break-all">
+                          <code>{tool.name}</code>
+                          <p className="text-caption text-muted-foreground">
+                            {!row.enabled || !policy
+                              ? t('console:mcpGateway.toolNotCallable')
+                              : policy.destructive
+                                ? t('console:mcpGateway.toolAsks')
+                                : t('console:mcpGateway.toolCallable')}
+                          </p>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <p className="mt-2 text-caption text-muted-foreground">
+                    {t('console:mcpGateway.observationHint')}
+                  </p>
+                </details>
+              </article>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
       {!data.read_only && (
         <StarterList

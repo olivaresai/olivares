@@ -724,8 +724,6 @@
       "snoozed": "Snoozed",
       "archived": "Archived"
     },
-    "agentCount_one": "{{count}} agent",
-    "agentCount_other": "{{count}} agents",
     "more": "More",
     "back": "Back to sessions",
     "showTable": "Show as table",
@@ -918,8 +916,8 @@
   "strip": {
     "needYou_one": "{{count}} needs you",
     "needYou_other": "{{count}} need you",
-    "running_one": "{{count}} running",
-    "running_other": "{{count}} running",
+    "running_one": "{{count}} working",
+    "running_other": "{{count}} working",
     "failedToday_one": "{{count}} failed today",
     "failedToday_other": "{{count}} failed today",
     "costToday": "{{amount}} today",

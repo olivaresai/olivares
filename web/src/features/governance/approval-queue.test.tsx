@@ -182,6 +182,19 @@ describe('Approvals: the flag stays on the request that needs you', () => {
     expect(flagged()).toEqual([rowOf('pnpm db:migrate')])
   })
 
+  it('marks the flagged request without a coloured side border; selection stays a background tone', async () => {
+    api.listApprovals.mockResolvedValue({
+      items: [own, migration, registry],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    await screen.findByText('Terraform needs the provider registry')
+
+    expect(rowOf('pnpm db:migrate')).toHaveAttribute('data-flagged', 'true')
+    expect(rowOf('pnpm db:migrate')).not.toHaveClass('border-l-accent')
+    expect(rowOf('pnpm db:migrate')).toHaveClass('bg-active')
+  })
+
   it('flags nothing for a person who may not decide', async () => {
     auth.can = (p) => p !== 'governance:approval:admin'
     api.listApprovals.mockResolvedValue({

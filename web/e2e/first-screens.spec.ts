@@ -136,13 +136,15 @@ test.describe('the first screens', () => {
     await expect(page.locator('#main-content')).toBeFocused()
   })
 
-  test('login: the deployment it signs into is named', async ({ page }) => {
+  test('login: the public page has no deployment footer', async ({ page }) => {
     await page.goto('/login')
-    const identity = page.getByTestId('deployment-identity')
-    await expect(identity).toBeVisible()
-    // The address, always. The version only once /v1/server-info answers, so it is
-    // not asserted here — an absent version is the documented behaviour, not a gap.
-    await expect(identity).toContainText(new URL(page.url()).host)
+    await expect(
+      page.getByRole('heading', { name: 'Sign in', exact: true }),
+    ).toBeVisible()
+    await expect(page.getByTestId('deployment-identity')).toHaveCount(0)
+    await expect(
+      page.getByText(new URL(page.url()).host, { exact: true }),
+    ).toHaveCount(0)
   })
 
   for (const theme of ['dark', 'light'] as const) {

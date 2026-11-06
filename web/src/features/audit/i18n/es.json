@@ -104,20 +104,21 @@
     "membership_offboard": "Persona quitada",
     "token_issue": "Token de API creado",
     "token_revoke": "Token de API revocado",
-    "secret_delete": "Secreto eliminado"
+    "secret_delete": "Secreto eliminado",
+    "governance_killswitch_engage": "Kill switch activado",
+    "sessions_run_created": "Sesión creada"
   },
   "targets": {
     "core_policy": "Política"
   },
   "internal": {
-    "hidden": "Registros internos ocultos: {{count}}",
     "show": "Mostrar registros internos",
     "hide": "Ocultar registros internos",
     "allHidden": "Todo lo cargado hasta ahora son registros internos."
   },
   "ledger": {
     "query": "Consulta del registro",
-    "placeholder": "person:  action:  since:7d  o palabras",
+    "placeholder": "Buscar",
     "addFilter": "Añadir un filtro",
     "remove": "Quitar {{token}}",
     "add": "Añadir {{token}} a la consulta",
@@ -150,16 +151,6 @@
       "bar_one": "{{at}}, {{count}} entrada",
       "bar_many": "{{at}}, {{count}} entradas",
       "bar_other": "{{at}}, {{count}} entradas",
-      "loaded_one": "{{count}} entrada cargada",
-      "loaded_many": "{{count}} entradas cargadas",
-      "loaded_other": "{{count}} entradas cargadas",
-      "sessions_one": "{{count}} sesión",
-      "sessions_many": "{{count}} sesiones",
-      "sessions_other": "{{count}} sesiones",
-      "people_one": "{{count}} persona",
-      "people_many": "{{count}} personas",
-      "people_other": "{{count}} personas",
-      "more": "hay más por cargar",
       "now": "Ahora"
     },
     "entry": {
@@ -173,5 +164,15 @@
       "chainHint": "Cada entrada lleva el hash de la anterior. Si cambia una, se rompen todos los hashes posteriores.",
       "signedEntry": "La entrada firmada"
     }
+  },
+  "verbs": {
+    "create": "Se creó {{what}}",
+    "update": "Se actualizó {{what}}",
+    "delete": "Se eliminó {{what}}"
+  },
+  "toolApproval": {
+    "allow": "Llamada a herramienta permitida",
+    "ask": "Llamada a herramienta en espera de aprobación",
+    "deny": "Llamada a herramienta denegada"
   }
 }

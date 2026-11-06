@@ -4,7 +4,8 @@
     "description": "Le cinque sessioni più recenti osservate da questa installazione.",
     "openAll": "Tutte le sessioni",
     "emptyTitle": "Ancora nessuna sessione",
-    "emptyDescription": "Ogni esecuzione di un motore collegato compare qui, con ciò che ha fatto, quanto è durata e quanto è costata.",
+    "emptyDescription": "Qui compare ogni sessione che avvii.",
+    "emptyAction": "Avvia una sessione",
     "unavailableTitle": "Impossibile caricare il lavoro recente",
     "unavailableDescription": "La lettura delle sessioni non ha risposto. Le cifre del parco qui sopra non sono influenzate.",
     "untitled": "Sessione senza titolo"
@@ -69,6 +70,8 @@
   },
   "overview": {
     "running": "In corso",
-    "recent": "Recenti"
+    "recent": "Recenti",
+    "wantsToRun": "{{session}} vuole eseguire",
+    "approvals": "Approvazioni: {{approved}} su {{required}}"
   }
 }

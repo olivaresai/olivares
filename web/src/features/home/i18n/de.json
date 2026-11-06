@@ -4,7 +4,8 @@
     "description": "Die fünf jüngsten Sitzungen, die diese Bereitstellung beobachtet hat.",
     "openAll": "Alle Sitzungen",
     "emptyTitle": "Noch keine Sitzungen",
-    "emptyDescription": "Hier erscheint jeder Lauf einer verbundenen Engine, mit dem, was er getan hat, wie lange er gedauert hat und was er gekostet hat.",
+    "emptyDescription": "Jede Sitzung, die Sie starten, erscheint hier.",
+    "emptyAction": "Sitzung starten",
     "unavailableTitle": "Letzte Arbeit konnte nicht geladen werden",
     "unavailableDescription": "Der Sitzungs-Lesevorgang hat nicht geantwortet. Die Kennzahlen oben sind davon nicht betroffen.",
     "untitled": "Unbenannte Sitzung"
@@ -67,6 +68,8 @@
   },
   "overview": {
     "running": "Läuft",
-    "recent": "Zuletzt"
+    "recent": "Zuletzt",
+    "wantsToRun": "{{session}} möchte ausführen:",
+    "approvals": "Genehmigungen: {{approved}} von {{required}}"
   }
 }

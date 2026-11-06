@@ -125,6 +125,10 @@ type editionPorts struct {
 	// nil gives a session no managed credentials: a launch that names one answers 501
 	// business_required (modules/sessions session_credentials.go).
 	sessionCredentialBroker func(deps sessionCredentialDeps, log *slog.Logger) sessions.SessionCredentialBroker
+	// nil: a session's publish proposal runs as its launcher through any target of its
+	// workspace. Otherwise it names the forge identity one session run publishes as and the
+	// lines its pull requests end with (an agent role's), or refuses with a *publicationRefusal.
+	publicationIdentity func(ctx context.Context, eng *engine, tenant model.TenantID, run string) (publicationIdentity, error)
 	// Business choices inside routes and commands Community also serves. Each gate is asked
 	// at the moment of the call and answers whether the live licence covers it; its error is
 	// the add-on refusal (403 addon_requires_license, or the CLI's error). nil is Community,

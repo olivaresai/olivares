@@ -3,11 +3,6 @@
   "subtitle": "Who can sign in, what they can do, and how they prove it.",
   "ownSignInOnly": "You can set up your own sign-in factors here. An organization admin changes the rest of this page.",
   "sections": "Identity sections",
-  "groups": {
-    "people": "People",
-    "signIn": "Sign-in",
-    "machines": "Machine identities"
-  },
   "tabs": {
     "federation": "Single sign-on",
     "inventory": "Identity inventory",
@@ -102,9 +97,9 @@
   },
   "sso": {
     "title": "Single sign-on (OIDC / SAML)",
-    "description": "Single sign-on is set up in SSO / IdP, by a superadmin. This panel checks the exact redirect URI and shows the connection state.",
+    "description": "Single sign-on is set up under Identity provider, by a superadmin. This panel checks the exact redirect URI and shows the connection state.",
     "notConfigured": "Not configured",
-    "notConfiguredHint": "No identity provider is configured, so federation requests return 501. A superadmin sets one up in SSO / IdP.",
+    "notConfiguredHint": "No identity provider is configured, so federation requests return 501. A superadmin sets one up under Identity provider.",
     "seamWhat": "The SSO connection-state summary",
     "protocol": "Protocol",
     "state": "Connection",
@@ -115,7 +110,7 @@
     "redirectCheckHint": "Paste the redirect/ACS URI configured in your identity provider. It must match the value above exactly (RFC 9700).",
     "redirectMatch": "Exact match — this redirect URI is valid.",
     "redirectMismatch": "Does not match exactly. The IdP must use the redirect URI above, character-for-character.",
-    "configure": "Open SSO / IdP",
+    "configure": "Open Identity provider",
     "testLogin": "Start a test login"
   },
   "scim": {

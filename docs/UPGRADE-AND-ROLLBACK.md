@@ -518,7 +518,7 @@ Changing configuration is **not** the same as upgrading. Much of the runtime is
 | **Connectors** + their sealed credentials | **Yes** | Console connector onboarding (test → seal → reference → apply) |
 | **Secrets** in the sealed store (`store:` references) | **Yes** | Console **Secrets**, resolved on next use |
 | Active policy / PDP | **Yes** | Reloaded in place (per-tenant) |
-| **Commercial license / edition entitlements** (renew, install, remove) | **Yes** | Console **Edition & license** tab, `olivares license install` / `olivares license uninstall` + reload/`SIGHUP`, or `OLIVARES_LICENSE*` + reload — see §7 |
+| **Commercial license / edition entitlements** (renew, install, remove) | **Yes** | Console **Settings › Edition**, `olivares license install` / `olivares license uninstall` + reload/`SIGHUP`, or `OLIVARES_LICENSE*` + reload — see §7 |
 
 Trigger a roster reconcile out-of-band with **`sudo systemctl reload olivares`** (the unit's
 `ExecReload` sends `SIGHUP`); for a container, **`docker kill --signal=HUP olivares`**, or the authenticated
@@ -775,14 +775,14 @@ pretended-active. The full add-on→config table is generated from the catalog
 
 Activation is applied at the **next engine restart** (add-ons are wired at boot — unlike a
 license, which hot-applies for term and entitlement changes). The console surfaces the same table plus a
-preview-diff enable under the **Edition & license** tab (superadmin + AAL3).
+preview-diff enable in **Settings › Edition** (superadmin + AAL3).
 
 ### Installing / changing a license — multi-surface, hot-applied
 
 | Surface | How |
 |---|---|
 | **CLI** | `olivares license install <file\|->` writes `<data-dir>/license.key` (0600, atomically) after verifying it, and names the licence it replaced; `olivares license uninstall --yes` removes it and reports what the engine resolves afterwards; `olivares license status` prints the at-rest status as JSON (signed in to an engine on another host, it prints that engine's license state instead) Both REFUSE while a `--license`/`OLIVARES_LICENSE*` override outranks the data-dir file (`install --force` stages it anyway) |
-| **Console** | **Edition & license** tab → paste or upload the blob (superadmin + AAL3 step-up) |
+| **Console** | **Settings › Edition** → paste or upload the blob (superadmin + AAL3 step-up) |
 | **File / env** | The engine reads, in precedence order, `--license <path>` > `OLIVARES_LICENSE_PATH` > `OLIVARES_LICENSE` (inline) > `<data-dir>/license.key` |
 | **Connected** | `olivares license connect start` creates the deployment's Ed25519 key under `<data-dir>/connect/` (0700; files 0600), requests the owner's approval and prints the approval URL and key fingerprint; running it again after approval completes the binding. `refresh`, `rotate-key`, `recover`, `reactivate`, `deactivate`, `status` and `abandon` follow. Every step is recorded before it is sent and repeated with the same operation id after a crash or timeout. A verified `rotate-key`, `recover` or `reactivate` is recorded before the new key replaces the old one; after an interruption, running the same command again completes it without contacting the service, and `abandon` refuses to discard it. A NEW `recover`, `reactivate` or `deactivate --owner-approval` request needs the current purchase credential with `--evidence <file>` (or `--evidence -` for stdin); the installed license is not used as that evidence, and finishing a recorded request repeats it without reading evidence again. No key, credential, token or approval reference is printed or placed in a URL or argument |
 | **Trust** | `olivares license trust status\|set\|fence` manages `<data-dir>/license-trust.json`: keys added to the embedded anchor, retired to verify-only, revoked, or pinned to a `key_epoch`, plus a minimum-epoch fence. Boot, reload, both install surfaces, the enterprise upgrade and `--bundle` gates, doctor and the connected client verify through this one keyring; it reloads with the license, also when a configured license source cannot be read: the live license is then kept and verified under the current trust |

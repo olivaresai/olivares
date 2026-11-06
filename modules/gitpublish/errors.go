@@ -42,6 +42,7 @@ var (
 	errRuntimeCredential = refuse("runtime_credential_refused", http.StatusForbidden)
 	errUnsupported       = refuse("unsupported_requirement", http.StatusUnprocessableEntity)
 	errSeparationOfDuty  = refuse("separation_of_duty", http.StatusForbidden)
+	errIdentityMismatch  = refuse("identity_mismatch", http.StatusForbidden)
 )
 
 func withIntent(e *Error, id model.ID) *Error {

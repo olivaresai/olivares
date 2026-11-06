@@ -20,8 +20,9 @@ function GoToNow() {
 
 /**
  * A bookmark of a page this edition does not include (route-census.json `business_paths`):
- * one sentence that names Business and a link to it. No button offers the action, so
- * nothing in Community starts what only Business performs.
+ * one sentence that names Business and a quiet link to it. The one primary action goes to
+ * the start page (`/`); no button offers the Business action, so nothing in Community
+ * starts what only Business performs.
  */
 function BusinessNotice() {
   const { t } = useTranslation('errors')
@@ -34,12 +35,14 @@ function BusinessNotice() {
         description={t('businessOnly.description')}
         action={
           <div className="flex items-center gap-4">
-            <GoToNow />
+            <Button asChild variant="primary" size="sm">
+              <Link to="/">{t('businessOnly.start')}</Link>
+            </Button>
             <a
               href={BUSINESS_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-body font-medium text-accent-text hover:underline"
+              className="text-body font-medium text-muted-foreground hover:text-foreground hover:underline"
             >
               {t('businessOnly.link')}
             </a>

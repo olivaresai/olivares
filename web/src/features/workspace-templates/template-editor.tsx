@@ -84,6 +84,7 @@ interface FormState {
   description: string
   hooks: Record<HookKind, FormHook[]>
   settings: {
+    ai_attribution?: string
     permission_mode: string
     effort: string
     model: string
@@ -151,6 +152,7 @@ function dtoToFormState(dto: TemplateDTO): FormState {
       post_session: (h.post_session ?? []).map(hToForm),
     },
     settings: {
+      ai_attribution: s.ai_attribution,
       permission_mode: s.permission_mode ?? '',
       effort: s.effort ?? '',
       model: s.model ?? '',
@@ -196,6 +198,8 @@ function formStateToBody(f: FormState): TemplateBody {
   }
 
   const settings: TemplateSettings = {}
+  if (f.settings.ai_attribution !== undefined)
+    settings.ai_attribution = f.settings.ai_attribution
   if (f.settings.permission_mode)
     settings.permission_mode = f.settings.permission_mode
   if (f.settings.effort) settings.effort = f.settings.effort
@@ -376,24 +380,37 @@ export function TemplateEditor({
   }
 
   // Each closed section says what it holds, from the body that Save would send:
-  // counts and the model name only, never a secret or a free-text value.
+  // counts, the model name and a permission mode that asks less than default,
+  // never a secret or a free-text value. An empty list reads "None"; settings
+  // and policies left unset read "Defaults".
   const body = formStateToBody(form)
   const { secret_env: secretEnv = [], ...agent } = body.settings ?? {}
-  const counted = (key: string, count: number) =>
-    count ? t(`editor.sections.summary.${key}`, { count }) : undefined
+  const counted = (key: string, count: number, empty: 'none' | 'defaults') =>
+    t(`editor.sections.summary.${count ? key : empty}`, { count })
+  // plan and default ask before every change; every other mode asks less. It
+  // reads as the tool takes it, as the select below lists it.
+  const mode = agent.permission_mode
+  const wideMode = mode && mode !== 'default' && mode !== 'plan' ? mode : ''
   const summary = {
     hooks: counted(
       'hooks',
       Object.values(body.hooks ?? {}).reduce((n, list) => n + list.length, 0),
+      'none',
     ),
-    settings: agent.model
-      ? t('editor.sections.summary.model', { model: agent.model })
-      : counted('set', Object.keys(agent).length),
-    secrets: counted('secrets', secretEnv.length),
-    connectors: counted('connectors', body.connectors?.length ?? 0),
+    settings: [
+      agent.model
+        ? t('editor.sections.summary.model', { model: agent.model })
+        : counted('set', Object.keys(agent).length, 'defaults'),
+      wideMode,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    secrets: counted('secrets', secretEnv.length, 'none'),
+    connectors: counted('connectors', body.connectors?.length ?? 0, 'none'),
     policies: counted(
       'set',
       Object.keys(body.policies ?? {}).length + (body.peers_rule ? 1 : 0),
+      'defaults',
     ),
   }
 
@@ -733,8 +750,8 @@ export function TemplateEditor({
 
 interface SectionProps {
   title: string
-  /** Counts or non-sensitive configuration; absent while the section is empty. */
-  summary?: string
+  /** Counts or non-sensitive configuration: what the closed section holds. */
+  summary: string
   hint: string
   children: ReactNode
 }
@@ -748,11 +765,9 @@ function Section({ title, summary, hint, children }: SectionProps) {
           className="size-4 shrink-0 text-text-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
         />
         <span>{title}</span>
-        {summary ? (
-          <span className="ms-auto text-caption font-normal text-muted-foreground">
-            {summary}
-          </span>
-        ) : null}
+        <span className="ms-auto text-caption font-normal text-muted-foreground">
+          {summary}
+        </span>
       </summary>
       <div className="mt-3 flex flex-col gap-3">
         <p className="text-caption text-muted-foreground">{hint}</p>

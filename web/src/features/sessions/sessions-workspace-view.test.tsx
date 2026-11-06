@@ -1568,3 +1568,33 @@ describe('SessionsWorkspaceView — the work column never scrolls', () => {
     expect(section?.className).not.toMatch(/\boverflow-hidden\b/)
   })
 })
+
+describe('SessionsWorkspaceView — the strip says what today cost', () => {
+  it('sums the costs reported today and leaves out a session that has reported none', async () => {
+    // The estate of a working day: one session reported $1.61, another is still working
+    // and has reported no cost yet. The strip used to drop the cost whole for that one.
+    const now = new Date().toISOString()
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [
+        { ...observed, cost_micro_usd: 1_610_000, last_event_at: now },
+        {
+          ...observed,
+          session_ref: 'sess-quiet',
+          live_ref: 'lr-quiet',
+          cost_micro_usd: 0,
+          last_event_at: now,
+        },
+      ],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderView('observe', { table: false })
+    const [strip] = await screen.findAllByRole('navigation', {
+      name: 'Sessions at a glance',
+    })
+    expect(strip).toHaveTextContent('2 working · $1.61 today')
+  })
+})

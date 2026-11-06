@@ -410,9 +410,9 @@ export async function apiFetchRaw(
     headers.delete('X-CSRF-Token')
     headers.delete('X-Olivares-Tenant')
   }
-  if (opts.rawBody !== undefined)
+  if (opts.rawBody !== undefined && !(opts.rawBody instanceof FormData))
     headers.set('Content-Type', opts.contentType ?? 'application/octet-stream')
-  else if (opts.body !== undefined)
+  else if (opts.rawBody === undefined && opts.body !== undefined)
     headers.set('Content-Type', 'application/json')
 
   // ⛔ RENOVAR ANTES, NO DESPUÉS. Un token caducado no se puede refrescar —lo rechazan el
@@ -552,6 +552,7 @@ function puedeReintentar(
   if (raw === undefined) return true
   return (
     typeof raw === 'string' ||
+    raw instanceof FormData ||
     raw instanceof ArrayBuffer ||
     ArrayBuffer.isView(raw) ||
     (typeof Blob !== 'undefined' && raw instanceof Blob)

@@ -1,6 +1,6 @@
 {
   "title": "확장",
-  "subtitle": "라이브 기능 카탈로그 — MCP 서버, 도구, 스킬 및 연결 방식입니다.",
+  "subtitle": "세션에서 사용할 MCP 서버와 스킬입니다.",
   "tabs": {
     "servers": "서버",
     "tools": "도구",

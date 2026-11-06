@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	gp "github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -252,4 +253,98 @@ func storeError(err error) error {
 		return authError(err)
 	}
 	return errUnavailable
+}
+
+// ReviewRule is what the forge requires before a change merges into one merge
+// base of a target, as the target's own forge identity reads it (see
+// gp.ReviewRule for the counts).
+type ReviewRule struct {
+	Target     model.ID `json:"target"`
+	Workspace  model.ID `json:"workspace"`
+	Base       string   `json:"base"`
+	Approvals  int      `json:"approvals"`
+	Bypassable int      `json:"bypassable"`
+	Bypassers  int      `json:"bypassers"`
+	// Unread is why the rule could not be read (unsupported, host_unavailable or
+	// a binding refusal); the counts are then zero and prove nothing.
+	Unread string `json:"unread,omitempty"`
+}
+
+// ReviewRules reads the review rule on every merge base of the tenant's targets
+// that publish as credentialBinding, each with one read-only token of that
+// target. It changes nothing on the host. It reads the forge's rulesets only:
+// classic branch protection is not read, so a base protected that way reads as
+// no rule. No route serves it and it takes no caller or workspace: the
+// composition root's caller authorizes the read, checking tenant-admin access
+// or keeping only rows in the principal's workspaces (one credential binding
+// can allow several workspaces).
+func (m *Module) ReviewRules(ctx context.Context, tenant model.TenantID, credentialBinding string) ([]ReviewRule, error) {
+	if !m.wired() {
+		return nil, errUnavailable
+	}
+	var targets []Target
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		recs, err := listAll(ctx, sc, kindTarget)
+		for _, rec := range recs {
+			if tg := targetFrom(rec); tg.CredentialBinding == credentialBinding {
+				targets = append(targets, tg)
+			}
+		}
+		return err
+	})
+	if err != nil {
+		return nil, storeError(err)
+	}
+	out := []ReviewRule{}
+	for _, tg := range targets {
+		out = append(out, m.targetReviewRules(ctx, tenant, tg)...)
+	}
+	return out, nil
+}
+
+func (m *Module) targetReviewRules(ctx context.Context, tenant model.TenantID, tg Target) []ReviewRule {
+	rows := make([]ReviewRule, 0, len(tg.MergeBases))
+	for _, base := range tg.MergeBases {
+		rows = append(rows, ReviewRule{Target: tg.ID, Workspace: tg.Workspace, Base: base})
+	}
+	unread := func(code string) []ReviewRule {
+		for i := range rows {
+			rows[i].Unread = code
+		}
+		return rows
+	}
+	if len(rows) == 0 {
+		return rows
+	}
+	rctx, cancel := context.WithTimeout(ctx, m.opts.AdmissionTimeout)
+	defer cancel()
+	cb, rb, e := m.bindings(rctx, tenant, tg.Workspace, tg.CredentialBinding, tg.RepositoryBinding)
+	if e != nil {
+		return unread(e.Code)
+	}
+	host, err := m.opts.Custody.OpenHost(rctx, tenant, cb, rb)
+	if err != nil {
+		return unread("host_unavailable")
+	}
+	tok, err := host.Mint(rctx, gp.EffectObserve)
+	if err != nil {
+		return unread("host_unavailable")
+	}
+	rel := &releaser{host: host, tok: tok}
+	defer rel.release(ctx) // a panic still releases; release runs once
+	for i := range rows {
+		r, err := gp.ReadReviewRule(rctx, host, tok, rows[i].Base)
+		switch {
+		case errors.Is(err, gp.ErrNotSupported):
+			rows[i].Unread = "unsupported"
+		case err != nil:
+			rows[i].Unread = "host_unavailable"
+		default:
+			rows[i].Approvals, rows[i].Bypassable, rows[i].Bypassers = r.Approvals, r.Bypassable, r.Bypassers
+		}
+	}
+	if code := rel.release(ctx); code != "" && m.opts.OnReleaseFailure != nil {
+		m.opts.OnReleaseFailure(tg.ID, code)
+	}
+	return rows
 }

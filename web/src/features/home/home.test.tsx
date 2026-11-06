@@ -178,7 +178,7 @@ describe('Overview: what needs you, what runs, what ended (#4427)', () => {
     const strip = await screen.findByRole('navigation', {
       name: 'Sessions at a glance',
     })
-    expect(strip).toHaveTextContent('1 running · 1 failed today')
+    expect(strip).toHaveTextContent('1 working · 1 failed today')
     expect(
       screen.getByRole('heading', { name: 'Needs you' }),
     ).toBeInTheDocument()
@@ -398,6 +398,29 @@ describe('Overview — Running and Recent rows (#4427)', () => {
     const recent = await screen.findByRole('region', { name: 'Recent' })
     expect(within(recent).getByText('Nightly report')).toBeInTheDocument()
     expect(within(recent).queryByText('Fix the flaky login test')).toBeNull()
+  })
+
+  it('an idle session is not Running: Running counts what the strip counts, the idle one is Recent', async () => {
+    authState.can = role
+    stub([
+      running(),
+      {
+        ...running(),
+        run_ref: 'run-idle',
+        state: 'idle',
+        name: 'Answered, awaiting input',
+      },
+    ])
+    renderIntel(<HomeView />)
+    const live = await screen.findByRole('region', { name: 'Running' })
+    expect(
+      within(live).getByText('Fix the flaky login test'),
+    ).toBeInTheDocument()
+    expect(within(live).queryByText('Answered, awaiting input')).toBeNull()
+    const recent = await screen.findByRole('region', { name: 'Recent' })
+    expect(
+      within(recent).getByText('Answered, awaiting input'),
+    ).toBeInTheDocument()
   })
 
   it('when every session is live Running is the one list: no empty Recent, and it links to all', async () => {

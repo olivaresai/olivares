@@ -6,7 +6,8 @@
   "businessOnly": {
     "title": "属于 Business 版",
     "description": "此页面属于 Olivares AI Business，当前版本不包含。",
-    "link": "了解 Business"
+    "link": "了解 Business",
+    "start": "前往起始页"
   },
   "forbidden": {
     "title": "未获授权",

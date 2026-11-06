@@ -62,7 +62,7 @@ import {
   type ModuleSelection,
   type ModuleState,
 } from '@/features/settings/modules-settings'
-import { useModulesStore } from '@/stores/modules'
+import { moduleOfView, useModulesStore } from '@/stores/modules'
 import { RequirePermission } from './require-permission'
 
 const publication = FEATURE_VIEWS.find((v) => v.id === 'gitPublication')!
@@ -106,6 +106,22 @@ describe('the page of a view whose module is off', () => {
     ).not.toBeNull()
     expect(screen.queryByText(/not enabled on this installation/i)).toBeNull()
     expect(screen.queryByText('Git publication screen')).toBeNull()
+  })
+
+  it('does not paint a name the top bar already says (Security under Security)', () => {
+    const security = FEATURE_VIEWS.find((v) => v.id === 'security')!
+    useModulesStore
+      .getState()
+      .setOff([moduleOfView(security.permission, security.id)!])
+    renderIntel(
+      <RequirePermission view={security}>
+        <p>Security screen</p>
+      </RequirePermission>,
+    )
+    // Still the page's h1 for assistive technology; only the painted word is dropped.
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Security' }),
+    ).toHaveClass('sr-only')
   })
 
   it('asks a person who may not change modules to ask an administrator', () => {

@@ -45,7 +45,12 @@
     "moved": "Assignment moved to the latest revision",
     "approveTitle": "Approve skills that act when loaded?",
     "approveDescription": "The latest revision pins skills for {{target}} that their tool acts on without asking: {{skills}}. Approve only after reviewing them.",
-    "approve": "Approve and use latest"
+    "approve": "Approve and use latest",
+    "disable": "Disable",
+    "disabled": "Skill disabled",
+    "disableFor": "Disable {{skill}} for {{target}}",
+    "disableTitle": "Disable this skill?",
+    "disableDescription": "New sessions of {{target}} stop receiving {{skill}} from this assignment. Other skills stay assigned. Recorded conversations keep their snapshot."
   },
   "assign": {
     "title": "Assign",
@@ -85,7 +90,15 @@
     "gitSubmit": "Install from Git",
     "name": "Pack name",
     "nameHint": "Optional; defaults to the repository name. Choose a distinct name for another pack from the same repository.",
-    "held": "Skill pack installed. It carries skills that act when loaded, so it was not assigned: review it and assign it from its pack sheet."
+    "held": "Skill pack installed. It carries skills that act when loaded, so it was not assigned: review it and assign it from its pack sheet.",
+    "local": "Folder or archive",
+    "archive": "Archive",
+    "archiveHint": "ZIP or tar.gz, up to 32 MiB. Select an archive or a folder.",
+    "folder": "Folder",
+    "uploadSubmit": "Install upload",
+    "selectedFiles": "Selected files: {{count}}",
+    "uploadLimit": "The upload exceeds the import limits (32 MiB, 4096 files, 8 MiB per file).",
+    "uploadName": "Uploaded pack name"
   },
   "update": {
     "title": "Updates",

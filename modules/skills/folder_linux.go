@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"golang.org/x/sys/unix"
 )
 
@@ -26,18 +27,36 @@ func ImportFolder(ctx context.Context, selected string) (*ValidatedPack, error) 
 	if err != nil {
 		return nil, refuse("unsafe_pack", "folder")
 	}
-	if h, err := os.UserHomeDir(); err == nil && filepath.Clean(h) == absolute {
+	home, homeErr := os.UserHomeDir()
+	if homeErr == nil && filepath.Clean(home) == absolute {
 		return nil, refuse("unsafe_pack", "home directory")
+	}
+	// Only the documented skills root may cross a protected tool config folder.
+	nativeRoot := ""
+	if homeErr == nil {
+		home = filepath.Clean(home)
+		for _, facts := range driverfacts.All() {
+			if facts.SkillsDir == "" {
+				continue
+			}
+			root := filepath.Join(home, filepath.FromSlash(facts.SkillsDir))
+			if absolute == root || strings.HasPrefix(absolute, root+"/") {
+				nativeRoot = root
+				break
+			}
+		}
 	}
 	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, refuse("unsafe_pack", "folder")
 	}
+	current := ""
 	for _, part := range strings.Split(strings.TrimPrefix(absolute, "/"), "/") {
 		if part == "" {
 			continue
 		}
-		if !safePath(part) {
+		current += "/" + part
+		if !safePath(part) && !(nativeRoot != "" && strings.HasPrefix(current, home+"/") && strings.HasPrefix(nativeRoot, current+"/")) {
 			_ = unix.Close(fd)
 			return nil, refuse("unsafe_pack", "selected folder is inside a protected source tree")
 		}

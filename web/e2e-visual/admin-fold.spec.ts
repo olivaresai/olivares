@@ -69,7 +69,7 @@ test('Administration repeats no tab another place holds', async ({ page }) => {
   await expect(tabs.getByRole('tab', { name: 'Agents' })).toBeVisible()
   for (const name of [
     'People',
-    'SSO / IdP',
+    'Identity provider',
     'Roles',
     'API keys',
     'Edition',

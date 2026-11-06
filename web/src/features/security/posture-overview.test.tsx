@@ -258,6 +258,13 @@ describe('SecurityPostureOverview', () => {
     }
   })
 
+  it('draws every Review link without the accent, which marks only the primary action', async () => {
+    renderOverview()
+
+    const links = await screen.findAllByRole('link', { name: /^Review/ })
+    for (const link of links) expect(link.className).not.toMatch(/accent/)
+  })
+
   it('shows not available instead of zero when the person cannot read the facts', async () => {
     mocks.auth.can = () => false
     renderOverview()

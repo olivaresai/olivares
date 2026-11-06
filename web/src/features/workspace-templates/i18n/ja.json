@@ -38,7 +38,9 @@
         "secrets_other": "変数 {{count}} 件",
         "connectors_other": "コネクター {{count}} 件",
         "set_other": "{{count}} 件設定済み",
-        "model": "モデル: {{model}}"
+        "model": "モデル: {{model}}",
+        "none": "なし",
+        "defaults": "デフォルト"
       }
     },
     "hooks": {

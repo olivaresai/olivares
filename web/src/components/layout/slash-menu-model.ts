@@ -21,17 +21,6 @@ export function slashQuery(draft: string): string | null {
   return match ? match[1] : null
 }
 
-/** The skill being typed after a leading "$" (a tool such as Codex invokes its skills as $name), or null. */
-export function skillQuery(draft: string): string | null {
-  const match = /^\$([^\s$]*)$/.exec(draft)
-  return match ? match[1] : null
-}
-
-/** An entry the tool invokes with "$" rather than "/". */
-export function isDollarSkill(command: RunCommandDTO): boolean {
-  return command.insert_text?.startsWith('$') ?? false
-}
-
 /** The path being typed after an "@" at the end of the draft, or null: a file or folder can be
  * mentioned anywhere in the message, and the mention ends at a space. */
 export function mentionQuery(draft: string): string | null {
@@ -39,13 +28,11 @@ export function mentionQuery(draft: string): string | null {
   return match ? match[1] : null
 }
 
-/** What the menu is for, as typed: "/word", "$word" or "@path", or null when no menu is. Escape
+/** What the menu is for, as typed: "/word" or "@path", or null when no menu is. Escape
  * closes the menu for this exact text; the next character brings it back. */
 export function menuKeyOf(draft: string): string | null {
   const slash = slashQuery(draft)
   if (slash !== null) return `/${slash}`
-  const skill = skillQuery(draft)
-  if (skill !== null) return `$${skill}`
   const mention = mentionQuery(draft)
   return mention === null ? null : `@${mention}`
 }

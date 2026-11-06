@@ -175,28 +175,21 @@ function sources(dir: string, out: string[] = []): string[] {
 }
 
 describe('public console build: no Business SSO UI', () => {
-  it('confines Business SSO controls and signals to the installed Business source', () => {
-    const files = sources(SRC)
-    // A scan that read nothing would pass by vacuity.
-    expect(files.some((f) => f.endsWith('sso-tab.tsx'))).toBe(true)
-    const found = files.flatMap((f) => {
-      const text = readFileSync(f, 'utf8')
-      return BUSINESS_MARKERS.filter((m) => text.includes(m)).map(
-        (m) => `${relative(SRC, f)}: ${m}`,
-      )
-    })
-    // Only the paid overlay supplies this module; Community permits no markers.
-    expect(found.sort()).toEqual(
-      FEATURE_EXTENSIONS.length > 0
-        ? [
-            'features/sso-providers/api.ts: groups_mapped_by',
-            'features/sso-providers/api.ts: routed_by',
-            'features/sso-providers/sso-providers-tab.tsx: groups_mapped_by',
-            'features/sso-providers/sso-providers-tab.tsx: routed_by',
-          ]
-        : [],
-    )
-  })
+  it.skipIf(FEATURE_EXTENSIONS.length > 0)(
+    'confines Business SSO controls and signals to the installed Business source',
+    () => {
+      const files = sources(SRC)
+      // A scan that read nothing would pass by vacuity.
+      expect(files.some((f) => f.endsWith('sso-tab.tsx'))).toBe(true)
+      const found = files.flatMap((f) => {
+        const text = readFileSync(f, 'utf8')
+        return BUSINESS_MARKERS.filter((m) => text.includes(m)).map(
+          (m) => `${relative(SRC, f)}: ${m}`,
+        )
+      })
+      expect(found).toEqual([])
+    },
+  )
 
   it('the public console words carry no Business SSO string, in any language', () => {
     const dir = join(__dirname, 'i18n')

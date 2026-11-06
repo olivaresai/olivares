@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // ADM-IDN-01 — SSO/SAML/OIDC config + SCIM 2.0 status (consumes).
-//  • SSO is SET UP in the SSO / IdP tab (a form, applied without a restart); this panel
+//  • SSO is SET UP in the Identity provider tab (a form, applied without a restart); this panel
 //    computes + checks the EXACT redirect URI (RFC 9700 exact-match), reflects the
 //    always-on PKCE S256, and surfaces the connection state — incl. the explicit
 //    ErrSSONotConfigured (501 sso_not_configured) state.
@@ -187,7 +187,7 @@ function SsoSection() {
           ) : null}
         </div>
 
-        {/* Set-up lives in the SSO / IdP tab, which only an administrator is offered. */}
+        {/* Set-up lives in the Identity provider tab, which only an administrator is offered. */}
         {admin ? (
           <div>
             <Button

@@ -140,6 +140,100 @@ async function openPack() {
 }
 
 describe('SkillsView', () => {
+  it('disables only the selected skill on one profile and removes its last-member pin', async () => {
+    const profileA: SkillAssignment = {
+      ...groupPin,
+      id: 'profile-a-pin',
+      target_kind: 'profile',
+      target_id: 'profile-a',
+      members: null,
+    }
+    const profileB: SkillAssignment = {
+      ...profileA,
+      id: 'profile-b-pin',
+      target_id: 'profile-b',
+      members: ['keep'],
+    }
+    let pins = [profileA, profileB]
+    vi.mocked(skillsApi.pack).mockResolvedValue({
+      ...detail,
+      revisions: [
+        detail.revisions[0],
+        {
+          ...detail.revisions[1],
+          members: [
+            { name: 'code-review', directory: 'code-review', description: '' },
+            { name: 'keep', directory: 'keep', description: '' },
+          ],
+        },
+      ],
+    })
+    vi.mocked(skillsApi.packAssignments).mockImplementation(async () =>
+      list(pins),
+    )
+    const put = vi.spyOn(http, 'put').mockImplementation(async (_url, body) => {
+      const assignment = {
+        ...profileA,
+        members: (body as { members: string[] }).members,
+        version: 5,
+      }
+      pins = [assignment, profileB]
+      return { state: 'pinned', assignment } as never
+    })
+    const remove = vi.spyOn(http, 'delete').mockImplementation(async () => {
+      pins = [profileB]
+      return { state: 'unassigned' } as never
+    })
+    const view = renderIntel(
+      <PackSheet pack={pack} skill="code-review" onOpenChange={vi.fn()} />,
+    )
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Disable code-review for profile-a',
+      }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Disable' }))
+    await screen.findByText('Not assigned')
+    expect(put).toHaveBeenCalledWith(
+      '/v1/m/skills/assignments/profile-a-pin',
+      {
+        target_kind: 'profile',
+        target_id: 'profile-a',
+        pack_revision_id: 'rev-1',
+        members: ['keep'],
+      },
+      expect.objectContaining({
+        tenant: 'tenant-1',
+        headers: { 'If-Match': '4' },
+      }),
+    )
+    expect(remove).not.toHaveBeenCalled()
+    expect(profileB.members).toEqual(['keep'])
+    view.rerender(<PackSheet pack={pack} skill="keep" onOpenChange={vi.fn()} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Disable keep for profile-a' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Disable' }))
+    await waitFor(() =>
+      expect(remove).toHaveBeenCalledWith(
+        '/v1/m/skills/assignments/profile-a-pin',
+        undefined,
+        expect.objectContaining({
+          tenant: 'tenant-1',
+          headers: { 'If-Match': '5' },
+        }),
+      ),
+    )
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Disable keep for profile-a' }),
+      ).toBeNull(),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Disable keep for profile-b' }),
+    ).toBeInTheDocument()
+  })
+
   it('keeps the selected skill in the URL across remount and Back', async () => {
     fakeRouter.reset('/capabilities?tab=skills')
     const view = renderIntel(<SkillsView />)
@@ -1141,4 +1235,42 @@ it('does not load provider targets without the native read permission', async ()
   )
   expect(agentOpsApi.listProfiles).not.toHaveBeenCalled()
   expect(within(sheet).getByRole('button', { name: 'Assign' })).toBeDisabled()
+})
+
+it('uploads a local archive through the existing import and assignment flow', async () => {
+  const post = vi.spyOn(http, 'post').mockResolvedValue({
+    state: 'catalog_published',
+    pack,
+    revision: detail.revisions[0],
+  })
+  const assign = vi.spyOn(skillsApi, 'assign').mockResolvedValue({
+    state: 'pinned',
+    assignment: groupPin,
+  })
+  renderIntel(<SkillsView />)
+  await chooseWorkspace()
+  await userEvent.click(screen.getByText('Folder or archive'))
+  await userEvent.upload(
+    screen.getByLabelText('Archive'),
+    new File(['archive'], 'ecc.zip', { type: 'application/zip' }),
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Install upload' }))
+  await screen.findByText('Skill pack installed and assigned')
+  expect(post).toHaveBeenCalledWith(
+    '/v1/m/skills/packs',
+    undefined,
+    expect.objectContaining({
+      tenant: 'tenant-1',
+      rawBody: expect.any(FormData),
+      headers: { 'Idempotency-Key': expect.any(String) },
+    }),
+  )
+  const upload = post.mock.calls[0][2]?.rawBody as FormData
+  expect(upload.get('name')).toBe('ecc')
+  expect(upload.get('format')).toBe('zip')
+  expect(upload.get('archive')).toBeInstanceOf(File)
+  expect(assign).toHaveBeenCalledWith(
+    expect.objectContaining({ pack_revision_id: 'rev-2', target_id: 'ws-1' }),
+    expect.objectContaining({ tenant: 'tenant-1' }),
+  )
 })

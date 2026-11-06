@@ -27,6 +27,7 @@ import {
   type ViewGate,
 } from '@/features/navigation/model'
 import { currentPlace, placeOpenedAt } from '@/features/navigation/places'
+import { frameFor } from './page-frames'
 
 let page = ''
 let attention = 0
@@ -103,9 +104,10 @@ export function pageLabel(
 
 /** The top bar's word: the place the page belongs to, whose heading names the page itself.
  * An address in no place (an area directory, a 404, a Business notice) has none: its
- * heading alone names it, so the same word never shows twice. */
+ * heading alone names it, so the same word never shows twice. Nor has a work page
+ * (Sessions), which names itself in its list's heading. */
 export function topBarLabel(t: TFunction, pathname: string): string {
-  const place = currentPlace(pathname)
+  const place = frameFor(pathname) === 'work' ? null : currentPlace(pathname)
   return place ? t(`nav:places.${place}`) : ''
 }
 

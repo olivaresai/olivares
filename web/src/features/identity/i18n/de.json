@@ -3,11 +3,6 @@
   "subtitle": "Wer sich anmelden darf, was er tun darf und wie er es nachweist.",
   "ownSignInOnly": "Hier können Sie Ihre eigenen Anmeldefaktoren einrichten. Den Rest dieser Seite ändert ein Administrator der Organisation.",
   "sections": "Identitätsbereiche",
-  "groups": {
-    "people": "Personen",
-    "signIn": "Anmeldung",
-    "machines": "Maschinenidentitäten"
-  },
   "tabs": {
     "federation": "Single Sign-On",
     "inventory": "Identitätsinventar",
@@ -102,9 +97,9 @@
   },
   "sso": {
     "title": "Single Sign-on (OIDC / SAML)",
-    "description": "Single Sign-on wird von einem Superadmin unter SSO / IdP eingerichtet. Dieses Panel prüft die exakte Redirect-URI und zeigt den Verbindungsstatus.",
+    "description": "Single Sign-on wird von einem Superadmin unter Identitätsanbieter eingerichtet. Dieses Panel prüft die exakte Redirect-URI und zeigt den Verbindungsstatus.",
     "notConfigured": "Nicht konfiguriert",
-    "notConfiguredHint": "Es ist kein Identitätsanbieter konfiguriert, daher liefern Föderationsanfragen 501 zurück. Ein Superadmin richtet ihn unter SSO / IdP ein.",
+    "notConfiguredHint": "Es ist kein Identitätsanbieter konfiguriert, daher liefern Föderationsanfragen 501 zurück. Ein Superadmin richtet ihn unter Identitätsanbieter ein.",
     "seamWhat": "Die Zusammenfassung des SSO-Verbindungsstatus",
     "protocol": "Protokoll",
     "state": "Verbindung",
@@ -115,7 +110,7 @@
     "redirectCheckHint": "Fügen Sie die in Ihrem Identitätsanbieter konfigurierte Redirect-/ACS-URI ein. Sie muss exakt mit dem obigen Wert übereinstimmen (RFC 9700).",
     "redirectMatch": "Exakte Übereinstimmung — diese Redirect-URI ist gültig.",
     "redirectMismatch": "Stimmt nicht exakt überein. Der IdP muss die obige Redirect-URI zeichengenau verwenden.",
-    "configure": "SSO / IdP öffnen",
+    "configure": "Identitätsanbieter öffnen",
     "testLogin": "Test-Anmeldung starten"
   },
   "scim": {

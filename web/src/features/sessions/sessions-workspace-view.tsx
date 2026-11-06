@@ -1171,8 +1171,8 @@ function Inner({
   // THE STRIP AT THE TOP OF THE LIST (session-strip.tsx): who waits for the person, what
   // runs, and today's cost, from the rows already loaded and the rules the list and Now
   // use. Without the run half, what runs and what it cost are not known, so they are left
-  // out; a cost is said only when every session of today reported one and no page cut
-  // hides one of today's sessions.
+  // out; the cost is what today's sessions reported, a session that reported none left out
+  // of it, and it is not said while a page cut may hide one of today's sessions.
   const now = useMinuteClock()
   const { navigable, listed } = useViewAccess()
   const usageView = viewById('usage')
@@ -1187,7 +1187,7 @@ function Inner({
     return {
       needYou: sessions.filter((s) => inSection(s, 'attention')).length,
       running: originUnknown ? null : counts.running,
-      costMicroUsd: today?.unpriced === 0 ? today.costMicroUsd : null,
+      costMicroUsd: today?.costMicroUsd ?? null,
       usagePath,
     }
   }, [

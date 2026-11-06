@@ -573,7 +573,8 @@ async function exigirEstateCoherente(
   id: string,
   visible: string,
 ): Promise<void> {
-  const running = /(\d[\d,]*) running/i.exec(visible)
+  // The strip's word is lower case; a row's state word, "Working", starts with a capital.
+  const running = /(\d[\d,]*) working\b/.exec(visible)
   const vivas = Number((running?.[1] ?? '0').replace(/,/g, ''))
   // A row starts with its state word.
   const filas = await page.getByTestId('home-recent-row').allInnerTexts()

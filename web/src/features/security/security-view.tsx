@@ -108,6 +108,8 @@ export function SecurityView() {
     <IntelPage
       icon={ShieldAlert}
       title={t('title')}
+      // The top bar already says Security; the place's lead page does not say it twice.
+      titleHidden
       description={t('description')}
     >
       <Tabs value={tab} onValueChange={setTab}>

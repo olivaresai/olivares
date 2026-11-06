@@ -6,7 +6,8 @@
   "businessOnly": {
     "title": "Входит в Business",
     "description": "Эта страница входит в Olivares AI Business. В этой редакции её нет.",
-    "link": "О Business"
+    "link": "О Business",
+    "start": "Перейти на стартовую страницу"
   },
   "forbidden": {
     "title": "Нет доступа",

@@ -219,6 +219,9 @@ func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 		owner = personalOwnerPrefix + id.String()
 	}
 	dto, err := m.createWorkspace(api.DepartmentAuthority(r.Context(), mc), mc.Tenant, CreateWorkspaceParams{
+		checkHostPaths: func(paths []string) error {
+			return m.admitDepartmentFolderPaths(r.Context(), mc, department, paths, body.Owner, paths[0], body.MountMode)
+		},
 		Department: department,
 		Owner:      owner,
 		Backup:     body.Backup,
@@ -263,7 +266,9 @@ func (m *Module) handlePatchWorkspace(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	mayRunUnrestricted := body.DefaultPermission != nil && m.mayRunUnrestricted(r.Context(), mc)
-	dto, err := m.patchWorkspace(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ReadOnlyFolders, body.DLPMode, body.DefaultPermission, mayRunUnrestricted, body.DataClass, body.Backup, body.RetentionDays, mc.Principal.Actor(), mc.Principal.ActorKind())
+	dto, err := m.patchWorkspace(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ReadOnlyFolders, body.DLPMode, body.DefaultPermission, mayRunUnrestricted, body.DataClass, body.Backup, body.RetentionDays, mc.Principal.Actor(), mc.Principal.ActorKind(), func(paths []string) error {
+		return m.admitDepartmentFolderPaths(r.Context(), mc, mc.Resource.WorkspaceID, paths, "", "", mountRO)
+	})
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -424,4 +429,84 @@ func (m *Module) handleDeleteFile(w http.ResponseWriter, r *http.Request, mc api
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
+}
+
+// A department administrator subdivides host reach registered by a tenant
+// administrator. Department membership alone never grants new host access.
+func (m *Module) admitDepartmentFolderPaths(ctx context.Context, mc api.ModuleContext, department model.ID, paths []string, owner, root, mode string) error {
+	_, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant)
+	if !confined && mc.Admits(ctx, permWsAdmin, auth.ResourceFor(permWsAdmin)) {
+		return nil
+	}
+	if owner != "" {
+		return forbiddenErr("Only a tenant administrator can grant host access or assign a folder owner.")
+	}
+	if mode == "" {
+		mode = mountRW
+	}
+	canonical := append([]string(nil), paths...)
+	return m.Data.View(api.DepartmentAuthority(ctx, mc), mc.Tenant, func(sc store.Scope) error {
+		// Folder EntityRefs have no WorkspaceColumn; their department is on the Resource.
+		if department.IsZero() && mc.Resource.ID != "" {
+			resource, err := sc.Resources().Get(ctx, model.ID(mc.Resource.ID))
+			if err != nil {
+				return err
+			}
+			department = resource.WorkspaceID
+		}
+		if department.IsZero() {
+			return forbiddenErr("Only a tenant administrator can grant host access or assign a folder owner.")
+		}
+		if len(canonical) == 0 {
+			return nil
+		}
+		repo, err := sc.Ext(workspaceKind)
+		if err != nil {
+			return err
+		}
+		cursor := ""
+		for {
+			records, page, err := repo.List(ctx, model.Query{Limit: workspaceRegistryScanPage, Cursor: cursor})
+			if err != nil {
+				return err
+			}
+			for _, rec := range records {
+				if rec.String(colWsState) != wsActive {
+					continue
+				}
+				resource, err := sc.Resources().Get(ctx, model.ID(rec.String(model.ColID)))
+				if err != nil {
+					return err
+				}
+				if resource.WorkspaceID != department || resource.Owner != "" {
+					continue
+				}
+				allow, err := decodeSubpaths(rec)
+				if err != nil {
+					return err
+				}
+				remaining := canonical[:0]
+				for _, path := range canonical {
+					at, under := pathRelation(path, rec.String(colWsRootPath))
+					// Reference folders are read-only. A new root must also preserve
+					// the registered root's write and delete restrictions.
+					modeCovered := path != root || mode == mountRO || mode == rec.String(colWsMountMode) || rec.String(colWsMountMode) == mountRW
+					if (!at && !under) || !underAllowedSubpath(rec.String(colWsRootPath), allow, path) || !modeCovered {
+						remaining = append(remaining, path)
+					}
+				}
+				canonical = remaining
+			}
+			if len(canonical) == 0 {
+				return nil
+			}
+			if !page.HasMore {
+				return forbiddenErr("The folder must be inside a registered department folder.")
+			}
+			if page.Cursor == "" || page.Cursor == cursor {
+				return forbiddenErr("Department folder reach could not be established.")
+			}
+			cursor = page.Cursor
+		}
+	})
 }

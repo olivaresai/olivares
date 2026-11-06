@@ -121,9 +121,23 @@ function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
   const [removing, setRemoving] = useState<SkillAssignment | null>(null)
   const unassign = usePrivilegedMutation<SkillAssignment>({
     mutationKey: [...assignmentsKey, 'unassign'],
-    mutationFn: (a) => skillsApi.unassign(a, { tenant: activeTenant }),
-    invalidateKeys: () => [assignmentsKey],
-    successMessage: t('uses.unassigned'),
+    mutationFn: (a) => {
+      if (skill) {
+        const members = (
+          a.members ??
+          detail
+            .data!.revisions.find((r) => r.id === a.pack_revision_id)!
+            .members.map((m) => m.name)
+        ).filter((name) => name !== skill)
+        if (members.length)
+          return skillsApi.repin({ ...a, members }, a.pack_revision_id, false, {
+            tenant: activeTenant,
+          })
+      }
+      return skillsApi.unassign(a, { tenant: activeTenant })
+    },
+    invalidateKeys: () => [assignmentsKey, skillsKeys.all(activeTenant)],
+    successMessage: skill ? t('uses.disabled') : t('uses.unassigned'),
     onDone: () => setRemoving(null),
     // A changed or removed pin answers 409/404: reread the list so a retry carries
     // the current version, and let the shared handler report the refusal.
@@ -136,8 +150,8 @@ function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
     },
   })
 
-  // A pin keeps its revision when the pack is updated; moving it is explicit. A
-  // revision whose skills act when loaded needs the operator's approval first.
+  // Apply advances eligible pins on the previous latest revision. Older pins and
+  // pins needing new active-content approval can be moved explicitly here.
   const [repinning, setRepinning] = useState<SkillAssignment | null>(null)
   const repin = usePrivilegedMutation<{
     assignment: SkillAssignment
@@ -308,12 +322,18 @@ function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        aria-label={t('uses.unassignFrom', {
-                          target: targetName(a),
-                        })}
+                        aria-label={
+                          skill
+                            ? t('uses.disableFor', {
+                                skill,
+                                target: targetName(a),
+                              })
+                            : t('uses.unassignFrom', { target: targetName(a) })
+                        }
+                        disabled={unassign.isPending || repin.isPending}
                         onClick={() => setRemoving(a)}
                       >
-                        {t('uses.unassign')}
+                        {skill ? t('uses.disable') : t('uses.unassign')}
                       </Button>
                     </div>
                   )}
@@ -337,11 +357,15 @@ function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
-        title={t('uses.confirmTitle')}
-        description={t('uses.confirmDescription', {
-          target: removing ? targetName(removing) : '',
-        })}
-        confirmLabel={t('uses.unassign')}
+        title={skill ? t('uses.disableTitle') : t('uses.confirmTitle')}
+        description={t(
+          skill ? 'uses.disableDescription' : 'uses.confirmDescription',
+          {
+            skill,
+            target: removing ? targetName(removing) : '',
+          },
+        )}
+        confirmLabel={skill ? t('uses.disable') : t('uses.unassign')}
         tone="danger"
         pending={unassign.isPending}
         onConfirm={() => removing && unassign.mutate(removing)}

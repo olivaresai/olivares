@@ -118,7 +118,7 @@ Führen Sie ihn nach jeder Installation und nach dem Entfernen eines Overrides a
 Wenn Sie eine gültige Business- oder Enterprise-Lizenz auf einem Community-Build installieren,
 läuft dieser Build weiter. Das Session-Cockpit und die übrigen kommerziellen Seiten erscheinen
 erst, nachdem Sie diese Installation auf Business umgestellt haben. Die Ansicht
-**Edition & license** der Konsole nennt die installierte Lizenz getrennt vom Build. **Expires**
+**Settings › Edition** der Konsole nennt die installierte Lizenz getrennt vom Build. **Expires**
 ist die bezahlte Laufzeit; **Lease until**, sofern angezeigt, ist die davon getrennte
 vorläufige Instanz-Lease. Läuft die Installation in Docker? Gehen Sie unten zu
 [Docker und Compose](#docker-und-compose).
@@ -138,7 +138,7 @@ export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is c
 olivares upgrade --edition business
 ```
 
-`olivares license install` und `olivares license status` geben den genauen Befehl für die Art aus, wie diese Installation installiert wurde, und die Ansicht **Edition & license** der Konsole zeigt denselben Schritt als einen Button, **Zu Business wechseln**: Die Engine lädt den Build herunter, prüft ihn, tauscht ihn an Ort und Stelle aus und startet damit neu. Das Download-Token steht auf der Seite **Downloads** des lizenzierten Download-Portals ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), neben diesen Befehlen, und in Ihrer Lizenz-E-Mail; übergeben Sie es wie oben über den Namen, damit es nicht in der Prozessliste erscheint. Eine verbundene Installation (`olivares license connect start`) braucht kein Token. `--enterprise` ist die ältere Schreibweise derselben Route. Der Button der Konsole braucht eines von beiden, das Token in der Umgebung der Engine selbst oder diese Verbindung; ohne beides zeigt die Ansicht stattdessen den Befehl.
+`olivares license install` und `olivares license status` geben den genauen Befehl für die Art aus, wie diese Installation installiert wurde, und die Ansicht **Settings › Edition** der Konsole zeigt denselben Schritt als einen Button, **Zu Business wechseln**: Die Engine lädt den Build herunter, prüft ihn, tauscht ihn an Ort und Stelle aus und startet damit neu. Das Download-Token steht auf der Seite **Downloads** des lizenzierten Download-Portals ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), neben diesen Befehlen, und in Ihrer Lizenz-E-Mail; übergeben Sie es wie oben über den Namen, damit es nicht in der Prozessliste erscheint. Eine verbundene Installation (`olivares license connect start`) braucht kein Token. `--enterprise` ist die ältere Schreibweise derselben Route. Der Button der Konsole braucht eines von beiden, das Token in der Umgebung der Engine selbst oder diese Verbindung; ohne beides zeigt die Ansicht stattdessen den Befehl.
 
 :::caution[Paketinstallationen]
 Bei einer deb-, rpm-, apk- oder AUR-Installation gehört `/usr/bin/olivares` dem Paketmanager, daher wird
@@ -246,7 +246,7 @@ erstellen Sie diesen Dienst dann mit `docker compose up -d --no-deps --force-rec
 neu. Erstellen Sie bei eigenständigem Docker den Container mit diesem Image und demselben Volume
 und denselben Argumenten neu. Behalten Sie das Datenvolume: Verwenden Sie nicht `down --volumes`.
 
-Prüfen Sie nach dem Neustart **Edition & license**: Die Edition sollte **Business** anzeigen, und
+Prüfen Sie nach dem Neustart **Settings › Edition**: Die Edition sollte **Business** anzeigen, und
 die installierte Lizenz bleibt im Datenvolume. Enterprise-Verträge verwenden ebenfalls diesen
 kommerziellen Build; ein vertragsspezifisches Artefakt folgt den Anweisungen seines Downloads.
 

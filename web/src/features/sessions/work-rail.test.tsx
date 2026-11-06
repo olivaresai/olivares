@@ -521,7 +521,7 @@ describe('WorkRail — what a row says', () => {
     expect(screen.getByRole('group', { name: /^Working\s*1$/ })).toBeTruthy()
   })
 
-  it('nests the sessions of one workspace under it, "workspace · N agents", and a session in a worktree under that worktree\'s branch', () => {
+  it('nests the sessions of one workspace under it, "workspace · N sessions", and a session in a worktree under that worktree\'s branch', () => {
     const run = (
       ref: string,
       name: string,
@@ -553,7 +553,7 @@ describe('WorkRail — what a row says', () => {
       ],
     )
     renderRail({ sessions, workspaceNames: new Map([['ws-1', 'shop']]) })
-    const shop = screen.getByRole('group', { name: 'shop · 2 agents' })
+    const shop = screen.getByRole('group', { name: 'shop · 2 sessions' })
     const rows = within(shop).getAllByRole('option')
     expect(rows).toHaveLength(2)
     // The worktree is a level of its own: its branch heads the group its session sits in,

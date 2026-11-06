@@ -104,20 +104,21 @@
     "membership_offboard": "Person entfernt",
     "token_issue": "API-Token erstellt",
     "token_revoke": "API-Token widerrufen",
-    "secret_delete": "Geheimnis gelöscht"
+    "secret_delete": "Geheimnis gelöscht",
+    "governance_killswitch_engage": "Not-Aus ausgelöst",
+    "sessions_run_created": "Sitzung erstellt"
   },
   "targets": {
     "core_policy": "Richtlinie"
   },
   "internal": {
-    "hidden": "Ausgeblendete interne Datensätze: {{count}}",
     "show": "Interne Datensätze anzeigen",
     "hide": "Interne Datensätze ausblenden",
     "allHidden": "Alles bisher Geladene sind interne Datensätze."
   },
   "ledger": {
     "query": "Hauptbuch-Abfrage",
-    "placeholder": "person:  action:  since:7d  oder Wörter",
+    "placeholder": "Suche",
     "addFilter": "Filter hinzufügen",
     "remove": "{{token}} entfernen",
     "add": "{{token}} zur Abfrage hinzufügen",
@@ -148,13 +149,6 @@
       "week": "Einträge pro Woche",
       "bar_one": "{{at}}, {{count}} Eintrag",
       "bar_other": "{{at}}, {{count}} Einträge",
-      "loaded_one": "{{count}} Eintrag geladen",
-      "loaded_other": "{{count}} Einträge geladen",
-      "sessions_one": "{{count}} Sitzung",
-      "sessions_other": "{{count}} Sitzungen",
-      "people_one": "{{count}} Person",
-      "people_other": "{{count}} Personen",
-      "more": "weitere ladbar",
       "now": "Jetzt"
     },
     "entry": {
@@ -168,5 +162,15 @@
       "chainHint": "Jeder Eintrag trägt den Hash des vorherigen. Ändert man einen, bricht jeder spätere Hash.",
       "signedEntry": "Der signierte Eintrag"
     }
+  },
+  "verbs": {
+    "create": "{{what}} erstellt",
+    "update": "{{what}} aktualisiert",
+    "delete": "{{what}} gelöscht"
+  },
+  "toolApproval": {
+    "allow": "Werkzeugaufruf erlaubt",
+    "ask": "Werkzeugaufruf wartet auf Genehmigung",
+    "deny": "Werkzeugaufruf abgelehnt"
   }
 }

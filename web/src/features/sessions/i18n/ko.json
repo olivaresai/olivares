@@ -705,7 +705,6 @@
       "snoozed": "미뤄 둠",
       "archived": "보관됨"
     },
-    "agentCount_other": "에이전트 {{count}}개",
     "more": "더 보기",
     "back": "세션으로 돌아가기",
     "showTable": "표로 표시",

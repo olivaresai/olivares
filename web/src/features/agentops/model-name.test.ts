@@ -43,8 +43,13 @@ describe('modelName: one name for a model everywhere the console says it', () =>
     expect(modelName('x-constructor')).toBe('x Constructor')
   })
 
+  it('names a model behind its vendor prefix, as some tools write the id', () => {
+    expect(modelName('anthropic/claude-sonnet-5-5')).toBe('Claude Sonnet 5.5')
+    expect(modelName('openai/gpt-5.5-codex')).toBe('GPT-5.5 Codex')
+  })
+
   it('leaves an id it cannot read as it is', () => {
-    for (const id of ['o3', 'qwen3:32b', 'anthropic/claude-opus-5.5', 'X-1'])
+    for (const id of ['o3', 'qwen3:32b', 'org/team/model-1', 'X-1'])
       expect(modelName(id)).toBe(id)
   })
 

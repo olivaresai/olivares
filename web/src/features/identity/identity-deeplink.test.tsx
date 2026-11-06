@@ -207,7 +207,9 @@ describe('IdentityView — Identities & access (console remake slice 3)', () => 
     renderAt('')
     expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
-    for (const name of ['People', 'Roles', 'SSO / IdP', 'API keys'])
+    // The section list names its sections and nothing else: no group label above them.
+    expect(screen.getByRole('tablist').textContent).toBe(tabs.join(''))
+    for (const name of ['People', 'Roles', 'Identity provider', 'API keys'])
       expect(tabs).toContain(name)
     // The identity sections are all still there, after people and roles.
     expect(tabs.indexOf('People')).toBe(0)

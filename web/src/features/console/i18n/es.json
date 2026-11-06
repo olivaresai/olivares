@@ -4,7 +4,7 @@
   "tabs": {
     "people": "Personas",
     "agents": "Agentes",
-    "sso": "SSO / IdP",
+    "sso": "Proveedor de identidad",
     "scopes": "Espacios de trabajo",
     "roles": "Roles",
     "secrets": "Secretos",
@@ -56,11 +56,11 @@
     "truncatedHint": "Hay más tokens de API de los que se ven; esta página coge filas por id —asignado al crear—, así que faltan las posteriores. Son credenciales VIVAS: un token que no se ve aquí sigue autenticando, y no se puede revocar desde esta pantalla. Que una clave no salga no demuestra que no exista."
   },
   "license": {
-    "title": "Edición y licencia",
+    "title": "Licencia",
     "caption": "Edición actual, estado de la licencia y acciones de esta instalación.",
     "helpSummary": "Aplicar la licencia frente a esta compilación",
     "helpBody": "Sustituir la licencia se aplica en este proceso sin reiniciar. Eso no es un cambio de binario ni una actualización de datos: son operaciones distintas, con sus propios procedimientos. En Community, aplicar una licencia verificada muestra sus datos aquí; no cambia esta compilación.",
-    "install": "Instalar / actualizar",
+    "install": "Instalar licencia",
     "remove": "Quitar licencia",
     "edition": "Edición",
     "editions": {
@@ -1197,11 +1197,9 @@
     "empty": "No hay servidores MCP",
     "emptyHint": "Añade un servidor Streamable HTTP, prueba su conexión y configura la confianza y los permisos antes de habilitarlo.",
     "source": {
-      "file": "Archivo del operador",
-      "store": "Ajustes de la organización"
+      "file": "Archivo del operador"
     },
     "fileOwned": "El archivo del operador gobierna MCP en su listener configurado. Esta vista es de solo lectura. La configuración almacenada queda inactiva; no se mezcla ni se sustituye.",
-    "storeOwned": "Los ajustes de la organización gobiernan MCP en el listener HTTP de esta instalación. No requiere archivo de configuración.",
     "sessionTitle": "Herramientas de sesión",
     "sessionHint": "Las sesiones pueden enviarse mensajes y usar el trabajo que tienen asignado. No da a las sesiones ningún permiso nuevo.",
     "tools": "Herramientas ({{count}})",
@@ -1339,8 +1337,8 @@
       "notAllowed": "no permitida (cámbialo en Configurar)",
       "confirm": "Activar"
     },
-    "sessionOn": "Activado: desactívalo para pararlo.",
-    "sessionOff": "Desactivado: las sesiones no pueden enviarse mensajes ni usar el trabajo asignado.",
+    "sessionOn": "Activado",
+    "sessionOff": "Desactivado",
     "startersTitle": "Servidores iniciales",
     "startersHint": "Servidores seleccionados, cada uno con su aislamiento y sus límites de red. Añadir rellena el formulario; el servidor se guarda apagado y no ejecuta nada hasta que lo pruebes y lo actives.",
     "starterAdd": "Añadir {{name}}",

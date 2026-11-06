@@ -104,20 +104,21 @@
     "membership_offboard": "사용자 제거됨",
     "token_issue": "API 토큰 생성됨",
     "token_revoke": "API 토큰 취소됨",
-    "secret_delete": "비밀 삭제됨"
+    "secret_delete": "비밀 삭제됨",
+    "governance_killswitch_engage": "킬 스위치 실행됨",
+    "sessions_run_created": "세션 생성됨"
   },
   "targets": {
     "core_policy": "정책"
   },
   "internal": {
-    "hidden": "내부 레코드 숨김: {{count}}",
     "show": "내부 레코드 표시",
     "hide": "내부 레코드 숨기기",
     "allHidden": "지금까지 불러온 모든 항목이 내부 레코드입니다."
   },
   "ledger": {
     "query": "원장 쿼리",
-    "placeholder": "person:  action:  since:7d  또는 단어",
+    "placeholder": "검색",
     "addFilter": "필터 추가",
     "remove": "{{token}} 제거",
     "add": "{{token}}을(를) 쿼리에 추가",
@@ -146,10 +147,6 @@
       "day": "일별 항목",
       "week": "주별 항목",
       "bar_other": "{{at}}, {{count}}개 항목",
-      "loaded_other": "{{count}}개 항목 불러옴",
-      "sessions_other": "세션 {{count}}개",
-      "people_other": "{{count}}명",
-      "more": "더 불러올 수 있음",
       "now": "지금"
     },
     "entry": {
@@ -163,5 +160,15 @@
       "chainHint": "각 항목은 이전 항목의 해시를 담고 있습니다. 하나를 바꾸면 이후의 모든 해시가 깨집니다.",
       "signedEntry": "서명된 항목"
     }
+  },
+  "verbs": {
+    "create": "{{what}} 생성됨",
+    "update": "{{what}} 업데이트됨",
+    "delete": "{{what}} 삭제됨"
+  },
+  "toolApproval": {
+    "allow": "도구 호출 허용됨",
+    "ask": "도구 호출 승인 대기",
+    "deny": "도구 호출 거부됨"
   }
 }

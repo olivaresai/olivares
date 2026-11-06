@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE BELL TELLS EVENTS AS SENTENCES (Root copy, 2026-10-01): "Audit checkpoint created",
+// The bell describes events as sentences: "Audit checkpoint created",
 // "{actor} started a session" — never a raw action id, a target id or "system: system". Reads,
 // sign-ins and sign-outs are routine and not shown. An action without a sentence is a record,
 // not a person's action: the bell shows it, as its name made readable, only on request.

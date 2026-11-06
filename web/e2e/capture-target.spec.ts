@@ -497,7 +497,7 @@ test.describe('capture target — session surfaces', () => {
   // The tile counts the live sessions (working, idle, gone silent) and captions the idle and silent ones.
   // Overview's strip (#4427): the sessions running, then today's cost; absent when nothing is said.
   const STRIP = (running: number) =>
-    `<nav>${running} running · $6.84 today</nav>`
+    `<nav>${running} working · $6.84 today</nav>`
   const FILA = (estado: string) =>
     `<li data-testid="home-recent-row"><span>${estado}</span> <span>dependency upgrade scan</span></li>`
 

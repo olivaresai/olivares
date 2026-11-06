@@ -4,7 +4,7 @@
   "tabs": {
     "people": "Pessoas",
     "agents": "Agentes",
-    "sso": "SSO / IdP",
+    "sso": "Fornecedor de identidade",
     "scopes": "Espaços de trabalho",
     "roles": "Funções",
     "secrets": "Segredos",
@@ -56,11 +56,11 @@
     "truncatedHint": "Existem mais tokens de API do que os apresentados; esta página obtém as linhas por id — atribuído na criação — pelo que faltam as linhas posteriores. Estas são credenciais ATIVAS: um token que não consegue ver aqui continua a autenticar e não o pode revogar a partir deste ecrã. Uma chave que não consta da lista não demonstra que não existe."
   },
   "license": {
-    "title": "Edição e licença",
+    "title": "Licença",
     "caption": "Edição atual, estado da licença e ações para esta instalação.",
     "helpSummary": "Aplicar licença versus esta compilação",
     "helpBody": "Substituir a licença aplica-se neste processo sem reinício. Isso não é uma troca de binário nem uma atualização de dados: são operações distintas, com os seus próprios procedimentos. Na edição Community, aplicar uma licença verificada mostra aqui os respetivos detalhes; não altera esta compilação.",
-    "install": "Instalar / atualizar",
+    "install": "Instalar licença",
     "remove": "Remover licença",
     "edition": "Edição",
     "editions": {
@@ -1197,11 +1197,9 @@
     "empty": "Sem servidores a montante",
     "emptyHint": "Adicione um servidor Streamable HTTP, teste a ligação e depois configure a confiança e as permissões das ferramentas antes de o ativar.",
     "source": {
-      "file": "Ficheiro do operador",
-      "store": "Definições da organização"
+      "file": "Ficheiro do operador"
     },
     "fileOwned": "O ficheiro do operador governa o MCP no respetivo listener configurado. Esta vista é só de leitura. A configuração guardada permanece inativa; nada é combinado nem substituído.",
-    "storeOwned": "As definições da organização governam o MCP no listener HTTP desta instalação. Não é necessário nenhum ficheiro de configuração.",
     "sessionTitle": "Ferramentas de sessão",
     "sessionHint": "As sessões podem enviar mensagens entre si e usar o trabalho que lhes foi atribuído. Isto não dá novas permissões às sessões.",
     "tools": "Ferramentas ({{count}})",
@@ -1339,8 +1337,8 @@
       "notAllowed": "não permitida (altere em Configurar)",
       "confirm": "Ativar"
     },
-    "sessionOn": "Ativo: desative-o para o parar.",
-    "sessionOff": "Desativado: as sessões não podem enviar mensagens entre si nem usar o trabalho que lhes foi atribuído.",
+    "sessionOn": "Ativado",
+    "sessionOff": "Desativado",
     "startersTitle": "Servidores iniciais",
     "startersHint": "Servidores selecionados, cada um com o seu confinamento e limites de rede. Adicionar preenche o formulário; o servidor é guardado desativado e não executa nada até o testar e ativar.",
     "starterAdd": "Adicionar {{name}}",

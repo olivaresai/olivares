@@ -221,12 +221,19 @@ test('two browsers list and end other sign-ins accessibly', async ({
     await secondPage.emulateMedia({ colorScheme: 'light' })
     await secondPage.setViewportSize({ width: 1280, height: 1000 })
     await secondPage.goto('/identity?tab=people')
+    await secondPage
+      .getByRole('button', {
+        name: 'Row actions for member@example.com',
+        exact: true,
+      })
+      .click()
     await expect(
-      secondPage.getByRole('button', {
+      secondPage.getByRole('menuitem', {
         name: 'End sign-ins for member@example.com?',
         exact: true,
       }),
     ).toBeVisible()
+    await secondPage.keyboard.press('Escape')
     expect(
       (await new AxeBuilder({ page: secondPage }).analyze()).violations,
     ).toEqual([])

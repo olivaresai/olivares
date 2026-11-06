@@ -249,12 +249,16 @@ export function RecentWork({
           description={t('recent.unavailableDescription')}
         />
       ) : rows.length === 0 ? (
-        // Now's start line above is the one next step (it knows what each tool can run on);
-        // a second "Start a session" here offered it twice, and while no tool was ready it
-        // contradicted the line's Install or Sign in.
+        // Its one action: Sessions, whose composer starts a session and says what a tool
+        // still needs (install, sign in) before it can.
         <EmptyState
           title={t('recent.emptyTitle')}
           description={t('recent.emptyDescription')}
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to={'/sessions' as never}>{t('recent.emptyAction')}</Link>
+            </Button>
+          }
         />
       ) : (
         <>

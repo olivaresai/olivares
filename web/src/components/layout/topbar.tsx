@@ -11,7 +11,6 @@ import { useCommandStore } from '@/stores/command'
 import { topBarLabel } from './document-title'
 import { HintBar } from './hint-bar'
 import { NotificationBell } from './notification-bell'
-import { frameFor } from './page-frames'
 import { SidePanelToggle } from './side-panel'
 import { TopbarSearchSlot } from './topbar-search'
 import { UserMenu } from './user-menu'
@@ -51,8 +50,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         data-slot="topbar-title"
         className="min-w-0 flex-1 truncate text-heading font-semibold text-text"
       >
-        {/* A work page (Sessions) names itself in its list's heading: once. */}
-        {frameFor(pathname) === 'work' ? null : label}
+        {label}
       </p>
 
       <HintBar />

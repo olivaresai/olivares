@@ -104,20 +104,21 @@
     "membership_offboard": "メンバーを削除",
     "token_issue": "API トークンを作成",
     "token_revoke": "API トークンを取り消し",
-    "secret_delete": "シークレットを削除"
+    "secret_delete": "シークレットを削除",
+    "governance_killswitch_engage": "キルスイッチを発動",
+    "sessions_run_created": "セッションを作成"
   },
   "targets": {
     "core_policy": "ポリシー"
   },
   "internal": {
-    "hidden": "非表示の内部記録: {{count}}",
     "show": "内部記録を表示",
     "hide": "内部記録を非表示",
     "allHidden": "これまでに読み込んだものはすべて内部記録です。"
   },
   "ledger": {
     "query": "台帳クエリ",
-    "placeholder": "person:  action:  since:7d  または語句",
+    "placeholder": "検索",
     "addFilter": "フィルターを追加",
     "remove": "{{token}} を削除",
     "add": "{{token}} をクエリに追加",
@@ -146,10 +147,6 @@
       "day": "1 日ごとのエントリ",
       "week": "1 週間ごとのエントリ",
       "bar_other": "{{at}}、{{count}} 件",
-      "loaded_other": "{{count}} 件を読み込み済み",
-      "sessions_other": "{{count}} セッション",
-      "people_other": "{{count}} 人",
-      "more": "さらに読み込めます",
       "now": "現在"
     },
     "entry": {
@@ -163,5 +160,15 @@
       "chainHint": "各エントリは直前のエントリのハッシュを持ちます。1 つを変えると、それ以降のハッシュがすべて壊れます。",
       "signedEntry": "署名されたエントリ"
     }
+  },
+  "verbs": {
+    "create": "{{what}}を作成",
+    "update": "{{what}}を更新",
+    "delete": "{{what}}を削除"
+  },
+  "toolApproval": {
+    "allow": "ツール呼び出しを許可",
+    "ask": "ツール呼び出しを承認待ちに",
+    "deny": "ツール呼び出しを拒否"
   }
 }

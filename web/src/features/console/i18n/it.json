@@ -4,7 +4,7 @@
   "tabs": {
     "people": "Persone",
     "agents": "Agenti",
-    "sso": "SSO / IdP",
+    "sso": "Identity provider",
     "scopes": "Workspace",
     "roles": "Ruoli",
     "secrets": "Segreti",
@@ -56,11 +56,11 @@
     "truncatedHint": "Esistono più token API di quelli mostrati; questa pagina legge le righe per id (assegnato alla creazione), quindi quelle successive mancano. Sono credenziali ATTIVE: un token che non vedi qui autentica comunque e non puoi revocarlo da questa schermata. Una chiave non elencata non dimostra che non esista."
   },
   "license": {
-    "title": "Edizione e licenza",
+    "title": "Licenza",
     "caption": "Edizione attuale, stato della licenza e azioni per questa installazione.",
     "helpSummary": "Applicare la licenza e sostituire questa build",
     "helpBody": "La sostituzione della licenza viene applicata a questo processo senza riavvio. Non equivale a sostituire il binario né ad aggiornare i dati: sono operazioni separate, con procedure proprie. Su Community, applicare una licenza verificata ne mostra qui i dettagli; la build non cambia.",
-    "install": "Installa / aggiorna",
+    "install": "Installa licenza",
     "remove": "Rimuovi licenza",
     "edition": "Edizione",
     "editions": {
@@ -1197,11 +1197,9 @@
     "empty": "Nessun server upstream",
     "emptyHint": "Aggiungi un server Streamable HTTP, testa la connessione, poi configura l'attendibilità e i permessi dei tool prima di attivarlo.",
     "source": {
-      "file": "File dell'operatore",
-      "store": "Impostazioni dell'organizzazione"
+      "file": "File dell'operatore"
     },
     "fileOwned": "Il file dell'operatore governa MCP sul listener configurato. Questa vista è in sola lettura. La configurazione salvata resta inattiva; nulla viene unito né sovrascritto.",
-    "storeOwned": "Le impostazioni dell'organizzazione governano MCP sul listener HTTP di questa installazione. Non serve alcun file di configurazione.",
     "sessionTitle": "Tool di sessione",
     "sessionHint": "Le sessioni possono scambiarsi messaggi e usare il lavoro che è stato loro assegnato. Non dà alle sessioni nessun nuovo permesso.",
     "tools": "Tool ({{count}})",
@@ -1339,8 +1337,8 @@
       "notAllowed": "non consentito (cambialo in Configura)",
       "confirm": "Attiva"
     },
-    "sessionOn": "Attivo: disattivalo per fermarlo.",
-    "sessionOff": "Disattivato: le sessioni non possono scambiarsi messaggi né usare il lavoro assegnato.",
+    "sessionOn": "Attivo",
+    "sessionOff": "Disattivo",
     "startersTitle": "Server di partenza",
     "startersHint": "Server selezionati, ciascuno con i propri limiti di confinamento e di rete. Aggiungi compila il modulo; il server viene salvato disattivato e non esegue nulla finché non lo testi e lo attivi.",
     "starterAdd": "Aggiungi {{name}}",

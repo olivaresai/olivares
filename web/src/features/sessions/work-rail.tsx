@@ -225,6 +225,11 @@ function RailRow({
       .filter(Boolean)
       .join(' · ') || undefined
 
+  // The account and the state fade, not hide, under the pointer's row buttons: they keep
+  // their place and the row's accessible name. Hover only: a focused row is not asking for
+  // the buttons.
+  const fade = (onOpenBeside || menu) && 'min-[761px]:group-hover/row:opacity-0'
+
   return (
     <div className="group/row relative">
       <div
@@ -323,29 +328,24 @@ function RailRow({
               </span>
             ) : null}
           </span>
-          {/* Under the name, small: the folder, and the state and its time at the right. */}
-          <span className="flex min-w-0 items-center gap-2">
+          {/* Under the name, small: the folder, and the state and its time at the right.
+            The folder and the account give up room together, by their length, and the
+            folder keeps six characters; the state word never gives up any. A folder left to
+            shrink alone was cut to one letter ("d.", "i...") beside a whole account. */}
+          <span className="flex min-w-0 items-center justify-end gap-2">
             {showFolder ? (
               <span
                 data-testid="rail-row-place"
-                className="min-w-0 truncate text-overline font-normal text-text-3"
+                className="min-w-[6ch] flex-auto truncate text-overline font-normal text-text-3"
               >
                 {folder}
               </span>
             ) : null}
-            <span
-              className={cn(
-                'ml-auto flex shrink-0 items-center gap-1.5',
-                // Faded, not hidden: it keeps its place and the row's accessible name.
-                // Hover only: a focused row is not asking for the button.
-                (onOpenBeside || menu) &&
-                  'min-[761px]:group-hover/row:opacity-0',
-              )}
-            >
-              <AccountBadge
-                profileRef={session.profileRef}
-                className="max-w-24"
-              />
+            <AccountBadge
+              profileRef={session.profileRef}
+              className={cn('max-w-24', fade)}
+            />
+            <span className={cn('flex shrink-0 items-center gap-1.5', fade)}>
               <StateWord session={session} />
             </span>
           </span>
@@ -571,7 +571,7 @@ export function WorkRail({
     (group) => group !== fold && !above.includes(group),
   )
   // THE SESSIONS OF ONE WORKSPACE ARE ONE GROUP (the section already put them side by side):
-  // "shop · 2 agents" above them, each still its own row with its mark, state and age.
+  // "shop · 2 sessions" above them, each still its own row with its mark, state and age.
   // One session of a workspace in a section is a row like any other. Inside it (or
   // alone), a session in a git worktree sits under that worktree's branch.
   const workspaceName = (run: readonly UnifiedSession[], ref: string) =>
@@ -609,7 +609,7 @@ export function WorkRail({
     return runs.map((run) => {
       const ref = run.length > 1 ? sessionWorkspace(run[0]!) : null
       if (!ref) return worktreeRows(run)
-      const name = `${workspaceName(run, ref)} · ${t('list.agentCount', { count: run.length })}`
+      const name = `${workspaceName(run, ref)} · ${t('summary.sessions', { count: run.length, n: run.length })}`
       return nested(`ws:${ref}`, name, worktreeRows(run))
     })
   }

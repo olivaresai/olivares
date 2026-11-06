@@ -45,7 +45,12 @@
     "moved": "Assegnazione spostata all'ultima revisione",
     "approveTitle": "Approvare le skill che agiscono al caricamento?",
     "approveDescription": "L'ultima revisione fissa per {{target}} skill su cui il loro strumento agisce senza chiedere: {{skills}}. Approva solo dopo averle esaminate.",
-    "approve": "Approva e usa l'ultima"
+    "approve": "Approva e usa l'ultima",
+    "disable": "Disattiva",
+    "disabled": "Skill disattivata",
+    "disableFor": "Disattiva {{skill}} per {{target}}",
+    "disableTitle": "Disattivare questa skill?",
+    "disableDescription": "Le nuove sessioni di {{target}} non ricevono più {{skill}} da questa assegnazione. Le altre skill restano assegnate. Le conversazioni registrate mantengono la propria istantanea."
   },
   "assign": {
     "title": "Assegna",
@@ -85,7 +90,15 @@
     "gitSubmit": "Installa da Git",
     "name": "Nome del pacchetto",
     "nameHint": "Facoltativo; per impostazione predefinita è il nome del repository. Scegli un nome distinto per un altro pacchetto dallo stesso repository.",
-    "held": "Pacchetto di skill installato. Contiene skill che agiscono al caricamento, quindi non è stato assegnato: esaminalo e assegnalo dalla sua scheda."
+    "held": "Pacchetto di skill installato. Contiene skill che agiscono al caricamento, quindi non è stato assegnato: esaminalo e assegnalo dalla sua scheda.",
+    "local": "Cartella o archivio",
+    "archive": "Archivio",
+    "archiveHint": "ZIP o tar.gz, fino a 32 MiB. Seleziona un archivio o una cartella.",
+    "folder": "Cartella",
+    "uploadSubmit": "Installa selezione",
+    "selectedFiles": "File selezionati: {{count}}",
+    "uploadLimit": "Limiti superati (32 MiB, 4096 file, 8 MiB per file).",
+    "uploadName": "Nome del pacchetto caricato"
   },
   "update": {
     "title": "Aggiornamenti",

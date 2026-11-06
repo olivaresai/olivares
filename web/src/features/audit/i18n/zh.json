@@ -104,20 +104,21 @@
     "membership_offboard": "已移除成员",
     "token_issue": "已创建 API 令牌",
     "token_revoke": "已吊销 API 令牌",
-    "secret_delete": "已删除密钥"
+    "secret_delete": "已删除密钥",
+    "governance_killswitch_engage": "紧急关停开关已触发",
+    "sessions_run_created": "已创建会话"
   },
   "targets": {
     "core_policy": "策略"
   },
   "internal": {
-    "hidden": "已隐藏的内部记录：{{count}}",
     "show": "显示内部记录",
     "hide": "隐藏内部记录",
     "allHidden": "目前已加载的全部是内部记录。"
   },
   "ledger": {
     "query": "账本查询",
-    "placeholder": "person:  action:  since:7d  或关键词",
+    "placeholder": "搜索",
     "addFilter": "添加筛选",
     "remove": "移除 {{token}}",
     "add": "将 {{token}} 加入查询",
@@ -146,10 +147,6 @@
       "day": "每日条目",
       "week": "每周条目",
       "bar_other": "{{at}}，{{count}} 条",
-      "loaded_other": "已加载 {{count}} 条",
-      "sessions_other": "{{count}} 个会话",
-      "people_other": "{{count}} 人",
-      "more": "还可加载更多",
       "now": "现在"
     },
     "entry": {
@@ -163,5 +160,15 @@
       "chainHint": "每条记录都带有上一条的哈希。改动其中一条，之后的每个哈希都会失效。",
       "signedEntry": "已签名的条目"
     }
+  },
+  "verbs": {
+    "create": "已创建{{what}}",
+    "update": "已更新{{what}}",
+    "delete": "已删除{{what}}"
+  },
+  "toolApproval": {
+    "allow": "已允许工具调用",
+    "ask": "工具调用等待审批",
+    "deny": "已拒绝工具调用"
   }
 }

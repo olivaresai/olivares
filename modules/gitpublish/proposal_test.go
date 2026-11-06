@@ -116,6 +116,44 @@ func TestProposalOutsideTheSessionWorkspaceIsRefused(t *testing.T) {
 	}
 }
 
+// A proposal pinned to a forge identity publishes only through a target that
+// holds that credential binding: an agent role's session never pushes or opens
+// a pull request as another identity, and the refusal comes before the folder
+// or the host is touched.
+func TestProposalPinnedToAnotherIdentityIsRefused(t *testing.T) {
+	h, s := sessionHarness(t)
+	p := h.proposal()
+	p.CredentialBinding = "cb-other-role"
+	_, err := h.m.Push(context.Background(), h.user(), PushInput{Target: h.target.ID, OperationID: "op-id", Ref: "refs/heads/olivares/run-1",
+		Commit: shaSession, Tree: shaTree, SessionRun: runOne, Proposal: p})
+	if codeOf(err) != "identity_mismatch" {
+		t.Fatalf("push err = %v, want identity_mismatch", err)
+	}
+	_, err = h.m.OpenPullRequest(context.Background(), h.user(), PullRequestInput{Target: h.target.ID, OperationID: "op-id-pr", HeadRef: "olivares/pr",
+		Base: "main", Commit: shaCommit, Title: "t", Proposal: p})
+	if codeOf(err) != "identity_mismatch" {
+		t.Fatalf("pr err = %v, want identity_mismatch", err)
+	}
+	if s.asked != 0 || h.host.mints != 0 {
+		t.Fatalf("refused proposal reached the folder (%d) or the host (%d)", s.asked, h.host.mints)
+	}
+	// Only a launcher admitted on the target learns it holds another identity:
+	// a denied one hears the concealed not_found, so no target id leaks.
+	h.authz.deny[h.ws] = auth.ErrRouteDenied
+	_, err = h.m.Push(context.Background(), h.user(), PushInput{Target: h.target.ID, OperationID: "op-id-denied", Ref: "refs/heads/olivares/run-1",
+		Commit: shaSession, Tree: shaTree, SessionRun: runOne, Proposal: p})
+	if codeOf(err) != "not_found" {
+		t.Fatalf("denied launcher err = %v, want not_found", err)
+	}
+	delete(h.authz.deny, h.ws)
+	p.CredentialBinding = "cb1"
+	r, err := h.m.Push(context.Background(), h.user(), PushInput{Target: h.target.ID, OperationID: "op-id-ok", Ref: "refs/heads/olivares/run-1",
+		Commit: shaSession, Tree: shaTree, SessionRun: runOne, Proposal: p})
+	if err != nil || r.Intent.State != StateApplied {
+		t.Fatalf("push as the target's own identity = %+v %v", r.Intent, err)
+	}
+}
+
 // The person whose session published a pull request or its head commit
 // cannot merge it; another administrator can, and so can the launcher for
 // work no session of theirs proposed.

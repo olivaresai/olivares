@@ -93,15 +93,21 @@ export function SessionsListHeader({
   return (
     <div data-slot="list-header" className="shrink-0">
       <div className="flex h-12 items-center gap-2 px-3">
+        {/* The menu button's hover fill reaches 4 px past the name on each side; the
+          margin that keeps the name on the list's edge sits on the heading, not on the
+          button, whose `max-w-full` would otherwise cut its own text by those 8 px. */}
         <h1
           title={t('sessions:title')}
-          className="min-w-0 truncate text-body font-semibold text-text"
+          className={cn(
+            'min-w-0 truncate text-body font-semibold text-text',
+            pages.length > 1 && '-mx-1',
+          )}
         >
           {pages.length > 1 ? (
             <PagesMenu pages={pages} currentId="sessions">
               <button
                 type="button"
-                className="-mx-1 inline-flex max-w-full items-center gap-1 rounded-ctl px-1 outline-none transition-colors duration-fast hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus data-[state=open]:bg-hover"
+                className="inline-flex max-w-full items-center gap-1 rounded-ctl px-1 outline-none transition-colors duration-fast hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus data-[state=open]:bg-hover"
               >
                 <span className="truncate">{t('sessions:title')}</span>
                 <ChevronDown

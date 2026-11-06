@@ -63,7 +63,8 @@ export function UsageView() {
   )
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t('title')} description={t('subtitle')} />
+      {/* The top bar already says Usage; the place's lead page does not say it twice. */}
+      <PageHeader title={t('title')} titleHidden description={t('subtitle')} />
       {canSessions ? (
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>

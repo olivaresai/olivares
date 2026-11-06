@@ -62,6 +62,14 @@ type fakeHost struct {
 	mintSecret     string // returned by Mint when set (the ssh key, say)
 	sshTarget      bool   // PushTarget answers the ssh transport
 	branchErr      error
+	reviewRule     gp.ReviewRule
+	reviewErr      error
+}
+
+func (h *fakeHost) ReviewRule(context.Context, gp.Token, string) (gp.ReviewRule, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.reviewRule, h.reviewErr
 }
 
 func newFakeHost() *fakeHost {

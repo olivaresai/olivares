@@ -256,11 +256,16 @@ export function NotificationBell() {
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0" sideOffset={8}>
+        {/* One scroller for the whole popover: every request keeps its actions in reach. */}
+        <PopoverContent
+          align="end"
+          className="max-h-[var(--radix-popover-content-available-height)] w-80 overflow-y-auto p-0"
+          sideOffset={8}
+        >
           {needsYou ? (
             <section
               aria-labelledby="bell-needs-you"
-              className="max-h-80 overflow-y-auto border-b border-border"
+              className="border-b border-border"
             >
               <h3
                 id="bell-needs-you"

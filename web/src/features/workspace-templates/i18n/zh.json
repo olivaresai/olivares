@@ -38,7 +38,9 @@
         "secrets_other": "{{count}} 个变量",
         "connectors_other": "{{count}} 个连接器",
         "set_other": "已设置 {{count}} 项",
-        "model": "模型：{{model}}"
+        "model": "模型：{{model}}",
+        "none": "无",
+        "defaults": "默认"
       }
     },
     "hooks": {

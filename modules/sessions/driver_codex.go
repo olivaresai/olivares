@@ -433,12 +433,13 @@ func (r codexThreadResponse) toolMode() string {
 	return strings.Join(words, " · ")
 }
 
-// codexUserInput is one block of a turn's input: text, or an image by data URL
-// (the app-server's UserInput "image" variant, codex-cli 0.162.1 schema).
+// codexUserInput is a text, image or skill block (codex-cli 0.162.1 UserInput schema).
 type codexUserInput struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 	URL  string `json:"url,omitempty"`
+	Name string `json:"name,omitempty"`
+	Path string `json:"path,omitempty"`
 }
 
 type codexUserInputText = codexUserInput
@@ -705,6 +706,27 @@ func (s *codexSession) InputImages(ctx context.Context, text string, images []tu
 	}
 	if strings.TrimSpace(text) != "" {
 		input = append(input, codexUserInput{Type: "text", Text: text})
+	}
+	// Resolve /name against this child's current enabled skills. Never accept
+	// a path from the console or fall back to plain text when discovery fails.
+	if words := strings.Fields(text); len(words) > 0 && strings.HasPrefix(words[0], "/") {
+		name := strings.TrimPrefix(words[0], "/")
+		if validToolCommandName(name) && !strings.Contains(name, "/") {
+			commands, _, err := s.commandCatalog(ctx)
+			if err != nil {
+				return false, err
+			}
+			for _, command := range commands {
+				if command.Name != name {
+					continue
+				}
+				if command.codexSkillPath == "" {
+					return false, &runErr{http.StatusBadGateway, "Codex did not report the skill's path"}
+				}
+				input = append(input, codexUserInput{Type: "skill", Name: name, Path: command.codexSkillPath})
+				break
+			}
+		}
 	}
 	// Before the request: the turn's usage can be read before its answer is.
 	s.mu.Lock()

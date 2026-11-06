@@ -830,7 +830,7 @@ describe('context compaction', () => {
   })
 })
 
-describe('the "@" and "$" pickers', () => {
+describe('the "@" picker and plain "$" text', () => {
   const entry = (name: string, path: string, type: 'file' | 'dir') => ({
     name,
     path,
@@ -923,7 +923,7 @@ describe('the "@" and "$" pickers', () => {
     ).toBeUndefined()
   })
 
-  it('lists after "$" the skills the tool invokes with "$", and stays closed for a tool without them', async () => {
+  it('opens no menu for "$x" and lists a Codex skill under "/"', async () => {
     const user = userEvent.setup()
     api.commands.mockResolvedValue({
       ...CATALOG,
@@ -940,23 +940,18 @@ describe('the "@" and "$" pickers', () => {
       ],
     })
     const box = renderComposer()
-    await user.type(box, '$')
-    const list = await screen.findByRole('listbox', { name: 'Skills' })
-    expect(
-      within(list)
-        .getAllByRole('option')
-        .map((o) => o.textContent),
-    ).toEqual([expect.stringContaining('$plan')])
-    await user.keyboard('{Enter}')
-    expect(box).toHaveValue('$plan ')
-  })
-
-  it('opens nothing after "$" when the tool has no "$" skills', async () => {
-    const user = userEvent.setup()
-    const box = renderComposer()
-    await user.type(box, '$5 is the price')
-    await waitFor(() => expect(api.commands).toHaveBeenCalled())
+    await user.type(box, '$x')
+    expect(box).toHaveValue('$x')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('slash-menu')).not.toBeInTheDocument()
+    expect(api.commands).not.toHaveBeenCalled()
+    await user.clear(box)
+    await user.type(box, '/')
+    const list = await screen.findByRole('listbox', {
+      name: 'Commands and skills',
+    })
+    const skill = await within(list).findByRole('option', { name: /\$plan/ })
+    await user.click(skill)
+    expect(box).toHaveValue('$plan ')
+    expect(api.input).not.toHaveBeenCalled()
   })
 })

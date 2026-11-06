@@ -42,7 +42,9 @@
         "connectors_other": "{{count}} Konnektoren",
         "set_one": "{{count}} festgelegt",
         "set_other": "{{count}} festgelegt",
-        "model": "Modell: {{model}}"
+        "model": "Modell: {{model}}",
+        "none": "Keine",
+        "defaults": "Standard"
       }
     },
     "hooks": {

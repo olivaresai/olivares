@@ -52,11 +52,14 @@ type PullRequestInput struct {
 // composition root sets it in process, after it spent that approval, and the
 // caller is the session's launcher; no request body carries it. The target
 // must be in the session's workspace, and the intent records the run and the
-// approval.
+// approval. CredentialBinding, when set, is the one forge identity the
+// session may publish as (an agent role's): a target holding another binding
+// refuses (identity_mismatch), and the claim pins the binding it admitted.
 type Proposal struct {
-	SessionRun string
-	Workspace  model.ID
-	Approval   string
+	SessionRun        string
+	Workspace         model.ID
+	Approval          string
+	CredentialBinding string
 }
 
 func (p Proposal) valid() bool {
@@ -295,6 +298,12 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	adm, err := m.opts.Authority.Admit(actx, c.Principal, c.Tenant, Question{Permission: s.perm, Action: s.action, MinimumAAL: s.aal, Target: tg.ID, Workspace: tg.Workspace})
 	if err != nil {
 		return Receipt{}, authError(err)
+	}
+	if s.proposal.CredentialBinding != "" && tg.CredentialBinding != s.proposal.CredentialBinding {
+		// An agent role's session publishes only as its own forge identity,
+		// told only to a caller admitted on the target. W1 pins tg's binding and
+		// A4 refuses a retarget, so this holds until dispatch.
+		return Receipt{}, errIdentityMismatch
 	}
 	sub := adm.Subject()
 	if !s.ack.IsZero() {

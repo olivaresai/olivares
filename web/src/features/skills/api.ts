@@ -31,14 +31,19 @@ export const skillsApi = {
   builtins: (request: TenantRequestOptions & Pick<RequestOptions, 'signal'>) =>
     http.get<ListResponse<BuiltinPack>>(`${BASE}/builtins`, request),
   install: (
-    body: SkillInstallRequest,
+    body: SkillInstallRequest | FormData,
     key: string,
     request: TenantRequestOptions,
   ) =>
-    http.post<SkillInstallResult>(`${BASE}/packs`, body, {
-      ...request,
-      headers: { 'Idempotency-Key': key },
-    }),
+    http.post<SkillInstallResult>(
+      `${BASE}/packs`,
+      body instanceof FormData ? undefined : body,
+      {
+        ...(body instanceof FormData ? { rawBody: body } : {}),
+        ...request,
+        headers: { 'Idempotency-Key': key },
+      },
+    ),
   packs: () =>
     http.get<ListResponse<SkillPack>>(`${BASE}/packs`, {
       query: { limit: LIST_CEILING },

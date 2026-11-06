@@ -104,20 +104,21 @@
     "membership_offboard": "Personne retirée",
     "token_issue": "Jeton d’API créé",
     "token_revoke": "Jeton d’API révoqué",
-    "secret_delete": "Secret supprimé"
+    "secret_delete": "Secret supprimé",
+    "governance_killswitch_engage": "Coupe-circuit activé",
+    "sessions_run_created": "Session créée"
   },
   "targets": {
     "core_policy": "Politique"
   },
   "internal": {
-    "hidden": "Enregistrements internes masqués : {{count}}",
     "show": "Afficher les enregistrements internes",
     "hide": "Masquer les enregistrements internes",
     "allHidden": "Tout ce qui a été chargé jusqu’ici est un enregistrement interne."
   },
   "ledger": {
     "query": "Requête du registre",
-    "placeholder": "person:  action:  since:7d  ou des mots",
+    "placeholder": "Recherche",
     "addFilter": "Ajouter un filtre",
     "remove": "Retirer {{token}}",
     "add": "Ajouter {{token}} à la requête",
@@ -150,16 +151,6 @@
       "bar_one": "{{at}}, {{count}} entrée",
       "bar_many": "{{at}}, {{count}} entrées",
       "bar_other": "{{at}}, {{count}} entrées",
-      "loaded_one": "{{count}} entrée chargée",
-      "loaded_many": "{{count}} entrées chargées",
-      "loaded_other": "{{count}} entrées chargées",
-      "sessions_one": "{{count}} session",
-      "sessions_many": "{{count}} sessions",
-      "sessions_other": "{{count}} sessions",
-      "people_one": "{{count}} personne",
-      "people_many": "{{count}} personnes",
-      "people_other": "{{count}} personnes",
-      "more": "il en reste à charger",
       "now": "Maintenant"
     },
     "entry": {
@@ -173,5 +164,15 @@
       "chainHint": "Chaque entrée porte le hash de la précédente. En modifier une casse tous les hashes suivants.",
       "signedEntry": "L'entrée signée"
     }
+  },
+  "verbs": {
+    "create": "Création : {{what}}",
+    "update": "Mise à jour : {{what}}",
+    "delete": "Suppression : {{what}}"
+  },
+  "toolApproval": {
+    "allow": "Appel d’outil autorisé",
+    "ask": "Appel d’outil en attente d’approbation",
+    "deny": "Appel d’outil refusé"
   }
 }

@@ -8,6 +8,8 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
+	"math"
 	"net/http"
 	"regexp"
 	"strings"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -244,7 +247,7 @@ func (m *Module) sourceReader(ctx context.Context, mc api.ModuleContext, recorde
 // current or available, with the diff of what a new revision would change and
 // the manifest digest of the bytes read; nothing is published. With apply it publishes
 // exactly the bytes whose digest the caller reviewed, as the next revision.
-// Assignments keep their pins: moving them is a separate, explicit action.
+// Pins on the previous latest revision move with publication; older pins stay put.
 func (m *Module) updatePack(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
@@ -341,4 +344,149 @@ func (m *Module) updatePack(w http.ResponseWriter, r *http.Request, mc api.Modul
 		out.Diff = &diff
 	}
 	respond(w, http.StatusOK, out)
+}
+
+// prepareUpdatePins authorizes native targets outside the write transaction (the
+// PDP reads the store), then reuses the pin writer inside publication. The pack
+// fence and assignment versions reject a changed set rather than miss a new pin.
+func (m *Module) prepareUpdatePins(ctx context.Context, mc api.ModuleContext, packID, previous string) (context.Context, func(store.Scope, Revision) ([]PinNotMoved, error), func(), error) {
+	releases := []context.CancelFunc{}
+	release := func() {
+		for _, cancel := range releases {
+			cancel()
+		}
+	}
+	if previous == "" {
+		return ctx, func(store.Scope, Revision) ([]PinNotMoved, error) { return nil, nil }, release, nil
+	}
+	query := model.Query{Limit: 100, Filters: []model.Filter{
+		{Column: "pack_id", Op: model.OpEq, Value: packID},
+		{Column: "revision_id", Op: model.OpEq, Value: previous},
+	}}
+	var moves []func(store.Scope, Revision) error
+	var pins []model.Record
+	var old Revision
+	var skipped []PinNotMoved
+	unavailable := func(id string, err error) bool {
+		if errors.Is(err, store.ErrNotFound) || errors.Is(err, auth.ErrRouteDenied) {
+			skipped = append(skipped, PinNotMoved{id, "target_unavailable: restore target access, then pin the published revision"})
+			return true
+		}
+		return false
+	}
+	expected := map[string]int64{}
+	err := mc.Data.View(ctx, func(sc store.Scope) error {
+		var err error
+		old, err = loadRevision(ctx, sc, packID, previous)
+		if err != nil {
+			return err
+		}
+		repo, err := sc.Ext(AssignmentKind)
+		if err != nil {
+			return err
+		}
+		return store.WalkPages(ctx, repo.List, query, math.MaxInt, func(rows []model.Record) error {
+			pins = append(pins, rows...)
+			for _, row := range rows {
+				expected[row.String(model.ColID)] = row.Int(model.ColVersion)
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return ctx, nil, release, err
+	}
+	oldMembers := map[string]Member{}
+	for _, member := range old.Members {
+		oldMembers[member.Name] = member
+	}
+	for _, row := range pins {
+		id, version := row.String(model.ColID), row.Int(model.ColVersion)
+		a, err := assignmentDTO(row)
+		if err != nil {
+			return ctx, nil, release, err
+		}
+		workspace := model.ID(row.String("workspace_id"))
+		assignmentMC := mc
+		assignmentMC.Resource = auth.ResourceAttrs{Kind: string(AssignmentKind), ID: id, WorkspaceID: workspace}
+		assignmentMC.BodyEntityFields = nil
+		prepared := ctx
+		if authority, ok := m.opts.Targets.(AssignmentAuthority); ok {
+			var cancel context.CancelFunc
+			prepared, cancel, err = authority.PrepareSkillsTarget(ctx, assignmentMC, a.Target, true)
+			if cancel != nil {
+				releases = append(releases, cancel)
+			}
+			if err != nil {
+				if unavailable(id, err) {
+					continue
+				}
+				return ctx, nil, release, err
+			}
+		}
+		if deadline, ok := prepared.Deadline(); ok {
+			bounded, cancel := context.WithDeadline(ctx, deadline)
+			ctx = bounded
+			releases = append(releases, cancel)
+		}
+		moves = append(moves, func(sc store.Scope, rev Revision) error {
+			target, err := m.target(prepared, sc, assignmentMC.Principal, a.Target, true)
+			if err != nil {
+				if unavailable(id, err) {
+					return nil
+				}
+				return err
+			}
+			if _, err := selectedNames(rev, a.Members); err != nil {
+				skipped = append(skipped, PinNotMoved{id, "members_removed: select members of the published revision"})
+				return nil
+			}
+			for name := range activeSelected(rev, a.Members, nil) {
+				before := oldMembers[name]
+				approved := false
+				for _, after := range rev.Members {
+					if after.Name == name && before.ContentDigest != "" && before.ContentDigest == after.ContentDigest && old.ActiveRules >= activeRules {
+						approved = true
+					}
+				}
+				if !approved {
+					skipped = append(skipped, PinNotMoved{id, "active_content_unapproved: review and pin the published revision with approve_active_content"})
+					return nil
+				}
+			}
+			// The update route already authorized skills:catalog:write on this pack;
+			// native target write authority is still checked for each pin. Unlike a
+			// standalone pin, no additional per-workspace catalog read is needed.
+			_, err = m.pinAssignmentInScope(prepared, sc, assignmentMC, AssignmentRequest{Target: a.Target, RevisionID: rev.ID, Members: a.Members, ApproveActiveContent: true}, &target, model.ID(id), version, false,
+				func(context.Context, string) (Revision, error) { return rev, nil })
+			return err
+		})
+	}
+	return ctx, func(sc store.Scope, rev Revision) ([]PinNotMoved, error) {
+		repo, err := sc.Ext(AssignmentKind)
+		if err != nil {
+			return nil, err
+		}
+		seen := 0
+		if err := store.WalkPages(ctx, repo.List, query, math.MaxInt, func(rows []model.Record) error {
+			for _, row := range rows {
+				if expected[row.String(model.ColID)] != row.Int(model.ColVersion) {
+					return store.ErrConflict
+				}
+				seen++
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		if seen != len(expected) {
+			return nil, store.ErrConflict
+		}
+		for _, move := range moves {
+			if err := move(sc, rev); err != nil {
+				return nil, err
+			}
+		}
+		return skipped, nil
+	}, release, nil
 }

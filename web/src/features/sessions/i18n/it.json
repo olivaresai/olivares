@@ -743,9 +743,6 @@
       "snoozed": "Posticipate",
       "archived": "Archiviate"
     },
-    "agentCount_one": "{{count}} agente",
-    "agentCount_many": "{{count}} agenti",
-    "agentCount_other": "{{count}} agenti",
     "more": "Altro",
     "back": "Torna alle sessioni",
     "showTable": "Mostra come tabella",

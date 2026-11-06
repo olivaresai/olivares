@@ -58,12 +58,47 @@ func TestToolCommands_CodexSkillsWire(t *testing.T) {
 		raw, _ := json.Marshal(c)
 		var fields map[string]any
 		_ = json.Unmarshal(raw, &fields)
-		if fields["insert_text"] != "$project-skill" {
-			t.Fatalf("native invocation missing: %s", raw)
+		if fields["insert_text"] != nil {
+			t.Fatalf("skill must be selected as /name: %s", raw)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("catalog did not arrive")
 	}
+
+	// The menu selection uses /name. Both starting and steering a turn must
+	// resolve the current catalog and send the native skill alongside the text.
+	p.session.(*codexSession).threadID = "ours"
+	for _, methodWant := range []string{codexMethodTurnStart, codexMethodTurnSteer} {
+		inputDone := make(chan error, 1)
+		go func() {
+			_, err := p.session.Input(t.Context(), "/project-skill review this")
+			inputDone <- err
+		}()
+		id, method, _ := p.nextRequest()
+		if method != "skills/list" {
+			t.Fatalf("skill invocation must resolve the live catalog, got %s", method)
+		}
+		p.reply(id, map[string]any{"data": []any{map[string]any{"cwd": "/project", "errors": []any{}, "skills": []any{
+			map[string]any{"name": "project-skill", "enabled": true, "path": "/project/.agents/skills/project-skill/SKILL.md"},
+		}}}})
+		id, method, params := p.nextRequest()
+		if method != methodWant {
+			t.Fatalf("turn request = %s, want %s", method, methodWant)
+		}
+		blocks, _ := params["input"].([]any)
+		if len(blocks) != 2 {
+			t.Fatalf("skill input missing: %#v", params)
+		}
+		skill, _ := blocks[1].(map[string]any)
+		if skill["type"] != "skill" || skill["name"] != "project-skill" || skill["path"] != "/project/.agents/skills/project-skill/SKILL.md" {
+			t.Fatalf("native skill = %#v", skill)
+		}
+		p.reply(id, map[string]any{"turn": map[string]any{"id": "turn", "status": "inProgress"}, "turnId": "turn"})
+		if err := <-inputDone; err != nil {
+			t.Fatal(err)
+		}
+	}
+
 }
 
 func TestToolCommands_ACPPushAndRoute(t *testing.T) {

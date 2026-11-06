@@ -137,9 +137,7 @@ describe('MCP console governance', () => {
         'Sessions can message each other and use their assigned work. It gives sessions no new permissions.',
       ),
     ).toBeInTheDocument()
-    expect(
-      within(card).getByText('On: turn it off to stop it.'),
-    ).toBeInTheDocument()
+    expect(within(card).getByText('On')).toBeInTheDocument()
     expect(within(card).queryByText(/by default/)).toBeNull()
     view.unmount()
     const off = structuredClone(snapshot)
@@ -147,11 +145,15 @@ describe('MCP console governance', () => {
     api.get.mockResolvedValue(off)
     setup()
     const again = await screen.findByRole('region', { name: 'Session tools' })
-    expect(
-      within(again).getByText(
-        'Off: sessions cannot message each other or use their assigned work.',
-      ),
-    ).toBeInTheDocument()
+    expect(within(again).getByText('Off')).toBeInTheDocument()
+  })
+  it('lists the servers as one list, without the engine’s endpoint or ownership note', async () => {
+    setup()
+    const row = await screen.findByRole('article', { name: 'Fixture MCP' })
+    // One list of rows, not a grid of cards.
+    expect(row.closest('ul')).not.toBeNull()
+    expect(screen.queryByText('/session/mcp')).toBeNull()
+    expect(screen.queryByText('Organization settings')).toBeNull()
   })
   it('shows state and every action; discovery cannot enable an untested server', async () => {
     setup()

@@ -4,7 +4,7 @@
   "tabs": {
     "people": "Personnes",
     "agents": "Agents",
-    "sso": "SSO / IdP",
+    "sso": "Fournisseur d’identité",
     "scopes": "Espaces de travail",
     "roles": "Rôles",
     "secrets": "Secrets",
@@ -56,11 +56,11 @@
     "truncatedHint": "Il y a plus de jetons d'API que ceux affichés ; cette page prend des lignes par id — attribué à la création —, les suivantes manquent. Ce sont des identifiants VIVANTS : un jeton invisible ici authentifie toujours et ne peut pas être révoqué depuis cet écran. Une clé absente ne démontre pas qu'elle n'existe pas."
   },
   "license": {
-    "title": "Édition et licence",
+    "title": "Licence",
     "caption": "Édition actuelle, état de la licence et actions de cette installation.",
     "helpSummary": "Application de la licence par rapport à cette compilation",
     "helpBody": "Le remplacement de la licence s'applique sur ce processus sans redémarrage. Ce n'est ni un remplacement de binaire ni une mise à niveau des données : ce sont des opérations distinctes, avec leurs propres procédures. En Community, appliquer une licence vérifiée en affiche les détails ici ; cela ne modifie pas cette compilation.",
-    "install": "Installer / mettre à jour",
+    "install": "Installer la licence",
     "remove": "Supprimer la licence",
     "edition": "Édition",
     "editions": {
@@ -1197,11 +1197,9 @@
     "empty": "Aucun serveur MCP",
     "emptyHint": "Ajoutez un serveur Streamable HTTP, testez sa connexion et configurez la confiance et les autorisations avant de l'activer.",
     "source": {
-      "file": "Fichier de l'opérateur",
-      "store": "Paramètres de l’organisation"
+      "file": "Fichier de l'opérateur"
     },
     "fileOwned": "Le fichier de l'opérateur gouverne MCP sur son listener configuré. Cette vue est en lecture seule. La configuration stockée reste inactive, sans fusion ni remplacement.",
-    "storeOwned": "Les paramètres de l’organisation gouvernent MCP sur le listener HTTP de cette installation. Aucun fichier de configuration n'est nécessaire.",
     "sessionTitle": "Outils de session",
     "sessionHint": "Les sessions peuvent s’envoyer des messages et utiliser le travail qui leur est attribué. Cela ne donne aux sessions aucune nouvelle autorisation.",
     "tools": "Outils ({{count}})",
@@ -1339,8 +1337,8 @@
       "notAllowed": "non autorisé (à changer dans Configurer)",
       "confirm": "Activer"
     },
-    "sessionOn": "Activé : désactivez-le pour l’arrêter.",
-    "sessionOff": "Désactivé : les sessions ne peuvent ni s’envoyer de messages ni utiliser le travail attribué.",
+    "sessionOn": "Activé",
+    "sessionOff": "Désactivé",
     "startersTitle": "Serveurs de départ",
     "startersHint": "Des serveurs sélectionnés, chacun avec son confinement et ses limites réseau. Ajouter remplit le formulaire ; le serveur est enregistré désactivé et n'exécute rien tant que vous ne l'avez pas testé et activé.",
     "starterAdd": "Ajouter {{name}}",

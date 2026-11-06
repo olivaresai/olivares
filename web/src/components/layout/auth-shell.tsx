@@ -5,12 +5,10 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ThemeToggle } from './theme-toggle'
 import { Wordmark } from './brand'
-import { DeploymentIdentity } from './deployment-identity'
 
 /** Shell for the unauthenticated surfaces (login, first-boot setup, invitations):
  * a two-column page — what this deployment IS on the left, the one focused card on
- * the right — with a corner theme toggle and the deployment's own identity in the
- * footer.
+ * the right — with a corner theme toggle.
  *
  * ⛔ WHY IT IS TWO COLUMNS NOW, and it is a measured defect, not taste.
  *    Captured at 1600 px on 2026-09-17: the login screen was a 360 px card centred in a
@@ -97,10 +95,6 @@ export function AuthShell({ children }: { children: ReactNode }) {
             <div className="w-full max-w-md">{children}</div>
           </div>
         </div>
-        {/* WHICH DEPLOYMENT AM I SIGNING INTO. The console keeps the scope of the next
-          action on screen at all times, and on the signed-out screens that scope is the
-          deployment itself. */}
-        <DeploymentIdentity className="pb-6 text-center" />
       </main>
     </div>
   )

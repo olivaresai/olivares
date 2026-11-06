@@ -190,11 +190,10 @@ test.describe('the console-wide standard', () => {
   }
 
   test('the type ladder survives to the painted element', async ({ page }) => {
-    // THE DEFECT `cn` HAD: tailwind-merge classified a ladder step as a text COLOUR and
-    // deleted it, so `DeploymentIdentity` asked for `text-caption` and painted the body
-    // size instead. No source census could see that; only the computed style can.
-    await page.goto('/login')
-    const identity = page.getByTestId('deployment-identity')
+    // A caption in the signed-in console must keep its ladder size through cn.
+    await signIn(page)
+    await page.goto('/now')
+    const identity = page.locator('[data-engine-state=ready]')
     await expect(identity).toBeVisible()
     const size = await identity.evaluate((el) => getComputedStyle(el).fontSize)
     expect(size, 'the caption step reaches the element').toBe(

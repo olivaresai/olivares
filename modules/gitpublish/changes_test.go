@@ -149,3 +149,45 @@ func TestPushChangesRefusals(t *testing.T) {
 		}
 	})
 }
+
+// A forge identity's review rule is read on every merge base of the targets that
+// publish as it, with each target's own read-only token, and only in its tenant.
+// A rule that cannot be read says why; it never reads as "no rule".
+func TestReviewRulesReadEachMergeBaseAsTheTargetsIdentity(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	h.custody.approved["cb2"] = true
+	if _, err := h.m.CreateTarget(ctx, h.admin(), TargetInput{Workspace: h.ws, CredentialBinding: "cb2", RepositoryBinding: "rb2", PushPrefix: "other/", MergeBases: []string{"release"}}); err != nil {
+		t.Fatalf("second target: %v", err)
+	}
+	h.host.reviewRule = gp.ReviewRule{Approvals: 1, Bypassers: -1}
+	got, err := h.m.ReviewRules(ctx, h.tenant, "cb1")
+	want := []ReviewRule{{Target: h.target.ID, Workspace: h.ws, Base: "main", Approvals: 1, Bypassers: -1}}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("rules = %+v %v, want %+v", got, err, want)
+	}
+	if !reflect.DeepEqual(h.host.mintEffects, []gp.Effect{gp.EffectObserve}) {
+		t.Fatalf("minted %v, want one observe token", h.host.mintEffects)
+	}
+	h.balanced()
+	if got, err := h.m.ReviewRules(ctx, h.other, "cb1"); err != nil || len(got) != 0 {
+		t.Fatalf("another tenant read %+v %v", got, err)
+	}
+	h.host.reviewErr = gp.ErrNotSupported
+	if got, _ := h.m.ReviewRules(ctx, h.tenant, "cb1"); len(got) != 1 || got[0].Unread != "unsupported" || got[0].Approvals != 0 {
+		t.Fatalf("unsupported host = %+v", got)
+	}
+	h.host.reviewErr = gp.ErrHostUnavailable
+	if got, _ := h.m.ReviewRules(ctx, h.tenant, "cb1"); len(got) != 1 || got[0].Unread != "host_unavailable" {
+		t.Fatalf("failed read = %+v", got)
+	}
+	h.balanced()
+}
+
+func TestReviewRulesWithoutCustodyIsUnavailable(t *testing.T) {
+	h := newHarness(t)
+	h.m.opts.Custody = nil
+	if got, err := h.m.ReviewRules(context.Background(), h.tenant, "cb1"); !errors.Is(err, errUnavailable) || got != nil {
+		t.Fatalf("rules = %+v %v, want errUnavailable", got, err)
+	}
+}

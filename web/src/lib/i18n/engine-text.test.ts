@@ -109,6 +109,19 @@ const RETIRED: [id: string, text: string][] = [
     'Scanned up to seq {{seq}} — not the full ledger; Load more continues the scan.',
   ],
   ['health:deps.truncated', 'Showing first {{n}}'],
+  [
+    'capabilities:subtitle',
+    'The live capability catalog — MCP servers, tools, skills and how they are connected.',
+  ],
+  [
+    'console:mcpGateway.storeOwned',
+    'The organization’s settings govern MCP on this installation’s HTTP listener. No configuration file is required.',
+  ],
+  ['console:mcpGateway.sessionOn', 'On: turn it off to stop it.'],
+  ['audit:internal.hidden', 'Internal records hidden: {{count}}'],
+  ['audit:ledger.placeholder', 'person:  action:  since:7d  or words'],
+  ['audit:ledger.histogram.loaded_other', '{{count}} entries loaded'],
+  ['audit:ledger.histogram.more', 'more to load'],
 ]
 
 /** Engineering words no English string of these features may carry. */

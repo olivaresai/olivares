@@ -90,6 +90,14 @@ func TestSessionAndSDKChildrenHaveDifferentDefaultReadPolicy(t *testing.T) {
 		if errors.Is(err, syscall.EPERM) {
 			t.Skipf("runner refuses owned user-namespace/rootfs isolation: %v", err)
 		}
+		// A live user manager adds a mount layer to hide its bus. This owned
+		// chroot is a directory, not a mount point on which the helper can
+		// change propagation; an ordinary session has the host's mounted root.
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 126 &&
+			strings.Contains(string(out), "mount layer: make the mount namespace private: invalid argument") {
+			t.Skipf("owned rootfs cannot provide a private mount root for user-manager isolation: %s", strings.TrimSpace(string(out)))
+		}
 		if err != nil {
 			t.Fatalf("isolated child: %v: %s", err, out)
 		}
@@ -118,6 +126,27 @@ func TestSessionAndSDKChildrenHaveDifferentDefaultReadPolicy(t *testing.T) {
 		t.Fatalf("SDK marker = %q, want read-denied", got)
 	}
 	t.Logf("owned SESSION/SDK child binary_sha256=%x; unrestricted=read-ok SESSION=read-ok SDK=read-denied for %s", sha256.Sum256(image), marker)
+}
+
+// The owned-rootfs fixture may be unavailable, but ordinary confinement must
+// still start a session with the host's root and user-manager isolation.
+func TestSessionStartsWithTheHostRoot(t *testing.T) {
+	requireLandlock(t)
+	cmd, state, err := Command(t.Context(), Policy{ReadWrite: []string{t.TempDir()}},
+		"/bin/sh", "-c", "printf session-started")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Mode != ModeLandlock {
+		t.Fatalf("state = %v", state)
+	}
+	if UserBusExposed(cmd) {
+		t.Fatal("host user manager is not isolated")
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "session-started" {
+		t.Fatalf("confined session: %v: %s", err, out)
+	}
 }
 
 // limitOf reads one "Max ..." row of /proc/self/limits output: the soft value.

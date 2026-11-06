@@ -104,20 +104,21 @@
     "membership_offboard": "Person removed",
     "token_issue": "API token created",
     "token_revoke": "API token revoked",
-    "secret_delete": "Secret deleted"
+    "secret_delete": "Secret deleted",
+    "governance_killswitch_engage": "Kill switch engaged",
+    "sessions_run_created": "Session created"
   },
   "targets": {
     "core_policy": "Policy"
   },
   "internal": {
-    "hidden": "Internal records hidden: {{count}}",
     "show": "Show internal records",
     "hide": "Hide internal records",
     "allHidden": "Everything loaded so far is an internal record."
   },
   "ledger": {
     "query": "Ledger query",
-    "placeholder": "person:  action:  since:7d  or words",
+    "placeholder": "Search",
     "addFilter": "Add a filter",
     "remove": "Remove {{token}}",
     "add": "Add {{token}} to the query",
@@ -148,13 +149,6 @@
       "week": "Entries per week",
       "bar_one": "{{at}}, {{count}} entry",
       "bar_other": "{{at}}, {{count}} entries",
-      "loaded_one": "{{count}} entry loaded",
-      "loaded_other": "{{count}} entries loaded",
-      "sessions_one": "{{count}} session",
-      "sessions_other": "{{count}} sessions",
-      "people_one": "{{count}} person",
-      "people_other": "{{count}} people",
-      "more": "more to load",
       "now": "Now"
     },
     "entry": {
@@ -168,5 +162,15 @@
       "chainHint": "Each entry carries the hash of the one before it. Change one and every later hash breaks.",
       "signedEntry": "The signed entry"
     }
+  },
+  "verbs": {
+    "create": "{{what}} created",
+    "update": "{{what}} updated",
+    "delete": "{{what}} deleted"
+  },
+  "toolApproval": {
+    "allow": "Tool call allowed",
+    "ask": "Tool call held for approval",
+    "deny": "Tool call denied"
   }
 }

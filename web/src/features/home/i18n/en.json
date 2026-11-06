@@ -4,7 +4,8 @@
     "description": "The five most recent sessions this deployment observed.",
     "openAll": "All sessions",
     "emptyTitle": "No sessions yet",
-    "emptyDescription": "Every run a connected engine performs appears here, with what it did, how long it took and what it cost.",
+    "emptyDescription": "Each session you start appears here.",
+    "emptyAction": "Start a session",
     "unavailableTitle": "Couldn’t load recent work",
     "unavailableDescription": "The sessions read did not answer. The estate figures above are unaffected.",
     "untitled": "Untitled session"
@@ -67,6 +68,8 @@
   },
   "overview": {
     "running": "Running",
-    "recent": "Recent"
+    "recent": "Recent",
+    "wantsToRun": "{{session}} wants to run",
+    "approvals": "Approvals: {{approved}} of {{required}}"
   }
 }

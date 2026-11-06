@@ -762,10 +762,6 @@
       "snoozed": "Відкладено",
       "archived": "Архівовано"
     },
-    "agentCount_one": "{{count}} агент",
-    "agentCount_few": "{{count}} агенти",
-    "agentCount_many": "{{count}} агентів",
-    "agentCount_other": "{{count}} агента",
     "more": "Ще",
     "back": "Назад до сесій",
     "showTable": "Показати як таблицю",

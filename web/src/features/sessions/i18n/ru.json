@@ -762,10 +762,6 @@
       "snoozed": "Отложенные",
       "archived": "Архивные"
     },
-    "agentCount_one": "{{count}} агент",
-    "agentCount_few": "{{count}} агента",
-    "agentCount_many": "{{count}} агентов",
-    "agentCount_other": "{{count}} агента",
     "more": "Ещё",
     "back": "Назад к сессиям",
     "showTable": "Показать в виде таблицы",

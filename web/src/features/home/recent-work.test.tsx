@@ -242,14 +242,15 @@ describe('RecentWork', () => {
     )
   })
 
-  it('an empty estate says what will appear, and leaves the start to Now', () => {
+  it('an empty list says what will appear and offers its one action: start a session', () => {
     renderIntel(<RecentWork sessions={asSessions([])} state="ready" />)
     expect(screen.getByText('No sessions yet')).toBeInTheDocument()
+    // Overview has no start line of its own: the empty list carries the way to Sessions.
     expect(
-      screen.getByText(/Every run a connected engine performs appears here/),
-    ).toBeInTheDocument()
-    // Now's start line is the one next step; the empty list offers no second one.
-    expect(screen.queryByRole('button', { name: 'Start a session' })).toBeNull()
+      screen.getByRole('link', { name: 'Start a session' }),
+    ).toHaveAttribute('href', '/sessions')
+    expect(screen.queryByText(/connected engine/)).toBeNull()
+    expectNoRawI18nKeys(document.body)
   })
 
   it('a failed read is an alert, not an empty estate', () => {

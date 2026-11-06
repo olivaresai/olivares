@@ -206,19 +206,21 @@ function LicenseFacts({
             {new Date(license.issued_at).toLocaleDateString(currentLanguage())}
           </Row>
         )}
-        <Row label={t('console:license.sourceLabel')}>
-          <span className="font-mono text-caption break-all">
-            {t(`console:license.sources.${license.source}`, {
-              defaultValue: license.source,
-            })}
-            {license.source_path ? (
-              <>
-                {' '}
-                (<PathText value={license.source_path} />)
-              </>
-            ) : null}
-          </span>
-        </Row>
+        {license.source !== 'none' && (
+          <Row label={t('console:license.sourceLabel')}>
+            <span className="font-mono text-caption break-all">
+              {t(`console:license.sources.${license.source}`, {
+                defaultValue: license.source,
+              })}
+              {license.source_path ? (
+                <>
+                  {' '}
+                  (<PathText value={license.source_path} />)
+                </>
+              ) : null}
+            </span>
+          </Row>
+        )}
       </dl>
     </div>
   )
@@ -255,7 +257,7 @@ export function LicenseTab() {
   })
 
   if (!isSuperadmin) {
-    // The License page has no tab or title around it, so the notice is under its own heading.
+    // Under the Edition section's heading, the notice keeps the license's own heading.
     return (
       <div className="flex flex-col gap-2">
         <h2 className="text-heading text-foreground">

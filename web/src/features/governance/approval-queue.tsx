@@ -125,9 +125,8 @@ function QueueRow({
       aria-current={selected ? 'true' : undefined}
       onClick={onSelect}
       className={cn(
-        'flex w-full min-w-0 flex-col gap-1.5 border-l-[3px] px-3 py-2.5 text-left outline-none transition-colors',
+        'flex w-full min-w-0 flex-col gap-1.5 px-3 py-2.5 text-left outline-none transition-colors',
         'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
-        flagged ? 'border-l-accent' : 'border-l-transparent',
         selected ? 'bg-active' : 'hover:bg-hover',
       )}
     >

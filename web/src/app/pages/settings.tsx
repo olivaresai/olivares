@@ -582,10 +582,14 @@ export function SettingsPage() {
   ].filter(Boolean)
 
   const showGeneral = q.length > 0 || (section === 'general' && !withheld)
-  const licenseLabel = t('console:license.title')
+  const editionLabel = t('nav.edition')
   const showLicenseResult =
     q.length > 0 &&
-    rowMatches(licenseLabel, t('console:license.title', { lng: 'en' }))
+    (rowMatches(editionLabel, t('nav.edition', { lng: 'en' })) ||
+      rowMatches(
+        t('console:license.title'),
+        t('console:license.title', { lng: 'en' }),
+      ))
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)]">
@@ -650,7 +654,7 @@ export function SettingsPage() {
                     href="/settings?section=edition"
                     className="text-body font-medium text-accent-text hover:underline"
                   >
-                    {licenseLabel}
+                    {editionLabel}
                   </AppLink>
                 ) : null}
               </>
@@ -950,7 +954,14 @@ function About({
             className="flex items-center justify-between gap-4 py-2"
           >
             <dt className="text-body text-text-2">{label}</dt>
-            <dd className="min-w-0 truncate text-body text-text">{value}</dd>
+            <dd
+              className="min-w-0 truncate text-body text-text"
+              data-testid={
+                label === t('about.version') ? 'about-version' : undefined
+              }
+            >
+              {value}
+            </dd>
           </div>
         ))}
       </dl>

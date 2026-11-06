@@ -6,7 +6,8 @@
   "businessOnly": {
     "title": "Fait partie de Business",
     "description": "Cette page fait partie d’Olivares AI Business. Cette édition ne l’inclut pas.",
-    "link": "À propos de Business"
+    "link": "À propos de Business",
+    "start": "Aller à la page de départ"
   },
   "forbidden": {
     "title": "Non autorisé",

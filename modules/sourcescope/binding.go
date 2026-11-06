@@ -465,6 +465,10 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 		writeProfileAssignmentBusiness(w)
 		return
 	}
+	if err := mayAssignPolicy(r.Context(), mc, in.SourceType); err != nil {
+		writeJSON(w, http.StatusForbidden, errorBody(err.Error()))
+		return
+	}
 	var (
 		out     bindingDTO
 		pending *postureRequestDTO
@@ -574,6 +578,9 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 		if err := m.mayWriteSource(in.SourceType); err != nil {
 			return err
 		}
+		if err := mayAssignPolicy(r.Context(), mc, in.SourceType); err != nil {
+			return err
+		}
 		if msg := in.validate(); msg != "" {
 			return validationError(msg)
 		}
@@ -624,6 +631,10 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 		return
 	}
 	if writeFenceRefusal(w, err) {
+		return
+	}
+	if ferr, ok := err.(forbiddenError); ok {
+		writeJSON(w, http.StatusForbidden, errorBody(string(ferr)))
 		return
 	}
 	if verr, ok := err.(validationError); ok {
@@ -697,6 +708,9 @@ func (m *Module) handleDeleteBinding(w http.ResponseWriter, r *http.Request, mc 
 			return err
 		}
 		snap := toBindingDTO(rec)
+		if err := mayAssignPolicy(r.Context(), mc, snap.SourceType); err != nil {
+			return err
+		}
 		// F2: deleting a forbid, or the last enabled allow, RELAXES enforcement —
 		// route it through dual-control instead of applying it.
 		otherAllows, err := countOtherEnabledAllows(r.Context(), sc, snap.SourceType, snap.SourceRef, id.String())
@@ -716,6 +730,10 @@ func (m *Module) handleDeleteBinding(w http.ResponseWriter, r *http.Request, mc 
 		}
 		return auditBinding(r.Context(), sc, mc, "delete", snap)
 	})
+	if ferr, ok := err.(forbiddenError); ok {
+		writeJSON(w, http.StatusForbidden, errorBody(string(ferr)))
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return

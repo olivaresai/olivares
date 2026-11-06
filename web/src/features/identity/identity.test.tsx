@@ -174,10 +174,10 @@ describe('ADM-IDN-01 — SSO config', () => {
     expect(screen.getByText(/exact match/i)).toBeInTheDocument()
   })
 
-  // One place sets SSO up: the SSO / IdP tab has the form and applies it without a restart.
+  // One place sets SSO up: the Identity provider tab has the form and applies it without a restart.
   // This tab used to list OLIVARES_* variables and say there is no write API, which sent an
   // administrator to the engine's environment for something the console does.
-  it('names no environment variable and points an administrator to the SSO / IdP form', async () => {
+  it('names no environment variable and points an administrator to the Identity provider form', async () => {
     const user = userEvent.setup()
     wrap(<FederationTab />)
     await screen.findByText('Not configured')
@@ -185,21 +185,23 @@ describe('ADM-IDN-01 — SSO config', () => {
     expect(screen.queryByText(/OLIVARES_/)).not.toBeInTheDocument()
     expect(screen.queryByText(/write API|restart/i)).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /SSO \/ IdP/i }))
+    await user.click(
+      screen.getByRole('button', { name: /open identity provider/i }),
+    )
     expect(mockNavigate).toHaveBeenCalledWith({
       to: '/identity',
       search: { tab: 'sso' },
     })
   })
 
-  it('offers no way to the SSO / IdP tab to someone who may not administer', async () => {
+  it('offers no way to the Identity provider tab to someone who may not administer', async () => {
     const can = authState.can
     authState.can = () => false
     try {
       wrap(<FederationTab />)
       await screen.findByText('Not configured')
       expect(
-        screen.queryByRole('button', { name: /SSO \/ IdP/i }),
+        screen.queryByRole('button', { name: /open identity provider/i }),
       ).not.toBeInTheDocument()
     } finally {
       authState.can = can

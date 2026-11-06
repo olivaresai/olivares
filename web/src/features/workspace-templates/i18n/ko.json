@@ -38,7 +38,9 @@
         "secrets_other": "변수 {{count}}개",
         "connectors_other": "커넥터 {{count}}개",
         "set_other": "{{count}}개 설정됨",
-        "model": "모델: {{model}}"
+        "model": "모델: {{model}}",
+        "none": "없음",
+        "defaults": "기본값"
       }
     },
     "hooks": {

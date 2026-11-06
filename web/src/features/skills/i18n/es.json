@@ -45,7 +45,12 @@
     "moved": "Asignación movida a la última revisión",
     "approveTitle": "¿Aprobar skills que actúan al cargarse?",
     "approveDescription": "La última revisión asigna a {{target}} skills sobre las que su herramienta actúa sin preguntar: {{skills}}. Apruébalas solo después de revisarlas.",
-    "approve": "Aprobar y usar la última"
+    "approve": "Aprobar y usar la última",
+    "disable": "Desactivar",
+    "disabled": "Skill desactivada",
+    "disableFor": "Desactivar {{skill}} para {{target}}",
+    "disableTitle": "¿Desactivar esta skill?",
+    "disableDescription": "Las nuevas sesiones de {{target}} dejan de recibir {{skill}} de esta asignación. Las demás skills siguen asignadas. Las conversaciones guardadas conservan su instantánea."
   },
   "assign": {
     "title": "Asignar",
@@ -85,7 +90,15 @@
     "gitSubmit": "Instalar desde Git",
     "name": "Nombre del paquete",
     "nameHint": "Opcional; usa el nombre del repositorio por defecto. Elige otro nombre para un paquete del mismo repositorio.",
-    "held": "Paquete instalado. Contiene skills que actúan al cargarse, así que no se asignó: revísalo y asígnalo desde su hoja."
+    "held": "Paquete instalado. Contiene skills que actúan al cargarse, así que no se asignó: revísalo y asígnalo desde su hoja.",
+    "local": "Carpeta o archivo",
+    "archive": "Archivo",
+    "archiveHint": "ZIP o tar.gz, hasta 32 MiB. Selecciona un archivo o una carpeta.",
+    "folder": "Carpeta",
+    "uploadSubmit": "Instalar selección",
+    "selectedFiles": "Archivos seleccionados: {{count}}",
+    "uploadLimit": "La carga supera los límites (32 MiB, 4096 archivos, 8 MiB por archivo).",
+    "uploadName": "Nombre del paquete cargado"
   },
   "update": {
     "title": "Actualizaciones",

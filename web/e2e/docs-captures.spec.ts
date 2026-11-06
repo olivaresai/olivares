@@ -958,7 +958,7 @@ const A_MANO: {
   },
   { id: 'vault', path: '/vault', heading: /^Vault$/ },
   { id: 'usage', path: '/usage', heading: /^Usage$/ },
-  { id: 'operations', path: '/operations', heading: /^Host and sessions$/ },
+  { id: 'operations', path: '/operations', heading: /^Server$/ },
   { id: 'stored-budgets', path: '/stored-budgets', heading: /^Budgets$/ },
   { id: 'security', path: '/security', heading: /^Security$/ },
   {

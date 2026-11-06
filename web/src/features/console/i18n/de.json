@@ -4,7 +4,7 @@
   "tabs": {
     "people": "Personen",
     "agents": "Agenten",
-    "sso": "SSO / IdP",
+    "sso": "Identitätsanbieter",
     "scopes": "Arbeitsbereiche",
     "roles": "Rollen",
     "secrets": "Secrets",
@@ -56,11 +56,11 @@
     "truncatedHint": "Es gibt mehr API-Tokens als angezeigt; diese Seite nimmt Zeilen nach ID — bei der Erstellung vergeben —, spätere fehlen. Das sind LEBENDE Zugangsdaten: ein hier nicht sichtbares Token authentifiziert weiterhin und lässt sich von diesem Bildschirm aus nicht widerrufen. Ein fehlender Schlüssel belegt nicht, dass es ihn nicht gibt."
   },
   "license": {
-    "title": "Edition & Lizenz",
+    "title": "Lizenz",
     "caption": "Aktuelle Edition, Lizenzstatus und Aktionen dieser Installation.",
     "helpSummary": "Lizenzanwendung gegenüber diesem Build",
     "helpBody": "Das Ersetzen der Lizenz gilt in diesem Prozess ohne Neustart. Das ist kein Binäraustausch und kein Daten-Upgrade: das sind getrennte Vorgänge mit eigenen Verfahren. In der Community-Edition zeigt das Anwenden einer verifizierten Lizenz deren Angaben hier; es ändert diesen Build nicht.",
-    "install": "Installieren / aktualisieren",
+    "install": "Lizenz installieren",
     "remove": "Lizenz entfernen",
     "edition": "Edition",
     "editions": {
@@ -1194,11 +1194,9 @@
     "empty": "Keine MCP-Server",
     "emptyHint": "Fügen Sie einen Streamable-HTTP-Server hinzu, testen Sie die Verbindung und konfigurieren Sie Vertrauen und Berechtigungen vor der Aktivierung.",
     "source": {
-      "file": "Betreiberdatei",
-      "store": "Organisationseinstellungen"
+      "file": "Betreiberdatei"
     },
     "fileOwned": "Die Betreiberdatei steuert MCP auf ihrem konfigurierten Listener. Diese Ansicht ist schreibgeschützt. Gespeicherte Konfiguration bleibt inaktiv und wird weder zusammengeführt noch ersetzt.",
-    "storeOwned": "Die Organisationseinstellungen steuern MCP auf dem HTTP-Listener dieser Installation. Eine Konfigurationsdatei ist nicht erforderlich.",
     "sessionTitle": "Sitzungstools",
     "sessionHint": "Sitzungen können einander Nachrichten senden und ihre zugewiesene Arbeit nutzen. Sitzungen erhalten dadurch keine neuen Berechtigungen.",
     "tools": "Werkzeuge ({{count}})",
@@ -1336,8 +1334,8 @@
       "notAllowed": "nicht erlaubt (in Konfigurieren ändern)",
       "confirm": "Einschalten"
     },
-    "sessionOn": "Ein: zum Beenden ausschalten.",
-    "sessionOff": "Aus: Sitzungen können einander keine Nachrichten senden und ihre zugewiesene Arbeit nicht nutzen.",
+    "sessionOn": "Ein",
+    "sessionOff": "Aus",
     "startersTitle": "Startserver",
     "startersHint": "Ausgewählte Server, jeder mit seiner Abschottung und seinen Netzwerkgrenzen. Hinzufügen füllt das Formular aus; der Server wird ausgeschaltet gespeichert und führt nichts aus, bis Sie ihn testen und aktivieren.",
     "starterAdd": "{{name}} hinzufügen",

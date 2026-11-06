@@ -45,7 +45,12 @@
     "moved": "Affectation déplacée vers la dernière révision",
     "approveTitle": "Approuver des skills qui agissent au chargement ?",
     "approveDescription": "La dernière révision affecte à {{target}} des skills sur lesquelles leur outil agit sans demander : {{skills}}. Approuvez-les seulement après les avoir examinées.",
-    "approve": "Approuver et utiliser la dernière"
+    "approve": "Approuver et utiliser la dernière",
+    "disable": "Désactiver",
+    "disabled": "Skill désactivée",
+    "disableFor": "Désactiver {{skill}} pour {{target}}",
+    "disableTitle": "Désactiver cette skill ?",
+    "disableDescription": "Les nouvelles sessions de {{target}} ne reçoivent plus {{skill}} de cette affectation. Les autres skills restent affectées. Les conversations enregistrées conservent leur instantané."
   },
   "assign": {
     "title": "Attribuer",
@@ -85,7 +90,15 @@
     "gitSubmit": "Installer depuis Git",
     "name": "Nom du pack",
     "nameHint": "Facultatif ; utilise le nom du dépôt par défaut. Choisissez un nom distinct pour un autre pack du même dépôt.",
-    "held": "Pack installé. Il contient des skills qui agissent au chargement, il n’a donc pas été affecté : examinez-le puis affectez-le depuis sa fiche."
+    "held": "Pack installé. Il contient des skills qui agissent au chargement, il n’a donc pas été affecté : examinez-le puis affectez-le depuis sa fiche.",
+    "local": "Dossier ou archive",
+    "archive": "Archive",
+    "archiveHint": "ZIP ou tar.gz, 32 Mio maximum. Choisissez une archive ou un dossier.",
+    "folder": "Dossier",
+    "uploadSubmit": "Installer la sélection",
+    "selectedFiles": "Fichiers sélectionnés : {{count}}",
+    "uploadLimit": "Limites dépassées (32 Mio, 4096 fichiers, 8 Mio par fichier).",
+    "uploadName": "Nom du pack importé"
   },
   "update": {
     "title": "Mises à jour",

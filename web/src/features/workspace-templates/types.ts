@@ -25,6 +25,7 @@ export interface TemplateHooks {
 
 /** Agent runtime settings carried in a template. */
 export interface TemplateSettings {
+  ai_attribution?: string
   permission_mode?: string
   effort?: string
   model?: string

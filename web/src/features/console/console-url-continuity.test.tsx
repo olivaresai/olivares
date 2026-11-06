@@ -298,7 +298,7 @@ describe('ConsoleView — tabs another place owns (0.5 Admin fold)', () => {
     const names = screen.getAllByRole('tab').map((tab) => tab.textContent)
     for (const gone of [
       'People',
-      'SSO / IdP',
+      'Identity provider',
       'Roles',
       'API keys',
       'Edition',

@@ -288,6 +288,32 @@ describe('TemplateCard', () => {
 })
 
 describe('TemplateEditor', () => {
+  it('preserves stored ai_attribution when renaming a template', async () => {
+    api.update.mockResolvedValue(customTemplate)
+    wrap(
+      <TemplateEditor
+        open={true}
+        onOpenChange={vi.fn()}
+        template={{
+          ...customTemplate,
+          body: { settings: { ai_attribution: 'off' } },
+        }}
+      />,
+    )
+    const user = userEvent.setup()
+    const name = screen.getByLabelText(/^Name/)
+    await user.clear(name)
+    await user.type(name, 'Renamed template')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.update).toHaveBeenCalledWith(customTemplate.id, {
+        name: 'Renamed template',
+        description: customTemplate.description,
+        body: { settings: { ai_attribution: 'off' } },
+      }),
+    )
+  })
+
   it('validates name required', async () => {
     wrap(<TemplateEditor open={true} onOpenChange={vi.fn()} />)
 
@@ -408,6 +434,17 @@ describe('TemplateEditor', () => {
       'Connectors',
     ])
       expect(screen.getByLabelText(label)).not.toBeVisible()
+    // Sentence-case titles, and every closed section says what it holds even when empty.
+    for (const [title, held] of [
+      ['Hooks', 'None'],
+      ['Agent settings', 'Defaults'],
+      ['Secrets', 'None'],
+      ['Connectors', 'None'],
+      ['Governance policies', 'Defaults'],
+    ])
+      expect(screen.getByText(title).closest('summary')).toHaveTextContent(
+        `${title}${held}`,
+      )
 
     await user.click(screen.getByText('Secrets'))
     await user.type(
@@ -418,15 +455,35 @@ describe('TemplateEditor', () => {
     expect(secrets).toHaveTextContent('1 variable')
     expect(secrets).not.toHaveTextContent('env/github')
 
-    await user.click(screen.getByText('Governance Policies'))
+    await user.click(screen.getByText('Governance policies'))
     await user.type(duration, '0')
-    await user.click(screen.getByText('Governance Policies'))
+    await user.click(screen.getByText('Governance policies'))
     expect(duration).not.toBeVisible()
     await user.type(screen.getByLabelText(/^Name/), 'Short')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(duration).toBeVisible()
     expect(duration).toHaveFocus()
     expect(api.create).not.toHaveBeenCalled()
+  })
+
+  // The closed Agent settings summary never hides a mode that asks less than default behind
+  // the model name; the mode reads as the tool takes it, in every locale.
+  it('the closed agent settings summary names a mode above default beside the model', () => {
+    wrap(
+      <TemplateEditor
+        open={true}
+        onOpenChange={vi.fn()}
+        template={{
+          ...customTemplate,
+          body: {
+            settings: { model: 'x', permission_mode: 'bypassPermissions' },
+          },
+        }}
+      />,
+    )
+    expect(
+      screen.getByText('Agent settings').closest('summary'),
+    ).toHaveTextContent('Agent settingsModel: x · bypassPermissions')
   })
 
   // Design first-hour check: a template names vault secrets (env/…) its sessions receive as

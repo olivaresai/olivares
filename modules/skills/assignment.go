@@ -397,9 +397,27 @@ func (m *Module) saveAssignment(w http.ResponseWriter, r *http.Request, mc api.M
 // pinAssignment preserves the native target and catalog authority barriers.
 func (m *Module) pinAssignment(ctx context.Context, mc api.ModuleContext, body AssignmentRequest, id model.ID, version int64, idempotent bool) (result Assignment, err error) {
 	err = m.mutateAssignment(ctx, mc, body.RevisionID, func(sc store.Scope, revision AssignmentRevisionReader) error {
-		target, err := m.target(ctx, sc, mc.Principal, body.Target, true)
-		if err != nil {
-			return err
+		var err error
+		result, err = m.pinAssignmentInScope(ctx, sc, mc, body, nil, id, version, idempotent, revision)
+		return err
+	})
+	return result, err
+}
+
+// pinAssignmentInScope shares pin validation and auditing with atomic catalog updates.
+// preparedTarget, if supplied, must have been resolved for write in this scope;
+// native target fencing is a write and must happen exactly once.
+func (m *Module) pinAssignmentInScope(ctx context.Context, sc store.Scope, mc api.ModuleContext, body AssignmentRequest, preparedTarget *StoredTarget, id model.ID, version int64, idempotent bool, revision AssignmentRevisionReader) (result Assignment, err error) {
+	err = func() error {
+		var target StoredTarget
+		if preparedTarget != nil {
+			target = *preparedTarget
+		} else {
+			var err error
+			target, err = m.target(ctx, sc, mc.Principal, body.Target, true)
+			if err != nil {
+				return err
+			}
 		}
 		rev, err := revision(ctx, body.RevisionID)
 		if err != nil {
@@ -501,7 +519,7 @@ func (m *Module) pinAssignment(ctx context.Context, mc api.ModuleContext, body A
 			meta["approved_active_content"] = active
 		}
 		return catalogAudit(ctx, sc, mc, "skills.assignment.pin", AssignmentKind, model.ID(result.ID), meta)
-	})
+	}()
 	return result, err
 }
 

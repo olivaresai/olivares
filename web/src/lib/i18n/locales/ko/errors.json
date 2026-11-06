@@ -6,7 +6,8 @@
   "businessOnly": {
     "title": "Business에 포함됨",
     "description": "이 페이지는 Olivares AI Business에 포함됩니다. 이 에디션에는 포함되지 않습니다.",
-    "link": "Business 정보"
+    "link": "Business 정보",
+    "start": "시작 페이지로 이동"
   },
   "forbidden": {
     "title": "권한 없음",

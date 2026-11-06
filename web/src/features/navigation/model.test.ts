@@ -118,7 +118,7 @@ const t = i18n.getFixedT(null, 'nav') as never
 const allow = permissionGate(() => true)
 const deny = permissionGate(() => false)
 
-describe('route map — every route sits where root ratified it', () => {
+describe('route map — every route has its designated placement', () => {
   it('keeps every Community placement exact while extensions add views', () => {
     const actual: Record<string, [string, string] | 'root'> = {}
     const extensionIds = new Set(FEATURE_EXTENSIONS.map((view) => view.id))

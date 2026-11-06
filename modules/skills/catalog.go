@@ -183,10 +183,25 @@ type Revision struct {
 	CreatedBy   string `json:"created_by"`
 	CreatedAt   string `json:"created_at"`
 }
+
+// PinNotMoved identifies a pin retained on its approved revision after an update.
+// The reason tells the operator whether to select members, restore target access,
+// or review and pin the published revision with explicit active-content approval.
+type PinNotMoved struct {
+	AssignmentID string `json:"assignment_id"`
+	Reason       string `json:"reason"`
+}
+
+type importReceiptSnapshot struct {
+	Pack
+	PinsNotMoved []PinNotMoved `json:"pins_not_moved,omitempty"`
+}
+
 type InstallResult struct {
-	State    string   `json:"state"`
-	Pack     Pack     `json:"pack"`
-	Revision Revision `json:"revision"`
+	PinsNotMoved []PinNotMoved `json:"pins_not_moved,omitempty"`
+	State        string        `json:"state"`
+	Pack         Pack          `json:"pack"`
+	Revision     Revision      `json:"revision"`
 }
 type PackDetail struct {
 	Pack      Pack       `json:"pack"`
@@ -701,6 +716,11 @@ func (m *Module) publishImportWithActor(ctx context.Context, mc api.ModuleContex
 			_ = remove()
 		}
 	}()
+	ctx, movePins, release, err := m.prepareUpdatePins(ctx, mc, packID.String(), plan.expectLatest)
+	defer release()
+	if err != nil {
+		return result, false, err
+	}
 	err = mc.Data.Mutate(ctx, func(sc store.Scope) error {
 		var err error
 		result, replay, err = findReceipt(ctx, sc, keyHash, requestDigest)
@@ -753,8 +773,12 @@ func (m *Module) publishImportWithActor(ctx context.Context, mc api.ModuleContex
 		if err != nil {
 			return err
 		}
-		result = InstallResult{State: "catalog_published", Pack: packDTO(row), Revision: rev}
-		snapshot, err := json.Marshal(result.Pack)
+		pinsNotMoved, err := movePins(sc, rev)
+		if err != nil {
+			return err
+		}
+		result = InstallResult{State: "catalog_published", Pack: packDTO(row), Revision: rev, PinsNotMoved: pinsNotMoved}
+		snapshot, err := json.Marshal(importReceiptSnapshot{result.Pack, result.PinsNotMoved})
 		if err != nil {
 			return err
 		}
@@ -791,9 +815,11 @@ func findReceipt(ctx context.Context, sc store.Scope, keyHash, requestDigest str
 	if row.String("request_digest") != requestDigest {
 		return result, false, store.ErrConflict
 	}
-	if err := json.Unmarshal([]byte(row.String("pack_snapshot")), &result.Pack); err != nil {
+	var snapshot importReceiptSnapshot
+	if err := json.Unmarshal([]byte(row.String("pack_snapshot")), &snapshot); err != nil {
 		return result, false, store.ErrStoreUnavailable
 	}
+	result.Pack, result.PinsNotMoved = snapshot.Pack, snapshot.PinsNotMoved
 	revisions, err := sc.Ext(RevisionKind)
 	if err != nil {
 		return result, false, err

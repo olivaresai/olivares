@@ -46,7 +46,9 @@
         "set_one": "{{count}} definido",
         "set_many": "{{count}} definidos",
         "set_other": "{{count}} definidos",
-        "model": "Modelo: {{model}}"
+        "model": "Modelo: {{model}}",
+        "none": "Ninguno",
+        "defaults": "Por defecto"
       }
     },
     "hooks": {

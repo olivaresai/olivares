@@ -123,17 +123,13 @@ export default function IdentityView() {
           aria-label={t('identity:sections')}
           className="min-w-0 lg:sticky lg:top-0 lg:w-56 lg:shrink-0"
         >
+          {/* The groups are told apart by space alone: a label above them read as an
+              eyebrow and repeated its first section ("People" over People). */}
           {groups.map((group, i) => (
             <Fragment key={group.id}>
-              <span
-                role="presentation"
-                className={
-                  'hidden px-2 pb-1 text-overline font-medium tracking-[0.06em] text-text-3 uppercase lg:block' +
-                  (i > 0 ? ' lg:mt-3' : '')
-                }
-              >
-                {t(`identity:groups.${group.id}`)}
-              </span>
+              {i > 0 ? (
+                <span role="presentation" className="hidden h-3 lg:block" />
+              ) : null}
               {group.tabs.map((key) => (
                 <TabsTrigger key={key} value={key}>
                   {label(key)}

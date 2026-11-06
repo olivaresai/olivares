@@ -101,12 +101,10 @@ import {
   commandLabel,
   filterCommands,
   insertText,
-  isDollarSkill,
   menuKeyOf,
   mentionEntries,
   mentionFolder,
   mentionQuery,
-  skillQuery,
   slashOptionId,
   slashQuery,
   type SlashMenuEmpty,
@@ -489,11 +487,9 @@ function SessionComposer({
   // the session's own tool says what it offers (commands, skills, agents), asked again
   // each time the menu opens so a skill added meanwhile is there. Escape closes it for
   // the word typed so far; the next character brings it back. The same menu lists, after
-  // a leading "$", the skills a tool invokes with "$" (Codex), and after an "@" at the end
-  // of the draft, the files and folders of the session's folder.
+  // an "@" at the end of the draft, the files and folders of the session's folder.
   const slash = slashQuery(turn)
-  const skill = skillQuery(turn)
-  const mention = slash === null && skill === null ? mentionQuery(turn) : null
+  const mention = slash === null ? mentionQuery(turn) : null
   const menuKey = menuKeyOf(turn)
   const [slashDismissed, setSlashDismissed] = useState<string | null>(null)
   const [slashActive, setSlashActive] = useState(0)
@@ -620,9 +616,7 @@ function SessionComposer({
           : []),
       ]
     if (!catalog?.reported) return []
-    return skill !== null
-      ? filterCommands(catalog.commands.filter(isDollarSkill), skill)
-      : filterCommands(catalog.commands, slash ?? '')
+    return filterCommands(catalog.commands, slash ?? '')
   }, [
     menuOpen,
     mention,
@@ -631,14 +625,8 @@ function SessionComposer({
     contextRuns.hasNextPage,
     t,
     catalog,
-    skill,
     slash,
   ])
-  // A "$" opens the menu only for a tool that has "$" skills: "$5" in a message to any other
-  // tool is just text.
-  const showMenu =
-    menuOpen &&
-    (skill === null || (catalog?.commands.some(isDollarSkill) ?? false))
   const slashIndex = Math.min(slashActive, Math.max(slashMatches.length - 1, 0))
   // Why there is nothing to choose: still reading (also while an old "nothing reported"
   // is being asked again), not readable, nothing reported, or nothing matches.
@@ -670,13 +658,13 @@ function SessionComposer({
       : mention !== null
         ? t(`nav:launcher.mention.${slashEmpty}`, { query: mention })
         : slashEmpty === 'nomatch'
-          ? t('nav:launcher.slashNoMatch', { query: skill ?? slash ?? '' })
+          ? t('nav:launcher.slashNoMatch', { query: slash ?? '' })
           : t(`nav:launcher.slash.${slashEmpty}`))
   // What is listed may be older than the tool: the engine served what the tool reported
   // before (stale), or this console's own refresh failed and the previous list stays.
   // The one line already says the read failed when there is nothing else to show.
   const slashStale =
-    showMenu &&
+    menuOpen &&
     mention === null &&
     !!catalog?.reported &&
     slashEmpty !== 'failed' &&
@@ -690,7 +678,7 @@ function SessionComposer({
   // The one live region of the menu: it exists before the menu opens and only its text
   // changes, which is what a screen reader announces. The active option is said here too,
   // because not every reader follows aria-activedescendant on a text field.
-  const slashSaid = !showMenu
+  const slashSaid = !menuOpen
     ? ''
     : slashMatches.length > 0
       ? t('nav:launcher.slashOption', {
@@ -851,14 +839,14 @@ function SessionComposer({
     // Enter sends and Shift+Enter breaks a line (the binding table matches Enter alone);
     // a key that is choosing a character of an IME composition is not a send.
     if (e.nativeEvent.isComposing) return
-    if (showMenu && e.key === 'Escape') {
+    if (menuOpen && e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
       setSlashDismissed(menuKey)
       return
     }
     const plain = !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
-    if (showMenu && slashMatches.length > 0 && plain) {
+    if (menuOpen && slashMatches.length > 0 && plain) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
         const step = e.key === 'ArrowDown' ? 1 : -1
@@ -1045,15 +1033,13 @@ function SessionComposer({
         'focus-within:border-line-strong focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus',
       )}
     >
-      {showMenu ? (
+      {menuOpen ? (
         <SlashMenu
           listId={slashListId}
           label={t(
             mention !== null
               ? 'nav:launcher.mentionLabel'
-              : skill !== null
-                ? 'nav:launcher.skillLabel'
-                : 'nav:launcher.slashLabel',
+              : 'nav:launcher.slashLabel',
           )}
           items={slashMatches}
           active={slashIndex}
@@ -1106,12 +1092,12 @@ function SessionComposer({
         }}
         placeholder={placeholder}
         aria-label={t('nav:launcher.turnAria')}
-        aria-autocomplete={showMenu ? 'list' : undefined}
+        aria-autocomplete={menuOpen ? 'list' : undefined}
         aria-controls={
-          showMenu && slashMatches.length > 0 ? slashListId : undefined
+          menuOpen && slashMatches.length > 0 ? slashListId : undefined
         }
         aria-activedescendant={
-          showMenu && slashMatches.length > 0
+          menuOpen && slashMatches.length > 0
             ? slashOptionId(slashListId, slashIndex)
             : undefined
         }

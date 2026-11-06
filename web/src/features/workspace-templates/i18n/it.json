@@ -46,7 +46,9 @@
         "set_one": "{{count}} impostato",
         "set_many": "{{count}} impostati",
         "set_other": "{{count}} impostati",
-        "model": "Modello: {{model}}"
+        "model": "Modello: {{model}}",
+        "none": "Nessuno",
+        "defaults": "Predefinite"
       }
     },
     "hooks": {

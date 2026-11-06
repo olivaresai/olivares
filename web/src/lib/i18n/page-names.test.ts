@@ -3,9 +3,9 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // ONE NOUN PER PAGE NAME. A page heading or a tab that pairs two nouns ("Health & SLA",
-// "Approvals and permissions") names two ideas; the page is named for the one a person looks
-// for, and the former name stays a palette search word (nav:aliases.<id>). The English
-// catalog is the source: every feature's `title` and `tabs.*`.
+// "Approvals and permissions", "SSO / IdP") names two ideas; the page is named for the one a
+// person looks for, and the former name stays a palette search word (nav:aliases.<id>). The
+// English catalog is the source: every feature's `title` and `tabs.*`.
 import { describe, expect, it } from 'vitest'
 
 const catalogs = import.meta.glob<Record<string, unknown>>(
@@ -18,12 +18,11 @@ const PENDING = new Set([
   'compliance:tabs.erasure',
   'finops:title',
   'observability:title',
-  'operations:title',
   'platforms:tabs.surfaces',
   'voice:title',
 ])
 
-const PAIR = /&|\band\b/i
+const PAIR = /&|\band\b|\s\/\s/i
 
 function pageNames(): [id: string, name: string][] {
   const out: [string, string][] = []

@@ -39,7 +39,7 @@ export function InstallModel() {
               {t('ollama.installMissing')}{' '}
               <Link
                 to={'/agent-tools' as never}
-                className="text-accent-text underline"
+                className="text-foreground underline"
               >
                 {t('ollama.installMissingAction')}
               </Link>

@@ -6,7 +6,8 @@
   "businessOnly": {
     "title": "Частина Business",
     "description": "Ця сторінка є частиною Olivares AI Business. Це видання її не містить.",
-    "link": "Про Business"
+    "link": "Про Business",
+    "start": "Перейти на початкову сторінку"
   },
   "forbidden": {
     "title": "Доступ заборонено",

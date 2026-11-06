@@ -14,6 +14,7 @@ import type { FeatureView } from '@/features/registry'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { useModuleEnabled } from '@/stores/modules'
+import { topBarLabel } from './document-title'
 import { ModuleOffPage } from './module-off-page'
 import { frameFor } from './page-frames'
 import { SystemAdminOnly } from './system-admin-only'
@@ -93,12 +94,16 @@ export function RequirePermission({
   // A view whose module is off has a calm page of its own, with its own heading, once the
   // person is established as allowed. A refusal, or an answer not established yet, outranks
   // it: a person who may not open the view is told nothing about its module.
+  // A label the top bar already says (Security under Security) stays the h1 for assistive
+  // technology and is not painted twice.
+  const label = viewLabel(t, view.id)
+  const titleHidden = label === topBarLabel(t, view.path)
   const body =
     !moduleOn && access.kind === 'permitted' ? (
-      <ModuleOffPage view={view} />
+      <ModuleOffPage view={view} titleHidden={titleHidden} />
     ) : notice ? (
       <>
-        <PageHeader title={viewLabel(t, view.id)} />
+        <PageHeader title={label} titleHidden={titleHidden} />
         {notice}
       </>
     ) : (

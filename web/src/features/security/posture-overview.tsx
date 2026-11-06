@@ -98,7 +98,7 @@ function PostureRowView({ row }: { row: PostureRow }) {
         <Link
           to={row.href as never}
           aria-label={`${t('security:posture.review')}: ${row.label}`}
-          className="rounded-sm text-caption font-medium text-accent-text outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="rounded-sm text-caption font-medium text-muted-foreground outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {t('security:posture.review')}
         </Link>

@@ -705,7 +705,6 @@
       "snoozed": "已延后",
       "archived": "已归档"
     },
-    "agentCount_other": "{{count}} 个智能体",
     "more": "更多",
     "back": "返回会话",
     "showTable": "以表格显示",

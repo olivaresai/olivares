@@ -383,6 +383,12 @@ describe('NotificationBell', () => {
     ).toBeTruthy()
     expect(screen.getByText('Release the kill switch')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Deny' })).toBeVisible()
+    // Every request keeps its actions in reach: Needs you is no scroller of its own
+    // (a fourth request's buttons hid under one); the popover scrolls as a whole.
+    expect(screen.getByRole('region', { name: 'Needs you' })).not.toHaveClass(
+      'overflow-y-auto',
+    )
+    expect(screen.getByRole('dialog')).toHaveClass('overflow-y-auto')
     // The bell opens over a page that keeps its own primary action: no orange here.
     expect(
       screen.getByRole('button', { name: 'Approve once' }),

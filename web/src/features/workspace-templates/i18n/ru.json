@@ -50,7 +50,9 @@
         "set_few": "Задано: {{count}}",
         "set_many": "Задано: {{count}}",
         "set_other": "Задано: {{count}}",
-        "model": "Модель: {{model}}"
+        "model": "Модель: {{model}}",
+        "none": "Нет",
+        "defaults": "По умолчанию"
       }
     },
     "hooks": {

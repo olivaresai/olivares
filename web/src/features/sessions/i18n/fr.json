@@ -743,9 +743,6 @@
       "snoozed": "Reportées",
       "archived": "Archivées"
     },
-    "agentCount_one": "{{count}} agent",
-    "agentCount_many": "{{count}} agents",
-    "agentCount_other": "{{count}} agents",
     "more": "Plus",
     "back": "Retour aux sessions",
     "showTable": "Afficher en tableau",

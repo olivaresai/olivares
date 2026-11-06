@@ -121,9 +121,8 @@ olivares skills disable tdd-workflow --profile <profile-ref>
 
 Built-in archives are checked against their pinned SHA-256 digest. Git refs are
 resolved to a commit, and the validated source, selected subdirectory and manifest
-digests are recorded in the revision. An update publishes another revision; existing
-assignments keep their pins until explicitly changed. Installation never executes pack
-code.
+digests are recorded in the revision. Applying an update publishes another revision and moves eligible pins on the previous
+latest revision. Older pins stay put. Installation never executes pack code.
 `GET /v1/m/skills/builtins` lists the built-in pins before any pack is installed;
 reading this catalog requires `skills:catalog:read`.
 
@@ -144,7 +143,11 @@ olivares skills pin <pack-id> [--revision <rev>] [--dry-run]
 
 Applying publishes only the digest that was reviewed, so a source that moved in between
 is refused with `source_changed`. `skills update ... --ref v2` moves a Git pack to that
-tag, and later updates follow it. The diff compares verified artifacts: members added,
+tag, and later updates follow it. Apply preserves approval for unchanged active members.
+A pin with changed active content, missing selected members or an unavailable target stays
+on its revision; the apply response lists it in `pins_not_moved` with the next action.
+For changed active content, review the published revision and pin it with explicit approval.
+The diff compares verified artifacts: members added,
 changed or removed, files with their hashes and sizes, and a bounded unified text diff.
 `skills pin` moves every pin of a pack that you can write to one revision, keeping each
 pin's selected skills; with an older `--revision` it is the rollback. A pin whose skills

@@ -43,7 +43,7 @@ import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useNewRowIds } from '@/lib/use-new-row-ids'
 import { AuditEntryDetail } from './audit-detail'
 import { EvidenceControls } from './evidence'
-import { DAY, sessionOf, useEntryNames } from './ledger'
+import { DAY, useEntryNames } from './ledger'
 import { LedgerEntries } from './ledger-entries'
 import { LedgerHistogram } from './ledger-histogram'
 import { LedgerQuery } from './ledger-query'
@@ -245,18 +245,6 @@ export function AuditView() {
           ...allRows.map((e) => new Date(e.occurred_at).getTime()),
         ),
       )
-  const caption = [
-    t('ledger.histogram.loaded', { count: rows.length }),
-    t('ledger.histogram.sessions', {
-      count: new Set(rows.map(sessionOf).filter(Boolean)).size,
-    }),
-    t('ledger.histogram.people', {
-      count: new Set(
-        rows.filter((e) => e.actor_kind === 'user').map((e) => e.actor),
-      ).size,
-    }),
-    ...(listQuery.hasNextPage ? [t('ledger.histogram.more')] : []),
-  ].join(' · ')
   const loading = headQuery.isLoading || listQuery.isLoading
   // A filtered list does not read the head: an error the head kept from before says nothing.
   const headError = filtersActive ? null : headQuery.error
@@ -330,7 +318,6 @@ export function AuditView() {
         from={from}
         to={to}
         now={now}
-        caption={caption}
         onPick={(b) =>
           setQuery({
             ...query,
@@ -352,20 +339,14 @@ export function AuditView() {
           ]}
         />
         {internalCount > 0 || (showInternal && !filters.action) ? (
-          <div className="ml-auto flex items-center gap-2 text-caption text-muted-foreground">
-            {showInternal ? null : (
-              <span role="status">
-                {t('internal.hidden', { count: internalCount })}
-              </span>
-            )}
-            <Button
-              variant="link"
-              size="sm"
-              onClick={() => setShowInternal((v) => !v)}
-            >
-              {t(showInternal ? 'internal.hide' : 'internal.show')}
-            </Button>
-          </div>
+          <Button
+            variant="link"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setShowInternal((v) => !v)}
+          >
+            {t(showInternal ? 'internal.hide' : 'internal.show')}
+          </Button>
         ) : null}
       </div>
 

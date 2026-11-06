@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE STRIP AT THE TOP OF THE LIST: "2 need you · 5 running · $14 today", each part a link.
+// THE STRIP AT THE TOP OF THE LIST: "2 need you · 5 working · $14 today", each part a link.
 import {
   createMemoryHistory,
   createRootRoute,
@@ -53,17 +53,17 @@ async function renderStrip(over: Partial<Props> = {}, at = '/sessions') {
 }
 
 describe('SessionStrip', () => {
-  it('reads "2 need you · 5 running · $14.00 today" as a named, polite nav of links', async () => {
+  it('reads "2 need you · 5 working · $14.00 today" as a named, polite nav of links', async () => {
     await renderStrip()
     const nav = await screen.findByRole('navigation', {
       name: 'Sessions at a glance',
     })
     expect(nav).toHaveAttribute('aria-live', 'polite')
-    expect(nav).toHaveTextContent('2 need you · 5 running · $14.00 today')
+    expect(nav).toHaveTextContent('2 need you · 5 working · $14.00 today')
     const links = screen.getAllByRole('link')
     expect(links.map((a) => a.textContent)).toEqual([
       '2 need you',
-      '5 running',
+      '5 working',
       '$14.00 today',
     ])
   })
@@ -79,14 +79,14 @@ describe('SessionStrip', () => {
     )
     await user.click(screen.getByRole('link', { name: '2 need you' }))
     expect(router.state.location.search).not.toHaveProperty('show')
-    await user.click(screen.getByRole('link', { name: '5 running' }))
+    await user.click(screen.getByRole('link', { name: '5 working' }))
     expect(router.state.location.search).toMatchObject({ show: 'active' })
   })
 
   it('keeps the open session, and brings the list in front when asked', async () => {
     const user = userEvent.setup()
     const router = await renderStrip({ toList: true }, '/sessions?session=r1')
-    await user.click(await screen.findByRole('link', { name: '5 running' }))
+    await user.click(await screen.findByRole('link', { name: '5 working' }))
     expect(router.state.location.search).toMatchObject({
       session: 'r1',
       show: 'active',
@@ -104,14 +104,14 @@ describe('SessionStrip', () => {
   it('omits a zero part and an unknown cost, never printing $0', async () => {
     await renderStrip({ needYou: 0, costMicroUsd: null })
     const nav = await screen.findByRole('navigation')
-    expect(nav).toHaveTextContent(/^5 running$/)
+    expect(nav).toHaveTextContent(/^5 working$/)
     expect(nav).not.toHaveTextContent('$')
   })
 
   it('omits a known cost of zero: no "$0.00 today"', async () => {
     await renderStrip({ needYou: 0, costMicroUsd: 0 })
     const nav = await screen.findByRole('navigation')
-    expect(nav).toHaveTextContent(/^5 running$/)
+    expect(nav).toHaveTextContent(/^5 working$/)
   })
 
   it('says the cost as text when the person may not open Usage', async () => {

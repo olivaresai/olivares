@@ -25,11 +25,11 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "Commands run before/after tools and sessions.",
-      "settings": "Agent Settings",
+      "settings": "Agent settings",
       "settingsHint": "Permission mode, effort level, model, and custom instructions.",
       "connectors": "Connectors",
       "connectorsHint": "Connector IDs to attach when this template is applied.",
-      "policies": "Governance Policies",
+      "policies": "Governance policies",
       "policiesHint": "DLP mode, session duration limits, allowed tools, and I/O recording.",
       "secrets": "Secrets",
       "secretsHint": "Vault secrets that sessions from this template receive as environment variables.",
@@ -42,7 +42,9 @@
         "connectors_other": "{{count}} connectors",
         "set_one": "{{count}} set",
         "set_other": "{{count}} set",
-        "model": "Model: {{model}}"
+        "model": "Model: {{model}}",
+        "none": "None",
+        "defaults": "Defaults"
       }
     },
     "hooks": {

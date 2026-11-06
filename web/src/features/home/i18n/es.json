@@ -4,7 +4,8 @@
     "description": "Las cinco sesiones más recientes que ha observado este despliegue.",
     "openAll": "Todas las sesiones",
     "emptyTitle": "Aún no hay sesiones",
-    "emptyDescription": "Aquí aparece cada ejecución de un motor conectado, con lo que hizo, cuánto duró y cuánto costó.",
+    "emptyDescription": "Aquí aparece cada sesión que inicies.",
+    "emptyAction": "Iniciar una sesión",
     "unavailableTitle": "No se ha podido cargar el trabajo reciente",
     "unavailableDescription": "La lectura de sesiones no ha respondido. Las cifras de arriba no se ven afectadas.",
     "untitled": "Sesión sin título"
@@ -69,6 +70,8 @@
   },
   "overview": {
     "running": "En marcha",
-    "recent": "Recientes"
+    "recent": "Recientes",
+    "wantsToRun": "{{session}} quiere ejecutar",
+    "approvals": "Aprobaciones: {{approved}} de {{required}}"
   }
 }

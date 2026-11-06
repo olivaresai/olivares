@@ -58,6 +58,9 @@ type resolvedWorkspace struct {
 
 // CreateWorkspaceParams is the validated input to register a workspace.
 type CreateWorkspaceParams struct {
+	// Bind request admission to the canonical paths persisted below. Internal
+	// engine registrations have no request-bound check.
+	checkHostPaths func([]string) error
 	// Department is the department the folder belongs to; empty is the tenant.
 	Department      model.ID
 	Backup          *bool
@@ -103,6 +106,11 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 		return workspaceDTO{}, badRequest(fmt.Sprintf("The folder %s does not exist or cannot be opened on this server. Choose an existing folder.", p.RootPath))
 	case err != nil || !info.IsDir():
 		return workspaceDTO{}, badRequest(fmt.Sprintf("%s is a file, not a folder.", p.RootPath))
+	}
+	if p.checkHostPaths != nil {
+		if err := p.checkHostPaths(append([]string{rootReal}, folders...)); err != nil {
+			return workspaceDTO{}, err
+		}
 	}
 	if p.MountMode != mountRO {
 		// Probe as the engine user: mode bits alone miss ACLs and read-only mounts.

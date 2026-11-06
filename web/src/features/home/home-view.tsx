@@ -31,7 +31,7 @@ import { inSection } from '@/features/sessions/session-groups'
 import { SessionStrip } from '@/features/sessions/session-strip'
 import { useUrlStateNotice } from '@/features/shared'
 import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
-import { dayCost, failedToday, isLiveSession } from './now-sessions'
+import { dayCost, failedToday } from './now-sessions'
 import { NowQueue, useFlaggedRequest } from './now-queue'
 import { RecentWork } from './recent-work'
 import { tileState } from './view-state'
@@ -79,13 +79,14 @@ export function HomeView() {
   const pendingApprovals = usePendingApprovals()
   const { navigable } = useViewAccess()
 
-  // Each session once: a live one is a Running row, an ended one a Recent row.
+  // Each session once: a working one is a Running row (the strip's own count), every
+  // other one, idle or waiting for a person included, a Recent row.
   const liveSessions = useMemo(
-    () => (recentSessions ?? []).filter(isLiveSession),
+    () => (recentSessions ?? []).filter((s) => inSection(s, 'active')),
     [recentSessions],
   )
   const settledSessions = useMemo(
-    () => recentSessions?.filter((s) => !isLiveSession(s)),
+    () => recentSessions?.filter((s) => !inSection(s, 'active')),
     [recentSessions],
   )
   const readsSessions = canRuns || canSessions
@@ -99,8 +100,8 @@ export function HomeView() {
   )
 
   // THE STRIP (session-strip.tsx), by the Sessions strip's rules: without the run half
-  // what runs, failed and cost is not known, and a page cut short leaves today's failures
-  // and cost out rather than saying part of them.
+  // what runs, failed and cost is not known, a page cut short leaves today's failures and
+  // cost out, and the cost is what today's sessions reported.
   // ponytail: running counts the recent run page (30 runs), so past 30 sessions working at
   // once it is a floor; read the Sessions page's working set when a fleet reaches it.
   const exact = !!runsAnswer && !floor(0)
@@ -110,11 +111,9 @@ export function HomeView() {
   const strip = recentSessions
     ? {
         needYou: recentSessions.filter((s) => inSection(s, 'attention')).length,
-        running: runsAnswer
-          ? recentSessions.filter((s) => inSection(s, 'active')).length
-          : null,
+        running: runsAnswer ? liveSessions.length : null,
         failed: exact ? failedToday(recentSessions, now) : null,
-        costMicroUsd: today?.unpriced === 0 ? today.costMicroUsd : null,
+        costMicroUsd: today?.costMicroUsd ?? null,
         listPath:
           sessionsView && navigable(sessionsView) ? sessionsView.path : null,
         usagePath: usageView && navigable(usageView) ? usageView.path : null,
