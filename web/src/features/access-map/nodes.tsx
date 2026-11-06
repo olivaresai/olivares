@@ -148,7 +148,7 @@ export function OriginNode({
           {group?.name ?? sessionName ?? data.label}
         </div>
         {(!group || group.line) && (
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
             {group?.line ??
               t(`kinds.${data.kind}`, { defaultValue: data.kind })}
           </div>
@@ -217,7 +217,7 @@ export function ResourceNode({
         </div>
         <div className="flex items-center gap-1.5">
           {(!group || group.line) && (
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
               {group?.line ??
                 t(`kinds.${data.resourceKind}`, {
                   defaultValue: data.resourceKind ?? 'resource',
@@ -227,7 +227,7 @@ export function ResourceNode({
           {tier && (
             <span
               className={cn(
-                'rounded-sm border px-1 text-xs font-medium uppercase leading-tight',
+                'rounded-sm border px-1 text-caption font-medium uppercase leading-tight',
                 COVERAGE_VARIANT[tier] ?? COVERAGE_VARIANT.opaque,
               )}
               title={t(`coverageHint.${tier}`, { defaultValue: '' })}

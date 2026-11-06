@@ -166,8 +166,8 @@
     "templateHint": "模板的规则会替换这里对应的选项，并在整个会话中生效。",
     "templateUnenforceable": "此模板声明了本次启动无法强制执行的条款，因此拒绝启动，而不是在缺少这些条款的情况下启动：",
     "templateOverrides_other": "模板覆盖了你的 {{count}} 项设置：",
-    "profile": "提供商配置档案",
-    "profileNone": "选择配置档案",
+    "profile": "账户",
+    "profileNone": "选择账户",
     "profileNotOperable": "在此环境未启用",
     "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME 和 GROK_HOME 属于配置档案：此处会拒绝转发其中任一变量的启动。其他名称仍需通过服务端自身的校验。",
     "identity": {

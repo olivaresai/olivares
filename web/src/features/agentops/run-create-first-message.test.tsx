@@ -37,6 +37,7 @@ vi.mock('@/features/identity/api', () => ({ identityApi: identities }))
 vi.mock('@/features/extensions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/extensions')>()),
   LAUNCH_IDENTITY_EXTENSION: undefined,
+  PANEL_EXTENSIONS: {},
 }))
 vi.mock('@/features/workspace-templates/api', () => ({
   templatesApi: { list: vi.fn(), apply: vi.fn() },
@@ -168,7 +169,7 @@ describe('RunCreateDialog — a first message and Start', () => {
     wrap()
     await waitFor(() =>
       expect(
-        screen.getByRole('combobox', { name: 'Provider profile' }),
+        screen.getByRole('combobox', { name: 'Account' }),
       ).toHaveTextContent('Home A'),
     )
     await user.type(
@@ -237,7 +238,7 @@ describe('RunCreateDialog — a first message and Start', () => {
     wrap()
     await waitFor(() =>
       expect(
-        screen.getByRole('combobox', { name: 'Provider profile' }),
+        screen.getByRole('combobox', { name: 'Account' }),
       ).toHaveTextContent('Home A'),
     )
     await user.type(
@@ -399,7 +400,7 @@ describe('RunCreateDialog — a first message and Start', () => {
   it("keeps every other choice under Advanced options, each on today's default", async () => {
     const user = userEvent.setup()
     wrap()
-    await screen.findByRole('combobox', { name: 'Provider profile' })
+    await screen.findByRole('combobox', { name: 'Account' })
     for (const label of [
       'Launch identity',
       'Name',
@@ -450,7 +451,7 @@ describe('RunCreateDialog — a first message and Start', () => {
     )
     expect(start()).toBeDisabled()
     expect(agentOpsApi.profileLaunchReadiness).not.toHaveBeenCalled()
-    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(screen.getByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home B/ }))
     await waitFor(() => expect(start()).toBeEnabled())
     await user.click(start())

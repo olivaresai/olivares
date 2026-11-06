@@ -117,7 +117,7 @@
     "signInWith": "Accedi sul server con il comando proprio dello strumento",
     "installWith": "Installalo dall'elenco qui sotto, oppure da un terminale",
     "stale": "Ultima risposta valida. L'ultimo controllo non è riuscito: {{error}}",
-    "staleBadge": "Obsoleto",
+    "staleBadge": "Accesso e utilizzo dall'ultimo controllo valido",
     "models": "Modelli: {{count}}",
     "checked": "Controllato {{when}}"
   },
@@ -239,7 +239,7 @@
     "reading": "Lettura in corso…",
     "readFailed": "Impossibile leggerlo: {{message}}",
     "tools": "Strumenti AI",
-    "packages": "Programmi e registry",
+    "packages": "Programmi",
     "egressHosts": "Host di rete",
     "skills": "Skill",
     "mcp": "Server MCP",

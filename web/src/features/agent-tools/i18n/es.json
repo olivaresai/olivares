@@ -117,7 +117,7 @@
     "signInWith": "Inicia sesión en el servidor con el comando de la propia herramienta",
     "installWith": "Instálala desde la lista de abajo o en un terminal",
     "stale": "Última respuesta válida. La última comprobación falló: {{error}}",
-    "staleBadge": "Desactualizado",
+    "staleBadge": "Sesión y uso de la última comprobación válida",
     "models": "Modelos: {{count}}",
     "checked": "Comprobado {{when}}"
   },
@@ -239,7 +239,7 @@
     "reading": "Leyendo…",
     "readFailed": "No se pudo leer: {{message}}",
     "tools": "Herramientas de IA",
-    "packages": "Programas y registros",
+    "packages": "Programas",
     "egressHosts": "Hosts de red",
     "skills": "Skills",
     "mcp": "Servidores MCP",

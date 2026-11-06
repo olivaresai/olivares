@@ -168,8 +168,8 @@
     "templateOverrides_one": "O modelo substitui {{count}} das suas opções:",
     "templateOverrides_many": "O modelo substitui {{count}} das suas opções:",
     "templateOverrides_other": "O modelo substitui {{count}} das suas opções:",
-    "profile": "Perfil de fornecedor",
-    "profileNone": "Selecione um perfil",
+    "profile": "Conta",
+    "profileNone": "Selecione uma conta",
     "profileNotOperable": "não ativado neste ambiente",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME e GROK_HOME pertencem ao perfil: um arranque que reencaminhe qualquer um deles é recusado aqui. Os outros nomes continuam sujeitos à validação do próprio servidor.",
     "identity": {

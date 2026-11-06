@@ -312,7 +312,7 @@ it("lists the programs and npm registries of each tool's launch profile, never t
       : { reason: 'own_login' },
   )
   mount()
-  const packages = within(await row('Programs and registries'))
+  const packages = within(await row('Programs'))
   expect(await packages.findByRole('link', { name: 'jq' })).toHaveAttribute(
     'href',
     '#tool-claude',
@@ -357,9 +357,7 @@ it('shows no network hosts row when no profile declares one', async () => {
     driver === 'claude' ? profile('ppf_claude', {}) : { reason: 'own_login' },
   )
   mount()
-  await within(await row('Programs and registries')).findByText(
-    /each tool's new session uses/,
-  )
+  await within(await row('Programs')).findByText(/each tool's new session uses/)
   expect(screen.queryByText('Network hosts')).toBeNull()
 })
 
@@ -374,7 +372,7 @@ it('names the launch profile by its account name when it has no display name', a
       : { reason: 'own_login' },
   )
   mount()
-  const packages = within(await row('Programs and registries'))
+  const packages = within(await row('Programs'))
   expect(
     await packages.findByText(
       /each tool's new session uses \(Claude Code: claude-b\)/,
@@ -385,7 +383,7 @@ it('names the launch profile by its account name when it has no display name', a
 it('shows no programs row when no launch profile exists yet', async () => {
   mount()
   await within(await row('Skills')).findByRole('link', { name: 'research' })
-  expect(screen.queryByText('Programs and registries')).toBeNull()
+  expect(screen.queryByText('Programs')).toBeNull()
 })
 
 it('asks no preview of a tool the tools readiness already refuses', async () => {

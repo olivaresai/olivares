@@ -167,8 +167,8 @@
     "templateUnenforceable": "Diese Vorlage deklariert Vorgaben, die dieser Start nicht durchsetzen kann; er wird daher abgelehnt, statt ohne sie zu starten:",
     "templateOverrides_one": "Die Vorlage überschreibt {{count}} Ihrer Angaben:",
     "templateOverrides_other": "Die Vorlage überschreibt {{count}} Ihrer Angaben:",
-    "profile": "Provider-Profil",
-    "profileNone": "Profil auswählen",
+    "profile": "Konto",
+    "profileNone": "Konto auswählen",
     "profileNotOperable": "in dieser Umgebung nicht aktiviert",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME und GROK_HOME gehören dem Profil: ein Start, der eine davon weiterreicht, wird hier abgelehnt. Andere Namen unterliegen weiterhin der Prüfung durch den Server.",
     "identity": {

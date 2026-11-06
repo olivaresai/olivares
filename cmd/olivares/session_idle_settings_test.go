@@ -68,6 +68,15 @@ type idleSettingsAuditFailureScope struct {
 	drop bool
 }
 
+// LockTransaction forwards the real lock, which the save takes before it audits.
+func (s idleSettingsAuditFailureScope) LockTransaction(ctx context.Context, key string) error {
+	l, ok := s.AuthScope.(store.TransactionLocker)
+	if !ok {
+		return errors.New("missing real transaction lock")
+	}
+	return l.LockTransaction(ctx, key)
+}
+
 func (s idleSettingsAuditFailureScope) Audit() store.AuditLog {
 	return idleSettingsAuditFailureLog{AuditLog: s.AuthScope.Audit(), drop: s.drop}
 }

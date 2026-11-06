@@ -232,8 +232,8 @@ test.describe('the message navigator on a long session', () => {
       .poll(() => text.evaluate((el) => el.getBoundingClientRect().height))
       .toBe(folded)
     await expect(message).toBeInViewport()
-    // The navigation's fold changes the column's width (Sessions starts folded: the
-    // button then reads Expand).
+    // The navigation's fold changes the column's width (the button reads Collapse, or
+    // Expand once folded).
     await page
       .getByRole('button', { name: /^(Collapse|Expand) navigation$/ })
       .click()

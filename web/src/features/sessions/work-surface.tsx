@@ -5,6 +5,7 @@ import { preferenceStorage } from '@/lib/preference-storage'
 import { ArrowLeft, PanelRight, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { WorkComposer } from '@/components/layout/work-composer'
 import { COMPOSER_INPUT_ID } from '@/components/layout/work-composer-id'
@@ -40,6 +41,7 @@ import {
   type StripFilter,
   type WorkPane,
 } from './session-address'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { SessionContextPane } from './session-context-pane'
 import { useSessionMenu } from './session-menu'
 import { isPinnable, isPinned, preferenceStorageKey } from './session-pins'
@@ -109,24 +111,25 @@ const PANEL_OPEN_KEY = 'olivares.sessions.sidePane'
 
 /** Where Details opens by default: from here the conversation keeps the main column with
  * the navigation, the list and Details beside it. Narrower (a 1280 px laptop) it starts
- * closed, one click away, so the conversation keeps the room. */
+ * closed, one click away, so the conversation keeps the room, unless the session
+ * changed files. */
 const DETAILS_OPEN_BY_DEFAULT_PX = 1440
 
-/** Whether this person left Details open. A person who opened or closed it keeps that;
- * with no choice yet it is open only where the window is at least
- * DETAILS_OPEN_BY_DEFAULT_PX wide. A principal with no partition (a token) is never
- * remembered and sees the default. */
-function storedPanelOpen(key: string | null, roomy: boolean): boolean {
-  if (!key) return roomy
+/** Whether this person left Details open, or null with no choice yet: then it is open
+ * where the window is at least DETAILS_OPEN_BY_DEFAULT_PX wide, or when the session
+ * changed files. A principal with no partition (a token) is never remembered and sees
+ * the default. */
+function storedPanelChoice(key: string | null): boolean | null {
+  if (!key) return null
   try {
     // A person with no choice yet keeps the one this browser saved for everyone before.
     const stored =
       preferenceStorage.getItem(key) ??
       preferenceStorage.getItem(PANEL_OPEN_KEY)
-    return stored === null ? roomy : stored !== 'closed'
+    return stored === null ? null : stored !== 'closed'
   } catch {
     // A browser that refuses storage keeps the default.
-    return roomy
+    return null
   }
 }
 
@@ -215,7 +218,7 @@ export function WorkSurface({
   // DETAILS IS OPEN BY DEFAULT beside the conversation; once a person has opened or closed
   // it, that choice is remembered for that person in this browser. The address naming it
   // (`?pane=context`) opens it either way: beside the work, or as the sheet below 1120 px.
-  const { principal, activeTenant } = useAuth()
+  const { principal, activeTenant, can } = useAuth()
   const panelKey =
     typeof window === 'undefined'
       ? null
@@ -227,15 +230,32 @@ export function WorkSurface({
         )
   const roomy = useMinWidth(DETAILS_OPEN_BY_DEFAULT_PX)
   const [contextOpen, setContextOpenState] = useState(
-    () => address.pane === 'context' || storedPanelOpen(panelKey, roomy),
+    () => address.pane === 'context' || (storedPanelChoice(panelKey) ?? roomy),
   )
   // Another person or organization: read that person's choice, never carry the last one.
   const [seenPanelKey, setSeenPanelKey] = useState(panelKey)
   if (seenPanelKey !== panelKey) {
     setSeenPanelKey(panelKey)
     setContextOpenState(
-      address.pane === 'context' || storedPanelOpen(panelKey, roomy),
+      address.pane === 'context' || (storedPanelChoice(panelKey) ?? roomy),
     )
+  }
+  // A session that changed files opens Details, on Changes, wherever it fits beside the
+  // work, unless this person chose: the same read the Changes tab makes, from its cache.
+  const run = can('sessions:run:read')
+    ? primaryRun(resolution.session.runs)
+    : undefined
+  const changes = useQuery({
+    queryKey: agentOpsKeys.runChanges(activeTenant, run?.run_ref ?? ''),
+    queryFn: ({ signal }) => agentOpsApi.changes(run!.run_ref, { signal }),
+    enabled: !!run,
+  })
+  const changedRun = changes.data?.files.length ? run?.run_ref : undefined
+  const [seenChangedRun, setSeenChangedRun] = useState<string>()
+  if (seenChangedRun !== changedRun) {
+    setSeenChangedRun(changedRun)
+    if (changedRun && storedPanelChoice(panelKey) === null)
+      setContextOpenState(true)
   }
   const setContextOpen = (open: boolean | ((was: boolean) => boolean)) =>
     setContextOpenState((was) => {

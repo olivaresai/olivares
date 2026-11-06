@@ -142,12 +142,10 @@ describe('RunCreateDialog — the default profile follows the New session form',
   it('opens on the profile the form would run under, and loads its models at once', async () => {
     wrap()
     await waitFor(() =>
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        /Home B/,
-      ),
+      expect(screen.getByLabelText('Account')).toHaveTextContent(/Home B/),
     )
-    expect(screen.getByLabelText('Provider profile')).not.toHaveTextContent(
-      'Select a profile',
+    expect(screen.getByLabelText('Account')).not.toHaveTextContent(
+      'Select an account',
     )
     await waitFor(() =>
       expect(agentOpsApi.profileModels).toHaveBeenCalledWith(
@@ -167,9 +165,7 @@ describe('RunCreateDialog — the default profile follows the New session form',
     )
     wrap()
     await waitFor(() =>
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        /Codex home/,
-      ),
+      expect(screen.getByLabelText('Account')).toHaveTextContent(/Codex home/),
     )
     expect(agentOpsApi.previewProfile).toHaveBeenCalledWith(
       'codex',
@@ -180,9 +176,7 @@ describe('RunCreateDialog — the default profile follows the New session form',
   it('reads the default for the tool the form had chosen, not the first ready one', async () => {
     wrap({ initialDriver: 'codex' })
     await waitFor(() =>
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        /Codex home/,
-      ),
+      expect(screen.getByLabelText('Account')).toHaveTextContent(/Codex home/),
     )
     expect(agentOpsApi.previewProfile).toHaveBeenCalledWith(
       'codex',
@@ -212,8 +206,8 @@ describe('RunCreateDialog — the default profile follows the New session form',
     await waitFor(() => expect(agentOpsApi.toolsReadiness).toHaveBeenCalled())
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(agentOpsApi.previewProfile).not.toHaveBeenCalled()
-    expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-      'Select a profile',
+    expect(screen.getByLabelText('Account')).toHaveTextContent(
+      'Select an account',
     )
   })
 
@@ -262,8 +256,8 @@ describe('RunCreateDialog — the default profile follows the New session form',
             .some((option) => option.textContent?.includes('Codex home')),
         ).toBe(true),
       )
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        'Select a profile',
+      expect(screen.getByLabelText('Account')).toHaveTextContent(
+        'Select an account',
       )
       expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
       expect(agentOpsApi.previewProfile).not.toHaveBeenCalled()
@@ -278,9 +272,7 @@ describe('RunCreateDialog — the default profile follows the New session form',
   it('keeps the default it took when the engine later answers with another profile', async () => {
     const { qc } = wrap()
     await waitFor(() =>
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        /Home B/,
-      ),
+      expect(screen.getByLabelText('Account')).toHaveTextContent(/Home B/),
     )
     vi.mocked(agentOpsApi.previewProfile).mockResolvedValue({
       reason: 'own_login',
@@ -288,9 +280,7 @@ describe('RunCreateDialog — the default profile follows the New session form',
     })
     await qc.invalidateQueries()
     await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-      /Home B/,
-    )
+    expect(screen.getByLabelText('Account')).toHaveTextContent(/Home B/)
   })
 
   it('reads nothing to find a default when one profile exists or one was handed over', async () => {
@@ -300,9 +290,7 @@ describe('RunCreateDialog — the default profile follows the New session form',
     })
     wrap()
     await waitFor(() =>
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        /Home A/,
-      ),
+      expect(screen.getByLabelText('Account')).toHaveTextContent(/Home A/),
     )
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(agentOpsApi.toolsReadiness).not.toHaveBeenCalled()
@@ -313,9 +301,7 @@ describe('RunCreateDialog — the default profile follows the New session form',
     const user = userEvent.setup()
     wrap()
     await waitFor(() =>
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        /Home B/,
-      ),
+      expect(screen.getByLabelText('Account')).toHaveTextContent(/Home B/),
     )
     await user.click(screen.getByRole('button', { name: 'Advanced options' }))
     await screen.findByText('Local requirements checked')
@@ -330,15 +316,11 @@ describe('RunCreateDialog — the default profile follows the New session form',
     const user = userEvent.setup()
     wrap()
     await waitFor(() =>
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        /Home B/,
-      ),
+      expect(screen.getByLabelText('Account')).toHaveTextContent(/Home B/),
     )
-    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(screen.getByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
-    expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-      /Home A/,
-    )
+    expect(screen.getByLabelText('Account')).toHaveTextContent(/Home A/)
   })
 
   it('offers no default when the profile the engine would reuse is not in the list', async () => {
@@ -352,8 +334,8 @@ describe('RunCreateDialog — the default profile follows the New session form',
     )
     // Let the answer land and render: a negative assertion has nothing to wait for.
     await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-      'Select a profile',
+    expect(screen.getByLabelText('Account')).toHaveTextContent(
+      'Select an account',
     )
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     // Nothing is read for a profile the list does not hold.

@@ -117,7 +117,7 @@
     "signInWith": "ツール自身のコマンドでサーバー上でログイン",
     "installWith": "下の一覧またはターミナルからインストール",
     "stale": "最後の有効な結果です。最新の確認に失敗しました：{{error}}",
-    "staleBadge": "古い情報",
+    "staleBadge": "サインインと使用状況は最後の有効な確認時のものです",
     "models": "モデル：{{count}}",
     "checked": "確認日時 {{when}}"
   },
@@ -239,7 +239,7 @@
     "reading": "読み取り中…",
     "readFailed": "読み取れませんでした: {{message}}",
     "tools": "AI ツール",
-    "packages": "プログラムとレジストリ",
+    "packages": "プログラム",
     "egressHosts": "ネットワークホスト",
     "skills": "スキル",
     "mcp": "MCP サーバー",

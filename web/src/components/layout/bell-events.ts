@@ -4,8 +4,8 @@
 //
 // THE BELL TELLS EVENTS AS SENTENCES (Root copy, 2026-10-01): "Audit checkpoint created",
 // "{actor} started a session" — never a raw action id, a target id or "system: system". Reads,
-// sign-ins and sign-outs are routine and not shown. An action without a sentence is shown as
-// its name made readable.
+// sign-ins and sign-outs are routine and not shown. An action without a sentence is a record,
+// not a person's action: the bell shows it, as its name made readable, only on request.
 import type { AuditEventDTO } from '@/lib/api/types'
 
 /** Routine events a person does not wait for: never in the bell. */
@@ -33,8 +33,8 @@ const ROUTINE: ReadonlySet<string> = new Set([
 ])
 
 /** Supporting engine records stay available without crowding out people's actions:
- * authorization and policy evidence (*.record), reads, and a session being viewed. The bell
- * and Audit fold the same set. */
+ * authorization and policy evidence (*.record), reads, and a session being viewed. Audit
+ * folds this set; the bell folds every action without a sentence, which includes it. */
 export function internalRecord(action: string): boolean {
   return (
     action.endsWith('.record') ||

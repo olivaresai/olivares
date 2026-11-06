@@ -34,7 +34,6 @@ import {
 import { cn } from '@/lib/utils'
 import { usePreferencesStore } from '@/stores/preferences'
 import { BrandMark } from './brand'
-import { frameFor } from './page-frames'
 import { ScopeSwitcher } from './scope-switcher'
 import { useSessionRail } from './use-session-rail'
 
@@ -239,11 +238,8 @@ export function Sidebar() {
   const { t } = useTranslation(['nav', 'common'])
   const chosen = usePreferencesStore((s) => s.navCollapsed)
   const setFolded = usePreferencesStore((s) => s.setNavCollapsed)
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
-  // A person's own fold wins everywhere. With none yet, the work surface (Sessions) folds
-  // the navigation to its icons, so the conversation keeps the main column beside the list;
-  // the document pages of the Sessions place (Work, Channels) keep it open.
-  const folded = chosen ?? frameFor(pathname) === 'work'
+  // Named on every page, as the drawer is; folding to icons is the person's own choice.
+  const folded = chosen === true
   const label = t(folded ? 'nav:shell.expand' : 'nav:shell.collapse')
   return (
     <nav

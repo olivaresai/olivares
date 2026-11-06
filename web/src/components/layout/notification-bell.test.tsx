@@ -218,6 +218,8 @@ describe('NotificationBell', () => {
           actor: 'user:u-self',
           action: 'sessions.work.item.ready',
         },
+        // A record with no sentence would show only its own name: it is not a person's action.
+        { ...ledger[3]!, id: 'unnamed', action: 'availability.create' },
       ],
     })
     const user = userEvent.setup()
@@ -227,18 +229,23 @@ describe('NotificationBell', () => {
       await screen.findByText('You marked a work item ready'),
     ).toBeVisible()
     expect(screen.queryByText('Authorization decision record')).toBeNull()
+    expect(screen.queryByText('Availability create')).toBeNull()
     await user.click(
       screen.getByRole('checkbox', { name: 'Include internal records' }),
     )
     expect(
       await screen.findByText('Authorization decision record'),
     ).toBeVisible()
+    expect(screen.getByText('Availability create')).toBeVisible()
   })
 
   it('shows the newest events first, never a ledger read, and never reads the ledger list', async () => {
     const user = userEvent.setup()
     mount()
     await user.click(screen.getByRole('button'))
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include internal records' }),
+    )
     const newest = shown().at(-1)!
     await screen.findByText(labelOf(newest))
     const rendered = screen
@@ -376,6 +383,10 @@ describe('NotificationBell', () => {
     ).toBeTruthy()
     expect(screen.getByText('Release the kill switch')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Deny' })).toBeVisible()
+    // The bell opens over a page that keeps its own primary action: no orange here.
+    expect(
+      screen.getByRole('button', { name: 'Approve once' }),
+    ).not.toHaveClass('bg-accent')
     await act(() => new Promise((done) => setTimeout(done, FLAG_ARM_MS + 50)))
     await user.click(screen.getByRole('button', { name: 'Approve once' }))
     await waitFor(() =>

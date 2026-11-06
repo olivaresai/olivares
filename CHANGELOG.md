@@ -47,6 +47,11 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   manager, or without Landlock plus a mount namespace, the session starts without
   memory and task ceilings and says why.
 
+- **Breaking: `olivares upgrade --timeout` bounds a stall, not the whole upgrade.** The
+  default is now 30s of no data instead of a 5m0s total, so a slow link can finish a
+  large release. A transfer that stays silent for more than 30 seconds and then resumes
+  now stops with a stall message; pass a longer `--timeout` to wait longer.
+
 - **Console sidebar** lists **Sessions**, **Files** and **Tools**, then **More**, which opens
   **Overview**, **Rules**, **Usage**, **Audit**, **People**, **Security** and **Operations**
   below it, with **Settings** at the foot. The Work, Tools, Control and Admin headers are gone,

@@ -155,7 +155,11 @@ it('keeps a stale snapshot and names the command that failed', async () => {
   mount()
   await openOptions('Claude Code')
   const card = await screen.findByRole('article', { name: /claude code/i })
-  expect(within(card).getByText('Stale')).toBeInTheDocument()
+  // The warning names what is old: the tool's sign-in and usage, not a bare "Stale".
+  expect(
+    within(card).getByText('Sign-in and usage from the last good check'),
+  ).toBeInTheDocument()
+  expect(screen.queryByText('Stale')).toBeNull()
   expect(
     within(card).getByText(
       'Last good answer. The latest check failed: claude auth status --json: timed out',

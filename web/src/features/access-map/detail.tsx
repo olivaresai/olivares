@@ -369,7 +369,7 @@ function EdgeDetail({
         />
 
         <Separator className="my-2" />
-        <p className="flex items-start gap-1.5 text-xs leading-snug text-muted-foreground">
+        <p className="flex items-start gap-1.5 text-caption leading-snug text-muted-foreground">
           <Lock className="mt-0.5 size-3 shrink-0" />
           {t('detail.minimalData')}
         </p>
@@ -439,7 +439,7 @@ function AuthoritySection({
             did not arrive, every sentence on this panel about which signals are or are not
             present is qualified here rather than quietly drawn from the scalar. */}
         {!authority.signalsFused && (
-          <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
+          <p className="mt-1.5 text-caption leading-snug text-muted-foreground">
             {t('authority.signalsNotFused')}
           </p>
         )}
@@ -448,7 +448,7 @@ function AuthoritySection({
             so editing the source does not remove the edge; and a fused edge can carry more
             than one independent permit, so addressing one leaves the other standing. */}
         {authority.multiple && (
-          <p className="mt-1.5 text-xs leading-snug text-warning">
+          <p className="mt-1.5 text-caption leading-snug text-warning">
             {t('authority.multiple')}
           </p>
         )}
@@ -459,12 +459,12 @@ function AuthoritySection({
             for a failure that did not happen. `closure` is only non-`unknown` when the drift
             read named which half this is, so neither sentence is ever a guess. */}
         {authority.closure === 'cannotClose' && (
-          <p className="mt-1.5 text-xs leading-snug text-warning">
+          <p className="mt-1.5 text-caption leading-snug text-warning">
             {t('authority.cannotClose')}
           </p>
         )}
         {authority.closure === 'closes' && (
-          <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
+          <p className="mt-1.5 text-caption leading-snug text-muted-foreground">
             {t('authority.closes')}
           </p>
         )}
@@ -472,7 +472,7 @@ function AuthoritySection({
             happen to name it: an `unattributed` permit is just as unretractable, and gating
             on the signal list hid the warning exactly where the map knows least. */}
         {edge.permitted && authority.closure === 'unknown' && (
-          <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
+          <p className="mt-1.5 text-caption leading-snug text-muted-foreground">
             {t('authority.noRetraction')}
           </p>
         )}
@@ -494,7 +494,7 @@ function AuthoritySection({
               {t('authority.checkDrift')}
             </Button>
           ) : canDrift === false ? (
-            <p className="mt-2.5 text-xs leading-snug text-muted-foreground">
+            <p className="mt-2.5 text-caption leading-snug text-muted-foreground">
               {t('authority.needsPermission', {
                 action: t('authority.checkDrift'),
                 permission: permissionWords(DRIFT_PERMISSION),
@@ -512,7 +512,7 @@ function AuthoritySection({
               return (
                 <p
                   key={`${target.key}-denied`}
-                  className="text-xs leading-snug text-muted-foreground"
+                  className="text-caption leading-snug text-muted-foreground"
                 >
                   {t('authority.needsPermission', {
                     action: t(`authority.target.${target.key}`),
@@ -566,7 +566,7 @@ function AuthoritySection({
             {verdict !== 'idle' && verdict !== 'checking' && (
               <p
                 className={cn(
-                  'mt-1.5 flex items-start gap-1.5 text-xs leading-snug',
+                  'mt-1.5 flex items-start gap-1.5 text-caption leading-snug',
                   verdict === 'clear'
                     ? 'text-confidence-attributed'
                     : verdict === 'present'

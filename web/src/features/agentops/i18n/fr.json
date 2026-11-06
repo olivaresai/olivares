@@ -168,8 +168,8 @@
     "templateOverrides_one": "Le modèle remplace {{count}} de vos choix :",
     "templateOverrides_many": "Le modèle remplace {{count}} de vos choix :",
     "templateOverrides_other": "Le modèle remplace {{count}} de vos choix :",
-    "profile": "Profil de fournisseur",
-    "profileNone": "Sélectionner un profil",
+    "profile": "Compte",
+    "profileNone": "Sélectionner un compte",
     "profileNotOperable": "non activé dans cet environnement",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME et GROK_HOME appartiennent au profil : un lancement qui transmet l’une d’elles est refusé ici. Les autres noms restent soumis à la validation du serveur.",
     "identity": {

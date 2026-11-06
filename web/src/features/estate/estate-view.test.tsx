@@ -160,7 +160,7 @@ describe('estate list and inspector', () => {
     ).not.toBeInTheDocument()
     await userEvent.click(start)
     expect(await screen.findByRole('dialog')).not.toHaveTextContent(
-      'Provider profile',
+      'Every other launch choice is under Advanced options.',
     )
     await userEvent.click(await screen.findByRole('button', { name: 'Start' }))
     expect(wire.start).toHaveBeenCalledWith(

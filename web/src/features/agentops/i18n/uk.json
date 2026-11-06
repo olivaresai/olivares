@@ -169,8 +169,8 @@
     "templateOverrides_few": "Шаблон перевизначає {{count}} ваші параметри:",
     "templateOverrides_many": "Шаблон перевизначає {{count}} ваших параметрів:",
     "templateOverrides_other": "Шаблон перевизначає {{count}} вашого параметра:",
-    "profile": "Профіль постачальника",
-    "profileNone": "Виберіть профіль",
+    "profile": "Обліковий запис",
+    "profileNone": "Виберіть обліковий запис",
     "profileNotOperable": "не ввімкнено в цьому середовищі",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME і GROK_HOME належать профілю: запуск, що передає будь-яку з них, тут відхиляється. Інші імена, як і раніше, підлягають власній перевірці сервера.",
     "identity": {

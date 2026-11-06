@@ -115,9 +115,7 @@ async function signIn(page: Page) {
 }
 
 async function chooseProfile(page: Page, form: Locator) {
-  await form
-    .getByRole('combobox', { name: 'Provider profile', exact: true })
-    .click()
+  await form.getByRole('combobox', { name: 'Account', exact: true }).click()
   const wanted = page
     .getByRole('option')
     .and(page.getByTitle(PROFILE_REF, { exact: true }))

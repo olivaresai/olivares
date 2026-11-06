@@ -26,7 +26,7 @@ test('launch feedback leaves the session composer clear', async ({
   await page.getByRole('button', { name: /^sign in$/i }).click()
   await page.waitForURL((url) => !url.pathname.startsWith('/login'))
   const dialog = await openAdvancedSession(page)
-  await dialog.getByRole('combobox', { name: 'Provider profile' }).click()
+  await dialog.getByRole('combobox', { name: 'Account' }).click()
   await page.getByRole('option', { name: /Claude stand-in/ }).click()
   await dialog.getByRole('button', { name: /^(Request launch|Start)$/ }).click()
   const composer = page.getByTestId('work-composer')

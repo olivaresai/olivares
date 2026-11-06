@@ -24,15 +24,17 @@ export function EngineUnreachable() {
         className="flex max-w-md flex-col items-center gap-3 text-center"
       >
         <BrandMark className="size-7 text-foreground" />
-        <h1 className="text-lg font-semibold text-foreground">
+        <h1 className="text-heading font-semibold text-foreground">
           {t('engineRetrying.title')}
         </h1>
-        <p className="text-sm text-text-2">{t('engineRetrying.description')}</p>
+        <p className="text-body text-text-2">
+          {t('engineRetrying.description')}
+        </p>
         <Spinner aria-hidden />
         <Link
           to="/login"
           search={returnTo ? { returnTo } : {}}
-          className="text-sm text-text-2 underline underline-offset-2 hover:text-foreground"
+          className="text-body text-text-2 underline underline-offset-2 hover:text-foreground"
         >
           {tAuth('login.title')}
         </Link>

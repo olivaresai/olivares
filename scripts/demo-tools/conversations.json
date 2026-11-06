@@ -1,5 +1,5 @@
 {
-  "_": "Recorded demo conversations. demo-tool.py answers from this file by exact prompt text and seed-demo-dataset.py launches the same sessions with the same prompts, so a transcript has one source. Plain prose only: no markdown, no tool bookkeeping. ending is exit, hold or linger: exit ends after the last turn, hold leaves the last turn in flight, linger closes the turn without growing usage. fixture transcripts are answered by the stand-ins but are not seeded.",
+  "_": "Recorded demo conversations. demo-tool.py answers from this file by exact prompt text and seed-demo-dataset.py launches the same sessions with the same prompts, so a transcript has one source. Plain prose only: no markdown, no tool bookkeeping. ending is exit, hold or linger: exit ends after the last turn, hold leaves the last turn in flight, linger closes the turn without growing usage. fixture transcripts are answered by the stand-ins but are not seeded. ask on a held turn is the one command the tool then asks a person to approve; only a fixture asks, so the canonical approval queue holds no session request.",
   "sessions": [
     {
       "name": "Refactor cart totals in checkout",
@@ -347,6 +347,31 @@
             }
           ],
           "hold": true,
+          "usage": {}
+        }
+      ]
+    },
+    {
+      "name": "Open the dependency upgrade pull request",
+      "tool": "codex",
+      "model": "gpt-5-codex",
+      "folder": "infra",
+      "profile": "codex-team",
+      "ending": "hold",
+      "fixture": true,
+      "turns": [
+        {
+          "prompt": "Push the lock file update and open the pull request for review.",
+          "steps": [
+            {
+              "say": "The lock file update is committed on its own branch. Opening the pull request runs the GitHub command line outside the sandbox, so it waits for your approval."
+            }
+          ],
+          "hold": true,
+          "ask": {
+            "command": "gh pr create --fill --base main",
+            "output": "Pull request opened for review."
+          },
           "usage": {}
         }
       ]

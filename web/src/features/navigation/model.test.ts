@@ -130,9 +130,19 @@ describe('route map — every route sits where root ratified it', () => {
           ? 'root'
           : [v.navigation.areaId, v.navigation.sectionId]
     }
-    expect(actual).toEqual(
-      businessBuild ? { ...RATIFIED, ...BUSINESS_ONLY_PLACEMENTS } : RATIFIED,
-    )
+    expect(actual).toEqual(RATIFIED)
+    if (businessBuild) {
+      for (const [id, [areaId, sectionId]] of Object.entries(
+        BUSINESS_ONLY_PLACEMENTS,
+      )) {
+        expect(
+          FEATURE_VIEWS.find((view) => view.id === id),
+          id,
+        ).toMatchObject({
+          navigation: { areaId, sectionId },
+        })
+      }
+    }
   })
 
   it('names only sections the area declares, in a declared area', () => {

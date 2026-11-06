@@ -117,7 +117,7 @@
     "signInWith": "在服务器上使用工具自带的命令登录",
     "installWith": "从下方列表或在终端中安装",
     "stale": "上次有效的结果。最近一次检查失败：{{error}}",
-    "staleBadge": "已过时",
+    "staleBadge": "登录和用量来自上次有效的检查",
     "models": "模型：{{count}}",
     "checked": "检查于 {{when}}"
   },
@@ -239,7 +239,7 @@
     "reading": "正在读取…",
     "readFailed": "无法读取：{{message}}",
     "tools": "AI 工具",
-    "packages": "程序和注册表",
+    "packages": "程序",
     "egressHosts": "网络主机",
     "skills": "技能",
     "mcp": "MCP 服务器",

@@ -195,7 +195,7 @@ describe('RunCreateDialog — provider profiles', () => {
     })
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     // The account that reported figures shows them; the one that did not shows none.
     expect(
       await screen.findByRole('option', { name: /Home A/ }),
@@ -266,7 +266,7 @@ describe('RunCreateDialog — provider profiles', () => {
     })
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitReadyToRequest()
     expect(
@@ -279,7 +279,7 @@ describe('RunCreateDialog — provider profiles', () => {
   it('keeps Fast mode Off when a catalog refresh fails', async () => {
     const user = userEvent.setup()
     const view = wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitReadyToRequest()
     await user.click(await screen.findByLabelText('Fast mode'))
@@ -331,7 +331,7 @@ describe('RunCreateDialog — provider profiles', () => {
       )
       const user = userEvent.setup()
       wrap()
-      await user.click(await screen.findByLabelText('Provider profile'))
+      await user.click(await screen.findByLabelText('Account'))
       await user.click(await screen.findByRole('option', { name: profile }))
       await waitReadyToRequest()
       await user.click(await screen.findByLabelText(label))
@@ -351,12 +351,12 @@ describe('RunCreateDialog — provider profiles', () => {
     })
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitReadyToRequest()
     await user.click(await screen.findByLabelText('Fast mode'))
     await user.click(await screen.findByRole('option', { name: 'On' }))
-    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(screen.getByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home B/ }))
     await waitReadyToRequest()
     await user.click(screen.getByRole('button', { name: 'Start' }))
@@ -366,7 +366,7 @@ describe('RunCreateDialog — provider profiles', () => {
   it('does not carry Fast mode to a model chosen in the new picker', async () => {
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await user.click(await screen.findByLabelText('Fast mode'))
     await user.click(await screen.findByRole('option', { name: 'On' }))
@@ -433,7 +433,7 @@ describe('RunCreateDialog — provider profiles', () => {
       })
       const user = userEvent.setup()
       wrap()
-      await user.click(await screen.findByLabelText('Provider profile'))
+      await user.click(await screen.findByLabelText('Account'))
       await user.click(await screen.findByRole('option', { name: /Home A/ }))
       await waitReadyToRequest()
       await user.click(await screen.findByLabelText(label))
@@ -442,9 +442,9 @@ describe('RunCreateDialog — provider profiles', () => {
       await user.click(screen.getByLabelText(label))
       await user.click(await screen.findByRole('option', { name: none }))
       expect(screen.getByLabelText(label)).toHaveTextContent(none)
-      await user.click(screen.getByLabelText('Provider profile'))
+      await user.click(screen.getByLabelText('Account'))
       expect(
-        await screen.findByRole('option', { name: 'Select a profile' }),
+        await screen.findByRole('option', { name: 'Select an account' }),
       ).toHaveAttribute('data-disabled')
       await user.keyboard('{Escape}')
       await user.click(screen.getByRole('button', { name: 'Start' }))
@@ -473,7 +473,7 @@ describe('RunCreateDialog — provider profiles', () => {
     })
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitReadyToRequest()
     await user.click(screen.getByLabelText('Folder'))
@@ -518,7 +518,7 @@ describe('RunCreateDialog — provider profiles', () => {
     expect(
       await screen.findByRole('heading', { name: 'New session' }),
     ).toBeInTheDocument()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Grok home/ }))
     expect(
       await screen.findByRole('heading', { name: 'New Grok Build session' }),
@@ -543,7 +543,7 @@ describe('RunCreateDialog — provider profiles', () => {
     })
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(
       await screen.findByRole('option', { name: /^claude-b · claude/ }),
     )
@@ -556,7 +556,7 @@ describe('RunCreateDialog — provider profiles', () => {
   it('posts only the profile REFERENCE when one is chosen — never a home', async () => {
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitReadyToRequest()
     await user.click(screen.getByRole('button', { name: 'Start' }))
@@ -572,7 +572,7 @@ describe('RunCreateDialog — provider profiles', () => {
   it('lets a not-enabled profile be selected and then blocks a known-inviable request', async () => {
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     const codex = await screen.findByRole('option', { name: /Codex home/ })
     expect(codex).toHaveTextContent('not enabled in this environment')
     expect(codex).not.toHaveAttribute('data-disabled')
@@ -601,7 +601,7 @@ describe('RunCreateDialog — provider profiles', () => {
     async (owned) => {
       const user = userEvent.setup()
       wrap()
-      await user.click(await screen.findByLabelText('Provider profile'))
+      await user.click(await screen.findByLabelText('Account'))
       await user.click(await screen.findByRole('option', { name: /Home A/ }))
       await waitReadyToRequest()
       await user.type(
@@ -648,7 +648,7 @@ describe('RunCreateDialog — provider profiles', () => {
     // refused, which is the whole claim.
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitReadyToRequest()
     await user.type(
@@ -670,7 +670,7 @@ describe('RunCreateDialog — provider profiles', () => {
     // discovered, because the locale message must not claim otherwise either.
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitReadyToRequest()
     await user.type(
@@ -693,7 +693,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
   it('chooses a model and its effort without opening any advanced section, and posts both', async () => {
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     const advanced = screen.getByRole('button', { name: 'Advanced options' })
     expect(advanced).toHaveAttribute('aria-expanded', 'false')
@@ -721,7 +721,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
   it('posts no effort when the model default is kept', async () => {
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
@@ -740,7 +740,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
     })
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await user.click(screen.getByRole('button', { name: 'Model' }))
     await user.type(
@@ -771,7 +771,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
     )
     const user = userEvent.setup()
     wrap()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await user.click(screen.getByRole('button', { name: 'Model' }))
     await user.click(await screen.findByText('Claude Haiku 5.5'))
@@ -782,7 +782,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
         'Claude Haiku 5.5',
       ),
     )
-    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(screen.getByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Codex home/ }))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
@@ -791,7 +791,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
     )
     expect(screen.getByLabelText('Effort')).toBeDisabled()
     // The choice belongs to Home A: it is there again with Home A, and never under Codex.
-    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(screen.getByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
@@ -816,7 +816,7 @@ describe('RunCreateDialog — model and effort, in front of Advanced options', (
         />
       </QueryClientProvider>,
     )
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),

@@ -100,6 +100,8 @@ type request struct {
 	Policy  Policy
 	Program string
 	Handles []directoryHandle `json:",omitempty"`
+	// ReadyFD is the descriptor the helper inherits Policy.Ready on, after the sealed handles.
+	ReadyFD int `json:",omitempty"`
 }
 
 type directoryHandle struct {
@@ -148,6 +150,9 @@ func Wrap(cmd *exec.Cmd, p Policy) (State, error) {
 	for i, file := range p.SealedFiles {
 		req.Handles = append(req.Handles, directoryHandle{FD: 3 + len(cmd.ExtraFiles) + i, Path: file.Name()})
 	}
+	if p.Ready != nil {
+		req.ReadyFD = 3 + len(cmd.ExtraFiles) + len(p.SealedFiles)
+	}
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return state, err
@@ -155,6 +160,9 @@ func Wrap(cmd *exec.Cmd, p Policy) (State, error) {
 	argv := append([]string{self, HelperArg, policyArg, string(payload), "--"}, cmd.Args...)
 	cmd.Path, cmd.Args = self, argv
 	cmd.ExtraFiles = append(cmd.ExtraFiles, p.SealedFiles...)
+	if p.Ready != nil {
+		cmd.ExtraFiles = append(cmd.ExtraFiles, p.Ready)
+	}
 	return state, nil
 }
 
@@ -179,6 +187,9 @@ func RunHelperWithReady(args []string, ready *os.File) int {
 		err = errors.New("invalid explicit confinement payload")
 	default:
 		if err = json.Unmarshal([]byte(args[1]), &req); err == nil {
+			if ready == nil && req.ReadyFD >= 3 {
+				ready = os.NewFile(uintptr(req.ReadyFD), "confine-ready")
+			}
 			req.Policy.Ready = ready
 			for _, handle := range req.Handles {
 				if handle.FD < 3 {

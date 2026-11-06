@@ -167,8 +167,8 @@
     "templateUnenforceable": "This template declares terms this launch cannot enforce, so the launch is refused rather than started without them:",
     "templateOverrides_one": "The template overrides {{count}} of your choices:",
     "templateOverrides_other": "The template overrides {{count}} of your choices:",
-    "profile": "Provider profile",
-    "profileNone": "Select a profile",
+    "profile": "Account",
+    "profileNone": "Select an account",
     "profileNotOperable": "not enabled in this environment",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME and GROK_HOME belong to the profile: a launch that forwards any of them is refused here. Other names are still subject to the server's own validation.",
     "identity": {

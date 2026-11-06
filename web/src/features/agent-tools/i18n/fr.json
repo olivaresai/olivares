@@ -117,7 +117,7 @@
     "signInWith": "Connectez-vous sur le serveur avec la commande de l’outil",
     "installWith": "Installez-le depuis la liste ci-dessous ou dans un terminal",
     "stale": "Dernière réponse valide. La dernière vérification a échoué : {{error}}",
-    "staleBadge": "Obsolète",
+    "staleBadge": "Connexion et utilisation de la dernière vérification valide",
     "models": "Modèles : {{count}}",
     "checked": "Vérifié le {{when}}"
   },
@@ -239,7 +239,7 @@
     "reading": "Lecture…",
     "readFailed": "Lecture impossible : {{message}}",
     "tools": "Outils d’IA",
-    "packages": "Programmes et registres",
+    "packages": "Programmes",
     "egressHosts": "Hôtes réseau",
     "skills": "Skills",
     "mcp": "Serveurs MCP",

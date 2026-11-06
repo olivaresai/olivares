@@ -22,9 +22,11 @@ import {
   useId,
   useRef,
   useState,
+  type Dispatch,
   type FormEvent,
   type ReactNode,
   type RefObject,
+  type SetStateAction,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { agentToolsKeys } from '@/features/agent-tools/api'
@@ -884,6 +886,7 @@ export function StartSessionForm({
   onAdvanced,
   initialDraft,
   composer = false,
+  toolChoice,
 }: {
   initialDraft?: SessionDraft
   onStarted?: () => void
@@ -892,6 +895,8 @@ export function StartSessionForm({
    * back when it closes. */
   onAdvanced?: (launch?: AdvancedLaunch, opener?: HTMLElement | null) => void
   composer?: boolean
+  /** The tool the person picked, held by a parent that shows something for it. */
+  toolChoice?: ToolChoice
 }) {
   const { t } = useTranslation('firstHour')
   const formId = useId()
@@ -940,10 +945,17 @@ export function StartSessionForm({
         onAdvanced={onAdvanced}
         composer={composer}
         field={field}
+        toolChoice={toolChoice}
       />
     </div>
   )
 }
+
+/** A tool picked in the composer (null: none yet), and its setter. */
+type ToolChoice = [
+  SessionTool | null,
+  Dispatch<SetStateAction<SessionTool | null>>,
+]
 
 function StartSessionChoices({
   initialDraft,
@@ -953,6 +965,7 @@ function StartSessionChoices({
   onAdvanced,
   composer,
   field,
+  toolChoice,
 }: {
   initialDraft?: SessionDraft
   formId: string
@@ -961,6 +974,7 @@ function StartSessionChoices({
   onAdvanced?: (launch?: AdvancedLaunch, opener?: HTMLElement | null) => void
   composer: boolean
   field: RefObject<HTMLTextAreaElement | null>
+  toolChoice?: ToolChoice
 }) {
   const { t } = useTranslation('firstHour')
   const navigate = useNavigate()
@@ -971,9 +985,10 @@ function StartSessionChoices({
   const { epoch } = boundary
   const defaults = useClientSettings((s) => s.sessionDefaults)
   const profileList = useProfileList()
-  const [driver, setDriver] = useState<SessionTool | null>(
+  const ownChoice = useState<SessionTool | null>(
     sessionTools().find((d) => d === initialDraft?.tool) ?? null,
   )
+  const [driver, setDriver] = toolChoice ?? ownChoice
   const defaultScope = JSON.stringify([
     defaults.tool,
     defaults.account,
@@ -2120,12 +2135,20 @@ function ToolCards() {
 }
 
 /** The work surface before any session: the composer is always there, and until a tool
- * can start one, the cards that get a tool ready are the step above it. */
+ * can start one, the card that gets the composer's tool ready is the one step above it. */
 export function WorkStart() {
   const { t } = useTranslation('firstHour')
   const canStart = useCanStart()
   const openAdvanced = useNewSessionDialog((s) => s.openAdvanced)
   const stopComposing = useNewSessionDialog((s) => s.stopComposing)
+  const toolChoice = useState<SessionTool | null>(null)
+  // With no tool ready the composer starts on the engine's first tool unless the person
+  // picked another (StartSessionChoices). A tool the first hour installs gets its card here;
+  // any other says its step under the composer, with the way to AI tools.
+  const cardTool =
+    canStart === false
+      ? FIRST_HOUR_TOOLS.find((d) => d === (toolChoice[0] ?? sessionTools()[0]))
+      : undefined
   return (
     <div
       data-testid="work-start"
@@ -2134,7 +2157,7 @@ export function WorkStart() {
       <h2 className="text-title font-semibold text-text">
         {t('steps.start.title')}
       </h2>
-      {canStart === false ? (
+      {cardTool ? (
         <section
           className="flex flex-col gap-3"
           aria-labelledby="work-start-tools"
@@ -2148,15 +2171,14 @@ export function WorkStart() {
             </h3>
             <p className="text-body text-text-2">{t('steps.signIn.body')}</p>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <ToolCards />
-          </div>
+          <ToolCard driver={cardTool} />
         </section>
       ) : null}
       <StartSessionForm
         composer
         onAdvanced={openAdvanced}
         onStarted={stopComposing}
+        toolChoice={toolChoice}
       />
     </div>
   )

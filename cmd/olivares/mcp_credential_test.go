@@ -43,6 +43,10 @@ func TestManagedMCPCatalogCannotReleaseUpstreamCredential(t *testing.T) {
 			w.WriteHeader(202)
 			return
 		}
+		if req.Method == "server/discover" { // a handshake-era server refuses it before initialize
+			http.Error(w, "Bad Request: Server not initialized", http.StatusBadRequest)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		result := `{"tools":[{"name":"search","description":"healthy fixture","inputSchema":{"type":"object"}}]}`
 		if echoCredential.Load() {
@@ -124,7 +128,8 @@ func TestManagedMCPCatalogCannotReleaseUpstreamCredential(t *testing.T) {
 		t.Fatalf("initialize=%d %s", w.Code, w.Body.String())
 	}
 	catalog := request(f.tenant, id, token, "tools/list")
-	if catalog.Code != http.StatusBadGateway || calls != before+2 {
+	// server/discover, initialize, then the refused tools/list.
+	if catalog.Code != http.StatusBadGateway || calls != before+3 {
 		t.Fatalf("catalog refusal status=%d calls=%d", catalog.Code, calls-before)
 	}
 	if strings.Contains(catalog.Body.String(), "fixture-upstream") {

@@ -10,7 +10,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { api, toast } = vi.hoisted(() => ({
+const { api, toast, auth } = vi.hoisted(() => ({
+  auth: { activeTenant: 't1' as string | null, can: () => true },
   api: {
     listProfiles: vi.fn(),
     limitResumeSettings: vi.fn(),
@@ -26,7 +27,7 @@ const { api, toast } = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+  useAuth: () => auth,
 }))
 vi.mock('@/features/agentops/auth-boundary', () => ({
   useAuthBoundary: () => ({ epoch: 1 }),
@@ -40,6 +41,7 @@ vi.mock('@/components/ui/toaster', () => ({ toast }))
 import type { RunDTO } from '@/features/agentops/types'
 import type { Capability } from './provenance'
 import { LimitNotice } from './session-limit'
+import { LimitResumePreference } from './limit-resume-preference'
 import { limitSentence } from './session-limit-text'
 import i18n from 'i18next'
 import './i18n'
@@ -70,6 +72,7 @@ function show(ui: React.ReactElement) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  auth.activeTenant = 't1'
   api.limitResumeSettings.mockResolvedValue({ automatic: false })
   api.listProfiles.mockResolvedValue({
     items: [
@@ -319,4 +322,22 @@ it('offers resume for an ordinary session with its default worker scope', () => 
   expect(
     screen.getByRole('button', { name: 'Resume at reset' }),
   ).toBeInTheDocument()
+})
+
+it('waits for a tenant before reading automatic resume preferences', async () => {
+  auth.activeTenant = null
+  const client = new QueryClient()
+  const content = () => (
+    <QueryClientProvider client={client}>
+      <LimitResumePreference />
+    </QueryClientProvider>
+  )
+  const view = render(content())
+  expect(api.limitResumeSettings).not.toHaveBeenCalled()
+  expect(screen.queryByRole('checkbox')).toBeNull()
+
+  auth.activeTenant = 't1'
+  view.rerender(content())
+  await waitFor(() => expect(api.limitResumeSettings).toHaveBeenCalledOnce())
+  expect(await screen.findByRole('checkbox')).not.toBeChecked()
 })

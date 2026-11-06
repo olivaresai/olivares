@@ -198,8 +198,8 @@ test.describe('cached sign-in eligibility in the launch forms', () => {
         .getByRole('button', { name: 'Advanced launch options', exact: true })
         .click()
       await expect(
-        form.getByRole('combobox', { name: 'Provider profile', exact: true }),
-      ).toContainText('Select a profile')
+        form.getByRole('combobox', { name: 'Account', exact: true }),
+      ).toContainText('Select an account')
       await expect(
         form.getByRole('button', { name: 'Start', exact: true }),
       ).toBeDisabled()

@@ -395,6 +395,7 @@ func TestNotifyDestinationTestFailureNeverEchoesTheURL(t *testing.T) {
 // connector replaces the old one atomically, and a connector that cannot open leaves
 // the old one serving.
 func TestConnectorDispatcherApplyStoredReplacesAndRemoves(t *testing.T) {
+	t.Setenv("OLIVARES_EVENTING_ALLOW_LOOPBACK", "1") // the receivers below are on loopback
 	_, eng, _ := consoleDestinations(t)
 	var hitsA, hitsB int
 	var mu sync.Mutex

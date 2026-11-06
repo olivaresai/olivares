@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import { stubViewportWidth } from '@/test/viewport'
+import { agentOpsApi } from '@/features/agentops/api'
 import { mergeSessions } from './provenance'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
@@ -569,6 +570,37 @@ describe('WorkSurface', () => {
         const surface = renderSurface()
         expect(grid().dataset.context, `${width} px`).toBe(state)
         surface.unmount()
+      }
+    })
+
+    it('opens on a laptop on Changes when the session changed files', async () => {
+      const changes = vi.spyOn(agentOpsApi, 'changes').mockResolvedValue({
+        folder: 'main',
+        files: [
+          { path: 'a.txt', size: 6, modified_at: '2026-11-01T15:01:09Z' },
+          { path: 'b.txt', size: 5, modified_at: '2026-11-01T15:01:10Z' },
+        ],
+        truncated: false,
+      })
+      try {
+        stubViewportWidth(1280)
+        const managed = live({ attribution: 'managed' })
+        renderSurface({
+          resolution: {
+            ...resolution,
+            session: mergeSessions([managed], [RUN])[0],
+            live: managed,
+            runs: [RUN],
+          },
+        })
+        await waitFor(() => expect(grid().dataset.context).toBe('open'))
+        expect(
+          await screen.findByRole('radio', { name: 'Changes' }),
+        ).toBeChecked()
+        expect(await screen.findByText('a.txt')).toBeInTheDocument()
+        expect(screen.getByText('b.txt')).toBeInTheDocument()
+      } finally {
+        changes.mockRestore()
       }
     })
 

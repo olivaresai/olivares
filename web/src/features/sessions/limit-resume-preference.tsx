@@ -23,7 +23,7 @@ export function LimitResumePreference({
     ...agentOpsKeys.boundaryScope(activeTenant, boundary.epoch),
     'limit-resume-settings',
   ]
-  const allowed = can('sessions:run:write')
+  const allowed = !!activeTenant && can('sessions:run:write')
   const query = useQuery({
     queryKey: key,
     queryFn: ({ signal }) => agentOpsApi.limitResumeSettings({ signal }),

@@ -59,6 +59,11 @@ vi.mock('@/features/agentops/session-launch', async (orig) => ({
   ...((await orig()) as Record<string, unknown>),
   launchSession: launch.launchSession,
 }))
+// Tool and preset selection assumes the engine permits the offered presets.
+vi.mock('@/features/agentops/permission-restriction', async (orig) => ({
+  ...((await orig()) as Record<string, unknown>),
+  usePermissionRestriction: () => ({ allows: () => true }),
+}))
 vi.mock('@/features/first-hour/api', async (orig) => {
   const real = (await orig()) as Record<string, unknown>
   return {

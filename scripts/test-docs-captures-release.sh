@@ -87,4 +87,44 @@ registry bad corrupt;        expect 'a corrupt layer fails its digest'          
 registry http http-error;    expect 'an HTTP error stops the run with its cause'                                            http 'curl exit 22'
 registry nosize whole 0;     expect 'a manifest with no usable size is refused'                                             nosize 'declares no usable size'
 registry other whole;        expect 'a tag that resolves to another image is refused'                                       other 'expected sha256:0000' "sha256:$(printf '0%.0s' {1..64})"
+
+# The owner's review set (web/e2e/console-review-captures.spec.ts) is the console 0.7 capture list: 26 screens, each at
+# 1280 px light (L), 1280 px dark (D) and, where the layout changes, 390 px light (M). Written out here so a screen
+# dropped from the spec, or a size changed there, fails this test.
+want_screens='C01 LDM
+C02 LD
+C03 LDM
+C04 LDM
+C05 LDM
+C06 L
+C07 LDM
+C08 LD
+C09 LD
+C10 LD
+C11 L
+C12 LD
+C13 L
+C14 LD
+C15 LD
+C16 LD
+C17 LD
+C18 LDM
+C19 LD
+C20 L
+C21 LD
+C22 LM
+C23 L
+C24 L
+C25 L
+C26 L'
+# Whitespace collapsed first: prettier lays an entry out on one line or several.
+got_screens="$(tr -s ' \n' ' ' <"$ROOT/web/e2e/console-review-captures.spec.ts" | grep -oE "\{ id: 'C[0-9]{2}', sizes: '[LDM]+'" |
+  sed -E "s/\{ id: '(C[0-9]{2})', sizes: '([LDM]+)'/\1 \2/" || true)"
+if [ "$got_screens" = "$want_screens" ]; then
+  printf 'ok   %s\n' 'the review spec declares the 26 console screens at their sizes'
+else
+  printf 'FAIL %s:\n%s\n' 'the review spec does not declare the 26 console screens at their sizes' \
+    "$(diff <(printf '%s\n' "$want_screens") <(printf '%s\n' "$got_screens"))" >&2
+  fail=1
+fi
 [ "$fail" = 0 ]

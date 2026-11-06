@@ -117,7 +117,7 @@
     "signInWith": "Auf dem Server mit dem eigenen Befehl des Werkzeugs anmelden",
     "installWith": "Aus der Liste unten oder in einem Terminal installieren",
     "stale": "Letzte gültige Antwort. Die letzte Prüfung schlug fehl: {{error}}",
-    "staleBadge": "Veraltet",
+    "staleBadge": "Anmeldung und Nutzung aus der letzten gültigen Prüfung",
     "models": "Modelle: {{count}}",
     "checked": "Geprüft am {{when}}"
   },
@@ -239,7 +239,7 @@
     "reading": "Wird gelesen…",
     "readFailed": "Konnte nicht gelesen werden: {{message}}",
     "tools": "KI-Werkzeuge",
-    "packages": "Programme und Registries",
+    "packages": "Programme",
     "egressHosts": "Netzwerk-Hosts",
     "skills": "Skills",
     "mcp": "MCP-Server",

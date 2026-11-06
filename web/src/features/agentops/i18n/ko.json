@@ -166,8 +166,8 @@
     "templateHint": "템플릿의 규칙이 여기서 일치하는 선택을 대체하며 세션 전체에 적용됩니다.",
     "templateUnenforceable": "이 템플릿이 이 시작이 강제할 수 없는 조건을 선언하므로, 그 조건 없이 시작하지 않고 시작을 거부합니다:",
     "templateOverrides_other": "템플릿이 귀하의 선택 {{count}}개를 재정의합니다:",
-    "profile": "프로바이더 프로필",
-    "profileNone": "프로필 선택",
+    "profile": "계정",
+    "profileNone": "계정 선택",
     "profileNotOperable": "이 환경에서 활성화되지 않음",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME 및 GROK_HOME은 프로필에 속합니다: 그중 하나를 전달하는 시작은 여기서 거부됩니다. 다른 이름은 서버 자체의 검증을 받습니다.",
     "identity": {

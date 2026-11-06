@@ -166,8 +166,8 @@
     "templateHint": "テンプレートのルールはここで選んだ対応する項目を置き換え、セッション全体に適用されます。",
     "templateUnenforceable": "このテンプレートには、この起動では強制できない条件が含まれています。条件なしで起動せず、起動を拒否します:",
     "templateOverrides_other": "テンプレートが指定内容のうち {{count}} 件を上書きします:",
-    "profile": "プロバイダープロファイル",
-    "profileNone": "プロファイルを選択",
+    "profile": "アカウント",
+    "profileNone": "アカウントを選択",
     "profileNotOperable": "この環境では有効ではありません",
     "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME、GROK_HOME はプロファイルが所有します。いずれかを転送する起動はここで拒否されます。その他の名前は引き続きサーバー側の検証を受けます。",
     "identity": {

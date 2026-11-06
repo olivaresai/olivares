@@ -241,18 +241,15 @@ describe('the left navigation', () => {
     expect(usePreferencesStore.getState().navCollapsed).toBe(false)
   })
 
-  it.each([
-    ['/sessions', true],
-    ['/work', false],
-    ['/communications', false],
-  ])(
-    'with no fold chosen, folds at %s only on the work surface: %s',
-    (path, folded) => {
+  // The column is the drawer's list at any width: with no fold chosen it names its places on
+  // every page, the work surface included; folding to icons is the person's own choice.
+  it.each(['/sessions', '/work', '/communications'])(
+    'with no fold chosen, names its places at %s',
+    (path) => {
       usePreferencesStore.setState({ navCollapsed: null })
       state.pathname = path
       renderIntel(<Sidebar />)
-      if (folded) expect(column()).toHaveAttribute('data-folded', 'true')
-      else expect(column()).not.toHaveAttribute('data-folded')
+      expect(column()).not.toHaveAttribute('data-folded')
     },
   )
 })

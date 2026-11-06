@@ -216,7 +216,7 @@ test.describe('the navigation and the Overview header (#3121) @nav3121', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await prefer(page, 'light')
     await signIn(page)
-    // A document page: the work surface (/) starts folded when no fold is chosen.
+    // With no fold chosen the column names its places, on this page as on Sessions.
     await page.goto('/workspace')
     const nav = page.locator('[data-slot="sidebar"]')
     await expect(

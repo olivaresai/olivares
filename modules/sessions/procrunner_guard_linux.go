@@ -135,6 +135,11 @@ func watchEngine(cmd *exec.Cmd, killTreeOnExit bool) (*engineWatch, error) {
 	}
 	cmd.Args = append(guardArgs, argv...)
 	cmd.Path = self
+	// os/exec kills the guard WaitDelay after a cancellation closed its watch: never
+	// before its tree kill can end, or what it had not reached yet outlives it.
+	if cmd.WaitDelay > 0 {
+		cmd.WaitDelay = max(cmd.WaitDelay, treeKillBound)
+	}
 	if cmd.SysProcAttr != nil {
 		cmd.SysProcAttr.Pdeathsig = 0
 	}
@@ -183,6 +188,29 @@ func (w *engineWatch) with(release func()) func() {
 	}
 	return func() { w.close(); release() }
 }
+
+// SessionGuard is the session guard of a program started outside this package.
+type SessionGuard struct{ watch *engineWatch }
+
+// GuardSession puts the session guard in front of cmd, a program the caller starts
+// itself. Call it last, after confinement rewrote cmd, so the guard is the process
+// started; call Started once cmd has started. When the program exits, the guard
+// kills what the session left running, including what left it with setsid.
+func GuardSession(cmd *exec.Cmd) (*SessionGuard, error) {
+	watch, err := watchEngine(cmd, false)
+	if err != nil {
+		return nil, err
+	}
+	return &SessionGuard{watch: watch}, nil
+}
+
+// Started closes the caller's copy of the guard's end once the guard has it.
+func (g *SessionGuard) Started() { g.watch.started() }
+
+// End closes the watch: the guard kills every process of the session and ends by
+// SIGKILL. It escalates a stop without killing the guard first, and releases the
+// watch once the program was reaped. A repeated call does nothing.
+func (g *SessionGuard) End() { g.watch.close() }
 
 // handlesSessionGuard reports whether args select the guard stage.
 func handlesSessionGuard(args []string) bool {
@@ -415,7 +443,17 @@ func killTree(guard int) (survivors int, err error) {
 // killPassPause is the wait between two kill passes, long enough for a killed
 // process to die and hand its children to the guard. A variable so a test can
 // widen the window it changes the listing in.
-var killPassPause = 5 * time.Millisecond
+var killPassPause = defaultKillPassPause
+
+const defaultKillPassPause = 5 * time.Millisecond
+
+// killPasses bounds the tree kill's passes: about ten seconds of pauses.
+const killPasses = 2000
+
+// treeKillBound is the longest the guard's tree kill takes: its passes' pauses,
+// doubled for the listings between them. Nothing may kill the guard sooner. The
+// guard is its own process, so its pause is the default one.
+const treeKillBound = 2 * killPasses * defaultKillPassPause
 
 // killTreeAt is killTree at a procfs root. A pass kills every child it lists before
 // it looks at the error: a child whose state cannot be read is still killed, and
@@ -425,7 +463,7 @@ var killPassPause = 5 * time.Millisecond
 func killTreeAt(procfs string, guard int) (survivors int, err error) {
 	signalled := map[int]bool{}
 	var unread error
-	for range 2000 {
+	for range killPasses {
 		live, err := liveChildrenAt(procfs, guard)
 		if unread == nil {
 			unread = err

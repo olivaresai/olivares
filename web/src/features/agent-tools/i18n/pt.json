@@ -117,7 +117,7 @@
     "signInWith": "Inicie sessão no servidor com o comando da própria ferramenta",
     "installWith": "Instale-a a partir da lista abaixo ou num terminal",
     "stale": "Última resposta válida. A verificação mais recente falhou: {{error}}",
-    "staleBadge": "Desatualizado",
+    "staleBadge": "Sessão e utilização da última verificação válida",
     "models": "Modelos: {{count}}",
     "checked": "Verificado {{when}}"
   },
@@ -239,7 +239,7 @@
     "reading": "A ler…",
     "readFailed": "Não foi possível ler: {{message}}",
     "tools": "Ferramentas de IA",
-    "packages": "Programas e registos",
+    "packages": "Programas",
     "egressHosts": "Anfitriões de rede",
     "skills": "Skills",
     "mcp": "Servidores MCP",

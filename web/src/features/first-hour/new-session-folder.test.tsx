@@ -142,12 +142,18 @@ it('the work surface keeps the composer while no tool can start, and Enter does 
     name: 'First message (optional)',
   })
   expect(await screen.findByRole('button', { name: 'Start' })).toBeDisabled()
-  // The way to get a tool ready sits on the same screen.
+  // The way to get a tool ready sits on the same screen: one card, for the tool the
+  // composer would start, and it follows the tool the person picks.
   expect(
     await screen.findByRole('heading', { name: 'Sign it in' }),
   ).toBeVisible()
   expect(await screen.findByTestId('tool-claude')).toBeVisible()
+  expect(screen.queryByTestId('tool-codex')).toBeNull()
   const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: /^Tool and account: / }))
+  await user.click(await screen.findByRole('menuitemradio', { name: 'Codex' }))
+  expect(await screen.findByTestId('tool-codex')).toBeVisible()
+  expect(screen.queryByTestId('tool-claude')).toBeNull()
   await user.type(composer, 'look at the repo{Enter}')
   expect(launch.launchSession).not.toHaveBeenCalled()
 })

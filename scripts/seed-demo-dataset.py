@@ -984,9 +984,17 @@ def turn_marker(turn, written):
                     "attach proof cannot tell them apart" % turn["prompt"])
 
 
-def dataset_sessions():
+def dataset_sessions(names=None):
+    """The seeded sessions, or the recorded sessions with these names (a fixture included)."""
     with open(os.path.join(HERE, "demo-tools", "conversations.json"), encoding="utf8") as fh:
-        return [s for s in json.load(fh)["sessions"] if not s.get("fixture")]
+        every = json.load(fh)["sessions"]
+    if names is None:
+        return [s for s in every if not s.get("fixture")]
+    picked = [s for s in every if s["name"] in names]
+    unknown = sorted(set(names) - {s["name"] for s in picked})
+    if unknown:
+        raise SeedError("sessions: no recorded session is named %s" % ", ".join(unknown))
+    return picked
 
 
 # The Northwind estate's figures, carried by the recorded sessions: seven live and nine finished, $6.84 today, and the
@@ -997,7 +1005,7 @@ CANONICAL_FINISHED = 9
 
 
 def step_sessions(api, ctx):
-    sessions = dataset_sessions()
+    sessions = dataset_sessions(ctx.get("sessions"))
     expected = {s["name"]: s for s in sessions}
     profiles = {p["key"]: p for p in PROFILES}
     have = {r["name"]: r for r in api.items("runs", "/v1/m/sessions/runs") if r.get("name") in expected}
@@ -1084,6 +1092,13 @@ def step_sessions(api, ctx):
                                     % (s["name"], final.get("state"), want_state,
                                        "on an open turn" if want_state == "running" else "for its next input"))
                 time.sleep(0.3)
+            # A turn that asks (a fixture's) leaves its run waiting for a person, as the review set shows it.
+            deadline = time.time() + 30
+            while any(t.get("ask") for t in s["turns"]) and not final.get("pending_approval_ref"):
+                if time.time() > deadline:
+                    raise SeedError("session %s: its tool asked for approval and the run waits for nobody" % s["name"])
+                time.sleep(0.3)
+                final = api.ok("run", "GET", "/v1/m/sessions/runs/" + ref)
         else:
             deadline = time.time() + 30
             while True:
@@ -1124,6 +1139,10 @@ def step_sessions(api, ctx):
         if rows[name].get("workspace_ref") != ctx["workspaces"][s["folder"]]:
             raise SeedError("session %s reads back in folder %r, expected %r"
                             % (name, rows[name].get("workspace_ref"), ctx["workspaces"][s["folder"]]))
+    if ctx.get("sessions") is not None:
+        # The canonical figures below are the whole estate's; a chosen few cannot add up to them.
+        say("sessions: %s started" % ", ".join(sorted(rows)))
+        return
     # Sum what the engine returned, not the table the seeder just read: the two agree today, and the
     # day they stop agreeing is the day the captures would show a figure nobody seeded.
     total = sum(r.get("cost_micro_usd") for r in rows.values() if r.get("cost_micro_usd") is not None)
@@ -1396,7 +1415,16 @@ def main():
     parser.add_argument("--verify-live-plane", action="store_true",
                         help="read the live plane back after the adoption seed and refuse any observed "
                              "row the home would count beside the canonical estate; makes no writes")
+    parser.add_argument("--steps", type=lambda v: v.split(","), default=[name for name, _ in STEPS],
+                        help="comma-separated steps to run, in the canonical order; the review set's fresh "
+                             "install runs edition,estate,providers,people,profiles to sign the tools in")
+    parser.add_argument("--sessions", type=lambda v: v.split(","), default=None,
+                        help="comma-separated names of the recorded sessions the sessions step starts, a fixture "
+                             "included; the default is the canonical estate's")
     args = parser.parse_args()
+    unknown = sorted(set(args.steps) - {name for name, _ in STEPS})
+    if unknown:
+        parser.error("unknown step(s): %s" % ", ".join(unknown))
     if args.token != "-":
         parser.error("the token is read from OLIVARES_TOKEN; pass - here, never the value")
     token = os.environ.get("OLIVARES_TOKEN", "")
@@ -1408,7 +1436,8 @@ def main():
                      "runs against a loopback demo engine" % host)
     os.makedirs(args.work_root, exist_ok=True)
     api = Api(args.base_url, token, args.tenant)
-    ctx = {"root": os.path.realpath(args.work_root), "no_communications": args.no_communications}
+    ctx = {"root": os.path.realpath(args.work_root), "no_communications": args.no_communications,
+           "sessions": args.sessions}
     instala_excepthook(_REDACT, LABEL)
     _REDACT.recuerda(token, DEMO_PASSWORD, DEMO_BACKUP_PASSPHRASE)
     try:
@@ -1417,8 +1446,9 @@ def main():
                 hour=0, minute=0, second=0, microsecond=0)
             verify_live_plane(api, midnight)
         else:
-            for _, fn in STEPS:
-                fn(api, ctx)
+            for name, fn in STEPS:
+                if name in args.steps:
+                    fn(api, ctx)
     except SeedError as exc:
         print(_REDACT("%s: ERROR: %s" % (LABEL, exc)), file=sys.stderr)
         return 1

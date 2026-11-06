@@ -169,8 +169,8 @@
     "templateOverrides_few": "Шаблон переопределяет {{count}} из ваших значений:",
     "templateOverrides_many": "Шаблон переопределяет {{count}} из ваших значений:",
     "templateOverrides_other": "Шаблон переопределяет {{count}} из ваших значений:",
-    "profile": "Профиль провайдера",
-    "profileNone": "Выберите профиль",
+    "profile": "Аккаунт",
+    "profileNone": "Выберите аккаунт",
     "profileNotOperable": "не включён в этой среде",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME и GROK_HOME принадлежат профилю: запуск, пробрасывающий любую из них, отклоняется здесь. Остальные имена по-прежнему проходят проверку на сервере.",
     "identity": {

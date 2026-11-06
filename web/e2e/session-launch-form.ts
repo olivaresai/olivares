@@ -17,7 +17,7 @@ export async function openAdvancedSession(page: Page) {
     .click()
   const form = page.getByRole('dialog')
   await expect(
-    form.getByRole('combobox', { name: 'Provider profile', exact: true }),
+    form.getByRole('combobox', { name: 'Account', exact: true }),
   ).toBeVisible()
   return form
 }

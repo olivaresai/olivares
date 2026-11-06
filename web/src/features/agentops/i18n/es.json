@@ -168,8 +168,8 @@
     "templateOverrides_one": "La plantilla sobrescribe {{count}} de tus elecciones:",
     "templateOverrides_many": "La plantilla sobrescribe {{count}} de tus elecciones:",
     "templateOverrides_other": "La plantilla sobrescribe {{count}} de tus elecciones:",
-    "profile": "Perfil de proveedor",
-    "profileNone": "Selecciona un perfil",
+    "profile": "Cuenta",
+    "profileNone": "Selecciona una cuenta",
     "profileNotOperable": "no habilitado en este entorno",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME y GROK_HOME pertenecen al perfil: aquí se rechaza un lanzamiento que reenvíe cualquiera de ellas. Los demás nombres siguen sujetos a la validación del servidor.",
     "identity": {

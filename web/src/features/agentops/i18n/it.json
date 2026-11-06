@@ -168,8 +168,8 @@
     "templateOverrides_one": "Il template sostituisce {{count}} delle tue scelte:",
     "templateOverrides_many": "Il template sostituisce {{count}} delle tue scelte:",
     "templateOverrides_other": "Il template sostituisce {{count}} delle tue scelte:",
-    "profile": "Profilo del provider",
-    "profileNone": "Seleziona un profilo",
+    "profile": "Account",
+    "profileNone": "Seleziona un account",
     "profileNotOperable": "non abilitato in questo ambiente",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME e GROK_HOME appartengono al profilo: un avvio che ne inoltra una qualsiasi viene rifiutato qui. Gli altri nomi restano soggetti alla validazione del server.",
     "identity": {

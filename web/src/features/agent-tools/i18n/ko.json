@@ -117,7 +117,7 @@
     "signInWith": "서버에서 도구 자체 명령으로 로그인하십시오",
     "installWith": "아래 목록 또는 터미널에서 설치하십시오",
     "stale": "마지막 정상 응답입니다. 최근 확인이 실패했습니다: {{error}}",
-    "staleBadge": "오래됨",
+    "staleBadge": "마지막 정상 확인 시점의 로그인 및 사용량",
     "models": "모델: {{count}}",
     "checked": "{{when}}에 확인됨"
   },
@@ -239,7 +239,7 @@
     "reading": "읽는 중…",
     "readFailed": "읽을 수 없습니다: {{message}}",
     "tools": "AI 도구",
-    "packages": "프로그램 및 레지스트리",
+    "packages": "프로그램",
     "egressHosts": "네트워크 호스트",
     "skills": "스킬",
     "mcp": "MCP 서버",

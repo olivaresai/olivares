@@ -41,7 +41,6 @@ import {
   actorOf,
   eventLink,
   hiddenInBell,
-  internalRecord,
   readableAction,
   sentenceKey,
 } from './bell-events'
@@ -97,9 +96,10 @@ function ApprovalItem({
       <ApprovalRequestCell approval={approval} className="w-full max-w-full" />
       <div className="flex flex-wrap items-center gap-1.5">
         {oneClickApprove(approval) ? (
+          // The bell opens over a page that keeps its own primary action: one orange control per view.
           <Button
             size="sm"
-            variant="primary"
+            variant="secondary"
             disabled={approve.isPending}
             onClick={() => {
               if (armed.current) approve.mutate({ decision: 'approve' })
@@ -203,7 +203,8 @@ export function NotificationBell() {
 
   const events = (data?.items ?? [])
     .filter((e) => !hiddenInBell(e.action))
-    .filter((e) => includeInternal || !internalRecord(e.action))
+    // A record with no sentence would show only its name: it waits behind the checkbox.
+    .filter((e) => includeInternal || sentenceKey(e.action) !== null)
     .slice(0, RECENT_LIMIT)
   // People are named for a principal who may already read the members; otherwise "You" or
   // "A member". The bell shows no one's address to someone who could not see it elsewhere.

@@ -13,6 +13,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import type { ComponentType, ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import './i18n'
 
 const { api, panels, auth } = vi.hoisted(() => ({
@@ -174,7 +175,7 @@ function sources(dir: string, out: string[] = []): string[] {
 }
 
 describe('public console build: no Business SSO UI', () => {
-  it('no public source names a Business SSO control or signal', () => {
+  it('confines Business SSO controls and signals to the installed Business source', () => {
     const files = sources(SRC)
     // A scan that read nothing would pass by vacuity.
     expect(files.some((f) => f.endsWith('sso-tab.tsx'))).toBe(true)
@@ -184,7 +185,17 @@ describe('public console build: no Business SSO UI', () => {
         (m) => `${relative(SRC, f)}: ${m}`,
       )
     })
-    expect(found).toEqual([])
+    // Only the paid overlay supplies this module; Community permits no markers.
+    expect(found.sort()).toEqual(
+      FEATURE_EXTENSIONS.length > 0
+        ? [
+            'features/sso-providers/api.ts: groups_mapped_by',
+            'features/sso-providers/api.ts: routed_by',
+            'features/sso-providers/sso-providers-tab.tsx: groups_mapped_by',
+            'features/sso-providers/sso-providers-tab.tsx: routed_by',
+          ]
+        : [],
+    )
   })
 
   it('the public console words carry no Business SSO string, in any language', () => {

@@ -63,7 +63,7 @@ import { providersApi } from '@/features/providers/api'
 import type { ProviderRecordDTO } from '@/features/providers/types'
 import { toast } from '@/components/ui/toaster'
 import { useTenantStore } from '@/stores/tenant'
-import { NewSessionDialog, StartSessionForm } from './first-hour'
+import { NewSessionDialog, StartSessionForm, WorkStart } from './first-hour'
 import { firstHourKeys } from './api'
 import { readinessOf, chooseTool } from './readiness.fixture'
 import { useClientSettings } from '@/features/settings/preferences'
@@ -806,6 +806,29 @@ describe('the usage of the accounts in the New session dialog', () => {
     const select = await profileSelect()
     await waitFor(() => expect(select).toHaveTextContent('claude-b'))
     expect(select).not.toHaveTextContent('claude-c')
+  })
+
+  it("names the composer's account on its pill with its share of the week", async () => {
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [
+        { ...account('ppf_b', 'claude-b'), usage: windows(40, 10) },
+        account('ppf_c', 'claude-c'),
+      ],
+      has_more: false,
+    })
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [run('r1', 'ppf_b')],
+      has_more: false,
+    })
+    wrap(<WorkStart />)
+    const pill = await screen.findByRole('button', {
+      name: 'Tool and account: Claude Code · claude-b',
+    })
+    // The vendor mark names the tool; the pill's room goes to the account and its week.
+    expect(pill).toHaveTextContent('claude-b')
+    expect(pill).toHaveTextContent('10% of the week')
+    expect(pill).not.toHaveTextContent('5 hours')
+    expect(pill).not.toHaveTextContent('Claude Code')
   })
 
   it('says nothing about usage for an account whose tool reported none', async () => {

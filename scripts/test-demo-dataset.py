@@ -734,6 +734,35 @@ class ClaudeStandIn(unittest.TestCase):
                               capture_output=True, text=True, timeout=30)
         self.assertEqual(proc.returncode, 4)
 
+    def test_a_call_id_is_never_reused_by_a_later_turn(self):
+        # A tool's call ids are unique in its session: the console joins an answer to its call by
+        # id, so a second turn that reused the first turn's ids left its own calls unanswered.
+        s = session("claude", "Refactor cart totals in checkout")
+        inputs = [{"type": "user", "message": {"role": "user", "content": t["prompt"]}} for t in s["turns"]]
+        _, frames = run_tool("claude", [], inputs, {"DEMO_SESSION_UNIQUE": "1"})
+        claude = [c["id"] for f in frames if f["type"] == "assistant"
+                  for c in f["message"]["content"] if c["type"] == "tool_use"]
+        s = session("opencode", "Review the staging load balancer change")
+        flow = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+                {"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {}}] + [
+            {"jsonrpc": "2.0", "id": 3 + i, "method": "session/prompt",
+             "params": {"prompt": [{"type": "text", "text": t["prompt"]}]}} for i, t in enumerate(s["turns"])]
+        _, frames = run_tool("opencode", ["acp"], flow)
+        acp = [f["params"]["update"]["toolCallId"] for f in frames if f.get("method") == "session/update"
+               and f["params"]["update"]["sessionUpdate"] == "tool_call"]
+        for ids, want in ((claude, 4), (acp, 2)):
+            self.assertEqual(len(ids), want)
+            self.assertEqual(len(set(ids)), len(ids), ids)
+
+    def test_the_persons_message_is_replayed_as_claude_code_does(self):
+        # The engine launches Claude Code with --replay-user-messages; the console shows the
+        # person's turn from that replay, so a stand-in that drops it shows no prompt at all.
+        s = session("claude", "Refactor cart totals in checkout")
+        inputs = [{"type": "user", "message": {"role": "user", "content": t["prompt"]}} for t in s["turns"]]
+        _, frames = run_tool("claude", ["--replay-user-messages"], inputs, {"DEMO_SESSION_UNIQUE": "1"})
+        replayed = [f["message"]["content"] for f in frames if f["type"] == "user" and f.get("isReplay")]
+        self.assertEqual(replayed, [t["prompt"] for t in s["turns"]])
+
     def test_the_session_id_joins_the_observed_session_unless_unique(self):
         _, fixed = run_tool("claude", [], [], {})
         self.assertEqual(fixed[0]["session_id"], STAND_IN.LIVE_SESSION)
@@ -799,6 +828,32 @@ class CodexStandIn(unittest.TestCase):
     def test_a_method_it_does_not_implement_is_refused_not_ignored(self):
         _, frames = run_tool("codex", ["app-server"], [{"id": 9, "method": "something/unknown"}])
         self.assertEqual(frames[0]["error"]["code"], -32601)
+
+    def test_the_stand_ins_report_plan_limits_and_one_turn_waits_for_a_person(self):
+        # The review set photographs account shares and a session in Needs you: the engine reads the
+        # windows the way it reads the real tools, and a held turn asks once for approval.
+        home = {"CODEX_HOME": "/demo/homes/codex-team/config", "CLAUDE_CONFIG_DIR": "/demo/homes/claude-lena/config"}
+        _, frames = run_tool("codex", ["app-server"], [{"id": 1, "method": "account/rateLimits/read"}], home)
+        windows = frames[0]["result"]["rateLimits"]
+        self.assertEqual({windows["primary"]["windowDurationMins"], windows["secondary"]["windowDurationMins"]},
+                         {300, 7 * 24 * 60})
+        self.assertTrue(all(0 < w["usedPercent"] < 100 for w in (windows["primary"], windows["secondary"])))
+        _, frames = run_tool("claude", ["-p"], [{"type": "control_request", "request_id": "usage",
+                                                 "request": {"subtype": "get_usage"}}], home)
+        usage = next(f for f in frames if f.get("type") == "control_response")["response"]
+        self.assertEqual((usage["subtype"], usage["request_id"]), ("success", "usage"))
+        self.assertTrue(usage["response"]["rate_limits_available"])
+        self.assertEqual({l["kind"] for l in usage["response"]["rate_limits"]["limits"]}, {"session", "weekly_all"})
+        asking = next(s for s in CONVERSATIONS if any(t.get("ask") for t in s["turns"]))
+        self.assertTrue(asking.get("fixture"), "the canonical estate's queue holds no session request")
+        turn = asking["turns"][-1]
+        _, frames = run_tool("codex", ["app-server"], [
+            {"id": 1, "method": "thread/start", "params": {}},
+            {"id": 2, "method": "turn/start", "params": {"input": [{"type": "text", "text": turn["prompt"]}]}}])
+        asks = [f for f in frames if f.get("method") == "item/commandExecution/requestApproval"]
+        self.assertEqual(len(asks), 1)
+        self.assertEqual(asks[0]["params"]["command"], turn["ask"]["command"])
+        self.assertEqual(asks[0]["params"]["turnId"], "turn-1")
 
 
 class AcpStandIns(unittest.TestCase):

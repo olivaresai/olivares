@@ -313,6 +313,7 @@ https://github.com/olivaresai/olivares.git 200 2026-09-24
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$ver 404 2026-10-08 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-24 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${RELEASE} 404 2026-10-31 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/blob/main/docs/CLI-RECIPES-BY-OUTCOME.md 200 2026-11-06
 https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/INSTALL.md#installation-qualification 200 2026-10-14

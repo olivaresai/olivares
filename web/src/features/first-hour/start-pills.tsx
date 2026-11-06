@@ -23,7 +23,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { AccountUsage, AtLimit } from '@/features/agentops/account-usage'
+import {
+  AccountUsage,
+  AtLimit,
+  sharesOf,
+} from '@/features/agentops/account-usage'
 import {
   useModelTriggerText,
   type ModelChoices,
@@ -68,7 +72,9 @@ function Pill({
   )
 }
 
-/** The tool, and under it the accounts of that tool with their share of the week. */
+/** The tool, and under it the accounts of that tool with their share of the week. The pill
+ * itself shows the vendor mark, the account and its share of the week: the mark names the
+ * tool, and the five-hour share is in the list. */
 export function ToolPill({
   tool,
   onTool,
@@ -79,20 +85,29 @@ export function ToolPill({
   profiles: SessionProfiles | null | undefined
 }) {
   const { t } = useTranslation('firstHour')
+  const { t: agentops } = useTranslation('agentops')
   const account = profiles?.selected
     ? profiles.choices.find((c) => c.value === profiles.selected)
     : undefined
   const value = account
     ? `${toolName(tool)} · ${account.label}`
     : toolName(tool)
+  const week = sharesOf(account?.usage).find((s) => s.key === 'shareOfWeek')
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Pill label={t('composer.toolPill', { value })}>
+        <Pill label={t('composer.toolPill', { value })} className="max-w-96">
           <ToolMark driver={tool} />
-          <span className="truncate">{value}</span>
-          {account?.usage ? (
-            <AccountUsage usage={account.usage} className="shrink-0" />
+          <span className="truncate">{account?.label ?? value}</span>
+          {week ? (
+            <span
+              className={cn(
+                'shrink-0 tabular-nums',
+                week.warning && 'text-warning',
+              )}
+            >
+              {agentops('usage.shareOfWeek', { percent: week.percent })}
+            </span>
           ) : null}
         </Pill>
       </DropdownMenuTrigger>

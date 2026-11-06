@@ -114,7 +114,7 @@ interface PreferencesState {
    * kept so an existing persisted preference keeps its shape. Not read by the N1 sidebar. */
   collapsedNavGroups: string[]
   /** The left navigation folded to its icons (0.5), as the person chose it; null until
-   * they choose, when the sidebar picks by the page (Sessions folds). */
+   * they choose, when the sidebar names its places as the drawer does. */
   navCollapsed: boolean | null
   /** Every place in the left navigation, not only the first ones. A new person starts
    * without it; a person who had preferences before the fold keeps what they saw. */

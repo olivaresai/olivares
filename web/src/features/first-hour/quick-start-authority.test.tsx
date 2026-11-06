@@ -38,6 +38,8 @@ const accessExtension = vi.hoisted(() => ({
 }))
 vi.mock('@/features/extensions', async (orig) => ({
   ...(await orig<typeof import('@/features/extensions')>()),
+  LAUNCH_IDENTITY_EXTENSION: undefined,
+  RUN_ON_EXTENSION: undefined,
   PANEL_EXTENSIONS: {
     get accessRequestAction() {
       return (props: {
