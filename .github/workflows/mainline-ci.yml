@@ -1747,7 +1747,7 @@ jobs:
       # aggregate in control-plane is red either way.
       fail-fast: false
       matrix:
-        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-i, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
+        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-i, root-rest, root-core, store-a, store-b, store-rest, sessions-a, sessions, modules]
     name: functional-shard (${{ matrix.shard }})
     # The group names the shard, and without that the matrix cancels itself: a job-level group
     # is per job instance, so the legs sharing one string with cancel-in-progress would

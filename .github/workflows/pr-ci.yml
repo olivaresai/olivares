@@ -556,7 +556,7 @@ jobs:
       # rest of the suite — which is the report the author needs most at that moment.
       fail-fast: false
       matrix:
-        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-i, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
+        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-i, root-rest, root-core, store-a, store-b, store-rest, sessions-a, sessions, modules]
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # The gate pins these ceilings to ci/pr-suite-shards.txt. Hosted root-rest
     # exhausted 35m twice; allow the measured 1.8x variation over its 19.8m cmd group
