@@ -12,7 +12,7 @@ import type { Page } from '@playwright/test'
 //    API client sends a Secure cookie only over https or to `localhost`, never to
 //    `http://127.0.0.1` where every browser script here serves. The engine then answers 401
 //    to a call the page itself would have made successfully. Measured on the supported demo
-//    run (#1181). The token goes in `Authorization: Bearer`, the form the engine accepts
+//    run. The token goes in `Authorization: Bearer`, the form the engine accepts
 //    from any non-browser caller.
 const SESSION_COOKIE = '__Host-olivares-session'
 

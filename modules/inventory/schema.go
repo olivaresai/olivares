@@ -193,7 +193,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colLastSeen, Kind: model.KindTimestamp, Indexed: true},
 			// occurred_at is the instant the SOURCE says the fact happened, as the source
 			// declared it — NULL when it declared none, never filled from our clock. It is
-			// the other half of the planner decision A (#122): last_seen answers "when did this
+			// the other half of the planner decision A: last_seen answers "when did this
 			// platform last SEE it", this answers "when does the source say it happened",
 			// and conflating them is what made last_seen unusable as either.
 			//

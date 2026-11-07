@@ -790,7 +790,7 @@ export function sessionNaming(
     name: text,
     // The tail tells apart an untitled row, and any row whose name another row of the
     // same list also carries (acceptance: two long first messages cut to the same words;
-    // #2266: fifty observed sessions of one tool).
+    //: fifty observed sessions of one tool).
     shortId:
       from === 'untitled' || shared?.has(text) ? sessionShortId(s) : null,
     reference: sessionReference(s),

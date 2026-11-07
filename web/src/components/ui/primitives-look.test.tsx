@@ -217,7 +217,7 @@ describe('the v26.10 look of the page primitives', () => {
         'data-[state=checked]:bg-foreground',
       ]),
     )
-    // Orange is the one primary action of a screen (2026-10-17, #2696): a state
+    // Orange is the one primary action of a screen (2026-10-17,): a state
     // switch must not count as a filled orange control in any theme.
     expect(c).not.toContain('data-[state=checked]:bg-accent')
     expect(c).not.toContain('data-[state=checked]:border-accent-border')
@@ -256,9 +256,9 @@ describe('the v26.10 look of the page primitives', () => {
           'data-[state=indeterminate]:text-surface',
         ]),
       )
-      // Orange is the one primary action of a screen (2026-10-17, #2696): a
+      // Orange is the one primary action of a screen (2026-10-17,): a
       // state checkbox must not count as a filled orange control in any theme,
-      // in either state variant (#2701).
+      // in either state variant.
       expect(c).not.toContain('data-[state=checked]:bg-accent')
       expect(c).not.toContain('data-[state=indeterminate]:bg-accent')
       expect(c).not.toContain('data-[state=checked]:border-accent-text')

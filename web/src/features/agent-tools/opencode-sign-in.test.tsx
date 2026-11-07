@@ -95,7 +95,7 @@ const flow = {
 beforeEach(() => {
   useTenantStore.setState({ activeTenant: 'tenant-a' })
   vi.clearAllMocks()
-  // Only the key form's own gate (#2551); these cases read no providers.
+  // Only the key form's own gate; these cases read no providers.
   auth.can.mockImplementation((p: string) => p === 'sessions:provider:write')
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
   api.inventory.mockResolvedValue({
@@ -136,7 +136,7 @@ it('offers OpenCode its own ChatGPT sign-in and relays the link and the code', a
   expect(
     within(dialog).getByRole('link', { name: /open the sign-in page/i }),
   ).toHaveAttribute('href', 'https://auth.openai.example/device')
-  // acceptance, #2551: the key form opens in this same dialog, on OpenAI — a button in
+  // acceptance,: the key form opens in this same dialog, on OpenAI — a button in
   // the sheet, not a page link that reloads and loses the dialog.
   expect(
     within(dialog).queryByRole('link', {
@@ -152,7 +152,7 @@ it('offers OpenCode its own ChatGPT sign-in and relays the link and the code', a
   expect(within(dialog).getByLabelText(/^API key/)).toBeInTheDocument()
 })
 
-// #2567: the engine lists OpenCode's own providers first. The dialog offers them
+//: the engine lists OpenCode's own providers first. The dialog offers them
 // before ChatGPT and starts nothing until one is chosen; a key method shows the page
 // that issues the key and a hidden field, and the typed key goes to the tool's own
 // login (the code route) and is not kept on the page.
@@ -382,9 +382,14 @@ it('starts the first OpenCode session on the local provider without signing in',
       <StartSessionForm />
     </QueryClientProvider>,
   )
-  const start = await screen.findByRole('button', {
-    name: 'Start',
-  })
+  await screen.findByRole('button', { name: 'Start' })
+  await userEvent.click(await screen.findByRole('combobox', { name: 'Folder' }))
+  await userEvent.click(
+    await screen.findByRole('option', {
+      name: 'A new folder for this session',
+    }),
+  )
+  const start = screen.getByRole('button', { name: 'Start' })
   expect(start).toBeEnabled()
   await userEvent.click(start)
   // Launched under the authority Start was pressed with.

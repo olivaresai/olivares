@@ -198,6 +198,10 @@ function openMenu() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.spyOn(agentOpsApi, 'getWorkspace').mockResolvedValue({
+    workspace_ref: 'ws-demo',
+    root_path: run().workspace_path!,
+  } as Awaited<ReturnType<typeof agentOpsApi.getWorkspace>>)
   accountMarks.clear()
   auth.can = () => true
   useClientSettings.setState({ confirmStop: true })
@@ -209,7 +213,7 @@ beforeEach(() => {
 })
 
 describe('thread header — one line', () => {
-  it('says the state, the name, the folder and the tool once', () => {
+  it('says the state, the name, the folder and the tool once', async () => {
     renderThread()
     const h = header()
     expect(h.className).toContain('h-12')
@@ -218,10 +222,10 @@ describe('thread header — one line', () => {
       'calc-review',
     )
     // The folder by NAME, the whole path on the hover.
-    const folder = within(h).getByTestId('narrative-folder')
+    const folder = await within(h).findByTestId('narrative-folder')
     expect(folder).toHaveTextContent('demo')
     expect(folder.textContent).not.toContain('/home/olv')
-    // A breadcrumb as T3 draws it: the folder above, then the session's folder (#4014).
+    // A breadcrumb as T3 draws it: the folder above, then the session's folder.
     expect(folder.textContent).toBe('projects / demo')
     expect(folder).toHaveAttribute(
       'title',
@@ -473,7 +477,7 @@ describe('thread header — the ⋯ menu', () => {
   })
 
   it('snoozes the session for the person, until a moment they pick', async () => {
-    // #2480: the engine keeps the snooze; the menu only names the moment.
+    //: the engine keeps the snooze; the menu only names the moment.
     renderThread()
     openMenu()
     expect(
@@ -576,7 +580,7 @@ describe('thread header — the session, then its tool', () => {
 // wide, the tool and the folder could not shrink, and the session's name was squeezed to
 // nothing while the controls were cut. The header measures its own pane, not the window.
 describe('thread header — in a narrow pane', () => {
-  it('keeps the name and gives way with the tool and the folder first', () => {
+  it('keeps the name and gives way with the tool and the folder first', async () => {
     renderThread(run({ effort: 'high' }))
     const h = header()
     expect(h.className).toContain('@container/thread')
@@ -586,9 +590,9 @@ describe('thread header — in a narrow pane', () => {
     expect(within(h).getByTestId('thread-tool').className).toContain(
       '@min-[26rem]/thread:inline',
     )
-    expect(within(h).getByTestId('narrative-folder').className).toContain(
-      '@min-[40rem]/thread:inline-block',
-    )
+    expect(
+      (await within(h).findByTestId('narrative-folder')).className,
+    ).toContain('@min-[40rem]/thread:inline-block')
     // Nothing in the header follows the window's width any more.
     expect(h.innerHTML).not.toMatch(/min-\[(761|1100)px\]/)
   })
@@ -702,7 +706,7 @@ describe('thread header — the usage of the session account', () => {
     updated_at: '2026-10-01T10:00:00Z',
   })
 
-  // THE TITLE IS THE ONE THING THE HEADER MUST LET A PERSON READ (#3938): the account's
+  // THE TITLE IS THE ONE THING THE HEADER MUST LET A PERSON READ: the account's
   // quota is the status bar's and the tokens are Details', not the header's, and the title
   // keeps 16 characters before it gives way. jsdom has no layout, so this pins the arrangement.
   it('keeps the account quota and the raw token totals out of the header and the title 16 characters wide', async () => {

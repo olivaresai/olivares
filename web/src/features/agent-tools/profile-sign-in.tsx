@@ -35,7 +35,7 @@ import { useAuth } from '@/lib/auth/context'
 import { PHONE_SHEET } from './phone-sheet'
 import './i18n'
 
-/** The API key as a way in: a button that turns into the key form in place (#2551). */
+/** The API key as a way in: a button that turns into the key form in place. */
 function KeyOffer({
   driver,
   accountRef,
@@ -87,7 +87,7 @@ function OtherWays({
   driver: string
   name: string
   accountRef?: string
-  /** The key form is open in place of the trigger; the panel owns it (#2551). */
+  /** The key form is open in place of the trigger; the panel owns it. */
   addingKey: boolean
   /** The key is offered here; false where the panel already offered it first. */
   keyOffered: boolean
@@ -159,11 +159,11 @@ export function ProfileSignInPanel({
 }) {
   const qc = useQueryClient()
   // The key form of Other ways, open over the sign-in: a login that completes under it
-  // must not close the sheet over a key being typed (#2551). Its close re-renders the
+  // must not close the sheet over a key being typed. Its close re-renders the
   // sign-in, which reports the login again.
   const [addingKey, setAddingKey] = useState(false)
   const { t } = useTranslation('agentTools')
-  // Gemini CLI no longer serves free personal Google accounts (#2990): say which accounts
+  // Gemini CLI no longer serves free personal Google accounts: say which accounts
   // work and offer the API key first. The person then picks; no Google login starts
   // under the key offer. Where no key can be added, the Google sign-in runs as before.
   const gemini = driver === 'gemini-cli'
@@ -236,7 +236,7 @@ export function ProfileSignInDialog({
   // The key write must not be cut off by a Radix-initiated close (X, Escape, overlay).
   const keyBeingStored = useKeyBeingStored()
   // A login can outlive its dialog: the rows read the tool again on close, so one still
-  // running shows "Signing in…" there instead of offering a second sign-in (#3388).
+  // running shows "Signing in…" there instead of offering a second sign-in.
   const close = (open: boolean) => {
     if (!open) {
       void qc.invalidateQueries({ queryKey: firstHourKeys.all(tenant) })

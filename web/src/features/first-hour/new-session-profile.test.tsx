@@ -122,6 +122,19 @@ const run = (ref: string, profile: string, driver = 'claude') =>
 beforeEach(() => {
   useClientSettings.getState().restore()
   vi.restoreAllMocks()
+  vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
+    items: [
+      {
+        workspace_ref: 'ws_fixture',
+        mount_mode: 'rw',
+        max_read_bytes: 1048576,
+        dlp_mode: 'off',
+        root_path: '/srv/work/project',
+        state: 'active',
+      },
+    ],
+    has_more: false,
+  })
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_1' })
   signedIn.refs = new Set(['ppf_b', 'ppf_c'])
@@ -135,10 +148,6 @@ beforeEach(() => {
     has_more: false,
   })
   vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
-    items: [],
-    has_more: false,
-  })
-  vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
     items: [],
     has_more: false,
   })
@@ -442,7 +451,7 @@ describe('the profile in the New session dialog', () => {
     await waitFor(() => expect(select).toHaveTextContent('claude-b'))
   })
 
-  // #1779 (srv17): with several sign-ins the advanced launch opened on "Select a profile";
+  // (srv17): with several sign-ins the advanced launch opened on "Select a profile";
   // it opens on the one this form shows.
   it('hands the advanced launch the sign-in the form shows', async () => {
     vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
@@ -586,7 +595,7 @@ describe('the profile in the New session dialog', () => {
     })
   })
 
-  // #2551: with nothing ready, the New session dialog holds one sign-in card per tool.
+  //: with nothing ready, the New session dialog holds one sign-in card per tool.
   // "Use an API key instead" turns the card's sheet into the key field in place: the
   // page and the dialog stay (the old link reloaded and lost both).
   it('keeps the New session dialog when the sheet turns into the key field', async () => {
@@ -605,7 +614,7 @@ describe('the profile in the New session dialog', () => {
     const useKey = await within(card).findByRole('button', {
       name: 'Use an API key instead',
     })
-    // The control is a button in the sheet, not a link that reloads the page (#2551).
+    // The control is a button in the sheet, not a link that reloads the page.
     expect(
       within(card).queryByRole('link', { name: 'Use an API key instead' }),
     ).not.toBeInTheDocument()
@@ -620,7 +629,7 @@ describe('the profile in the New session dialog', () => {
     await waitFor(() => expect(key).toHaveFocus())
   })
 
-  // #2551 review: closing the dialog mid-write unmounted the form, retired its step-up
+  // review: closing the dialog mid-write unmounted the form, retired its step-up
   // owner, and the write then finished with no toast, no refresh and no error report.
   it.each([
     ['stored', 'success'],
@@ -672,7 +681,7 @@ describe('the profile in the New session dialog', () => {
       expect(onOpenChange).not.toHaveBeenCalled()
       await waitFor(() => expect(settle).toBeDefined())
       // The outcome reaches the person, and the dialog closes as before. A refusal is
-      // said inside the dialog, which hides the toast from screen readers (#2561).
+      // said inside the dialog, which hides the toast from screen readers.
       await act(async () => settle())
       if (outcome === 'stored') {
         await waitFor(() =>

@@ -22,7 +22,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// GET /v1/audit?tool= and ?folder= (#2750): the Ledger query's tool: and folder:
+// GET /v1/audit?tool= and ?folder=: the Ledger query's tool: and folder:
 // tokens. An entry has neither; both are facts of the sessions.run it targets (or
 // of the approval that run names), so the handler hands them to the store.
 

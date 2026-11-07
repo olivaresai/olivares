@@ -72,7 +72,7 @@ const flow = {
 beforeEach(() => {
   useTenantStore.setState({ activeTenant: 'tenant-a' })
   vi.clearAllMocks()
-  // Only the key form's own gate (#2551); these cases read no providers.
+  // Only the key form's own gate; these cases read no providers.
   auth.can.mockImplementation((p: string) => p === 'sessions:provider:write')
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
   api.inventory.mockResolvedValue({
@@ -110,7 +110,7 @@ it('relays the native Google sign-in URL and pasted code from the Gemini row', a
   const dialog = await screen.findByRole('dialog', {
     name: /Sign in Gemini CLI/,
   })
-  // The key is offered first (#2990): the Google sign-in starts when it is chosen.
+  // The key is offered first: the Google sign-in starts when it is chosen.
   await user.click(
     within(dialog).getByRole('button', { name: 'Sign in with Google' }),
   )
@@ -120,7 +120,7 @@ it('relays the native Google sign-in URL and pasted code from the Gemini row', a
   expect(
     await within(dialog).findByRole('link', { name: 'Open the sign-in page' }),
   ).toHaveAttribute('href', flow.url)
-  // acceptance, #2551: the key form opens in this same dialog, on Gemini's own provider —
+  // acceptance,: the key form opens in this same dialog, on Gemini's own provider —
   // a button in the sheet, not a page link that reloads and loses the dialog.
   expect(
     within(dialog).queryByRole('link', {
@@ -143,7 +143,7 @@ it('relays the native Google sign-in URL and pasted code from the Gemini row', a
   )
 })
 
-it('names the accounts that work and offers the API key before the Google sign-in (#2990)', async () => {
+it('names the accounts that work and offers the API key before the Google sign-in', async () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
@@ -192,7 +192,14 @@ it('starts the first Gemini session through its existing driver', async () => {
       <StartSessionForm />
     </QueryClientProvider>,
   )
-  const start = await screen.findByRole('button', { name: 'Start' })
+  await screen.findByRole('button', { name: 'Start' })
+  await userEvent.click(await screen.findByRole('combobox', { name: 'Folder' }))
+  await userEvent.click(
+    await screen.findByRole('option', {
+      name: 'A new folder for this session',
+    }),
+  )
+  const start = screen.getByRole('button', { name: 'Start' })
   expect(start).toBeEnabled()
   await userEvent.click(start)
   expect(launch).toHaveBeenCalledWith(

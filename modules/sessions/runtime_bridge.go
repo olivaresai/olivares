@@ -122,7 +122,7 @@ func (m *Module) bridge(lr *liveRun) {
 			m.onStdout(ctx, lr, frame.Data, at)
 			continue
 		}
-		// A driver takes its tool's own log lines from stderr (OpenCode's errors, #2937):
+		// A driver takes its tool's own log lines from stderr (OpenCode's errors,):
 		// what they say reaches the session as the driver's notice, not as raw output.
 		if t, ok := lr.session.(stderrTaker); ok && frame.Stream == streamStderr && t.takeStderr(frame.Data) {
 			continue

@@ -16,7 +16,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// #2129: `session messages` lists, searches and anchors the messages of a session
+// : `session messages` lists, searches and anchors the messages of a session
 // from the engine's read, the one the console's navigator uses.
 func TestSessionMessagesAsksTheEngineAndPrintsThePage(t *testing.T) {
 	const answer = `{"driver":"claude","transcript":"read","total":120,

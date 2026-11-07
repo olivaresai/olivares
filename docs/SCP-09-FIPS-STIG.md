@@ -34,7 +34,7 @@ unaffected.** These are additive variants alongside it.
 - **FedRAMP Moderate/High → CMVP-validated cryptography.** FedRAMP requires the
   cryptographic module to be CMVP-validated. With FIPS 140-2 moved to the CMVP
   **Historical List** in early 2026, new deployments target **FIPS 140-3**. The
-  FIPS binary uses a **140-3** module that **is** CMVP-validated (cert #5247). This
+  FIPS binary uses a **140-3** module that **is** CMVP-validated (cert 5247). This
   satisfies the *cryptographic-module* prerequisite; it is **not**, by itself, a
   FedRAMP authorization (which is a system-level process we do not claim).
   Authority: *FedRAMP Policy for Cryptographic Module Selection v1.1.0* —
@@ -68,7 +68,7 @@ environment variable. Authority: <https://go.dev/doc/security/fips140>.
 ### Build the validated variant
 
 ```sh
-# Pin v1.0.0 — the CMVP-VALIDATED module (cert #5247). Still pure-Go static.
+# Pin v1.0.0 — the CMVP-VALIDATED module (cert 5247). Still pure-Go static.
 GOFIPS140=v1.0.0 CGO_ENABLED=0 go build -o olivares-fips ./cmd/olivares
 ```
 
@@ -82,7 +82,7 @@ This repo's workspace toolchain is **Go 1.26.9** (`go.work`: `go 1.26.9` /
 The module matching it is **v1.26.0** — but as of **2026-04-28** that module is
 **"Pending Review"** on the CMVP **Modules-In-Process List** (CAVP cert **A8028**) —
 i.e. **NOT yet validated**. The **v1.0.0** module (frozen from Go 1.24) holds
-**CMVP Certificate #5247** (active/validated). So for an *actually CMVP-validated*
+**CMVP Certificate 5247** (active/validated). So for an *actually CMVP-validated*
 build we pin **`GOFIPS140=v1.0.0`** (equivalently `GOFIPS140=certified`, which on
 this toolchain resolves to the v1.0.0 module). `v1.26.0`/`latest` **enable FIPS
 mode** but are **not CMVP-validated** — do not represent them as validated.
@@ -167,7 +167,7 @@ the contract: what each artifact claims, and its verification status.
 
 | Artifact / setting | What is claimed | Verification status |
 |---|---|---|
-| **FIPS binary** `GOFIPS140=v1.0.0` (`olivares-fips`, `Dockerfile.fips`, `Dockerfile.stig`) | Built in Go native FIPS 140-3 mode using the **CMVP-validated** "FIPS 140-3 Go Cryptographic Module **v1.0.0**", **CMVP Certificate #5247** (active; frozen from Go 1.24). | **Validated module.** Self-verify the build with `scripts/fips-verify.sh` (links `crypto/internal/fips140/v1.0.0`) and the runtime with `GODEBUG=fips140=on` → `fips140.Enabled()==true`, `Version()=="v1.0.0"`. We claim the *module* is validated — **not** that any product/system is FedRAMP-authorized. |
+| **FIPS binary** `GOFIPS140=v1.0.0` (`olivares-fips`, `Dockerfile.fips`, `Dockerfile.stig`) | Built in Go native FIPS 140-3 mode using the **CMVP-validated** "FIPS 140-3 Go Cryptographic Module **v1.0.0**", **CMVP Certificate 5247** (active; frozen from Go 1.24). | **Validated module.** Self-verify the build with `scripts/fips-verify.sh` (links `crypto/internal/fips140/v1.0.0`) and the runtime with `GODEBUG=fips140=on` → `fips140.Enabled()==true`, `Version()=="v1.0.0"`. We claim the *module* is validated — **not** that any product/system is FedRAMP-authorized. |
 | **`GOFIPS140=v1.26.0` / `latest`** (matches this repo's Go 1.26 toolchain) | Enables FIPS 140-3 **mode** with the v1.26.0 module. | **FIPS mode, but NOT CMVP-validated.** v1.26.0 is **"Pending Review"** on the CMVP Modules-In-Process List (2026-04-28, CAVP cert **A8028**). Do **not** represent as validated. We pin `v1.0.0` precisely to avoid this. |
 | **`GODEBUG=fips140=on`** (runtime) | The validated module runs its self-tests and the stdlib permits only approved algorithms for this process. | **Verifiable** via `crypto/fips140.Enabled()`. Build-time `GOFIPS140` selects the module; this toggle enforces it at runtime. |
 | **STIG image** (`Dockerfile.stig`) | Hardened toward the DISA STIG and **self-verifiable** with the published OpenSCAP profile. | **Self-verifiable, NOT a certification.** Run Business OpenSCAP scanner against the **upstream** ComplianceAsCode DISA STIG content to produce **your** report. We ship the harness, not a passing result. **No DoD ATO** is claimed. |
@@ -178,7 +178,7 @@ the contract: what each artifact claims, and its verification status.
 ### Explicit non-claims
 
 - The **product** and any **system** are **not FIPS-validated**; only the
-  **crypto module** (#5247) is validated. Module validation ≠ system authorization.
+  **crypto module** (CMVP certificate 5247) is validated. Module validation ≠ system authorization.
 - We do **not** claim **FedRAMP authorization** or a **DoD ATO**.
 - We do **not** ship or imply a **passing OSCAP scan**; we ship the harness to
   generate one.
@@ -195,19 +195,19 @@ the contract: what each artifact claims, and its verification status.
 - ComplianceAsCode / `scap-security-guide` (DISA STIG profiles):
   <https://github.com/ComplianceAsCode/content>
 - OpenSCAP project: <https://www.open-scap.org/>
-- NIST CMVP (cert #5247 "FIPS 140-3 Go Cryptographic Module v1.0.0"; v1.26.0
+- NIST CMVP (cert 5247 "FIPS 140-3 Go Cryptographic Module v1.0.0"; v1.26.0
   Modules-In-Process / CAVP A8028): <https://csrc.nist.gov/projects/cryptographic-module-validation-program>
 
 ## Provenance note (verify, don't trust)
 
-The CMVP cert number (#5247), the v1.26.0 "Pending Review" status (2026-04-28,
+The CMVP certificate number 5247, the v1.26.0 "Pending Review" status (2026-04-28,
 CAVP A8028), the `GOFIPS140` accepted values, and the toolchain↔module mapping were
 provided as verified primary-source facts for this build (June 2026) and are
 reflected in code/comments. CMVP listings change over time — **re-verify against the
 CMVP search and `$GOROOT/lib/fips140/*.txt` before representing status to an auditor.**
 
 **Last re-verification: 2026-06-10, against the primary sources:** cert
-**#5247** is **ACTIVE** (validated 2026-04-27 by Lightship Security, Overall
+**5247** is **ACTIVE** (validated 2026-04-27 by Lightship Security, Overall
 Level 1, sunset 2031-04-26) and remains the only validated Go module; **v1.26.0
 is still "Pending Review"** on the Modules-In-Process list (list updated
 2026-06-10); `GOFIPS140=certified` still resolves to v1.0.0 and `inprocess` to

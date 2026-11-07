@@ -15,8 +15,8 @@ import (
 // eventingpump_test.go pins the pump's environment contract (default 15s;
 // "0" disables, loudly; a typo never silently changes the cadence — the
 // retention-sweep posture) and the tenant-enumeration pass over the real
-// composition root (system tenant skipped; a pass over idle tenants is a
-// silent no-op).
+// composition root (the system tenant once, after the orgs; a pass over idle
+// tenants is a silent no-op).
 
 func TestEventingPumpIntervalEnv(t *testing.T) {
 	log := discardLog()
@@ -59,8 +59,9 @@ func TestNewEventingPumpDisableSemantics(t *testing.T) {
 }
 
 // One runOnce pass over the full composition root: enumerates the business
-// tenants (never the system tenant), runs DispatchDue+PruneExpired per tenant,
-// and an idle estate is a clean no-op.
+// tenants and then the system tenant once (the ledger forwarder enqueues sign-ins
+// there for a system SIEM sink, and only this pump retries them), runs
+// DispatchDue+PruneExpired per tenant, and an idle estate is a clean no-op.
 func TestEventingPumpRunOncePassesAllBusinessTenants(t *testing.T) {
 	h := newHarness(t)
 	p := &eventingPump{st: h.st, evt: h.set.eventing, interval: time.Second, log: discardLog()}
@@ -69,12 +70,12 @@ func TestEventingPumpRunOncePassesAllBusinessTenants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("businessTenants: %v", err)
 	}
-	if len(tenants) < 2 {
-		t.Fatalf("expected the harness's business tenants, got %d", len(tenants))
+	if len(tenants) < 3 {
+		t.Fatalf("expected the harness's business tenants and the system tenant, got %d", len(tenants))
 	}
-	for _, tid := range tenants {
-		if tid.IsSystem() || tid.IsZero() {
-			t.Fatal("the reserved system tenant must never be pumped")
+	for i, tid := range tenants {
+		if tid.IsZero() || tid.IsSystem() != (i == len(tenants)-1) {
+			t.Fatalf("tenants = %v; want the business tenants, then the system tenant exactly once", tenants)
 		}
 	}
 	if err := p.runOnce(context.Background()); err != nil {

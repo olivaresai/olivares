@@ -17,7 +17,7 @@ import (
 
 // The tools' children inherit the engine's proxy and CA variables by name, in
 // any case, and nothing near them; a name the engine resolved as a secret stays
-// behind in both of its cases (#547).
+// behind in both of its cases.
 func TestHostNetworkEnvIsTheEnginesWayOutOnly(t *testing.T) {
 	for _, kv := range os.Environ() {
 		if name, _, _ := strings.Cut(kv, "="); name != "" {

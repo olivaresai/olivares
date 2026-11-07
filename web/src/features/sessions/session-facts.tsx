@@ -122,7 +122,7 @@ function AccessRow({ run }: { run: RunDTO }) {
   const words = useAccessWords(run)
   return (
     <KvRow label={t('context.facts.access')} align="start">
-      {words}
+      {words || t('meter.accessUnknown')}
     </KvRow>
   )
 }

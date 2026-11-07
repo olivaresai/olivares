@@ -10,13 +10,14 @@
 // Every fact is the approval queue's own (features/governance/approval-preview.tsx) and
 // every decision goes through the queue's own mutation: this is another place to decide,
 // not another way to.
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Loader2, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { PathText } from '@/components/ui/path-text'
 import { KvList, KvRow } from '@/components/ui/kv'
+import { agentOpsKeys } from '@/features/agentops/api'
 import { toolName } from '@/features/agentops/engine-tools'
 import type { RunDTO } from '@/features/agentops/types'
 import { governanceApi, governanceKeys } from '@/features/governance/api'
@@ -94,6 +95,18 @@ function ApprovalCard({ id, run }: { id: string; run: RunDTO }) {
   )
 }
 
+/** A decision moves the session too: its run record and runs list are read again now,
+ * so the composer and the session list leave the waiting state without a reload. */
+function useRefreshRuns() {
+  const queryClient = useQueryClient()
+  const { activeTenant } = useAuth()
+  return useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: agentOpsKeys.all(activeTenant),
+    })
+  }, [queryClient, activeTenant])
+}
+
 function ApprovalBody({
   approval,
   run,
@@ -110,7 +123,8 @@ function ApprovalBody({
   const asker = useAskedBy(approval)
   const pending = approval.status === 'pending'
   const { mayDecide, decidedByMe } = useMayDecide(approval)
-  const approve = useDecision(approval.id, 'approve')
+  const refreshRuns = useRefreshRuns()
+  const approve = useDecision(approval.id, 'approve', refreshRuns)
   const [denyOpen, setDenyOpen] = useState(false)
   const card = useRef<HTMLDivElement>(null)
   // One decision per action: a second key or click before the first one's render is dropped.
@@ -258,6 +272,7 @@ function ApprovalBody({
               open={denyOpen}
               onOpenChange={setDenyOpen}
               approval={approval}
+              onDecided={refreshRuns}
             />
           </div>
         ) : (

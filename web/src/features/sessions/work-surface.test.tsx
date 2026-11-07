@@ -585,12 +585,14 @@ describe('WorkSurface', () => {
       try {
         stubViewportWidth(1280)
         const managed = live({ attribution: 'managed' })
+        // Changes is offered only to a session with a folder (workspace_ref).
+        const folderRun = { ...RUN, workspace_ref: 'ws-main' }
         renderSurface({
           resolution: {
             ...resolution,
-            session: mergeSessions([managed], [RUN])[0],
+            session: mergeSessions([managed], [folderRun])[0],
             live: managed,
-            runs: [RUN],
+            runs: [folderRun],
           },
         })
         await waitFor(() => expect(grid().dataset.context).toBe('open'))
@@ -810,7 +812,7 @@ describe('WorkSurface', () => {
     expect(screen.queryByTestId('work-composer')).toBeNull()
   })
 
-  // The pin is the engine's, kept against a run (#2130): the card's menu reads it from the
+  // The pin is the engine's, kept against a run: the card's menu reads it from the
   // list's set or from the session's own runs, and hands its own session to the toggle.
   it('the menu says Unpin for a pinned session, and Unpin acts on the open session', async () => {
     const user = userEvent.setup()
@@ -1030,7 +1032,7 @@ describe('WorkSurface — Escape and the side pane', () => {
   })
 })
 
-describe('WorkSurface — the row menu and the Archived section (#2795)', () => {
+describe('WorkSurface — the row menu and the Archived section', () => {
   const ARCHIVED: RunDTO = {
     ...RUN,
     run_ref: 'run-z',
@@ -1054,7 +1056,7 @@ describe('WorkSurface — the row menu and the Archived section (#2795)', () => 
   })
 
   it('folds an archived session out of the list, under an Archived toggle that unfolds it', async () => {
-    // The same fold as Snoozed (#2480): the rows stay where they were, and the archived
+    // The same fold as Snoozed: the rows stay where they were, and the archived
     // ones join the end of the list while the section is open.
     const user = userEvent.setup()
     renderSurface({ sessions: estate })

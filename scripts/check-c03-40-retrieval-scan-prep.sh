@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# C03-40 unique leftover unique vs #1074: two options, none chosen.
+# C03-40 unique leftover unique vs: two options, none chosen.
 # Hub-safe: no overlay remasure so lint:addon-sets does not LOOK 2.
 # Three answers: 0 CLEAN · 1 finding · 2 could not look.
 

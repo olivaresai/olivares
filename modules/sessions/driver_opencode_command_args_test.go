@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// #2998: OpenCode expands a /command's arguments into its template and then runs
+// : OpenCode expands a /command's arguments into its template and then runs
 // every !`shell` in it and reads every @file, before and despite the session's
 // bash, read and external_directory rules (measured over ACP on 1.19.3: a marker
 // was created with bash denied, and a file outside the folder reached the model
@@ -35,7 +35,7 @@ func TestOpenCodeInputRefusesInterpolationInCommandArguments(t *testing.T) {
 		// An opening !` is closed by a backtick in the template (measured with
 		// the template "Run `$ARGUMENTS` now.").
 		"/review x` !`touch /tmp/x",
-		// Review of #3010: a lone backtick closes an opener the template leaves
+		// Review of: a lone backtick closes an opener the template leaves
 		// open, two arguments can join into one, and OpenCode reads $ in the
 		// arguments as replacement patterns (or expands a typed $ARGUMENTS again).
 		"/review x`",
@@ -88,7 +88,7 @@ func TestOpenCodeInputSendsCommandsAndPromptsWithoutInterpolation(t *testing.T) 
 	}
 }
 
-// #3083: OpenCode's built-in /review is a subtask command: it runs as a subagent whatever
+// : OpenCode's built-in /review is a subtask command: it runs as a subagent whatever
 // the task rule says, and that subagent's approval requests never reach Olivares, so
 // its turn waits forever (measured on 1.19.4 over ACP). It is refused by name.
 func TestOpenCodeInputRefusesTheBuiltInSubtaskCommand(t *testing.T) {

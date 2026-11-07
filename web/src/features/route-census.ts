@@ -44,7 +44,7 @@ export interface RouteAlias {
 /**
  * A tab of a live page that moved to another place. The page still answers, so a path
  * alias cannot catch it: its route redirects when the old `tab` is asked for, keeping the
- * rest of the query (#3388).
+ * rest of the query.
  */
 export interface TabAlias {
   /** The live page that used to hold the tab. */

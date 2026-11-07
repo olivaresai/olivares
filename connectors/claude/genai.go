@@ -60,7 +60,7 @@ import (
 // generation — content keys are dialect markers only (OBS-10 minimal data).
 //
 // Pinned to semconv v1.41.1 PLUS an upstream ref, VERIFIED against primary
-// sources 2026-07-05. semconv v1.42.0 (2026-06-12, #3696) deprecated/moved
+// sources 2026-07-05. semconv v1.42.0 (2026-06-12,) deprecated/moved
 // gen_ai.* (and openai.*/mcp.*) from the main semantic-conventions repo to
 // https://github.com/open-telemetry/semantic-conventions-genai; the main repo's
 // v1.43.0 model keeps only deprecated "Moved" stubs. v1.41.1 (2026-05-11) is

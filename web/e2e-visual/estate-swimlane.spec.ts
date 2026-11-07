@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE LAST-HOUR SWIMLANE IN A REAL BROWSER (#2547), on Usage › Timeline (#4427), over the demo
+// THE LAST-HOUR SWIMLANE IN A REAL BROWSER, on Usage › Timeline, over the demo
 // estate's event log (src/features/home/swimlane.fixture.ts) with the clock held at its 16:42:
 // the lanes match the events, no label overlaps a bar and axe finds nothing at 1440, 1024 and
 // 390 in both themes, and a drag across the lanes opens the Ledger on that range (since/until).
@@ -126,7 +126,7 @@ for (const theme of ['dark', 'light'])
       )
       expect(await page.evaluate(overlapScan)).toEqual([])
       // Nothing of a lane runs past the card's right edge, and the plot keeps room to be
-      // read: at 390 the side columns once took all of its width (#3047).
+      // read: at 390 the side columns once took all of its width.
       const card = (await swimlane.boundingBox())!
       for (const cell of await swimlane
         .getByTestId('swimlane-lane')
@@ -146,7 +146,7 @@ for (const theme of ['dark', 'light'])
         expect(box.x).toBeCloseTo(axis.x, 0)
         expect(box.width).toBeCloseTo(axis.width, 0)
       }
-      // The waiting-for-approval mark is a warn tint, not a gradient: no visible glow (#2946).
+      // The waiting-for-approval mark is a warn tint, not a gradient: no visible glow.
       expect(
         (await page.evaluate(orangeScan)).hits.filter((h) => h.visible),
       ).toEqual([])

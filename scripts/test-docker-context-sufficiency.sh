@@ -231,10 +231,11 @@ true'
 # extra_files provided, and the qualification scripts' hand-built contexts lacked it.
 HELPER="$(dirname "$SUBJ")/assemble-runtime-context.sh"
 RUNTIME='
-mkdir -p scripts LICENSES packaging/container/data-dir deploy/seccomp deploy/apparmor
+mkdir -p scripts LICENSES packaging/container/data-dir deploy/seccomp deploy/apparmor modules/documents
 cp "$HELPER" scripts/
 touch LICENSE NOTICE LICENSING.md DISCLAIMER.md packaging/container/uv-LICENSE-MIT.txt packaging/container/bashrc.sh
 touch deploy/seccomp/olivares-sessions.json deploy/apparmor/olivares-sessions.conf
+touch modules/documents/requirements.txt modules/documents/MarkItDown-LICENSE.txt
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares

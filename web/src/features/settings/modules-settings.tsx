@@ -130,7 +130,7 @@ const TONE: Record<RowState, 'success' | 'neutral' | 'warning' | 'accent'> = {
 }
 
 /**
- * The restart that applies a module change stops every running session (#507). Apply
+ * The restart that applies a module change stops every running session. Apply
  * reads how many run now: with none it applies at once; otherwise it asks first and says
  * how many stop. A count it cannot read, or one the reply leaves out, still warns, without
  * a number. Only the engine knows whether a change restarts it, so Apply always asks.

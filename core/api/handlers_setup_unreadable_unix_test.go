@@ -20,7 +20,7 @@ import (
 )
 
 // A setup token the engine cannot read answered the same bare 403 as a wrong one and
-// logged nothing (#530), so neither the person at the console nor the operator could
+// logged nothing, so neither the person at the console nor the operator could
 // tell why setup refused. It answers its own code now, without the path, and the log
 // names the file and the errno once. A wrong or used token answers as it always did.
 func TestSetupNamesAnUnreadableTokenFileAndLogsItsCause(t *testing.T) {
@@ -45,7 +45,7 @@ func TestSetupNamesAnUnreadableTokenFileAndLogsItsCause(t *testing.T) {
 	}
 
 	// The engine's account may not open the file: what a token written by another
-	// account looks like to it (#514). Root opens any file, so as root the file is
+	// account looks like to it. Root opens any file, so as root the file is
 	// made unreadable the other way the engine refuses it: a mode wider than 0600.
 	mode, reason := os.FileMode(0o200), "permission denied"
 	if os.Geteuid() == 0 {

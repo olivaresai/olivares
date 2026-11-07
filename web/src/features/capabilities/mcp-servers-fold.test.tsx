@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// One MCP servers destination (#3388): MCP & skills' Servers tab is where a
+// One MCP servers destination: MCP & skills' Servers tab is where a
 // server is added, tested and enabled (the tenant gateway) and where the servers the
 // inventory discovered are listed. The gateway part is a tenant administrator's, as it was
 // on its own page; the tab the address names opens first.

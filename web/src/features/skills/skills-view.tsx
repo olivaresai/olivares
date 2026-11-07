@@ -26,7 +26,7 @@ import type { SkillPack } from './types'
 import './i18n'
 
 /** The skill-pack catalog. `titled` is its own page header; on MCP & skills' Skills tab
- * (#3388) the page's title already names it. */
+ * the page's title already names it. */
 export function SkillsView({ titled = true }: { titled?: boolean } = {}) {
   const { t } = useTranslation('skills')
   const { activeTenant } = useAuth()

@@ -56,7 +56,7 @@ Schutzmechanismen aktiv:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.7
+olivares upgrade --check --current-version 0.8
 ```
 <!-- /release -->
 

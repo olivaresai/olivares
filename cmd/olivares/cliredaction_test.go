@@ -89,7 +89,7 @@ func TestRedactCodedKeepsTheCodeAndScrubsEverySecret(t *testing.T) {
 			// redaction is. That is another face of the same pathology — a
 			// single-character secret is indistinguishable from ordinary text — and one
 			// more reason to refuse absurd passwords at input rather than here.
-			// ⛔ CAMBIADO AL RESTAURAR #824 (PR #1112), y el motivo importa más que el string.
+			// ⛔ CAMBIADO AL RESTAURAR #824 (PR), y el motivo importa más que el string.
 			// Este caso fijaba el comportamiento POST-REVERT: mientras #824 estuvo fuera,
 			// redactCLISecrets no tenía suelo y un secreto de un carácter salía sustituido
 			// —y de paso destrozaba el mensaje: el "7" de "attempt 7" también caía—.

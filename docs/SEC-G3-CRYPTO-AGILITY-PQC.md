@@ -62,7 +62,7 @@ is the PQC risk with a real clock.
   hybrids are in the FIPS allowlist of `crypto/tls` (bare X25519 is
   excluded; the approved ML-KEM component is the one that carries the approval — the
   Go stance since 1.25). **ML-KEM is inside the validated module
-  v1.0.0/cert #5247** (the Security Policy lists ML-KEM KeyGen/EncapDecap, CAVP
+  v1.0.0/cert 5247** (the Security Policy lists ML-KEM KeyGen/EncapDecap, CAVP
   A6650) — the post-quantum KEM does not force leaving the validated module.
 - Version gotcha, already resolved in this repo: under `fips140=only` the hybrids
   were broken from Go 1.25 to go1.26.2 (#78178; fixed in go1.26.3+). This
@@ -101,7 +101,7 @@ when to activate it.
 
 | Clock | Date | What it really requires |
 |---|---|---|
-| CMVP: FIPS 140-2 → Historical | **2026-09-22** (acceptance until 2026-09-21; no calendar changes) | New procurements: only **140-3** modules. Covered: the FIPS build uses the 140-3 module #5247 (ACTIVE, validated 2026-04-27, sunset 2031-04-26). |
+| CMVP: FIPS 140-2 → Historical | **2026-09-22** (acceptance until 2026-09-21; no calendar changes) | New procurements: only **140-3** modules. Covered: the FIPS build uses the 140-3 module 5247 (ACTIVE, validated 2026-04-27, sunset 2031-04-26). |
 | CNSA 2.0: NSS acquisition gate | **2027-01-01** | Every **new acquisition** for National Security Systems must be CNSA-2.0-compliant (FAQ v2.1, dec-2024). NOTE: it is a purchase gate, not an algorithm-use deadline. |
 | CNSA 2.0: software/firmware signing | prefer 2025 → **exclusive 2030** | LMS/XMSS (SP 800-208) or **ML-DSA-87** ("approved for all signing use cases"); **SLH-DSA is NOT approved for NSS**. |
 | CNSA 2.0: use by category | browsers/cloud prefer 2025→2033 · networking 2026→2030 · OS 2027→2033 · total transition 2033/2035 | ML-KEM-1024 is the only approved key-establishment parameter (Cat 5). Note: NSA does **not require** hybrids; it permits them. |
@@ -143,7 +143,7 @@ the provider.
 ## 7. Primary sources (verified 2026-06-10)
 
 - Go FIPS 140-3 / GOFIPS140 / module status: <https://go.dev/doc/security/fips140>
-- CMVP cert #5247 (ACTIVE): <https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5247> · Security Policy (ML-KEM approved inside the module): `140sp5247.pdf`
+- CMVP cert 5247 (ACTIVE): <https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5247> · Security Policy (ML-KEM approved inside the module): `140sp5247.pdf`
 - CMVP Modules-In-Process (v1.26.0 "Pending Review"): <https://csrc.nist.gov/Projects/cryptographic-module-validation-program/modules-in-process/modules-in-process-list>
 - FIPS 140-2→Historical transition: <https://csrc.nist.gov/projects/fips-140-3-transition-effort>
 - FIPS 203/204/205 (finals 2024-08-13): <https://csrc.nist.gov/pubs/fips/203/final> · `…/204/final` · `…/205/final`

@@ -68,7 +68,7 @@ ver_le() {
 	local a="$1" b="$2" i
 	local -a A B
 	# Fail closed on anything but dotted numbers: the compares below swallow their own errors, so a
-	# CRLF go.mod ("1.26.4\r") used to read as "not older" and pass every rule (#1531 review).
+	# CRLF go.mod ("1.26.4\r") used to read as "not older" and pass every rule ( review).
 	[[ "$a" =~ ^[0-9]+(\.[0-9]+)*$ && "$b" =~ ^[0-9]+(\.[0-9]+)*$ ]] ||
 		cannot_look "cannot compare go versions '$(printf '%q' "$a")' and '$(printf '%q' "$b")'"
 	IFS=. read -r -a A <<<"$a"
@@ -215,7 +215,7 @@ EOF
 
 # --- RULE 3b: workspace modules the vulnerability gate scans ALONE -----------------------------
 #
-# Added 2026-10-11 (#1531). Rule 3 skips workspace members, and rule 2 only stops a go line ABOVE
+# Added 2026-10-11. Rule 3 skips workspace members, and rule 2 only stops a go line ABOVE
 # the workspace. But scripts/govulncheck-gate.sh scans some members AGAIN with GOWORK=off, and there
 # the module's own go line picks the toolchain. cloud/control-plane said `go 1.26.6`, so on a host
 # with go1.26.8 the gate graded the 1.26.8 standard library (11 called vulns) while CI, which

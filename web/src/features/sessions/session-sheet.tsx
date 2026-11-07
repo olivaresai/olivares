@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ONE SESSION IN A SHEET, OVER THE ESTATE (#2549, C2-IMPROVE E4). Opening a session from
+// ONE SESSION IN A SHEET, OVER THE ESTATE (, C2-IMPROVE E4). Opening a session from
 // Estate keeps the estate in view: the sheet is the session page's own narrative, the
 // header with Interrupt and Stop and the real conversation as the tool streams it, not a
 // second telling of the session. "Open the session" goes to the full page, where the

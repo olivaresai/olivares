@@ -351,7 +351,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
     await test.step('the member opens the accounts page', async () => {
       await signIn(member, MEMBER_EMAIL, MEMBER_PASSWORD)
       await member.goto(stepHref(ACCOUNTS))
-      // The accounts page is a door into Tools (#2552): a member reads its Accounts part.
+      // The accounts page is a door into Tools: a member reads its Accounts part.
       await expect(
         content(member).getByRole('heading', {
           name: 'Accounts',
@@ -627,7 +627,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       )
       expect(first).toHaveLength(1)
       await member.keyboard.press('Escape')
-      // Leave the accounts and come back (they are on Tools, #2552): the parked
+      // Leave the accounts and come back (they are on Tools,): the parked
       // creation survives the list unmounting, as it did a tab switch.
       await shellLink(member).click()
       await member.locator('[data-place="tools"]').click()

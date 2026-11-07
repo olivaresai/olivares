@@ -24,6 +24,7 @@ import (
 	"github.com/olivaresai/olivares/modules/catalog"
 	"github.com/olivaresai/olivares/modules/compliance"
 	"github.com/olivaresai/olivares/modules/deploy"
+	"github.com/olivaresai/olivares/modules/documents"
 	"github.com/olivaresai/olivares/modules/evals"
 	"github.com/olivaresai/olivares/modules/eventing"
 	"github.com/olivaresai/olivares/modules/finops"
@@ -1010,7 +1011,9 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 		editionModules = append(editionModules, m) // the same instance governance and knowledge ask
 	}
 	editionModules = append(editionModules, managedSCIM...)
-	all, err := registry.Build([]api.Module{
+	documentsMod := documents.New()
+	sm.UseDocumentConverter(documentsMod.Markdown)
+	all, err := registry.Build([]api.Module{documentsMod,
 		capabilities.New(capabilitiesOpts(pinVerifier)...), ss,
 		catalog.New(catalog.WithSigningKey(catalogSigner), catalog.WithActivation(catalogBridge.activate)),
 		skillsMod,

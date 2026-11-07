@@ -369,7 +369,7 @@ var prefixConfigEnvKeys = []string{
 	"OLIVARES_CODEX_HOOK_",
 	"OLIVARES_DR_OFFSITE_",
 	"OLIVARES_EMBEDDINGS_",
-	// Y el mismo caso otra vez, ahora con Grok (PR #1011, 2026-08-19): siete claves leidas
+	// Y el mismo caso otra vez, ahora con Grok (PR, 2026-08-19): siete claves leidas
 	// —seis en cmd_grokhook.go y OLIVARES_GROK_HOOK_PEP_CONFIG en grokhookpepserver.go— y
 	// ninguna registrada, de modo que `config validate --strict` habria RECHAZADO un despliegue
 	// que las pusiera. Tercera vez que la familia de un hook llega sin su prefijo. Va AQUI y no

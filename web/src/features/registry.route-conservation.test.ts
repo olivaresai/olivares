@@ -113,7 +113,7 @@ describe('route conservation', () => {
           replace: true,
         })
         // The query the old address carried is kept; an alias may add its own (a tab of the
-        // page it lands on, #3388).
+        // page it lands on,).
         if (alias.search) {
           const search = options.search as (
             prev: Record<string, unknown>,

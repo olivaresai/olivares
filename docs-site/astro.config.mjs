@@ -38,7 +38,7 @@ export default defineConfig({
   output: 'static',
   trailingSlash: 'ignore',
   // The core REST path count is written as {{core-paths}} in every locale and filled in here
-  // from web/openapi/openapi.json, the file the REST reference is rendered from (#2494).
+  // from web/openapi/openapi.json, the file the REST reference is rendered from.
   markdown: { processor: satteri({ mdastPlugins: [corePathsPlugin()] }) },
   // Astro 7 default is compressHTML:'jsx', which strips the space between
   // adjacent inline tags. Keep the v6 HTML-aware compressor so existing
@@ -441,7 +441,7 @@ export default defineConfig({
             {
               label: 'Modules catalog',
               items: [
-                { label: 'Overview — the 35 selectable modules', slug: 'reference/modules/overview' },
+                { label: 'Overview — the 36 selectable modules', slug: 'reference/modules/overview' },
                 // Observe
                 { label: 'Inventory & discovery', slug: 'reference/modules/i-inventory' },
                 { label: 'Live operation & sessions', slug: 'reference/modules/ii-sessions' },
@@ -484,9 +484,9 @@ export default defineConfig({
                 { label: 'Output integrations & notifications', slug: 'reference/modules/xv-notify' },
                 { label: 'Eventing & webhooks', slug: 'reference/modules/eventing' },
                 { label: 'Saved console views', slug: 'reference/modules/consoleviews' },
-                // Edition availability descriptor (modules/sessioncockpit; not one of the 35)
+                // Edition availability descriptor (modules/sessioncockpit; not one of the 36)
                 { label: 'Session cockpit (availability)', slug: 'reference/modules/session-cockpit' },
-                // Platform & core capabilities (not counted among the 35 selectable modules)
+                // Platform & core capabilities (not counted among the 36 selectable modules)
                 { label: 'API & manage-as-code (platform)', slug: 'reference/modules/xix-api-manage-as-code' },
                 { label: 'Multi-tenancy & org management (platform)', slug: 'reference/modules/xx-multi-tenancy' },
                 { label: 'Executive dashboards & reporting (console)', slug: 'reference/modules/xxi-executive-dashboards' },

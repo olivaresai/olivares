@@ -14,7 +14,7 @@ import (
 
 // Deleting an agent must take its agent-group memberships with it. The membership table
 // has no foreign key to agents, so a row that outlives its agent is never cleaned up by
-// the database and every group reader then trips over it (finops#2944).
+// the database and every group reader then trips over it (finops).
 func TestDeleteAgentRemovesItsGroupMemberships(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

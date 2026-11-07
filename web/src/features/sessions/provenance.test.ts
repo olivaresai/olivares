@@ -779,7 +779,7 @@ describe('sessionNaming — what a ONE-LINE row is called', () => {
       [],
     )[0]!
     // The action is what the row's hover and the detail say; with no tool and no
-    // project known the row is untitled, not named by a tool call (#2266).
+    // project known the row is untitled, not named by a tool call.
     expect(sessionNaming(acting, 'Untitled session').name).toBe(
       'Untitled session',
     )
@@ -824,14 +824,14 @@ describe('sessionNaming — what a ONE-LINE row is called', () => {
 })
 
 /**
- * #2266 — THE LIST NAMES A SESSION BY ITS TOOL AND ITS PLACE, never by its last file.
+ * — THE LIST NAMES A SESSION BY ITS TOOL AND ITS PLACE, never by its last file.
  *
  * Measured in a 50-session capture: every observed row was titled by its only tool event
  * ("Read · src/ma…", "Write · READM…"), cut by the row's own ellipsis, and the launched
  * session on top was "Untitled session". The file of the last event is the secondary
  * line (the row's hover and the detail), never the title.
  */
-describe('sessionNaming — tool and place, not the last file (#2266)', () => {
+describe('sessionNaming — tool and place, not the last file', () => {
   const untitled = 'Untitled session'
   const observed = (ref: string, over: Partial<LiveDTO> = {}) =>
     live(ref, {
@@ -1162,7 +1162,7 @@ describe('sharedNames — one list, distinct names', () => {
   })
 })
 
-describe('runAwaitedApproval — the approval a run waits on now (#502)', () => {
+describe('runAwaitedApproval — the approval a run waits on now', () => {
   const run = (patch: Partial<RunDTO>) =>
     ({ run_ref: 'r', state: 'running', ...patch }) as RunDTO
   it.each<[string, Partial<RunDTO>, string | undefined]>([

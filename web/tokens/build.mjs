@@ -343,7 +343,7 @@ const blackBlock = block('.dark.black', black, [
   ...ROLES,
 ])
 
-// TRUST CHROME (#3140). The approval card, the consent and step-up dialogs, the
+// TRUST CHROME. The approval card, the consent and step-up dialogs, the
 // provenance chips and the edition badges carry a decision, so a brand accent or a pack
 // variable set on :root or <html> must not reach them. Each of these blocks declares the
 // SAME plan at the surface itself (a declaration on the element always beats an inherited

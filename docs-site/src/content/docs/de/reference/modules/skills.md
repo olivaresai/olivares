@@ -1,13 +1,13 @@
 ---
 title: "Skills — der immutable Katalog und die gepinnten Zuweisungen"
 description: >-
-  Eines der 32 Module: der immutable Skills-Katalog und seine gepinnten
+  Eines der 33 Module: der immutable Skills-Katalog und seine gepinnten
   Zuweisungen. Skill-Packs werden als digest-validierte, immutable Revisionen
   installiert; was ein Ziel nutzen darf, ist ein registrierter, auditierter Pin —
   nie eine Live-Ordneränderung.
 ---
 
-Skills (`modules/skills`, `olivares.skills`) ist eines der 32 Module. Es besitzt den
+Skills (`modules/skills`, `olivares.skills`) ist eines der 33 Module. Es besitzt den
 **immutableen Skills-Katalog** und seine **gepinnten Zuweisungen**: Ein Skill-Pack
 wird einmal installiert, Eintrag für Eintrag gegen seinen Manifest-Digest validiert
 und als immutable Revision veröffentlicht — danach wird es nie an Ort und Stelle
@@ -67,7 +67,7 @@ bereits gepinnter Launch ausführen wird.
 
 ## Verwandtes
 
-- [Modul-Katalog](/de/reference/modules/overview/) — die 32 Module und wo dieses
+- [Modul-Katalog](/de/reference/modules/overview/) — die 33 Module und wo dieses
   darunter sitzt.
 - [MCP, Skills & Fähigkeiten](/de/reference/modules/v-capabilities/) — die steuernde
   Sicht über Tools und Fähigkeiten, die dieser Katalog speist.

@@ -1,12 +1,12 @@
 ---
 title: "Skills — 不可变目录与固定分配"
 description: >-
-  32 个模块之一：不可变的技能目录及其固定分配。技能包以经 digest 校验的不可变
+  33 个模块之一：不可变的技能目录及其固定分配。技能包以经 digest 校验的不可变
   修订形式安装；目标可以使用什么，取决于一条被记录、被审计的固定分配——而绝不
   是对文件夹的现场修改。
 ---
 
-Skills（`modules/skills`、`olivares.skills`）是 32 个模块之一。它拥有**不可变的
+Skills（`modules/skills`、`olivares.skills`）是 33 个模块之一。它拥有**不可变的
 技能目录**及其**固定分配**：技能包只安装一次，逐条对照其清单 digest 校验，并作为
 不可变修订发布——此后绝不在原地修改。目标（智能体、组、工作区）可以使用什么，由一条
 把包修订固定下来的**分配**决定，而每一次固定都会写入审计账本
@@ -57,7 +57,7 @@ read 权限；安装包或修订需要 write；退役需要 admin；分配需要
 
 ## 相关
 
-- [模块目录](/zh/reference/modules/overview/) — 32 个模块以及本模块在其中的位置。
+- [模块目录](/zh/reference/modules/overview/) — 33 个模块以及本模块在其中的位置。
 - [MCP、技能与能力](/zh/reference/modules/v-capabilities/) — 本目录供料的工具与
   能力治理视图。
 - [内部目录与市场](/zh/reference/modules/xiv-catalog/) — 经审核的智能体、MCP 服务器

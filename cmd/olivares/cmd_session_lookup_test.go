@@ -67,7 +67,7 @@ func TestSessionFollowShowsThePersonsMessages(t *testing.T) {
 	}
 }
 
-// Two sessions that hold one name (#2978: the engine used to accept it) are refused
+// Two sessions that hold one name (: the engine used to accept it) are refused
 // by name, never resolved to the newer: `session stop api` must reach neither
 // unasked. A cleaned session holds nothing, so the live one is the one it names.
 func TestSessionNameHeldTwiceIsRefusedNotResolvedToTheNewer(t *testing.T) {

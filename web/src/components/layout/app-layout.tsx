@@ -61,7 +61,7 @@ function Splash() {
  * bar and the routed work, plus the always-mounted ⌘K palette and, below 761 px, the
  * navigation drawer the top bar's menu button opens.
  *
- * THE SHELL CONTRACT (0.5, after console Estate #2544):
+ * THE SHELL CONTRACT (0.5, after console Estate):
  *
  *   left navigation │ top bar 56 px: title · search · notifications · account
  *   ──────────────────────────────────────────────────────────────

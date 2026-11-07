@@ -123,7 +123,7 @@ for (const { spec: specRel, dist: distRel } of RENDERED) {
   }
   console.log(`✓ anti-drift: all ${expectedPages.length} operations of ${specRel} rendered under ${distRel}.`)
 }
-// 4. The core-path count is a build-time value (#2494): the pages carry the token, the build
+// 4. The core-path count is a build-time value: the pages carry the token, the build
 // fills in the number from the same spec. A built page that still shows the token was not
 // processed, and the English reference index must show the number the spec has right now.
 const DIST = here('../dist')

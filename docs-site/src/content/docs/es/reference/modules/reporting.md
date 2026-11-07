@@ -45,5 +45,5 @@ Business Compliance Packs ofrece cinco tipos de informe bajo demanda:
   postura y evidencia de compliance.
 - [Costes y AI FinOps](/es/reference/modules/xi-finops/) — superficie
   autoritativa de gasto.
-- [Catálogo de módulos](/es/reference/modules/overview/) — los 32 módulos
+- [Catálogo de módulos](/es/reference/modules/overview/) — los 33 módulos
   conectados y su madurez honesta.

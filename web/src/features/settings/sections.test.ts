@@ -14,7 +14,7 @@ import {
   settingsSections,
 } from './sections'
 
-// The sections that host another page of the console (#2905), and the page each hosts.
+// The sections that host another page of the console, and the page each hosts.
 const HOSTED = [['setup', 'onboarding']] as const
 
 describe('settings sections that host a page', () => {

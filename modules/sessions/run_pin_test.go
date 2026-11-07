@@ -679,7 +679,7 @@ func liveItemsOf(r resp) map[string]map[string]any {
 }
 
 // A session the plane only observes (no run) is pinned by its live row, as a launched one
-// is by its run (#2176): the caller's own mark on the live reads, in the same order and
+// is by its run: the caller's own mark on the live reads, in the same order and
 // under the same ceiling as the run pins, refused for a row that belongs to a run, and gone
 // with the observed session.
 func TestObservedSessionPinSharesTheRunPinsOrderAndCeiling(t *testing.T) {

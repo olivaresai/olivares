@@ -397,7 +397,7 @@ func TestRSInvalidOrigin(t *testing.T) {
 	w := httptest.NewRecorder()
 	rs.ServeHTTP(w, req)
 	if w.Code != http.StatusForbidden {
-		t.Errorf("invalid-origin status = %d, want 403 (PR#1439)", w.Code)
+		t.Errorf("invalid-origin status = %d, want 403", w.Code)
 	}
 	// An allowed Origin passes the check (reaches auth → 200).
 	req2 := toolsCallReq(token, "search", "{}")

@@ -29,7 +29,7 @@ folder. The session folder's own two skill folders of those kinds are listed aga
 in the launch's inline `skills.paths`, which replaces a `skills.paths` set in the
 account's configuration. A session in a subfolder of a git repository therefore
 no longer lists those skill folders at the repository root; OpenCode's own
-configuration folders above the session folder are still read (#3011). These locations are in a temporary
+configuration folders above the session folder are still read. These locations are in a temporary
 HOME managed by the engine. The account's configuration home remains in use.
 For Gemini CLI, `GEMINI_CLI_HOME` also names this temporary home, whose `.gemini`
 links to the selected profile's configuration directory.

@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const fetchedObjectName = ".fetched"
@@ -40,7 +41,7 @@ func (e *Engine) PlanV2(ctx context.Context, req RequestV2) (*PlanV2, error) {
 // atomic publication. Error removes only this operation's staging.
 //
 // An OpenCode install also places the pinned ripgrep its glob and grep run
-// (ensureRipgrep, #3173), after the release is placed or found in place, so
+// (ensureRipgrep,), after the release is placed or found in place, so
 // installing again gives an earlier install its ripgrep.
 func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2, progress io.Writer) (*ReceiptV2, *PlanV2, error) {
 	rec, plan, err := e.installV2(ctx, req, approved, progress)
@@ -70,14 +71,25 @@ func (e *Engine) installV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	if err != nil {
 		return nil, nil, err
 	}
-	fmt.Fprintf(progress, "resolving %s %s from %s\n", req.Driver, req.Version, orOfficial(req.Source))
-	plan, material, err := p.ResolveV2(ctx, req)
+	// Pin metadata-only archive channels to the approved release. Archives with
+	// checksum files keep their API-free resolution route.
+	_, archive := p.(*ReleaseArchive)
+	resolveReq := req
+	requested := strings.TrimSpace(req.Version)
+	if archive && releaseChecksumFile(req.Driver) == "" && approved != nil && (requested == ChannelLatest || requested == ChannelStable) {
+		resolveReq.Version = approved.Selection.Version
+	}
+	fmt.Fprintf(progress, "resolving %s %s from %s\n", req.Driver, resolveReq.Version, orOfficial(req.Source))
+	plan, material, err := p.ResolveV2(ctx, resolveReq)
 	if err != nil {
 		return nil, nil, err
 	}
 	plan.Digest = ComputeDigestV2(plan)
 	fmt.Fprintf(progress, "selected %s %s %s verification %s\n", plan.Selection.Driver, plan.Selection.Version, plan.Selection.VendorPlatform, plan.Selection.Verification.Kind)
-	if approved != nil && approved.Digest != plan.Digest {
+	if approved != nil && approved.Digest != plan.Digest && !(archive && sameReleaseOtherRoute(p, plan, approved.Digest)) {
+		approvedSelection, _ := json.Marshal(approved.Selection)
+		resolvedSelection, _ := json.Marshal(plan.Selection)
+		fmt.Fprintf(progress, "approved selection: %s\nresolved selection: %s\n", approvedSelection, resolvedSelection)
 		return nil, plan, refuse(KindPlanChanged, "the approved plan (digest %s) no longer matches what resolves (digest %s); the selection changed, so a new plan must be reviewed", short(approved.Digest), short(plan.Digest))
 	}
 	if declared, ok := p.(*declaredProvider); ok {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// HOW A MESSAGE FINDS ITS ROW (#2129). The index, the search and the time anchor are the
+// HOW A MESSAGE FINDS ITS ROW. The index, the search and the time anchor are the
 // engine's (GET /runs/{ref}/messages); what is here is only how an index entry finds its
 // row in the conversation this view holds.
 import type { RunMessageDTO } from '@/features/agentops/types'

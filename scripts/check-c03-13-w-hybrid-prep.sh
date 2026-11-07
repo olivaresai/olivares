@@ -5,7 +5,7 @@
 #
 # C03-13 unique leftover unique vs check-c03-13-w-hybrid.sh (LOOK 2 on
 # origin/main without the 2026-08-19 census doc) and unique leftover
-# unique vs #1005. 0 CLEAN · 1 finding · 2 could not look.
+# unique vs. 0 CLEAN · 1 finding · 2 could not look.
 #
 # 2026-09-14 (R115 paid renewal, Root-ratified MIXED-COHORT-INTERFACE): the source half used to
 # pin the defect itself — `paidIssue ? "refund_window" : "term"`, one phase for every line chosen

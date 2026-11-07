@@ -5,7 +5,7 @@
 #
 # C05-08 unique leftover unique vs check-c05-08-legal-entities.sh
 # (named on main, CHECK not in lint:addon-sets) and unique leftover
-# unique vs #1391 / #1405. 0 CLEAN · 1 finding · 2 could not look.
+# unique vs /. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

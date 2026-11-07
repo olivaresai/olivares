@@ -23,7 +23,7 @@ type acpToolCall struct {
 	Kind       string `json:"kind"`
 	facts      codexApprovalFacts
 	// searchesSessionFolder is set for OpenCode's glob or grep given no folder, which
-	// searches the session folder (openCodeFolderSearch, #3058).
+	// searches the session folder (openCodeFolderSearch,).
 	searchesSessionFolder bool
 }
 
@@ -137,7 +137,7 @@ func (s *acpSession) resolveServerRequest(req *acpServerRequest, key string, raw
 			params.ToolCall.facts = recorded.facts
 		}
 		// A glob or grep given no path searches the session folder (measured on 1.19.4):
-		// that is the folder it reads (#3058).
+		// that is the folder it reads.
 		if params.ToolCall.searchesSessionFolder && len(params.ToolCall.facts.FilePaths) == 0 &&
 			strings.TrimSpace(params.ToolCall.facts.CommandLine) == "" {
 			params.ToolCall.facts = codexApprovalFacts{FilePaths: []string{s.workDir()}, Complete: true}

@@ -27,7 +27,7 @@ const maxDriftLines = 10
 // TestBetaOpenAPICoversEveryMountedModuleRoute binds the document to the mounted routes; this
 // binds the committed file to the document. `task openapi:check` finds the same drift but needs
 // the web toolchain, so a route added without its snapshot reached main and was found only by
-// the public export (#1910). Dev runs no suite that includes this package before a merge, so
+// the public export. Dev runs no suite that includes this package before a merge, so
 // AGENTS.md "Work and verification" has a route change run this test by name and paste the result.
 func TestBetaOpenAPIMatchesCommittedSnapshot(t *testing.T) {
 	committed, err := os.ReadFile("../../web/openapi/openapi.beta.json")

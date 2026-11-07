@@ -426,7 +426,7 @@ if [ "${1:-}" = "--selftest" ]; then
 		*) ok "real tree: 'health' is not a finding (declared in 3 views)" ;;
 		esac
 		# ⛔ ESTA CALIBRACION ERA UN LITERAL Y CERTIFICABA LA DERIVA QUE EXISTE PARA CAZAR. Decia
-		#    «arbol real: 'knowledge' deberia ser hallazgo», y el dia que #1957 le puso el aviso a
+		#    «arbol real: 'knowledge' deberia ser hallazgo», y el dia que le puso el aviso a
 		#    `knowledge` el selftest se puso ROJO por el EXITO: la feature dejo de ser hallazgo, que
 		#    es exactamente lo que queriamos. Un ejemplo cableado convierte cada arreglo en un fallo
 		#    del control, y entonces alguien borra el caso —y con el, la calibracion positiva—.

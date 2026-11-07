@@ -58,6 +58,19 @@ function wrap(ui: ReactNode) {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
+    items: [
+      {
+        workspace_ref: 'ws_fixture',
+        mount_mode: 'rw',
+        max_read_bytes: 1048576,
+        dlp_mode: 'off',
+        root_path: '/srv/work/project',
+        state: 'active',
+      },
+    ],
+    has_more: false,
+  })
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_1' })
   useTenantStore.setState({ activeTenant: 'tnt-a' })
@@ -72,10 +85,7 @@ beforeEach(() => {
     items: [],
     has_more: false,
   })
-  vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
-    items: [],
-    has_more: false,
-  })
+
   consoleApi.listSecrets.mockReset()
   consoleApi.listSecrets.mockResolvedValue({
     sealer_available: true,
@@ -111,7 +121,7 @@ describe('New session: the skills it will get are shown before it starts', () =>
       'ws-default',
       expect.any(AbortSignal),
       undefined,
-      undefined,
+      'ws_fixture',
     )
   })
 })

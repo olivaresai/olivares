@@ -59,7 +59,7 @@ CPC_COUNTS_ONLY=0
 [ "${1:-}" = "--counts-only" ] && CPC_COUNTS_ONLY=1
 export CPC_SELFTEST
 
-# ── delegated-leg verdicts: collected, never a detour (#569) ───────────────────────────
+# ── delegated-leg verdicts: collected, never a detour ───────────────────────────
 #
 # The three delegated legs below used to exit the gate the moment one of them failed, so a
 # stale config-env reference or a toolchain the host lacks silenced EVERY count finding
@@ -628,8 +628,8 @@ NOUN = {
     # The other two odd forms («à N chemins», «контракт из N путей») were normalised to the
     # canonical noun in the same commit rather than pattern-matched, because a bare "N chemins"
     # or "N путей" would match unrelated prose and this gate must not fire on a true sentence.
-    # Only the beta-sentence wordings below (#2297) are pattern-matched, each anchored.
-    # `paths rendered` joined on 2026-10-08 (#569): explanation/architecture/overview.md:93
+    # Only the beta-sentence wordings below are pattern-matched, each anchored.
+    # `paths rendered` joined on 2026-10-08: explanation/architecture/overview.md:93
     # shipped "54 paths rendered from the product's own OpenAPI 3.1 contract" for two releases
     # and NO noun above could see it. The lookbehind is defense-in-depth for the beta
     # document's "N module paths rendered": today JOIN (spaces/hyphens/CJK counters) can
@@ -638,7 +638,7 @@ NOUN = {
     # outcome either way.
     # The groups after `paths rendered` are the wordings of the sentence «not part of the
     # stable N-path core document» in the non-English reference indexes, quickstarts and
-    # honesty pages (#2297; the fr and ru honesty pages use a noun above). Each locale
+    # honesty pages (; the fr and ru honesty pages use a noun above). Each locale
     # words it differently, so each phrase is anchored on the words next to it instead of
     # loosening the noun: a bare «N Pfaden», «N chemins» or «N путей» is unrelated prose.
     # The per-line check only sees an anchor that sits on the same line as the number, so
@@ -866,7 +866,7 @@ def require_digit_claim(surface, path, text, metric, minimum=1):
 
 # The core-path count is NOT written in the docs-site pages. Every locale carries this token
 # and docs-site/src/core-paths-plugin.mjs fills it in at build time from the same
-# web/openapi/openapi.json the REST reference is rendered from (#2494: 42 hand-kept copies in
+# web/openapi/openapi.json the REST reference is rendered from (: 42 hand-kept copies in
 # seven locales went stale on every API pull request, 129 -> 132 -> 134 in one day).
 CORE_PATHS_TOKEN = "{{core-paths}}"
 
@@ -1116,7 +1116,7 @@ def selftest():
     expect_red("wrong paths digit zh", lambda: check_units("t", "f.md", "该契约描述 **24 条核心路径**。"))
     # The "not part of the stable N-path core document" sentence of reference/index.md,
     # start/quickstart.md and start/honesty-and-limits.md states the same count in a wording
-    # the nouns above never matched (#2297), in every non-English locale. One red fixture per
+    # the nouns above never matched, in every non-English locale. One red fixture per
     # phrase, each the real sentence of its page; a bare "N Pfaden" / "N chemins" / "N путей"
     # must stay green, so each phrase is anchored on its neighbouring words.
     for name, line in (
@@ -1155,7 +1155,7 @@ def selftest():
         ("zh wrapped", "该脚本扫描 40 条路径的"),
     ):
         expect_green(f"bare path noun is not this metric {name}", lambda line=line: check_units("t", "f.md", line))
-    # The rendered form overview.md shipped for two releases with no noun watching it (#569):
+    # The rendered form overview.md shipped for two releases with no noun watching it:
     # 53 ≠ the fixture canon 54, and the beta guard below must not swallow the true one.
     expect_red("wrong paths digit rendered form", lambda: check_units("t", "f.md",
         "The stable core REST surface — 53 paths rendered from the product's own OpenAPI 3.1 contract — is documented in the API reference."))
@@ -1186,7 +1186,7 @@ def selftest():
         "x" * 1200 + " There are currently **150 connector directories** in the tree."))
     # The retained historical snapshot carries the same labels with old values. A live row
     # that went stale was hidden by it: the bare substring `| 114 |` matched the historical
-    # "legacy broad count" row while the live row said 128 (#1796). The historical block of
+    # "legacy broad count" row while the live row said 128. The historical block of
     # these fixtures also repeats every live label with the CORRECT value, so only a check
     # that reads the first row of a label is red on a stale live row.
     state_rows = (("Product modules", f"**{MODULES} wired**"),
@@ -1317,7 +1317,7 @@ def selftest():
     expect_green("paths claimed at BOTH sites", lambda: require_digit_claim(
         "t", "reference/index.md", "row: (54 core paths)\nprose: describes **54 core paths**.",
         "paths", minimum=2))
-    # #2494: a docs-site page states the count through the build-time token, never as a number.
+    #: a docs-site page states the count through the build-time token, never as a number.
     # A CORRECT number is refused too (it is wrong at the next API change), in every language.
     expect_red("hand-kept core-path count, even the correct one", lambda: forbid_hand_kept_paths(
         "t", "f.md", "The contract describes **54 core paths**."))
@@ -1718,9 +1718,9 @@ for loc in LOCALES:
         require_digit_claim("docs-site", wi, rd(wi), "integrations")
     # The API reference index states the core-path count THREE times — the capability-table row,
     # the prose sentence under it and the «not part of the stable core document» sentence
-    # (#2297, whose wording differs per locale and went unwatched) — in all seven languages.
+    # (, whose wording differs per locale and went unwatched) — in all seven languages.
     # Requiring it ONCE would let a session fix the sentence, leave a stale row above it, and
-    # pass: the gate would find what it was looking for and stop looking. Since #2494 the
+    # pass: the gate would find what it was looking for and stop looking. Since the
     # sites carry the token and the build fills the number in, so the count is required at
     # all three and may never be a number.
     ri = f"{DOCS_ROOT}/{loc}reference/index.md"
@@ -1730,7 +1730,7 @@ for loc in LOCALES:
         require_nonempty("docs-site", ri, rd(ri), 2000)
         require_core_paths_token("docs-site", ri, rd(ri), minimum=3)
     # The same count sits once in the quickstart, once in the honesty page and once in the
-    # architecture overview of every locale (#2297, #569); the claim over the whole text
+    # architecture overview of every locale; the claim over the whole text
     # survives a rewrap that hides it from the per-line check.
     for page in ("start/quickstart.md", "start/honesty-and-limits.md", "explanation/architecture/overview.md"):
         pp = f"{DOCS_ROOT}/{loc}{page}"

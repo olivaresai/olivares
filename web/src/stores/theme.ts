@@ -82,7 +82,7 @@ function applyTheme(theme: Theme): ResolvedTheme {
  * What a brand or a pack may set on the document: the accent family and the logo, and
  * nothing else. Every other variable (surfaces, text, lines, status colours, focus) stays
  * the host's, and the trust surfaces (`TrustChrome`) re-declare even the accent, so a
- * pack cannot make a decision look like something else (#3140).
+ * pack cannot make a decision look like something else.
  */
 export const THEME_SETTABLE_VARIABLES: readonly string[] = [
   '--accent',

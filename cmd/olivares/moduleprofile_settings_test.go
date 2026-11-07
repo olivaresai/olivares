@@ -213,7 +213,7 @@ func TestModuleSelectionRestartsOnlyWhenTheRunningModulesChange(t *testing.T) {
 }
 
 // The restart that applies a selection stops every running session, so the
-// selection says how many run now, before Apply and in the reply (#507).
+// selection says how many run now, before Apply and in the reply.
 func TestModuleSelectionSaysHowManySessionsTheRestartStops(t *testing.T) {
 	_, p := bootForSettings(t)
 	ctx := context.Background()

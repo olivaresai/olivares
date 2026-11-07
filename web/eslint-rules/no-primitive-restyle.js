@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// no-primitive-restyle (#3135): a primitive from components/ui is restyled only through its
+// no-primitive-restyle: a primitive from components/ui is restyled only through its
 // variants.
 //
 // A primitive decides its own colour, size and padding, and offers variants for the choices a

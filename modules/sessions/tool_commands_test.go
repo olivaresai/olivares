@@ -135,7 +135,7 @@ func startCommandsRun(t *testing.T, fr *fakeRunner) (*Module, context.Context, s
 	return m, ctx, dto.RunRef, lr, fr.lastProc()
 }
 
-// #1801: typing "/" lists what the TOOL reports. Claude Code
+// : typing "/" lists what the TOOL reports. Claude Code
 // reports it on the live session's stdin protocol; the engine asks and serves it.
 func TestToolCommands_ListsWhatClaudeReportsWithItsSource(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-commands"}
@@ -778,7 +778,7 @@ func TestParseClaudeCommands_BoundsAndShapes(t *testing.T) {
 	})
 }
 
-// #1801: asking writes the tool's stdin, so it is fenced like an interrupt. A launch whose
+// : asking writes the tool's stdin, so it is fenced like an interrupt. A launch whose
 // durable Claim moved to a successor is not asked, and nothing crosses to its child.
 func TestToolCommands_ALaunchWhoseClaimMovedIsNotAsked(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-commands-fence"}

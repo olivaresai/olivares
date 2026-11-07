@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
-// sessionMessages is GET /runs/{ref}/messages (#2129). The JSON form prints the
+// sessionMessages is GET /runs/{ref}/messages. The JSON form prints the
 // engine's answer as it came; the text form prints what the console's message
 // navigator shows.
 type sessionMessages struct {

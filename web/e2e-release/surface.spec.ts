@@ -188,7 +188,7 @@ for (const label of [auth.setup.creating, auth.login.signingIn]) {
     await page.setContent(`<button type="submit" disabled>${label}</button>`)
     await page.evaluate(watchSurface, surfaceOptions('0.1'))
     await page.clock.runFor(5200)
-    // A slower host is not a hung page: the gate waits for readiness (#1177).
+    // A slower host is not a hung page: the gate waits for readiness.
     expect(findings).toEqual([])
     await page.clock.runFor(25_000)
     await expect
@@ -255,7 +255,7 @@ test('first-hour guard records a slow load the page left, and says when it is re
   expect(await page.evaluate(() => window.__firstHourLoading?.())).toBe(false)
 })
 
-// A slow load names the requests the page made while it waited (#2608). The page
+// A slow load names the requests the page made while it waited. The page
 // shows a spinner and holds one POST open past the 5 s target, as a session start does.
 const SESSIONS_PAGE = 'https://first-hour.invalid/sessions'
 const RUNS_PATH = '/v1/m/sessions/runs'
@@ -388,7 +388,7 @@ test('first-hour guard closes the requests a new document tears down, and only t
     window.__firstHourSlow?.('/sessions: before', 60_000),
   )
   // The browser reports neither a response nor a failure for a request that the next
-  // document tears down, so it must not stay "open" for the rest of the run (#2608).
+  // document tears down, so it must not stay "open" for the rest of the run.
   await page.goto('https://first-hour.invalid/agent-tools')
   await page.evaluate(() =>
     window.__firstHourSlow?.('/agent-tools: after', 60_000),
@@ -561,7 +561,7 @@ test('first-hour guard ignores a disabled action inside a closed disclosure, and
   )
   // AI tools' "install from a source" form: closed by default, its Review disabled
   // until the inventory loads. Chromium keeps a closed disclosure's content laid out
-  // (content-visibility: hidden), so it has boxes but no rendered text (#330).
+  // (content-visibility: hidden), so it has boxes but no rendered text.
   await page.setContent(`<details><summary>Install from a source</summary>
     <form><button type="submit" disabled>Review</button></form></details>`)
   // The premise: the closed button still has boxes, so rects alone cannot hide it.

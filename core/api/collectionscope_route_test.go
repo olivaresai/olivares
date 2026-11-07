@@ -124,7 +124,7 @@ func TestCollectionScopeCapabilitySeedsTheDecisionAndOnlyItsOwnRoutes(t *testing
 	}
 
 	// (3) A known-absent workspace and a denied caller are the SAME public answer. Both
-	// ask the same route: a refusal names the route's permission (#491), so two routes
+	// ask the same route: a refusal names the route's permission, so two routes
 	// with different permissions answer different bytes whatever exists.
 	absent := h.do("GET", "/v1/m/scopeprobe/denied?workspace_id="+newProbeWorkspaceID(), token, nil, tenantHdr(tenant))
 	denied := h.do("GET", "/v1/m/scopeprobe/denied?workspace_id="+workspace, token, nil, tenantHdr(tenant))

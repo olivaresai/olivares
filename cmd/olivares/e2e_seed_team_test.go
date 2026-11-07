@@ -14,7 +14,7 @@ import (
 
 // TestE2E_Seed_TeamSessionsReadAsAWorkingDay feeds the demo seed through the real
 // bus and reads the same live list the Sessions view and the dashboard's Active
-// agents card read (#2268). The card prints the Working section of that list, so
+// agents card read. The card prints the Working section of that list, so
 // what is proved here is the list: ten named sessions of three engines, in
 // working, idle, flagged and ended states, none of them a one-event row, and none
 // adding an access to the unexpected-access list.

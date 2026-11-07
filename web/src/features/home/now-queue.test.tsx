@@ -259,7 +259,7 @@ describe('NowQueue — what needs a person', () => {
     )
   })
 
-  it('the setup administrator (superadmin and owner here) is offered handoffs too (#503)', async () => {
+  it('the setup administrator (superadmin and owner here) is offered handoffs too', async () => {
     auth.owner = true
     useWorkspaceStore.setState({ activeWorkspace: 'w1' } as never)
     const inbox = vi
@@ -439,7 +439,7 @@ describe('NowQueue — what needs a person', () => {
     expectNoRawI18nKeys(document.body)
   })
 
-  it('says what is not shown once, on a tool call stored without a review (#2269)', () => {
+  it('says what is not shown once, on a tool call stored without a review', () => {
     renderIntel(
       <Queue
         state="ready"
@@ -490,7 +490,7 @@ describe('NowQueue — what needs a person', () => {
     expect(screen.getByTestId('now-flagged-request')).toHaveTextContent(
       'Deploy promote',
     )
-    // A request a person raised expects no command: no "does not include" note (#2269).
+    // A request a person raised expects no command: no "does not include" note.
     expect(
       screen.queryByText('This request does not include what will run.'),
     ).toBeNull()
@@ -811,7 +811,7 @@ describe('NowQueue — what needs a person', () => {
     expect(screen.getByTestId('now-approval-row')).toHaveTextContent('1 of 2')
   })
 })
-describe('NowQueue — the person’s marks on a run take a session out (#2901)', () => {
+describe('NowQueue — the person’s marks on a run take a session out', () => {
   const needsPerson = {
     code: 'repeated_policy_denials',
     consecutive_denials: 3,

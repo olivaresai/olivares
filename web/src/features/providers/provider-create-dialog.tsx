@@ -203,7 +203,7 @@ export function ProviderCreateDialog({
       open={open}
       onOpenChange={(o) => {
         if (create.isPending) return
-        // A key typed before the dialog closes must not survive the next opening (#2551):
+        // A key typed before the dialog closes must not survive the next opening:
         // every close — Cancel, X, Escape — resets the form.
         if (!o) reset()
         onOpenChange(o)

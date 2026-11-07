@@ -43,7 +43,7 @@ func openCodeUsageLaunch(t *testing.T, fixture openCodeFixture, prompts int, opt
 	return m, tenant, dto
 }
 
-// #2891: OpenCode reports each turn's tokens on its prompt result (ACP
+// : OpenCode reports each turn's tokens on its prompt result (ACP
 // PromptResponse.usage) and the session's cumulative cost on usage_update (measured
 // on 1.19.3, opencode/glm-5.3-flash-free: {"amount":0,"currency":"USD"}). Both reach
 // the run and the spend ledger: the turns' tokens add up, and the cost the tool

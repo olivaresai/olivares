@@ -680,7 +680,7 @@ const maxACPToolFacts = 256
 // toolCallId. OpenCode's read asks for permission with locations [] and rawInput {}:
 // its path is only in native patterns ACP does not carry. The tool_call_update it
 // sends just before, for the same call, names the file (measured over ACP on 1.19.3
-// and 1.19.4; #2979). Notifications are handled in order on the pump, before the
+// and 1.19.4;). Notifications are handled in order on the pump, before the
 // request that follows them. Called with s.mu held.
 func (s *acpSession) observeToolCall(raw json.RawMessage) {
 	var update struct {

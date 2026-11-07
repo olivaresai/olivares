@@ -207,7 +207,7 @@ func TestProfileModelCatalogBoundProviderAndFallback(t *testing.T) {
 	}
 }
 
-// #2567: an OpenCode account's catalog is the tool's own list, read only with the
+// : an OpenCode account's catalog is the tool's own list, read only with the
 // plugin-free form of its command: a configured plugin is not executed (measured on
 // v1.18.34: `opencode models --pure` leaves a plugin's marker unwritten, `opencode
 // models` writes it). The fake runner records the only command launched.
@@ -410,7 +410,7 @@ func (r *gatedCatalogRunner) Launch(ctx context.Context, spec LaunchSpec) (Proce
 
 // A list past its lifetime is not waited for: the page that asks gets the last list at once,
 // the tool is asked again behind it, and a failed read behind it drops the list so the next
-// read says so instead of showing models the tool no longer reports (#3931).
+// read says so instead of showing models the tool no longer reports.
 func TestProfileModelCatalogPastItsLifetimeAnswersAtOnceAndRefreshesBehind(t *testing.T) {
 	peer := &catalogToolPeer{t: t, signed: true, modelIDs: []string{"first-model"}}
 	runner := &gatedCatalogRunner{peer: peer, release: make(chan struct{})}

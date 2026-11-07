@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE LAST-HOUR SWIMLANE ON ESTATE (#2547), over the demo estate's event log
+// THE LAST-HOUR SWIMLANE ON ESTATE, over the demo estate's event log
 // (swimlane.fixture.ts): one row per live session that says its numbers in words, opens
 // its session in the sheet, carries the one orange mark only for the flagged approval,
 // and turns a dragged range or a ten-minute mark into the Ledger's own window.

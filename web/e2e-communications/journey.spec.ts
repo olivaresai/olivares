@@ -1149,12 +1149,12 @@ test('keyboard-only Ack, mobile viewport, light and dark themes, English and Spa
   await expect(sheet).toBeHidden()
 
   // Dark and light, through the product's own toggle.
-  // The theme is chosen in the account menu (#3161).
+  // The theme is chosen in the account menu.
   await b.getByRole('button', { name: /, Account$/ }).click()
   await b.getByRole('menuitemradio', { name: 'Dark' }).click()
   await expect(b.locator('html')).toHaveClass(/dark/)
   await shot(b, '24-b-inbox-dark')
-  // The theme is chosen in the account menu (#3161).
+  // The theme is chosen in the account menu.
   await b.getByRole('button', { name: /, Account$/ }).click()
   await b.getByRole('menuitemradio', { name: 'Light' }).click()
   await expect(b.locator('html')).not.toHaveClass(/dark/)
@@ -1200,7 +1200,7 @@ test('captures of the three doors in light and dark at the docs viewport, with r
   browser,
 }) => {
   const shotDoc = async (page: Page, id: string, theme: 'light' | 'dark') => {
-    // The theme is chosen in the account menu (#3161).
+    // The theme is chosen in the account menu.
     await page.getByRole('button', { name: /, Account$/ }).click()
     await page
       .getByRole('menuitemradio', { name: theme === 'dark' ? 'Dark' : 'Light' })
@@ -2268,7 +2268,7 @@ async function expectTitleHoldsFocus(
 }
 
 async function setTheme(page: Page, theme: 'light' | 'dark') {
-  // The theme is chosen in the account menu (#3161).
+  // The theme is chosen in the account menu.
   await page.getByRole('button', { name: /, Account$/ }).click()
   await page
     .getByRole('menuitemradio', { name: theme === 'dark' ? 'Dark' : 'Light' })

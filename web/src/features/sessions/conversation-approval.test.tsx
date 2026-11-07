@@ -4,8 +4,13 @@
 import type { ReactNode } from 'react'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import type { ApprovalDTO } from '@/features/governance/types'
 import { ConversationApproval } from './conversation-approval'
@@ -29,6 +34,20 @@ vi.mock('@/features/governance/api', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/features/governance/api')>()
   return { ...actual, governanceApi: api }
+})
+
+const agent = vi.hoisted(() => ({ getRun: vi.fn(), listRuns: vi.fn() }))
+vi.mock('@/features/agentops/api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/agentops/api')>()
+  return {
+    ...actual,
+    agentOpsApi: {
+      ...actual.agentOpsApi,
+      getRun: agent.getRun,
+      listRuns: agent.listRuns,
+    },
+  }
 })
 
 // What the transcripts' viewports show of every card: the observers' last report.
@@ -92,6 +111,8 @@ beforeEach(() => {
   api.getApproval.mockResolvedValue(APPROVAL)
   api.listDecisions.mockResolvedValue({ items: [], has_more: false })
   api.getPolicy.mockResolvedValue({ id: 'pol-1', name: 'Migrations need two' })
+  agent.getRun.mockResolvedValue(RUN)
+  agent.listRuns.mockResolvedValue({ items: [], has_more: false })
   auth.can = () => true
   reports.length = 0
   vi.stubGlobal('IntersectionObserver', FakeObserver)
@@ -321,4 +342,54 @@ it('does not invent Why from the Claude hook scope when the tool gave no purpose
   wrap(<ConversationApproval run={RUN} />)
   await screen.findByText('make migrate')
   expect(screen.queryByText('Why')).not.toBeInTheDocument()
+})
+
+// The composer's waiting text and the session list read the run record and the runs
+// list, and neither polls here: they change only when something invalidates them.
+function RunStateProbe() {
+  const run = useQuery({
+    queryKey: agentOpsKeys.run('t1', RUN.run_ref),
+    queryFn: () => agent.getRun(RUN.run_ref),
+  })
+  const list = useQuery({
+    queryKey: agentOpsKeys.runs('t1'),
+    queryFn: () => agent.listRuns(),
+  })
+  return (
+    <>
+      <p data-testid="run-state">{run.data?.state}</p>
+      <p data-testid="list-state">{list.data?.items[0]?.state}</p>
+    </>
+  )
+}
+
+it('a decided approval reads the run and the runs list again, so the waiting state clears without a reload', async () => {
+  const user = userEvent.setup()
+  let state: RunDTO['state'] = 'waiting_approval'
+  agent.getRun.mockImplementation(async () => ({ ...RUN, state }))
+  agent.listRuns.mockImplementation(async () => ({
+    items: [{ ...RUN, state }],
+    has_more: false,
+  }))
+  api.decide.mockImplementation(async () => {
+    state = 'running'
+    return { ...APPROVAL, status: 'approved' }
+  })
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={qc}>
+      <ConversationApproval run={RUN} />
+      <RunStateProbe />
+    </QueryClientProvider>,
+  )
+  await waitFor(() =>
+    expect(screen.getByTestId('run-state')).toHaveTextContent(
+      'waiting_approval',
+    ),
+  )
+  await user.click(await screen.findByRole('button', { name: 'Approve once' }))
+  await waitFor(() =>
+    expect(screen.getByTestId('run-state')).toHaveTextContent('running'),
+  )
+  expect(screen.getByTestId('list-state')).toHaveTextContent('running')
 })

@@ -18,7 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// A department carries its standards (#530): the custom instructions of the session templates
+// A department carries its standards: the custom instructions of the session templates
 // assigned to it are given to every Claude launch of the department, and the template assigned
 // as its default governs a launch that names none. The assignments are the composition root's
 // (source scoping); this module reads the templates and obeys.

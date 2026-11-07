@@ -517,7 +517,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     renderCard({ sessionRef: 'sess-ours' })
 
     await user.click(await screen.findByRole('button', { name: 'Stop' }))
-    // Stop asks first, as the person's setting says by default (#2549).
+    // Stop asks first, as the person's setting says by default.
     await user.click(
       await screen.findByRole('button', { name: 'Stop the session' }),
     )
@@ -546,7 +546,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     })
     const view = renderCard({ sessionRef: 'sess-ours' })
     await user.click(await screen.findByRole('button', { name: 'Stop' }))
-    // Stop asks first, as the person's setting says by default (#2549).
+    // Stop asks first, as the person's setting says by default.
     await user.click(
       await screen.findByRole('button', { name: 'Stop the session' }),
     )
@@ -564,7 +564,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     })
     renderCard({ sessionRef: 'sess-ours' })
     await user.click(await screen.findByRole('button', { name: 'Stop' }))
-    // Stop asks first, as the person's setting says by default (#2549).
+    // Stop asks first, as the person's setting says by default.
     await user.click(
       await screen.findByRole('button', { name: 'Stop the session' }),
     )

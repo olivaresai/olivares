@@ -158,7 +158,7 @@ jobs:
     needs: [pr-web, pr-lint]
     outputs:
       # The attempt that produced and uploaded cli-development-verification. userspace-compat
-      # compares the manifest against THIS attempt (#2749), not its own.
+      # compares the manifest against THIS attempt, not its own.
       build-attempt: ${{ github.run_attempt }}
     if: always() && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true')
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
@@ -204,7 +204,7 @@ jobs:
           # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
           # "re-run failed jobs" re-runs a failed consumer at attempt 2 while pr-web's earlier
           # success keeps attempt 1's artifact, and requiring them equal made every such rerun
-          # fail here before a test ran (#2749). A development self-hosted runner downloads
+          # fail here before a test ran. A development self-hosted runner downloads
           # nothing: it rebuilt the console in THIS job, where this attempt produced it.
           GENERATION_ATTEMPT: ${{ needs.pr-web.outputs.bundle-attempt }}
           CONSOLE_REBUILT_IN_THIS_JOB: ${{ github.repository != 'olivaresai/olivares' && runner.environment == 'self-hosted' }}
@@ -635,7 +635,7 @@ jobs:
           # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
           # "re-run failed jobs" re-runs a failed consumer at attempt 2 while pr-web's earlier
           # success keeps attempt 1's artifact, and requiring them equal made every such rerun
-          # fail here before a test ran (#2749). A development self-hosted runner downloads
+          # fail here before a test ran. A development self-hosted runner downloads
           # nothing: it rebuilt the console in THIS job, where this attempt produced it.
           GENERATION_ATTEMPT: ${{ needs.pr-web.outputs.bundle-attempt }}
           CONSOLE_REBUILT_IN_THIS_JOB: ${{ github.repository != 'olivaresai/olivares' && runner.environment == 'self-hosted' }}
@@ -771,13 +771,13 @@ jobs:
     outputs:
       bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
       # The attempt that produced and uploaded the artifact above. Consumers compare the
-      # manifest against THIS attempt (#2749): "re-run failed jobs" re-runs a failed
+      # manifest against THIS attempt: "re-run failed jobs" re-runs a failed
       # consumer at a new attempt while this job's earlier success keeps its artifact.
       bundle-attempt: ${{ github.run_attempt }}
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    # 30 + OpenAPI freshness (15) + the two generated-reference gates (15 + 10).
-    timeout-minutes: 70
+    # 30 + OpenAPI freshness (15) + generated references (25) + first-use build/journey (15).
+    timeout-minutes: 85
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -826,6 +826,16 @@ jobs:
         run: task lint:format-ratchet
       - name: the console checks (the bundle was already built and verified)
         run: task check:web
+      - name: build the engine for the first-use console gate
+        run: task build:bin
+      - name: install the first-use browser
+        run: |
+          deps=()
+          if [[ "$RUNNER_ENVIRONMENT" == github-hosted ]]; then deps=(--with-deps); fi
+          pnpm --dir web exec playwright install "${deps[@]}" chromium
+      - name: first-use console journey (fresh setup, model, folder, panes, stop)
+        timeout-minutes: 6
+        run: bash scripts/console-first-use.sh
       # The raw color gate: the real eslint.config.js over web/src, failing only on
       # olivares/no-raw-palette or on a file it could not parse. A raw palette class,
       # arbitrary color value, color string or named color paints the same in Light, Dark

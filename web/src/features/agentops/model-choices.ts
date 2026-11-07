@@ -11,7 +11,12 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/auth/context'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { useAuthBoundary } from './auth-boundary'
-import { effortChoices, findModel, startModel } from './model-catalog'
+import {
+  effortChoices,
+  findModel,
+  firstProfileCatalog,
+  startModel,
+} from './model-catalog'
 import { modelName } from './model-name'
 import { toolName } from './engine-tools'
 import type { ProfileModelCatalogDTO, ProfileModelDTO } from './types'
@@ -48,12 +53,15 @@ export function useModelChoices({
   model,
   enabled,
   fallbackModel = '',
+  beforeFirstProfile = false,
 }: {
   profileRef: string
   driver: string
   model: string
   enabled: boolean
   fallbackModel?: string
+  /** Release catalog for an own-login launch that has no profile yet. */
+  beforeFirstProfile?: boolean
 }): ModelChoices {
   const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
@@ -72,20 +80,30 @@ export function useModelChoices({
     retry: false,
   })
   const answer = allowed && !query.isError ? query.data : undefined
-  const status: CatalogStatus = !allowed
-    ? 'none'
-    : query.isError
-      ? 'failed'
-      : !answer
-        ? 'loading'
-        : answer.state === 'fresh' && answer.models.length > 0
-          ? 'fresh'
-          : answer.state === 'failed'
-            ? 'failed'
-            : 'unsupported'
-  const catalog = status === 'fresh' ? answer : undefined
+  const shipped = enabled && !profileRef && beforeFirstProfile
+  const status: CatalogStatus = shipped
+    ? 'fresh'
+    : !allowed
+      ? 'none'
+      : query.isError
+        ? 'failed'
+        : !answer
+          ? 'loading'
+          : answer.state === 'fresh' && answer.models.length > 0
+            ? 'fresh'
+            : answer.state === 'failed'
+              ? 'failed'
+              : 'unsupported'
+  const catalog = shipped
+    ? firstProfileCatalog(driver)
+    : status === 'fresh'
+      ? answer
+      : undefined
   const start = startModel(catalog, model || fallbackModel)
-  return { status, catalog, start, efforts: effortChoices(driver, start) }
+  const efforts = shipped
+    ? (start?.effort_levels ?? null)
+    : effortChoices(driver, start)
+  return { status, catalog, start, efforts }
 }
 
 export function modelLabel(m: ProfileModelDTO): string {

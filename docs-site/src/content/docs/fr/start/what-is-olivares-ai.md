@@ -68,7 +68,7 @@ SQLite, D1). Là où la nature lecture/écriture ne peut être déterminée, le 
 La carte d'accès est une capacité parmi beaucoup. Le produit est une **plateforme
 modulaire** (dans l'esprit de Grafana ou Backstage) : un moteur plus des modules plus des
 connecteurs, conçu pour que tout module se rattache sans réarchitecturer le reste. Il
-embarque **32 modules** — inventaire et sessions en direct, la carte L/L-É, l'orchestration
+embarque **33 modules** — inventaire et sessions en direct, la carte L/L-É, l'orchestration
 d'agents (A2A, en développement), la gestion MCP et des compétences, l'identité et l'identité non-humaine, le
 déploiement, la connaissance et le contexte, la sécurité et les guardrails, la gestion des
 modèles et des fournisseurs, le coût/FinOps, les évals et un bac à sable de test, le

@@ -12,7 +12,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-// The work-outbox pump's environment contract (#566): the documented `0`
+// The work-outbox pump's environment contract: the documented `0`
 // disables the periodic drain — no scheduler registration, the witness never
 // claims one, and the insert nudge keeps draining fresh rows (the
 // eventing-dispatch disable posture). A typo or a negative value keeps the

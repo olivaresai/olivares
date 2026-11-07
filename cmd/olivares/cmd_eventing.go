@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,12 +21,14 @@ import (
 	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/connectors/webhook"
 	"github.com/olivaresai/olivares/core/egress"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/eventing"
+	"github.com/olivaresai/olivares/modules/siemforward"
 )
 
 // Entity kinds for the eventing module, matching the values in
@@ -333,15 +336,27 @@ func eventingSubCreateCmd() *cobra.Command {
 		authType, authHdrName string
 		maxAttempts           int64
 		initialInterval       int64
+		sinkKind, sinkFormat  string
+		sinkCredFile          string
+		sinkOpts              map[string]string
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
 		Use:         "create",
 		Short:       "Create a new event subscription",
 		Long: "Create a new webhook event subscription. The signing secret is generated\n" +
-			"server-side and printed ONCE — store it securely. The subscription starts enabled.",
+			"server-side and printed ONCE — store it securely. The subscription starts enabled.\n" +
+			"--sink-kind makes it a SIEM sink (Business), as the API's sink_* fields do; its\n" +
+			"credential is read from --sink-cred-file (a path, or - for stdin), never from argv.\n" +
+			"With --tenant set to the system tenant (ffffffff-ffff-ffff-ffff-ffffffffffff), the sink\n" +
+			"receives the instance's identity events (sign-ins, factor changes) as audit.recorded.\n" +
+			"Only this command, run by the operator who holds the data directory, can author it:\n" +
+			"the API refuses the system tenant to every principal.",
 		Example: `  olivares eventing subscriptions create --tenant t_abc123 --name siem \
-    --endpoint https://siem.example/hooks/olivares --event-types audit.created,finding.created`,
+    --endpoint https://siem.example/hooks/olivares --event-types audit.created,finding.created
+  olivares eventing subscriptions create --tenant ffffffff-ffff-ffff-ffff-ffffffffffff --name identity \
+    --endpoint https://splunk.example:8088 --event-types audit.recorded --role admin \
+    --sink-kind splunk_hec --sink-cred-file /etc/olivares/hec.token --sink-opt index=identity`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolvedTenant, err := resolveTenant(tenant)
@@ -395,6 +410,30 @@ func eventingSubCreateCmd() *cobra.Command {
 				return err
 			}
 			defer func() { _ = eng.Close() }()
+
+			// A SIEM sink takes the API's own route checks (refuseSink, validateSink) and its
+			// credential is sealed before the transaction, like the signing secret above.
+			var sink eventing.SealedSink
+			if sinkKind == "" && (sinkFormat != "" || sinkCredFile != "" || len(sinkOpts) > 0) {
+				return fmt.Errorf("--sink-format, --sink-cred-file and --sink-opt need --sink-kind")
+			}
+			if sinkKind != "" {
+				if siemforward.NewRenderer() == nil {
+					return exitcode.New(exitcode.Edition, errors.New("SIEM push requires Olivares Business: https://olivares.ai/pricing"))
+				}
+				if thisEdition.siemSink != nil {
+					if err := thisEdition.siemSink(); err != nil {
+						return err
+					}
+				}
+				cred, err := readSecretValue(cmd, "", sinkCredFile)
+				if err != nil {
+					return err
+				}
+				if sink, err = eventing.SealSink(cmd.Context(), sealer, t, sinkKind, sinkFormat, strings.TrimSpace(cred), sinkOpts); err != nil {
+					return fmt.Errorf("--sink-*: %w", err)
+				}
+			}
 
 			// The SAME destination rules the API applies. This path used to write the
 			// endpoint column raw — no scheme check, no address guard, no operator
@@ -463,6 +502,9 @@ func eventingSubCreateCmd() *cobra.Command {
 					return err
 				}
 				createdID = created.String(model.ColID)
+				if sinkKind != "" {
+					return sink.Create(cmd.Context(), sc, model.ID(createdID), fenceGeneration)
+				}
 				return nil
 			})
 			if err != nil {
@@ -500,6 +542,10 @@ func eventingSubCreateCmd() *cobra.Command {
 	cmd.Flags().Int64Var(&maxAttempts, "max-attempts", 0, "max delivery attempts (0 = module default)")
 	cmd.Flags().Int64Var(&initialInterval, "initial-interval", 0, "initial retry interval in seconds (0 = module default)")
 	cmd.Flags().StringVar(&description, "description", "", "optional description")
+	cmd.Flags().StringVar(&sinkKind, "sink-kind", "", "SIEM sink kind (Business): https|splunk_hec|sentinel_dcr|datadog|newrelic")
+	cmd.Flags().StringVar(&sinkFormat, "sink-format", "", "SIEM wire format (default: the sink's own, OCSF)")
+	cmd.Flags().StringVar(&sinkCredFile, "sink-cred-file", "", "file holding the sink credential (token or key), or - for stdin")
+	cmd.Flags().StringToStringVar(&sinkOpts, "sink-opt", nil, "sink routing option key=value (repeatable), e.g. index=identity")
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("endpoint")
 	_ = cmd.MarkFlagRequired("event-types")

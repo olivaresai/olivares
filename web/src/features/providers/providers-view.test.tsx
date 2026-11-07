@@ -138,7 +138,7 @@ describe('ApiKeys', () => {
     expect(mark.querySelector('svg')).toHaveAttribute('fill', claude.color)
   })
 
-  // axe empty-table-header on AI tools (#3388): the actions column had an empty header.
+  // axe empty-table-header on AI tools: the actions column had an empty header.
   it('names every column of the key table, the actions one for a screen reader', async () => {
     providersApi.list.mockResolvedValue({ items: [registered] })
     wrap(<ApiKeys />)
@@ -239,7 +239,7 @@ describe('ApiKeys', () => {
     expect(providersApi.create).not.toHaveBeenCalled()
   })
 
-  // The toast is hidden from assistive technology while a dialog is open (#2561).
+  // The toast is hidden from assistive technology while a dialog is open.
   it('announces a refused default model on its field', async () => {
     const user = userEvent.setup()
     providersApi.list.mockResolvedValue({
@@ -636,7 +636,7 @@ describe('ApiKeys', () => {
     fakeRouter.reset(`/providers?add=${kind}`)
     wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
-    // The wizard's "Add a local model" lands here: its address is already filled in (#476).
+    // The wizard's "Add a local model" lands here: its address is already filled in.
     if (kind === 'ollama')
       expect(
         within(dialog).getByRole('textbox', { name: 'Endpoint' }),
@@ -740,7 +740,7 @@ describe('ApiKeys', () => {
     fakeRouter.reset('/')
   })
 
-  it('shows the download instead of a spinner while the preparation installs (#1086)', async () => {
+  it('shows the download instead of a spinner while the preparation installs', async () => {
     const user = userEvent.setup()
     preparation.status.mockResolvedValue({ installed: false, signed_in: false })
     preparation.install.mockImplementation(
@@ -783,7 +783,7 @@ describe('ApiKeys', () => {
     fakeRouter.reset('/')
   })
 
-  it("forgets a failed preparation's download before Retry (#1086)", async () => {
+  it("forgets a failed preparation's download before Retry", async () => {
     const user = userEvent.setup()
     preparation.status.mockResolvedValue({ installed: false, signed_in: false })
     preparation.install

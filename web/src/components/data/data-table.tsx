@@ -84,7 +84,7 @@ import { DENSITY_ROW, usePreferencesStore } from '@/stores/preferences'
  *
  *    Se corrige aquí porque esta cifra **se usa para dimensionar la migración** y hoy la
  *    sobreestima 56×: leyéndola tal cual se concluye «cuesta 56 ficheros» cuando cuesta UNO. Pasó
- *    al medir el PR #2217 (v9.2.3) el 2026-09-01, y la corrección la ordena el propio canon —
+ *    al medir el PR (v9.2.3) el 2026-09-01, y la corrección la ordena el propio canon —
  *    una cifra en prosa envejece en silencio.
  *
  * ⚠ Que el radio sea un fichero NO hace la migración trivial, y conviene decirlo junto a la buena

@@ -172,6 +172,31 @@ Activity（6005）— を使います。出力はテストスイートで公式�
 検証されます。これらのスキーマは未知のフィールドを禁じているため、プロファイル外の属性や
 不完全なプロファイルオブジェクトは、利用者に届く前にビルドを落とします。
 
+サインインと認証要素の変更はシステム台帳に記録されます。そこからエクスポートすると
+（`olivares audit export --format ocsf --tenant ffffffff-ffff-ffff-ffff-ffffffffffff`）、
+SIEM の認証データモデルに送られます。HTTP エクスポート（`GET /v1/audit/export`）は
+組織の台帳だけを読みます。台帳フォワーダーはこれらのイベントを、システムテナントで購読された SIEM シンクに一度だけ送り、
+組織のシンクには送りません。API はシステムテナントを拒否するため、そのシンクを作成できるのはデータディレクトリを持つ運用者だけです：
+`olivares eventing subscriptions create --tenant ffffffff-ffff-ffff-ffff-ffffffffffff --event-types audit.recorded --role admin --sink-kind splunk_hec --sink-cred-file <file>`。
+`auth.login`, `auth.external.login`, `sso.login`, `auth.login.failed`, `auth.login.blocked`, `auth.logout`, `sso.logout.backchannel` は **Authentication（3002）** で、Logon または Logoff、拒否されたサインインは
+`status_id` 2（Failure）です。`auth.webauthn.register` と `auth.totp.activate` は
+**Account Change（3001）** の MFA Factor Enable、`auth.webauthn.unregister`、
+`auth.webauthn.recover`、`auth.totp.reset` は MFA Factor Disable、`auth.webauthn.rename` と
+`auth.totp.recovery_used` は Other です。どちらの Identity & Access Management クラスも
+`user.name` を持ちます。これは台帳のアクターで、管理者が他人の認証要素をリセットした場合は
+対象アカウントです。`ai_operation` プロファイルは付きません。完全性フィールドは他のイベントと
+同じく `unmapped` の下に残り、それ以外のアクションはすべて API Activity のままです。
+`sso.logout.backchannel` のユーザーはサインアウトされたアカウントで、台帳にアクターがないイベントは `unknown` です。
+
+:::caution[変更: サインインと認証要素の変更は API Activity ではなくなりました]
+この 14 のアクションは以前、API Activity（6003）、`activity_id` 99（Other、`type_uid`
+600399）としてエクスポートされていました。現在は Authentication（3002）と Account
+Change（3001）です。これらを `class_uid` 6003 で拾う検知、保存済み検索、パーサーをすべて
+更新してください。
+`auth.stepup.failed` と `auth.os_account.verify.refused` は API Activity のままですが、`status_id` は
+1 ではなく 2（Failure）になりました。
+:::
+
 :::caution[AWS Security Lake は OCSF 1.3 以下]
 Security Lake のカスタムソースは **Parquet の OCSF 1.3** が上限のため、1.8.0 の
 `ai_operation` イベントはそのままでは取り込まれません（2026-07-24 確認）。1.3 へのダウン

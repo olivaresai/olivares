@@ -34,7 +34,7 @@
 # file-path-from-variable, permissions) are non-blocking but stay visible in the
 # --report scan. Rationale per rule class: docs/security/SECURITY-GATE.md.
 #
-# go.work caveat (golang/go#50745): `gosec ./...` only covers the current module,
+# go.work caveat (golang/go): `gosec ./...` only covers the current module,
 # so — like vuln/build/test — this runs gosec once per workspace module, plus the
 # out-of-workspace cloud/control-plane module (GOWORK=off).
 set -euo pipefail

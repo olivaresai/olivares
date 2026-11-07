@@ -363,7 +363,7 @@ function AccountsPanelInner() {
           onRetry={() => void query.refetch()}
         />
       ) : rows.length === 0 ? (
-        // On Tools beside the API keys (#2552): the list takes its rows' height.
+        // On Tools beside the API keys: the list takes its rows' height.
         <TableRegion fill={false}>
           <EmptyState
             className="flex-1"

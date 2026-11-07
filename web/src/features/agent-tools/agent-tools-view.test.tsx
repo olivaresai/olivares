@@ -1002,7 +1002,7 @@ it('reviews a catalog-admitted tool from its source URL through the existing pla
 })
 
 // The release first hour opens AI tools on a fresh install while the inventory is read,
-// and again while an install runs: the URL form's primary action says why it waits (#2050).
+// and again while an install runs: the URL form's primary action says why it waits.
 it.each([
   ['the inventory is read', 'Reading…'],
   ['an install runs', 'Installing…'],

@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { aliveSessions, openSessions, railGroups } from './session-rail-model'
 
-describe('observed sessions of one tool in the rail (#2266)', () => {
+describe('observed sessions of one tool in the rail', () => {
   const observed = (ref: string) =>
     ({
       session_ref: ref,
@@ -78,11 +78,11 @@ describe('operated runs in the rail', () => {
       title: 'Codex in app',
       meta: 'codex',
     })
-    // No name and no prompt: the run is called by its tool, never left untitled (#2266).
+    // No name and no prompt: the run is called by its tool, never left untitled.
     expect(earlier.rows[0]).toMatchObject({ title: 'Codex', reference: 'r3' })
   })
 
-  it('a run that answered and waits for input is Idle and listed under Earlier, not Working (#1785)', () => {
+  it('a run that answered and waits for input is Idle and listed under Earlier, not Working', () => {
     const [needs, working, earlier] = railGroups(
       {
         live: [],
@@ -187,7 +187,7 @@ describe('operated runs in the rail', () => {
     })
   })
 
-  it('files a session the person snoozed under Snoozed only, and one they marked done under Earlier (#2480)', () => {
+  it('files a session the person snoozed under Snoozed only, and one they marked done under Earlier', () => {
     const [needs, working, earlier, snoozed] = railGroups(
       {
         live: [],
@@ -220,7 +220,7 @@ describe('operated runs in the rail', () => {
     expect(snoozed.rows.map((row) => row.title)).toEqual(['Snoozed'])
   })
 
-  it('files an archived session under Archived only, counted nowhere (#2795)', () => {
+  it('files an archived session under Archived only, counted nowhere', () => {
     const groups = railGroups(
       {
         live: [],
@@ -328,7 +328,7 @@ describe('operated runs in the rail', () => {
   })
 })
 
-describe('aliveSessions: what a stop of every agent would end (#3161)', () => {
+describe('aliveSessions: what a stop of every agent would end', () => {
   it('counts idle and waiting sessions with the working ones, and no ended one', () => {
     const run = (run_ref: string, state: string) =>
       ({ run_ref, name: run_ref, state, provider_driver: '' }) as never

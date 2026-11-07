@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Reach on the real binary (issue #2553): the MCP servers the access map shows for
+// Reach on the real binary (issue): the MCP servers the access map shows for
 // the seeded sessions are solid under their tool, and a new network request one of
 // those sessions opens is dashed from the same tool until it is approved. Runs on
 // the seeded demo estate (scripts/web-e2e-demo.sh e2e/reach-waiting.spec.ts -g

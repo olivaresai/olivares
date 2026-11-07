@@ -32,7 +32,7 @@ import "strings"
 //     gen_ai.usage.input_tokens/output_tokens (renamed in v1.27.0).
 //  3. The v1.37+ MESSAGES generation (mapped at the verified pin v1.41.1, the
 //     last VERSIONED vocabulary carrying the gen-ai conventions before semconv
-//     v1.42.0 (2026-06-12, #3696) moved them from the main repo to
+//     v1.42.0 (2026-06-12,) moved them from the main repo to
 //     open-telemetry/semantic-conventions-genai; upstream shape pinned separately
 //     as main@c321d7e, verified 2026-07-05):
 //     gen_ai.provider.name (Required on spans), gen_ai.input.messages/

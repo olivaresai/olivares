@@ -123,7 +123,7 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	// --data-dir (measured 2026-09-18).
 	obs := newHostToolObserverForDataDir(dataDir, getenv)
 	opts = append(opts, sessions.WithHostToolObserver(obs))
-	// OpenCode's glob and grep run the ripgrep installing OpenCode placed (#3173).
+	// OpenCode's glob and grep run the ripgrep installing OpenCode placed.
 	if obs.rootErr == nil {
 		opts = append(opts, sessions.WithOpenCodeSearchDir(toolinstall.Ripgrep(obs.root)))
 	}

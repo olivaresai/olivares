@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A SESSION ROW'S ACTIONS (#2795, #2866): what each item does, against the engine's routes.
+// A SESSION ROW'S ACTIONS: what each item does, against the engine's routes.
 // How the menu opens (right-click, `⋯`, Shift+F10) is `work-rail.test.tsx`'s.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

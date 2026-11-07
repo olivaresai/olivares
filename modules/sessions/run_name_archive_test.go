@@ -47,7 +47,7 @@ func runAuditEvents(t *testing.T, st store.Store, tenant model.TenantID, action 
 	return out
 }
 
-// #2795: a session is renamed from its row. The name is trimmed, an empty one
+// : a session is renamed from its row. The name is trimmed, an empty one
 // clears it, the answer is the run as GET returns it, and the ledger says that the
 // run was renamed without repeating the name.
 func TestRunRenameSetsAndClearsTheName(t *testing.T) {
@@ -254,7 +254,7 @@ func TestRunRenameAndArchiveNeedWriteAndDeleteNeedsAdmin(t *testing.T) {
 }
 
 // preArchiveRegistry strips archived_at from the run descriptor, so the real
-// RegisterSchema builds the schema this module had before #2795.
+// RegisterSchema builds the schema this module had before.
 type preArchiveRegistry struct {
 	store.ExtensionRegistry
 	stripped bool
@@ -367,7 +367,7 @@ func TestRunArchivedAtUpgradesAPostgresDatabase(t *testing.T) {
 	archiveUpgradeCase(t, store.Config{Engine: store.EnginePostgres, DSN: pg.App})
 }
 
-// TestRunRenameRefusesANameASessionHolds pins #2978: a rename onto a name a
+// TestRunRenameRefusesANameASessionHolds pins: a rename onto a name a
 // session that is not cleaned carries is a 409, so a console rename or a direct
 // API call cannot give a second session a name that is already in use — the rule
 // `session rename` always had, owned by the engine now. A cleaned namesake holds

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SIGNED-IN PERSON'S SNOOZE, DONE AND UNREAD MARKS (#2480, #2866). The engine keeps
+// THE SIGNED-IN PERSON'S SNOOZE, DONE AND UNREAD MARKS. The engine keeps
 // them, per person, like the pin (`modules/sessions/run_mark.go`), and sends them back on
 // the runs it lists (`snoozed_until`, `done`, `unread`), which is all `session-groups.ts`
 // sorts by. This is the one action that changes a mark and then re-reads the sessions,

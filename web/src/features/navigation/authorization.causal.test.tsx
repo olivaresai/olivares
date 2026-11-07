@@ -373,7 +373,7 @@ describe('navigation lists every view the person may open and that runs here', (
     expect(listed(view('permissions'))).toBe(true)
   })
 
-  // #2240: a module that is off folds out of navigation (GNOME, not KDE); Settings > Modules
+  //: a module that is off folds out of navigation (GNOME, not KDE); Settings > Modules
   // is where it reads as Off and is turned on, and its address keeps working.
   it('hides a view whose module is off, everywhere navigation lists, and keeps the rest', () => {
     useModulesStore.setState({ off: new Set(['gitpublish']) })

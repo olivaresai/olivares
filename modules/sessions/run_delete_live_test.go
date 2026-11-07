@@ -141,7 +141,7 @@ func TestDeleteRun_RemovesLegacyRowsOfARunWithNoManagedRow(t *testing.T) {
 // writes the plane's own live row (keyed by the tool's ses_ id) beside the run, and a
 // Claude launch also folds rows under the run reference and the canonical id. The
 // run's name lives on the run, so a row left behind after `session rm` painted as
-// "Untitled session ses_…" and no route removed it (#2328).
+// "Untitled session ses_…" and no route removed it.
 func TestDeleteRun_TakesTheLiveRowsOfItsSessionAndNoOtherSession(t *testing.T) {
 	ctx := context.Background()
 	m, st, tenant, profA := openCodeHarness(t, AuthSourceAccountHome)

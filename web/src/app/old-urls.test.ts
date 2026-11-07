@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Every address the Tools fold retired (#3388), and where it lands now. Each
+// Every address the Tools fold retired, and where it lands now. Each
 // one redirects through the real route tree, keeping the query it carried and the anchor;
 // a bookmark or a runbook link opens the place that holds the page now, never a 404.
 import { createMemoryHistory, createRouter } from '@tanstack/react-router'

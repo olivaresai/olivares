@@ -324,7 +324,7 @@ bash "$ARBOL/scripts/check-public-counts.sh" --counts-only >"$BANCO/A-healthy.lo
 comprobar "counts-only: healthy tree passes without Go" 0 "$?"
 # The drift expectation takes the live count from the healthy run's derived line, not a
 # hardcoded number: the next PR that adds a connector and updates README.md would otherwise
-# turn this cell red with nothing wrong (review of #2790).
+# turn this cell red with nothing wrong (review of).
 integraciones="$(sed -n 's/^derived:.* integrations=\([0-9][0-9]*\).*/\1/p' "$BANCO/A-healthy.log" | head -n 1)"
 mkdir -p "$ARBOL/connectors/zz-count-probe" && printf 'package zzcountprobe\n' >"$ARBOL/connectors/zz-count-probe/probe.go"
 [ -f "$ARBOL/connectors/zz-count-probe/probe.go" ] || {

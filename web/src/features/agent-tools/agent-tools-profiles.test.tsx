@@ -140,7 +140,7 @@ function mount(
 }
 
 beforeEach(() => {
-  // AI tools also lists the provider key references (#3388); this role reads them too.
+  // AI tools also lists the provider key references; this role reads them too.
   vi.spyOn(modelsApi, 'keys').mockResolvedValue({ items: [], has_more: false })
   vi.clearAllMocks()
   auth.can = () => true
@@ -709,7 +709,7 @@ describe('AI tools: one boxed list per installed tool', () => {
     ).toBeInTheDocument()
   })
 
-  // #2552: the accounts, their profiles and bindings are on Tools itself, so the tool menu
+  //: the accounts, their profiles and bindings are on Tools itself, so the tool menu
   // no longer sends a person to another page for them.
   it('offers Update and Install details from the tool menu, and no page elsewhere for its profiles', async () => {
     api.plan.mockResolvedValue({

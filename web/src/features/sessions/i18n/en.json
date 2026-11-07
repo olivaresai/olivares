@@ -542,6 +542,8 @@
     "startedTools_other": "{{count}} tools",
     "notSent": "Not sent: {{reason}}",
     "waitingApproval": "Sent when the session is ready.",
+    "discardedOnSessionChange": "A message typed before the session changed was not sent. Type it again.",
+    "dismissDiscarded": "Dismiss",
     "workingFolder": "Working folder: <path />",
     "temporaryFolder": "Working folder: temporary folder for this session",
     "turnLine": "<work/> · {{duration}}",
@@ -884,6 +886,10 @@
     "unreadable": "The request could not be read."
   },
   "terminal": {
+    "runScript": "Run {{name}}",
+    "scripts": "Project scripts",
+    "scriptsFailed": "Could not read project scripts.",
+    "stopScript": "Stop",
     "title": "Terminal",
     "hint": "A shell in this session's folder, inside the same limits as the session. It runs as you; each command line you type is recorded.",
     "open": "Open terminal",

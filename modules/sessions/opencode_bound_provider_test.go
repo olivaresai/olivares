@@ -66,7 +66,7 @@ func assertOpenCodeConfined(t *testing.T, env map[string]string, provider string
 			t.Errorf("%s = %q, want %q (a request to a host other than the bound provider)", name, env[name], want)
 		}
 	}
-	// #3122: OpenCode's shell runs the agent's commands with this environment, so the
+	//: OpenCode's shell runs the agent's commands with this environment, so the
 	// variable would make the agent's npm install fail and keep a profile's declared
 	// registries unreachable. OpenCode's background install of @opencode-ai/plugin is
 	// refused by the session's egress policy instead (it names only the bound provider
@@ -253,7 +253,7 @@ func TestOpenCodeWithNoRecordKeepsItsOwnConfiguration(t *testing.T) {
 	env := envMap(openCodeDriver{}.LaunchEnv(DriverLaunch{Preset: PresetAsk}))
 	cfg := openCodeInline(t, env)
 	// With no model named, the own sign-in keeps its provider choice and its model
-	// catalog; it shares nothing and downloads nothing (#2888).
+	// catalog; it shares nothing and downloads nothing.
 	for _, key := range []string{"enabled_providers", "disabled_providers", "model"} {
 		if _, ok := cfg[key]; ok {
 			t.Errorf("a launch on the tool's own sign-in sets %s; only a record-bound launch is confined", key)
@@ -385,7 +385,7 @@ func TestOpenCodeRefusesAnyHostManagedConfig(t *testing.T) {
 	}
 }
 
-// #2985: OpenCode itself ships a native provider for OpenRouter, Mistral, Moonshot and
+// : OpenCode itself ships a native provider for OpenRouter, Mistral, Moonshot and
 // Z.ai, each at its own documented endpoint (opencode.ai/docs/providers). A BYO key
 // record at exactly that endpoint confines to OpenCode's own provider for it, read from
 // the preset catalog (connectors/modelprovider), not the generic local-server adapter

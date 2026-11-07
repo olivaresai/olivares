@@ -15,7 +15,7 @@ import (
 )
 
 // EnsureAs writes the token as the account given, through the staging descriptor, so a
-// root caller never publishes a file the engine cannot read (#514). A group this process
+// root caller never publishes a file the engine cannot read. A group this process
 // is not in makes the ownership change observable without root: the kernel refuses it,
 // and nothing may be left at the path.
 func TestSetupTokenEnsureAsGivesTheFileToTheAccount(t *testing.T) {

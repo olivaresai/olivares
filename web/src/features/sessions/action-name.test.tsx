@@ -28,7 +28,7 @@ function keyShapedCopy(root: HTMLElement): string[] {
 }
 
 // the regression: "Write · /srv/work/…/verdict.md" pushed the Context pane
-// sideways. #3135: a path goes through the one shared PathText, which cuts it in its middle,
+// sideways.: a path goes through the one shared PathText, which cuts it in its middle,
 // keeps the whole value as the hover and copies it whole; ActionName keeps no cutter of its own.
 describe('a path is shown through PathText, never cut by a second mechanism', () => {
   const path = '/srv/work/reports/2026-10/review-0142/verdict.md'

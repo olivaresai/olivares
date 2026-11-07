@@ -187,7 +187,7 @@ func TestToolLoginMethodReachesTheEngine(t *testing.T) {
 	}
 }
 
-// #2567: without --method the CLI starts the first method the engine lists, which
+// : without --method the CLI starts the first method the engine lists, which
 // for OpenCode is its own provider; a status without methods sends none.
 func TestToolLoginStartsTheFirstListedMethod(t *testing.T) {
 	var sent map[string]any

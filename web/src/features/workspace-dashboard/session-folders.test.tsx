@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Issue #1788: the Workspace page showed only the organization workspace. The folders
+// Issue: the Workspace page showed only the organization workspace. The folders
 // sessions work in are registered by the sessions module; the page lists them and says
 // how they differ from the workspace, where Sessions opens them.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

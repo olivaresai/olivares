@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// TestBareOlivaresJSONOutputIsUnchanged is exit criterion (b) of #2569: the
+// TestBareOlivaresJSONOutputIsUnchanged is exit criterion (b) of: the
 // JSON pane, and the `next` value scripts read from it, are byte-identical to
 // the output captured from origin/main before this change.
 func TestBareOlivaresJSONOutputIsUnchanged(t *testing.T) {

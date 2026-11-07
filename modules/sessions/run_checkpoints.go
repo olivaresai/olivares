@@ -28,7 +28,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// A SESSION'S TURNS, one checkpoint each (#3433): what each turn changed in the session's
+// A SESSION'S TURNS, one checkpoint each: what each turn changed in the session's
 // folder, and the folder as it was before any turn, to rewind to.
 //
 // The folder is the agent's, so nothing here runs in it or reads a setting from it. The

@@ -106,7 +106,7 @@ const PENDING_PAUSED_FLAGS = {
 }
 
 /** The observed page the dashboard reads: the Sessions view's page size, so the card
- *  joins the rows that view lists (#2268). */
+ *  joins the rows that view lists. */
 const LIVE_KEY = sessionsKeys.live('demo', { limit: 200 })
 
 const BOTH = (p: string) =>
@@ -223,7 +223,7 @@ describe('ExecutiveView usage pillar — Inventory valid, Sessions not establish
     renderIntel(<ExecutiveView />)
     const tile = await settledTile()
 
-    // The headline is the Working set, which is the live half's fact (#2268).
+    // The headline is the Working set, which is the live half's fact.
     expect(within(tile).getByText('—')).toBeInTheDocument()
     expect(within(tile).queryByText('3')).toBeNull()
     expect(within(tile).getByText('— live · 25 tracked')).toBeInTheDocument()

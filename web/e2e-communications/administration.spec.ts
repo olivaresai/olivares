@@ -1407,7 +1407,7 @@ test('keyboard-only administration (focus returns to the trigger on close), the 
     dpage.getByRole('row').filter({ hasText: adminSlug }),
   ).toHaveCount(1)
   const shotDoc = async (theme: 'light' | 'dark') => {
-    // The theme is chosen in the account menu (#3161).
+    // The theme is chosen in the account menu.
     await dpage.getByRole('button', { name: /, Account$/ }).click()
     await dpage
       .getByRole('menuitemradio', { name: theme === 'dark' ? 'Dark' : 'Light' })

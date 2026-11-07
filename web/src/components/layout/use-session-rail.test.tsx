@@ -332,7 +332,7 @@ describe('session rail read authority', () => {
     expect(requests).toEqual(['/v1/m/sessions/runs'])
   })
 
-  it('keeps a snoozed session where the command menu searches, out of the counts and the notifications (#2480)', async () => {
+  it('keeps a snoozed session where the command menu searches, out of the counts and the notifications', async () => {
     auth.permissions.add('sessions:run:read')
     replies.set(RUNS, () =>
       Response.json({

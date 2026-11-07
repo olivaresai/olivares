@@ -966,3 +966,63 @@ func TestReleaseArchivePlansThroughOneGatewayError(t *testing.T) {
 		t.Fatalf("latest through a redirect 502 and a HEAD 503: api calls %d err %v", api, err)
 	}
 }
+
+// A channel can advance between approval and installation. Install the approved
+// release, while still refusing changed metadata for that release.
+func TestReleaseArchiveInstallPinsApprovedVersion(t *testing.T) {
+	payload := archiveFixture(t, DriverOpenCode, nil)
+	engine, req, client := archiveEngine(t, DriverOpenCode, payload, false)
+	transport := client.Transport
+	latestCalls := 0
+	changed := false
+	client.Transport = archiveRoundTrip(func(r *http.Request) (*http.Response, error) {
+		lookup := r.Clone(r.Context())
+		lookup.URL.Path = strings.ReplaceAll(lookup.URL.Path, "v1.2.4", "v1.2.3")
+		resp, err := transport.RoundTrip(lookup)
+		if err != nil {
+			return resp, err
+		}
+		if strings.HasSuffix(r.URL.Path, "/releases/latest") {
+			latestCalls++
+		}
+		if latestCalls > 1 && (strings.HasSuffix(r.URL.Path, "/releases/latest") || strings.HasSuffix(r.URL.Path, "/releases/tags/v1.2.4")) {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			body = bytes.ReplaceAll(body, []byte("1.2.3"), []byte("1.2.4"))
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+			resp.ContentLength = int64(len(body))
+		}
+		if changed && strings.HasSuffix(r.URL.Path, "/releases/tags/v1.2.3") {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			body = bytes.ReplaceAll(body, []byte(sha256Hex(payload)), []byte(strings.Repeat("a", 64)))
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+			resp.ContentLength = int64(len(body))
+		}
+		return resp, nil
+	})
+	approved, err := engine.PlanV2(t.Context(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var progress bytes.Buffer
+	receipt, _, err := engine.InstallV2(t.Context(), req, approved, &progress)
+	if err != nil {
+		t.Fatalf("install approved %s after latest advances: %v\n%s", approved.Selection.Version, err, &progress)
+	}
+	if receipt.Version != "1.2.3" || latestCalls != 1 {
+		t.Fatalf("installed %s, latest calls %d", receipt.Version, latestCalls)
+	}
+	changed = true
+	progress.Reset()
+	_, resolved, err := engine.InstallV2(t.Context(), req, approved, &progress)
+	if KindOf(err) != KindPlanChanged {
+		t.Fatalf("changed release metadata: %v", err)
+	}
+	for _, selection := range []SelectionV2{approved.Selection, resolved.Selection} {
+		raw, _ := json.Marshal(selection)
+		if !strings.Contains(progress.String(), string(raw)) {
+			t.Fatalf("missing selection diagnostics: %s", &progress)
+		}
+	}
+}

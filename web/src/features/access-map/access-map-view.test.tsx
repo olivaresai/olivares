@@ -1555,7 +1555,7 @@ describe('level of detail (text stays readable, zooming out groups)', () => {
 })
 
 /**
- * #2914 — the view IS the address. Selection, filters, the drift overlay and the
+ * — the view IS the address. Selection, filters, the drift overlay and the
  * expanded neighbors round-trip through the URL: a pasted link restores the same map,
  * Back leaves it, and expanding a node keeps the previous map one Back away.
  */

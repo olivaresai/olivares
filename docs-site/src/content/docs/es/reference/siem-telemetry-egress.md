@@ -189,6 +189,33 @@ tests contra los esquemas oficiales de clase 1.8.0, que prohíben campos
 desconocidos: un atributo fuera de perfil o un objeto de perfil incompleto rompen
 la build en vez de llegarte.
 
+Los inicios de sesión y los cambios de factor se registran en el ledger del
+sistema. Exportados desde allí (`olivares audit export --format ocsf --tenant ffffffff-ffff-ffff-ffff-ffffffffffff`),
+van en cambio al modelo de datos de
+autenticación del SIEM. La exportación HTTP (`GET /v1/audit/export`) solo lee
+los ledgers de las organizaciones. El reenviador del ledger envía estos eventos una vez a los destinos SIEM
+suscritos en el tenant del sistema, nunca al destino de una organización. La API rechaza el tenant del sistema,
+así que solo el operador que tiene el directorio de datos crea ese destino: `olivares eventing subscriptions create --tenant ffffffff-ffff-ffff-ffff-ffffffffffff --event-types audit.recorded --role admin --sink-kind splunk_hec --sink-cred-file <file>`. `auth.login`, `auth.external.login`, `sso.login`, `auth.login.failed`, `auth.login.blocked`, `auth.logout`, `sso.logout.backchannel` son **Authentication (3002)**: Logon o Logoff, con `status_id` 2
+(Failure) para un inicio de sesión rechazado. `auth.webauthn.register` y
+`auth.totp.activate` son **Account Change (3001)** MFA Factor Enable;
+`auth.webauthn.unregister`, `auth.webauthn.recover` y `auth.totp.reset` son MFA
+Factor Disable; `auth.webauthn.rename` y `auth.totp.recovery_used` son Other. Las
+dos clases de Identity & Access Management llevan `user.name`: el actor del ledger,
+o la cuenta destino cuando un administrador restablece los factores de otra
+persona. No llevan el perfil `ai_operation`. Los campos de integridad siguen bajo
+`unmapped`, como en cualquier otro evento, y cualquier otra acción sigue siendo API
+Activity. En `sso.logout.backchannel` el usuario es la cuenta cuya sesión se cerró, y un
+evento sin actor en el ledger lleva `unknown`.
+
+:::caution[Cambio: los inicios de sesión y los cambios de factor ya no son API Activity]
+Estas 14 acciones se exportaban como API Activity (6003) con `activity_id` 99
+(Other, `type_uid` 600399). Ahora se exportan como Authentication (3002) y Account
+Change (3001). Actualiza cada detección, búsqueda guardada o parser que las
+identifique por `class_uid` 6003.
+`auth.stepup.failed` y `auth.os_account.verify.refused` siguen siendo API
+Activity, ahora con `status_id` 2 (Failure) en lugar de 1.
+:::
+
 :::caution[AWS Security Lake acepta OCSF ≤ 1.3]
 Una fuente personalizada de Security Lake tope en **OCSF 1.3 en Parquet**, así que
 los eventos `ai_operation` 1.8.0 **no** aterrizan ahí tal cual (comprobado el

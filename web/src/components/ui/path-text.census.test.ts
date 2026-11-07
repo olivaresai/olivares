@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// EVERY RAW PATH IN THE CONSOLE RENDERS THROUGH `PathText` (#3135).
+// EVERY RAW PATH IN THE CONSOLE RENDERS THROUGH `PathText`.
 //
 // A path written straight into the page as `{file.path}` is cut wherever its own cell happens
 // to cut it, has no hover with the whole value and no copy: the defect the regression fixed on the
@@ -706,7 +706,7 @@ describe('every raw path renders through PathText', () => {
   })
 })
 
-// A SECOND CUTTER (#3135, review round 3). A helper that cuts a path into a display string
+// A SECOND CUTTER (, review round 3). A helper that cuts a path into a display string
 // before render (`${head}/…/${tail}`, a split at the last slash) hides the whole value from
 // every page that shows the string, and the checks above cannot see it: the field is a summary
 // and the cut is in a `.ts` file. `path-split.ts` is the one splitter PathText uses; any other

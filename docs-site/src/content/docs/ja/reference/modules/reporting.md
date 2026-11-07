@@ -41,4 +41,4 @@ Business Compliance Packs は、次の 5 種類をオンデマンドで提供し
 
 - [コンプライアンスと規制](/ja/reference/modules/xiii-compliance/) — 状況と証拠のデータソース。
 - [コストと AI FinOps](/ja/reference/modules/xi-finops/) — 支出の正本。
-- [モジュールカタログ](/ja/reference/modules/overview/) — 接続済み 32 モジュールと正直な成熟度。
+- [モジュールカタログ](/ja/reference/modules/overview/) — 接続済み 33 モジュールと正直な成熟度。

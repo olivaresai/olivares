@@ -991,7 +991,7 @@ func readToolLoginKey(ctx context.Context, cmd *cobra.Command, lines <-chan tool
 }
 
 func toolSignInFailed(driver string, s toolSignIn) error {
-	// The engine's message is the tool's reason and its one next step (#470).
+	// The engine's message is the tool's reason and its one next step.
 	// It keeps the tool's own reason; an address in it off the tool's hosts is hidden.
 	if msg := strings.TrimSpace(hideOtherAddresses(driver, s.Message)); msg != "" {
 		return sentence(exitcode.Err, "%s is not signed in. %s", toolName(driver), msg)

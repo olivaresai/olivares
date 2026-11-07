@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
  * Checkbox — Radix checkbox with a crisp lucide Check glyph. Hairline border when
  * unchecked; checked and indeterminate fill the box with the neutral ink — state,
  * not an action, so it never counts as one of a screen's orange verb controls
- * (#2701, the #2696 Switch decision). Focus is a ring. Supports the indeterminate
+ * (, the Switch decision). Focus is a ring. Supports the indeterminate
  * state Radix exposes (`checked="indeterminate"`), which renders the same fill
  * (callers can swap the glyph if they need a dash).
  */

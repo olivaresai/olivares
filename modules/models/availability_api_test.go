@@ -84,7 +84,7 @@ func TestAvailableModelsAPIAuthIsolationAndReadOnly(t *testing.T) {
 }
 
 // The models of a provider key, a tool account or a tool are listed to whoever may use it
-// (#2420): the reference and the model IDs of another department's account, tool or key are
+// : the reference and the model IDs of another department's account, tool or key are
 // not shown, and an unreadable assignment fails the answer.
 type accountDiscovery struct{ tenant model.TenantID }
 

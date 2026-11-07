@@ -96,7 +96,7 @@ if mode == 'empty':
                         PR_HEAD=self.head, GITHUB_REPOSITORY="olivaresai/olivares",
                         GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="2",
                         # The embed step reads the producing attempt from pr-web's output
-                        # (#2749), so the extracted script needs the same environment.
+                        # so the extracted script needs the same environment.
                         GENERATION_ATTEMPT="2", CONSOLE_REBUILT_IN_THIS_JOB="false")
         # Ignore the invoking shell's git overrides; only this fixture is in scope.
         for name in list(self.env):
@@ -254,7 +254,7 @@ else:
             self.assertLess(body.index('run: python3 scripts/capture-web-generation.py'),
                             body.index('name: embed the verified console output'))
             # The embed step's local-rebuild branch must fire on exactly the runs that
-            # rebuild locally (#2749): same condition as the rebuild/download steps above.
+            # rebuild locally: same condition as the rebuild/download steps above.
             embed = next(step for step in steps
                          if step.startswith('name: embed the verified console output\n'))
             self.assertIn('CONSOLE_REBUILT_IN_THIS_JOB: ${{ ' + local + ' }}', embed)
@@ -358,7 +358,7 @@ else:
                   .split('      - ', 1)[0]
 
     def test_consumer_embeds_the_attempt_the_generation_job_reported(self):
-        # #2749: "re-run failed jobs" re-runs a failed consumer at attempt 2 while pr-web's
+        #: "re-run failed jobs" re-runs a failed consumer at attempt 2 while pr-web's
         # attempt-1 success keeps its artifact, so the identity check must read the
         # PRODUCING attempt — pr-web's own output on the download path, this job's own
         # attempt after a local rebuild — never the consumer's GITHUB_RUN_ATTEMPT, or
@@ -432,7 +432,7 @@ else:
                 self.assertNotIn('--arg attempt "$GITHUB_RUN_ATTEMPT"', step)
 
     def test_userspace_compat_binds_the_attempt_pr_build_reported(self):
-        # #2749, second consumer: userspace-compat downloads pr-build's artifact by name and
+        #, second consumer: userspace-compat downloads pr-build's artifact by name and
         # must check it against the attempt pr-build reported, not its own GITHUB_RUN_ATTEMPT
         # (scripts/userspace/test_extract_build.py runs the check itself).
         workflow = (SOURCE.parent.parent / '.github/workflows/pr-ci.yml').read_text()

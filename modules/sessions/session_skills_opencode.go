@@ -39,7 +39,7 @@ var openCodeBuiltinAgents = []string{"build", "plan", "general", "explore", "com
 var openCodeTemplateFile = regexp.MustCompile("(?:^|[^A-Za-z0-9_`])@")
 
 // openCodeTemplateSplice is a placeholder right after ! or right before a backtick
-// or @, which lets typed arguments complete one of the two (#2998): `$ARGUMENTS`
+// or @, which lets typed arguments complete one of the two: `$ARGUMENTS`
 // followed by a backtick and the argument "!" become !`, run as shell. It is also a
 // $ and capital letters right before a placeholder: OpenCode replaces $N before
 // $ARGUMENTS, so "$ARG$1UMENTS" becomes a new $ARGUMENTS once $1 is replaced, and
@@ -162,7 +162,7 @@ const openCodeJSSpace = `\t\n\v\f\r \x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{
 var openCodePlaceholder = regexp.MustCompile(`\$(?:ARGUMENTS|[0-9]+)`)
 
 // openCodeSkill refuses a skill whose /command form would act outside the session's
-// approvals (#3005). OpenCode offers each skill as a command and expands its
+// approvals. OpenCode offers each skill as a command and expands its
 // SKILL.md like a template (measured on 1.19.3 and 1.19.4): it replaces the
 // placeholders, then runs every !`shell` and reads every @path that exists, through
 // symlinks, resolved against the folder's git top level, or / when git does not
@@ -178,7 +178,7 @@ var openCodePlaceholder = regexp.MustCompile(`\$(?:ARGUMENTS|[0-9]+)`)
 // mention @dataclass, an @scope/package, an email or a TypeScript "@/lib/x" import,
 // which OpenCode reads only if such a file exists. The check runs at launch: a path
 // created later, and an agent of the account's or the folder's own configuration
-// (#3076), are not seen.
+// , are not seen.
 func openCodeSkill(dir, file string, b []byte, agents []string) error {
 	refuse := func(why string) error {
 		return &runErr{503, fmt.Sprintf("assigned skill %q cannot be delivered to OpenCode: %s", path.Dir(file), why)}

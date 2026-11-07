@@ -460,7 +460,7 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 						run["peers"] = body["peers"]
 					}
 					out["peers"], out["peers_rule"] = run["peers"], run["peers_rule"]
-				// The session's name and its archived mark (#2795) are the run's own: each
+				// The session's name and its archived mark are the run's own: each
 				// call answers the run, and an empty name clears it.
 				case strings.HasSuffix(path, "/name") && r.Method == http.MethodPut:
 					f.mu.Lock()
@@ -496,7 +496,7 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 					if at, ok := run["archived_at"]; ok {
 						out["archived_at"] = at
 					}
-				// The caller's own pin (#2130): POST sets it, DELETE clears it, both answer
+				// The caller's own pin: POST sets it, DELETE clears it, both answer
 				// the pin state, and the run reads carry it as the engine's do.
 				case strings.HasSuffix(path, "/pin"):
 					pinned := r.Method == http.MethodPost
@@ -512,7 +512,7 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 					f.mu.Unlock()
 					writeJSON(200, answer)
 					return
-				// The caller's own snooze and done marks (#2480): each route answers both
+				// The caller's own snooze and done marks: each route answers both
 				// marks as they now stand, and the run reads carry them.
 				case strings.HasSuffix(path, "/snooze"), strings.HasSuffix(path, "/done"):
 					f.mu.Lock()
@@ -532,7 +532,7 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 					f.mu.Unlock()
 					writeJSON(200, answer)
 					return
-				// The caller's own read state (#2866): POST marks the run unread, DELETE read.
+				// The caller's own read state: POST marks the run unread, DELETE read.
 				case strings.HasSuffix(path, "/unread"):
 					unread := r.Method == http.MethodPost
 					f.mu.Lock()
@@ -1123,5 +1123,30 @@ func TestSessionViewAnInterruptedClaudeTurnAndItsOwnCost(t *testing.T) {
 	}
 	if got := b.String(); !strings.Contains(got, "— turn failed · 1.2s") || !v.failed {
 		t.Fatalf("a refused credential's interrupted turn =\n%s(failed %v), want turn failed", got, v.failed)
+	}
+}
+
+func TestSessionListRegisteredFolderLabelKeepsJSON(t *testing.T) {
+	f := newFakeSessionEngine(t)
+	storage := "/var/lib/olivares/files/tenant-example/person-example"
+	f.workspaces = []map[string]any{{"workspace_ref": "ws_personal", "name": "My files", "root_path": storage}}
+	f.runs = []map[string]any{{"run_ref": "run-example", "name": "notes", "state": "running", "workspace_ref": "ws_personal", "workspace_path": storage}}
+	out, stderr, err := execSessionCLI(t, nil, append([]string{"sessions", "ls", "-o", "text"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("sessions ls: %v; %s", err, stderr)
+	}
+	if !strings.Contains(out, "My files") || strings.Contains(out, storage) || strings.Contains(out, "tenant-example") {
+		t.Errorf("FOLDER must show the registered name without storage ids:\n%s", out)
+	}
+	raw, stderr, err := execSessionCLI(t, nil, append([]string{"sessions", "ls", "-o", "json"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("sessions ls -o json: %v; %s", err, stderr)
+	}
+	want, err := json.MarshalIndent(f.runs, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(raw) != string(want) {
+		t.Fatalf("JSON changed: got %s; want %s", raw, want)
 	}
 }

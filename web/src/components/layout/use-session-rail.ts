@@ -245,7 +245,7 @@ export function useOfferedHandoffs() {
   const handoffsView = viewById('communicationsHandoffs')
   // A global administrator is never the recipient of a personal handoff, so the inbox
   // is not asked for that account (the handoffs page says the same). A superadmin with
-  // a grant in this tenant is a member and is asked (#503).
+  // a grant in this tenant is a member and is asked.
   const readHandoffs =
     !!boundary.tenant &&
     !!handoffsView &&

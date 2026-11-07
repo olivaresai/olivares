@@ -185,6 +185,32 @@ suite against the official 1.8.0 class schemas, which forbid unknown fields — 
 an un-profiled attribute or an incomplete profile object fails the build rather
 than reaching you.
 
+Sign-ins and factor changes are recorded in the system ledger. Exported from
+there (`olivares audit export --format ocsf --tenant ffffffff-ffff-ffff-ffff-ffffffffffff`), they go to the SIEM's
+authentication data model instead. The HTTP export (`GET /v1/audit/export`) reads
+organization ledgers only. The ledger forwarder pushes these events once, to the SIEM sinks subscribed on the
+system tenant, never to an organization's sink. The API refuses the system tenant, so only the operator who
+holds the data directory creates such a sink: `olivares eventing subscriptions create --tenant ffffffff-ffff-ffff-ffff-ffffffffffff --event-types audit.recorded --role admin --sink-kind splunk_hec --sink-cred-file <file>`. `auth.login`, `auth.external.login`, `sso.login`, `auth.login.failed`, `auth.login.blocked`, `auth.logout`, `sso.logout.backchannel` are **Authentication (3002)**:
+Logon or Logoff, with `status_id` 2 (Failure) for a refused sign-in.
+`auth.webauthn.register` and `auth.totp.activate` are **Account Change (3001)**
+MFA Factor Enable; `auth.webauthn.unregister`, `auth.webauthn.recover` and
+`auth.totp.reset` are MFA Factor Disable; `auth.webauthn.rename` and
+`auth.totp.recovery_used` are Other. Both Identity & Access Management classes
+carry `user.name`: the ledger actor, or the target account when an administrator
+resets someone else's factors. They carry no `ai_operation` profile. The integrity
+fields stay under `unmapped`, as on every other event, and every other action stays
+API Activity. For `sso.logout.backchannel` the user is the signed-out account, and an event
+with no ledger actor carries `unknown`.
+
+:::caution[Changed: sign-ins and factor changes are no longer API Activity]
+These 14 actions used to export as API Activity (6003) with `activity_id` 99
+(Other, `type_uid` 600399). They now export as Authentication (3002) and Account
+Change (3001). Update every detection, saved search or parser that matches them
+on `class_uid` 6003.
+`auth.stepup.failed` and `auth.os_account.verify.refused` stay API Activity, now
+with `status_id` 2 (Failure) instead of 1.
+:::
+
 :::caution[AWS Security Lake accepts OCSF ≤ 1.3]
 A Security Lake custom source caps at **OCSF 1.3 in Parquet**, so 1.8.0
 `ai_operation` events do **not** land there as-is (checked 2026-07-24). Until a

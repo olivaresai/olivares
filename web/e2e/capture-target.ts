@@ -508,10 +508,10 @@ export async function exigirInstanteLimpio(
     await exigirSesionesCoherentes(page, id, visible)
 }
 
-// The views that show sessions and their conversation, which the 0.1 console painted wrong (#1784, #1785).
+// The views that show sessions and their conversation, which the 0.1 console painted wrong.
 // The recording replay (session-viewer) and the workspace sheet (video-10) are not here: recorded terminal
 // output may hold a code fence, and a file list holds no conversation. `exigirPantallaTerminada` still reads
-// every view, so a replay that shows a code fence is judged when it is retaken (#1843).
+// every view, so a replay that shows a code fence is judged when it is retaken.
 export const VISTAS_DE_SESION = new Set([
   'home',
   'estate',
@@ -520,7 +520,7 @@ export const VISTAS_DE_SESION = new Set([
   'video-07-live',
   'video-08-governance',
 ])
-// What #1784 showed: a list item or a bold span the reply left unrendered, and a code fence. Other markdown
+// What showed: a list item or a bold span the reply left unrendered, and a code fence. Other markdown
 // (headings, tables, inline code) is not looked for, so "no raw markdown" is not proven beyond these.
 // A glob (`src/**/x`) and a masked value (`****`) are not markdown.
 const MARKDOWN_CRUDO =
@@ -564,7 +564,7 @@ async function exigirSesionesCoherentes(
   if (id === 'home') await exigirEstateCoherente(page, id, visible)
 }
 
-// #1785: Now marked every session Working while the page counted them idle. On Overview (#4427) the
+// #1785: Now marked every session Working while the page counted them idle. On Overview the
 // strip counts the sessions running (the Working section, as on Sessions; absent when none runs), so a
 // Running or Recent row can read Working only for one of those, and a strip that counts sessions
 // running needs a row on the page. The rows are a recent page of the sessions, so fewer is fine.

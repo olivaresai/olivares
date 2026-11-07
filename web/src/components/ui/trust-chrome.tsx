@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
  * Marks a surface that carries a trust decision: an approval, a consent or step-up
  * dialog, a provenance chip, an edition or license badge. Inside `[data-trust-chrome]`
  * tokens.css re-declares every colour per theme, so a brand accent or a pack variable
- * set on the document cannot restyle it (#3140). Dialogs carry the attribute on their
+ * set on the document cannot restyle it. Dialogs carry the attribute on their
  * content through `DialogContent trust`.
  */
 export function TrustChrome({

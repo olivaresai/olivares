@@ -65,7 +65,7 @@ PY
 }
 
 # A long conversation in the tool's own transcript, for the message navigator's journey
-# (#2129): 600 requests and answers a minute apart from 2026-10-14T08:00Z, one phrase on
+# 600 requests and answers a minute apart from 2026-10-14T08:00Z, one phrase on
 # the second line of request 137. New turns are recorded by the driver. Needs the
 # session of seed_conversation_fixture, whose provider id the engine learns from the
 # fixture driver's init frame.

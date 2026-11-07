@@ -343,7 +343,7 @@ const SIN_AVISO_CONOCIDAS: Record<string, string> = {
   //    ERROR (`ErrEnumerationNotAuthoritative`), nunca un parcial silencioso. `has_more` de
   //    cliente es siempre false. Se queda declarada porque la guarda mide FUENTE y el tipo
   //    `ListResponse<>` no distingue: el wrapper es el CONTENEDOR, no la evidencia.
-  // ⛔ #1622 ATERRIZO EL 2026-08-25 Y LA LISTA ENCOGIO SOLA, que era el diseno. Aqui vivian
+  // ⛔ ATERRIZO EL 2026-08-25 Y LA LISTA ENCOGIO SOLA, que era el diseno. Aqui vivian
   //    `claude-policy`, `finops` y `redteam`, exentas «hasta que aterrice la pila de consola».
   //    La tercera celda dijo que SOBRABAN y se borraron el 2026-08-27, junto con otras seis que
   //    el mismo aterrizaje dejo obsoletas. Se deja escrito porque el valor de esta lista es que
@@ -365,7 +365,7 @@ const SIN_AVISO_CONOCIDAS: Record<string, string> = {
   //    Lo compruebo porque mi primera sonda dijo 0 y la ancha dijo 1: gana la que encuentra mas.
   compliance:
     'N/A: sus listas DRENAN con listAll (depthhandlers.go); 0 HasMore en respuesta',
-  // ⛔ `deploy` VIVIA AQUI Y SE RETIRA EL 2026-08-28, porque #1902 (restauracion de) le da
+  // ⛔ `deploy` VIVIA AQUI Y SE RETIRA EL 2026-08-28, porque (restauracion de) le da
   //    su aviso: la tercera celda de esta bateria dijo que la exencion SOBRA, y ese rojo es la
   //    forma que tiene este gate de celebrar un arreglo. Se borra en el mismo aterrizaje que la
   //    vuelve falsa: una exencion que nadie retira envejece hasta volverse permiso.

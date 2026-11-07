@@ -251,7 +251,7 @@ jobs:
         env:
           # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
           # "re-run failed jobs" re-runs a failed consumer at attempt 2 while web-bundle's
-          # earlier success keeps attempt 1's artifact (#2749).
+          # earlier success keeps attempt 1's artifact.
           GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}
         run: |
           set -euo pipefail
@@ -468,14 +468,14 @@ jobs:
           # que siempre. No se silencia nada en el hub.
           #
           # ⛔ EL PREDICADO ES EL DIRECTORIO, NO EL FICHERO — corregido el 2026-08-30 sobre la
-          # guarda de #2155, cuyo comentario de arriba ya dice lo correcto («sin el MÓDULO no hay
+          # guarda de, cuyo comentario de arriba ya dice lo correcto («sin el MÓDULO no hay
           # sujeto que probar») mientras el `[ ! -f ]` preguntaba por el guion. No es lo mismo: con
           # el módulo presente y el `.sql` borrado o renombrado dentro del hub, el `-f` también
           # respondía NOT APPLICABLE y tapaba un defecto real con la excusa del export. Lo que
           # separa «árbol público» de «guion roto» es la ausencia del módulo, que es justo lo que
           # el export retira.
           # ⛔ LA DECLARACION QUE LA GUARDA DE ABAJO NECESITA para que el gate la reconozca.
-          # La guarda existe desde #2155 y su predicado por directorio desde lo que
+          # La guarda existe desde y su predicado por directorio desde lo que
           # faltaba era DECIRLO en la forma que `check-export-closure.sh` lee, y hasta hoy
           # `scan_workflow` ni siquiera recogia declaraciones. En UNA linea a proposito: el
           # patron exige ruta y razon juntas y una razon partida en dos no se reconoce.
@@ -1838,7 +1838,7 @@ jobs:
         env:
           # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
           # "re-run failed jobs" re-runs a failed consumer at attempt 2 while web-bundle's
-          # earlier success keeps attempt 1's artifact (#2749).
+          # earlier success keeps attempt 1's artifact.
           GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}
         run: |
           set -euo pipefail
@@ -2729,7 +2729,7 @@ jobs:
         env:
           # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
           # "re-run failed jobs" re-runs a failed consumer at attempt 2 while web-bundle's
-          # earlier success keeps attempt 1's artifact (#2749).
+          # earlier success keeps attempt 1's artifact.
           GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}
         run: |
           set -euo pipefail
@@ -3525,7 +3525,7 @@ jobs:
         env:
           # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
           # "re-run failed jobs" re-runs a failed consumer at attempt 2 while web-bundle's
-          # earlier success keeps attempt 1's artifact (#2749).
+          # earlier success keeps attempt 1's artifact.
           GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}
         run: |
           set -euo pipefail
@@ -3996,7 +3996,7 @@ jobs:
           retention-days: 1
 
   capture-gate:
-    # Capture gate (issue #2557): over the SAME routes and themes as `at:gate` it adds the
+    # Capture gate (issue): over the SAME routes and themes as `at:gate` it adds the
     # checks from the WEBC4 review that the automatic sweep was silent about — glow/backdrop
     # and "at most one filled orange control in the first screen" (orange.ts), text-fit
     # (textfit.ts) and text overlap (overlap.ts), ported from concepts-c2/qa — at BOTH
@@ -4374,7 +4374,7 @@ jobs:
     outputs:
       bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
       # The attempt that produced and uploaded the artifact above. Consumers compare the
-      # manifest against THIS attempt (#2749): "re-run failed jobs" re-runs a failed
+      # manifest against THIS attempt: "re-run failed jobs" re-runs a failed
       # consumer at a new attempt while this job's earlier success keeps its artifact.
       bundle-attempt: ${{ github.run_attempt }}
     needs: [classify]
@@ -4449,7 +4449,7 @@ jobs:
   # conformance vectors come from commercial/commerce/internal/inbox/testdata and the wire
   # format from core/license. The job is a few minutes of Node on a dev box; it runs.
   #
-  # CEILING, MEASURED (2026-10-16, #2314). The gate is 116 s on the dev box (typecheck 8 s, units
+  # CEILING, MEASURED (2026-10-16,). The gate is 116 s on the dev box (typecheck 8 s, units
   # 107 s, hermetic E2E 1 s). On build-host, dispatch run 38860445399 took 34 s for typecheck and
   # 843 s for the units; the step ended at 06:33:19Z and the old 15-minute job cap fell at 06:33:26Z,
   # during the failure reporter, so the run was reported `cancelled` (a job cap also cancels the
@@ -4831,7 +4831,7 @@ jobs:
   # The FIPS-mode build was only ever exercised on a v* release tag (goreleaser),
   # so a change that broke GOFIPS140=v1.0.0 would land on main unnoticed.
   # This builds the olivares in native FIPS 140-3 mode and runs the full
-  # self-check (module #5247 linked, runtime toggle, `version` self-report).
+  # self-check (module linked, runtime toggle, `version` self-report).
   secrets:
     # DELIBERATELY NOT gated by classify: gitleaks consumes the journal paths (see
     # the header). Every push gets a secrets verdict for the commits it introduces.
@@ -4886,7 +4886,7 @@ jobs:
       # ⛔ AQUI HUBO UNA PODA DE REFS MUERTAS. RETIRADA EL 2026-09-03, Y ESTO ES LO MEDIDO.
       #
       # Hacia `git remote prune origin` y publicaba un antes/despues. La justificaba la incidencia
-      # #1499 (2026-08-21): gitleaks recorrio 9 264 commits, 1 590 ajenos a este ref (17,2 %), y ese
+      # (2026-08-21): gitleaks recorrio 9 264 commits, 1 590 ajenos a este ref (17,2 %), y ese
       # residuo fue el ORIGEN de un hallazgo «NOT reachable from HEAD» que acuso a una rama que nunca
       # lo llevo. Las tres razones por las que se va, cada una con su medida:
       #
@@ -4904,7 +4904,7 @@ jobs:
       #    nada que podar como si la poda murio. Un contador de diferencias no distingue «limpio» de
       #    «no pude mirar» — que es justo la tercera respuesta que este gate si sabe dar.
       #
-      # 2. LA CORRECCION YA NO DEPENDE DE ESTO. La acusacion falsa de #1499 la cura hoy el propio
+      # 2. LA CORRECCION YA NO DEPENDE DE ESTO. La acusacion falsa de la cura hoy el propio
       #    guion: `scripts/check-secrets.sh:355-360` sale 0 cuando NINGUN hallazgo es alcanzable desde
       #    HEAD, y `:304-316` imprime la columna «reachability» de cada uno. Por eso el paso de abajo
       #    se llama «charges only what HEAD reaches». La poda defendia coste, no verdad.

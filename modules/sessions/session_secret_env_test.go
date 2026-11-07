@@ -241,8 +241,8 @@ func TestSecretEnv_RefusesReservedAndMalformedNames(t *testing.T) {
 }
 
 // TestSecretEnv_ARegistryTokenStillLaunches is the registry credential a session
-// is given the way npm, a CI's setup-node and Cargo document it (#1442), and yarn,
-// bun, uv, Gradle, Bundler, RubyGems and a NuGet push (#1474): the package-manager
+// is given the way npm, a CI's setup-node and Cargo document it, and yarn,
+// bun, uv, Gradle, Bundler, RubyGems and a NuGet push: the package-manager
 // rule refuses their code, trust and routing settings, never these. Composer has
 // none: COMPOSER_AUTH is configuration as much as a credential.
 func TestSecretEnv_ARegistryTokenStillLaunches(t *testing.T) {
@@ -336,7 +336,7 @@ const secretEnvPlace = "New session > More options > Manage session secrets"
 
 // A stopped session's secrets cannot be edited, and session secrets live in the
 // tenant's store behind the start form's "Manage session secrets", not the
-// deployment-wide Secrets page (#511). Every refusal of a stored secret on resume
+// deployment-wide Secrets page. Every refusal of a stored secret on resume
 // names that place and the other way out, a new session, and none offers to
 // remove the secret from this session.
 func TestSecretEnv_AResumeRefusalNamesAWayOutThatExists(t *testing.T) {

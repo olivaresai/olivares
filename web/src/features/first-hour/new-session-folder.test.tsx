@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A first session needs no typed folder. The form shows the folder the product fills in
-// (the last session's folder while it is still registered, else a new folder of the
-// session's own, which the engine creates) in one dropdown, and a typed path only after
-// "Another folder…".
+// The last registered folder is remembered; otherwise a first session needs an explicit
+// folder choice. A private session folder remains available as an explicit choice.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -184,6 +182,7 @@ it('the composer is on screen before the engine says which tools can start, and 
 
 it('the composer comes first and Enter starts the session', async () => {
   runs([])
+  workspaces([REPO])
   wrap(<WorkStart />)
   const composer = await screen.findByRole('textbox', {
     name: 'First message (optional)',
@@ -377,20 +376,32 @@ it('explains a removed default folder and uses the first available folder', asyn
 })
 
 describe('the folder in the New session form', () => {
-  it('asks a first session for no path: it starts in a new folder of its own', async () => {
+  it('requires a folder choice before the first message starts a fresh session', async () => {
     const user = userEvent.setup()
     runs([])
-    wrap(<StartSessionForm />)
-    await screen.findByRole('button', { name: 'Start' })
-    expect(
-      await screen.findByRole('combobox', { name: 'Folder' }),
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
+    wrap(<StartSessionForm composer />)
+    const folder = await screen.findByRole('button', {
+      name: 'Folder: Choose a folder',
+    })
+    expect(folder).toHaveFocus()
+    const message = screen.getByRole('textbox', {
+      name: 'First message (optional)',
+    })
+    await user.type(message, 'inspect this project{Enter}')
+    expect(launch.launchSession).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await user.click(folder)
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: 'Another folder…' }),
+    )
+    await user.type(
+      screen.getByRole('textbox', { name: 'Folder' }),
+      '/srv/work/project',
+    )
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
-      folder: '',
-      workspace_ref: undefined,
+      folder: '/srv/work/project',
     })
   })
 
@@ -439,7 +450,7 @@ describe('the folder in the New session form', () => {
     })
   })
 
-  it('lets the user change the folder, and an emptied one is a new folder', async () => {
+  it('lets the user change the folder and requires a choice when the path is emptied', async () => {
     const user = userEvent.setup()
     runs([
       {
@@ -469,6 +480,13 @@ describe('the folder in the New session form', () => {
       workspace_ref: undefined,
     })
     await user.clear(field)
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await user.click(screen.getByRole('combobox', { name: 'Folder' }))
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(2))
     expect(launch.launchSession.mock.calls[1][0].quick).toMatchObject({
@@ -477,7 +495,7 @@ describe('the folder in the New session form', () => {
     })
   })
 
-  // Issue #1788: Change folder was a bare text field although the form had read the
+  // Issue: Change folder was a bare text field although the form had read the
   // registered folders. The folders sessions use are listed and selectable.
   const PAYMENTS = {
     workspace_ref: 'ws_2',
@@ -507,23 +525,21 @@ describe('the folder in the New session form', () => {
     const options = await screen.findAllByRole('option')
     expect(options.map((o) => o.textContent)).toEqual([
       '/srv/work/repo',
-      'payments-api (/srv/work/payments)',
+      'payments-api',
       'A new folder for this session',
       'Another folder…',
     ])
+    expect(options[0].querySelector('[data-slot="path-text"]')).not.toBeNull()
+    expect(options[1].querySelector('[data-slot="path-text"]')).toBeNull()
     for (const option of options.slice(0, 2)) {
-      expect(option.querySelector('[data-slot="path-text"]')).not.toBeNull()
       // A select option cannot contain another interactive control.
       expect(option.querySelector('button')).toBeNull()
     }
-    expect(options[1].querySelector('[data-slot="path-text"]')).toHaveClass(
-      'flex-1',
-    )
     await user.keyboard('payments-api{Enter}')
     expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
-    // What the list shows is what Start sends.
+    // Show the chosen name, but send its registered path to Start.
     expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveTextContent(
-      'payments-api (/srv/work/payments)',
+      'payments-api',
     )
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -786,8 +802,7 @@ describe('the folder in the New session form', () => {
     expect(folder).not.toHaveTextContent('/srv/work/other')
   })
 
-  // An unreadable session list is no reason to block a start: the engine still gives the
-  // session a folder of its own.
+  // An unreadable session list still allows an explicit private-folder choice.
   it('starts in a new folder when the session list cannot be read', async () => {
     const user = userEvent.setup()
     vi.spyOn(agentOpsApi, 'listRuns').mockRejectedValue(new Error('offline'))
@@ -795,6 +810,12 @@ describe('the folder in the New session form', () => {
     expect(
       await screen.findByRole('combobox', { name: 'Folder' }),
     ).toBeInTheDocument()
+    await user.click(screen.getByRole('combobox', { name: 'Folder' }))
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
@@ -830,7 +851,7 @@ describe('the folder in the New session form', () => {
     expect(screen.queryByText('/srv/work/removed')).toBeNull()
   })
 
-  it('starts in a new folder, registering none, when the last folder is no longer registered', async () => {
+  it('requires an explicit new folder when the last folder is no longer registered', async () => {
     const user = userEvent.setup()
     runs([
       {
@@ -861,6 +882,13 @@ describe('the folder in the New session form', () => {
       await screen.findByRole('combobox', { name: 'Folder' }),
     ).toBeInTheDocument()
     expect(screen.queryByText('/srv/work/removed')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await user.click(screen.getByRole('combobox', { name: 'Folder' }))
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(createRun).toHaveBeenCalledTimes(1))
     expect(createRun.mock.calls[0][0]).toMatchObject({ workspace_ref: '' })
@@ -951,9 +979,8 @@ describe('the folder in the New session form', () => {
     expect(screen.queryByText('/srv/work/repo')).toBeNull()
   })
 
-  // An unreadable folder list is no reason to offer an unchecked folder or to block a
-  // start: the session gets a new folder of its own.
-  it('starts in a new folder when the registered folders cannot be read', async () => {
+  // An unreadable folder list still allows an explicit private-folder choice.
+  it('requires an explicit new folder when the registered folders cannot be read', async () => {
     const user = userEvent.setup()
     runs([
       {
@@ -970,6 +997,13 @@ describe('the folder in the New session form', () => {
     expect(
       await screen.findByRole('combobox', { name: 'Folder' }),
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await user.click(screen.getByRole('combobox', { name: 'Folder' }))
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
@@ -1045,4 +1079,59 @@ it('opens a session link as an editable draft and launches only on Start', async
     open: false,
     draft: null,
   })
+})
+
+it('uses registered folder names in the picker and thread header without storage paths', async () => {
+  const path = '/var/lib/olivares/files/tenant-example/person-example'
+  const workspace = { ...REPO, name: 'My files', root_path: path }
+  workspaces([workspace])
+  runs([])
+  vi.spyOn(agentOpsApi, 'getWorkspace').mockResolvedValue(
+    workspace as WorkspaceDTO,
+  )
+  const user = userEvent.setup()
+  const qc = wrap(<WorkStart />)
+  await user.click(await screen.findByRole('button', { name: /^Folder:/ }))
+  expect(
+    await screen.findByRole('menuitemradio', { name: 'My files' }),
+  ).toBeVisible()
+  expect(document.body.textContent).not.toContain(path)
+  await user.click(screen.getByRole('menuitemradio', { name: 'My files' }))
+  expect(screen.getByRole('button', { name: 'Folder: My files' })).toBeVisible()
+
+  const { renderIntel } = await import('@/test/intel')
+  const { ThreadHeader } = await import('@/features/sessions/thread-header')
+  const { mergeSessions } = await import('@/features/sessions/provenance')
+  const run = {
+    run_ref: 'run-folder',
+    state: 'stopped',
+    workspace_ref: REPO.workspace_ref,
+    workspace_path: path,
+  } as RunDTO
+  renderIntel(
+    <ThreadHeader
+      session={mergeSessions([], [run])[0]!}
+      run={run}
+      caps={[]}
+      title="Folder session"
+      titleHint="Folder session"
+      titleMono={false}
+      address="run-folder"
+      reference={null}
+      pinned={false}
+      onTogglePin={null}
+    />,
+    { queryClient: qc },
+  )
+  await waitFor(() =>
+    expect(screen.getByTestId('narrative-folder')).toHaveTextContent(
+      'My files',
+    ),
+  )
+  expect(screen.getByTestId('narrative-folder')).not.toHaveAttribute(
+    'title',
+    path,
+  )
+  expect(document.body.textContent).not.toContain('tenant-example')
+  expect(document.body.textContent).not.toContain('person-example')
 })

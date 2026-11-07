@@ -533,7 +533,8 @@ it('keeps the same identity history on renewal, clears departures and rejects ol
     })
   })
   await waitFor(() => expect(latest.available).toBe(true))
-  expect(recentIds()).toEqual(['agentops'])
+  // Availability can settle before the permitted route's visit effect.
+  await waitFor(() => expect(recentIds()).toEqual(['agentops']))
   act(() => {
     latest.clearRecents()
     beforeLogout.recordVisit('agentops')
@@ -550,7 +551,7 @@ it('keeps the same identity history on renewal, clears departures and rejects ol
       'fixture-b',
     ),
   )
-  expect(recentIds()).toEqual(['agentops'])
+  await waitFor(() => expect(recentIds()).toEqual(['agentops']))
   act(() => {
     latest.clearRecents()
     old.recordVisit('home')

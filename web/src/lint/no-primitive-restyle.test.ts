@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE RULE THAT KEEPS A CALL SITE FROM RESTYLING A PRIMITIVE (#3135).
+// THE RULE THAT KEEPS A CALL SITE FROM RESTYLING A PRIMITIVE.
 //
 // A primitive in `components/ui` decides its own colour, size and padding, and offers
 // variants for the choices a screen may make. A call site that adds `bg-accent`, `h-9` or

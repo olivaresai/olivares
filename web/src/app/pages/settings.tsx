@@ -197,7 +197,7 @@ export function SettingsPage() {
   // owned here only so that leaving a section can clear them.
   const [url, patchUrl] = useUrlState(['section', 'q', 'add', 'returnTo'])
   // A page this installation does not run, or this principal may not open, is neither a
-  // section nor offered as a start page: the same gate the sidebar uses (#474).
+  // section nor offered as a start page: the same gate the sidebar uses.
   const { navigable, state } = useViewAccess()
   const offered = settingsSections(isSuperadmin, navigable)
   // An address to a section this person is not offered, or that does not exist, shows General.
@@ -262,7 +262,7 @@ export function SettingsPage() {
   // must find the accented label here too, or the two searches disagree.
   const q = fold(query.trim())
   // A hosted page is the page's own element, mounted here instead of at its route: the
-  // same room, never a second copy of it (#2905). A search query replaces it, as it
+  // same room, never a second copy of it. A search query replaces it, as it
   // does every section.
   const hostedRoom =
     q.length === 0 && hostedView ? viewById(hostedView)?.element() : null

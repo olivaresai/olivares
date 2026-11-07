@@ -65,8 +65,8 @@ full scan (`task security:report`), so nothing is hidden — just not release-bl
 `scripts/sast.sh --packages ./dir...` runs the same blocking gate (same rules, flags and
 fail-closed checks) over just the named package directories; `/...` works as in Go. The
 pre-push hook runs it on the packages the push changes, right after `go vet`, so a new
-`exec.Command` with variable arguments meets the gate before a full CI dispatch does
-(#2313). A whole-module scan of `cmd/olivares` needs more than 4 GiB; a package does not.
+`exec.Command` with variable arguments meets the gate before a full CI dispatch does.
+A whole-module scan of `cmd/olivares` needs more than 4 GiB; a package does not.
 The hook prints `SAST NOT CHECKED` when the pushed tree has no such gate or the host has no
 `gosec` (`task tools`); CI still runs the whole gate.
 

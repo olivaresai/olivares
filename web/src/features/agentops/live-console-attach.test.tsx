@@ -121,7 +121,7 @@ afterEach(() => {
 })
 
 describe('LiveConsole attach continuity', () => {
-  it('shows no row for a bookkeeping frame that arrives before any other (#1784)', async () => {
+  it('shows no row for a bookkeeping frame that arrives before any other', async () => {
     const frames = [
       {
         type: 'system',
@@ -153,7 +153,7 @@ describe('LiveConsole attach continuity', () => {
     expect(screen.queryByText(/Protocol frames/)).toBeNull()
   })
 
-  it('shows a tool call path whole through PathText (#3135)', async () => {
+  it('shows a tool call path whole through PathText', async () => {
     const long =
       '/home/ada/.claude/projects/-home-ada-work-shop/memory/MEMORY.md'
     const frames = [
@@ -189,7 +189,7 @@ describe('LiveConsole attach continuity', () => {
     expect(row.textContent).not.toContain('/…/')
   })
 
-  it('paints an assistant reply as markdown and keeps the tool bookkeeping off the page (#1784)', async () => {
+  it('paints an assistant reply as markdown and keeps the tool bookkeeping off the page', async () => {
     const frames = [
       { type: 'user', message: { role: 'user', content: 'list the files' } },
       {

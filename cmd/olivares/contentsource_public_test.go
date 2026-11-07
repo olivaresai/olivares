@@ -12,7 +12,7 @@ import (
 
 // The document source's "public" setting is the operator's explicit decision that
 // documents the source reports without an ACL are visible to the whole tenant
-// (#3030). Only the literal "true" counts: a typo stays denied.
+// . Only the literal "true" counts: a typo stays denied.
 func TestWrapContentSourceConfigPublic(t *testing.T) {
 	type publicSource interface{ Public() bool }
 	sources := map[string]contentsource.Source{

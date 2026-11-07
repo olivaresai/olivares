@@ -69,7 +69,7 @@ export interface ViewAccess {
    * Whether navigation lists the view: `navigable`. This is the single rule the sidebar,
    * palette, shortcuts, All areas and the phone bar share, which is what stops them
    * disagreeing. A module that is off folds out of navigation; Settings > Modules shows it
-   * as Off and turns it on (#2240). A view it does not list keeps its route.
+   * as Off and turns it on. A view it does not list keeps its route.
    */
   listed: ViewGate
 }

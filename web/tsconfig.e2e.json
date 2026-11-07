@@ -50,5 +50,5 @@
    * suite added beside them) plus every Playwright config. JSON reports under
    * e2e-visual/__at__ and the `.mjs` build/probe scripts are not TypeScript and are
    * not matched. */
-  "include": ["e2e*/**/*", "playwright*.config.ts"]
+  "include": ["e2e*/**/*", "playwright*.config.ts", "src/types/*.d.ts"]
 }

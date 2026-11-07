@@ -11,7 +11,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// #2795: `session rename` names a session by its name or id and makes one PUT; an
+// : `session rename` names a session by its name or id and makes one PUT; an
 // empty name clears it, and the session is shown by its id again.
 func TestSessionRenameSetsAndClearsTheName(t *testing.T) {
 	f := newFakeSessionEngine(t)

@@ -154,7 +154,7 @@ describe('cobertura del arnés de capturas', () => {
   })
 
   // An alias is a redirect, not a page: the capture lands on its target (captured under its own
-  // entry) and waits for a heading the console never paints at that address (#1520).
+  // entry) and waits for a heading the console never paints at that address.
   it('no capture entry names a retired alias path', () => {
     const alias = ROUTE_ALIASES.filter((a) =>
       new RegExp(`(^|[^A-Za-z])path:\\s*'${escapaRegex(a.from)}'`, 'm').test(

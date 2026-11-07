@@ -75,7 +75,7 @@ export function isOnScreen(
 }
 
 /** Use the rail's full reads, before the sidebar's row cap. A session the person snoozed
- * or marked done (#2480), or an archived one (#2795), is not watched: it raises no
+ * or marked done, or an archived one, is not watched: it raises no
  * notification and is not in the tab title's count, as it is not in Needs you. */
 export function attentionSnapshots(
   sources: RailSources,
@@ -110,7 +110,7 @@ export function attentionSnapshots(
           session.live?.unclaimed === true
       // What a notification calls a session: the operator's own name, else its tool and
       // folder with the row's tail (as a rail row does when another shares the name), else
-      // the key (#2266). NEVER the list's summary or goal: that is text the session wrote,
+      // the key. NEVER the list's summary or goal: that is text the session wrote,
       // often a prompt, and this title is painted by the OS outside the console.
       const place = sessionPlace(session)
       return {

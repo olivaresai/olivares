@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE LAST HOUR OF EVERY LIVE SESSION, AS ROWS (#2547). Pure: the rows are a function of
+// THE LAST HOUR OF EVERY LIVE SESSION, AS ROWS. Pure: the rows are a function of
 // what the engine already sent — each session's timeline events from an hour ago on, its
 // runs, and the pending approvals — and of the clock. Nothing here is guessed: a stretch
 // of events is a run, a pending approval is a wait from the moment it was asked, an idle
@@ -19,7 +19,7 @@ import type { TimelineDTO } from '@/features/sessions/types'
 import { isLiveSession } from './now-sessions'
 
 /** Past this many live sessions the swimlanes are too tall: a build with a fleet panel draws
- * that instead (#2565). */
+ * that instead. */
 export const FLEET_SESSIONS = 30
 /** The swimlane shows the last hour. */
 export const WINDOW_MS = 60 * 60_000

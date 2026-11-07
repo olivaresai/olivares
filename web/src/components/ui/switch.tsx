@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
  * Switch — Radix switch for immediate, binary settings (no confirm). Track is the
  * control boundary color when off (3:1 against the surface, and under the thumb) and the
  * neutral ink fill when on — state, not an action, so it never counts as one of a
- * screen's orange verb controls (#2696); the thumb stays the surface color and slides
+ * screen's orange verb controls; the thumb stays the surface color and slides
  * fast (100ms); a switch that cannot act is a dashed empty track,
  * color-only otherwise. Focus is a ring on the track. Prefer this over a checkbox
  * for "applies instantly" toggles; use Checkbox for form selections.

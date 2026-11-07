@@ -68,7 +68,7 @@ import type { ProbeState, ProviderKind, ProviderRecordDTO } from './types'
 import './i18n'
 
 /**
- * ApiKeys — the API keys on Tools (#2552): where a new operator lands when they ask
+ * ApiKeys — the API keys on Tools: where a new operator lands when they ask
  * "where do I put my API key". It was a page of its own (`/providers`), which is now a
  * door into Tools.
  *
@@ -207,7 +207,7 @@ function Inner({
   // toast from screen readers, so the dialog says it (one is open at a time).
   const [dialogError, setDialogError] = useState<string>()
   const [preparing, setPreparing] = useState<SignInTool | null>(null)
-  // The engine's latest line about the download a preparation is waiting for (#1086).
+  // The engine's latest line about the download a preparation is waiting for.
   const [download, setDownload] = useState<string | null>(null)
   const canPrepare = can('system:admin') && can('sessions:profile:write')
   const prepare = usePrivilegedMutation<SignInTool, void>({

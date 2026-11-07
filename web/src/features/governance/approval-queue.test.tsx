@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// #2548: the Rules place lists each request with the rule that asked and what it reaches,
+//: the Rules place lists each request with the rule that asked and what it reaches,
 // the request that needs this person carries the one orange edge whatever row is
 // selected, and approving it is one action that records one decision.
 import type { ReactNode } from 'react'

@@ -103,7 +103,7 @@ func (r entityReachRecorder) HandleSealed(method, pattern string, perm auth.Perm
 // This lot publishes REST/SDK operations only, so the console limitation remains explicit rather
 // than being disguised as tenant-wide authority or as a client call that does not exist.
 //
-// DECISION RESPONSE AND SKILL ASSIGNMENT (#1456). POST /decision-requests/{id}/responses
+// DECISION RESPONSE AND SKILL ASSIGNMENT. POST /decision-requests/{id}/responses
 // resolves the stored request's workspace before the outer PEP decides, so answering a
 // decision stays grantable to an operator confined to that workspace. The console does not
 // call it, so this entry is "in the bound, not yet consoled", like the K1 entries. Skill

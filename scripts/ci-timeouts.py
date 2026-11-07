@@ -169,7 +169,7 @@ def por_yaml(fs):
 # Cualquier `timeout-minutes:` a otra columna, o un valor que no sea un entero
 # literal, es una forma que no sabe leer -> NOPUEDO.
 #
-# The step list has a second style, the compact one (#2635): the "- " sits at the column of
+# The step list has a second style, the compact one: the "- " sits at the column of
 # `steps:` and the step keys at column 6. merge-gate-check.yml writes its jobs that way (and its
 # `check` job in the indented style above). The column of the "- " is read from the first item
 # after `steps:` (ESTILOS_LISTA, nothing else is accepted) and the step guard sits two columns to

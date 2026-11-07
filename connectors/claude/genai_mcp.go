@@ -17,7 +17,7 @@ import (
 // split (v1.41.0), both Development status: experimental, mapped with CLEAN
 // degradation (an unrecognized shape feeds liveness and is skipped explicitly,
 // never mis-mapped). The mcp.* conventions moved WITH gen_ai.* out of the main
-// semantic-conventions repo in semconv v1.42.0 (2026-06-12, #3696) to the
+// semantic-conventions repo in semconv v1.42.0 (2026-06-12,) to the
 // dedicated open-telemetry/semantic-conventions-genai repo; v1.41.1 remains the
 // last VERSIONED vocabulary label, while main@c321d7e is the upstream shape ref
 // re-verified 2026-07-05.

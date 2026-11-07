@@ -125,6 +125,9 @@ jobs:
           pnpm --dir web exec playwright install "${deps[@]}" chromium
           echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
           echo "NODE_PATH=$PWD/web/node_modules" >> "$GITHUB_ENV"
+      - name: fresh console first-use journey
+        timeout-minutes: 6
+        run: bash scripts/console-first-use.sh
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         timeout-minutes: 5
         with:

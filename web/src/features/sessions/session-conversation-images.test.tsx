@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A sent message keeps its images (#2158): each is a thumbnail read from the engine's
+// A sent message keeps its images: each is a thumbnail read from the engine's
 // copy that opens full size, and a reloaded page shows the same thumbnails because they
 // come from the stored attachment, not from the tool's echo.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

@@ -96,7 +96,7 @@ describe('the account menu', () => {
     )
   })
 
-  it("leaves the engine's state to the status bar (#3161)", async () => {
+  it("leaves the engine's state to the status bar", async () => {
     const user = userEvent.setup()
     renderIntel(<UserMenu />)
     await user.click(screen.getByRole('button', { name: /, Account$/ }))
@@ -104,14 +104,14 @@ describe('the account menu', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  it('names the version the engine runs (#3161)', async () => {
+  it('names the version the engine runs', async () => {
     const user = userEvent.setup()
     renderIntel(<UserMenu />)
     await user.click(screen.getByRole('button', { name: /, Account$/ }))
     expect(screen.getByRole('menu')).toHaveTextContent('Version 0.4')
   })
 
-  it('carries the theme the top bar no longer does (#3161)', async () => {
+  it('carries the theme the top bar no longer does', async () => {
     useThemeStore.getState().setTheme('light')
     const user = userEvent.setup()
     renderIntel(<UserMenu />)

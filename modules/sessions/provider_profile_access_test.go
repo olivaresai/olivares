@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// Who may use which AI tool, account and model path (#2420). The decision is the
+// Who may use which AI tool, account and model path. The decision is the
 // source-scoping bindings' (modules/sourcescope, tested there with real departments and
 // groups); these tests fix what this module does with the answer, on every route that
 // shows or starts a profile.

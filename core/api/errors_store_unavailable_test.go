@@ -20,7 +20,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// #2774: sqlstore wraps a lost/refused connection or a Postgres SQLSTATE class-08
+// : sqlstore wraps a lost/refused connection or a Postgres SQLSTATE class-08
 // failure in store.ErrStoreUnavailable (generic.go wrapUnavailableErr), and
 // statusFor had no arm for it, so a dead database was answered 500 "internal
 // error" — blamed on the server, counted against the 5xx SLI and never retried —

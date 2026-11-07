@@ -4,7 +4,7 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # C02 unique leftover unique vs check-c02-producer-r2-from-grants.sh
-# (on main, not in lint:addon-sets) and unique leftover unique vs #1381.
+# (on main, not in lint:addon-sets) and unique leftover unique vs.
 # 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail

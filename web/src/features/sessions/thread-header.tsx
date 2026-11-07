@@ -15,6 +15,10 @@
 //    words (`session-overview.tsx`). Paths, ids and sandbox names are never in a header.
 import { ArrowUpRight, Folder, MoreHorizontal, Pin, PinOff } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useAuth } from '@/lib/auth/context'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { CodeLine } from '@/components/ui/code-line'
@@ -129,7 +133,7 @@ export function ThreadHeader({
   /** The Context icon that opens the pane in front, painted between 761 px and `xl`. */
   contextPaneButton?: ReactNode
   /**
-   * The sheet's form (#2549): the name and the controls on the first line and every fact
+   * The sheet's form: the name and the controls on the first line and every fact
    * on a second one, at any width. A sheet is narrower than the viewport the one-line
    * form's breakpoints read, so there the facts would crowd the name out.
    */
@@ -137,9 +141,32 @@ export function ThreadHeader({
 }) {
   const { t } = useTranslation('sessions')
   const [terminalOpen, setTerminalOpen] = useState(false)
-  const folder = runFolder(run)
-  // THE FOLDER AS A BREADCRUMB (#4014): the folder above it, then its own name, as T3 draws
-  // "workspace / folder"; the whole path on the hover.
+  const { activeTenant, can } = useAuth()
+  const boundary = useAuthBoundary()
+  const canReadWorkspaces = can('sessions:workspace:read')
+  const workspaceQuery = useQuery({
+    queryKey: [
+      ...agentOpsKeys.boundaryScope(activeTenant, boundary.epoch),
+      'workspace',
+      run?.workspace_ref,
+    ],
+    queryFn: ({ signal }) =>
+      agentOpsApi.getWorkspace(run!.workspace_ref!, {
+        tenant: activeTenant!,
+        signal,
+      }),
+    enabled: canReadWorkspaces && !!activeTenant && !!run?.workspace_ref,
+  })
+  const workspace = canReadWorkspaces ? workspaceQuery.data : undefined
+  const registeredName =
+    workspace?.root_path === run?.workspace_path &&
+    workspace?.name !== workspace?.root_path
+      ? workspace?.name
+      : undefined
+  // A registration may name a managed storage directory. Never paint its raw
+  // breadcrumb while the name is still being resolved or cannot be read.
+  const folder =
+    registeredName || (!run?.workspace_ref || workspace ? runFolder(run) : null)
   const parentPath =
     run?.workspace_path?.replace(/[/\\]+[^/\\]+[/\\]*$/, '') ?? ''
   const parent = folderName(parentPath)
@@ -187,7 +214,7 @@ export function ThreadHeader({
       {folder ? (
         <span
           data-testid="narrative-folder"
-          title={run?.workspace_path}
+          title={registeredName || run?.workspace_path}
           className={cn(
             'max-w-40 shrink-0 truncate rounded-[6px] bg-muted px-1.5 py-0.5 text-overline font-normal text-text-2',
             !stackedFacts && 'hidden @min-[40rem]/thread:inline-block',
@@ -197,7 +224,7 @@ export function ThreadHeader({
             className="me-1 inline size-3 align-[-2px] text-text-3"
             aria-hidden="true"
           />
-          {parent ? `${parent} / ${folder}` : folder}
+          {registeredName || (parent ? `${parent} / ${folder}` : folder)}
         </span>
       ) : null}
       {folder && run?.workspace_path ? (
@@ -209,7 +236,7 @@ export function ThreadHeader({
         >
           <OpenInEditor
             root={parentPath || '/'}
-            file={folder}
+            file={folderName(run.workspace_path) ?? ''}
             labelClassName="sr-only"
           />
           <SessionGit run={run} variant="init" />
@@ -232,7 +259,7 @@ export function ThreadHeader({
       <h2
         title={titleHint}
         className={cn(
-          // THE TITLE GIVES WAY LAST (#3938): it keeps 16 characters before anything
+          // THE TITLE GIVES WAY LAST: it keeps 16 characters before anything
           // beside it shrinks, and takes the room the facts leave.
           'min-w-[16ch] truncate text-body-l font-semibold text-text',
           // A zero basis keeps a long name on the controls' line, cut, instead of
@@ -296,7 +323,7 @@ export function ThreadHeader({
                 </span>
               </DropdownMenuItem>
             ) : null}
-            {/* The person's own unread, snooze and done (#2480, #2866) need a run the engine
+            {/* The person's own unread, snooze and done need a run the engine
                 still lists; an observed or released session is offered only the way back. */}
             <SessionMarkItems session={session} marks={marks} />
             {onOpenDetail ? (

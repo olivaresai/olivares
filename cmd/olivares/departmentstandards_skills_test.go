@@ -38,7 +38,7 @@ func newSkillsOnADepartment(t *testing.T) skillsOnADepartment {
 
 // A skill pinned to a template that a department is given is delivered to every launch of the
 // department that names no template, so writing that pin is changing the template: it asks what
-// the template's own edit asks (#530). The permission to write templates is not enough, and the
+// the template's own edit asks. The permission to write templates is not enough, and the
 // answer is the same whether the pin is made, narrowed or taken off.
 func TestASkillOnADepartmentsDefaultTemplateNeedsTemplateAdministration(t *testing.T) {
 	w := newSkillsOnADepartment(t)

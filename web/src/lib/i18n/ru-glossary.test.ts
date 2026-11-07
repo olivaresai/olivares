@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// RUSSIAN CONSOLE: ONE WORD PER CONCEPT, NO ENGLISH LEFT BEHIND (#2404). The parity gate
+// RUSSIAN CONSOLE: ONE WORD PER CONCEPT, NO ENGLISH LEFT BEHIND. The parity gate
 // proves the keys exist; it cannot see that a value is still English, or that the sidebar
 // says "Провайдеры" while a hint sends the reader to «Поставщики». The glossary is the
 // audit's (analysis-i18n-20261016, section 3): провайдер, сессия, рабочая область, парк,

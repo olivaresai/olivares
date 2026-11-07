@@ -11,7 +11,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-// #2890: an OpenCode read goes through the live session policy like any other tool call.
+// : an OpenCode read goes through the live session policy like any other tool call.
 // A read or search that names its files is a read (opencode.tool.use:read), as Claude
 // Code's reads are: every preset allows it without a person, read-only included, and it
 // is audited as allowed. One that names no file (a web search) is not a read, and an edit

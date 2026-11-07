@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Stop all is a safety control, so it never does nothing (#3161). The status bar loads the
+// Stop all is a safety control, so it never does nothing. The status bar loads the
 // kill switch's confirmation on demand; when that chunk cannot load (a tab left open across
 // an upgrade), the click opens the kill switch page, whose own Stop all is there.
 import { within } from '@testing-library/react'

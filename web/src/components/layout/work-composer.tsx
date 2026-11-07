@@ -315,6 +315,10 @@ function SessionComposer({
   inputId: string
 }) {
   const { t } = useTranslation('nav')
+  const sessionLaunch = {
+    workspaceRef: attached.run.workspace_ref || undefined,
+    profileRef: attached.run.provider_profile_ref,
+  }
   const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
   const org = useTenantLabel()
@@ -976,7 +980,7 @@ function SessionComposer({
   // in a word, the access in the words New session offers. The tool is the pane header's.
   const modelText = sessionModel
     ? modelName(sessionModel, modelChoices.catalog?.models)
-    : t('agentops:create.model')
+    : t('agentops:picker.defaultUnnamed', { tool: toolName(driver ?? '') })
   // A session that cannot take a turn says why where the sentence would go: the
   // placeholder is the one place a disabled field already is read.
   // A session that is not running offers one step, named as the header's button names it:
@@ -1064,7 +1068,7 @@ function SessionComposer({
           {t('nav:launcher.draftSaveFailed')}
         </p>
       ) : null}
-      {/* What the tool runs on its own, each with its Stop (#4013). */}
+      {/* What the tool runs on its own, each with its Stop. */}
       <BackgroundTaskStrip run={attached.run} />
       <WorkComposerQueue run={attached.run} queue={queue} />
       <AttachmentTray
@@ -1107,8 +1111,7 @@ function SessionComposer({
       />
       {/* The row wraps on a narrow screen: the buttons move below, the pickers keep their words. */}
       <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 pb-3">
-        {/* ALWAYS THERE: a session whose tool has not said its model yet still takes the
-            choice, and the scope of the next action lives in this popover. */}
+        {/* The tool default keeps model choices and the next action scope reachable. */}
         <Popover
           open={modelOpen}
           onOpenChange={(next) => {
@@ -1223,7 +1226,7 @@ function SessionComposer({
                     disabled={speedUnavailable}
                     onClick={() => {
                       useNewSessionDialog.getState().openAdvanced({
-                        profileRef: attached.run.provider_profile_ref,
+                        ...sessionLaunch,
                         // A model the tool only reported (usage) was not chosen.
                         model:
                           chosen.model === sessionModel
@@ -1267,17 +1270,21 @@ function SessionComposer({
             session either, so it is a label with a lock, not a picker: it says what this
             one keeps and offers a new session for another. */}
         <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              data-testid="composer-access"
-              aria-label={t('nav:launcher.accessPicker', { value: accessText })}
-              className={PICKER}
-            >
-              <Lock aria-hidden className="size-3 shrink-0" />
-              <span className="truncate">{accessText}</span>
-            </button>
-          </PopoverTrigger>
+          {accessText ? (
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                data-testid="composer-access"
+                aria-label={t('nav:launcher.accessPicker', {
+                  value: accessText,
+                })}
+                className={PICKER}
+              >
+                <Lock aria-hidden className="size-3 shrink-0" />
+                <span className="truncate">{accessText}</span>
+              </button>
+            </PopoverTrigger>
+          ) : null}
           <PopoverContent
             side="top"
             align="start"
@@ -1297,7 +1304,7 @@ function SessionComposer({
                 size="sm"
                 onClick={() =>
                   useNewSessionDialog.getState().openAdvanced({
-                    profileRef: attached.run.provider_profile_ref,
+                    ...sessionLaunch,
                     model: attached.run.model_ref ?? '',
                     effort: sessionEffort,
                   })

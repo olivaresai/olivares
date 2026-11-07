@@ -43,8 +43,8 @@ const (
 )
 
 // ProtocolVersion is the A2A release this client is built and verified against,
-// pinned to a2aproject/A2A tag v1.0.1 (published 2026-05-28; erratas #1753 content
-// type, #1627 transcoding error mappings, #1801 TaskStatus values — all doc-level,
+// pinned to a2aproject/A2A tag v1.0.1 (published 2026-05-28; erratas content
+// type, transcoding error mappings, TaskStatus values — all doc-level,
 // the proto wire model is byte-identical to v1.0.0).
 const ProtocolVersion = "1.0.1"
 

@@ -96,7 +96,7 @@ describe('GlobalShortcuts', () => {
 
   it('never steals the letters typed in an open menu: they find its items', () => {
     // A menu's typeahead is typing: "Ren" picks Rename. Read as shell keys, its `n`
-    // started a new session and `g e` navigated away (#2795).
+    // started a new session and `g e` navigated away.
     renderIntel(
       <>
         <div role="menu">
@@ -128,7 +128,7 @@ describe('GlobalShortcuts', () => {
   })
 
   it('claims the letter after g even when it names no place offered here, so a page key never fires on it', () => {
-    // `g a` must not approve on the queue (#2548): the letter is the sequence's.
+    // `g a` must not approve on the queue: the letter is the sequence's.
     canMock.mockImplementation(
       (p: string) => p !== 'eventing:subscription:read',
     )
@@ -231,7 +231,7 @@ describe('GlobalShortcuts — the declared table', () => {
     ).toBeInTheDocument()
   })
 
-  it('prints Mod as the key this platform has: Ctrl on Linux, ⌘ on a Mac (#3121)', () => {
+  it('prints Mod as the key this platform has: Ctrl on Linux, ⌘ on a Mac', () => {
     for (const [platform, mod] of [
       ['Linux x86_64', 'Ctrl'],
       ['MacIntel', '⌘'],

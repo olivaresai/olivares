@@ -22,7 +22,7 @@ import (
 	"github.com/olivaresai/olivares/core/webpush"
 )
 
-// A person's own WEB PUSH DEVICES (#2840): the browsers they chose, under Settings, to be
+// A person's own WEB PUSH DEVICES: the browsers they chose, under Settings, to be
 // told in even with the console closed, when a session of theirs needs an approval or has
 // ended. Like a pin (run_pin.go) a device is the caller's own interface state, so the routes
 // take the READ permission and write no ledger row; unlike a pin it is addressed to the

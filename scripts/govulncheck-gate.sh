@@ -14,7 +14,7 @@
 # upstream fix is never allowlisted — the dependency is bumped instead. Reviewed
 # scanner false positives require an exact, dated scope for EVERY called finding.
 #
-# go.work caveat (golang/go#50745): govulncheck ./... only covers the current
+# go.work caveat (golang/go): govulncheck ./... only covers the current
 # module, so this runs it per workspace module plus cloud/control-plane.
 set -euo pipefail
 
@@ -90,7 +90,7 @@ done
 # it is that export. Absent without the marker is a REFUSAL — "the directory is not here" must
 # never be spelled the same way as "it is here and it is clean".
 # scripts/check-go-toolchain.sh reads this line: a workspace member listed here must not sit below
-# go.work, since GOWORK=off lets its own go line pick the toolchain (#1531).
+# go.work, since GOWORK=off lets its own go line pick the toolchain.
 STANDALONE_MODULES="cloud/control-plane commercial/commerce commercial/commerce-lint"
 for extra in ${STANDALONE_MODULES}; do
 	if [ -d "${extra}" ]; then

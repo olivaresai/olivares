@@ -63,7 +63,7 @@ func TestStoreUnavailableNeverEchoesTheDriver(t *testing.T) {
 
 // A COMMIT whose answer was lost carries both sentinels (commitoutcome.go): the
 // write may be durable, so the client is not told to retry. statusFor already
-// answers it commit_outcome_unknown (#2774); the token endpoint keeps it a plain
+// answers it commit_outcome_unknown; the token endpoint keeps it a plain
 // server error for the same reason — no blind re-send.
 func TestClassifyExchangeErrorCommitOutcomeUnknownIsNotARetryable503(t *testing.T) {
 	err := fmt.Errorf("%w: %w", store.ErrCommitOutcomeUnknown, storeUnavailableError())

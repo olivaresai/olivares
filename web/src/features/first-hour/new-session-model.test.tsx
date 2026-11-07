@@ -107,6 +107,19 @@ async function chooseCodex(user: ReturnType<typeof userEvent.setup>) {
 beforeEach(() => {
   useClientSettings.getState().restore()
   vi.restoreAllMocks()
+  vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
+    items: [
+      {
+        workspace_ref: 'ws_fixture',
+        mount_mode: 'rw',
+        max_read_bytes: 1048576,
+        dlp_mode: 'off',
+        root_path: '/srv/work/project',
+        state: 'active',
+      },
+    ],
+    has_more: false,
+  })
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_1' })
   auth.providers = true
@@ -392,7 +405,7 @@ describe('the model in the New session dialog', () => {
     expect(await screen.findByRole('button', { name: 'Model' })).toBeVisible()
   })
 
-  // #1779: model and effort were two "advanced" steps away; the person looking for them
+  //: model and effort were two "advanced" steps away; the person looking for them
   // opened the raw stdin line instead. They are on the form itself, from the tool's own list.
   it("chooses the own-login tool's model and effort on the form, with More options closed", async () => {
     const user = userEvent.setup()
@@ -457,7 +470,7 @@ describe('the model in the New session dialog', () => {
     )
   })
 
-  // #1779 (srv17): the advanced launch opened on "Select a profile" while this form already
+  // (srv17): the advanced launch opened on "Select a profile" while this form already
   // showed the sign-in it would use. It opens on the same sign-in, model and effort.
   it('hands the advanced launch the sign-in, model and effort the form shows', async () => {
     const user = userEvent.setup()
@@ -706,7 +719,7 @@ describe('the model in the New session dialog', () => {
   })
 })
 
-// #1083: Start is disabled while the chosen tool cannot start; the reason is the sentence
+//: Start is disabled while the chosen tool cannot start; the reason is the sentence
 // under the tool choice, and Start must name it (first-hour run 37903242313).
 describe('Start for a tool that cannot start yet', () => {
   it('is disabled and described by the not-ready sentence', async () => {

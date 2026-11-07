@@ -542,6 +542,8 @@
     "startedTools_other": "{{count}} Werkzeuge",
     "notSent": "Nicht gesendet: {{reason}}",
     "waitingApproval": "Wird gesendet, sobald die Sitzung bereit ist.",
+    "discardedOnSessionChange": "Eine Nachricht, die vor dem Sitzungswechsel eingegeben wurde, wurde nicht gesendet. Bitte erneut eingeben.",
+    "dismissDiscarded": "Ausblenden",
     "workingFolder": "Arbeitsordner: <path />",
     "temporaryFolder": "Arbeitsordner: temporärer Ordner dieser Sitzung",
     "turnLine": "<work/> · {{duration}}",
@@ -884,6 +886,10 @@
     "unreadable": "Die Anfrage konnte nicht gelesen werden."
   },
   "terminal": {
+    "runScript": "{{name}} ausführen",
+    "scripts": "Projektskripte",
+    "scriptsFailed": "Projektskripte konnten nicht gelesen werden.",
+    "stopScript": "Stoppen",
     "title": "Terminal",
     "hint": "Eine Shell im Ordner dieser Sitzung, mit denselben Grenzen wie die Sitzung. Sie läuft unter Ihrer Identität; jede eingegebene Befehlszeile wird aufgezeichnet.",
     "open": "Terminal öffnen",

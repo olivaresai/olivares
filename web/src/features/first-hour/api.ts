@@ -20,7 +20,7 @@ export type ToolKey = 'claude' | 'codex'
 export const FIRST_HOUR_TOOLS: readonly ToolKey[] = ['claude', 'codex']
 /** The tools whose own login the engine relays: the first-hour tools, Grok Build, whose
  * release is installed from AI tools (HU-R15), and OpenCode, which signs in with its own
- * OpenCode key (Zen or Go) or with ChatGPT (#2567). */
+ * OpenCode key (Zen or Go) or with ChatGPT. */
 export type SignInTool = ToolKey | 'grok' | 'opencode' | 'gemini-cli' | 'cursor'
 /** The tools a session can start on, by the engine's own table (agentops/engine-tools). */
 export {
@@ -72,7 +72,7 @@ export interface SignInFlow {
 }
 
 /** The tool still runs a login for this status: a pending flow that has neither signed
- * in nor failed. While it runs, a second start would replace it (#3388). */
+ * in nor failed. While it runs, a second start would replace it. */
 export function isSigningIn(status: SignInStatus | undefined): boolean {
   const state = status?.pending?.state
   return !!state && state !== 'signed_in' && state !== 'failed'

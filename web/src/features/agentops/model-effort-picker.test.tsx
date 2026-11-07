@@ -367,8 +367,8 @@ describe('fast mode', () => {
   })
 })
 
-// #2567: OpenCode's catalog is the tool's own list, free models among them, in the
-// provider/model form a session takes. The picker shows them and takes one as is.
+//: OpenCode's catalog is the tool's own list, free models among them, in the
+// provider/model form a session takes. The picker names them and keeps the exact launch id.
 describe("OpenCode's own list", () => {
   it('shows the free models and starts on the one chosen', async () => {
     vi.mocked(agentOpsApi.profileModels).mockResolvedValue(
@@ -385,9 +385,9 @@ describe("OpenCode's own list", () => {
     wrap({ driver: 'opencode' })
     const list = await openModels(user)
     expect(
-      await within(list).findByText('opencode/mimo-v2.6-flash-free'),
+      await within(list).findByText('Mimo v2.6 Flash Free'),
     ).toBeInTheDocument()
-    await user.click(within(list).getByText('opencode/glm-5.3-flash-free'))
+    await user.click(within(list).getByText('GLM 5.3 Flash Free'))
     expect(last.model).toBe('opencode/glm-5.3-flash-free')
   })
 })
@@ -486,7 +486,7 @@ describe('a tool that cannot list its models', () => {
     wrap({ initial: { model: 'opus-5-5', effort: 'high' } })
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
-        'opus-5-5',
+        'Opus 5.5',
       ),
     )
     // The failure is said, and the choice made is still the one shown and kept.

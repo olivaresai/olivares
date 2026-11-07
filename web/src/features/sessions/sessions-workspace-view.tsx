@@ -1843,7 +1843,7 @@ function Inner({
         data-testid="rail-footer"
         className="flex shrink-0 flex-col gap-1 border-t border-line px-3 py-2 text-caption text-text-3"
       >
-        {/* ONE LINE (#4032): the count gives way to the list's width with an ellipsis (its
+        {/* ONE LINE: the count gives way to the list's width with an ellipsis (its
             whole text on the hover) and Load more stays whole at the end, so the foot never
             breaks into a count with a dangling separator and a button below it. */}
         {truncated ? (

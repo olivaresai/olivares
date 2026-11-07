@@ -131,7 +131,7 @@ describe('El parque, las rutas y las claves piden el techo del motor', () => {
     expect(routingMock).toHaveBeenLastCalledWith({ limit: 1000 })
   })
 
-  // Provider keys live in AI tools since #3388: their list is ProviderKeyReferences.
+  // Provider keys live in AI tools since: their list is ProviderKeyReferences.
   it('las claves de proveedor', async () => {
     renderIntel(<ProviderKeyReferences />)
     await screen.findByRole('heading', { name: 'Provider key references' })
@@ -248,7 +248,7 @@ describe('cada aviso mira SU consulta', () => {
   }
 })
 
-// The keys left Models (#3388): their notice still reads ITS own query, now in AI tools.
+// The keys left Models: their notice still reads ITS own query, now in AI tools.
 describe('provider key references in AI tools', () => {
   it('the keys notice shows only when ITS list has more', async () => {
     keysMock.mockResolvedValue({ items: [FILA], has_more: true })

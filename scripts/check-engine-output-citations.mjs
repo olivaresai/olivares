@@ -681,7 +681,7 @@ function chainAtoms(code, literals, consts) {
 // It is the DEFINITION of what the gate treats as a string the engine contains: every atom
 // alone and every contiguous sub-chain of atoms joined by `+`. It is also quadratic in the
 // strings and cubic in the characters of a chain, which is what made the full-tree run
-// exceed its memory limit (#1149), so the gate does NOT call it: readEngine holds each
+// exceed its memory limit, so the gate does NOT call it: readEngine holds each
 // chain once (chainRuns) and the checks answer for its sub-chains from the atom boundaries
 // (runBounded, chainFragments). The self-test holds the two equal, and this function is the
 // reference they are held to.
@@ -1637,7 +1637,7 @@ function selfTest() {
     )
   }
 
-  // THE SPACE CLAUSES (#1149). A string the engine assembles from N literals joined by `+` is
+  // THE SPACE CLAUSES. A string the engine assembles from N literals joined by `+` is
   // ONE chain, and it must be held ONCE. The reader used to materialise every contiguous
   // sub-chain of it, N(N+1)/2 strings of up to N literals each, so a generated help table of
   // 622 lines (and a 311-literal protobuf descriptor) exhausted the JavaScript heap of the
@@ -1695,7 +1695,7 @@ function selfTest() {
     })
   }
 
-  // THE EQUIVALENCE CLAUSE (#1149). Holding a chain once must not change a verdict: every
+  // THE EQUIVALENCE CLAUSE. Holding a chain once must not change a verdict: every
   // question the checks used to ask of the sub-chain strings is answered from the atom
   // boundaries now, and joinConcatenated stays as the definition they are held to. Random
   // sources, a fixed seed: chains of 1..12 literals and constants whose pieces end in a

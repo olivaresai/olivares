@@ -20,7 +20,7 @@ import (
 
 // The audit list filters tool: and folder: reach a sessions.run entry through its
 // target_id, so every entry about a run must name the sessions.run row there, not
-// only in meta.run_ref (#2755).
+// only in meta.run_ref.
 
 // runAuditTargets returns every entry with action on the tenant's ledger.
 func runAuditTargets(t *testing.T, st store.Store, tenant model.TenantID, action string) []model.AuditEvent {

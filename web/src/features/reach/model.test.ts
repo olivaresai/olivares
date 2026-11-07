@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The reach projection (issue #2553): tools on the left, destinations on the right
+// The reach projection (issue): tools on the left, destinations on the right
 // (folders, MCP servers, provider endpoints), and a destination a pending approval
 // names rendered WAITING (dashed), never invented as reached. Pure model tests —
 // the view renders this, the engine keeps the truth.

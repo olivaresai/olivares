@@ -91,7 +91,7 @@ func runRootStatus(cmd *cobra.Command) error {
 		root := cmd.Root()
 		for _, c := range root.Commands() {
 			// ui is named by the hint line below, not repeated here: the bare
-			// command's only allowed change on its own is that one line (#2569).
+			// command's only allowed change on its own is that one line.
 			if c.GroupID == "start" && c.IsAvailableCommand() && c.Name() != "ui" {
 				fmt.Fprintf(w, "  %-10s %s\n", c.Name(), c.Short)
 			}

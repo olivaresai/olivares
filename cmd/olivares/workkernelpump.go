@@ -95,7 +95,7 @@ func newWorkOutboxPump(getenv func(string) string, st store.Store, sm *sessions.
 		case err != nil || parsed < 0:
 			log.Warn("sessions-work-outbox: invalid interval; using default", "value", raw, "default", interval.String())
 		case parsed == 0:
-			// The documented disable (#566): stop the periodic safety drain
+			// The documented disable: stop the periodic safety drain
 			// only — the insert nudge keeps draining fresh rows (the
 			// eventing-dispatch disable posture).
 			log.Warn("sessions-work-outbox: pump DISABLED (" + workOutboxPumpIntervalEnv + "=0): the periodic safety drain will NOT run — work rows still drain on the insert nudge; communication events, crash-window rows and expired leases stay pending")
@@ -127,7 +127,7 @@ func (p *workOutboxPump) useCommunication(witness *communicationPumpWitness, aut
 }
 
 func (p *workOutboxPump) register(rt periodicScheduler) error {
-	// interval 0 (#566): the periodic drain is disabled; register still owns
+	// interval 0: the periodic drain is disabled; register still owns
 	// the insert nudge below, so fresh rows keep draining.
 	if p.interval > 0 {
 		if err := rt.SchedulePeriodic(workOutboxPumpJobName, p.interval, false, p.runOnce); err != nil {

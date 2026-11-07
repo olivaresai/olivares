@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// WHEN THE LOADED PAGE HAS NO MATCH, THE ONE SEARCH ANSWERS (#3990). The list holds the
+// WHEN THE LOADED PAGE HAS NO MATCH, THE ONE SEARCH ANSWERS. The list holds the
 // most recent sessions; an older one is found by the console's search (GET /v1/search),
 // the same answer the palette gives under the same key, and it opens by its address.
 import { useQuery } from '@tanstack/react-query'

@@ -106,7 +106,7 @@ type PrivilegeDiff struct {
 	// GrantsDeclared reports that at least one grant (a permitted policy edge)
 	// exists. Without one nothing is permitted, so every observed access is
 	// unexpected by construction: a consumer must not headline that as a
-	// violation of a rule (#3936).
+	// violation of a rule.
 	GrantsDeclared bool
 	// Truncated reports that drainDrift hit its page bound and the diff was
 	// reconciled over a PARTIAL window: rows past the bound are invisible, and a

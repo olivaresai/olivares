@@ -389,7 +389,16 @@ func (m *Module) handleWriteFile(w http.ResponseWriter, r *http.Request, mc api.
 		writeJSON(w, http.StatusRequestEntityTooLarge, errorBody("upload exceeds the hard size ceiling"))
 		return
 	}
-	resp, err := m.writeFile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"),
+	write := m.writeFile
+	switch r.URL.Query().Get("documents") {
+	case "":
+	case "markdown":
+		write = m.writeDocumentFile
+	default:
+		writeRunErr(w, badRequest("documents must be markdown or omitted"))
+		return
+	}
+	resp, err := write(r.Context(), mc.Tenant, chi.URLParam(r, "ref"),
 		r.URL.Query().Get("path"), content, mc.Principal.Actor(), mc.Principal.ActorKind())
 	if err != nil {
 		writeRunErr(w, err)

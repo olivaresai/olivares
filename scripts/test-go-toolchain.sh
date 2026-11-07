@@ -119,7 +119,7 @@ d=$(mk allinside "$WK"); mod "$d" a 1.26.5; mod "$d" b 1.26.5
 run "$d" 0 "zero modules outside the workspace is CLEAN, not COULD NOT LOOK" "0 module(s) outside"
 
 # ── RULE 3b: workspace modules the vulnerability gate scans ALONE ──────────────────────────────
-# #1531: cloud/control-plane is in go.work, so rule 3 skipped it, and rule 2 only stops a go line
+#: cloud/control-plane is in go.work, so rule 3 skipped it, and rule 2 only stops a go line
 # ABOVE the workspace. The gate scans it with GOWORK=off, where its own `go 1.26.6` decides, so on a
 # host with native go1.26.8 the gate graded the 1.26.8 stdlib (11 called vulns) while CI, with
 # setup-go on go1.26.9, stayed green. The list comes from the gate's own STANDALONE_MODULES line.
@@ -141,7 +141,7 @@ run "$d" 0 "a listed module absent from the tree is not counted" "0 workspace mo
 d=$(mk alone_unreadable "$WK"); mod "$d" a 1.26.4; mod "$d" b 1.26.5; gate "$d" 'for extra in a; do'
 run "$d" 2 "a gate with no STANDALONE_MODULES line is COULD NOT LOOK" "scans with GOWORK=off are UNKNOWN"
 
-# Review of #1531: two spellings that used to read CLEAN without looking.
+# Review of: two spellings that used to read CLEAN without looking.
 d=$(mk alone_dotslash "$WK"); mod "$d" a 1.26.4; mod "$d" b 1.26.5; gate "$d" 'STANDALONE_MODULES="./a"'
 run "$d" 1 "a ./-prefixed list entry is still the module it names" "a/go.mod asks for go 1.26.4"
 

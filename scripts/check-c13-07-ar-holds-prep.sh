@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# C13-07 unique leftover unique vs #1027: AR-1..AR-4 rows on the HOLD
+# C13-07 unique leftover unique vs: AR-1..AR-4 rows on the HOLD
 # file already on origin/main. Does not copy check-c13-07-holds.sh.
 # Three answers: 0 CLEAN · 1 finding · 2 could not look.
 

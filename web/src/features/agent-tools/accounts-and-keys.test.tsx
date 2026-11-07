@@ -227,7 +227,7 @@ describe('accounts and API keys on Tools', () => {
   })
 })
 
-describe('provider key references on AI tools (#3388)', () => {
+describe('provider key references on AI tools', () => {
   it('a key-reference reader finds them here, at their anchor', async () => {
     auth.perms = new Set(['sessions:provider:read', 'models:keys:read'])
     const keys = vi

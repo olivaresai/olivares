@@ -333,7 +333,7 @@ func TestOpenCodeStatusRecoversImmediatelyAfterNativeFailure(t *testing.T) {
 
 // A status past its lifetime is not waited for: the page that asks gets the last answer at
 // once and the tool is asked again behind it, so the first visit after a pause does not pay
-// the tool's start (#3931).
+// the tool's start.
 func TestOpenCodeStatusPastItsLifetimeAnswersAtOnceAndRefreshesBehind(t *testing.T) {
 	var m *Module
 	_, home := newSignInServer(t, func(module *Module, _ string) { m = module })

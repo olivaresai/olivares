@@ -362,6 +362,8 @@ dockers:
       - LICENSES
       - packaging/container/data-dir
       - packaging/container/uv-LICENSE-MIT.txt
+      - modules/documents/requirements.txt
+      - modules/documents/MarkItDown-LICENSE.txt
       - packaging/container/bashrc.sh
       - deploy/seccomp/olivares-sessions.json
       - deploy/apparmor/olivares-sessions.conf
@@ -399,6 +401,8 @@ dockers:
       - LICENSES
       - packaging/container/data-dir
       - packaging/container/uv-LICENSE-MIT.txt
+      - modules/documents/requirements.txt
+      - modules/documents/MarkItDown-LICENSE.txt
       - packaging/container/bashrc.sh
       - deploy/seccomp/olivares-sessions.json
       - deploy/apparmor/olivares-sessions.conf

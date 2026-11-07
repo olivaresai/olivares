@@ -11,7 +11,7 @@ import (
 	"github.com/olivaresai/olivares/sdk/model"
 )
 
-// The demo workspace reads as a team's working day (#2268): about ten sessions
+// The demo workspace reads as a team's working day: about ten sessions
 // over three or four projects and three engines, with start times, durations and
 // event counts that differ, and none of them a single-event row. These cases pin
 // that shape on the data the seed emits, not on the table alone.

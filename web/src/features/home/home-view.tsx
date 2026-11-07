@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// OVERVIEW (`/now`, #4427): what needs a person across the installation, what runs and what
+// OVERVIEW (`/now`,): what needs a person across the installation, what runs and what
 // ended, in one column and in that order:
 //
 //  1. the strip: need you, running, failed today, cost today (the Sessions strip, with the
@@ -48,7 +48,7 @@ const SessionSheet = lazy(() =>
 
 export function HomeView() {
   const { t } = useTranslation(['home', 'nav'])
-  // THE SESSION OPEN OVER OVERVIEW (#2549): a place, so opening one is a history entry
+  // THE SESSION OPEN OVER OVERVIEW: a place, so opening one is a history entry
   // and Back closes it; closing replaces it, so Back does not reopen it. The address is
   // untrusted: one that names no session is cleared and said, as on Sessions.
   const [sheet, setSheet, sheetIssues] = useValidatedUrlState(
@@ -106,7 +106,7 @@ export function HomeView() {
     pendingApprovals.query,
   )
   const flag = useFlaggedRequest(approvals?.items)
-  // Needs you, read once: the strip's count and the section's are this one count (#4738).
+  // Needs you, read once: the strip's count and the section's are this one count.
   const needs = useNeedsYouRows(
     liveAnswer?.items,
     canSessions,

@@ -14,7 +14,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// Moving a session to another profile of the same tool (#1845).
+// Moving a session to another profile of the same tool.
 //
 // A stopped session is bound to the profile it was launched under, and resume
 // refuses any other home on purpose (revalidateStoredProfile): the conversation

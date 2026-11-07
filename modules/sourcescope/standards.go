@@ -17,7 +17,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// What a department carries: its instructions and its default session template (#530).
+// What a department carries: its instructions and its default session template.
 //
 // Both are session templates, assigned by a binding like any other source: "instructions" names a
 // template whose custom instructions are the text a launch is given, and "template" names the

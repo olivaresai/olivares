@@ -115,7 +115,7 @@ func (m *Module) readToolModelCatalog(ctx context.Context, home ProviderHomeSnap
 		program = m.driverProgram(NewGrokDriver())
 		args = []string{"models"}
 	case providerDriverOpenCode:
-		// The tool's own list (#2567). `models` loads configured plugins; `--pure`
+		// The tool's own list. `models` loads configured plugins; `--pure`
 		// ("run without external plugins", v1.18.34) does not, so reading the list
 		// runs no user automation.
 		program = m.driverProgram(NewOpenCodeDriver())

@@ -687,7 +687,7 @@ describe('MCP servers page headings', () => {
           new QueryClient({ defaultOptions: { queries: { retry: false } } })
         }
       >
-        {/* Its host since #3388: MCP & skills, whose page title is the h1 above it. */}
+        {/* Its host since: MCP & skills, whose page title is the h1 above it. */}
         <h1>MCP &amp; skills</h1>
         <MCPGatewayTab titled={false} />
       </QueryClientProvider>,

@@ -150,7 +150,7 @@ func buildOpenAPI() map[string]any {
 		"description", "Omit events whose action starts with this prefix. Repeatable: give it once per action family to leave out. It uses the SAME prefix rule as `action`, and it filters only what is RETURNED — the ledger still records every event, and a request without this parameter still returns them all. Its use is a caller that must not be shown its own footprint: the console's notification bell passes `exclude_action=audit.read` so that reading the ledger does not itself become the newest activity in it.",
 		"schema", obj("type", "array", "items", obj("type", "string")))
 	// tool and folder are not columns of an entry: they are facts of the session an
-	// entry is about, resolved by the store (#2750). Tenant ledger only: the system
+	// entry is about, resolved by the store. Tenant ledger only: the system
 	// ledger records no sessions.
 	auditToolParam := obj("name", "tool", "in", "query", "required", false,
 		"description", "Only entries about sessions run with this AI tool (its provider driver, for example `codex` or `claude`): an entry on such a session, and the approval that session names now. It is matched exactly, given once, and read from each session's current record, so these entries are not matched: those of a session that was deleted, those that name their session only in their metadata (reads of its attach, activity, messages and preview, and denial-budget notices), and those of an approval the session no longer names. It pages by `from` and `next_from` like every other filter. The system ledger refuses it (400). A deployment without the sessions module answers 501 `audit_filter_unavailable`.",

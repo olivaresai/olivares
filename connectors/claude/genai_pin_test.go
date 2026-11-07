@@ -5,7 +5,7 @@ package claude
 
 import "testing"
 
-// currency-refresh guards. semconv v1.42.0 (2026-06-12, #3696)
+// currency-refresh guards. semconv v1.42.0 (2026-06-12,)
 // moved gen_ai.* (and openai.*/mcp.*) from the main semantic-conventions repo to
 // open-telemetry/semantic-conventions-genai; v1.41.1 (2026-05-11) remains the
 // last VERSIONED vocabulary label, while the upstream shape is pinned separately

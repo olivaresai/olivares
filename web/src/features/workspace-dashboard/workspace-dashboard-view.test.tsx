@@ -232,7 +232,7 @@ describe('WorkspaceDashboardView', () => {
   })
 
   /**
-   * THE CONTROL (#475): a page link to Inventory is offered only where Inventory opens. A
+   * THE CONTROL: a page link to Inventory is offered only where Inventory opens. A
    * fresh install runs without the inventory module, and /inventory then shows only the
    * not-enabled notice, so these actions led nowhere.
    *

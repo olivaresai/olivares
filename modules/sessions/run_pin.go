@@ -18,7 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// A person's own PINNED SESSIONS (#2130): the sessions they keep first in their
+// A person's own PINNED SESSIONS: the sessions they keep first in their
 // list, the way the reference's thread menu pins a thread. A pin is the caller's
 // own interface state, exactly what console favorites are
 // (modules/consoleviews/favorites.go): it lives on the server so it follows the
@@ -268,8 +268,8 @@ func unpinRun(ctx context.Context, sc store.Scope, caller, key string) error {
 	return repo.Delete(ctx, id)
 }
 
-// dropPersonalRunState removes EVERY person's pins (#2130), snooze and done
-// marks (#2480, run_mark.go) and the messages queued for the session (#3125,
+// dropPersonalRunState removes EVERY person's pins, snooze and done
+// marks (, run_mark.go) and the messages queued for the session (,
 // run_queue.go) on one run: a session that is released or deleted leaves every
 // person's list for good. Only a release can reach a queue (a delete needs a released
 // session), and its answer carries the queue it discards, so nothing a person typed

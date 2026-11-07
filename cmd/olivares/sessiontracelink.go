@@ -12,7 +12,7 @@ import (
 )
 
 // linkSessionTrace installs the caller session's GenAI agent-span context on
-// requests whose bearer is a live run's inference credential (#429), so the
+// requests whose bearer is a live run's inference credential, so the
 // inference proxy's server span and the model span the GenAI transport emits
 // land in that session's trace beside its invoke_agent and execute_tool spans.
 //

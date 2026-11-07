@@ -217,7 +217,7 @@ export interface RunDTO {
   peers_rule?: 'same-template'
   /** A privileged launch (drove the HITL + mandatory recording floor). */
   critical: boolean
-  /** What the session reaches (#2545): its folders with their access, and the hosts it
+  /** What the session reaches: its folders with their access, and the hosts it
    * may connect to besides the engine. `reason` says why a part could not be read. */
   reaches?: {
     folders: { path: string; access: 'write' | 'read' | 'unknown' }[]
@@ -271,7 +271,7 @@ export interface RunDTO {
   /** The canonical session this run operates (`osn_…`): what an approval's
    * `session_ref` names. */
   canonical_sid?: string
-  /** Who the session acts for (the run read's session facts, #2545). Absent on an
+  /** Who the session acts for (the run read's session facts,). Absent on an
    * engine older than the facts. */
   acts_for?: RunActsFor
   /** The audit ledger's evidence for the session; `chain_verified` is the tenant's
@@ -727,7 +727,7 @@ export interface ActivityTodoDTO {
   active_form?: string
 }
 
-/** One message of a session's transcript, as GET /runs/{ref}/messages indexes it (#2129).
+/** One message of a session's transcript, as GET /runs/{ref}/messages indexes it.
  * `id` is its position among the session's messages; `text` is only present when one
  * message is read whole by id. */
 export interface RunMessageDTO {

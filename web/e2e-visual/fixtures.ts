@@ -1141,8 +1141,8 @@ export const eventingTypes = { event_types: [] }
 // cannot measure that screen.
 //
 // `egress-policy` and `/compat` are served here since the pre-push batch. Integration brought
-// the typed definitions from main (#1622), and the maintainer added both route entries,
-// which the definition union alone did not supply. #1622 (`sol/truncation-honesty`, created
+// the typed definitions from main, and the maintainer added both route entries,
+// which the definition union alone did not supply. (`sol/truncation-honesty`, created
 // at 12:34 that day) added better fixtures typed against `EgressPolicyStatus` from
 // `features/eventing/types`, including `classified_mode`, `generation`, and the digest reason.
 // The earlier fixtures were untyped objects. Declaring both versions was a content conflict,

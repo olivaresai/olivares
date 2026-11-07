@@ -610,3 +610,31 @@ func TestDepartmentAdminRegistersAFolderInItsDepartment(t *testing.T) {
 		}
 	}
 }
+
+func TestPersonalFolderDoesNotReuseLegacyPath(t *testing.T) {
+	m := New()
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "legacy-folder")
+	who := h.do("GET", "/v1/auth/whoami", admin, nil)
+	user := model.ID(who.body["user_id"].(string))
+	root := t.TempDir()
+	if err := m.UsePersonalFilesRoot(root); err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(root, user.String())
+	if err := os.MkdirAll(legacy, 0700); err != nil {
+		t.Fatal(err)
+	}
+	old, err := m.createWorkspace(t.Context(), tenant, CreateWorkspaceParams{Name: "Legacy", RootPath: legacy, MountMode: mountRW, Owner: "user:" + user.String(), Actor: "user:" + user.String(), ActorKind: model.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := m.ensurePersonalFolder(t.Context(), tenant, auth.Principal{Kind: auth.KindUser, UserID: user})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref == old.WorkspaceRef {
+		t.Fatal("reused account-only legacy folder")
+	}
+}

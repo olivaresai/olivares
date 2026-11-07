@@ -164,7 +164,7 @@ func TestDiff_InventoryKindGoesToInventoryGrants(t *testing.T) {
 
 // TestDiff_GrantsDeclared: a diff reports whether any grant exists at all, so a
 // consumer can tell "nothing to compare against" (no rules declared, every
-// observed access unexpected by construction) from a real violation (#3936).
+// observed access unexpected by construction) from a real violation.
 func TestDiff_GrantsDeclared(t *testing.T) {
 	st, tenant := newStore(t)
 	m := New()

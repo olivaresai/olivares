@@ -236,7 +236,7 @@ describe('the side pane tabs', () => {
     expect(screen.queryByTestId('files-browser')).toBeNull()
   })
 
-  // #2267: an address that names no evidence block leaves `evidence` undefined; the
+  //: an address that names no evidence block leaves `evidence` undefined; the
   // pane used to read that as "no overview" and dropped the session's work from it.
   it('shows the overview when the address names no evidence block', async () => {
     renderPane({ evidence: undefined })
@@ -443,16 +443,14 @@ describe('the side pane tabs', () => {
     )
   })
 
-  it('says a session without a folder has nowhere to open a terminal', async () => {
+  it('hides folder panes and opens Details for a folderless terminal link', async () => {
     renderPane({
       panel: 'terminal',
       resolution: resolution([{ ...RUN, workspace_ref: undefined }]),
     })
-    expect(
-      await screen.findByText(
-        'This session has no folder, so there is nowhere to open a terminal.',
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByTestId('context-details')).toBeInTheDocument()
+    for (const name of ['Changes', 'Files', 'Terminal'])
+      expect(screen.queryByRole('radio', { name })).toBeNull()
     expect(screen.queryByTestId('terminal-tab')).toBeNull()
   })
 
@@ -493,12 +491,12 @@ describe('the side pane tabs', () => {
     expect(ops.getWorkspace).not.toHaveBeenCalled()
   })
 
-  it('Files says there is no folder to browse for a session without one', async () => {
+  it('a folderless Files link opens Details', async () => {
     renderPane({
       panel: 'files',
       resolution: resolution([{ ...RUN, workspace_ref: undefined }]),
     })
-    expect(await screen.findByTestId('context-no-files')).toBeInTheDocument()
+    expect(await screen.findByTestId('context-details')).toBeInTheDocument()
     expect(screen.queryByTestId('files-browser')).toBeNull()
   })
 

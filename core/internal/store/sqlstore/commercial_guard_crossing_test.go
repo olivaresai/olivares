@@ -20,7 +20,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// The Business X.Y-1 -> Community X.Y -> Business X.Y crossing (#1883, #2741): Community
+// The Business X.Y-1 -> Community X.Y -> Business X.Y crossing: Community
 // starts on a directory a Business build wrote, keeps every row, and Business reopens it.
 func TestCommunityOpensBusinessWrittenDirectory(t *testing.T) {
 	ctx := context.Background()
@@ -89,7 +89,7 @@ func TestCommunityOpensBusinessWrittenDirectory(t *testing.T) {
 
 // Only a history that records the full Business set widens the census, and the widened
 // census still has to verify as one exact compiled history: an unknown relation, an
-// incomplete completion and a plain Community ledger keep their refusals (#2741).
+// incomplete completion and a plain Community ledger keep their refusals.
 func TestGuardCensusForBusinessWrittenHistory(t *testing.T) {
 	sourceTables := append([]string{"audit_events", "set_seen_jtis", guardEpoch2UserTombstoneTable, guardEpoch2DirectoryTombstoneTable}, guardAccessEvidenceTables[:]...)
 	business := append(append([]string(nil), sourceTables...), commercialGuardFixtureTables...)
@@ -223,7 +223,7 @@ func TestGuardCensusForBusinessWrittenHistory(t *testing.T) {
 
 // A Business directory that also holds a relation no Community compiles is not a known
 // history: Community refuses it at admission, and the same directory still opens in the
-// build that wrote it (#2741: unknown history refuses).
+// build that wrote it (: unknown history refuses).
 func TestCommunityRefusesBusinessDirectoryWithUnknownRelation(t *testing.T) {
 	ctx := context.Background()
 	cfg := store.Config{Engine: store.EngineSQLite, DSN: filepath.Join(t.TempDir(), "business.db")}

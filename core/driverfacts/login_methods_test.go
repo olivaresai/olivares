@@ -46,7 +46,7 @@ func TestLoginArgsForMethod(t *testing.T) {
 	}
 }
 
-// OpenCode lists its own providers first (#2567): the OpenCode console key (Zen and
+// OpenCode lists its own providers first: the OpenCode console key (Zen and
 // the free models) and the Go subscription key, each read by the tool's own login
 // prompt, then the ChatGPT device method. The default a start without a method
 // runs stays the ChatGPT one, so a client that names no method is signed in

@@ -124,7 +124,7 @@ function ReasonField({
 
 /**
  * The Stop all confirmation, opened by the kill switch's own button and by the status
- * bar's (#3161). `running`, when the opener knows it, says how many sessions stop.
+ * bar's. `running`, when the opener knows it, says how many sessions stop.
  */
 export function StopAllConfirm({
   open,

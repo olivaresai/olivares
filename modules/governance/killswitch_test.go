@@ -189,7 +189,7 @@ func TestKillSwitchEngageRevokesPendingActuationApprovals(t *testing.T) {
 // An estate stop ends every session, so a request a session filed (session_ref) can never be
 // carried out by the session that asked: the stop cancels it whatever its action, counts it in
 // revoked_approvals, and a decision on it afterwards is refused. A person's request filed outside a
-// session stays, and so does a session's request for governance work, one kind at a time (#3207).
+// session stays, and so does a session's request for governance work, one kind at a time.
 func TestKillSwitchEstateStopRevokesSessionRequests(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

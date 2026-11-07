@@ -111,7 +111,7 @@ it.each(PROVIDER_KINDS)('states which endpoints %s accepts', async (kind) => {
   else expect(endpoint).not.toHaveAccessibleDescription()
 })
 
-// The setup wizard's "Add a local model" opens this form on ollama (#476): the address
+// The setup wizard's "Add a local model" opens this form on ollama: the address
 // the form knows is filled in at once, and again after a create resets the form.
 it('opens a local model on its default address', async () => {
   const user = userEvent.setup()
@@ -180,7 +180,7 @@ it('clears another provider endpoint when switching to Gemini', async () => {
 })
 
 // The providers view keeps the dialog mounted and reopens it, so a key typed before
-// Cancel must not survive the next opening (#2551).
+// Cancel must not survive the next opening.
 it('Cancel clears the typed key before the dialog closes', async () => {
   const user = userEvent.setup()
   function Openable() {
@@ -209,7 +209,7 @@ it('Cancel clears the typed key before the dialog closes', async () => {
   expect(screen.getByLabelText(/^API key/)).toHaveValue('')
 })
 
-// Escape is the dialog's own close, not a button: it takes the same reset (#2551).
+// Escape is the dialog's own close, not a button: it takes the same reset.
 it('Escape clears the typed key before the dialog closes', async () => {
   const user = userEvent.setup()
   function Openable() {
@@ -242,7 +242,7 @@ it('Escape clears the typed key before the dialog closes', async () => {
 })
 
 // A modal dialog hides the rest of the page from assistive technology, toasts
-// included (#2561): a refusal is announced inside the dialog, next to the form.
+// included: a refusal is announced inside the dialog, next to the form.
 it('announces a refused create inside the dialog', async () => {
   const user = userEvent.setup()
   vi.spyOn(providersApi, 'create').mockRejectedValue(

@@ -550,6 +550,8 @@
     "startedTools_other": "{{count}} outils",
     "notSent": "Non envoyé : {{reason}}",
     "waitingApproval": "Sera envoyé dès que la session est prête.",
+    "discardedOnSessionChange": "Un message saisi avant le changement de session n'a pas été envoyé. Saisissez-le à nouveau.",
+    "dismissDiscarded": "Masquer",
     "workingFolder": "Dossier de travail : <path />",
     "temporaryFolder": "Dossier de travail : dossier temporaire de cette session",
     "turnLine": "<work/> · {{duration}}",
@@ -906,6 +908,10 @@
     "unreadable": "La demande n'a pas pu être lue."
   },
   "terminal": {
+    "runScript": "Exécuter {{name}}",
+    "scripts": "Scripts du projet",
+    "scriptsFailed": "Impossible de lire les scripts du projet.",
+    "stopScript": "Arrêter",
     "title": "Terminal",
     "hint": "Un shell dans le dossier de cette session, avec les mêmes limites que la session. Il s’exécute sous votre identité ; chaque ligne de commande saisie est enregistrée.",
     "open": "Ouvrir un terminal",

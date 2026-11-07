@@ -192,7 +192,7 @@ describe('decodeSessionAddress — a bad value falls back AND says which', () =>
     })
   })
 
-  // #2267: an absent key means "the block the data points at" (the turns when there
+  //: an absent key means "the block the data points at" (the turns when there
   // are any), which only the evidence read can say, so the address must not pre-answer.
   it('an absent evidence key stays absent; a named block is kept', () => {
     expect(decodeSessionAddress({}).value.evidence).toBeUndefined()

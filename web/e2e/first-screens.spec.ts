@@ -161,7 +161,7 @@ test.describe('the first screens', () => {
       await expect(page.locator('#main-content h1')).toHaveCount(1)
 
       // What needs the person comes first; the composer on Sessions starts a session, so
-      // Overview has no New session of its own (#4427).
+      // Overview has no New session of its own.
       await expect(page.getByTestId('now-needs')).toBeVisible()
       await expect(page.getByTestId('now-start')).toHaveCount(0)
 

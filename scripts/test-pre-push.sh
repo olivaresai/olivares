@@ -187,7 +187,7 @@ check "it runs the boundary check, vets the package and then the identity leg" "
 	"task lint:boundary,go vet ./core,task lint:commit-identity"
 check "a failing boundary check refuses the push" "$(PRE_PUSH_TEST_TASK_RC=1 push origin "$gochange" "$zero")" 1
 
-# Migration history is immutable against the merge base with main (#1909). The gate is the
+# Migration history is immutable against the merge base with main. The gate is the
 # pushed tree's own script, and it picks that baseline itself: the hook sets none, because the
 # newest commit the remote holds may be this branch's own earlier push of a migration that is
 # still editable. Here a stub records the base it is handed and answers PRE_PUSH_TEST_MIG_RC.
@@ -217,7 +217,7 @@ check "a migration file alone runs the gate" "$(push origin "$sql" "$zero")/$(ca
 check "a Go change in a tree without the gate is reported, not graded" \
 	"$(push origin "$gochange" "$zero")/$(grep -c 'migration hashes NOT CHECKED' "$WORK/out")" "0/1"
 
-# The blocking SAST rules run on the pushed Go packages (#2313). The gate is the pushed tree's
+# The blocking SAST rules run on the pushed Go packages. The gate is the pushed tree's
 # own script; a stub records the argument count and the arguments the hook hands it and answers
 # PRE_PUSH_TEST_SAST_RC. gosec is a shim on PATH, so the hook's probe finds it.
 git switch -qc sastStub "$base"

@@ -289,7 +289,7 @@ func openCodeApprovalAfterUpdates(t *testing.T, updates []map[string]any, toolCa
 	return req
 }
 
-// #2890: the authority is told what kind of tool asked (ACP toolCall.kind), so a read
+// : the authority is told what kind of tool asked (ACP toolCall.kind), so a read
 // or a search is reviewed as a read.
 func TestOpenCodeApprovalNamesTheToolKind(t *testing.T) {
 	for _, kind := range []string{"read", "search", "edit", "execute"} {
@@ -337,7 +337,7 @@ func TestOpenCodeReadApprovalNamesTheFileFromItsToolCallUpdate(t *testing.T) {
 	}
 }
 
-// #3058: OpenCode's glob and grep ask with kind "search" (measured over ACP on 1.19.4).
+// : OpenCode's glob and grep ask with kind "search" (measured over ACP on 1.19.4).
 // One given a path names it in the request's locations and rawInput; one given none
 // names nothing and searches the session folder. Either way the authority is told
 // the folder searched, so live policy decides and audits it as a read.

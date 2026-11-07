@@ -38,9 +38,9 @@ func recordChildren(e *Engine) *[]probeChild {
 	return &got
 }
 
-// An install's version probe is built by the engine's ChildCommand (#1430): it
+// An install's version probe is built by the engine's ChildCommand: it
 // may write only its scratch home and names no readable path of its own: the
-// release's lib/<program> comes from the shared confinement policy (#2900).
+// release's lib/<program> comes from the shared confinement policy.
 func TestInstallProbeIsBuiltByTheEngineChildCommand(t *testing.T) {
 	t.Run("release archive (ollama)", func(t *testing.T) {
 		engine, req, _ := archiveEngine(t, DriverOllama, archiveFixture(t, DriverOllama, nil), false)
@@ -226,7 +226,7 @@ func TestInstallProbeThatCannotBeConfinedDoesNotRun(t *testing.T) {
 
 // A probe that fails must show the tool's whole message: Node prints the
 // error, its stack and its code on separate lines, and the first line alone
-// ("node:internal/modules/run_main:76") named no cause (#2900).
+// ("node:internal/modules/run_main:76") named no cause.
 func TestProbeRefusalKeepsTheToolsWholeMessage(t *testing.T) {
 	script := "echo 'node:fs:441'; echo \"Error: EACCES: permission denied, open '/lib/gemini/gemini.js'\"; " +
 		"echo '    at Object.readFileSync (node:fs:441:20)'; echo \"  code: 'EACCES',\"; echo 'Node.js v24.15.0'; exit 1"

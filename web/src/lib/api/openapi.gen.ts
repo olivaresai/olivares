@@ -83440,15 +83440,29 @@ export interface paths {
       requestBody: {
         content: {
           'application/json': {
-            /** @description The image, base64 encoded. At most 3.75 MiB decoded. */
+            /** @description The file, base64 encoded. At most 3.75 MiB decoded. */
             data: string
             /** @enum {string} */
-            media_type: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+            media_type:
+              | 'application/epub+zip'
+              | 'application/json'
+              | 'application/pdf'
+              | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+              | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+              | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              | 'application/xml'
+              | 'application/zip'
+              | 'image/gif'
+              | 'image/jpeg'
+              | 'image/png'
+              | 'image/webp'
+              | 'text/csv'
+              | 'text/html'
           }
         }
       }
       responses: {
-        /** @description the image is stored with the session; send its id with the next message */
+        /** @description the file is stored with the session; documents reach the agent as Markdown */
         201: {
           headers: {
             [name: string]: unknown
@@ -83458,7 +83472,20 @@ export interface paths {
               id: string
               /** @enum {string} */
               media_type:
-                'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+                | 'application/epub+zip'
+                | 'application/json'
+                | 'application/pdf'
+                | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                | 'application/xml'
+                | 'application/zip'
+                | 'image/gif'
+                | 'image/jpeg'
+                | 'image/png'
+                | 'image/webp'
+                | 'text/csv'
+                | 'text/html'
               size_bytes: number
             }
           }
@@ -86080,7 +86107,7 @@ export interface paths {
       requestBody: {
         content: {
           'application/json': {
-            /** @description Ids of images stored with this session (POST /runs/{ref}/attachments), sent with text as one message. The engine encodes the message for the session's tool; a tool that takes no images refuses it. Not accepted with line, message or work_lease_fence. */
+            /** @description Ids of files stored with this session (POST /runs/{ref}/attachments), sent with text as one message. Documents reach the tool as Markdown; images retain native delivery and a tool that takes no images refuses them. Not accepted with line, message or work_lease_fence. */
             attachments?: string[]
             line?: string
             message?: {
@@ -94898,7 +94925,10 @@ export interface paths {
      */
     put: {
       parameters: {
-        query?: never
+        query?: {
+          /** @description Convert supported document uploads to Markdown beside the preserved original. Other file formats are stored unchanged. Omit to retain raw-write behavior. */
+          documents?: 'markdown'
+        }
         header?: {
           /** @description Target tenant id; required when the principal can act in more than one tenant. */
           'X-Olivares-Tenant'?: string

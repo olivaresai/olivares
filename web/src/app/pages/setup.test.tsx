@@ -399,7 +399,7 @@ describe('SetupPage', () => {
     expect(shown.textContent).toMatch(/--install-directory-inventory/)
     expect(shown.textContent).toMatch(/--admin-role/)
     expect(shown.textContent).toMatch(/NOSUPERUSER BYPASSRLS/)
-    // Both commands read as commands, with no backtick left on the screen (#1844).
+    // Both commands read as commands, with no backtick left on the screen.
     expect(shown.textContent).not.toContain('`')
     expect(
       [...shown.querySelectorAll('code')].map((c) => c.textContent),
@@ -420,7 +420,7 @@ describe('SetupPage', () => {
     const field = await screen.findByLabelText(/setup token/i)
     const hintId = field.getAttribute('aria-describedby')!.split(' ')[0]
     const hint = document.getElementById(hintId)!.textContent!
-    // The commands read as commands, not as text between backticks (#1844).
+    // The commands read as commands, not as text between backticks.
     expect(hint).not.toContain('`')
     const codes = [...document.getElementById(hintId)!.querySelectorAll('code')]
     expect(codes.map((c) => c.textContent)).toEqual([
@@ -548,7 +548,7 @@ describe('SetupPage', () => {
 
   // The engine names the first organization "Default Organization" when setup sends no
   // name (core/api/handlers_auth.go firstOrgNaming), and the console shows the stored
-  // name as is: a Spanish setup left a Spanish sidebar with one English label (#1116).
+  // name as is: a Spanish setup left a Spanish sidebar with one English label.
   // The page sends the name in the language the person set up in; English sends none, so
   // the engine's published default (name and "default" handle) stays what it was.
   describe('first organization name', () => {

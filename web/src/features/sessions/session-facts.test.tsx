@@ -109,9 +109,8 @@ describe('SessionFacts — the session as a person reads it', () => {
     expect(facts).not.toHaveTextContent('dontAsk')
   })
 
-  it("says the access is not reported yet instead of the launch's internal name", () => {
-    // The tool has not reported its mode; the launch asked for "default".
-    render({ ...RUN, permission_mode: 'default', tool_mode: undefined })
+  it('says the access is not reported when neither launch nor tool supplied it', () => {
+    render({ ...RUN, permission_mode: '', tool_mode: undefined })
     const access = within(screen.getByRole('region', { name: 'Session' }))
       .getByText('Access')
       .closest('div')!

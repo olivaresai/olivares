@@ -100,7 +100,7 @@ type Config struct {
 	// gen_ai.client.inference.usage per-tier counters replace the
 	// gen_ai.client.token.usage histogram and its gen_ai.token.type attribute
 	// (semantic-conventions-genai #374), and the span's cache attribute is
-	// gen_ai.usage.cache_write.input_tokens (#440). The replaced names are NOT
+	// gen_ai.usage.cache_write.input_tokens. The replaced names are NOT
 	// emitted — this is the opt-in the gen-ai semconv README documents
 	// ("emit the latest experimental version ... do not emit the old one"), set
 	// through the standard comma-separated OTEL_SEMCONV_STABILITY_OPT_IN list

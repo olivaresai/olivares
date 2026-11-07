@@ -5,7 +5,7 @@
 // WHAT A PERSON MAY PICK FOR A SESSION, from the live catalog of its profile
 // (GET /provider-profiles/{ref}/models). The tool names its models, which one is its
 // default, which are new or retired and which effort levels each takes: nothing here
-// lists a model, so a model the vendor ships tomorrow is a new catalog entry and no
+// maintains the live list, so a model the vendor ships tomorrow needs no
 // console release. The list is only grouped and filtered for what a launch accepts.
 import { EFFORT_LEVELS } from './types'
 import type { ProfileModelCatalogDTO, ProfileModelDTO } from './types'
@@ -77,4 +77,55 @@ export function effortChoices(
   if (driver !== 'claude') return [...reported]
   const accepted: readonly string[] = EFFORT_LEVELS
   return reported.filter((level) => accepted.includes(level))
+}
+
+/** Before the first own-login profile, offer only documented launch choices. These
+ * are release data, never a probe or a reason to create a profile during a read. */
+export function firstProfileCatalog(driver: string): ProfileModelCatalogDTO {
+  let models: ProfileModelDTO[] = []
+  if (driver === 'claude') {
+    // Labels: https://platform.claude.com/docs/en/models/overview
+    // Launch aliases and efforts: https://code.claude.com/docs/en/model-config
+    models = [
+      { id: 'opus', display_name: 'Claude Opus 5.5' },
+      { id: 'sonnet', display_name: 'Claude Sonnet 5.5' },
+      { id: 'haiku', display_name: 'Claude Haiku 5.5' },
+      { id: 'fable', display_name: 'Claude Fable 5.1' },
+    ].map((model) => ({
+      ...model,
+      effort_levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+    }))
+  } else if (driver === 'codex') {
+    // Model IDs and per-model effort: https://learn.chatgpt.com/docs/models
+    models = ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'].map(
+      (id) => ({
+        id,
+        effort_levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      }),
+    )
+  } else if (driver === 'gemini') {
+    // Model IDs (no effort levels): https://geminicli.com/docs/cli/model/
+    models = [
+      'gemini-3-pro-preview',
+      'gemini-3-flash-preview',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+    ].map((id) => ({ id }))
+  } else if (driver === 'opencode') {
+    // Model ID (no effort levels): https://opencode.ai/docs/cli/commands/
+    models = [{ id: 'anthropic/claude-sonnet-5-5' }]
+  }
+  // Other CLI references name no model IDs: https://docs.x.ai/build/cli/reference,
+  // https://cursor.com/docs/cli/reference/parameters.
+  // Those drivers offer only the tool's default until their live catalog exists.
+  return {
+    profile_ref: '',
+    driver,
+    state: 'fresh',
+    models,
+    default_model: '',
+    free_text: false,
+    checked_at: '',
+    refresh_interval_seconds: 0,
+  }
 }

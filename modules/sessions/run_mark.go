@@ -17,7 +17,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// A person's own SNOOZE, DONE and SEEN marks on a session (#2480, #2866), the ones the
+// A person's own SNOOZE, DONE and SEEN marks on a session, the ones the
 // reference's thread list offers beside its pin: snooze takes a session out of THIS
 // person's list until a moment they chose, done files it under Settled, and the moment
 // they last saw it says whether it did anything since (unread). They are the caller's

@@ -99,7 +99,7 @@ func statusOutcome(err error, unrecognized bool) string {
 }
 
 // logStatusRead says which tool's status read failed, timed out or was slow, and how long
-// it took, so a stalled first hour names its cause (#2575). It never carries the tool's
+// it took, so a stalled first hour names its cause. It never carries the tool's
 // output or the error text: a status line can name an account. A fast read that succeeded,
 // or that its caller abandoned (a closed page), is not a finding; an abandoned one that
 // had already run past the load target is, because that is how a stall looks from a page.
@@ -454,7 +454,7 @@ func (m *Module) toolEnv(ctx context.Context, tenant model.TenantID, driver, acc
 
 // hostNetworkEnv is the engine's proxy and CA variables (driverfacts.NetworkEnv),
 // which a tool needs to reach its vendor from a host that goes out only through
-// a proxy (#547). A variable the engine reads as a secret stays behind, in
+// a proxy. A variable the engine reads as a secret stays behind, in
 // either case: https_proxy usually repeats HTTPS_PROXY.
 func hostNetworkEnv() []string {
 	var env []string
@@ -934,7 +934,7 @@ func (m *Module) build() ChildCommand {
 // key in it), and a private temporary directory (TMPDIR) that release removes once
 // the child has exited. The login, the status read and the provider probes of an
 // unsigned install go through the node-wide rule first: while this host cannot
-// confine a child, they are refused rather than run (#3312).
+// confine a child, they are refused rather than run.
 func (m *Module) command(ctx context.Context, driver, program, configDir string, env []string, args ...string) (*exec.Cmd, func(), error) {
 	if err := toolinstall.RefuseUnconfinedUnsigned(m.engine.VerificationLevels()[driver], driver, hostConfinement()); err != nil {
 		return nil, nil, err
@@ -1274,7 +1274,7 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 			if cur, ok := m.signIns[s.ID]; ok {
 				if (cur.URL == "" || driver == "gemini-cli") && !signInError.MatchString(line) {
 					// A URL with userinfo is never the sign-in link: it is the
-					// host proxy's, with its credential (#547).
+					// host proxy's, with its credential.
 					if u := firstURL.FindString(line); u != "" && !hasUserInfo(u) && (driver != "gemini-cli" || geminiAuthorizationURL(u)) && (driver != "cursor" || cursorLoginURL(strings.TrimRight(u, ".,)"))) {
 						cur.URL = strings.TrimRight(u, ".,)")
 					}

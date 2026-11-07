@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# VER-10 unique leftover unique vs #1038: hub-safe pin. 13 locales, not 14;
+# VER-10 unique leftover unique vs: hub-safe pin. 13 locales, not 14;
 # not 14 OG-per-page; looked: yes. Live web remasure is opt-in so
 # lint:addon-sets does not LOOK 2 without the web clone.
 # Three answers: 0 CLEAN · 1 finding · 2 could not look.

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE MESSAGE NAVIGATOR (#2129), against a live seeded engine whose child is the fixture
+// THE MESSAGE NAVIGATOR, against a live seeded engine whose child is the fixture
 // driver, over a long conversation in the tool's own transcript: open the session, reach
 // the message just sent from the rail, search a phrase far back, go to a time, by mouse and
 // by keyboard, in both themes. Run through scripts/e2e-session-conversation.sh with

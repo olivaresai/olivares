@@ -42,7 +42,7 @@ SQLite, D1). Where the read/write nature cannot be determined, the mode is
 
 ## A platform, not a single feature
 
-The 32 modules cover inventory, sessions, resource access, orchestration (in
+The 33 modules cover inventory, sessions, resource access, orchestration (in
 development), MCP and skills, identity, deployment, knowledge, security, models
 and providers, costs, evals, sandboxing, red-teaming, compliance, catalogs,
 output integrations, voice and health. APIs, manage-as-code, multi-tenancy and

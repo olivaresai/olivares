@@ -22,7 +22,7 @@ const turnStarts = new Map<string, number | null>()
 
 /**
  * Where a working row's clock runs from: the moment this page saw the session start its
- * turn, else the session's own start, so EVERY working row has a clock (#4019). The
+ * turn, else the session's own start, so EVERY working row has a clock. The
  * engine keeps no turn's start. The moment is kept by key, not by row, since a row that
  * starts working moves to another group and mounts again; the row's own clock, which
  * ticks at once when it starts working, reads it.
@@ -99,7 +99,7 @@ export function StateWord({ session }: { session: UnifiedSession }) {
     working,
     Date.parse(run?.started_at ?? session.live?.first_event_at ?? ''),
   )
-  // ONE WORD PER STATUS (#4019): a session that finished says Done whatever ended it
+  // ONE WORD PER STATUS: a session that finished says Done whatever ended it
   // (stopped, ended, cleaned up), so the list never shows two words for one state. The
   // run's own word is in the thread. Only a run not yet started says Pending.
   const word = pending

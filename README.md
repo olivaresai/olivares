@@ -12,7 +12,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.7](https://img.shields.io/badge/release-0.7-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.7)<!-- /release -->
+[![Next release: 0.8](https://img.shields.io/badge/release-0.8-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.8)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -47,7 +47,7 @@ Olivares AI answers them in one place. It connects to the agents and tools you a
 - **Keep work going across sessions.** Tasks, owners and decisions stay when a session ends. Start, join and stop Claude Code, Codex and Grok sessions from the browser, without SSH.
 - **Show proof when someone asks.** Every decision goes into a signed, tamper-evident log. Business Compliance Packs map evidence to 26 framework catalogs and produce reports for your security team and auditors. Community retains stored evidence and its JSON/CSV exports.
 
-It works with the tools you already have: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands and local models through Ollama. **32 modules** and **136 integrations**: [every module](docs-site/src/content/docs/reference/modules/overview.md) · [every connector](connectors/README.md).
+It works with the tools you already have: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands and local models through Ollama. **33 modules** and **136 integrations**: [every module](docs-site/src/content/docs/reference/modules/overview.md) · [every connector](connectors/README.md).
 
 Community keeps local observability, stored settings and backup export. SIEM/ITSM push, external telemetry delivery, posture export, active-passive HA leader routing and the edge collector are included in the Business base edition.
 
@@ -68,10 +68,10 @@ olivares quickstart
 
 <!-- release -->
 ```sh
-docker pull docker.io/olivaresai/olivares:0.7 &&
-img=$(docker image inspect --format '{{index .RepoDigests 0}}' docker.io/olivaresai/olivares:0.7) &&
+docker pull docker.io/olivaresai/olivares:0.8 &&
+img=$(docker image inspect --format '{{index .RepoDigests 0}}' docker.io/olivaresai/olivares:0.8) &&
 cosign verify "$img" \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.8 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null &&
 docker run --rm --entrypoint cat "$img" /usr/share/olivares/olivares-sessions.json >olivares-sessions.json &&
 apparmor= &&
@@ -109,15 +109,15 @@ Sessions work on one host folder: set `OLIVARES_PROJECT_DIR` to its absolute pat
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.deb" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/olivares_0.8_linux_amd64.deb" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.8 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.7_linux_amd64.deb$' checksums.txt | sha256sum -c &&
-sudo dpkg -i olivares_0.7_linux_amd64.deb && sudo systemctl enable --now olivares
+grep ' olivares_0.8_linux_amd64.deb$' checksums.txt | sha256sum -c &&
+sudo dpkg -i olivares_0.8_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -125,15 +125,15 @@ sudo dpkg -i olivares_0.7_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.rpm" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/olivares_0.8_linux_amd64.rpm" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.8 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.7_linux_amd64.rpm$' checksums.txt | sha256sum -c &&
-sudo rpm -i olivares_0.7_linux_amd64.rpm && sudo systemctl enable --now olivares
+grep ' olivares_0.8_linux_amd64.rpm$' checksums.txt | sha256sum -c &&
+sudo rpm -i olivares_0.8_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -141,19 +141,19 @@ sudo rpm -i olivares_0.7_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.apk" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/olivares_0.8_linux_amd64.apk" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.8/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.8 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.7_linux_amd64.apk$' checksums.txt | sha256sum -c &&
-sudo apk add --allow-untrusted olivares_0.7_linux_amd64.apk && sudo rc-service olivares start
+grep ' olivares_0.8_linux_amd64.apk$' checksums.txt | sha256sum -c &&
+sudo apk add --allow-untrusted olivares_0.8_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-On ARM servers, use `arm64` instead of `amd64`. Every file of the release: the <!-- release -->[release page](https://github.com/olivaresai/olivares/releases/tag/0.7)<!-- /release -->.
+On ARM servers, use `arm64` instead of `amd64`. Every file of the release: the <!-- release -->[release page](https://github.com/olivaresai/olivares/releases/tag/0.8)<!-- /release -->.
 
 **Homebrew.** macOS and Linux.
 

@@ -148,7 +148,7 @@ describe("the engine's rule for which records a tool runs on", () => {
     ).toBe(false)
   })
 
-  // #2985: OpenCode ships a native provider for each of these vendors at their own
+  //: OpenCode ships a native provider for each of these vendors at their own
   // documented address; a BYO key record at exactly that address is held to it.
   it.each(OPENCODE_PRESET_ENDPOINTS)(
     'OpenCode on openai_compatible at the preset catalog address %s',

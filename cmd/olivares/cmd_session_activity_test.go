@@ -23,7 +23,7 @@ func TestSessionActivityShowsCodexContextWindow(t *testing.T) {
 	}
 }
 
-// #1861: `session show --activity` prints what the session's tool is doing, from the
+// : `session show --activity` prints what the session's tool is doing, from the
 // same engine answer the console's side panel reads; -o json is that answer.
 func TestSessionShowActivityPrintsTheEngineAnswer(t *testing.T) {
 	for _, driver := range []string{"claude", "codex"} {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Estate's last hour at fleet scale (#2565): past FLEET_SESSIONS live sessions a build
+// Estate's last hour at fleet scale: past FLEET_SESSIONS live sessions a build
 // that supplies `estateFleet` draws it instead of the swimlanes, with the swimlanes' own props.
 // Community supplies none and keeps the swimlanes at any count.
 import type { ReactNode } from 'react'

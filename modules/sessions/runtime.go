@@ -36,6 +36,7 @@ import (
 // processes (the durable state of record is the sessions_run table; this map is
 // the live handles keyed by tenant|run_ref).
 type runtimeState struct {
+	DocumentConverter func(context.Context, string, []byte) ([]byte, error)
 	limitResumeCancel context.CancelFunc
 	limitResumeWG     sync.WaitGroup
 	// toolMu holds launch selection through live registration against release removal.
@@ -2658,14 +2659,14 @@ func (m *Module) interruptRunLoadedWithReason(ctx context.Context, tenant model.
 // could be written into a process that stop was already tearing down, and neither
 // side knew about the other.
 func (m *Module) sendTextInput(ctx context.Context, tenant model.TenantID, runRef, text string) error {
-	_, err := m.sendTextInputAttempt(ctx, tenant, runRef, text)
+	_, err := m.sendTextInputAttempt(ctx, tenant, runRef, text, true)
 	return err
 }
 
 // sendTextInputAttempt is sendTextInput that also reports whether the input CROSSED to
 // the child, the one fact a caller needs to decide whether a refused message may be put
 // back (the message queue, run_queue.go).
-func (m *Module) sendTextInputAttempt(ctx context.Context, tenant model.TenantID, runRef, text string) (bool, error) {
+func (m *Module) sendTextInputAttempt(ctx context.Context, tenant model.TenantID, runRef, text string, expandMentions bool) (bool, error) {
 	if err := m.awaitLaunch(ctx, tenant, runRef); err != nil {
 		return false, err
 	}
@@ -2681,6 +2682,12 @@ func (m *Module) sendTextInputAttempt(ctx context.Context, tenant model.TenantID
 	}
 	if err := m.refuseUnfencedActiveWork(ctx, tenant, rec); err != nil {
 		return false, err
+	}
+	if expandMentions {
+		text, err = m.expandDocumentMentions(ctx, tenant, rec, text)
+		if err != nil {
+			return false, err
+		}
 	}
 	attempted, err := m.sendTextInputLoaded(ctx, tenant, runRef, text, nil, rec)
 	if err != nil {
@@ -2914,8 +2921,8 @@ func (m *Module) cleanupRunWith(ctx context.Context, tenant model.TenantID, runR
 	if err != nil {
 		return runDTO{}, err
 	}
-	// A released session leaves every pinned group (#2130) and drops every snooze
-	// and done mark (#2480). The release has committed, so a failure here must not
+	// A released session leaves every pinned group and drops every snooze
+	// and done mark. The release has committed, so a failure here must not
 	// be reported as a failed release: the read paths refuse to mark a cleaned run
 	// anyway (decorateRunPin, decorateRunMark), which makes a row left behind
 	// invisible, not wrong.
@@ -2968,7 +2975,7 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef, a
 			return err
 		}
 		claimSID = rec.String(colRunClaimSID)
-		// The delete is in the ledger, in the same transaction (#2795): the record
+		// The delete is in the ledger, in the same transaction: the record
 		// goes, the act of removing it stays.
 		if _, err := sc.Audit().Append(ctx, model.AuditDraft{
 			Actor: actor, ActorKind: actorKind,
@@ -2978,7 +2985,7 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef, a
 			return err
 		}
 		// A deleted session leaves no pin or mark rows behind — same transaction as
-		// the delete itself (#2130, #2480).
+		// the delete itself.
 		return dropPersonalRunState(ctx, sc, runRef)
 	})
 	if err != nil {
@@ -2987,7 +2994,7 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef, a
 	// The images attached to its messages go with the session.
 	m.removeRunAttachments(tenant, runRef)
 	m.removeCheckpoints(tenant, runRef)
-	// So do the live rows the plane kept for it (#2328). They carry no workspace
+	// So do the live rows the plane kept for it. They carry no workspace
 	// lineage, which a workspace-confined caller's scope refuses, so the engine removes
 	// them in a transaction of its own; the confined lookup above already proved the
 	// caller may delete this run. The request's confinement and cancellation end here:
@@ -4488,7 +4495,7 @@ func runAuditTarget(ctx context.Context, sc store.Scope, runRef string) (model.I
 
 // RunningSessions is how many supervised session processes run now and have not been
 // asked to stop: the ones the engine's own stop ends (stopAllRuns), so a restart can
-// say so before it is applied (#507).
+// say so before it is applied.
 func (m *Module) RunningSessions() int {
 	if m == nil || m.rt == nil {
 		return 0

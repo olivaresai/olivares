@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The shell on the built binary (#3161): the top bar holds the scope, the places, search,
+// The shell on the built binary: the top bar holds the scope, the places, search,
 // notifications and the account; the status bar under the work says how things stand.
 // Stop all is absent while no session works (idle ones left open included), present while
 // one does, and goes through the

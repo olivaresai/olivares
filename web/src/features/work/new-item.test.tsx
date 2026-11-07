@@ -188,7 +188,7 @@ const emptyState = () =>
     .getByText('No work items yet')
     .closest('[data-slot="empty-state"]') as HTMLElement
 
-describe('A person records a work item from the Work view (#505)', () => {
+describe('A person records a work item from the Work view', () => {
   it('offers New item where the empty state says people record items', async () => {
     renderIntel(<WorkView />)
     await screen.findByText('No work items yet')

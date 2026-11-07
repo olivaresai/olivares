@@ -16,7 +16,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// A session's turns (#3433), over the real routes: each message is a turn, the list says
+// A session's turns, over the real routes: each message is a turn, the list says
 // what each turn changed, and a rewind puts the folder back as it was before a turn, or
 // undoes that.
 func TestTurnCheckpointsListWhatEachTurnChangedAndRewindTheFolder(t *testing.T) {

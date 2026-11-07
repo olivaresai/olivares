@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -179,6 +180,9 @@ func (s *SecretStore) put(ctx context.Context, actor Principal, scope model.Tena
 	if msg := ValidateSecretName(name); msg != "" {
 		return SecretView{}, fmt.Errorf("%w: %s", ErrBadSecretName, msg)
 	}
+	if err := refuseReservedSecret(actor, scope, name); err != nil {
+		return SecretView{}, err
+	}
 	existing, found, err := s.load(ctx, scope, name)
 	if err != nil {
 		return SecretView{}, err
@@ -242,6 +246,9 @@ func (s *SecretStore) put(ctx context.Context, actor Principal, scope model.Tena
 // resolution (a connector cannot wire), which is the intended effect of removing
 // a credential. Returns ErrSecretNotFound if there is nothing to delete.
 func (s *SecretStore) Delete(ctx context.Context, actor Principal, scope model.TenantID, name string) error {
+	if err := refuseReservedSecret(actor, scope, name); err != nil {
+		return err
+	}
 	row, found, err := s.load(ctx, scope, name)
 	if err != nil {
 		return err
@@ -255,6 +262,25 @@ func (s *SecretStore) Delete(ctx context.Context, actor Principal, scope model.T
 		}
 		return auditAct(ctx, as, actor, "secret.delete", secretEntryKind, row.ID)
 	})
+}
+
+// reservedSecretNames holds the deployment-wide names the engine itself writes.
+var reservedSecretNames sync.Map
+
+// ReserveSecretName marks a deployment-wide secret the engine creates and owns, such as an
+// add-on's private key. Only an engine path (NewSystemOperator) may then write or delete it;
+// a person's put or rm, from the CLI or the API, is refused. Call it from init.
+func ReserveSecretName(name string) { reservedSecretNames.Store(strings.TrimSpace(name), struct{}{}) }
+
+func refuseReservedSecret(actor Principal, scope model.TenantID, name string) error {
+	name = strings.TrimSpace(name)
+	if scope != GlobalSecretScope || actor.IsSystemOperator() {
+		return nil
+	}
+	if _, reserved := reservedSecretNames.Load(name); reserved {
+		return fmt.Errorf("%w: %q is managed by the engine and cannot be changed or removed by hand", ErrBadSecretName, name)
+	}
+	return nil
 }
 
 // PersonalVaultPrefix opens a person's own namespace in a tenant scope:

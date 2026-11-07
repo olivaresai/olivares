@@ -71,7 +71,7 @@ function queueOwnsKey(e: KeyboardEvent): boolean {
 }
 
 /**
- * ApprovalDetailPanel is the open request beside the queue (#2548): what will run, the
+ * ApprovalDetailPanel is the open request beside the queue: what will run, the
  * rule that asked and what it reaches, who may not decide it, the decision, and the
  * immutable, append-only trail (read-only, never an edit or delete affordance).
  *

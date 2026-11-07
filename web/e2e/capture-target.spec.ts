@@ -489,13 +489,13 @@ test.describe('capture target — a capture that outlives its release', () => {
   })
 })
 
-// What the 0.1 console got wrong on the surfaces that show sessions (#1784, #1785): an assistant reply left as
+// What the 0.1 console got wrong on the surfaces that show sessions: an assistant reply left as
 // raw markdown, bookkeeping rows in the conversation, and a Now page that lists more sessions as Working than
 // its own tile counts as working. Other views keep the checks they had.
 test.describe('capture target — session surfaces', () => {
   const VISTAS = [...VISTAS_DE_SESION]
   // The tile counts the live sessions (working, idle, gone silent) and captions the idle and silent ones.
-  // Overview's strip (#4427): the sessions running, then today's cost; absent when nothing is said.
+  // Overview's strip: the sessions running, then today's cost; absent when nothing is said.
   const STRIP = (running: number) =>
     `<nav>${running} working · $6.84 today</nav>`
   const FILA = (estado: string) =>
@@ -592,7 +592,7 @@ test.describe('capture target — session surfaces', () => {
   test('rejects an Overview page that lists more rows Working than sessions running', async ({
     page,
   }) => {
-    // Three running; five Working rows is the #1785 page.
+    // Three running; five Working rows is the page.
     await monta(
       page,
       `<main><h1>Overview</h1>${STRIP(3)}<ul>${FILA('Working').repeat(5)}</ul></main>`,

@@ -249,7 +249,7 @@ function PlainText({ text }: { text: string }) {
 }
 
 /** The live line of the calls that run: what they do, and for how long. A file the last
- * call reads or edits is named through PathText, whole (#3135). */
+ * call reads or edits is named through PathText, whole. */
 function liveWords(
   t: TFunction,
   running: readonly ConversationItem[],

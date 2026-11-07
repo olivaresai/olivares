@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The table alternative of the reach view (issue #2553): one row per solid link,
+// The table alternative of the reach view (issue): one row per solid link,
 // one per dashed link (the tool whose session asked), and one honest row per
 // waiting destination no tool asked for. The graph's waiting encoding
 // (dash + clock) becomes a Status word here; the same model drives both.

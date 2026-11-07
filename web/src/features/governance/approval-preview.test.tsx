@@ -240,7 +240,7 @@ describe('Approvals: what will run, before Approve', () => {
       within(queue()).getByText('Command not shown for this tool yet'),
     )
     expect(row.querySelector('[data-slot="approval-review"]')).toBeNull()
-    // One line says it, not two (#2269).
+    // One line says it, not two.
     expect(
       within(row).queryByText('This request does not include what will run.'),
     ).toBeNull()
@@ -541,7 +541,7 @@ it('names the launcher of the running session a tool permission comes from', asy
   expect(await screen.findByText('Ada through their session')).toBeVisible()
 })
 
-// Issue #2269 (permissions capture): the note repeated under every request,
+// Issue (permissions capture): the note repeated under every request,
 // including the ones a person raised, where no command is expected. It shows once, and
 // only on a request the engine stores a review for: a tool call, a provider's
 // permission request or a publish.

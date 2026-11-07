@@ -20,7 +20,7 @@ import (
 	"github.com/olivaresai/olivares/core/secure"
 )
 
-// A REPLACEMENT TOKEN MUST BELONG TO THE ACCOUNT THE ENGINE RUNS AS (#514).
+// A REPLACEMENT TOKEN MUST BELONG TO THE ACCOUNT THE ENGINE RUNS AS.
 //
 // On a deb/rpm install the data directory is olivares:olivares 0750 and the engine runs
 // as olivares, so the natural way to run the printed remedy is `sudo olivares first-boot
@@ -258,7 +258,7 @@ func TestFirstBootNewTokenWithoutRootMintsAsItselfOverASymlinkedConsoleRecord(t 
 	}
 }
 
-// A SETUP STATE THE COMMAND CANNOT LOOK AT IS UNKNOWN, NEVER "COMPLETE" (#513).
+// A SETUP STATE THE COMMAND CANNOT LOOK AT IS UNKNOWN, NEVER "COMPLETE".
 //
 // On a deb/rpm install the data directory is olivares:olivares 0750, so the help's own
 // "local or systemd install" example, run by a normal user, cannot even stat

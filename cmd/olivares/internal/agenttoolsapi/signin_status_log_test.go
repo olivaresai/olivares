@@ -113,7 +113,7 @@ func slowAfter(t *testing.T, d time.Duration) {
 	t.Cleanup(func() { slowStatusRead = previous })
 }
 
-// #2575: release-first-hour run 39114374757 returned 503 from GET sign-in after 15 s on
+// : release-first-hour run 39114374757 returned 503 from GET sign-in after 15 s on
 // the AI tools page, and the engine log named neither the tool nor where the time went.
 // A status read that fails now says which tool and how long it took, with no output of
 // the tool in the line.

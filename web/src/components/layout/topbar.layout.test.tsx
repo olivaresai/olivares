@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Structure of the top bar (0.5, after #2544 and #3161). jsdom does not lay out, so the pixel
+// Structure of the top bar (0.5, after and). jsdom does not lay out, so the pixel
 // facts live in the browser captures; what is pinned here is what those pixels depend on: ONE
 // 56 px ROW with the page title and four controls (the menu button below 761 px, search,
 // notifications and the account) and no places, and the Tab order equal to the reading order.
@@ -338,7 +338,7 @@ describe('the scope control', () => {
   })
 })
 
-describe('the bar speaks the platform and names its icons (#3121)', () => {
+describe('the bar speaks the platform and names its icons', () => {
   /** The platform the browser reports, as `navigator.platform` answers it. */
   const onPlatform = (platform: string) =>
     Object.defineProperty(window.navigator, 'platform', {

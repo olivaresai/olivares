@@ -26,9 +26,9 @@ import (
 )
 
 // An install job ends with a --version probe of the freshly staged vendor
-// binary. That probe is a child of the engine like a tool's login (#1114): the
+// binary. That probe is a child of the engine like a tool's login: the
 // composition confines it, so it cannot read the engine data directory and a
-// root engine's probe holds no capability (#1430).
+// root engine's probe holds no capability.
 func TestAgentToolInstallProbeIsConfinedLikeASessionChild(t *testing.T) {
 	if s := confine.Probe(); s.Mode != confine.ModeLandlock {
 		t.Fatal("this security reproducer requires Landlock: " + s.Reason)
@@ -111,7 +111,7 @@ func TestAgentToolInstallProbeIsConfinedLikeASessionChild(t *testing.T) {
 
 // A release archive's probe runs confined by the composition's builder and still
 // passes: it reads the runtime its program loads from lib/<program> and writes its
-// temporary directory, but not its own release nor the engine's data (#1430).
+// temporary directory, but not its own release nor the engine's data.
 func TestReleaseArchiveProbeRunsConfinedAndReadsItsLibraries(t *testing.T) {
 	if s := confine.Probe(); s.Mode != confine.ModeLandlock {
 		t.Fatal("this security reproducer requires Landlock: " + s.Reason)

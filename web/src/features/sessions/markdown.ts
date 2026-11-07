@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ASSISTANT'S MARKDOWN, READ INTO DATA AND NEVER INTO HTML (#1784). What the model says
+// THE ASSISTANT'S MARKDOWN, READ INTO DATA AND NEVER INTO HTML. What the model says
 // can be shaped by what it read, so the reply is parsed into a small tree that the console
 // paints as elements: there is no HTML string, no pass-through of tags and no sanitizer to
 // get wrong. A link survives only with a web or mail address; any other destination stays in

@@ -16,7 +16,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
-// #3173: OpenCode's glob and grep run ripgrep: the rg on its PATH, else one it
+// : OpenCode's glob and grep run ripgrep: the rg on its PATH, else one it
 // downloads from github.com, which a confined session cannot reach (measured on
 // 1.19.4: "ripgrep execution failed"). The rg that `olivares tool install opencode`
 // placed goes first on an OpenCode child's PATH, and a confined child may run it.
@@ -59,7 +59,7 @@ func TestOpenCodeLaunchPutsTheInstalledRipgrepFirstOnPATH(t *testing.T) {
 	}
 }
 
-// #3202: a damaged pinned ripgrep refuses the OpenCode launch, naming the fix that
+// : a damaged pinned ripgrep refuses the OpenCode launch, naming the fix that
 // works, instead of launching a session whose glob and grep fail.
 func TestOpenCodeLaunchRefusesADamagedRipgrep(t *testing.T) {
 	t.Parallel()

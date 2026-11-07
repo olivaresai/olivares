@@ -75,7 +75,7 @@ function EntryRow({ entry }: { entry: TimelineDTO }) {
     (entry.title || entry.tool_ref || '').trim() || t(`kind.${entry.kind}`),
     entry.resource_ref,
   )
-  // ONE LINE PER ROW (#2796): the words and the resource are cut with an
+  // ONE LINE PER ROW: the words and the resource are cut with an
   // ellipsis, their whole text on `title`, and a word is never broken per letter.
   const whole = subtitle ? `${title} · ${subtitle}` : title
   return (
@@ -112,7 +112,7 @@ function EntryRow({ entry }: { entry: TimelineDTO }) {
 }
 
 /**
- * IDENTICAL ENTRIES ARE ONE ROW (#2267). Three "cooperative trace gap" findings with one
+ * IDENTICAL ENTRIES ARE ONE ROW. Three "cooperative trace gap" findings with one
  * time told the same fact three times, and a call that wrote two entries is one turn told
  * twice; the row says it once, with its count and when. Expanding lists the moments, so
  * nothing is hidden, only folded.
@@ -147,7 +147,7 @@ function EntryGroupRow({ group }: { group: EntryGroup }) {
           aria-hidden
         />
         <span className="min-w-0 flex-1">
-          {/* The count stays visible beside the cut-off words (#2796): the row
+          {/* The count stays visible beside the cut-off words: the row
               is one line and its whole text is on `title`. */}
           <span className="flex min-w-0 items-baseline gap-1 text-caption">
             <span
@@ -170,7 +170,7 @@ function EntryGroupRow({ group }: { group: EntryGroup }) {
               {subtitle}
             </span>
           ) : null}
-          {/* A range is about as wide as the pane's text (#2796): beside the words
+          {/* A range is about as wide as the pane's text: beside the words
               it left "Bash ×10" no room, so it takes a line of its own. */}
           {group.ranged ? (
             <span className={cn('block', time)}>
@@ -416,7 +416,7 @@ export function SessionEvidence({
   // findings" was empty noise. Nothing at all when every block is empty.
   const shown = EVIDENCE_BLOCKS.filter((id) => counts[id] > 0)
   if (shown.length === 0) return null
-  // THE PANE SHOWS THE SESSION'S WORK, NOT A COLLAPSED LIST (#2267): with no block named
+  // THE PANE SHOWS THE SESSION'S WORK, NOT A COLLAPSED LIST: with no block named
   // the turns are open; a named block that has nothing in it opens nothing, so it falls
   // back the same way.
   const open: EvidenceBlock =

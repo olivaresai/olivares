@@ -93,7 +93,7 @@ function WorkRow({
       )
     : []
   // The action the engine reported is not the sentence (the name is the list's, the
-  // same as the Sessions list says it, #2266) and it is not dropped: it is on the hover.
+  // same as the Sessions list says it,) and it is not dropped: it is on the hover.
   const doing = live ? workLine(live) : null
   const fullTitle = [
     name,

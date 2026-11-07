@@ -4,7 +4,7 @@
 //
 // SETTINGS HOLDS PERSONAL SECTIONS ONLY (0.5 one navigation), against a live `--seed-demo`
 // engine. Tools and Files are places of the sidebar; Settings' old addresses
-// for them (#2905) land on those pages. Nothing on this path is intercepted. Like
+// for them land on those pages. Nothing on this path is intercepted. Like
 // console-keyboard-routes.spec.ts it needs the seeded estate (a demo login) and skips visibly
 // without it; scripts/web-e2e-demo.sh runs it.
 import AxeBuilder from '@axe-core/playwright'

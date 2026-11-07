@@ -17,7 +17,7 @@ import (
 )
 
 // A pgcontent table that declares no ACL columns is denied to an identity with no
-// groups until the operator declares the source public (#3030). The real
+// groups until the operator declares the source public. The real
 // connector reads a real export, the document sources are wired exactly as boot
 // wires them (knowledgeContentSources, then openAll), and the engine's own
 // routes ingest, query and scan.

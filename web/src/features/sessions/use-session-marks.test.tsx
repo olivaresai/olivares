@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The snooze, done and unread marks are the engine's (#2480, #2866): a change calls its
+// The snooze, done and unread marks are the engine's: a change calls its
 // routes and the sessions are re-read afterwards, success or not. Opening a session marks it
 // read.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

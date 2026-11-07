@@ -15,7 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
-// Who may use which AI tool, account and model path (#2420).
+// Who may use which AI tool, account and model path.
 //
 // A provider profile is one tool on one account and names the provider record it runs on,
 // so a binding on the profile (source type "profile", source_ref its ppf_ reference) is a

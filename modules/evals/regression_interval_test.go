@@ -80,7 +80,7 @@ func passRateDiffOf(t *testing.T, cmp map[string]any) (baselinePassed, baselineN
 		floatOf(diff["drop"]), floatOf(ci["lo"]), floatOf(ci["hi"])
 }
 
-// TestRegressionNeedsIntervalExcludingZero is the #2151 contract. The same
+// TestRegressionNeedsIntervalExcludingZero is the contract. The same
 // 10-point drop (score 1.0 → 0.9, over a 0.05 threshold) is noise on 10 cases and a
 // finding on 100: eval_regression fires only when the Newcombe interval of the
 // pass-rate difference excludes zero.

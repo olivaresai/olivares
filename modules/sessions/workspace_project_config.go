@@ -119,7 +119,7 @@ var projectConfigFiles = []projectConfigFile{
 		paths: []string{"tools.discoveryCommand", "tools.callCommand", "mcp.serverCommand", "telemetry.otlpEndpoint"},
 	}},
 	// OpenCode merges the session folder's opencode.json(c) under the launch's own
-	// configuration, so a key the launch does not set is added (#3076), and it loads
+	// configuration, so a key the launch does not set is added, and it loads
 	// .opencode/ (agents, commands, modes, plugins and tools, which run inside it).
 	{driver: providerDriverOpenCode, path: "opencode.json", format: "json", rules: openCodeConfigRules},
 	{driver: providerDriverOpenCode, path: "opencode.jsonc", format: "json", rules: openCodeConfigRules},

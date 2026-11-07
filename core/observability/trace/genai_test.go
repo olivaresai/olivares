@@ -338,7 +338,7 @@ func TestGenAICompatDualEmitSpanOnly(t *testing.T) {
 // emits the gen_ai.client.inference.usage COUNTERS (the #374 replacement for the
 // gen_ai.client.token.usage histogram and its gen_ai.token.type attribute) with
 // the required gen_ai.token.modality, renames the span's cache-creation attribute
-// to cache_write (#440), and does not emit the replaced names. Default emission
+// to cache_write, and does not emit the replaced names. Default emission
 // stays pinned by TestGenAISpanAndAccounting; the counters ride the SAME meter as
 // the duration histogram (one metrics pipeline).
 func TestGenAILatestExperimentalOptInSwitchesTokenMetrics(t *testing.T) {
@@ -390,7 +390,7 @@ func TestGenAILatestExperimentalOptInSwitchesTokenMetrics(t *testing.T) {
 				counters[m.Name] = dp.Value
 				for _, kv := range dp.Attributes.ToSlice() {
 					if string(kv.Key) == attrGenAITokenType {
-						t.Fatalf("metric attribute %q emitted under the latest form; #374 replaced it", kv.Key)
+						t.Fatalf("metric attribute %q emitted under the latest form; the newer attribute replaced it", kv.Key)
 					}
 				}
 				assertMetricAttr(t, dp.Attributes, attrGenAITokenModality, modalityText)
@@ -421,7 +421,7 @@ func TestGenAILatestExperimentalOptInSwitchesTokenMetrics(t *testing.T) {
 		}
 	}
 	if seen[metricTokenUsage] {
-		t.Errorf("%s emitted under the latest form; #374 replaced it", metricTokenUsage)
+		t.Errorf("%s emitted under the latest form; the newer attribute replaced it", metricTokenUsage)
 	}
 	if len(seen) != len(want)+1 { // four counters + duration
 		t.Fatalf("metric instruments = %v, want the four inference.usage counters and operation.duration", seen)

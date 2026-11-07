@@ -20,7 +20,7 @@ import (
 // un error bien construido que la capa HTTP renderiza como `errorBody` habría tirado la fila sin
 // que ningún test del módulo se enterara.
 //
-// ⛔ ES LA MISMA LECCIÓN QUE ME COSTÓ `#1716`: allí el campo viajaba en el error y `writeWorkError`
+// ⛔ ES LA MISMA LECCIÓN QUE ME COSTÓ “: allí el campo viajaba en el error y `writeWorkError`
 // lo tiraba, y mi testigo no lo vio porque ejercitaba el camino que yo tenía en la cabeza. Aquí el
 // camino se ejercita entero, hasta el cuerpo.
 func TestARacedLaunchAnswers409WithTheRowInTheBody(t *testing.T) {

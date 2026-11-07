@@ -5,7 +5,7 @@
 #
 # C13-06 unique leftover unique vs check-c13-06-canon-proposals.sh
 # (named on main, CHECK not in lint:addon-sets) and unique leftover
-# unique vs #1400. 0 CLEAN · 1 finding · 2 could not look.
+# unique vs. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

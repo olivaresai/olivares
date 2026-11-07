@@ -45,7 +45,7 @@ func TestSessionViewKeepsALongToolCallReadable(t *testing.T) {
 
 // TestSessionViewDropsTheThinkingCounter: Claude Code reports a `thinking_tokens` system
 // frame per thinking chunk, and send printed "· thinking tokens" for each, 19 lines in a
-// row before one answer. It is the tool's bookkeeping, as the console treats it (#1784):
+// row before one answer. It is the tool's bookkeeping, as the console treats it:
 // no line. Another status the view cannot name is said once, not once per frame.
 func TestSessionViewDropsTheThinkingCounter(t *testing.T) {
 	var b strings.Builder

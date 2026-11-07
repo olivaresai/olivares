@@ -18,6 +18,7 @@ import (
 	compliance "github.com/olivaresai/olivares/modules/compliance"
 	consoleviews "github.com/olivaresai/olivares/modules/consoleviews"
 	deploy "github.com/olivaresai/olivares/modules/deploy"
+	documents "github.com/olivaresai/olivares/modules/documents"
 	evals "github.com/olivaresai/olivares/modules/evals"
 	eventing "github.com/olivaresai/olivares/modules/eventing"
 	finops "github.com/olivaresai/olivares/modules/finops"
@@ -48,6 +49,8 @@ import (
 
 func newDefault(namespace string, built map[string]api.Module) (api.Module, error) {
 	switch namespace {
+	case "documents":
+		return documents.New(), nil
 	case "accessmap":
 		return accessmap.New(), nil
 	case "capabilities":

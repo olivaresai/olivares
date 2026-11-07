@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-// A token the engine cannot read is not a wrong token (#530): Match says so, with the
+// A token the engine cannot read is not a wrong token: Match says so, with the
 // path and the reason, while a wrong, missing or consumed token stays a plain false.
 func TestSetupTokenMatchTellsAnUnreadableFileFromAWrongToken(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "setup.token")

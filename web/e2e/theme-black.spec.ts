@@ -5,7 +5,7 @@
 // THE BLACK THEME IN A REAL BROWSER, on the seeded demo engine scripts/web-e2e-demo.sh boots.
 // jsdom checks the tokens and the store; here the browser paints them. Chosen in Settings,
 // Black survives a reload, and the frame, the sheet and the top bar of every main place are
-// true black (#000), while Light and Dark keep their own sheet.
+// true black, while Light and Dark keep their own sheet.
 //
 // With CAPTURE_DIR set it also photographs Now, Sessions (two side by side), Tools, Rules and
 // Ledger at 1280 and 1920 px in Light, Dark and Black, for the review.

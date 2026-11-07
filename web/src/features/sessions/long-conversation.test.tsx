@@ -124,7 +124,7 @@ describe('a long conversation', () => {
       </QueryClientProvider>,
     )
     // A short list keeps the browser's scroll anchoring; the virtual list keeps the view in
-    // place itself, and both doing it moved the view every frame (#4128).
+    // place itself, and both doing it moved the view every frame.
     expect(screen.getByRole('log')).not.toHaveClass('[overflow-anchor:none]')
     act(() => {
       for (let i = 0; i < 2000; i++) push(i)

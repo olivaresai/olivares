@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // While the tool reports a login in progress, a profile row offers no second sign-in
-// (#3388): it says "Signing in…" and its button is disabled, and it never reads
+// it says "Signing in…" and its button is disabled, and it never reads
 // as signed in before the tool's own status says so.
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'

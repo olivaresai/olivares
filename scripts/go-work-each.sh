@@ -7,7 +7,7 @@
 # workspace.
 #
 # WHY: in a go.work workspace, `go build ./...` / `go test ./...` only cover the
-# CURRENT module, not all workspace modules (golang/go#50745). So build, test,
+# CURRENT module, not all workspace modules (golang/go). So build, test,
 # vet and govulncheck must be run per-module. This iterates the module dirs from
 # go.work (no jq dependency) and runs the given command in each.
 #

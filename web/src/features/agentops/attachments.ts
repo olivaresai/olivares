@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE IMAGES A PERSON ATTACHES TO A MESSAGE (#2158), from paste, drop or the picker to
+// THE IMAGES A PERSON ATTACHES TO A MESSAGE, from paste, drop or the picker to
 // the ids the message is sent with.
 //
 // Each image is stored with the session the moment it is attached, not when the message
@@ -15,16 +15,42 @@ import { ApiError } from '@/lib/api/errors'
 import { agentOpsApi } from './api'
 import './i18n'
 
-/** The image types the engine takes (run_attachment.go, attachmentExt). */
+/** Document extensions and MIME types accepted by the engine. */
+const DOCUMENT_MEDIA_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  csv: 'text/csv',
+  json: 'application/json',
+  xml: 'application/xml',
+  html: 'text/html',
+  htm: 'text/html',
+  epub: 'application/epub+zip',
+  zip: 'application/zip',
+}
 export const ATTACH_TYPES = [
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/gif',
+  ...Object.values(DOCUMENT_MEDIA_TYPES),
 ] as const
 
-/** The picker's accept list. */
-export const ATTACH_ACCEPT = ATTACH_TYPES.join(',')
+/** MIME metadata can be empty or generic for an Office file on a person's OS. */
+function attachmentMediaType(file: File): string {
+  if ((ATTACH_TYPES as readonly string[]).includes(file.type)) return file.type
+  return (
+    DOCUMENT_MEDIA_TYPES[file.name.toLowerCase().split('.').at(-1) ?? ''] ??
+    file.type
+  )
+}
+
+/** The picker's accept list, including systems without document MIME metadata. */
+export const ATTACH_ACCEPT = [
+  ...ATTACH_TYPES,
+  ...Object.keys(DOCUMENT_MEDIA_TYPES).map((extension) => `.${extension}`),
+].join(',')
 
 /** The most images one message carries (maxTurnAttachments): what one request to the
  * model takes. */
@@ -63,11 +89,11 @@ export interface DraftImage {
   id?: string
 }
 
-/** The images in a clipboard or drop payload, in order. A file that is not an image is
- * not an attachment and is left to the browser (a pasted file path stays text). */
+/** Supported files in a clipboard or drop payload, in order. Other payloads
+ * stay with the browser, including a pasted file path. */
 export function imagesIn(data: DataTransfer | null): File[] {
   return Array.from(data?.files ?? []).filter((f) =>
-    f.type.startsWith('image/'),
+    (ATTACH_TYPES as readonly string[]).includes(attachmentMediaType(f)),
   )
 }
 
@@ -135,7 +161,8 @@ export function useImageDraft(runRef: string) {
         const name = file.name || t('attach.pasted')
         const refuse = (reason: string) =>
           toast.error(t('attach.failed', { name, reason }))
-        if (!(ATTACH_TYPES as readonly string[]).includes(file.type)) {
+        const mediaType = attachmentMediaType(file)
+        if (!(ATTACH_TYPES as readonly string[]).includes(mediaType)) {
           refuse(t('attach.notImage'))
           continue
         }
@@ -160,7 +187,7 @@ export function useImageDraft(runRef: string) {
             // One read gives both the thumbnail address and the bytes to upload.
             const preview = await dataUrlOf(file)
             const stored = await uploadWhenFree(runRef, {
-              media_type: file.type,
+              media_type: mediaType,
               data: preview.slice(preview.indexOf(',') + 1),
             })
             if (!mounted.current || currentRun.current !== runRef) {

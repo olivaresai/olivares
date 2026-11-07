@@ -46,7 +46,7 @@ function copyAsOneLine(event: ClipboardEvent<HTMLElement>, value: string) {
 }
 
 /**
- * PathText — the one way the console shows a filesystem path or a branch name (#3135).
+ * PathText — the one way the console shows a filesystem path or a branch name.
  *
  * It is machine text, so it is code in the machine face. It is cut in its MIDDLE: the start
  * shrinks to an ellipsis and the end stays whole, so a long path never pushes its pane

@@ -18,7 +18,7 @@ import (
 	"github.com/olivaresai/olivares/modules/skills"
 )
 
-// #2997: in a session folder that is not a git repository, OpenCode 1.19.3 walks
+// : in a session folder that is not a git repository, OpenCode 1.19.3 walks
 // every ancestor for .claude/skills and .agents/skills and grants each found
 // folder external_directory: allow (measured: 138 skills from one ancestor). The
 // launch turns those scans off and lists the session folder's own two folders

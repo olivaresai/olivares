@@ -45,12 +45,12 @@ What it adds is the AI-governance control set inside that boundary
 
 ## FIPS 140-3 — the exact, current claim (re-verified 2026-07-09)
 
-IL4+ expects FIPS-validated cryptography operating in FIPS mode; Olivares pins CMVP module #5247
+IL4+ expects FIPS-validated cryptography operating in FIPS mode; Olivares pins CMVP module 5247
 (`GOFIPS140=v1.0.0`). Our claim is precise and deliberately narrow
 (`Dockerfile.fips`, `docs/SCP-09-FIPS-STIG.md`):
 
 - The FIPS image builds with **`GOFIPS140=v1.0.0`** — the Go Cryptographic Module v1.0.0,
-  **CMVP certificate #5247: FIPS 140-3, overall Level 1, status ACTIVE** (validated 2026-04-27,
+  **CMVP certificate 5247: FIPS 140-3, overall Level 1, status ACTIVE** (validated 2026-04-27,
   vendor Geomys, sunset 2031-04-26). Re-verified against the CMVP certificate page **today,
   2026-07-09** — not quoted from an older audit.
 - We deliberately do **not** build with the newer `v1.26.0` module: it remains on the CMVP
@@ -92,5 +92,5 @@ IL4+ expects FIPS-validated cryptography operating in FIPS mode; Olivares pins C
   belongs to the deploying program.
 
 *Primary sources, all re-read 2026-07-09: DISA Cloud Computing Mission Owner SRG Overview
-(30 Jan 2025) via the DoD Cyber Exchange DCCS library; NIST CMVP certificate #5247; NIST FIPS
+(30 Jan 2025) via the DoD Cyber Exchange DCCS library; NIST CMVP certificate 5247; NIST FIPS
 140-3 Transition Effort (csrc.nist.gov, updated 2026-04-13); FedRAMP FRR-MAS.*

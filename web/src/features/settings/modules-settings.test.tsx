@@ -123,7 +123,7 @@ describe('Settings > Modules (ARCH C1)', () => {
     )
   })
 
-  it('warns with the running-session count, read at Apply, before the restart stops them (#507)', async () => {
+  it('warns with the running-session count, read at Apply, before the restart stops them', async () => {
     const select = vi
       .spyOn(modulesApi, 'select')
       .mockResolvedValue({ ...structuredClone(catalog), restarting: true })
@@ -151,7 +151,7 @@ describe('Settings > Modules (ARCH C1)', () => {
     )
   })
 
-  it('warns for a change only the engine knows restarts it (#507)', async () => {
+  it('warns for a change only the engine knows restarts it', async () => {
     // Health waits for a restart, so the engine restarts for any Apply, even one
     // that only chooses Eventing, which Orchestration already keeps on.
     vi.mocked(modulesApi.get).mockResolvedValue({
@@ -365,7 +365,7 @@ it('explains Apply during saving and removes the idle reason when a choice chang
   expect(apply).toHaveAccessibleDescription('Saving module selection…')
 })
 
-it('Turn on warns with the running-session count before the restart (#507)', async () => {
+it('Turn on warns with the running-session count before the restart', async () => {
   vi.mocked(modulesApi.get).mockResolvedValue({
     ...structuredClone(catalog),
     running_sessions: 3,

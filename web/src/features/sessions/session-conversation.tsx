@@ -451,7 +451,7 @@ function ConversationBody({
     })
   }, [runRef, sentCount, tenant, queryClient])
 
-  // The person's messages as a rail and a panel (#2129). A jump leaves the newest output
+  // The person's messages as a rail and a panel. A jump leaves the newest output
   // behind: following it again is the person scrolling back down.
   const stopFollowing = useCallback(() => setAutoscroll(false), [])
   // The navigator reaches a row that is not in the page by asking for it first.
@@ -630,7 +630,7 @@ function ConversationBody({
           aria-label={t('conversation.log')}
           // A virtual list keeps the view in place itself when a row above it changes size;
           // the browser's scroll anchoring doing it too moved the view back and forth every
-          // frame at some positions (#4128). A short list keeps the browser's.
+          // frame at some positions. A short list keeps the browser's.
           className={cn(
             'relative min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
             virtual && '[overflow-anchor:none]',
@@ -769,6 +769,7 @@ function ConversationBody({
                 ))}
               </ol>
             )}
+            <DiscardedNotice />
             <ConversationTaskList key={ownerKey} run={run} query={tasks} />
             {/* The request the session waits on, after what led to it, answered here. */}
             <ConversationApproval run={run} />
@@ -929,7 +930,7 @@ function ConversationRowView({
       </li>
     )
 
-  // THE ASSISTANT'S WORDS ARE MARKDOWN (#1784): lists, code and bold are shown as such. A
+  // THE ASSISTANT'S WORDS ARE MARKDOWN: lists, code and bold are shown as such. A
   // reply holds blocks and links, which a button cannot, so the row is the reply itself.
   return (
     <li className="group/msg py-1">
@@ -958,6 +959,26 @@ function ConversationRowView({
         />
       ) : null}
     </li>
+  )
+}
+
+/** A held first message that a session change dropped: says so, with none of its words,
+ * until the reader dismisses it. */
+function DiscardedNotice() {
+  const { t } = useTranslation('sessions')
+  const discarded = useSentTurns((s) => s.discarded)
+  const dismiss = useSentTurns((s) => s.dismissDiscarded)
+  if (!discarded) return null
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-2 px-1 py-2 text-caption text-danger"
+    >
+      <span>{t('conversation.discardedOnSessionChange')}</span>
+      <button type="button" className="underline" onClick={dismiss}>
+        {t('conversation.dismissDiscarded')}
+      </button>
+    </div>
   )
 }
 

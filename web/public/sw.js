@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The console's service worker (#2840). It does two things and nothing else: it shows a
+// The console's service worker. It does two things and nothing else: it shows a
 // notification when the engine pushes one, and it opens the session that notification is about
 // when the person taps it. It caches nothing and answers no fetch: the console is always the
 // server's own.

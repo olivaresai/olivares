@@ -298,6 +298,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 // these route/header/query controls are required for a generated client to
 // invoke validate, plan and apply correctly.
 func sessionsParameters(method, pattern string) []map[string]any {
+	if sessionsRawFileWrite(method, pattern) {
+		return []map[string]any{oas.Param("documents", "query", "Convert supported document uploads to Markdown beside the preserved original. Other file formats are stored unchanged. Omit to retain raw-write behavior.", false, oas.Obj("type", "string", "enum", oas.Enum("markdown")))}
+	}
 	if method == http.MethodGet && pattern == "/provider-profiles/{ref}/models" {
 		return []map[string]any{oas.Param("refresh", "query", "Refresh the upstream catalog now.", false, oas.Obj("type", "boolean"))}
 	}
@@ -508,7 +511,7 @@ func sessionsRequestBody(method, pattern string) (map[string]any, bool) {
 					"text", oas.Obj("type", "string", "minLength", 1),
 					"attachments", oas.Obj("type", "array", "maxItems", maxTurnAttachments,
 						"items", oas.Obj("type", "string"),
-						"description", "Ids of images stored with this session (POST /runs/{ref}/attachments), sent with text as one message. The engine encodes the message for the session's tool; a tool that takes no images refuses it. Not accepted with line, message or work_lease_fence."),
+						"description", "Ids of files stored with this session (POST /runs/{ref}/attachments), sent with text as one message. Documents reach the tool as Markdown; images retain native delivery and a tool that takes no images refuses them. Not accepted with line, message or work_lease_fence."),
 					"work_lease_fence", oas.Obj("type", "integer", "format", "int64", "minimum", 1),
 					"review_comment", oas.Obj("type", "object", "additionalProperties", false,
 						"required", []string{"path", "line", "side"},

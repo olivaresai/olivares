@@ -407,7 +407,7 @@ grep -q 'route/stall' <(sed -n '/screen(s), .* with findings/,$p' "${TMP}/walk3.
 echo "OK: console-walk tells its three answers apart — stream vs stall vs 404, and 'could not look' names where it looked."
 
 # ---------------------------------------------------------------------------
-# Leg 4 — SIGN-IN WAITS FOR SETUP TO FINISH (#3507).
+# Leg 4 — SIGN-IN WAITS FOR SETUP TO FINISH.
 #
 # The setup form submits with fetch and stays on the same document, so `networkidle`, already
 # reached, answered at once. On the nightly of 2026-10-28 the login step then found the setup
@@ -473,7 +473,7 @@ grep -q '^\[login\]' "${TMP}/walk4.log" \
 echo "OK: the walk waits for setup to finish before it signs in."
 
 # ---------------------------------------------------------------------------
-# Leg 5 — A REQUEST THAT DIED WITH ITS PAGE IS NOT A STALL ON THE NEXT SCREEN (#4200).
+# Leg 5 — A REQUEST THAT DIED WITH ITS PAGE IS NOT A STALL ON THE NEXT SCREEN.
 #
 # Playwright emits neither `requestfinished` nor `requestfailed` for a request that had no
 # response headers yet when its document went away, so the walk kept it in `inflight` and a

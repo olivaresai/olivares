@@ -65,7 +65,7 @@ lectura/escritura, el modo es `unknown` — el producto nunca fabrica una clasif
 
 El mapa de acceso es una capacidad entre muchas. El producto es una **plataforma modular**
 (en el espíritu de Grafana o Backstage): un motor más módulos más conectores, diseñada para
-que cualquier módulo se acople sin rearquitecturar el resto. Incluye **32 módulos** —
+que cualquier módulo se acople sin rearquitecturar el resto. Incluye **33 módulos** —
 inventario y sesiones en vivo, el mapa L/RW, orquestación de agentes (A2A, en desarrollo), gestión de MCP y
 de skills, identidad e identidad no humana, despliegue, conocimiento y contexto, seguridad y
 guardrails, gestión de modelos y proveedores, coste/FinOps, evals y un sandbox de pruebas,

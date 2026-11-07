@@ -5,7 +5,7 @@
 #
 # a repository gate unique leftover unique vs check-config-coverage.sh (named on
 # main, CHECK not in lint:addon-sets) and unique leftover unique vs
-# #1460. 0 CLEAN · 1 finding · 2 could not look.
+#. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

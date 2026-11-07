@@ -58,7 +58,7 @@ export function groupOf(s: UnifiedSession): WorkGroupId {
 }
 
 /**
- * Whether the person snoozed this session (#2480). The engine sends `snoozed_until` on a
+ * Whether the person snoozed this session. The engine sends `snoozed_until` on a
  * run only while that person's snooze is still to end, so its presence IS the rule: no
  * clock here, and the session comes back on the read after its moment.
  */
@@ -67,20 +67,20 @@ export function isSnoozed(s: Pick<UnifiedSession, 'runs'>): boolean {
 }
 
 /**
- * Whether the session is archived (#2795). Unlike a snooze it is the session's own mark,
+ * Whether the session is archived. Unlike a snooze it is the session's own mark,
  * the same for everyone who reads it; the rail folds it away the same way.
  */
 export function isArchived(s: Pick<UnifiedSession, 'runs'>): boolean {
   return s.runs.some((run) => !!run.archived_at)
 }
 
-/** Whether the session did something after the person last saw it (#2866). The engine
+/** Whether the session did something after the person last saw it. The engine
  * works it out per person, so it is a flag to read, not a time to compare here. */
 export function isUnread(s: Pick<UnifiedSession, 'runs'>): boolean {
   return s.runs.some((run) => run.unread === true)
 }
 
-/** Whether the person marked this session done (#2480): it is filed under Settled. */
+/** Whether the person marked this session done: it is filed under Settled. */
 export function isMarkedDone(s: Pick<UnifiedSession, 'runs'>): boolean {
   return s.runs.some((run) => run.done === true)
 }
@@ -97,7 +97,7 @@ export const WORKING_SET_PAGE_LIMIT = 200
  * How many sessions are Working. The ONE figure the Sessions header ("N working") and
  * the dashboard's Active agents card both print, so the card and the list cannot
  * disagree: it is the size of the Working section, and nothing else. A session the
- * person snoozed or marked done (#2480), or an archived one (#2795), is not in that
+ * person snoozed or marked done, or an archived one, is not in that
  * section, so it is not counted.
  */
 export function workingCount(sessions: readonly UnifiedSession[]): number {
@@ -128,18 +128,18 @@ function startedMs(s: UnifiedSession): number {
  * The rail, in reading order.
  *
  * PINNED FIRST, AND ABOVE EVERY SECTION. A person pins a session so it is always the
- * first thing in their list, whatever else is going on (#2130), so the pinned rows are
+ * first thing in their list, whatever else is going on, so the pinned rows are
  * their own section at the top, in the order they were pinned (the set's own order, the
  * engine's `pinned_at`). A pin does not hide what a row needs: the row keeps its state
  * badge, and an unpinned session that asks for attention is still the first of the
  * sections below. The other three keep the order the join produced, most recent
  * activity first, and a session is in exactly one section.
  *
- * THE PERSON'S OWN MARKS (#2480) come before every other rule, because they are what the
+ * THE PERSON'S OWN MARKS come before every other rule, because they are what the
  * person said about the row. A snoozed session leaves every section, a pinned one too, for
  * the Snoozed section at the end, which the rail keeps folded: "not in my list until then".
  * A session marked done is filed under Settled whatever it is doing, unless it is pinned,
- * which still keeps it first. An archived session (#2795) leaves every section before any
+ * which still keeps it first. An archived session leaves every section before any
  * of that, for the Archived section after Snoozed, folded the same way.
  *
  * Sections with no rows are RETURNED, empty. The rail draws only the ones that have rows,

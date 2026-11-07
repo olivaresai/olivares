@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE LEDGER PLACE (console Estate + Ledger, issue #2554): the tamper-evident ledger
+// THE LEDGER PLACE (console Estate + Ledger, issue): the tamper-evident ledger
 // an auditor expects to see. The query lives in the top bar as tokens over the audit API's
 // own filters (query.ts); under it a 48 px strip of entries per hour; then the entries as
 // sentences, grouped by session, the request that needs a person first; and the picked

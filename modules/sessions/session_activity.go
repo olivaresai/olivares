@@ -22,7 +22,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// What the session's tool is doing (#1861): the agents it spawned, its background
+// What the session's tool is doing: the agents it spawned, its background
 // tasks, the files it changed, its own task list and what its context holds. Each
 // item is a record the tool wrote in the transcript it keeps for the session;
 // the engine stores nothing of it and infers nothing beyond it, and reads it again

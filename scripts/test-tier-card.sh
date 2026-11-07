@@ -19,7 +19,7 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/tier-card.XXXXXX")"
 # vivir en el carril rápido bloqueaba el push de toda máquina con /tmp noexec.
 #
 # Es la misma clase que ya documentaron test-alias-image-digest.sh (2026-08-01) y
-# test-publish-enterprise-artifacts.sh (#1065). El nombre del respaldo usa el prefijo que
+# test-publish-enterprise-artifacts.sh. El nombre del respaldo usa el prefijo que
 # `.gitignore` ya cubre (`/.tmpexec.*`), para que un residuo nunca salga untracked.
 printf '#!/bin/sh\nexit 0\n' >"$TMP/.execprobe" && chmod +x "$TMP/.execprobe"
 if ! [ -x "$TMP/.execprobe" ]; then

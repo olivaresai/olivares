@@ -325,7 +325,7 @@ async function sendFirstMessage(
   const prompt = message.trim()
   if (!prompt) return
   const { note } = useSentTurns.getState()
-  // POST /runs answered waiting_approval (#500) or pending (the worktree's setup is
+  // POST /runs answered waiting_approval or pending (the worktree's setup is
   // still running): no child takes input yet. The message waits with the launch
   // instead of being refused by it.
   if (run.state === 'waiting_approval' || run.state === 'pending') {

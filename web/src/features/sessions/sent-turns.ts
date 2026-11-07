@@ -13,17 +13,17 @@ export interface SentTurn {
   text: string
   /** The attach `seq` of the newest frame the session had shown when this one was sent:
    * only a row a later frame started can be its echo. A seq never moves, where a row's
-   * place in the shown window does (review of #2855). Absent on a launch's first
+   * place in the shown window does (review of). Absent on a launch's first
    * message, which any row can echo. */
   after?: number
   /** How many rows of its words the session showed when it was sent. More of them now
    * means the tool showed it, even where the frame that did is gone: a Codex thread read
    * back from its store after a remount, or after the run left this node (review round 2
-   * of #2855). Absent with `after`. */
+   * of). Absent with `after`.*/
   shown?: number
   /** Why the engine did not take it; absent when it did. */
   refused?: string
-  /** Held until its launch is approved (#500) or its worktree setup ends, and the session runs; absent once sent. */
+  /** Held until its launch is approved or its worktree setup ends, and the session runs; absent once sent. */
   waiting?: boolean
 }
 
@@ -32,14 +32,20 @@ interface OwnedTurn extends SentTurn {
   partition: string
 }
 
-/** The sign-in and organization a note belongs to. Any credential change (a sign-out, a
- * sign-in, another person) moves the generation, so a note is never shown to anyone but
- * the session that started the run, in the organization it started in (review on
- * 3cf9f18a). */
+function partitionOf(sessionId: string | null, tenant: string | null): string {
+  return `${sessionId ?? ''}\n${tenant ?? ''}`
+}
+
+/** The session and organization a note belongs to. A session id is one sign-in (a sign-out,
+ * a sign-in or another person changes it), so a note is never shown to anyone but the
+ * session that started the run, in the organization it started in (review on 3cf9f18a).
+ * A renewal of the same session keeps its notes: its CSRF token moves, the session does
+ * not. */
 export function sentTurnsPartition(): string {
-  const generation = useSessionStore.getState().credentialGeneration
-  const tenant = useTenantStore.getState().activeTenant ?? ''
-  return `${generation}\n${tenant}`
+  return partitionOf(
+    useSessionStore.getState().sessionId,
+    useTenantStore.getState().activeTenant,
+  )
 }
 
 /** The first messages this console sent, by run, each with its owner. A tool
@@ -54,6 +60,11 @@ export const useSentTurns = create<{
   seen: Record<string, number>
   /** How many operator rows of each words each run's conversation showed, as of `seen`. */
   said: Record<string, Readonly<Record<string, number>>>
+  /** A held first message a session change dropped: the new session says so once, with no
+   * words of it. Set by that change, cleared by dismissDiscarded when the conversation
+   * shows it. */
+  discarded: boolean
+  dismissDiscarded: () => void
   see: (
     runRef: string,
     seq: number,
@@ -70,6 +81,8 @@ export const useSentTurns = create<{
   byRun: {},
   seen: {},
   said: {},
+  discarded: false,
+  dismissDiscarded: () => set({ discarded: false }),
   see: (runRef, seq, said) =>
     set((s) =>
       s.seen[runRef] === seq && s.said[runRef] === said
@@ -126,11 +139,21 @@ export const useSentTurns = create<{
   },
 }))
 
-// Every note is forgotten when the credential or the organization changes: a sign-out
-// leaves no person's words behind in this tab.
+// Every note is forgotten when the session or the organization changes: a sign-out leaves
+// no person's words behind in this tab. A session change that drops a held first message
+// leaves a word-free notice instead. A renewal of the same session keeps its notes.
 useSessionStore.subscribe((s, prev) => {
-  if (s.credentialGeneration !== prev.credentialGeneration)
-    useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
+  if (s.sessionId === prev.sessionId) return
+  const { byRun, discarded } = useSentTurns.getState()
+  const held = Object.values(byRun).some((turns) =>
+    turns.some((t) => t.waiting),
+  )
+  useSentTurns.setState({
+    byRun: {},
+    seen: {},
+    said: {},
+    discarded: discarded || held,
+  })
 })
 useTenantStore.subscribe((s, prev) => {
   if (s.activeTenant !== prev.activeTenant)
@@ -163,12 +186,12 @@ export function sentTurnsOf(runRef: string): readonly SentTurn[] | undefined {
 export function useRunSentTurns(
   runRef: string,
 ): readonly SentTurn[] | undefined {
-  const generation = useSessionStore((s) => s.credentialGeneration)
-  const tenant = useTenantStore((s) => s.activeTenant ?? '')
+  const sessionId = useSessionStore((s) => s.sessionId)
+  const tenant = useTenantStore((s) => s.activeTenant)
   const turns = useSentTurns((s) => s.byRun[runRef])
   return useMemo(
-    () => owned(turns, `${generation}\n${tenant}`),
-    [turns, generation, tenant],
+    () => owned(turns, partitionOf(sessionId, tenant)),
+    [turns, sessionId, tenant],
   )
 }
 

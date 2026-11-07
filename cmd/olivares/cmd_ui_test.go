@@ -21,7 +21,7 @@ import (
 
 // Every row of the main menu opens a screen on an engine that answers and a
 // person signed in to it. A row that only showed its command was a dead end
-// (#3911). "All commands" is the full reference and names `olivares --help`.
+// . "All commands" is the full reference and names `olivares --help`.
 func TestEveryMainMenuRowOpensAScreen(t *testing.T) {
 	e := newUIEngine(t)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

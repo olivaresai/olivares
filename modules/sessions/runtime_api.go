@@ -509,7 +509,7 @@ func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.M
 			out.HasMore, out.Cursor = page.HasMore, page.Cursor
 		}
 		// The caller's own pins (run_pin.go) mark their rows. The page's order is
-		// the published one; each client puts its pinned rows first (#2130).
+		// the published one; each client puts its pinned rows first.
 		pins, err := ownRunPinAts(r.Context(), sc, mc.Principal.Actor())
 		if err != nil {
 			return err
@@ -1219,12 +1219,34 @@ func (m *Module) handleRunInputWithImages(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusBadRequest, errorBody("attachments are not available on a session started by a work item"))
 		return
 	}
-	images, err := m.loadTurnImages(mc.Tenant, ref, body.Attachments, len(body.Text))
+	rec, err := m.loadRun(r.Context(), mc.Tenant, ref)
 	if err != nil {
 		writeRunErr(w, err)
 		return
 	}
-	if err := m.sendImageInput(r.Context(), mc.Tenant, ref, body.Text, images); err != nil {
+	// Resolve only the person's mentions, never @paths inside converted documents.
+	text, err := m.expandDocumentMentions(r.Context(), mc.Tenant, rec, body.Text)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	ids, text, err := m.documentAttachments(r.Context(), mc.Tenant, ref, body.Attachments, text)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	images, err := m.loadTurnImages(mc.Tenant, ref, ids, len(text))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	var sendErr error
+	if len(images) == 0 {
+		_, sendErr = m.sendTextInputAttempt(r.Context(), mc.Tenant, ref, text, false)
+	} else {
+		sendErr = m.sendImageInput(r.Context(), mc.Tenant, ref, text, images)
+	}
+	if err := sendErr; err != nil {
 		writeRuntimeControlErr(w, err)
 		return
 	}

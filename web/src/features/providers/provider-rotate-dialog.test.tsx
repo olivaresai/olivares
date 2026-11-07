@@ -12,7 +12,7 @@ vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ can: () => true, activeTenant: 'tenant', principal: null }),
 }))
 
-// The toast is hidden from assistive technology while the dialog is open (#2561):
+// The toast is hidden from assistive technology while the dialog is open:
 // the refusal is announced on the key field itself.
 it('announces a refused rotation on the key field', async () => {
   const user = userEvent.setup()

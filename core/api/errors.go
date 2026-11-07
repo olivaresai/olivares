@@ -39,7 +39,7 @@ var (
 )
 
 // forbiddenFor is errForbidden for a refusal whose missing permission is known
-// (#491). Status and code stay 403 "forbidden"; the message names the permission
+// . Status and code stay 403 "forbidden"; the message names the permission
 // and where it applies, so the caller knows what to ask for and of whom: an
 // organization admin, or the server's superadmin. The permission is the route's
 // own declaration, never derived from a row, so it discloses nothing about data;
@@ -177,7 +177,7 @@ func statusFor(err error) (int, string) {
 		// that exposes none). 501 honest seam, never a list without module kinds.
 		return http.StatusNotImplemented, "workspace_contents_unavailable"
 	case errors.Is(err, store.ErrAuditFilterUnavailable):
-		// #2750: ?tool and ?folder are facts of the sessions.run an entry targets; a
+		//: ?tool and ?folder are facts of the sessions.run an entry targets; a
 		// store without that entity cannot resolve them. 501 honest seam, never an
 		// empty page and never the unfiltered ledger.
 		return http.StatusNotImplemented, "audit_filter_unavailable"
@@ -604,7 +604,7 @@ func statusFor(err error) (int, string) {
 		// moduleerrors.go.
 		return http.StatusServiceUnavailable, "commit_outcome_unknown"
 	case errors.Is(err, store.ErrStoreUnavailable):
-		// #2774: the SQL backend could not be reached — a lost/refused
+		// : the SQL backend could not be reached — a lost/refused
 		// connection or a Postgres SQLSTATE class-08 "Connection Exception"
 		// (sqlstore generic.go wrapUnavailableErr). Nothing was decided or written,
 		// and the condition is transient, so it is 503 like not_leader (retryable)
@@ -771,7 +771,7 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		w.Header().Set("Cache-Control", "no-store")
 		// The cause goes to the log, never to the client: for a wrapped refusal such
 		// as setup_token_unreadable it is the only place the operator learns the
-		// file and the errno (#530).
+		// file and the errno.
 		level, message := slog.LevelInfo, "api: refused by design"
 		if code == "store_unavailable" {
 			// Not a refusal by design: the operator has to hear about a database

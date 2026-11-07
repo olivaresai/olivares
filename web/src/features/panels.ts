@@ -162,16 +162,16 @@ export interface CedarPolicyAuthoring {
 export interface DashboardCostPanels {
   readonly permitted: boolean
   readonly loading: boolean
-  /** Unread since Now dropped its report button (#2245); kept because the edition
+  /** Unread since Now dropped its report button; kept because the edition
    * overlay sets it, and removing it there and here is one change. */
   readonly hasActivity: boolean
   readonly headline: ReactNode
   /** Unread since Estate's home dropped its cost tile and the floor note under it
-   * (#2546): the day's cost is a clause of the summary sentence now. Kept because the
+   * the day's cost is a clause of the summary sentence now. Kept because the
    * edition overlay sets both, and removing them there and here is one change. */
   readonly homeTile: ReactNode
   readonly sections: ReactNode
-  /** Unread since #2546, with `homeTile` above. */
+  /** Unread since, with `homeTile` above.*/
   readonly floor: ReactNode
 }
 

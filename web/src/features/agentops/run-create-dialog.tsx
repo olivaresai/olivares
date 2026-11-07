@@ -809,7 +809,7 @@ export function RunCreateDialog({
                         title={p.profile_ref}
                       >
                         <ProviderAccent accent={p.accent} />
-                        {profileName(p) ?? p.profile_ref} · {p.driver}
+                        {profileName(p) ?? p.profile_ref} · {toolName(p.driver)}
                         {!p.operable && ` — ${t('create.profileNotOperable')}`}
                         <AccountUsage
                           usage={usageOf(p.profile_ref)}

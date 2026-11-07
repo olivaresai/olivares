@@ -53,7 +53,7 @@ func (s *Server) admit(ctx context.Context, req auth.Request, denial error, gove
 	var none auth.RouteAuthorizationWitness
 	if denial == nil || denial == errForbidden {
 		// A refusal must stay a refusal: a nil denial would read as an admission.
-		// The plain one names the permission it lacked (#491); a concealing
+		// The plain one names the permission it lacked; a concealing
 		// route's store.ErrNotFound is kept exactly as the route chose it.
 		denial = forbiddenFor(req.Permission, req.Tenant.IsSystem())
 	}

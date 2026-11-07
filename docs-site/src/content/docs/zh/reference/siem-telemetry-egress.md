@@ -153,6 +153,22 @@ API Activity（6003，默认）、Process Activity（1007）与 Datastore Activi
 测试套件中对照官方 1.8.0 类模式校验，而这些模式禁止未知字段——因此配置档之外的属性或不
 完整的配置档对象会让构建失败，而不是送到你面前。
 
+登录和认证因素变更记录在系统账本中。从系统账本导出（`olivares audit export --format ocsf --tenant ffffffff-ffff-ffff-ffff-ffffffffffff`）时，它们会送入 SIEM 的认证数据模型。HTTP 导出（`GET /v1/audit/export`）只读取组织账本。账本转发器将这些事件只推送一次，送到在系统租户上订阅的 SIEM 接收端，绝不送到某个组织的接收端。API 拒绝系统租户，因此只有持有数据目录的运维人员才能创建这样的接收端：`olivares eventing subscriptions create --tenant ffffffff-ffff-ffff-ffff-ffffffffffff --event-types audit.recorded --role admin --sink-kind splunk_hec --sink-cred-file <file>`。`auth.login`, `auth.external.login`, `sso.login`, `auth.login.failed`, `auth.login.blocked`, `auth.logout`, `sso.logout.backchannel`
+为 **Authentication（3002）**：Logon 或 Logoff，被拒绝的登录 `status_id` 为 2（Failure）。
+`auth.webauthn.register` 与 `auth.totp.activate` 为 **Account Change（3001）** 的 MFA Factor Enable；
+`auth.webauthn.unregister`、`auth.webauthn.recover` 与 `auth.totp.reset` 为 MFA Factor Disable；
+`auth.webauthn.rename` 与 `auth.totp.recovery_used` 为 Other。这两个 Identity & Access Management 类都带
+`user.name`：即账本的执行者；管理员重置他人认证因素时则为目标账户。它们不带 `ai_operation`
+配置档。完整性字段与其他事件一样保留在 `unmapped` 下，其他所有操作仍为 API Activity。
+`sso.logout.backchannel` 的用户是被登出的账户；账本中没有执行者的事件带 `unknown`。
+
+:::caution[变更：登录与认证因素变更不再是 API Activity]
+这 14 个操作此前以 API Activity（6003）导出，`activity_id` 为 99（Other，`type_uid` 600399）。
+现在导出为 Authentication（3002）与 Account Change（3001）。请更新所有按 `class_uid` 6003
+匹配它们的检测规则、已保存搜索和解析器。
+`auth.stepup.failed` 与 `auth.os_account.verify.refused` 仍为 API Activity，但 `status_id` 由 1 改为 2（Failure）。
+:::
+
 :::caution[AWS Security Lake 仅接受 OCSF ≤ 1.3]
 Security Lake 自定义源的上限是 **Parquet 格式的 OCSF 1.3**，因此 1.8.0 的 `ai_operation`
 事件无法原样落地（2026-07-24 核对）。在 1.3 降级输出器出现之前，请自行做转换后再路由到

@@ -89,7 +89,7 @@ fi
 has -Eq '^\| \[Cost & AI FinOps\][^|]*\| live \|' "$OVERVIEW" \
   || fail "overview.md row XI (finops) must keep Actuate 'live' — budget enforcement denies at the cap with no provisioning (C3)"
 
-# ---- No pipe into a shell (#585) ----------------------------------------------
+# ---- No pipe into a shell ----------------------------------------------
 # security-hardening.md and verify-a-release.md say "Never `curl | bash`": download, verify,
 # then run. No docs-site page may pipe a download into a shell, and INSTALL.md and the READMEs
 # may not pipe a branch head (unsigned, mutable) into one. INSTALL.md keeps its generic
@@ -275,7 +275,7 @@ if [ "$floor" -lt 3 ]; then
   # tampoco la caza: mide obsolescencia, no afirmaciones. Un gate que dice «3072 ficheros» y sólo
   # sabe leer uno de siete idiomas etiqueta como cubierto lo que no mira.
   #
-  # Las seis redacciones salen del PR que las retiro (#1047), no de una traduccion inventada aqui.
+  # Las seis redacciones salen del PR que las retiro, no de una traduccion inventada aqui.
   # ⚠ Y ESTO NO ES COMPLETO POR CONSTRUCCION: una traduccion futura puede decirlo de otra forma.
   # Es un suelo comprobado, no un techo; el techo seria comparar SIGNIFICADO, que ningun grep hace.
   if has -rniE 'post.?review by a third|third approver|approval (from|by) a third|durch einen dritten|por un tercero|par un troisième|三人目|由第三人|третьим лицом|третьего' \

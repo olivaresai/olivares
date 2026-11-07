@@ -252,7 +252,7 @@ green "a justified #nosec suppression still passes" "sast: clean"
 # ------------------------------------------------------------ --packages rows
 #
 # Why they exist: the pre-push hook runs `sast.sh --packages` over the packages a push changes
-# (#2313: four G204 sites first met the gate in a full CI dispatch, because nothing earlier
+# (: four G204 sites first met the gate in a full CI dispatch, because nothing earlier
 # ran it). One module, three packages: a has a finding, b is clean, c is a multi-line call whose
 # justification sits on the line ABOVE the statement — the form the repository uses for a call
 # gosec cites by its first line.

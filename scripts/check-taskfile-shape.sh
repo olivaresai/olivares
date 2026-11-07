@@ -19,8 +19,8 @@
 # 0 limpio · 1 hallazgo · 2 NO HE PODIDO MIRAR.
 #
 # La medida que lo pedia: resolviendo siete conflictos del Taskfile en un solo lote, «conservar
-# ambos lados» produjo (a) una tarea RENOMBRADA por #1387 que sobrevivio dos veces, la vieja
-# mutilada, y (b) una `desc` duplicada de #1308 que hizo que `task` rechazara el fichero entero.
+# ambos lados» produjo (a) una tarea RENOMBRADA por que sobrevivio dos veces, la vieja
+# mutilada, y (b) una `desc` duplicada de que hizo que `task` rechazara el fichero entero.
 # Ninguna de las dos se ve leyendo el hunk.
 set -uo pipefail
 export LC_ALL=C

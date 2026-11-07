@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE TOP BAR'S SEARCH, OWNED BY A PLACE (console Ledger, issue #2554). The top bar shows
+// THE TOP BAR'S SEARCH, OWNED BY A PLACE (console Ledger, issue). The top bar shows
 // search with ⌘K everywhere; a place whose list is a query (the Ledger) declares its own
 // field by rendering `<TopbarSearch>`, and the frame draws it where search was, through a
 // portal, so the field's state stays the page's. The same shape as the side panel: the

@@ -26,7 +26,7 @@ import (
 // OpenTelemetry GenAI semantic-convention attribute keys (status: Development).
 // Verified verbatim against the dedicated open-telemetry/semantic-conventions-genai
 // repo (docs/gen-ai/gen-ai-spans.md), the home these conventions moved to after
-// semconv v1.42.0 (2026-06-12, #3696) deprecated and REMOVED gen_ai.* from the main
+// semconv v1.42.0 (2026-06-12,) deprecated and REMOVED gen_ai.* from the main
 // semantic-conventions repo; re-verified at main@c321d7e on 2026-07-05.
 // gen_ai.provider.name REPLACED the deprecated gen_ai.system. NOTE the cache-token
 // keys use DOTS before input_tokens (gen_ai.usage.cache_read.input_tokens) — the
@@ -120,7 +120,7 @@ type genAIInstruments struct {
 	latestUsage *genAILatestUsage
 }
 
-// genAILatestUsage are the pending-form per-tier token counters (#374).
+// genAILatestUsage are the pending-form per-tier token counters.
 type genAILatestUsage struct {
 	input      metric.Int64Counter
 	output     metric.Int64Counter

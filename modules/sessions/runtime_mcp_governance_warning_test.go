@@ -50,7 +50,7 @@ func TestRuntimeRunReportsMCPGovernanceByDriver(t *testing.T) {
 			}
 			configHome := t.TempDir()
 			if driver == providerDriverOpenCode {
-				// An own-login OpenCode launch needs a model to know its hosts (#3094).
+				// An own-login OpenCode launch needs a model to know its hosts.
 				if err := os.WriteFile(filepath.Join(configHome, "opencode.json"), []byte(`{"model":"opencode/big-pickle"}`), 0o600); err != nil {
 					t.Fatal(err)
 				}

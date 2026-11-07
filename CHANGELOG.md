@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.7`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.8`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.7`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.8`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.7<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.8<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,33 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.8] - 2026-11-07
+
+### Changed
+
+- **Breaking: Business OCSF export of sign-ins and factor changes.** The export of the system ledger (`olivares audit export --format ocsf --tenant <system tenant ID>`) now sends `auth.login`, `auth.external.login`, `sso.login`, `auth.login.failed`, `auth.login.blocked`, `auth.logout` and `sso.logout.backchannel` as Authentication (3002), and the passkey and TOTP factor actions as Account Change (3001), instead of API Activity (6003, `type_uid` 600399). Update detections keyed on `class_uid` 6003 for these actions. The HTTP export and the ledger forwarder read organization ledgers only and do not carry these actions yet. `auth.stepup.failed` and `auth.os_account.verify.refused` stay API Activity, with `status_id` 2 (Failure) instead of 1.
+
+- Add-ons can reserve engine-owned secret names so operators cannot overwrite or delete those keys.
+
+### Fixed
+
+- The session composer keeps model and effort choices usable before the tool reports a model, shows the tool default, and avoids unknown access labels.
+- Starting a session requires choosing a folder or explicitly choosing a private session folder; folderless sessions hide unavailable Changes, Files and Terminal tabs.
+- New sessions let you choose a supported model and effort before sending the first message.
+- Registered folders show their names, including My files, in the folder picker and session header instead of storage paths.
+- Model selection continues to show readable model names rather than raw model identifiers.
+- Personal session folders are scoped to their organization instead of reusing an older registration from another organization.
+- Approving or denying a command refreshes the composer and session list without requiring a page reload.
+- Release sources omit unrelated issue references from comments and displayed text.
+- Local appliance setup refuses conflicting cloud-init ownership and unsupported static network settings.
+- New sessions created with different access, model or effort keep the current folder and show readable access labels.
+- OpenCode and Gemini installation keeps the approved version when an upstream release channel changes before installation.
+- The Appliance Console starts after first-boot certificate creation so it can serve HTTPS on a fresh installation.
+- The Appliance Repair Console can request power operations while preserving the required operation locks.
+- Appliance first boot applies local host settings when no cloud-init seed is present.
+- Anaconda Server and GNOME installations can defer creation of a missing administrator to first boot and support native credential recovery.
+- Changing sessions warns when a first message waiting for approval was not sent, without retaining its text.
 
 ## [0.7] - 2026-11-06
 

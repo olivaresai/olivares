@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// #2888: a session on OpenCode's own login got none of the record-bound switches.
+// : a session on OpenCode's own login got none of the record-bound switches.
 // Measured on 1.19.4 behind a refusing proxy, one turn with a fixture key: the own
 // login reached models.opencode.ai, opencode.ai and registry.npmjs.org (ChatGPT:
 // chatgpt.com instead of opencode.ai). With the switches below and enabled_providers
@@ -18,7 +18,7 @@ import (
 // The model catalog fetch stays on: the model picker lists what that catalog names.
 // npm_config_offline stays off: OpenCode's shell runs the agent's commands with its
 // own environment, so it would make the agent's npm install fail offline (review of
-// #3053, measured: ENOTCACHED).
+// , measured: ENOTCACHED).
 func TestOpenCodeOwnLoginGetsTheSwitchesThatNeedNoRecord(t *testing.T) {
 	for _, tc := range []struct{ model, provider string }{
 		{"opencode/glm-5.3-flash-free", "opencode"},

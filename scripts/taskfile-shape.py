@@ -147,7 +147,7 @@ def por_indentacion():
 
 # ⛔ HUECO CERRADO EL 2026-08-21. Este guion contaba la forma de las TAREAS y no veia una clave
 #    DUPLICADA DENTRO de una tarea. La union mecanica de Taskfile.yml las produce: al integrar
-#    #1308 en el lote 46, `lint:c13-06-canon-proposals:selftest` acabo con DOS `desc:`, cada una
+# en el lote 46, `lint:c13-06-canon-proposals:selftest` acabo con DOS `desc:`, cada una
 #    diciendo algo distinto y util.
 #
 #    Lo grave es CUANDO se caza: PyYAML con carga permisiva no se queja, mi conteo de claves de

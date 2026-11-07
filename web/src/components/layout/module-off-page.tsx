@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE PAGE OF A VIEW WHOSE MODULE IS OFF. Navigation folds such a view away (#2240); its
+// THE PAGE OF A VIEW WHOSE MODULE IS OFF. Navigation folds such a view away; its
 // address, a bookmark or a link from another page, lands here, and the page is calm: the
 // view's icon, its name, one sentence of what it does and one
 // action. It is neither an error nor a refusal (that is a permission, and stays hidden).

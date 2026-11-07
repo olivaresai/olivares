@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# VER-02: 16/16 NOT_RUN. Hub-safe HOLD. Overlay remasure stays on #1117.
+# VER-02: 16/16 NOT_RUN. Hub-safe HOLD. Overlay remasure stays on.
 # 0 CLEAN · 1 finding · 2 LOOK.
 
 set -euo pipefail

@@ -169,7 +169,7 @@ export function RunActions({
     return null
 
   // ONE STOP QUESTION FOR BOTH FORMS: the header's icon and the card's labelled button
-  // both ask first while the person's Stop setting says so (#2549).
+  // both ask first while the person's Stop setting says so.
   const stopConfirm = (
     <ConfirmDialog
       open={confirm === 'stop'}
@@ -370,7 +370,7 @@ export function RunActions({
 }
 
 /**
- * Delete, asked first: the session card's button and a session row's menu (#2795). A
+ * Delete, asked first: the session card's button and a session row's menu. A
  * stopped or failed session is cleaned up first: the server deletes only a cleaned
  * record, and "Delete" is one action for the person asking.
  */

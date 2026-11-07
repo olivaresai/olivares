@@ -27,7 +27,7 @@ export interface SettingsSection {
   icon: LucideIcon
   adminOnly: boolean
   /** The console page this section hosts (a registry id): Settings shows that page's own
-   * element inside itself, and offers the section only where the page opens (#2905). */
+   * element inside itself, and offers the section only where the page opens. */
   view?: string
 }
 

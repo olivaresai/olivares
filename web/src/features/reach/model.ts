@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The Reach projection (issue #2553): the access map read as "what the tools reach".
+// The Reach projection (issue): the access map read as "what the tools reach".
 // Pure function over the engine's EXISTING reads — the access-map graph, the agents
 // list, the live-sessions page and the pending approval queue — no new mechanism,
 // no fetching here.

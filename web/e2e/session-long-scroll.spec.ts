@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A LONG CONVERSATION HOLDS STILL WHERE IT IS SCROLLED (#4128), against a live seeded engine whose
+// A LONG CONVERSATION HOLDS STILL WHERE IT IS SCROLLED, against a live seeded engine whose
 // child is the fixture driver, over the long conversation in the tool's own transcript. The list
 // renders only the rows near the screen; at a few positions the browser's scroll anchoring and the
 // list's own correction moved the view against each other every frame, and a click there never

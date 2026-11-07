@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// One provider destination (#3388): provider keys live in AI tools. Models is
+// One provider destination: provider keys live in AI tools. Models is
 // called Models and keeps no "Provider keys" tab of its own; the workspace residency that
 // tab also carried stays in Models, under Governance.
 import { describe, expect, it, vi } from 'vitest'

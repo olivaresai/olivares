@@ -421,10 +421,10 @@ describe('RunCreateDialog — a first message and Start', () => {
     expect(screen.getByLabelText('Launch identity')).toHaveValue('')
     expect(screen.getByLabelText('Name')).toHaveValue('')
     expect(screen.getByLabelText('Transport')).toHaveTextContent(
-      'Governed (stream-json)',
+      'Governed by Olivares',
     )
     expect(screen.getByLabelText('Permission mode')).toHaveTextContent(
-      'default',
+      'Supervised',
     )
     expect(screen.getByLabelText('Folder')).toHaveTextContent(
       'Default (My files)',

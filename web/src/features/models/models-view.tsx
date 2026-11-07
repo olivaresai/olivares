@@ -197,7 +197,7 @@ function ModelAccessTab() {
   const { activeTenant, can } = useAuth()
 
   // ⛔ DOS ARREGLOS EN LA MISMA CONSULTA, y los dos hacen falta:
-  //    1 · la clave NOMBRA AL INQUILINO (es también el cambio de la PR #1544, que va aparte:
+  //    1 · la clave NOMBRA AL INQUILINO (es también el cambio de la PR, que va aparte:
   //        aquí se escribe la forma FINAL para que ninguna de las dos ramas pierda la otra);
   //    2 · se pide el techo y se declara el recorte. Ésta es la pantalla que decide QUIÉN PUEDE
   //        USAR QUÉ MODELO: un `allow` CONFINA y un `forbid` RESTA, y el conjunto `confinados`
@@ -563,7 +563,7 @@ export function ModelsView() {
             </TabsContent>
 
             {/* Where each workspace's data may be processed. It rode the provider keys tab
-                for its permission; the keys moved to AI tools (#3388) and the residency
+                for its permission; the keys moved to AI tools and the residency
                 stays with model governance. */}
             <TabsContent value="residency" className="flex flex-col gap-4">
               <ResidencyCard />

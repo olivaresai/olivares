@@ -108,7 +108,7 @@ beforeEach(() => {
   messageRights.writable = true
   attachStatus.value = 'open'
   onFrameRef.current = null
-  useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
+  useSentTurns.setState({ byRun: {}, seen: {}, said: {}, discarded: false })
 })
 
 describe('SessionConversation', () => {
@@ -431,7 +431,7 @@ describe('SessionConversation', () => {
     expect(screen.getAllByText('README.md').length).toBeGreaterThan(0)
   })
 
-  // #3135: a file tool's path is shown whole through the shared PathText, in the row and in
+  //: a file tool's path is shown whole through the shared PathText, in the row and in
   // its arguments, never cut into a string first (the full path was nowhere on the page).
   it('shows a file tool path whole through PathText, in the row and in its arguments', async () => {
     const long =
@@ -471,7 +471,7 @@ describe('SessionConversation', () => {
     expect(row.querySelector('summary button')).toBeNull()
   })
 
-  // #3135: while the call runs, the live line names its path through PathText too, so the
+  //: while the call runs, the live line names its path through PathText too, so the
   // file name is not lost at the end of a long sentence.
   it('names a running file tool path whole through PathText in the live line', async () => {
     const long =
@@ -505,7 +505,7 @@ describe('SessionConversation', () => {
     expect(live.querySelector('button')).toBeNull()
   })
 
-  // #3135 round 5: a running search names its folder through PathText too, so a long
+  // round 5: a running search names its folder through PathText too, so a long
   // folder keeps its end in the live line (Grep, Glob and LS share the search words).
   it.each([
     ['Grep', { pattern: 'TODO', path: '' }, /^Searching TODO · /],
@@ -546,7 +546,7 @@ describe('SessionConversation', () => {
     },
   )
 
-  // #3135 round 6: a search pattern is the agent's text, never markup. It shows exactly as
+  // round 6: a search pattern is the agent's text, never markup. It shows exactly as
   // typed beside the path; only the path fills the PathText slot.
   it.each(['TODO', '<strong>x</strong>', '<path/>', '{{lead}}'])(
     'shows the search pattern %s as plain text in the live line',
@@ -978,12 +978,40 @@ describe('SessionConversation', () => {
     wrap()
     expect(await screen.findByText('Say hi.')).toBeInTheDocument()
     act(() => {
-      useSessionStore.setState((s) => ({
-        credentialGeneration: s.credentialGeneration + 1,
-      }))
+      useSessionStore.getState().setSession({
+        csrfToken: 'csrf-other',
+        sessionId: 'sess-other',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      })
     })
     expect(screen.queryByText('Say hi.')).toBeNull()
     expect(useSentTurns.getState().byRun).toEqual({})
+  })
+
+  //: a held first message a session change dropped says so, with none of its words.
+  it('says a held first message was not sent after a session change, once, with none of its words', async () => {
+    useSentTurns.getState().note(sentTurnsPartition(), 'run_1', {
+      text: 'Say hi.',
+      waiting: true,
+    })
+    wrap()
+    expect(await screen.findByText('Say hi.')).toBeInTheDocument()
+    act(() => {
+      useSessionStore.setState({ sessionId: 'another-session' })
+    })
+    expect(
+      await screen.findByText(
+        'A message typed before the session changed was not sent. Type it again.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Say hi.')).toBeNull()
+    expect(document.body.textContent).not.toContain('Say hi.')
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(
+      screen.queryByText(
+        'A message typed before the session changed was not sent. Type it again.',
+      ),
+    ).toBeNull()
   })
 
   it('shows a sent first message once: until the tool shows it, then as the tool does', async () => {
@@ -1481,9 +1509,9 @@ it('shows an initial attach failure while a sent turn is pending', async () => {
   expect(screen.queryByText('No messages yet.')).toBeNull()
 })
 
-// #1784: the released 0.1 painted two "thinking tokens" rows before the answer and an
+//: the released 0.1 painted two "thinking tokens" rows before the answer and an
 // "allowed · five hour" line after it. They are the tool's bookkeeping, not turns.
-describe('SessionConversation — the tool’s bookkeeping stays out of the thread (#1784)', () => {
+describe('SessionConversation — the tool’s bookkeeping stays out of the thread', () => {
   const thinking = (estimated: number) =>
     JSON.stringify({
       type: 'system',
@@ -1563,11 +1591,11 @@ describe('SessionConversation — the tool’s bookkeeping stays out of the thre
   })
 })
 
-// #1784: the released 0.1 painted the assistant's answer as the characters it was sent in
+//: the released 0.1 painted the assistant's answer as the characters it was sent in
 // ("- **Identify clients:** ..."). The reply is markdown: lists, code and bold are shown as
 // such. It is read into elements, never into HTML, because what the model says can be
 // shaped by what it read.
-describe('SessionConversation — the assistant reply is rendered markdown (#1784)', () => {
+describe('SessionConversation — the assistant reply is rendered markdown', () => {
   const answer = (text: string) =>
     JSON.stringify({
       type: 'assistant',
@@ -1816,7 +1844,7 @@ describe('SessionConversation and the Activity tab', () => {
   })
 })
 
-// #2129: the person's messages as a rail beside the thread. The index is the engine's
+//: the person's messages as a rail beside the thread. The index is the engine's
 // (the transcript the tool keeps); a mark reaches the row of the thread that message is.
 describe('SessionConversation — the message navigator', () => {
   beforeEach(() => useTenantStore.setState({ activeTenant: 'demo' }))
@@ -1875,7 +1903,7 @@ describe('SessionConversation — the message navigator', () => {
     const marks = await screen.findAllByTestId('message-mark')
     expect(marks).toHaveLength(2)
     // The rail sits in the column's left padding, away from a message's Copy at the
-    // right edge (#2856): the column keeps its width.
+    // right edge: the column keeps its width.
     expect(screen.getByTestId('message-rail')).toHaveClass('left-0')
     expect(
       document.querySelector('[data-slot="conversation-column"]'),
@@ -1935,7 +1963,7 @@ describe('SessionConversation — the message navigator', () => {
     expect(screen.queryByTestId('message-problem')).not.toBeInTheDocument()
   })
 
-  // #2258: the engine answers 422 for a tool that keeps its record another way, and the
+  //: the engine answers 422 for a tool that keeps its record another way, and the
   // browser logs every failed request as a console error, so the first-hour journey on an
   // OpenCode session failed on a request the console never needed to make.
   it('does not ask a tool that keeps no transcript for its messages', async () => {
@@ -2135,7 +2163,7 @@ describe('SessionConversation — a sent message', () => {
     ).toHaveLength(2)
   })
 
-  // Review round 2 of #2855: a Codex view that remounts restores the stored thread first,
+  // Review round 2 of: a Codex view that remounts restores the stored thread first,
   // then the ring replays the same items (seq 1-6 here: two turns of message, answer, end).
   const codexFrames = nativeHistory.turns.flatMap((turn) => [
     ...turn.items.map((item) =>
@@ -2444,7 +2472,7 @@ describe('SessionConversation — copying a message, review', () => {
     const row = screen
       .getAllByTestId('conversation-item')
       .find((el) => el.getAttribute('data-kind') === 'operator')!
-    // the row holds only its words: Inspect sits beside it, not in it (review of #2856)
+    // the row holds only its words: Inspect sits beside it, not in it (review of)
     expect(row).toHaveTextContent(/^Look up the readme$/)
     within(row.closest('li')!)
       .getByRole('button', { name: /inspect/i })

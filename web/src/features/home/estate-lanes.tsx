@@ -7,7 +7,7 @@ import { Swimlane, type SwimlaneProps } from './swimlane'
 import { FLEET_SESSIONS } from './swimlane-model'
 
 /** The last hour (Usage › Timeline): one swimlane per session, or, past FLEET_SESSIONS
- * live sessions, the fleet panel a build supplies (#2565). Only one of the two mounts, so
+ * live sessions, the fleet panel a build supplies. Only one of the two mounts, so
  * the fleet does not read every session's hour. */
 export function EstateLanes(props: SwimlaneProps) {
   const Fleet = PANEL_EXTENSIONS.estateFleet

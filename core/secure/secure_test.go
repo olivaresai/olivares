@@ -41,7 +41,7 @@ func TestSetupTokenLifecycle(t *testing.T) {
 	}
 }
 
-// Check must not read "could not look" as "no token" (#513), while Exists keeps its
+// Check must not read "could not look" as "no token", while Exists keeps its
 // fail-closed answer for the engine: false for anything that is not a readable
 // regular file.
 func TestSetupTokenCheckSeparatesAbsentFromUnknown(t *testing.T) {

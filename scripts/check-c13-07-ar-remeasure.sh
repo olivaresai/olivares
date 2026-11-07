@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# C13-07 unique leftover unique vs original OPEN #1027.
+# C13-07 unique leftover unique vs original OPEN.
 # Independently dated 2026-08-21. Does not copy check-c13-07-holds.sh.
-# Unique vs leftover #1424 and vs check-c13-07-growth-slugs.sh (day_one ∩ growth).
+# Unique vs leftover and vs check-c13-07-growth-slugs.sh (day_one ∩ growth).
 # 0 CLEAN · 1 finding · 2 LOOK.
 #
 # ⛔ CAMINO SIN PyYAML, misma clase que taskfile-shape.py:14-27 y

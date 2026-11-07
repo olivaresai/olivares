@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test'
 const setupToken = process.env.PLAYWRIGHT_SETUP_TOKEN ?? ''
 
 // Setup consumes a one-time token: scripts/web-e2e.sh gives this spec its own engine.
-test('no Settings link lands on a not-enabled notice on a fresh installation (#474)', async ({
+test('no Settings link lands on a not-enabled notice on a fresh installation', async ({
   page,
 }) => {
   test.skip(!setupToken, 'Run via scripts/web-e2e.sh with a fresh engine')

@@ -43,7 +43,7 @@ export default function CapabilitiesView() {
   const canWriteConfig = can('capabilities:config:write')
   const canReadConfig = can('capabilities:config:read')
   const extensionTabs = useOfferedPanels(PANEL_EXTENSIONS.capabilitiesTabs)
-  // The pack catalog is the skills module's part of this page (#3388): it follows that
+  // The pack catalog is the skills module's part of this page: it follows that
   // module's switch, as its own page did.
   const skillsOn = useModuleOn('skills')
 
@@ -322,7 +322,7 @@ export default function CapabilitiesView() {
         </TabsList>
 
         <TabsContent value="servers" className="flex flex-col gap-4">
-          {/* ONE MCP SERVERS DESTINATION (#3388): a server is added, tested and enabled
+          {/* ONE MCP SERVERS DESTINATION: a server is added, tested and enabled
               here (the tenant gateway, a tenant administrator's), above the servers the
               inventory discovered. */}
           {can('tenant:admin') ? <MCPGatewayTab titled={false} /> : null}
@@ -333,7 +333,7 @@ export default function CapabilitiesView() {
             query={servers}
             // ⛔ CLAVE PROPIA, NO LA COMPARTIDA. La compartida dice «Loaded {{n}} rows» y esta
             //    pantalla enumera SERVIDORES: `servers.truncated` existe en los siete idiomas y
-            //    estaba muerta. La perdi yo al integrar #1651 el 2026-08-29 —resolvi la vista al
+            //    estaba muerta. La perdi yo al integrar el 2026-08-29 —resolvi la vista al
             //    lado de main y el testigo al de la rama—, y el par dejo de casar: el test busca
             //    «servers; there are more» y la nota generica dice «rows». Sus hermanas `tools` y
             //    `skills` ya usan la suya; servers era la unica excepcion.
@@ -409,7 +409,7 @@ export default function CapabilitiesView() {
         ))}
 
         <TabsContent value="skills" className="flex flex-col gap-4">
-          {/* ONE SKILLS DESTINATION (#3388): the pack catalog (install, open, assign) for a
+          {/* ONE SKILLS DESTINATION: the pack catalog (install, open, assign) for a
               skills reader, above the skills the inventory found. */}
           {skillsOn && can('skills:catalog:read') ? (
             <SkillsView titled={false} />

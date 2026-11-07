@@ -398,7 +398,7 @@ function LiveConversationLine({
       </div>
     )
   }
-  // The assistant's reply is markdown (#1784): shown as the session conversation shows it.
+  // The assistant's reply is markdown: shown as the session conversation shows it.
   if (item.kind === 'assistant')
     return (
       <div

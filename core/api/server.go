@@ -2197,7 +2197,7 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				if ref.ConcealDeniedAsNotFound {
 					cr.s.writeError(w, r, errEntityAuthorizationUnavailable)
 				} else {
-					// Deny-closed answers exactly as a denial of perm does (#491).
+					// Deny-closed answers exactly as a denial of perm does.
 					cr.s.writeError(w, r, forbiddenFor(perm, false))
 				}
 				return

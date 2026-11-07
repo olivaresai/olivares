@@ -54,7 +54,7 @@
     "cleaned": "Cleaned"
   },
   "transport": {
-    "stream-json": "Governed (stream-json)",
+    "stream-json": "Governed by Olivares",
     "remote-control": "Remote-control",
     "streamJsonHint": "Bidirectional NDJSON bridged and governed in full by Olivares.",
     "remoteControlHint": "Lifecycle only — I/O is relayed to Anthropic’s cloud, so it cannot be shown here."
@@ -65,12 +65,12 @@
     "sandbox": "Sandbox"
   },
   "permissionMode": {
-    "default": "default",
-    "acceptEdits": "acceptEdits",
-    "plan": "plan",
-    "auto": "auto",
-    "dontAsk": "dontAsk",
-    "bypassPermissions": "bypassPermissions"
+    "default": "Supervised",
+    "acceptEdits": "Auto-accept edits",
+    "plan": "Read only",
+    "auto": "Auto",
+    "dontAsk": "Runs allowed tools without asking",
+    "bypassPermissions": "Full"
   },
   "effort": {
     "low": "Low",
@@ -1057,16 +1057,16 @@
     }
   },
   "attach": {
-    "add": "Attach an image",
-    "tray": "Attached images",
+    "add": "Attach a file",
+    "tray": "Attached files",
     "remove": "Remove {{name}}",
     "uploading": "Storing…",
     "pasted": "Pasted image",
     "failed": "{{name}} was not attached: {{reason}}",
-    "notImage": "it is not a PNG, JPEG, WebP or GIF image",
+    "notImage": "this file format is not supported",
     "tooLarge": "it is {{size}} MB and the limit is {{limit}} MB",
-    "tooMany": "a message takes up to {{count}} images",
-    "notStored": "the image could not be stored",
+    "tooMany": "a message takes up to {{count}} files",
+    "notStored": "the file could not be stored",
     "sent": "Attached images",
     "imageN": "Image {{n}}",
     "open": "Open {{name}} full size",

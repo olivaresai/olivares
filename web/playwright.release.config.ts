@@ -15,7 +15,7 @@ export default defineConfig({
   retries: 0,
   forbidOnly: true,
   timeout: 180_000,
-  // Wait for readiness, never a fixed 5 s: a slower host is not a broken page (#1177).
+  // Wait for readiness, never a fixed 5 s: a slower host is not a broken page.
   expect: { timeout: READY_MS },
   // Playwright clears this directory at startup. Container identities live above it.
   outputDir: join(

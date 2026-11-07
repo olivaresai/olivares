@@ -35,7 +35,7 @@
 # targets and examples too, so they are in the same universe.
 #
 # THE PACKAGE UNIVERSE is enumerated module by module, because `go test ./...` in a
-# workspace only covers the CURRENT module (golang/go#50745) — the same reason
+# workspace only covers the CURRENT module (golang/go) — the same reason
 # scripts/go-work-each.sh exists. Only packages WITH tests are listed: a package without
 # tests contributes no coverage and only lengthens the command line.
 #

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE PERSON'S OWN MARKS AS MENU ITEMS (#2480, #2866): unread, snooze and done. The thread
+// THE PERSON'S OWN MARKS AS MENU ITEMS: unread, snooze and done. The thread
 // header's menu and the session row's menu both render this, over the one hook that sends
 // them (`use-session-marks.ts`), so the two menus cannot say different things.
 import {
@@ -22,7 +22,7 @@ import './i18n'
 
 const HOUR_MS = 3_600_000
 
-/** The moments a snooze offers, from now (#2480). The CLI takes any duration or time. */
+/** The moments a snooze offers, from now. The CLI takes any duration or time. */
 const SNOOZE_FOR = [
   { label: 'rail.snoozeHour', ms: HOUR_MS },
   { label: 'rail.snoozeDay', ms: 24 * HOUR_MS },

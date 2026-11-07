@@ -4,7 +4,7 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # Unique leftover unique vs check-json-decoders.sh (named on main,
-# CHECK not in lint:addon-sets) and unique leftover unique vs #1461.
+# CHECK not in lint:addon-sets) and unique leftover unique vs.
 # 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail

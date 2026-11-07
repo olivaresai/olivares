@@ -13,7 +13,7 @@ import (
 )
 
 // A tool that fails before its prompt must not offer the endpoint in its error
-// as the sign-in page (#828). Exercise both streams through the real reader.
+// as the sign-in page. Exercise both streams through the real reader.
 func TestSignInErrorURLIsNotTheSignInLink(t *testing.T) {
 	const reason = "Error logging in with device code: error sending request for url (https://auth.openai.com/api/accounts/deviceauth/usercode)"
 	for _, stream := range []string{"stdout", "stderr"} {
@@ -73,7 +73,7 @@ func TestSignInPromptAfterAnErrorKeepsItsOwnLinkAndCode(t *testing.T) {
 	}
 }
 
-// The login now gets the host's proxy (#547), whose URL can carry its
+// The login now gets the host's proxy, whose URL can carry its
 // credential. A tool that names that proxy before its link must not make it the
 // sign-in link the console shows: the link is the first one without userinfo.
 func TestTheSignInLinkIsNeverAProxyWithItsCredential(t *testing.T) {

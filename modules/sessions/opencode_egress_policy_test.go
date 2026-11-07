@@ -14,8 +14,8 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// #2888 part 2: an OpenCode session reaches only its provider's hosts. Measured on
-// 1.19.4 behind a refusing proxy (the switches of #3053 on): a record-bound launch
+// part 2: an OpenCode session reaches only its provider's hosts. Measured on
+// 1.19.4 behind a refusing proxy (the switches of on): a record-bound launch
 // reaches only its record's endpoint; the own login on OpenCode Zen or Go reaches
 // opencode.ai, on ChatGPT chatgpt.com and auth.openai.com (an expired token is
 // refreshed there), and every own login reads OpenCode's catalog at models.opencode.ai.
@@ -53,11 +53,11 @@ func TestOpenCodeSessionsAreHeldToTheirProviderHosts(t *testing.T) {
 				t.Fatalf("policy = providers %v public %v, want %v %v", spec.NetworkPolicy.Providers, spec.NetworkPolicy.PublicProviders, tc.providers, tc.more)
 			}
 			// The own login's hosts are public: a resolver that answers one of them with a
-			// loopback or private address does not open that address (#3082 review).
+			// loopback or private address does not open that address ( review).
 			if own := tc.cred.bound.Kind == ""; spec.NetworkPolicy.PublicOnly != own {
 				t.Fatalf("PublicOnly = %v, want %v", spec.NetworkPolicy.PublicOnly, own)
 			}
-			// #3082: OpenCode's ACP mode calls its own server on loopback, and the proxy
+			//: OpenCode's ACP mode calls its own server on loopback, and the proxy
 			// cannot reach it. Its port is pinned in the session's own network and is the
 			// only one NO_PROXY names (Bun matches host:port exactly, measured on 1.19.4).
 			i := slices.Index(spec.Args, "--port")
@@ -85,7 +85,7 @@ func TestOpenCodeOwnLoginWithoutTheConfinementHelperDoesNotStart(t *testing.T) {
 	}
 }
 
-// #3094: an own-login launch that names no model is held to the provider of the
+// : an own-login launch that names no model is held to the provider of the
 // model the account's OpenCode configuration sets, the one OpenCode would use.
 func TestOpenCodeOwnLoginWithNoModelIsHeldToTheConfiguredModel(t *testing.T) {
 	m := New(WithConfinement([]string{"/srv/olivares"}, false), WithProviderDriver(NewOpenCodeDriver()))
@@ -100,7 +100,7 @@ func TestOpenCodeOwnLoginWithNoModelIsHeldToTheConfiguredModel(t *testing.T) {
 	}
 }
 
-// #3094: an own-login launch whose hosts cannot be known does not start, and the
+// : an own-login launch whose hosts cannot be known does not start, and the
 // refusal says what to choose (the bible's privacy rule: a session reaches only its
 // provider, or it does not start).
 func TestOpenCodeOwnLoginWithUnknownHostsDoesNotStart(t *testing.T) {
@@ -125,7 +125,7 @@ func TestOpenCodeOwnLoginWithUnknownHostsDoesNotStart(t *testing.T) {
 }
 
 // openCodeConfiguredModel reads what OpenCode reads from OPENCODE_CONFIG_DIR
-// (review of #3094): opencode.json, then opencode.jsonc over it; never config.json,
+// (review of): opencode.json, then opencode.jsonc over it; never config.json,
 // a symlink, or anything that is not a small regular file.
 func TestOpenCodeConfiguredModelReadsWhatOpenCodeReads(t *testing.T) {
 	write := func(dir, name, body string) {
@@ -186,7 +186,7 @@ func TestOpenCodeConfiguredModelNarrowsTheProviders(t *testing.T) {
 
 // A profile's registries are appended to a launch's policy (applyProfileRegistries):
 // that must not write into the own-login host table, which every later own-login
-// launch reads (review of #3095).
+// launch reads (review of).
 func TestOpenCodeOwnLoginPolicyDoesNotShareTheHostTable(t *testing.T) {
 	before := slices.Clone(openCodeOwnLoginHosts[openCodeHostedProviderID])
 	p := sessionNetworkPolicy(providerDriverOpenCode, BoundProvider{}, "opencode/big-pickle", nil, nil)

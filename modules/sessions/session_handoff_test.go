@@ -21,7 +21,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// #1845, second half: a conversation cannot continue natively in ANOTHER tool, so a
+//, second half: a conversation cannot continue natively in ANOTHER tool, so a
 // handoff starts a new session there, linked to the original, whose first turn is a
 // summary the person reviewed and whose full transcript sits where the new tool can
 // read it.
@@ -344,7 +344,7 @@ func TestHandoff_ARunningSessionIsNotStoppedByARefusal(t *testing.T) {
 	still("a handoff name the rename refuses")
 
 	// A handoff name another session holds is refused with it, still before the
-	// source is stopped: the successor would be the name's second holder (#2978).
+	// source is stopped: the successor would be the name's second holder.
 	if err := f.m.Data.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
@@ -548,7 +548,7 @@ func TestHandoff_EachHandoffKeepsItsOwnAttachment(t *testing.T) {
 
 // A handoff that names nothing gets the name the engine derives. Handing one session to a
 // second tool must not fail for it: the second is numbered, as `session start` numbers a
-// derived name, while a name the caller chose is refused (#2978).
+// derived name, while a name the caller chose is refused.
 func TestHandoff_ASecondUnnamedHandoffIsNumberedNotRefused(t *testing.T) {
 	f := newMoveFixture(t)
 	f.stop(t)

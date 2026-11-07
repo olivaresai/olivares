@@ -44,7 +44,7 @@ const { api, auth, signIn } = vi.hoisted(() => ({
     isSuperadmin: true,
     // The tool card asks can('sessions:provider:read') (the refused-key read). These
     // cases are about the install and sign-in rows, so the role reads no providers.
-    // Only the key form's own gate (#2551).
+    // Only the key form's own gate.
     can: (p: string) => p === 'sessions:provider:write',
     activeTenant: null,
     principal: { user_id: 'root' },
@@ -124,7 +124,7 @@ it('offers Grok Build its own sign-in and relays the link and the code', async (
   expect(
     within(dialog).getByRole('link', { name: /open the sign-in page/i }),
   ).toHaveAttribute('href', 'https://accounts.x.ai/device')
-  // acceptance, #2551: the key form opens in this same dialog, on Grok's own provider — a
+  // acceptance,: the key form opens in this same dialog, on Grok's own provider — a
   // button in the sheet, not a page link that reloads and loses the dialog. The dialog
   // says the terminal way too.
   expect(

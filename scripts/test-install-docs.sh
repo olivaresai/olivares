@@ -209,7 +209,7 @@ expect "mutant: pre-release package marker returns" 1 'pre-release state'
 sed -i '$d' "$TREE/docs-site/src/content/docs/how-to/install-from-packages.md"
 
 
-# ── check-docs-honesty.sh: no pipe into a shell (#585) ──
+# ── check-docs-honesty.sh: no pipe into a shell ──
 CC_GUIDE="$TREE/docs-site/src/content/docs/how-to/run-claude-code-with-olivares.md"
 CC_GUIDE_ZH="$TREE/docs-site/src/content/docs/zh/how-to/run-claude-code-with-olivares.md"
 cp "$CC_GUIDE" "$W/guide.good"; cp "$CC_GUIDE_ZH" "$W/guide-zh.good"; cp "$TREE/INSTALL.md" "$W/install.good"; cp "$TREE/README.fr.md" "$W/readme-fr.good"

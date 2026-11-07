@@ -230,7 +230,7 @@ describe('the type ladder, across the directories carried to it', () => {
   it('offers a step for every role a surface needs to name', () => {
     // Thirteen steps: the seven every surface already names, each at the design value of
     // its role, the four the v26.10 design adds (hero, body-l, mono, mono-s) and the two
-    // metadata sizes below them (#3135; styles/metadata-step.test.ts says where they may
+    // metadata sizes below them (; styles/metadata-step.test.ts says where they may
     // go). The census above is the evidence that they are enough: no exception row.
     expect(TYPE_SCALE_STEPS).toHaveLength(13)
     expect(DECLARED).toEqual([])

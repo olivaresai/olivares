@@ -75,7 +75,7 @@ for (const path of globSync(
 if (!translationKeys.size) throw new Error('No English translation keys found')
 
 /** How long the gate waits for a page or control to become ready. Waits return as
- * soon as it is; only a page still loading after this is a failure (#1177). */
+ * soon as it is; only a page still loading after this is a failure. */
 export const READY_MS = 30_000
 /** The console's target for a load. A longer one is recorded with its time. */
 export const SLOW_MS = 5000
@@ -138,7 +138,7 @@ export function watchSurface({
   let loadingSince: number | undefined
   let route = location.pathname + location.search
   // The browser's own test: a closed <details> keeps its content laid out under
-  // content-visibility: hidden, with boxes but nothing painted (#330).
+  // content-visibility: hidden, with boxes but nothing painted.
   const visible = (element: Element) =>
     element.getClientRects().length > 0 &&
     element.checkVisibility({ visibilityProperty: true })
@@ -146,7 +146,7 @@ export function watchSurface({
   // Evidence only; a page closing while it is sent loses nothing the run needs.
   const slow = (message: string, waitedMs: number) =>
     void window.__firstHourSlow?.(message, waitedMs).catch(() => undefined)
-  // The gate asks this at every stage end, and waits for false (#1177).
+  // The gate asks this at every stage end, and waits for false.
   window.__firstHourLoading = () => loadingSince !== undefined
   // The versions the identity paints right now: the one thing a stale deployment
   // changes. A number in page copy is not an identity, so only these are compared.
@@ -329,7 +329,7 @@ export interface PageRequest {
   error?: string
 }
 
-/** A load over the console's target and what the page asked for while it waited (#2608). */
+/** A load over the console's target and what the page asked for while it waited. */
 export interface SlowLoad {
   load: string
   requests: PageRequest[]
@@ -371,7 +371,7 @@ export async function recordSlowLoads(
     entry.requestId = response.headers()['x-request-id']
     // The browser reports neither a response nor a failure for a request in flight when the
     // main frame loads another document, so without this it stays open for the rest of the
-    // run and is listed under every later slow load as one the page still waits on (#2608).
+    // run and is listed under every later slow load as one the page still waits on.
     if (!request.isNavigationRequest() || request.frame() !== page.mainFrame())
       return
     const closedAt = Date.now()
@@ -429,7 +429,7 @@ export async function recordSlowLoads(
 /** Opens AI tools' install review for one tool and returns the menu item that starts it:
  * Install on the not-installed line, or Update in the options of a tool a provider's
  * first test already installed. The page shows either only once its reads finish, so
- * the choice waits for one of them instead of counting a page still loading (#330). */
+ * the choice waits for one of them instead of counting a page still loading. */
 export async function openToolInstall(page: Page, name: string) {
   const missing = page.getByTestId('not-installed').getByText(name)
   const options = page.getByRole('button', {

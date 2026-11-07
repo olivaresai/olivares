@@ -88,7 +88,7 @@ export function pageLabel(
   if (pathname === '/') return ''
   const location = resolveLocation(pathname)
   if (location.kind === 'unknown') {
-    // A retired address redirects before it paints: it reads as where it lands (#3388).
+    // A retired address redirects before it paints: it reads as where it lands.
     const alias = ROUTE_ALIASES.find((a) => a.from === pathname)
     return alias
       ? pageLabel(t, alias.to, { ...search, ...alias.search }, gate)

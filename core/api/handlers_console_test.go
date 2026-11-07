@@ -293,7 +293,7 @@ func TestOnboardInviteModeMailsTheTokenOnly(t *testing.T) {
 
 // TestServerInfoSaysWhenInvitationsCannotBeMailed: without an invitation mailer
 // invite mode answers 409 invite_delivery_unavailable, and server-info says so
-// up front, so the console offers only what the engine serves (#471). With a
+// up front, so the console offers only what the engine serves. With a
 // mailer the field is absent.
 func TestServerInfoSaysWhenInvitationsCannotBeMailed(t *testing.T) {
 	h := newHarness(t)

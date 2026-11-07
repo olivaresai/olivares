@@ -17,7 +17,7 @@ Le graphe du module III des **origines** (agents, identités, sessions) et des
 **ressources** qu'elles touchent, chaque arête classée par [mode](#mode) et étiquetée
 avec sa [signal source](#signal-source), son [attribution](#attribution-confiance)
 et son [niveau de couverture](#niveau-de-couverture). Une capacité différenciante clé — l'un
-des 32 modules, pas l'ensemble du produit.
+des 33 modules, pas l'ensemble du produit.
 Voir [Qu'est-ce qu'Olivares AI ?](/fr/start/what-is-olivares-ai/).
 
 ### États d'actuation : `v1` / `on-demand` / `seam`
@@ -187,7 +187,7 @@ processus à un agent. Voir [eBPF/Tetragon](/fr/how-to/connectors/ebpf-tetragon/
 
 ### live_ref
 
-Identité attribuée par le serveur d’**une** ligne de session live. Olivares <!-- release -->0.7<!-- /release -->
+Identité attribuée par le serveur d’**une** ligne de session live. Olivares <!-- release -->0.8<!-- /release -->
 classe l’observation par `(périmètre d’observation, id externe)` afin que deux
 homes fournisseur qui annoncent le même id de session restent deux lignes. Les
 lectures console et API qui signifient « cette ligne » utilisent `live_ref`,

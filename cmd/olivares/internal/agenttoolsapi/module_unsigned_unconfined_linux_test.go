@@ -42,7 +42,7 @@ import (
 // install flow runs on a node that cannot confine a child. An unsigned install
 // job ends failed, with the node-wide refusal sentence as the job's error: that
 // sentence is what `olivares tool install` prints and the console install
-// details show, and the unverified bytes never run (#3312).
+// details show, and the unverified bytes never run.
 func TestUnsignedInstallJobFailsWithTheRefusalSentence(t *testing.T) {
 	if os.Getenv("OLIVARES_TEST_NO_LANDLOCK") != "1" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestUnsignedInstallJobFailsWithTheRefusalSentence$", "-test.v")

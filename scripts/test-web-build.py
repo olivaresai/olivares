@@ -153,7 +153,7 @@ class WebConsumerTests(unittest.TestCase):
                 # in the manifest and PR_HEAD, while the checkout stays on the candidate; only the
                 # checkout guard can refuse it. The manifest carries the PRODUCING job's attempt
                 # ('1'): "re-run failed jobs" re-runs a race job at attempt 2 against setup's
-                # earlier success, so this job's own attempt never decides (#2749).
+                # earlier success, so this job's own attempt never decides.
                 cases = {
                     'matching identity': ({}, False, False, '1', '1'),
                     're-run of a failed race job': ({}, False, False, '1', '2'),

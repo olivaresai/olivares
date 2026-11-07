@@ -11,7 +11,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setEngineTools } from './engine-tools'
 
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
@@ -159,6 +160,8 @@ beforeEach(() => {
   )
 })
 
+afterEach(() => setEngineTools([]))
+
 describe('RunCreateDialog — provider profiles', () => {
   it('shows each account its use in the picker and marks the chosen one at its limit before Start', async () => {
     const window = (name: string, utilization: number, resets_at?: string) => ({
@@ -253,6 +256,28 @@ describe('RunCreateDialog — provider profiles', () => {
       expect(postedBody().fast_mode).toBe(fastMode)
     },
   )
+  //: the picker names an account's tool in its product name, never by its driver key.
+  it('names the account by its tool, never by its driver key', async () => {
+    setEngineTools([
+      {
+        key: 'claude',
+        name: 'Claude Code',
+        name_stem: 'claude',
+        vendor: 'Anthropic',
+        monogram: 'CC',
+        color: '#D97757',
+        session: true,
+        bindings: [],
+      },
+    ])
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Account'))
+    const option = await screen.findByRole('option', { name: /Home A/ })
+    expect(option).toHaveTextContent('Home A · Claude Code')
+    expect(option).not.toHaveTextContent('· claude')
+  })
+
   it('reports a failed discovery while allowing the tool default', async () => {
     vi.mocked(agentOpsApi.profileModels).mockResolvedValue({
       profile_ref: homeA.profile_ref,
@@ -545,7 +570,7 @@ describe('RunCreateDialog — provider profiles', () => {
     wrap()
     await user.click(await screen.findByLabelText('Account'))
     await user.click(
-      await screen.findByRole('option', { name: /^claude-b · claude/ }),
+      await screen.findByRole('option', { name: /^claude-b · Claude Code/ }),
     )
     await waitReadyToRequest()
     await user.click(screen.getByRole('button', { name: 'Start' }))

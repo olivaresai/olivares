@@ -20,9 +20,10 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/api/oas"
 	"github.com/olivaresai/olivares/core/model"
+	conversion "github.com/olivaresai/olivares/core/runtime/documents"
 )
 
-// An image a person attaches to a message (#2158). The engine keeps it with the
+// An image a person attaches to a message. The engine keeps it with the
 // session, under the tenant and outside every folder the session works in:
 //
 //	<attachment root>/<tenant>/<run_ref>/<id>.<ext>
@@ -58,10 +59,20 @@ var attachmentUploads = make(chan struct{}, attachmentUploadSlots)
 // attachmentExt is every image type the engine accepts and the file extension that
 // records it. The type is read back from the extension, so no sidecar file exists.
 var attachmentExt = map[string]string{
-	"image/png":  "png",
-	"image/jpeg": "jpg",
-	"image/webp": "webp",
-	"image/gif":  "gif",
+	"application/pdf": "pdf",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document":   "docx",
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         "xlsx",
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+	"application/json":     "json",
+	"application/xml":      "xml",
+	"text/csv":             "csv",
+	"text/html":            "html",
+	"application/epub+zip": "epub",
+	"application/zip":      "zip",
+	"image/png":            "png",
+	"image/jpeg":           "jpg",
+	"image/webp":           "webp",
+	"image/gif":            "gif",
 }
 
 // turnImage is one stored image on its way into a message.
@@ -175,10 +186,6 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 		writeRunErr(w, err)
 		return
 	}
-	if why := imageRefusal(rec); why != "" {
-		writeJSON(w, http.StatusUnprocessableEntity, errorBody(why))
-		return
-	}
 	var body attachmentUpload
 	if err := api.DecodeRequestBody(w, r, &body, api.RequestBodySpec{MaxBytes: maxAttachmentBody}); err != nil {
 		var tooBig *http.MaxBytesError
@@ -191,7 +198,7 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 	}
 	ext, ok := attachmentExt[body.MediaType]
 	if !ok {
-		writeJSON(w, http.StatusUnsupportedMediaType, errorBody("attach a PNG, JPEG, WebP or GIF image"))
+		writeJSON(w, http.StatusUnsupportedMediaType, errorBody("attach a supported image, PDF, Office document, HTML, CSV, JSON, XML, EPUB or ZIP"))
 		return
 	}
 	data, err := base64.StdEncoding.DecodeString(body.Data)
@@ -203,8 +210,24 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusRequestEntityTooLarge, errorBody(fmt.Sprintf("the image is %.1f MB; the limit is %.1f MB", megabytes(len(data)), megabytes(maxAttachmentBytes))))
 		return
 	}
+	var markdown []byte
+	if conversion.Supports("document." + ext) {
+		markdown, err = m.documentMarkdown(r.Context(), "document."+ext, data)
+		if errors.Is(err, conversion.ErrBusy) {
+			w.Header().Set("Retry-After", "2")
+			writeJSON(w, http.StatusTooManyRequests, errorBody(err.Error()))
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, errorBody(err.Error()))
+			return
+		}
+	} else if why := imageRefusal(rec); why != "" {
+		writeJSON(w, http.StatusUnprocessableEntity, errorBody(why))
+		return
+	}
 	// The declared type is a claim; the bytes decide. A file renamed to .png is not one.
-	if http.DetectContentType(data) != body.MediaType {
+	if !conversion.Supports("document."+ext) && http.DetectContentType(data) != body.MediaType {
 		writeJSON(w, http.StatusUnsupportedMediaType, errorBody("the file is not a "+strings.ToUpper(ext)+" image"))
 		return
 	}
@@ -221,7 +244,7 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 		writeRunErr(w, err)
 		return
 	}
-	if err := makeRoom(dir, int64(len(data))); err != nil {
+	if err := makeRoom(dir, int64(len(data)+len(markdown))); err != nil {
 		m.warnf("session attachments not removed", "run_ref", ref, "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorBody("the image could not be stored"))
 		return
@@ -236,6 +259,13 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 		m.warnf("session attachment write", "run_ref", ref, "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorBody("the image could not be stored"))
 		return
+	}
+	if markdown != nil {
+		if err := writeAttachment(filepath.Join(dir, id+"."+ext+".md"), markdown); err != nil {
+			_ = os.Remove(filepath.Join(dir, id+"."+ext))
+			writeJSON(w, http.StatusInternalServerError, errorBody("the document Markdown could not be stored"))
+			return
+		}
 	}
 	writeJSON(w, http.StatusCreated, attachmentDTO{ID: id, MediaType: body.MediaType, SizeBytes: len(data)})
 }
@@ -263,7 +293,10 @@ func makeRoom(dir string, incoming int64) error {
 	total := incoming
 	for _, e := range entries {
 		if info, err := e.Info(); err == nil && e.Type().IsRegular() {
-			images = append(images, stored{e.Name(), info.Size(), info.ModTime()})
+			// Document originals and derivatives stay until the session is removed.
+			if ext := strings.ToLower(filepath.Ext(e.Name())); ext == ".png" || ext == ".jpg" || ext == ".webp" || ext == ".gif" {
+				images = append(images, stored{e.Name(), info.Size(), info.ModTime()})
+			}
 			total += info.Size()
 		}
 	}
@@ -276,6 +309,9 @@ func makeRoom(dir string, incoming int64) error {
 			return err
 		}
 		total -= img.size
+	}
+	if total > toolRequestMaxBytes {
+		return errors.New("session document storage is full; remove the session or use its folder")
 	}
 	return nil
 }
@@ -388,7 +424,7 @@ func sessionsRunAttachmentResponses(method, pattern string) (map[string]any, boo
 	switch method + " " + pattern {
 	case http.MethodPost + " /runs/{ref}/attachments":
 		delete(resp, "200")
-		resp["201"] = oas.Obj("description", "the image is stored with the session; send its id with the next message",
+		resp["201"] = oas.Obj("description", "the file is stored with the session; documents reach the agent as Markdown",
 			"content", oas.Obj("application/json", oas.Obj("schema", oas.Obj(
 				"type", "object", "additionalProperties", false, "required", oas.Enum("id", "media_type", "size_bytes"),
 				"properties", oas.Obj(
@@ -422,10 +458,15 @@ func sessionsAttachmentUploadSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
 		"media_type", oas.Obj("type", "string", "enum", oas.Enum(sessionsAttachmentMediaTypes()...)),
 		"data", oas.Obj("type", "string", "contentEncoding", "base64",
-			"description", "The image, base64 encoded. At most 3.75 MiB decoded."),
+			"description", "The file, base64 encoded. At most 3.75 MiB decoded."),
 	), "media_type", "data")
 }
 
 func sessionsAttachmentMediaTypes() []string {
-	return []string{"image/png", "image/jpeg", "image/webp", "image/gif"}
+	types := make([]string, 0, len(attachmentExt))
+	for media := range attachmentExt {
+		types = append(types, media)
+	}
+	slices.Sort(types)
+	return types
 }

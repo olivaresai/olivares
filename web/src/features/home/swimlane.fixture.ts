@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE DEMO ESTATE'S LAST HOUR, AS THE ENGINE SENDS IT (#2547). The console design's demo
+// THE DEMO ESTATE'S LAST HOUR, AS THE ENGINE SENDS IT. The console design's demo
 // estate (Northwind, Friday 16:42: seven live sessions, three approvals waiting, Marc's
 // the flagged one) written as the engine's own reads: the runs and live rows Estate lists,
 // each session's timeline events from an hour ago on, and the pending approvals in the

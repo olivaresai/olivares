@@ -93,7 +93,7 @@ beforeEach(() => {
  *    trinquete acepta *un aviso cualquiera por feature*: al quitar el badge de `members`,
  *    `people-tab` + `registry.truncation-notice` quedaban en **10/10, rc 0**. Lo reproduje
  *    exactamente antes de escribir esto. Un aviso que puede desaparecer sin poner nada rojo no
- *    esta verificado: esta afirmado — la misma clase que yo mismo exigi cerrar en #2031 (A-09).
+ *    esta verificado: esta afirmado — la misma clase que yo mismo exigi cerrar en (A-09).
  *
  * ⛔ Y LA ASERCION ES DE CARDINALIDAD, con UNA sola consulta recortada por caso. Los tres avisos
  *    de esta pantalla comparten el texto generico (`intel:notices.listTruncated`), asi que la

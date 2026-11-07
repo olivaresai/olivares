@@ -187,6 +187,33 @@ MSG корректного кадра RFC 5424 — именно так ArcSight 
 официальных схем классов 1.8.0, запрещающих неизвестные поля, — поэтому атрибут
 вне профиля или неполный объект профиля ломают сборку, а не доезжают до вас.
 
+Входы и изменения факторов записываются в системный журнал. При экспорте из него
+(`olivares audit export --format ocsf --tenant ffffffff-ffff-ffff-ffff-ffffffffffff`)
+они попадают в модель данных аутентификации SIEM.
+HTTP-экспорт (`GET /v1/audit/export`) читает только журналы
+организаций. Пересылка журнала отправляет эти события один раз в SIEM-приёмники, подписанные на системном
+тенанте, и никогда в приёмник организации. API отклоняет системный тенант, поэтому такой приёмник создаёт
+только оператор, владеющий каталогом данных: `olivares eventing subscriptions create --tenant ffffffff-ffff-ffff-ffff-ffffffffffff --event-types audit.recorded --role admin --sink-kind splunk_hec --sink-cred-file <file>`. `auth.login`, `auth.external.login`, `sso.login`, `auth.login.failed`, `auth.login.blocked`, `auth.logout`, `sso.logout.backchannel` — это **Authentication (3002)**: Logon
+или Logoff, с `status_id` 2 (Failure) для отклонённого входа.
+`auth.webauthn.register` и `auth.totp.activate` — это **Account Change (3001)** MFA
+Factor Enable; `auth.webauthn.unregister`, `auth.webauthn.recover` и
+`auth.totp.reset` — MFA Factor Disable; `auth.webauthn.rename` и
+`auth.totp.recovery_used` — Other. Оба класса Identity & Access Management несут
+`user.name`: актора журнала или целевую учётную запись, когда администратор
+сбрасывает факторы другого человека. Профиля `ai_operation` у них нет. Поля
+целостности остаются в `unmapped`, как у любого другого события, а все остальные
+действия остаются API Activity. Для `sso.logout.backchannel` пользователь — это учётная запись, из которой
+выполнен выход, а событие без актора в журнале несёт `unknown`.
+
+:::caution[Изменено: входы и изменения факторов больше не API Activity]
+Раньше эти 14 действий экспортировались как API Activity (6003) с `activity_id` 99
+(Other, `type_uid` 600399). Теперь это Authentication (3002) и Account Change
+(3001). Обновите каждое правило обнаружения, сохранённый поиск и парсер, которые
+отбирают их по `class_uid` 6003.
+`auth.stepup.failed` и `auth.os_account.verify.refused` остаются API Activity,
+теперь со `status_id` 2 (Failure) вместо 1.
+:::
+
 :::caution[AWS Security Lake принимает OCSF ≤ 1.3]
 Пользовательский источник Security Lake ограничен **OCSF 1.3 в Parquet**,
 поэтому события `ai_operation` версии 1.8.0 туда как есть не попадают (проверено

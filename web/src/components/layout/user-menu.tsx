@@ -90,7 +90,7 @@ function initialsOf(name: string): string {
 }
 
 /** The account menu: identity, role, the edition and version, Settings, the theme, help for
- * this page, the command line, and sign-out (#3161 moved the version and the theme here from
+ * this page, the command line, and sign-out ( moved the version and the theme here from
  * the top bar; the engine's state went to the status bar). The engine does not return the
  * principal's email to itself (minimum data), so we show the display name and the principal
  * id (`actor`). */

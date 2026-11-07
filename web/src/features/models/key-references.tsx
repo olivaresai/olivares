@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // Governed references to provider keys and workspaces: a masked hint, never a secret. They
-// sit in AI tools beside the API keys sessions run on (#3388), so a provider key
+// sit in AI tools beside the API keys sessions run on, so a provider key
 // has one destination; their read and write tiers are the models module's own.
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'

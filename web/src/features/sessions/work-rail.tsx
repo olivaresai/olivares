@@ -10,7 +10,7 @@
 //    this key beside it, in the narrative pane's menu — which also names the action
 //    before it happens (Pin / Unpin), the other half of the same rule.
 //
-//    ⛔ EVERY ROW HAS ONE ACTIONS MENU (#2795), opened three ways: a right-click (the
+//    ⛔ EVERY ROW HAS ONE ACTIONS MENU, opened three ways: a right-click (the
 //       browser's own menu said Back and Reload), the `⋯` beside the row, and Shift+F10
 //       or the menu key on the focused row. The `⋯` is NOT a control inside the row, and
 //       that is not a preference: `option` is children-presentational in ARIA, so a
@@ -32,7 +32,7 @@
 //    distinguishing tail — and it is imported rather than re-derived, so the rail, the
 //    table and the sidebar can never tell the same session two different ways. The action
 //    and resource a connector reported are the secondary fact: on the row's hover and in
-//    the thread, never the title (#2266).
+//    the thread, never the title.
 import { PathText } from '@/components/ui/path-text'
 import {
   ChevronDown,
@@ -134,7 +134,7 @@ function sharedByAll(values: readonly (string | null)[]): boolean {
 }
 
 /**
- * A ROW (#3970): what the session is called first, on up to two lines; under it, small,
+ * A ROW: what the session is called first, on up to two lines; under it, small,
  * the folder and at the right what it is doing in a word with its time. The tool's mark
  * and the folder are left out when every row of the list shares them. The full path and
  * what it is doing now are on the row's hover and in the thread it opens.
@@ -251,7 +251,7 @@ function RailRow({
         }
         /* ⛔ TWO SHORT LINES, BOTH WITH WORDS: the folder and the state above,
          the name below. The old second line was blank for every observed session
-         (#2266); this one carries the place and what the session is doing, which is what
+; this one carries the place and what the session is doing, which is what
          a person picks a row BY. The name is cut with an ellipsis and its whole text
          (name, tail, reference) is on the name's hover.
 
@@ -267,7 +267,7 @@ function RailRow({
           // name keeps the room: reserving 48 px for it on every row left a title 103 px.
           // With a coarse pointer from the shell breakpoint up (a tablet has no hover to
           // reveal it), the button is always painted and keeps its own column. A phone has
-          // no row buttons at all (#3975): a tap opens the thread, whose `⋯` holds the same
+          // no row buttons at all: a tap opens the thread, whose `⋯` holds the same
           // actions, and a long press opens the row's menu where the browser offers one.
           onOpenBeside && menu
             ? 'min-[761px]:pointer-coarse:pr-22'
@@ -362,7 +362,7 @@ function RailRow({
             // screen-reader users have the declared command (Alt+Shift+O on the row)
             // and the palette; this stays for the mouse and the touch screen.
             // Painted on hover (always with a coarse pointer, which has no hover; never on a
-            // phone, which cannot open a session beside another, #3975) and never on focus: a clicked or arrowed-to row is focus-within with
+            // phone, which cannot open a session beside another,) and never on focus: a clicked or arrowed-to row is focus-within with
             // the pointer elsewhere, and the button sits over the time's end, which only a
             // hover fades out.
             aria-hidden="true"
@@ -389,7 +389,7 @@ function RailRow({
                 // head of this file): out of the tab order and the accessibility tree,
                 // like Open beside. Painted on hover, while its menu is open, and always
                 // with a coarse pointer; not on a phone, where the thread's `⋯` and a long
-                // press on the row hold the same items (#3975). There it stays laid out,
+                // press on the row hold the same items. There it stays laid out,
                 // unseen and untouchable, because the menu a long press opens is placed
                 // against it: a `display:none` trigger would put the menu at the corner.
                 aria-hidden="true"
@@ -434,18 +434,18 @@ export function WorkRail({
   useForgetTurnsOnLeave()
   useSeenTurns(sessions)
   const groups = groupSessions(sessions, pinned)
-  // THE SNOOZED SECTION IS FOLDED (#2480): a snooze takes the session out of the list
+  // THE SNOOZED SECTION IS FOLDED: a snooze takes the session out of the list
   // until its moment, and one toggle under the list keeps it reachable, so a snooze is
   // never a way to lose a session. Folded, its rows are not drawn and not walked.
   const [showSnoozed, setShowSnoozed] = useState(false)
   const snoozedCount =
     groups.find((group) => group.id === 'snoozed')?.sessions.length ?? 0
-  // THE ARCHIVED SECTION FOLDS THE SAME WAY (#2795), under its own toggle: one rule for
+  // THE ARCHIVED SECTION FOLDS THE SAME WAY, under its own toggle: one rule for
   // every session that is out of the list, whoever put it there.
   const [showArchived, setShowArchived] = useState(false)
   const archivedCount =
     groups.find((group) => group.id === 'archived')?.sessions.length ?? 0
-  // THE WORKING SECTION ARRIVES OPEN (#3969): what is working now is what a person opens
+  // THE WORKING SECTION ARRIVES OPEN: what is working now is what a person opens
   // the list for, so it is never hidden under what has finished. Its rows keep the order
   // they started in (`groupSessions`), so a running session does not move under the
   // pointer. A fold is the person's choice and the console remembers it.

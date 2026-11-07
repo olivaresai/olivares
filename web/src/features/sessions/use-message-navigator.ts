@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The message navigator's state for one session (#2129): the engine's index of what the
+// The message navigator's state for one session: the engine's index of what the
 // person sent, and a jump that scrolls to the row of the conversation a message is, or
 // says the message is older than what this view holds.
 import { useQuery } from '@tanstack/react-query'

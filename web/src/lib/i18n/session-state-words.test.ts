@@ -66,7 +66,7 @@ describe.each(LANGUAGE_CODES)('session state words (%s)', (locale) => {
     ['sessions', 'state.ended', sessions, 'ended'],
     ['sessions', 'runState.running', sessions, 'live'],
     // A run the engine reports idle has answered its turn and waits for the person: the
-    // rail files it as Idle (#1785), so its chip says the rail's Idle, like the observed half.
+    // rail files it as Idle, so its chip says the rail's Idle, like the observed half.
     ['sessions', 'runState.idle', sessions, 'idle'],
     ['sessions', 'summary.active', sessions, 'live'],
     ['sessions', 'summary.idle', sessions, 'idle'],

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// session show names the mode the tool itself reported (#427), and a session whose
+// session show names the mode the tool itself reported, and a session whose
 // tool has not reported one shows no mode row rather than a guess.
 func TestSessionShowNamesTheModeTheToolReported(t *testing.T) {
 	f := newFakeSessionEngine(t)
