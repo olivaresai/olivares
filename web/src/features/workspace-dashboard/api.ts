@@ -16,12 +16,12 @@ export interface WorkspaceSummaryDTO {
   resource_count: number
   group_count: number
   // ⛔ ESTAS CUATRO DICEN QUE EL RECUENTO DE ARRIBA ES UN SUELO, NO UN TOTAL, y llegan de
-  //    ``. El motor construía la consulta con `Limit: 10000`, pero el store recorta en
+  //    the engine's count cap. The engine built the query with `Limit: 10000`, but the store cuts at
   //    `maxLimit = 1000` (`core/internal/store/sqlstore/generic.go`), así que los cuatro
   //    recuentos SATURABAN en 1.000 y el handler descartaba el `page.HasMore` que lo delataba
   //    cuatro líneas después. Con esto, `true` significa «al menos N».
   //
-  //    OPCIONALES A PROPÓSITO: una consola servida por un motor anterior a `` no los
+  //    OPTIONAL ON PURPOSE: a console served by an engine older than the count cap does not
   //    recibe, y entonces tiene que pintar el número EXACTO — inventarse un «≥» donde el motor
   //    no ha dicho nada sería el error simétrico al que esto arregla.
   agent_count_capped?: boolean

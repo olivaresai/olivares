@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Fichero PROPIO a propósito: `` edita `workspace-dashboard-view.test.tsx` y no compito con
-// él por las mismas líneas. Lo que se pincha aquí es la mitad de PANTALLA del contrato de ``.
+// A file OF ITS OWN on purpose: another change edits `workspace-dashboard-view.test.tsx`, and this one does not compete with
+// it for the same lines. What is pinned here is the SCREEN half of the count-cap contract.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# T3-A / pg-roles-cloud — testigo de la degradacion honesta (NOT APPLICABLE) de.
+# T3-A / pg-roles-cloud — witness of the honest degradation (NOT APPLICABLE) of the module guard.
 #
 # QUE MIDE, y por que existe. La mainline VIAJA en el export del espejo preprod, y alli el paso
 # «provision cloud control-plane roles» moria con `psql: error: cloud/control-plane/deploy/

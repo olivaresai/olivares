@@ -468,7 +468,7 @@ jobs:
           # que siempre. No se silencia nada en el hub.
           #
           # ⛔ EL PREDICADO ES EL DIRECTORIO, NO EL FICHERO — corregido el 2026-08-30 sobre la
-          # guarda de, cuyo comentario de arriba ya dice lo correcto («sin el MÓDULO no hay
+          # guard, whose comment above already says the right thing ("without the MODULE there is no
           # sujeto que probar») mientras el `[ ! -f ]` preguntaba por el guion. No es lo mismo: con
           # el módulo presente y el `.sql` borrado o renombrado dentro del hub, el `-f` también
           # respondía NOT APPLICABLE y tapaba un defecto real con la excusa del export. Lo que
@@ -4904,7 +4904,7 @@ jobs:
       #    nada que podar como si la poda murio. Un contador de diferencias no distingue «limpio» de
       #    «no pude mirar» — que es justo la tercera respuesta que este gate si sabe dar.
       #
-      # 2. LA CORRECCION YA NO DEPENDE DE ESTO. La acusacion falsa de la cura hoy el propio
+      # 2. THE FIX NO LONGER DEPENDS ON THIS. The false accusation is cured today by the
       #    guion: `scripts/check-secrets.sh:355-360` sale 0 cuando NINGUN hallazgo es alcanzable desde
       #    HEAD, y `:304-316` imprime la columna «reachability» de cada uno. Por eso el paso de abajo
       #    se llama «charges only what HEAD reaches». La poda defendia coste, no verdad.

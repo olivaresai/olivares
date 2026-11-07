@@ -3077,9 +3077,9 @@ tasks:
       #    ⛔ Y LO QUE NO SE HACE EL 4 DE SEPTIEMBRE: si esto vuelve, la respuesta NO es subir el
       #    número otra vez. La solución es medir cada captura contra la fuente que RETRATA (a repository gate),
       #    no contra el último commit de la UI entera — que es lo que hace insatisfacible el gate
-      #    para una pantalla que nadie ha tocado. Frase traída de al integrar: es la única
+      #    for a screen nobody has touched. Sentence brought in at integration: it is the only
       #    parte de su versión que este bloque no decía ya.
-      #    ⛔ Y POR QUE a una rama de consola le hace falta este margen, traido de/ al
+      #    ⛔ AND WHY a console branch needs this margin, brought in at
       #    integrar: una rama que arregla ficheros de `web/src/features` mueve `UI_TS` a HOY, y si su
       #    base es de hace seis dias sus capturas quedan a ONCE dias de un reloj que ella misma acaba
       #    de adelantar. No estan rancias: `UI_TS` mide la UI ENTERA, no la pantalla que cada captura
@@ -4842,7 +4842,7 @@ tasks:
       # corrida 33284926144: el paso que instala estas dependencias se salto por un rojo
       # ajeno (SPDX) y este canto la consecuencia.
       #
-      # La guarda no evita el fallo: lo NOMBRA. Misma forma que la de en
+      # The guard does not prevent the failure: it NAMES it. Same shape as the one in
       # .github/workflows/export-check.yml:150 — una herramienta que no se alcanza se dice
       # aqui, no se traslada al siguiente. Y vive en la TAREA, no en un workflow, porque
       # los otros dos consumidores (release.yml, release-rehearsal.yml) llaman a

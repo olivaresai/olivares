@@ -11,7 +11,7 @@
  *    función, un solo mutante la mata en los seis.
  *
  * ⛔ Y EL «≥» SÓLO SI EL MOTOR LO HA DICHO. `capped === true` es la única puerta: `false`,
- *    `undefined` (motor anterior a ``) o un campo ausente pintan el número EXACTO. Poner el
+ *    `undefined` (an engine older than the count cap) or a missing field paint the EXACT number. Putting the
  *    «≥» sobre un recuento que sí es total es el error simétrico del que esto corrige, y engaña
  *    igual — sólo que hacia el otro lado.
  */

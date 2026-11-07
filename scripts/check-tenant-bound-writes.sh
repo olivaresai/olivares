@@ -111,7 +111,7 @@ censar() {
 		done < <(grep -nE "$ESCRITURA" "$f" 2>/dev/null)
 	done < <(find "$raiz" -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | LC_ALL=C sort)
 	# ⛔ TRES ESTADOS, NO DOS, y la diferencia es la razon de ser de este bloque.
-	# `TenantRequestOptions` NACE en: en `main` HOY no existe en ningun fichero. Un gate que
+	# `TenantRequestOptions` is BORN in a later change: on `main` TODAY it exists in no file. A gate that
 	# no encuentra el mecanismo y contesta «limpio» es la clase «un gate ciego no falla: CERTIFICA»
 	# — se leeria como «toda escritura ata» justo en el arbol donde ninguna lo hace. Asi que:
 	#   · el mecanismo no esta en el arbol  -> 3, NO APLICA TODAVIA (el llamante lo traduce a 0

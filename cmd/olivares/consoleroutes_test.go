@@ -1972,7 +1972,7 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 // previa que el motor construia PARA la consola y que la consola nunca llamaba— y midio el censo
 // en **51**. Esa, y no 52, es la cifra que documenta la constante de abajo.
 //
-// Los dos PR llegaron con un valor propio y NINGUNO era el medido: traia 56 y traia
+// The two PRs arrived with their own value and NEITHER was the measured one: one brought 56, the other
 // 53, y al fusionarlos el conflicto era literalmente esta linea. Elegir uno de los dos habria
 // dejado el trinquete flojo por 4 o por 1 — y un trinquete flojo no avisa de la primera ruta que
 // aterriza sin superficie, que es justo para lo que existe.

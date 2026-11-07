@@ -19,7 +19,7 @@ import (
 //
 // ⛔ SE PRUEBA EL MECANISMO, NO LA CARRERA. Un test que reproduzca la carrera real es intermitente
 // por construcción, y un rojo aleatorio en un check requerido enseña a la gente a ignorar el job
-// entero — la misma razón por la que el testigo de “ fija la PROPIEDAD y no la carrera.
+// entirely — the same reason the earlier witness pins the PROPERTY and not the race.
 func TestTheReservationWindowDefersRowWritesAndFlushesThemInOrder(t *testing.T) {
 	t.Parallel()
 

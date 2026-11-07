@@ -833,6 +833,10 @@ jobs:
           deps=()
           if [[ "$RUNNER_ENVIRONMENT" == github-hosted ]]; then deps=(--with-deps); fi
           pnpm --dir web exec playwright install "${deps[@]}" chromium
+      - name: the runner allows the session boundary's user and network namespaces
+        # The journey starts a bound session, which fails closed (502) where the host refuses
+        # the boundary: a hosted runner does, until this clears its AppArmor switch.
+        run: bash scripts/ci-session-boundary.sh
       - name: first-use console journey (fresh setup, model, folder, panes, stop)
         timeout-minutes: 6
         run: bash scripts/console-first-use.sh

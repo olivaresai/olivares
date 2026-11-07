@@ -9,7 +9,7 @@
 #
 # POR QUÉ EXISTE, medido el 2026-08-19 sobre esta misma sesión y no deducido.
 #
-# El hub integró el PR con `git merge --no-ff`, resolvió su único conflicto, commiteó, y
+# A PR was integrated with `git merge --no-ff`, its only conflict resolved and committed, and
 # antes de publicar hizo `git rebase origin/main` como en todas las publicaciones. **`git rebase`
 # APLANA el commit de merge** y replaya los commits sueltos que trajo. Tres entraron; el cuarto
 # volvió a chocar contra la MISMA línea, y el rebase se detuvo dejando HEAD detached en el estado

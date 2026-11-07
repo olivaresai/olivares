@@ -197,7 +197,7 @@ function ModelAccessTab() {
   const { activeTenant, can } = useAuth()
 
   // ⛔ DOS ARREGLOS EN LA MISMA CONSULTA, y los dos hacen falta:
-  //    1 · la clave NOMBRA AL INQUILINO (es también el cambio de la PR, que va aparte:
+  //    1 · the key NAMES THE TENANT (it is also the change of a separate PR:
   //        aquí se escribe la forma FINAL para que ninguna de las dos ramas pierda la otra);
   //    2 · se pide el techo y se declara el recorte. Ésta es la pantalla que decide QUIÉN PUEDE
   //        USAR QUÉ MODELO: un `allow` CONFINA y un `forbid` RESTA, y el conjunto `confinados`

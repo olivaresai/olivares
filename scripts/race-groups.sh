@@ -51,7 +51,7 @@ export SHARDER
 command -v go >/dev/null 2>&1 || cannot "no Go toolchain: cannot enumerate packages"
 
 # ── Enumeración: UNA sola función, la misma para `check` y para `run` ──────────
-# Un `go test ./...` en un workspace sólo cubre el módulo ACTUAL (golang/go),
+# A `go test ./...` in a workspace covers only the CURRENT module (golang/go),
 # así que se enumera módulo a módulo. Se listan sólo los paquetes CON tests: un
 # paquete sin tests no aporta cobertura de carrera y alarga la línea de comandos.
 enumerate() {

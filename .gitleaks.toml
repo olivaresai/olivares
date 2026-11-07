@@ -458,10 +458,10 @@ regexes = [
   # The [^/]* prefix preserves the single-file scope without naming the session.
   paths = ['''^design/[^/]*CONTRASTE-GITLEAKS-2026-08-29\.md$''']
 
-# El séptimo, y es una recursión con nombre: el fichero `.gitleaksignore` que añadió para
+# The seventh is a named recursion: the `.gitleaksignore` file that was added to
 # SUPRIMIR un hallazgo contiene una línea con forma de clave —la propia huella
 # `<sha40>:<fichero>:<regla>:<línea>`— y es, él mismo, un hallazgo. El fichero ya está retirado del
-# árbol por; esto cubre el commit que lo introdujo.
+# tree; this covers the commit that introduced it.
 [[allowlists]]
   description = "the fingerprint line of the retired .gitleaksignore is itself key-shaped, in c66f8f72aca4"
   targetRules = ["generic-api-key"]
