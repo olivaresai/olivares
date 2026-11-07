@@ -27,6 +27,10 @@ EnvironmentFile=-/etc/olivares/olivares.env
 # environment file to "--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444" — the
 # later flag on the command line wins — or edit this line with a drop-in override.
 ExecStart=/usr/bin/olivares serve --data-dir=/var/lib/olivares --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h $OLIVARES_EXTRA_ARGS
+# A rollback that lost power mid-restore leaves the data volume half-restored and its marker in the snapshot directory.
+# The marker blocks the start, and exit 1 skips the unit without failing it; the rollback run again finishes the
+# restore and removes the marker. The + runs the test as root: that directory is root-only.
+ExecCondition=+/usr/bin/test ! -e /var/lib/olivares-snapshots/rollback-in-progress
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s

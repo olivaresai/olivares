@@ -32,7 +32,7 @@ import { SessionStrip } from '@/features/sessions/session-strip'
 import { useUrlStateNotice } from '@/features/shared'
 import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import { dayCost, failedToday } from './now-sessions'
-import { NowQueue, useFlaggedRequest } from './now-queue'
+import { NowQueue, useFlaggedRequest, useNeedsYouRows } from './now-queue'
 import { RecentWork } from './recent-work'
 import { tileState } from './view-state'
 import { useRecentSessions } from './use-recent-sessions'
@@ -99,6 +99,23 @@ export function HomeView() {
     settledSessions?.length === 0
   )
 
+  // The current answer only: a page whose refetch failed keeps its old rows on the query,
+  // and a request that may have been decided since must not keep its Approve.
+  const approvals = currentAnswer(
+    pendingApprovals.permitted,
+    pendingApprovals.query,
+  )
+  const flag = useFlaggedRequest(approvals?.items)
+  // Needs you, read once: the strip's count and the section's are this one count (#4738).
+  const needs = useNeedsYouRows(
+    liveAnswer?.items,
+    canSessions,
+    runsAnswer?.items,
+    approvals?.items,
+    tileState(sessionsQ),
+    pendingApprovals.permitted ? tileState(pendingApprovals.query) : 'ready',
+  )
+
   // THE STRIP (session-strip.tsx), by the Sessions strip's rules: without the run half
   // what runs, failed and cost is not known, a page cut short leaves today's failures and
   // cost out, and the cost is what today's sessions reported.
@@ -110,7 +127,9 @@ export function HomeView() {
   const usageView = viewById('usage')
   const strip = recentSessions
     ? {
-        needYou: recentSessions.filter((s) => inSection(s, 'attention')).length,
+        needYou: needs.count,
+        // This list holds the sessions only; the count also holds approvals, so it is text.
+        needYouLinked: false,
         running: runsAnswer ? liveSessions.length : null,
         failed: exact ? failedToday(recentSessions, now) : null,
         costMicroUsd: today?.costMicroUsd ?? null,
@@ -119,14 +138,6 @@ export function HomeView() {
         usagePath: usageView && navigable(usageView) ? usageView.path : null,
       }
     : null
-
-  // The current answer only: a page whose refetch failed keeps its old rows on the query,
-  // and a request that may have been decided since must not keep its Approve.
-  const approvals = currentAnswer(
-    pendingApprovals.permitted,
-    pendingApprovals.query,
-  )
-  const flag = useFlaggedRequest(approvals?.items)
 
   if (!readsSessions && !pendingApprovals.permitted) {
     return (
@@ -155,10 +166,7 @@ export function HomeView() {
         {strip ? <SessionStrip {...strip} className="px-0 pb-0" /> : null}
         {canSessions || pendingApprovals.permitted ? (
           <NowQueue
-            sessions={liveAnswer?.items}
-            runs={runsAnswer?.items}
-            state={tileState(sessionsQ)}
-            sessionsReadable={canSessions}
+            needs={needs}
             approvals={approvals?.items}
             flag={flag}
             approvalsState={

@@ -2110,8 +2110,6 @@ var consoleDeferredOperatorSurface = map[string]string{
 	// Skills catalog retirement, revision publishing and comparisons remain CLI and
 	// REST/SDK surfaces. Remove each entry when its console flow gains a caller; the
 	// existing stale-declaration checks enforce it.
-	"DELETE /v1/m/skills/packs/{}": "unused pack retirement uses `olivares skills rm`; " +
-		"the console has no catalog retirement confirmation or pack-version state",
 	"POST /v1/m/skills/packs/{}/revisions": "publishing another immutable revision uses `olivares skills update`; " +
 		"the console has no catalog revision import or retry-key flow",
 	"GET /v1/m/skills/packs/{}/diff": "published revision comparisons use `olivares skills diff`; " +

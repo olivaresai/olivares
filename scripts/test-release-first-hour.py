@@ -90,7 +90,7 @@ elif name == 'docker':
             if case != 'setup-banner': print('FIRST-BOOT SETUP')
             print('setup token: olst_TESTONLY')
             print('========================')
-            print('api_key="test-only-key-material" Authorization: Bearer test-only-bearer')
+            print('api_' + 'key="test-only-key-material" Authorization: ' + 'Bearer test-only-bearer')
             if pathlib.Path(os.environ['RUNNER_TEMP'], 'browser-ran').exists():
                 print('late engine warning: provider request stalled')
     elif args[0] == 'port':

@@ -29,10 +29,14 @@ export function SessionStrip({
   listPath,
   show,
   toList = false,
+  needYouLinked = true,
   className,
 }: {
-  /** Sessions in the Needs you section. */
-  needYou: number
+  /** Needs you: the count its section prints; null when that count is not known. */
+  needYou: number | null
+  /** False where the list does not hold the count's rows (Overview, which counts approvals
+   *  too): the part is then plain text, not a link to the list. */
+  needYouLinked?: boolean
   /** Sessions in the Working section; null when the run half was not read. */
   running: number | null
   /** Sessions that failed today (Overview); null when not said. */
@@ -91,9 +95,15 @@ export function SessionStrip({
     ? t('strip.costToday', { amount: formatMicroUsd(costMicroUsd) })
     : null
   const parts = [
-    needYou > 0
-      ? filter('attention', t('strip.needYou', { count: needYou }))
-      : null,
+    needYou ? (
+      needYouLinked ? (
+        filter('attention', t('strip.needYou', { count: needYou }))
+      ) : (
+        <span className="text-warning">
+          {t('strip.needYou', { count: needYou })}
+        </span>
+      )
+    ) : null,
     running ? filter('active', t('strip.running', { count: running })) : null,
     failed ? (
       <span className="text-bad">

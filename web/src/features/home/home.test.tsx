@@ -86,6 +86,20 @@ afterEach(() => {
 const page = (items: unknown[], has_more = false) =>
   ({ items, has_more }) as never
 
+/** A pending approval the Overview lists under Needs you (#4738). */
+const pendingApproval = (id: string) => ({
+  id,
+  action: 'claude.hook.tool',
+  subject_kind: 'claude.tool',
+  requested_by: 'user:sam',
+  review: { tool: 'Command', text: 'pnpm test' },
+  status: 'pending',
+  required_approvals: 1,
+  approve_count: 0,
+  reject_count: 0,
+  escalated: false,
+})
+
 describe('Overview: what needs you, what runs, what ended (#4427)', () => {
   const now = () => new Date().toISOString()
   const run = (over: Record<string, unknown>) => ({
@@ -521,6 +535,107 @@ describe('Overview — Running and Recent rows (#4427)', () => {
       expect(screen.queryByText(/\d+ needs? you/)).toBeNull()
     },
   )
+
+  it('the strip and Needs you count the same rows (#4738)', async () => {
+    authState.can = () => true
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(
+      page([pendingApproval('ap-one'), pendingApproval('ap-two')]),
+    )
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(page([]))
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(
+      page([
+        {
+          session_ref: 'sess-silent',
+          attribution: 'legacy',
+          cc_state: 'silent_evasion',
+          engine: 'claude',
+          input_tokens: 0,
+          output_tokens: 0,
+          cost_micro_usd: 0,
+          event_count: 1,
+          tool_call_count: 0,
+          first_event_at: today(),
+          last_event_at: today(),
+          duration_seconds: 1,
+          critical: false,
+        },
+      ]),
+    )
+    renderIntel(<HomeView />)
+    const needs = await screen.findByTestId('now-needs')
+    // Two pending approvals and one silent session: the section's count and the strip's
+    // read the same rows, so they say the same number.
+    await waitFor(() => {
+      const heading = within(needs).getByRole('heading', { name: 'Needs you' })
+      expect(heading.nextElementSibling?.textContent).toBe('3')
+      const strip = screen.getByText(/\d+ needs? you/).textContent ?? ''
+      expect(strip).toMatch(/^3 needs? you$/)
+    })
+  })
+
+  it('the strip count is plain text, not a link to the Sessions filter, when approvals are in it (#4738)', async () => {
+    authState.can = () => true
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(
+      page([pendingApproval('ap-one'), pendingApproval('ap-two')]),
+    )
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(page([]))
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([]))
+    renderIntel(<HomeView />)
+    // Two approvals and no session: the Sessions filter would list nothing for this count.
+    const strip = await screen.findByText(/^2 needs? you$/)
+    expect(strip.closest('a')).toBeNull()
+  })
+
+  it('the strip prints no needs-you count when the live read fails but runs and approvals answer', async () => {
+    authState.can = () => true
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(
+      page([pendingApproval('ap-one'), pendingApproval('ap-two')]),
+    )
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(page([]))
+    vi.spyOn(sessionsApi, 'live').mockRejectedValue(
+      new ApiError(500, 'server_error', 'boom'),
+    )
+    renderIntel(<HomeView />)
+    const needs = await screen.findByTestId('now-needs')
+    await within(needs).findByText('The sessions could not be read.')
+    await screen.findByTestId('now-approvals')
+    expect(screen.queryByText(/\d+ needs? you/)).toBeNull()
+    expect(
+      within(needs).getByRole('heading', { name: 'Needs you' })
+        .nextElementSibling,
+    ).toBeNull()
+  })
+
+  it('the strip prints no needs-you count while the approvals read has failed (#4738)', async () => {
+    authState.can = () => true
+    vi.spyOn(governanceApi, 'listApprovals').mockRejectedValue(
+      new ApiError(500, 'server_error', 'boom'),
+    )
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(page([]))
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(
+      page([
+        {
+          session_ref: 'sess-silent',
+          attribution: 'legacy',
+          cc_state: 'silent_evasion',
+          engine: 'claude',
+          input_tokens: 0,
+          output_tokens: 0,
+          cost_micro_usd: 0,
+          event_count: 1,
+          tool_call_count: 0,
+          first_event_at: today(),
+          last_event_at: today(),
+          duration_seconds: 1,
+          critical: false,
+        },
+      ]),
+    )
+    renderIntel(<HomeView />)
+    // The approvals failed: the strip must not print a count that leaves them out.
+    await screen.findByTestId('now-approvals-error')
+    expect(screen.queryByText(/\d+ needs? you/)).toBeNull()
+  })
 })
 
 describe('Now counts sessions, not the rows each one wrote', () => {

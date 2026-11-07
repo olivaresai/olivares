@@ -19,12 +19,14 @@ import type { ApprovalDTO } from '@/features/governance/types'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import { AccountMarksContext } from '@/features/agent-tools/account-marks'
 import type { LiveDTO } from '@/features/sessions/types'
+import type { RunDTO } from '@/features/agentops/types'
 import { sessionsApi } from '@/features/sessions/api'
 import { agentOpsApi } from '@/features/agentops/api'
 import * as communications from '@/features/communications/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { FLAG_ARM_MS } from '@/features/governance/approval-preview'
-import { NowQueue, useFlaggedRequest } from './now-queue'
+import { NowQueue, useFlaggedRequest, useNeedsYouRows } from './now-queue'
+import type { TileState } from './view-state'
 import './i18n'
 
 const auth = vi.hoisted(() => ({
@@ -81,9 +83,27 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 /** Estate's own wiring: the page holds the flagged request and hands it to the queue. */
-function Queue(props: Omit<ComponentProps<typeof NowQueue>, 'flag'>) {
+// The page's own wiring: Overview reads the rows once and hands them to the queue.
+function Queue({
+  sessions,
+  runs,
+  ...props
+}: Omit<ComponentProps<typeof NowQueue>, 'flag' | 'needs'> & {
+  sessions?: LiveDTO[]
+  sessionsReadable?: boolean
+  state: TileState
+  runs?: readonly RunDTO[]
+}) {
   const flag = useFlaggedRequest(props.approvals)
-  return <NowQueue {...props} flag={flag} />
+  const needs = useNeedsYouRows(
+    sessions,
+    props.sessionsReadable,
+    runs,
+    props.approvals,
+    props.state,
+    props.approvalsState,
+  )
+  return <NowQueue {...props} needs={needs} flag={flag} />
 }
 
 function live(over: Partial<LiveDTO> = {}): LiveDTO {

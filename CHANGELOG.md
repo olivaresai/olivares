@@ -28,17 +28,16 @@ See [versioning](INSTALL.md#versioning) for the release policy.
 
 ## [Unreleased]
 
-### Changed
-
-- `olivares skills list` (and `ls`) now lists individual installed and detected skills,
-  matching the console Skills tab, with descriptions, sources and hashes. Use
-  `--packs` for the previous pack-summary output, `--builtin` for available packs,
-  and `-o json` or `--json` for JSON. Pagination selects installed packs; detected
-  skills accompany each page.
-
 ## [0.7] - 2026-11-06
 
 ### Changed
+
+- `olivares skills list --skills` (and `ls --skills`) lists individual installed
+  and detected skills, matching the console Skills tab, with descriptions, sources
+  and hashes. The default output continues to list installed catalog packs.
+  Use `--builtin` for available packs and `-o json` or `--json` for JSON.
+  Pagination selects installed packs; with `--skills`, detected skills accompany
+  each page.
 
 - **Business department folders:** a department administrator gets 403 for host folders outside the department’s registered folders or beyond their mount mode and allowed subpaths.
 

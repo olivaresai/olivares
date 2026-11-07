@@ -364,7 +364,10 @@ stops anything, and says why, when the last transaction took no snapshot (an upg
 hand or an edition swap), the snapshot is gone, no package is kept, or `rpm`'s test
 transaction shows the kept versions cannot go back together. A rollback uses the kept
 packages up, so a second one refuses instead of wiping what was written since. A failure
-after the stop leaves the product stopped; run the rollback again.
+after the stop leaves the product stopped; run the rollback again. A power loss during the
+restore leaves a marker, `/var/lib/olivares-snapshots/rollback-in-progress`: the product
+does not start while it exists, and an update refuses until the rollback run again finishes
+the restore and removes it.
 
 For PostgreSQL, install the matching PostgreSQL client (`pg_dump`) and configure the
 service's `--admin-dsn` with a cross-tenant backup role on the same live database as

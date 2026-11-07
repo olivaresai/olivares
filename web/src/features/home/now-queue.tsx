@@ -384,72 +384,31 @@ export function useNeedsYouRows(
   sessionsReadable = true,
   runs?: readonly RunDTO[],
   approvals: readonly ApprovalDTO[] = [],
+  state: TileState = 'ready',
+  approvalsState: TileState = 'ready',
 ) {
   const now = useMinuteClock()
   const { readHandoffs, handoffs } = useOfferedHandoffs()
   const canOpenApprovals = useCanOpenApprovals()
   const listedApprovals = new Set(approvals.map((a) => a.id))
-  const rows =
-    railGroups(
-      {
-        live: sessionsReadable ? (sessions ?? []) : [],
-        handoffs: handoffs.data?.items ?? [],
-        runs: runs ?? [],
-      },
-      now,
-      {
-        canOpenApprovals,
-        // Keep the live page's sessions, including echoes folded into a run.
-        // A listed approval already has its own row; filter before the cap.
-        keepNeeds: (row, session) =>
-          (!!session.live || !!session.echoes?.length) &&
-          !(
-            row.to === '/permissions' &&
-            listedApprovals.has(row.search.approval)
-          ),
-      },
-    ).find((g) => g.id === 'needsYou')?.rows ?? []
-  return { rows, readHandoffs, handoffs }
-}
-
-export function NowQueue({
-  sessions,
-  state,
-  sessionsReadable = true,
-  approvals = [],
-  approvalsState = 'ready',
-  runs,
-  flag,
-}: {
-  /** The live page Estate already fetched (its sentence reads the same page). */
-  sessions: LiveDTO[] | undefined
-  /** The runs Estate already read carry the archived, snoozed and done marks. */
-  runs?: readonly RunDTO[]
-  state: TileState
-  /** False for a principal who may not read live sessions: the queue then holds what it
-   * may read (approvals, offered handoffs) and says nothing about sessions. */
-  sessionsReadable?: boolean
-  /** The pending approvals this principal may read (none when it may not). */
-  approvals?: readonly ApprovalDTO[]
-  /** The approvals read's own state: a failed read is said, never "nothing waits". */
-  approvalsState?: TileState
-  /** The request the card holds: Estate's own, which also decides its orange control. */
-  flag: FlaggedRequest
-}) {
-  const { t } = useTranslation(['home', 'nav'])
-  const { rows, readHandoffs, handoffs } = useNeedsYouRows(
-    sessions,
-    sessionsReadable,
-    runs,
-    approvals,
-  )
-  const flagged = flag.approval
-  const quiet = approvals.filter((a) => a.id !== flagged?.id)
-  const { settle } = flag
-  const flaggedId = flagged?.id
-  const settleFlagged = useCallback(() => {
-    if (flaggedId) settle(flaggedId)
-  }, [settle, flaggedId])
+  const group = railGroups(
+    {
+      live: sessionsReadable ? (sessions ?? []) : [],
+      handoffs: handoffs.data?.items ?? [],
+      runs: runs ?? [],
+    },
+    now,
+    {
+      canOpenApprovals,
+      // Keep the live page's sessions, including echoes folded into a run.
+      // A listed approval already has its own row; filter before the cap.
+      keepNeeds: (row, session) =>
+        (!!session.live || !!session.echoes?.length) &&
+        !(
+          row.to === '/permissions' && listedApprovals.has(row.search.approval)
+        ),
+    },
+  ).find((g) => g.id === 'needsYou')
   const sessionsState: TileState = sessionsReadable ? state : 'ready'
   const status: 'loading' | 'error' | 'ready' =
     sessionsState === 'unavailable' && (!readHandoffs || handoffs.isError)
@@ -461,6 +420,44 @@ export function NowQueue({
             handoffs.fetchStatus !== 'idle')
         ? 'loading'
         : 'ready'
+  // THE COUNT the section header and the Overview strip both print: every row the rail
+  // holds (the list shows eight) and every pending approval listed above it.
+  const count =
+    status === 'ready' &&
+    sessionsState === 'ready' &&
+    approvalsState === 'ready' &&
+    (!readHandoffs || !handoffs.isError)
+      ? (group?.total ?? 0) + approvals.length
+      : null
+  return { rows: group?.rows ?? [], count, status }
+}
+
+export type NeedsYou = ReturnType<typeof useNeedsYouRows>
+
+export function NowQueue({
+  needs,
+  approvals = [],
+  approvalsState = 'ready',
+  flag,
+}: {
+  /** The rows and their count, read once by Overview (the strip prints the same count). */
+  needs: NeedsYou
+  /** The pending approvals this principal may read (none when it may not). */
+  approvals?: readonly ApprovalDTO[]
+  /** The approvals read's own state: a failed read is said, never "nothing waits". */
+  approvalsState?: TileState
+  /** The request the card holds: Estate's own, which also decides its orange control. */
+  flag: FlaggedRequest
+}) {
+  const { t } = useTranslation(['home', 'nav'])
+  const { rows, count, status } = needs
+  const flagged = flag.approval
+  const quiet = approvals.filter((a) => a.id !== flagged?.id)
+  const { settle } = flag
+  const flaggedId = flagged?.id
+  const settleFlagged = useCallback(() => {
+    if (flaggedId) settle(flaggedId)
+  }, [settle, flaggedId])
   return (
     <section
       aria-labelledby="now-needs-heading"
@@ -474,9 +471,9 @@ export function NowQueue({
         >
           {t('nav:shell.rail.groups.needsYou')}
         </h2>
-        {status === 'ready' && approvalsState !== 'unavailable' ? (
+        {count !== null ? (
           <span className="text-metadata-s text-text-3 tabular-nums">
-            {rows.length + approvals.length}
+            {count}
           </span>
         ) : null}
       </div>

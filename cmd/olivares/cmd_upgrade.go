@@ -202,6 +202,7 @@ func newUpgradeRollbackCmd() *cobra.Command {
 			"update replaced, and starts the product. Data written since the update is lost. It refuses, before it stops\n" +
 			"anything, when the last package transaction took no snapshot or kept no packages. Run it as root. Only the\n" +
 			"Olivares appliance keeps these restore points (docs/UPGRADE-AND-ROLLBACK.md).",
+		Example:      "  sudo olivares upgrade rollback",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

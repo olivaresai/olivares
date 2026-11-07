@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -203,8 +204,35 @@ func TestSkillsCLIListMatchesConsoleRows(t *testing.T) {
 		}
 		return http.StatusNotFound, `{}`
 	}
+	for _, mode := range [][]string{{}, {"-o", "json"}, {"--json"}} {
+		before := rec.count()
+		out, _, err := execDatalane(t, "", datalaneArgs(rec, append([]string{"skills", "ls"}, mode...)...)...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rec.count() != before+1 {
+			t.Fatalf("default listing fetched individual skills instead of packs: %s", out)
+		}
+		if len(mode) == 0 {
+			if !strings.Contains(out, "review-pack") || strings.Join(strings.Fields(strings.Split(out, "\n")[0]), " ") != "ID NAME STATE REVISION" {
+				t.Fatalf("default pack columns changed: %s", out)
+			}
+		} else {
+			var got, want any
+			_, raw := rec.respond(rec.last(t))
+			if err := json.Unmarshal([]byte(out), &got); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal([]byte(raw), &want); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("default pack JSON changed: %s", out)
+			}
+		}
+	}
 	for _, mode := range [][]string{{"-o", "json"}, {"--json"}, {}} {
-		args := append([]string{"skills", "list"}, mode...)
+		args := append([]string{"skills", "list", "--skills"}, mode...)
 		out, _, err := execDatalane(t, "", datalaneArgs(rec, args...)...)
 		if err != nil {
 			t.Fatal(err)
@@ -227,14 +255,23 @@ func TestSkillsCLIListMatchesConsoleRows(t *testing.T) {
 			t.Fatalf("console rows missing: %s", out)
 		}
 	}
-	out, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "list", "--packs", "--json")...)
-	if err != nil || !strings.Contains(out, "review-pack") || strings.Contains(out, "native-hash") {
-		t.Fatalf("packs: %s %v", out, err)
+	before := rec.count()
+	if _, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "ls", "--skills", "--builtin")...); exitcode.From(err) != exitcode.Usage || rec.count() != before {
+		t.Fatalf("exclusive flags: %v; requests %d -> %d", err, before, rec.count())
+	}
+	rec.respond = func(r datalaneRequest) (int, string) {
+		if r.Path != "/v1/m/skills/builtins" {
+			t.Errorf("builtin listing requested %s", r.Path)
+		}
+		return http.StatusOK, `{"items":[{"id":"builtin-pack","origin":"https://example.test/skills"}]}`
+	}
+	if out, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "ls", "--builtin")...); err != nil || !strings.Contains(out, "builtin-pack") {
+		t.Fatalf("builtins: %s %v", out, err)
 	}
 	rec.respond = func(r datalaneRequest) (int, string) {
 		return http.StatusServiceUnavailable, `{"error":{"message":"detection unavailable"}}`
 	}
-	if out, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "list", "--json")...); err == nil || strings.Contains(out, "native-hash") {
+	if out, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "list", "--skills", "--json")...); err == nil || strings.Contains(out, "native-hash") {
 		t.Fatalf("failure hidden: %s %v", out, err)
 	}
 }

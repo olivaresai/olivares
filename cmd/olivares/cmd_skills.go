@@ -39,10 +39,10 @@ func newSkillsCmd() *cobra.Command {
 }
 func newSkillsListCmd(client datalaneClient) *cobra.Command {
 	var page datalanePageFlags
-	var builtin, packs bool
-	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "ls", Aliases: []string{"list"}, Short: "List installed and detected skills", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-		if builtin && packs {
-			return exitcode.New(exitcode.Usage, fmt.Errorf("choose --packs or --builtin, not both"))
+	var builtin, individual bool
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "ls", Aliases: []string{"list"}, Short: "List installed catalog packs", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if builtin && individual {
+			return exitcode.New(exitcode.Usage, fmt.Errorf("choose --skills or --builtin, not both"))
 		}
 		q, err := page.values(cmd, nil)
 		if err != nil {
@@ -65,7 +65,7 @@ func newSkillsListCmd(client datalaneClient) *cobra.Command {
 		if builtin {
 			return datalaneRenderList(cmd, "skills", raw, "no built-in skills available", datalaneCols("ID", "id", "ORIGIN", "origin", "COMMIT", "resolved_commit", "DIGEST", "source_digest"))
 		}
-		if !packs {
+		if individual {
 			raw, err = skillsCatalogRows(cmd, client, raw)
 			if err != nil {
 				return err
@@ -75,9 +75,9 @@ func newSkillsListCmd(client datalaneClient) *cobra.Command {
 		return datalaneRenderList(cmd, "skills", raw, "no skills installed in the catalog", datalaneCols("ID", "id", "NAME", "name", "STATE", "state", "REVISION", "latest_revision"))
 	}}
 	cmd.Flags().BoolVar(&builtin, "builtin", false, "browse the pinned built-in catalog")
-	cmd.Flags().BoolVar(&packs, "packs", false, "list installed pack summaries instead of individual skills")
+	cmd.Flags().BoolVar(&individual, "skills", false, "list individual installed and detected skills, as in the console Skills tab")
 	addDeprecatedJSONFlag(cmd)
-	cmd.Long = "List members of installed packs and detected native skills, as in the console Skills tab. Use --packs for pack summaries or --builtin for available packs. Pagination selects installed packs; detected skills accompany every page. Use -o json (or --json) for row metadata."
+	cmd.Long = "List installed catalog packs. Use --skills for individual installed and detected skills, as in the console Skills tab, or --builtin for available packs. Pagination selects installed packs; with --skills, detected skills accompany every page. Use -o json (or --json) for row metadata."
 	cmd.Example = "  olivares skills ls"
 	page.add(cmd)
 	return cmd

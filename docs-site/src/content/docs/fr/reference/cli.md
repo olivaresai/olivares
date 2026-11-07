@@ -1085,7 +1085,7 @@ All 1007 commands, in alphabetical order.
 | [`olivares skills enable`](#command-olivares-skills-enable) | Enable skills on a workspace, profile, folder, template, group, agent or session |
 | [`olivares skills get`](#command-olivares-skills-get) | Show catalog provenance and immutable revisions |
 | [`olivares skills install`](#command-olivares-skills-install) | Publish a reviewed immutable catalog revision |
-| [`olivares skills ls`](#command-olivares-skills-ls) | List installed and detected skills |
+| [`olivares skills ls`](#command-olivares-skills-ls) | List installed catalog packs |
 | [`olivares skills pin`](#command-olivares-skills-pin) | Move every pin of a pack to one revision (update or roll back) |
 | [`olivares skills rm`](#command-olivares-skills-rm) | Retire an unused catalog pack and retain its provenance |
 | [`olivares skills selection`](#command-olivares-skills-selection) | Show the skills a new session will get, before it starts |
@@ -14135,7 +14135,7 @@ olivares skills install
 
 #### Command: olivares skills ls
 
-List installed and detected skills
+List installed catalog packs
 
 ```
 olivares skills ls
@@ -14149,7 +14149,7 @@ Aliases: `list`
 | `--cursor` | `string` | — | opaque cursor from a previous page's has_more result |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--limit` | `int` | `0` | maximum rows per page (server default when unset) |
-| `--packs` | `bool` | `false` | list installed pack summaries instead of individual skills |
+| `--skills` | `bool` | `false` | list individual installed and detected skills, as in the console Skills tab |
 
 #### Command: olivares skills pin
 
