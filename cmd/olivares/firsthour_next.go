@@ -167,6 +167,7 @@ var topLevelNextCommands = map[string]string{
 // table, and only one of them is a decision.
 var nextCommandExempt = map[string]string{
 	"ask":        "ask takes the question itself; the answer it prints is the next step",
+	"files":      "files convert takes the document path; the Markdown path it prints is the next step",
 	"wiki":       "Wiki operations require a folder; use wiki init, ingest, query or lint with its path.",
 	"help":       "cobra's own verb: what follows is the command you asked about, which it just printed",
 	"completion": "its output is evaluated by the shell, not run as a command",
