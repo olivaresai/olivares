@@ -312,7 +312,7 @@ describe('the sign-in page after a session ended', () => {
   })
 })
 
-// olivares#2781: a sign-in whose request never gets an answer. The browser hides why (a
+// olivares: a sign-in whose request never gets an answer. The browser hides why (a
 // refused certificate looks like a stopped engine), so the page words it by how it was opened.
 describe('a sign-in request that gets no answer', () => {
   const realLocation = window.location

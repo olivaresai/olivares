@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A FILE OR FOLDER IN A REPLY IS A CHIP (#4011). An inline code span that reads as a path
+// A FILE OR FOLDER IN A REPLY IS A CHIP. An inline code span that reads as a path
 // ("tools/dispatch.py:3446", "docs/") shows its name and line, opens in the editor the person
 // chose in Settings at that line, carries its whole path on the hover, and its menu (right
 // click, or Enter) copies the path relative to the session folder or whole. Only where the

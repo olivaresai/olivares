@@ -9,11 +9,11 @@
 # QUE DEFECTO CIERRA, y la ventana es estrecha a proposito. La peticion normal ya queda acotada:
 # el cliente FIJA el inquilino al entrar (web/src/lib/api/client.ts). Lo que queda abierto es la
 # MUTACION PAUSADA — offline, reintento, red caida — que se reanuda DESPUES de un cambio de
-# inquilino y sale con el nuevo. `#1613` lo demuestra con un testigo ejecutable en
+# inquilino y sale con el nuevo. `` lo demuestra con un testigo ejecutable en
 # web/src/features/knowledge/scans-view.test.tsx: offline, clic, cambio de inquilino, online, y
 # exige que la mutacion salga con el inquilino que la INICIO.
 #
-# POR QUE ESTE ALCANCE Y NO «TODAS LAS ESCRITURAS». Medido el 2026-08-23 sobre la punta de #1613:
+# POR QUE ESTE ALCANCE Y NO «TODAS LAS ESCRITURAS». Medido el 2026-08-23 sobre la punta de:
 # el arbol tiene ~363 llamadas de escritura en produccion y solo ~30 atadas. Un trinquete sobre
 # esas 363 naceria con ~330 exenciones, y una lista de trescientas excepciones no es un trinquete:
 # es una lista de la compra que nadie relee. El alcance que SI funciona es «donde el trabajo ya se
@@ -90,7 +90,7 @@ censar() {
 			# expresiones de intervalo: `/^[[:space:]]{2}…/` no casa NADA, `nom` se queda vacio,
 			# el `[ -n "$nombre" ] || continue` de abajo se traga TODAS las escrituras y el gate
 			# imprime CLEAN sobre un arbol lleno de supervivientes. Lo hizo: la primera version
-			# dijo «CLEAN» sobre la punta de #1613, donde `createBudget` esta sin atar y verificado.
+			# dijo «CLEAN» sobre la punta de, donde `createBudget` esta sin atar y verificado.
 			nombre="$(awk -v fin="$n" '
 				NR<=fin && /^  [a-zA-Z_][a-zA-Z0-9_]*:/ { linea=NR; nom=$0 }
 				END { if (nom!="") { sub(/^[[:space:]]*/,"",nom); sub(/:.*/,"",nom); print linea ":" nom } }
@@ -111,11 +111,11 @@ censar() {
 		done < <(grep -nE "$ESCRITURA" "$f" 2>/dev/null)
 	done < <(find "$raiz" -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | LC_ALL=C sort)
 	# ⛔ TRES ESTADOS, NO DOS, y la diferencia es la razon de ser de este bloque.
-	# `TenantRequestOptions` NACE en #1613: en `main` HOY no existe en ningun fichero. Un gate que
+	# `TenantRequestOptions` is BORN in a later change: on `main` TODAY it exists in no file. A gate that
 	# no encuentra el mecanismo y contesta «limpio» es la clase «un gate ciego no falla: CERTIFICA»
 	# — se leeria como «toda escritura ata» justo en el arbol donde ninguna lo hace. Asi que:
 	#   · el mecanismo no esta en el arbol  -> 3, NO APLICA TODAVIA (el llamante lo traduce a 0
-	#     con su razon impresa; se arma solo el dia que #1613 aterrice)
+	#     con su razon impresa; se arma solo el dia que aterrice)
 	#   · el mecanismo esta pero no vi escrituras -> 2, NO HE PODIDO MIRAR
 	if [ "$ficheros_con_mecanismo" -eq 0 ]; then
 		return 3
@@ -299,7 +299,7 @@ TS
 
 	# CALIBRACION CONTRA UN ARBOL REAL QUE TENGA EL MECANISMO.
 	# ⛔ Y SI NO SE PUEDE, SE DICE A GRITOS. `TenantRequestOptions` no existe en `main` (nace en
-	# #1613), asi que en `main` estas dos casillas NO PUEDEN correr. Un `skip` mudo aqui seria un
+	#), asi que en `main` estas dos casillas NO PUEDEN correr. Un `skip` mudo aqui seria un
 	# pase silencioso: la bateria diria «todo verde» sin haber calibrado nunca contra codigo real,
 	# que es justo como esta version llego a imprimir CLEAN sobre un arbol lleno de supervivientes.
 	REALS="${OLIVARES_SELFTEST_SRC:-$ROOT/web/src}"

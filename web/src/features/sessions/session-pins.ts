@@ -13,7 +13,7 @@
 //
 // ⛔ A PIN NAMES A RUN, OR AN OBSERVED ROW. A launched session is pinned on its run. A
 //    session the plane only observes (no run launched through Olivares) is pinned on its
-//    live row (`observedLiveRef`, #2176) and reads the same `pinned` / `pinned_at` on
+//    live row (`observedLiveRef`,) and reads the same `pinned` / `pinned_at` on
 //    `LiveDTO`: one section, one order, one ceiling. A session with neither is not offered
 //    a pin (`isPinnable`) — a control that silently does nothing is worse than none.
 //

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A person's snooze and done marks at the TRANSPORT boundary (#2480): the path, the
+// A person's snooze and done marks at the TRANSPORT boundary: the path, the
 // method and the body the engine's routes take, through the real client.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __resetRefreshState, configureApiClient } from '@/lib/api/client'

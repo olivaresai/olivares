@@ -741,7 +741,7 @@ func backupPostgres(ctx context.Context, sf drFlags, work string, keyRefs []dr.K
 	}
 	// The chain tips are read through a read-only snapshot of their own, not through
 	// the engine booted above: beside a serving node that engine is a standby, and
-	// its Custody door refuses standbys (#496). TipAdvisory already names the window:
+	// its Custody door refuses standbys. TipAdvisory already names the window:
 	// the manifest is built from the live store.
 	ledger, err := coreengine.OpenAuditReader(ctx, store.Config{
 		Engine: store.EnginePostgres, DSN: sf.dsn, OwnerDSN: sf.ownerDSN, MaxConns: 2,

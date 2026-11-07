@@ -34,7 +34,7 @@ func TestStoreErrorStatusMapsTheCanonicalSet(t *testing.T) {
 		{"cursor with sort", store.ErrCursorWithSort, http.StatusBadRequest, "invalid query"},
 		{"unknown entity", store.ErrUnknownEntity, http.StatusBadRequest, "invalid query"},
 		{"audit spool full", store.ErrAuditSpoolFull, http.StatusServiceUnavailable, "audit spool full"},
-		// #2774: the backend-availability sentinel. statusFor had no arm for it, so
+		//: the backend-availability sentinel. statusFor had no arm for it, so
 		// storeErrorAnswer fell to its 500 fallback and every module route answered
 		// "internal error" for a dead database while core/api did the same.
 		{"store unavailable", store.ErrStoreUnavailable, http.StatusServiceUnavailable, "store backend unavailable"},

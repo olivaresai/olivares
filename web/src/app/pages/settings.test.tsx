@@ -50,7 +50,7 @@ vi.mock('@tanstack/react-router', async () => ({
   Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
 }))
 
-// Setup is a room with its own tests; here it only has to open INSIDE Settings (#2905).
+// Setup is a room with its own tests; here it only has to open INSIDE Settings.
 vi.mock('@/features/onboarding/index', () => ({
   OnboardingView: () => <section aria-label="Setup wizard" />,
 }))
@@ -119,7 +119,7 @@ beforeEach(async () => {
   useModulesStore.setState({ off: new Set() })
   localStorage.clear()
   document.documentElement.classList.remove('dark', 'black')
-  // A fresh profile: whatever the store reads with nothing stored (#478).
+  // A fresh profile: whatever the store reads with nothing stored.
   const fresh = readStoredThemeForTest()
   useThemeStore.setState({
     theme: fresh,
@@ -288,7 +288,7 @@ describe('Settings', () => {
     expect(screen.getByRole('heading', { name: 'Notifications' })).toBeVisible()
     for (const name of ['Needs you', 'Finished', 'Failed'])
       expect(screen.getByRole('switch', { name })).toBeVisible()
-    // Setup is a section of Settings, never a link out of it (#2905).
+    // Setup is a section of Settings, never a link out of it.
     expect(screen.queryByRole('link', { name: 'Setup' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Setup' }))
     expect(
@@ -512,7 +512,7 @@ describe('Settings', () => {
     expect(screen.getByRole('radio', { name: 'System' })).toHaveFocus()
   })
 
-  it('treats System as the theme default: no marker, and reset returns to it (#478)', async () => {
+  it('treats System as the theme default: no marker, and reset returns to it', async () => {
     const user = userEvent.setup()
     render(<SettingsPage />)
     expect(screen.getByRole('radio', { name: 'System' })).toBeChecked()
@@ -585,7 +585,7 @@ describe('Settings', () => {
   })
 
   it('keeps Restore all in the General header, never portaled into a top bar', () => {
-    // The top bar has no page slot since #2544; a stray one must not pull the button out.
+    // The top bar has no page slot since; a stray one must not pull the button out.
     const bar = document.createElement('header')
     bar.dataset.slot = 'topbar'
     bar.innerHTML = '<div data-slot="page-actions"></div>'
@@ -670,7 +670,7 @@ describe('Settings', () => {
     },
   )
 
-  it('opens ?section=setup on load, with its row marked current (#2905)', async () => {
+  it('opens ?section=setup on load, with its row marked current', async () => {
     location.search = '?section=setup'
     render(<SettingsPage />)
     expect(
@@ -682,7 +682,7 @@ describe('Settings', () => {
     )
   })
 
-  it('offers Setup only where its page opens, and an address to it otherwise says it is for a system administrator, not General (#474, #2905)', () => {
+  it('offers Setup only where its page opens, and an address to it otherwise says it is for a system administrator, not General', () => {
     auth.denied.add('system:admin')
     location.search = '?section=setup'
     render(<SettingsPage />)
@@ -704,7 +704,7 @@ describe('Settings', () => {
     expect(screen.getByText('Work')).toBeInTheDocument()
   })
 
-  it('shows search results, not the hosted section, while the search holds a query (#2905)', async () => {
+  it('shows search results, not the hosted section, while the search holds a query', async () => {
     location.search = '?section=setup&q=theme'
     const view = render(<SettingsPage />)
     expect(
@@ -718,7 +718,7 @@ describe('Settings', () => {
     ).toBeVisible()
   })
 
-  it('offers as a start page only pages this installation runs (#474)', async () => {
+  it('offers as a start page only pages this installation runs', async () => {
     const user = userEvent.setup()
     const startPages = async () => {
       await user.click(screen.getByRole('combobox', { name: 'Start page' }))

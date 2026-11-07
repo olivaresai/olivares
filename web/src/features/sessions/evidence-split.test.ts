@@ -159,7 +159,7 @@ describe('groupEntries', () => {
   })
 })
 
-describe('groupEntries on turns (#2267 review)', () => {
+describe('groupEntries on turns', () => {
   const call = (at: string, over: Partial<TimelineDTO> = {}) =>
     entry({ kind: 'mcp', tool_ref: 'github/create_issue', at, ...over })
 

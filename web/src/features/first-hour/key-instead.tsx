@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // "Use an API key instead": the sign-in sheet itself turns into the key
-// form, on the provider the tool runs on. The page and the dialog stay (#2551), the
+// form, on the provider the tool runs on. The page and the dialog stay, the
 // field takes the focus, Cancel returns to the sign-in with nothing kept, and the key
 // leaves the browser once, in the create request.
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'

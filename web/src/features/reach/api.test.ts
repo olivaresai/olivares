@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // Transport contract of the reach view: it reads the engine's EXISTING endpoints
-// (access-map graph, agents list, live sessions, pending approval queue) — issue #2553 forbids a
+// (access-map graph, agents list, live sessions, pending approval queue) — issue forbids a
 // new mechanism, so these paths are the whole surface. Both list reads carry a
 // ceiling (the registry's list-ceiling ratchet) and the view labels every page cut.
 import { beforeEach, describe, expect, it, vi } from 'vitest'

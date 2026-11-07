@@ -4,12 +4,13 @@
 import { describe, expect, it } from 'vitest'
 import nativeHistory from './fixtures/codex-native-history.json'
 import { mapConversationFrames } from './conversation-frames'
-import { settleTurns } from './sent-turns'
+import { sentTurnsPartition, settleTurns, useSentTurns } from './sent-turns'
+import { useSessionStore } from '@/stores/session'
 
 const user = (text: string) =>
   JSON.stringify({ type: 'user', message: { role: 'user', content: text } })
 
-// Review of #2855: a note is placed by the frames the session had shown when it was
+// Review of: a note is placed by the frames the session had shown when it was
 // sent, which never move; the rows of the shown window do (it keeps the newest frames).
 describe('settleTurns', () => {
   it('settles a note when the window drops older rows before the echo comes', () => {
@@ -70,5 +71,24 @@ describe('settleTurns', () => {
     ])
     const note = { text: 'continue', after: 5, shown: 1 }
     expect(settleTurns(items, [note]).pending).toEqual([note])
+  })
+})
+
+//11-07: a held first message dropped by a session change says so, with no
+// words of it kept anywhere in the tab.
+describe('a held first message on a session change', () => {
+  it('leaves a word-free notice and keeps no words of the held message', () => {
+    useSentTurns.setState({ byRun: {}, seen: {}, said: {}, discarded: false })
+    useSentTurns.getState().note(sentTurnsPartition(), 'run-1', {
+      text: 'held secret words',
+      waiting: true,
+    })
+
+    useSessionStore.setState({ sessionId: 'another-session' })
+
+    const state = useSentTurns.getState()
+    expect(state.byRun).toEqual({})
+    expect(state.discarded).toBe(true)
+    expect(JSON.stringify(state)).not.toContain('held secret words')
   })
 })

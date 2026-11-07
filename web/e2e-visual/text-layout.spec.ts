@@ -132,7 +132,7 @@ async function expectFullText(locator: Locator) {
 
 for (const theme of ['light', 'dark']) {
   for (const width of [1920, 1280, 768, 390, 320]) {
-    // The provider profiles page is a door into Tools (#2552): its header is the one read.
+    // The provider profiles page is a door into Tools: its header is the one read.
     test(`provider profiles header remains readable at ${width} in ${theme}`, async ({
       page,
     }, testInfo) => {

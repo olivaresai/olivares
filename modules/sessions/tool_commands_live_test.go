@@ -22,7 +22,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
 
-// The "/" menu against the REAL Claude Code on this host (#1801). The fake child proves
+// The "/" menu against the REAL Claude Code on this host. The fake child proves
 // the engine's side; only this proves that the vendor program answers the request with
 // what the parser reads, for the folders a session really runs in.
 //
@@ -153,7 +153,7 @@ func TestToolCommands_RealClaudeReportsTheFoldersSkillsAndTakesNewOnes(t *testin
 	}
 }
 
-// #1871 against the actual vendor: a large local catalog, fresh homes, no
+// against the actual vendor: a large local catalog, fresh homes, no
 // credential, no hooks/MCP and no model turn. Two initialize requests prove the
 // first oversized answer did not retire the live session or corrupt stdout.
 func TestToolCommands_RealClaudeOversizedInitializeKeepsSessionAlive(t *testing.T) {

@@ -35,7 +35,7 @@ async function mockApi(page: Page) {
 }
 
 async function toDark(page: Page) {
-  // The theme is chosen in the account menu (#3161).
+  // The theme is chosen in the account menu.
   await page.getByRole('button', { name: /, Account$/ }).click()
   await page.getByRole('menuitemradio', { name: /^dark$/i }).click()
   await page.waitForFunction(() =>

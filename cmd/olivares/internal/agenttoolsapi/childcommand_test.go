@@ -23,7 +23,7 @@ import (
 )
 
 // Every child of this module goes through the composition's ChildCommand, which
-// confines it like a session child (#1114): the provider probes (one-shot
+// confines it like a session child: the provider probes (one-shot
 // commands and stdio exchanges), the status read and the login. Each may write
 // its configuration home, its login home unless that is the engine user's own
 // home, and a private TMPDIR removed once it has exited.
@@ -133,7 +133,7 @@ func TestAToolChildThatCannotBeConfinedDoesNotRun(t *testing.T) {
 // Without confinement on the node, the login and the status read of an
 // unsigned install (none-origin-only Grok Build, origin-tarball Cursor CLI)
 // are refused with one sentence naming Landlock and the tool never runs; a
-// signed tool signs in as before (#3312).
+// signed tool signs in as before.
 func TestUnsignedToolChildRefusedWhileUnconfined(t *testing.T) {
 	var m *Module
 	bin := ""

@@ -192,7 +192,7 @@ describe('AcceptInvitePage', () => {
   })
 })
 
-// olivares#2781: an invite whose request gets no answer is worded by how the page was opened.
+// olivares: an invite whose request gets no answer is worded by how the page was opened.
 describe('AcceptInvitePage: a request that gets no answer', () => {
   const realLocation = window.location
   afterEach(() => {

@@ -18,7 +18,7 @@ import (
 )
 
 // stubNoConfinement makes the engine read this host as one that cannot confine
-// a child, as a node without Landlock does (#3312).
+// a child, as a node without Landlock does.
 func stubNoConfinement(t *testing.T) {
 	t.Helper()
 	previous := hostConfinement

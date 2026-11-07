@@ -120,7 +120,7 @@ test.describe('the session surface is a conversation', () => {
     await expect(conversation).not.toContainText(/modelUsage/)
     await expect(conversation).not.toContainText(/rate_limit_event/)
 
-    // #1784: the reply reads as lists, bold and code, and the tool's bookkeeping
+    //: the reply reads as lists, bold and code, and the tool's bookkeeping
     // (thinking-token counters, an allowed rate limit) is no row of the thread.
     await expect(conversation.locator('[data-kind="assistant"]')).toHaveCount(2)
     const reply = conversation.locator('[data-kind="assistant"]').last()

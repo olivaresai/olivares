@@ -33,7 +33,7 @@ func openCodeRuntimeOptions(extra ...Option) []Option {
 		WithProductVersion("test"),
 		WithStopWaitDelay(2 * time.Second),
 		WithDriverTimeouts(20*time.Second, 2*time.Second),
-		// An OpenCode session reaches only its provider's hosts (#2888), and a
+		// An OpenCode session reaches only its provider's hosts, and a
 		// network boundary needs the filesystem confinement helper around the child.
 		WithConfinement([]string{openCodeProtectedFixture()}, true),
 	}, extra...)
@@ -59,7 +59,7 @@ func openCodeHarness(t *testing.T, authSource string, opts ...Option) (*Module, 
 func newOpenCodeProfile(t *testing.T, m *Module, tenant model.TenantID, name, authSource string) ProviderProfile {
 	t.Helper()
 	config, home := t.TempDir(), t.TempDir()
-	// An account names its default model, as a launch with none needs (#3094).
+	// An account names its default model, as a launch with none needs.
 	if err := os.WriteFile(filepath.Join(config, "opencode.json"), []byte(`{"model":"opencode/big-pickle"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestOpenCodeRuntimeLaunchOwnsTheChildAndBindsItsConversation(t *testing.T) 
 		t.Fatal(err)
 	}
 	// The preset is the build agent's rules; every other agent's (the global ones)
-	// deny everything (#3083).
+	// deny everything.
 	permissions, _ := nativeConfig["permission"].(map[string]any)
 	agents, _ := nativeConfig["agent"].(map[string]any)
 	build, _ := agents["build"].(map[string]any)
@@ -195,9 +195,9 @@ func TestOpenCodeRuntimeLaunchOwnsTheChildAndBindsItsConversation(t *testing.T) 
 	if nativeConfig["ambient_fixture"] != nil || buildPermissions["bash"] != "ask" || buildPermissions["edit"] != "ask" || permissions["*"] != "deny" {
 		t.Fatalf("native preset was replaced by ambient routing: %v", nativeConfig)
 	}
-	// #2890: the build agent's read asks too, so live policy reviews and audits it as a
+	//: the build agent's read asks too, so live policy reviews and audits it as a
 	// read. A .env file stays denied natively, and glob, grep and list ask too: they are
-	// reads of the folder they search (#3058).
+	// reads of the folder they search.
 	buildReads, _ := buildPermissions["read"].(map[string]any)
 	if buildReads["*"] != "ask" || buildReads["*.env"] != "deny" || buildReads["*.env.*"] != "deny" ||
 		buildPermissions["glob"] != "ask" || buildPermissions["grep"] != "ask" || buildPermissions["list"] != "ask" {

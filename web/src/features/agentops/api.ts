@@ -558,7 +558,7 @@ export const agentOpsApi = {
     http.get<RunActivityDTO>(`${RUNS}/${ref(r)}/activity`, {
       signal: opts?.signal,
     }),
-  /** The session's messages from the transcript its tool keeps (#2129): the index of what
+  /** The session's messages from the transcript its tool keeps: the index of what
    * the person sent, a phrase search, a start time, one message whole by `id`. Paged. */
   messages: (
     r: string,
@@ -871,7 +871,10 @@ export const agentOpsApi = {
   ) =>
     http.putRaw<WriteResponse>(`${WORKSPACES}/${ref(r)}/files/raw`, content, {
       ...opts,
-      query: { path },
+      query: {
+        path,
+        documents: typeof content === 'string' ? undefined : 'markdown',
+      },
       contentType:
         typeof content === 'string'
           ? 'text/plain; charset=utf-8'

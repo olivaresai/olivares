@@ -92,11 +92,11 @@ var providerProfileDescriptorKinds = map[model.Kind]string{
 }
 
 // personalStateDescriptorKinds is the manifest of the state a person makes: their own
-// pins (#2130) and snooze and done marks (#2480) on operated sessions, the messages they
-// queue for a session's tool (#3125), and the share links
+// pins and snooze and done marks on operated sessions, the messages they
+// queue for a session's tool, and the share links
 // they make of a folder (written by Business only), and the run shares an owner makes with a
 // guest and the guest's proposals on them (collaboration storage, collaboration_schema.go), and
-// the browsers they registered to be told in by Web Push (#2840).
+// the browsers they registered to be told in by Web Push.
 // Like B1 and K5 it is absent from the pre-K3 schema the upgrade tests reopen from, and a new
 // kind must be listed here.
 var personalStateDescriptorKinds = map[model.Kind]string{
@@ -1838,7 +1838,7 @@ func communicationK2Registration(
 			continue // B1, like K5: not part of the pre-K3 schema this reopens from
 		}
 		if _, personal := personalStateDescriptorKinds[descriptor.Kind]; personal {
-			continue // a person's pins and marks (#2130, #2480): not part of the pre-K3 schema either
+			continue // a person's pins and marks: not part of the pre-K3 schema either
 		}
 		if _, legacy := communicationLegacyDescriptorKinds[descriptor.Kind]; !legacy {
 			t.Fatalf("unexpected descriptor %s cannot be classified as K2, K3, K5 or B1", descriptor.Kind)

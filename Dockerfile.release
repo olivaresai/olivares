@@ -55,6 +55,12 @@ RUN v="$(dpkg-query -W -f='${Version}' ca-certificates)"; \
     fi
 COPY --from=ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff /uv /uvx /usr/local/bin/
 COPY packaging/container/uv-LICENSE-MIT.txt /usr/share/doc/uv/LICENSE-MIT
+COPY modules/documents/requirements.txt /usr/share/olivares/documents/requirements.txt
+COPY modules/documents/MarkItDown-LICENSE.txt /usr/share/doc/markitdown/LICENSE
+RUN uv venv --python /usr/bin/python3 /usr/lib/olivares/markitdown \
+    && uv pip install --no-cache --only-binary=:all: --python /usr/lib/olivares/markitdown/bin/python3 --require-hashes \
+       -r /usr/share/olivares/documents/requirements.txt
+
 # A confined session reaches an SSH host only through the session proxy's CONNECT tunnel
 # (HTTPS_PROXY names the proxy); without it (an unconfined session) ssh connects directly.
 # This is the main file, not a drop-in: in the session's user namespace root's files belong

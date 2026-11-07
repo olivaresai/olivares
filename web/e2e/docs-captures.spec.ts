@@ -1169,7 +1169,7 @@ const A_MANO: {
         .waitFor({ timeout: 20_000 })
     },
   },
-  // The API key, profile, binding and account pages are doors into Tools (#2552).
+  // The API key, profile, binding and account pages are doors into Tools.
   {
     id: 'providers',
     path: '/providers',
@@ -1691,7 +1691,7 @@ test.describe('Docs captures over real seeded data', () => {
               await expect(page.getByRole('dialog')).toBeHidden()
             }
             // Use the theme control so store-driven charts update too: the account
-            // menu's Theme submenu (#3161). Header-free views use the CSS-class fallback.
+            // menu's Theme submenu. Header-free views use the CSS-class fallback.
             const cuenta = page.getByRole('button', { name: /, Account$/ })
             if ((await cuenta.count()) > 0) {
               await cuenta.click()

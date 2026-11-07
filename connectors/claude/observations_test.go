@@ -29,7 +29,7 @@ func TestEdgeFromTool(t *testing.T) {
 
 // A session this connector observed is a Claude Code session, and the connector is the
 // one that knows it: without the label the live row carries no engine, and the console
-// can only call the session by its last tool call (#2266). Posture is the PEP's to say,
+// can only call the session by its last tool call. Posture is the PEP's to say,
 // not telemetry's, so it stays undeclared.
 func TestEdgeFromToolDeclaresTheClaudeEngine(t *testing.T) {
 	e, ok := edgeFromTool("sess-1", "Read", map[string]any{"file_path": "/x"}, testTime, model.ConfidenceAttributed)

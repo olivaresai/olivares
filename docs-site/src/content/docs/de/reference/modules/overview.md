@@ -1,7 +1,7 @@
 ---
 title: Modulkatalog
 description: >-
-  Die 35 auswählbaren Module von Olivares AI — organisiert nach den neun Capability-Bereichen,
+  Die 36 auswählbaren Module von Olivares AI — organisiert nach den neun Capability-Bereichen,
   mit der ehrlichen Reife jedes Moduls. Olivares AI integriert, verwaltet und
   sichert KI im Unternehmen, eine Ground Truth: Claude Code auf der tiefsten Stufe, Codex und Grok Build daneben; dies ist
   die Referenz pro Modul.
@@ -9,7 +9,7 @@ description: >-
 
 Olivares AI integriert, verwaltet und sichert KI im Unternehmen, eine Ground Truth:
 Claude Code auf der tiefsten Stufe, Codex und Grok Build daneben. Es ist eine **modulare Plattform** — eine Engine,
-eine Konsole und **35 auswählbare Module** im Katalog — die
+eine Konsole und **36 auswählbare Module** im Katalog — die
 beobachtet, wo Agenten laufen, regelt, was sie tun dürfen, und (auf einer
 wachsenden Teilmenge) auf Ihrer realen Infrastruktur agiert. Jedes Modul (a)
 konsumiert normalisierte Events/Daten aus dem Core, (b) deklariert seine
@@ -17,7 +17,7 @@ Entitäten im gemeinsamen Datenmodell und (c) stellt seine eigenen
 API-Endpunkte und UI-Ansichten bereit — ohne den Core oder andere Module zu
 berühren.
 
-Diese 35 auswählbaren Module werden von **32 Modul-Packages** implementiert;
+Diese 36 auswählbaren Module werden von **32 Modul-Packages** implementiert;
 das Governance-Package stellt vier getrennt auswählbare Module bereit. Sie sind nach den **neun Capability-Bereichen** unten organisiert.
 Lesen Sie den Status jedes Moduls als **zwei Hälften**: *Govern/Observe*
 (katalogisieren, beobachten, gaten, berichten) ist heute gebaut und verdrahtet;
@@ -35,11 +35,11 @@ ein Großteil des Produkts ist pre-1.0 / im Designstadium, wo vermerkt (siehe
 
 Die **access map** (`iii-access-map`) — der Read-/Read-Write-Graph dessen, was
 jeder Agent berühren kann und tatsächlich berührt, mit Least-Privilege-Drift =
-`Permitted ≠ Observed` — ist **eine der nützlichsten Capabilities unter den 35**,
+`Permitted ≠ Observed` — ist **eine der nützlichsten Capabilities unter den 36**,
 nicht das gesamte Produkt. Die Breite ist der Punkt: neun Bereiche, eine Engine,
 eine Konsole.
 
-## Die 35 auswählbaren Module, nach Capability-Bereich
+## Die 36 auswählbaren Module, nach Capability-Bereich
 
 Jede Zeile verlinkt auf ihre Modulseite (`/reference/modules/<slug>/`). Die
 Spalte **Actuate** ist der ehrliche Zustand der agierenden Hälfte; `—` bedeutet,
@@ -50,6 +50,7 @@ hat.
 
 | Modul | Actuate | Zweck |
 |---|---|---|
+| [Dokumente](/de/reference/modules/documents/) | local | Lokale Markdown-Konvertierung mit MarkItDown; Originaldateien bleiben erhalten, kein Netzwerkzugriff. |
 | [Inventar & Discovery](/de/reference/modules/i-inventory/) | — | Entdecken und katalogisieren Sie die Agenten, Sessions, MCP-Server, Tools, Modelle und Identitäten, die Konnektoren beobachtet haben. |
 | [Live-Betrieb & Sessions](/de/reference/modules/ii-sessions/) | — | Echtzeitzustand jedes Agenten und jeder Session; beherbergt außerdem die geregelte Claude-Code-Session-Runtime. |
 | [Access- & Resource-Map (R/RW)](/de/reference/modules/iii-access-map/) | — | Worauf jeder Agent zugreift und ob er liest oder schreibt; Least-Privilege-Drift = `Permitted ≠ Observed`. |
@@ -148,11 +149,11 @@ Produkt **beobachtet und regelt heute breit und agiert auf einer wachsenden,
 die Liste **Module** der Konsole. `npm run test:modules` prüft jeden
 auswählbaren Namensraum auf eine verlinkte Referenzseite und verifiziert die Anzahl.
 
-## Editions-Verfügbarkeitsnaht (nicht zu den 35 auswählbaren Modulen gezählt)
+## Editions-Verfügbarkeitsnaht (nicht zu den 36 auswählbaren Modulen gezählt)
 
-Der Katalog oben umfasst die **35 auswählbaren Module** der gemeinsamen
+Der Katalog oben umfasst die **36 auswählbaren Module** der gemeinsamen
 Modulspezifikation. Zusätzlich registriert Community einen Verfügbarkeitsdeskriptor
-unter dem API-Namensraum `session-cockpit`. Er ist keines dieser 35.
+unter dem API-Namensraum `session-cockpit`. Er ist keines dieser 36.
 
 - [Session-Cockpit (Verfügbarkeit)](/de/reference/modules/session-cockpit/) —
   keine Handler in Community; `/v1/m/session-cockpit` liefert **404 durch
@@ -161,11 +162,11 @@ unter dem API-Namensraum `session-cockpit`. Er ist keines dieser 35.
   [Live-Betrieb und Sessions](/de/reference/modules/ii-sessions/) und
   [Claude Code mit Olivares ausführen](/de/how-to/run-claude-code-with-olivares/).
 
-## Plattform- & Core-Capabilities (nicht zu den 35 auswählbaren Modulen gezählt)
+## Plattform- & Core-Capabilities (nicht zu den 36 auswählbaren Modulen gezählt)
 
 Dies sind reale, ausgelieferte Capabilities, aber es sind
 **Engine-/Core-/Web-Capabilities**, keine separat auswählbaren Module — daher
-werden sie nicht zu den 35 gezählt:
+werden sie nicht zu den 36 gezählt:
 
 - [Eigene API + Manage-as-Code](/de/reference/modules/xix-api-manage-as-code/) —
   **Engine-/Core-Capability.** Die eigene versionierte REST-/gRPC-API der Engine
@@ -177,7 +178,7 @@ werden sie nicht zu den 35 gezählt:
 - [Executive-Dashboards](/de/reference/modules/xxi-executive-dashboards/) —
   **Web-Capability.** Leadership-Konsolenansichten neben der technischen UI.
   (Das Backend für die Berichtserzeugung ist das Modul
-  [Reporting](/de/reference/modules/reporting/), das zu den 35 gezählt wird.)
+  [Reporting](/de/reference/modules/reporting/), das zu den 36 gezählt wird.)
 - [Modellbetrieb (eigene Modelle)](/de/reference/modules/xxiii-model-operations/) —
   **Capability des Models-Moduls** (über die Zeile von Modul X gezählt, keine
   eigene Zeile): die governte Registry eigener Modelle, Admission signierter
@@ -188,7 +189,7 @@ werden sie nicht zu den 35 gezählt:
 ([xxiii-fine-tuning](/de/reference/modules/xxiii-fine-tuning/)) — die Plattform
 governt und erfasst diese Arbeit heute (siehe Modellbetrieb oben), führt aber
 selbst kein Training aus und bedient keine Inferenz; die ausführende Hälfte ist
-dokumentierte **geplante** Arbeit, **nicht ausgeliefert** und keines der 35.
+dokumentierte **geplante** Arbeit, **nicht ausgeliefert** und keines der 36.
 
 ## Wie Module in der API und im Bus erscheinen
 
@@ -203,11 +204,11 @@ dokumentierte **geplante** Arbeit, **nicht ausgeliefert** und keines der 35.
 
 ## Schichten
 
-Die 35 auswählbaren Module bauen auf Schichten über der Engine auf, neben den oben genannten
+Die 36 auswählbaren Module bauen auf Schichten über der Engine auf, neben den oben genannten
 Engine-/Core- und Web-Capabilities:
 
 - **Engine (Schicht 0)** — die Capabilities Eigene-API/Manage-as-Code und
-  Mandantenfähigkeit (Core, nicht zu den 35 gezählt).
+  Mandantenfähigkeit (Core, nicht zu den 36 gezählt).
 - **Core (Schicht 1)** — inventory, sessions, access-map, models, health,
   observability.
 - **Management (Schicht 2)** — capabilities, governance, identity, claude-policy, claude-agents,

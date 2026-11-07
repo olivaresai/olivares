@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Behavioral tests of the Reach view (issue #2553): the two-column graph matches
+// Behavioral tests of the Reach view (issue): the two-column graph matches
 // the access map for the demo estate, a destination a pending approval names is
 // rendered WAITING (dashed, clock), the table alternative carries the same data,
 // and the rendered DOM passes axe. The graph column lists are aria-hidden — the

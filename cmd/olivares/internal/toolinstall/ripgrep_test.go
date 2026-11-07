@@ -62,7 +62,7 @@ func openCodeEngineServing(t *testing.T, rgURL string, rgArchive []byte, served 
 	return NewEngineWithCapabilities(catalog, EngineOptions{PlaceRipgrep: true}), req
 }
 
-// #3173: OpenCode's glob and grep run ripgrep, which OpenCode otherwise downloads
+// : OpenCode's glob and grep run ripgrep, which OpenCode otherwise downloads
 // from github.com at first use, out of a confined session's reach. Installing
 // OpenCode places the pinned ripgrep, verified by its archive's and its program's
 // sha256, where a session finds it; a second install downloads nothing.
@@ -109,7 +109,7 @@ func TestOpenCodeInstallPlacesThePinnedRipgrep(t *testing.T) {
 	}
 }
 
-// #3202: a damaged pinned ripgrep (its hash no longer the pin's, or its folder
+// : a damaged pinned ripgrep (its hash no longer the pin's, or its folder
 // left without it) is replaced by a verified copy when OpenCode is installed again;
 // the install no longer exits damaged or conflict.
 func TestOpenCodeInstallRepairsADamagedRipgrep(t *testing.T) {

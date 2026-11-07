@@ -9,8 +9,13 @@ package sessions
 import (
 	"context"
 	"net/http"
+	"os"
 )
 
 func readWorkspaceSnapshot(context.Context, *resolvedWorkspace, string) (snapshotTree, error) {
 	return snapshotTree{}, &runErr{http.StatusServiceUnavailable, "workspace snapshot reading is unavailable on this platform"}
+}
+
+func openDocumentDirectory(context.Context, string) (*os.Root, error) {
+	return nil, forbiddenErr("document mention conversion requires Linux confinement")
 }

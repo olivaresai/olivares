@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// LAST HOUR (#2547): every live session over the hour that ends now, one row each. A bar
+// LAST HOUR: every live session over the hour that ends now, one row each. A bar
 // is a stretch of activity and its shade is how many tool calls it made, minute by minute
 // (no tick per call); a warn-tinted span waits on an approval, a dotted line waits for the
 // person's next prompt, a red tick is a failure, and the approval Needs you shows first is

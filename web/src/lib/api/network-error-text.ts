@@ -8,7 +8,7 @@
 // opened. Over http: TLS is not involved, so the engine does not answer and the line stays
 // "unreachable". Over https: a certificate the browser does not trust is a possible cause the
 // user can fix and "unreachable" hides it, so the wording names the secure connection, the
-// certificate and its next step, then the engine and the link (olivares#2781).
+// certificate and its next step, then the engine and the link (olivares).
 import type { TFunction } from 'i18next'
 
 export interface NetworkErrorText {

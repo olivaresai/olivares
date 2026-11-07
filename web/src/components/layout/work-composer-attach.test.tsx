@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Images attached to a message (#2158) from the composer: paste, drop and the picker
+// Images attached to a message from the composer: paste, drop and the picker
 // store the image with the session as it is attached, the message carries the ids, and
 // everything the engine refuses is said at that moment, before a message is sent.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'

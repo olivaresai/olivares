@@ -87,7 +87,7 @@ test('fresh install opens its only workspace overview without a selection step',
     ).toBeVisible()
   } finally {
     for (const theme of ['light', 'dark']) {
-      // The theme is chosen in the account menu (#3161).
+      // The theme is chosen in the account menu.
       await page.getByRole('button', { name: /, Account$/ }).click()
       await page
         .getByRole('menuitemradio', { name: new RegExp(`^${theme}$`, 'i') })

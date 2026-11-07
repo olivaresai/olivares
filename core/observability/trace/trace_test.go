@@ -265,7 +265,7 @@ func TestFromEnvGenAICompat(t *testing.T) {
 // TestFromEnvGenAILatestOptIn pins the standard semconv opt-in switch (issue
 // #202): OTEL_SEMCONV_STABILITY_OPT_IN is a comma-separated list per the
 // instrumentation.yaml convention, and only the exact genai_latest_experimental
-// token switches GenAI emission to the pending conventions (#374, #440).
+// token switches GenAI emission to the pending conventions.
 func TestFromEnvGenAILatestOptIn(t *testing.T) {
 	t.Setenv("OLIVARES_OTEL_ENABLED", "")
 	t.Setenv("OLIVARES_OTEL_ENDPOINT", "")

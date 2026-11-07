@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# C05-24 unique leftover unique vs #1085 (original OPEN product PR;
+# C05-24 unique leftover unique vs (original OPEN product PR;
 # no original check on origin/main). 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail

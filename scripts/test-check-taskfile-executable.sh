@@ -173,7 +173,7 @@ tasks:
 corre "$d"; check "message names both outcomes (127 and silent zero)" finding 1 "exits 0"
 
 # 9 — an `includes:` block is NOT a task: its two-space key (`appliance:`) has no `cmds:`, and the
-#     gate read it as an unexecutable task (#2711 measured the include going from clean to finding).
+#     gate read it as an unexecutable task ( measured the include going from clean to finding).
 INC='  appliance:
     taskfile: ./fragment/Taskfile.yml
     flatten: true

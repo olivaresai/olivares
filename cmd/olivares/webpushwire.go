@@ -8,7 +8,7 @@ import (
 	"github.com/olivaresai/olivares/core/webpush"
 )
 
-// webpushwire.go is the composition-root half of Web Push (#2840): the application server the
+// webpushwire.go is the composition-root half of Web Push: the application server the
 // sessions module pushes through (modules/sessions/push.go).
 //
 // Its VAPID key is derived from the engine-held eventing key (eventingKeyMaterial), so the

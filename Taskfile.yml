@@ -657,7 +657,7 @@ tasks:
       # there — measured 1247s (20m47s) on an IDLE machine at GOMAXPROCS=8, ~101% CPU, i.e.
       # the suite is wall-clock-bound (poll/converge loops), so cores don't help. Raising the
       # ceiling never hides a real hang (that still fails, at the ceiling) — it only stops a
-      # genuinely-slow -race suite from a false timeout. 35m→60m 2026-07-24: the (#372)
+      # genuinely-slow -race suite from a false timeout. 35m→60m 2026-07-24: the
       # inferenceproxy tests pushed the measured root -race wall past 35m (gate red by
       # timeout with ZERO races and verifiable progress). The push gate no longer runs this
       # whole suite (see test:race-hot); it is the weekly/local full-fidelity race sweep.
@@ -1393,7 +1393,7 @@ tasks:
       # not a property worth relying on.) The explicit zero-file refusal is the same
       # third answer check-workflow-node-setup.sh gives: could not look ≠ clean.
       #
-      # THE ONE KNOWN FALSE POSITIVE, scoped to its exact message (#792). GitHub documented
+      # THE ONE KNOWN FALSE POSITIVE, scoped to its exact message. GitHub documented
       # `queue:` under `concurrency:` on 2026-05-07 (concurrency queues); every actionlint
       # release this repo can pin — through v1.7.12, 2026-03-30 — predates it and rejects
       # the field as an unknown key (rhysd/actionlint#657; fix #654 unreleased), so the guard
@@ -2901,7 +2901,7 @@ tasks:
   lint:eco-11-reserve-funded:
     desc: >-
       ECO-11 — the RESERVE-FUNDED package has been presented, with no decision made. Its hyphenated pin
-      distinguishes it from #1385, check-eco11- in batch 38, and 0022-20260820 #1384. Does not restack
+      distinguishes it from #1385, check-eco11- in batch 38, and 0022-20260820. Does not restack
       #983, sign, or fund. Row, U_f, U_d, and amount remain UNKNOWN.
     cmds:
       - bash scripts/check-eco-11-reserve-funded.sh
@@ -3077,9 +3077,9 @@ tasks:
       #    ⛔ Y LO QUE NO SE HACE EL 4 DE SEPTIEMBRE: si esto vuelve, la respuesta NO es subir el
       #    número otra vez. La solución es medir cada captura contra la fuente que RETRATA (a repository gate),
       #    no contra el último commit de la UI entera — que es lo que hace insatisfacible el gate
-      #    para una pantalla que nadie ha tocado. Frase traída de #2024 al integrar: es la única
+      #    for a screen nobody has touched. Sentence brought in at integration: it is the only
       #    parte de su versión que este bloque no decía ya.
-      #    ⛔ Y POR QUE a una rama de consola le hace falta este margen, traido de #2049/#2063 al
+      #    ⛔ AND WHY a console branch needs this margin, brought in at
       #    integrar: una rama que arregla ficheros de `web/src/features` mueve `UI_TS` a HOY, y si su
       #    base es de hace seis dias sus capturas quedan a ONCE dias de un reloj que ella misma acaba
       #    de adelantar. No estan rancias: `UI_TS` mide la UI ENTERA, no la pantalla que cada captura
@@ -4842,7 +4842,7 @@ tasks:
       # corrida 33284926144: el paso que instala estas dependencias se salto por un rojo
       # ajeno (SPDX) y este canto la consecuencia.
       #
-      # La guarda no evita el fallo: lo NOMBRA. Misma forma que la de #2149 en
+      # The guard does not prevent the failure: it NAMES it. Same shape as the one in
       # .github/workflows/export-check.yml:150 — una herramienta que no se alcanza se dice
       # aqui, no se traslada al siguiente. Y vive en la TAREA, no en un workflow, porque
       # los otros dos consumidores (release.yml, release-rehearsal.yml) llaman a

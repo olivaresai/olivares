@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-// #2129: a session's messages are listed, searched and reached by time from the
+//: a session's messages are listed, searched and reached by time from the
 // transcript the tool keeps, the way its activity is: on the server, scoped to the
 // session the person may read, never the whole conversation in one answer.
 

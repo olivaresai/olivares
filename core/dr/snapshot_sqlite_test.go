@@ -20,7 +20,7 @@ import (
 // default temp_store a statement that needs a temporary b-tree writes a temporary
 // file into the system's temporary directory, which the Olivares Server's SELinux
 // policy refuses, and the statement — here a backup's or the pre-upgrade snapshot's
-// VACUUM INTO — fails loudly (#3374).
+// VACUUM INTO — fails loudly.
 func TestSnapshotSourceSetsTempStoreOnEveryConnection(t *testing.T) {
 	ctx := context.Background()
 	src := filepath.Join(t.TempDir(), "source.db")
@@ -44,7 +44,7 @@ func TestSnapshotSourceSetsTempStoreOnEveryConnection(t *testing.T) {
 	}
 }
 
-// The behavioral leg, with the recipe the reviewer of #3352 used: a statement that
+// The behavioral leg, with the recipe the reviewer of used: a statement that
 // needs a temporary b-tree (a 200,000-row sort of random 100-byte blobs) holds a
 // temporary file open through the DEFAULT driver open — the control — and none
 // through the snapshot's source open. (VACUUM INTO itself was measured to open no

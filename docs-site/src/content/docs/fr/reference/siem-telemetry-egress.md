@@ -193,6 +193,33 @@ la suite de tests contre les schémas de classe officiels 1.8.0, qui interdisent
 les champs inconnus : un attribut hors profil ou un objet de profil incomplet
 casse donc la build au lieu de vous parvenir.
 
+Les connexions et les changements de facteur sont enregistrés dans le journal
+système. Exportés depuis celui-ci (`olivares audit export --format ocsf --tenant ffffffff-ffff-ffff-ffff-ffffffffffff`),
+ils vont en revanche vers le modèle de
+données d'authentification du SIEM. L'export HTTP (`GET /v1/audit/export`) ne lit que
+les journaux des organisations. Le transmetteur du journal envoie ces événements une seule fois aux destinations
+SIEM abonnées sur le tenant système, jamais à la destination d'une organisation. L'API refuse le tenant système :
+seul l'opérateur qui détient le répertoire de données crée une telle destination : `olivares eventing subscriptions create --tenant ffffffff-ffff-ffff-ffff-ffffffffffff --event-types audit.recorded --role admin --sink-kind splunk_hec --sink-cred-file <file>`. `auth.login`, `auth.external.login`, `sso.login`, `auth.login.failed`, `auth.login.blocked`, `auth.logout`, `sso.logout.backchannel` sont des **Authentication (3002)** : Logon ou
+Logoff, avec `status_id` 2 (Failure) pour une connexion refusée.
+`auth.webauthn.register` et `auth.totp.activate` sont des **Account Change (3001)**
+MFA Factor Enable ; `auth.webauthn.unregister`, `auth.webauthn.recover` et
+`auth.totp.reset` sont MFA Factor Disable ; `auth.webauthn.rename` et
+`auth.totp.recovery_used` sont Other. Les deux classes Identity & Access Management
+portent `user.name` : l'acteur du journal, ou le compte cible quand un
+administrateur réinitialise les facteurs d'une autre personne. Elles ne portent pas
+le profil `ai_operation`. Les champs d'intégrité restent sous `unmapped`, comme sur
+tout autre événement, et toute autre action reste une API Activity. Pour `sso.logout.backchannel`, l'utilisateur est le compte déconnecté, et un
+événement sans acteur dans le journal porte `unknown`.
+
+:::caution[Changement : connexions et changements de facteur ne sont plus des API Activity]
+Ces 14 actions étaient exportées comme API Activity (6003) avec `activity_id` 99
+(Other, `type_uid` 600399). Elles sont désormais exportées comme Authentication
+(3002) et Account Change (3001). Mettez à jour chaque détection, recherche
+enregistrée ou parser qui les reconnaît par `class_uid` 6003.
+`auth.stepup.failed` et `auth.os_account.verify.refused` restent des API Activity,
+désormais avec `status_id` 2 (Failure) au lieu de 1.
+:::
+
 :::caution[AWS Security Lake accepte OCSF ≤ 1.3]
 Une source personnalisée Security Lake plafonne à **OCSF 1.3 en Parquet** : les
 événements `ai_operation` 1.8.0 n'y atterrissent donc pas tels quels (vérifié le

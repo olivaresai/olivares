@@ -64,7 +64,7 @@ func SnapshotSQLite(ctx context.Context, srcPath, dstPath string) error {
 // the same temp_store pragma the store's connections get: it keeps a
 // statement's temporary storage out of the system's temporary directory, which the
 // Olivares Server's SELinux policy refuses — there a backup or the pre-upgrade
-// snapshot fails loudly (#3374). The pragma rides the DSN so a replacement
+// snapshot fails loudly. The pragma rides the DSN so a replacement
 // connection is configured too.
 func openSnapshotSource(srcPath string) (*sql.DB, error) {
 	return sql.Open("sqlite", opgate.SQLiteDSNWithPragmas(srcPath, opgate.SQLiteTempStoreMemory))

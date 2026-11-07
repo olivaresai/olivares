@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ESTATE SHEET (#2549): a running session's real conversation streams into it as the
+// THE ESTATE SHEET: a running session's real conversation streams into it as the
 // tool writes, its header carries every fact on a line of its own, Stop asks first, and
 // "Open the session" goes to the full page by the same address.
 import axe from 'axe-core'

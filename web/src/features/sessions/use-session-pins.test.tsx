@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // The pin is the engine's: toggling calls its routes once, also under StrictMode, and
-// the sessions are re-read afterwards (#2130).
+// the sessions are re-read afterwards.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { StrictMode, type ReactNode } from 'react'
@@ -364,7 +364,7 @@ describe('useSessionPins', () => {
   })
 })
 
-// Pins this browser kept before the engine did must not be lost (#2130, linux rule 1).
+// Pins this browser kept before the engine did must not be lost (, linux rule 1).
 describe('useSessionPins — pins the browser kept before the engine did', () => {
   const key = pinStorageKey(
     window.location.origin,

@@ -5,7 +5,7 @@ import { ContactRound, IdCard, Link2 } from 'lucide-react'
 import { toolsRoom } from '@/features/agent-tools/views'
 import type { ViewEntry } from '@/features/registry'
 
-// The profile, binding and account pages are doors into Tools (#2552): an account and
+// The profile, binding and account pages are doors into Tools: an account and
 // its profile are one reference, and its settings and bindings are in its detail there.
 // Each door keeps its url and its OWN read tier (the route guard checks exactly the one
 // permission an entry declares), and navigation lists a door only to a principal who

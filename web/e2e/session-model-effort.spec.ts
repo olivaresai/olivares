@@ -9,6 +9,8 @@
 // the form under test; the New session form's own pick is covered by its component tests.
 // Run it through scripts/e2e-session-conversation.sh.
 import { expect, test, type Page } from '@playwright/test'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { openAdvancedSession } from './session-launch-form'
 import { sessionToken } from './live-session'
 
@@ -16,6 +18,8 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const fixtureOn = process.env.CONVERSATION_FIXTURE === '1'
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
+
+test.use({ screenshot: 'off', trace: 'off', video: 'off' })
 
 async function signIn(page: Page) {
   await page.context().addInitScript(() => {
@@ -329,5 +333,181 @@ test.describe('model and effort are chosen where a session is started', () => {
     await expect(composer.getByText(/advanced/i)).toHaveCount(0)
     await expect(composer.getByTestId('composer-wire-input')).toHaveCount(0)
     await page.screenshot({ path: 'test-results/model-effort-session.png' })
+  })
+})
+
+test.describe('folder-first launch', () => {
+  // Provider discovery and fresh-tenant reads are stand-ins; launch, Files and Terminal use the engine.
+  test('the first composer requires a folder and starts its selected model there', async ({
+    page,
+  }) => {
+    test.skip(!demoTenant || !fixtureOn, 'Seeded engine required')
+    test.setTimeout(120_000)
+    writeFileSync(
+      join(process.env.E2E_SESSION_FOLDER!, 'folder-first.txt'),
+      'hello\n',
+    )
+    await signIn(page)
+    const headers = {
+      Authorization: `Bearer ${await sessionToken(page)}`,
+      'X-Olivares-Tenant': demoTenant,
+    }
+    const profiles = await page.request.get(
+      '/v1/m/sessions/provider-profiles',
+      { headers },
+    )
+    expect(profiles.ok()).toBe(true)
+    const profile = (await profiles.json()).items.find(
+      (p: { display_name: string }) => p.display_name === 'Fixture Claude',
+    )
+    expect(profile).toBeTruthy()
+    await page.route('**/provider-profiles/readiness', (route) =>
+      route.fulfill({
+        json: {
+          tools: [{ driver: 'claude', ready: true, reason: 'own_login' }],
+        },
+      }),
+    )
+    await page.route(/\/provider-profiles\/resolve(?:\?.*)?$/, (route) =>
+      route.fulfill({ json: { reason: 'own_login', profile } }),
+    )
+    await page.route('**/provider-profiles/*/models', (route) =>
+      route.fulfill({
+        json: {
+          profile_ref: profile.profile_ref,
+          driver: 'claude',
+          state: 'fresh',
+          free_text: false,
+          default_model: 'opus',
+          checked_at: new Date().toISOString(),
+          refresh_interval_seconds: 120,
+          models: [
+            { id: 'opus', is_default: true, effort_levels: ['low', 'high'] },
+            { id: 'sonnet', effort_levels: ['low', 'high'] },
+          ],
+        },
+      }),
+    )
+    // No registered or remembered folder on this initial read, as on a fresh tenant.
+    await page.route(
+      /\/v1\/m\/sessions\/(?:workspaces|runs)(?:\?.*)?$/,
+      async (route) => {
+        if (route.request().method() === 'GET')
+          await route.fulfill({ json: { items: [], has_more: false } })
+        else await route.continue()
+      },
+    )
+    await page.goto('/sessions')
+    await page
+      .locator('#work-pane-rail')
+      .getByRole('button', { name: 'New session', exact: true })
+      .click()
+    const folder = page.getByRole('button', {
+      name: 'Folder: Choose a folder',
+      exact: true,
+    })
+    await expect(folder).toBeVisible()
+    const message = page.getByRole('textbox', {
+      name: 'First message (optional)',
+    })
+    await message.fill('Inspect this folder')
+    await message.press('Enter')
+    await expect(
+      page.getByRole('button', { name: 'Start', exact: true }),
+    ).toBeDisabled()
+    await page.getByRole('button', { name: /^Model: / }).click()
+    await page.getByRole('option', { name: /Sonnet/i }).click()
+    await page.getByRole('button', { name: /^Effort: / }).click()
+    await page.getByRole('menuitemradio', { name: 'High', exact: true }).click()
+    await folder.click()
+    await page.getByRole('menuitemradio', { name: 'Another folder…' }).click()
+    await page
+      .getByRole('textbox', { name: 'Folder', exact: true })
+      .fill(process.env.E2E_SESSION_FOLDER!)
+    // Subsequent reads are real: Files and Terminal must resolve the folder just launched.
+    await page.unroute(/\/v1\/m\/sessions\/(?:workspaces|runs)(?:\?.*)?$/)
+    const launched = page.waitForResponse(
+      (r) =>
+        r.url().endsWith('/v1/m/sessions/runs') &&
+        r.request().method() === 'POST',
+    )
+    await message.press('Enter')
+    const response = await launched
+    expect(response.status()).toBe(201)
+    const run = await response.json()
+    expect(run.workspace_ref).toBeTruthy()
+    expect(response.request().postDataJSON()).toMatchObject({
+      model: 'sonnet',
+      effort: 'high',
+    })
+    expect(run.model_ref).toBe('claude-sonnet-5-5')
+    expect(run.effort).toBe('high')
+    await page.goto(
+      `/sessions?session=run:${run.run_ref}&panel=files&pane=context`,
+    )
+    await expect(page.getByTestId('context-no-files')).toHaveCount(0)
+    await expect(
+      page.getByRole('radio', { name: 'Files', exact: true }),
+    ).toHaveAttribute('aria-checked', 'true')
+    await expect(
+      page.getByText('folder-first.txt', { exact: true }).first(),
+    ).toBeVisible()
+    await page.getByRole('radio', { name: 'Terminal', exact: true }).click()
+    const terminalOpened = page.waitForResponse(
+      (r) =>
+        /\/terminals$/.test(new URL(r.url()).pathname) &&
+        r.request().method() === 'POST',
+    )
+    await page
+      .getByRole('button', { name: 'Open terminal', exact: true })
+      .click()
+    expect((await terminalOpened).status()).toBe(201)
+    await expect(page.getByTestId('terminal-screen')).toBeVisible()
+    await page.locator('.xterm-helper-textarea').focus()
+    await page.keyboard.type('pwd')
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('terminal-screen')).toContainText(
+      process.env.E2E_SESSION_FOLDER!,
+    )
+    await page
+      .getByRole('button', { name: 'Close terminal', exact: true })
+      .click()
+    await page
+      .locator('#work-pane-rail')
+      .getByRole('button', { name: 'New session', exact: true })
+      .click()
+    await page.getByRole('button', { name: /^Folder: / }).click()
+    await page
+      .getByRole('menuitemradio', {
+        name: 'A new folder for this session',
+        exact: true,
+      })
+      .click()
+    const privateLaunch = page.waitForResponse(
+      (r) =>
+        r.url().endsWith('/v1/m/sessions/runs') &&
+        r.request().method() === 'POST',
+    )
+    await page
+      .getByRole('textbox', { name: 'First message (optional)' })
+      .fill('Work without a registered folder')
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    const privateResponse = await privateLaunch
+    expect(privateResponse.status()).toBe(201)
+    const privateRun = await privateResponse.json()
+    expect(privateRun.workspace_ref).toBeFalsy()
+    await page.goto(
+      `/sessions?session=run:${privateRun.run_ref}&pane=context&panel=files`,
+    )
+    for (const name of ['Changes', 'Files', 'Terminal'])
+      await expect(page.getByRole('radio', { name, exact: true })).toHaveCount(
+        0,
+      )
+    await expect(
+      page.getByRole('radio', { name: 'Details', exact: true }),
+    ).toHaveAttribute('aria-checked', 'true')
+    console.log(
+      `folder-first: run model=${run.model_ref}, effort=${run.effort}; Files listed; terminal opened; private folder hides unavailable panes`,
+    )
   })
 })

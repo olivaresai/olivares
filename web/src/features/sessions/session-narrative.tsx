@@ -96,7 +96,7 @@ export function SessionNarrative({
     primaryRun(session.runs)?.provider_profile_ref ?? session.profileRef,
   )
   const [inUseModel, setInUseModel] = useState<string | null>(null)
-  // Opening a session is seeing it (#2866); the pane is where a session is open.
+  // Opening a session is seeing it; the pane is where a session is open.
   useMarkSeen(session, !!target && !loading && grants.runRead)
 
   // Recovery belongs to the pane, including before its session can be read.
@@ -211,7 +211,7 @@ export function SessionNarrative({
       )}
 
       {hasThread(resolution) && run ? (
-        // Paths in the replies are read against the session's folder (#4011).
+        // Paths in the replies are read against the session's folder.
         <PathRoot root={run.workspace_path}>
           <SessionConversation
             run={run}

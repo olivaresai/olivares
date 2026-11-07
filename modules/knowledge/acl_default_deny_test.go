@@ -17,7 +17,7 @@ import (
 )
 
 // A document that arrives without an ACL is denied; "public" is an explicit
-// per-source decision (#3030). These tests drive the real ingest, retrieval and
+// per-source decision. These tests drive the real ingest, retrieval and
 // scan routes: the identity has NO groups, so only an explicit "anyone" shows.
 
 // publicFakeSource is a fakeSource whose operator declared it public.
@@ -156,7 +156,7 @@ func TestDirectUploadWithoutACLStaysVisible(t *testing.T) {
 }
 
 // clearACLs rewrites every document and chunk of a KB to the empty ACL, the way
-// rows written before #3030 look in a store.
+// rows written before look in a store.
 func clearACLs(t *testing.T, h *harness, tenant model.TenantID, kbID string) {
 	t.Helper()
 	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
@@ -196,7 +196,7 @@ func TestLegacyDirectUploadKeepsVisibilityAfterDefaultDeny(t *testing.T) {
 	}
 	connKB := h.mustKB(editor, tenant, map[string]any{"name": "orders-kb", "classification": "public"})
 	ingestFromSource(t, h, editor, tenant, connKB, "orders")
-	// The store as a release before #3030 left it: every ACL empty.
+	// The store as a release before left it: every ACL empty.
 	clearACLs(t, h, tenant, upKB)
 	clearACLs(t, h, tenant, connKB)
 

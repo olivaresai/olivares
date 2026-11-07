@@ -66,7 +66,7 @@ class BuildIdentity(unittest.TestCase):
                                              b'the existing candidate executable')
 
     def test_cli_binds_the_attempt_pr_build_reported_not_the_consumers_own(self):
-        # #2749: "re-run failed jobs" re-runs a failed userspace-compat at attempt 2 while
+        #: "re-run failed jobs" re-runs a failed userspace-compat at attempt 2 while
         # pr-build's attempt-1 success keeps its artifact, so the identity check must read
         # the PRODUCING attempt (pr-build's output, passed as BUILD_ATTEMPT), never the
         # consumer's GITHUB_RUN_ATTEMPT.

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The "/" menu of the session composer (#1801): typing "/" lists what the session's own
+// The "/" menu of the session composer: typing "/" lists what the session's own
 // tool reports (commands, skills, agents), searchable, by keyboard, announced to a
 // screen reader. The menu inserts text; what the text does is the tool's, under the same
 // governance as any typed message.

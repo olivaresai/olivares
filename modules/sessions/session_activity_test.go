@@ -25,7 +25,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// #1861: the session's side panel shows what its tool is doing, read from the
+// : the session's side panel shows what its tool is doing, read from the
 // transcript Claude Code keeps. The fixture is the transcript of a real Claude Code
 // 2.1.296 session (claude -p, Haiku) that spawned two subagents, ran a background
 // shell command and changed three files. Only the records the activity reads are

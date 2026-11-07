@@ -25,7 +25,7 @@ it('lets a governed wiki resolve relative links throughout Markdown without wide
   expect(JSON.stringify(parseMarkdown(source))).not.toContain('"kind":"link"')
 })
 
-describe('parseMarkdown — blocks (#1784)', () => {
+describe('parseMarkdown — blocks', () => {
   it('reads the reply that was shown raw: bold lead-ins, nested items, ordered steps and code', () => {
     const blocks = parseMarkdown(
       [
@@ -189,7 +189,7 @@ describe('parseMarkdown — blocks (#1784)', () => {
   })
 })
 
-describe('parseInline (#1784)', () => {
+describe('parseInline', () => {
   it('reads code, bold and italic, and keeps snake_case and arithmetic as written', () => {
     expect(parseInline('`a` **b** *c* _d_')).toEqual([
       { kind: 'code', text: 'a' },
@@ -266,7 +266,7 @@ describe('parseInline (#1784)', () => {
   })
 })
 
-describe('safeHref — only web and mail addresses are links (#1784)', () => {
+describe('safeHref — only web and mail addresses are links', () => {
   it.each([
     ['https://example.com/a?b=1#c', true],
     ['HTTP://EXAMPLE.COM', true],
@@ -364,7 +364,7 @@ describe('safeHref — only web and mail addresses are links (#1784)', () => {
   })
 })
 
-describe('parseMarkdown — a hostile or runaway reply stays bounded (#1784)', () => {
+describe('parseMarkdown — a hostile or runaway reply stays bounded', () => {
   const depthOf = (blocks: Block[]): number => {
     const quote = blocks.find((b) => b.kind === 'quote')
     return quote?.kind === 'quote' ? 1 + depthOf(quote.blocks) : 0
@@ -488,7 +488,7 @@ describe('plainText — review of the copy', () => {
   })
 })
 
-// Review of #2856: a fence inside a list item keeps a tab-led line inside the item;
+// Review of: a fence inside a list item keeps a tab-led line inside the item;
 // the list stays whole and the code keeps its tab.
 it('keeps a list whole when a fence in an item has a tab-led line', () => {
   const blocks = parseMarkdown(
@@ -505,7 +505,7 @@ it('keeps a list whole when a fence in an item has a tab-led line', () => {
   expect(list.items[1]).toEqual([{ kind: 'paragraph', inline: ['next'] }])
 })
 
-// Review of #2856, round 2: indentation reads a leading tab as four spaces where it is
+// Review of, round 2: indentation reads a leading tab as four spaces where it is
 // measured, and a fence body keeps its lines as written, wherever the fence sits.
 describe('parseMarkdown — tabs in and around a fence', () => {
   it('ends a fence left open in an item with the item: a later tab-indented list nests', () => {

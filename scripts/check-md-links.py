@@ -627,7 +627,7 @@ def self_test():
                 "[escape](../%s)\n"
                 "[sneaky-link](docs/sneaky.md)\n" % os.path.basename(outside)
             )
-        # Repository anchors must resolve in the page they target (#575).
+        # Repository anchors must resolve in the page they target.
         with tempfile.TemporaryDirectory() as anchors:
             with open(os.path.join(anchors, "LICENSING.md"), "w", encoding="utf-8") as fh:
                 fh.write("## What is open, what is commercial, what is planned — by area\n"

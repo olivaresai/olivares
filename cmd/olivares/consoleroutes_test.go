@@ -1964,7 +1964,7 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 // consola. Sólo BAJA. Subirlo para que pase un rojo es apagar el gate, y queda en el historial de
 // quien lo suba.
 //
-// RE-MEDIDO el 2026-08-20 sobre `main@f862d9494` con #1124 y #1066 dentro y el bundle regenerado:
+// RE-MEDIDO el 2026-08-20 sobre `main@f862d9494` con y dentro y el bundle regenerado:
 // **52** rutas registradas no tenian llamada de consola, y el trinquete se fijo en ESE numero, no
 // en uno de los dos que traian los PR.
 //
@@ -1972,7 +1972,7 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 // previa que el motor construia PARA la consola y que la consola nunca llamaba— y midio el censo
 // en **51**. Esa, y no 52, es la cifra que documenta la constante de abajo.
 //
-// Los dos PR llegaron con un valor propio y NINGUNO era el medido: #1124 traia 56 y #1066 traia
+// The two PRs arrived with their own value and NEITHER was the measured one: one brought 56, the other
 // 53, y al fusionarlos el conflicto era literalmente esta linea. Elegir uno de los dos habria
 // dejado el trinquete flojo por 4 o por 1 — y un trinquete flojo no avisa de la primera ruta que
 // aterriza sin superficie, que es justo para lo que existe.
@@ -2096,7 +2096,7 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"this increment has no console binding-detail screen",
 	"DELETE /v1/auth/os-account-bindings/{}": "`olivares auth os-account revoke` confirms audited revocation " +
 		"while retaining the permanent account reservation; this increment has no console revocation control",
-	// #2179's repo-resident agent configuration approval shipped its operator
+	//'s repo-resident agent configuration approval shipped its operator
 	// surface as CLI and REST/SDK: the report of what a folder's repository
 	// carries and the person's approval of that exact flagged-subset hash. The
 	// increment that builds the console approval screen removes these lines.
@@ -2757,17 +2757,17 @@ func withEditionConsoleSurfaces(surfaces map[string]string) map[string]string {
 			"PUT /v1/system/orgs/{}/status": "Enterprise organization status: Community answers 501 organizations_unavailable; its console control is private",
 			"GET /v1/system/residency":      "the configured-registry read remains an authenticated shared REST/SDK surface; its console selector is private",
 			// Recordings console pages are Business (dce1bacb1): this build has no caller for these
-			// routes. Tracked in #4300.
-			"GET /v1/m/recording/config":                 "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"GET /v1/m/recording/notice":                 "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"GET /v1/m/recording/sessions":               "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"GET /v1/m/recording/sessions/{}/export":     "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"GET /v1/m/recording/sessions/{}/unified":    "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"GET /v1/m/recording/sessions/{}/verify":     "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"POST /v1/m/recording/ack":                   "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"POST /v1/m/recording/sessions/{}/seal":      "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"POST /v1/m/recording/sessions/{}/summarize": "Recordings are Business: the Community console has no recording screen, tracked in #4300",
-			"PUT /v1/m/recording/config":                 "Recordings are Business: the Community console has no recording screen, tracked in #4300",
+			// routes. Tracked in.
+			"GET /v1/m/recording/config":                 "Recordings are Business: the Community console has no recording screen",
+			"GET /v1/m/recording/notice":                 "Recordings are Business: the Community console has no recording screen",
+			"GET /v1/m/recording/sessions":               "Recordings are Business: the Community console has no recording screen",
+			"GET /v1/m/recording/sessions/{}/export":     "Recordings are Business: the Community console has no recording screen",
+			"GET /v1/m/recording/sessions/{}/unified":    "Recordings are Business: the Community console has no recording screen",
+			"GET /v1/m/recording/sessions/{}/verify":     "Recordings are Business: the Community console has no recording screen",
+			"POST /v1/m/recording/ack":                   "Recordings are Business: the Community console has no recording screen",
+			"POST /v1/m/recording/sessions/{}/seal":      "Recordings are Business: the Community console has no recording screen",
+			"POST /v1/m/recording/sessions/{}/summarize": "Recordings are Business: the Community console has no recording screen",
+			"PUT /v1/m/recording/config":                 "Recordings are Business: the Community console has no recording screen",
 		})
 	}
 	if thisEdition.departmentService == nil {

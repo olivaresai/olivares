@@ -284,7 +284,7 @@ function PaletteBody() {
   const ToolIcon = toolsView?.icon ?? Search
   // Installed objects use the Tools page's authority and its existing scoped reads.
   // Disabled queries may retain cached data: also gate the rows below on readTools.
-  // The installed tools are a superadmin's read, as on the Tools page itself (#2552).
+  // The installed tools are a superadmin's read, as on the Tools page itself.
   const readTools = !!isSuperadmin && !!toolsView && navigable(toolsView)
   const queryClient = useQueryClient()
   const toolScope = useMemo(

@@ -38,7 +38,7 @@ vi.mock('./api', async (importOriginal) => {
 
 const { ModelsView } = await import('./models-view')
 
-// Residency left the keys tab (the keys moved to AI tools, #3388): it is under Governance,
+// Residency left the keys tab (the keys moved to AI tools,): it is under Governance,
 // next to the GPAI posture.
 async function abrirClaves(user: ReturnType<typeof userEvent.setup>) {
   renderIntel(<ModelsView />)

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A SESSION ROW'S ACTIONS MENU (#2795): rename, pin, unread, snooze, done, archive, copy its
+// A SESSION ROW'S ACTIONS MENU: rename, pin, unread, snooze, done, archive, copy its
 // link, id or transcript, delete. The rail opens it (`work-rail.tsx`: right-click, `⋯`, Shift+F10);
 // this file says what is in it and does it, against the engine's own routes.
 //

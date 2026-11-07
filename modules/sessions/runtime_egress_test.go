@@ -55,7 +55,7 @@ func TestLaunchSpecNetworkPolicyRelaysEveryHookEndpoint(t *testing.T) {
 // A record-bound launch of a measured tool (Claude Code, Codex, OpenCode) is confined
 // to its record's endpoint. A tool whose host inventory has not been measured behind
 // the proxy keeps today's network until it is (Grok Build), and so do Claude Code and
-// Codex account logins, whose vendor endpoints are not measured yet (#2154).
+// Codex account logins, whose vendor endpoints are not measured yet.
 // OpenCode's own login is held to its provider's hosts (opencode_egress_policy_test.go).
 func TestLaunchSpecNetworkPolicyEnforcesOnlyMeasuredTools(t *testing.T) {
 	m := New(WithConfinement([]string{"/engine-data"}, true))

@@ -13,7 +13,7 @@ import (
 // the system's temporary directory, which a confined engine may not write (the Olivares Server's SELinux policy), and
 // every statement that needs one then fails. Every connection the store and the DR snapshot open sets it;
 // the engine's two remaining opens (the restore destination read and the payload count) need no temporary file
-// (#3352 review, advisory 3).
+// ( review, advisory 3).
 // shortcut: temporary space is RAM, upgrade to an engine-owned SQLite temporary directory when a measured statement
 // needs more than 256 MiB of it.
 const SQLiteTempStoreMemory = "temp_store(2)"

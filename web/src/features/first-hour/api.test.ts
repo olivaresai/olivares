@@ -73,7 +73,7 @@ describe('one-click install', () => {
     }
   })
 
-  it('reports each job it reads, so the page can show the download (#1086)', async () => {
+  it('reports each job it reads, so the page can show the download', async () => {
     vi.useFakeTimers()
     try {
       tools.plan.mockResolvedValue({ digest: 'd1' })

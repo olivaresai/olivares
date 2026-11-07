@@ -145,7 +145,7 @@ describe('session attention', () => {
     ).toBe('ended')
     expect(snapshot({ ...run, state: 'idle' }).state).toBe('quiet')
   })
-  it('watches no session the person snoozed or marked done, as Needs you leaves it out (#2480)', () => {
+  it('watches no session the person snoozed or marked done, as Needs you leaves it out', () => {
     const asking = { ...run, pending_approval_ref: 'approval' }
     const keys = (runs: RunDTO[]) =>
       attentionSnapshots({ live: [], handoffs: [], runs }, NOW).map(
@@ -157,7 +157,7 @@ describe('session attention', () => {
     ).toEqual([])
     expect(keys([{ ...asking, done: true }])).toEqual([])
   })
-  it('watches no archived session, as no list shows it (#2795)', () => {
+  it('watches no archived session, as no list shows it', () => {
     const asking = { ...run, pending_approval_ref: 'approval' }
     expect(
       attentionSnapshots(
@@ -309,7 +309,7 @@ describe('session attention', () => {
     // A name the person chose is theirs to show.
     expect(named({ name: 'deploy-api', title: prompt }).name).toBe('deploy-api')
   })
-  it('names an unnamed session by its tool, never by its raw key or its prompt (#2266)', () => {
+  it('names an unnamed session by its tool, never by its raw key or its prompt', () => {
     const seen = (over: Partial<LiveDTO>): AttentionSnapshot =>
       attentionSnapshots(
         {

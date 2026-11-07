@@ -379,7 +379,7 @@ it.each([
   { mark: 'snoozed', marks: { snoozed_until: '2030-01-02T09:00:00Z' } },
   { mark: 'done', marks: { done: true } },
 ])(
-  'closes the needs-you notification when the person marks the session $mark (#2480)',
+  'closes the needs-you notification when the person marks the session $mark',
   async ({ marks: set }) => {
     await mount()
     state = 'waiting_approval'

@@ -146,7 +146,7 @@ export function useSessionPins(
   const offerUndo = useOfferUndo()
   const pinned = useMemo(() => pinnedKeys(sessions), [sessions])
 
-  // ⛔ PINS KEPT IN THIS BROWSER BEFORE THE ENGINE KEPT THEM MOVE ONCE (#2130, linux rule
+  // ⛔ PINS KEPT IN THIS BROWSER BEFORE THE ENGINE KEPT THEM MOVE ONCE (, linux rule
   //    1: stored data keeps working). Once per (origin, person, tenant), after the engine's
   //    own pins are known: the runs the browser stored are pinned there oldest first,
   //    within the ceiling the engine's existing pins leave, and the old key is removed. What

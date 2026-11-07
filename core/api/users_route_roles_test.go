@@ -15,7 +15,7 @@ import (
 // GET /v1/users lists the accounts of the whole deployment, across every
 // organization, so it belongs to the superadmin. The console's users table reads
 // GET /v1/members, the organization's own roster, which an organization admin holds
-// (#1787: an admin saw the table and got 403 on the other route). Both halves are
+// (: an admin saw the table and got 403 on the other route). Both halves are
 // pinned for every built-in role, so neither route is widened to answer the other.
 func TestUsersRouteIsDeploymentWideWhileMembersIsTheOrganizationRoster(t *testing.T) {
 	h := newHarness(t)

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// olivares#2781: a failed fetch on a page opened over https: names the certificate, a failed
+// olivares: a failed fetch on a page opened over https: names the certificate, a failed
 // fetch on a page opened over http: keeps "unreachable". Both states, in every surface that
 // words a NetworkError.
 import { afterEach, describe, expect, it, vi } from 'vitest'

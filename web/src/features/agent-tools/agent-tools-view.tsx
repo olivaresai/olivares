@@ -68,7 +68,7 @@ function Tools({ epoch }: { epoch: number }) {
   const { t } = useTranslation(['agentTools', 'providers'])
   const { isSuperadmin, activeTenant, can } = useAuth()
   const qc = useQueryClient()
-  // The page's next step (#3388): whoever may add a provider key does it from the header.
+  // The page's next step: whoever may add a provider key does it from the header.
   const canAddKey =
     can('sessions:provider:read') && can('sessions:provider:write')
   const [addingKey, setAddingKey] = useState(false)

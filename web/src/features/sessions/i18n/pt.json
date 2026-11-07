@@ -550,6 +550,8 @@
     "startedTools_other": "{{count}} ferramentas",
     "notSent": "Não enviada: {{reason}}",
     "waitingApproval": "Enviada quando a sessão estiver pronta.",
+    "discardedOnSessionChange": "Uma mensagem escrita antes de a sessão mudar não foi enviada. Digite-a novamente.",
+    "dismissDiscarded": "Dispensar",
     "workingFolder": "Pasta de trabalho: <path />",
     "temporaryFolder": "Pasta de trabalho: pasta temporária desta sessão",
     "turnLine": "<work/> · {{duration}}",
@@ -906,6 +908,10 @@
     "unreadable": "Não foi possível ler o pedido."
   },
   "terminal": {
+    "runScript": "Executar {{name}}",
+    "scripts": "Scripts do projeto",
+    "scriptsFailed": "Não foi possível ler os scripts do projeto.",
+    "stopScript": "Parar",
     "title": "Terminal",
     "hint": "Uma shell na pasta desta sessão, dentro dos mesmos limites da sessão. É executada como o utilizador; cada linha de comando que escrever é registada.",
     "open": "Abrir terminal",

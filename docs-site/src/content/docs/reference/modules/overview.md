@@ -1,7 +1,7 @@
 ---
 title: Modules catalog
 description: >-
-  The 35 selectable modules of Olivares AI — organized by the nine capability areas, with
+  The 36 selectable modules of Olivares AI — organized by the nine capability areas, with
   each module's honest maturity. Olivares AI integrates, manages and secures AI
   in the enterprise, one ground truth: Claude Code at the deepest level, Codex and Grok Build alongside; this is the per-module
   reference.
@@ -9,14 +9,14 @@ description: >-
 
 Olivares AI integrates, manages and secures AI in the enterprise, one ground truth:
 Claude Code at the deepest level, Codex and Grok Build alongside. It is a **modular platform** — one engine, one
-console, and **35 selectable modules** in the catalog — that observes where
+console, and **36 selectable modules** in the catalog — that observes where
 agents run, governs what they are allowed to do, and (on a growing subset) acts
 on your real infrastructure. Every module (a) consumes normalized events/data
 from the core, (b) declares its entities in the shared data model, and (c)
 exposes its own API endpoints and UI views — without touching the core or other
 modules.
 
-These 35 selectable modules are implemented by **32 module packages**; the governance
+These 36 selectable modules are implemented by **33 module packages**; the governance
 package provides four separately selectable modules. They are organized by the **nine capability areas** below. Read each
 module's status as **two halves**: *Govern/Observe* (catalog, observe, gate,
 report) is built and wired today; *Actuate* (acting on real infrastructure —
@@ -32,10 +32,10 @@ by module, and much of the product is pre-1.0 / design-stage where noted (see
 
 The **access map** (`iii-access-map`) — the read/read-write graph of what each
 agent can and does touch, with least-privilege drift = `Permitted ≠ Observed` —
-is **one of the most useful capabilities among the 35**, not the whole product.
+is **one of the most useful capabilities among the 36**, not the whole product.
 The breadth is the point: nine areas, one engine, one console.
 
-## The 35 selectable modules, by capability area
+## The 36 selectable modules, by capability area
 
 Each row links to its module page (`/reference/modules/<slug>/`). The **Actuate**
 column is the honest state of the acting half; `—` means the module
@@ -45,6 +45,7 @@ governs/observes by nature and has no actuation surface.
 
 | Module | Actuate | Purpose |
 |---|---|---|
+| [Documents](/reference/modules/documents/) | local | Local MarkItDown conversion to Markdown; originals retained, no network. |
 | [Inventory & discovery](/reference/modules/i-inventory/) | — | Discover and catalog the agents, sessions, MCP servers, tools, models and identities that connectors observed. |
 | [Live operation & sessions](/reference/modules/ii-sessions/) | — | Real-time state of each agent and session; also hosts the governed Claude Code session runtime. |
 | [Access & resource map (R/RW)](/reference/modules/iii-access-map/) | — | What each agent accesses, and whether it reads or writes; least-privilege drift = `Permitted ≠ Observed`. |
@@ -140,11 +141,11 @@ actuates on a growing, mostly provision-gated subset** — see
 and the console’s **Settings > Modules** list. `npm run test:modules` checks
 each selectable namespace for a linked reference page and verifies the count.
 
-## Edition availability seam (not counted among the 35 selectable modules)
+## Edition availability seam (not counted among the 36 selectable modules)
 
-The catalog above covers the **35 selectable modules** in the shared module
+The catalog above covers the **36 selectable modules** in the shared module
 spec. Separately, Community registers an availability descriptor
-under the `session-cockpit` API namespace. It is not one of those 35.
+under the `session-cockpit` API namespace. It is not one of those 36.
 
 - [Session cockpit (availability)](/reference/modules/session-cockpit/) —
   zero handlers in Community; `/v1/m/session-cockpit` returns **404 by
@@ -153,10 +154,10 @@ under the `session-cockpit` API namespace. It is not one of those 35.
   [Live operation & sessions](/reference/modules/ii-sessions/) and
   [Run Claude Code with Olivares](/how-to/run-claude-code-with-olivares/).
 
-## Platform & core capabilities (not counted among the 35 selectable modules)
+## Platform & core capabilities (not counted among the 36 selectable modules)
 
 These are real, shipped capabilities, but they are **engine/core/web capabilities**,
-not separately selectable modules — so they are not counted in the 35:
+not separately selectable modules — so they are not counted in the 36:
 
 - [Own API + manage-as-code](/reference/modules/xix-api-manage-as-code/) —
   **Engine/core capability.** The engine's own versioned REST/gRPC API plus the
@@ -167,7 +168,7 @@ not separately selectable modules — so they are not counted in the 35:
 - [Executive dashboards](/reference/modules/xxi-executive-dashboards/) — **Web capability.**
   Leadership console views alongside the technical UI. (Its report-generation
   backend is the [reporting](/reference/modules/reporting/) module, which IS
-  counted among the 35.)
+  counted among the 36.)
 - [Model operations (own models)](/reference/modules/xxiii-model-operations/) —
   **Capability of the models module** (counted through module X's row, not a
   separate row): the governed registry of owned models, signed-model admission,
@@ -178,7 +179,7 @@ not separately selectable modules — so they are not counted in the 35:
 ([xxiii-fine-tuning](/reference/modules/xxiii-fine-tuning/)) — the platform
 governs and records that work today (see model operations above) but does not
 run training or serve inference itself; the executing half is documented
-**planned** work, **not shipped** and not one of the 35.
+**planned** work, **not shipped** and not one of the 36.
 
 ## How modules show up in the API and the bus
 
@@ -193,11 +194,11 @@ run training or serve inference itself; the executing half is documented
 
 ## Layers
 
-The 35 selectable modules build on layers over the engine, alongside the engine/core and
+The 36 selectable modules build on layers over the engine, alongside the engine/core and
 web capabilities above:
 
 - **Engine (layer 0)** — the own-API/manage-as-code and multi-tenancy
-  capabilities (core, not counted in the 35).
+  capabilities (core, not counted in the 36).
 - **Core (layer 1)** — inventory, sessions, access-map, models, health,
   observability.
 - **Management (layer 2)** — capabilities, governance, identity, claude-policy, claude-agents,

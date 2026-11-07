@@ -204,7 +204,7 @@ func testOpenCodeDefaultLogin(t *testing.T, backend string, retained bool) {
 	}
 }
 
-// #2567: `olivares tool login opencode` offers OpenCode's own provider first. The key
+// : `olivares tool login opencode` offers OpenCode's own provider first. The key
 // comes from the CLI's stdin (a pipe here), reaches the tool's own login prompt on
 // the engine and lands in the organization's login home; the CLI never prints it,
 // and the session profile resolves to that own login.

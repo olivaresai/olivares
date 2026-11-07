@@ -22,7 +22,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sourcescope"
 )
 
-// A department carries its standards (#530), on the real engine and through the real routes: the
+// A department carries its standards, on the real engine and through the real routes: the
 // instructions assigned to Engineering reach the Claude launches of its members and of the
 // departments under it, a forbid on a sub-department holds, and the instructions file of the
 // department's workstations is rendered from the same text. The Community build refuses to

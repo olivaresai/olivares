@@ -540,7 +540,7 @@ sed '/^gpgcheck=1$/d' "$served/olivares.repo" >"$scratch/repo-no-gpgcheck"
 expect_rc mutant-repo-file-without-gpgcheck 1 user_repo_file_ok "$scratch/repo-no-gpgcheck" "file://$served"
 { cat "$served/olivares.repo"; printf 'repo_gpgcheck = 0\n'; } >"$scratch/repo-appended"
 expect_rc mutant-repo-file-appended-override 1 user_repo_file_ok "$scratch/repo-appended" "file://$served"
-# Mutant 12b: the dnf file fetches its key from the repository address, as it did before #2576.
+# Mutant 12b: the dnf file fetches its key from the repository address, as it did before.
 sed "s#^gpgkey=.*#gpgkey=file://$served/olivares-packages.asc#" "$served/olivares.repo" >"$scratch/repo-key-from-address"
 expect_rc mutant-repo-file-key-from-repository-address 1 user_repo_file_ok "$scratch/repo-key-from-address" "file://$served"
 # Mutants 12c, 12d: dnf reads gpgkey as a list, so a second line, spaced or continued, adds a key address.

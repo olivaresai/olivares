@@ -190,7 +190,7 @@ func TestClaudePricingForConcurrentLookups(t *testing.T) {
 	wg.Wait()
 }
 
-// TestForRetriesTransientCalculateError reproduces the red main of issue #2620. The
+// TestForRetriesTransientCalculateError reproduces the red main of issue. The
 // dataset guards each regex match with a 100 ms wall-clock timeout, and a CPU stall
 // can trip it on a model the dataset does carry. One errored lookup must not read as
 // an unpriced model: the lookup runs again and answers the tariff.

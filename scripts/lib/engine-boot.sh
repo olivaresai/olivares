@@ -177,9 +177,11 @@ engine_proc_gone() {
 	[ "$state" = "Z" ]
 }
 
-# boot_engine_at <bin> <port> <data-dir> <pidfile> — start an engine, prove it is OURS,
-# print its one-time setup token on stdout, and record the child's pid in <pidfile> so the
-# caller's cleanup trap can kill it.
+# boot_engine_at <bin> <port> <data-dir> <pidfile> [polls] — start an engine, prove it is
+# OURS, print its one-time setup token on stdout, and record the child's pid in <pidfile> so
+# the caller's cleanup trap can kill it. It waits up to <polls> half-second polls (default
+# 40) for /healthz; a caller that boots a virgin store on a loaded runner passes a longer
+# bound, and a dead child still ends the wait at once.
 #
 # A PIDFILE, NOT AN ARRAY, AND THAT IS THE SECOND DEFECT THIS FILE CLOSES. The inline
 # version appended to a `PIDS` array — and every caller invokes it as
@@ -195,7 +197,7 @@ engine_proc_gone() {
 # Found by this file's own battery asserting that the caller can see the child — a case
 # written to confirm the happy path, which failed instead.
 boot_engine_at() {
-	local bin="$1" port="$2" data="$3" pidfile="$4"
+	local bin="$1" port="$2" data="$3" pidfile="$4" polls="${5:-40}"
 	local grpc log pid i owner token
 	grpc="$((port + 1))"
 	log="${data}/engine.log"
@@ -247,7 +249,7 @@ boot_engine_at() {
 	fi
 
 	# --- 2. LIVENESS + readiness ---------------------------------------------------
-	for i in $(seq 1 40); do
+	for i in $(seq 1 "${polls}"); do
 		if ! kill -0 "${pid}" 2>/dev/null; then
 			echo "ERROR: the engine we started for 127.0.0.1:${port} EXITED during boot." >&2
 			echo "       This is the case the old probe could not see: it asked the port, not" >&2
@@ -268,7 +270,7 @@ boot_engine_at() {
 		return 1
 	fi
 	if ! curl -sf "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then
-		echo "ERROR: engine on 127.0.0.1:${port} never accepted connections (pid ${pid} alive)." >&2
+		echo "ERROR: engine on 127.0.0.1:${port} never accepted connections (pid ${pid} alive, ${polls} polls of 0.5 s)." >&2
 		sed 's/^/         /' "${log}" >&2 || true
 		return 1
 	fi

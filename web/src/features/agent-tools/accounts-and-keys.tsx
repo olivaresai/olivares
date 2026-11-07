@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The accounts and API keys sessions run as, on Tools (#2552). They were two pages and
+// The accounts and API keys sessions run as, on Tools. They were two pages and
 // two more for the profiles and bindings an account is made of; an account's profile and
 // bindings are now in its detail. Each part is shown under its own read tier and leaves
 // the screen the moment that tier does.
@@ -43,7 +43,7 @@ export function AccountsAndKeys({
   // list on its own, as the /provider-profiles and /provider-bindings doors gave it.
   const profiles = profileRead && !accounts
   const bindings = can('sessions:profile-binding:read') && !profileRead
-  // The governed references to keys held at the provider (#3388): a provider key has one
+  // The governed references to keys held at the provider: a provider key has one
   // destination, here, beside the API keys. Their tier is the models module's own.
   // They are the models module's: off, they are not offered, as the Models page was not.
   const keyReferences = useModuleOn('models') && can('models:keys:read')

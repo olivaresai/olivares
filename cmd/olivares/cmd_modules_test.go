@@ -94,7 +94,7 @@ func TestModulesCLIListsAndChangesTheCompleteSelection(t *testing.T) {
 }
 
 // The restart that applies a module change stops every running session: the help
-// says so, and the reply names how many stopped and what to do next (#507).
+// says so, and the reply names how many stopped and what to do next.
 func TestModulesCLISaysTheRestartStopsRunningSessions(t *testing.T) {
 	for _, tc := range []struct {
 		sessions int

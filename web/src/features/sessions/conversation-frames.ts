@@ -479,7 +479,7 @@ export const isQuiet = (item: ConversationItem): boolean =>
   item.systemKind === 'quiet'
 
 /**
- * THE TOOL'S OWN BOOKKEEPING IS NO CONVERSATION ROW (#1784). A thinking-token counter and a
+ * THE TOOL'S OWN BOOKKEEPING IS NO CONVERSATION ROW. A thinking-token counter and a
  * rate limit report that says `allowed` are neither a turn the person took nor words the
  * assistant said: painted as rows they read "thinking tokens" before the answer and
  * "allowed · five hour" after it. The line joins the item before it, so the inspector keeps
@@ -1290,7 +1290,7 @@ function foldLine(
       const existing = items.findIndex((item) => item.id === codex.id)
       if (existing >= 0) {
         // It keeps the first frame that showed it; an item the stored history restored
-        // takes this frame's (review of #2855).
+        // takes this frame's (review of).
         const first = items[existing]!.seq ?? seq
         const replay = first === undefined ? codex : { ...codex, seq: first }
         return items.map((item, index) => (index === existing ? replay : item))

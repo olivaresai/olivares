@@ -33,7 +33,7 @@ import (
 //
 // The ordering it lives inside is not negotiable and is worth stating once:
 //
-//  1. classifyRolloutControls (#448) runs FIRST under the advisory lock. It is what decides
+//  1. classifyRolloutControls runs FIRST under the advisory lock. It is what decides
 //     whether a deployment predates a staged control, and it must observe the schema BEFORE
 //     anything this boot creates.
 //  2. preflightGuardControlPlane then asks its all-or-none question about the C4 objects

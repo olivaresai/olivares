@@ -459,7 +459,7 @@ export function SignIn({
   const tenant = tenantId ?? activeTenant
   const [flow, setFlow] = useState<SignInFlow | null>(null)
   const [code, setCode] = useState('')
-  // The sheet became KeyInstead's key form (the link's replacement, #2551).
+  // The sheet became KeyInstead's key form (the link's replacement,).
   const [addingKey, setAddingKey] = useState(false)
   const keyTriggerRef = useKeyTriggerFocus(addingKey)
   const [error, setError] = useState<string | null>(null)
@@ -481,7 +481,7 @@ export function SignIn({
   const statusSettled = !ownsDefault || !statusRead.isPending
   const methods =
     listedMethods ?? (ownsDefault ? statusRead.data?.methods : undefined) ?? []
-  // The first listed method is the one to offer first (OpenCode's own key, #2567).
+  // The first listed method is the one to offer first (OpenCode's own key,).
   const [chosen, setChosen] = useState<string | undefined>(undefined)
   const method = methods.length > 1 ? (chosen ?? methods[0]?.id) : undefined
   const takesKey = methods.find((m) => m.id === method)?.key === true
@@ -489,7 +489,7 @@ export function SignIn({
   // pending login is never taken up again here.
   const [resumeSpent, setResumeSpent] = useState(false)
   // The key form replaces the sheet: a login it did not ask for must not be taken
-  // up, started or completed underneath it (#2551).
+  // up, started or completed underneath it.
   if (
     ownsDefault &&
     !addingKey &&
@@ -590,7 +590,7 @@ export function SignIn({
   }, [flow, live, accountRef])
   useEffect(() => {
     // Not under the key form: a login that completes then must not close the sheet
-    // (or the dialog) over a key the person is typing (#2551).
+    // (or the dialog) over a key the person is typing.
     if (flow?.state === 'signed_in' && !addingKey) {
       if (!accountRef) {
         void qc.invalidateQueries({
@@ -829,36 +829,22 @@ export function SignIn({
   )
 }
 
-/** A folder row is one line however long its path: the name stays, the path is cut, and
- * the whole label is the tooltip. */
+/** A folder row stays on one line, with its whole label on the tooltip. */
 const FOLDER_ITEM =
   '[&>span:last-child]:min-w-0 [&>span:last-child]:overflow-hidden [&>span:last-child]:whitespace-nowrap'
 
-/** A registered folder in the list: its name when it has one, always its path. */
+/** A registered folder's chosen name, or its path when it has no name. */
 function folderLabel(w: Pick<WorkspaceDTO, 'name' | 'root_path'>): string {
-  return w.name && w.name !== w.root_path
-    ? `${w.name} (${w.root_path})`
-    : w.root_path
+  return w.name || w.root_path
 }
 
-/** The same label as rich text: the path keeps its own middle cut and tooltip, while the
- * select's textValue keeps the whole label for typeahead. */
 function FolderLabel({
   workspace,
 }: {
   workspace: Pick<WorkspaceDTO, 'name' | 'root_path'>
 }) {
-  const named = workspace.name && workspace.name !== workspace.root_path
-  return named ? (
-    <span className="flex w-full min-w-0 items-baseline">
-      <span className="shrink-0">{workspace.name} (</span>
-      <PathText
-        value={workspace.root_path}
-        copy={false}
-        className="min-w-0 flex-1"
-      />
-      <span className="shrink-0">)</span>
-    </span>
+  return workspace.name && workspace.name !== workspace.root_path ? (
+    <span className="truncate">{workspace.name}</span>
   ) : (
     <PathText value={workspace.root_path} copy={false} />
   )
@@ -1015,7 +1001,7 @@ function StartSessionChoices({
     sessionTools()[0]
   const defaultAccount =
     !defaults.tool || tool === defaults.tool ? defaults.account : ''
-  // Start points at the sentence under the tool choice when that tool cannot start (#1083).
+  // Start points at the sentence under the tool choice when that tool cannot start.
   const notReadyId = useId()
   const keyModelId = useId()
   const accessId = useId()
@@ -1087,6 +1073,7 @@ function StartSessionChoices({
     /** A path typed instead of picked: set by "Another folder…". Fixed then, so a list
      * that arrives later never swaps the field under what the user is typing. */
     typing?: boolean
+    selected?: boolean
   } | null>(null)
   const pickable = (registered.data?.items ?? []).filter(
     (w) => w.state === 'active' && w.root_path,
@@ -1097,9 +1084,14 @@ function StartSessionChoices({
   const preferredFolder = pickable.find(
     (w) => w.workspace_ref === defaults.folder,
   )
-  const defaultFolder = defaults.folder
-    ? (preferredFolder ?? pickable[0])
-    : undefined
+  const recentFolder = lastFolder(
+    runs.data?.items ?? [],
+    registered.data?.items ?? [],
+  )
+  const defaultFolder =
+    preferredFolder ??
+    pickable.find((w) => w.workspace_ref === recentFolder.workspace_ref) ??
+    pickable[0]
   if (
     chosen?.scope !== folderScope &&
     !runs.isFetching &&
@@ -1113,15 +1105,17 @@ function StartSessionChoices({
             workspace_ref: linkedFolder?.workspace_ref,
             typing: !linkedFolder,
           }
-        : defaults.folder
+        : defaultFolder
           ? {
               folder: defaultFolder?.root_path ?? '',
               workspace_ref: defaultFolder?.workspace_ref,
             }
-          : lastFolder(runs.data?.items ?? [], registered.data?.items ?? [])),
+          : { folder: '' }),
     })
   const current = chosen?.scope === folderScope ? chosen : null
   const folder = current?.folder ?? ''
+  const needsFolder =
+    !!current && !current.workspace_ref && !folder.trim() && !current.selected
   // The folders sessions already use, to pick from; a path is typed only as the fallback.
   const [runOn, setRunOn] = useState('')
   const [more, setMore] = useState(false)
@@ -1184,6 +1178,7 @@ function StartSessionChoices({
     model: requestedModel,
     enabled: toolReady,
     fallbackModel: saved,
+    beforeFirstProfile: !key && reuse.data?.reason === 'own_login',
   })
   const offeredModels = key
     ? tested
@@ -1358,6 +1353,7 @@ function StartSessionChoices({
     if (
       start.isPending ||
       !current ||
+      needsFolder ||
       defaultsLoading ||
       !toolReady ||
       speedUnavailable ||
@@ -1381,7 +1377,7 @@ function StartSessionChoices({
         effort,
         folder: current.workspace_ref ?? '',
       },
-      // An emptied path is a new folder of the session's own, kept as Automatic.
+      // A typed path is registered by the engine and kept for the next start.
       typed: !!current.typing && !!folder.trim(),
     })
   }
@@ -1392,6 +1388,7 @@ function StartSessionChoices({
       return setChosen({
         ...current,
         typing: true,
+        selected: false,
         workspace_ref: undefined,
       })
     }
@@ -1401,6 +1398,7 @@ function StartSessionChoices({
         folder: '',
         workspace_ref: undefined,
         typing: false,
+        selected: true,
       })
     const picked = pickable.find((w) => w.workspace_ref === v)
     if (picked)
@@ -1562,7 +1560,9 @@ function StartSessionChoices({
         ? shownFolder
           ? folderLabel(shownFolder)
           : folder
-        : t('start.folderNew')
+        : current?.selected
+          ? t('start.folderNew')
+          : t('start.folderChoose')
     const recent = pickable.slice(0, RECENT_FOLDERS)
     // A folder picked or remembered beyond the recent ones stays listed: Enter sends it.
     const folders = [
@@ -1620,11 +1620,13 @@ function StartSessionChoices({
           ) : null}
           {current ? (
             <FolderPill
+              autoFocus={needsFolder && !prompt}
               label={folderText}
               value={
                 current.typing
                   ? FOLDER_TYPED
-                  : (current.workspace_ref ?? FOLDER_NEW)
+                  : (current.workspace_ref ??
+                    (current.selected ? FOLDER_NEW : ''))
               }
               folders={folders}
               onPick={pickFolder}
@@ -1656,6 +1658,7 @@ function StartSessionChoices({
             mode="native"
             disabled={
               !current ||
+              needsFolder ||
               defaultsLoading ||
               permissionBlocked ||
               start.isPending ||
@@ -1670,7 +1673,9 @@ function StartSessionChoices({
                     ? t('agentops:create.speedUnavailable')
                     : defaultsLoading
                       ? t('common:states.loading')
-                      : t('start.readingFolder')
+                      : needsFolder
+                        ? t('start.folderChoose')
+                        : t('start.readingFolder')
             }
           >
             <Button
@@ -1690,6 +1695,7 @@ function StartSessionChoices({
               }
               disabled={
                 !current ||
+                needsFolder ||
                 defaultsLoading ||
                 permissionBlocked ||
                 start.isPending ||
@@ -1891,12 +1897,13 @@ function StartSessionChoices({
               value={
                 current.typing
                   ? FOLDER_TYPED
-                  : (current.workspace_ref ?? FOLDER_NEW)
+                  : (current.workspace_ref ??
+                    (current.selected ? FOLDER_NEW : ''))
               }
               onValueChange={pickFolder}
             >
               <SelectTrigger aria-label={t('start.folder')}>
-                <SelectValue />
+                <SelectValue placeholder={t('start.folderChoose')} />
               </SelectTrigger>
               <SelectContent
                 className="max-w-[var(--radix-select-content-available-width)]"
@@ -2062,6 +2069,7 @@ function StartSessionChoices({
           disabled={
             permissionBlocked ||
             !current ||
+            needsFolder ||
             defaultsLoading ||
             speedUnavailable ||
             needsKeyModel
@@ -2075,7 +2083,9 @@ function StartSessionChoices({
                   ? t('common:states.loading')
                   : !current
                     ? t('start.readingFolder')
-                    : keyModelReason
+                    : needsFolder
+                      ? t('start.folderChoose')
+                      : keyModelReason
           }
           mode="native"
         >
@@ -2087,6 +2097,7 @@ function StartSessionChoices({
             aria-describedby={tool && !toolReady ? notReadyId : undefined}
             disabled={
               !current ||
+              needsFolder ||
               defaultsLoading ||
               permissionBlocked ||
               start.isPending ||
@@ -2120,7 +2131,7 @@ export function NewSessionDialog({
 }) {
   const { t } = useTranslation('firstHour')
   // A tool card's key write must not be cut off by the dialog's own close (X, Escape,
-  // overlay): the write would then finish with no toast and no refresh (#2551).
+  // overlay): the write would then finish with no toast and no refresh.
   const keyBeingStored = useKeyBeingStored()
   return (
     <Dialog

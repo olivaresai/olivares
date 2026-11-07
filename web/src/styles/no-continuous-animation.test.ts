@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// NO CONTINUOUSLY REPAINTING ANIMATION (#3135).
+// NO CONTINUOUSLY REPAINTING ANIMATION.
 //
 // A panel that pulses, a badge that bounces or a glow that breathes repaints the screen for
 // as long as the page is open: it keeps the GPU busy to say nothing. The console's motion is a

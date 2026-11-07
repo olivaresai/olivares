@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// #3140: a brand or a pack can set a few variables on the document, but the surfaces that
+//: a brand or a pack can set a few variables on the document, but the surfaces that
 // carry a trust decision (approval, consent and step-up dialogs, provenance chips,
 // edition badges) keep the host's colours, and an extension panel stays in its container.
 /// <reference types="node" />

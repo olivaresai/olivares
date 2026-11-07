@@ -234,7 +234,7 @@ describe('ReleaseStatePanel — honest not-published state', () => {
     ).toBeInTheDocument()
   })
 
-  // #1844: the engine writes the provenance note with its command between backticks, and the
+  //: the engine writes the provenance note with its command between backticks, and the
   // panel printed them as they came. The command reads as a command; the sentence is the
   // engine's, word for word.
   it('shows the command in the provenance note as code, with no backtick', () => {

@@ -114,7 +114,7 @@ describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
     expect(screen.getByRole('button', { name: /^cancel$/i })).toBeEnabled()
     expect(screen.getByText('session:osn_new')).toBeInTheDocument()
     expect(api.decide).not.toHaveBeenCalled()
-    // A launch runs nothing by itself: no command is expected, so no note (#2269).
+    // A launch runs nothing by itself: no command is expected, so no note.
     expect(screen.queryByText(NOTE)).toBeNull()
   })
 

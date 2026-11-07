@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE LAST HOUR, ROW BY ROW, FROM THE EVENT LOG (#2547): every row of the demo estate
+// THE LAST HOUR, ROW BY ROW, FROM THE EVENT LOG: every row of the demo estate
 // (swimlane.fixture.ts) must say what its events say.
 import { describe, expect, it } from 'vitest'
 import { mergeSessions } from '@/features/sessions/provenance'

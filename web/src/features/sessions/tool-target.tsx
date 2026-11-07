@@ -5,7 +5,7 @@ import { PathText } from '@/components/ui/path-text'
 import type { ConversationItem } from './conversation-frames'
 
 /**
- * What a tool call acts on (#3135): its summary, with the path it names shown whole through
+ * What a tool call acts on: its summary, with the path it names shown whole through
  * PathText, so the hover and the copy are all of it ("TODO · web/src/…/x.tsx" keeps the
  * pattern as text). `copy` is off where the line sits inside a control, such as a row's
  * <summary>; `wrap` shows the whole path where a person reads it in full.

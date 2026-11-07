@@ -99,10 +99,7 @@ export function SessionDefaultsSettings() {
       .filter((w) => w.state === 'active' && w.root_path)
       .map((w) => ({
         value: w.workspace_ref,
-        label:
-          w.name && w.name !== w.root_path
-            ? `${w.name} (${w.root_path})`
-            : w.root_path,
+        label: w.name || w.root_path,
       })),
   }
   return (

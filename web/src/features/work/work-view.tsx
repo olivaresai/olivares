@@ -54,7 +54,7 @@ import './i18n'
  * the kernel declines to assert. Each is commented where it lives; the two on this
  * screen are the archived tri-state below and the live stream's unavailable notice.
  *
- * PERMISSIONS ARE PURE SET MEMBERSHIP (#578). can() is a lookup in the effective set
+ * PERMISSIONS ARE PURE SET MEMBERSHIP. can() is a lookup in the effective set
  * /v1/auth/whoami serves — no verb arithmetic, no "admin implies write", no exceptions
  * wired in for this feature. Measured on the wire for all six of this cockpit's
  * permissions by cmd/olivares/work_console_whoami_reach_test.go.

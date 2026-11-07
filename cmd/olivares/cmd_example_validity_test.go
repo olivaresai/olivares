@@ -197,7 +197,7 @@ func flagsAfterTerminatorProblems(root *cobra.Command, owner string, words []str
 // is heard. After a bare -- terminator cobra hands every word to the wrapped
 // command, so an olivares flag written after it is stored as a server argument
 // and never takes effect — which is how `mcp add --help` shipped an example
-// that failed with the engine's inline-credential refusal (#572).
+// that failed with the engine's inline-credential refusal.
 func TestExamplesKeepOlivaresFlagsBeforeTheTerminator(t *testing.T) {
 	root := newRootCmd()
 	checked := 0
@@ -313,7 +313,7 @@ func requireAttributionFlags(t *testing.T, root *cobra.Command, owner string, wo
 // TestExamplesInvokeRealCommandsAndFlags: a flag that exists is not a flag that
 // is enough. --actor and --reason are deliberately not cobra-required (see
 // localactor.go), so cobra's own required-flag display cannot flag the gap, and
-// the examples of secrets, sources and superadmin drifted from it (#512).
+// the examples of secrets, sources and superadmin drifted from it.
 func TestPrivilegedOfflineExamplesCarryAttribution(t *testing.T) {
 	root := newRootCmd()
 	checked, privileged := 0, 0

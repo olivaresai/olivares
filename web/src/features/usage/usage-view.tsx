@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// USAGE & COST, ONE CLICK FROM THE SIDEBAR (#3389): each account's share of the week and of
+// USAGE & COST, ONE CLICK FROM THE SIDEBAR: each account's share of the week and of
 // five hours, the account nearest its limit first, its row opening every window its tool
 // reports with when each resets (the one place window names are shown), then what today's
 // sessions used. Both are reads the console already makes (the account list AI tools
 // shows, and Now's recent sessions, on the same cache keys), so this page never says a
 // number AI tools or Now does not. A read this principal may not make is not made, and a
 // figure nobody reported is left out, never shown as 0. The Timeline tab holds the last-hour
-// lanes that were on Now (#4427).
+// lanes that were on Now.
 import { Link } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -85,7 +85,7 @@ export function UsageView() {
   )
 }
 
-/** THE LAST HOUR (#2547), moved from Overview (#4427): one row per session, drag to the
+/** THE LAST HOUR, moved from Overview: one row per session, drag to the
  * Ledger, Show as a table, and past FLEET_SESSIONS a build's fleet panel (EstateLanes). It
  * reads the sessions Today reads and the approval queue's own read, on the same keys. */
 function Timeline() {

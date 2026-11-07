@@ -47,7 +47,7 @@ export function runInputMode(
  * readsNativeRecord reports whether the engine reads this run's activity and messages
  * from its tool's own record: Claude Code and Codex. It answers 422 for any other tool,
  * and the browser logs every failed request as a console error, so the console does not
- * ask one (#2258). A legacy run names no driver, so it is not one of these.
+ * ask one. A legacy run names no driver, so it is not one of these.
  *
  * Mirrors `activitySource` (`modules/sessions/session_activity.go`); the server stays
  * the authority. When the engine learns to read another tool's record, add its driver

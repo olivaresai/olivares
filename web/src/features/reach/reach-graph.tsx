@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The two-column reach graph (issue #2553): tools on the left, destinations on the
+// The two-column reach graph (issue): tools on the left, destinations on the
 // right, one neutral curve per access-map edge. A destination a PENDING approval
 // names renders dashed: a dashed curve from the tool whose session asked, a dashed
 // stub from the mid rail when the approval names no session, and a dashed

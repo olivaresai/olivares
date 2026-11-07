@@ -507,7 +507,7 @@ if PATH=/usr/local/bin:/usr/bin:/bin HOME="$DATA/home" "$BIN" sources set --name
     # Every session id the receiver sees is also a row of the Sessions list, with one event
     # and no name, so the volume is a team's, not a fleet's: four teams of two sessions
     # (the default of six teams of eight put 48 identical rows on the Sessions and
-    # AgentOps views, #2268).
+    # AgentOps views,).
     OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-adoption-otlp.py" \
       "http://127.0.0.1:$PORT" - "$TENANT" \
       --otlp "http://127.0.0.1:$OTLP_PORT/v1/metrics" --equipos 4 --por-equipo 2 || {

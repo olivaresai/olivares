@@ -7,7 +7,7 @@
 // is drawn and named, for the Sessions list, Now, the palette and the Business cockpit.
 //
 // ⛔ THE SHAPE DIFFERS PER STATUS AND THE WORD IS ALWAYS THERE, so colour never carries a
-//    state alone. Each status has its colour (#4019): blue Working, amber Needs you,
+//    state alone. Each status has its colour: blue Working, amber Needs you,
 //    green Done, red Failed; Idle, the one at rest, is grey.
 import { CircleCheck, CircleX, Pause } from 'lucide-react'
 import { useTranslation } from 'react-i18next'

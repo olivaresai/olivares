@@ -168,7 +168,7 @@ describe('the one New session host', () => {
     expect(mounts.advanced).toBe(1)
   })
 
-  // #1779 (srv17): the form's sign-in, model and effort reach the advanced launch, which
+  // (srv17): the form's sign-in, model and effort reach the advanced launch, which
   // otherwise opens on "Select a profile" when the tenant has several.
   it("opens the advanced launch on the form's sign-in, model and effort", async () => {
     const user = userEvent.setup()

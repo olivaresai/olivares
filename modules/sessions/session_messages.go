@@ -23,7 +23,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// The messages of a session (#2129): its index, its search and its time anchor, read
+// The messages of a session: its index, its search and its time anchor, read
 // from the transcript the tool keeps, as its activity is (session_activity.go). The
 // engine stores nothing of it, the same read serves the console and the CLI, and a
 // person reaches only the sessions they may read. A message has one id, its position

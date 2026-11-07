@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ONE TERM, ONE WORD, PER LANGUAGE. The translation audit of 2026-10-16 (#2405) found the
+// ONE TERM, ONE WORD, PER LANGUAGE. The translation audit of 2026-10-16 found the
 // Chinese catalog calling a provider by three words, an agent by the word for a proxy, the
 // Estate module by the generic word for an environment, and over a hundred sentences still
 // in English. The English catalog is the source: wherever it says "provider", "agent" or

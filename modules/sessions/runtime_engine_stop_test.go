@@ -239,7 +239,7 @@ func TestASessionRunningAtEngineStopIsStoppedNotFailed(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "running", func() bool { d, _ := m.getRun(ctx, tenant, run.RunRef); return d.ClaudeSessionID != "" })
-	// A restart stops it, so the console says how many before it applies one (#507).
+	// A restart stops it, so the console says how many before it applies one.
 	if n := m.RunningSessions(); n != 1 {
 		t.Fatalf("running sessions before the engine stopped = %d, want 1", n)
 	}

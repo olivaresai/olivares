@@ -171,7 +171,7 @@ func TestInstallV2ReportsTheDownloadToTheCallersTerminal(t *testing.T) {
 // TestInstallReportsTheDownloadToTheCallersTerminal is the same proof for the
 // signed-manifest install (Claude Code): its artifact is the largest download of
 // all, and without the count the console's preparation and the terminal showed
-// nothing for its whole length (#1086).
+// nothing for its whole length.
 func TestInstallReportsTheDownloadToTheCallersTerminal(t *testing.T) {
 	f := newFixture(t)
 	f.publish(fxVersion)

@@ -42,7 +42,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # The attempt that produced the artifact is pr-build's output, never this job's own
     # GITHUB_RUN_ATTEMPT: "re-run failed jobs" re-runs userspace-compat at a new attempt
-    # while pr-build's earlier success keeps its artifact (#2749).
+    # while pr-build's earlier success keeps its artifact.
     build_attempt = os.environ.get('BUILD_ATTEMPT', '')
     if not build_attempt:
         parser.error('pr-build reported no attempt for the build artifact')

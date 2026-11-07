@@ -12,8 +12,8 @@ import (
 	"testing"
 )
 
-// TestDRBackupSaysWhatItLeavesOut is the #3027 statement kept true now that the
-// bundle carries the folders and sign-ins (#3029): `dr backup` and `dr inspect`
+// TestDRBackupSaysWhatItLeavesOut is the statement kept true now that the
+// bundle carries the folders and sign-ins: `dr backup` and `dr inspect`
 // name what the bundle leaves out, with the real path and the reason, and never
 // name what it carries.
 func TestDRBackupSaysWhatItLeavesOut(t *testing.T) {

@@ -1,13 +1,13 @@
 ---
 title: "Skills — le catalogue immuable et les affectations épinglées"
 description: >-
-  L'un des 32 modules : le catalogue immuable de skills et ses affectations
+  L'un des 33 modules : le catalogue immuable de skills et ses affectations
   épinglées. Les packs de skills sont installés comme des révisions immuables
   validées par digest ; ce qu'une cible peut utiliser est un pin enregistré et
   audité — jamais une édition en direct d'un dossier.
 ---
 
-Skills (`modules/skills`, `olivares.skills`) est l'un des 32 modules. Il possède le
+Skills (`modules/skills`, `olivares.skills`) est l'un des 33 modules. Il possède le
 **catalogue immuable de skills** et ses **affectations épinglées** : un pack de skills
 est installé une fois, validé entrée par entrée contre le digest de son manifeste et
 publié comme une révision immuable — il n'est jamais modifié en place ensuite. Ce
@@ -68,7 +68,7 @@ change jamais ce qu'un lancement déjà épinglé exécutera.
 
 ## En relation
 
-- [Catalogue des modules](/fr/reference/modules/overview/) — les 32 modules et où
+- [Catalogue des modules](/fr/reference/modules/overview/) — les 33 modules et où
   celui-ci se situe parmi eux.
 - [MCP, skills et capacités](/fr/reference/modules/v-capabilities/) — la vue de
   gouvernance sur les outils et capacités que ce catalogue alimente.

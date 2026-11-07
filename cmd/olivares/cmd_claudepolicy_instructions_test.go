@@ -16,7 +16,7 @@ import (
 )
 
 // The instructions file of Claude Code's managed tier is the surface managed-instructions@<department>
-// (#530): one document per department, rendered by the engine from what the department carries,
+//: one document per department, rendered by the engine from what the department carries,
 // so the verbs take no document for it.
 
 func TestClaudePolicyDepartmentInstructionsReachTheirRoutes(t *testing.T) {

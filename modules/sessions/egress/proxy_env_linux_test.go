@@ -35,7 +35,7 @@ func TestProxyEnvironmentReplacesTheHostWayOut(t *testing.T) {
 }
 
 // A tool that calls its own server on a loopback port reaches only that port
-// directly (#3082): NO_PROXY names it with its port, and the host's no_proxy is gone.
+// directly: NO_PROXY names it with its port, and the host's no_proxy is gone.
 func TestProxyEnvironmentExemptsOnlyTheNamedLoopbackPorts(t *testing.T) {
 	host := []string{"PATH=/usr/bin", "no_proxy=internal", "NO_PROXY=10.0.0.0/8"}
 	want := []string{"PATH=/usr/bin", "HTTP_PROXY=http://127.0.0.1:9", "HTTPS_PROXY=http://127.0.0.1:9", "http_proxy=http://127.0.0.1:9", "https_proxy=http://127.0.0.1:9",

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Endpoint helpers + query keys for the Reach view (issue #2553). Thin wrappers
+// Endpoint helpers + query keys for the Reach view (issue). Thin wrappers
 // over the core HTTP client against the engine's EXISTING reads — no new
 // mechanism, no logic here (ARCHITECTURE.md):
 // - /v1/m/accessmap/graph — the edges that ARE the reach (accessmap:graph:read,

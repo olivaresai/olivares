@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -439,5 +440,61 @@ func TestWorkspace_RootNotRespondingIsRefusedAndRecovers(t *testing.T) {
 	rootProbeTimeout = realTimeout
 	if _, err := m.resolveLaunchWorkspace(ctx, tenant, ws.WorkspaceRef); err != nil {
 		t.Fatalf("server back: %v", err)
+	}
+}
+
+func TestDocumentMentionsPreserveOrdinaryInput(t *testing.T) {
+	m, _, tenant, _ := newRuntimeHarness(t)
+	folder := t.TempDir()
+	for _, name := range []string{"package.json", "report.pdf"} {
+		if err := os.WriteFile(filepath.Join(folder, name), []byte("original"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.UseDocumentConverter(func(context.Context, string, []byte) ([]byte, error) { return nil, errors.New("converter unavailable") })
+	rec := model.Record{colRunWorkspacePath: folder}
+	for _, text := range []string{"Create @schema.json for the API", "see @package.json", "see @missing.pdf", "see @report.pdf"} {
+		got, err := m.expandDocumentMentions(context.Background(), tenant, rec, text)
+		if err != nil || got != text {
+			t.Errorf("%q: got %q, %v; want original input", text, got, err)
+		}
+	}
+}
+
+func TestDocumentMentionPinsCompanionDirectory(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("document mention conversion requires Linux confinement")
+	}
+	m, _, tenant, _ := newRuntimeHarness(t)
+	folder := t.TempDir()
+	docs, sealed := filepath.Join(folder, "docs"), filepath.Join(folder, "sealed")
+	for _, dir := range []string{docs, sealed} {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(docs, "a.pdf"), []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m.UseDocumentConverter(func(context.Context, string, []byte) ([]byte, error) {
+		if err := os.Rename(docs, docs+"-old"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("sealed", docs); err != nil {
+			t.Fatal(err)
+		}
+		return []byte("converted table cell"), nil
+	})
+	got, err := m.expandDocumentMentions(context.Background(), tenant, model.Record{colRunWorkspacePath: folder}, "read @docs/a.pdf")
+	if err != nil || !strings.Contains(got, "converted table cell") {
+		t.Fatalf("conversion: %q, %v", got, err)
+	}
+	entries, err := os.ReadDir(sealed)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("companion redirected into sealed directory: %v, %v", entries, err)
+	}
+	entries, err = os.ReadDir(docs + "-old")
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("companion absent from pinned directory: %v, %v", entries, err)
 	}
 }

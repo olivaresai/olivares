@@ -273,7 +273,7 @@ func (g sessionProviderPolicy) verdict(ctx context.Context, tenant model.TenantI
 	case "permissions", "mcp_elicitation", "tool_call_permission":
 		// An ACP read or search that names the files it reads is a read, as Claude Code's
 		// reads are: the live policy decides it as one, and every preset allows reads
-		// (#2890). One that names no file (a web search, a tool's own query) is not.
+		//. One that names no file (a web search, a tool's own query) is not.
 		// A request that also carries a command is not a read, whatever its kind says.
 		if req.Kind == "tool_call_permission" && (req.ToolKind == "read" || req.ToolKind == "search") &&
 			req.FactsComplete && len(req.FilePaths) > 0 && strings.TrimSpace(req.CommandLine) == "" {

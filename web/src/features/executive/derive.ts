@@ -73,7 +73,7 @@ export interface UsageKpi {
    *  established. */
   liveActive: number | null
   liveIdle: number | null
-  /** THE WORKING SET (#2268): the sessions the Sessions view files under Working,
+  /** THE WORKING SET: the sessions the Sessions view files under Working,
    *  launched or observed, from the same join and the same rule, so the dashboard's
    *  Active agents card and that list print one figure. It is not `activeAgents`
    *  (the catalog's "seen recently" count, which a dashboard once printed as 3 over a

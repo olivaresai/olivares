@@ -5,7 +5,7 @@
 // THE KILL SWITCH, ON EVERY PAGE (console remake 26.10, CONCEPT-IA row "Kill switch"): while
 // a stop is engaged, the status bar carries one status pill that opens the kill switch —
 // danger for an estate stop, warning for agent stops — and nothing when no stop is active.
-// It lives IN the status bar (#3161), not as a strip above the work: an emergency state
+// It lives IN the status bar, not as a strip above the work: an emergency state
 // must not move every page down.
 //
 // The read is the kill switch's own live posture under its own cache key, so this pill and

@@ -17,7 +17,7 @@ import (
 
 // THE HALF OF THE CONTRACT THIS FILE OWNS, AND WHY IT IS NOT THE WHOLE CONTRACT.
 //
-// (#690) landed a console that posted a body the engine rejected with 400,
+// Landed a console that posted a body the engine rejected with 400,
 // and its test was GREEN because the test double accepted what production
 // refuses. The defense against that class is a payload that is not written twice:
 // the four testdata/agentcore_console_*.json files are the EXACT bytes the console

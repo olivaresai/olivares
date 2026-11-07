@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A SESSION ROW'S ACTIONS MENU (#2795, #2866), in a real browser against a live `--seed-demo`
+// A SESSION ROW'S ACTIONS MENU, in a real browser against a live `--seed-demo`
 // engine: each action from a right-click, from the row's `⋯` and from the keyboard, and
 // each one still true after a reload, because the engine keeps it. Nothing is intercepted.
 //

@@ -6,7 +6,7 @@
 // A fresh install runs with most modules off, so a link that lands on a tab gated by one
 // shows only "<module> is not enabled on this installation" and a button that restarts the
 // engine. "Set policies" did that: the bare /claude-policy opened Drift & posture, which
-// reads the Security module (#473). Every next step must open a page that works as it is.
+// reads the Security module. Every next step must open a page that works as it is.
 import { expect, test } from '@playwright/test'
 
 const setupToken = process.env.PLAYWRIGHT_SETUP_TOKEN ?? ''

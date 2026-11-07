@@ -6,7 +6,7 @@ import { Wrench } from 'lucide-react'
 import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
 
-// ONE TOOLS PLACE (#2552): each tool, who signs in with what, and the accounts and API
+// ONE TOOLS PLACE: each tool, who signs in with what, and the accounts and API
 // keys sessions run as. The API key, account, profile and binding pages are doors into
 // this room (their own views.tsx), each under its own read tier, so the room is exported
 // once and every door mounts the same element.

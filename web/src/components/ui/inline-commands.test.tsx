@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A backticked part of a translated or engine-written sentence reads as a command (#1844).
+// A backticked part of a translated or engine-written sentence reads as a command.
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { withInlineCommands } from './inline-commands'

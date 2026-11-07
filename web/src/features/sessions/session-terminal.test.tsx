@@ -79,6 +79,7 @@ vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
 vi.mock('@/features/agentops/api', async (orig) => ({
   ...(await orig<typeof import('@/features/agentops/api')>()),
   agentOpsApi: {
+    readFile: vi.fn(),
     startTerminal: vi.fn(),
     terminalInput: vi.fn(),
     terminalSize: vi.fn(),
@@ -128,6 +129,9 @@ beforeEach(() => {
       headers: { 'Content-Type': 'text/event-stream' },
     })
   }) as typeof fetch)
+  vi.mocked(agentOpsApi.readFile).mockRejectedValue(
+    new ApiError(404, 'not_found', 'absent'),
+  )
   vi.mocked(agentOpsApi.startTerminal).mockResolvedValue({
     terminal: 'term_1',
     confinement: 'landlock',
@@ -313,4 +317,36 @@ describe('SessionTerminal', () => {
     await waitFor(() => expect(xterm.terms[0].written).toEqual(['still here']))
     act(() => end())
   })
+})
+
+it('runs a declared test script in the session terminal and shows its output', async () => {
+  vi.mocked(agentOpsApi.readFile).mockImplementation(async (_ref, path) => {
+    if (path !== 'package.json') throw new ApiError(404, 'not_found', 'absent')
+    return {
+      path,
+      size: 60,
+      encoding: 'utf-8',
+      content: JSON.stringify({ scripts: { test: 'printf script-passed' } }),
+    }
+  })
+  const user = userEvent.setup()
+  render(<SessionTerminal workspaceRef="ws_1" />)
+  const run = await screen.findByRole('button', { name: 'Run test' })
+  expect(agentOpsApi.startTerminal).not.toHaveBeenCalled()
+  await user.click(run)
+  await waitFor(() =>
+    expect(agentOpsApi.terminalInput).toHaveBeenCalledWith(
+      'ws_1',
+      'term_1',
+      "npm run -- 'test'\r",
+    ),
+  )
+  act(() => push(frame(0, 'script-passed')))
+  await waitFor(() => expect(xterm.terms[0].written).toContain('script-passed'))
+  await user.click(screen.getByRole('button', { name: 'Stop' }))
+  expect(agentOpsApi.terminalInput).toHaveBeenLastCalledWith(
+    'ws_1',
+    'term_1',
+    '\x03',
+  )
 })

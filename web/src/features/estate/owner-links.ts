@@ -9,7 +9,7 @@ export const estateOwnerPaths: Record<EstateFamily, string> = {
   session: '/agentops',
   work: '/work',
   connector: '/console',
-  // MCP servers are added and listed on MCP & skills' Servers tab (#3388).
+  // MCP servers are added and listed on MCP & skills' Servers tab.
   mcp: '/capabilities',
   policy: '/permissions',
 }

@@ -8,7 +8,7 @@
 #
 # WHY. The drills-nightly `pitr` job installed postgresql-15..18 with apt only on GitHub-hosted
 # runners. The self-hosted runners (build-host, build-host) have no /usr/lib/postgresql, so every
-# PITR test failed in 0.00 s with "no PostgreSQL 15 server binaries" (issue #3507, runs 40670247352
+# PITR test failed in 0.00 s with "no PostgreSQL 15 server binaries" (issue, runs 40670247352
 # and 40776002136). Installing on the hosts would make the drill depend on one host's package state;
 # this helper follows the mainline-ci bsdtar pattern instead: fixed packages, digest-checked, unpacked
 # with dpkg-deb -x into the job's own scratch. No apt, no sudo, no dpkg database, no maintainer script.

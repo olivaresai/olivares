@@ -5,7 +5,7 @@
 #
 # C05-15 unique leftover unique vs check-c05-15-corpus.sh
 # (named on main, CHECK not in lint:addon-sets) and unique leftover
-# unique vs #1392 / #1406. 0 CLEAN · 1 finding · 2 could not look.
+# unique vs /. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

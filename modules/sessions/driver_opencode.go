@@ -74,7 +74,7 @@ func (openCodeDriver) DefaultProgram() string {
 func (openCodeDriver) LaunchArgs(l DriverLaunch) []string {
 	// --print-logs --log-level ERROR is the tool's own switch that writes its errors to
 	// stderr: a failed model call is said nowhere else (1.19.3 sends no ACP update and
-	// never ends the prompt), and openCodeSession.Deliver reads it from there (#2937).
+	// never ends the prompt), and openCodeSession.Deliver reads it from there.
 	args := []string{"acp", "--hostname", "127.0.0.1", "--print-logs", "--log-level", "ERROR"}
 	if dir := strings.TrimSpace(l.WorkDir); dir != "" {
 		args = append(args, "--cwd", dir)
@@ -89,7 +89,7 @@ func (openCodeDriver) LaunchArgs(l DriverLaunch) []string {
 // own default, 1.19.4). Behind the session proxy it is pinned and is the one port
 // the proxy environment exempts (egress.Policy.LoopbackPorts): Bun sends every
 // other request, loopback included, to the proxy, and matches NO_PROXY by host and
-// port (measured, #3082).
+// port (measured,).
 const openCodeACPPort = 4096
 
 func (openCodeDriver) TransportProfile() DriverTransportProfile {
@@ -139,7 +139,7 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	case l.BoundProvider.Kind != "":
 		openCodeConfineToKey(cfg, l.BoundProvider, l.Model)
 	default:
-		// The tool's own login (#2888) has no record to pin. It stays on the provider
+		// The tool's own login has no record to pin. It stays on the provider
 		// its model names and shares nothing. It keeps OpenCode's model catalog,
 		// which is what its model picker lists.
 		bound = false
@@ -150,7 +150,7 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	}
 	if bound {
 		// npm stays online: npm_config_offline would reach every command OpenCode's
-		// shell runs, the agent's npm install included (#3122). OpenCode's own plugin
+		// shell runs, the agent's npm install included. OpenCode's own plugin
 		// install is refused by the session's egress policy.
 		env = append(env, EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"})
 	}
@@ -171,15 +171,15 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 			// It starts no subagent: see the global rules below.
 			"task": "deny"}
 		// Only the build agent, pinned below with its own rules (agent configuration
-		// takes precedence over the global rules), may ask. Its read asks (#2890): live
+		// takes precedence over the global rules), may ask. Its read asks: live
 		// policy reviews it as a read, which every preset allows, and audits it; the file
 		// comes from the tool_call_update OpenCode sends just before the request
 		// (acpSession.toolFacts). OpenCode's MCP resource reads ask "read" with
 		// mcp:<server>:<uri> patterns and name no file: they stay allowed. Glob and grep
 		// (and list, which 1.19.4 does not offer) ask too, decided and audited as reads of
-		// the folder they search (#3058).
+		// the folder they search.
 		// Every other agent, a subagent above all, has the global rules, which deny
-		// everything (#3083): OpenCode's ACP agent drops an ask from a session it did not
+		// everything: OpenCode's ACP agent drops an ask from a session it did not
 		// create, so a subagent's ask is never answered and its turn waits forever, and
 		// what it allows goes unaudited (measured on 1.19.4). With every tool denied,
 		// OpenCode offers a subagent none and it ends at once.
@@ -249,7 +249,7 @@ const (
 // envOpenCodeDisableExternalSkills stops the .claude/skills and .agents/skills scans
 // under HOME and up every ancestor of the session folder. Measured on 1.19.3: in a
 // folder that is not a git repository the walk reaches /, and every skill folder it
-// finds gets external_directory: allow (#2997). OpenCode's own .opencode folders are
+// finds gets external_directory: allow. OpenCode's own .opencode folders are
 // still scanned.
 const envOpenCodeDisableExternalSkills = "OPENCODE_DISABLE_EXTERNAL_SKILLS"
 
@@ -835,7 +835,7 @@ func (s *openCodeSession) Input(ctx context.Context, text string) (bool, error) 
 	}
 	// OpenCode's built-in /review is a subtask command (1.19.4): it runs as a subagent
 	// whatever the task rule says, and OpenCode never passes that subagent's approval
-	// requests to Olivares, so its turn would wait forever (#3083).
+	// requests to Olivares, so its turn would wait forever.
 	if name := strings.FieldsFunc(command, unicode.IsSpace); len(name) > 0 && name[0] == openCodeSubtaskCommand {
 		return false, badRequest("OpenCode runs /review as a subagent whose approval requests never reach Olivares; ask for the review in your own words, without the leading /review")
 	}
@@ -915,11 +915,11 @@ func openCodeCurrentValue(raw json.RawMessage) string {
 }
 
 // prepareOpenCodeSearch puts the installed ripgrep's folder first on an OpenCode
-// child's PATH and lets a confined child run it (#3173). Without it, glob and grep
+// child's PATH and lets a confined child run it. Without it, glob and grep
 // fail in a confined session: OpenCode would download rg from github.com. A node
 // with no ripgrep installed launches as before. An rg that is no longer the pinned
 // program (something wrote over it) refuses the launch with the fix that works:
-// installing OpenCode again replaces it (#3202).
+// installing OpenCode again replaces it.
 func (m *Module) prepareOpenCodeSearch(p CreateRunParams, spec *LaunchSpec) error {
 	dir := m.rt.openCodeSearchDir
 	if launchDriverKey(p) != providerDriverOpenCode || dir == "" {

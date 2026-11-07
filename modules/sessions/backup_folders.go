@@ -26,7 +26,18 @@ type BackupFolder struct {
 // a SQLite store snapshot. A disabled folder still holds a person's files. A
 // snapshot without the folder registry has no folders.
 func ListBackupFolders(ctx context.Context, snapshot *sql.DB) ([]BackupFolder, error) {
-	rows, err := snapshot.QueryContext(ctx, "SELECT "+colWsRef+", "+colWsRootPath+", "+colWsBackup+" FROM "+workspaceTable+" ORDER BY "+colWsRef)
+	// A store written by an older binary has no backup column yet, and the snapshot is
+	// read-only, so it cannot be migrated first: read the column only where it exists.
+	// Absent reads as NULL, which is backed up, as the API documents.
+	backupCol := "NULL"
+	var present int
+	if err := snapshot.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info(?) WHERE name = ?", workspaceTable, colWsBackup).Scan(&present); err != nil {
+		return nil, fmt.Errorf("read registered folders: %w", err)
+	}
+	if present > 0 {
+		backupCol = colWsBackup
+	}
+	rows, err := snapshot.QueryContext(ctx, "SELECT "+colWsRef+", "+colWsRootPath+", "+backupCol+" FROM "+workspaceTable+" ORDER BY "+colWsRef)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such table") {
 			return nil, nil

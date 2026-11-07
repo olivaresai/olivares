@@ -111406,15 +111406,25 @@
                 "properties": {
                   "data": {
                     "contentEncoding": "base64",
-                    "description": "The image, base64 encoded. At most 3.75 MiB decoded.",
+                    "description": "The file, base64 encoded. At most 3.75 MiB decoded.",
                     "type": "string"
                   },
                   "media_type": {
                     "enum": [
-                      "image/png",
+                      "application/epub+zip",
+                      "application/json",
+                      "application/pdf",
+                      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                      "application/xml",
+                      "application/zip",
+                      "image/gif",
                       "image/jpeg",
+                      "image/png",
                       "image/webp",
-                      "image/gif"
+                      "text/csv",
+                      "text/html"
                     ],
                     "type": "string"
                   }
@@ -111441,10 +111451,20 @@
                     },
                     "media_type": {
                       "enum": [
-                        "image/png",
+                        "application/epub+zip",
+                        "application/json",
+                        "application/pdf",
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "application/xml",
+                        "application/zip",
+                        "image/gif",
                         "image/jpeg",
+                        "image/png",
                         "image/webp",
-                        "image/gif"
+                        "text/csv",
+                        "text/html"
                       ],
                       "type": "string"
                     },
@@ -111461,7 +111481,7 @@
                 }
               }
             },
-            "description": "the image is stored with the session; send its id with the next message"
+            "description": "the file is stored with the session; documents reach the agent as Markdown"
           },
           "400": {
             "content": {
@@ -114819,7 +114839,7 @@
                 "description": "One run input. line/message are RAW frames for a Claude stream-json child; text is a turn for a session driven by an owned provider protocol, which refuses a raw frame. Send one form, never both. Omit work_lease_fence for legacy non-work runs; a positive value selects fenced WorkItem control and is accepted with either form, so a work-bound driver run is spoken to through the same fence as its other controls.",
                 "properties": {
                   "attachments": {
-                    "description": "Ids of images stored with this session (POST /runs/{ref}/attachments), sent with text as one message. The engine encodes the message for the session's tool; a tool that takes no images refuses it. Not accepted with line, message or work_lease_fence.",
+                    "description": "Ids of files stored with this session (POST /runs/{ref}/attachments), sent with text as one message. Documents reach the tool as Markdown; images retain native delivery and a tool that takes no images refuses them. Not accepted with line, message or work_lease_fence.",
                     "items": {
                       "type": "string"
                     },
@@ -127690,6 +127710,18 @@
             "name": "ref",
             "required": true,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Convert supported document uploads to Markdown beside the preserved original. Other file formats are stored unchanged. Omit to retain raw-write behavior.",
+            "in": "query",
+            "name": "documents",
+            "required": false,
+            "schema": {
+              "enum": [
+                "markdown"
+              ],
               "type": "string"
             }
           }

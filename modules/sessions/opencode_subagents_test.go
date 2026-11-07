@@ -6,7 +6,7 @@ package sessions
 
 import "testing"
 
-// #3083: OpenCode's ACP agent drops a permission ask from a session it did not create,
+// : OpenCode's ACP agent drops a permission ask from a session it did not create,
 // so a subagent's ask is never answered and its turn waits forever (measured on
 // 1.19.4 over ACP: task -> general -> bash). Only the build agent may ask; it starts no
 // subagent, and every other agent's rules (the global ones) deny instead of asking or
@@ -39,7 +39,7 @@ func TestOpenCodeSubagentsNeverAskAndBuildStartsNone(t *testing.T) {
 	}
 }
 
-// #3058: the build agent's glob, grep and list ask, so live policy decides and audits
+// : the build agent's glob, grep and list ask, so live policy decides and audits
 // them as reads of the folder they search (OpenCode 1.19.4 has no list tool).
 func TestOpenCodeBuildAgentSearchesAsk(t *testing.T) {
 	for _, preset := range []string{PresetAsk, PresetEditsOnly, PresetEditsAndCommands, PresetFull, PresetReadOnly} {

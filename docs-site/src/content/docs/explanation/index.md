@@ -24,7 +24,7 @@ through the SDK and do not import the core.
 
 SQLite is the default store for single-node and air-gapped use. PostgreSQL adds
 row-level security for multi-tenant deployments. NATS is an optional event-bus
-binding. The 32 modules have different levels of readiness; own-model registry
+binding. The 33 modules have different levels of readiness; own-model registry
 and fine-tuning remain planned.
 
 [Architecture overview](/explanation/architecture/overview/) describes the engine,

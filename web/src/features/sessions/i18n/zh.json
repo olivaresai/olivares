@@ -534,6 +534,8 @@
     "startedTools_other": "{{count}} 个工具",
     "notSent": "未发送：{{reason}}",
     "waitingApproval": "会话就绪后发送。",
+    "discardedOnSessionChange": "会话切换前输入的消息未发送。请重新输入。",
+    "dismissDiscarded": "关闭",
     "workingFolder": "工作文件夹：<path />",
     "temporaryFolder": "工作文件夹：此会话的临时文件夹",
     "turnLine": "<work/> · {{duration}}",
@@ -862,6 +864,10 @@
     "unreadable": "无法读取该请求。"
   },
   "terminal": {
+    "runScript": "运行 {{name}}",
+    "scripts": "项目脚本",
+    "scriptsFailed": "无法读取项目脚本。",
+    "stopScript": "停止",
     "title": "终端",
     "hint": "在此会话文件夹中运行的 shell，受与会话相同的限制，以你的身份运行；你输入的每一条命令行都会被记录。",
     "open": "打开终端",

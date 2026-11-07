@@ -166,18 +166,6 @@ boot_engine() {
   boot_engine_at "$BIN" "$1" "$2" "$PIDFILE"
 }
 
-# Derive the first-boot specs: the ones that fill the setup form's #token field.
-FIRSTBOOT=()
-while IFS= read -r spec; do
-  FIRSTBOOT+=("$spec")
-done < <(cd "$ROOT/web" && grep -lE "locator\('#token'\)" e2e/*.spec.ts 2>/dev/null | sort)
-
-if [ "${#FIRSTBOOT[@]}" -eq 0 ]; then
-  echo "ERROR: no first-boot spec found (none fills #token). The derivation above is" >&2
-  echo "       stale, or e2e/ moved — refusing to run a battery whose shape I cannot see." >&2
-  exit 1
-fi
-
 # ⛔ ESPECIFICACIONES QUE PERTENECEN A OTRO RUNNER. No se excluyen por gusto: se ejecutaban aqui y
 # se saltaban enteras por falta de `DEMO_TENANT`, que este guion no siembra. Resultado medido el
 # 2026-08-19: «7 passed, 124 skipped» con rc=0 — un verde sobre el 5 % de lo que el recuento
@@ -188,6 +176,7 @@ fi
 # Y la lista NO puede pudrirse en silencio: si una de estas deja de existir, este guion PARA. Una
 # exclusion que nombra un fichero inexistente excluye nada y nadie se entera.
 OTROS_RUNNERS=(
+  "e2e/console-first-use.spec.ts" # scripts/console-first-use.sh — fresh engine and tool double
   "e2e/console-func-l4.spec.ts" # scripts/web-e2e-demo.sh — estate demo + lote funcional vivo
   "e2e/demo-graph.spec.ts"      # scripts/web-e2e-demo.sh — grafo y deriva sobre estate demo
   "e2e/docs-captures.spec.ts"   # scripts/docs-captures.sh — siembra el estate y captura
@@ -197,6 +186,20 @@ OTROS_RUNNERS=(
 for _o in "${OTROS_RUNNERS[@]}"; do
   [ -f "$ROOT/web/$_o" ] || { echo "web-e2e: COULD NOT LOOK: the exclusion names $_o, which does not exist" >&2; exit 2; }
 done
+
+# Derive the first-boot specs: the ones that fill the setup form's #token field.
+FIRSTBOOT=()
+while IFS= read -r spec; do
+  [ -z "${E2E_FIRSTBOOT_SPEC:-}" ] || [ "$spec" = "$E2E_FIRSTBOOT_SPEC" ] || continue
+  for other in "${OTROS_RUNNERS[@]}"; do [ "$spec" = "$other" ] && continue 2; done
+  FIRSTBOOT+=("$spec")
+done < <(cd "$ROOT/web" && grep -lE "locator\('#token'\)" e2e/*.spec.ts 2>/dev/null | sort)
+
+if [ "${#FIRSTBOOT[@]}" -eq 0 ]; then
+  echo "ERROR: no first-boot spec found (none fills #token). The derivation above is" >&2
+  echo "       stale, or e2e/ moved — refusing to run a battery whose shape I cannot see." >&2
+  exit 1
+fi
 
 # Everything else shares one engine, as before.
 SHARED=()
@@ -220,6 +223,9 @@ for spec in "${FIRSTBOOT[@]}"; do
     pnpm exec playwright test "$spec" || rc=1
   next_port="$((next_port + 2))"
 done
+
+# A targeted first-boot check has no shared-engine journeys.
+[ -z "${E2E_FIRSTBOOT_SPEC:-}" ] || exit "$rc"
 
 # Deploy's journey has a second half that needs a runtime executor, so its spec gets one more
 # virgin engine, started with a test executor: a Docker backend whose socket does not exist.

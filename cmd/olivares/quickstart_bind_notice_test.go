@@ -12,7 +12,7 @@ import (
 	"github.com/olivaresai/olivares/core/webaddr"
 )
 
-// QUICKSTART SAYS WHAT `serve` SAYS ABOUT A WILDCARD BIND, ONCE (#849). Its default
+// QUICKSTART SAYS WHAT `serve` SAYS ABOUT A WILDCARD BIND, ONCE. Its default
 // panel listed the console addresses and never stated that the default bind is
 // every interface, nor how to keep it on this host. The sentence is the one the
 // serve banner prints (wildcardBindNotice), not a second wording.

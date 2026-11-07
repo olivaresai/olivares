@@ -210,7 +210,7 @@ describe('WorkRail — what a row says', () => {
     // identifier the row does not paint stays reachable from it.
     expect(nameEl.getAttribute('title')).toContain(name)
     expect(nameEl.getAttribute('title')).toContain('run-long')
-    // The title leads on up to two lines (#3970), then is cut with an ellipsis; the
+    // The title leads on up to two lines, then is cut with an ellipsis; the
     // row is at least the list's standard row height and grows for the second line.
     expect(nameEl.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['line-clamp-2', 'min-w-0']),
@@ -248,7 +248,7 @@ describe('WorkRail — what a row says', () => {
     )[0]
     renderRail({ sessions: [launched] })
     const first = rows()[0]
-    // ONE LINE: there is no second line to leave blank (#2266).
+    // ONE LINE: there is no second line to leave blank.
     expect(within(first).queryByTestId('rail-row-meta')).toBeNull()
     const name = within(first).getByTestId('rail-row-name')
     expect(name).toHaveTextContent('fix-tests')
@@ -298,7 +298,7 @@ describe('WorkRail — what a row says', () => {
     )
     const first = rows()[0]
     // No permanent padding for the button from the shell breakpoint up (a title had 103 px
-    // of 300 left), and none on a phone, which has no button (#3975).
+    // of 300 left), and none on a phone, which has no button.
     const cls = first.className.split(/\s+/)
     expect(cls).not.toContain('pr-12')
     expect(cls).not.toContain('max-[760px]:pr-12')
@@ -317,7 +317,7 @@ describe('WorkRail — what a row says', () => {
     expect(button).not.toBeNull()
     const buttonCls = (button as HTMLElement).className.split(/\s+/)
     expect(buttonCls).toContain('group-hover/row:opacity-100')
-    // A phone cannot open a session beside another (#3975): no button there.
+    // A phone cannot open a session beside another: no button there.
     expect(buttonCls).toContain('max-[760px]:hidden')
     expect((button as HTMLElement).className).not.toMatch(/focus-within/)
     // A touch screen has no hover to reveal it (`group-hover` is gated by
@@ -405,7 +405,7 @@ describe('WorkRail — what a row says', () => {
     // the second rung of the old label, so a rail of discovered sessions read as six
     // machine ids. The reference is on the name's own `title`.
     // The title is the tool: the action and resource the engine reported are the
-    // secondary fact, on the hover, never the name (#2266).
+    // secondary fact, on the hover, never the name.
     const name = within(first).getByTestId('rail-row-name')
     expect(name).toHaveTextContent('Claude Code')
     expect(name.textContent).not.toContain('create_issue')
@@ -488,7 +488,7 @@ describe('WorkRail — what a row says', () => {
   })
 
   it('lists the pinned sessions in their own section FIRST, above Needs you', () => {
-    // #2130: a pin is "always first in my list". The pinned row leaves its state
+    //: a pin is "always first in my list". The pinned row leaves its state
     // section (Earlier is not drawn once its only row is pinned) and the section above
     // all the others carries the count like every other.
     renderRail({ pinned: new Set([addressOf(done)]) })
@@ -588,7 +588,7 @@ describe('WorkRail — what a row says', () => {
   })
 
   it('keeps snoozed sessions out of the list, folded behind one toggle under it', async () => {
-    // #2480: a snooze takes the session out of the person's list until its moment; the
+    //: a snooze takes the session out of the person's list until its moment; the
     // toggle keeps it one click away so a snooze is never a way to lose a session.
     const user = userEvent.setup()
     const snoozed = mergeSessions(
@@ -820,7 +820,7 @@ describe('WorkRail — nothing at all', () => {
   })
 })
 
-describe('WorkRail — every row has one actions menu (#2795)', () => {
+describe('WorkRail — every row has one actions menu', () => {
   // The menu's items are the caller's (`session-menu.tsx`); the rail owns the three ways
   // to open them on one row and where focus goes after.
   function renderMenuRail(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
@@ -865,7 +865,7 @@ describe('WorkRail — every row has one actions menu (#2795)', () => {
     expect(rows()[0].contains(more)).toBe(false)
     expect(more).toHaveAttribute('tabindex', '-1')
     expect(more).toHaveAttribute('aria-hidden', 'true')
-    // A phone has no ⋯ to see or tap (#3975), but the trigger stays laid out: the menu a
+    // A phone has no ⋯ to see or tap, but the trigger stays laid out: the menu a
     // long press opens is placed against it.
     const moreCls = more.className.split(/\s+/)
     expect(moreCls).toContain('max-[760px]:pointer-events-none')
@@ -1028,7 +1028,7 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
     expect(state()).toHaveTextContent(/^Pending$/)
   })
 
-  // ONE STATUS SET (#4019): a finished session says Done whatever ended it, every working
+  // ONE STATUS SET: a finished session says Done whatever ended it, every working
   // row has a clock, and each status has its colour on its mark and its word.
   it('says one word per status, a clock on every working row and a colour per status', () => {
     const up3h = rail(
@@ -1141,7 +1141,7 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
   })
 })
 
-// The Working section arrives open (#3969): the sessions working now are the first thing a
+// The Working section arrives open: the sessions working now are the first thing a
 // person looks for. A fold is the person's own choice, and it is remembered.
 /** The rail exactly as it arrives. */
 function renderShut(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {

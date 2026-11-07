@@ -21,7 +21,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// THE DOCUMENTED ONLINE POSTGRES BACKUP FAILED WHILE THE ENGINE RAN (#496).
+// THE DOCUMENTED ONLINE POSTGRES BACKUP FAILED WHILE THE ENGINE RAN.
 //
 // `olivares dr backup --engine postgres` boots its own engine, and that boot joins
 // the cluster leader election. With `serve` already holding the lock the backup

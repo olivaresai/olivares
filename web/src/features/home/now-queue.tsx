@@ -12,7 +12,7 @@
 // PENDING APPROVALS come first (slice 4): a request that waits on a person's decision is
 // the most direct "needs you" there is. They are the approval queue's own pending read
 // (features/governance/use-pending-approvals.ts) — the top bar's count reads the same
-// cache. One is FLAGGED (#2546): the first this person may decide, by the queue's own rule
+// cache. One is FLAGGED: the first this person may decide, by the queue's own rule
 // (approval-queue.tsx `flaggedApprovalId`). Its card says what will run, the rule that
 // asked, what it reaches, and offers Approve once, the one orange control on Estate,
 // decided in one click when the card shows the whole request; otherwise it opens the

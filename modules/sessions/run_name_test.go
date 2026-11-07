@@ -178,7 +178,7 @@ func TestRuntimeAPILaunchRefusesARunNameBeforeItCreatesAProfile(t *testing.T) {
 	}
 }
 
-// TestRuntimeAPILaunchRefusesANameASessionHolds pins #2978: a launch whose name a
+// TestRuntimeAPILaunchRefusesANameASessionHolds pins: a launch whose name a
 // session that is not cleaned already carries is a 409 before anything is started,
 // so two live sessions never share a name and `session stop <name>` cannot reach a
 // second one. The CLI always refused this (`takenSessionNames`); the engine owns the

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SESSION'S MODE AND WHAT IT HAS SPENT, in Details (#427). The header names the session
+// THE SESSION'S MODE AND WHAT IT HAS SPENT, in Details. The header names the session
 // and its state; each tool's plan windows are the status bar's.
 //
 // ⛔ EVERY FIGURE IS ONE THE ENGINE SENT, AS THE TOOL SAID IT.
@@ -91,7 +91,10 @@ function permissionChoice(
 function useLaunchTemplate(run: RunDTO | null | undefined) {
   const tenant = useTenantStore((s) => s.activeTenant)
   const choice = run
-    ? permissionChoice(run.tool_mode ?? '', run.permission_mode)
+    ? permissionChoice(
+        run.tool_mode || run.permission_mode,
+        run.permission_mode,
+      )
     : undefined
   const templateId =
     choice === 'editsAndCommands' ? run?.template_id : undefined
@@ -111,7 +114,8 @@ function useLaunchTemplate(run: RunDTO | null | undefined) {
  * The session's access in a few words, for the composer's access picker, as
  * SessionMode words it: the permission New session offers, the run's template read first;
  * a template a person wrote, by its name; else the tool's word said plainly; else the
- * tool's word as it said it. A run that reports no mode says so.
+ * tool's word as it said it. Before a report, use the launch permission; unknown access
+ * has no picker label.
  */
 export function useAccessWords(run: RunDTO): string {
   const { t } = useTranslation(['sessions', 'firstHour'])
@@ -126,9 +130,8 @@ export function useAccessWords(run: RunDTO): string {
   const plain = toolWord(toolMode)
   if (plain === 'unasked') return t('sessions:meter.unaskedShort')
   if (plain) return t(`sessions:meter.toolWord.${plain}`)
-  // The tool's own word when it has reported one; before that the access is not known,
-  // and the launch's internal name ("default", "dontAsk") is not a word to show.
-  return toolMode || t('sessions:meter.accessUnknown')
+  // Never expose an internal launch name when no readable permission is known.
+  return toolMode
 }
 
 /**

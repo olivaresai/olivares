@@ -15,7 +15,7 @@ import (
 
 // TestInviteSenderSaysWhyANamedDestinationIsNotUsed: invite mode is unavailable
 // without a mailer; an unset destination is the default and stays quiet, but a
-// named one with no notification dispatcher says so in the log (#471).
+// named one with no notification dispatcher says so in the log.
 func TestInviteSenderSaysWhyANamedDestinationIsNotUsed(t *testing.T) {
 	for _, tc := range []struct {
 		name, destination string

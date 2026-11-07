@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// WHAT THE TOOL IS DOING, beside its conversation (#1861): its own task list, the agents it
+// WHAT THE TOOL IS DOING, beside its conversation: its own task list, the agents it
 // spawned, the work it left running in the background, the files its edits changed and what
 // its context holds. The engine reads each item from the transcript the tool keeps
 // (modules/sessions/session_activity.go), so a reload or another browser shows the same; the

@@ -25,7 +25,7 @@ import (
 )
 
 // TestMain lets the test binary stand in for a tool that, like the real ones,
-// reaches its vendor with the standard proxy and trust variables (#547).
+// reaches its vendor with the standard proxy and trust variables.
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == confine.HelperArg {
 		os.Exit(confine.RunHelper(os.Args[2:]))
@@ -77,7 +77,7 @@ func proxiedCodex(args []string) int {
 	return 0
 }
 
-// TestSignInReachesTheVendorThroughTheEnginesProxy (#547): on a host that
+// TestSignInReachesTheVendorThroughTheEnginesProxy: on a host that
 // reaches the vendor only through an HTTPS proxy with its own CA, the engine's
 // HTTPS_PROXY, no_proxy and SSL_CERT_FILE reach the login, and no engine secret.
 func TestSignInReachesTheVendorThroughTheEnginesProxy(t *testing.T) {

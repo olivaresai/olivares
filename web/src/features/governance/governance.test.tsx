@@ -115,7 +115,7 @@ const pendingApproval: ApprovalDTO = {
 }
 
 // A request a person raised shows its own reason in the row and no "does not include what
-// will run" note (#2269): the reason is the row's sentinel.
+// will run" note: the reason is the row's sentinel.
 const ROW_REASON = 'Ship the hotfix'
 
 const escalatedApproval: ApprovalDTO = {

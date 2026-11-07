@@ -7,7 +7,7 @@ import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
 
 // Beside the AI tools: what those tools reach, projected from the access map.
-// Placed in ai/environments next to agent-tools until the Tools area (#2552)
+// Placed in ai/environments next to agent-tools until the Tools area
 // lands; order 315 keeps the registry's step-of-ten spacing (320 is taken).
 const ReachView = lazy(() => import('./reach-view'))
 

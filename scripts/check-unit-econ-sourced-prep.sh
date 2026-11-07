@@ -5,7 +5,7 @@
 #
 # ECO-05 unique leftover unique vs check-unit-econ-sourced.sh
 # (named on main, CHECK not in lint:addon-sets) and unique leftover
-# unique vs #1387 / #1402. 0 CLEAN · 1 finding · 2 could not look.
+# unique vs /. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

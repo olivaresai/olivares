@@ -467,7 +467,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       (await page.locator('html').getAttribute('lang')) ?? 'en',
       { maximumFractionDigits: 0 },
     )
-    // The Ledger place (issue #2554): the entries are sentences in one list, the filters
+    // The Ledger place (issue): the entries are sentences in one list, the filters
     // are tokens in the top bar's query field, and an entry opens beside the list.
     const ledger = page.getByRole('list', { name: 'Ledger entries' })
     const entries = ledger.locator('[data-slot="entry"]')

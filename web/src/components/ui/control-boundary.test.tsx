@@ -175,7 +175,7 @@ describe('control boundaries use ctl-border', () => {
   })
 
   it('the checked checkbox (the ink fill) holds 3:1 on every surface, and under its glyph', () => {
-    // #2701: checked and indeterminate alike fill the box with the foreground
+    //: checked and indeterminate alike fill the box with the foreground
     // ink, not the action orange — state, not an action. WCAG 2.2 SC 1.4.11
     // asks 3:1 for that boundary against what surrounds it, and for the check
     // glyph on the fill, in both themes.
@@ -197,7 +197,7 @@ describe('control boundaries use ctl-border', () => {
   })
 
   it('the checked switch track (the ink fill) holds 3:1 on every surface, and under its thumb', () => {
-    // #2696: the checked track is the foreground ink, not the action orange. WCAG 2.2
+    //: the checked track is the foreground ink, not the action orange. WCAG 2.2
     // SC 1.4.11 asks 3:1 for the state it shows against what surrounds it, in both themes.
     const css = readFileSync(join(SRC, 'src/styles/tokens.css'), 'utf8')
     for (const [name, t] of [

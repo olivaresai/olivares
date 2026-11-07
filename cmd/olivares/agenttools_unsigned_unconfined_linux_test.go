@@ -31,7 +31,7 @@ import (
 // (as sessionconfinement_unavailable_linux_test.go does), and install through
 // the real composition on that node: the first run of an unsigned install's
 // bytes — the install's --version probe — is refused with one sentence naming
-// Landlock, while a signed install probes as before (#3312).
+// Landlock, while a signed install probes as before.
 func TestUnsignedInstallFirstRunRefusedWithoutLandlock(t *testing.T) {
 	if os.Getenv("OLIVARES_TEST_NO_LANDLOCK") != "1" {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestUnsignedInstallFirstRunRefusedWithoutLandlock$", "-test.v")

@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { http } from '@/lib/api/client'
 
-// Web Push for the installed console (#2840): this browser subscribes to the engine's own push
+// Web Push for the installed console: this browser subscribes to the engine's own push
 // server, and the engine tells it, tab closed, that a session needs an approval or has ended.
 // public/sw.js shows the notification. The message is encrypted to this browser, so the push
 // service (Google, Mozilla or Apple) relays it without reading it.

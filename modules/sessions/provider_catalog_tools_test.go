@@ -386,7 +386,7 @@ func TestParseGrokModelCatalogDefaultMarker(t *testing.T) {
 const openCodeCatalogFixture = "opencode/claude-haiku-5-5\nopencode/deepseek-v4.1-flash-free\nopencode/glm-5.3-flash-free\n" +
 	"opencode/longcat-2.5-preview-free\nopencode/mimo-v2.6-flash-free\nopencode-go/kimi-k3\n"
 
-// #2567: OpenCode's catalog is the tool's own `models` list, read in the account's home
+// : OpenCode's catalog is the tool's own `models` list, read in the account's home
 // with `--pure` (v1.18.34: "run without external plugins", so a configured plugin does
 // not run), with no input sent. The free models are listed exactly as the tool prints
 // them, which is the provider/model form a session's model option takes.

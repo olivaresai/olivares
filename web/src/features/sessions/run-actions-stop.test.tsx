@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// STOP ASKS FIRST IN EVERY FORM (#2549): the thread header's icon and the session card's
+// STOP ASKS FIRST IN EVERY FORM: the thread header's icon and the session card's
 // labelled button read the same setting. The card's Stop used to stop at once, so "Full
 // controls" stopped a session the header would have asked about.
 import {

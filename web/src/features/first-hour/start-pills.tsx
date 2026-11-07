@@ -307,7 +307,9 @@ export function FolderPill({
   onPick,
   onMore,
   onCloseAutoFocus,
+  autoFocus,
 }: {
+  autoFocus?: boolean
   label: string
   value: string
   folders: { value: string; label: string }[]
@@ -319,7 +321,10 @@ export function FolderPill({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Pill label={t('composer.folderPill', { value: label })}>
+        <Pill
+          autoFocus={autoFocus}
+          label={t('composer.folderPill', { value: label })}
+        >
           <span className="truncate">{label}</span>
         </Pill>
       </DropdownMenuTrigger>

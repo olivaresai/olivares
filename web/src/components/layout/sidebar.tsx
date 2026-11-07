@@ -59,7 +59,7 @@ interface PlaceCount {
 
 /** The counts a place carries, read from current state. Sessions: every session the list
  * shows that has not ended, the status bar's "N sessions open" from the same read, so the two
- * never say two numbers (#3161); amber when one of them needs the person. Rules: the requests
+ * never say two numbers; amber when one of them needs the person. Rules: the requests
  * waiting for a decision. Zero draws nothing. */
 function usePlaceCounts(): Partial<Record<PlaceId, PlaceCount>> {
   const rules = pendingCount(usePendingApprovals().query.data)

@@ -200,3 +200,13 @@ func snapshotChanged() error {
 func snapshotUnavailable() error {
 	return &runErr{http.StatusFailedDependency, "workspace snapshot source is unavailable"}
 }
+
+// openDocumentDirectory pins a document's verified parent for reading and writing.
+func openDocumentDirectory(ctx context.Context, absolute string) (*os.Root, error) {
+	dir, err := openSnapshotDirectory(ctx, absolute)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+	return os.OpenRoot(fmt.Sprintf("/proc/self/fd/%d", dir.Fd()))
+}

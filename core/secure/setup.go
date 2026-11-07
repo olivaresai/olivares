@@ -87,7 +87,7 @@ func (s *SetupToken) EnsureAs(uid, gid int) (plaintext string, created bool, err
 // ErrSetupTokenUnreadable is Match's refusal when the token file exists but this
 // process cannot read a token hash from it: another account owns it, its mode is
 // wider than 0600, or it does not hold a SHA-256. No presented token can match then,
-// and the reason is the deployment's, not the caller's (#530).
+// and the reason is the deployment's, not the caller's.
 var ErrSetupTokenUnreadable = errors.New("secure: the setup token file cannot be read")
 
 // Verify reports whether presented matches the active setup token, in constant

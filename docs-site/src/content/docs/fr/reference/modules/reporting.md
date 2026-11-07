@@ -45,5 +45,5 @@ avec `GET /v1/m/reporting/reports/{type}` ; HTML est le format par défaut et
   source de posture et de preuves de conformité.
 - [Coûts et AI FinOps](/fr/reference/modules/xi-finops/) — la surface de dépenses
   faisant autorité.
-- [Catalogue des modules](/fr/reference/modules/overview/) — les 32 modules
+- [Catalogue des modules](/fr/reference/modules/overview/) — les 33 modules
   câblés et leur maturité déclarée avec honnêteté.

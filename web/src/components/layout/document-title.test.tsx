@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // One document title per page (WCAG 2.4.2): tabs, history and a screen reader's page
-// announcement name the page, as "<Page> · Olivares AI". Until #2558 every route kept
+// announcement name the page, as "<Page> · Olivares AI". Until every route kept
 // index.html's one title.
 import {
   createMemoryHistory,
@@ -58,7 +58,7 @@ describe('the document title of every census route', () => {
   // A Business console serves /deploy as the one leaf of its Deployment area: the area page
   // and the leaf are both "Deployment".
   // A retired address with no page of its own reads as where it lands (/mcp-servers as MCP &
-  // skills, #3388): its title is its target's, so it is not a second page to tell apart.
+  // skills,): its title is its target's, so it is not a second page to tell apart.
   const redirectsOnly = new Set(
     ROUTE_ALIASES.filter((a) => !a.from.startsWith('/areas/')).map(
       (a) => a.from,

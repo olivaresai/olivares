@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The Reach view (issue #2553): what the tools reach — folders, MCP servers and
+// The Reach view (issue): what the tools reach — folders, MCP servers and
 // provider endpoints — read from the EXISTING access map, agents list, live
 // sessions and pending approval queue (no new mechanism). Waiting destinations
 // come ONLY from pending approvals; without the approval read the waiting column

@@ -71,7 +71,7 @@ vi.mock('./use-session-rail', () => ({
         total: 5,
         sessionTotal: 5,
       },
-      // What the person snoozed (#2480): out of the lists, never out of the menu.
+      // What the person snoozed: out of the lists, never out of the menu.
       {
         id: 'snoozed',
         rows: [
@@ -157,7 +157,7 @@ describe('command palette session rows', () => {
     ).toBeNull()
   })
 
-  it('finds a session the person snoozed by its name (#2480)', () => {
+  it('finds a session the person snoozed by its name', () => {
     useCommandStore.getState().setOpen(true)
     renderIntel(<CommandMenu />)
     fireEvent.change(screen.getByRole('combobox'), {

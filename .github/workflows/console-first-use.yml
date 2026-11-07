@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+name: console-first-use
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'scripts/console-first-use.sh'
+      - '.github/workflows/console-first-use.yml'
+permissions:
+  contents: read
+concurrency:
+  group: console-first-use-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  console-first-use:
+    # Run the focused journey when the full pr-web check is not enabled.
+    if: >-
+      github.repository != 'olivaresai/olivares' &&
+      vars.OLIVARES_DEV_CI != 'true' &&
+      vars.OLIVARES_RELEASE_PROFILE != 'preprod' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}
+          cache-dependency-path: go.work.sum
+      - uses: ./.github/actions/olivares-tool-cache
+      - name: build the embedded console and engine
+        run: |
+          pnpm --dir web install --frozen-lockfile
+          task build:web build:bin
+      - name: install Chromium
+        shell: bash
+        run: |
+          deps=()
+          if [[ "$RUNNER_ENVIRONMENT" == github-hosted ]]; then deps=(--with-deps); fi
+          pnpm --dir web exec playwright install "${deps[@]}" chromium
+      - name: fresh console first-use journey
+        timeout-minutes: 6
+        run: bash scripts/console-first-use.sh

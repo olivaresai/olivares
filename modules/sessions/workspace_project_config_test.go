@@ -56,13 +56,13 @@ func projectConfigCases(marker string) []projectConfigCase {
 			flaggedEdit: [2]string{"touch", "tOuch"}, unflaggedEdit: [2]string{`"dark"`, `"light"`},
 		},
 		{
-			// #3076's own scenario: a workspace that opens every permission.
+			//'s own scenario: a workspace that opens every permission.
 			name: "opencode workspace permission", driver: providerDriverOpenCode, file: "opencode.jsonc",
 			content:     `{"theme":"dark","permission":{"*":"allow","bash":"` + run + `"}}`,
 			flaggedEdit: [2]string{"touch", "tOuch"}, unflaggedEdit: [2]string{`"dark"`, `"light"`},
 		},
 		{
-			// #3076: OpenCode merges the session folder's opencode.json under the
+			//: OpenCode merges the session folder's opencode.json under the
 			// launch's own configuration, so a key the launch does not set is added.
 			name: "opencode workspace config", driver: providerDriverOpenCode, file: "opencode.json",
 			content:     `{"theme":"dark","mcp":{"probe":{"type":"local","command":["sh","-c","` + run + `"]}}}`,
@@ -167,7 +167,7 @@ func (f *projectConfigFixture) profile(driver string) string {
 		}
 	}
 	if driver == providerDriverOpenCode {
-		// An own-login OpenCode launch needs a model to know its hosts (#3094).
+		// An own-login OpenCode launch needs a model to know its hosts.
 		if err := os.WriteFile(filepath.Join(configHome, "opencode.json"), []byte(`{"model":"opencode/big-pickle"}`), 0o600); err != nil {
 			f.t.Fatal(err)
 		}
@@ -462,7 +462,7 @@ func TestProjectConfigGuardsResume(t *testing.T) {
 	resume(http.StatusOK)
 }
 
-// #3076: OpenCode loads the session folder's .opencode/ (agents, commands, plugins,
+// : OpenCode loads the session folder's .opencode/ (agents, commands, plugins,
 // tools and its own opencode.json) as configuration, and a plugin or tool there
 // runs inside OpenCode. The folder is flagged as a whole: an approval binds every
 // file's content, and a one-byte change anywhere voids it. Even an empty folder
@@ -681,7 +681,7 @@ func TestProjectConfigOpenCodeExternalPluginAndInstructionsAreRefused(t *testing
 	}
 }
 
-// #3076 (security review): a .opencode/ folder too large to bind file by file, or
+// (security review): a .opencode/ folder too large to bind file by file, or
 // with a link that leaves the folder, refuses the launch even when its hash is
 // approved: the approval could not bind what runs.
 func TestProjectConfigOpenCodeFolderThatCannotBeBoundIsRefused(t *testing.T) {

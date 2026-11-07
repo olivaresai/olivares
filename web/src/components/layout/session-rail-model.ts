@@ -193,8 +193,8 @@ function handoffRow(item: HandoffInboxItem, now: number): RailRow {
 
 /** The groups, always all of them and always in this order, so the rail keeps its
  * shape while rows move between them: it draws Needs you always, at the top, and Working
- * and Earlier when they hold rows. Snoozed holds what the person snoozed (#2480), and
- * Archived the archived sessions (#2795): no count and no list shows them, and the
+ * and Earlier when they hold rows. Snoozed holds what the person snoozed, and
+ * Archived the archived sessions: no count and no list shows them, and the
  * command menu still finds them there. */
 /** The sessions a stop of every agent would end: each one that has not ended, idle and
  * waiting ones too, counted as Now counts its running sessions; `shown` narrows them. */
@@ -237,7 +237,7 @@ export function railGroups(
   const earlier: RailRow[] = []
   const snoozed: RailRow[] = []
   const archived: RailRow[] = []
-  // The person's own marks (#2480), the rule the Sessions rail sorts by
+  // The person's own marks, the rule the Sessions rail sorts by
   // (`groupSessions`): a snoozed session is out of the list until its moment, and one
   // marked done is filed under Earlier whatever it is doing.
   const sessions = mergeSessions([...sources.live], [...(sources.runs ?? [])])

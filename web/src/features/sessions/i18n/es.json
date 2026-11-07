@@ -550,6 +550,8 @@
     "startedTools_other": "{{count}} herramientas",
     "notSent": "No se envió: {{reason}}",
     "waitingApproval": "Se enviará cuando la sesión esté lista.",
+    "discardedOnSessionChange": "Un mensaje escrito antes de que cambiara la sesión no se envió. Escríbelo de nuevo.",
+    "dismissDiscarded": "Descartar",
     "workingFolder": "Carpeta de trabajo: <path />",
     "temporaryFolder": "Carpeta de trabajo: carpeta temporal de esta sesión",
     "turnLine": "<work/> · {{duration}}",
@@ -906,6 +908,10 @@
     "unreadable": "No se pudo leer la solicitud."
   },
   "terminal": {
+    "runScript": "Ejecutar {{name}}",
+    "scripts": "Scripts del proyecto",
+    "scriptsFailed": "No se pudieron leer los scripts del proyecto.",
+    "stopScript": "Detener",
     "title": "Terminal",
     "hint": "Una consola en la carpeta de esta sesión, con los mismos límites que la sesión. Se ejecuta como tú; cada línea de comandos que escribes queda registrada.",
     "open": "Abrir terminal",

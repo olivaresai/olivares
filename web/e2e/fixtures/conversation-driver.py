@@ -9,7 +9,7 @@ spec. On each stdin line it emits an assistant message, a tool call, a tool
 result and a result footer — the four shapes the conversation view must render —
 and the same bookkeeping the released Claude Code streams around a turn: two
 thinking_tokens counters before the first reply, a markdown reply after the tool
-result and an allowed rate_limit_event before the footer (#1784).
+result and an allowed rate_limit_event before the footer.
 
 It also answers Claude Code's `initialize` control request with a command catalog, as
 the real tool does for the console's "/" menu, and pushes system/commands_changed when
@@ -17,8 +17,8 @@ the catalog file (.fixture-commands.json in the session folder, a JSON object
 {"commands": [...], "agents": [...]}) changes. The shapes are the ones measured on Claude Code 2.1.296.
 
 When the session folder holds a file named .fixture-echo-user, each turn also echoes the
-person's message as a user record, as Claude Code does with --replay-user-messages (#2129:
-the message navigator reaches the row of a message the tool has taken).
+person's message as a user record, as Claude Code does with --replay-user-messages
+(the message navigator reaches the row of a message the tool has taken).
 If that file contains a transcript path, new user records are appended there too.
 
 It reports the model it was launched with (`--model`, else fixture-claude) on its init
@@ -33,6 +33,15 @@ import os
 import sys
 import threading
 import time
+
+SIGNED_IN = os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), '.fixture-signed-in'))
+
+if '--version' in sys.argv:
+    print('2.1.296 (Claude Code)')
+    sys.exit(0)
+if sys.argv[1:3] == ['auth', 'status']:
+    print(json.dumps({'loggedIn': SIGNED_IN, 'authMethod': 'claude.ai' if SIGNED_IN else 'none'}))
+    sys.exit(0)
 
 SID = f"sess-conversation-fixture-{os.getpid()}"
 CWD = os.getcwd()
@@ -101,6 +110,16 @@ def watch_catalog() -> None:
 threading.Thread(target=watch_catalog, daemon=True).start()
 
 
+# Only the fresh-install runner copies this driver beside a hold file. Other
+# journeys stream immediately. Hold init too: its model would mask launch labels.
+hold = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".fixture-first-turn")
+deadline = time.monotonic() + 30
+while os.path.exists(hold):
+    if time.monotonic() >= deadline:
+        sys.exit("first-use fixture: browser did not release the first turn")
+    time.sleep(0.05)
+
+
 emit(
     {
         "type": "system",
@@ -129,7 +148,10 @@ while True:
                     "response": {
                         "subtype": "success",
                         "request_id": request.get("request_id"),
-                        "response": {**catalog(), "models": [], "account": {"tokenSource": "none"}},
+                        "response": {**catalog(), "models": [
+                            {"value": "claude-opus-5-5", "displayName": "Claude Opus 5.5", "supportedEffortLevels": ["low", "medium", "high"]},
+                            {"value": "claude-sonnet-5-5", "displayName": "Claude Sonnet 5.5", "supportedEffortLevels": ["low", "medium", "high"]},
+                        ] if SIGNED_IN else [], "account": {"tokenSource": "none"}},
                     },
                 }
             )

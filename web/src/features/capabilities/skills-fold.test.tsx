@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// One skills destination (#3388): MCP & skills' Skills tab holds the skill-pack
+// One skills destination: MCP & skills' Skills tab holds the skill-pack
 // catalog (install a pack, open one, see where it is assigned) beside the skills the
 // inventory found. The catalog is a skills reader's, as it was on its own page.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

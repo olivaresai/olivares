@@ -53,7 +53,7 @@ service); `--check` still shows the plan, and `--target` still replaces a path y
 
 ## 1. Versioning and the image coordinate
 
-Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.7`<!-- /release -->, image tags <!-- release -->`:0.7`<!-- /release --> and `:latest`;
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.8`<!-- /release -->, image tags <!-- release -->`:0.8`<!-- /release --> and `:latest`;
 FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
@@ -71,11 +71,11 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 <!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:0.7 \
+cosign verify docker.io/olivaresai/olivares:0.8 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:0.7   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.8   # -> sha256:<…>
 ```
 <!-- /release -->
 
@@ -681,7 +681,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
 
   <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 0.7
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.8
   ```
   <!-- /release -->
 

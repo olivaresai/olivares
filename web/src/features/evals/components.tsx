@@ -53,7 +53,7 @@ import type {
  *    La columna pintaba «sin regresión» para los cuatro: una ejecución que NO MIDIÓ NADA se leía
  *    como una que midió y salió bien, en la señal que decide si una release sale.
  *
- *    Since the interval of #2151 there is a FIFTH: a drop OVER the threshold whose 95%
+ *    Since the interval of there is a FIFTH: a drop OVER the threshold whose 95%
  *    pass-rate-difference interval includes zero leaves `regressed` false with
  *    `comparison.reason = "inconclusive_noise"` (`comparison.go:352-358`: "at this n the drop
  *    cannot be told from noise"). The receipt rides EVERY run read, the list included, so

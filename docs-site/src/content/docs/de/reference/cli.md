@@ -146,7 +146,7 @@ menschliche Übersetzung. Die redaktionelle Anleitung darum ist lokalisiert.
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 1007 command nodes — the root command and 1006 subcommands, of which 208 are groups that carry subcommands and 48 are hidden diagnostics — together with the 4046 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 1009 command nodes — the root command and 1008 subcommands, of which 209 are groups that carry subcommands and 48 are hidden diagnostics — together with the 4051 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -185,7 +185,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 1007 commands, in alphabetical order.
+All 1009 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -474,6 +474,8 @@ All 1007 commands, in alphabetical order.
 | [`olivares eventing subscriptions test`](#command-olivares-eventing-subscriptions-test) | Send a test delivery to a subscription's endpoint |
 | [`olivares eventing subscriptions update`](#command-olivares-eventing-subscriptions-update) | Edit one event subscription in place (never reissues the secret) |
 | [`olivares exit-codes`](#command-olivares-exit-codes) | What the exit codes of olivares mean _(hidden)_ |
+| [`olivares files`](#command-olivares-files) | Convert local documents to Markdown |
+| [`olivares files convert`](#command-olivares-files-convert) | Create Markdown beside a document, preserving the original |
 | [`olivares findings`](#command-olivares-findings) | Export governed security findings |
 | [`olivares findings export`](#command-olivares-findings-export) | Export all matching findings as SARIF 2.1.0 |
 | [`olivares finops`](#command-olivares-finops) | Report AI spend and value, and govern budgets, rates and cost centers _(hidden)_ |
@@ -5561,6 +5563,10 @@ olivares eventing subscriptions create
 | `--max-attempts` | `int64` | `0` | max delivery attempts (0 = module default) |
 | `--name` | `string` | — | **required**. subscription name |
 | `--role` | `string` | `viewer` | authorization role for the per-event RBAC filter (viewer\|editor\|admin\|owner) |
+| `--sink-cred-file` | `string` | — | file holding the sink credential (token or key), or - for stdin |
+| `--sink-format` | `string` | — | SIEM wire format (default: the sink's own, OCSF) |
+| `--sink-kind` | `string` | — | SIEM sink kind (Business): https\|splunk_hec\|sentinel_dcr\|datadog\|newrelic |
+| `--sink-opt` | `stringToString` | `[]` | sink routing option key=value (repeatable), e.g. index=identity |
 | `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT) |
 
 #### Command: olivares eventing subscriptions get
@@ -5691,6 +5697,28 @@ olivares exit-codes
 ```
 
 Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
+
+#### Command: olivares files
+
+Convert local documents to Markdown
+
+```
+olivares files
+```
+
+Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
+
+#### Command: olivares files convert
+
+Create Markdown beside a document, preserving the original
+
+```
+olivares files convert <path>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--json` | `bool` | `false` | Print the Markdown path as JSON |
 
 #### Command: olivares findings
 

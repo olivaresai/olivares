@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE MACHINE FACE IS FOR CODE, COMMANDS, PATHS AND IDENTIFIERS (#3135).
+// THE MACHINE FACE IS FOR CODE, COMMANDS, PATHS AND IDENTIFIERS.
 //
 // On Now, the "workspace" chip on every live card, the last-tool fragment ("Bash · cd") and the
 // count beside "Needs you" were set in the mono face. None of them is code: a folder is shown by

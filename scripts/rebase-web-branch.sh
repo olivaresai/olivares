@@ -66,7 +66,7 @@ case "${1:-}" in
     # ⛔ REBASA SOLO LO QUE HAY DESPUES DE <rev>, Y NO ES COMODIDAD: es el caso medido el
     #    2026-08-27 en las CINCO PRs apiladas sobre `feature-sin-recorte`.
     #    El PRIMER commit de cada una —«las siete ultimas listas de models…»— YA ESTA en `main`
-    #    con OTRO SHA (e9a873a22, entrado por el rebase de #1622), y main lo evoluciono despues
+    #    con OTRO SHA (e9a873a22, entrado por el rebase de), y main lo evoluciono despues
     #    en e03317146. Reaplicarlo choca contra una version mas nueva de su propio trabajo, y ese
     #    choque NO es del bundle: son 4 ficheros de FUENTE, asi que este guion se negaba
     #    —correctamente— y las cinco ramas quedaban muertas.
@@ -81,7 +81,7 @@ case "${1:-}" in
     #
     # ⛔ NO SE ADIVINA CUAL SALTAR. El <rev> lo da quien invoca, porque decidir que un commit «ya
     #    esta en main» es una adjudicacion de CONTENIDO —aqui se verifico con `patch-id` y con
-    #    `merge-base --is-ancestor` contra el merge de #1622—, y un guion que lo dedujera solo
+    #    `merge-base --is-ancestor` contra el merge de—, y un guion que lo dedujera solo
     #    estaria descartando trabajo ajeno sin que nadie lo mirara.
     shift
     DESDE="${1:-}"

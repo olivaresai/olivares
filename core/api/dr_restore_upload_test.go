@@ -64,7 +64,7 @@ func uploadRestoreBundle(h *harness, token string, body []byte) (int, string) {
 
 // Restoring onto a freshly installed host is the disaster-recovery case, and a
 // fresh install has never made a backup, so <data-dir>/backups does not exist
-// yet. The upload must create it instead of failing with a 500 (#495).
+// yet. The upload must create it instead of failing with a 500.
 func TestDRRestoreUploadCreatesMissingBackupDir(t *testing.T) {
 	bundle := restoreUploadBundle(t)
 

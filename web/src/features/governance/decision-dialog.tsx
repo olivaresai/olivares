@@ -23,7 +23,7 @@ import {
 
 /**
  * DenyDialog records a denial of the open request. Approve once needs no dialog: the
- * command, the rule and the reach are already on screen above it (#2548). A denial is
+ * command, the rule and the reach are already on screen above it. A denial is
  * confirmed here and can carry a note, which is sent in the decision body and kept in the
  * immutable trail; red is for Deny, Stop and delete (Root, 09b capture review).
  *

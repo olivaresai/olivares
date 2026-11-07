@@ -131,7 +131,7 @@ do not currently carry a production SLO target.
 - **Tenancy:** Postgres RLS `FORCE` + application-layer tenant guard + SQLite
   triggers; region guard on top for T3.
 - **Crypto custody:** operator-provided signing keys and off-box checkpoint signing in Community; CMEK envelope encryption (AWS/GCP/Azure KMS) in Business,
-  fail-closed sealed configs; optional FIPS 140-3 build (CMVP cert #5247) and
+  fail-closed sealed configs; optional FIPS 140-3 build (CMVP cert 5247) and
   STIG-profiled image (OpenSCAP-scannable).
 - **Privileged access:** RBAC; AAL3 step-up (Community WebAuthn; PIV/CAC in Business Identity & Scale) for privileged actions;
   dual-control approvals; audited break-glass; graduated estate kill switch with

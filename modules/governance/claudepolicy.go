@@ -104,7 +104,7 @@ type ObservedConfigProvider interface {
 	Observed(ctx context.Context, tenant model.TenantID, surface string) ([]ObservedConfig, error)
 }
 
-// InstructionsSource renders the instructions a department carries (#530): the document of the
+// InstructionsSource renders the instructions a department carries: the document of the
 // managed-instructions@<department> surface. It is the composition root's, over the same
 // source a session of the department is given, so a workstation file and a session cannot
 // differ. "" means the department carries none; an error is a refusal, never an empty

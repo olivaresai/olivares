@@ -222,13 +222,13 @@ var rows = []Facts{
 	{
 		Key: "opencode", Name: "OpenCode", Program: "opencode", Session: true,
 		Vendor: "opencode", Monogram: "OC", Color: "#8679F1",
-		// Its own configuration folder: sessions turn the .agents/.claude scans off (#2997).
+		// Its own configuration folder: sessions turn the .agents/.claude scans off.
 		SkillsDir:   ".opencode/skills",
 		EnvPrefixes: []string{"OPENCODE_"},
 		ConfigDir:   ".config/opencode", ConfigHomeEnv: OpenCodeConfigHomeEnv, RuntimeBinEnv: OpenCodeRuntimeBinEnv,
 		Installer: InstallRelease, SignIn: SignInDevice,
 		LoginArgs: openCodeHeadlessLogin,
-		// OpenCode's own providers come first (#2567; opencode.ai/docs/cli, measured
+		// OpenCode's own providers come first (; opencode.ai/docs/cli, measured
 		// on v1.18.34): `auth login --provider opencode` takes the OpenCode console
 		// key (Zen and the free models), `--provider opencode-go` the Go
 		// subscription key; each prints openCodeKeyPrompt, reads the key on stdin
@@ -255,7 +255,7 @@ var rows = []Facts{
 		// Record-bound turns reach only their provider's host: inventoried on 1.18.34
 		// with an egress probe (modules/sessions/driver_opencode.go). The own sign-in
 		// and OpenCode's local server port were measured behind the session proxy on
-		// 1.19.4 (#3082, #3094); a record-bound turn behind the proxy is not.
+		// 1.19.4; a record-bound turn behind the proxy is not.
 		EgressMeasured: true,
 	},
 	// GEMINI_CLI_HOME names the home that holds .gemini, not .gemini itself.

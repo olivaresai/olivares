@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// File and folder references in a reply become chips (#4011): the path and line of an inline
+// File and folder references in a reply become chips: the path and line of an inline
 // code span, opened in the person's editor, its whole path on the hover, and copied relative
 // or whole from its menu.
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'

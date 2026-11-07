@@ -17,7 +17,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// #2937: when OpenCode's model call fails upstream (measured on 1.19.3 with a used-up
+// : when OpenCode's model call fails upstream (measured on 1.19.3 with a used-up
 // free tier: "Free usage limit reached. Subscribe to OpenCode Go to keep going"), it
 // logs the error and never ends the prompt: no ACP update and no result for 300 s, so
 // the session showed "Working" forever. The turn now ends, and the session says why in

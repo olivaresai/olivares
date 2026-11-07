@@ -246,7 +246,7 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
   }
   for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width: 1280, height: 900 })
-    // The theme is chosen in the account menu (#3161).
+    // The theme is chosen in the account menu.
     await page.getByRole('button', { name: /, Account$/ }).click()
     await page
       .getByRole('menuitemradio', { name: new RegExp(`^${theme}$`, 'i') })

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE MESSAGE NAVIGATOR (#2129): find and reach any point of a session. A thin rail of marks
+// THE MESSAGE NAVIGATOR: find and reach any point of a session. A thin rail of marks
 // at the conversation's left edge, one per message the person sent; a hover or focus shows its
 // time and first line, as words without Markdown markers, and a click scrolls to it. Beside the rail, a panel: every message in a
 // list, a search over the whole session, and a date and time to go to. The index, the

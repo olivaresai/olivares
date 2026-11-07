@@ -389,7 +389,7 @@ func TestToolLoginClaudeTakesThePastedCode(t *testing.T) {
 }
 
 // Gemini CLI no longer serves free personal Google accounts, Google AI Pro or
-// Ultra (#2990): the login says which accounts work and names the API key first.
+// Ultra: the login says which accounts work and names the API key first.
 func TestToolLoginGeminiNamesTheAccountsThatWork(t *testing.T) {
 	f := newFakeToolEngine(t)
 	out, errb, err := execSessionCLI(t, strings.NewReader("good-code\n"),

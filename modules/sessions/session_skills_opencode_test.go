@@ -63,7 +63,7 @@ func splitTestFrontmatter(t *testing.T, b []byte) (map[string]any, string) {
 	return out, body
 }
 
-// #2889: OpenCode reads agents and commands from $HOME/.opencode and rule files
+// : OpenCode reads agents and commands from $HOME/.opencode and rule files
 // listed in its inline `instructions` (measured on 1.19.3), so a session gets
 // them without touching the account configuration directory. A Claude-format
 // agent's tool list only narrows: tools it does not list are denied, listed
@@ -162,14 +162,14 @@ func TestRuntimeOpenCodeComponentsRefuseUngovernedContentBeforeWriting(t *testin
 		{"shell-no-frontmatter", skills.DeliveryFile{Kind: "command", Path: "diff.md", Bytes: []byte("Changes: !`git diff`\n")}, "shell"},
 		{"file", skills.DeliveryFile{Kind: "command", Path: "read.md", Bytes: []byte("Summarize @README.md\n")}, "file reference"},
 		{"file-in-parens", skills.DeliveryFile{Kind: "command", Path: "read.md", Bytes: []byte("Summarize (@.env)\n")}, "file reference"},
-		// #2998: typed arguments would complete the interpolation.
-		// An opener left open is closed by a typed backtick (review of #3010).
+		//: typed arguments would complete the interpolation.
+		// An opener left open is closed by a typed backtick (review of).
 		{"unclosed-opener", skills.DeliveryFile{Kind: "command", Path: "run.md", Bytes: []byte("Run !`git log $ARGUMENTS\n")}, "shell"},
 		{"splice-bang", skills.DeliveryFile{Kind: "command", Path: "run.md", Bytes: []byte("Run !$ARGUMENTS\n")}, "placeholder"},
 		{"splice-backtick", skills.DeliveryFile{Kind: "command", Path: "run.md", Bytes: []byte("Run `$ARGUMENTS` now.\n")}, "placeholder"},
 		{"splice-file", skills.DeliveryFile{Kind: "command", Path: "run.md", Bytes: []byte("See ($1@x)\n")}, "placeholder"},
 		// OpenCode replaces $N before $ARGUMENTS, so removing an empty $1 can form a
-		// $ARGUMENTS that the splice check never saw (review of #3050).
+		// $ARGUMENTS that the splice check never saw (review of).
 		{"hidden-shell", skills.DeliveryFile{Kind: "command", Path: "run.md", Bytes: []byte("Run !$ARG$1UMENTS`id`\n")}, "placeholder"},
 		{"hidden-file", skills.DeliveryFile{Kind: "command", Path: "run.md", Bytes: []byte("Run $ARG$1UMENTS@/etc/passwd\n")}, "placeholder"},
 		{"builtin-agent", skills.DeliveryFile{Kind: "agent", Path: "build.md", Bytes: []byte("---\ndescription: d\n---\nx\n")}, "built-in"},
@@ -195,7 +195,7 @@ func TestRuntimeOpenCodeComponentsRefuseUngovernedContentBeforeWriting(t *testin
 
 // OpenCode 1.19.3 also offers each skill as a slash command, and a command of the same
 // name hides it (command/index.ts: if (commands[item.name]) continue). The same
-// ambiguous alias Claude Code refuses is refused for OpenCode (review of #3003).
+// ambiguous alias Claude Code refuses is refused for OpenCode (review of).
 func TestRuntimeOpenCodeRefusesASkillAndCommandWithOneSlashName(t *testing.T) {
 	m, tenant, runRef, root := openCodeComponentsRun(t, []skills.DeliveryFile{
 		{Path: "review/SKILL.md", Bytes: []byte("---\nname: review\ndescription: d\n---\nskill\n"), Mode: 0444},
@@ -230,7 +230,7 @@ func TestOpenCodeInstructionsAppendAndFailClosed(t *testing.T) {
 	}
 }
 
-// #3005: OpenCode offers each skill as a /command and expands its SKILL.md like a
+// : OpenCode offers each skill as a /command and expands its SKILL.md like a
 // command template: it runs !`shell` and reads an @path, outside the session's
 // approvals (measured on 1.19.3 and 1.19.4). Only what OpenCode would run, and @paths
 // that leave the folder or name a file the read policy denies, refuse delivery:
@@ -262,7 +262,7 @@ func TestRuntimeOpenCodeRefusesSkillsWhoseCommandFormRunsOutsideApprovals(t *tes
 		{"Mail dev@example.test.", false, ""},
 		{"Copy @.env.example first.", false, ""},
 		// OpenCode resolves an @path against the git top level, or / in no repository
-		// (review of #3050). {outside} is outside.md beside the folders, without its
+		// (review of). {outside} is outside.md beside the folders, without its
 		// leading /; repo/docs/plan.md exists.
 		{"Read @{outside}", true, ""},
 		{"Read @docs/plan.md", false, "repo"},
@@ -280,7 +280,7 @@ func TestRuntimeOpenCodeRefusesSkillsWhoseCommandFormRunsOutsideApprovals(t *tes
 		{"@.$1env", true, ""},
 		{"Run $ARGUMENTS`id`", true, ""},
 		{"Costs $5 a month, see $ARGUMENTS.", false, ""},
-		// Review of #3050 (security-reviewer). OpenCode replaces $N before $ARGUMENTS.
+		// Review of (security-reviewer). OpenCode replaces $N before $ARGUMENTS.
 		{"!$ARG$1UMENTS`id`", true, ""},
 		{"$ARG$1UMENTS@/etc/passwd", true, ""},
 		// It strips a trailing slash before it reads.
@@ -293,11 +293,11 @@ func TestRuntimeOpenCodeRefusesSkillsWhoseCommandFormRunsOutsideApprovals(t *tes
 		// It skips an empty path.
 		{"Use @ here.", false, ""},
 		// An @name that names no file but an agent starts that agent without the task
-		// rule's ask (review of #3050): a built-in subagent, or the delivered reviewer.
+		// rule's ask (review of): a built-in subagent, or the delivered reviewer.
 		{"Delegate this to @general.", true, ""},
 		{"Ask @reviewer to check it.", true, ""},
 		// OpenCode looks an agent up as a key of a plain JavaScript object, so an
-		// inherited key is an agent too (review of #3050, round 3).
+		// inherited key is an agent too (review of, round 3).
 		{"See @constructor.", true, ""},
 		{"See @__proto__ here.", true, ""},
 		// the maintainer's review of the catalog census: a mention is not a path. A typed "!"

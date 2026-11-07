@@ -96,8 +96,8 @@ test('release container: a fresh administrator reaches a first answer and the co
     secrets.reduce((out, secret) => out.replaceAll(secret, '<redacted>'), text)
   const record = (message: string) => failures.add(redact(message))
   await page.exposeFunction('__firstHourFinding', record)
-  // Loads past the console's 5 s target: evidence, not a failure (#1177), each with the
-  // requests the page made while it waited, so a slow load names what it waited on (#2608).
+  // Loads past the console's 5 s target: evidence, not a failure, each with the
+  // requests the page made while it waited, so a slow load names what it waited on.
   const slowLoads = await recordSlowLoads(page, redact)
   await page.addInitScript(watchSurface, surfaceOptions(version!))
   page.on('console', (message) => {
@@ -116,7 +116,7 @@ test('release container: a fresh administrator reaches a first answer and the co
   })
   const capture = async (name: string) => {
     // Every stage ends on a ready page: waiting returns as soon as it is, and a page
-    // still loading after READY_MS fails the stage (#1177).
+    // still loading after READY_MS fails the stage.
     await page
       .waitForFunction(() => !window.__firstHourLoading?.(), undefined, {
         timeout: READY_MS,
@@ -238,7 +238,7 @@ test('release container: a fresh administrator reaches a first answer and the co
         await expect(row.getByText('Accepted', { exact: true })).toBeVisible()
         // A new key's first passing test prepares its tool (docs: add-a-provider), and
         // leaving the page cancels that. Wait as a person does: Add an API key comes back
-        // when the preparation is done, and says so (#1088).
+        // when the preparation is done, and says so.
         await expect(
           page.getByRole('button', { name: 'Add an API key', exact: true }),
         ).toBeEnabled({ timeout: 180_000 })
@@ -309,7 +309,7 @@ test('release container: a fresh administrator reaches a first answer and the co
         const session = page.url()
         // The tool asks before it runs the command; the administrator approves it
         // in the queue the Rules place opens: the row its first message named opens
-        // beside the queue, and Approve once is the one action (#2548).
+        // beside the queue, and Approve once is the one action.
         await page
           .getByRole('navigation')
           .getByRole('link', { name: /^Rules\b/ })

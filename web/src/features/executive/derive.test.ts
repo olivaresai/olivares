@@ -260,7 +260,7 @@ describe('currentAnswer', () => {
   })
 })
 
-// ⛔ THE CARD AND THE LIST AGREE (#2268). The headline used to read the inventory
+// ⛔ THE CARD AND THE LIST AGREE. The headline used to read the inventory
 //    catalog (agents seen recently), so a dashboard could say "3 active agents" over a
 //    Sessions list showing 9 Working, or the other way round. It is now the Working
 //    set itself: the sessions the Sessions view files under Working, launched or

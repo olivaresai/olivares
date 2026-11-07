@@ -237,11 +237,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	if err := m.registerRuntimeSchema(reg); err != nil {
 		return err
 	}
-	// #2130: a person's own pins on operated sessions.
+	//: a person's own pins on operated sessions.
 	if err := m.registerRunPinSchema(reg); err != nil {
 		return err
 	}
-	// #2480: a person's own snooze and done marks on operated sessions.
+	//: a person's own snooze and done marks on operated sessions.
 	if err := m.registerRunMarkSchema(reg); err != nil {
 		return err
 	}

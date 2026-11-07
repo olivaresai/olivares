@@ -20,7 +20,7 @@ import (
 // rs.go is the inline MCP Resource Server PEP http.Handler (AIP-02). It is mounted IN
 // FRONT OF an MCP dispatcher and enforces, in order, on every JSON-RPC request:
 //
-//	Origin check (PR#1439: invalid Origin → 403)
+//	Origin check (PR: invalid Origin → 403)
 //	  → bearer present?            (no → 401 + WWW-Authenticate resource_metadata)
 //	  → token valid + audience-bound (fail-closed; cross-audience → 401 invalid_token)
 //	  → method:
@@ -96,7 +96,7 @@ func (rs *ResourceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Origin check (Streamable HTTP MUST, PR#1439): a browser request carrying an
+	// Origin check (Streamable HTTP MUST, PR): a browser request carrying an
 	// Origin not on the allowlist (or any Origin when no allowlist is configured) is
 	// a DNS-rebinding risk → 403. A non-browser client sends no Origin and passes.
 	if !rs.originAllowed(r) {
@@ -4167,7 +4167,7 @@ func (rs *ResourceServer) clock() time.Time {
 	return time.Now().UTC()
 }
 
-// originAllowed enforces the Origin check (PR#1439): a request with no Origin header
+// originAllowed enforces the Origin check (PR): a request with no Origin header
 // (a non-browser client) is allowed; a request WITH an Origin must match the operator
 // allowlist (and an empty allowlist matches nothing, so any browser Origin is refused).
 func (rs *ResourceServer) originAllowed(r *http.Request) bool {

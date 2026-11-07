@@ -7,7 +7,7 @@
 import type { MouseEvent } from 'react'
 
 /**
- * Whether a click on a session link opens it in the Estate sheet (#2549): a plain primary
+ * Whether a click on a session link opens it in the Estate sheet: a plain primary
  * click. A click with a modifier, or another button, keeps the link's own meaning (a new
  * tab, a new window), which goes to the full page.
  */

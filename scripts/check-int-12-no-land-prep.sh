@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# INT-12 unique leftover unique vs #1038: hub-safe refuse of ent#58 as-is.
+# INT-12 unique leftover unique vs: hub-safe refuse of ent#58 as-is.
 # Does not remasure the overlay clone, so lint:addon-sets does not LOOK 2
 # without OLIVARES_ENT_DIR.
 # Three answers: 0 CLEAN · 1 finding · 2 could not look.

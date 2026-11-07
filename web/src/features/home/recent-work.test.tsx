@@ -371,7 +371,7 @@ describe('RecentWork — the list starts the work', () => {
   })
 })
 
-describe('a row named by its tool and folder says the folder once (#2266)', () => {
+describe('a row named by its tool and folder says the folder once', () => {
   it('does not append the folder the name already carries', () => {
     const session = mergeSessions(
       [],
@@ -399,7 +399,7 @@ describe('a row named by its tool and folder says the folder once (#2266)', () =
   })
 })
 
-// #2549: on Estate a row opens its session in the sheet over the page; a click that
+//: on Estate a row opens its session in the sheet over the page; a click that
 // asks for a new tab or window keeps the link's own way to the full page.
 describe('RecentWork — opening a session in place', () => {
   it('opens the row’s session on a plain click, and leaves a modified one to the link', () => {

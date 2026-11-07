@@ -12,12 +12,21 @@
 // ⛔ OPENING A TAB STARTS NOTHING. A terminal is an act (it starts a process and is written
 //    to the audit ledger), so the tab offers a button, and a reload takes back only the
 //    shell this tab already had. Reading changes nothing.
-import { Terminal as TerminalIcon, X } from 'lucide-react'
+import { Terminal as TerminalIcon, X, Play, ChevronDown } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { terminalTheme } from './terminal-theme'
 import { useTerminalSession } from './use-terminal-session'
+import { projectScripts, type ProjectScript } from './project-scripts'
+import { useTenantStore } from '@/stores/tenant'
+import { useSessionStore } from '@/stores/session'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import './i18n'
 
 type XTerm = import('@xterm/xterm').Terminal
@@ -32,6 +41,24 @@ const TOUCH_KEYS: readonly { id: string; seq: string }[] = [
 ]
 
 export function SessionTerminal({ workspaceRef }: { workspaceRef: string }) {
+  const tenant = useTenantStore((s) => s.activeTenant)
+  const generation = useSessionStore((s) => s.credentialGeneration)
+  return (
+    <FolderTerminal
+      key={`${tenant}:${generation}:${workspaceRef}`}
+      workspaceRef={workspaceRef}
+      tenant={tenant}
+    />
+  )
+}
+
+function FolderTerminal({
+  workspaceRef,
+  tenant,
+}: {
+  workspaceRef: string
+  tenant: string | null
+}) {
   const { t } = useTranslation('sessions')
   const host = useRef<HTMLDivElement>(null)
   const term = useRef<XTerm | null>(null)
@@ -40,6 +67,30 @@ export function SessionTerminal({ workspaceRef }: { workspaceRef: string }) {
     [],
   )
   const session = useTerminalSession(workspaceRef, write)
+  const [scripts, setScripts] = useState<ProjectScript[]>([])
+  const [scriptsFailed, setScriptsFailed] = useState(false)
+  const pendingScript = useRef<string | null>(null)
+  useEffect(() => {
+    const ctl = new AbortController()
+    void projectScripts(workspaceRef, tenant, ctl.signal).then(
+      (items) => {
+        if (!ctl.signal.aborted) setScripts(items)
+      },
+      () => {
+        if (!ctl.signal.aborted) setScriptsFailed(true)
+      },
+    )
+    return () => ctl.abort()
+  }, [workspaceRef, tenant])
+  useEffect(() => {
+    if (session.state === 'live' && pendingScript.current) {
+      const command = pendingScript.current
+      pendingScript.current = null
+      session.send(command + '\r')
+    } else if (session.problem || session.state === 'ended') {
+      pendingScript.current = null
+    }
+  }, [session])
   const [mode, setMode] = useState<'off' | 'open' | 'resume'>(
     session.canResume ? 'resume' : 'off',
   )
@@ -135,12 +186,68 @@ export function SessionTerminal({ workspaceRef }: { workspaceRef: string }) {
       .catch(() => {})
   }
 
+  const runScript = (script: ProjectScript) => {
+    if (session.state === 'live') {
+      session.send('\x15' + script.command + '\r')
+      term.current?.focus()
+    } else if (mode === 'off') {
+      pendingScript.current = script.command
+      session.dismiss()
+      setMode('open')
+    }
+  }
+  const primaryScript = scripts.find((s) => s.name === 'dev') ?? scripts[0]
+  const scriptActions = primaryScript ? (
+    <div className="flex min-w-0 max-w-full items-center gap-1">
+      <Button
+        size="sm"
+        className="min-w-0 max-w-full shrink"
+        disabled={mode !== 'off' && session.state !== 'live'}
+        title={primaryScript.command}
+        onClick={() => runScript(primaryScript)}
+      >
+        <Play aria-hidden />
+        <span className="truncate">
+          {t('terminal.runScript', { name: primaryScript.name })}
+        </span>
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={t('terminal.scripts')}
+            disabled={mode !== 'off' && session.state !== 'live'}
+          >
+            <ChevronDown aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {scripts.map((script) => (
+            <DropdownMenuItem
+              key={`${script.source}:${script.name}`}
+              onSelect={() => runScript(script)}
+            >
+              {t('terminal.runScript', { name: script.name })}{' '}
+              <span className="ml-2 text-text-3">{script.source}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  ) : scriptsFailed ? (
+    <p role="alert" className="text-caption text-warning">
+      {t('terminal.scriptsFailed')}
+    </p>
+  ) : null
+
   if (mode === 'off') {
     return (
       <section
         data-testid="session-terminal"
         className="flex flex-col items-start gap-2"
       >
+        {scriptActions}
         {/* AN EMPTY TAB IS ITS ONE ACTION. What the shell is (its limits, that each line
             is recorded) is the action's hover, not a paragraph in front of it. */}
         {session.problem ? (
@@ -178,7 +285,16 @@ export function SessionTerminal({ workspaceRef }: { workspaceRef: string }) {
       data-testid="session-terminal"
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-2"
     >
-      <div className="flex min-w-0 shrink-0 items-center gap-1">
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-1">
+        {scriptActions}
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={session.state !== 'live'}
+          onClick={() => session.send('\x03')}
+        >
+          {t('terminal.stopScript')}
+        </Button>
         <p
           role="status"
           className="min-w-0 flex-1 truncate text-caption text-muted-foreground"

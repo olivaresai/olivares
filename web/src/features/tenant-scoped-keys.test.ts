@@ -176,7 +176,7 @@ describe('las claves de caché nombran al inquilino', () => {
         `useQuery({ queryKey: ['knowledge', 'tenant', 'scans'] })`,
       ),
     ).toHaveLength(1)
-    // Invalid spread (#718): spreading a base key does not visibly prove tenant scope;
+    // Invalid spread: spreading a base key does not visibly prove tenant scope;
     // the base may or may not contain it. `[...queryKey, 'used-by']` violates the rule just
     // like a flat literal.
     expect(

@@ -103,7 +103,7 @@ test('copies a message, a reply and a code block, by selection and by Copy', asy
   await reply.getByRole('button', { name: 'Copy code' }).click()
   await expect.poll(() => clipboard(page)).toBe('make test')
 
-  // One copy per message: no paragraph carries its own (#3947).
+  // One copy per message: no paragraph carries its own.
   await expect(
     reply.getByRole('button', { name: 'Copy Markdown block' }),
   ).toHaveCount(0)

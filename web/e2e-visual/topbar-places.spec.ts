@@ -164,7 +164,7 @@ for (const lang of ['en', 'es'] as const) {
   }
 }
 
-// The Ledger's own query (#2554): in the top bar's search from 1100 px, at the head of the
+// The Ledger's own query: in the top bar's search from 1100 px, at the head of the
 // page below. It must stay a usable field at every measured width, not be squeezed by the
 // bar, and nothing on the page runs under it either.
 const LEDGER_QUERY_MIN = 200

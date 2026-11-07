@@ -16,7 +16,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// A session's NAME and its ARCHIVED mark (#2795), set from its row. Both are the
+// A session's NAME and its ARCHIVED mark, set from its row. Both are the
 // session's own state, the way its peers are (session_peers.go): one value on the
 // run row that every reader sees, changed with the run's write permission and
 // recorded in the ledger. They are not a person's interface state like a pin

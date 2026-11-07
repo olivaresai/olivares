@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The message navigator (#2129) against a small fake of the engine's messages read, which
+// The message navigator against a small fake of the engine's messages read, which
 // keeps the engine's rules: ids are positions, `role` and `q` and `at` filter, `order` and
 // `cursor` page, `id` reads one message whole with `later_same`.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ACTIVE AGENTS CARD IS THE SESSIONS WORKING SET (#2268). The headline used to be
+// THE ACTIVE AGENTS CARD IS THE SESSIONS WORKING SET. The headline used to be
 // the inventory catalog's "seen recently" count, so the dashboard could say "3 active
 // agents" over a Sessions list that filed 9 under Working. The card now counts the
 // sessions the Sessions view files under Working, launched or observed, through the

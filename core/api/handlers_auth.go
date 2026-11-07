@@ -79,7 +79,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, mc ModuleCo
 	}
 	ok, err := s.setupTok.Match(in.Token)
 	if err != nil {
-		// The engine cannot read its own token (#530): a deployment fault, so it
+		// The engine cannot read its own token: a deployment fault, so it
 		// answers setup_token_unreadable and logs the path and the errno.
 		s.writeError(w, r, err)
 		return

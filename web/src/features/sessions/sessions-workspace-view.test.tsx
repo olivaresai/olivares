@@ -557,7 +557,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
     )
   })
 
-  // The foot is ONE line (#4032): the count and Load more whole at its end. A wrapping foot
+  // The foot is ONE line: the count and Load more whole at its end. A wrapping foot
   // put "Showing the 202 most recent ·" on one line and Load more alone on the next; at the
   // 264 px rail that sentence was then cut ("Showing the 200 most r…"), so the count is only
   // "<n> most recent". jsdom has no layout, so this pins the arrangement and the short text.
@@ -918,7 +918,7 @@ describe('SessionsWorkspaceView — the surface opens on work, not on nothing', 
   })
 
   it('never opens an archived session by default, however much it needs a person', async () => {
-    // Archived sessions are out of the rail (#2795); a default that still picked one would
+    // Archived sessions are out of the rail; a default that still picked one would
     // fill the pane with a session no row of the list shows. The person's archived session
     // waits for an approval, which ranks it first; their other session is the default.
     // (The observed-only row has no launch record, so it is nobody's default.)

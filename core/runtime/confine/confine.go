@@ -7,7 +7,7 @@
 // Linux uses the engine's re-exec helper, Landlock and no_new_privs, and clears
 // the child's capability sets; it empties the bounding set only when the helper
 // holds CAP_SETPCAP (DropCapabilities). It does not restrict network access or
-// install seccomp.
+// install seccomp unless Offline is requested.
 package confine
 
 import (
@@ -26,6 +26,10 @@ const HelperArg = "__olivares_confine"
 
 const policyArg = "--policy-v1"
 
+// A distinct marker makes an older on-disk engine refuse an offline launch,
+// rather than ignore a JSON field it does not understand after an upgrade.
+const offlinePolicyArg = "--offline-policy-v1"
+
 // Policy grants only the paths and devices explicitly supplied by a caller.
 // Sealed paths cannot overlap any writable grant; Protect paths are carved out
 // of directory grants. Limits is optional and never supplied by the mechanism.
@@ -37,6 +41,8 @@ const policyArg = "--policy-v1"
 // file over the index). It must lie strictly inside a NoDelete folder: the folder
 // itself would give every right back.
 type Policy struct {
+	// Offline denies sockets, namespace entry and descriptor theft in the child.
+	Offline                                                      bool `json:",omitempty"`
 	ReadWrite, ReadOnly, Protect, Sealed, NoDelete, KeepWritable []string
 	// ReadFiles are files the child may read, each one a regular file of its own that the caller
 	// already checked (ReadFileOf). Unlike a ReadOnly path, which may be a folder or a link, each is
@@ -111,7 +117,9 @@ type directoryHandle struct {
 
 // IsExplicitPolicy distinguishes the shared helper payload from the published
 // session helper's legacy four-field flags.
-func IsExplicitPolicy(args []string) bool { return len(args) > 0 && args[0] == policyArg }
+func IsExplicitPolicy(args []string) bool {
+	return len(args) > 0 && (args[0] == policyArg || args[0] == offlinePolicyArg)
+}
 
 // IsWrapped reports whether Wrap replaced cmd's executable with the helper. A mount layer
 // WrapMounts put in front of the policy (the user manager hidden from a plugin) is looked
@@ -157,7 +165,11 @@ func Wrap(cmd *exec.Cmd, p Policy) (State, error) {
 	if err != nil {
 		return state, err
 	}
-	argv := append([]string{self, HelperArg, policyArg, string(payload), "--"}, cmd.Args...)
+	marker := policyArg
+	if p.Offline {
+		marker = offlinePolicyArg
+	}
+	argv := append([]string{self, HelperArg, marker, string(payload), "--"}, cmd.Args...)
 	cmd.Path, cmd.Args = self, argv
 	cmd.ExtraFiles = append(cmd.ExtraFiles, p.SealedFiles...)
 	if p.Ready != nil {
@@ -187,6 +199,9 @@ func RunHelperWithReady(args []string, ready *os.File) int {
 		err = errors.New("invalid explicit confinement payload")
 	default:
 		if err = json.Unmarshal([]byte(args[1]), &req); err == nil {
+			if args[0] == offlinePolicyArg {
+				req.Policy.Offline = true
+			}
 			if ready == nil && req.ReadyFD >= 3 {
 				ready = os.NewFile(uintptr(req.ReadyFD), "confine-ready")
 			}

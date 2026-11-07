@@ -151,7 +151,7 @@ func (c consoleAddress) withPlan(plan webAuthnPlan) consoleAddress {
 // wildcardBindNotice is the statement of network exposure: what the bind accepts
 // and, outside a container, how to keep it on this host. `serve` prints it at the
 // head of the address list and `quickstart` after its own address lines, so the
-// two commands cannot word the same exposure differently (#849). Inside a
+// two commands cannot word the same exposure differently. Inside a
 // container a loopback bind would hide the console from the published port, so
 // the container paragraph (wildcardBindGuidance) gives the remedy instead.
 func wildcardBindNotice(c consoleAddress) string {

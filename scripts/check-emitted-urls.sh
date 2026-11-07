@@ -253,7 +253,7 @@ MAX_RECORD_AGE_DAYS=45
 # 2026-09-17 · README rewrite (docs/readme-clarity-20260916): the thirteen olivares.ai section URLs it
 # links, the releases index and the v26.9.0 tag page were measured with --probe from this box (five
 # attempts each). The tag page is 404 on the public repository until the v26.9.0 release is published
-# there (dev cut only, PR #2504); the README emitted it since that cut without a record line.
+# there (dev cut only, PR); the README emitted it since that cut without a record line.
 # 2026-09-23 · release links. There is no v26.9.1: the next release is v26.10, and no v26.9.1
 # tag or release exists. The release canon is the published
 # v26.9.0, so README.md's release link names v26.9.0 and the v26.9.1 row left the record with
@@ -296,7 +296,7 @@ MAX_RECORD_AGE_DAYS=45
 # redirects), as did the 0.2 tag page. The 0.1 package rows and the 0.1 tag page left the record:
 # nothing emits them any more.
 # 2026-10-15 · those four rows became ${RELEASE} templates: README derives them from the
-# canon, so literal rows broke at every cut and cost the regression/PR #2187 three review rounds. The rows
+# canon, so literal rows broke at every cut and cost the regression/PR three review rounds. The rows
 # keep their 0.2 measurements; a cut re-probes and pastes the template row back with the fresh date,
 # and the record itself no longer changes between releases.
 # 2026-11-02 · the executor guide row left the record: the Deployment page was its only emitter and

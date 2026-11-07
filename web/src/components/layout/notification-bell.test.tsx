@@ -148,7 +148,7 @@ beforeEach(() => {
 })
 
 describe('NotificationBell', () => {
-  it('names its icon on hover as it does to a screen reader (#3121)', () => {
+  it('names its icon on hover as it does to a screen reader', () => {
     mount()
     expect(
       screen.getByRole('button', { name: 'Recent activity' }),

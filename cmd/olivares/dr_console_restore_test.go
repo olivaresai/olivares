@@ -324,7 +324,7 @@ func TestConsoleRestoreInvalidKeyDestinationRefusesBeforePromotion(t *testing.T)
 	}
 	handler := target.api.Handler()
 	token := consoleLogin(t, handler)
-	// Prepare the target's backup directory through the product path (#495).
+	// Prepare the target's backup directory through the product path.
 	consoleBackupBundle(t, handler, token, passphrase)
 	oldKeys := map[string][]byte{}
 	for _, key := range manifest.Keys {

@@ -189,7 +189,7 @@ func TestComparisonSameProtocolPositive(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "comparison-drift")
 	suite := comparisonFixture(t, h, admin, tenant, "drift")
-	// Two cases, not one: on a single case no drop can exclude zero (#2151), and this
+	// Two cases, not one: on a single case no drop can exclude zero, and this
 	// test is about which score the comparison reads, not about the interval.
 	h.addCase(admin, tenant, suite, map[string]any{"case_key": "two", "input": "question", "expected": "answer"})
 	base := h.do("POST", "/v1/m/evals/runs", admin, map[string]any{"suite_ref": suite, "subject_ref": "model-a", "outputs": map[string]string{"one": "answer", "two": "answer"}}, tenantHdr(tenant))

@@ -539,3 +539,38 @@ func (m *Module) loadSinkDTO(ctx context.Context, sc store.Scope, dto *subscript
 	dto.SinkCredHint = r.String(colSinkHint)
 	return nil
 }
+
+// SealedSink is a SIEM sink profile validated by the create route's own rules, with its
+// credential sealed, for a writer outside this module's handlers: the CLI, which writes a
+// subscription directly (see StampWriterProof for why it shares the rules, not a copy).
+type SealedSink struct {
+	in     subscriptionRequest
+	sealed string
+}
+
+// SealSink validates a sink profile as a create and seals its credential under the tenant key.
+// Call it before the subscription's transaction: the sealer is never invoked inside one. cred is
+// taken as given; the caller trims it.
+func SealSink(ctx context.Context, sealer SecretSealer, tenant model.TenantID, kind, format, cred string, opts map[string]string) (SealedSink, error) {
+	in := subscriptionRequest{SinkKind: kind, SinkFormat: format, SinkCred: cred, SinkOpts: opts}
+	if msg := in.validateSink(); msg != "" {
+		return SealedSink{}, errors.New(msg)
+	}
+	if !in.hasSink() {
+		return SealedSink{}, errors.New("sink_kind is required")
+	}
+	if credRequiredFor(in.SinkKind) && in.SinkCred == "" {
+		return SealedSink{}, errors.New("sink_cred is required for the " + in.SinkKind + " sink")
+	}
+	sealed, err := (&Module{sealer: sealer}).sealSinkCred(ctx, tenant, in.SinkCred)
+	if err != nil {
+		return SealedSink{}, err
+	}
+	return SealedSink{in: in, sealed: sealed}, nil
+}
+
+// Create stores the sink side row of subscription subID inside that subscription's create
+// transaction, with the writer proof of the fence generation the caller read before it.
+func (s SealedSink) Create(ctx context.Context, sc store.Scope, subID model.ID, generation int64) error {
+	return (&Module{}).createSinkRow(ctx, sc, subID, &s.in, s.sealed, WriterProof{Capability: EgressWriterCapability, Generation: generation})
+}

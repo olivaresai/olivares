@@ -207,7 +207,7 @@ type harnessOpts struct {
 	dsn    string
 	// adminDSN is the BYPASSRLS (NOSUPERUSER) role a Postgres engine needs to answer a
 	// cross-tenant System read authoritatively. Empty is correct for SQLite and was correct
-	// for Postgres too until (#608) made store.SystemScope.ListOrgs REFUSE rather than
+	// for Postgres too until made store.SystemScope.ListOrgs REFUSE rather than
 	// return an unauthoritative empty list — after which an engine opened with only the app
 	// pool answers 500 on /v1/setup, because setup performs exactly that read. Measured on
 	// this batch: TestCrossBackend_AuthzParity/postgres went from green on origin/main to

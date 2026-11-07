@@ -163,7 +163,7 @@ func runGuardAdmissionUnits(ctx context.Context, mdb dialect.Execer, dia dialect
 // bootGuardCensus builds the guard manifest and edition graph this boot verifies and governs.
 // Normally the census is the registry's own. A directory a Business build wrote records
 // bootstrap receipts bound to Business census digests, which no Community variant carries
-// (Business X.Y-1 -> Community X.Y -> Business X.Y, #1883, #2741): when a receipt is bound to
+// (Business X.Y-1 -> Community X.Y -> Business X.Y,,): when a receipt is bound to
 // a digest only the registry plus the three Business relations produces, Community verifies
 // and keeps guarding that wider census, and the Business admission graph (with its Community
 // predecessor) does the exact verification. The receipt digest only selects the census; an

@@ -16,10 +16,10 @@ import (
 
 // moduleOffRefusal is the body moduleNotEnabledHandler answers every route of a
 // module this node does not run (core/api/server.go), as the clean-host audit
-// captured it on a fresh install (#483).
+// captured it on a fresh install.
 const moduleOffRefusal = `{"error":{"code":"module_not_enabled","message":"The skills module is not enabled on this node. An administrator can enable it in the module settings.","module":"skills"}}`
 
-// The defect (#483): every module verb refused this way printed the engine's
+// The defect: every module verb refused this way printed the engine's
 // console wording with no command to run. The engine already names the module
 // (error.module); the sentence the CLI prints must name the switch.
 func TestAModuleThatIsOffNamesTheCommandThatEnablesIt(t *testing.T) {

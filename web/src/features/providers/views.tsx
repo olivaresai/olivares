@@ -31,7 +31,7 @@ export const VIEWS = [
       { permission: 'sessions:provider:admin' },
       { permission: 'sessions:profile:write' },
     ],
-    // A door into Tools (#2552), where the API keys are listed beside the accounts.
+    // A door into Tools, where the API keys are listed beside the accounts.
     // `?add=<kind>&returnTo=` (the setup wizard's "Add an API key") still opens the form.
     doorTo: 'agent-tools',
     element: toolsRoom,

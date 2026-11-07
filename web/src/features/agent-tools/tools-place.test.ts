@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ONE TOOLS PLACE (#2552). Which sign-in or key a session runs as was one idea on seven
+// ONE TOOLS PLACE. Which sign-in or key a session runs as was one idea on seven
 // screens. The API key, account, profile and binding pages are now doors into Tools: each
 // keeps its url and its own read tier, and mounts the same room.
 import type { ReactElement } from 'react'

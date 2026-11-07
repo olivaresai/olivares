@@ -5,7 +5,7 @@
 #
 # C03-03 unique leftover unique vs check-c03-03-addon-ids.sh
 # (on main GATE only, not in lint:addon-sets) and unique leftover
-# unique vs #1409. 0 CLEAN · 1 finding · 2 could not look.
+# unique vs. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

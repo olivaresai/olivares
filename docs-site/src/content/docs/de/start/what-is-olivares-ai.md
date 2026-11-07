@@ -70,7 +70,7 @@ Modus `unknown` — das Produkt erfindet niemals eine Klassifizierung.
 Die Zugriffskarte ist eine Fähigkeit unter vielen. Das Produkt ist eine **modulare
 Plattform** (im Geiste von Grafana oder Backstage): eine Engine plus Module plus
 Connectors, so entworfen, dass sich jedes Modul anbinden lässt, ohne den Rest neu
-zu architektieren. Es liefert **32 Module** — Inventar und Live-Sessions, die
+zu architektieren. Es liefert **33 Module** — Inventar und Live-Sessions, die
 R/RW-Karte, Agenten-Orchestrierung (A2A, in Entwicklung), MCP- und Skill-Management, Identität und
 nicht-menschliche Identität, Deployment, Wissen und Kontext, Security und
 Guardrails, Modell- und Provider-Management, Cost/FinOps, Evals und eine

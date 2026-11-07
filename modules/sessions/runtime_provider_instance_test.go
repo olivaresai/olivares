@@ -16,7 +16,7 @@ import (
 // A session started the default way runs on the organization's own login of the
 // tool, the one the console signed in under AI tools. The run names that login as
 // the AI tools instance it is (GET /v1/m/agenttools/providers: "claude/olivares"),
-// so the session can show that instance's plan window (#427). A profile on homes of
+// so the session can show that instance's plan window. A profile on homes of
 // its own is not that login, and names none.
 func TestARunNamesTheToolLoginInstanceItRunsOn(t *testing.T) {
 	h, admin, tenant := toolLoginInstanceHarness(t, t.TempDir())

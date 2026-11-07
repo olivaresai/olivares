@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// test:core-paths — the build-time core-path count (#2494): counted from the contract, refuses a
+// test:core-paths — the build-time core-path count: counted from the contract, refuses a
 // contract that has no paths, and replaces only the token in text nodes.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

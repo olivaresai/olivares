@@ -45,7 +45,7 @@ import (
 //     unless the client declares sampling.context"), Deprecated under SEP-2596;
 //     removal follows Sampling.
 //   - Dynamic Client Registration (RFC 7591): demoted to MAY in 2025-11-25
-//     (CIMD SHOULD, SEP-991), Deprecated in 2026-07-28 (PR #2858), earliest
+//     (CIMD SHOULD, SEP-991), Deprecated in 2026-07-28 (PR), earliest
 //     removal ≥ 2027-07-28.
 //
 // The static rules below are COMPILED-IN, severity-graded posture vectors fed by
@@ -162,7 +162,7 @@ func deprecationIssues(spec serverSpec, cat catalog) []postureIssue {
 }
 
 // registrationIssues grades the OAuth client-registration path against the
-// CIMD-over-DCR deprecation (PR #2858; spec priority: pre-registered → CIMD → DCR).
+// CIMD-over-DCR deprecation (PR; spec priority: pre-registered → CIMD → DCR).
 func registrationIssues(spec serverSpec, cat catalog) []postureIssue {
 	if reg := cat.authReg; reg != nil {
 		if reg.method != identityDCR {

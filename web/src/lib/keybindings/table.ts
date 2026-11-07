@@ -182,7 +182,7 @@ export const KEYBINDINGS: readonly KeyRule[] = [
     when: 'sourceDiff',
   },
 
-  // ── the approvals queue: the open request, outside a field and a modal (#2548)
+  // ── the approvals queue: the open request, outside a field and a modal
   { command: 'approvals.approve', keys: 'a', when: 'approvalQueue' },
   { command: 'approvals.deny', keys: 'd', when: 'approvalQueue' },
 

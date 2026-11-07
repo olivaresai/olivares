@@ -131,7 +131,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 	}
 }
 
-// #2795: the rename body is the closed object its strict decoder reads, the two
+// : the rename body is the closed object its strict decoder reads, the two
 // archive routes and the rename answer with the run, and the messages read
 // publishes its parameters, text among them, with the values the handler accepts.
 func TestSessionsRunNameArchiveAndMessagesAreDocumented(t *testing.T) {

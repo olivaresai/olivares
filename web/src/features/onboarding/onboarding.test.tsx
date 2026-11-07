@@ -232,7 +232,7 @@ describe('the setup wizard', () => {
 
   // A fresh install runs without Security, and the policy page's default tab (Drift &
   // posture) reads Security's findings, so a bare /claude-policy showed only "Security is
-  // not enabled on this installation" and a button that restarts the engine (#473).
+  // not enabled on this installation" and a button that restarts the engine.
   it('opens Set policies on a tab that works while Security is off', () => {
     useModulesStore.getState().setOff(['security'])
     wrap(<OnboardingView />)
@@ -282,7 +282,7 @@ describe('the setup wizard', () => {
     expect(
       await screen.findByRole('button', { name: 'Sign in with Claude' }),
     ).toBeInTheDocument()
-    // acceptance, #2551: the key form opens in the sheet, on the provider this tool runs
+    // acceptance,: the key form opens in the sheet, on the provider this tool runs
     // on — no page link, no reload.
     await user.click(
       screen.getByRole('button', { name: 'Use an API key instead' }),

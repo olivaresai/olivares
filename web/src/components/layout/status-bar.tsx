@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE STATUS BAR (#3161): one thin row under the work that says how things stand, the
+// THE STATUS BAR: one thin row under the work that says how things stand, the
 // way the editors people already use do. Left to right: the engine (a dot and a word), the
 // sessions open, each tool's 5-hour and weekly use as the tool reported it, the agent
 // stops while one is active, what Business adds, then Stop all while a session works or waits
@@ -51,7 +51,7 @@ import { KillSwitchStatus } from './killswitch-status'
 import { useKillSwitchState } from './use-killswitch-state'
 import { useSessionRail } from './use-session-rail'
 
-/** The metadata step (#3135): counters and secondary facts, never content. */
+/** The metadata step: counters and secondary facts, never content. */
 const META = 'text-metadata'
 
 const loadConfirm = () => import('@/features/killswitch/engage-card')

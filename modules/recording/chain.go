@@ -25,7 +25,7 @@ const schemaVersion = "olivares.recording/v1"
 // semconvVersion is the PINNED OpenTelemetry semantic-conventions vocabulary label
 // the frame attribute semantics are documented against. Re-verified 2026-07-05:
 // v1.41.1 (2026-05-11) is the LAST VERSIONED release that carried the gen-ai
-// conventions; semconv v1.42.0 (2026-06-12, #3696) moved them from the main repo to
+// conventions; semconv v1.42.0 (2026-06-12,) moved them from the main repo to
 // open-telemetry/semantic-conventions-genai, whose live shape is pinned separately
 // by semconvUpstreamRepo/Ref (0 releases; README Schema URL TODO). The GenAI
 // agent-span conventions are still Development status, so this is a documentation

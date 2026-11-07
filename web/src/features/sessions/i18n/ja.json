@@ -534,6 +534,8 @@
     "startedTools_other": "ツール {{count}} 件",
     "notSent": "送信されませんでした: {{reason}}",
     "waitingApproval": "セッションの準備ができると送信されます。",
+    "discardedOnSessionChange": "セッションが切り替わる前に入力したメッセージは送信されていません。もう一度入力してください。",
+    "dismissDiscarded": "閉じる",
     "workingFolder": "作業フォルダー: <path />",
     "temporaryFolder": "作業フォルダー: このセッションの一時フォルダー",
     "turnLine": "<work/> · {{duration}}",
@@ -862,6 +864,10 @@
     "unreadable": "リクエストを読み込めませんでした。"
   },
   "terminal": {
+    "runScript": "{{name}} を実行",
+    "scripts": "プロジェクトのスクリプト",
+    "scriptsFailed": "プロジェクトのスクリプトを読み取れませんでした。",
+    "stopScript": "停止",
     "title": "ターミナル",
     "hint": "このセッションのフォルダー内で動くシェルです。セッションと同じ制限がかかり、あなたとして実行されます。入力したコマンド行はすべて記録されます。",
     "open": "ターミナルを開く",

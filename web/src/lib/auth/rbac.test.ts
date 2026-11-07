@@ -209,7 +209,7 @@ describe('roleRank', () => {
 // check that the set invents nothing outside it. That is strictly stronger than the
 // four cases removed here, and it sits where the rule now lives.
 
-describe('isGlobalAccount — superadmin with no grant in the tenant (#503)', () => {
+describe('isGlobalAccount — superadmin with no grant in the tenant', () => {
   it('the setup administrator (superadmin and owner here) is a member, not global', () => {
     const p = principal([grant(TENANT, 'owner', [])], true)
     expect(isGlobalAccount(p, TENANT)).toBe(false)

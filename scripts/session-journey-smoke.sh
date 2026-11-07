@@ -127,7 +127,7 @@ case "$(uname -s)" in
 	*) confinement_mode=unconfined ;;
 esac
 
-# One first-boot wait for the installer and the journeys (#3342): a fresh engine runs its module
+# One first-boot wait for the installer and the journeys: a fresh engine runs its module
 # migrations before it answers, which took 45-58 s on loaded battery legs.
 first_boot="$(sed -n 's/^FIRST_BOOT_DEADLINE=\([0-9][0-9]*\)$/\1/p' "$root/scripts/install-service.sh")"
 [ -n "$first_boot" ] || { printf 'session-journey: COULD NOT LOOK — no FIRST_BOOT_DEADLINE in scripts/install-service.sh\n' >&2; exit 2; }

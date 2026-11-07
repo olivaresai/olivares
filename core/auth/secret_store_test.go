@@ -188,3 +188,32 @@ func TestSecretStoreFailClosed(t *testing.T) {
 		t.Errorf("absent resolve = %v", err)
 	}
 }
+
+// A reserved name is the engine's: a person's put and rm are refused (the API maps
+// ErrBadSecretName to 400), the engine's own system path still writes and removes it.
+func TestSecretStoreReservedNameRefusesPeople(t *testing.T) {
+	svc := auth.NewSecretStore(testStore(t), secretTestSealer{})
+	ctx := context.Background()
+	scope := auth.GlobalSecretScope
+	const name = "test-addon/engine-key"
+	auth.ReserveSecretName(name)
+	engine, err := auth.NewSystemOperator("test-addon", "create its key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Put(ctx, engine, scope, name, "engine", ""); err != nil {
+		t.Fatalf("engine put: %v", err)
+	}
+	if _, err := svc.Put(ctx, adminActor(), scope, name, "person", ""); !errors.Is(err, auth.ErrBadSecretName) {
+		t.Fatalf("person put = %v, want ErrBadSecretName", err)
+	}
+	if err := svc.Delete(ctx, adminActor(), scope, " "+name); !errors.Is(err, auth.ErrBadSecretName) {
+		t.Fatalf("person rm = %v, want ErrBadSecretName", err)
+	}
+	if got, err := svc.Resolve(ctx, scope, name); err != nil || string(got) != "engine" {
+		t.Fatalf("reserved value changed: %q %v", got, err)
+	}
+	if err := svc.Delete(ctx, engine, scope, name); err != nil {
+		t.Fatalf("engine rm: %v", err)
+	}
+}

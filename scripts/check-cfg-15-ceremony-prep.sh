@@ -5,7 +5,7 @@
 #
 # CFG-15 unique leftover unique vs check-cfg-15-ceremony.sh
 # (named on main, CHECK not in lint:addon-sets) and unique leftover
-# unique vs #1388 / #1401. 0 CLEAN · 1 finding · 2 could not look.
+# unique vs /. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

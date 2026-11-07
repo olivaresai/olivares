@@ -24,8 +24,8 @@ description: >-
 потому что это сервер — ограничивайте его осознанно, как показано ниже.
 
 <!-- release -->
-:::note[Olivares 0.7]
-Следующий выпуск — `0.7`; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в `docs/releases/0.7-install-surfaces.json`.
+:::note[Olivares 0.8]
+Следующий выпуск — `0.8`; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в `docs/releases/0.8-install-surfaces.json`.
 :::
 <!-- /release -->
 
@@ -40,7 +40,7 @@ description: >-
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.7
+docker pull docker.io/olivaresai/olivares:0.8
 ```
 <!-- /release -->
 
@@ -49,8 +49,8 @@ docker pull docker.io/olivaresai/olivares:0.7
 **анонимных** пулов; ghcr.io не ограничивает анонимные пулы публичных образов — поэтому
 `docker login` или координата ghcr.io и есть выход, если узел CI или большой парк упирается
 в лимит. Теги несут **без
-ведущего `v`**: <!-- release -->`:0.7`<!-- /release --> закрепляет релиз, `:latest` плавает, а <!-- release -->
-`:0.7-fips`<!-- /release --> / <!-- release -->`:0.7-stig`<!-- /release --> — усиленные варианты. Базовый тег и `:latest`
+ведущего `v`**: <!-- release -->`:0.8`<!-- /release --> закрепляет релиз, `:latest` плавает, а <!-- release -->
+`:0.8-fips`<!-- /release --> / <!-- release -->`:0.8-stig`<!-- /release --> — усиленные варианты. Базовый тег и `:latest`
 мультиархитектурные (`linux/amd64`, `linux/arm64`); `fips`/`stig` — только
 `amd64`.
 
@@ -62,7 +62,7 @@ Docker Hub через `cosign copy`, поэтому digest тот же:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.7")"
+DIGEST="$(crane digest "$IMAGE:0.8")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -92,11 +92,11 @@ cosign verify-attestation "$REF" --type spdxjson \
 <!-- release -->
 ```bash
 docker volume create olivares-data
-docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 \
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.8 \
   /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
 apparmor=
 if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
-  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 /usr/share/olivares/olivares-sessions.conf |
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.8 /usr/share/olivares/olivares-sessions.conf |
     sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
   sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
   apparmor=--security-opt=apparmor=olivares-sessions
@@ -113,7 +113,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.7 \
+  docker.io/olivaresai/olivares:0.8 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -353,7 +353,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. Закрепление по digest для продакшена
 
-Изменяемые теги (<!-- release -->`:0.7`<!-- /release -->, `:latest`) — для оценки. В продакшене закрепляйте
+Изменяемые теги (<!-- release -->`:0.8`<!-- /release -->, `:latest`) — для оценки. В продакшене закрепляйте
 **digest**, который вы проверили — digest неизменяем и есть ровно то, что вы
 утвердили:
 

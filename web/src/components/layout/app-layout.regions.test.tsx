@@ -5,7 +5,7 @@
 // THE SHELL'S REGIONS: one header row · the work · one status row, and NOTHING ELSE BELOW
 // THE WORK. The left navigation sits beside the sheet (0.5); the top bar holds no places. The work sits
 // in the sheet's body, a ROW that may also hold the side panel a page declares — beside the
-// work, never below it. The status bar (#3161) is the sheet's last row: 24 px that say how
+// work, never below it. The status bar is the sheet's last row: 24 px that say how
 // things stand, under the work and the panel alike, and the only row allowed there.
 //
 // ⛔ THIS FILE EXISTS BECAUSE ITS ABSENCE WAS MEASURED. An independent review of this

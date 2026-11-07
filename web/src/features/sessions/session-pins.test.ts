@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // PINS are the engine's: this module only turns the `pinned` / `pinned_at` the runs
-// carry into the set the rail sorts by (#2130).
+// carry into the set the rail sorts by.
 import { describe, expect, it } from 'vitest'
 import type { Whoami } from '@/lib/api/types'
 import {
@@ -158,7 +158,7 @@ describe("isPinned — the list, or the session's own runs", () => {
   })
 })
 
-// The pins this browser kept before the engine did (#2130) are stored data: read back
+// The pins this browser kept before the engine did are stored data: read back
 // only to be moved to the engine, and everything in them is input nobody wrote on purpose.
 describe('pinStorageKey — the key the old pins live under', () => {
   it('is the key the console always wrote, per origin, user and tenant', () => {

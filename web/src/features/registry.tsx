@@ -437,7 +437,7 @@ export interface FeatureView {
    * filter it. */
   hideInNav?: boolean
   /** The registry id of the view whose screen this one mounts under its own permission
-   * (agentops is a second door into Sessions), or whose screen it folds into (#2240:
+   * (agentops is a second door into Sessions), or whose screen it folds into (:
    * the provider profile, binding and account pages into AI tools). Navigation lists the
    * door only to a principal who cannot open that view, so one screen is one entry; the
    * route stays open to deep links, and the top bar reads it as that view. */
@@ -652,7 +652,7 @@ export const ROUTE_ALIASES: readonly RouteAlias[] = [
   { from: '/areas/deployment', to: '/estate', note: AREA_FOLD },
   { from: '/areas/observation', to: '/audit', note: AREA_FOLD },
   { from: '/areas/system', to: '/settings', note: AREA_FOLD },
-  // The MCP servers page joined MCP & skills' Servers tab (#3388).
+  // The MCP servers page joined MCP & skills' Servers tab.
   {
     from: '/mcp-servers',
     to: '/capabilities',
@@ -669,7 +669,7 @@ export const ROUTE_ALIASES: readonly RouteAlias[] = [
 ]
 
 /**
- * RETIRED TABS THAT STILL LAND. The 0.5 Tools fold (#3388) gave every provider,
+ * RETIRED TABS THAT STILL LAND. The 0.5 Tools fold gave every provider,
  * MCP and skills surface one destination; a tab that left its page lands on its new place,
  * with the rest of its query.
  */

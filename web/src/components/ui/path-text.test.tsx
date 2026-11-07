@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A PATH OR A BRANCH NAME IS CUT IN ITS MIDDLE, NEVER SIDEWAYS (#3135).
+// A PATH OR A BRANCH NAME IS CUT IN ITS MIDDLE, NEVER SIDEWAYS.
 //
 // The end of a path is the part a person reads (the file, the last folder), and the end of a
 // branch name is the part that tells one branch from the next. So the start gives way: it

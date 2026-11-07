@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE QUEUE OF THE RULES PLACE (#2548, concepts-c2 estate/approvals.html). Each request
+// THE QUEUE OF THE RULES PLACE (, concepts-c2 estate/approvals.html). Each request
 // is one row: who asks, what will run, the rule that asked and what it reaches. One row
 // carries the orange edge: the first request still waiting that THIS person may decide.
 // Selecting a row is a tone step and nothing else, so the edge never follows the

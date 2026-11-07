@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ASSISTANT'S WORDS, PAINTED AS THE MARKDOWN THEY ARE (#1784). The reply is parsed into
+// THE ASSISTANT'S WORDS, PAINTED AS THE MARKDOWN THEY ARE. The reply is parsed into
 // data (./markdown) and painted as elements: nothing here builds a string of HTML, so what
 // the model says can never become markup. A link says where it goes (its title) and opens
 // without the opener.

@@ -32,7 +32,7 @@ it('does not offer red-team robustness in the shared security section', () => {
   expect(screen.getByText('Open findings')).toBeInTheDocument()
 })
 
-// #3936: with no grant declared every observed access is "unexpected" by
+//: with no grant declared every observed access is "unexpected" by
 // construction; the card must say there is nothing to compare, not headline it.
 it('shows no red unexpected count when the engine reports no grants declared', () => {
   const drift = deriveDrift({

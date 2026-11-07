@@ -21,7 +21,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// Images attached to a message (#2158), proved the way the person meets them: over the
+// Images attached to a message, proved the way the person meets them: over the
 // module's HTTP surface with its real authentication and store, against a real child
 // process that records what it received.
 
@@ -96,7 +96,7 @@ func TestAttachmentRefusalsHappenBeforeAnythingIsSent(t *testing.T) {
 		message   string
 	}{
 		{"text claiming to be a PNG", "image/png", []byte("not an image at all"), http.StatusUnsupportedMediaType, "the file is not a PNG image"},
-		{"a type no tool takes", "application/pdf", tinyPNGBytes(t), http.StatusUnsupportedMediaType, "attach a PNG, JPEG, WebP or GIF image"},
+		{"a type no tool takes", "image/svg+xml", tinyPNGBytes(t), http.StatusUnsupportedMediaType, "attach a supported image, PDF, Office document, HTML, CSV, JSON, XML, EPUB or ZIP"},
 		{"a GIF declared as a PNG", "image/png", gif, http.StatusUnsupportedMediaType, "the file is not a PNG image"},
 		{"over the limit", "image/png", append(tinyPNGBytes(t), make([]byte, maxAttachmentBytes)...), http.StatusRequestEntityTooLarge, ""},
 	} {

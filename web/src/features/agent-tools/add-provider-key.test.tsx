@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// AI tools offers its next step in the first viewport (#3388): a person who may
+// AI tools offers its next step in the first viewport: a person who may
 // add an API key finds "Add an API key" in the page's header, above the tools and the
-// accounts. It is the page's one way to add a key (#3945): the key list and the key
+// accounts. It is the page's one way to add a key: the key list and the key
 // references do not offer a second and a third under other names.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'

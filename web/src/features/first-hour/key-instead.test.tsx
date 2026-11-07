@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // "Use an API key instead" turns the sign-in sheet into the key field in place
-// (#2551): the page and the dialog stay, the provider is the tool's own, the field
+// the page and the dialog stay, the provider is the tool's own, the field
 // takes the focus, and Cancel clears the typed key.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -48,7 +48,7 @@ describe('"Use an API key instead" in the sign-in sheet', () => {
     })
     const user = userEvent.setup()
     renderIntel(<SignIn driver="claude" />)
-    // The control is a button in the sheet, not a link out of the page (#2551).
+    // The control is a button in the sheet, not a link out of the page.
     expect(
       screen.queryByRole('link', { name: 'Use an API key instead' }),
     ).not.toBeInTheDocument()
@@ -242,7 +242,7 @@ describe('"Use an API key instead" in the sign-in sheet', () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
   })
 
-  // The sheet is a modal: it hides the toast from screen readers (#2561), so a
+  // The sheet is a modal: it hides the toast from screen readers, so a
   // refused key is announced in the form, inside the sheet.
   it('announces a refused key inside the profile sheet', async () => {
     vi.spyOn(signInApi, 'start').mockReturnValue(new Promise(() => {}))

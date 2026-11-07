@@ -226,7 +226,7 @@ func WithProviderDriver(d ProviderDriver) Option {
 }
 
 // WithOpenCodeSearchDir names the folder of the ripgrep that installing OpenCode
-// placed (#3173). OpenCode's glob and grep run the rg on its PATH, else one they
+// placed. OpenCode's glob and grep run the rg on its PATH, else one they
 // download from github.com, which a confined session cannot reach; an OpenCode
 // launch puts this folder first on PATH (prepareOpenCodeSearch) while its rg
 // still has the pinned sha256.

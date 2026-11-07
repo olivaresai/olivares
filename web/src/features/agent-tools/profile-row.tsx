@@ -30,7 +30,7 @@ export type ProfileState =
   | {
       kind: 'account'
       signedIn: boolean | undefined
-      /** The tool still runs a login: no second one is offered (#3388). */
+      /** The tool still runs a login: no second one is offered. */
       signingIn?: boolean
       failed?: boolean
       error?: string

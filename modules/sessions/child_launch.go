@@ -176,7 +176,7 @@ func launchPreparationProcess(err error) Process {
 
 // launchNetworkModel is the model whose provider an own-login OpenCode launch is held
 // to: the launch's own, or else the one the account's OpenCode configuration sets,
-// which OpenCode uses when the launch names none (#3094).
+// which OpenCode uses when the launch names none.
 func launchNetworkModel(driver string, p CreateRunParams, d childDecision) string {
 	if p.Model != "" || driver != providerDriverOpenCode || d.cred.bound.Kind != "" || p.ProviderHome == nil {
 		return p.Model
@@ -185,7 +185,7 @@ func launchNetworkModel(driver string, p CreateRunParams, d childDecision) strin
 }
 
 // openCodeUnknownHosts refuses an own-login OpenCode launch whose hosts are not known
-// (#3094): its model's provider has no entry in openCodeOwnLoginHosts, or it names no
+// : its model's provider has no entry in openCodeOwnLoginHosts, or it names no
 // model and the account's configuration sets none. Such a session would keep the host
 // network, and a session reaches only its provider or does not start.
 func openCodeUnknownHosts(driver string, bound BoundProvider, model string, network *egress.Policy) error {

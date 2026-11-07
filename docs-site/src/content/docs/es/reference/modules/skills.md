@@ -1,13 +1,13 @@
 ---
 title: "Skills — el catálogo inmutable y las asignaciones fijadas"
 description: >-
-  Uno de los 32 módulos: el catálogo inmutable de skills y sus asignaciones
+  Uno de los 33 módulos: el catálogo inmutable de skills y sus asignaciones
   fijadas. Los packs de skills se instalan como revisiones inmutables validadas
   por digest; lo que un destino puede usar es un pin registrado y auditado —
   nunca una edición en caliente de una carpeta.
 ---
 
-Skills (`modules/skills`, `olivares.skills`) es uno de los 32 módulos. Es dueño del
+Skills (`modules/skills`, `olivares.skills`) es uno de los 33 módulos. Es dueño del
 **catálogo inmutable de skills** y de sus **asignaciones fijadas**: un pack de skills
 se instala una vez, se valida entrada por entrada contra el digest de su manifiesto y
 se publica como una revisión inmutable — nunca se edita en sitio después. Lo que un
@@ -67,7 +67,7 @@ lanzamiento ya fijado.
 
 ## Relacionado
 
-- [Catálogo de módulos](/es/reference/modules/overview/) — los 32 módulos y dónde se
+- [Catálogo de módulos](/es/reference/modules/overview/) — los 33 módulos y dónde se
   sitúa este entre ellos.
 - [MCP, skills y capacidades](/es/reference/modules/v-capabilities/) — la vista de
   gobierno sobre herramientas y capacidades que este catálogo alimenta.

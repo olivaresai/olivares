@@ -20,7 +20,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// #1845: a stopped Claude Code session moves to another profile of the same tool,
+//: a stopped Claude Code session moves to another profile of the same tool,
 // carrying the tool's own session state, and resumes there by the same id.
 
 const (
@@ -782,7 +782,7 @@ func TestWriteClaudeStateFile_RefusesWhatIsNotThePlannedFile(t *testing.T) {
 	}
 }
 
-// #1919: the planned file's device and inode cannot tell it from a different file
+// : the planned file's device and inode cannot tell it from a different file
 // that was given the same inode, so the case is built without the filesystem's help:
 // the file is rewritten in place and keeps its device, inode, mode, link count and
 // size. Only its modification time, newer than the plan saw, says it changed.

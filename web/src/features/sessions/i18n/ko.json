@@ -534,6 +534,8 @@
     "startedTools_other": "도구 {{count}}개",
     "notSent": "전송되지 않음: {{reason}}",
     "waitingApproval": "세션이 준비되면 전송됩니다.",
+    "discardedOnSessionChange": "세션이 바뀌기 전에 입력한 메시지는 전송되지 않았습니다. 다시 입력하세요.",
+    "dismissDiscarded": "닫기",
     "workingFolder": "작업 폴더: <path />",
     "temporaryFolder": "작업 폴더: 이 세션의 임시 폴더",
     "turnLine": "<work/> · {{duration}}",
@@ -862,6 +864,10 @@
     "unreadable": "요청을 읽을 수 없습니다."
   },
   "terminal": {
+    "runScript": "{{name}} 실행",
+    "scripts": "프로젝트 스크립트",
+    "scriptsFailed": "프로젝트 스크립트를 읽을 수 없습니다.",
+    "stopScript": "중지",
     "title": "터미널",
     "hint": "이 세션의 폴더 안에서 실행되는 셸입니다. 세션과 같은 제한이 적용되며 내 계정으로 실행됩니다. 입력한 모든 명령줄이 기록됩니다.",
     "open": "터미널 열기",

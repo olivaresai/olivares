@@ -100,7 +100,7 @@ describe('Trusted Types — ADM-CORE-05', () => {
 
   // Chromium logs "Executing inline event handler violates … script-src" when
   // DOMPurify merely PARSES an on* attribute under the console's CSP, so a probe
-  // carrying one put a CSP error on every page load (#2050).
+  // carrying one put a CSP error on every page load.
   it('checkSafetyNet probes without an inline event-handler attribute', async () => {
     const purify = (await import('dompurify')).default
     const spy = vi.spyOn(purify, 'sanitize')

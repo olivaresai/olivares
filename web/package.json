@@ -85,7 +85,8 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7",
-    "zustand": "^5.0.16"
+    "zustand": "^5.0.16",
+    "js-yaml": "4.3.2"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

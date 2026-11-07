@@ -410,6 +410,11 @@ func restrictAndExec(p Policy, program string, argv []string) error {
 		return fmt.Errorf("enter the Landlock domain: %w", errno)
 	}
 	_ = unix.Close(int(fd))
+	if p.Offline {
+		if err := denyNetwork(); err != nil {
+			return fmt.Errorf("offline confinement: %w", err)
+		}
+	}
 	if p.Ready != nil {
 		unix.CloseOnExec(int(p.Ready.Fd()))
 		if _, err := p.Ready.WriteString("ready\n"); err != nil {

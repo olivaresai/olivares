@@ -18,7 +18,7 @@ function spec(name: string, dir = E2E): string {
 }
 
 /** Every browser spec directory (e2e, e2e-release, e2e-visual...), not only the demo one:
- * a spec outside `e2e/` signs in to the same console (#1520). */
+ * a spec outside `e2e/` signs in to the same console. */
 const SPEC_DIRS = readdirSync(WEB, { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && /^e2e(-|$)/.test(entry.name))
   .map((entry) => entry.name)
@@ -79,9 +79,9 @@ function waitsASignInCannotPaint(file: string, src: string): string[] {
  *    with `aria-current`), named like the page it marked, so a page-level
  *    `getByRole('link', { name, exact: true })` matched the place AND the crumb, and
  *    Playwright's strict mode rejected it before the assertion it was written for. The
- *    crumb went with the sidebar (#2544); a page's own links still share names with the
+ *    crumb went with the sidebar; a page's own links still share names with the
  *    places, so the wait stays scoped. Measured on the supported demo run
- *    (#1181): nine cases failed at their sign-in helper. The wait is read inside the
+ * nine cases failed at their sign-in helper. The wait is read inside the
  *    left navigation, as the specs that already passed read it.
  */
 function shellLinksOutsideNavigation(file: string, src: string): string[] {

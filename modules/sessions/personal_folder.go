@@ -102,8 +102,7 @@ func (m *Module) ensurePersonalFolder(ctx context.Context, tenant model.TenantID
 	if err != nil {
 		return "", fmt.Errorf("resolve personal files root: %w", err)
 	}
-	primary := filepath.Join(canonicalRoot, p.UserID.String())
-	dir := primary
+	dir := filepath.Join(canonicalRoot, "tenant-"+tenant.String(), p.UserID.String())
 	for generation := 0; generation < ownershipInventoryLimit; generation++ {
 		real := dir
 		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
@@ -140,13 +139,6 @@ func (m *Module) ensurePersonalFolder(ctx context.Context, tenant model.TenantID
 		})
 		if err != nil {
 			return "", err
-		}
-		if !registered && dir == primary {
-			// Only an existing registration in this organization may reuse the old
-			// account-only path. New allocations always have a tenant namespace,
-			// including two organizations allocating the person's first folder at once.
-			dir = filepath.Join(canonicalRoot, "tenant-"+tenant.String(), p.UserID.String())
-			continue
 		}
 		if !transferred.IsZero() {
 			// Siblings keep the successor's folder from enclosing the mover's new files.

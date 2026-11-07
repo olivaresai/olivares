@@ -266,7 +266,7 @@ rm -rf -- "$caja"
 
 # --- the fallback READS the compact list style (dash at the key's column) ----------------------
 # merge-gate-check.yml writes `steps:` with its `- ` at column 4 and the step keys at column 6; the
-# fallback used to read only the indented style (dash 6, keys 8) and refused the real tree (#2635).
+# fallback used to read only the indented style (dash 6, keys 8) and refused the real tree.
 # These cases force the plain reader and demand its exact verdict: `corre_fixture` accepts a refusal
 # where PyYAML reads, so it cannot catch a fallback that stays blind to this style.
 plana() {

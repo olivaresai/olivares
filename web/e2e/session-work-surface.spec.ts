@@ -199,7 +199,7 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/now')
-    // A live session is a Running row on Overview and an ended one a Recent row (#4427).
+    // A live session is a Running row on Overview and an ended one a Recent row.
     const row = page.getByTestId('home-recent-row').first()
     await expect(row).toBeVisible()
     const href = await row.getAttribute('href')

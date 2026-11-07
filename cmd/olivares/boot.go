@@ -2848,7 +2848,7 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	}
 	b.bindCatalogToolInstaller()
 	b.agentTools.SetSessions(b.set.sessions)
-	// The tools' logins, status reads, probes, install probes and Ollama run confined like a session child (#1114, #1430).
+	// The tools' logins, status reads, probes, install probes and Ollama run confined like a session child.
 	b.agentTools.SetChildCommand(confinedToolCommand(b.cfg.DataDir))
 	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
 		b.log.Warn("agent tools: the tools' logins, status reads, model catalogs and probes run UNCONFINED on this node with the engine user's rights, except an unsigned install (none-origin-only, origin-tarball), whose runs are refused; enable Landlock and run olivares doctor", "reason", state.Reason)
@@ -3523,7 +3523,7 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	providerPolicy := sessionProviderPolicy{credentials: b.sessionHooks.SessionCredentials, eval: b.policyEval, scoped: b.set.gov.ScopedGrants(), authz: b.authz, approvals: b.set.gov.EngineApprovals(), store: b.st, redactSecrets: b.set.sessions.RedactSessionSecretsWithSpans}
 	b.set.sessionDependencies.ProviderApprovalPolicy = providerPolicy.Decide
 	b.set.sessionDependencies.ApprovalGate = providerApprovalAdapter{bridge: b.set.approvalBridge, approvalWait: b.set.sessions.BeginApprovalWait, reviewFacts: providerPolicy.reviewFacts, reviewReason: providerPolicy.reviewReason}
-	// Web Push to a person's closed browser (#2840). Without a usable key the routes answer
+	// Web Push to a person's closed browser. Without a usable key the routes answer
 	// 503 and the console keeps its in-page notices; nothing else changes.
 	if sender, perr := newPushSender(b.cfg.DataDir, osGetenv); perr != nil {
 		b.log.Error("web push: application server key unavailable; Web Push is disabled until fixed", "err", perr)

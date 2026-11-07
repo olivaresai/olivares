@@ -710,7 +710,7 @@ describe('ProfilesPanel — a filtered empty page is not an empty estate', () =>
 })
 
 describe('ProfilesPanel — one tab of the Sessions workspace', () => {
-  // Its own page is gone (#2552): the panel is a tab, its verb is the register button
+  // Its own page is gone: the panel is a tab, its verb is the register button
   // above the table, and a tab divides a region it does not own.
   it('offers no second register line under the table', async () => {
     wrap()

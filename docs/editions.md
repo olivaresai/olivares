@@ -291,3 +291,5 @@ Active directory ingestion, managed lifecycle configuration and WIF opt-in refus
 
 Placement is not maturity. [Honesty and limits](../docs-site/src/content/docs/start/honesty-and-limits.md)
 states what each capability does today. The licenses by directory are in [LICENSING.md](../LICENSING.md).
+
+Document conversion with confined MarkItDown is included in Community. See [Documents](documents.md).

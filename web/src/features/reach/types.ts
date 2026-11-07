@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Wire shapes for the Reach view (issue #2553) — the fields the reach projection
+// Wire shapes for the Reach view (issue) — the fields the reach projection
 // consumes from the engine's EXISTING endpoints (no new mechanism): the access-map
 // graph, the agents list, the live-sessions page and the pending approval queue. Every ref arrives already
 // redacted from the engine; the web never parses a ref into a path.

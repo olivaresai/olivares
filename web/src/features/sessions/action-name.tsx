@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
  * It is machine text, shown exactly as the engine sends it in every language, so it renders
  * as code in the machine face, with the full value as its title where a cell truncates it.
  *
- * A path goes through the shared PathText (#3135): cut in its middle, the whole value as the
+ * A path goes through the shared PathText: cut in its middle, the whole value as the
  * hover and the copy. `copy` is off inside a control, such as a clickable table row.
  */
 export function ActionName({

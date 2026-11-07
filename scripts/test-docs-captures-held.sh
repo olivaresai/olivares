@@ -34,7 +34,7 @@ check() {
     issue="$(awk '{ print $2 }' <<<"$raw")"
     reason="$(awk '{ $1 = $2 = ""; sub(/^[[:space:]]+/, ""); print }' <<<"$raw")"
     [[ "$id" =~ ^[A-Za-z0-9-]+$ ]] || { bad "the first field is a view id, got: $raw"; continue; }
-    [[ "$issue" =~ ^#[0-9]+$ ]] || bad "$id: the second field is the open issue that owns the retake (#1234), got: ${issue:-nothing}"
+    [[ "$issue" =~ ^#[0-9]+$ ]] || bad "$id: the second field is the open issue that owns the retake, got: ${issue:-nothing}"
     [ "${#reason}" -ge 12 ] || bad "$id: say why in a few words after the issue number"
     grep -qE "(^|[^_A-Za-z])id: '$id'," "$SPEC" || bad "$id: no such view in web/e2e/docs-captures.spec.ts"
     case "$ids" in *" $id "*) bad "$id: listed twice" ;; esac

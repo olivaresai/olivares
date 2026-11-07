@@ -71,7 +71,7 @@ const timeOf = (e: TimelineDTO): number => {
 }
 
 /**
- * Fold identical entries into one row each (#2267: "cooperative trace gap" three times
+ * Fold identical entries into one row each (: "cooperative trace gap" three times
  * with one time is one fact told three times; a call that wrote two entries is one turn
  * told twice). Identical means the same kind and words about the same resource; anything
  * that differs stays its own row. `mode` and `source` are not on any row, so they do not

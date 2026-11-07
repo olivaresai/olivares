@@ -107,6 +107,12 @@ async function submit(prompt = 'original prompt') {
       await screen.findByRole('textbox', { name: 'First message (optional)' }),
       prompt,
     )
+  await user.click(await screen.findByRole('combobox', { name: 'Folder' }))
+  await user.click(
+    await screen.findByRole('option', {
+      name: 'A new folder for this session',
+    }),
+  )
   await user.click(await screen.findByRole('button', { name: 'Start' }))
 }
 

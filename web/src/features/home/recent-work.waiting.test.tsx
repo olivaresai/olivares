@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// RECENT WORK TELLS A WAITING SESSION AS IDLE, AND NAMES THE MODEL THE RUN USED (#1785).
+// RECENT WORK TELLS A WAITING SESSION AS IDLE, AND NAMES THE MODEL THE RUN USED.
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AUTH, renderIntel, screen, within } from '@/test/intel'

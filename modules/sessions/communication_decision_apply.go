@@ -1123,7 +1123,7 @@ func (m *Module) applyLockedDecisionRequestResponse(
 	if err != nil {
 		return DecisionRequestResponseResult{}, err
 	}
-	// Both work-event writers above inserted a work-outbox row without tx.create (#3316).
+	// Both work-event writers above inserted a work-outbox row without tx.create.
 	tx.noteWorkOutboxInsert()
 	requestRecord, err := decisionRequestToRecord(plan.After)
 	if err != nil {

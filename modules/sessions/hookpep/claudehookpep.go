@@ -392,7 +392,7 @@ type Decider struct {
 	// clock ROLLBACK can never resurrect an expired relaxation. Keyed by model.TenantID.
 	observeExpired sync.Map
 
-	// tracer and sessionTrace (#429) emit the GenAI execute_tool span of each
+	// tracer and sessionTrace emit the GenAI execute_tool span of each
 	// governed decision, parented on the caller session's invoke_agent span when
 	// the bearer is a live run's. Telemetry only: a nil tracer or an unresolvable
 	// session changes no decision.
@@ -488,7 +488,7 @@ func (d *Decider) Decide(ctx context.Context, in claude.HookDecisionInput, beare
 		ctx = context.WithValue(ctx, sessionHookScopeKey{}, scope)
 	}
 
-	// One execute_tool span per governed decision (#429), parented on the
+	// One execute_tool span per governed decision, parented on the
 	// session's invoke_agent span when the bearer names a live run (the
 	// normalization above already made in.SessionID the run reference). A
 	// non-session caller keeps its own conversation id and a standalone root.

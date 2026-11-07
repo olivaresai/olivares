@@ -100,7 +100,7 @@ describe('08b real rows: five sessions, fifteen live rows (HU-R24)', () => {
     expect(running(idle, r08bRuns)).toBe(5)
   })
 
-  it('a launched session whose run waits for input is still running (#1785)', () => {
+  it('a launched session whose run waits for input is still running', () => {
     const runs = r08bRuns.map((r, i) => (i === 0 ? { ...r, state: 'idle' } : r))
     expect(running(r08bLive, runs)).toBe(5)
   })

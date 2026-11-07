@@ -90,7 +90,7 @@ describe('groupOf — membership is a field the engine sent', () => {
     ['it ended', row({ cc_state: 'ended' })],
     ['it is quiet within tolerance', row({ cc_state: 'idle' })],
     // A run the engine reports `idle` has answered its turn and waits for the person
-    // (#1785): not working, whatever its process is doing. The observed half files the
+    // not working, whatever its process is doing. The observed half files the
     // same word the same way, one row above.
     ['its run answered and waits for input', row(undefined, { state: 'idle' })],
     [
@@ -179,7 +179,7 @@ describe('groupSessions — the rail in reading order', () => {
   })
 
   it('puts pinned sessions in their own section ABOVE every other, in pin order', () => {
-    // A pin is "always first in my list" (#2130): a settled session pinned goes above
+    // A pin is "always first in my list": a settled session pinned goes above
     // the one asking for a person, and two pins keep the order they were pinned in,
     // not the order the list gave them.
     const all = [working, asking, done, alsoDone]
@@ -215,7 +215,7 @@ describe('groupSessions — the rail in reading order', () => {
     expect(order.map((s) => s.sessionRef)).toEqual(['c', 'd'])
   })
 
-  // The person's own marks (#2480), sent by the engine on the session's runs.
+  // The person's own marks, sent by the engine on the session's runs.
   const snoozed = row(undefined, {
     run_ref: 'run-s',
     state: 'running',
@@ -255,7 +255,7 @@ describe('groupSessions — the rail in reading order', () => {
     expect(groups.find((g) => g.id === 'pinned')?.sessions).toEqual([marked])
   })
 
-  // The session's own archived mark (#2795), the same for everyone who reads it.
+  // The session's own archived mark, the same for everyone who reads it.
   const archived = row(undefined, {
     run_ref: 'run-z',
     state: 'running',

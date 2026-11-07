@@ -175,7 +175,7 @@ func TestConsoleModulesReportsWhichModulesHoldData(t *testing.T) {
 	if !holds["consoleviews"] || holds["finops"] {
 		t.Fatalf("holds_data consoleviews=%v finops=%v, want true/false: %s", holds["consoleviews"], holds["finops"], raw)
 	}
-	// Always sent, also when none run: a missing count is never read as none (#507).
+	// Always sent, also when none run: a missing count is never read as none.
 	if n, ok := body["running_sessions"].(float64); !ok || n != 0 {
 		t.Fatalf("running_sessions = %v, want 0 on the wire: %s", body["running_sessions"], raw)
 	}

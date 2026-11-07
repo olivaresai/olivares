@@ -61,7 +61,7 @@ command -v git >/dev/null 2>&1 || cannot_check "check-taskfile-executable: git i
 # limitacion en vez de comprobarlo.
 #
 # Only the keys under `tasks:` count: `includes:` (and any other top-level key) also holds
-# two-space entries without `cmds:`, and they are not tasks (#2711 measured the `appliance:`
+# two-space entries without `cmds:`, and they are not tasks ( measured the `appliance:`
 # include key as one).
 # The pending task is closed when `tasks:` ends, and `cmds:`/`deps:`/`cmd:` count only inside
 # it: a later `vars:` or include with a `cmd:` key cannot pass the last task as executable.

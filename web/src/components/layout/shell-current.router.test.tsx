@@ -85,10 +85,10 @@ describe('the router marks no second current link', () => {
     ['/communications/inbox', ['sessions'], ['/communications']],
     // Source diff sits under the row's More: the row marks no link, the menu marks it.
     ['/console/sources/diff', ['sessions'], []],
-    // A door folded into a room (#2240) marks the room's place and, in its row, the room.
+    // A door folded into a room marks the room's place and, in its row, the room.
     ['/provider-profiles', ['tools'], ['/agent-tools']],
     ['/provider-accounts', ['tools'], ['/agent-tools']],
-    // /mcp-servers now lands on MCP & skills' Servers tab (#3388).
+    // /mcp-servers now lands on MCP & skills' Servers tab.
     ['/capabilities', ['tools'], ['/capabilities']],
     ['/inventory', ['files'], ['/inventory']],
     // A deep-link detail reads as its parent's page (Recordings is a Business page).

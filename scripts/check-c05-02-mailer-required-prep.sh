@@ -4,7 +4,7 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # C05-02 unique leftover unique vs check-c05-first-owner.sh and unique
-# leftover unique vs #1380. 0 CLEAN · 1 finding · 2 could not look.
+# leftover unique vs. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

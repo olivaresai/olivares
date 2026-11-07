@@ -120,9 +120,20 @@ func (p *eventingPump) runOnce(ctx context.Context) error {
 	return nil
 }
 
-// businessTenants enumerates the orgs to pump. The reserved SYSTEM tenant is
-// skipped deliberately: platform events are tenant-scoped facts (the capture
-// path drops system-tenant events for the same reason).
+// businessTenants enumerates the tenants to pump (pumpTenants).
 func (p *eventingPump) businessTenants(ctx context.Context) ([]model.TenantID, error) {
-	return servedWorkTenants(ctx, p.st)
+	return pumpTenants(ctx, p.st)
+}
+
+// pumpTenants is the served orgs, then the reserved SYSTEM tenant once. The bus
+// capture path drops system-tenant events, but the ledger forwarder enqueues the
+// system ledger's identity events (sign-ins, factor changes) for a SIEM sink
+// subscribed on that tenant; this pump and that forwarder walk the same list, so
+// those deliveries are retried and pruned like any other.
+func pumpTenants(ctx context.Context, st store.Store) ([]model.TenantID, error) {
+	tenants, err := servedWorkTenants(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+	return append(tenants, model.SystemTenantID), nil
 }

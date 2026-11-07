@@ -53,7 +53,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   providerAccounts: ['ai', 'environments'],
   'agent-tools': ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],
-  // Added after the ratification: the Reach view sits here until the Tools area (#2552) lands.
+  // Added after the ratification: the Reach view sits here until the Tools area lands.
   reach: ['ai', 'environments'],
   models: ['ai', 'models'],
   modelOps: ['ai', 'models'],
@@ -346,10 +346,10 @@ describe('visibility is the union of authorized leaves', () => {
     ).toBe(false)
   })
 
-  // #2240: Provider profiles, Source bindings and Provider accounts fold into AI tools, whose
+  //: Provider profiles, Source bindings and Provider accounts fold into AI tools, whose
   // tool menu opens their room. Each page stays a door under its own permission for a
   // principal who cannot open AI tools, and its address keeps working.
-  // #2552: the API key, account, profile and binding pages are doors into Tools, which
+  //: the API key, account, profile and binding pages are doors into Tools, which
   // opens on the account read tier. A door is listed only to a principal who cannot open
   // Tools, under the tier it keeps.
   it('folds the API key, profile, binding and account pages into Tools', () => {

@@ -538,9 +538,11 @@ describe('the first-hour launch', () => {
   it('notes nothing when the sign-in changed while the start was out', async () => {
     // Claude Code takes its first message as a stream-json line (agentOpsApi.input).
     ops.input.mockImplementation(async () => {
-      useSessionStore.setState((s) => ({
-        credentialGeneration: s.credentialGeneration + 1,
-      }))
+      useSessionStore.getState().setSession({
+        csrfToken: 'csrf-other',
+        sessionId: 'sess-other',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      })
       return { accepted: true }
     })
     await startSession({
@@ -586,7 +588,7 @@ describe('the first-hour launch', () => {
   })
 })
 
-// #1779: the New session form chooses an effort beside the model, and the launch sends it.
+//: the New session form chooses an effort beside the model, and the launch sends it.
 describe('the quick form effort', () => {
   it('is sent with the model, and is empty when none was chosen', async () => {
     await startSession({
@@ -841,12 +843,50 @@ describe.each(['waiting_approval', 'pending'])(
       expect(useSentTurns.getState().byRun).toEqual({})
     })
 
+    it('is sent once when the session is refreshed while it waits', async () => {
+      useSessionStore.getState().setSession({
+        csrfToken: 'csrf-1',
+        sessionId: 'sess-1',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+      await start()
+      // The session refresh moves the token and keeps the session: the same person waits.
+      useSessionStore.getState().setSession({
+        csrfToken: 'csrf-2',
+        sessionId: 'sess-1',
+        expiresAt: new Date(Date.now() + 7_200_000).toISOString(),
+      })
+      state = 'running'
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(ops.inputText).toHaveBeenCalledTimes(1)
+      expect(ops.inputText.mock.calls[0].slice(0, 2)).toEqual([
+        'run_5',
+        'say hello',
+      ])
+    })
+
+    it('is never sent once the session changes', async () => {
+      useSessionStore.getState().setSession({
+        csrfToken: 'csrf-1',
+        sessionId: 'sess-1',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+      await start()
+      useSessionStore.getState().setSession({
+        csrfToken: 'csrf-2',
+        sessionId: 'sess-2',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+      state = 'running'
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(ops.inputText).not.toHaveBeenCalled()
+      expect(useSentTurns.getState().byRun).toEqual({})
+    })
+
     it('is never sent after a sign-out', async () => {
       const started = start()
       await vi.advanceTimersByTimeAsync(0)
-      useSessionStore.setState((s) => ({
-        credentialGeneration: s.credentialGeneration + 1,
-      }))
+      useSessionStore.getState().clear()
       state = 'running'
       await vi.advanceTimersByTimeAsync(30_000)
       expect(ops.getRun).not.toHaveBeenCalled()

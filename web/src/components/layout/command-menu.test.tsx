@@ -666,7 +666,7 @@ describe('the palette of a new installation', () => {
   })
 })
 
-// #2544: with no sidebar, every page is two actions away: ⌘K, then the page, with nothing
+//: with no sidebar, every page is two actions away: ⌘K, then the page, with nothing
 // typed. All areas retired in 0.5: the left navigation is the one directory.
 describe('the palette with no sidebar', () => {
   it('lists every page the person may open with nothing typed, so each is two actions away', () => {
@@ -676,7 +676,7 @@ describe('the palette with no sidebar', () => {
         .map((v) => /^view:(\S+) /.exec(v)?.[1])
         .filter(Boolean),
     )
-    // A door (/agentops, the folded provider pages, #2240) is reached through its room,
+    // A door (/agentops, the folded provider pages,) is reached through its room,
     // which the palette offers.
     const pages = FEATURE_VIEWS.filter(
       (v) => !v.hideInNav && !v.doorTo && v.navigation.kind !== 'detail',
@@ -693,7 +693,7 @@ describe('the palette with no sidebar', () => {
   })
 })
 
-// #2240: Settings > Modules is where an off module reads as Off.
+//: Settings > Modules is where an off module reads as Off.
 describe('the palette folds a page whose module is off', () => {
   afterEach(() => useModulesStore.setState({ off: new Set() }))
 

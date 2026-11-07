@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE LEDGER PLACE (issue #2554): the query as tokens over the audit API's own filters,
+// THE LEDGER PLACE (issue): the query as tokens over the audit API's own filters,
 // the histogram strip, the entries as sentences grouped by session with the flagged one
 // first, and the entry with its place in the chain.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

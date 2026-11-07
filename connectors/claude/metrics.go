@@ -215,7 +215,7 @@ func dpTime(dp *metricspb.NumberDataPoint, fallback time.Time) time.Time {
 // time, or fallback when no datapoint carries one that can be believed. It is the
 // session's liveness evidence, so a batch a collector buffered or a producer
 // back-filled reads as the moment it describes and not as the moment it arrived
-// (#2268: 48 sessions of one event, all "seen 43 seconds ago"). A datapoint that
+// (: 48 sessions of one event, all "seen 43 seconds ago"). A datapoint that
 // claims a time after fallback (clock skew, or a lie) or one a signed instant
 // cannot hold is skipped, so one bad point does not discard the valid ones.
 func batchTime(rm *metricspb.ResourceMetrics, fallback time.Time) time.Time {

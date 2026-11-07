@@ -68,7 +68,7 @@ func TestSignInStatusListsTheMethods(t *testing.T) {
 	}
 }
 
-// #2567: OpenCode's own providers sign in with the key the person types. The tool's
+// : OpenCode's own providers sign in with the key the person types. The tool's
 // login prints its key prompt; the sign-in waits in needs_key with the page that
 // issues the key, the key goes to the tool's stdin through the code route, and the
 // tool stores it in the selected home. The key is in no answer and no log line.

@@ -24,7 +24,7 @@ import (
 )
 
 // Use a real native child and the real bridge: handing a frame straight to the
-// waiter would bypass the line cap that caused #1871.
+// waiter would bypass the line cap that caused.
 func TestToolCommands_OversizedInitializeKeepsNativeSessionAlive(t *testing.T) {
 	for _, cached := range []bool{false, true} {
 		t.Run(map[bool]string{false: "first catalog", true: "stale catalog"}[cached], func(t *testing.T) {

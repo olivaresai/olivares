@@ -779,7 +779,7 @@ func (s *Server) authzScopedCollectionPolicy(
 		s.writeError(w, r, errBadRequest)
 		return auth.Principal{}, "", resource, none, false
 	case workspaceAdmissionNotAdmissible:
-		// The same bytes admit writes for a denial of perm (#491), or the
+		// The same bytes admit writes for a denial of perm, or the
 		// sentence would tell which workspaces exist.
 		s.writeError(w, r, forbiddenFor(perm, false))
 		return auth.Principal{}, "", resource, none, false

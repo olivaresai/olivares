@@ -310,7 +310,7 @@ class StoredData(unittest.TestCase):
 
     def test_boot_naming_fills_only_an_unnamed_profile(self):
         # 0.1 names unnamed profiles at boot but, on SQLite, its pass ran before the node's
-        # environment was bound and named nothing (#1619); 0.2's first boot names them.
+        # environment was bound and named nothing; 0.2's first boot names them.
         unnamed = self.profile_snapshot()
         for name in ('claude', 'claude-b'):
             self.assertEqual(row_diff(unnamed, self.profile_snapshot(name, 'adopted', 'shared')), [])

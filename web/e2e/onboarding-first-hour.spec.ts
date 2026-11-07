@@ -214,7 +214,7 @@ test('first hour: the setup wizard asks only for what the first session needs', 
 
   // PROVIDER KEYS: the key the wizard added, the profile sessions launch with, and the
   // accounts a tool signs in with instead. The API key, profile and account pages are
-  // doors into AI tools (#2552): the Tools place shows the key, the row of its place offers
+  // doors into AI tools: the Tools place shows the key, the row of its place offers
   // none of the doors, and each door still opens Tools at its own address.
   visited.splice(0)
   await nav.getByRole('link', { name: 'Tools', exact: true }).click()

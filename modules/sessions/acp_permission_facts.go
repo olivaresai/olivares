@@ -86,7 +86,7 @@ func (call *acpToolCall) UnmarshalJSON(raw []byte) error {
 // openCodeFolderSearch reports a glob or grep that names no folder, which OpenCode runs
 // in the session folder (1.19.4). OpenCode asks for them with their own input only
 // (pattern, path, include) and titles them with the pattern; an MCP tool it also gives
-// kind search (context, context7_*) asks with empty metadata, so it is not one (#3058).
+// kind search (context, context7_*) asks with empty metadata, so it is not one.
 // The title only recognizes the tool here: it is never a fact.
 func openCodeFolderSearch(raw []byte) bool {
 	var shape struct {

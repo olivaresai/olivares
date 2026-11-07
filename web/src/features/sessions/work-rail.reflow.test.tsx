@@ -61,7 +61,7 @@ function renderRow() {
 }
 
 describe('a rail row leads with its title', () => {
-  // THE TITLE FIRST, ON UP TO TWO LINES (#3970): the badge, the folder and the state used
+  // THE TITLE FIRST, ON UP TO TWO LINES: the badge, the folder and the state used
   // to come first and left the title about 22 characters, even at 1920 px.
   it('the title takes up to two lines and its whole text stays on the hover', () => {
     const { name, nameEl, rowEl } = renderRow()
@@ -95,7 +95,7 @@ describe('a rail row leads with its title', () => {
     expect(order.indexOf(state)).toBeLessThan(order.indexOf(time))
   })
 
-  // A FACT EVERY ROW SHARES IS SAID BY NONE (#3970): in a list where every session runs
+  // A FACT EVERY ROW SHARES IS SAID BY NONE: in a list where every session runs
   // the same tool in the same folder, the mark and the folder repeat one fact per row.
   it('drops the tool mark and the folder a whole list shares, and keeps them when rows differ', () => {
     const at = (ref: string, project: string) =>

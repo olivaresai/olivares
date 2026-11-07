@@ -138,7 +138,7 @@ func TestStripJSONCommentsLeavesStringsAlone(t *testing.T) {
 	}
 }
 
-// #3076 (security review): OpenCode substitutes {file:path} and {env:NAME} in the
+// (security review): OpenCode substitutes {file:path} and {env:NAME} in the
 // raw text before it parses opencode.json, so a key or a comment can turn into a
 // flagged key the parsed text does not show. Every token is flagged, a {file:}
 // is bound to the content of the file it names, and every top-level key that is
@@ -189,7 +189,7 @@ func TestProjectConfigOpenCodeFlagsSubstitutionsAndUnknownKeys(t *testing.T) {
 	}
 }
 
-// #3076 (security review): a link in .opencode/ is bound to what it points to, and
+// (security review): a link in .opencode/ is bound to what it points to, and
 // a file over the parse limit to its whole content, so a change keeps no approval.
 func TestProjectConfigOpenCodeFolderBindsLinkTargetsAndLargeFiles(t *testing.T) {
 	dir := t.TempDir()
@@ -233,7 +233,7 @@ func TestProjectConfigOpenCodeFolderBindsLinkTargetsAndLargeFiles(t *testing.T) 
 	}
 }
 
-// #3076 (security re-review): what the gate cannot bind in a workspace's OpenCode
+// (security re-review): what the gate cannot bind in a workspace's OpenCode
 // files is refused, whatever is approved: an {env:} (OpenCode replaces it first, so
 // "{fi{env:UNSET}le:k}" becomes {file:k}), a {file:} in a file the gate cannot
 // decode (a trailing comma OpenCode accepts) is still bound, a {file:} path with
@@ -288,7 +288,7 @@ func TestProjectConfigOpenCodeRefusesWhatItCannotBind(t *testing.T) {
 	}
 }
 
-// #3076 (security review, round 3): an OpenCode file or folder that is a link out of
+// (security review, round 3): an OpenCode file or folder that is a link out of
 // the session folder is refused, not approvable by its name: what OpenCode loads
 // through it is not in the folder. So is a {file:~/...}, which OpenCode reads from
 // the home folder.
@@ -326,7 +326,7 @@ func TestProjectConfigOpenCodeRefusesLinksOutAndHomePaths(t *testing.T) {
 	}
 }
 
-// #3076 (review of e1c239f5, finding 1): an approval binds everything OpenCode
+// (review of e1c239f5, finding 1): an approval binds everything OpenCode
 // loads through {file:}. A key that is itself a token keeps its value in the hash
 // (OpenCode substitutes keys too, so {"{file:k}": ...} with k = "mcp" is an MCP
 // server), and .opencode/opencode.json(c), which OpenCode loads through the same
@@ -368,7 +368,7 @@ func TestProjectConfigOpenCodeBindsEveryFileToken(t *testing.T) {
 	}
 }
 
-// #3076 (review, finding 2): a {file:} target is opened only when it is a regular
+// (review, finding 2): a {file:} target is opened only when it is a regular
 // file, and read only up to the limit: a FIFO cannot hang the check and a huge
 // sparse file cannot make the engine allocate it.
 func TestProjectConfigOpenCodeFileTokenReadIsBounded(t *testing.T) {
@@ -408,7 +408,7 @@ func TestProjectConfigOpenCodeFileTokenReadIsBounded(t *testing.T) {
 	}
 }
 
-// #3076 (review, finding 5): a folder inside .opencode/ the check cannot list is
+// (review, finding 5): a folder inside .opencode/ the check cannot list is
 // refused, not bound by a constant "cannot be read".
 func TestProjectConfigOpenCodeFolderWalkErrorIsRefused(t *testing.T) {
 	if os.Geteuid() == 0 {

@@ -128,7 +128,7 @@ check() {
 	fi
 	# Migration history is immutable against the merge base with main, as in pr-lint, which
 	# answers the same question after the push and only where the repository opts in to pr-ci:
-	# a Go edit that moved a hash (#1909) reached main before anything read it. The baseline is
+	# a Go edit that moved a hash reached main before anything read it. The baseline is
 	# the gate's own default, not the remote's newest commit: a migration this branch added in
 	# an earlier push may still be edited until it merges.
 	if grep -Eq '\.go$|(^|/)migrations/.*\.sql$' <<<"$changed"; then
@@ -145,7 +145,7 @@ check() {
 	[ -n "$touched" ] || return 0
 	mapfile -t pkgs <<<"$touched"
 	go vet "${pkgs[@]}"
-	# SAST on the same packages, with the blocking gate's own rules (#2313: four unannotated
+	# SAST on the same packages, with the blocking gate's own rules (: four unannotated
 	# G204 sites first met `task lint:sast` in a full CI dispatch). The pushed tree's own gate,
 	# like the migrations leg, and only a gate that knows --packages: an older script would
 	# ignore the flag and scan whole modules. A host without gosec says so, never a silent pass.

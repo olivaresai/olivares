@@ -301,7 +301,7 @@ func (m *Module) sendQueued(ctx context.Context, tenant model.TenantID, runRef, 
 	}); err != nil || claimed == nil {
 		return false, err
 	}
-	attempted, err := m.sendTextInputAttempt(ctx, tenant, runRef, claimed.String(colRunQueueText))
+	attempted, err := m.sendTextInputAttempt(ctx, tenant, runRef, claimed.String(colRunQueueText), true)
 	if err != nil && !attempted {
 		restoreCtx := context.WithoutCancel(ctx)
 		if rerr := m.Data.Mutate(restoreCtx, tenant, func(sc store.Scope) error { return restoreQueued(restoreCtx, sc, claimed) }); rerr != nil {

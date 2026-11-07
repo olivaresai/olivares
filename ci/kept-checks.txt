@@ -1,5 +1,5 @@
 # Checks no hook, workflow or other task runs. Most had the old pre-push hook as their only
-# runner, and R2.3 (#181) kept each for failing on a real change in the month before 2026-10-05,
+# runner, and R2.3 kept each for failing on a real change in the month before 2026-10-05,
 # for being named in published docs, or for being asserted by a script; lint:tenant-bound-writes
 # guards tenant isolation. integration-check runs every line (scripts/kept-checks.sh) as a
 # ratchet against its base. Add a check here when nothing else runs it; delete its line when it

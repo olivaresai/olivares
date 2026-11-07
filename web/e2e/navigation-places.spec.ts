@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE NAVIGATION AND THE OVERVIEW HEADER IN A REAL BROWSER (#3121, the one left navigation of
+// THE NAVIGATION AND THE OVERVIEW HEADER IN A REAL BROWSER (, the one left navigation of
 // 0.5, its 0.7 places), on the seeded demo engine scripts/web-e2e-demo.sh boots. What jsdom
 // cannot measure is measured here: the Overview header keeps its height while the page loads,
 // the search hint names this platform's key, the left navigation shows Sessions, Files and Tools
@@ -57,7 +57,7 @@ async function shoot(page: Page, name: string) {
   await page.screenshot({ path: `${captureDir}/${name}.png` })
 }
 
-test.describe('the navigation and the Overview header (#3121) @nav3121', () => {
+test.describe('the navigation and the Overview header @nav3121', () => {
   test.skip(!demoTenant, 'needs the seeded demo engine (DEMO_TENANT)')
 
   test('Overview keeps its header block still while the page loads', async ({

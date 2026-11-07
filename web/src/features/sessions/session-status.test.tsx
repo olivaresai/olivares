@@ -134,7 +134,7 @@ describe('SessionStatusMark', () => {
     expect(new Set(shapes).size).toBe(5)
   })
 
-  // A colour per status (#4019): blue Working, amber Needs you, green Done, red Failed;
+  // A colour per status: blue Working, amber Needs you, green Done, red Failed;
   // Idle is the one at rest, in grey.
   it('paints each status its own colour, Idle grey', () => {
     const colours = WORDS.map(([status, word]) => {

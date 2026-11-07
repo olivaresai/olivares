@@ -128,7 +128,7 @@ func TestSecurityResponseErrorCarriesFingerprintsNotKeyMaterial(t *testing.T) {
 	}
 }
 
-// ⛔ THE LANGUAGE OF THE EXPLANATION IS PART OF THE CONTRACT (#588). The refusal above is
+// ⛔ THE LANGUAGE OF THE EXPLANATION IS PART OF THE CONTRACT. The refusal above is
 // pinned by its first line and its fingerprints; this pins the paragraph AFTER it. An
 // operator who hits a signing-key mismatch during the release ceremony is exactly the
 // person who needs the three causes, and the audit found the paragraph in Spanish behind

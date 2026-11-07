@@ -69,6 +69,13 @@ precedence = "override"
 SPDX-FileCopyrightText = "2025 Astral Software Inc."
 SPDX-License-Identifier = "MIT"
 
+# Upstream document converter notice, retained alongside the packaged helper.
+[[annotations]]
+path = ["modules/documents/MarkItDown-LICENSE.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Microsoft Corporation"
+SPDX-License-Identifier = "MIT"
+
 # Upstream OpenAI Whisper model and license, shipped together with the console.
 [[annotations]]
 path = ["web/public/licenses/whisper/Whisper-MIT.txt", "web/src/features/dictation/model/**"]

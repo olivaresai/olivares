@@ -298,6 +298,8 @@ classify() {
     # ---- NOT SOURCE, by extension -------------------------------------------
     # Prose and docs (licensed by the REUSE.toml repo-wide and docs-site/** annotations).
     *.md|*.mdx|*.txt) echo data; return ;;
+    # pip-compile dependency inputs are data like requirements.txt, not programs.
+    requirements.in) echo data; return ;;
     # Structured data, config and manifests — including the Go module metadata.
     *.json|*.json5|*.jsonc|*.jsonl|*.jsonlog|*.ndjson|*.yaml|*.yml|*.toml|*.xml) echo data; return ;;
     *.mod|*.sum|*.work|*.example|*.conf|*.service|*.webmanifest|*.node-version) echo data; return ;;

@@ -94,7 +94,7 @@ export function useApprovalSession(approval: ApprovalDTO) {
           ).text
         : undefined,
     folder: workspace.data?.root_path,
-    /** What the session reaches, as the run read reports it (#2545). */
+    /** What the session reaches, as the run read reports it. */
     reaches: owner?.reaches,
   }
 }
@@ -364,7 +364,7 @@ export function approvalWhy(approval: ApprovalDTO): string | undefined {
 /** Where a command, a tool call or a plan is expected: the requests the engine raises to
  * run something. Only on these is a missing review worth saying. A request a person
  * raised (a deploy, an export, a launch) runs nothing by itself, so the note would only
- * repeat under it (#2269). */
+ * repeat under it. */
 export function approvalExpectsCommand(approval: ApprovalDTO): boolean {
   return (
     !!approval.subject_kind?.endsWith('.tool') ||
@@ -587,7 +587,7 @@ export function ApprovalRequestCell({
   const review = approval.review
   const toolCall = approval.subject_kind?.endsWith('.tool')
   // A request a person raised leads with their own words; the kind of request
-  // ("Killswitch release") names it only when they wrote none (#2548, audit finding 8).
+  // ("Killswitch release") names it only when they wrote none (, audit finding 8).
   const head =
     [review?.tool, session.name].filter(Boolean).join(' · ') ||
     (!toolCall && approval.action && !approval.reason

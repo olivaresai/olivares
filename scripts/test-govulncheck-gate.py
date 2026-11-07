@@ -17,7 +17,7 @@ OSV = json.loads((ROOT / "scripts/testdata/govulncheck-cilium-osv.json").read_te
 MODULE = "github.com/cilium/cilium"
 PACKAGES = [MODULE + "/api/v1/" + name for name in ("flow", "observer", "relay")]
 # The reviewed false-positive scope, as it stood in .govulncheck-allow.yaml until it expired
-# (2026-10-10, #1531). A fixture, so the scope rules stay tested after the live entry is gone.
+# (2026-10-10,). A fixture, so the scope rules stay tested after the live entry is gone.
 ALLOW = """allow:
   - id: GO-2026-6596
     kind: false-positive

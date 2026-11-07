@@ -5,7 +5,7 @@
 #
 # C03-25 unique leftover unique vs check-c03-25-deactivated.sh (LOOK 2
 # on origin/main without the 2026-08-19 census doc) and unique leftover
-# unique vs #1014. 0 CLEAN · 1 finding · 2 could not look.
+# unique vs. 0 CLEAN · 1 finding · 2 could not look.
 
 set -euo pipefail
 say() { printf '%s\n' "$*"; }

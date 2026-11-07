@@ -466,7 +466,7 @@ func TestClaudeResumeHandsTheToolTheExactModelID(t *testing.T) {
 	resume("claude-sonnet-5-5")
 }
 
-// Review of #2815: one model under two names is not a template conflict, but the
+// Review of: one model under two names is not a template conflict, but the
 // template still wins it. A provider-bound launch, which keeps model names as written,
 // must carry the template's model, with or without a model of its own.
 func TestClaudeTemplateModelWinsUnderEitherName(t *testing.T) {

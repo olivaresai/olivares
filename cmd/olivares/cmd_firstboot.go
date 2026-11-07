@@ -150,7 +150,7 @@ func runFirstBoot(dest io.Writer, dataDir string, newToken bool) error {
 	// Only a missing setup.token means setup is complete. A token this process cannot
 	// even stat (the package data directory is 0750 olivares, and a normal user cannot
 	// search it) is a state it does not know, and it says so before it prints, or
-	// changes, anything (#513).
+	// changes, anything.
 	tok := secure.NewSetupToken(filepath.Join(dataDir, "setup.token"))
 	pending, tokenErr := tok.Check()
 	if tokenErr != nil {
@@ -252,7 +252,7 @@ func runFirstBoot(dest io.Writer, dataDir string, newToken bool) error {
 	return withReportFailure(out, nil)
 }
 
-// newTokenOwner returns the account a replacement setup token must belong to (#514),
+// newTokenOwner returns the account a replacement setup token must belong to,
 // or -1, -1 for this process's own.
 //
 // The engine reads setup.token on every Verify, and the file is 0600: a token that

@@ -1458,7 +1458,7 @@ func newSessionListCmd() *cobra.Command {
 			for _, r := range runs {
 				s := str(r, "state")
 				// The engine lists archived sessions with archived_at and leaves the
-				// choice to its clients (#2795): the plain list leaves them out, as it
+				// choice to its clients: the plain list leaves them out, as it
 				// leaves released ones, and --all or a state asked by name keeps them.
 				shelved := str(r, "archived_at") != ""
 				if (state != "" && s != state) || (state == "" && !all && s == "cleaned") ||
@@ -1472,7 +1472,7 @@ func newSessionListCmd() *cobra.Command {
 				}
 				shown = append(shown, r)
 			}
-			// Sessions Olivares only observes join the list when pinned (#2176), or all of
+			// Sessions Olivares only observes join the list when pinned, or all of
 			// them with --observed. A state, an account or --archived names runs only.
 			if state == "" && accountRef == "" && !archived {
 				seen, err := cfg.listObserved(cmd.Context(), !observed)
@@ -1482,7 +1482,7 @@ func newSessionListCmd() *cobra.Command {
 				shown = append(shown, seen...)
 			}
 			// The caller's own pins first, in the order they were pinned, then the
-			// rest newest first (#2130). Stable, so the newest-first order survives
+			// rest newest first. Stable, so the newest-first order survives
 			// among the unpinned, and JSON keeps the order the table shows.
 			sort.SliceStable(shown, func(i, j int) bool { return pinnedBefore(shown[i], shown[j]) })
 			// The table holds every open session and the newest `limit` finished ones;
@@ -1513,25 +1513,49 @@ func newSessionListCmd() *cobra.Command {
 				// Every session is archived: "none yet" would be false.
 				table.Empty = fmt.Sprintf("No sessions in the list; %d archived. List them: olivares session ls --archived", hidden)
 			}
-			now := time.Now()
-			waiting := 0
-			for _, r := range listed {
-				s := str(r, "state")
-				if s == sessionWaitingApproval {
-					waiting++
-					s = "needs approval"
-				}
-				folder := homeShort(termSafe(str(r, "workspace_path")))
-				if str(r, "workspace_ref") == "" && folder != "" && r["observed"] != true {
-					// The engine made this folder for the session; its path is an id.
-					folder = "(its own folder)"
-				}
-				table.Marks = append(table.Marks, toolMark(sessionDriver(r)))
-				table.Rows = append(table.Rows, []string{sessionDisplay(r), s, sessionDriver(r),
-					folder, sinceText(str(r, "created_at"), now), termSafe(sessionShortID(r))})
-				table.Roles = append(table.Roles, []termrender.Role{termrender.RoleNone, sessionStateRole(s)})
-			}
 			return renderOut(cmd, func(out io.Writer) error {
+				folderLabels := make(map[string]string)
+				now := time.Now()
+				waiting := 0
+				for _, r := range listed {
+					s := str(r, "state")
+					if s == sessionWaitingApproval {
+						waiting++
+						s = "needs approval"
+					}
+					folder := homeShort(termSafe(str(r, "workspace_path")))
+					if ref := str(r, "workspace_ref"); ref != "" {
+						label, ok := folderLabels[ref]
+						if !ok {
+							status, body, err := cfg.do(cmd.Context(), http.MethodGet, sessionWorkspacesPath+"/"+url.PathEscape(ref), nil, http.StatusOK, http.StatusForbidden, http.StatusNotFound)
+							if err != nil {
+								return err
+							}
+							label = "(folder unavailable)"
+							if status == http.StatusOK {
+								var ws map[string]any
+								if err := json.Unmarshal(body, &ws); err != nil {
+									return err
+								}
+								if name := strings.TrimSpace(str(ws, "name")); name != "" {
+									label = termSafe(name)
+								} else {
+									label = homeShort(termSafe(str(ws, "root_path")))
+								}
+							}
+							folderLabels[ref] = label
+						}
+						folder = label
+					}
+					if str(r, "workspace_ref") == "" && folder != "" && r["observed"] != true {
+						// The engine made this folder for the session; its path is an id.
+						folder = "(its own folder)"
+					}
+					table.Marks = append(table.Marks, toolMark(sessionDriver(r)))
+					table.Rows = append(table.Rows, []string{sessionDisplay(r), s, sessionDriver(r),
+						folder, sinceText(str(r, "created_at"), now), termSafe(sessionShortID(r))})
+					table.Roles = append(table.Roles, []termrender.Role{termrender.RoleNone, sessionStateRole(s)})
+				}
 				r := renderTo(out)
 				r.Table(table)
 				if len(listed) < len(shown) {
@@ -1763,7 +1787,7 @@ var sessionPinLong = map[string]string{
 
 // newSessionPinCmd is pin and unpin: the caller's own mark, one call, one
 // sentence. The pin lives on the server, so it follows the person to the console
-// and other machines (#2130).
+// and other machines.
 func newSessionPinCmd(use, short, method, done string) *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
@@ -1814,7 +1838,7 @@ func newSessionPinCmd(use, short, method, done string) *cobra.Command {
 }
 
 // newSessionSnoozeCmd is snooze: the caller's own mark that takes a session out of
-// their list in the console until a moment, kept on the server like the pin (#2480).
+// their list in the console until a moment, kept on the server like the pin.
 func newSessionSnoozeCmd() *cobra.Command {
 	var (
 		cfg  agentClientConfig
@@ -1861,7 +1885,7 @@ func newSessionSnoozeCmd() *cobra.Command {
 }
 
 // newSessionDoneCmd is done: the caller's own mark that files a session under Earlier in
-// the console, kept on the server like the pin (#2480).
+// the console, kept on the server like the pin.
 func newSessionDoneCmd() *cobra.Command {
 	var (
 		cfg  agentClientConfig
@@ -1893,7 +1917,7 @@ func newSessionDoneCmd() *cobra.Command {
 }
 
 // newSessionUnreadCmd is unread: the caller's own mark that makes a session read as
-// unread in the console, kept on the server like the pin (#2866).
+// unread in the console, kept on the server like the pin.
 func newSessionUnreadCmd() *cobra.Command {
 	var (
 		cfg  agentClientConfig
@@ -1975,7 +1999,7 @@ func markSession(cmd *cobra.Command, cfg *agentClientConfig, name, method, route
 }
 
 // newSessionRenameCmd is rename: the session's own name, one PUT, one sentence. The
-// name is the session's, so every person and client sees the new one (#2795).
+// name is the session's, so every person and client sees the new one.
 func newSessionRenameCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
@@ -2089,7 +2113,7 @@ func newSessionTitleCmd() *cobra.Command {
 
 // newSessionArchiveCmd is archive and, with --undo, unarchive: the session's own
 // mark, one call, one sentence. An archived session keeps running or stays stopped
-// as it was; lists leave it out until it is unarchived (#2795).
+// as it was; lists leave it out until it is unarchived.
 func newSessionArchiveCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var undo bool
@@ -2135,7 +2159,7 @@ func newSessionArchiveCmd() *cobra.Command {
 	return cmd
 }
 
-// runIsPinned reads a run read's per-caller pinned flag (#2130); absent means
+// runIsPinned reads a run read's per-caller pinned flag; absent means
 // the server did not say, which is not pinned.
 func runIsPinned(run map[string]any) bool {
 	pinned, _ := run["pinned"].(bool)

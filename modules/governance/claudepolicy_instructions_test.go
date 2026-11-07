@@ -20,7 +20,7 @@ import (
 // The instructions file of Claude Code's managed tier (/etc/claude-code/CLAUDE.md) is a claude-policy
 // surface like the four settings files, with one document per department: the surface is
 // "managed-instructions@<department>", and its document is rendered from what the department
-// carries (#530), so a session and a workstation read one source.
+// carries, so a session and a workstation read one source.
 
 type fakeInstructions struct {
 	byDepartment map[string]string

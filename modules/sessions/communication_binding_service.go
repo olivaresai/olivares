@@ -1155,7 +1155,7 @@ func protocolBindingObservationEventType(verdict ProtocolObservationVerdict) str
 
 // mutateWorkWakingOutbox is the work data's Mutate for a protocol binding mutation: its
 // work-outbox inserts are written without communicationTx.create and counted with
-// noteWorkOutboxInsert, so the pump wakes after the commit that made them durable (#3316).
+// noteWorkOutboxInsert, so the pump wakes after the commit that made them durable.
 func (m *Module) mutateWorkWakingOutbox(
 	ctx context.Context,
 	tenant model.TenantID,

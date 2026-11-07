@@ -205,7 +205,7 @@ describe('session adoption credential ownership', () => {
     expect(toasts.dismiss).toHaveBeenCalled()
   })
 
-  // olivares#2781: the sign-out toast words a transport failure by how the page was opened and
+  // olivares: the sign-out toast words a transport failure by how the page was opened and
   // leaves an answered failure (a 503) as it was.
   describe('the toast when sign-out revocation fails', () => {
     const realLocation = window.location

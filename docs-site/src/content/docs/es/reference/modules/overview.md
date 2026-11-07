@@ -1,7 +1,7 @@
 ---
 title: Catálogo de módulos
 description: >-
-  Los 35 módulos seleccionables de Olivares AI — organizados por las nueve áreas de capacidad,
+  Los 36 módulos seleccionables de Olivares AI — organizados por las nueve áreas de capacidad,
   con la madurez honesta de cada módulo. Olivares AI integra, gestiona y asegura
   la IA en la empresa, un único ground truth: Claude Code al nivel más profundo, Codex y Grok Build a su lado; esta es la
   referencia por módulo.
@@ -9,14 +9,14 @@ description: >-
 
 Olivares AI integra, gestiona y asegura la IA en la empresa, un único ground truth:
 Claude Code al nivel más profundo, Codex y Grok Build a su lado. Es una **plataforma modular** — un motor, una
-consola y **35 módulos seleccionables** en el catálogo — que observa dónde se
+consola y **36 módulos seleccionables** en el catálogo — que observa dónde se
 ejecutan los agentes, gobierna lo que se les permite hacer y (sobre un subconjunto
 creciente) actúa sobre tu infraestructura real. Cada módulo (a) consume
 eventos/datos normalizados del núcleo, (b) declara sus entidades en el modelo de
 datos compartido y (c) expone sus propios endpoints de API y vistas de UI — sin
 tocar el núcleo ni otros módulos.
 
-Estos 35 módulos seleccionables se implementan en **32 paquetes de módulos**;
+Estos 36 módulos seleccionables se implementan en **32 paquetes de módulos**;
 el paquete governance proporciona cuatro módulos seleccionables por separado. Se organizan por las **nueve áreas de capacidad** de abajo. Lee el
 estado de cada módulo como **dos mitades**: *Gobernar/Observar* (catalogar,
 observar, restringir, informar) está construido y cableado hoy; *Actuar* (actuar
@@ -35,10 +35,10 @@ producto está pre-1.0 / en fase de diseño donde así se indica (consulta
 El **access map** (`iii-access-map`) — el grafo de lectura/lectura-escritura de lo
 que cada agente puede tocar y de hecho toca, con la desviación de mínimo
 privilegio = `Permitted ≠ Observed` — es **una de las capacidades más útiles entre
-las 35**, no el producto entero. La amplitud es lo que importa: nueve áreas, un
+las 36**, no el producto entero. La amplitud es lo que importa: nueve áreas, un
 motor, una consola.
 
-## Los 35 módulos seleccionables, por área de capacidad
+## Los 36 módulos seleccionables, por área de capacidad
 
 Cada fila enlaza a su página de módulo (`/reference/modules/<slug>/`). La columna
 **Actuar** es el estado honesto de la mitad que actúa; `—` significa que el módulo
@@ -48,6 +48,7 @@ gobierna/observa por naturaleza y no tiene superficie de actuación.
 
 | Módulo | Actuar | Propósito |
 |---|---|---|
+| [Documentos](/es/reference/modules/documents/) | local | Conversión local a Markdown con MarkItDown; conserva los originales, sin acceso a la red. |
 | [Inventario y descubrimiento](/es/reference/modules/i-inventory/) | — | Descubre y cataloga los agentes, sesiones, servidores MCP, herramientas, modelos e identidades que los conectores observaron. |
 | [Operación en vivo y sesiones](/es/reference/modules/ii-sessions/) | — | Estado en tiempo real de cada agente y sesión; también aloja el runtime gobernado de sesiones de Claude Code. |
 | [Mapa de acceso y recursos (R/RW)](/es/reference/modules/iii-access-map/) | — | A qué accede cada agente, y si lee o escribe; desviación de mínimo privilegio = `Permitted ≠ Observed`. |
@@ -147,12 +148,12 @@ y la lista **Módulos** de la consola. `npm run test:modules` comprueba
 que cada namespace seleccionable enlaza una página de referencia y verifica
 el recuento.
 
-## Costura de disponibilidad de edición (no contada entre los 35 módulos seleccionables)
+## Costura de disponibilidad de edición (no contada entre los 36 módulos seleccionables)
 
-El catálogo de arriba cubre los **35 módulos seleccionables** de la
+El catálogo de arriba cubre los **36 módulos seleccionables** de la
 especificación compartida de módulos. Por separado, Community registra un
 descriptor de disponibilidad bajo el espacio de nombres API `session-cockpit`.
-No es uno de esos 35.
+No es uno de esos 36.
 
 - [Cockpit de sesiones (disponibilidad)](/es/reference/modules/session-cockpit/) —
   cero manejadores en Community; `/v1/m/session-cockpit` devuelve **404 por
@@ -162,11 +163,11 @@ No es uno de esos 35.
   [Operación en vivo y sesiones](/es/reference/modules/ii-sessions/) y
   [Ejecutar Claude Code con Olivares](/es/how-to/run-claude-code-with-olivares/).
 
-## Capacidades de plataforma y núcleo (no contadas entre los 35 módulos seleccionables)
+## Capacidades de plataforma y núcleo (no contadas entre los 36 módulos seleccionables)
 
 Estas son capacidades reales, entregadas, pero son **capacidades de
 motor/núcleo/web**, no módulos seleccionables por separado — así que no se cuentan
-entre los 35:
+entre los 36:
 
 - [API propia + manage-as-code](/es/reference/modules/xix-api-manage-as-code/) —
   **Capacidad de motor/núcleo.** La propia API REST/gRPC versionada del motor más
@@ -177,7 +178,7 @@ entre los 35:
 - [Dashboards ejecutivos](/es/reference/modules/xxi-executive-dashboards/) —
   **Capacidad web.** Vistas de consola para dirección junto a la UI técnica. (Su
   backend de generación de informes es el módulo
-  [reporting](/es/reference/modules/reporting/), que SÍ se cuenta entre los 35.)
+  [reporting](/es/reference/modules/reporting/), que SÍ se cuenta entre los 36.)
 - [Operaciones de modelos (modelos propios)](/es/reference/modules/xxiii-model-operations/) —
   **Capacidad del módulo de modelos** (se cuenta a través de la fila del módulo X,
   no como fila aparte): el registro gobernado de modelos propios, la admisión de
@@ -189,7 +190,7 @@ inferencia local ([xxiii-fine-tuning](/es/reference/modules/xxiii-fine-tuning/))
 la plataforma gobierna y registra ese trabajo hoy (ver operaciones de modelos
 arriba) pero no ejecuta entrenamiento ni sirve inferencia por sí misma; la mitad
 ejecutora es trabajo **planificado** documentado, **no entregado** y no uno de
-los 35.
+los 36.
 
 ## Cómo aparecen los módulos en la API y en el bus
 
@@ -203,11 +204,11 @@ los 35.
 
 ## Capas
 
-Los 35 módulos seleccionables se construyen sobre capas por encima del motor, junto a las
+Los 36 módulos seleccionables se construyen sobre capas por encima del motor, junto a las
 capacidades de motor/núcleo y web de arriba:
 
 - **Motor (capa 0)** — las capacidades de API-propia/manage-as-code y
-  multi-tenancy (núcleo, no contadas en los 35).
+  multi-tenancy (núcleo, no contadas en los 36).
 - **Núcleo (capa 1)** — inventory, sessions, access-map, models, health,
   observability.
 - **Gestión (capa 2)** — capabilities, governance, identity, claude-policy, claude-agents, skills,

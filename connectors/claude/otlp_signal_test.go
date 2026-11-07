@@ -96,7 +96,7 @@ func TestSpanTimeFallback(t *testing.T) {
 }
 
 // A metrics batch is liveness evidence of the instant it reports, not of the instant
-// it arrived (#2268). A collector that buffered or replayed a batch, or a seeder that
+// it arrived. A collector that buffered or replayed a batch, or a seeder that
 // back-fills history, used to make every session in it read as active now: 48 sessions
 // with one event each, all "seen 43 seconds ago". The datapoints carry their own time
 // (the span path and the metric values already read it); the receiver clock stays the
@@ -290,7 +290,7 @@ func TestReceiverNeverRecordsASignalAfterItsClock(t *testing.T) {
 	}
 }
 
-// The failure #2272 names, end to end: one span with a start time of the year 2262
+// The failure names, end to end: one span with a start time of the year 2262
 // used to set a session's last-OTEL time ahead of the clock, and later real signals
 // could not lower it, so the gap finding never fired and the session was never evicted.
 func TestFarFutureSpanDoesNotPinSessionLiveness(t *testing.T) {

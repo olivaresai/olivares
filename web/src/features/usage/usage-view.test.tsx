@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Usage & cost (#3389): the account nearest its limit leads, then today's sessions, tokens
+// Usage & cost: the account nearest its limit leads, then today's sessions, tokens
 // and cost. Each section reads only what the principal may read, and a figure nobody
 // reported is left out, never shown as zero.
 import type { ComponentProps } from 'react'
@@ -386,7 +386,7 @@ describe('UsageView', () => {
     ).toHaveTextContent("Today's sessions could not be read.")
   })
 
-  it('the Timeline tab holds the last-hour lanes, over the sessions Usage reads (#4427)', () => {
+  it('the Timeline tab holds the last-hour lanes, over the sessions Usage reads', () => {
     state.tab = 'timeline'
     state.recent.recentSessions = [
       { key: 's1', runs: [], live: { cc_state: 'active' } },

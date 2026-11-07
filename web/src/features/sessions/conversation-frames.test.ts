@@ -937,7 +937,7 @@ describe('an interrupted Claude Code turn', () => {
   })
 })
 
-// #1784 (real use of the released 0.1, Claude Code 2.1.296): the conversation showed two
+// (real use of the released 0.1, Claude Code 2.1.296): the conversation showed two
 // "thinking tokens" rows before the answer and an "allowed · five hour" line after it. Both
 // are the tool's own bookkeeping: a progress counter while the model thinks, and a rate
 // limit report whose status is plain `allowed`. The shapes are the ones that binary's
@@ -974,7 +974,7 @@ const RATE_LIMIT_REJECTED = JSON.stringify({
   session_id: '73e15f11-74bc-4174-8593-0193c9d1ad87',
 })
 
-describe('mapConversationFrames — the tool’s own bookkeeping is no row (#1784)', () => {
+describe('mapConversationFrames — the tool’s own bookkeeping is no row', () => {
   it('shows no row for thinking-token counters or an allowed rate limit', () => {
     const lines = [
       INIT,
@@ -1108,7 +1108,7 @@ describe('mapConversationFrames — the tool’s own bookkeeping is no row (#178
   })
 })
 
-// An image attached to a message (#2158): the engine replaces the tool's echo of the
+// An image attached to a message: the engine replaces the tool's echo of the
 // message, which holds the picture, with a frame that names the stored attachments.
 describe('a message with attached images', () => {
   it('is an operator row that carries the attachment ids and media types', () => {
@@ -1453,7 +1453,7 @@ describe('a tool call in its own short form', () => {
     expect(target('mcp__peer__inbox', { limit: 10 })).toBe('')
   })
 
-  // #3135: the path stays whole; the console cuts it in its middle (PathText) and keeps it all.
+  //: the path stays whole; the console cuts it in its middle (PathText) and keeps it all.
   it('keeps a long path whole, and gives it as the path the call acts on', () => {
     const long =
       'web/src/features/sessions/very/deep/folder/session-conversation.tsx'
@@ -1552,7 +1552,7 @@ describe('how a call ended, from every tool', () => {
         },
       }),
     ])
-    // Whole: the console cuts it in its middle (PathText) and keeps all of it (#3135).
+    // Whole: the console cuts it in its middle (PathText) and keeps all of it.
     const whole =
       'web/src/features/sessions/very/deep/folder/session-conversation.tsx'
     expect(item?.toolArgsSummary).toBe(whole)

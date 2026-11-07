@@ -65,7 +65,7 @@ func acpReplayTools() []acpReplayTool {
 				return m, tenant, prof
 			},
 			launch: openCodeLaunch,
-			// An own-login OpenCode session is held to its sign-in's hosts (#3082).
+			// An own-login OpenCode session is held to its sign-in's hosts.
 			registry: SessionRegistry{Kind: acmeRegistry.Kind, URL: "https://registry.npmjs.org/", Scope: acmeRegistry.Scope, Secret: acmeRegistry.Secret},
 			confined: true,
 			fixture: func(t *testing.T, prof ProviderProfile, conversation, replayText string, replayed int) {

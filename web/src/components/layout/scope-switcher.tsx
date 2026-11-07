@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SCOPE, ONE CONTROL (#3161): the organization and the workspace the next action
+// THE SCOPE, ONE CONTROL: the organization and the workspace the next action
 // applies to, in one menu, with one name on the bar: the workspace in force, or the
 // organization when the work spans every workspace. The other level is in the tooltip
 // and in the menu, where both are switched. It sits under the brand in the left

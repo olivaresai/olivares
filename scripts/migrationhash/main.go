@@ -108,7 +108,7 @@ func (in *inventory) load(dir string) error {
 // passes its parameter straight to it, takes as a reason. The reason cites the reader lines that
 // show a column names no principal (file.go:line) and is only checked for that shape; no schema
 // or migration reads it. Hashing it made a line shifting in an unrelated file rewrite every key
-// that depends on the descriptor (#1909). The None call itself, its position among the other
+// that depends on the descriptor. The None call itself, its position among the other
 // fields and every other string stay in the hash.
 func (in *inventory) blankNoneReasons(dir string) {
 	var files []*sourceFile

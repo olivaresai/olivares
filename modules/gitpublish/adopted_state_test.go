@@ -249,7 +249,7 @@ func TestReleaseFailureWithoutIntentIsLogged(t *testing.T) {
 	_ = sync.Mutex{}
 }
 
-// #3416: an intent whose stored effect this module does not know is refused
+// : an intent whose stored effect this module does not know is refused
 // on reconcile, never asked as the empty permission.
 func TestReconcileRefusesUnknownEffect(t *testing.T) {
 	h := newHarness(t)

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ESTATE SHEET AND THE SESSION PAGE SHOW THE REAL CONVERSATION (#2549), against a live
+// THE ESTATE SHEET AND THE SESSION PAGE SHOW THE REAL CONVERSATION, against a live
 // seeded engine whose session child is the zero-network fixture driver. A turn sent while
 // the sheet is open streams into it; the full page shows the same conversation; Stop asks
 // first in both; the sheet has no axe violation and no text overlap at 1440 and 1024.

@@ -27,7 +27,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// Handing a conversation off to another tool (#1845, #2243).
+// Handing a conversation off to another tool.
 //
 // No other tool can resume a conversation of Claude Code, Codex, Gemini CLI or
 // OpenCode by id, so the honest way to continue it elsewhere is a NEW session,

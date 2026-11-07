@@ -166,7 +166,7 @@ export interface EvalRun {
   regressed: boolean
   /**
    * ⛔ `regressed: false` with `baseline_ref` present is not simply "no regression":
-   * since the interval of #2151, a drop over the threshold whose pass-rate-difference
+   * since the interval of, a drop over the threshold whose pass-rate-difference
    * interval includes zero leaves `regressed` false with
    * `comparison.reason = "inconclusive_noise"` ("measured drift, unproven
    * regression"). The receipt, which the engine attaches to EVERY run read, the list

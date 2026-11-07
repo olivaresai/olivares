@@ -86,7 +86,7 @@ afterEach(() => {
 const page = (items: unknown[], has_more = false) =>
   ({ items, has_more }) as never
 
-/** A pending approval the Overview lists under Needs you (#4738). */
+/** A pending approval the Overview lists under Needs you. */
 const pendingApproval = (id: string) => ({
   id,
   action: 'claude.hook.tool',
@@ -100,7 +100,7 @@ const pendingApproval = (id: string) => ({
   escalated: false,
 })
 
-describe('Overview: what needs you, what runs, what ended (#4427)', () => {
+describe('Overview: what needs you, what runs, what ended', () => {
   const now = () => new Date().toISOString()
   const run = (over: Record<string, unknown>) => ({
     tenant_id: 'demo',
@@ -175,7 +175,7 @@ describe('Overview: what needs you, what runs, what ended (#4427)', () => {
     })
   }
 
-  it('Overview is the strip, Needs you, Running and Recent: no headline, no New session (#4427)', async () => {
+  it('Overview is the strip, Needs you, Running and Recent: no headline, no New session', async () => {
     estate()
     vi.mocked(agentOpsApi.listRuns).mockResolvedValue(
       page([
@@ -360,7 +360,7 @@ describe('Overview (RBAC gating + honest states)', () => {
   })
 })
 
-describe('Overview — Running and Recent rows (#4427)', () => {
+describe('Overview — Running and Recent rows', () => {
   // Overview reads two pages: the runs Olivares operates and the live sessions it observes.
   // A live session is a Running row and an ended one a Recent row. The header holds no lone
   // report button.
@@ -536,7 +536,7 @@ describe('Overview — Running and Recent rows (#4427)', () => {
     },
   )
 
-  it('the strip and Needs you count the same rows (#4738)', async () => {
+  it('the strip and Needs you count the same rows', async () => {
     authState.can = () => true
     vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(
       page([pendingApproval('ap-one'), pendingApproval('ap-two')]),
@@ -573,7 +573,7 @@ describe('Overview — Running and Recent rows (#4427)', () => {
     })
   })
 
-  it('the strip count is plain text, not a link to the Sessions filter, when approvals are in it (#4738)', async () => {
+  it('the strip count is plain text, not a link to the Sessions filter, when approvals are in it', async () => {
     authState.can = () => true
     vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(
       page([pendingApproval('ap-one'), pendingApproval('ap-two')]),
@@ -606,7 +606,7 @@ describe('Overview — Running and Recent rows (#4427)', () => {
     ).toBeNull()
   })
 
-  it('the strip prints no needs-you count while the approvals read has failed (#4738)', async () => {
+  it('the strip prints no needs-you count while the approvals read has failed', async () => {
     authState.can = () => true
     vi.spyOn(governanceApi, 'listApprovals').mockRejectedValue(
       new ApiError(500, 'server_error', 'boom'),

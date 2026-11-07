@@ -533,9 +533,22 @@ test.describe('the golden path, in the console', () => {
       'the run records its actual working folder',
     ).toBe('string')
     if (run.workspace_ref) {
+      const workspaceResponse = await page.request.get(
+        `/v1/m/sessions/workspaces/${run.workspace_ref}`,
+        {
+          headers: {
+            'X-Olivares-Tenant':
+              (await created.request().headerValue('x-olivares-tenant')) ?? '',
+          },
+        },
+      )
+      expect(workspaceResponse.ok()).toBe(true)
+      const workspace = await workspaceResponse.json()
       await expect(page.getByTestId('narrative-folder')).toHaveAttribute(
         'title',
-        run.workspace_path as string,
+        workspace.root_path === run.workspace_path && workspace.name
+          ? workspace.name
+          : (run.workspace_path as string),
       )
     } else {
       await expect(page.getByTestId('context-scope')).toContainText(
@@ -662,7 +675,7 @@ test.describe('the golden path, in the console', () => {
 
     const t0 = Date.now()
     // Every profile is listed in the Sessions workspace's Profiles tab; /provider-profiles
-    // is a door into Tools, which lists accounts (named profiles) only (#2552).
+    // is a door into Tools, which lists accounts (named profiles) only.
     await page.goto('/sessions?tab=profiles')
     // The actual profile row keeps the complete identity on its cell title;
     // the painted display name and shortened reference are not identity oracles.

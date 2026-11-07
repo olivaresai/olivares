@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// WHAT EACH TURN CHANGED, and a way back (#3433): one row per message the session took,
+// WHAT EACH TURN CHANGED, and a way back: one row per message the session took,
 // newest first, with the files that turn changed. "Rewind" puts the session's folder back
 // as it was before that turn, after a confirmation that says how many files it touches,
 // and puts the turn's message in the message box to edit and send again; "Undo" puts the

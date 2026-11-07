@@ -127,12 +127,16 @@ it('shows no tool mode row before the tool has reported one', () => {
 })
 it('shows the branch changes of a session in its own worktree', () => {
   // What a session changed is the Changes tab's.
-  mount({ ...run, worktree_branch: 'olivares/ab12cd34' }, undefined, 'changes')
+  mount(
+    { ...run, workspace_ref: 'ws-main', worktree_branch: 'olivares/ab12cd34' },
+    undefined,
+    'changes',
+  )
   expect(screen.getByTestId('session-branch-changes')).toBeInTheDocument()
 })
 
 it('shows no branch changes for a session that works in its folder', () => {
-  mount(run, undefined, 'changes')
+  mount({ ...run, workspace_ref: 'ws-main' }, undefined, 'changes')
   expect(screen.queryByTestId('session-branch-changes')).toBeNull()
   expect(screen.getByTestId('session-changes')).toBeInTheDocument()
 })

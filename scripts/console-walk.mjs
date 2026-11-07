@@ -252,7 +252,7 @@ page.on('request', (r) => {
   // A new document replaces the old one, and Playwright reports neither `requestfinished` nor
   // `requestfailed` for a request that had no response yet when its document went away. Left
   // in, it was reported as STALLED on a later screen that never made it (the nightly of
-  // 2026-11-03: setup's readiness read, reported on /sessions, #4200).
+  // 2026-11-03: setup's readiness read, reported on /sessions,).
   if (r.isNavigationRequest() && r.frame() === page.mainFrame()) inflight.clear()
   inflight.add(r)
 })
@@ -413,7 +413,7 @@ if (TOKEN && (await page.locator('#token').count())) {
     await page.click('button:has-text("Create administrator")')
     // Setup posts with fetch and stays on this document, so `networkidle`, already reached,
     // answered at once and the login step below clicked the setup form's disabled button
-    // (#3507). Done means the form is gone; if it never goes, the check below says so.
+    // Done means the form is gone; if it never goes, the check below says so.
     await page.locator('#token').waitFor({ state: 'detached', timeout: 60000 }).catch(() => {})
   })
 }

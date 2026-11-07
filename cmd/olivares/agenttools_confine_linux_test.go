@@ -23,7 +23,7 @@ import (
 // A tool's own login, its status read and the provider probes are children of
 // the engine, like a session. The composition confines them the same way: they
 // cannot read the engine data directory, and a root engine's child holds no
-// capability (#1114). Only an engine holding CAP_SETPCAP can empty the bounding
+// capability. Only an engine holding CAP_SETPCAP can empty the bounding
 // set; without it, no_new_privs keeps any exec from regaining the cleared sets.
 // A child that hides the engine user's user bus in its own user namespace
 // empties it there.

@@ -16,7 +16,7 @@ import (
 	"testing"
 )
 
-// #2243: a handoff reads the stored conversation of Codex, Gemini CLI and OpenCode
+//: a handoff reads the stored conversation of Codex, Gemini CLI and OpenCode
 // as well as Claude Code's. The Gemini chat and the OpenCode export under testdata
 // were produced by real Gemini CLI 0.64.0 and OpenCode 1.19.2 processes against a
 // loopback model stand-in, and over the agent protocol (the sessions the engine

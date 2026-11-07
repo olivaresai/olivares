@@ -72,7 +72,7 @@ func TestBareOlivaresSignedInNamesTheNextStep(t *testing.T) {
 
 // A probe that fails says why, and names the command that fixes that case: an engine
 // the CLI cannot trust (the CA lives in a container's data volume, not on this host)
-// is not an engine that is down (#3861).
+// is not an engine that is down.
 func TestRootStatusNamesWhyTheEngineDoesNotAnswer(t *testing.T) {
 	stop := make(chan struct{})
 	hang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

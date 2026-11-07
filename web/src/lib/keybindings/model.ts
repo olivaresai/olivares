@@ -211,7 +211,7 @@ export function resolveBinding(
  * of them ends up eating a keystroke from a form.
  *
  * An open menu counts: its letters are typeahead ("Ren" finds Rename), and a shell
- * key read from them (`n`, a new session) took the menu's choice away (#2795).
+ * key read from them (`n`, a new session) took the menu's choice away.
  */
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
@@ -238,7 +238,7 @@ export function modalIsOpen(): boolean {
  * THE `g` LEADER, ARMED: one value for the whole console, not a ref inside the shell.
  * A page that answers a bare key asks it too, so the second half of `g a` is never read
  * as `a`, whichever window listener runs first (the shell re-adds its listener when it
- * re-renders, so registration order is not a guarantee; #2548).
+ * re-renders, so registration order is not a guarantee;).
  */
 let navLeaderUntil = 0
 export const navLeader = {

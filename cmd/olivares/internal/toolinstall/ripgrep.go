@@ -20,7 +20,7 @@ import (
 )
 
 // RipgrepFolder holds, under the tools root, the ripgrep OpenCode's glob and grep
-// run (#3173). OpenCode runs the rg on its PATH, else one it downloads from
+// run. OpenCode runs the rg on its PATH, else one it downloads from
 // github.com at first use, which a confined session cannot reach; installing
 // OpenCode places this one, and an OpenCode launch puts its folder first on PATH.
 // The tools list does not report it: it is no tool of its own.
@@ -69,7 +69,7 @@ func ripgrepDir(root, arch string) string {
 // already there: the archive is fetched and checked against its pin, only its rg
 // is extracted, checked against its own pin, and the folder is renamed into
 // place. A version folder whose rg is not the pinned program, or is missing, is
-// damaged (#3202): the verified copy replaces it, and the damaged folder is moved
+// damaged: the verified copy replaces it, and the damaged folder is moved
 // aside and removed, so installing OpenCode again repairs it.
 func ensureRipgrep(ctx context.Context, fetch fetcher, destRoot, arch string, progress io.Writer) error {
 	pin, ok := ripgrepPins[arch]

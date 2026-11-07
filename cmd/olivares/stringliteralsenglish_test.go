@@ -5,7 +5,7 @@
 package main
 
 // stringliteralsenglish_test.go is the CLASS half of the US-English user-facing text
-// contract (#588): the per-command tests prove each known message reads in English; this
+// contract: the per-command tests prove each known message reads in English; this
 // one walks every non-test string literal under cmd/, core/, modules/ and connectors/
 // so the next Spanish literal cannot quietly ship in a file nobody re-audits. The audit
 // found three independent producers this way (the security-response refusal, the work
@@ -152,7 +152,7 @@ func judgeSpanishLiterals(n ast.Node, fset *token.FileSet, findings *[]string) {
 // testdata/ is skipped: those .go files are fixtures executed by tests, test material
 // like _test.go itself. cmd/olivares/tools/ is skipped: separate main packages for
 // contributor tooling, never linked into the product binary; their prose is the
-// contributor-tooling lane (#594), not the product contract this gate guards.
+// contributor-tooling lane, not the product contract this gate guards.
 var englishLiteralRoots = []string{"../../cmd", "../../core", "../../modules", "../../connectors"}
 
 func TestProductStringLiteralsAreEnglish(t *testing.T) {

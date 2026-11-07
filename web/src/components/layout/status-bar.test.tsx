@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The status bar (#3161): one thin row under the work that says how things stand. The
+// The status bar: one thin row under the work that says how things stand. The
 // engine with a dot and a word, the sessions open (not yet ended), each tool's usage windows when the
 // tool reported them, agent stops only while one is active, and the version the release
 // gate reads at every width. Stop all leaves the permanent chrome: it shows here only while
@@ -204,7 +204,7 @@ describe('the status bar says how things stand', () => {
     expect(bar()).not.toHaveTextContent(/Olivares|Version|1\.0/)
   })
 
-  // #3140: the bar is on every screen, so an item an edition registers here must not be
+  //: the bar is on every screen, so an item an edition registers here must not be
   // able to paint over an approval or consent dialog. It gets a container of its own.
   it('renders a registered item in its own panel container, inside the bar', () => {
     registered.items = [
@@ -436,7 +436,7 @@ describe('Stop all lives in the status bar while a session runs', () => {
       name: 'Stop all agents?',
     })
     expect(sheet).toHaveTextContent('3 open sessions stop.')
-    // What the stop cancels, and what it keeps, said before it happens (#3207).
+    // What the stop cancels, and what it keeps, said before it happens.
     expect(sheet).toHaveTextContent(
       'the pending approval requests of those sessions and of agent actions are canceled',
     )
@@ -451,7 +451,7 @@ describe('Stop all lives in the status bar while a session runs', () => {
       expect.objectContaining({ scope_kind: 'estate' }),
     )
     // The stop answers how many requests it canceled, and the console says it and drops
-    // them at once: Now and Rules read the approvals again instead of 30 s later (#3207).
+    // them at once: Now and Rules read the approvals again instead of 30 s later.
     await vi.waitFor(() =>
       expect(done).toHaveBeenCalledWith(
         'Kill switch engaged',

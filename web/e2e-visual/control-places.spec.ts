@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Control in the 0.5 map (#3389, Usage in 0.7), in Chromium: Usage is one click from the sidebar
+// Control in the 0.5 map (, Usage in 0.7), in Chromium: Usage is one click from the sidebar
 // and leads with the account nearest its limit; the palette names each page by its place,
 // never by a retired area; Reach keeps graph or table in the address. Each page passes axe,
 // and its frame at 1280 px is kept as the review capture; the new Usage page is also kept

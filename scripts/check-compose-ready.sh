@@ -258,7 +258,7 @@ assert "apparmor=${OLIVARES_APPARMOR_PROFILE:-docker-default}" in compose
 apparmor = read("deploy/apparmor/olivares-sessions.conf")
 assert "  userns," in apparmor
 # The session helper bind-mounts a workspace's git hooks and configuration
-# read-only in its own mount namespace (the guard of sessions#2172). Docker's
+# read-only in its own mount namespace (the guard of sessions). Docker's
 # defaults deny the namespace (the clone mask) and the syscall (the CAP_SYS_ADMIN
 # seccomp rule, AppArmor's deny), so the shipped profile allows exactly those: the
 # mount namespace leaves the clone mask, and mount is allowed only with MS_BIND

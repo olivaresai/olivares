@@ -200,10 +200,14 @@ export function SessionContextPane({
       ? 'activity'
       : 'context'
   const options = [
-    { value: 'changes', label: t('context.tabChanges') },
-    { value: 'files', label: t('context.tabFiles') },
+    ...(run?.workspace_ref
+      ? [
+          { value: 'changes', label: t('context.tabChanges') },
+          { value: 'files', label: t('context.tabFiles') },
+        ]
+      : []),
     // A shell in the folder. It writes to the folder, so it needs the right to.
-    ...(run && can('sessions:workspace:write')
+    ...(run?.workspace_ref && can('sessions:workspace:write')
       ? [{ value: 'terminal', label: t('terminal.title') }]
       : []),
     // The app the session serves on a local port. Only a launched session has one.

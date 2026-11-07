@@ -86,11 +86,20 @@ export function AttachmentTray({
     >
       {images.map((image) => (
         <li key={image.key} className="relative">
-          <img
-            src={image.preview}
-            alt={image.name}
-            className="size-14 rounded-md border border-line object-cover"
-          />
+          {image.preview.startsWith('data:image/') ? (
+            <img
+              src={image.preview}
+              alt={image.name}
+              className="size-14 rounded-md border border-line object-cover"
+            />
+          ) : (
+            <span
+              className="flex h-14 max-w-48 items-center truncate rounded-md border border-line px-3 text-caption"
+              title={image.name}
+            >
+              {image.name}
+            </span>
+          )}
           <button
             type="button"
             aria-label={t('attach.remove', { name: image.name })}

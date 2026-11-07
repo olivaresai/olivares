@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// What a department carries (#530): the standards every launch of it starts from.
+// What a department carries: the standards every launch of it starts from.
 //
 // They are session templates assigned by source-scoping bindings (source types "instructions"
 // and "template"; modules/sourcescope, standards.go) to a department of the organization tree or

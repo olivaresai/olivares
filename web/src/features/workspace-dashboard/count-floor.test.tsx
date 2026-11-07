@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Fichero PROPIO a propósito: `#1622` edita `workspace-dashboard-view.test.tsx` y no compito con
-// él por las mismas líneas. Lo que se pincha aquí es la mitad de PANTALLA del contrato de `#1647`.
+// A file OF ITS OWN on purpose: another change edits `workspace-dashboard-view.test.tsx`, and this one does not compete with
+// it for the same lines. What is pinned here is the SCREEN half of the count-cap contract.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -74,7 +74,7 @@ describe('cuentaConSuelo — la regla, en las dos direcciones', () => {
   it('con capped false pinta el número EXACTO', () => {
     expect(cuentaConSuelo(1000, false, f)).toBe('1000')
   })
-  it('sin el campo (motor anterior a #1647) NO se inventa un suelo', () => {
+  it('sin el campo (motor anterior) NO se inventa un suelo', () => {
     expect(cuentaConSuelo(1000, undefined, f)).toBe('1000')
   })
 })
@@ -85,7 +85,7 @@ describe('WorkspaceDashboardView · el recuento saturado se declara', () => {
    *
    * LA MUTACIÓN que esto caza: que la vista pinte `formatInt(s.agent_count)` a secas. La tarjeta
    * seguiría enseñando «1.000» —con pinta de exacto— sobre un total que en realidad es un suelo,
-   * que es justo el defecto que `#1647` arregla en el motor.
+   * que es justo el defecto que `` arregla en el motor.
    *
    * LA DIRECCIÓN QUE NO DISPARA es el caso siguiente: sin el campo NO puede aparecer el «≥», así
    * que una vista que lo pintara siempre satisface a éste y falla aquél.

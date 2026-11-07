@@ -1,5 +1,19 @@
 [
   {
+    "namespace": "documents",
+    "name": "olivares.documents",
+    "package": "documents",
+    "constructor": "documents.New()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": true,
+    "requires": [],
+    "selectable": true,
+    "published_26100": false,
+    "config_defaults": {},
+    "console_entries": []
+  },
+  {
     "namespace": "accessmap",
     "name": "olivares.access-map",
     "package": "access-map",

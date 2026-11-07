@@ -15,7 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// The audit list's tool= and folder= filters (#2750). The ledger row carries no
+// The audit list's tool= and folder= filters. The ledger row carries no
 // tool and no folder: they are facts of the sessions.run row an entry targets,
 // and of the approval that run names. These tests pin that the store resolves
 // them by that relation, in SQL, on both engines.

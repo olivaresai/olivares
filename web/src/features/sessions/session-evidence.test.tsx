@@ -111,7 +111,7 @@ describe('SessionEvidence reads the rows the session wrote on other channels', (
   })
 })
 
-describe("SessionEvidence puts the session's work on screen (#2267)", () => {
+describe("SessionEvidence puts the session's work on screen", () => {
   const gap = (at: string) => ({
     at,
     kind: 'finding',
@@ -228,7 +228,7 @@ describe("SessionEvidence puts the session's work on screen (#2267)", () => {
     expect(checks).not.toHaveTextContent('×')
   })
 
-  it('folds the entries one call wrote into one turn, and prints no fact twice (#2267 review)', async () => {
+  it('folds the entries one call wrote into one turn, and prints no fact twice', async () => {
     const call = (at: string) => ({
       at,
       kind: 'mcp',
@@ -393,7 +393,7 @@ describe("SessionEvidence puts the session's work on screen (#2267)", () => {
   })
 })
 
-describe('SessionEvidence keeps its tool rows on one line (#2796)', () => {
+describe('SessionEvidence keeps its tool rows on one line', () => {
   const call = (i: number) => ({
     at: `2026-10-15T21:2${i}:00Z`,
     kind: 'tool',

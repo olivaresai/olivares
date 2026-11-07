@@ -142,7 +142,7 @@ var childEnvRuleRows = []struct{ want, name string }{
 
 // TestChildExecEnvIsNoSecretsOrAdapters pins, name by name, what a vault secret
 // and a credential adapter may not set because it makes the child run other code,
-// trust another CA or reach another host (#1375). The table above carries one row
+// trust another CA or reach another host. The table above carries one row
 // per family; this list fails when any one name leaves the rule.
 func TestChildExecEnvIsNoSecretsOrAdapters(t *testing.T) {
 	for _, name := range []string{
@@ -160,7 +160,7 @@ func TestChildExecEnvIsNoSecretsOrAdapters(t *testing.T) {
 		"EDITOR", "VISUAL", "PAGER", "LESSOPEN", "LESSCLOSE", "BROWSER",
 		"SSL_CERT_FILE", "SSL_CERT_DIR", "SSLKEYLOGFILE", "NODE_EXTRA_CA_CERTS", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE",
 		"HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "all_proxy", "no_proxy",
-		// Package managers and toolchains (#1442): npm and pnpm read npm_config_ in
+		// Package managers and toolchains: npm and pnpm read npm_config_ in
 		// either case, pip and Cargo their own prefix, Go and rustup their names.
 		"npm_config_script_shell", "npm_config_node_options", "npm_config_cafile", "npm_config_ca",
 		"npm_config_registry", "npm_config_proxy", "npm_config_https_proxy", "npm_config_noproxy",
@@ -188,7 +188,7 @@ func TestChildExecEnvIsNoSecretsOrAdapters(t *testing.T) {
 		"GOPACKAGESDRIVER", "GOPATH", "GOMODCACHE", "GOCACHE", "GOBIN", "RUSTFMT",
 		"AWS_CA_BUNDLE", "DENO_CERT", "DENO_TLS_CA_STORE", "PYTHONHTTPSVERIFY",
 		"OPENSSL_CONF", "OPENSSL_MODULES", "OPENSSL_ENGINES",
-		// The other ecosystems (#1474): yarn reads yarn_ in either case and lowers
+		// The other ecosystems: yarn reads yarn_ in either case and lowers
 		// the key; bun, uv, Composer, .NET, Gradle and Bundler read theirs as written.
 		"YARN_YARN_PATH", "YARN_NPM_REGISTRY_SERVER", "YARN_RC_FILENAME", "YARN_CA_FILE_PATH", "YARN_HTTPS_PROXY",
 		"YARN_UNSAFE_HTTP_WHITELIST", "yarn_registry", "Yarn_Npm_Registry_Server",
@@ -224,7 +224,7 @@ func TestChildExecEnvIsNoSecretsOrAdapters(t *testing.T) {
 	}
 }
 
-// TestRegistryCredentialsStayASecret pins what the rule above keeps (#1442): the
+// TestRegistryCredentialsStayASecret pins what the rule above keeps: the
 // registry credentials a package manager reads, by its own key or by the variable
 // a project's .npmrc or CI names, are still a secret and an adapter's to set.
 func TestRegistryCredentialsStayASecret(t *testing.T) {
@@ -239,7 +239,7 @@ func TestRegistryCredentialsStayASecret(t *testing.T) {
 		"NPM_CONFIGURE", "PIPX_HOME", "pip_index_url", "cargo_home", "CARGOX_TOKEN", "corepack_home",
 		"HOSTNAME_ALIAS", "TARGET_ENV", "LDAP_PASSWORD", "ARTIFACTORY_TOKEN",
 		"CC_API_KEY", "AR_TOKEN", "CXX_SECRET", "CFLAGS_TOKEN", "PKG_CONFIG_TOKEN", "TARGET_CCACHE", "HOST_TOKEN",
-		// The other ecosystems' registry credentials (#1474), each as its tool reads it.
+		// The other ecosystems' registry credentials, each as its tool reads it.
 		"YARN_NPM_AUTH_TOKEN", "YARN_NPM_AUTH_IDENT", "yarn_npm_auth_token", "YARN_HTTPS_CERT_FILE_PATH",
 		"YARN_HTTPS_KEY_FILE_PATH", "BUN_CONFIG_TOKEN",
 		"UV_INDEX_INTERNAL_USERNAME", "UV_INDEX_INTERNAL_PASSWORD", "UV_INDEX_MY_INDEX_PASSWORD",

@@ -1193,7 +1193,7 @@ describe('WorkComposer — a disabled Send says why', () => {
   })
 })
 
-// #1779: the message bar's "Advanced" opened a developer's raw stdin line to every user, and
+//: the message bar's "Advanced" opened a developer's raw stdin line to every user, and
 // the model and effort a person looked for were nowhere in it.
 describe('WorkComposer — model and effort', () => {
   const ATTACHED = {
@@ -1237,7 +1237,11 @@ describe('WorkComposer — model and effort', () => {
         />,
         { queryClient: qc },
       )
-      await user.click(await screen.findByTestId('composer-tool-model'))
+      await user.click(
+        await screen.findByTestId(
+          persisted ? 'composer-effort' : 'composer-tool-model',
+        ),
+      )
       await user.click(await screen.findByLabelText('Service tier'))
       await user.click(screen.getByRole('option', { name: 'priority' }))
       await user.click(screen.getByLabelText('Effort'))
@@ -1279,7 +1283,10 @@ describe('WorkComposer — model and effort', () => {
     })
     renderIntel(
       <WorkComposer
-        attached={{ ...ATTACHED, run: { ...ATTACHED.run, fast_mode: true } }}
+        attached={{
+          ...ATTACHED,
+          run: { ...ATTACHED.run, workspace_ref: 'ws-main', fast_mode: true },
+        }}
       />,
     )
     await user.click(await screen.findByTestId('composer-tool-model'))
@@ -1289,6 +1296,7 @@ describe('WorkComposer — model and effort', () => {
     await user.click(screen.getByRole('option', { name: 'High' }))
     await user.click(screen.getByTestId('composer-new-with-choice'))
     expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      workspaceRef: 'ws-main',
       fastMode: true,
       effort: 'high',
     })
@@ -1643,6 +1651,49 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
     title: 'calc-review',
   }
 
+  it('keeps first-turn choices anchored and shows known launch access', async () => {
+    const user = userEvent.setup()
+    const { rerender } = renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, effort: 'high', permission_mode: '' },
+          group: 'active',
+        }}
+      />,
+    )
+    expect(screen.getByTestId('composer-tool-model')).toHaveTextContent(
+      /^Claude Code default$/,
+    )
+    expect(screen.queryByTestId('composer-access')).toBeNull()
+    expect(screen.queryByText('Access not reported')).toBeNull()
+    await user.click(screen.getByTestId('composer-effort'))
+    expect(await screen.findByTestId('work-scope-line')).toBeVisible()
+    await user.keyboard('{Escape}')
+
+    for (const provider_driver of ['gemini', 'grok', 'opencode', 'cursor']) {
+      rerender(
+        <WorkComposer
+          attached={{ run: { ...RUNNING, provider_driver }, group: 'active' }}
+        />,
+      )
+      expect(screen.getByTestId('composer-access')).toHaveTextContent(
+        /^Supervised$/,
+      )
+      await user.click(screen.getByTestId('composer-access'))
+      expect(
+        await screen.findByTestId('composer-access-panel'),
+      ).toHaveTextContent('A different access starts a new session')
+      await user.keyboard('{Escape}')
+    }
+    rerender(<WorkComposer attached={attached} />)
+    expect(await screen.findByTestId('composer-tool-model')).toHaveTextContent(
+      /^Claude Opus 5\.5$/,
+    )
+    expect(screen.getByTestId('composer-access')).toHaveTextContent(
+      /^Supervised$/,
+    )
+  })
+
   it('says the model, the effort and the access each on its own picker', async () => {
     renderIntel(<WorkComposer attached={attached} />)
     expect(await screen.findByTestId('composer-tool-model')).toHaveTextContent(
@@ -1712,7 +1763,7 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
     )
   })
 
-  // #3987: the access cannot change inside a running session, so the chip is a label with
+  //: the access cannot change inside a running session, so the chip is a label with
   // a lock, not a picker with a chevron, and its button does not claim a choice was made.
   it("shows the session's access as a locked label, kept until a new session", async () => {
     const user = userEvent.setup()
@@ -1737,6 +1788,31 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
       await import('@/features/first-hour/new-session-store')
     expect(useNewSessionDialog.getState().advanced).toMatchObject({
       open: true,
+    })
+  })
+
+  //: a new session with different access keeps the current session's folder, not My files.
+  it('keeps the current folder when a new session with different access starts', async () => {
+    const user = userEvent.setup()
+    renderIntel(
+      <WorkComposer
+        attached={{
+          ...attached,
+          run: { ...attached.run, workspace_ref: 'ws-main' },
+        }}
+      />,
+    )
+    await user.click(await screen.findByTestId('composer-access'))
+    const panel = await screen.findByTestId('composer-access-panel')
+    await user.click(
+      within(panel).getByRole('button', {
+        name: 'New session with different access…',
+      }),
+    )
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      workspaceRef: 'ws-main',
     })
   })
 

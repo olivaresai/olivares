@@ -43,7 +43,7 @@ vi.mock('@/lib/auth/context', () => ({
     principal: { user_id: 'operator' },
     isSuperadmin: state.admin,
     activeTenant: state.tenant,
-    // Tools opens on the account read tier (#2552), kept when restricted.
+    // Tools opens on the account read tier, kept when restricted.
     can: (permission: string) =>
       permission === 'sessions:account:read'
         ? !state.denied
