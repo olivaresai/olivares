@@ -28,6 +28,14 @@ See [versioning](INSTALL.md#versioning) for the release policy.
 
 ## [Unreleased]
 
+### Changed
+
+- `olivares skills list` (and `ls`) now lists individual installed and detected skills,
+  matching the console Skills tab, with descriptions, sources and hashes. Use
+  `--packs` for the previous pack-summary output, `--builtin` for available packs,
+  and `-o json` or `--json` for JSON. Pagination selects installed packs; detected
+  skills accompany each page.
+
 ## [0.7] - 2026-11-06
 
 ### Changed

@@ -109,6 +109,7 @@ function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
   )
   const canAssign = can('skills:assignment:write')
   const canPublish = can('skills:catalog:write')
+  const canRetire = can('skills:catalog:admin')
   const directory = useDirectory(activeTenant)
   const detail = useQuery({
     queryKey: skillsKeys.pack(activeTenant, pack.id),
@@ -117,6 +118,33 @@ function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
   const uses = useQuery({
     queryKey: assignmentsKey,
     queryFn: ({ signal }) => skillsApi.packAssignments(pack.id, { signal }),
+  })
+  const [retiring, setRetiring] = useState(false)
+  const retire = usePrivilegedMutation({
+    mutationKey: [...assignmentsKey, 'retire'],
+    mutationFn: async (_, authority) => {
+      const request = { tenant: activeTenant, ...authority }
+      // Delete one page at a time; after deletion the next page becomes first.
+      // Reread on every attempt so partial progress and changed pins stay visible.
+      for (;;) {
+        const page = await skillsApi.packAssignments(pack.id, request)
+        for (const pin of page.items) await skillsApi.unassign(pin, request)
+        if (!page.has_more) break
+        if (!page.items.length) throw new Error(t('remove.incomplete'))
+      }
+      const current = await skillsApi.pack(pack.id, request)
+      return skillsApi.retire(current.pack, request)
+    },
+    invalidateKeys: [skillsKeys.all(activeTenant)],
+    successMessage: t('remove.done'),
+    onDone: () => setRetiring(false),
+    onError: () => {
+      void queryClient.invalidateQueries({
+        queryKey: skillsKeys.all(activeTenant),
+      })
+      setRetiring(false)
+      return false
+    },
   })
   const [removing, setRemoving] = useState<SkillAssignment | null>(null)
   const unassign = usePrivilegedMutation<SkillAssignment>({
@@ -343,6 +371,16 @@ function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
           )}
         </Section>
 
+        {canRetire && canAssign && pack.state === 'enabled' && (
+          <Button
+            variant="destructive"
+            disabled={retire.isPending}
+            onClick={() => setRetiring(true)}
+          >
+            {t('remove.action')}
+          </Button>
+        )}
+
         {canAssign && pack.state === 'enabled' && detail.data && (
           <AssignForm
             key={pack.latest_revision_id}
@@ -354,6 +392,16 @@ function PackDetail({ pack, skill }: { pack: SkillPack; skill?: string }) {
           />
         )}
       </div>
+      <ConfirmDialog
+        open={retiring}
+        onOpenChange={setRetiring}
+        title={t('remove.title')}
+        description={t('remove.description')}
+        confirmLabel={t('remove.action')}
+        tone="danger"
+        pending={retire.isPending}
+        onConfirm={() => retire.mutate()}
+      />
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}

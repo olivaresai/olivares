@@ -121,6 +121,10 @@
     "noDiff": "Não está disponível nenhuma diferença de texto."
   },
   "catalog": {
+    "source": "Origem",
+    "tool_folder": "Pasta da ferramenta",
+    "pack": "Pacote",
+    "uploaded": "Enviado",
     "skills": "Skills",
     "packs": "Pacotes",
     "name": "Nome",
@@ -144,5 +148,12 @@
     "current_many": "Atribuídas atualmente: {{count}} de skills",
     "current_other": "Atribuídas atualmente: {{count}} skills",
     "unavailable": "Não foi possível determinar as skills deste departamento."
+  },
+  "remove": {
+    "action": "Remover pacote",
+    "title": "Remover este pacote?",
+    "description": "Remove as atribuições deste pacote de todos os destinos visíveis e o pacote das sessões atuais. As revisões e o histórico de auditoria são mantidos. A remoção para se uma atribuição não puder ser removida.",
+    "done": "Pacote de habilidades removido",
+    "incomplete": "Não foi possível completar a lista de atribuições. Atualize e tente novamente."
   }
 }

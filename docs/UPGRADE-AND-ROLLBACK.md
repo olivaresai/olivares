@@ -348,7 +348,23 @@ again. The kept snapshots still hold the blocks of data deleted since they were 
 deleting files may not bring the volume under 95%: as root, `btrfs subvolume delete
 /var/lib/olivares-snapshots/<oldest-digest>` frees the oldest (digests sort by time).
 These snapshots are local restore points, not backups: they live on the same disk, so
-keep the DR bundle. No appliance command restores one yet.
+keep the DR bundle.
+
+The update also keeps, beside its snapshot, the installed version of every Olivares
+package (`olivares*`: the product, the appliance layer and its SELinux policy), in
+`/var/lib/olivares-snapshots/<request-digest>.package/`, downloaded again from the channel
+before the package manager starts; a channel that no longer offers those versions does
+not hold the update back, and the journal says that a rollback to that point will refuse.
+To return to the state before the last update, run `olivares upgrade rollback` as root
+(it starts `olivares-appliance-rollback.service` and waits for it), or use the Updates
+page's rollback act. It restores the snapshot the last package transaction's request
+names and reinstalls the kept packages in one `rpm` transaction (signature required),
+then starts the product. Data written since that update is lost. It refuses, before it
+stops anything, and says why, when the last transaction took no snapshot (an upgrade by
+hand or an edition swap), the snapshot is gone, no package is kept, or `rpm`'s test
+transaction shows the kept versions cannot go back together. A rollback uses the kept
+packages up, so a second one refuses instead of wiping what was written since. A failure
+after the stop leaves the product stopped; run the rollback again.
 
 For PostgreSQL, install the matching PostgreSQL client (`pg_dump`) and configure the
 service's `--admin-dsn` with a cross-tenant backup role on the same live database as

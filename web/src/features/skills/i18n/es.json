@@ -121,6 +121,10 @@
     "noDiff": "No hay diferencias de texto disponibles."
   },
   "catalog": {
+    "source": "Origen",
+    "tool_folder": "Carpeta de herramienta",
+    "pack": "Paquete",
+    "uploaded": "Subido",
     "skills": "Habilidades",
     "packs": "Paquetes",
     "name": "Nombre",
@@ -144,5 +148,12 @@
     "current_other": "Asignadas actualmente: {{count}} habilidades",
     "current_many": "Asignadas actualmente: {{count}} de habilidades",
     "unavailable": "No se pudieron resolver las habilidades de este departamento."
+  },
+  "remove": {
+    "action": "Eliminar paquete",
+    "title": "¿Eliminar este paquete?",
+    "description": "Desasigna este paquete de todos los destinos visibles y lo elimina de las sesiones actuales. Se conservan las revisiones y el historial de auditoría. La eliminación se detiene si no se puede quitar una asignación.",
+    "done": "Paquete de habilidades eliminado",
+    "incomplete": "No se pudo completar la lista de asignaciones. Actualiza e inténtalo de nuevo."
   }
 }

@@ -1,6 +1,6 @@
 {
   "title": "Sicurezza",
-  "description": "Segnalazioni dei guardrail, postura di enforcement, coda delle anomalie e forensics degli incidenti a prova di manomissione. Per impostazione predefinita registra soltanto: nulla viene bloccato finché non attivi una regola.",
+  "description": "Esamina le segnalazioni dei guardrail, scegli quali regole bloccano e indaga sugli incidenti. Nulla viene bloccato finché non attivi una regola.",
   "tabs": {
     "overview": "Panoramica",
     "safety": "Postura di sicurezza",

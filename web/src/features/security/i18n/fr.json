@@ -1,6 +1,6 @@
 {
   "title": "Sécurité",
-  "description": "Constats de garde-fous, posture d’application, file des anomalies et investigation d’incidents inviolable. Par défaut, il enregistre seulement : rien n’est bloqué tant que vous n’activez pas une règle.",
+  "description": "Examinez ce que les garde-fous ont signalé, choisissez les règles qui bloquent et enquêtez sur les incidents. Rien n’est bloqué tant que vous n’activez pas une règle.",
   "tabs": {
     "overview": "Vue d’ensemble",
     "safety": "Posture de sécurité",

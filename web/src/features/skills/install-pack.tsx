@@ -10,6 +10,7 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { consoleApi, consoleKeys } from '@/features/console/api'
+import { NetworkError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -115,6 +116,21 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
           )
         } catch (error) {
           authority.dispatchGuard()
+          // No answer arrived, so the engine may have pinned it anyway: read the
+          // pin back. A failed read keeps the original failure below.
+          if (
+            error instanceof NetworkError &&
+            (await skillsApi
+              .hasWorkspacePin(
+                action.workspace,
+                result.pack.id,
+                result.revision.id,
+                result.revision.members.map((member) => member.name),
+                request,
+              )
+              .catch(() => false))
+          )
+            return result
           // The shared hook still reports authorization/assurance. Record partial
           // completion here too: those errors deliberately bypass feature onError.
           setFailure(

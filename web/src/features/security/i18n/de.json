@@ -1,6 +1,6 @@
 {
   "title": "Sicherheit",
-  "description": "Befunde der Schutzleitplanken, die Durchsetzungslage, die Anomalie-Warteschlange und manipulationssichere Vorfallforensik. Standardmäßig wird nur aufgezeichnet: Nichts wird blockiert, bis Sie eine Regel aktivieren.",
+  "description": "Prüfen Sie, was die Schutzleitplanken gemeldet haben, wählen Sie die Regeln, die blockieren, und untersuchen Sie Vorfälle. Nichts wird blockiert, bis Sie eine Regel aktivieren.",
   "tabs": {
     "overview": "Übersicht",
     "safety": "Sicherheitslage",

@@ -170,7 +170,7 @@ diff. Это источник истины для отрендеренного [
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 1006 command nodes — the root command and 1005 subcommands, of which 207 are groups that carry subcommands and 48 are hidden diagnostics — together with the 4044 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 1007 command nodes — the root command and 1006 subcommands, of which 208 are groups that carry subcommands and 48 are hidden diagnostics — together with the 4046 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -209,7 +209,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 1006 commands, in alphabetical order.
+All 1007 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -1081,7 +1081,7 @@ All 1006 commands, in alphabetical order.
 | [`olivares skills enable`](#command-olivares-skills-enable) | Enable skills on a workspace, profile, folder, template, group, agent or session |
 | [`olivares skills get`](#command-olivares-skills-get) | Show catalog provenance and immutable revisions |
 | [`olivares skills install`](#command-olivares-skills-install) | Publish a reviewed immutable catalog revision |
-| [`olivares skills ls`](#command-olivares-skills-ls) | List installed catalog packs |
+| [`olivares skills ls`](#command-olivares-skills-ls) | List installed and detected skills |
 | [`olivares skills pin`](#command-olivares-skills-pin) | Move every pin of a pack to one revision (update or roll back) |
 | [`olivares skills rm`](#command-olivares-skills-rm) | Retire an unused catalog pack and retain its provenance |
 | [`olivares skills selection`](#command-olivares-skills-selection) | Show the skills a new session will get, before it starts |
@@ -1161,6 +1161,7 @@ All 1006 commands, in alphabetical order.
 | [`olivares ui session`](#command-olivares-ui-session) | Follow, message, interrupt and stop one session on a terminal |
 | [`olivares uninstall`](#command-olivares-uninstall) | Plan or remove a local installation without crossing its signed-release layout |
 | [`olivares upgrade`](#command-olivares-upgrade) | Upgrade this binary in place to a newer signed release (verified, atomic, reversible) |
+| [`olivares upgrade rollback`](#command-olivares-upgrade-rollback) | On the Olivares appliance: return the product to its data and packages before the last update |
 | [`olivares users`](#command-olivares-users) | User accounts: list, create, disable, enable |
 | [`olivares users create`](#command-olivares-users-create) | Create a global user account (superadmin) |
 | [`olivares users disable`](#command-olivares-users-disable) | Disable a superadmin account (reversible) |
@@ -14130,7 +14131,7 @@ olivares skills install
 
 #### Command: olivares skills ls
 
-List installed catalog packs
+List installed and detected skills
 
 ```
 olivares skills ls
@@ -14142,7 +14143,9 @@ Aliases: `list`
 |---|---|---|---|
 | `--builtin` | `bool` | `false` | browse the pinned built-in catalog |
 | `--cursor` | `string` | — | opaque cursor from a previous page's has_more result |
+| `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--limit` | `int` | `0` | maximum rows per page (server default when unset) |
+| `--packs` | `bool` | `false` | list installed pack summaries instead of individual skills |
 
 #### Command: olivares skills pin
 
@@ -15440,6 +15443,16 @@ olivares upgrade
 | `--timer-schedule` | `string` | `Sun *-*-* 03:00:00` | systemd OnCalendar expression for the auto-check timer; when omitted, an --enterprise --connect timer runs daily (*-*-* 03:00:00) |
 | `--token` | `string` | — | Business download token from your license/fulfillment email |
 | `-y`, `--yes` | `bool` | `false` | do not prompt for confirmation before swapping |
+
+#### Command: olivares upgrade rollback
+
+On the Olivares appliance: return the product to its data and packages before the last update
+
+```
+olivares upgrade rollback
+```
+
+Declares no flags of its own; it takes those of [`olivares upgrade`](#command-olivares-upgrade) and the root command.
 
 #### Command: olivares users
 

@@ -121,6 +121,10 @@
     "noDiff": "Aucune différence textuelle disponible."
   },
   "catalog": {
+    "source": "Source",
+    "tool_folder": "Dossier de l’outil",
+    "pack": "Pack",
+    "uploaded": "Importé",
     "skills": "Compétences",
     "packs": "Paquets",
     "name": "Nom",
@@ -144,5 +148,12 @@
     "current_other": "Actuellement attribuées : {{count}} compétences",
     "current_many": "Actuellement attribuées : {{count}} de compétences",
     "unavailable": "Impossible de déterminer les compétences de ce département."
+  },
+  "remove": {
+    "action": "Supprimer le pack",
+    "title": "Supprimer ce pack ?",
+    "description": "Retire ce pack de toutes les cibles visibles et des sessions actuelles. Les révisions et l’historique d’audit sont conservés. La suppression s’arrête si une affectation ne peut pas être retirée.",
+    "done": "Pack de compétences supprimé",
+    "incomplete": "La liste des affectations n’a pas pu être complétée. Actualisez et réessayez."
   }
 }

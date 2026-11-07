@@ -121,6 +121,10 @@
     "noDiff": "没有可用的文本差异。"
   },
   "catalog": {
+    "source": "来源",
+    "tool_folder": "工具文件夹",
+    "pack": "技能包",
+    "uploaded": "已上传",
     "skills": "技能",
     "packs": "包",
     "name": "名称",
@@ -140,5 +144,12 @@
     "count_other": "此会话将获得 {{count}} 项技能",
     "current_other": "当前分配：{{count}} 项技能",
     "unavailable": "无法解析此部门的技能。"
+  },
+  "remove": {
+    "action": "移除技能包",
+    "title": "移除此技能包？",
+    "description": "取消此技能包在所有可见目标上的分配，并将其从当前会话中移除。修订版本和审计历史将保留。如果某项分配无法移除，操作将停止。",
+    "done": "技能包已移除",
+    "incomplete": "无法获取完整的分配列表。请刷新后重试。"
   }
 }

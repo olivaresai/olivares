@@ -10276,6 +10276,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/skills/detected — Lists the existing native skills visible to the caller without importing or executing them.
+   *
+   * Stability: beta.
+   */
+  getV1MSkillsDetected(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/skills/detected", "/v1/m/skills/detected", undefined, opts);
+  }
+
+  /**
    * GET /v1/m/skills/packs — Lists the tenant's skills packs, including retired packs, with cursor pagination.
    *
    * Stability: beta.

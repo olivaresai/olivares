@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -183,5 +184,57 @@ func TestSkillsCLIAssignsAndListsByDirectoryTargetAndPack(t *testing.T) {
 	}
 	if rec.count() != before {
 		t.Fatalf("refused commands sent %d requests", rec.count()-before)
+	}
+}
+
+func TestSkillsCLIListMatchesConsoleRows(t *testing.T) {
+	prepareDatalaneCLITest(t)
+	pack := model.NewID().String()
+	revision := model.NewID().String()
+	rec := newDatalaneRecorder(t, http.StatusOK, "")
+	rec.respond = func(r datalaneRequest) (int, string) {
+		switch r.Path {
+		case "/v1/m/skills/packs":
+			return http.StatusOK, fmt.Sprintf(`{"items":[{"id":%q,"name":"review-pack","latest_revision_id":%q}],"has_more":false}`, pack, revision)
+		case "/v1/m/skills/packs/" + pack:
+			return http.StatusOK, fmt.Sprintf(`{"revisions":[{"id":%q,"number":2,"source":{"kind":"archive"},"members":[{"name":"review","description":"Review changes","skill_digest":"installed-hash"}]}]}`, revision)
+		case "/v1/m/skills/detected":
+			return http.StatusOK, `{"items":[{"name":"native","description":"Native skill","source":"tool_folder","sha256":"native-hash","path":"/skills/native","driver":"claude","profile_ref":"profile-a"}]}`
+		}
+		return http.StatusNotFound, `{}`
+	}
+	for _, mode := range [][]string{{"-o", "json"}, {"--json"}, {}} {
+		args := append([]string{"skills", "list"}, mode...)
+		out, _, err := execDatalane(t, "", datalaneArgs(rec, args...)...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(mode) == 0 {
+			for _, value := range []string{"review", "native", "uploaded", "tool_folder", "installed-hash", "native-hash"} {
+				if !strings.Contains(out, value) {
+					t.Fatalf("missing %s in %s", value, out)
+				}
+			}
+			continue
+		}
+		var result struct {
+			Items []map[string]any `json:"items"`
+		}
+		if err := json.Unmarshal([]byte(out), &result); err != nil {
+			t.Fatal(err)
+		}
+		if len(result.Items) != 2 || result.Items[0]["name"] != "review" || result.Items[0]["source"] != "uploaded" || result.Items[0]["sha256"] != "installed-hash" || result.Items[0]["revision"] != float64(2) || result.Items[1]["profile_ref"] != "profile-a" {
+			t.Fatalf("console rows missing: %s", out)
+		}
+	}
+	out, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "list", "--packs", "--json")...)
+	if err != nil || !strings.Contains(out, "review-pack") || strings.Contains(out, "native-hash") {
+		t.Fatalf("packs: %s %v", out, err)
+	}
+	rec.respond = func(r datalaneRequest) (int, string) {
+		return http.StatusServiceUnavailable, `{"error":{"message":"detection unavailable"}}`
+	}
+	if out, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "list", "--json")...); err == nil || strings.Contains(out, "native-hash") {
+		t.Fatalf("failure hidden: %s %v", out, err)
 	}
 }

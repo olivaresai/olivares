@@ -18,7 +18,6 @@ import { useAuth } from '@/lib/auth/context'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { QueryErrorState } from '@/components/layout/query-error-state'
-import { Skeleton } from '@/components/ui/skeleton'
 import { skillsApi, skillsKeys } from './api'
 import { InstallPack } from './install-pack'
 import { PackSheet, PackState } from './pack-sheet'
@@ -114,17 +113,7 @@ export function SkillsView({ titled = true }: { titled?: boolean } = {}) {
             <TabsTrigger value="packs">{t('catalog.packs')}</TabsTrigger>
           </TabsList>
           <TabsContent value="skills" className="min-h-0 flex-1">
-            {packs.isLoading ? (
-              <Skeleton className="h-24 w-full" />
-            ) : items.length === 0 ? (
-              <EmptyState
-                icon={<GraduationCap />}
-                title={t('packs.emptyTitle')}
-                description={t('packs.emptyDescription')}
-              />
-            ) : (
-              <SkillCatalog packs={items} onOpen={open} />
-            )}
+            <SkillCatalog packs={items} onOpen={open} />
           </TabsContent>
           <TabsContent value="packs" className="min-h-0 flex-1">
             <DataTable

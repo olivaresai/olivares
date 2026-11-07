@@ -121,6 +121,10 @@
     "noDiff": "No text diff is available."
   },
   "catalog": {
+    "source": "Source",
+    "tool_folder": "Tool folder",
+    "pack": "Pack",
+    "uploaded": "Uploaded",
     "skills": "Skills",
     "packs": "Packs",
     "name": "Name",
@@ -142,5 +146,12 @@
     "current_one": "Currently assigned: {{count}} skill",
     "current_other": "Currently assigned: {{count}} skills",
     "unavailable": "Skills could not be resolved for this department."
+  },
+  "remove": {
+    "action": "Remove pack",
+    "title": "Remove this pack?",
+    "description": "Unassign this pack from all visible targets and remove it from current sessions. Revisions and audit history are kept. Removal stops if an assignment cannot be removed.",
+    "done": "Skill pack removed",
+    "incomplete": "The assignment list could not be completed. Refresh and try again."
   }
 }

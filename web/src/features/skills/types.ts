@@ -16,6 +16,7 @@ export interface SkillPack {
 }
 
 export interface SkillMember {
+  skill_digest?: string
   /** Absent for portable skills; other names are qualified by kind. */
   kind?: 'agent' | 'command' | 'rule'
   name: string
@@ -164,4 +165,14 @@ export function pinHolds(
       .find((r) => r.id === pin.pack_revision_id)
       ?.members.some((m) => m.name === name)
   )
+}
+
+export interface DetectedSkill {
+  name: string
+  description: string
+  source: 'tool_folder' | 'pack'
+  path: string
+  sha256: string
+  driver: string
+  profile_ref?: string
 }

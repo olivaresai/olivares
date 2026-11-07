@@ -121,6 +121,10 @@
     "noDiff": "Nessuna differenza di testo disponibile."
   },
   "catalog": {
+    "source": "Origine",
+    "tool_folder": "Cartella dello strumento",
+    "pack": "Pacchetto",
+    "uploaded": "Caricato",
     "skills": "Competenze",
     "packs": "Pacchetti",
     "name": "Nome",
@@ -144,5 +148,12 @@
     "current_other": "Attualmente assegnate: {{count}} competenze",
     "current_many": "Attualmente assegnate: {{count}} di competenze",
     "unavailable": "Impossibile determinare le competenze di questo reparto."
+  },
+  "remove": {
+    "action": "Rimuovi pacchetto",
+    "title": "Rimuovere questo pacchetto?",
+    "description": "Rimuove le assegnazioni del pacchetto da tutte le destinazioni visibili e il pacchetto dalle sessioni attuali. Le revisioni e la cronologia di audit vengono conservate. La rimozione si interrompe se non è possibile eliminare un’assegnazione.",
+    "done": "Pacchetto di competenze rimosso",
+    "incomplete": "Impossibile completare l’elenco delle assegnazioni. Aggiorna e riprova."
   }
 }

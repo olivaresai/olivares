@@ -1,6 +1,6 @@
 {
   "title": "Segurança",
-  "description": "Deteções de guardrails, a postura de imposição, a fila de anomalias e a análise forense de incidentes com deteção de adulteração. Por predefinição, só regista: nada é bloqueado até ativar uma regra.",
+  "description": "Reveja o que os guardrails assinalaram, escolha quais regras bloqueiam e investigue os incidentes. Nada é bloqueado até ativar uma regra.",
   "tabs": {
     "overview": "Visão geral",
     "safety": "Postura de segurança",

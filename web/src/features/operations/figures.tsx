@@ -5,7 +5,11 @@
 // The two figures Operations draws, each as a titled card holding the chart, its sentence and
 // the same data as a table (`AccessibleChart`): bars for a ranking, a trend over time. They
 // only lay out what the sections hand them; no figure here is computed.
-import { CategoryBarChart, TrendChart } from '@/components/charts'
+import {
+  CategoryBarChart,
+  TrendChart,
+  useChartTheme,
+} from '@/components/charts'
 import type { SeriesSpec } from '@/components/charts'
 import {
   AccessibleChart,
@@ -48,6 +52,8 @@ export function BarFigure<Row extends Record<string, unknown>>({
   categoryKey,
   valueKey,
 }: FigureProps<Row> & { categoryKey: string; valueKey: string }) {
+  // Measurements are neutral data: the brand orange is reserved for the primary action.
+  const theme = useChartTheme()
   const shown = rows.slice(0, BAR_ROWS)
   return (
     <SectionCard title={title}>
@@ -68,6 +74,7 @@ export function BarFigure<Row extends Record<string, unknown>>({
           valueFormatter={valueFormatter}
           categoryFormatter={shorten}
           colorByCategory={false}
+          color={theme.slate}
         />
       </AccessibleChart>
     </SectionCard>
@@ -92,6 +99,8 @@ export function TrendFigure<Row extends Record<string, unknown>>({
   /** A line at a limit the series cannot pass (memory: the total). */
   reference?: { y: number; label: string }
 }) {
+  // Measurements are neutral data: the brand orange is reserved for the primary action.
+  const theme = useChartTheme()
   return (
     <SectionCard title={title}>
       <AccessibleChart<Row>
@@ -106,7 +115,10 @@ export function TrendFigure<Row extends Record<string, unknown>>({
         <TrendChart
           data={rows}
           xKey={xKey}
-          series={series}
+          series={series.map((s, i) => ({
+            color: [theme.slate, theme.teal][i % 2],
+            ...s,
+          }))}
           height={TREND_HEIGHT}
           valueFormatter={valueFormatter}
           xTickFormatter={xTickFormatter}

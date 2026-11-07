@@ -422,7 +422,7 @@ export default function CapabilitiesView() {
             hint={t('truncatedHint')}
           />
           <p className="mb-3 text-caption text-muted-foreground">
-            {t('skills.caption')}
+            {t('empty.skill.description')}
           </p>
           <ListTruncationBadge
             query={skills}

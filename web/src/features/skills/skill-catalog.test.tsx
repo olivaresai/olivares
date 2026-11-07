@@ -51,6 +51,10 @@ const revision: SkillRevision = {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.spyOn(skillsApi, 'detected').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
   vi.spyOn(skillsApi, 'pack').mockResolvedValue({
     pack,
     revisions: [revision, { ...revision, id: 'r1', number: 1, members: [] }],
@@ -91,9 +95,26 @@ beforeEach(() => {
 })
 
 it('lists every member kind and searches descriptions across packs', async () => {
+  vi.mocked(skillsApi.detected).mockResolvedValue({
+    items: [
+      {
+        name: 'native-review',
+        description: 'Inspect native sources',
+        source: 'tool_folder',
+        path: '/home/user/.claude/skills/native-review/SKILL.md',
+        driver: 'claude',
+        sha256: 'a'.repeat(64),
+      },
+    ],
+    has_more: false,
+  })
   const open = vi.fn()
   renderIntel(<SkillCatalog packs={[pack]} onOpen={open} />)
   expect(await screen.findByText('review')).toBeInTheDocument()
+  const native = (await screen.findByText('native-review')).closest('tr')!
+  expect(within(native).getByText('Inspect native sources')).toBeInTheDocument()
+  expect(within(native).getByText('Tool folder')).toBeInTheDocument()
+  expect(within(native).getByText('a'.repeat(64))).toBeInTheDocument()
   for (const name of ['agent:writer', 'command:check', 'rule:style'])
     expect(screen.getByText(name)).toBeInTheDocument()
   await userEvent.type(

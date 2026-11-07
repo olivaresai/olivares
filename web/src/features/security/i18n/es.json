@@ -1,6 +1,6 @@
 {
   "title": "Seguridad",
-  "description": "Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. Por defecto solo registra: no bloquea nada hasta que actives una regla.",
+  "description": "Revisa lo que señalaron los guardrails, elige qué reglas bloquean e investiga los incidentes. Nada se bloquea hasta que actives una regla.",
   "tabs": {
     "overview": "Resumen",
     "safety": "Postura de seguridad",

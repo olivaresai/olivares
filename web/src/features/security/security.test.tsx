@@ -353,6 +353,15 @@ describe('Security overview — current exposure before detective work', () => {
       screen.queryByRole('button', { name: /Export SARIF/i }),
     ).not.toBeInTheDocument()
   })
+
+  it('leads with what the person can do, not how the engine works', async () => {
+    wrapView(<SecurityView />)
+    expect(
+      await screen.findByText(
+        'Review what the guardrails flagged, choose which rules block, and investigate incidents. Nothing is blocked until you turn a rule on.',
+      ),
+    ).toBeInTheDocument()
+  })
 })
 
 describe('Findings SARIF export — the server bytes, and an honest cap', () => {

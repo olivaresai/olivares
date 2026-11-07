@@ -240,6 +240,8 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
   skills: {
     builtins:
       'modules/skills/builtin.go: listBuiltins answers every pack of the embedded builtin/PIN.json in one response, reads no limit or cursor and never sets has_more; builtin_test.go TestBuiltinCatalogIgnoresLimitAndNeverTruncates proves limit=1 still returns every pinned pack',
+    detected:
+      'modules/skills/detected.go: listDetected returns the native scan in one response, reads no limit or cursor and never sets has_more; modules/sessions/detected_skills.go DetectSkills shares the skills.MaxFiles entry budget across homes and profiles; session_skills_test.go TestDetectedSkillsBoundScanAndSkipBadEntries proves the scan ceiling',
   },
   ...(existsSync(join(RAIZ, 'tenants/api.ts'))
     ? {

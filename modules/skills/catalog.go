@@ -57,6 +57,7 @@ type SkillLoadTracer interface {
 }
 
 type Options struct {
+	Detect       func(context.Context, api.ModuleContext) ([]DetectedSkill, error)
 	ArtifactRoot string
 	Git          *GitImporter
 	Targets      TargetAuthority
@@ -120,6 +121,7 @@ func (m *Module) Permissions() []auth.Permission {
 	return []auth.Permission{permRead, permWrite, permAdmin, permAssign}
 }
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
+	reg.Handle("GET", "/detected", permRead, m.listDetected)
 	reg.Handle("GET", "/builtins", permRead, m.listBuiltins)
 	reg.Handle("GET", "/packs", permRead, m.listPacks)
 	reg.Handle("POST", "/packs", permWrite, m.installPack)

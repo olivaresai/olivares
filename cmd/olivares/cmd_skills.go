@@ -39,8 +39,11 @@ func newSkillsCmd() *cobra.Command {
 }
 func newSkillsListCmd(client datalaneClient) *cobra.Command {
 	var page datalanePageFlags
-	var builtin bool
-	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "ls", Aliases: []string{"list"}, Short: "List installed catalog packs", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	var builtin, packs bool
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "ls", Aliases: []string{"list"}, Short: "List installed and detected skills", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if builtin && packs {
+			return exitcode.New(exitcode.Usage, fmt.Errorf("choose --packs or --builtin, not both"))
+		}
 		q, err := page.values(cmd, nil)
 		if err != nil {
 			return err
@@ -62,14 +65,63 @@ func newSkillsListCmd(client datalaneClient) *cobra.Command {
 		if builtin {
 			return datalaneRenderList(cmd, "skills", raw, "no built-in skills available", datalaneCols("ID", "id", "ORIGIN", "origin", "COMMIT", "resolved_commit", "DIGEST", "source_digest"))
 		}
+		if !packs {
+			raw, err = skillsCatalogRows(cmd, client, raw)
+			if err != nil {
+				return err
+			}
+			return datalaneRenderList(cmd, "skills", raw, "no installed or detected skills", datalaneCols("NAME", "name", "DESCRIPTION", "description", "SOURCE", "source", "SHA-256", "sha256", "KIND", "kind", "REVISION", "revision", "DRIVER", "driver", "PROFILE", "profile_ref"))
+		}
 		return datalaneRenderList(cmd, "skills", raw, "no skills installed in the catalog", datalaneCols("ID", "id", "NAME", "name", "STATE", "state", "REVISION", "latest_revision"))
 	}}
 	cmd.Flags().BoolVar(&builtin, "builtin", false, "browse the pinned built-in catalog")
-	cmd.Long = "List installed skill packs or browse available packs with --builtin; use olivares skills get <pack-id> to inspect a pack and its revisions."
+	cmd.Flags().BoolVar(&packs, "packs", false, "list installed pack summaries instead of individual skills")
+	addDeprecatedJSONFlag(cmd)
+	cmd.Long = "List members of installed packs and detected native skills, as in the console Skills tab. Use --packs for pack summaries or --builtin for available packs. Pagination selects installed packs; detected skills accompany every page. Use -o json (or --json) for row metadata."
 	cmd.Example = "  olivares skills ls"
 	page.add(cmd)
 	return cmd
 }
+
+// skillsCatalogRows uses the same latest pack members and native rows as the console.
+func skillsCatalogRows(cmd *cobra.Command, client datalaneClient, raw []byte) ([]byte, error) {
+	var packs skillsPage[skills.Pack]
+	if err := json.Unmarshal(raw, &packs); err != nil {
+		return nil, exitcode.New(exitcode.Server, fmt.Errorf("decode skills packs: %w", err))
+	}
+	rows := skillsPage[map[string]any]{Items: make([]map[string]any, 0), Cursor: packs.Cursor, HasMore: packs.HasMore}
+	for _, pack := range packs.Items {
+		_, history, err := skillsPackHistory(cmd, client, pack.ID)
+		if err != nil {
+			return nil, err
+		}
+		latest, ok := revisionByID(history, pack.LatestRevisionID)
+		if !ok {
+			return nil, exitcode.New(exitcode.Server, fmt.Errorf("latest skills revision is unavailable"))
+		}
+		source := "pack"
+		if latest.Source.Kind == "archive" {
+			source = "uploaded"
+		}
+		for _, member := range latest.Members {
+			kind := member.Kind
+			if kind == "" {
+				kind = "skill"
+			}
+			rows.Items = append(rows.Items, map[string]any{
+				"name": member.Name, "description": member.Description, "source": source,
+				"sha256": member.SkillDigest, "kind": kind, "pack": pack, "revision": latest.Number,
+			})
+		}
+	}
+	detected, err := skillsReadAll[map[string]any](cmd, client, "/detected", nil)
+	if err != nil {
+		return nil, err
+	}
+	rows.Items = append(rows.Items, detected...)
+	return json.Marshal(rows)
+}
+
 func newSkillsGetCmd(client datalaneClient) *cobra.Command {
 	var page datalanePageFlags
 	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "get <pack-id>", Short: "Show catalog provenance and immutable revisions", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {

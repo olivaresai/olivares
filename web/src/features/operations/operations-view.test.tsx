@@ -5,7 +5,10 @@
 // Operations: the host, its filesystems, the live sessions and the usage, on one page. Each
 // section reads only what the principal may read, every chart has a table and a sentence,
 // and a read that cannot answer says so instead of drawing nothing.
+import type { ComponentType, ReactNode } from 'react'
+import { waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FALLBACK } from '@/components/charts/chart-theme'
 import { ApiError } from '@/lib/api/errors'
 import { renderIntel, screen, userEvent, within } from '@/test/intel'
 import '@/features/_intel'
@@ -31,6 +34,28 @@ vi.mock('@/lib/auth/context', () => ({
 vi.mock('@/features/home/use-recent-sessions', () => ({
   useRecentSessions: () => state.recent,
 }))
+// recharts sizes its surface from a ResizeObserver that jsdom never fires, so a chart
+// draws nothing; give each chart a fixed size so the host charts mount and their fills can be read.
+vi.mock('recharts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('recharts')>()
+  const sized = (Chart: ComponentType<Record<string, unknown>>) =>
+    function SizedChart(props: Record<string, unknown>) {
+      return <Chart width={800} height={300} {...props} />
+    }
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }: { children?: ReactNode }) => (
+      <div style={{ width: 800, height: 300 }}>{children}</div>
+    ),
+    AreaChart: sized(
+      actual.AreaChart as ComponentType<Record<string, unknown>>,
+    ),
+    LineChart: sized(
+      actual.LineChart as ComponentType<Record<string, unknown>>,
+    ),
+    BarChart: sized(actual.BarChart as ComponentType<Record<string, unknown>>),
+  }
+})
 
 const hostMock = vi.fn()
 vi.mock('./api', async (importOriginal) => {
@@ -172,6 +197,50 @@ describe('Operations: the host', () => {
     expect(
       within(folders).getByRole('row', { name: /run_alpha.*2 GiB/ }),
     ).toBeInTheDocument()
+  })
+
+  it('fills the CPU and memory areas with the neutral data color, not the brand orange', async () => {
+    state.perms = new Set(['system:admin'])
+    renderIntel(<OperationsView />)
+
+    await screen.findByRole('img', { name: /CPU.*peak 30%/ })
+    const cpuFill = document
+      .querySelector('#grad-cpu_percent stop')
+      ?.getAttribute('stop-color')
+    expect(cpuFill).toBe(FALLBACK.slate)
+    expect(cpuFill).not.toBe(FALLBACK.accent)
+  })
+
+  it('distinguishes memory and swap with separate non-orange data colors', async () => {
+    state.perms = new Set(['system:admin'])
+    renderIntel(<OperationsView />)
+
+    const memory = await screen.findByRole('figure', { name: 'Memory' })
+    const memoryColor = memory
+      .querySelector('#grad-memory_used_bytes stop')
+      ?.getAttribute('stop-color')
+    const swapColor = memory
+      .querySelector('#grad-swap_used_bytes stop')
+      ?.getAttribute('stop-color')
+    expect(memoryColor).toBe(FALLBACK.slate)
+    expect(swapColor).toBe(FALLBACK.teal)
+    expect(swapColor).not.toBe(memoryColor)
+    expect(swapColor).not.toBe(FALLBACK.accent)
+  })
+
+  it('fills the filesystem bars with the neutral data color, not the brand orange', async () => {
+    state.perms = new Set(['system:admin'])
+    renderIntel(<OperationsView />)
+
+    const disks = await screen.findByRole('figure', { name: 'Filesystems' })
+    const barFills = await waitFor(() => {
+      const fills = Array.from(
+        disks.querySelectorAll('.recharts-bar-rectangle path'),
+      ).map((bar) => bar.getAttribute('fill'))
+      expect(fills.length).toBeGreaterThan(0)
+      return fills
+    })
+    expect(barFills.every((fill) => fill === FALLBACK.slate)).toBe(true)
   })
 
   it('says a folder size is a minimum when the measurement stopped at its bound', async () => {

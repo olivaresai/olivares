@@ -13,7 +13,7 @@ import {
 import { agentOpsApi } from '@/features/agentops/api'
 import { consoleApi } from '@/features/console/api'
 import { http } from '@/lib/api/client'
-import { ApiError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
 import { skillsApi } from './api'
 import { SkillsView } from './skills-view'
 import { PackSheet } from './pack-sheet'
@@ -112,6 +112,10 @@ beforeEach(() => {
     ]),
   )
   vi.spyOn(skillsApi, 'packs').mockResolvedValue(list([pack]))
+  vi.spyOn(skillsApi, 'detected').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
   vi.spyOn(skillsApi, 'pack').mockResolvedValue(detail)
   vi.spyOn(skillsApi, 'packAssignments').mockResolvedValue(
     list([groupPin, orphanPin]),
@@ -234,6 +238,63 @@ describe('SkillsView', () => {
     ).toBeInTheDocument()
   })
 
+  it('removes a pack after unpinning every target and refreshes the catalog', async () => {
+    const calls: string[] = []
+    vi.spyOn(skillsApi, 'unassign').mockImplementation(async (pin) => {
+      calls.push(pin.id)
+      return { state: 'unassigned' }
+    })
+    const remove = vi.spyOn(http, 'delete').mockImplementation(async (path) => {
+      calls.push(String(path))
+      vi.mocked(skillsApi.packs).mockResolvedValue(
+        list([{ ...pack, state: 'retired' }]),
+      )
+      return { state: 'catalog_retired', pack: { ...pack, state: 'retired' } }
+    })
+    await openPack()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Remove pack' }),
+    )
+    const confirm = await screen.findByRole('dialog', {
+      name: 'Remove this pack?',
+    })
+    expect(calls).toEqual([])
+    await userEvent.click(
+      within(confirm).getByRole('button', { name: 'Remove pack' }),
+    )
+    await waitFor(() =>
+      expect(remove).toHaveBeenCalledWith(
+        '/v1/m/skills/packs/pack-1',
+        undefined,
+        expect.objectContaining({
+          tenant: 'tenant-1',
+          headers: { 'If-Match': '3' },
+        }),
+      ),
+    )
+    expect(calls).toEqual(['as-1', 'as-2', '/v1/m/skills/packs/pack-1'])
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Remove this pack?' }),
+      ).toBeNull(),
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Remove pack' })).toBeNull(),
+    )
+    expect(screen.getAllByText('Retired').length).toBeGreaterThan(0)
+  })
+  it('hides pack removal from editors without catalog admin permission', async () => {
+    auth.can = (p) =>
+      p === 'skills:catalog:read' ||
+      p === 'skills:catalog:write' ||
+      p === 'skills:assignment:write' ||
+      p === 'agent:read'
+    const sheet = await openPack()
+    await within(sheet).findByText('Reviewers')
+    expect(
+      within(sheet).queryByRole('button', { name: 'Remove pack' }),
+    ).toBeNull()
+  })
   it('keeps the selected skill in the URL across remount and Back', async () => {
     fakeRouter.reset('/capabilities?tab=skills')
     const view = renderIntel(<SkillsView />)
@@ -556,6 +617,48 @@ describe('SkillsView', () => {
     expect(
       await screen.findByRole('gridcell', { name: 'ecc-security' }),
     ).toBeInTheDocument()
+  })
+
+  it('reads back a workspace pin whose assignment response was lost', async () => {
+    const installed = { ...pack, id: 'installed-1', name: 'ecc-security' }
+    const revision = detail.revisions[0]
+    vi.spyOn(skillsApi, 'packs')
+      .mockResolvedValueOnce(list([pack]))
+      .mockResolvedValue(list([pack, installed]))
+    vi.spyOn(http, 'post').mockResolvedValue({
+      state: 'catalog_published',
+      pack: installed,
+      revision,
+    })
+    vi.spyOn(http, 'get').mockImplementation(async (path) =>
+      path === '/v1/m/skills/assignments'
+        ? list([
+            {
+              ...groupPin,
+              target_kind: 'workspace',
+              target_id: 'ws-1',
+              pack_id: installed.id,
+              pack_revision_id: revision.id,
+              members: revision.members.map((member) => member.name),
+            },
+          ])
+        : list([{ id: 'ecc-security' }]),
+    )
+    vi.spyOn(skillsApi, 'assign').mockRejectedValue(
+      new NetworkError(
+        'The control plane is unreachable.',
+        new TypeError('Failed to fetch'),
+      ),
+    )
+    renderIntel(<SkillsView />)
+    await chooseWorkspace()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Install ecc-security' }),
+    )
+    await screen.findByText('Skill pack installed and assigned')
+    expect(
+      screen.queryByText(/workspace assignment failed/),
+    ).not.toBeInTheDocument()
   })
 
   it('recognizes a pin after its successful response was lost', async () => {

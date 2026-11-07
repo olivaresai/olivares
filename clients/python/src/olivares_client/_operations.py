@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "2cfa1f95bce606867c6174c04bfee88da70fa6acfefa921d9916676f49391827"
+SPEC_HASH = "4b9db11d45e8064937befccc86fabca4fc163ed19e3d853884aa8fbc4836e3e6"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -8029,6 +8029,13 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/skills/builtins", "/v1/m/skills/builtins", query=query, headers=headers, tenant=tenant)
+
+    def get_v1_m_skills_detected(self, *, tenant=None, headers=None, **query):
+        """GET /v1/m/skills/detected — Lists the existing native skills visible to the caller without importing or executing them.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/skills/detected", "/v1/m/skills/detected", query=query, headers=headers, tenant=tenant)
 
     def get_v1_m_skills_packs(self, *, tenant=None, headers=None, **query):
         """GET /v1/m/skills/packs — Lists the tenant's skills packs, including retired packs, with cursor pagination.

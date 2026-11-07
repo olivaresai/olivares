@@ -121,6 +121,10 @@
     "noDiff": "Kein Textvergleich verfügbar."
   },
   "catalog": {
+    "source": "Quelle",
+    "tool_folder": "Werkzeugordner",
+    "pack": "Paket",
+    "uploaded": "Hochgeladen",
     "skills": "Skills",
     "packs": "Pakete",
     "name": "Name",
@@ -142,5 +146,12 @@
     "current_one": "Derzeit zugewiesen: {{count}} Skill",
     "current_other": "Derzeit zugewiesen: {{count}} Skills",
     "unavailable": "Die Skills dieser Abteilung konnten nicht ermittelt werden."
+  },
+  "remove": {
+    "action": "Paket entfernen",
+    "title": "Dieses Paket entfernen?",
+    "description": "Hebt die Zuweisungen zu allen sichtbaren Zielen auf und entfernt das Paket aus aktuellen Sitzungen. Revisionen und Prüfprotokoll bleiben erhalten. Der Vorgang stoppt, wenn eine Zuweisung nicht entfernt werden kann.",
+    "done": "Skill-Paket entfernt",
+    "incomplete": "Die Zuweisungsliste konnte nicht vollständig geladen werden. Aktualisieren Sie die Seite und versuchen Sie es erneut."
   }
 }

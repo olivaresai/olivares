@@ -96859,6 +96859,102 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/m/skills/detected': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Lists the existing native skills visible to the caller without importing or executing them.
+     * @description Lists the existing native skills visible to the caller without importing or executing them.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/m/skills/packs': {
     parameters: {
       query?: never

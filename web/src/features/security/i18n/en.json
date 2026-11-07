@@ -1,6 +1,6 @@
 {
   "title": "Security",
-  "description": "Guardrail findings, the enforcement posture, the anomaly queue and tamper-evident incident forensics. By default it records only: nothing is blocked until you turn on a rule.",
+  "description": "Review what the guardrails flagged, choose which rules block, and investigate incidents. Nothing is blocked until you turn a rule on.",
   "tabs": {
     "overview": "Overview",
     "safety": "Safety posture",

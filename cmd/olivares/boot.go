@@ -2283,6 +2283,7 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 		b.set.sessionDependencies.WorkspaceSnapshotAuthority = workspaceSnapshotAuthority{data: b.st, principals: b.authr, authz: b.authz, scopes: b.set.sourceScopeResolver}.Check
 	}
 	if b.set.skills != nil && b.set.sessions != nil {
+		b.set.skills.UseDetection(b.set.sessions.DetectSkills)
 		b.set.skills.UseTargets(skillsTargetAuthority{principals: b.authr, st: b.st, authz: b.authz, sessions: b.set.sessions}, b.set.sessions.RefuseReferencedSkillsPack)
 	}
 	if b.running.skills != nil && b.running.sessions != nil {

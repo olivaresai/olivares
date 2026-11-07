@@ -5,6 +5,9 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,4 +153,45 @@ func TestUpgradeRefusesToReplaceThePackageOwnedBinary(t *testing.T) {
 			t.Fatalf("the data volume holds %q, want the applied 26.800", got)
 		}
 	})
+}
+
+// `olivares upgrade rollback` is the appliance's rollback unit, started and waited for; a host without that unit
+// has no data snapshot to return to, and the command says so with a usage exit code.
+func TestUpgradeRollbackStartsTheApplianceRollbackUnit(t *testing.T) {
+	oldUnit, oldStart := applianceRollbackUnit, startUnit
+	t.Cleanup(func() { applianceRollbackUnit, startUnit = oldUnit, oldStart })
+	var started []string
+	startErr := error(nil)
+	startUnit = func(_ context.Context, unit string) error {
+		started = append(started, unit)
+		return startErr
+	}
+	run := func() error {
+		cmd := newUpgradeCmd()
+		cmd.SetArgs([]string{"rollback"})
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		return cmd.Execute()
+	}
+
+	applianceRollbackUnit = filepath.Join(t.TempDir(), "olivares-appliance-rollback.service")
+	if err := run(); err == nil || exitcode.From(err) != exitcode.Usage || !strings.Contains(err.Error(), "Olivares appliance") {
+		t.Fatalf("err = %v (exit %d), want a usage refusal naming the appliance", err, exitcode.From(err))
+	}
+	if len(started) != 0 {
+		t.Fatalf("started %q on a host without the rollback unit", started)
+	}
+	if err := os.WriteFile(applianceRollbackUnit, []byte("[Service]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(); err != nil {
+		t.Fatal(err)
+	}
+	if len(started) != 1 || started[0] != "olivares-appliance-rollback.service" {
+		t.Fatalf("started %q, want the appliance rollback unit once", started)
+	}
+	startErr = errors.New("exit status 1")
+	if err := run(); err == nil || !strings.Contains(err.Error(), "journalctl -u olivares-appliance-rollback.service") {
+		t.Fatalf("err = %v, want a failed rollback to name its journal", err)
+	}
 }
