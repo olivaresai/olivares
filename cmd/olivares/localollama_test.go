@@ -121,3 +121,22 @@ func TestLocalOllamaRegistrationReadsTheEndpointsModels(t *testing.T) {
 		t.Fatalf("models after a download = %v", got)
 	}
 }
+
+func TestLocalOllamaRegistrationReportsAFailedProbe(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": "tags unavailable"})
+	}))
+	defer srv.Close()
+	h := newHarness(t)
+	sessions.WithProviderProbe(newProviderProbe())(h.set.sessions)
+	ctx := context.Background()
+	p, err := h.authr.Authenticate(ctx, h.adminToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	register := registerLocalOllama(h.set.sessions, h.st)
+	if err := register(ctx, p, model.TenantID(h.tenantA), srv.URL); err == nil || !strings.Contains(err.Error(), "connection test did not succeed") {
+		t.Fatalf("register with an unreadable model list = %v, want the probe failure", err)
+	}
+}

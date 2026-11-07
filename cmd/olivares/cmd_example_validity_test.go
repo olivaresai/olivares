@@ -97,6 +97,27 @@ func resolveInvocation(root *cobra.Command, words []string) *cobra.Command {
 	return target
 }
 
+// namesUnknownSubcommand reports whether the words stop at a group and go on with a
+// word that is neither a flag nor one of its subcommands: `olivares users invite ann`
+// resolves to the `users` group, which the binary answers with `unknown command`
+// (exit 2). A word naming a subcommand by alias is not unknown: resolveInvocation
+// stops before aliases, so `work ls` also lands on its group.
+func namesUnknownSubcommand(target *cobra.Command, words []string) bool {
+	if !isGroupStub(target) {
+		return false
+	}
+	depth := len(strings.Fields(target.CommandPath())) - 1
+	if depth >= len(words) || strings.HasPrefix(words[depth], "-") {
+		return false
+	}
+	for _, child := range target.Commands() {
+		if child.Name() == words[depth] || slices.Contains(child.Aliases, words[depth]) {
+			return false
+		}
+	}
+	return true
+}
+
 // flagKnownTo reports whether name is a flag of target or one inherited from
 // the tree above it.
 func flagKnownTo(root, target *cobra.Command, name string) bool {
@@ -120,7 +141,7 @@ func longFlagName(w string) (string, bool) {
 func verifyInvocation(t *testing.T, root *cobra.Command, owner string, words []string) {
 	t.Helper()
 	target := resolveInvocation(root, words)
-	if target == nil {
+	if target == nil || namesUnknownSubcommand(target, words) {
 		t.Errorf("%s: example names a command that does not resolve: olivares %s",
 			owner, strings.Join(words, " "))
 		return

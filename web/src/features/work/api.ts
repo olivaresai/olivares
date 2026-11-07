@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { ApiError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
 import { http, type TenantRequestOptions } from '@/lib/api/client'
 import { workItemQueryKeys } from '@/lib/api/work-query-keys'
 import type {
@@ -843,6 +843,7 @@ export type ApplyFailure =
   | 'other'
 
 export function classifyApplyFailure(err: unknown): ApplyFailure {
+  if (err instanceof NetworkError) return 'unknown'
   if (isUnknownVerdict(err)) return 'unknown'
   if (!(err instanceof ApiError)) return 'other'
   const code = workErrorCode(err) ?? ''

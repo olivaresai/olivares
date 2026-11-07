@@ -74,7 +74,10 @@ export function CodeLine({
         )}
         {...props}
       >
-        <code className="min-w-0 font-mono text-mono-s break-all text-text">
+        <code
+          tabIndex={0}
+          className="min-w-0 overflow-x-auto font-mono text-mono-s whitespace-pre text-text outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        >
           {command}
         </code>
         {button}
@@ -102,7 +105,11 @@ export function CodeLine({
         >
           $
         </span>
-        <code className="min-w-0 flex-1 py-px font-mono text-mono [overflow-wrap:anywhere] text-text">
+        {/* One line that scrolls: a command wrapped inside a token reads as two broken ones. */}
+        <code
+          tabIndex={0}
+          className="min-w-0 flex-1 overflow-x-auto py-px font-mono text-mono whitespace-pre text-text outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        >
           {command}
         </code>
         {button}

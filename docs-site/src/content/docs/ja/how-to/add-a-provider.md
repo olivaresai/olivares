@@ -167,6 +167,18 @@ olivares provider rm prv_01J8ABCDEF --yes               # 取り消せません
 プロファイルのように読めてしまうからです。ここでの失効は、プロバイダー側のキーを失効さ
 せません。それは各社のコンソールで行ってください。
 
+## Olivares Server 上のローカルモデルランタイム
+
+Olivares Server（アプライアンス、SELinux enforcing）では、ループバックアドレスのプロバイダーに紐づいたセッションは、ポリシーがローカルモデルランタイム用にラベルを付けたポートにのみ到達できます。11434（Ollama）、1234（LM Studio）、8000（vLLM）、8080（llama.cpp の `llama-server`）です。別のポートのランタイムについては、root として一度ラベルを付けてください:
+
+```bash
+semanage port -a -t olivares_model_runtime_port_t -p tcp 11435
+# If the base policy already labels that port (semanage port -l | grep -w 11435), modify it instead:
+semanage port -m -t olivares_model_runtime_port_t -p tcp 11435
+```
+
+それまではセッションは起動せず、そのエラーにこのコマンドが示されます。
+
 ## エンジンが拒否するもの、そしてその理由
 
 | 表示 | 意味 |
@@ -189,6 +201,7 @@ olivares provider rm prv_01J8ABCDEF --yes               # 取り消せません
 
 ## 関連
 
+- [プロバイダーとツール](/reference/providers-and-tools/)
 - [プロバイダーセッションを運用する](/ja/how-to/operate-provider-sessions/)
 - [最初の 1 時間](/ja/how-to/first-hour/)
 - [CLI リファレンス](/ja/reference/cli/)

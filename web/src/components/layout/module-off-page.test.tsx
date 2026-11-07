@@ -4,7 +4,7 @@
 //
 // THE PAGE OF A VIEW WHOSE MODULE IS OFF IS A CALM ONE: the view's icon, its name, one sentence
 // of what it does, and one action. A person who may change modules gets "Turn on", which uses
-// the same selection as Settings > Edition & modules and brings the view back without a
+// the same selection as Settings > Modules and brings the view back without a
 // reload; anyone else is told whom to ask. When turning it on takes more than this one module
 // the page says so in one line and links to Settings instead of acting. It is never a refusal.
 import { act } from 'react'
@@ -62,7 +62,7 @@ import {
   type ModuleSelection,
   type ModuleState,
 } from '@/features/settings/modules-settings'
-import { useModulesStore } from '@/stores/modules'
+import { moduleOfView, useModulesStore } from '@/stores/modules'
 import { RequirePermission } from './require-permission'
 
 const publication = FEATURE_VIEWS.find((v) => v.id === 'gitPublication')!
@@ -106,6 +106,22 @@ describe('the page of a view whose module is off', () => {
     ).not.toBeNull()
     expect(screen.queryByText(/not enabled on this installation/i)).toBeNull()
     expect(screen.queryByText('Git publication screen')).toBeNull()
+  })
+
+  it('does not paint a name the top bar already says (Security under Security)', () => {
+    const security = FEATURE_VIEWS.find((v) => v.id === 'security')!
+    useModulesStore
+      .getState()
+      .setOff([moduleOfView(security.permission, security.id)!])
+    renderIntel(
+      <RequirePermission view={security}>
+        <p>Security screen</p>
+      </RequirePermission>,
+    )
+    // Still the page's h1 for assistive technology; only the painted word is dropped.
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Security' }),
+    ).toHaveClass('sr-only')
   })
 
   it('asks a person who may not change modules to ask an administrator', () => {
@@ -172,9 +188,9 @@ describe('the page of a view whose module is off', () => {
     expect(note).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Turn on' })).toBeNull()
     const link = within(note.parentElement!).getByRole('link', {
-      name: 'Open Edition & modules',
+      name: 'Open Modules',
     })
-    expect(link).toHaveAttribute('href', '/settings?section=edition')
+    expect(link).toHaveAttribute('href', '/settings?section=modules')
     expect(select).not.toHaveBeenCalled()
   })
 
@@ -199,6 +215,20 @@ describe('the page of a view whose module is off', () => {
     expect(
       screen.getByText(/You do not have permission to view this/),
     ).toBeInTheDocument()
+  })
+
+  it('tells a person refused a system:admin view to ask a system administrator, not "an administrator"', () => {
+    route.kind = 'forbidden'
+    const updates = FEATURE_VIEWS.find((v) => v.id === 'updates')!
+    renderIntel(
+      <RequirePermission view={updates}>
+        <p>Updates screen</p>
+      </RequirePermission>,
+    )
+    expect(
+      screen.getByText(/ask a system administrator to view or change it/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Ask an administrator for access/)).toBeNull()
   })
 
   it('waits for an answer that is not established before it says a module is off', () => {

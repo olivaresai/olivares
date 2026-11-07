@@ -1,5 +1,5 @@
 {
-  "title": "Salud y SLA",
+  "title": "Salud",
   "subtitle": "Liveness, fiabilidad y dependencias de tu infraestructura — derivado de la actividad observada y del barrido de inactividad, nunca sondeando la infraestructura.",
   "auditedNote": "El stream en vivo y cualquier acción de resolver/editar son operaciones privilegiadas y auditadas. La salud se deriva; el motor nunca transporta aquí texto de error ni payloads.",
   "refresh": "Actualizar",
@@ -175,8 +175,7 @@
       "delegates_to": "Delega en"
     },
     "observed": "Observado",
-    "truncated": "Primeros {{n}}",
-    "truncatedHint": "El grafo de dependencias tiene más nodos de los mostrados; esta es la primera página keyset.",
+    "truncated": "No se muestran todas las dependencias.",
     "empty": {
       "title": "Aún no se han descubierto dependencias",
       "description": "Cuando los agentes llamen a servidores MCP y herramientas, el grafo de dependencias observado aparecerá aquí."

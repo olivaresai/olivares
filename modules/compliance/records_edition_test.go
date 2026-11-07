@@ -14,13 +14,12 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 )
 
 // Legal hold and erasure with key shred are Business capabilities (docs/editions.md): a module
 // built without the Business option answers each of their routes 501 business_required after the
 // role check, and the Business option keeps the behavior every other test in this package pins.
-// Retention, risk and residency stay Community.
+// Retention schedules and the sweep are Business too; reading them, risk and residency stay Community.
 
 type routeLister struct{ routes [][2]string }
 
@@ -100,8 +99,9 @@ func TestCommunityLegalHoldRefusalFollowsTheRoleCheck(t *testing.T) {
 	}
 }
 
-// What stays Community: retention schedules, risk and residency answer as before.
-func TestCommunityKeepsRetentionRiskAndResidency(t *testing.T) {
+// What stays Community: reading retention classes, schedules and certificates, risk and
+// residency answer as before.
+func TestCommunityKeepsRetentionReadsRiskAndResidency(t *testing.T) {
 	h := newCommunityHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
@@ -111,6 +111,30 @@ func TestCommunityKeepsRetentionRiskAndResidency(t *testing.T) {
 		if r := h.do("GET", s138Base+path, adm, nil, tenantHdr(tenant)); r.code != http.StatusOK {
 			t.Fatalf("Community GET %s = %d %s; want 200", path, r.code, r.raw)
 		}
+	}
+}
+
+// A purge schedule a Business engine stored and enabled is applied by no Community engine, so a
+// Community module never reports it as enabled; the row stays stored as it was, and the module
+// counts it for the one boot warning. Nor does it state a "gone everywhere after" window for it.
+func TestCommunityReportsNoStoredScheduleAsEnabled(t *testing.T) {
+	h := newCommunityHarness(t, WithProviderRetention(stubProviderRetention{days: 30, source: "models.reference"}))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	adm := h.roleToken(admin, tenant, "a@x.io", "admin")
+	h.seedExtRows(tenant, retentionPolicyKind, 1, model.Record{
+		colDataClass: "agent.memory", colRPDays: int64(30), colRPDisposition: dispositionPurge, colRPEnabled: true, colRPBasis: "stored by Business",
+	})
+
+	r := h.do("GET", s138Base+"/retention/policies", adm, nil, tenantHdr(tenant))
+	if r.code != http.StatusOK || !strings.Contains(r.raw, "agent.memory") || strings.Contains(r.raw, `"enabled":true`) {
+		t.Fatalf("Community GET /retention/policies = %d %s; want the stored schedule listed and not enabled", r.code, r.raw)
+	}
+	if strings.Contains(r.raw, "effective_disclosure_days") {
+		t.Fatalf("Community GET /retention/policies = %s; want no disclosure window for a schedule it does not apply", r.raw)
+	}
+	if n, err := h.mod.StoredPurgeSchedules(context.Background(), tenant); err != nil || n != 1 {
+		t.Fatalf("StoredPurgeSchedules = %d, %v; want the one stored enabled purge schedule", n, err)
 	}
 }
 
@@ -133,49 +157,58 @@ func TestCommunityStillHonorsAStoredHold(t *testing.T) {
 	}
 }
 
-// The retention sweep is the destruction path Community keeps. A hold a Business engine stored
-// must stop its purge, and the same schedule must purge where no hold is stored, so the veto is
-// the cause and not an inert schedule. The hold is written into the store: Community cannot place one.
-func TestCommunitySweepStillHonorsAStoredHold(t *testing.T) {
+// Retention schedules and the hold-checked sweep are Business too: a Community module answers
+// authoring a schedule, deleting one and sweeping 501 business_required after the role check,
+// and its engine loop destroys nothing under a schedule a Business engine stored. The same
+// schedule purges under the Business module, so the edition is the cause and not an inert one.
+func TestCommunityRefusesRetentionAuthoringAndSweep(t *testing.T) {
 	clock := &movableClock{t: time.Now().UTC()}
 	gate := &stubApprovalGate{status: GateStatusApproved, ref: "ap-ret", approvers: []string{"user:approver"}}
 	h := newCommunityHarness(t, WithClock(clock), WithApprovalGate(gate))
 	admin := h.adminLogin()
-	held := h.createOrg(admin, "held")
-	free := h.createOrg(admin, "free")
+	tenant := h.createOrg(admin, "acme")
+	adm := h.roleToken(admin, tenant, "a@x.io", "admin")
+	viewer := h.roleToken(admin, tenant, "v@x.io", "viewer")
 
-	for _, tenant := range []model.TenantID{held, free} {
-		adm := h.roleToken(admin, tenant, "a@"+tenant.String()+".io", "admin")
-		h.seedExtRows(tenant, knowledgeMemoryStandInKind, 2, model.Record{"agent_ref": "a-1", "mkey": "k1", "content": "x"})
-		if r := h.putPolicy(adm, tenant, "agent.memory", map[string]any{"retention_days": 30, "disposition": "purge", "basis": "test schedule"}); r.code != http.StatusOK {
-			t.Fatalf("Community enable purge schedule = %d %s; retention stays Community", r.code, r.raw)
+	writes := []struct {
+		method, path string
+		body         any
+	}{
+		{"PUT", "/retention/policies/agent.memory", map[string]any{"retention_days": 30, "disposition": "purge", "basis": "test schedule"}},
+		{"DELETE", "/retention/policies/agent.memory", nil},
+		{"POST", "/retention/sweep", map[string]any{}},
+	}
+	for _, w := range writes {
+		if r := h.do(w.method, s138Base+w.path, viewer, w.body, tenantHdr(tenant)); r.code != http.StatusForbidden {
+			t.Fatalf("viewer %s %s = %d %s; want 403 before the edition answer", w.method, w.path, r.code, r.raw)
 		}
-		if tenant == held {
-			if r := h.do("POST", s138Base+"/holds", adm, map[string]any{"matter_ref": "c-1", "reason": "r", "scope_kind": "tenant"}, tenantHdr(tenant)); r.code != http.StatusNotImplemented {
-				t.Fatalf("Community placed a hold: %d %s", r.code, r.raw)
-			}
-			h.mutate(held, func(sc store.Scope) error {
-				repo, err := sc.Ext(legalHoldKind)
-				if err != nil {
-					return err
-				}
-				_, err = repo.Create(context.Background(), model.Record{
-					"matter_ref": "case-1", "scope_kind": "tenant", "subject_kind": nil, "subject_ref": nil,
-					"reason": "stored by a Business engine", "status": "active", "created_by": "test",
-				})
-				return err
-			})
+		r := h.do(w.method, s138Base+w.path, adm, w.body, tenantHdr(tenant))
+		if r.code != http.StatusNotImplemented || errorCodeOf(r) != "business_required" || !strings.Contains(r.raw, "Business") {
+			t.Fatalf("Community %s %s = %d %s; want 501 business_required naming Business", w.method, w.path, r.code, r.raw)
 		}
-		clock.advance(60 * 24 * time.Hour)
-		sweep := h.sweepNow(adm, tenant)
-		wantPurged, wantRows := 2, 0
-		if tenant == held {
-			wantPurged, wantRows = 0, 2
-		}
-		if intOf(sweep.body["purged"]) != wantPurged || h.countExtRows(tenant, knowledgeMemoryStandInKind) != wantRows {
-			t.Fatalf("Community sweep of %s purged %v and left %d rows; want %d purged and %d rows left: %s",
-				tenant, sweep.body["purged"], h.countExtRows(tenant, knowledgeMemoryStandInKind), wantPurged, wantRows, sweep.raw)
-		}
+	}
+
+	// A schedule a Business engine stored, over two rows past its age.
+	business := newHarness(t, WithClock(clock), WithApprovalGate(gate))
+	bAdmin := business.adminLogin()
+	stored := business.createOrg(bAdmin, "stored")
+	bAdm := business.roleToken(bAdmin, stored, "a@stored.io", "admin")
+	business.seedExtRows(stored, knowledgeMemoryStandInKind, 2, model.Record{"agent_ref": "a-1", "mkey": "k1", "content": "x"})
+	if r := business.putPolicy(bAdm, stored, "agent.memory", map[string]any{"retention_days": 30, "disposition": "purge", "basis": "test schedule"}); r.code != http.StatusOK {
+		t.Fatalf("Business enable purge schedule = %d %s", r.code, r.raw)
+	}
+	clock.advance(60 * 24 * time.Hour)
+
+	community := New(WithClock(clock), WithApprovalGate(gate))
+	community.UseData(api.NewModuleData(business.st))
+	if sum, err := community.RunRetention(context.Background(), stored); err != nil || sum.Purged != 0 || business.countExtRows(stored, knowledgeMemoryStandInKind) != 2 {
+		t.Fatalf("Community engine sweep = %+v, %v, %d rows left; want nothing purged and both rows kept", sum, err, business.countExtRows(stored, knowledgeMemoryStandInKind))
+	}
+	if r := business.do("GET", s138Base+"/retention/policies", bAdm, nil, tenantHdr(stored)); r.code != http.StatusOK || !strings.Contains(r.raw, "agent.memory") {
+		t.Fatalf("stored schedule read = %d %s; want it listed", r.code, r.raw)
+	}
+	if sum := business.sweepNow(bAdm, stored); intOf(sum.body["purged"]) != 2 || business.countExtRows(stored, knowledgeMemoryStandInKind) != 0 {
+		t.Fatalf("Business sweep of the same schedule = %s; want both rows purged", sum.raw)
 	}
 }
 

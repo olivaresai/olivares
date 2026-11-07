@@ -42,7 +42,6 @@ FILES='
 core/api/handlers_scim_noenterprise.go
 core/auth/scim.go
 core/auth/scim_groups.go
-core/auth/scim_events.go
 '
 for f in $FILES; do
 	[ -f "$f" ] || cannot "missing $f"

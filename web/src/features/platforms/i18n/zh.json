@@ -1,6 +1,6 @@
 {
-  "title": "平台与生命周期",
-  "description": "面向 Claude 资产域的多面部署矩阵与按平台的模型生命周期——按面划分的合规态势与各异的退役截止日期。该引用由引擎提供，绝不重新计算。",
+  "title": "平台",
+  "description": "Claude 的运行位置以及各模型的停用时间。",
   "tabs": {
     "surfaces": "面与合规",
     "lifecycle": "模型生命周期"
@@ -13,7 +13,7 @@
   },
   "surfaces": {
     "title": "部署面",
-    "description": "六个已建模的 Claude 面（ANT2-01/17）。每个面在 Base URL、认证、模型 ID 形式、计费、驻留地与合规态势上各不相同——它们不可互换。",
+    "description": "六个已建模的 Claude 面。每个面在 Base URL、认证、模型 ID 形式、计费、驻留地与合规态势上各不相同——它们不可互换。",
     "matrixTitle": "面属性矩阵",
     "matrixSummary": "从运营方、端点、认证、模型 ID 形式、API 支持、计费、HIPAA、ZDR 与驻留地等维度对比六个部署面。",
     "unmodeled": "未建模的面——无属性矩阵。",
@@ -60,7 +60,7 @@
   },
   "lifecycle": {
     "title": "按平台的模型生命周期",
-    "description": "模型退役是按平台进行的，而非全局统一（ANT2-03）。Anthropic 运营的面与 Bedrock 和 Vertex 的退役日期各不相同——单一的「已退役」标志会对半数资产域给出错误的迁移截止日期。",
+    "description": "模型退役是按平台进行的，而非全局统一。Anthropic 运营的面与 Bedrock 和 Vertex 的退役日期各不相同——单一的「已退役」标志会对半数资产域给出错误的迁移截止日期。",
     "datePending": "日期未公布 / 待确认",
     "noSuccessor": "未声明后继模型",
     "noSuccessorHint": "权威方未为此系列指定替代模型。不会进行任何推断。",
@@ -75,7 +75,7 @@
     "paramDeprecation": {
       "title": "参数弃用预先提示",
       "badge": "信息提示",
-      "body": "{{affected}} 会以 HTTP {{status}} 拒绝非默认的 {{params}}。这是 Anthropic 的弃用行为（ANT2-03），并非产品缺陷，也不是可修复的错误——推理面将这些参数作为预先提示予以保留拒绝。",
+      "body": "{{affected}} 会以 HTTP {{status}} 拒绝非默认的 {{params}}。这是 Anthropic 的弃用行为，并非产品缺陷，也不是可修复的错误——Olivares 将这些参数作为预先提示予以保留拒绝。",
       "paramsJoin": "、"
     },
     "notes": {
@@ -90,11 +90,11 @@
   "empty": {
     "lifecycle": {
       "title": "尚未声明模型退役计划",
-      "description": "这些截止日期必须由引擎在编译时内置的 Claude 生命周期参考数据提供；租户活动与控制台输入不会填充它们。"
+      "description": "这些截止日期必须由引擎在编译时内置的 Claude 生命周期参考数据提供；你的活动与控制台输入不会填充它们。"
     },
     "surface": {
       "title": "尚未声明部署面",
-      "description": "这些行必须由引擎在编译时内置的 Claude 部署面参考数据提供；租户活动与控制台输入不会填充它们。"
+      "description": "这些行必须由引擎在编译时内置的 Claude 部署面参考数据提供；你的活动与控制台输入不会填充它们。"
     }
   },
   "effectiveState": {

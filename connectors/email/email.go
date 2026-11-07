@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
@@ -40,6 +41,8 @@ const Name = "olivares.email"
 const (
 	defaultSMTPPort = 587
 	defaultSubject  = "Olivares notification"
+	smtpDialTimeout = 30 * time.Second
+	implicitTLSPort = 465
 )
 
 // Config field keys.
@@ -82,7 +85,10 @@ type Output struct {
 
 	dkim *dkimSigner
 
-	send smtpSendFunc           // injectable (tests); nil => real SMTP
+	send smtpSendFunc // injectable (tests); nil => real SMTP
+	// dial opens the TCP connection to the SMTP server; nil => net.Dialer. An engine
+	// that governs egress sets its guarded dialer here (WithDialer).
+	dial func(ctx context.Context, network, addr string) (net.Conn, error)
 	now  func() time.Time       // injectable clock (tests); nil => time.Now
 	rid  func() (string, error) // injectable message-id randomness (tests); nil => crypto/rand
 }
@@ -92,6 +98,13 @@ var _ sdk.OutputConnector = (*Output)(nil)
 // New returns an email output connector with default configuration.
 func New() *Output {
 	return &Output{port: defaultSMTPPort}
+}
+
+// WithDialer sets how the connection to the SMTP server is opened (an egress-guarded
+// dialer). nil keeps net.Dialer.
+func (o *Output) WithDialer(dial func(ctx context.Context, network, addr string) (net.Conn, error)) *Output {
+	o.dial = dial
+	return o
 }
 
 // Descriptor returns the connector's self-description and declared configuration.
@@ -228,38 +241,47 @@ func (o *Output) buildMessage(n sdk.Notification, to []string) ([]byte, error) {
 }
 
 // deliver performs the real SMTP delivery: implicit TLS on port 465, STARTTLS on
-// 587/25 (unless insecure_no_tls). It authenticates with PLAIN when a username is set.
-func (o *Output) deliver(_ context.Context, msg []byte, from string, to []string) error {
-	addr := net.JoinHostPort(o.host, strconv.Itoa(o.port))
-	var auth smtp.Auth
-	if o.username != "" {
-		auth = smtp.PlainAuth("", o.username, o.password, o.host)
+// 587/25 when the server offers it (as smtp.SendMail does), and PLAIN auth when a
+// username is set. The connection is opened through o.dial.
+func (o *Output) deliver(ctx context.Context, msg []byte, from string, to []string) error {
+	dial := o.dial
+	if dial == nil {
+		dial = (&net.Dialer{Timeout: smtpDialTimeout}).DialContext
 	}
-	if o.insecureTLS {
-		return smtp.SendMail(addr, auth, from, to, msg)
-	}
-	if o.port == 465 {
-		return o.deliverImplicitTLS(addr, auth, from, to, msg)
-	}
-	// STARTTLS path: smtp.SendMail issues STARTTLS automatically when the server
-	// advertises it, and PLAIN auth requires the connection to be TLS-protected first.
-	return smtp.SendMail(addr, auth, from, to, msg)
-}
-
-// deliverImplicitTLS dials a TLS connection (port 465 implicit TLS) and runs the SMTP
-// conversation over it.
-func (o *Output) deliverImplicitTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
-	conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: o.host, MinVersion: tls.VersionTLS12})
+	conn, err := dial(ctx, "tcp", net.JoinHostPort(o.host, strconv.Itoa(o.port)))
 	if err != nil {
 		return err
+	}
+	// The dial honors ctx; the conversation after it reads and writes the raw conn, so
+	// the caller's deadline is carried there too (a server that never speaks).
+	if dl, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(dl)
+	}
+	tlsCfg := &tls.Config{ServerName: o.host, MinVersion: tls.VersionTLS12}
+	implicitTLS := o.port == implicitTLSPort && !o.insecureTLS
+	if implicitTLS {
+		conn = tls.Client(conn, tlsCfg)
 	}
 	c, err := smtp.NewClient(conn, o.host)
 	if err != nil {
+		_ = conn.Close()
 		return err
 	}
 	defer func() { _ = c.Close() }()
-	if auth != nil {
-		if err := c.Auth(auth); err != nil {
+	if !implicitTLS {
+		if ok, _ := c.Extension("STARTTLS"); ok {
+			if err := c.StartTLS(tlsCfg); err != nil {
+				return err
+			}
+		}
+	}
+	if o.username != "" {
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server doesn't support AUTH")
+		}
+		// PlainAuth refuses to send the credential over a connection without TLS
+		// unless the server is localhost.
+		if err := c.Auth(smtp.PlainAuth("", o.username, o.password, o.host)); err != nil {
 			return err
 		}
 	}

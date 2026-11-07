@@ -49,7 +49,7 @@ func NewSessionToolServer(cfg SessionToolServerConfig) (*SessionToolServer, erro
 		resource: "urn:olivares:session-mcp:" + cfg.ServerID, tenant: cfg.Tenant,
 		upstreamDescriptor: cfg.Descriptor, toolset: cfg.Toolset, upstream: cfg.Upstream,
 		gate: cfg.Gate, auditor: cfg.Auditor, now: time.Now, taskLedger: newTaskLedger(0, time.Now),
-		revisionMode: revisionModeLegacy, upstreamRevision: "2025-11-25", instanceID: instance,
+		revisionMode: revisionModeLegacy, upstreamRevision: LegacyRevision, instanceID: instance,
 		apps: apps, consent: denyConsentStore{},
 		dataFlow: cfg.DataFlow, flowServer: cfg.ServerID,
 	}

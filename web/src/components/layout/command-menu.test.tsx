@@ -138,7 +138,7 @@ describe('CommandMenu', () => {
         option.getAttribute('data-value')?.startsWith('settings:edition '),
       )
       expect(entry).toBeDefined()
-      expect(entry).toHaveTextContent('Edition & modules')
+      expect(entry).toHaveTextContent('Edition')
       await user.click(entry!)
       expect(navigateMock).toHaveBeenCalledWith({
         to: '/settings',
@@ -331,7 +331,7 @@ describe('CommandMenu', () => {
   })
 
   // N1 — the palette shares the sidebar's index and ranking.
-  it('ranks the exact label first and shows Group › Place beside each page', async () => {
+  it('ranks the exact label first and shows its place beside each page', async () => {
     const user = userEvent.setup()
     useCommandStore.getState().setOpen(true)
     renderIntel(<CommandMenu />)
@@ -347,7 +347,8 @@ describe('CommandMenu', () => {
         values.indexOf(values.find((v) => v.startsWith('view:finops'))!),
       )
     } else expect(values.some((v) => v.startsWith('view:finops'))).toBe(false)
-    expect(options[0]).toHaveTextContent('Tools › Models')
+    expect(options[0]).toHaveTextContent('Tools')
+    expect(options[0]).not.toHaveTextContent('›')
   })
 
   it('offers no retired area: its name finds the pages it held, each beside its place', async () => {
@@ -361,7 +362,8 @@ describe('CommandMenu', () => {
     const usage = options.find((o) =>
       o.getAttribute('data-value')?.startsWith('view:usage '),
     )!
-    expect(usage).toHaveTextContent('Control › Usage & cost')
+    expect(usage).toHaveTextContent('Usage')
+    expect(usage).not.toHaveTextContent('›')
     expect(screen.queryByText(/Oversight ›/)).toBeNull()
     await user.click(usage)
     expect(navigateMock).toHaveBeenCalledWith({ to: '/usage' })

@@ -9,9 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -40,6 +43,47 @@ func TestRootVersionWired(t *testing.T) {
 	for _, want := range []string{version, commit, date} {
 		if !strings.Contains(root.Version, want) {
 			t.Errorf("root.Version %q does not carry build metadatum %q", root.Version, want)
+		}
+	}
+}
+
+// TestVersionTextNamesTheEdition: an administrator reads which build runs, and on a
+// Business build whether this host's license is live, from the text line of `version`
+// and `--version`, not only from the JSON form.
+func TestVersionTextNamesTheEdition(t *testing.T) {
+	previous := thisEdition
+	t.Cleanup(func() { thisEdition = previous })
+	t.Setenv("OLIVARES_LICENSE", "")
+	t.Setenv("OLIVARES_LICENSE_PATH", "")
+	licensed := t.TempDir()
+	blob := signTestLicence(t, "Acme Ltd", time.Now().Add(365*24*time.Hour))
+	if err := os.WriteFile(filepath.Join(licensed, licenseFileName), []byte(blob), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The packaged unit keeps its license in its own data directory, which a login
+	// shell does not name: an empty account directory must not hide it.
+	previousUnit := unitLicenseDataDir
+	t.Cleanup(func() { unitLicenseDataDir = previousUnit })
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	for _, tc := range []struct {
+		edition, dataDir, unitDir, want string
+	}{
+		{"community", t.TempDir(), licensed, version + " Community (commit "},
+		{"enterprise", t.TempDir(), licensed, version + " Business, license none (commit "},
+		{"enterprise", licensed, t.TempDir(), version + " Business, license valid (commit "},
+		{"enterprise", "", licensed, version + " Business, license valid (commit "},
+	} {
+		thisEdition = editionPorts{name: tc.edition}
+		t.Setenv("OLIVARES_DATA_DIR", tc.dataDir)
+		unitLicenseDataDir = tc.unitDir
+		for _, args := range [][]string{{"version"}, {"--version"}} {
+			out, err := runRootForTest(t, args...)
+			if err != nil {
+				t.Fatalf("%v: %v\n%s", args, err, out)
+			}
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("%s data dir %q %v printed %q, want it to contain %q", tc.edition, tc.dataDir, args, out, tc.want)
+			}
 		}
 	}
 }

@@ -6,8 +6,12 @@ package confine
 
 import (
 	"errors"
+	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -36,6 +40,36 @@ func ChildTempDir() (string, error) {
 		}
 	}
 	return os.MkdirTemp(root, "s-")
+}
+
+// RemoveChildTemp removes a confined child's temporary directory once the child has exited. A failure is logged: the
+// folder then waits for the next start-up sweep.
+func RemoveChildTemp(dir string) {
+	if err := removeChildTemp(dir); err != nil {
+		slog.Warn("sessions: a confined child's temporary directory was not removed; the next start-up sweep removes it", "dir", dir, "err", err)
+	}
+}
+
+// removeChildTemp removes dir, also when the child left folders there without the owner's write permission (Go's module
+// cache is read-only): it gives each folder back to the owner, never through a symbolic link, and removes the tree.
+func removeChildTemp(dir string) error {
+	if os.RemoveAll(dir) == nil {
+		return nil
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	_ = fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() {
+			if info, ierr := d.Info(); ierr == nil {
+				_ = root.Chmod(p, info.Mode().Perm()|0o700)
+			}
+		}
+		return nil // remove what can be removed; RemoveAll reports the rest
+	})
+	return os.RemoveAll(dir)
 }
 
 // ErrChildTempHeld is the sweep's answer when another engine holds the child temporary root: it serves on the same data
@@ -90,10 +124,11 @@ func holdChildTemp(root string) error {
 	return nil
 }
 
-// SweepChildTemp removes every entry a previous engine left in the child temporary root: their children are gone. It
-// first holds the root for this engine, so a second engine on the same data folder (started by hand, about to fail on
-// the busy port, or a --reuse-port hand-over serving beside the previous engine) removes nothing and gets
-// ErrChildTempHeld; a serving one then holds the root once the previous engine exits.
+// SweepChildTemp removes the child temporary directories a previous engine left in the child temporary root: their
+// children are gone. It removes only what ChildTempDir makes there, direct s-<decimal> folders that are no link; it
+// leaves anything else in place and logs it. It first holds the root for this engine, so a second engine on the same
+// data folder (started by hand, about to fail on the busy port, or a --reuse-port hand-over serving beside the previous
+// engine) removes nothing and gets ErrChildTempHeld; a serving one then holds the root once the previous engine exits.
 func SweepChildTemp() error {
 	root := childRoot()
 	if root == "" {
@@ -109,9 +144,25 @@ func SweepChildTemp() error {
 	if err != nil {
 		return err
 	}
+	resolved, rerr := filepath.EvalSymlinks(root)
+	if rerr != nil {
+		resolved = root
+	}
+	slog.Info("sessions: sweeping the confined children's temporary directories a previous engine left", "root", resolved)
 	var errs []error
 	for _, e := range entries {
-		errs = append(errs, os.RemoveAll(filepath.Join(root, e.Name())))
+		if !e.IsDir() || !childTempName(e.Name()) { // ReadDir's type is the entry's own, so a link is no directory
+			slog.Warn("sessions: the start-up sweep left an entry that is no child temporary directory", "root", resolved, "entry", e.Name())
+			continue
+		}
+		errs = append(errs, removeChildTemp(filepath.Join(root, e.Name())))
 	}
 	return errors.Join(errs...)
+}
+
+// childTempName reports a name ChildTempDir gives: "s-" and os.MkdirTemp's decimal suffix.
+func childTempName(name string) bool {
+	digits, ok := strings.CutPrefix(name, "s-")
+	_, err := strconv.ParseUint(digits, 10, 32)
+	return ok && err == nil
 }

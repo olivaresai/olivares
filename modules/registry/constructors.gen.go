@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	accessmap "github.com/olivaresai/olivares/modules/access-map"
+	agentroles "github.com/olivaresai/olivares/modules/agentroles"
 	aiterms "github.com/olivaresai/olivares/modules/aiterms"
 	capabilities "github.com/olivaresai/olivares/modules/capabilities"
 	catalog "github.com/olivaresai/olivares/modules/catalog"
@@ -125,6 +126,8 @@ func newDefault(namespace string, built map[string]api.Module) (api.Module, erro
 		return aiterms.New(), nil
 	case "session-cockpit":
 		return sessioncockpit.NewPlaceholder(), nil
+	case "agentroles":
+		return agentroles.New(), nil
 	default:
 		return nil, fmt.Errorf("module spec %q has no generated constructor; run scripts/generate-module-spec.py", namespace)
 	}

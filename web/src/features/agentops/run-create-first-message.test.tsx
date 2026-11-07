@@ -37,6 +37,7 @@ vi.mock('@/features/identity/api', () => ({ identityApi: identities }))
 vi.mock('@/features/extensions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/extensions')>()),
   LAUNCH_IDENTITY_EXTENSION: undefined,
+  PANEL_EXTENSIONS: {},
 }))
 vi.mock('@/features/workspace-templates/api', () => ({
   templatesApi: { list: vi.fn(), apply: vi.fn() },
@@ -52,6 +53,7 @@ const navigate = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', async (orig) => ({
   ...(await orig<typeof import('@tanstack/react-router')>()),
   useNavigate: () => navigate,
+  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
 }))
 
 import { templatesApi } from '@/features/workspace-templates/api'
@@ -90,13 +92,15 @@ const tpl = {
   updated_at: '',
 }
 
+const onOpenChange = vi.fn()
+
 function wrap(initialTemplateId?: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
       <RunCreateDialog
         open
-        onOpenChange={vi.fn()}
+        onOpenChange={onOpenChange}
         initialTemplateId={initialTemplateId}
       />
     </QueryClientProvider>,
@@ -165,7 +169,7 @@ describe('RunCreateDialog — a first message and Start', () => {
     wrap()
     await waitFor(() =>
       expect(
-        screen.getByRole('combobox', { name: 'Provider profile' }),
+        screen.getByRole('combobox', { name: 'Account' }),
       ).toHaveTextContent('Home A'),
     )
     await user.type(
@@ -234,7 +238,7 @@ describe('RunCreateDialog — a first message and Start', () => {
     wrap()
     await waitFor(() =>
       expect(
-        screen.getByRole('combobox', { name: 'Provider profile' }),
+        screen.getByRole('combobox', { name: 'Account' }),
       ).toHaveTextContent('Home A'),
     )
     await user.type(
@@ -396,7 +400,7 @@ describe('RunCreateDialog — a first message and Start', () => {
   it("keeps every other choice under Advanced options, each on today's default", async () => {
     const user = userEvent.setup()
     wrap()
-    await screen.findByRole('combobox', { name: 'Provider profile' })
+    await screen.findByRole('combobox', { name: 'Account' })
     for (const label of [
       'Launch identity',
       'Name',
@@ -423,7 +427,7 @@ describe('RunCreateDialog — a first message and Start', () => {
       'default',
     )
     expect(screen.getByLabelText('Folder')).toHaveTextContent(
-      'Temporary folder for this session',
+      'Default (My files)',
     )
     expect(await screen.findByLabelText('Template')).toHaveTextContent(
       'No template',
@@ -447,7 +451,7 @@ describe('RunCreateDialog — a first message and Start', () => {
     )
     expect(start()).toBeDisabled()
     expect(agentOpsApi.profileLaunchReadiness).not.toHaveBeenCalled()
-    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(screen.getByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home B/ }))
     await waitFor(() => expect(start()).toBeEnabled())
     await user.click(start())
@@ -470,6 +474,26 @@ describe('RunCreateDialog — a first message and Start', () => {
     expect(
       screen.getByRole('link', { name: 'Open Providers' }),
     ).toHaveAttribute('href', '/providers')
+  })
+
+  // The dialog lives in the shell, so the router changing the page does not close it:
+  // a plain click must, and a click that opens a new tab must leave it be.
+  it('Open Providers closes the dialog on a plain click, not on a new-tab click', async () => {
+    vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap()
+    const link = await screen.findByRole('link', { name: 'Open Providers' })
+    await user.keyboard('{Control>}')
+    await user.click(link)
+    await user.keyboard('{/Control}')
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.pointer({ keys: '[MouseMiddle]', target: link })
+    expect(onOpenChange).not.toHaveBeenCalled()
+    await user.click(link)
+    expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false)
   })
 
   it('names what the chosen profile is missing when it cannot start', async () => {

@@ -17,7 +17,12 @@
 #            speaks stream-json (an init frame, then one reply per prompt) and
 #            reports whether it could read <data-dir>/secret-store.key.
 #
-# Usage:  scripts/session-journey-smoke.sh [--binary PATH] [--label NAME] [--pipeline]
+# --large-output adds one turn in which the tool reads a file over 1 MiB (a 3 MiB
+# tool_result): the frame must come through whole, the session must carry on to its
+# answer and stay alive (release-first-hour passes it on the candidate binary;
+# Community 0.5 ended every such session).
+#
+# Usage:  scripts/session-journey-smoke.sh [--binary PATH] [--label NAME] [--pipeline] [--large-output]
 # Requires: bash, python3. Exit 0 = journey works; 1 = it does not (the step is
 # named); 2 = could not look (no binary, no free port).
 set -euo pipefail
@@ -25,10 +30,12 @@ set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 bin="${OLIVARES_BIN:-$root/bin/olivares}"
 pipeline=false
+large_output=false
 label="$(uname -s | tr '[:upper:]' '[:lower:]')"
 while [[ "$#" -gt 0 ]]; do
 	case "$1" in
   --pipeline) pipeline=true; shift ;;
+		--large-output) large_output=true; shift ;;
 		--binary) bin="${2:-}"; shift 2 ;;
 		--label) label="${2:-}"; shift 2 ;;
 		*) printf 'session-journey: unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -71,6 +78,14 @@ printf '{"type":"system","subtype":"init","session_id":"%s","cwd":"%s"}\n' "$sid
 printf '{"type":"system","subtype":"journey_probe","probe":"%s"}\n' "$probe"
 while IFS= read -r line; do
  case "$line" in
+  *large-output*)
+   printf '{"type":"assistant","session_id":"%s","message":{"role":"assistant","content":[{"type":"text","text":"reading the file"}]}}\n' "$sid"
+   printf '{"type":"user","session_id":"%s","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_big","content":"' "$sid"
+   head -c 3145728 /dev/zero | tr '\0' x
+   printf '"}]}}\n'
+   printf '{"type":"assistant","session_id":"%s","message":{"role":"assistant","content":[{"type":"text","text":"journey-large-reply"}]}}\n' "$sid"
+   printf '{"type":"result","subtype":"success","is_error":false,"result":"journey-large-reply","session_id":"%s"}\n' "$sid"
+   continue ;;
   *pipeline-timeout*) sleep 3600; continue ;;
   *pipeline-fail*)
    printf '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"pipeline failure","session_id":"%s"}\n' "$sid"
@@ -117,9 +132,9 @@ esac
 first_boot="$(sed -n 's/^FIRST_BOOT_DEADLINE=\([0-9][0-9]*\)$/\1/p' "$root/scripts/install-service.sh")"
 [ -n "$first_boot" ] || { printf 'session-journey: COULD NOT LOOK — no FIRST_BOOT_DEADLINE in scripts/install-service.sh\n' >&2; exit 2; }
 
-python3 - "http://127.0.0.1:$port" "$work/engine.out" "$folder" "$data" "$confinement_mode" "$label" "$bin" "$pipeline" "$first_boot" <<'PY'
+python3 - "http://127.0.0.1:$port" "$work/engine.out" "$folder" "$data" "$confinement_mode" "$label" "$bin" "$pipeline" "$first_boot" "$large_output" <<'PY'
 import json, os, re, subprocess, sys, time, urllib.error, urllib.request
-base, out_path, folder, data, confinement_mode, label, binary, pipeline, first_boot = sys.argv[1:10]
+base, out_path, folder, data, confinement_mode, label, binary, pipeline, first_boot, large_output = sys.argv[1:11]
 tenant, token = "", ""
 
 def fail(step, detail):
@@ -228,6 +243,39 @@ for _ in range(10):
 else:
     fail("read the reply", f"no reply frame in {lines[-5:]}")
 probe = next((json.loads(l).get("probe") for l in lines if "journey_probe" in l), None)
+
+if large_output == "true":
+    # The tool reads a file over 1 MiB. The line is within what a provider takes (maxOutputLine,
+    # modules/sessions/procrunner.go), so the stream carries it whole, the answer after it must
+    # arrive and the session must still be running: Community 0.5 killed it here with
+    # "exit -1; output incomplete; protocol output limit exceeded".
+    big = {"type": "user", "message": {"role": "user", "content": "large-output"}}
+    ok("send the large-output prompt", *call("POST", f"/v1/m/sessions/runs/{ref}/input", {"line": json.dumps(big)}), want=(200, 202, 204))
+    for _ in range(40):
+        lines = [f.get("line", "") for f in frames(0)]
+        if any("journey-large-reply" in l for l in lines):
+            break
+        run_now = call("GET", f"/v1/m/sessions/runs/{ref}")[1]
+        if isinstance(run_now, dict) and run_now.get("state") not in ("running", "idle"):
+            fail("large output", f"the session ended before its answer: state={run_now.get('state')} "
+                 f"exit={run_now.get('exit_code')} reason={run_now.get('reason')!r}")
+    else:
+        fail("large output", f"no answer frame after the long line; last frames {[l[:80] for l in lines[-3:]]}")
+    long_frames = [l for l in lines if len(l) > 1 << 20]
+    if len(long_frames) != 1:
+        fail("large output", f"want the one long frame carried whole, got {len(long_frames)}; "
+             f"frames {[(len(l), l[:70]) for l in lines]}")
+    try:
+        carried = json.loads(long_frames[0])["message"]["content"][0]["content"]
+    except (ValueError, KeyError, IndexError, TypeError):
+        fail("large output", f"the long frame is not the tool_result record: {long_frames[0][:120]!r}")
+    if carried != "x" * (3 << 20):
+        fail("large output", f"the tool_result came through changed: {len(carried)} bytes, want {3 << 20}")
+    still = call("GET", f"/v1/m/sessions/runs/{ref}")[1]
+    # idle is alive and waiting for the next prompt (the turn is over); stopped, failed and cleaned are not.
+    if still.get("state") not in ("running", "idle") or still.get("process_state") != "running":
+        fail("large output", f"the session did not stay alive: {still.get('state')}/{still.get('process_state')}")
+    print(f"session-journey: large output OK — a {len(carried)}-byte tool result came through whole; the answer followed; the session is running")
 
 events = call("GET", f"/v1/m/sessions/runs/{ref}/events")[1]
 confinement = re.search(r"confinement: [^\"]+", json.dumps(events))

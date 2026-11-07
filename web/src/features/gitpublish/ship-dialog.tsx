@@ -11,7 +11,7 @@
 //    words change, so shipping again with the same words replays what already landed and, after
 //    a second person approved the push, goes on from there.
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -25,6 +25,7 @@ import {
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PathText } from '@/components/ui/path-text'
 import {
   Select,
   SelectContent,
@@ -83,9 +84,10 @@ export function ShipDialog({
         { tenant: activeTenant },
       ),
     invalidateKeys: () => [gitpublishKeys.intents(activeTenant, target.id)],
+    // A toast holds a string, so it carries no branch: the dialog beside it names the branch.
     successMessage: (r) =>
       r.state === 'shipped'
-        ? t('ship.shipped', { branch: r.branch })
+        ? t('ship.shippedToast')
         : t(
             r.state === 'awaiting_approval'
               ? 'ship.awaitingTitle'
@@ -228,6 +230,9 @@ function ShipOutcome({
   const { t } = useTranslation('gitpublish')
   const url = safePullRequestUrl(result.pull_request_url)
   const number = result.pull_request?.observed.number
+  // The branch is machine text read whole, so it wraps rather than being cut; the sentence
+  // already says what it is, so it has no copy action of its own.
+  const branch = <PathText value={result.branch ?? ''} copy={false} wrap />
   if (result.state === 'shipped') {
     return (
       <section
@@ -235,7 +240,11 @@ function ShipOutcome({
         className="space-y-2 rounded-md border border-success-line bg-success-soft p-3 text-body"
       >
         <p className="text-foreground">
-          {t('ship.shipped', { branch: result.branch })}
+          <Trans
+            i18nKey="ship.shipped"
+            ns="gitpublish"
+            components={{ branch }}
+          />
         </p>
         {url ? (
           <a
@@ -277,15 +286,17 @@ function ShipOutcome({
     >
       <h3 className="font-medium text-warning">{t('ship.incompleteTitle')}</h3>
       <p className="text-foreground">
-        {pushed
-          ? t('ship.incompletePullRequest', {
-              branch: result.branch,
-              code: result.pull_request_error ?? '',
-            })
-          : t('ship.incompletePush', {
-              branch: result.branch,
-              state: t(`states.${pushState ?? 'uncertain'}`),
-            })}
+        <Trans
+          i18nKey={
+            pushed ? 'ship.incompletePullRequest' : 'ship.incompletePush'
+          }
+          ns="gitpublish"
+          values={{
+            code: result.pull_request_error ?? '',
+            state: t(`states.${pushState ?? 'uncertain'}`),
+          }}
+          components={{ branch }}
+        />
       </p>
       {push && !pushed ? (
         <Button

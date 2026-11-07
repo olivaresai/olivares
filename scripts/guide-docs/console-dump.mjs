@@ -446,7 +446,8 @@ const standalone = []
   ) {
     const obj = node.arguments[0]
     const p = literal(obj, 'path')
-    if (typeof p === 'string' && p !== '') {
+    // The not-found catch-all '$' answers no address; the route conservation test excludes it too.
+    if (typeof p === 'string' && p !== '' && p !== '$') {
       let parent = ''
       for (const prop of obj.properties) {
         if (!ts.isPropertyAssignment(prop)) continue

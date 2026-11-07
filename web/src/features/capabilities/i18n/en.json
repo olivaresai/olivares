@@ -1,6 +1,6 @@
 {
-  "title": "MCP & skills",
-  "subtitle": "The live capability catalog — MCP servers, tools, skills and how they are connected.",
+  "title": "Extensions",
+  "subtitle": "MCP servers and skills for your sessions.",
   "tabs": {
     "servers": "Servers",
     "tools": "Tools",
@@ -19,8 +19,9 @@
     "managed": "Managed",
     "managedRev": "Managed · rev {{rev}}",
     "discovered": "Discovered",
+    "caption": "Servers the connectors observed, whether or not Olivares connects them.",
     "empty": "No MCP servers discovered",
-    "emptyHint": "Servers appear here as the inventory and introspection planes discover them.",
+    "emptyHint": "Servers appear here as inventory and introspection discover them.",
     "truncated": "Loaded {{n}} servers; there are more"
   },
   "connection": {
@@ -82,11 +83,10 @@
     "title": "Capability wiring",
     "mobileHint": "The wiring graph ({{count}} connections) is best viewed on a larger screen.",
     "description": "What is connected to what — agents and sessions to the MCP servers, tools, skills and resources they use.",
-    "notAccessMap": "This is the capability-connection graph, not the R/RW resource access map (see Access map).",
     "observed": "Observed",
     "declared": "Declared",
     "legend": "Provenance",
-    "partial": "Showing a partial graph — refine the filters to see specific connections.",
+    "partial": "Filter to see more connections.",
     "occurrences": "Occurrences",
     "firstSeen": "First seen",
     "lastSeen": "Last seen",
@@ -126,7 +126,7 @@
     "endpoint": "Endpoint",
     "endpointHint": "A reference only — never embed a credential in the endpoint.",
     "scope": "Scope",
-    "scopeHint": "Optional deployment/tenant scope label (e.g. team-a).",
+    "scopeHint": "Optional deployment/organization scope label (e.g. team-a).",
     "enabled": "Enabled",
     "note": "Note",
     "secretRefs": "Secret references",
@@ -187,7 +187,7 @@
     },
     "server": {
       "title": "No MCP servers discovered yet",
-      "description": "MCP servers appear when connector observations identify them in the tenant’s inventory."
+      "description": "MCP servers appear when connector observations identify them in the organization’s inventory."
     },
     "skill": {
       "title": "No skills discovered yet",
@@ -195,7 +195,7 @@
     },
     "tool": {
       "title": "No MCP tools discovered yet",
-      "description": "Tools appear when MCP introspection or observed tool activity reports them to the tenant’s inventory."
+      "description": "Tools appear when MCP introspection or observed tool activity reports them to the organization’s inventory."
     }
   },
   "truncatedHint": "There are more rows than shown; this page takes them by row id (assigned at creation), so the later ones are missing. A server, tool, skill or config NOT listed here is not proof that it does not exist."

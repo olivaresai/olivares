@@ -13,7 +13,6 @@
   },
   "apply": {
     "planning": "Planificando el cambio. En este paso no se escribe nada.",
-    "planTitle": "Plan",
     "command": "Comando",
     "permission": "Permiso",
     "eventType": "Evento",
@@ -29,14 +28,14 @@
     "close": "Cerrar",
     "appliedTitle": "Aplicado",
     "replayedTitle": "Ya estaba aplicado",
-    "replayedBody": "El motor reconoció esta clave de idempotencia y reprodujo el resultado original. No se escribió nada por segunda vez.",
+    "replayedBody": "Este cambio ya se había aplicado. No se ha repetido.",
     "commandId": "Id del comando",
     "resultId": "Id del resultado",
     "status": "Estado nuevo",
     "etag": "Etiqueta de versión nueva",
     "auditSeq": "Secuencia de auditoría",
     "reread": "Releer y comparar",
-    "retrySameKey": "Reintentar con la misma clave",
+    "retrySameKey": "Reintentar",
     "failure": {
       "conflict-version": "Otra persona cambió esta unidad",
       "version-required": "Falta la precondición de versión",
@@ -272,7 +271,7 @@
   "unavailable": {
     "title": "No he podido mirar",
     "body": "El motor no pudo completar esta observación, así que informa de un desenlace desconocido en vez de un resultado. No des por confirmado nada de este panel.",
-    "retryHint": "No se sabe si el cambio llegó a escribirse. Reintenta con la MISMA clave de idempotencia: eso es lo que hace seguro el reintento, porque el motor lo reconocerá como la misma intención y no como una segunda.",
+    "retryHint": "No se ha podido confirmar el resultado. Reintenta aquí para comprobarlo sin repetir el cambio.",
     "code": "Código del motor: {{code}}"
   },
   "verdict": {

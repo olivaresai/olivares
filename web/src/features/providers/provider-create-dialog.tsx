@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useQuery } from '@tanstack/react-query'
+import { ExternalLink } from 'lucide-react'
+import { sessionTools, toolName } from '@/features/agentops/engine-tools'
 import { firstHourKeys } from '@/features/first-hour/api'
 import { useId, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -18,7 +21,10 @@ import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -30,10 +36,11 @@ import {
 } from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys, providersApi } from './api'
 import { useProviderBoundary } from './auth-boundary'
-import { LOCAL_HTTP_KINDS, PROVIDER_KINDS } from './kinds'
+import { LOCAL_HTTP_KINDS, PROVIDER_KINDS, recordServesDriver } from './kinds'
 import type {
   CreateProviderRequest,
   ProviderKind,
+  ProviderPreset,
   ProviderRecordDTO,
 } from './types'
 import './i18n'
@@ -44,6 +51,17 @@ import './i18n'
 const OLLAMA_BASE_URL = 'http://127.0.0.1:11434'
 const defaultBaseURL = (kind: ProviderKind | '') =>
   kind === 'ollama' ? OLLAMA_BASE_URL : ''
+
+/** A preset's select value; the six kinds keep their own names as values. */
+const PRESET = 'preset:'
+
+/** The session tools a preset serves, by the engine's binding rule for its kind,
+ * endpoint and ref: the same rule that decides whether such a session starts. */
+const presetTools = (p: ProviderPreset) =>
+  sessionTools()
+    .filter((d) => recordServesDriver(p.kind, p.base_url, d, p.ref))
+    .map(toolName)
+    .join(', ')
 
 /**
  * ProviderCreateDialog — THREE typed fields and one optional, and that is the whole
@@ -80,6 +98,7 @@ export function ProviderCreateDialog({
   const boundary = useProviderBoundary()
 
   const [kind, setKind] = useState<ProviderKind | ''>(initialKind)
+  const [presetRef, setPresetRef] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [baseURL, setBaseURL] = useState(() => defaultBaseURL(initialKind))
   const [apiKey, setApiKey] = useState('')
@@ -88,8 +107,21 @@ export function ProviderCreateDialog({
   const [error, setError] = useState<string>()
   const missingFieldsId = useId()
 
+  // The engine's vendor table. A governed row registers the governed inference
+  // service, which no tool session uses, so this picker of tool providers leaves
+  // it out. Without the table the six kinds still work.
+  const presetRows = useQuery({
+    queryKey: providerKeys.presets,
+    queryFn: () => providersApi.presets(),
+    enabled: open,
+    staleTime: Infinity,
+  })
+  const presets = (presetRows.data?.items ?? []).filter((p) => !p.governed)
+  const preset = presets.find((p) => p.ref === presetRef)
+
   const reset = () => {
     setKind(initialKind)
+    setPresetRef('')
     setDisplayName('')
     setBaseURL(defaultBaseURL(initialKind))
     setApiKey('')
@@ -101,14 +133,25 @@ export function ProviderCreateDialog({
 
   const create = usePrivilegedMutation<void, ProviderRecordDTO>({
     mutationFn: () => {
-      const body: CreateProviderRequest = {
-        kind: kind as ProviderKind,
-        // The name is the operator's label; with none typed it is the provider's own.
-        display_name: displayName.trim() || t(`kinds.${kind}`),
-        ...(kind === 'ollama' ? {} : { api_key: apiKey }),
-        ...(baseURL.trim() ? { base_url: baseURL.trim() } : {}),
-        ...(defaultModel.trim() ? { default_model: defaultModel.trim() } : {}),
-      }
+      // A preset fixes the kind and the vendor's endpoint: the engine reads both
+      // from its ref, so no base URL travels.
+      const body: CreateProviderRequest = preset
+        ? {
+            kind: preset.kind,
+            service: preset.ref,
+            display_name: displayName.trim() || preset.title,
+            api_key: apiKey,
+          }
+        : {
+            kind: kind as ProviderKind,
+            // The name is the operator's label; with none typed it is the provider's own.
+            display_name: displayName.trim() || t(`kinds.${kind}`),
+            ...(kind === 'ollama' ? {} : { api_key: apiKey }),
+            ...(baseURL.trim() ? { base_url: baseURL.trim() } : {}),
+            ...(defaultModel.trim()
+              ? { default_model: defaultModel.trim() }
+              : {}),
+          }
       return providersApi.create(body)
     },
     invalidateKeys: () => [
@@ -132,7 +175,8 @@ export function ProviderCreateDialog({
 
   // openai_compatible has no official endpoint to assume, so the engine requires
   // one. The form says so before the request rather than after the refusal.
-  const endpointRequired = kind === 'openai_compatible' || kind === 'ollama'
+  const endpointRequired =
+    !preset && (kind === 'openai_compatible' || kind === 'ollama')
   const missingFields = [
     ...(kind === '' ? [t('create.kind')] : []),
     ...(endpointRequired && !baseURL.trim() ? [t('create.baseURL')] : []),
@@ -146,6 +190,13 @@ export function ProviderCreateDialog({
     setError(undefined)
     create.mutate()
   }
+
+  const tools = preset && presetTools(preset)
+  const description = tools
+    ? t('create.worksWith', { tools })
+    : kind && !preset
+      ? t(`kindHints.${kind}`)
+      : t('create.description')
 
   return (
     <Dialog
@@ -161,15 +212,22 @@ export function ProviderCreateDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('create.title')}</DialogTitle>
-          <DialogDescription>
-            {kind ? t(`kindHints.${kind}`) : t('create.description')}
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           <Field label={t('create.kind')} required>
             <Select
-              value={kind}
+              value={preset ? PRESET + preset.ref : kind}
               onValueChange={(v) => {
+                const row = presets.find((p) => PRESET + p.ref === v)
+                setPresetRef(row?.ref ?? '')
+                if (row) {
+                  setKind(row.kind)
+                  setBaseURL('')
+                  setDefaultModel('')
+                  setAdvanced(false)
+                  return
+                }
                 setKind(v as ProviderKind)
                 setDefaultModel('')
                 if (v === 'ollama') {
@@ -184,11 +242,39 @@ export function ProviderCreateDialog({
                 <SelectValue placeholder={t('create.kindPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                {PROVIDER_KINDS.map((k) => (
-                  <SelectItem key={k} value={k}>
-                    {t(`kinds.${k}`)}
-                  </SelectItem>
-                ))}
+                {presets.length > 0 && (
+                  <>
+                    <SelectGroup>
+                      {presets.map((p) => {
+                        const served = presetTools(p)
+                        return (
+                          <SelectItem
+                            key={p.ref}
+                            value={PRESET + p.ref}
+                            hint={
+                              served
+                                ? t('create.worksWith', { tools: served })
+                                : undefined
+                            }
+                          >
+                            {p.title}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectGroup>
+                    <SelectSeparator />
+                  </>
+                )}
+                <SelectGroup>
+                  {presets.length > 0 && (
+                    <SelectLabel>{t('create.otherKinds')}</SelectLabel>
+                  )}
+                  {PROVIDER_KINDS.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {t(`kinds.${k}`)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </Field>
@@ -202,7 +288,11 @@ export function ProviderCreateDialog({
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder={
-                kind ? t(`kinds.${kind}`) : t('create.namePlaceholder')
+                preset
+                  ? preset.title
+                  : kind
+                    ? t(`kinds.${kind}`)
+                    : t('create.namePlaceholder')
               }
               autoComplete="off"
             />
@@ -231,7 +321,7 @@ export function ProviderCreateDialog({
                 mono
               />
             </Field>
-          ) : kind !== '' && kind !== 'gemini' ? (
+          ) : !preset && kind !== '' && kind !== 'gemini' ? (
             <Button
               type="button"
               variant="link"
@@ -259,6 +349,19 @@ export function ProviderCreateDialog({
                 mono
               />
             </Field>
+          )}
+          {preset && (
+            <a
+              href={preset.key_url || preset.docs_url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1 self-start text-caption text-accent-text underline-offset-2 hover:underline"
+            >
+              <ExternalLink aria-hidden className="size-3.5" />
+              {t(preset.key_url ? 'create.keyLink' : 'create.docsLink', {
+                vendor: preset.title,
+              })}
+            </a>
           )}
           {(advanced || endpointRequired) && (
             <Field

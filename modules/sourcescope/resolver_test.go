@@ -611,3 +611,54 @@ func TestSessionResolutionContainment(t *testing.T) {
 		t.Errorf("session in default must be denied for the payments-bound model, got %+v err=%v", d, err)
 	}
 }
+
+// Person-only discovery uses the authenticated membership, including its ancestors.
+func TestPersonDepartmentDiscovery(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	parent := h.createWorkspace(tenant, "engineering")
+	child := h.createWorkspaceUnder(tenant, "payments", parent)
+	h.createWorkspace(tenant, "marketing")
+	if r := h.do("POST", "/v1/users", admin, map[string]any{"email": "member@acme.io", "password": "memberpass1", "tenant": tenant.String(), "role": auth.RoleEditor, "workspace_id": child.String()}, nil); r.code != 201 {
+		t.Fatalf("create member: %d %s", r.code, r.raw)
+	}
+	login := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "member@acme.io", "password": "memberpass1"}, nil)
+	p, err := h.authr.Authenticate(t.Context(), login.body["token"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws, ok := p.ConfinedWorkspaceIn(tenant); !ok || ws != child {
+		t.Fatal("member is not confined")
+	}
+	h.mustAssign(admin, tenant, "mcp", "own", "workspace", "payments")
+	// The scoped authorizer still forbids a child-confined person targeting its parent.
+	h.mustAssign(admin, tenant, "mcp", "parent", "workspace", "engineering")
+	h.mustAssign(admin, tenant, "mcp", "other", "workspace", "marketing")
+	if err := h.st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext("sourcescope.connector_assignment")
+		if err != nil {
+			return err
+		}
+		_, err = repo.Create(t.Context(), model.Record{"connector_name": "assigned", "workspace_ref": "payments", "workspace_id": child.String(), "enabled": true, "created_by": "fixture"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		ref  string
+		want bool
+	}{{"own", true}, {"parent", false}, {"assigned", true}, {"other", false}} {
+		if d := h.resolveHuman(tenant, p, sourcescope.SourceMCP, tc.ref); d.Allowed != tc.want {
+			t.Errorf("%s: %+v, want allowed=%v", tc.ref, d, tc.want)
+		}
+	}
+	// An explicit unresolved actor must never borrow the person's membership.
+	if d := h.resolveAgent(tenant, p, "unknown-agent", sourcescope.SourceMCP, "own"); d.Allowed {
+		t.Fatal("unknown agent inherited person scope")
+	}
+	p.AgentIdentity = "unknown-agent"
+	if d := h.resolveHuman(tenant, p, sourcescope.SourceMCP, "own"); d.Allowed {
+		t.Fatal("unknown authenticated agent inherited person scope")
+	}
+}

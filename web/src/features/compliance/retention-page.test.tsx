@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The Community Retention page: retention schedules are a Community capability
-// (docs/editions.md, "Records"), and the Compliance page that used to hold their tab is Business.
-// The page must read only the retention routes, which a Community engine answers.
+// The Retention page: reading retention schedules is Community, authoring one and the sweep are
+// Business (docs/editions.md, "Records"), and the Compliance page that used to hold their tab is
+// Business. The page must read only the retention routes, which a Community engine answers.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AUTH, renderIntel, screen, waitFor } from '@/test/intel'
 import '@/features/_intel'
@@ -27,8 +27,13 @@ const api = {
 }
 
 const granted = { can: (_permission: string) => true }
+const build = { community: false as boolean | undefined }
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ ...DEFAULT_AUTH, can: granted.can }),
+}))
+vi.mock('@/lib/hooks/use-server-info', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/hooks/use-server-info')>()),
+  useCommunityBuild: () => build.community,
 }))
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api')
@@ -41,6 +46,7 @@ await import('./i18n')
 describe('RetentionView', () => {
   beforeEach(() => {
     granted.can = () => true
+    build.community = false
     for (const fn of Object.values(api)) fn.mockReset()
     api.dataClasses.mockResolvedValue({
       items: [
@@ -96,6 +102,44 @@ describe('RetentionView', () => {
     expect(
       screen.queryByRole('button', { name: /run sweep/i }),
     ).not.toBeInTheDocument()
+  })
+
+  it('shows a Community admin the schedules but neither the sweep nor authoring', async () => {
+    build.community = true
+    renderIntel(<RetentionView />)
+
+    expect(await screen.findByText('agent.memory')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /run sweep/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /add schedule|edit schedule/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('promises no deletion window for a stored schedule Community does not apply', async () => {
+    build.community = true
+    api.dataClasses.mockResolvedValue({
+      items: [{ id: 'agent.memory', purgeable: true, model_io: true }],
+    })
+    api.retentionPolicies.mockResolvedValue({
+      items: [
+        {
+          id: 'p1',
+          data_class: 'agent.memory',
+          retention_days: 30,
+          disposition: 'purge',
+          enabled: false,
+          model_io: true,
+          provider_floor_known: true,
+          effective_disclosure_days: 30,
+        },
+      ],
+    })
+    renderIntel(<RetentionView />)
+
+    expect(await screen.findByText('agent.memory')).toBeInTheDocument()
+    expect(screen.queryByText(/Gone everywhere/i)).not.toBeInTheDocument()
   })
 
   it('reads nothing without the retention read permission', async () => {

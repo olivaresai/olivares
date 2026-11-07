@@ -1,14 +1,9 @@
 {
-  "truncation": {
-    "label": "Loaded {{n}} rows; there are more",
-    "hint": "This workspace preview is capped. Use View all to inspect the wider inventory.",
-    "hintCapped": "This workspace preview is capped."
-  },
   "title": "Workspace overview",
   "selectTitle": "No workspace selected",
   "selectPrompt": "Select a workspace in the navigation rail to open this overview, or go to the tenant-wide inventory.",
   "selectPromptWorkspaceOnly": "Select a workspace in the navigation rail to open this overview.",
-  "viewInventory": "Open inventory",
+  "viewInventory": "Open discovered resources",
   "agents": "Agents",
   "sessions": "Sessions",
   "resources": "Resources",
@@ -43,8 +38,29 @@
     "empty": "No session folders yet. A folder appears here once a session starts in it.",
     "loading": "Reading session folders…",
     "unavailable": "Session folders are unavailable.",
-    "truncationHint": "Open Sessions to see every folder.",
     "filter": "Find a folder",
-    "noMatch": "No folder matches “{{query}}”."
-  }
+    "noMatch": "No folder matches “{{query}}”.",
+    "cut": "Not every folder is shown."
+  },
+  "connect": {
+    "title": "Copy files with SFTP or SCP",
+    "intro": "Get a key that works for a few minutes, then use any sftp or scp client. It reaches only this folder.",
+    "button": "Connect",
+    "connecting": "Connecting…",
+    "privateKey": "Private key",
+    "copyKey": "Copy private key",
+    "copied": "Private key copied",
+    "copyFailed": "Could not copy. Select the key and copy it by hand.",
+    "keyHint": "Shown once. Save it as {{file}}, then run chmod 600 {{file}}.",
+    "sftp": "Browse and copy with sftp",
+    "scp": "Copy one file with scp",
+    "hostKey": "Host key to compare when your client asks:",
+    "expires": "Connect before {{time}}. After that the key opens no new connection.",
+    "readOnly": "This key can only read files: the folder is mounted read-only.",
+    "stepUp": "Complete the sign-in step this server requires, then try again.",
+    "failed": "Could not get a key. Try again.",
+    "statusFailed": "Could not check whether this folder is available over SFTP."
+  },
+  "showMore": "Show more",
+  "agentsCut": "Not every agent is shown."
 }

@@ -1105,7 +1105,7 @@ def main():
             # ⛔ `provenance_*` es OBLIGATORIO en `item.create` (`work_state.go:243-245`) y dice de
             #    donde viene el trabajo. Aqui es honesto declararlo `system`: lo crea el sembrador de
             #    demo, no una persona. Poner "human" seria mentir en el propio registro de origen.
-            "provenance_kind": "system", "provenance_ref": "demo-seed/docs-captures",
+            "provenance_kind": "system", "provenance_ref": "demo-seed/northwind",
             # Cada criterio necesita `criterion_key` unico y `ordinal`; y al menos UNO `required`,
             # o el motor responde 422 `acceptance_incomplete` (`work_state.go:274`).
             "acceptance": [

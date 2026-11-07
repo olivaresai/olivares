@@ -14,8 +14,10 @@ import (
 
 // SourceOpener admits and opens a request-owned document source for the stored KB
 // ID and authenticated request. It returns only safe refusal text and an HTTP
-// status. Knowledge owns the returned source and closes it after the pull. Static
-// boot sources keep their existing lifecycle and take precedence.
+// status; a 501 means the source's connector is a Business one this build does not
+// construct, answered as connector_unavailable. Knowledge owns the returned source and
+// closes it after the pull. Static boot sources keep their existing lifecycle and take
+// precedence.
 type SourceOpener func(context.Context, api.ModuleContext, string, string) (*OpenedSource, string, int)
 
 // SourceValidation names the three native checks around an ingest. Read checks

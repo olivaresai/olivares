@@ -115,9 +115,7 @@ async function signIn(page: Page) {
 }
 
 async function chooseProfile(page: Page, form: Locator) {
-  await form
-    .getByRole('combobox', { name: 'Provider profile', exact: true })
-    .click()
+  await form.getByRole('combobox', { name: 'Account', exact: true }).click()
   const wanted = page
     .getByRole('option')
     .and(page.getByTitle(PROFILE_REF, { exact: true }))
@@ -148,6 +146,18 @@ async function runIsVisible(page: Page, runRef: string, name: string) {
     const context = page.locator('#work-pane-context')
     if (!(await context.isVisible()))
       await page.getByTestId('context-toggle').click()
+    // A Claude Code session's pane opens on what its tool is doing; the identifiers
+    // are on the Details tab.
+    const detailsTab = context.getByRole('radio', {
+      name: 'Details',
+      exact: true,
+    })
+    if (
+      (await detailsTab.isVisible()) &&
+      (await detailsTab.getAttribute('aria-checked')) !== 'true'
+    ) {
+      await detailsTab.click()
+    }
     const details = page.getByTestId('context-details')
     if (
       (await details.isVisible()) &&
@@ -412,8 +422,13 @@ test.describe('the golden path, in the console', () => {
                 observation.stage = 'candidate-selection'
                 const candidate = candidates.last()
                 if ((await candidate.getAttribute('data-kind')) === 'result') {
-                  if ((await candidate.getAttribute('open')) === null) {
-                    await candidate.locator('summary').click({ timeout: 1000 })
+                  const toggle = candidate.locator(
+                    ':scope > button[aria-expanded]',
+                  )
+                  if (
+                    (await toggle.getAttribute('aria-expanded')) === 'false'
+                  ) {
+                    await toggle.click({ timeout: 1000 })
                   }
                   await candidate
                     .getByRole('button', {
@@ -524,7 +539,7 @@ test.describe('the golden path, in the console', () => {
       )
     } else {
       await expect(page.getByTestId('context-scope')).toContainText(
-        'Temporary folder for this session',
+        'Default (My files)',
       )
       await expect(page.getByTestId('narrative-folder')).toHaveCount(0)
     }

@@ -17,15 +17,16 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// A person's own SNOOZE and DONE marks on a session (#2480), the two the reference's
-// thread list offers beside its pin: snooze takes a session out of THIS person's list
-// until a moment they chose, done files it under Settled. They are the caller's own
-// interface state exactly as a pin is (run_pin.go), so they take the same rules: kept
-// on the server so they follow the person to another browser, never visible to
+// A person's own SNOOZE, DONE and SEEN marks on a session (#2480, #2866), the ones the
+// reference's thread list offers beside its pin: snooze takes a session out of THIS
+// person's list until a moment they chose, done files it under Settled, and the moment
+// they last saw it says whether it did anything since (unread). They are the caller's
+// own interface state exactly as a pin is (run_pin.go), so they take the same rules:
+// kept on the server so they follow the person to another browser, never visible to
 // anyone else, READ permission, no ledger row.
 //
-// One row per (tenant, owner, run) holds both marks; a row with neither is deleted,
-// so a person who clears what they set leaves nothing behind. A snooze whose moment
+// One row per (tenant, owner, run) holds all three; a row with none is deleted, so a
+// person who clears what they set leaves nothing behind. A snooze whose moment
 // has passed is no snooze: the read paths stop carrying it, which is how every client
 // shows the session again without a clock of its own.
 const (
@@ -48,7 +49,12 @@ const (
 	colRunMarkOwner        = "owner"
 	colRunMarkSnoozedUntil = "snoozed_until"
 	colRunMarkDone         = "done"
+	colRunMarkSeenAt       = "seen_at"
 )
+
+// seenNever is the moment Mark unread stores: before any activity a run can have, so
+// the run reads as unread until the person opens it again.
+var seenNever = time.Unix(0, 0).UTC()
 
 // registerRunMarkSchema declares the mark entity, the pin entity's sibling: the same
 // owner and run columns, the run's workspace lineage so a confined member keeps the
@@ -62,6 +68,7 @@ func (m *Module) registerRunMarkSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunMarkOwner, Kind: model.KindText, Indexed: true, Principal: pdeclActorRef},
 			{Name: colRunMarkSnoozedUntil, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colRunMarkDone, Kind: model.KindBool},
+			{Name: colRunMarkSeenAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colRunAuthzWorkspaceID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the core workspace id of the marked run's authorization lineage, never an account: runtime_schema.go:357, runtime_schema.go:397-401")},
 		},
 		WorkspaceLineage: model.WorkspaceLineageSpec{
@@ -78,10 +85,12 @@ func (m *Module) registerRunMarkSchema(reg store.ExtensionRegistry) error {
 }
 
 // runMark is what one person's row says about one run, as the read paths answer it:
-// snoozedUntil is empty unless the snooze is still to end.
+// snoozedUntil is empty unless the snooze is still to end, seenAt is the zero value until
+// the person opens or marks the run.
 type runMark struct {
 	snoozedUntil string
 	done         bool
+	seenAt       model.Timestamp
 }
 
 // markOf reads a row as of now.
@@ -90,7 +99,29 @@ func markOf(rec model.Record, now time.Time) runMark {
 	if ts, err := model.ParseTimestamp(rec.String(colRunMarkSnoozedUntil)); err == nil && ts.Time().After(now) {
 		out.snoozedUntil = ts.Time().Format(time.RFC3339)
 	}
+	if ts, err := model.ParseTimestamp(rec.String(colRunMarkSeenAt)); err == nil {
+		out.seenAt = ts
+	}
 	return out
+}
+
+// unreadOn is whether the run did anything after the person last saw it. A run they
+// never opened or marked has no baseline and reads as read, so a mark row that only
+// carries a snooze never turns a session bold; a released run is never unread.
+//
+// ponytail: a session the person never opened does not read as unread, however much it
+// did. Add a baseline (the run's creation for its owner) if people want runs started
+// elsewhere flagged before their first visit.
+func (mk runMark) unreadOn(run model.Record) bool {
+	if mk.seenAt.IsZero() || run.String(colState) == stateCleaned {
+		return false
+	}
+	at := run.String(colLastActivityAt)
+	if at == "" {
+		at = run.String(model.ColCreatedAt)
+	}
+	last, err := model.ParseTimestamp(at)
+	return err == nil && last.Time().After(mk.seenAt.Time())
 }
 
 // ownRunMarks reads the caller's marks on the given runs, keyed by run ref.
@@ -118,16 +149,18 @@ func ownRunMarks(ctx context.Context, sc store.Scope, caller string, refs []stri
 	return out, nil
 }
 
-// decorateRunMark marks one DTO with the caller's snooze and done. A released session
-// never carries them: cleanup drops the rows, and this is the same rule holding if a
-// crash left one behind.
+// decorateRunMark marks one DTO with the caller's snooze, done and unread. A released
+// session never carries them: cleanup drops the rows, and this is the same rule
+// holding if a crash left one behind.
 func decorateRunMark(dto *runDTO, rec model.Record, marks map[string]runMark) {
 	mark := marks[dto.RunRef]
 	if rec.String(colState) == stateCleaned {
 		mark = runMark{}
 	}
+	unread := mark.unreadOn(rec)
 	dto.SnoozedUntil = mark.snoozedUntil
 	dto.Done = &mark.done
+	dto.Unread = &unread
 }
 
 // markRun applies change to the caller's row for run and returns the marks it then
@@ -171,12 +204,13 @@ func markRun(ctx context.Context, sc store.Scope, caller string, run model.Recor
 	return mark, err
 }
 
-// markDTO is the answer of the snooze and done routes: the run and both of the
+// markDTO is the answer of the snooze, done and unread routes: the run and the
 // caller's marks as they now stand.
 type markDTO struct {
 	RunRef       string `json:"run_ref"`
 	SnoozedUntil string `json:"snoozed_until,omitempty"`
 	Done         bool   `json:"done"`
+	Unread       bool   `json:"unread"`
 }
 
 // snoozeRequest is the body of POST /runs/{ref}/snooze.
@@ -184,7 +218,7 @@ type snoozeRequest struct {
 	Until string `json:"until"`
 }
 
-// handleMarkRun is the one handler behind all four mark routes: it resolves the run
+// handleMarkRun is the one handler behind all six mark routes: it resolves the run
 // inside the caller's transaction (a run that vanished mid-flight refuses as 404),
 // refuses a released one when setting a mark, and changes column as of now, the
 // instant the snooze route checked its moment against.
@@ -206,9 +240,9 @@ func (m *Module) handleMarkRun(w http.ResponseWriter, r *http.Request, mc api.Mo
 			return err
 		}
 		// A released session has left every list for good; a mark on it would answer
-		// set and read as unset.
-		if set && rec.String(colState) == stateCleaned {
-			return conflictErr("a released session cannot be snoozed or marked done")
+		// set and read as unset. Both directions of the seen mark are a write.
+		if (set || column == colRunMarkSeenAt) && rec.String(colState) == stateCleaned {
+			return conflictErr("a released session cannot be snoozed, marked done or marked read or unread")
 		}
 		mark, err := markRun(r.Context(), sc, mc.Principal.Actor(), rec, now, func(row model.Record) { row[column] = value })
 		if err != nil {
@@ -226,7 +260,7 @@ func (m *Module) handleMarkRun(w http.ResponseWriter, r *http.Request, mc api.Mo
 				return err
 			}
 		}
-		out = markDTO{RunRef: ref, SnoozedUntil: mark.snoozedUntil, Done: mark.done}
+		out = markDTO{RunRef: ref, SnoozedUntil: mark.snoozedUntil, Done: mark.done, Unread: mark.unreadOn(rec)}
 		return nil
 	})
 	if err != nil {
@@ -282,4 +316,17 @@ func (m *Module) handleDoneRun(w http.ResponseWriter, r *http.Request, mc api.Mo
 // handleUndoneRun removes the caller's done mark, idempotently.
 func (m *Module) handleUndoneRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	m.handleMarkRun(w, r, mc, m.now(), colRunMarkDone, false)
+}
+
+// handleUnreadRun marks the run unread for the caller, idempotently: the moment they
+// last saw it goes back before anything it ever did.
+func (m *Module) handleUnreadRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	m.handleMarkRun(w, r, mc, m.now(), colRunMarkSeenAt, model.NewTimestamp(seenNever).String())
+}
+
+// handleReadRun marks the run read for the caller, idempotently: they have seen all it
+// did up to now. The console sends it when a session is opened.
+func (m *Module) handleReadRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	now := m.now()
+	m.handleMarkRun(w, r, mc, now, colRunMarkSeenAt, model.NewTimestamp(now).String())
 }

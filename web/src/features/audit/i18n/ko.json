@@ -3,9 +3,6 @@
   "subtitle": "AI 활동의 서명된 기록을 확인합니다.",
   "subtitleSystem": "교차 테넌트 관리 작업의 시스템 테넌트 체인입니다(읽기 전용).",
   "searchLoaded": "불러온 행만 필터(클라이언트 측)…",
-  "scan": {
-    "incomplete": "seq {{seq}}까지 스캔했습니다 — 전체 원장이 아니며 더 불러오면 스캔을 계속합니다."
-  },
   "scope": {
     "label": "원장 범위",
     "tenant": "테넌트 원장",
@@ -75,6 +72,9 @@
     "actorMember": "구성원"
   },
   "empty": {
+    "filteredTitle": "일치하는 증거 없음",
+    "searching": "지금까지 검색한 이벤트에 일치하는 항목이 없습니다. 더 불러오기를 눌러 검색을 계속하세요.",
+    "noMatches": "이 필터와 일치하는 이벤트가 없습니다. 필터를 변경하거나 제거해 보세요.",
     "title": "아직 증거 없음",
     "description": "이 범위의 원장이 비어 있습니다. 거버넌스된 작업이 발생하는 대로 변조 증거 이벤트를 추가합니다."
   },
@@ -104,26 +104,27 @@
     "membership_offboard": "사용자 제거됨",
     "token_issue": "API 토큰 생성됨",
     "token_revoke": "API 토큰 취소됨",
-    "secret_delete": "비밀 삭제됨"
+    "secret_delete": "비밀 삭제됨",
+    "governance_killswitch_engage": "킬 스위치 실행됨",
+    "sessions_run_created": "세션 생성됨"
   },
   "targets": {
     "core_policy": "정책"
   },
   "internal": {
-    "hidden": "내부 레코드 숨김: {{count}}",
     "show": "내부 레코드 표시",
     "hide": "내부 레코드 숨기기",
     "allHidden": "지금까지 불러온 모든 항목이 내부 레코드입니다."
   },
   "ledger": {
     "query": "원장 쿼리",
-    "placeholder": "person:  action:  since:7d  또는 단어",
+    "placeholder": "검색",
     "addFilter": "필터 추가",
     "remove": "{{token}} 제거",
     "add": "{{token}}을(를) 쿼리에 추가",
     "commands": "검색 및 명령",
     "problem": {
-      "key": "{{token}}은(는) 원장 필터가 아닙니다. person:, action:, kind:, target:, since:, until: 또는 단어를 사용하세요.",
+      "key": "{{token}}은(는) 원장 필터가 아닙니다. person:, action:, kind:, target:, tool:, folder:, since:, until: 또는 단어를 사용하세요.",
       "time": "{{token}}은(는) 시간이 아닙니다. 90m, 24h, 7d, 2w 또는 2026-10-20 같은 날짜를 사용하세요.",
       "person": "{{token}}과(와) 일치하는 사람이 없습니다. 이름, 이메일 또는 user:<id>를 사용하세요.",
       "several": "{{token}}과(와) 일치하는 사람이 여러 명입니다. 전체 이름, 이메일 또는 user:<id>를 사용하세요.",
@@ -146,10 +147,6 @@
       "day": "일별 항목",
       "week": "주별 항목",
       "bar_other": "{{at}}, {{count}}개 항목",
-      "loaded_other": "{{count}}개 항목 불러옴",
-      "sessions_other": "세션 {{count}}개",
-      "people_other": "{{count}}명",
-      "more": "더 불러올 수 있음",
       "now": "지금"
     },
     "entry": {
@@ -163,5 +160,15 @@
       "chainHint": "각 항목은 이전 항목의 해시를 담고 있습니다. 하나를 바꾸면 이후의 모든 해시가 깨집니다.",
       "signedEntry": "서명된 항목"
     }
+  },
+  "verbs": {
+    "create": "{{what}} 생성됨",
+    "update": "{{what}} 업데이트됨",
+    "delete": "{{what}} 삭제됨"
+  },
+  "toolApproval": {
+    "allow": "도구 호출 허용됨",
+    "ask": "도구 호출 승인 대기",
+    "deny": "도구 호출 거부됨"
   }
 }

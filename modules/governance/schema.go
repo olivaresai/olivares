@@ -261,7 +261,9 @@ const (
 	colAction             = "action"
 	colRequestedBy        = "requested_by"      // audit-actor string (user:<id>/token:<id>) — provenance only
 	colRequestedByUser    = "requested_by_user" // stable user id — the separation-of-duty identity
-	colLaunchedBy         = "launched_by"       // who launched the session a launch approval is for — display only
+	colLaunchedBy         = "launched_by"       // who launched the session that asks
+	colApprovalOrigin     = "origin"            // "ask" when Ask Olivares opened the request, set from the principal
+	approvalOriginAsk     = "ask"
 	colStatus             = "status"
 	colRequiredApproval   = "required_approvals"
 	colApproveCount       = "approve_count"
@@ -556,9 +558,14 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// comparison as requested_by_user, which can only refuse a decision.
 			{Name: colRequestedBy, Kind: model.KindText, Principal: model.Ref(model.EncodeUserRef, model.ClassRestrict)},
 			{Name: colRequestedByUser, Kind: model.KindText, Indexed: true, Principal: pdeclUserRestrict},
-			// The person who launched the session a launch approval is for. Display
-			// only: separation of duty, quorum and cancel never read it.
+			// The person who launched the session that asks: whose approval policies
+			// govern the request, and whom a policy that requires someone other than
+			// the launcher excludes. Separation of duty and cancel never read it.
 			{Name: colLaunchedBy, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserRef, model.ClassRestrict)},
+			// Who opened the request on the person's behalf: "ask" when Ask Olivares did,
+			// taken from the requesting principal, never from the body. Added nullable
+			// like the consume markers.
+			{Name: colApprovalOrigin, Kind: model.KindText, Nullable: true, Principal: model.None("a closed origin word set from the requesting principal and compared with \"ask\" only: approval_read.go:122, approval_read.go:166, approval_read.go:182, approvals.go:140")},
 			{Name: colStatus, Kind: model.KindText, Indexed: true, Principal: model.None("a lifecycle status from a closed set: approvals.go:105")},
 			{Name: colRequiredApproval, Kind: model.KindInt},
 			{Name: colApproveCount, Kind: model.KindInt},

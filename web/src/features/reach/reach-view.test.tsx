@@ -21,6 +21,7 @@ import { createQueryClient } from '@/lib/api/query'
 import { createTestQueryClient, renderIntel } from '@/test/intel'
 
 const perm = { approvals: true, sessions: true }
+vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: 't1',
@@ -33,7 +34,7 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
-// The view is in the address (?view=table): the router answers with the real URL, and a
+// The view is in the address (?view=graph): the router answers with the real URL, and a
 // navigation writes it there, so a test reads back what a pasted link would carry.
 const navigate = vi.hoisted(() =>
   vi.fn((opts: { search: (cur: Record<string, unknown>) => object }) => {
@@ -71,6 +72,7 @@ vi.mock('./api', () => ({
   },
 }))
 
+import { notify } from '@/lib/notify'
 import ReachView from './reach-view'
 
 const GRAPH = {
@@ -216,6 +218,10 @@ beforeEach(() => {
 })
 
 describe('ReachView graph', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/reach?view=graph')
+  })
+
   it('counts destinations and waiting requests in the header meta', async () => {
     // 4 destinations reached by edges + the waiting-only issue-tracker from the
     // pending approval; payments-api is both reached and waiting.
@@ -499,7 +505,7 @@ describe('ReachView graph', () => {
 })
 
 describe('ReachView table alternative', () => {
-  it('toggles to a table with the same rows and honest waiting statuses', async () => {
+  it('opens on a table with the same rows and honest waiting statuses, and toggles to the graph', async () => {
     const user = userEvent.setup()
     // The shell mounts every view inside its <main> landmark; mirror that so the
     // page-level axe run (which requires content in landmarks) matches real usage.
@@ -508,10 +514,6 @@ describe('ReachView table alternative', () => {
         <ReachView />
       </main>,
     )
-    await screen.findByRole('img', { name: /Reach graph/ })
-
-    await user.click(screen.getByRole('button', { name: 'Table' }))
-
     const table = await screen.findByRole('table')
     expect(within(table).getByText('Tool')).toBeInTheDocument()
     expect(within(table).getByText('Destination')).toBeInTheDocument()
@@ -534,32 +536,54 @@ describe('ReachView table alternative', () => {
     ])
     const results = await axe.run(document.body)
     expect(results.violations).toEqual([])
-    // The choice is in the address, so a pasted link opens the table.
-    expect(window.location.search).toBe('?view=table')
+    // The choice is in the address, so a pasted link opens the graph.
     await user.click(screen.getByRole('button', { name: 'Graph' }))
+    expect(
+      await screen.findByRole('img', { name: /Reach graph/ }),
+    ).toBeInTheDocument()
+    expect(window.location.search).toBe('?view=graph')
+    await user.click(screen.getByRole('button', { name: 'Table' }))
     expect(window.location.search).toBe('')
   })
 
-  it('opens on the table a link names, and says when the link names no view', async () => {
-    window.history.replaceState(null, '', '/reach?view=table')
+  it('opens on the table; a link names the graph, and an old table link still opens the table', async () => {
     const first = renderIntel(<ReachView />)
     expect(await screen.findByRole('table')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Table', pressed: true }),
     ).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /Reach graph/ })).toBeNull()
     first.unmount()
 
-    window.history.replaceState(null, '', '/reach?view=pie')
-    renderIntel(<ReachView />)
+    window.history.replaceState(null, '', '/reach?view=graph')
+    const second = renderIntel(<ReachView />)
     expect(
       await screen.findByRole('img', { name: /Reach graph/ }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('table')).toBeNull()
-    expect(
-      await screen.findByText(
-        /1 value in this link could not be used \(view\)/,
+    second.unmount()
+
+    window.history.replaceState(null, '', '/reach?view=table')
+    const third = renderIntel(<ReachView />)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    third.unmount()
+  })
+
+  it('says when the link names no view, and opens the table', async () => {
+    window.history.replaceState(null, '', '/reach?view=pie')
+    renderIntel(<ReachView />)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /Reach graph/ })).toBeNull()
+    // A refused link value is told in a toast, not in a strip above the page.
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringMatching(
+            /1 value in this link could not be used \(view\)/,
+          ),
+        }),
       ),
-    ).toBeInTheDocument()
+    )
   })
 })
 
@@ -639,6 +663,7 @@ describe('ReachView states', () => {
     )
     expect(screen.getByText('Loading reach…')).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: /Reach graph/ })).toBeNull()
+    expect(screen.queryByRole('table')).toBeNull()
   })
 
   it('labels an agents page cut: tool names may be missing', async () => {

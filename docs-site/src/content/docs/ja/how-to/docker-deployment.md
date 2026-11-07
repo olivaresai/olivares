@@ -22,8 +22,8 @@ description: >-
 これはサーバーだからです。下記のように意図して制限してください。
 
 <!-- release -->
-:::note[Olivares 0.6]
-次のリリースは `0.6` で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は `docs/releases/0.6-install-surfaces.json` に記録されています。
+:::note[Olivares 0.7]
+次のリリースは `0.7` で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は `docs/releases/0.7-install-surfaces.json` に記録されています。
 :::
 <!-- /release -->
 
@@ -39,7 +39,7 @@ description: >-
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.6
+docker pull docker.io/olivaresai/olivares:0.7
 ```
 <!-- /release -->
 
@@ -47,7 +47,7 @@ docker pull docker.io/olivaresai/olivares:0.6
 バックアップ兼ビルドレジストリとして使われます。Docker Hub は**匿名**プルにレート制限を課しますが、
 ghcr.io は公開イメージの匿名プルにレート制限を課しません。CI ノードや大規模なフリートが上限に達した
 場合は `docker login` するか、ghcr.io の座標に切り替えてください。タグには **先頭に `v` が付きません**: <!-- release -->
-`:0.6`<!-- /release --> はリリースを固定し、`:latest` は浮動、<!-- release -->`:0.6-fips`<!-- /release --> / <!-- release -->`:0.6-stig`<!-- /release --> は
+`:0.7`<!-- /release --> はリリースを固定し、`:latest` は浮動、<!-- release -->`:0.7-fips`<!-- /release --> / <!-- release -->`:0.7-stig`<!-- /release --> は
 堅牢化されたバリアントです。ベースと `:latest` タグはマルチアーキ
 （`linux/amd64`、`linux/arm64`）で、`fips`/`stig` は `amd64` 専用です。
 
@@ -59,7 +59,7 @@ Docker Hub にコピーされるため、ダイジェストは同じです:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.6")"
+DIGEST="$(crane digest "$IMAGE:0.7")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -88,17 +88,28 @@ cosign verify-attestation "$REF" --type spdxjson \
 <!-- release -->
 ```bash
 docker volume create olivares-data
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
 
 docker run -d --name olivares \
+  --hostname olivares \
   --user 65532:65532 \
   --read-only \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
+  --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.6 \
+  docker.io/olivaresai/olivares:0.7 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -114,6 +125,7 @@ docker run -d --name olivares \
 | `--tmpfs /tmp` | 書き込み可能なスクラッチ tmpfs。rootfs が読み取り専用のため必須 |
 | `--cap-drop ALL` | エンジンは Linux capability を一切必要としない |
 | `--security-opt no-new-privileges` | setuid バイナリ経由の権限昇格をブロックする |
+| `--security-opt seccomp=olivares-sessions.json $apparmor` | 最初のコマンドがイメージから読み取るセッション用 seccomp プロファイル: Docker の既定に、セッションがツールを閉じ込めるユーザー・ネットワーク・マウント名前空間を加えたもの（Debian 13 や Ubuntu 24.04 以降など AppArmor がユーザー名前空間を制御するホストでは、`$apparmor` がブロックの読み込むセッション用 AppArmor プロファイルも選択する） |
 | `-v olivares-data:/var/lib/olivares` | データディレクトリを永続化する（[§5](#5-運用上の注記) を参照） |
 | `-p 8443:8443` | HTTPS（REST + Web UI）を **すべてのホストインターフェース** に公開する |
 | `-p 8444:8444` | gRPC（取り込み / ControlPlane API）をすべてのホストインターフェースに公開する |
@@ -328,7 +340,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 本番ではダイジェストで固定する
 
-可変タグ（<!-- release -->`:0.6`<!-- /release -->、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
+可変タグ（<!-- release -->`:0.7`<!-- /release -->、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
 ダイジェストは不変であり、まさにあなたが承認したものです:
 
 ```bash

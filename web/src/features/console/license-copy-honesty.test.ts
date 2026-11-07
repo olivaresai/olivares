@@ -8,7 +8,19 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const DIR = 'src/features/console/i18n'
-const LOCALES = ['en', 'es', 'de', 'fr', 'it', 'ja', 'zh', 'ru', 'ko'] as const
+const LOCALES = [
+  'en',
+  'es',
+  'de',
+  'fr',
+  'it',
+  'ja',
+  'zh',
+  'ru',
+  'ko',
+  'uk',
+  'pt',
+] as const
 
 type LocaleFile = {
   license: { helpBody: string; communityNote: string }
@@ -73,7 +85,22 @@ const expected = {
     helpCommunity:
       'Community에서는 확인된 라이선스를 적용하면 여기에 세부 정보가 표시될 뿐 이 빌드는 바뀌지 않습니다.',
   },
+  uk: {
+    communityNote:
+      'Редакція Community: застосування перевіреної ліцензії показує її подробиці тут; воно не змінює цю збірку.',
+    helpCommunity:
+      'У Community застосування перевіреної ліцензії показує її подробиці тут; воно не змінює цю збірку.',
+  },
+  pt: {
+    communityNote:
+      'Edição Community: aplicar uma licença verificada mostra aqui os respetivos detalhes; não altera esta compilação.',
+    helpCommunity:
+      'Na edição Community, aplicar uma licença verificada mostra aqui os respetivos detalhes; não altera esta compilação.',
+  },
 } as const
+
+// prettier-ignore
+const portugueseShownLeftover = 'uma licença verificada é mostrada' // language-data: Portuguese leftover wording, rejected
 
 const leftoverShown = [
   /a verified license is shown/i,
@@ -88,10 +115,12 @@ const leftoverShown = [
   /已验证的许可证会显示在此/,
   /проверенная лицензия показывается/,
   /확인된 라이선스가 여기에 표시됩니다/,
+  /перевірена ліцензія показується/,
+  new RegExp(portugueseShownLeftover),
 ]
 
 describe('license copy honesty (CLC-R2)', () => {
-  it('covers the nine shipped console locales and no others', () => {
+  it('covers the eleven shipped console locales and no others', () => {
     const files = readdirSync(DIR)
       .filter((name) => name.endsWith('.json'))
       .map((name) => name.replace(/\.json$/, ''))

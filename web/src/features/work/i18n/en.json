@@ -13,7 +13,6 @@
   },
   "apply": {
     "planning": "Planning the change. Nothing is written in this step.",
-    "planTitle": "Plan",
     "command": "Command",
     "permission": "Permission",
     "eventType": "Event",
@@ -29,14 +28,14 @@
     "close": "Close",
     "appliedTitle": "Applied",
     "replayedTitle": "Already applied",
-    "replayedBody": "The engine recognised this idempotency key and replayed the original result. Nothing was written a second time.",
+    "replayedBody": "This change was already applied. Nothing was changed twice.",
     "commandId": "Command id",
     "resultId": "Result id",
     "status": "New status",
     "etag": "New version tag",
     "auditSeq": "Audit sequence",
     "reread": "Re-read and compare",
-    "retrySameKey": "Retry with the same key",
+    "retrySameKey": "Retry",
     "failure": {
       "conflict-version": "Someone else changed this item",
       "version-required": "Missing version precondition",
@@ -272,7 +271,7 @@
   "unavailable": {
     "title": "Could not look",
     "body": "The engine could not complete this observation, so it is reporting an unknown outcome rather than a result. Treat nothing on this panel as confirmed.",
-    "retryHint": "Whether the change was written is undetermined. Retry with the SAME idempotency key — that is what makes the retry safe, because the engine will recognise it as the same intention rather than a second one.",
+    "retryHint": "The result is uncertain. Retry here to check safely without repeating the change.",
     "code": "Engine code: {{code}}"
   },
   "verdict": {

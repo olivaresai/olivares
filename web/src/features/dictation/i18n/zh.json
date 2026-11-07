@@ -5,6 +5,7 @@
   "listening": "正在聆听。再按一次或按 Esc 停止。",
   "transcribing": "正在转写…",
   "nothing": "未听到语音。",
+  "unavailable": "会话运行时才能使用听写。",
   "failed": "听写失败，请重试。",
   "blocked": "浏览器已阻止麦克风。"
 }

@@ -70,6 +70,12 @@ func TestConnectorCatalogKindsBuild(t *testing.T) {
 		if info.Transport != "in_process" {
 			continue
 		}
+		if info.Class == "document" {
+			if src, ok := buildContentSource(info.Kind, nil); !ok || src == nil {
+				t.Errorf("catalog document kind %q does not build via content routing", info.Kind)
+			}
+			continue
+		}
 		if conn, ok := buildInProcSource(info.Kind); !ok || conn == nil {
 			t.Errorf("catalog kind %q does not build via source routing", info.Kind)
 		}

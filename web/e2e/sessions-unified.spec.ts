@@ -34,7 +34,7 @@ test('Claude Code portal: setup → login → navigate → create form → works
   await page.getByRole('button', { name: /create administrator/i }).click()
 
   // Setup signs the new administrator in and opens the setup wizard (pages/setup.tsx).
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
 
   // THE ENTRY IS INSIDE A NAV AREA, AND SIGN-IN LANDS ON THE ROOT. The sidebar
   // renders a closed area's panel hidden, and the root belongs to no area, so this
@@ -81,15 +81,16 @@ test('Claude Code portal: setup → login → navigate → create form → works
     .getByRole('button', { name: 'Back to sessions', exact: true })
     .click()
 
-  // The create form is the visual equivalent of the CLI launch.
+  // The create form is the visual equivalent of the CLI launch: New session focuses the
+  // composer, and its folder pill's More options opens it.
   await page
     .getByRole('main')
     .getByRole('button', { name: 'New session', exact: true })
     .first()
     .click()
-  const launcher = page.getByRole('dialog')
-  await launcher
-    .getByRole('button', { name: 'Advanced launch options', exact: true })
+  await page.getByRole('button', { name: /^Folder: / }).click()
+  await page
+    .getByRole('menuitem', { name: 'More options', exact: true })
     .click()
   const dialog = page.getByRole('dialog')
   await expect(

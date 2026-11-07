@@ -5,12 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
 import { mergeSessions } from '@/features/sessions/provenance'
 import type { LiveDTO } from '@/features/sessions/types'
-import {
-  actsForPeople,
-  dayCost,
-  dayIsFloor,
-  isLiveSession,
-} from './now-sessions'
+import { dayCost, dayIsFloor, isLiveSession } from './now-sessions'
 
 const NOW = new Date(2026, 9, 16, 15, 0).getTime()
 const at = (h: number, day = 16) => new Date(2026, 9, day, h, 0).toISOString()
@@ -293,38 +288,5 @@ describe('dayCost of yesterday: the sessions whose last work was yesterday', () 
     const t = (h: number, day: number) => new Date(2026, 9, day, h).getTime()
     expect(dayIsFloor(true, [t(14, 16), t(9, 15)], NOW, 1)).toBe(true)
     expect(dayIsFloor(true, [t(14, 16), t(9, 14)], NOW, 1)).toBe(false)
-  })
-})
-
-describe('actsForPeople: how many people the live sessions act for', () => {
-  const session = (acts_for: RunDTO['acts_for'], run_ref: string) =>
-    mergeSessions([], [run({ run_ref, acts_for })])[0]!
-
-  it('counts each person once and no automation', () => {
-    expect(
-      actsForPeople([
-        session({ kind: 'user', user_id: 'u1' }, 'r1'),
-        session({ kind: 'user', user_id: 'u1' }, 'r2'),
-        session({ kind: 'user', user_id: 'u2' }, 'r3'),
-        session({ kind: 'automation' }, 'r4'),
-      ]),
-    ).toBe(2)
-  })
-
-  it('is unknown, never a count, while one session does not say whom it acts for', () => {
-    expect(
-      actsForPeople([
-        session({ kind: 'user', user_id: 'u1' }, 'r1'),
-        session({ kind: 'unknown', reason: 'predates the record' }, 'r2'),
-      ]),
-    ).toBeNull()
-    expect(
-      actsForPeople([
-        session({ kind: 'user', user_id: 'u1' }, 'r1'),
-        session(undefined, 'r2'),
-      ]),
-    ).toBeNull()
-    // An observed session with no launch record says nothing about whom it acts for.
-    expect(actsForPeople(mergeSessions([live()], []))).toBeNull()
   })
 })

@@ -24,7 +24,8 @@ import (
 // as. A root engine's child would otherwise keep every capability inside its
 // Landlock domain. Only an engine holding CAP_SETPCAP can empty the bounding
 // set; without it, no_new_privs keeps any exec from regaining the cleared sets.
-// The network helper empties it inside its own user namespace.
+// The network helper empties it inside its own user namespace, and so does
+// every child that hides the engine user's user bus in one.
 func TestProcRunnerConfinedChildHoldsNoCapabilities(t *testing.T) {
 	if s := confine.Probe(); s.Mode != confine.ModeLandlock {
 		t.Fatal("this security reproducer requires Landlock: " + s.Reason)
@@ -38,7 +39,7 @@ func TestProcRunnerConfinedChildHoldsNoCapabilities(t *testing.T) {
 	engineBound := engine["CapBnd"]
 	if effective, err := strconv.ParseUint(engine["CapEff"], 16, 64); err != nil {
 		t.Fatal(err)
-	} else if effective&(1<<unix.CAP_SETPCAP) != 0 {
+	} else if effective&(1<<unix.CAP_SETPCAP) != 0 || (len(confine.UserBusDirs()) > 0 && confine.UserBusUnhideable() == nil) {
 		engineBound = none
 	}
 	// Only an engine that holds capabilities tells the fix apart on the

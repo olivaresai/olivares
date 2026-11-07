@@ -4,7 +4,8 @@
 //
 // The shell on the built binary (#3161): the top bar holds the scope, the places, search,
 // notifications and the account; the status bar under the work says how things stand.
-// Stop all is absent while no session runs, present while one does, and goes through the
+// Stop all is absent while no session works (idle ones left open included), present while
+// one does, and goes through the
 // kill switch's confirmation, which names how many sessions stop. The session reads are
 // answered here so "running" is a fact of the test, not of the demo estate; the stop
 // itself is answered here too, so the run engages nothing on the engine it shares.
@@ -69,11 +70,12 @@ function runningRun() {
   }
 }
 
-/** Answer the rail's session reads: `running` runs, and no live snapshots. */
-async function sessions(page: Page, running: number) {
-  const items = Array.from({ length: running }, (_, i) => ({
+/** Answer the rail's session reads: `count` runs in `state`, and no live snapshots. */
+async function sessions(page: Page, count: number, state = 'running') {
+  const items = Array.from({ length: count }, (_, i) => ({
     ...runningRun(),
     run_ref: `e2e-status-bar-run-${i + 1}`,
+    state,
   }))
   const answer = (body: unknown) => (route: Route) =>
     route.request().method() === 'GET'
@@ -135,7 +137,7 @@ async function expectOneOpenCount(page: Page) {
   ).toHaveText(count)
 }
 
-test('@shell Stop all: absent with no running session, present with one, through the confirmation', async ({
+test('@shell Stop all: absent with no working session, idle ones included, present with one, through the confirmation', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
@@ -146,7 +148,9 @@ test('@shell Stop all: absent with no running session, present with one, through
   const bar = statusBar(page)
   await expect(bar).toBeVisible()
   await expect(bar.getByText('Engine ready')).toBeVisible()
-  await expect(bar.getByTestId('deployment-identity')).toBeVisible()
+  // No version in the bar: Settings › About and the account menu carry it.
+  await expect(bar.getByTestId('deployment-identity')).toHaveCount(0)
+  await expect(bar).not.toContainText('Olivares')
   await expect(bar.getByRole('button', { name: 'Stop all' })).toHaveCount(0)
   // Nor anywhere in the top bar: it left the permanent chrome.
   await expect(
@@ -154,6 +158,13 @@ test('@shell Stop all: absent with no running session, present with one, through
       name: 'Stop all',
     }),
   ).toHaveCount(0)
+
+  // Idle sessions left open are alive, and the stop would end them, but none works or
+  // waits for a person: nothing on screen asks to be stopped.
+  await sessions(page, 2, 'idle')
+  await page.reload()
+  await expect(bar.getByText('2 sessions open')).toBeVisible()
+  await expect(bar.getByRole('button', { name: 'Stop all' })).toHaveCount(0)
 
   await sessions(page, 1)
   await page.reload()
@@ -200,7 +211,7 @@ for (const theme of THEMES)
       await signIn(page)
       for (const [name, path] of [
         ['sessions', '/sessions'],
-        ['now', '/'],
+        ['now', '/now'],
       ] as const) {
         await page.goto(path)
         // On Sessions, one of the estate's own sessions, as the reference shows one.

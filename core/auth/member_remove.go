@@ -26,10 +26,8 @@ var (
 // event. The account itself, its other organizations and its account-scope sessions
 // are untouched, as in every scoped offboard.
 //
-// It is the guard the SCIM server's deprovision never had to be: an IdP is the
-// tenant's directory of record, a person is not. The checks run in the offboard's own
-// transaction, under the directory writer lock, so two removals cannot each see the
-// other owner still there:
+// The checks (checkMemberRemovable) run in the offboard's own transaction, under the
+// directory writer lock, so two removals cannot each see the other owner still there:
 //
 //   - a workspace-confined caller is refused (ErrWorkspaceConfined), as onboarding
 //     and the TOTP reset do: removing a member is a tenant-wide act;
@@ -47,6 +45,8 @@ func (a *Authenticator) RemoveMember(ctx context.Context, actor Principal, tenan
 	if tenant.IsZero() || tenant.IsSystem() {
 		return ErrInvalidToken
 	}
+	// Answered before the membership read, so a confined caller learns nothing of who
+	// is a member; checkMemberRemovable asks again under the lock.
 	if _, confined := actor.ConfinedWorkspaceIn(tenant); confined {
 		return ErrWorkspaceConfined
 	}
@@ -82,8 +82,17 @@ func (a *Authenticator) RemoveMember(ctx context.Context, actor Principal, tenan
 	return err
 }
 
-// checkMemberRemovable applies the guards of RemoveMember to a member of tenant.
+// checkMemberRemovable applies every guard of a removal to a member of tenant: the
+// workspace confinement, self-removal, the role ceiling and the last active owner.
+// It is the one check a principal's removal of a member runs inside its offboard
+// transaction, whichever route asks: the member route and the Business build's
+// directory (SCIM) DELETE and active=false, which an IdP sends with a bearer token
+// holding the same user:write permission. A caller that offboards a member for a
+// principal without it skips the guards (docs/contracts-identity.md).
 func checkMemberRemovable(ctx context.Context, as store.AuthScope, actor Principal, tenant model.TenantID, id model.ID) error {
+	if _, confined := actor.ConfinedWorkspaceIn(tenant); confined {
+		return ErrWorkspaceConfined
+	}
 	if actor.UserID == id {
 		return ErrSelfRemoval
 	}

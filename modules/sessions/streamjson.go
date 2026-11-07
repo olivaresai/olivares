@@ -4,7 +4,11 @@
 
 package sessions
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+	"unicode"
+)
 
 // stream-json is Claude Code's headless protocol (`--output-format stream-json`):
 // newline-delimited JSON, one message object per line. We parse only the MINIMAL
@@ -49,6 +53,27 @@ func parseStreamJSON(line []byte) (streamJSONFrame, bool) {
 		return streamJSONFrame{}, false
 	}
 	return f, true
+}
+
+// controlFrame reports whether a raw input line would act on the session rather
+// than be a turn in it. Claude Code's stdin takes more than turns: control
+// requests (set_permission_mode, set_model, ...), environment updates, a
+// bash_command it runs with no permission check, transcript and workflow frames,
+// and each release may add one. So a JSON object passes only as a user message;
+// the engine alone sends the rest (interrupt, stop task) and never through here.
+// The type is read as the tool reads it, the exact key with the last duplicate
+// winning, not through a struct, whose decoder folds case, and after the
+// whitespace and byte order mark a JavaScript trim removes. An object this
+// decoder cannot read (nested past its depth limit) cannot be ruled out, so it
+// counts as one; plain text does not.
+func controlFrame(line []byte) bool {
+	line = bytes.TrimFunc(line, func(r rune) bool { return unicode.IsSpace(r) || r == '\ufeff' })
+	var f map[string]json.RawMessage
+	if err := json.Unmarshal(line, &f); err != nil {
+		return bytes.HasPrefix(line, []byte("{"))
+	}
+	var typ string
+	return json.Unmarshal(f["type"], &typ) != nil || typ != "user"
 }
 
 // isInit reports whether the frame is the session-establishing init message that

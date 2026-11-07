@@ -3,9 +3,6 @@
   "subtitle": "查看 AI 活动的签名记录。",
   "subtitleSystem": "记录跨租户管理操作的系统租户链（只读）。",
   "searchLoaded": "仅筛选已加载的行（客户端）…",
-  "scan": {
-    "incomplete": "已扫描至 seq {{seq}}——非完整账本；点击「加载更多」继续扫描。"
-  },
   "scope": {
     "label": "账本范围",
     "tenant": "租户账本",
@@ -75,6 +72,9 @@
     "actorMember": "成员"
   },
   "empty": {
+    "filteredTitle": "没有匹配的证据",
+    "searching": "目前已搜索的事件中没有匹配项。点击“加载更多”继续搜索。",
+    "noMatches": "没有事件符合这些筛选条件。请尝试更改或移除筛选条件。",
     "title": "暂无证据",
     "description": "此范围下账本为空。受治理的操作会在发生时追加防篡改事件。"
   },
@@ -104,26 +104,27 @@
     "membership_offboard": "已移除成员",
     "token_issue": "已创建 API 令牌",
     "token_revoke": "已吊销 API 令牌",
-    "secret_delete": "已删除密钥"
+    "secret_delete": "已删除密钥",
+    "governance_killswitch_engage": "紧急关停开关已触发",
+    "sessions_run_created": "已创建会话"
   },
   "targets": {
     "core_policy": "策略"
   },
   "internal": {
-    "hidden": "已隐藏的内部记录：{{count}}",
     "show": "显示内部记录",
     "hide": "隐藏内部记录",
     "allHidden": "目前已加载的全部是内部记录。"
   },
   "ledger": {
     "query": "账本查询",
-    "placeholder": "person:  action:  since:7d  或关键词",
+    "placeholder": "搜索",
     "addFilter": "添加筛选",
     "remove": "移除 {{token}}",
     "add": "将 {{token}} 加入查询",
     "commands": "搜索与命令",
     "problem": {
-      "key": "{{token}} 不是账本筛选。请使用 person:、action:、kind:、target:、since:、until: 或关键词。",
+      "key": "{{token}} 不是账本筛选。请使用 person:、action:、kind:、target:、tool:、folder:、since:、until: 或关键词。",
       "time": "{{token}} 不是时间。请使用 90m、24h、7d、2w 或 2026-10-20 这样的日期。",
       "person": "没有人匹配 {{token}}。请使用姓名、邮箱或 user:<id>。",
       "several": "{{token}} 匹配多个人。请使用全名、邮箱或 user:<id>。",
@@ -146,10 +147,6 @@
       "day": "每日条目",
       "week": "每周条目",
       "bar_other": "{{at}}，{{count}} 条",
-      "loaded_other": "已加载 {{count}} 条",
-      "sessions_other": "{{count}} 个会话",
-      "people_other": "{{count}} 人",
-      "more": "还可加载更多",
       "now": "现在"
     },
     "entry": {
@@ -163,5 +160,15 @@
       "chainHint": "每条记录都带有上一条的哈希。改动其中一条，之后的每个哈希都会失效。",
       "signedEntry": "已签名的条目"
     }
+  },
+  "verbs": {
+    "create": "已创建{{what}}",
+    "update": "已更新{{what}}",
+    "delete": "已删除{{what}}"
+  },
+  "toolApproval": {
+    "allow": "已允许工具调用",
+    "ask": "工具调用等待审批",
+    "deny": "已拒绝工具调用"
   }
 }

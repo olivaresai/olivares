@@ -146,6 +146,25 @@ the parity and ADR-sync checks. Creating a release archive is a separate,
 maintainer-reviewed change; do not hand-edit an archived tree or add a speculative
 version to `astro.config.mjs`.
 
+### Redirects
+
+`public/_redirects` mixes hand-written rules with a generated block between two marker
+lines. The block exists because the language and version pickers of every page offer a locale
+or snapshot copy that was never built (the REST references exist only in English and only in
+the latest version, and the snapshot lacks the pages added after it). Each of those URLs
+answers a 301 to the page that exists, and so do the locale roots `/es` … `/zh` (the platform
+alone answers them with a 307).
+
+Order matters: the platform counts every rule after the first wildcard rule as dynamic and
+ignores the rules past the 100th. Exact rules therefore come first, the wildcard rules after
+them, and a hand-written wildcard rule goes below the end marker.
+
+After adding, renaming or removing a page: `npm run build && npm run redirects`, commit
+`public/_redirects`. `npm run test:redirects` reads `dist/` and fails with the first
+unresolved URL when the file is stale, when a rule would redirect a page that exists, when an
+exact rule follows a wildcard rule, or when a limit (2000 exact rules, 100 dynamic rules, 1000
+characters per rule) is passed.
+
 ## Publishing
 
 ⛔ **Corrected 2026-08-27.** Two sections of this README used to say this tree carried

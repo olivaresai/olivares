@@ -13,7 +13,6 @@
   },
   "apply": {
     "planning": "Pianificazione della modifica. In questo passaggio non viene scritto nulla.",
-    "planTitle": "Piano",
     "command": "Comando",
     "permission": "Permesso",
     "eventType": "Evento",
@@ -29,14 +28,14 @@
     "close": "Chiudi",
     "appliedTitle": "Applicata",
     "replayedTitle": "Già applicata",
-    "replayedBody": "Il motore ha riconosciuto questa chiave di idempotenza e ha riproposto il risultato originale. Non è stato scritto nulla una seconda volta.",
+    "replayedBody": "Questa modifica era già stata applicata. Non è stata eseguita due volte.",
     "commandId": "ID del comando",
     "resultId": "ID del risultato",
     "status": "Nuovo stato",
     "etag": "Nuovo tag di versione",
     "auditSeq": "Sequenza di audit",
     "reread": "Rileggi e confronta",
-    "retrySameKey": "Riprova con la stessa chiave",
+    "retrySameKey": "Riprova",
     "failure": {
       "conflict-version": "Qualcun altro ha modificato questo elemento",
       "version-required": "Precondizione di versione mancante",
@@ -272,7 +271,7 @@
   "unavailable": {
     "title": "Impossibile verificare",
     "body": "Il motore non è riuscito a completare questa osservazione, quindi segnala un esito sconosciuto invece di un risultato. Non considerare confermato nulla di ciò che c'è in questo pannello.",
-    "retryHint": "Non è stabilito se la modifica sia stata scritta. Riprova con la STESSA chiave di idempotenza: è ciò che rende sicuro il nuovo tentativo, perché il motore lo riconoscerà come la stessa intenzione e non come una seconda.",
+    "retryHint": "Il risultato è incerto. Riprova qui per verificarlo senza ripetere la modifica.",
     "code": "Codice del motore: {{code}}"
   },
   "verdict": {

@@ -12,9 +12,13 @@
 //      403 or module_not_enabled can never read as a failure with Retry.
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { type FeatureView } from '@/features/registry'
 import { moduleOfView } from '@/stores/modules'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 const SRC = resolve(__dirname, '..')
 

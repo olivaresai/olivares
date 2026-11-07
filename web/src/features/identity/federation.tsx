@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // ADM-IDN-01 — SSO/SAML/OIDC config + SCIM 2.0 status (consumes).
-//  • SSO config is ENV-ONLY (no write API): the panel documents the env keys,
+//  • SSO is SET UP in the Identity provider tab (a form, applied without a restart); this panel
 //    computes + checks the EXACT redirect URI (RFC 9700 exact-match), reflects the
 //    always-on PKCE S256, and surfaces the connection state — incl. the explicit
 //    ErrSSONotConfigured (501 sso_not_configured) state.
@@ -17,6 +17,7 @@ import {
   QueryErrorState,
 } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { CircleAlert, CircleCheck, ExternalLink } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -49,25 +50,7 @@ import {
   PostureUnavailableNotice,
 } from './components'
 import { AuthorityReferences } from './references'
-import type { AuditEntry, ScimUser, SsoEnvField } from './types'
-
-/** The env keys that configure SSO (read-only documentation — there is NO config
- *  write API; these are read once at boot via FromEnv).*/
-const SSO_ENV_FIELDS: SsoEnvField[] = [
-  { key: 'OLIVARES_SSO_PROTOCOL', required: true, protocol: 'common' },
-  { key: 'OLIVARES_OIDC_ISSUER', required: true, protocol: 'oidc' },
-  { key: 'OLIVARES_OIDC_CLIENT_ID', required: true, protocol: 'oidc' },
-  {
-    key: 'OLIVARES_OIDC_CLIENT_SECRET',
-    required: false,
-    protocol: 'oidc',
-    secret: true,
-  },
-  { key: 'OLIVARES_SAML_IDP_METADATA_URL', required: true, protocol: 'saml' },
-  { key: 'OLIVARES_SAML_SP_ENTITY_ID', required: true, protocol: 'saml' },
-  { key: 'OLIVARES_SAML_ACS_URL', required: true, protocol: 'saml' },
-  { key: 'OLIVARES_SAML_IDP_SSO_URL', required: true, protocol: 'saml' },
-]
+import type { AuditEntry, ScimUser } from './types'
 
 /** The server derives the callback from the request host (RFC 9700 exact-match);
  *  we compute the same value so the operator can register it before the backend
@@ -95,7 +78,9 @@ export function FederationTab() {
 
 function SsoSection() {
   const { t } = useTranslation(['identity', 'common'])
-  const { activeTenant } = useAuth()
+  const { activeTenant, can } = useAuth()
+  const navigate = useNavigate()
+  const admin = can('tenant:admin')
   const status = useQuery({
     queryKey: identityKeys.sso(activeTenant),
     queryFn: () => identityApi.ssoStatus(),
@@ -202,27 +187,24 @@ function SsoSection() {
           ) : null}
         </div>
 
-        {/* Env config (read-only docs) + test login. */}
-        <KvList>
-          {SSO_ENV_FIELDS.map((f) => (
-            <KvRow
-              key={f.key}
-              label={<code className="font-mono text-caption">{f.key}</code>}
-              align="start"
+        {/* Set-up lives in the Identity provider tab, which only an administrator is offered. */}
+        {admin ? (
+          <div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                // Feature routes are not in the static route tree: loose cast, as nhi-roster does.
+                void navigate({
+                  to: '/identity',
+                  search: { tab: 'sso' },
+                } as never)
+              }
             >
-              <span className="flex flex-wrap items-center gap-1.5">
-                <Badge variant="outline">{t(`sso.proto.${f.protocol}`)}</Badge>
-                {f.required ? (
-                  <Badge variant="neutral">{t('sso.required')}</Badge>
-                ) : null}
-                {f.secret ? (
-                  <Badge variant="warning">{t('sso.secret')}</Badge>
-                ) : null}
-              </span>
-            </KvRow>
-          ))}
-        </KvList>
-        <p className="text-caption text-muted-foreground">{t('sso.envNote')}</p>
+              {t('sso.configure')}
+            </Button>
+          </div>
+        ) : null}
         <div>
           <Button asChild variant="outline" size="sm">
             <a
@@ -290,14 +272,20 @@ function scimUserColumns(
 const LEAVER_ACTION = 'scim.user.deprovision'
 /** How many leaver events the card lists. */
 const LEAVER_ROWS = 10
+/** How many ledger entries, counted back from the head, the card reads. The action filter
+ *  scans every entry from `from`, so a read from entry 1 costs the whole ledger: 12 s on
+ *  128,000 entries, whatever the number of leavers. */
+const LEAVER_SCAN = 10_000
 
 /**
- * The newest `LEAVER_ROWS` deprovision events, newest first, in the list envelope.
+ * The newest `LEAVER_ROWS` deprovision events among the last `LEAVER_SCAN` ledger entries,
+ * newest first, in the list envelope, with the sequence the read started at.
  *
  * The ledger pages FORWARDS only (`from`, ascending sequence), so the newest events are on
  * its LAST page: one `limit: 10` read returned the ten oldest and a tenant past ten leavers
- * never saw the latest. This follows `next_from` to the last page and keeps the tail;
- * `has_more` on the result means older events exist that the card does not list.
+ * never saw the latest. This starts `LEAVER_SCAN` entries before the head, follows `next_from`
+ * to the last page and keeps the tail; `has_more` on the result means more events than the
+ * card lists, and `scannedFrom` above 1 means older entries were not read at all.
  *
  * A page that reports `has_more` without a `next_from` that moves forward cannot be walked
  * to its end, and its rows are the oldest ones: that is an error, never a "latest" list.
@@ -306,14 +294,19 @@ const LEAVER_ROWS = 10
  * A tenant switch cancels the query (tenant-cache-isolation), which discards its result but
  * would not stop the later pages: `signal` stops them, so none goes out under the new tenant.
  *
- * ponytail: one read per 1,000 leaver events on every load, and each read appends an
- * `audit.read` event to the ledger. Upgrade trigger: a tenant with tens of thousands of
- * leaver events, which wants a newest-first filter on GET /v1/audit.
+ * ponytail: leaver events older than the last `LEAVER_SCAN` entries are not listed, and the
+ * card says so. Each read still appends an `audit.read` event to the ledger. Upgrade trigger:
+ * a tenant that needs its older leavers here, which wants a newest-first filter (or an action
+ * index) on GET /v1/audit.
  */
 async function newestLeavers(
   signal: AbortSignal,
-): Promise<ListResponse<AuditEntry>> {
-  let from = 1
+): Promise<ListResponse<AuditEntry> & { scannedFrom: number }> {
+  const scannedFrom = Math.max(
+    1,
+    (await identityApi.auditHead()) - LEAVER_SCAN + 1,
+  )
+  let from = scannedFrom
   let newest: AuditEntry[] = []
   let seen = 0
   for (;;) {
@@ -330,7 +323,11 @@ async function newestLeavers(
     }
     from = page.next_from
   }
-  return { items: newest.slice().reverse(), has_more: seen > LEAVER_ROWS }
+  return {
+    items: newest.slice().reverse(),
+    has_more: seen > LEAVER_ROWS,
+    scannedFrom,
+  }
 }
 
 function ScimSection() {
@@ -477,6 +474,11 @@ function ScimSection() {
           {/* The card lists the newest `LEAVER_ROWS` events, so an OLDER leaver can be
               missing from it. The count is the rows LISTED; the notice stays out of
               DeclaredSection so a failed refetch cannot leave it floating over the error. */}
+          {leaver.data && !leaver.isError && leaver.data.scannedFrom > 1 && (
+            <p className="mb-2 text-caption text-muted-foreground">
+              {t('scim.leaverWindow', { n: LEAVER_SCAN })}
+            </p>
+          )}
           <ListTruncationBadge
             query={leaver}
             filas={leaver.data?.items.length}

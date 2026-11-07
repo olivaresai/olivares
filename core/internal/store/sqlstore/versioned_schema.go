@@ -25,6 +25,7 @@ const (
 	coreUserGroupWorkspaceVersion      = 27
 	coreAuthSessionInventoryVersion    = 28
 	coreGroupDerivedTokenRoleVersion   = 29
+	coreAuthSessionIdPSessionVersion   = 30
 )
 
 // The deployed prefix keeps its guard-edition barrier. Versions appended here
@@ -244,6 +245,25 @@ func authSessionInventoryV28() model.EntityDescriptor {
 	})
 	d.Indexes = nil
 	return d
+}
+
+// coreAuthSessionIdPSessionMigration adds the identity provider session a
+// back-channel logout names. Existing rows keep NULL: they came from no named
+// IdP session, so only a subject-wide logout reaches them.
+func coreAuthSessionIdPSessionMigration(dia dialect.Dialect) migrate.Migration {
+	return migrate.Migration{Version: coreAuthSessionIdPSessionVersion, Name: "auth_session_idp_session", Exec: func(ctx context.Context, tx *sql.Tx) error {
+		have, err := dia.TableColumns(ctx, tx, authSessionDescriptor.Table)
+		if err != nil {
+			return fmt.Errorf("introspect %q: %w", authSessionDescriptor.Table, err)
+		}
+		if !have["selector"] {
+			return fmt.Errorf("%q is absent or lacks its selector: refusing to record v%d", authSessionDescriptor.Table, coreAuthSessionIdPSessionVersion)
+		}
+		d := authSessionDescriptorV30
+		d.Fields = slices.DeleteFunc(slices.Clone(d.Fields), func(f model.FieldSpec) bool { return f.Name != "idp_session" })
+		d.Indexes = nil
+		return reconcileColumnsTx(ctx, tx, dia, []model.EntityDescriptor{d})
+	}}
 }
 
 // v29 adds issue-time token-role provenance and backfills only legacy rows

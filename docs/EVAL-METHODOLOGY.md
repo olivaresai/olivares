@@ -261,3 +261,28 @@ exactly what a research buyer expects to see when no domain benchmark exists.
   <https://arxiv.org/abs/2410.12784>, RewardBench 2 <https://arxiv.org/abs/2506.01937>, LLMBar
   <https://arxiv.org/abs/2310.07641>, JETTS <https://arxiv.org/abs/2504.15253>, OffsetBias
   <https://arxiv.org/abs/2407.06551>, govllm <https://arxiv.org/html/2605.24737>.
+
+## Governed session trials
+
+`olivares evals run [folder] --suite S --template T --trials 3` runs each case
+three times through the normal governed session runtime. The folder defaults to
+the current folder and must be a Git repository on the engine host. Every trial
+gets a fresh worktree at the same base commit and uses the saved template's
+permissions, provider binding and audit. Each finished session is stopped;
+worktrees remain for inspection and can be removed with `olivares session rm`.
+`--timeout` bounds the whole run (default ten minutes).
+
+Each trial batch goes through the existing scorer and regression gate. The final
+report adds empirical **pass@1** (cases passing the first trial), **pass@k** (cases
+passing at least one trial) and **pass^k** (cases passing every trial), each with
+the existing 95% Wilson interval over cases. These are observed case fractions,
+not powers of a pooled success probability. The final gate fails with exit 1
+when pass^k is below the suite's pass threshold, any batch gate fails, or any
+score is missing, skipped or errored. Each gate receives the session model identity;
+an unknown model or a model change between sessions stops the run. Approval and
+launch failures stop the run without fabricating scores. The CLI stops its owned session on errors too.
+
+Use `-o json` to capture the report, session references and batch gate IDs in CI.
+Candidate outputs are held in memory and sent directly to the existing gate;
+the eval store still retains only hashes and clamped labels. The normal session
+runtime's retention policy continues to apply to session evidence.

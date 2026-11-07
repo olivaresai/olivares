@@ -160,7 +160,6 @@
     }
   },
   "seam": {
-    "synthetic": "Génération locale de données",
     "syntheticData": "Générez des entrées reproductibles via l’API du sandbox avec des modèles de texte locaux bornés. Aucun appel à un modèle IA ou au réseau."
   },
   "empty": {
@@ -182,7 +181,7 @@
     "scenarioRef": "Scenario ref (optional)",
     "baseline": "Baseline variant",
     "candidate": "Candidate variant",
-    "replayHint": "Réexécute une session historique de façon déterministe contre des simulacres. Si la chronologie ne peut pas être reconstruite, la relecture revient DÉGRADÉE avec zéro étape — ce n’est pas une session qui n’a rien fait, c’est une chronologie impossible à reconstruire.",
+    "replayHint": "Réexécute une session passée sur des simulations. Une relecture sans étape signifie que sa chronologie n’a pas pu être reconstituée.",
     "compareHint": "Une comparaison est une preuve de DÉCISION pré/post-déploiement et est stockée en ajout seul, c’est pourquoi elle exige le palier admin plutôt que celui qui se contente d’exécuter.",
     "liveRef": "Référence de l’instance de session",
     "legacySessionRef": "Référence de session héritée (alternative)"

@@ -6,6 +6,7 @@ import {
   layeredLayout,
   type LayoutEdgeInput,
 } from '@/features/shared/graph/layout'
+import { refTail } from '@/features/shared/entity-names'
 import {
   type AccessEdge,
   type AccessMapMode,
@@ -35,7 +36,10 @@ import {
 
 export interface OriginNodeData extends Record<string, unknown> {
   role: 'origin'
+  /** What the canvas paints: short (shortLabel). */
   label: string
+  /** The engine's whole redacted ref (or the id): the tooltip and the detail sheet. */
+  ref: string
   kind: string
   bridged: boolean
   dimmed: boolean
@@ -43,7 +47,10 @@ export interface OriginNodeData extends Record<string, unknown> {
 
 export interface ResourceNodeData extends Record<string, unknown> {
   role: 'resource'
+  /** What the canvas paints: short (shortLabel). */
   label: string
+  /** The engine's whole redacted ref (or the id): the tooltip and the detail sheet. */
+  ref: string
   kind: string
   resourceKind?: string
   coverageTier?: string
@@ -52,6 +59,13 @@ export interface ResourceNodeData extends Record<string, unknown> {
 }
 
 export type EdgeCategory = 'normal' | 'unexpected' | 'pending' | 'unused'
+
+export const ACCESS_MAP_LAYOUT_OPTIONS = {
+  layerGapX: 360,
+  nodeGapY: 76,
+  // 8 rows of 76 px fit the canvas at zoom 1, where the text is 12 px or more.
+  maxPerColumn: 8,
+} as const
 
 export interface AccessEdgeData extends Record<string, unknown> {
   edge: AccessEdge
@@ -63,6 +77,8 @@ export interface AccessEdgeData extends Record<string, unknown> {
   dashed: boolean
   opacity: number
   showLabel: boolean
+  /** How many access edges this one drawn edge stands for (groups.ts), when several. */
+  count?: number
 }
 
 export interface AccessFilterState {
@@ -220,6 +236,12 @@ export function buildGraph({
     }
   }
 
+  // The overlay also surfaces unused grants (permitted, never observed). /graph lists
+  // every edge, permitted-only ones included, so a grant it returned is classified in
+  // place and only the others are added from /drift: one edge per id.
+  const unused = new Set(
+    overlayOn && diff ? diff.unused_grants.map((d) => d.edge.id) : [],
+  )
   type Entry = { e: AccessEdge; category: EdgeCategory }
   const entries: Entry[] = []
   for (const e of graph.edges) {
@@ -227,14 +249,15 @@ export function buildGraph({
     let category: EdgeCategory = 'normal'
     if (overlayOn && unexpected.has(e.id)) {
       category = unexpected.get(e.id) ? 'pending' : 'unexpected'
+    } else if (unused.has(e.id)) {
+      category = 'unused'
     }
     entries.push({ e, category })
   }
-  // The overlay also surfaces unused grants (permitted, never observed) — they are
-  // not in /graph (that is observed-only), so add them from /drift.
   if (overlayOn && diff) {
+    const inGraph = new Set(graph.edges.map((e) => e.id))
     for (const d of diff.unused_grants) {
-      if (!matchesFilter(d.edge, filter)) continue
+      if (inGraph.has(d.edge.id) || !matchesFilter(d.edge, filter)) continue
       entries.push({ e: d.edge, category: 'unused' })
     }
   }
@@ -272,11 +295,18 @@ export function buildGraph({
       }
       return
     }
-    const label = ref || nodeRef.get(id) || shortId(id)
+    const full = ref || nodeRef.get(id) || id
+    const label =
+      ref || nodeRef.get(id)
+        ? kind === 'session'
+          ? refTail(full)
+          : shortLabel(full)
+        : shortId(id)
     if (role === 'origin') {
       nodeData.set(id, {
         role,
         label,
+        ref: full,
         kind,
         bridged: true,
         dimmed: dimNonFindings,
@@ -286,6 +316,7 @@ export function buildGraph({
       nodeData.set(id, {
         role,
         label,
+        ref: full,
         kind,
         resourceKind: kind,
         coverageTier: extra?.coverageTier,
@@ -341,28 +372,14 @@ export function buildGraph({
     })
   }
 
-  const layout = layeredLayout(layoutNodes, layoutEdges, {
-    layerGapX: 360,
-    nodeGapY: 76,
-    // ⛔ WITHOUT THIS the product's most visible view comes out as an unreadable
-    // vertical column. An estate of 56 origins stacked them in ONE column: 55 · 76 =
-    // 4180 px tall by 360 px wide, inside a container of about 630 px
-    // (`access-map-view.tsx` `h-[70vh]`). `fitView` shrank it to about 0.12 and the
-    // `text-xs` labels (12 px) were drawn at about 1.5 px. With 14 per sub-column those
-    // 56 origins take 988 px and the whole graph is 1480 × 988 (measured, not estimated).
-    //
-    // 14 is not a round number: it is the height that fits legibly in the container.
-    //
-    // ⛔ CORRECTED after the `sol max` contrast (F-07): THIS COMMENT USED TO SAY that
-    // above about 400 nodes `WEBGL_NODE_THRESHOLD` rules and "this value only governs
-    // the stretch React Flow draws". **That is false.** `buildGraph` runs BEFORE the
-    // renderer is chosen (`access-map-view.tsx:138-164`) and Sigma copies
-    // `n.position.x/y` as they are (`sigma-graph-build.ts:94-111`), so the wrapping
-    // reaches it too. What does NOT reach it is the zoom floor, which belongs to the
-    // React Flow canvas. It has not been measured that wrapping makes Sigma worse; what
-    // is corrected here is the claim.
-    maxPerColumn: 14,
-  })
+  // Wrap tall layers into side-by-side sub-columns so fitView never has to shrink
+  // the access map into a single unreadable strip. These positions reach both the
+  // React Flow and Sigma renderers; the readable zoom floor belongs to React Flow.
+  const layout = layeredLayout(
+    layoutNodes,
+    layoutEdges,
+    ACCESS_MAP_LAYOUT_OPTIONS,
+  )
 
   const flowNodes: Node[] = layoutNodes.map(({ id }) => {
     const data = nodeData.get(id)!
@@ -393,6 +410,20 @@ export function buildGraph({
       unused: unusedCount,
     },
   }
+}
+
+/**
+ * The name a node is painted with: the host of a URL, the command word of a command
+ * line, the last segment of a path (`/srv/shop/api/main.go` → `main.go`), else the ref
+ * as it came. The whole ref stays on the node for the tooltip and the sheet.
+ */
+export function shortLabel(ref: string): string {
+  const url = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i.exec(ref)
+  if (url) return url[1]!
+  const words = ref.trim().split(/\s+/)
+  if (words.length > 1) return `${shortLabel(words[0]!)} …`
+  const segments = ref.split('/').filter(Boolean)
+  return segments.length > 1 ? segments[segments.length - 1]! : ref
 }
 
 /** A short, stable id label (first 8 chars) when no redacted ref is available. */

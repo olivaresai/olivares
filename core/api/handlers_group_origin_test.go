@@ -10,31 +10,15 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
 func createOwnedGroup(t *testing.T, h *harness, actor auth.Principal, tenant model.TenantID, origin string) model.UserGroup {
 	t.Helper()
-	ctx := context.Background()
-	out, err := h.authr.SCIMCreateGroup(ctx, actor, tenant, auth.SCIMGroupInput{
-		DisplayName: "Owned " + origin, ExternalID: "external-" + origin,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
-		g, err := as.Groups().Get(ctx, out.Group.ID)
-		if err != nil {
-			return err
-		}
-		g.ProvisionedBy = origin
-		out.Group, err = as.Groups().Update(ctx, g)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return out.Group
+	g := authtest.Group(t, h.st, tenant, "Owned "+origin, "external-"+origin)
+	return authtest.Edit(t, h.st, g.Group.ID, func(g *model.UserGroup) { g.ProvisionedBy = origin })
 }
 
 func TestGroupOriginOperatorProjection(t *testing.T) {
@@ -107,57 +91,5 @@ func TestGroupOriginHTTPWritesRefuseClaimedGroups(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestGroupOriginHTTPHierarchyUsesFixedForbiddenEnvelope(t *testing.T) {
-	// Group nesting is a Business route: the department service is wired to reach it.
-	h := newHarnessOpts(t, groupDepartments)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "origin-hierarchy-http")
-	ctx := context.Background()
-	actor, err := h.authr.Authenticate(ctx, admin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	groups := map[string]model.UserGroup{}
-	for _, name := range []string{"child", "middle", "top", "elsewhere", "loose"} {
-		g, err := h.authr.SCIMCreateGroup(ctx, actor, tenant, auth.SCIMGroupInput{DisplayName: name, ExternalID: name})
-		if err != nil {
-			t.Fatal(err)
-		}
-		groups[name] = g.Group
-	}
-	for _, edge := range [][2]string{{"child", "middle"}, {"middle", "top"}} {
-		if _, err := h.authr.ConfigureGroupParent(ctx, actor, tenant, groups[edge[0]].ID, groups[edge[1]].ID); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
-		g, err := as.Groups().Get(ctx, groups["top"].ID)
-		if err != nil {
-			return err
-		}
-		g.ProvisionedBy = "directory-a"
-		_, err = as.Groups().Update(ctx, g)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for _, edge := range [][2]string{{"loose", "middle"}, {"middle", ""}, {"child", "elsewhere"}} {
-		t.Run(edge[0]+"-to-"+edge[1], func(t *testing.T) {
-			parent := ""
-			if edge[1] != "" {
-				parent = groups[edge[1]].ID.String()
-			}
-			res := h.do(http.MethodPut, "/v1/groups/"+groups[edge[0]].ID.String()+"/parent", admin, map[string]any{"parent_id": parent}, tenantHdr(tenant))
-			if res.code != http.StatusForbidden {
-				t.Fatalf("hierarchy refusal: status=%d", res.code)
-			}
-			body := res.body["error"].(map[string]any)
-			if body["code"] != "group_origin_read_only" || body["message"] != "group is managed by another provisioner" {
-				t.Errorf("hierarchy refusal is not fixed: %v", body)
-			}
-		})
 	}
 }

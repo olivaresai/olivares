@@ -16,6 +16,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 	"github.com/olivaresai/olivares/modules/sessions/egress"
 	"github.com/olivaresai/olivares/modules/skills"
 )
@@ -188,6 +189,8 @@ func TestRunOnRefusesCentralLaunchHandles(t *testing.T) {
 		"scratch home":   {ScratchHome: func(string) error { return nil }},
 		"start callback": {OnStart: func(int) {}},
 		"open files":     {ConfinementFiles: []*os.File{nil}},
+		"checked files":  {ConfinementReadFiles: []confine.ReadFile{{Path: "/run/broker/service"}}},
+		"no-delete":      {ConfinementNoDelete: []string{"/work"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			spec.RunOn = "node-remote"

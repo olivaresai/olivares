@@ -35,7 +35,7 @@ var credentialBindingDescriptor = model.EntityDescriptor{
 		pdecl(field("credential_kind", model.KindText, false),
 			model.None("the closed credential kind user or token, switched on: core/auth/credential_binding.go:725")),
 		pdecl(field("credential_id", model.KindUUID, false),
-			model.None("the session or token row, reloaded as such when bound and at every resolution: core/auth/credential_binding.go:727, core/auth/credential_binding.go:739, core/auth/principal_evidence.go:265, core/auth/principal_evidence.go:358")),
+			model.None("the session or token row, reloaded as such when bound and at every resolution: core/auth/credential_binding.go:727, core/auth/credential_binding.go:739, core/auth/principal_evidence.go:267, core/auth/principal_evidence.go:360")),
 		field("credential_version", model.KindInt, false),
 		field("os_uid", model.KindInt, true),
 		pdecl(field("os_account", model.KindText, true), model.None("the immutable native account name, compared without deriving a product subject: core/auth/credential_binding.go:777")),
@@ -297,4 +297,27 @@ func (s credentialBindingStore) RevokeOSAccount(ctx context.Context, current mod
 	rec[model.ColVersion] = stored.Version
 	_, err = s.g.Update(ctx, rec)
 	return err
+}
+
+// ListByUser lists a person's current bindings without exposing a write seam.
+func (s credentialBindingStore) ListByUser(ctx context.Context, target model.TenantID, user model.ID) ([]model.CredentialBinding, error) {
+	if target.IsZero() || target.IsSystem() || user.IsZero() {
+		return nil, store.ErrInvalidID
+	}
+	rows, page, err := s.g.List(ctx, model.Query{Filters: []model.Filter{{Column: "target_tenant_id", Op: model.OpEq, Value: target.String()}, {Column: "subject_user_id", Op: model.OpEq, Value: user.String()}, {Column: "superseded_by", Op: model.OpIsNull}, {Column: "superseded_at", Op: model.OpIsNull}}, Limit: 1001})
+	if err != nil {
+		return nil, err
+	}
+	if page.HasMore || len(rows) > 1000 {
+		return nil, fmt.Errorf("sqlstore: credential binding inventory exceeds 1000 rows")
+	}
+	out := make([]model.CredentialBinding, 0, len(rows))
+	for _, row := range rows {
+		binding, err := s.decode(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, binding)
+	}
+	return out, nil
 }

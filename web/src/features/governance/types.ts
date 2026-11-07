@@ -286,6 +286,10 @@ export interface ApprovalDTO {
   decided_at?: string
   /** When the request was made (RFC 3339); absent from an engine that does not send it. */
   created_at?: string
+  /** The server's answer for THIS reader: they may record a decision on the request now.
+   * False on a resolved request; it does not promise the decision succeeds (a step-up or
+   * a policy can still refuse it), so the decision route decides. */
+  may_decide?: boolean
 }
 
 /** A decision verb. */
@@ -914,3 +918,30 @@ export interface EmergingStandardsResponse {
   /** Texto del MOTOR, literal: «Design-toward only (IDN-12) …». */
   disclaimer: string
 }
+
+/** A shared vault (`/v1/m/governance/vaults`, Business). Only `id` and `name` are read. */
+export interface SharedVaultDTO {
+  id: string
+  name: string
+}
+
+/** The body of `POST /v1/m/governance/vaults`. */
+export interface SharedVaultInput {
+  name: string
+}
+
+export type VaultSubjectKind = 'user' | 'group'
+export type VaultRole = 'viewer' | 'editor' | 'owner'
+
+/** Who a vault is shared with: the body of a revoke (`DELETE .../shares`). */
+export interface VaultShareRef {
+  subject_kind: VaultSubjectKind
+  subject_ref: string
+}
+
+/** One grant on a vault (`GET .../shares`); the body of a share adds the role. */
+export interface VaultShareDTO extends VaultShareRef {
+  role: VaultRole
+}
+
+export type VaultShareInput = VaultShareRef & { role: VaultRole }

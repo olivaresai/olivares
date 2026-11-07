@@ -73,7 +73,9 @@ describe('i18n runtime parity', () => {
       'it',
       'ja',
       'ko',
+      'pt',
       'ru',
+      'uk',
       'zh',
     ])
     // Foundation (5) + every feature namespace.

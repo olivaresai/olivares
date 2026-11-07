@@ -23,6 +23,8 @@ import {
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { useProfileProviders } from '@/features/agentops/profile-authentication'
+import { ProviderAccent } from '@/features/agentops/provider-accent'
+import { ProviderAccountMetadata } from '@/features/agentops/provider-account-metadata'
 import type { ProviderAccountDTO } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -270,12 +272,20 @@ export function ProfileSheet({
     <Sheet open onOpenChange={onOpenChange}>
       <SheetContent className="w-full max-w-md overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{model.name}</SheetTitle>
+          <SheetTitle className="flex items-center">
+            <ProviderAccent accent={model.accent} />
+            {model.name}
+          </SheetTitle>
           <SheetDescription>{toolName}</SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-5">
           {editable && can('sessions:account:write') ? (
             <RenameField account={account} />
+          ) : null}
+          {/* Display name and color, the CLI's --display-name and --accent: the same
+              editor the accounts panel uses, so a write is checked and invalidated once. */}
+          {editable && can('sessions:account:write') ? (
+            <ProviderAccountMetadata account={account} />
           ) : null}
           {editable && can('sessions:profile:write') ? (
             <SignsInWith account={account} />

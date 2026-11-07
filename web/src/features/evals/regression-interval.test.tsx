@@ -41,6 +41,10 @@ vi.mock('./api', async (importOriginal) => ({
 
 import { EvalsView } from './evals-view'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 beforeEach(() => {
   vi.clearAllMocks()
   api.scorecards.mockResolvedValue({

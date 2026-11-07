@@ -1,6 +1,7 @@
 {
   "title": "Kill switch",
   "subtitle": "Emergency stop for every AI agent on this server, or for one agent. Stopping takes one click; starting again needs the approval of two different user accounts and a review afterwards.",
+  "subtitleNoStop": "Emergency stop for every AI agent on this server, or for one agent. Stopping needs the admin role.",
   "banner": {
     "estateTitle": "ALL AGENTS STOPPED",
     "estateBody": "Agents cannot act until two user accounts approve starting again: sessions end, and tool calls, MCP, schedules, voice, model calls, deployments and event delivery are refused.",

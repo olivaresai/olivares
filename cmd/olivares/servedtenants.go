@@ -163,3 +163,30 @@ func servesTenant(ctx context.Context, st store.Store, tenant model.TenantID) (b
 	}
 	return status == model.StatusActive, nil
 }
+
+// isOnlyPersonsTenant reports whether this node has exactly one person, in one
+// organization, and tenant is it: one account and one membership among all of them. A
+// login that belongs to the machine's user serves that person as it would on their own
+// terminal. It serves nobody once a second account exists, with or without a membership.
+// The auth partition is what every install can read (servedWorkTenants), and two rows of
+// each are enough to know.
+func isOnlyPersonsTenant(ctx context.Context, st store.Store, tenant model.TenantID) (bool, error) {
+	served, err := servesTenant(ctx, st, tenant)
+	if err != nil || !served {
+		return false, err
+	}
+	var users []model.User
+	var memberships []model.Membership
+	err = st.AuthView(ctx, func(as store.AuthScope) error {
+		var err error
+		if users, _, err = as.Users().List(ctx, model.Query{Limit: 2}); err != nil {
+			return err
+		}
+		memberships, _, err = as.Memberships().List(ctx, model.Query{Limit: 2})
+		return err
+	})
+	if err != nil {
+		return false, fmt.Errorf("read the accounts of this node: %w", err)
+	}
+	return len(users) == 1 && len(memberships) == 1 && memberships[0].TargetTenantID == tenant, nil
+}

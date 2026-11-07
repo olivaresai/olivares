@@ -53,7 +53,7 @@ service); `--check` still shows the plan, and `--target` still replaces a path y
 
 ## 1. Versioning and the image coordinate
 
-Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.6`<!-- /release -->, image tags <!-- release -->`:0.6`<!-- /release --> and `:latest`;
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.7`<!-- /release -->, image tags <!-- release -->`:0.7`<!-- /release --> and `:latest`;
 FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
@@ -71,11 +71,11 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 <!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:0.6 \
+cosign verify docker.io/olivaresai/olivares:0.7 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:0.6   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.7   # -> sha256:<…>
 ```
 <!-- /release -->
 
@@ -271,7 +271,17 @@ Pull and **verify** the new image/package first (§1), then:
 **Docker (`docker run`)**
 ```sh
 docker stop olivares && docker rm olivares      # the named data volume is NOT removed
-docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares@sha256:<new-digest> \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json   # the new release's session profiles
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares@sha256:<new-digest> /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
+docker run -d --name olivares --hostname olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+  --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   docker.io/olivaresai/olivares@sha256:<new-digest> \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
@@ -323,6 +333,42 @@ Directories are private and snapshot files are mode `0600`. A service restart re
 that transaction's completed snapshot; another package upgrade retains it and creates
 a new one. An installation that has never created its SQLite store has nothing to copy.
 
+On the Olivares appliance, the update (`olivares-appliance-update.service`) and the edition
+swap (`olivares-edition.service`) also take a read-only btrfs snapshot of the whole
+`/var/lib/olivares` volume **before** the package manager starts, when the channel offers a
+package to install: they stop a running product, write the snapshot to
+`/var/lib/olivares-snapshots/<request-digest>` and start the product again afterwards. The
+package request they publish names that volume snapshot, and the engine takes its database
+snapshot from that request; a later upgrade outside them (`rpm -Uvh` or `dnf upgrade` by
+hand) gets a new request, as above. An edition swap installs another package rather than
+upgrading one, so it takes the volume snapshot only. The last three volume snapshots are
+kept. With the data volume 95% full or more, the update refuses before it stops the
+product or starts the package manager, and says so in its journal; free space and run it
+again. The kept snapshots still hold the blocks of data deleted since they were taken, so
+deleting files may not bring the volume under 95%: as root, `btrfs subvolume delete
+/var/lib/olivares-snapshots/<oldest-digest>` frees the oldest (digests sort by time).
+These snapshots are local restore points, not backups: they live on the same disk, so
+keep the DR bundle.
+
+The update also keeps, beside its snapshot, the installed version of every Olivares
+package (`olivares*`: the product, the appliance layer and its SELinux policy), in
+`/var/lib/olivares-snapshots/<request-digest>.package/`, downloaded again from the channel
+before the package manager starts; a channel that no longer offers those versions does
+not hold the update back, and the journal says that a rollback to that point will refuse.
+To return to the state before the last update, run `olivares upgrade rollback` as root
+(it starts `olivares-appliance-rollback.service` and waits for it), or use the Updates
+page's rollback act. It restores the snapshot the last package transaction's request
+names and reinstalls the kept packages in one `rpm` transaction (signature required),
+then starts the product. Data written since that update is lost. It refuses, before it
+stops anything, and says why, when the last transaction took no snapshot (an upgrade by
+hand or an edition swap), the snapshot is gone, no package is kept, or `rpm`'s test
+transaction shows the kept versions cannot go back together. A rollback uses the kept
+packages up, so a second one refuses instead of wiping what was written since. A failure
+after the stop leaves the product stopped; run the rollback again. A power loss during the
+restore leaves a marker, `/var/lib/olivares-snapshots/rollback-in-progress`: the product
+does not start while it exists, and an update refuses until the rollback run again finishes
+the restore and removes it.
+
 For PostgreSQL, install the matching PostgreSQL client (`pg_dump`) and configure the
 service's `--admin-dsn` with a cross-tenant backup role on the same live database as
 `--dsn`/`--owner-dsn` (see [DR-RUNBOOK.md](DR-RUNBOOK.md)). Secret `file:`/`env:` references
@@ -336,7 +382,10 @@ to storage, blocks that boot before migration; correct the reported cause and re
 the service. A retry syncs the completed snapshot's directories again without replacing
 the original database copy. Package-manager success only means the restart was requested:
 verify `/readyz` and the new running version afterward. Keep sufficient disk space;
-snapshots are retained until the operator removes them. They protect the local package
+snapshots are retained until the operator removes them. Once that start has opened the
+migrated store, the engine records the request as done in `<data-dir>/upgrade-snapshot.consumed`,
+so removing the snapshot is safe: a later start neither copies the migrated store again nor
+refuses for lack of space. They protect the local package
 startup path, not concurrent migrations initiated by another binary or another host.
 They contain the database only, so retain a full DR backup with the installation's
 signing keys for disaster recovery. No automatic database rollback or additional
@@ -505,7 +554,7 @@ Changing configuration is **not** the same as upgrading. Much of the runtime is
 | **Connectors** + their sealed credentials | **Yes** | Console connector onboarding (test → seal → reference → apply) |
 | **Secrets** in the sealed store (`store:` references) | **Yes** | Console **Secrets**, resolved on next use |
 | Active policy / PDP | **Yes** | Reloaded in place (per-tenant) |
-| **Commercial license / edition entitlements** (renew, install, remove) | **Yes** | Console **Edition & license** tab, `olivares license install` / `olivares license uninstall` + reload/`SIGHUP`, or `OLIVARES_LICENSE*` + reload — see §7 |
+| **Commercial license / edition entitlements** (renew, install, remove) | **Yes** | Console **Settings › Edition**, `olivares license install` / `olivares license uninstall` + reload/`SIGHUP`, or `OLIVARES_LICENSE*` + reload — see §7 |
 
 Trigger a roster reconcile out-of-band with **`sudo systemctl reload olivares`** (the unit's
 `ExecReload` sends `SIGHUP`); for a container, **`docker kill --signal=HUP olivares`**, or the authenticated
@@ -632,7 +681,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
 
   <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 0.6
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.7
   ```
   <!-- /release -->
 
@@ -762,14 +811,14 @@ pretended-active. The full add-on→config table is generated from the catalog
 
 Activation is applied at the **next engine restart** (add-ons are wired at boot — unlike a
 license, which hot-applies for term and entitlement changes). The console surfaces the same table plus a
-preview-diff enable under the **Edition & license** tab (superadmin + AAL3).
+preview-diff enable in **Settings › Edition** (superadmin + AAL3).
 
 ### Installing / changing a license — multi-surface, hot-applied
 
 | Surface | How |
 |---|---|
-| **CLI** | `olivares license install <file\|->` writes `<data-dir>/license.key` (0600, atomically) after verifying it, and names the licence it replaced; `olivares license uninstall --yes` removes it and reports what the engine resolves afterwards; `olivares license status` prints the at-rest status as JSON. Both REFUSE while a `--license`/`OLIVARES_LICENSE*` override outranks the data-dir file (`install --force` stages it anyway) |
-| **Console** | **Edition & license** tab → paste or upload the blob (superadmin + AAL3 step-up) |
+| **CLI** | `olivares license install <file\|->` writes `<data-dir>/license.key` (0600, atomically) after verifying it, and names the licence it replaced; `olivares license uninstall --yes` removes it and reports what the engine resolves afterwards; `olivares license status` prints the at-rest status as JSON (signed in to an engine on another host, it prints that engine's license state instead) Both REFUSE while a `--license`/`OLIVARES_LICENSE*` override outranks the data-dir file (`install --force` stages it anyway) |
+| **Console** | **Settings › Edition** → paste or upload the blob (superadmin + AAL3 step-up) |
 | **File / env** | The engine reads, in precedence order, `--license <path>` > `OLIVARES_LICENSE_PATH` > `OLIVARES_LICENSE` (inline) > `<data-dir>/license.key` |
 | **Connected** | `olivares license connect start` creates the deployment's Ed25519 key under `<data-dir>/connect/` (0700; files 0600), requests the owner's approval and prints the approval URL and key fingerprint; running it again after approval completes the binding. `refresh`, `rotate-key`, `recover`, `reactivate`, `deactivate`, `status` and `abandon` follow. Every step is recorded before it is sent and repeated with the same operation id after a crash or timeout. A verified `rotate-key`, `recover` or `reactivate` is recorded before the new key replaces the old one; after an interruption, running the same command again completes it without contacting the service, and `abandon` refuses to discard it. A NEW `recover`, `reactivate` or `deactivate --owner-approval` request needs the current purchase credential with `--evidence <file>` (or `--evidence -` for stdin); the installed license is not used as that evidence, and finishing a recorded request repeats it without reading evidence again. No key, credential, token or approval reference is printed or placed in a URL or argument |
 | **Trust** | `olivares license trust status\|set\|fence` manages `<data-dir>/license-trust.json`: keys added to the embedded anchor, retired to verify-only, revoked, or pinned to a `key_epoch`, plus a minimum-epoch fence. Boot, reload, both install surfaces, the enterprise upgrade and `--bundle` gates, doctor and the connected client verify through this one keyring; it reloads with the license, also when a configured license source cannot be read: the live license is then kept and verified under the current trust |

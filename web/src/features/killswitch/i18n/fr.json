@@ -1,6 +1,7 @@
 {
   "title": "Coupe-circuit",
   "subtitle": "Arrêt d'urgence de tous les agents d'IA de ce serveur, ou d'un seul. L'arrêt se fait en un clic ; le redémarrage exige l'approbation de deux comptes utilisateur différents, puis une revue.",
+  "subtitleNoStop": "Arrêt d'urgence de tous les agents d'IA de ce serveur, ou d'un seul. L'arrêt nécessite le rôle d'administrateur.",
   "banner": {
     "estateTitle": "TOUS LES AGENTS ARRÊTÉS",
     "estateBody": "Les agents ne peuvent pas agir tant que deux comptes utilisateur n'ont pas approuvé le redémarrage : les sessions se terminent, et les appels d'outils, MCP, planifications, voix, appels de modèles, déploiements et la livraison d'événements sont refusés.",

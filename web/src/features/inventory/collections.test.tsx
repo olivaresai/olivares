@@ -25,7 +25,8 @@ vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))
 
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useRouterState: () => '',
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>

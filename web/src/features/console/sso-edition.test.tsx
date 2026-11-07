@@ -13,6 +13,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import type { ComponentType, ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import './i18n'
 
 const { api, panels, auth } = vi.hoisted(() => ({
@@ -135,7 +136,11 @@ describe('public SSO tab: one provider, no Business controls', () => {
     auth.isSuperadmin = false
     panels.ssoTab = () => <p>Business SSO</p>
     wrap(<SSOTab />)
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     expect(screen.queryByText('Business SSO')).toBeNull()
     expect(api.getSSO).not.toHaveBeenCalled()
   })
@@ -170,23 +175,26 @@ function sources(dir: string, out: string[] = []): string[] {
 }
 
 describe('public console build: no Business SSO UI', () => {
-  it('no public source names a Business SSO control or signal', () => {
-    const files = sources(SRC)
-    // A scan that read nothing would pass by vacuity.
-    expect(files.some((f) => f.endsWith('sso-tab.tsx'))).toBe(true)
-    const found = files.flatMap((f) => {
-      const text = readFileSync(f, 'utf8')
-      return BUSINESS_MARKERS.filter((m) => text.includes(m)).map(
-        (m) => `${relative(SRC, f)}: ${m}`,
-      )
-    })
-    expect(found).toEqual([])
-  })
+  it.skipIf(FEATURE_EXTENSIONS.length > 0)(
+    'confines Business SSO controls and signals to the installed Business source',
+    () => {
+      const files = sources(SRC)
+      // A scan that read nothing would pass by vacuity.
+      expect(files.some((f) => f.endsWith('sso-tab.tsx'))).toBe(true)
+      const found = files.flatMap((f) => {
+        const text = readFileSync(f, 'utf8')
+        return BUSINESS_MARKERS.filter((m) => text.includes(m)).map(
+          (m) => `${relative(SRC, f)}: ${m}`,
+        )
+      })
+      expect(found).toEqual([])
+    },
+  )
 
   it('the public console words carry no Business SSO string, in any language', () => {
     const dir = join(__dirname, 'i18n')
     const locales = readdirSync(dir).filter((f) => f.endsWith('.json'))
-    expect(locales).toHaveLength(9)
+    expect(locales).toHaveLength(11)
     const found = locales.flatMap((file) => {
       const words = JSON.parse(readFileSync(join(dir, file), 'utf8')) as {
         sso: Record<string, unknown>

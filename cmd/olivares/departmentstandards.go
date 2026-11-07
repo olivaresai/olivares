@@ -102,6 +102,15 @@ func (d departmentStandards) DepartmentExists(ctx context.Context, tenant model.
 	return d.scopes.DepartmentExists(ctx, tenant, department)
 }
 
+// ADRFolder is the folder the department points its instructions at, "" when it names none.
+func (d departmentStandards) ADRFolder(ctx context.Context, tenant model.TenantID, department string) (string, error) {
+	folder, err := d.scopes.ADRFolder(ctx, tenant, department)
+	if errors.Is(err, sourcescope.ErrSettingNotText) {
+		err = sessions.ErrADRFolderNotText
+	}
+	return folder, err
+}
+
 // departmentInstructions is the claude-policy console's InstructionsSource: the text a session of
 // the department is given.
 type departmentInstructions struct{ sessions *sessions.Module }

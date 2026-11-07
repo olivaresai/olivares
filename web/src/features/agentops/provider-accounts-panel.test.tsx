@@ -10,7 +10,14 @@
 // a refusal changes nothing; that a list with more pages says so; and that nothing read
 // or half-done under one tenant or credential is painted under the next.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -205,6 +212,47 @@ describe('ProviderAccountsPanel — the list', () => {
     // Reading accounts reads nothing else.
     expect(api.listProfiles).not.toHaveBeenCalled()
     expect(api.listRuns).not.toHaveBeenCalled()
+  })
+
+  it('names each tool by its product name and shows a server column only when the list spans servers', async () => {
+    const env = 'xenv_01a15d5f-51fc-7739-93b3-9ea041cc5757'
+    api.listAccounts.mockResolvedValue(
+      page([
+        account('ppf_a', 'work-claude', { environment_ref: env }),
+        account('ppf_c', 'review-codex', {
+          driver: 'codex',
+          environment_ref: env,
+        }),
+      ]),
+    )
+    wrap()
+    await screen.findByRole('button', { name: 'work-claude' })
+    // One server: the raw id is no column, and the driver key reads as the tool.
+    expect(screen.getByText('Claude Code')).toBeInTheDocument()
+    expect(screen.getByText('Codex')).toBeInTheDocument()
+    expect(screen.queryByText('claude')).not.toBeInTheDocument()
+    expect(screen.queryByText(env)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('columnheader', { name: 'Server' }),
+    ).not.toBeInTheDocument()
+    cleanup()
+
+    // Two servers: the column appears with the short tail, the whole id on hover.
+    api.listAccounts.mockResolvedValue(
+      page([
+        account('ppf_a', 'work-claude', { environment_ref: env }),
+        account('ppf_d', 'far-claude', {
+          environment_ref: 'xenv_01a15d5f-0000-7000-8000-00000000beef',
+        }),
+      ]),
+    )
+    wrap()
+    await screen.findByRole('button', { name: 'far-claude' })
+    expect(
+      screen.getByRole('columnheader', { name: 'Server' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(env)).not.toBeInTheDocument()
+    expect(screen.getByTitle(env)).toHaveTextContent('…9ea041cc5757')
   })
 
   it('an empty answer is a complete empty list and says who may adopt', async () => {
@@ -2220,7 +2268,7 @@ describe('ProviderAccountsPanel — usage', () => {
     },
   ]
 
-  it("shows each account's 5-hour and weekly use next to its name, and unknown when the tool reported none", async () => {
+  it("shows each account's share of the week and of five hours next to its name, and unknown when the tool reported none", async () => {
     api.listAccounts.mockResolvedValue(
       page([{ ...workClaude, usage: usage(41, 17) }, reviewCodex]),
     )
@@ -2229,7 +2277,7 @@ describe('ProviderAccountsPanel — usage', () => {
       await screen.findByRole('button', { name: 'work-claude' })
     ).closest('tr')!
     expect(within(row).getByTestId('account-usage')).toHaveTextContent(
-      '5-hour 41% · Weekly 17%',
+      '17% of the week · 41% of 5 hours',
     )
     const other = screen
       .getByRole('button', { name: 'review-codex' })
@@ -2250,7 +2298,7 @@ describe('ProviderAccountsPanel — usage', () => {
       expect(await screen.findByText('Usage unknown')).toBeVisible()
       await act(() => vi.advanceTimersByTimeAsync(30_000))
       expect(await screen.findByTestId('account-usage')).toHaveTextContent(
-        '5-hour 8% · Weekly 3%',
+        '3% of the week · 8% of 5 hours',
       )
       expect(screen.queryByText('Usage unknown')).toBeNull()
     } finally {

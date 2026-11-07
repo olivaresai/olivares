@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -104,14 +105,9 @@ func TestGroupAdminOfDepartmentEndsWhenTheMemberLeavesTheGroup(t *testing.T) {
 
 			// The directory takes Bob out. Same session, next request.
 			if tc.deleteGroup {
-				err = h.authr.SCIMDeleteGroup(context.Background(), super, tenant, membership)
+				authtest.Delete(t, h.st, membership)
 			} else { // a roster that keeps Carol replaces the member list
-				_, err = h.authr.SCIMReplaceGroup(context.Background(), super, tenant, membership,
-					auth.SCIMGroupInput{DisplayName: "eng-admins", ExternalID: "cn=eng-admins",
-						Members: []model.ID{model.ID(carolID)}}, 0)
-			}
-			if err != nil {
-				t.Fatalf("the directory takes Bob out: %v", err)
+				authtest.SetMembers(t, h.st, membership, model.ID(carolID))
 			}
 			if got := deleteIn(bob, engineering, "eng-2"); got != http.StatusForbidden {
 				t.Fatalf("leaver still writes in the department = %d, want 403", got)

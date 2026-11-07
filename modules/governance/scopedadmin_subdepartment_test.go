@@ -43,6 +43,61 @@ func (d *creatingDepartments) CreateWorkspace(ctx context.Context, p auth.Princi
 	return created, err
 }
 
+// A directory places a person in the department of their OU, which confines their
+// membership to it, and maps their group to an admin grant on the same department.
+// That confined administrator creates a sub-department of their department, and
+// still not of a sibling's, and a confined member with no grant creates nothing.
+func TestConfinedDepartmentAdminCreatesASubDepartmentInsideItsDepartment(t *testing.T) {
+	departments := &creatingDepartments{}
+	h := newHarnessWith(t, harnessOpts{departments: func(*auth.Authenticator) api.DepartmentService { return departments }})
+	departments.st = h.st
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	hdr := tenantHdr(tenant)
+	super, err := h.authr.Authenticate(context.Background(), admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engineering := h.createWorkspace(tenant, "engineering")
+	finance := h.createWorkspace(tenant, "finance")
+	confinedUser := func(email string) (string, string) {
+		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1", "tenant": tenant.String(), "role": auth.RoleViewer, "workspace_id": engineering.String()}, nil)
+		if r.code != http.StatusCreated {
+			t.Fatalf("create confined member %s = %d %s", email, r.code, r.raw)
+		}
+		login := h.do("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "memberpass1"}, nil)
+		if login.code != http.StatusOK {
+			t.Fatalf("confined member login = %d %s", login.code, login.raw)
+		}
+		token := login.body["token"].(string)
+		h.stepUp(token)
+		return r.body["id"].(string), token
+	}
+	bobID, bob := confinedUser("bob@acme.io")
+	_, plain := confinedUser("plain@acme.io")
+	group := h.createGroup(super, tenant, "eng-admins", "cn=eng-admins", bobID)
+	createGrant(t, h, admin, tenant, map[string]any{
+		"subject_kind": "group", "subject_ref": group.String(), "role": auth.RoleAdmin,
+		"scope_tree": "workspace", "scope_ref": "engineering",
+	})
+	create := func(token, slug string, parent model.ID) resp {
+		return h.do("POST", "/v1/workspaces", token, map[string]any{"name": slug, "slug": slug, "parent_id": parent.String()}, hdr)
+	}
+	if r := create(bob, "eng-platform", engineering); r.code != http.StatusCreated {
+		t.Fatalf("confined group admin creates a child of its department = %d %s, want 201", r.code, r.raw)
+	}
+	calls := departments.calls
+	if r := create(bob, "fin-child", finance); r.code != http.StatusForbidden {
+		t.Errorf("confined group admin creates under a sibling = %d %s, want 403", r.code, r.raw)
+	}
+	if r := create(plain, "plain-child", engineering); r.code != http.StatusForbidden {
+		t.Errorf("confined member with no grant creates under its department = %d %s, want 403", r.code, r.raw)
+	}
+	if departments.calls != calls {
+		t.Errorf("a refused create reached the department service %d times", departments.calls-calls)
+	}
+}
+
 // A department administrator creates a sub-department inside its own department, and
 // only there: its admin grant on D makes it an admin of D, as for authoring grants in
 // D, and the new child is under D at once, so the grant reaches it and the same

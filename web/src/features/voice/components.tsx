@@ -7,7 +7,7 @@
 // never text/audio); latency is shown as BOTH avg and max (never a fabricated
 // p50/p95); an ungoverned open is FLAGGED, not hidden. No fetching, no auth — so they
 // are trivially testable with fixtures and reused by the container.
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { AudioLines, Gauge, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
@@ -239,11 +239,15 @@ export function SessionsTable({
  *  percentile. */
 export function LatencyByCategory({ sessions }: { sessions: VoiceSession[] }) {
   const { t } = useTranslation('voice')
+  // Enter on a focused bar filters to that session; Enter on it again
+  // restores the whole set. The chart and the equivalent table show the same rows.
+  const [selected, setSelected] = useState<string | null>(null)
   const data = sessions
     .slice()
     .sort((a, b) => b.latency_avg_ms - a.latency_avg_ms)
     .slice(0, 8)
     .map((s) => ({ key: s.session_ref, latency_avg_ms: s.latency_avg_ms }))
+  const tableData = selected ? data.filter((d) => d.key === selected) : data
   // Descending sort puts the slowest session first — name it in the SR summary.
   const summary =
     data.length > 0
@@ -280,7 +284,7 @@ export function LatencyByCategory({ sessions }: { sessions: VoiceSession[] }) {
         title={t('latency.title')}
         summary={summary}
         columns={columns}
-        data={data}
+        data={tableData}
         getRowId={(d) => d.key}
         empty={
           <EmptyState
@@ -290,11 +294,14 @@ export function LatencyByCategory({ sessions }: { sessions: VoiceSession[] }) {
         }
       >
         <CategoryBarChart
-          data={data}
+          data={tableData}
           categoryKey="key"
           valueKey="latency_avg_ms"
           valueFormatter={(v) => formatLatency(v)}
           height={Math.max(160, data.length * 30 + 24)}
+          onSelectCategory={(category) =>
+            setSelected((cur) => (cur === category ? null : category))
+          }
         />
       </AccessibleChart>
     </SectionCard>

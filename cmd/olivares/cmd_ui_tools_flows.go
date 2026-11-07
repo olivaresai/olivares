@@ -214,13 +214,10 @@ func (f *signInFlow) run(ctx context.Context) {
 	}
 	for {
 		// The link is the engine's text and a person opens it: one that is not a
-		// plain https address is not drawn, and the login ends.
-		if linkRefused(s) {
-			f.fail(ctx, "The sign-in link from the engine is not a plain https address, so it is not shown.", false)
-			return
-		}
-		if textRefused(s) {
-			f.fail(ctx, "The engine's sign-in text names another address, so it is not shown.", false)
+		// plain https address on the tool's own hosts is not drawn, and the login
+		// ends. `olivares tool login` asks the same question.
+		if why := signInRefusal(f.driver, s); why != "" {
+			f.fail(ctx, why, false)
 			return
 		}
 		f.show(s)

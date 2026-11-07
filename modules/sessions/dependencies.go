@@ -22,6 +22,9 @@ import (
 // Start checks required ports without replacing or mutating this record.
 // Optional ports retain their existing OFF, refusal, or default behavior.
 type Dependencies struct {
+	// GitAttribution reads only the effective commit mode. The engine owns the
+	// org/template lookup so workspace-scoped callers keep their confinement.
+	GitAttribution func(context.Context, model.TenantID, string) (string, error)
 	// Data retains ordinary tenant service/standing guards. RecoveryData is the
 	// distinct custody-only, residency-guarded handle used during promotion;
 	// runtime mint/renew must never inherit its service-suspension bypass.
@@ -40,6 +43,8 @@ type Dependencies struct {
 	ProviderSources                  ProviderSourceResolver
 	ToolLogin                        ToolLoginStatus
 	ProfileLogin                     ProfileLoginStatus
+	ServerToolLogin                  ServerToolLoginHome
+	ServerLoginOpen                  ServerLoginPolicy
 	CommunicationSealer              CommunicationContentSealer
 	CommunicationAuthority           *CommunicationRequestAuthority
 	CommunicationDirectoryResolver   DirectorySnapshotResolver
@@ -199,6 +204,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 	}
 	checks := []dependencyCheck{
 		{"Data", d.Data, "persistent sessions and work", true},
+		{"GitAttribution", d.GitAttribution, "commit provenance for workspace-scoped callers", false},
 		{"Standing", d.Standing, "account-fenced writes", true},
 		{"RecoveryData", d.RecoveryData, "residency-guarded credential recovery", true},
 		{"WorkspaceSnapshotAuthority", d.WorkspaceSnapshotAuthority, "authorized workspace snapshots", true},
@@ -213,6 +219,8 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"ProviderSources", d.ProviderSources, "provider source bindings", true},
 		{"ToolLogin", d.ToolLogin, "tool login resolution", true},
 		{"ProfileLogin", d.ProfileLogin, "profile login checks", true},
+		{"ServerToolLogin", d.ServerToolLogin, "sessions on the engine user's own tool login", false},
+		{"ServerLoginOpen", d.ServerLoginOpen, "sessions on the engine user's own tool login", false},
 		{"CommunicationSealer", d.CommunicationSealer, "communication payload sealing", false},
 		{"CommunicationAuthority", authority, "authenticated communication authority", true},
 		{"CommunicationDirectoryResolver", d.CommunicationDirectoryResolver, "communication audience resolution", false},

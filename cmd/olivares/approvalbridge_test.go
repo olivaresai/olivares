@@ -498,6 +498,37 @@ func TestSessionLaunchApprovalNamesTheLauncher(t *testing.T) {
 	}
 }
 
+// A configured service bridge must still bind engine-filed launch approvals to
+// the claimed session through the engine port, rather than impersonating it over HTTP.
+func TestConfiguredApprovalBridgeSessionLaunchBindsSession(t *testing.T) {
+	h := newHarness(t)
+	b := buildBridge(t, h, h.mintBoundToken(t, "editor"))
+	b.UseLocalProposer(h.set.gov.EngineApprovals())
+	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
+	gate := &sessionLaunchGate{bridge: b, log: discardLog()}
+	sid := "osn_" + model.NewID().String()
+	intent := sessions.LaunchIntent{Action: sessions.LaunchActionCreate, Transport: sessions.TransportStreamJSON, PermissionMode: "default", WorkspaceClassified: true, WorkspaceReadWrite: true, WorkspaceRef: "test-folder", Actor: "user:initiator", ClaimSID: sid}
+	decision, err := gate.Authorize(t.Context(), model.TenantID(h.tenantA), intent)
+	if err != nil || decision.Allowed || decision.DeniedStatus != http.StatusAccepted || !decision.Critical || decision.ApprovalRef == "" {
+		t.Fatalf("waiting=%+v %v, want pending human approval", decision, err)
+	}
+	approval, err := b.LocalProposer.Read(t.Context(), model.TenantID(h.tenantA), decision.ApprovalRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approval.SessionRef != sid || approval.RequestedBy != "session:"+sid || approval.LaunchedBy != intent.Actor || approval.Action != sessionLaunchAction || approval.Status != "pending" {
+		t.Fatalf("launch approval=%+v, want pending approval bound to session and launcher", approval)
+	}
+	if code, body := h.decide(t, h.adminToken, decision.ApprovalRef, "approve"); code != http.StatusOK {
+		t.Fatalf("one administrator approving = %d %s", code, body)
+	}
+	intent.ApprovalRef = decision.ApprovalRef
+	approved, err := gate.Authorize(t.Context(), model.TenantID(h.tenantA), intent)
+	if err != nil || !approved.Allowed || !approved.RecordIO {
+		t.Fatalf("approved=%+v %v", approved, err)
+	}
+}
+
 // The approver read "governed actuation approval opened by the engine
 // approval bridge. action=… plan=<64 hex> requested_by=…" and then "mode=default
 // transport=stream-json workspace=<uuid>". A session launch's reason is now one sentence

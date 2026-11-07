@@ -1,5 +1,5 @@
 {
-  "title": "Données, connaissances et contexte",
+  "title": "Connaissances",
   "subtitle": "Bases de connaissances gouvernées, traçabilité de la récupération, registre des invites, mémoire des agents et politiques de contexte.",
   "tabs": {
     "kbs": "Bases de connaissances",
@@ -20,11 +20,11 @@
     "status": "Statut",
     "agentRef": "Agent",
     "acl": "ACL",
-    "aclHint": "Références de permission (identifiants de groupe / rôle / principal) — jamais d’identifiants.",
+    "aclHint": "Références d’autorisation (groupe, rôle, personne ou outil) — jamais d’identifiants.",
     "aclNone": "Aucune ACL",
     "addRef": "Ajouter une référence",
     "removeRef": "Supprimer",
-    "credentialWarning": "Cela ressemble à une valeur d’identifiants. Saisissez une référence de permission (un identifiant de groupe / rôle / principal), jamais un secret.",
+    "credentialWarning": "Cela ressemble à une valeur d’identifiant. Saisissez une référence d’autorisation (un groupe, un rôle, une personne ou un outil), jamais un secret.",
     "localHashLabel": "Lexical — non sémantique",
     "localHashHint": "Cet index utilise un embedder lexical local (par hachage), et NON un modèle vectoriel sémantique. Les correspondances reposent sur les mots-clés, pas sur le sens.",
     "egressNo": "Aucune sortie",
@@ -94,12 +94,12 @@
   "kbEditor": {
     "createTitle": "Nouvelle base de connaissances",
     "editTitle": "Modifier la gouvernance",
-    "createBody": "Déclare une base de connaissances et enregistre l’embedder configuré. local_only interdit toute sortie ; model_backed exige un embedder sémantique. Consigné dans le registre d’audit sous votre identité.",
+    "createBody": "Déclare une base de connaissances et enregistre l’embedder configuré. « Local uniquement » n’envoie rien à l’extérieur ; « Adossé à un modèle » exige un embedder sémantique. Consigné dans le registre d’audit sous votre identité.",
     "editBody": "Met à jour la gouvernance de « {{name}} ». Modifier la classification, la résidence ou l’ACL change ce que chaque identité peut récupérer. embed_model et la dimension restent tels qu’enregistrés à la création. Audité sous votre identité.",
     "name": "Nom",
     "classificationHint": "Détermine quelles identités peuvent récupérer depuis cette base.",
     "residencyHint": "Fixe où les données de cette base peuvent être traitées.",
-    "embedPolicyHint": "local_only = index lexical zéro sortie. model_backed = index vectoriel sémantique via le fournisseur gouverné. auto = choix selon l’embedder configuré. Le backend rejette une combinaison politique/embedder invalide (400).",
+    "embedPolicyHint": "Local uniquement : index lexical qui ne quitte jamais cette machine. Adossé à un modèle : index sémantique via le fournisseur gouverné. Automatique : choix selon l’embedder configuré. Une combinaison inadaptée est refusée.",
     "create": "Créer la base de connaissances",
     "save": "Enregistrer les modifications",
     "created": "Base de connaissances créée",
@@ -114,7 +114,7 @@
   },
   "ingest": {
     "title": "Ingérer du contenu",
-    "body": "Ingère du contenu dans « {{name}} ». Les secrets / PII sont expurgés avant l’indexation. Sur une base model_backed, le texte des segments est encodé via le fournisseur gouverné (la sortie est consignée dans la traçabilité).",
+    "body": "Ingère du contenu dans « {{name}} ». Les secrets / PII sont expurgés avant l’indexation. Sur une base « Adossé à un modèle », le texte des segments est encodé via le fournisseur gouverné (la sortie est consignée dans la traçabilité).",
     "modeConnector": "Connecteur enregistré",
     "modeInline": "Documents en ligne",
     "source": "Nom du connecteur",
@@ -291,14 +291,14 @@
     "maxTokens": "Tokens max",
     "strategy": "Stratégie",
     "redaction": "Expurgation requise",
-    "newPolicy": "Insérer ou mettre à jour une politique",
+    "newPolicy": "Ajouter une politique",
     "caption": "Politiques de contexte / compactage. Appliquées au moment de l’appel au modèle — cette vue ne gouverne que les données.",
     "empty": "Aucune politique de contexte",
-    "emptyHint": "Insérez ou mettez à jour une politique pour gouverner la composition et le compactage du contexte d’un périmètre.",
+    "emptyHint": "Ajoutez une politique pour gouverner la composition et le compactage du contexte d’un périmètre.",
     "scopeKinds": {
       "agent": "Agent",
       "kb": "Base de connaissances",
-      "tenant": "Locataire"
+      "tenant": "Organisation"
     },
     "strategies": {
       "truncate": "Tronquer",
@@ -307,7 +307,7 @@
     }
   },
   "contextEditor": {
-    "title": "Insérer ou mettre à jour une politique de contexte",
+    "title": "Politique de contexte",
     "body": "Définit la politique de contexte pour {{scopeKind}}:{{scopeRef}}. Elle gouverne la composition / le compactage du contexte de ce périmètre et l’éventuelle exigence d’expurgation. Audité sous votre identité.",
     "scopeKind": "Type de périmètre",
     "scopeRef": "Référence de périmètre",
@@ -435,7 +435,7 @@
   "empty": {
     "context": {
       "title": "Aucune politique de contexte définie",
-      "description": "Insérez ou mettez à jour une politique pour gouverner la taille du contexte, la stratégie de compactage et l’expurgation d’un agent, d’une base de connaissances ou d’un locataire."
+      "description": "Ajoutez une politique pour gouverner la taille du contexte, la stratégie de compactage et l’expurgation d’un agent, d’une base de connaissances ou de l’organisation."
     },
     "dataProduct": {
       "title": "Aucun produit de données défini",
@@ -456,20 +456,20 @@
   },
   "dlp": {
     "enabled": "La DLP est activée : une classe étiquetée sans règle exacte retombe sur la règle « * », et sans règle « * » elle est REFUSÉE.",
-    "inert": "La DLP n'est PAS configurée — la barrière est inerte et rien n'est bloqué. Ce n'est pas « tout refusé ».",
+    "inert": "La DLP n'est PAS configurée — rien n'est bloqué. Ce n'est pas « tout refusé ».",
     "unscannedDenied": "Le contenu non analysé est REFUSÉ : sans étiquette, sa sensibilité ne peut être prouvée.",
     "unscannedAllowed": "Le contenu non analysé est AUTORISÉ par une règle explicite. Du contenu que personne n'a classé peut sortir.",
     "unscannedUndetermined": "Impossible à déterminer à partir de cette page — la liste des règles est tronquée, et il se peut qu’une règle autorisant le contenu non analysé se trouve au-delà de cette page.",
     "empty": "Aucune règle DLP",
-    "emptyHint": "Sans règles, la barrière n'applique rien. Écrire une règle active la DLP pour ce locataire.",
+    "emptyHint": "Sans règles, la barrière n'applique rien. Écrire une règle active la DLP pour cette organisation.",
     "anyScope": "correspond à toute classe ÉTIQUETÉE — elle NE couvre PAS le contenu non analysé",
     "newRule": "New DLP rule",
     "newRuleHint": "Une règle rattache une classe de contenu à autoriser ou refuser en sortie.",
     "class": "Class",
     "action": "Action",
     "deleteRule": "Supprimer la règle pour {{class}}",
-    "willReplace": "⛔ Une règle pour « {{class}} » existe déjà. Enregistrer la REMPLACE — c’est un upsert par classe, pas un ajout. Remplacer un refus par une autorisation ouvre immédiatement la sortie pour cette classe.",
-    "mayReplace": "La liste des règles est tronquée : il se peut qu’une règle pour «{{class}}» existe déjà au-delà de cette page. Si elle existe, elle sera REMPLACÉE lors de l’enregistrement, car celui-ci utilise un upsert par classe.",
+    "willReplace": "⛔ Une règle pour « {{class}} » existe déjà. Enregistrer la REMPLACE — il n’en ajoute pas une seconde. Remplacer un refus par une autorisation ouvre immédiatement la sortie pour cette classe.",
+    "mayReplace": "La liste des règles est tronquée : il se peut qu’une règle pour «{{class}}» existe déjà au-delà de cette page. Si elle existe, elle sera REMPLACÉE lors de l’enregistrement, car il n’y a qu’une règle par classe.",
     "truncated": "{{n}} règles DLP chargées ; il y en a davantage",
     "truncatedHint": "Cette liste affiche la première page chargée ; d’autres règles DLP existent."
   },

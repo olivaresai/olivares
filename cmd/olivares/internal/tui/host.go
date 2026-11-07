@@ -32,6 +32,9 @@ type Host struct {
 	// pasting is set and read on the loop only: the terminal is between its
 	// bracketed-paste markers, so a newline is text and not an Enter.
 	pasting bool
+	// exit is set and read on the loop only: a screen asked the frame to end
+	// once the key being handled is done.
+	exit bool
 }
 
 // page is one screen of the stack. render returns entries whose terminal rows
@@ -82,6 +85,10 @@ func (h *Host) Pop() {
 		h.stack = h.stack[:len(h.stack)-1]
 	}
 }
+
+// Exit ends the frame once the key being handled is done, as q does, so the
+// caller of Run can open a screen that takes the terminal itself.
+func (h *Host) Exit() { h.exit = true }
 
 // Depth is the number of screens on the stack.
 func (h *Host) Depth() int { return len(h.stack) }
@@ -148,6 +155,7 @@ func (h *Host) handle(k key) (quit bool, code int) {
 		return false, 0
 	}
 	quit, code = h.top().handle(k)
+	quit = quit || h.exit
 	if quit {
 		h.leaveAll()
 	}

@@ -72,9 +72,12 @@ const (
 // Options composes the module. The composition root supplies the production
 // ports; tests supply fakes.
 type Options struct {
-	Custody   Custody
-	Git       Git
-	Authority Authority
+	// ScanSecrets returns only paths containing credentials in the exact commit.
+	// Nil refuses publication; the composition root binds the existing classifier.
+	ScanSecrets func(context.Context, string, string) ([]string, error)
+	Custody     Custody
+	Git         Git
+	Authority   Authority
 	// Sessions resolves a push's session run to its folder. Nil refuses a
 	// push that names a run; a push that names none never reads it.
 	Sessions SessionFolders
@@ -199,4 +202,9 @@ func (m *Module) now() time.Time { return m.opts.Now().UTC() }
 // admissionContext is the earlier of the caller's deadline and now + T.
 func (m *Module) admissionContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, m.opts.AdmissionTimeout)
+}
+
+// UseSecretScanner binds the composition root's deterministic credential scan.
+func (m *Module) UseSecretScanner(scan func(context.Context, string, string) ([]string, error)) {
+	m.opts.ScanSecrets = scan
 }

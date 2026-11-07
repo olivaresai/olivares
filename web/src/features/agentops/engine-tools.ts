@@ -20,9 +20,17 @@ export interface EngineTool {
   name: string
   /** The word an account of the tool is named from (`gemini` for Gemini CLI). */
   name_stem: string
+  /** The company behind the tool, in the provider kind's word where it has one. */
+  vendor: string
+  /** The tool's one mark: one or two capitals on its color (#RRGGBB). */
+  monogram: string
+  color: string
   /** A session can run on it. */
   session: boolean
   bindings: ToolBinding[]
+  /** Provider presets the tool cannot be bound to though their kind is one of its
+   * bindings (a Responses-only tool and a vendor without that API). */
+  refused_services?: string[]
 }
 
 /** A driver key the engine lists as a session tool. */
@@ -42,6 +50,9 @@ export const isEngineTool = (row: unknown): row is EngineTool => {
     typeof tool?.key === 'string' &&
     typeof tool.name === 'string' &&
     typeof tool.name_stem === 'string' &&
+    typeof tool.vendor === 'string' &&
+    typeof tool.monogram === 'string' &&
+    typeof tool.color === 'string' &&
     typeof tool.session === 'boolean' &&
     Array.isArray(tool.bindings) &&
     tool.bindings.every(
@@ -62,4 +73,10 @@ export function sessionTools(): SessionTool[] {
 /** A driver's product name; a driver the engine does not list is named by itself. */
 export function toolName(driver: string): string {
   return engineTool(driver)?.name ?? driver
+}
+
+/** The color of the vendor whose provider kind this is (a tool's `vendor`): a record
+ * of that kind wears it. A kind no tool's vendor names (openai_compatible) has none. */
+export function vendorColor(kind: string): string | undefined {
+  return known.find((tool) => tool.vendor === kind)?.color
 }

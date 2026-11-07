@@ -95,12 +95,23 @@ func (p dlpPolicy) unscannedDenied() bool {
 // loadDLPPolicy reads the tenant's DLP rules inside an open scope. An error from
 // the store fails the caller's transaction (and with it the request) — the gate
 // never degrades to allow.
-func loadDLPPolicy(ctx context.Context, sc store.Scope) (dlpPolicy, error) {
-	repo, err := sc.Ext(dlpRuleKind)
+func (m *Module) loadDLPPolicy(ctx context.Context, sc store.Scope, userID string) (dlpPolicy, error) {
+	var recs []model.Record
+	var err error
+	selected := false
+	if m.policyResolver != nil {
+		recs, selected, err = m.policyResolver.DLPRules(ctx, sc, userID)
+	}
 	if err != nil {
 		return dlpPolicy{}, err
 	}
-	recs, err := listAll(ctx, repo)
+	if !selected {
+		var repo store.GenericRepo
+		repo, err = sc.Ext(dlpRuleKind)
+		if err == nil {
+			recs, err = listAll(ctx, repo)
+		}
+	}
 	if err != nil {
 		return dlpPolicy{}, err
 	}

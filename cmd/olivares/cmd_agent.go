@@ -878,6 +878,7 @@ func httpErr(status int, b []byte) error {
 	var env apiErrorEnvelope
 	if json.Unmarshal(b, &env) == nil {
 		refusal.code = strings.TrimSpace(env.Error.Code)
+		refusal.remedy = termSafe(strings.TrimSpace(env.Error.Remedy))
 	}
 	var err error = refusal
 	switch {
@@ -928,6 +929,7 @@ type apiErrorEnvelope struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 		Module  string `json:"module"`
+		Remedy  string `json:"remedy"`
 	} `json:"error"`
 }
 
@@ -938,6 +940,7 @@ type apiRefusal struct {
 	status int
 	code   string
 	text   string
+	remedy string
 }
 
 func (e *apiRefusal) Error() string { return e.text }
@@ -996,6 +999,11 @@ func describeAPIRefusal(status int, b []byte) string {
 		return "this sign-in has ended (a password change or a sign-out ends it): sign in again with olivares login, or pass a valid --token-file"
 	}
 	if json.Unmarshal(b, &env) == nil && strings.TrimSpace(env.Error.Message) != "" {
+		// The engine's remedy, when it names one, is the second line.
+		next := ""
+		if r := termSafe(strings.TrimSpace(env.Error.Remedy)); r != "" {
+			next = "\n" + r
+		}
 		detail := strings.TrimSpace(env.Error.Message)
 		// A module this node does not run has a command the operator can run:
 		// the engine names the module (error.module), the CLI names the switch.
@@ -1008,15 +1016,15 @@ func describeAPIRefusal(status int, b []byte) string {
 		// EU-08: a message the engine wrote for a person is printed as it is; the status
 		// and code stay on the error (-o json), not in the sentence.
 		if isSentence(detail) {
-			return detail
+			return detail + next
 		}
 		// A code that only repeats the message adds nothing: the engine answers
 		// {"code":"forbidden","message":"forbidden"} on a plain refusal, and
 		// "forbidden (HTTP 403 forbidden)" is three sayings of one fact.
 		if code := strings.TrimSpace(env.Error.Code); code != "" && !strings.EqualFold(code, detail) {
-			return fmt.Sprintf("%s: %s (HTTP %d %s)", lead, detail, status, code)
+			return fmt.Sprintf("%s: %s (HTTP %d %s)", lead, detail, status, code) + next
 		}
-		return fmt.Sprintf("%s: %s (HTTP %d)", lead, detail, status)
+		return fmt.Sprintf("%s: %s (HTTP %d)", lead, detail, status) + next
 	}
 	if raw == "" {
 		return fmt.Sprintf("%s, and said nothing about why (HTTP %d)", lead, status)

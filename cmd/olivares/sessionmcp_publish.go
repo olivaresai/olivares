@@ -88,7 +88,32 @@ type sessionPublications struct {
 	beginCall func(context.Context, auth.Principal) (context.Context, func(), error)
 	beginWait func(context.Context, auth.Principal, string, time.Time) (func(), error)
 	launcher  func(context.Context, auth.Principal) (auth.Principal, error)
-	log       *slog.Logger
+	// identity names who a session run publishes as, when the edition names one.
+	identity func(context.Context, model.TenantID, string) (publicationIdentity, error)
+	log      *slog.Logger
+}
+
+// publicationIdentity is who one session run publishes as: the credential
+// binding every target it publishes through must hold, and the lines that end
+// its pull requests. An agent role's session publishes as the role, and its pull
+// requests name the role and its accountable person. The zero value names none.
+type publicationIdentity struct {
+	CredentialBinding string
+	Trailer           string
+}
+
+// publicationRefusal is the edition's refusal of a run's publication; its code
+// and message are the agent's answer.
+type publicationRefusal struct{ Code, Message string }
+
+func (r *publicationRefusal) Error() string { return r.Code + ": " + r.Message }
+
+// publicationIdentity asks the edition who run publishes as; Community names none.
+func (e *engine) publicationIdentity(ctx context.Context, tenant model.TenantID, run string) (publicationIdentity, error) {
+	if thisEdition.publicationIdentity == nil {
+		return publicationIdentity{}, nil
+	}
+	return thisEdition.publicationIdentity(ctx, e, tenant, run)
 }
 
 const publishAfterApproval = " A person decides in the console's approvals while this session shows it waiting (under a minute, like other session approvals); once approved, Olivares publishes it as your launcher with the target's host credential and answers with the publication receipt. One request waits at a time. A refusal or a declined request is final: never retry with other authority."
@@ -140,7 +165,7 @@ func (e *engine) sessionPublisher() sessionPublisher {
 		return nil
 	}
 	return sessionPublications{module: e.gitpublish, approvals: e.engineApprovals, beginCall: e.sessionsMod.BeginSessionCall,
-		beginWait: e.sessionsMod.BeginApprovalWait, launcher: e.sessionHooks.LauncherForRun, log: e.log}
+		beginWait: e.sessionsMod.BeginApprovalWait, launcher: e.sessionHooks.LauncherForRun, identity: e.publicationIdentity, log: e.log}
 }
 
 // publication is one proposed effect: what the person reviews and what runs.
@@ -163,7 +188,7 @@ func singleLine(field, v string) error {
 
 // publication decodes and checks a proposal before anything queues: the
 // verb's own shape checks, so a person never approves what would be refused.
-func (s sessionPublications) publication(p auth.Principal, tool string, raw json.RawMessage) (publication, error) {
+func (s sessionPublications) publication(p auth.Principal, tool string, raw json.RawMessage, id publicationIdentity) (publication, error) {
 	strict := func(v any) error {
 		if strictSessionJSON(bytes.NewReader(raw), v) != nil {
 			return errors.New("Invalid arguments; use the schema from tools/list")
@@ -211,7 +236,16 @@ func (s sessionPublications) publication(p auth.Principal, tool string, raw json
 		if err != nil {
 			return publication{}, refused(errors.New("target_id is not a publication target id"))
 		}
-		in := gitpublish.PullRequestInput{Target: target, HeadRef: a.HeadRef, Base: a.Base, Commit: a.Commit, Title: a.Title, Body: a.Body, Draft: a.Draft}
+		body := a.Body
+		if id.Trailer != "" {
+			// The pull request names who it publishes as, whatever the agent wrote.
+			body = strings.TrimRight(body, "\n")
+			if body != "" {
+				body += "\n\n"
+			}
+			body += id.Trailer
+		}
+		in := gitpublish.PullRequestInput{Target: target, HeadRef: a.HeadRef, Base: a.Base, Commit: a.Commit, Title: a.Title, Body: body, Draft: a.Draft}
 		if err := in.Validate(); err != nil {
 			return publication{}, refused(err)
 		}
@@ -221,7 +255,7 @@ func (s sessionPublications) publication(p auth.Principal, tool string, raw json
 		return publication{action: "gitpublish.pull_request", tool: "Pull request", target: target,
 			summary: fmt.Sprintf("Session run %s asks to open a pull request %s -> %s at %s on publication target %s.", run, a.HeadRef, a.Base, a.Commit, target),
 			review: fmt.Sprintf("target: %s\nhead: %s\nbase: %s\ncommit: %s\ndraft: %t\ntitle: %s\nfrom session run: %s\nbody:\n%s",
-				target, a.HeadRef, a.Base, a.Commit, a.Draft, a.Title, run, a.Body),
+				target, a.HeadRef, a.Base, a.Commit, a.Draft, a.Title, run, body),
 			run: func(ctx context.Context, c gitpublish.Caller, pr gitpublish.Proposal) (gitpublish.Receipt, error) {
 				in.OperationID, in.Proposal = "proposal:"+pr.Approval, pr
 				return s.module.OpenPullRequest(ctx, c, in)
@@ -264,12 +298,11 @@ func (s sessionPublications) waiting(ctx context.Context, tenant model.TenantID,
 // launcher. Every refusal is an answer to the agent; nothing publishes without
 // an approved, spent request.
 func (s sessionPublications) proposePublication(ctx context.Context, w http.ResponseWriter, hold func(time.Duration) error, p auth.Principal, tenant model.TenantID, tool string, raw json.RawMessage) error {
-	pub, err := s.publication(p, tool, raw)
-	if err != nil {
-		return err
-	}
 	workspace, confined := p.ConfinedWorkspaceIn(tenant)
 	if !confined || p.SessionIdentity == "" || p.SessionRunRef == "" {
+		if _, err := s.publication(p, tool, raw, publicationIdentity{}); err != nil {
+			return err
+		}
 		s.log.Warn("session publish: the session principal names no run or workspace", "session", p.SessionIdentity)
 		publishRefusal(w, http.StatusForbidden, "session_turn_ended", "This session cannot publish.")
 		return nil
@@ -278,6 +311,24 @@ func (s sessionPublications) proposePublication(ctx context.Context, w http.Resp
 		s.log.Warn("session publish: "+what, append(args, "err", err)...)
 		publishRefusal(w, http.StatusServiceUnavailable, "approval_unavailable", "The approval service could not answer; ask again later.")
 		return nil
+	}
+	// Who this run publishes as is read before anything is proposed, so the
+	// person approves the identity and the pull request text that will run.
+	id, err := s.identity(ctx, tenant, p.SessionRunRef)
+	var refusal *publicationRefusal
+	if errors.As(err, &refusal) {
+		publishRefusal(w, http.StatusForbidden, refusal.Code, refusal.Message)
+		return nil
+	}
+	if err != nil {
+		return unavailable("the run's publishing identity could not be read", err, "session", p.SessionIdentity)
+	}
+	pub, err := s.publication(p, tool, raw, id)
+	if err != nil {
+		return err
+	}
+	if id.CredentialBinding != "" {
+		pub.review += "\nas forge identity: " + id.CredentialBinding
 	}
 	// Until the decision; the publication's own budget starts again before the spend.
 	if err := hold(managedMCPApprovalWait + publishSpendWindow + s.module.PublicationBudget()); err != nil {
@@ -390,6 +441,16 @@ func (s sessionPublications) proposePublication(ctx context.Context, w http.Resp
 		publishRefusal(w, http.StatusForbidden, "session_access_ended", "This session's launcher can no longer publish; nothing was published.")
 		return nil
 	}
+	// Who the run publishes as, again: a role changed, removed or re-bound
+	// while the person decided leaves the approval unspent.
+	if now, err := s.identity(after, tenant, p.SessionRunRef); err != nil || now != id {
+		if err != nil && !errors.As(err, &refusal) {
+			return unavailable("the run's publishing identity could not be read", err, "approval_ref", approval.ID)
+		}
+		s.log.Info("session publish: the run's publishing identity changed during the wait", "approval_ref", approval.ID, "session_run", p.SessionRunRef, "err", err)
+		publishRefusal(w, http.StatusForbidden, "session_access_ended", "This session's publishing identity changed while a person decided; nothing was published.")
+		return nil
+	}
 	// The receipt must outlive gitpublish's own phases, counted from here: an
 	// applied publication whose answer is cut would be asked for again.
 	if err := hold(publishSpendWindow + s.module.PublicationBudget()); err != nil {
@@ -407,7 +468,7 @@ func (s sessionPublications) proposePublication(ctx context.Context, w http.Resp
 	}
 	// A spent approval publishes even if the call is interrupted now; the
 	// module bounds its own admission and dispatch.
-	rc, err := pub.run(context.WithoutCancel(ctx), gitpublish.Caller{Principal: launcher, Tenant: tenant}, gitpublish.Proposal{SessionRun: p.SessionRunRef, Workspace: workspace, Approval: approval.ID})
+	rc, err := pub.run(context.WithoutCancel(ctx), gitpublish.Caller{Principal: launcher, Tenant: tenant}, gitpublish.Proposal{SessionRun: p.SessionRunRef, Workspace: workspace, Approval: approval.ID, CredentialBinding: id.CredentialBinding})
 	s.log.Info("session publish: approved proposal carried out", "approval_ref", approval.ID, "session_run", p.SessionRunRef, "action", pub.action, "state", rc.Answer, "err", err)
 	gitpublish.WriteReceipt(w, rc, err)
 	return nil

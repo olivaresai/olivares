@@ -2,83 +2,49 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
-import type { ProviderSnapshot } from '@/features/agent-tools/api'
+import type { ProviderAccountDTO } from '@/features/agentops/types'
 import { accountsNearestLimit } from './accounts'
 
-function snap(over: Partial<ProviderSnapshot>): ProviderSnapshot {
+function account(
+  ref: string,
+  utilization: number[] | null,
+): ProviderAccountDTO {
   return {
-    instance: 'claude/default',
+    account_ref: ref,
+    name: ref,
     driver: 'claude',
-    default: true,
-    config_dir: '',
-    state: 'ready',
-    installed: true,
-    limits: [],
-    models: [],
-    checked_at: '2026-10-28T08:00:00Z',
-    source: 'claude /status',
-    ...over,
-  }
+    usage: utilization?.map((u, i) => ({
+      window: i === 0 ? 'five_hour' : 'seven_day',
+      label: i === 0 ? '5-hour' : 'Weekly',
+      utilization: u,
+      observed_at: '2026-10-28T08:00:00Z',
+    })),
+  } as ProviderAccountDTO
 }
 
 describe('accountsNearestLimit: the account nearest its limit leads', () => {
-  it('orders by the fullest window, highest first, and names the reset of that window', () => {
+  it('orders by the fullest window, highest first', () => {
     const rows = accountsNearestLimit([
-      snap({
-        instance: 'claude/default',
-        limits: [
-          { label: '5-hour', percent: 42, resets_at: '2026-10-28T10:00:00Z' },
-          { label: 'Weekly', percent: 31, resets_at: '2026-11-01T00:00:00Z' },
-        ],
-      }),
-      snap({
-        instance: 'codex/default',
-        driver: 'codex',
-        limits: [
-          { label: '5-hour', percent: 12, resets_at: '2026-10-28T09:00:00Z' },
-          { label: 'Weekly', percent: 77, resets_at: '2026-10-30T00:00:00Z' },
-        ],
-      }),
+      account('a', [42, 31]),
+      account('b', [12, 77]),
     ])
-    expect(rows.map((r) => r.instance)).toEqual([
-      'codex/default',
-      'claude/default',
-    ])
-    expect(rows[0]!.peak).toBe(77)
-    // The reset that matters is the one of the window nearest its limit.
-    expect(rows[0]!.resetsAt).toBe('2026-10-30T00:00:00Z')
-    expect(rows[1]!.windows.map((w) => w.label)).toEqual(['5-hour', 'Weekly'])
+    expect(rows.map((r) => r.account_ref)).toEqual(['b', 'a'])
   })
 
-  it('leaves out a login that is not ready or reported no window: unknown is never 0%', () => {
+  it('leaves out an account that reported no window: unknown is never 0%', () => {
     const rows = accountsNearestLimit([
-      snap({ instance: 'claude/default', limits: [] }),
-      snap({
-        instance: 'gemini/default',
-        driver: 'gemini',
-        state: 'not_signed_in',
-        limits: [{ label: '5-hour', percent: 99 }],
-      }),
-      snap({
-        instance: 'codex/olivares',
-        driver: 'codex',
-        default: false,
-        limits: [{ label: 'Weekly', percent: 5 }],
-      }),
+      account('none', null),
+      account('empty', []),
+      account('seen', [5]),
     ])
-    expect(rows.map((r) => r.instance)).toEqual(['codex/olivares'])
-    expect(rows[0]!.resetsAt).toBeUndefined()
+    expect(rows.map((r) => r.account_ref)).toEqual(['seen'])
   })
 
-  it('breaks a tie by the instance, so the order never flickers between reads', () => {
-    const limits = [{ label: '5-hour', percent: 50 }]
+  it('breaks a tie by the reference, so the order never flickers between reads', () => {
     const rows = accountsNearestLimit([
-      snap({ instance: 'codex/default', driver: 'codex', limits }),
-      snap({ instance: 'claude/default', limits }),
+      account('codex', [50]),
+      account('claude', [50]),
     ])
-    expect(rows.map((r) => r.instance)).toEqual([
-      'claude/default',
-      'codex/default',
-    ])
+    expect(rows.map((r) => r.account_ref)).toEqual(['claude', 'codex'])
   })
 })

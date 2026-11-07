@@ -112,14 +112,14 @@ describe('sign-in opens the stored start page', () => {
       startPage: 'not-a-view' as 'home',
     })
     await signIn()
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/' })
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/now' })
   })
 
   it('falls back to / when the operator may not open the stored destination', async () => {
     useClientSettings.setState({ startPage: 'sessions' })
     auth.can = () => false
     await signIn()
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/' })
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/now' })
   })
 
   it('uses the same choice when the operator is already signed in', () => {
@@ -186,7 +186,7 @@ describe('sign-in returns to the requested console page', () => {
     async (path) => {
       loginSearch.returnTo = path
       await signIn()
-      expect(navigateMock).toHaveBeenCalledWith({ to: '/' })
+      expect(navigateMock).toHaveBeenCalledWith({ to: '/now' })
     },
   )
   it('keeps the requested page when the cookie already signed the person in', () => {

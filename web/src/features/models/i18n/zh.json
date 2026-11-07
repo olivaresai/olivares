@@ -9,7 +9,8 @@
     "keys": "提供商密钥",
     "gpai": "GPAI 态势",
     "access": "Access",
-    "governance": "治理"
+    "governance": "治理",
+    "usage": "用量"
   },
   "catalog": {
     "title": "能力矩阵",
@@ -122,9 +123,9 @@
   "keys": {
     "title": "提供商密钥引用",
     "description": "对提供商 API 密钥和工作区的受治理引用。仅存储经掩码处理的提示——绝不存储密钥值。",
-    "new": "添加密钥引用",
+    "new": "添加引用",
     "empty": "暂无密钥引用",
-    "emptyHint": "密钥引用指向引擎保管的凭据，而不是密钥本身。添加一条后才能调用模型。",
+    "emptyHint": "密钥引用指向引擎保管的凭据，而不是密钥本身。调用模型并不需要它：请将密钥本身添加为 API 密钥。",
     "maskedOnly": "仅为引用——密钥值从不存储或展示。",
     "columns": {
       "name": "名称",
@@ -141,7 +142,7 @@
       "workspace": "工作区"
     },
     "dialog": {
-      "title": "添加密钥引用",
+      "title": "添加引用",
       "name": "名称",
       "provider": "提供商",
       "kind": "引用类型",
@@ -273,6 +274,37 @@
     "truncatedHint": "访问规则多于此处所示；本页按行 id 取数。这些行上的标记仅反映已加载的规则：可能缺少引入限定或增加允许目标的 allow，也可能缺少扣减访问的 forbid——因此本页可能看起来比实际更宽，也可能更窄，而没有任何已加载规则的主体根本不会出现。请勿据此推断有效访问：引擎在决策前会读取全部页面，并跨用户、角色与分组解析主体，这是一行无法呈现的。",
     "groupsTruncated": "已加载 {{n}} 个分组；还有更多",
     "groupsTruncatedHint": "模型分组多于此处所示；本页按行 id 取数。分组未列在此处，并不能证明它不存在——规则仍可能指向它。"
+  },
+  "usage": {
+    "byLabel": "用量分组依据",
+    "periodLabel": "时间段",
+    "by": {
+      "model": "模型",
+      "account": "账户",
+      "provider": "提供商",
+      "tool": "工具"
+    },
+    "period": {
+      "days1": "24 小时",
+      "days7": "7 天",
+      "days30": "30 天"
+    },
+    "chartTitle": "每日运行次数",
+    "chartSummary": "每日运行次数。分组方式：{{by}}。时间段：{{period}}。总计 {{total}}；最繁忙的一天 {{day}}，共 {{peak}}。",
+    "totalsTitle": "合计",
+    "columns": {
+      "day": "日期",
+      "runs": "运行次数",
+      "input": "输入 token",
+      "output": "输出 token",
+      "cost": "费用"
+    },
+    "noKey": "未记录",
+    "other": "其他",
+    "empty": {
+      "title": "此时间段内没有用量",
+      "description": "第一个会话运行后，用量将显示在这里。"
+    }
   },
   "available": {
     "title": "当前可用",

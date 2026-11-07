@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import type { TextareaHTMLAttributes } from 'react'
+import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
  * height for readable wrapped prose / config blobs. `mono` switches to the tabular
  * monospace face for editing snippets, env files, or structured payloads.
  */
-export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+export interface TextareaProps extends ComponentProps<'textarea'> {
   /** Use the monospace, tabular-aligned face for config / snippets / payloads. */
   mono?: boolean
 }

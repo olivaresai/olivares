@@ -19,6 +19,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -42,6 +44,33 @@ func toolName(driver string) string {
 		return facts.Name
 	}
 	return driver
+}
+
+// toolMark is the tool's one mark (driverfacts), as the console draws it; a driver
+// the table does not know has none.
+func toolMark(driver string) termrender.Mark {
+	facts, _ := driverfacts.Lookup(driver)
+	return termrender.Mark{Letters: facts.Monogram, Color: facts.Color}
+}
+
+// providerMark is a provider record's mark, as the console's Providers list draws
+// it: the initials of its name's first two words on the color of the vendor whose
+// kind it is (none for a kind without a vendor tool, such as openai_compatible).
+func providerMark(name, kind string) termrender.Mark {
+	words := strings.FieldsFunc(name, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	letters := ""
+	for _, w := range words[:min(2, len(words))] {
+		first, _ := utf8.DecodeRuneInString(w)
+		letters += strings.ToUpper(string(first))
+	}
+	color := ""
+	for _, f := range driverfacts.All() {
+		if f.Vendor == kind {
+			color = f.Color
+			break
+		}
+	}
+	return termrender.Mark{Letters: letters, Color: color}
 }
 
 // signInToolWords are the words a person types for the tools that can sign in:
@@ -93,6 +122,7 @@ type toolRow struct {
 	Version   string `json:"version,omitempty"`
 	SignedIn  *bool  `json:"signed_in,omitempty"`
 	Account   string `json:"account,omitempty"`
+	Reason    string `json:"reason,omitempty"`
 	// probeFailed is set when the tool's own sign-in status could not be read; its
 	// installed and signed-in answers are then unknown, not no. Not in the JSON.
 	// unreadSignIn (cmd_ui_tools.go) infers a related case from SignedIn == nil
@@ -135,6 +165,9 @@ func newToolListCmd() *cobra.Command {
 			} else {
 				rows, err = cfg.toolRows(cmd.Context())
 			}
+			if notSystemAdmin(err) {
+				return cfg.showAccountsAndKeys(cmd)
+			}
 			if err != nil {
 				return err
 			}
@@ -155,6 +188,9 @@ func newToolListCmd() *cobra.Command {
 					status = "signed in"
 				case r.SignedIn != nil:
 					status, role = "not signed in", termrender.RoleWarn
+					if r.Reason != "" {
+						status = r.Reason
+					}
 					if next == "" {
 						next = "olivares tool login " + r.Driver
 					}
@@ -170,6 +206,7 @@ func newToolListCmd() *cobra.Command {
 					}
 				}
 				table.Rows = append(table.Rows, []string{label, version, status})
+				table.Marks = append(table.Marks, toolMark(r.Driver))
 				table.Roles = append(table.Roles, []termrender.Role{termrender.RoleNone, termrender.RoleNone, role})
 			}
 			// A tool that can run a session now makes the session the next step, as in
@@ -196,6 +233,42 @@ func newToolListCmd() *cobra.Command {
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&accountName, "account", "", "read an existing provider account's own login (name or profile reference)")
 	return cmd
+}
+
+// toolsSystemAdminNote says who installs the tools to a caller who may not read
+// the engine's inventory: the console says the same to a member.
+const toolsSystemAdminNote = "A system administrator installs the tools and signs them in."
+
+// notSystemAdmin is whether the engine refused err's request because the caller is
+// not the system administrator: the tool inventory, installs and sign-ins are the
+// whole server's, so an organization admin gets a 403 there.
+func notSystemAdmin(err error) bool {
+	var refusal *apiRefusal
+	return errors.As(err, &refusal) && refusal.status == http.StatusForbidden
+}
+
+// showAccountsAndKeys is what an organization admin sees in place of the tool
+// inventory: the accounts and API keys sessions run as, which the console shows
+// them too, and who installs the tools.
+func (c *agentClientConfig) showAccountsAndKeys(cmd *cobra.Command) error {
+	accounts, err := c.listItems(cmd.Context(), providerAccountsPath)
+	if err != nil {
+		return err
+	}
+	keys, err := c.listItems(cmd.Context(), providersPath)
+	if err != nil {
+		return err
+	}
+	return renderOut(cmd, func(w io.Writer) error {
+		if err := printProviderAccountTable(w, accounts); err != nil {
+			return err
+		}
+		if err := printProviderTable(w, keys); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintln(w, toolsSystemAdminNote)
+		return err
+	}, map[string]any{"read_only": true, "accounts": accounts, "api_keys": keys})
 }
 
 // toolRows is the engine's inventory (newest installed version per tool) joined
@@ -262,7 +335,7 @@ func (c *agentClientConfig) toolRows(ctx context.Context) ([]toolRow, error) {
 		r.Installed = r.Installed || st.Installed
 		if st.Installed {
 			signed := st.SignedIn
-			r.SignedIn, r.Account = &signed, st.Account
+			r.SignedIn, r.Account, r.Reason = &signed, st.Account, st.Reason
 		}
 	}
 	out := make([]toolRow, 0, len(rows))
@@ -289,6 +362,7 @@ type toolSignInState struct {
 	SignedIn  bool   `json:"signed_in"`
 	Method    string `json:"method"`
 	Account   string `json:"account"`
+	Reason    string `json:"reason"`
 	// Methods are the tool's login methods in the order the engine offers them.
 	Methods []struct {
 		ID string `json:"id"`
@@ -515,6 +589,13 @@ type toolSignIn struct {
 	Message  string `json:"message"`
 }
 
+// geminiAccountsNote is said before Gemini CLI's Google sign-in: since 2026-06-18 it
+// no longer serves free personal Google accounts, Google AI Pro or Ultra (Google's
+// "transitioning Gemini CLI to Antigravity CLI" announcement). The console says the same.
+const geminiAccountsNote = "Gemini CLI works with a paid Gemini API key or a Gemini Code Assist Standard or Enterprise account. " +
+	"Free personal Google accounts, Google AI Pro and Google AI Ultra stopped working on 18 June 2026.\n" +
+	"For an API key, run: olivares provider add --kind gemini\n\n"
+
 func newToolLoginCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var accountName, method string
@@ -577,6 +658,9 @@ func newToolLoginCmd() *cobra.Command {
 				_, err := fmt.Fprintf(out, "%s is already signed in%s.\n", toolName(driver), who)
 				return err
 			}
+			if driver == "gemini-cli" {
+				fmt.Fprint(out, geminiAccountsNote)
+			}
 			// The login is the organization's own, named because the route
 			// ignores the tenant selection.
 			body := map[string]any{"driver": driver, "tenant_id": cfg.tenant}
@@ -629,6 +713,12 @@ func newToolLoginCmd() *cobra.Command {
 			lines := toolLoginLines(flowCtx, cmd.InOrStdin())
 			linkShown := false
 			for {
+				// The link, the code and the message are the engine's text and a person opens
+				// what they name: the screen asks the same question before it draws them.
+				// The deferred cancel above ends the login on the engine.
+				if why := signInRefusal(driver, s); why != "" {
+					return sentence(exitcode.Err, "%s", why)
+				}
 				if !linkShown && s.State == "needs_key" && s.URL != "" {
 					fmt.Fprintf(out, "Create an API key here, then paste it below:\n\n  %s\n\n", termSafe(s.URL))
 					linkShown = true
@@ -712,6 +802,10 @@ const signInWindow = 15 * time.Minute
 func (c *agentClientConfig) startToolSignIn(ctx context.Context, body map[string]any, s *toolSignIn) error {
 	status, b, err := c.do(ctx, "POST", agentToolsPath+"/sign-in", body, http.StatusAccepted, http.StatusNotFound)
 	if err != nil {
+		var refusal *apiRefusal
+		if driver, _ := body["driver"].(string); errors.As(err, &refusal) {
+			refusal.text = hideOtherAddresses(driver, refusal.text)
+		}
 		return err
 	}
 	if status != http.StatusAccepted {
@@ -898,7 +992,8 @@ func readToolLoginKey(ctx context.Context, cmd *cobra.Command, lines <-chan tool
 
 func toolSignInFailed(driver string, s toolSignIn) error {
 	// The engine's message is the tool's reason and its one next step (#470).
-	if msg := strings.TrimSpace(termSafe(s.Message)); msg != "" {
+	// It keeps the tool's own reason; an address in it off the tool's hosts is hidden.
+	if msg := strings.TrimSpace(hideOtherAddresses(driver, s.Message)); msg != "" {
 		return sentence(exitcode.Err, "%s is not signed in. %s", toolName(driver), msg)
 	}
 	return sentence(exitcode.Err, "%s is not signed in. The tool did not finish its sign-in. Try again: olivares tool login %s", toolName(driver), driver)

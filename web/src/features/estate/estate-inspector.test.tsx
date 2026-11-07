@@ -94,7 +94,5 @@ it('shows only dependencies whose endpoints are in the readable projection, with
   expect(
     screen.queryByRole('button', { name: 'Add dependency' }),
   ).not.toBeInTheDocument()
-  expect(
-    screen.queryByRole('link', { name: 'Open resource' }),
-  ).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /^Open / })).not.toBeInTheDocument()
 })

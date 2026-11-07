@@ -500,14 +500,14 @@ email; the module redacts the body before persisting).
 | Kind | Ingests |
 |---|---|
 | `gdrive` | Google Drive documents (Docs/Sheets/Slides/files) |
-| `confluence` | Atlassian Confluence spaces & pages |
+| `confluence` | Atlassian Confluence spaces & pages (Business) |
 | `notion` | Notion workspaces, databases & pages |
 | `sharepoint` | Microsoft SharePoint / OneDrive sites & documents (Business) |
 | `s3content` | Object-storage content (S3 / R2 / GCS objects) |
 | `sap_odata` | SAP OData service entities as governed documents (Business) |
 | `salesforce` | Salesforce objects/records as governed documents (Business) |
-| `snowflake` | Snowflake tables/rows as governed documents (distinct from the `snowflake-audit` R/RW observer) |
-| `azure_ai_search` | Azure AI Search index documents |
+| `snowflake` | Snowflake tables/rows as governed documents, distinct from the `snowflake-audit` R/RW observer (Business) |
+| `azure_ai_search` | Azure AI Search index documents (Business) |
 | `postgres` | PostgreSQL rows as governed documents — read-only by construction, declared per-row ACL, per-column classification (distinct from the `pgaudit` R/RW observer; not NL-to-SQL). See [Postgres as a governed context source](/how-to/govern-postgres-content/). |
 | `filesystem` | File-server content (local / NFS / SMB) — read confined to the root by construction, POSIX owner/group/ACL mapped to Document ACLs, xattr classification (distinct from the `filelog` log sink). See [Govern your file server](/how-to/govern-your-file-server/). |
 
@@ -515,8 +515,8 @@ email; the module redacts the body before persisting).
 // OLIVARES_SOURCES_CONFIG — document sources live under "documents", never "sources"
 {
   "documents": [
-    { "name": "eng-wiki", "kind": "confluence",
-      "config": { "export_path": "/var/lib/olivares/confluence" } }
+    { "name": "eng-wiki", "kind": "notion",
+      "config": { "export_path": "/var/lib/olivares/notion" } }
   ]
 }
 ```

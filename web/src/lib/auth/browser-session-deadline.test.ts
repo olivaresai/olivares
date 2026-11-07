@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { authApi } from '@/lib/api/endpoints'
 import { configureApiClient } from '@/lib/api/client'
 import { useSessionStore } from '@/stores/session'
-import { restoreBrowserSession } from './browser-session'
+import { restoreBrowserSession, retryWhileUnreachable } from './browser-session'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -175,3 +175,124 @@ it.each([
     expect(fetcher).toHaveBeenCalledTimes(2)
   },
 )
+
+// A slow or restarting engine at page load used to look like "logged out": the 8 s recovery
+// deadline expired, the console went to /login and said nothing.
+it('a 9 s answer, then a 503, keeps the unreachable state and retries until the engine returns', async () => {
+  let call = 0
+  const fetcher = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+    call++
+    if (call === 1)
+      return new Promise<Response>((resolve, reject) => {
+        const answer = setTimeout(
+          () => resolve(new Response(JSON.stringify(metadata))),
+          9_000,
+        )
+        init?.signal?.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(answer)
+            reject(new DOMException('Aborted', 'AbortError'))
+          },
+          { once: true },
+        )
+      })
+    if (call === 2)
+      return Promise.resolve(
+        new Response('<html>Bad Gateway</html>', { status: 503 }),
+      )
+    return Promise.resolve(new Response(JSON.stringify(metadata)))
+  })
+  vi.stubGlobal('fetch', fetcher)
+  const recovery = restoreBrowserSession().catch(() => {})
+  // Not the 9 s answer: the deadline came first. No session, and the engine is the reason.
+  await vi.advanceTimersByTimeAsync(8_000)
+  await recovery
+  expect(useSessionStore.getState()).toMatchObject({
+    ready: true,
+    sessionId: null,
+    engineUnreachable: true,
+  })
+  const stop = new AbortController()
+  const retrying = retryWhileUnreachable(stop.signal)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(fetcher).toHaveBeenCalledTimes(2)
+  expect(useSessionStore.getState().engineUnreachable).toBe(true)
+  await vi.advanceTimersByTimeAsync(2_000)
+  await retrying
+  expect(fetcher).toHaveBeenCalledTimes(3)
+  expect(useSessionStore.getState()).toMatchObject({
+    sessionId: metadata.session_id,
+    engineUnreachable: false,
+  })
+})
+
+// An engine that always takes 9 s (a loaded host) is slow, not down: the first attempt gives
+// up at 8 s, but a retry waits longer and the person gets in.
+it('an engine that always answers in 9 s ends signed in, not stuck on the unreachable state', async () => {
+  const fetcher = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+    return new Promise<Response>((resolve, reject) => {
+      const answer = setTimeout(
+        () => resolve(new Response(JSON.stringify(metadata))),
+        9_000,
+      )
+      init?.signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(answer)
+          reject(new DOMException('Aborted', 'AbortError'))
+        },
+        { once: true },
+      )
+    })
+  })
+  vi.stubGlobal('fetch', fetcher)
+  const recovery = restoreBrowserSession().catch(() => {})
+  await vi.advanceTimersByTimeAsync(8_000)
+  await recovery
+  expect(useSessionStore.getState().engineUnreachable).toBe(true)
+  const stop = new AbortController()
+  const retrying = retryWhileUnreachable(stop.signal)
+  await vi.advanceTimersByTimeAsync(1_000 + 9_000)
+  await retrying
+  expect(useSessionStore.getState()).toMatchObject({
+    sessionId: metadata.session_id,
+    engineUnreachable: false,
+  })
+})
+
+// A bearer from the old storage is sent for migration once per page, not on every retry.
+it('a failing migration is not repeated on every retry', async () => {
+  localStorage.setItem(
+    'olivares.session',
+    JSON.stringify({ state: { token: 'olvs_synthetic-old' } }),
+  )
+  const fetcher = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+    Promise.resolve(
+      new Response(null, { status: init?.method === 'POST' ? 503 : 401 }),
+    ),
+  )
+  vi.stubGlobal('fetch', fetcher)
+  await restoreBrowserSession().catch(() => {})
+  expect(useSessionStore.getState().engineUnreachable).toBe(true)
+  const stop = new AbortController()
+  const retrying = retryWhileUnreachable(stop.signal)
+  await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000)
+  stop.abort()
+  await retrying
+  const posts = fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')
+  expect(posts).toHaveLength(1)
+})
+
+// 429 is the engine asking to slow down: not an answer about the session.
+it('a 429 keeps the unreachable state and retries', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(new Response(null, { status: 429 }))),
+  )
+  await restoreBrowserSession().catch(() => {})
+  expect(useSessionStore.getState()).toMatchObject({
+    ready: true,
+    engineUnreachable: true,
+  })
+})

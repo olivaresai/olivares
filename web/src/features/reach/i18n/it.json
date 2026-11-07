@@ -31,6 +31,7 @@
   "waitingSummary": "In attesa di approvazione: {{destinations}}",
   "empty": "Nessuna portata registrata finora.",
   "partial": "Vista parziale: la mappa degli accessi contiene altro.",
+  "otherReach": "Le altre attività degli strumenti (comandi shell, ricerche, database) non sono una cartella, un server MCP né un endpoint di rete, quindi non sono elencate qui. La mappa degli accessi le mostra.",
   "loading": "Caricamento della portata…",
   "error": "Impossibile caricare il grafico della portata.",
   "off": "Questo modulo è spento.",

@@ -96,7 +96,7 @@ func TestAgentToolInstallProbeIsConfinedLikeASessionChild(t *testing.T) {
 	bound := engine["CapBnd"]
 	if effective, err := strconv.ParseUint(engine["CapEff"], 16, 64); err != nil {
 		t.Fatal(err)
-	} else if effective&(1<<unix.CAP_SETPCAP) != 0 {
+	} else if effective&(1<<unix.CAP_SETPCAP) != 0 || (len(confine.UserBusDirs()) > 0 && confine.UserBusUnhideable() == nil) {
 		bound = none
 	}
 	t.Logf("engine euid %d: CapEff %s CapBnd %s", os.Geteuid(), engine["CapEff"], engine["CapBnd"])

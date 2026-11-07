@@ -31,6 +31,7 @@
   "waitingSummary": "En attente d’approbation : {{destinations}}",
   "empty": "Aucune portée enregistrée pour l’instant.",
   "partial": "Vue partielle : la carte d’accès contient davantage.",
+  "otherReach": "L’autre activité des outils (commandes shell, recherches, bases de données) n’est ni un dossier, ni un serveur MCP, ni un point d’accès réseau : elle n’est donc pas listée ici. La carte d’accès la montre.",
   "loading": "Chargement de la portée…",
   "error": "Impossible de charger le graphe de portée.",
   "off": "Ce module est désactivé.",

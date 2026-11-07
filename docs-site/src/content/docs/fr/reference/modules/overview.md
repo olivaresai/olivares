@@ -147,7 +147,7 @@ honnête : le produit **observe et gouverne largement aujourd'hui, et actionne s
 un sous-ensemble croissant, principalement soumis au provisionnement** — voir
 [Honnêteté et limites](/fr/start/honesty-and-limits/). Le catalogue sélectionnable provient de
 `core/modulespec/modules.json`, la même source que `olivares modules ls` et la
-liste **Édition et modules** de la console. `npm run test:modules` vérifie que
+liste **Modules** de la console. `npm run test:modules` vérifie que
 chaque namespace sélectionnable dispose d’une page de référence liée et valide
 le nombre de modules.
 

@@ -14,6 +14,10 @@
 #         must go on past the wait instead of reporting an engine that never came up.
 #   dead  exits at once: the drill must say the engine EXITED, and not burn the whole wait on it.
 #   hang  stays up and never answers: the drill gives up by its budget (SMOKE_HEALTH_POLLS=4 here).
+#   lag   answers the whole Path A API but serves an empty access graph for its first reads, as an
+#         engine does while the demo source's observations are still on their way through the bus
+#         after the module restart: the drill must wait for the published counts (nightly 2026-11-03:
+#         "demo graph nodes (quickstart guide says 20): got '0'").
 #
 # Usage: scripts/test-quickstart-smoke-boot.sh
 set -uo pipefail
@@ -102,6 +106,57 @@ drive hang SMOKE_HEALTH_POLLS=4
 case "$OUT" in
 *"demo engine never became healthy"*) ok "reports 'never became healthy', not an exit (rc=$RC, ${SECS}s)" ;;
 *) no "reports 'never became healthy', not an exit" "rc=$RC; output tail: $(printf '%s' "$OUT" | tail -3)" ;;
+esac
+
+echo "case 4: a graph that fills a moment after the modules are running is waited for"
+# The published counts, from the guide the drill itself reads.
+read -r GUIDE_NODES GUIDE_EDGES < <(sed -n 's/.*returns exactly \*\*\([0-9]*\) nodes and \([0-9]*\) edges.*/\1 \2/p' "$ROOT/docs-site/src/content/docs/start/quickstart.md")
+mkdir -p "$WORK/lag"
+cat >"$WORK/lag/server.py" <<'PYEOF'
+import http.server, json, sys
+nodes, edges, empty_reads = int(sys.argv[2]), int(sys.argv[3]), 4
+reads = 0
+mods = ["inventory", "observability", "security", "accessmap"]
+class H(http.server.BaseHTTPRequestHandler):
+    def send(s, body):
+        s.send_response(200)
+        s.send_header("Content-Type", "application/json")
+        s.end_headers()
+        s.wfile.write(json.dumps(body).encode())
+    def do_GET(s):
+        global reads
+        p = s.path.split("?")[0]
+        if p == "/healthz": s.send({})
+        elif p == "/v1/auth/whoami": s.send({"grants": [{"tenant": "t1"}]})
+        elif p == "/v1/console/modules": s.send({"modules": [{"name": m, "selected": True, "running": True} for m in mods]})
+        elif p == "/v1/server-info": s.send({"edition": "community"})
+        elif p == "/v1/m/security/findings": s.send({"items": []})
+        elif p == "/v1/m/governance/identities": s.send({})
+        elif p == "/v1/m/accessmap/graph":
+            reads += 1
+            n, e = (0, 0) if reads <= empty_reads else (nodes, edges)
+            s.send({"nodes": [{}] * n, "edges": [{"attribution_tier": "firm" if i % 2 else "approximate"} for i in range(e)]})
+        else:
+            s.send_response(404); s.end_headers()
+    def do_POST(s):
+        s.rfile.read(int(s.headers.get("Content-Length", 0)))
+        s.send({"token": "t"})
+    do_PUT = do_POST
+    def log_message(s, *a): pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PYEOF
+cat >"$WORK/lag/olivares" <<EOF
+#!/usr/bin/env bash
+while [ \$# -gt 0 ]; do
+  case "\$1" in --listen) port="\${2##*:}"; shift 2 ;; *) shift ;; esac
+done
+exec python3 "$WORK/lag/server.py" "\$port" "$GUIDE_NODES" "$GUIDE_EDGES"
+EOF
+chmod +x "$WORK/lag/olivares"
+OUT="$(OLIVARES_BIN="$WORK/lag/olivares" SMOKE_PORT="$PORT" timeout 60 bash "$ROOT/scripts/quickstart-smoke.sh" 2>&1)"
+case "$OUT" in
+*"ok: demo graph nodes (quickstart guide says $GUIDE_NODES) = $GUIDE_NODES"*"ok: demo graph edges (quickstart guide says $GUIDE_EDGES) = $GUIDE_EDGES"*) ok "the drill asserts the published counts once the graph has them" ;;
+*) no "the drill asserts the published counts once the graph has them" "output tail: $(printf '%s' "$OUT" | tail -3)" ;;
 esac
 
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"

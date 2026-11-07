@@ -10,7 +10,7 @@ de contenu — masquer → classifier → fragmenter → intégrer → indexer �
 avec des ACL propres à chaque document et une classification par colonne.
 
 Il est le pendant, pour les bases de données opérationnelles, des sources de contenu
-SaaS/data warehouse (gdrive, confluence, s3content, snowflake…). Deux choses qu'il
+SaaS/data warehouse (gdrive, s3content…). Deux choses qu'il
 **n'est pas** :
 
 - **Ce n'est pas `pgaudit`.** `pgaudit` observe les *arêtes d'accès* R/RW pour la carte

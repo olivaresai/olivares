@@ -91,9 +91,6 @@ need_handler "$SERVER" 'coreRoute(r, "POST", "/Users", s.scimRoute("user:write")
 need_handler "$SERVER" 'coreRoute(r, "PUT", "/Users/{id}", s.scimRoute("user:write"), s.scimReplaceUser)'
 need_handler "$SERVER" 'coreRoute(r, "PATCH", "/Users/{id}", s.scimRoute("user:write"), s.scimPatchUser)'
 need_handler "$SERVER" 'coreRoute(r, "DELETE", "/Users/{id}", s.scimRoute("user:write"), s.scimDeleteUser)'
-need_handler "$AUTHSCIM" 'func (a *Authenticator) SCIMProvisionUser'
-need_handler "$AUTHSCIM" 'func (a *Authenticator) SCIMUpdateUser'
-need_handler "$AUTHSCIM" 'func (a *Authenticator) SCIMDeprovisionUser'
 need_handler "$LOGIN" 'scimAuthoritative bool'
 need_handler "$PORTS" 'managedSCIM editionPort[any]'
 

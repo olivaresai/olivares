@@ -3,19 +3,19 @@
     "label": "Cargadas {{n}} plantillas; hay más",
     "hint": "En este catálogo sólo están disponibles las plantillas cargadas. Una plantilla ausente puede estar más allá de esta página."
   },
-  "title": "Plantillas de espacio de trabajo",
+  "title": "Plantillas",
   "subtitle": "Instantáneas reutilizables de hooks, ajustes, conectores y políticas para sesiones del espacio de trabajo.",
   "catalog": {
     "builtin": "Integrada",
     "version": "v{{version}}",
     "author": "Por {{author}}",
     "archived": "Archivada",
-    "noTemplates": "No se encontraron plantillas.",
-    "noTemplatesHint": "Crea tu primera plantilla para reutilizar configuraciones del espacio de trabajo.",
-    "filterAll": "Todas",
-    "filterBuiltin": "Integradas",
-    "filterCustom": "Personalizadas",
     "showArchived": "Mostrar archivadas"
+  },
+  "groups": {
+    "yours": "Tus plantillas",
+    "builtin": "Plantillas integradas ({{n}})",
+    "yoursEmpty": "Aún no tienes ninguna. Una plantilla es un punto de partida reutilizable para nuevas sesiones."
   },
   "editor": {
     "nameLabel": "Nombre",
@@ -30,7 +30,26 @@
       "connectors": "Conectores",
       "connectorsHint": "IDs de conector que se adjuntarán al aplicar esta plantilla.",
       "policies": "Políticas de gobernanza",
-      "policiesHint": "Modo DLP, límites de duración de sesión, herramientas permitidas y grabación de E/S."
+      "policiesHint": "Modo DLP, límites de duración de sesión, herramientas permitidas y grabación de E/S.",
+      "secrets": "Secretos",
+      "secretsHint": "Secretos del almacén que las sesiones de esta plantilla reciben como variables de entorno.",
+      "summary": {
+        "hooks_one": "{{count}} hook",
+        "hooks_many": "{{count}} hooks",
+        "hooks_other": "{{count}} hooks",
+        "secrets_one": "{{count}} variable",
+        "secrets_many": "{{count}} variables",
+        "secrets_other": "{{count}} variables",
+        "connectors_one": "{{count}} conector",
+        "connectors_many": "{{count}} conectores",
+        "connectors_other": "{{count}} conectores",
+        "set_one": "{{count}} definido",
+        "set_many": "{{count}} definidos",
+        "set_other": "{{count}} definidos",
+        "model": "Modelo: {{model}}",
+        "none": "Ninguno",
+        "defaults": "Por defecto"
+      }
     },
     "hooks": {
       "preTool": "Antes de herramienta",

@@ -4,7 +4,7 @@
 //
 // useUrlState contract tests: mount-seeding from the URL, owned-key merging,
 // clearing via ''/undefined, replace semantics, and non-owned-param survival.
-import { act, renderHook } from '@testing-library/react'
+import { act, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const navigateMock = vi.fn()
@@ -40,6 +40,8 @@ function seedLocation(next: string) {
   window.history.replaceState(null, '', next)
   routerState.searchStr = window.location.search
 }
+
+vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
 
 import { useEffect as reactUseEffect, useState as reactUseState } from 'react'
 import { useUrlState, useValidatedUrlState } from './use-url-state'
@@ -379,28 +381,39 @@ describe('useValidatedUrlState cleans the address bar', () => {
   })
 })
 
-describe('UrlStateNotice re-arms on a new rejection', () => {
+describe('useUrlStateNotice tells every rejection', () => {
   it('speaks again for a fresh rejection naming the same key', async () => {
-    const { UrlStateNotice } =
-      await import('@/features/shared/url-state-notice')
-    const { render, screen } = await import('@testing-library/react')
-    const user = (await import('@testing-library/user-event')).default.setup()
+    const { useUrlStateNotice } =
+      await import('@/features/shared/use-url-state-notice')
+    const { notify } = await import('@/lib/notify')
+    vi.mocked(notify).mockClear()
 
     const first = ['scope']
-    const { rerender } = render(<UrlStateNotice issues={first} />)
-    await user.click(screen.getByTestId('url-state-notice-dismiss'))
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    const { rerender } = renderHook(({ issues }) => useUrlStateNotice(issues), {
+      initialProps: { issues: first },
+    })
+    expect(notify).toHaveBeenCalledTimes(1)
 
-    // Re-rendering the SAME event must stay dismissed…
-    rerender(<UrlStateNotice issues={first} />)
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    // Re-rendering the SAME event must not tell it twice…
+    rerender({ issues: first })
+    expect(notify).toHaveBeenCalledTimes(1)
 
     // …but a NEW event naming the same key must speak. The hook marks the event
     // with a new array instance, because it deliberately does NOT pass through
     // an empty state in between: it latches the complaint across its own URL
-    // cleanup so the notice survives long enough to be read.
-    rerender(<UrlStateNotice issues={['scope']} />)
-    expect(screen.getByTestId('url-state-notice')).toBeInTheDocument()
+    // cleanup so the notice is not told again by the cleanup.
+    rerender({ issues: ['scope'] })
+    expect(notify).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the UrlStateNotice export other pages import: it tells by toast and draws nothing', async () => {
+    const { UrlStateNotice } = await import('@/features/shared')
+    const { notify } = await import('@/lib/notify')
+    vi.mocked(notify).mockClear()
+
+    const { container } = render(<UrlStateNotice issues={['scope']} />)
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(container).toBeEmptyDOMElement()
   })
 })
 

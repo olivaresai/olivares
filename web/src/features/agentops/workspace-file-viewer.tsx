@@ -13,10 +13,11 @@ import {
   Save,
   Trash2,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { CodeEditor } from '@/components/ui/code-editor'
+import { PassageNotes } from './passage-notes'
 import type { CodeLanguage } from '@/components/ui/code-languages'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
@@ -117,15 +118,19 @@ export function FileViewer({
     () => (image ? imageSource(file, image) : undefined),
     [file, image],
   )
-  const lang: CodeLanguage = path.toLowerCase().endsWith('.json')
+  const lang: CodeLanguage = /\.json$/i.test(path)
     ? 'json'
-    : 'text'
+    : /\.(md|markdown)$/i.test(path)
+      ? 'markdown'
+      : 'text'
 
   const [confirmDel, setConfirmDel] = useState(false)
   const [recursive, setRecursive] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
   const [moveTo, setMoveTo] = useState(path)
   const [showSource, setShowSource] = useState(false)
+  // The rendered Markdown: notes are taken from a passage selected in it.
+  const rendered = useRef<HTMLElement | null>(null)
 
   // What git HEAD holds for this file. A 404 (no repository, a file never committed) is
   // an answer: the file shows without a Changes view. Any other failure is said so under
@@ -303,9 +308,19 @@ export function FileViewer({
         </p>
       ) : hasRenderedView && !showSource && !editing ? (
         isMarkdown ? (
-          <article className="max-w-[72ch] break-words text-body leading-relaxed text-text">
-            <MarkdownText text={file.content} headingOffset={1} />
-          </article>
+          <>
+            <article
+              ref={rendered}
+              className="max-w-[72ch] break-words text-body leading-relaxed text-text"
+            >
+              <MarkdownText text={file.content} headingOffset={1} />
+            </article>
+            <PassageNotes
+              workspace={workspace}
+              path={path}
+              container={rendered}
+            />
+          </>
         ) : (
           // ponytail: the console's default Trusted Types policy sanitizes srcDoc, so the
           // page shows its structure without <style>, style= or <head>; a faithful preview
@@ -355,11 +370,7 @@ export function FileViewer({
             onClick={onSave}
             disabled={saving}
           >
-            {saving ? (
-              <Spinner className="size-3.5" />
-            ) : (
-              <Save className="size-3.5" />
-            )}
+            {saving ? <Spinner size="sm" /> : <Save className="size-3.5" />}
             {saving ? t('browser.saving') : t('browser.save')}
           </Button>
         </div>
@@ -426,7 +437,7 @@ export function FileViewer({
                 move.isPending || !moveTo.trim() || moveTo.trim() === path
               }
             >
-              {move.isPending && <Spinner className="size-3.5" />}
+              {move.isPending && <Spinner size="sm" />}
               {t('browser.move')}
             </Button>
           </DialogFooter>

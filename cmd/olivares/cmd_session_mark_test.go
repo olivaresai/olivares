@@ -11,7 +11,8 @@ import (
 )
 
 // `session snooze` sends the moment the snooze ends, from a duration or a time, and
-// `--undo` ends it; `session done` marks the session done and `--undo` clears it.
+// `--undo` ends it; `session done` marks the session done and `--undo` clears it;
+// `session unread` marks it unread and `--undo` marks it read.
 // Each makes one call and says so in one sentence; the JSON answer is the engine's.
 func TestSessionSnoozeAndDoneMakeOneCallEachAndSaySo(t *testing.T) {
 	f := pinEngine(t)
@@ -52,8 +53,19 @@ func TestSessionSnoozeAndDoneMakeOneCallEachAndSaySo(t *testing.T) {
 	if out := run("done", "newest", "--undo"); out != "Marked newest not done.\n" {
 		t.Fatalf("undone output = %q", out)
 	}
+	if out := run("unread", "newest"); out != "Marked newest unread.\n" {
+		t.Fatalf("unread output = %q", out)
+	}
+	if js := decodeSessionBody(t, run("unread", "middle", "-o", "json")); js["run_ref"] != "r-mid" || js["unread"] != true {
+		t.Fatalf("json unread state = %v", js)
+	}
+	if out := run("unread", "newest", "--undo"); out != "Marked newest read.\n" {
+		t.Fatalf("read output = %q", out)
+	}
 	hits := strings.Join(f.hits, "\n")
 	for want, n := range map[string]int{
+		"POST " + sessionRunsPath + "/r-new/unread":   1,
+		"DELETE " + sessionRunsPath + "/r-new/unread": 1,
 		"POST " + sessionRunsPath + "/r-new/snooze":   2,
 		"DELETE " + sessionRunsPath + "/r-new/snooze": 1,
 		"POST " + sessionRunsPath + "/r-new/done":     1,
@@ -77,6 +89,7 @@ func TestSessionSnoozeRefusesAMomentItCannotRead(t *testing.T) {
 		{[]string{"snooze", "newest", "0s"}, "the duration must be positive"},
 		{[]string{"snooze", "newest", "2h", "--undo"}, "accepts 1 arg(s)"},
 		{[]string{"done", "newest", "now"}, "accepts 1 arg(s)"},
+		{[]string{"unread", "newest", "now"}, "accepts 1 arg(s)"},
 	} {
 		args := tc.args
 		f := pinEngine(t)

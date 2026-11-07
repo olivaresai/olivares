@@ -1,0 +1,88 @@
+{
+  "title": "Server",
+  "subtitle": "L'host, i suoi dischi, le sessioni attive e ciò che hanno consumato.",
+  "range": {
+    "label": "Intervallo",
+    "24h": "24 ore",
+    "7d": "7 giorni",
+    "30d": "30 giorni"
+  },
+  "host": {
+    "heading": "Host",
+    "keeps24": "L'host conserva 24 ore di cronologia, quindi i suoi grafici mostrano le ultime 24 ore.",
+    "unavailable": "Le metriche dell'host non sono disponibili su questo host. Solo Linux le riporta.",
+    "noHistory": "L'host non ha ancora registrato alcun campione.",
+    "noFilesystems": "Nessun file system ha riportato la propria dimensione.",
+    "noFolders": "Nessuna cartella di sessione.",
+    "facts": {
+      "load": "Carico {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "Memoria {{used}} di {{total}}",
+      "swap": "Swap {{used}} di {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "Uso della CPU nelle ultime 24 ore: ora {{now}}, picco {{peak}}, media {{average}}."
+    },
+    "memory": {
+      "title": "Memoria",
+      "total": "Totale",
+      "summary": "Memoria in uso nelle ultime 24 ore: ora {{used}} di {{total}}, picco {{peak}}."
+    },
+    "disks": {
+      "title": "File system",
+      "summary_one": "Un file system, {{mount}}, {{pct}} usato.",
+      "summary_many": "{{count}} file system; il più pieno è {{mount}}, {{pct}} usato.",
+      "summary_other": "{{count}} file system; il più pieno è {{mount}}, {{pct}} usato."
+    },
+    "folders": {
+      "title": "Cartelle di sessione",
+      "summary_one": "Una cartella di sessione, {{largest}}, {{size}}.",
+      "summary_many": "{{count}} cartelle di sessione occupano {{total}}; la più grande è {{largest}} con {{size}}.",
+      "summary_other": "{{count}} cartelle di sessione occupano {{total}}; la più grande è {{largest}} con {{size}}.",
+      "floor": "La misurazione si è fermata al suo limite, quindi le dimensioni sono un minimo."
+    },
+    "columns": {
+      "time": "Ora",
+      "cpu": "Uso della CPU",
+      "memory": "Memoria in uso",
+      "swap": "Swap in uso",
+      "mount": "Punto di mount",
+      "device": "Dispositivo",
+      "type": "Tipo",
+      "used": "Usato",
+      "size": "Dimensione",
+      "usedPercent": "Usato %",
+      "folder": "Cartella"
+    }
+  },
+  "live": {
+    "heading": "Sessioni attive",
+    "loading": "Lettura delle sessioni attive…",
+    "error": "Impossibile leggere le sessioni attive.",
+    "none": "Nessuna sessione attiva.",
+    "more": "L'elenco è stato tagliato: ci sono più sessioni aperte di quelle contate qui, quindi i conteggi sono un minimo.",
+    "automation": "Automazione",
+    "unknown": "Non registrato",
+    "columns": {
+      "tool": "Strumento",
+      "person": "Persona",
+      "sessions": "Sessioni"
+    },
+    "byTool": {
+      "title": "Sessioni attive per strumento",
+      "summary_one": "{{count}} sessione attiva per strumento: {{list}}.",
+      "summary_many": "{{count}} sessioni attive per strumento: {{list}}.",
+      "summary_other": "{{count}} sessioni attive per strumento: {{list}}."
+    },
+    "byPerson": {
+      "title": "Sessioni attive per persona",
+      "summary_one": "{{count}} sessione attiva per persona: {{list}}.",
+      "summary_many": "{{count}} sessioni attive per persona: {{list}}.",
+      "summary_other": "{{count}} sessioni attive per persona: {{list}}."
+    }
+  },
+  "usage": {
+    "heading": "Utilizzo"
+  }
+}

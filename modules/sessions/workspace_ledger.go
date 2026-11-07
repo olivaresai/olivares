@@ -34,7 +34,7 @@ type wsMutationInput struct {
 	contentHash  string // hex sha-256 of written content or configured folder list
 	actor        string
 	actorKind    string
-	classes      []string       // DLP classes (non-sensitive); "" for non-read
+	classes      []string       // DLP classes (non-sensitive) found in the bytes read or written
 	meta         map[string]any // extra non-secret facts the event states in the clear (not in the hash)
 }
 
@@ -59,6 +59,9 @@ func appendWorkspaceAudit(ctx context.Context, sc store.Scope, in wsMutationInpu
 	}
 	if in.contentHash != "" {
 		meta["sha256"] = in.contentHash
+	}
+	if len(in.classes) > 0 {
+		meta["sensitivity"] = in.classes
 	}
 	maps.Copy(meta, in.meta)
 	_, err := sc.Audit().Append(ctx, model.AuditDraft{

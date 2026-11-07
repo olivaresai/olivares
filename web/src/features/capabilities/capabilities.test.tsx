@@ -61,6 +61,10 @@ import CapabilitiesView from './capabilities-view'
 import { ConfigEditorDialog } from './config-editor'
 import { ServerDetailSheet } from './server-detail'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -140,6 +144,49 @@ describe('CapabilitiesView — servers catalog', () => {
     expect(await screen.findByText('github')).toBeInTheDocument()
     expect(screen.getByText(/Managed · rev 2/)).toBeInTheDocument()
     expect(screen.getByText('Connected')).toBeInTheDocument()
+  })
+})
+
+describe('CapabilitiesView — tools catalog', () => {
+  it('lists the tools an MCP server offers, not the built-ins a session used, and draws only columns that have values', async () => {
+    const user = userEvent.setup()
+    api.listTools.mockResolvedValue({
+      items: [
+        {
+          id: 'b1',
+          name: 'Bash',
+          read_only_hint: false,
+          destructive_hint: false,
+          annotation_trust: 'untrusted',
+        },
+        {
+          id: 'b2',
+          name: 'Read',
+          read_only_hint: false,
+          destructive_hint: false,
+          annotation_trust: 'untrusted',
+        },
+        {
+          id: 't1',
+          name: 'create_issue',
+          mcp_server_id: 's1',
+          schema_hash: 'abcdef0123456789',
+          read_only_hint: false,
+          destructive_hint: false,
+          annotation_trust: 'untrusted',
+        },
+      ],
+      has_more: false,
+    })
+    wrap(<CapabilitiesView />)
+    await user.click(screen.getByRole('tab', { name: 'Tools' }))
+
+    expect(await screen.findByText('create_issue')).toBeInTheDocument()
+    expect(screen.queryByText('Bash')).not.toBeInTheDocument()
+    expect(screen.queryByText('Read')).not.toBeInTheDocument()
+    expect(screen.getByText('Schema hash')).toBeInTheDocument()
+    expect(screen.queryByText('Kind')).not.toBeInTheDocument()
+    expect(screen.queryByText('Annotations')).not.toBeInTheDocument()
   })
 })
 

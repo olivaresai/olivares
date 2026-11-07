@@ -7,7 +7,7 @@ import {
   type TenantRequestOptions,
 } from '@/lib/api/client'
 import type { ListResponse } from '@/lib/api/types'
-import type { LiveDTO, TimelineDTO } from './types'
+import type { LiveDTO, LivePinDTO, TimelineDTO } from './types'
 
 /**
  * Sessions / live-operation endpoints (module II) — under /v1/m/sessions/,
@@ -75,8 +75,20 @@ export const sessionsApi = {
   /** The LEGACY row of a session by its bare external reference. A profile-scoped
    * row is never returned here (it would be "the first" of several homes); read it
    * by its `live_ref`. */
-  liveOne: (ref: string) =>
-    http.get<LiveDTO>(`/v1/m/sessions/live/${encodeURIComponent(ref)}`),
+  liveOne: (ref: string, opts?: Pick<RequestOptions, 'tenant'>) =>
+    http.get<LiveDTO>(`/v1/m/sessions/live/${encodeURIComponent(ref)}`, opts),
+  /** Pin an observed session (no run) for the signed-in person, or unpin it: their own
+   * mark, kept on the server like a run's. Both are idempotent. */
+  pinLive: (liveRef: string, opts?: Pick<RequestOptions, 'tenant'>) =>
+    http.post<LivePinDTO>(
+      `/v1/m/sessions/live/by-id/${encodeURIComponent(liveRef)}/pin`,
+      undefined,
+      opts,
+    ),
+  unpinLive: (liveRef: string) =>
+    http.delete<LivePinDTO>(
+      `/v1/m/sessions/live/by-id/${encodeURIComponent(liveRef)}/pin`,
+    ),
   /** ONE row by its opaque `live_ref`, whichever channel it was observed through. */
   liveById: (liveRef: string) =>
     http.get<LiveDTO>(

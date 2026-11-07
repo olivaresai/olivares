@@ -17,7 +17,7 @@ import (
 // The native cursor is retained after the last matching row. Filling the page
 // and looking ahead keep Limit/HasMore truthful even across skipped lazy expiry.
 // Both callers use the repository's default id ordering, within one View.
-func listEffectiveApprovals(ctx context.Context, repo store.GenericRepo, q model.Query, status string, now model.Timestamp, policies []model.Policy) ([]model.Record, model.Page, error) {
+func listEffectiveApprovals(ctx context.Context, repo store.GenericRepo, q model.Query, status string, now model.Timestamp, lookup func(model.Record) ([]model.Policy, error)) ([]model.Record, model.Page, error) {
 	if status != "" && status != statusExpired {
 		q.Filters = append(q.Filters, eq(colStatus, status))
 	}
@@ -33,6 +33,10 @@ func listEffectiveApprovals(ctx context.Context, repo store.GenericRepo, q model
 	cursor := ""
 	for {
 		for i, rec := range rows {
+			policies, err := lookup(rec)
+			if err != nil {
+				return nil, model.Page{}, err
+			}
 			if approvalGrantStatus(rec, now, liveRiskTier(policies, rec)) != status {
 				continue
 			}
@@ -99,7 +103,7 @@ func (a *EngineApprovals) persistWaitExpiry(ctx context.Context, tenant model.Te
 			return err
 		}
 		now := a.module.clock.Now()
-		policies, err := loadApprovalPolicies(cleanup, sc)
+		policies, err := a.module.approvalPolicies(cleanup, sc, approvalPolicySubject(rec))
 		if err != nil {
 			return err
 		}

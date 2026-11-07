@@ -5,15 +5,18 @@ import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Cable,
+  Download,
   Pencil,
   Plus,
   RotateCw,
   ShieldAlert,
   Trash2,
+  Upload,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
+import { SystemAdminOnly } from '@/components/layout/system-admin-only'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -62,12 +65,24 @@ import {
   consoleApi,
   consoleKeys,
   type ConnectorOnboardInput,
+  type PreviewDocument,
   type SourceApplyResult,
   type SourceReloadReport,
   type SourceRosterEntry,
 } from './api'
 import { ConnectorCatalog, HostingBadge } from './connector-catalog'
 import { CustomFields, type CustomRow } from './custom-fields'
+import {
+  DEFAULT_MAX_DELETE_PERCENT,
+  DOCUMENT_KEYS,
+  DocumentPreview,
+  DocumentSchedule,
+  downloadDefinition,
+  exportDefinition,
+  importInput,
+  isDocumentKind,
+  parseDefinition,
+} from './document-source'
 import { StaticTable } from '@/components/data/static-table'
 
 // A source name/handle: letters, digits and the separators `. _ - /` (mirrors the
@@ -91,6 +106,7 @@ function statusVariant(
     case 'failed':
       return 'danger'
     case 'stopped':
+    case 'credential_missing':
       return 'warning'
     case 'disabled':
       return 'neutral'
@@ -206,7 +222,6 @@ function scopedSourcesKey(scope: string, episode: number) {
  * everything they authorize.
  */
 export function ConnectorsTab() {
-  const { t } = useTranslation('console')
   const { isSuperadmin } = useAuth()
   const boundary = useAuthBoundary()
   const stepUpRevision = useStepUpStore((state) => state.contextRevision)
@@ -232,15 +247,7 @@ export function ConnectorsTab() {
   // for BOTH exits — a scope change (the body is keyed by it, so it unmounts) and the
   // tab being removed outright — with no ref to prime and no transition to miss.
   if (!isSuperadmin) {
-    return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
-        <ShieldAlert
-          className="mt-0.5 size-4 shrink-0 text-warning"
-          aria-hidden
-        />
-        {t('connectors.superadminOnly')}
-      </div>
-    )
+    return <SystemAdminOnly />
   }
 
   // `key` ends the lifetime the same way the state was made. The body unmounts with
@@ -252,7 +259,7 @@ export function ConnectorsTab() {
 }
 
 function ConnectorsTabBody({ scope }: { scope: string }) {
-  const { can } = useAuth()
+  const { can, activeTenant } = useAuth()
   const { t } = useTranslation(['console', 'common', 'shared'])
   const queryClient = useQueryClient()
   // Minted once per mount, and this mount is the only thing that will ever read it.
@@ -380,6 +387,37 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
     onDone: () => setDel(null),
   })
 
+  // Import creates the source from an exported definition. It carries no
+  // credential, so the engine keeps it "credential missing" until one is set here.
+  const importMutation = usePrivilegedMutation<
+    ConnectorOnboardInput,
+    SourceApplyResult
+  >({
+    mutationFn: (input, { signal, dispatchGuard }) =>
+      consoleApi.putConnector(input, { signal, dispatchGuard }),
+    invalidateKeys: () => [consoleKeys.sources()],
+    successMessage: (res) =>
+      res.applied
+        ? t('console:connectors.imported')
+        : t('console:connectors.savedNotApplied', { note: res.note ?? '' }),
+    successIntent: (res) => (res.applied ? 'success' : 'warning'),
+  })
+  const importFile = useRef<HTMLInputElement>(null)
+  async function importDefinition(file: File) {
+    const def = parseDefinition(await file.text())
+    if (!def) {
+      toast.error(t('console:connectors.importInvalid'))
+      return
+    }
+    importMutation.mutate(
+      importInput(
+        def,
+        isDocumentKind(kinds.find((c) => c.kind === def.kind)),
+        activeTenant,
+      ),
+    )
+  }
+
   // Reconcile the live source roster. On success we open a report panel that renders
   // the outcome honestly. The success toast is QUALIFIED, never a bare "reloaded":
   // rejections downgrade it to a partial, and a clean reload still carries the
@@ -428,6 +466,26 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
               of a catalog the operator may no longer read is not one. A refused
               ROSTER never disables it: not knowing what is configured is not a reason
               to refuse to configure something. */}
+          <input
+            ref={importFile}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            aria-label={t('console:connectors.import')}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) void importDefinition(file)
+            }}
+          />
+          <Button
+            variant="secondary"
+            onClick={() => importFile.current?.click()}
+            disabled={!catalogAdmitted || importMutation.isPending}
+          >
+            <Upload />
+            {t('console:connectors.import')}
+          </Button>
           <Button
             onClick={() => setCreateOpen(stamp)}
             disabled={!catalogAdmitted || kinds.length === 0}
@@ -587,6 +645,21 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
                           >
                             <Pencil />
                             {t('console:connectors.edit')}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              downloadDefinition(
+                                exportDefinition(
+                                  s,
+                                  kinds.find((c) => c.kind === s.kind),
+                                ),
+                              )
+                            }
+                          >
+                            <Download />
+                            {t('console:connectors.export')}
                           </Button>
                           <Button
                             variant="ghost"
@@ -877,6 +950,7 @@ function ConnectorForm({
   onClose: () => void
 }) {
   const { t } = useTranslation(['console', 'common', 'shared'])
+  const { activeTenant } = useAuth()
   const isEdit = !!existing
   const [kind, setKind] = useState(existing?.kind ?? catalog[0]?.kind ?? '')
   const [sourceMode, setSourceMode] = useState<RosterSourceMode>(() =>
@@ -894,6 +968,15 @@ function ConnectorForm({
 
   const [name, setName] = useState(existing?.name ?? '')
   const [tenant, setTenant] = useState(existing?.tenant ?? '')
+  // A document source syncs into a knowledge base of its tenant (config "kb") and
+  // never deletes more than max_delete_percent of its documents in one run.
+  const isDocument = isDocumentKind(info)
+  const [kb, setKb] = useState(existing?.config?.kb ?? '')
+  const [maxDelete, setMaxDelete] = useState(
+    existing?.config?.max_delete_percent ??
+      (existing ? '' : DEFAULT_MAX_DELETE_PERCENT),
+  )
+  const [preview, setPreview] = useState<PreviewDocument[] | null>(null)
   const [enabled, setEnabled] = useState(existing?.enabled ?? true)
   const [poll, setPoll] = useState(String(existing?.poll_seconds ?? 0))
 
@@ -922,6 +1005,7 @@ function ConnectorForm({
   const [custom, setCustom] = useState<CustomRow[]>(() => {
     const known = new Set((initialInfo?.fields ?? []).map((f) => f.key))
     for (const k of RESERVED_CONFIG_KEYS) known.add(k)
+    if (isDocumentKind(initialInfo)) for (const k of DOCUMENT_KEYS) known.add(k)
     const rows: CustomRow[] = []
     if (existing?.config) {
       for (const [k, v] of Object.entries(existing.config)) {
@@ -934,11 +1018,24 @@ function ConnectorForm({
   // On create the operator may switch kinds; reset the per-kind field state so values
   // never leak from one connector's form to another's.
   function changeKind(k: string) {
+    const next = catalog.find((c) => c.kind === k)
     setKind(k)
-    setSourceMode('export')
+    // A document connector declares its own default mode (the file server reads
+    // the live tree); every other kind starts in export.
+    setSourceMode(
+      normalizeRosterMode(
+        isDocumentKind(next)
+          ? next?.fields?.find((f) => f.key === 'mode')?.default
+          : undefined,
+      ),
+    )
+    if (isDocumentKind(next) && tenant.trim() === '' && activeTenant) {
+      setTenant(activeTenant)
+    }
     setCfg({})
     setSecrets({})
     setCustom([])
+    setPreview(null)
   }
 
   const fields = (info?.fields ?? []).filter(
@@ -966,6 +1063,10 @@ function ConnectorForm({
     }
     if (sourceMode === 'live' || existing?.config?.mode !== undefined) {
       config.mode = sourceMode
+    }
+    if (isDocument) {
+      if (kb) config.kb = kb
+      if (maxDelete.trim() !== '') config.max_delete_percent = maxDelete.trim()
     }
     return {
       name: name.trim(),
@@ -1002,7 +1103,8 @@ function ConnectorForm({
   async function test() {
     setTesting(true)
     try {
-      await consoleApi.testConnector(buildInput())
+      const res = await consoleApi.testConnector(buildInput())
+      setPreview(isDocument ? (res.preview ?? []) : null)
       toast.success(t('console:connectors.tested'))
     } catch (err) {
       // Handle step-up before displaying a red error. This test performs an AAL3-gated write
@@ -1239,6 +1341,33 @@ function ConnectorForm({
             </p>
           )}
           <CustomFields rows={custom} onChange={setCustom} />
+
+          {isDocument && preview && (
+            <section className="flex flex-col gap-2">
+              <h3 className="text-body font-medium text-foreground">
+                {t('console:connectors.previewTitle')}
+              </h3>
+              <DocumentPreview docs={preview} />
+            </section>
+          )}
+          {isDocument && (
+            <section className="flex flex-col gap-2">
+              <h3 className="text-body font-medium text-foreground">
+                {t('console:connectors.scheduleTitle')}
+              </h3>
+              <DocumentSchedule
+                kb={kb}
+                onKb={(v) => {
+                  setKb(v)
+                  // The list holds the active tenant's knowledge bases, and the
+                  // engine syncs in the row's tenant: keep the two the same.
+                  if (v && activeTenant) setTenant(activeTenant)
+                }}
+                maxDelete={maxDelete}
+                onMaxDelete={setMaxDelete}
+              />
+            </section>
+          )}
         </div>
 
         <DialogFooter>

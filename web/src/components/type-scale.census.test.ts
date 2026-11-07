@@ -72,7 +72,6 @@ const AT_THE_STANDARD = [
   'features/communications',
   'features/compliance',
   'features/console',
-  'features/deploy',
   'features/evals',
   'features/finops',
   'features/governance',
@@ -86,7 +85,9 @@ const AT_THE_STANDARD = [
   'features/observability',
   'features/platforms',
   'features/rate-limits',
-  'features/recordings',
+  ...(FEATURE_EXTENSIONS.some((view) => view.id === 'recordings')
+    ? ['features/recordings']
+    : []),
   'features/redteam',
   'features/reporting',
   ...(FEATURE_EXTENSIONS.some((view) => view.id === 'residency')
@@ -113,7 +114,9 @@ const AT_THE_STANDARD = [
   ...(EXTENSION_ROUTES.some((route) => route.id === 'postureExport')
     ? ['features/posture-export']
     : []),
-  'features/session-viewer',
+  ...(FEATURE_EXTENSIONS.some((view) => view.id === 'session-viewer')
+    ? ['features/session-viewer']
+    : []),
   ...(FEATURE_EXTENSIONS.some((view) => view.id === 'tenants')
     ? ['features/tenants']
     : []),

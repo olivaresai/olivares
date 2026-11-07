@@ -22,6 +22,12 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Compile-only qualification may opt out; distributable builds require the console.
+if [ "${1:-}" = "build" ] && [ "${OLIVARES_REQUIRE_CONSOLE:-1}" != 0 ] && ! bash "${repo_root}/scripts/check-web-bundle-freshness.sh" --built >&2; then
+  echo "console build failed or output is missing; run bash scripts/build-web.sh before the Go build" >&2
+  exit 1
+fi
+
 # Anything that is not a target build (e.g. `go env`, or a build with no
 # cross-target env) passes straight through to the toolchain.
 if [ "${1:-}" != "build" ] || [ -z "${GOOS:-}" ] || [ -z "${GOARCH:-}" ]; then

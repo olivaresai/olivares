@@ -9,7 +9,7 @@ through the same pipeline as every other content source — redact → classify 
 embed → index → serve over MCP — with per-document ACLs and per-column classification.
 
 It is the operational-database counterpart to the SaaS/warehouse content sources
-(gdrive, confluence, s3content, snowflake…). Two things it is **not**:
+(gdrive, s3content…). Two things it is **not**:
 
 - **Not `pgaudit`.** `pgaudit` observes R/RW *access edges* for the access map; it never
   reads row content. `pg-content` materializes *rows as documents*. They are different

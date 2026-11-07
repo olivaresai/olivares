@@ -89,6 +89,9 @@ const maxAbandonedCommandRequests = 16
 // skill: the tool types both as /name) or "agent". Source is "built-in", "user",
 // "project" or "plugin" when the tool says so and "" when it does not.
 type toolCommand struct {
+	// The native skill path stays in the driver; it is never menu JSON.
+	codexSkillPath string
+
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	ArgumentHint string `json:"argument_hint,omitempty"`

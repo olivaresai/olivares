@@ -1,4 +1,23 @@
 {
+  "pathChip": {
+    "open": "Apri in {{editor}}",
+    "copyRelative": "Copia percorso relativo",
+    "copyFull": "Copia percorso completo"
+  },
+  "race": {
+    "cleanupFailed": "Il ramo scelto è già stato unito. Rimangono altri alberi di lavoro; riprova per eliminarli.",
+    "title": "Confronta le sessioni",
+    "hint": "Esamina ogni ramo e il suo costo. Crea un commit delle modifiche da conservare prima di scegliere.",
+    "keep": "Conserva questa",
+    "confirm": "Arrestare tutte le sessioni, unire {{name}} nel repository ed eliminare definitivamente gli altri alberi di lavoro e le modifiche non unite?",
+    "confirmKeep": "Unisci ed elimina le altre",
+    "kept": "Il ramo scelto è stato unito. Gli altri alberi di lavoro sono stati eliminati.",
+    "invalid": "Scegli sessioni distinte con alberi di lavoro dello stesso repository.",
+    "loadError": "Impossibile leggere tutte le sessioni. Verifica l’accesso e riprova.",
+    "notStopped": "Una sessione non si è arrestata. Nessun ramo unito o eliminato.",
+    "failed": "Impossibile conservare questa sessione.",
+    "uncommitted": "Modifiche senza commit e Git"
+  },
   "compact": {
     "context": "Contesto",
     "now": "Compatta ora",
@@ -9,6 +28,8 @@
     "failed": "La compattazione non è stata confermata. Il messaggio non è stato inviato."
   },
   "git": {
+    "init": "Inizializza Git",
+    "noRepository": "Questa cartella non è un repository Git.",
     "title": "Git",
     "branch": "Branch",
     "newBranch": "Nuovo branch",
@@ -95,7 +116,7 @@
     "lastSeen": "Ultimo evento",
     "minimalData": "Sono mostrati solo i metadati. Per scelta di progettazione il motore non include mai qui SQL, payload o segreti (dati minimi).",
     "viewAccess": "Mappa degli accessi",
-    "viewInventory": "Inventario"
+    "viewInventory": "Risorse rilevate"
   },
   "timeline": {
     "title": "Timeline",
@@ -311,7 +332,18 @@
     "unsnooze": "Non posticipare più",
     "markDone": "Segna come fatta",
     "markNotDone": "Segna come non fatta",
+    "markUnread": "Segna come non letta",
+    "markRead": "Segna come letta",
+    "unreadMark": "Non letta",
     "markFailed": "Non è stato possibile cambiare il segno."
+  },
+  "undo": {
+    "archived": "«{{name}}» archiviata",
+    "snoozed": "«{{name}}» posticipata",
+    "done": "«{{name}}» segnata come fatta",
+    "unpinned": "«{{name}}» sbloccata",
+    "changed": "Questa sessione è cambiata; non è stato annullato nulla.",
+    "failed": "Non è stato possibile annullare la modifica."
   },
   "surface": {
     "openBeside": "Apri accanto",
@@ -360,11 +392,6 @@
     "costUnknown": "costo non riportato",
     "costPartial": "{{cost}} (parziale)",
     "viewCosts": "Vedi i costi",
-    "planLabel": "Le finestre di utilizzo del piano per il login di questa sessione",
-    "planNotRead": "finestra del piano non letta",
-    "resets": "Si azzera {{when}} ({{at}})",
-    "stale": "ultimo valore noto",
-    "readAt": "Letto {{at}}",
     "permission": "{{name}}: {{what}}",
     "full": "Accesso completo: funziona senza chiedere, confinato dalla <policy>policy di Olivares</policy>"
   },
@@ -424,7 +451,6 @@
     "identifiersHint": "Riferimenti da copiare. Non sono i nomi nella riga dell'ambito.",
     "wireTitle": "Riga selezionata",
     "wireHint": "La riga selezionata esattamente come l'ha inviata lo strumento. La vista predefinita è la conversazione.",
-    "wireEmpty": "Seleziona una riga nella conversazione per vederla esattamente come l'ha inviata lo strumento.",
     "thisNode": "Questo nodo",
     "workTitle": "Autorità di lavoro della sessione",
     "workHint": "Registrata per l'ultimo avvio. Ogni azione verifica l'autorizzazione corrente.",
@@ -447,7 +473,6 @@
       "worker": "Worker",
       "orchestrator": "Orchestrator"
     },
-    "details": "Riferimenti",
     "echoes": "Riportata anche come",
     "folder": "Cartella",
     "temporaryFolder": "Cartella temporanea per questa sessione",
@@ -472,12 +497,25 @@
       "cost": "Costo"
     },
     "usage": {
-      "title": "Utilizzo dell’account",
-      "fiveHour": "{{percent}}% di 5 ore",
-      "week": "{{percent}}% della settimana"
-    }
+      "title": "Utilizzo dell’account"
+    },
+    "fork": "Crea sessione da qui",
+    "readFailed": "Impossibile leggere il contesto completo. Carica i messaggi precedenti o scegli un turno più breve e riprova."
+  },
+  "details": {
+    "technical": "Dettagli tecnici",
+    "unknownFrames_one": "Frame sconosciuto: {{count}}",
+    "unknownFrames_many": "Frame sconosciuti: {{count}}",
+    "unknownFrames_other": "Frame sconosciuti: {{count}}"
+  },
+  "backgroundTasks": {
+    "label": "Attività in background",
+    "stop": "Ferma {{name}}",
+    "stopFailed": "Impossibile fermare l’attività."
   },
   "conversation": {
+    "showAll": "Mostra tutto",
+    "showLess": "Mostra meno",
     "log": "Conversazione",
     "waiting": "In attesa della sessione…",
     "empty": "Ancora nessun messaggio.",
@@ -488,8 +526,7 @@
     "lag_many": "{{count}} frame persi: l'output qui sotto riprende dopo l'interruzione.",
     "lag_other": "{{count}} frame persi: l'output qui sotto riprende dopo l'interruzione.",
     "tool": "Strumento",
-    "result": "Risultato",
-    "unknown": "Frame non riconosciuto",
+    "answered": "Ha risposto",
     "inspect": "Mostra nell'inspector",
     "args": "Argomenti",
     "toolResult": "Risultato",
@@ -515,12 +552,14 @@
     "waitingApproval": "Inviato quando la sessione è pronta.",
     "workingFolder": "Cartella di lavoro: <path />",
     "temporaryFolder": "Cartella di lavoro: cartella temporanea per questa sessione",
-    "workedFor": "Ha lavorato per {{duration}}",
+    "turnLine": "<work/> · {{duration}}",
+    "jumpToLatest": "Vai al più recente",
     "modelChanged": "Modello cambiato: {{from}} → {{to}}",
     "modelChangedAt": "Modello cambiato alle {{time}}: {{from}} → {{to}}",
     "sentPending": "Inviato. In attesa che lo strumento lo prenda.",
     "sentNotTaken": "La sessione è terminata prima che lo strumento lo prendesse.",
     "finishedIn": "Finito in {{duration}}",
+    "interrupted": "Interrotto da te",
     "escToInterrupt": "Esc per interrompere",
     "background": "In background",
     "agentWorking": "Al lavoro",
@@ -605,6 +644,29 @@
     "fileTruncated": "Sono mostrati i primi 256 KB.",
     "truncated": "Sono mostrati i {{count}} file più recenti."
   },
+  "checkpoints": {
+    "title": "Turni",
+    "hint": "Cosa ha cambiato ogni messaggio di questa sessione nella sua cartella. Riavvolgere riporta i file com’erano prima di un turno.",
+    "turn": "Turno {{n}}",
+    "filesChanged": "File modificati: {{n}}",
+    "showFiles": "File",
+    "status": {
+      "added": "aggiunto",
+      "modified": "modificato",
+      "deleted": "eliminato"
+    },
+    "rewind": "Riavvolgi",
+    "undo": "Annulla il riavvolgimento",
+    "noWords": "(senza testo)",
+    "rewound": "Cartella riavvolta ({{n}} file ripristinati o rimossi). Il tuo messaggio è nella casella dei messaggi.",
+    "undone": "Riavvolgimento annullato ({{n}} file ripristinati o rimossi).",
+    "confirm": {
+      "title": "Riavvolgere a prima del turno {{n}}?",
+      "description": "File interessati: {{n}}. Tornano com’erano prima di questo turno; i file creati dall’agente da allora vengono rimossi.",
+      "action": "Riavvolgi",
+      "conversation": "Cambiano solo i file. Lo strumento mantiene la sua conversazione. Il messaggio di questo turno viene messo nella casella dei messaggi, così puoi modificarlo e inviarlo di nuovo."
+    }
+  },
   "preview": {
     "title": "Anteprima",
     "hint": "L'app che questa sessione espone su una porta locale. Gira nel tuo browser, isolata dalla console e fuori dai limiti di rete della sessione.",
@@ -619,7 +681,9 @@
     "reload": "Ricarica",
     "newTab": "Apri in una nuova scheda",
     "openError": "Non è stato possibile aprire l'anteprima. La porta potrebbe essersi chiusa.",
-    "frameTitle": "Anteprima della porta {{port}}"
+    "frameTitle": "Anteprima della porta {{port}}",
+    "annotate": "Annota",
+    "annotating": "Fare clic su un elemento della pagina per lasciare una nota."
   },
   "branchChanges": {
     "title": "Modifiche del branch",
@@ -683,9 +747,10 @@
     "back": "Torna alle sessioni",
     "showTable": "Mostra come tabella",
     "filter": "Filtra sessioni…",
-    "recent": "Sono mostrate le {{n}} più recenti",
+    "recent": "Le {{n}} più recenti",
     "loadMore": "Carica altre",
-    "noMatch": "Nessuna sessione corrisponde."
+    "noMatch": "Nessuna sessione corrisponde.",
+    "unnamedFolder": "Cartella senza nome"
   },
   "thread": {
     "copyReference": "Copia riferimento",
@@ -809,7 +874,6 @@
     "cancel": "Annulla",
     "archive": "Archivia",
     "unarchive": "Ripristina",
-    "archived": "Archiviata. Si trova in Archiviate, in fondo all’elenco.",
     "unarchived": "Di nuovo nell’elenco.",
     "copyLink": "Copia link",
     "copyId": "Copia ID sessione",
@@ -870,5 +934,18 @@
       "down": "Giù"
     },
     "closeLabel": "Chiudi terminale"
+  },
+  "strip": {
+    "needYou_one": "{{count}} ti aspetta",
+    "needYou_many": "{{count}} ti aspettano",
+    "needYou_other": "{{count}} ti aspettano",
+    "running_one": "{{count}} in corso",
+    "running_many": "{{count}} in corso",
+    "running_other": "{{count}} in corso",
+    "failedToday_one": "{{count}} non riuscita oggi",
+    "failedToday_many": "{{count}} non riuscite oggi",
+    "failedToday_other": "{{count}} non riuscite oggi",
+    "costToday": "{{amount}} oggi",
+    "label": "Sessioni in breve"
   }
 }

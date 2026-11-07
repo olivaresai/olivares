@@ -15,6 +15,8 @@ const authState = vi.hoisted(() => ({
   activeTenant: 't1' as string | null,
   perms: new Set<string>(),
 }))
+import { fakeRouter } from '@/test/fake-router'
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: authState.activeTenant,
@@ -39,6 +41,10 @@ vi.mock('./api', async (importOriginal) => {
 
 import CapabilitiesView from './capabilities-view'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
@@ -48,7 +54,7 @@ beforeEach(() => {
   for (const fn of Object.values(api))
     fn.mockResolvedValue({ items: [], has_more: false })
 })
-afterEach(() => window.history.replaceState(null, '', '/'))
+afterEach(() => fakeRouter.reset('/'))
 
 describe('MCP servers in MCP & skills', () => {
   it('a tenant administrator adds and enables servers on the Servers tab', async () => {
@@ -71,9 +77,19 @@ describe('MCP servers in MCP & skills', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('says how the discovered servers relate to the ones Olivares connects', async () => {
+    authState.perms = new Set(['capabilities:catalog:read'])
+    wrap(<CapabilitiesView />)
+    expect(
+      await screen.findByText(
+        'Servers the connectors observed, whether or not Olivares connects them.',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('opens the tab its address names', async () => {
     authState.perms = new Set(['capabilities:catalog:read'])
-    window.history.replaceState(null, '', '/capabilities?tab=skills')
+    fakeRouter.reset('/capabilities?tab=skills')
     wrap(<CapabilitiesView />)
     expect(
       await screen.findByRole('tab', { name: 'Skills', selected: true }),

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
@@ -26,19 +27,12 @@ func TestSessionAccessChangeDoesNotWaitForItsOwnSessionCall(t *testing.T) {
 func runSessionAccessChange(t *testing.T, activeCall bool) {
 	h := newHarness(t)
 	tenant := model.TenantID(h.tenantA)
-	admin, err := h.authr.Authenticate(t.Context(), h.adminToken)
-	if err != nil {
-		t.Fatal(err)
-	}
 	userToken := h.newUser("access-change@e2e.test", "access-change-password", h.tenantA, auth.RoleAdmin)
 	user, err := h.authr.Authenticate(t.Context(), userToken)
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := h.authr.SCIMCreateGroup(t.Context(), admin, tenant, auth.SCIMGroupInput{DisplayName: "Original group", Members: []model.ID{user.UserID}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	group := authtest.Group(t, h.st, tenant, "Original group", "", user.UserID)
 	m := h.set.sessions
 	sessions.WithRunner(approvalProjectionRunner{})(m)
 	m.UseExecutionEnvironmentRef("access-change-test")
@@ -68,9 +62,7 @@ func runSessionAccessChange(t *testing.T, activeCall bool) {
 		t.Fatal(err)
 	}
 	// A directory version or label change with the same subjects must not stop a run.
-	if _, err = h.authr.SCIMReplaceGroup(t.Context(), admin, tenant, group.Group.ID, auth.SCIMGroupInput{DisplayName: "Renamed group", Members: []model.ID{user.UserID}}, group.Group.Version); err != nil {
-		t.Fatal(err)
-	}
+	authtest.Edit(t, h.st, group.Group.ID, func(g *model.UserGroup) { g.DisplayName = "Renamed group" })
 	if _, _, err = credentials.Resolve(t.Context(), token); err != nil {
 		t.Fatal("same group closure revoked the session")
 	}
@@ -79,9 +71,7 @@ func runSessionAccessChange(t *testing.T, activeCall bool) {
 	if view["process_state"] != "running" {
 		t.Fatalf("same closure process=%v", view["process_state"])
 	}
-	if _, err = h.authr.SCIMCreateGroup(t.Context(), admin, tenant, auth.SCIMGroupInput{DisplayName: "New restriction subjects", Members: []model.ID{user.UserID}}); err != nil {
-		t.Fatal(err)
-	}
+	authtest.Group(t, h.st, tenant, "New restriction subjects", "", user.UserID)
 	if activeCall {
 		callCtx, endCall, callErr := m.BeginSessionCall(t.Context(), principal)
 		if callErr != nil {

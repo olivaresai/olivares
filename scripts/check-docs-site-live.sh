@@ -142,8 +142,13 @@ while IFS= read -r linea; do
 	# ruta, así que que `/cli` redirija no dice nada de `/cli/algo`. Ahora cada regla se sondea en
 	# su propia forma: la bare tal cual, y la de splat con un segmento detrás.
 	case "$src" in
-	*'/*') sonda="${src%\*}olivares-splat-probe" ;;
-	*) sonda="${src%/}" ;;
+	*'/*')
+		sonda="${src%\*}olivares-splat-probe"
+		# A destination with `:splat` ends in what the splat matched, which here is the probe itself.
+		dst="${dst//:splat/olivares-splat-probe}"
+		;;
+	# The platform matches an exact source by its literal key: ask for it as written.
+	*) sonda="$src" ;;
 	esac
 	[ -n "$sonda" ] || continue
 	reglas=$((reglas + 1))

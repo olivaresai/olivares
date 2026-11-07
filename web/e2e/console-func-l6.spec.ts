@@ -121,7 +121,7 @@ async function loginDemo(
   await expect(
     page
       .getByRole('navigation', { name: 'Main navigation', exact: true })
-      .getByRole('link', { name: 'Now', exact: true }),
+      .getByRole('link', { name: 'Settings', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
   return sessionToken(page)
 }
@@ -660,9 +660,7 @@ test('eventing authors, revisions, bulk work, replay, filters, and DLQ are live'
   const catalogRead = observe(page, 'GET', '/v1/m/eventing/event-types', 200)
   await page.goto('/eventing')
   await Promise.all([initialSubscriptions, policyRead, compatRead, catalogRead])
-  await expect(
-    page.getByRole('heading', { name: 'Webhooks & event subscriptions' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Webhooks' })).toBeVisible()
   await expect(
     page.getByRole('heading', { name: 'Destination policy' }),
   ).toBeVisible()

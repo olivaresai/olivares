@@ -19,6 +19,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/xvi-voice',
     icon: AudioLines,
     permission: 'voice:session:read',
+    changes: [
+      { permission: 'voice:session:admin' },
+      { permission: 'voice:policy:admin' },
+    ],
     element: lazyView(VoiceView),
   },
 ] satisfies ViewEntry[]

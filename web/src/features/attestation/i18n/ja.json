@@ -4,13 +4,12 @@
   "forbiddenTitle": "権限がありません",
   "forbidden": "証明契約を閲覧するには compliance:read 権限が必要です。",
   "disclaimer": {
-    "tag": "Beta",
-    "body": "本プロジェクトはベータ版です。リリースはまだ存在せず、リリースパイプラインは記述済みですが有効化されていません。実行中バイナリのパネルはこのプロセスから実測されています。契約タブは宣言された契約であり、公開済みリリースやライブの暗号検証ではありません — このコンソールはブラウザ内で署名を再検証することはありません。",
+    "body": "このビルドは公開済みのリリースではありません。",
     "declaredRef": "宣言された参照 — 基準時点 {{date}}。docs/RELEASE-VERIFICATION.md、SECURITY.md、.goreleaser.yaml、ならびに release / scorecard / patch-velocity の各ワークフローからそのまま取得しています。エンジンはリポジトリや CI の状態を観測できないため、この半面はライブでは提供されません。"
   },
   "live": {
     "title": "実行中バイナリ（実測）",
-    "description": "このエンジンプロセスが自身について証明できること — バイナリからライブで読み取られます（ldflags、debug.ReadBuildInfo、crypto/fips140、実行ファイルの自己ハッシュ） — および誠実なリリース状態。v* タグがパイプラインを起動するまで、何も公開・検証されません。",
+    "description": "実行中のこのビルドが自身について報告する内容。",
     "status": {
       "measured": "実測済み"
     },
@@ -58,11 +57,11 @@
   },
   "tabs": {
     "artifacts": "アーティファクト",
-    "provenance": "来歴 & VEX",
+    "provenance": "来歴",
     "sbom": "SBOM",
     "scorecard": "Scorecard",
     "remediation": "修正 SLA",
-    "airgap": "エアギャップ & チャート"
+    "airgap": "エアギャップ"
   },
   "artifacts": {
     "title": "リリースアーティファクト",

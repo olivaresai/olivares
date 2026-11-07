@@ -9,9 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +71,7 @@ func doctorFixture(t *testing.T) (*doctorOptions, doctorDeps) {
 	deps := defaultDoctorDeps()
 	// No exec seam on the test host: the image answer is not what these tests measure.
 	deps.containerImage = nil
+	deps.userBusUnhideable = nil // the user manager of the test host is not what these tests measure
 	deps.confinement = func() confine.State { return confine.State{Mode: confine.ModeLandlock, ABI: 3} }
 	deps.euid = os.Geteuid
 	deps.lookupUID = func(string) (int, error) { return os.Geteuid(), nil }
@@ -534,5 +539,106 @@ func TestDoctorAuditEditionRefusalIsNotIntegrityFailure(t *testing.T) {
 				t.Fatalf("audit check = %+v, want %s required=%v", c, tc.status, tc.required)
 			}
 		})
+	}
+}
+
+// TestEveryDoctorFailOrUnknownNamesARemediation reads every file of this package that
+// builds a doctorCheck: each "fail" or "unknown" status is set together with a
+// remediation, in the same composite literal or in the same statement list (an
+// assignment anywhere in it, a switch that sets it included), so no failing or
+// unmeasured check leaves the operator without a next step.
+func TestEveryDoctorFailOrUnknownNamesARemediation(t *testing.T) {
+	paths, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	failing := func(e ast.Expr) bool {
+		b, ok := e.(*ast.BasicLit)
+		if !ok || b.Kind != token.STRING {
+			return false
+		}
+		s, _ := strconv.Unquote(b.Value)
+		return s == "fail" || s == "unknown"
+	}
+	setsRemediation := func(n ast.Node) (found bool) {
+		ast.Inspect(n, func(m ast.Node) bool {
+			if as, ok := m.(*ast.AssignStmt); ok {
+				for _, l := range as.Lhs {
+					if se, ok := l.(*ast.SelectorExpr); ok && se.Sel.Name == "Remediation" {
+						found = true
+					}
+				}
+			}
+			return !found
+		})
+		return found
+	}
+	fset := token.NewFileSet()
+	checked := 0
+	for _, path := range paths {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasSuffix(path, "_test.go") || !bytes.Contains(src, []byte("doctorCheck")) {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			var list []ast.Stmt
+			switch x := n.(type) {
+			case *ast.CompositeLit:
+				if id, ok := x.Type.(*ast.Ident); ok && id.Name == "doctorCheck" {
+					status, remedy := false, false
+					for _, el := range x.Elts {
+						if kv, ok := el.(*ast.KeyValueExpr); ok {
+							key, _ := kv.Key.(*ast.Ident)
+							status = status || (key != nil && key.Name == "Status" && failing(kv.Value))
+							remedy = remedy || (key != nil && key.Name == "Remediation")
+						}
+					}
+					if status {
+						checked++
+						if !remedy {
+							t.Errorf("%s: a fail or unknown doctorCheck without a Remediation", fset.Position(x.Pos()))
+						}
+					}
+				}
+				return true
+			case *ast.BlockStmt:
+				list = x.List
+			case *ast.CaseClause:
+				list = x.Body
+			case *ast.CommClause:
+				list = x.Body
+			default:
+				return true
+			}
+			for _, s := range list {
+				as, ok := s.(*ast.AssignStmt)
+				if !ok {
+					continue
+				}
+				for i, l := range as.Lhs {
+					if se, ok := l.(*ast.SelectorExpr); ok && se.Sel.Name == "Status" && i < len(as.Rhs) && failing(as.Rhs[i]) {
+						checked++
+						remedied := false
+						for _, other := range list {
+							remedied = remedied || setsRemediation(other)
+						}
+						if !remedied {
+							t.Errorf("%s: a fail or unknown status set without a Remediation", fset.Position(as.Pos()))
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+	if checked == 0 {
+		t.Fatal("found no fail or unknown doctor status: the scan is reading the wrong files")
 	}
 }

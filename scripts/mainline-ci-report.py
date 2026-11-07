@@ -28,9 +28,9 @@ def pages(request, path, field=None):
             return
 
 
-# Each reported workflow and the event that starts its main run. mainline-ci reports only from
-# the public repository; scheduled battery and full-history secrets scans report wherever they run.
-REPORTED = {"mainline-ci": "push", "merge-gate-check": "schedule", "secrets-weekly": "schedule"}
+# Each reported workflow and the events that start its main runs. mainline-ci reports only from
+# the public repository; battery and full-history secrets scans report wherever they run.
+REPORTED = {"mainline-ci": {"push"}, "merge-gate-check": {"schedule", "push"}, "secrets-weekly": {"schedule"}}
 
 
 def reportable(run, repo):
@@ -38,7 +38,7 @@ def reportable(run, repo):
     # A run-name extends the workflow's name ("merge-gate-check main batteries"): match the prefix.
     if name.startswith("merge-gate-check"):
         name = "merge-gate-check"
-    return (name in REPORTED and run.get("event") == REPORTED[name]
+    return (name in REPORTED and run.get("event") in REPORTED[name]
             and (name != "mainline-ci" or repo == "olivaresai/olivares"))
 
 
@@ -65,6 +65,8 @@ def reconcile_run(run, repo, request):
         groups.setdefault(name, []).append(job)
 
     issues = list(pages(request, f"{base}/issues?state=all"))
+    # A merge's battery runs part of the shards; only the whole scheduled battery proves a recovery.
+    partial = run.get("event") == "push" and run.get("name", "").startswith("merge-gate-check")
     for name, jobs in groups.items():
         failed = [job for job in jobs if job["conclusion"] in FAILED]
         green = all(job["conclusion"] == "success" for job in jobs)
@@ -107,7 +109,7 @@ def reconcile_run(run, repo, request):
                     request("POST", base + "/issues", {"title": title, "body": body})
             if issue and issue["state"] == "closed":
                 request("PATCH", path, {"state": "open"})
-        elif issue and issue["state"] == "open":
+        elif issue and issue["state"] == "open" and not partial:
             if not delivered:
                 request("POST", path + "/comments", {"body": body + "\nRecovered: every job partition passed."})
             request("PATCH", path, {"state": "closed", "state_reason": "completed"})

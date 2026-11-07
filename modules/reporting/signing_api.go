@@ -75,7 +75,7 @@ func (m *Module) handleSetSigning(w http.ResponseWriter, r *http.Request, mc api
 	status, err := manager.SetReportingSigning(r.Context(), mc.Principal, *input.Enabled)
 	if err != nil {
 		if errors.Is(err, license.ErrAddonRequiresLicense) {
-			writeResponse(w, http.StatusForbidden, map[string]any{"error": map[string]string{"code": "addon_requires_license", "message": err.Error()}})
+			writeResponse(w, http.StatusForbidden, api.ErrorBody("addon_requires_license", err.Error()))
 			return
 		}
 		if m.log != nil {

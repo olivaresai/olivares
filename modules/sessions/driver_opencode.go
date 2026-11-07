@@ -22,6 +22,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
@@ -129,10 +130,11 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	env := []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}, {Name: envOpenCodeDisableExternalSkills, Value: "1"}}
 	cfg := map[string]any{}
 	bound := true
+	_, presetVendor := modelprovider.LookupPresetByEndpoint(l.BoundProvider.Kind, l.BoundProvider.Endpoint)
 	switch {
 	case l.LocalModelEndpoint != "":
 		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(openCodeOllama, l.LocalModelEndpoint, l.LocalModels, l.Model)), &cfg)
-	case l.BoundProvider.Kind == ProviderKindOpenAICompatible:
+	case l.BoundProvider.Kind == ProviderKindOpenAICompatible && !presetVendor:
 		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(openCodeLocalServer, l.BoundProvider.Endpoint, l.LocalModels, l.Model)), &cfg)
 	case l.BoundProvider.Kind != "":
 		openCodeConfineToKey(cfg, l.BoundProvider, l.Model)
@@ -147,10 +149,10 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 		cfg["share"] = "disabled"
 	}
 	if bound {
-		// npm_config_offline reaches every command OpenCode's shell runs, the agent's
-		// npm install included; the own login keeps npm online (review of #3053).
-		env = append(env, EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"},
-			EnvVar{Name: envNPMConfigOffline, Value: "true"})
+		// npm stays online: npm_config_offline would reach every command OpenCode's
+		// shell runs, the agent's npm install included (#3122). OpenCode's own plugin
+		// install is refused by the session's egress policy.
+		env = append(env, EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"})
 	}
 	env = append(env,
 		EnvVar{Name: envOpenCodeDisableLSPDownload, Value: "1"},
@@ -219,13 +221,18 @@ var (
 // Anthropic, OpenAI and xAI keys reached only their own API host, a local model only
 // loopback.
 //
-// Three more requests went to other hosts, each closed by OpenCode's own switch:
+// Two more requests went to other hosts, each closed by OpenCode's own switch:
 //   - OPENCODE_DISABLE_MODELS_FETCH: the model catalogue from models.opencode.ai at start;
-//   - npm_config_offline: the background install of @opencode-ai/plugin from
-//     registry.npmjs.org into every configuration directory (it fails and is logged).
-//     OpenCode's shell runs the agent's commands with the same environment, so their
-//     npm is offline too; the own login, which has no record, does not set it;
 //   - OPENCODE_DISABLE_LSP_DOWNLOAD: language servers downloaded when a file is edited.
+//
+// A third, the background install of @opencode-ai/plugin from registry.npmjs.org into
+// every configuration directory, has no OpenCode switch of its own (1.19.3: neither
+// OPENCODE_PURE nor OPENCODE_DISABLE_DEFAULT_PLUGINS stops it; only npm_config_offline
+// did). That variable also reaches the agent's own npm commands, because OpenCode's
+// shell runs them with the same environment, and no registry a profile declares would
+// then be contacted. So npm stays online and the install is refused where every other
+// host is: the session's egress policy (sessionNetworkPolicy) names the bound provider
+// and the profile's declared registries alone. OpenCode logs the failed install and goes on.
 //
 // And two held against what a profile or a project may already hold:
 //   - the bound provider's address is pinned in the same configuration, so a baseURL saved
@@ -344,17 +351,41 @@ var openCodeKeyProviders = map[string]openCodeKeyProvider{
 // first (recordServesDriver), and this keeps the driver closed if a caller did not.
 const openCodeUnconfinedProviderID = "olivares_no_provider"
 
+// openCodeNativeProviderID is the OpenCode provider id a preset catalog ref names
+// (opencode.ai/docs/providers): Moonshot's OpenCode id is "moonshotai", not the
+// catalog's own ref "moonshot"; every other preset ref is OpenCode's id unchanged.
+func openCodeNativeProviderID(ref string) string {
+	if ref == "moonshot" {
+		return "moonshotai"
+	}
+	return ref
+}
+
 // openCodeConfineToKey allows only the bound key's provider, at the carrier's endpoint. A
 // carrier naming a kind OpenCode has no provider for, or any address but the vendor's own,
-// enables no provider at all.
+// enables no provider at all. openai_compatible has no single vendor address: OpenRouter,
+// DeepSeek, Mistral, Moonshot and Z.ai each confine to OpenCode's own native provider for
+// that vendor (modelprovider.LookupPresetByEndpoint), at the preset catalog's documented endpoint; the key
+// reaches it by reference to the engine's one credential variable for this kind
+// (providerRecordKeyEnv), which is not the variable name OpenCode's own provider expects.
 func openCodeConfineToKey(cfg map[string]any, b BoundProvider, model string) {
-	p, ok := openCodeKeyProviders[b.Kind]
-	if !ok || b.Endpoint != providerVendorEndpoints[b.Kind] {
+	if p, ok := openCodeKeyProviders[b.Kind]; ok {
+		if b.Endpoint != providerVendorEndpoints[b.Kind] {
+			openCodeConfineTo(cfg, openCodeUnconfinedProviderID)
+			return
+		}
+		cfg["provider"] = map[string]any{p.id: map[string]any{"options": map[string]any{"baseURL": p.baseURL}}}
+		openCodeConfineTo(cfg, p.id)
+	} else if row, ok := modelprovider.LookupPresetByEndpoint(b.Kind, b.Endpoint); ok {
+		id := openCodeNativeProviderID(row.Ref)
+		cfg["provider"] = map[string]any{id: map[string]any{"options": map[string]any{
+			"baseURL": row.BaseURL, "apiKey": "{env:" + providerRecordKeyEnv(b.Kind) + "}",
+		}}}
+		openCodeConfineTo(cfg, id)
+	} else {
 		openCodeConfineTo(cfg, openCodeUnconfinedProviderID)
 		return
 	}
-	cfg["provider"] = map[string]any{p.id: map[string]any{"options": map[string]any{"baseURL": p.baseURL}}}
-	openCodeConfineTo(cfg, p.id)
 	if model != "" {
 		cfg["model"] = openCodeModelValue(b, model, false)
 		cfg["small_model"] = cfg["model"]
@@ -371,6 +402,9 @@ func openCodeModelValue(b BoundProvider, model string, endpointID bool) string {
 		id = openCodeOllama.id
 	case ProviderKindOpenAICompatible:
 		id = openCodeLocalServer.id
+		if row, ok := modelprovider.LookupPresetByEndpoint(b.Kind, b.Endpoint); ok {
+			id = openCodeNativeProviderID(row.Ref)
+		}
 	}
 	return qualifyOpenCodeModel(id, model, endpointID)
 }

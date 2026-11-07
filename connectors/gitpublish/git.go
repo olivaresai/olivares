@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/url"
@@ -804,4 +805,84 @@ func classifyPorcelain(out, ref string) Result {
 		}
 	}
 	return Result{Class: Ambiguous, Reason: "no_status"}
+}
+
+// AddedLines visits only added lines of the exact commit, including a root or
+// merge commit. It reads immutable objects in the managed repository, never a
+// working tree, external diff driver, text conversion, or replacement object.
+func (x *Executor) AddedLines(ctx context.Context, repo, commit string, visit func(path, text string)) error {
+	if err := x.CheckManagedConfig(ctx, repo); err != nil {
+		return err
+	}
+	if _, err := x.CommitTree(ctx, repo, commit); err != nil {
+		return err
+	}
+	args := []string{"--literal-pathspecs", "diff-tree", "--root", "-m", "-r", "--no-commit-id", "--no-renames", "--no-ext-diff", "--no-textconv"}
+	names := append(append([]string{}, args...), "--name-only", "-z", commit, "--")
+	out, code, err := x.readDiff(ctx, repo, names...)
+	if err != nil || code != 0 {
+		return ErrContent
+	}
+	paths := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+	if len(paths) > maxChangedPaths {
+		return ErrContent
+	}
+	seen := map[string]bool{}
+	for _, path := range paths {
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		patchArgs := append(append([]string{}, args...), "--text", "--unified=0", "-p", commit, "--", path)
+		patch, code, err := x.readDiff(ctx, repo, patchArgs...)
+		if err != nil || code != 0 {
+			return ErrContent
+		}
+		var added strings.Builder
+		hunk := false
+		for line := range strings.SplitSeq(patch, "\n") {
+			if strings.HasPrefix(line, "diff --git ") {
+				hunk = false
+			}
+			if strings.HasPrefix(line, "@@ ") {
+				hunk = true
+			}
+			if hunk && strings.HasPrefix(line, "+") {
+				added.WriteString(line[1:])
+				added.WriteByte('\n')
+			}
+		}
+		if added.Len() > 0 {
+			visit(path, added.String())
+		}
+	}
+	return nil
+}
+
+// readDiff bounds untrusted diff output before it can exhaust engine memory.
+func (x *Executor) readDiff(ctx context.Context, repo string, args ...string) (string, int, error) {
+	// #nosec G204 -- pinned executable, literal options and validated operands; no shell.
+	cmd := exec.CommandContext(ctx, x.git, append(guard(""), args...)...)
+	cmd.Dir, cmd.Env = repo, x.closedEnv(Secret{}, repo)
+	cmd.WaitDelay = 5 * time.Second
+	out := diffBuffer{}
+	cmd.Stdout = &out
+	err := x.run1(cmd)
+	if err != nil || out.full || ctx.Err() != nil {
+		return "", 1, ErrContent
+	}
+	return out.buf.String(), 0, nil
+}
+
+type diffBuffer struct {
+	buf  bytes.Buffer
+	full bool
+}
+
+func (b *diffBuffer) Write(p []byte) (int, error) {
+	if len(p) > (16<<20)-b.buf.Len() {
+		b.full = true
+		return 0, io.ErrShortWrite
+	}
+	return b.buf.Write(p)
 }

@@ -396,15 +396,15 @@ func TestRSDualModeRevisionSelection(t *testing.T) {
 		}
 	})
 
-	t.Run("absent protocol version refused", func(t *testing.T) {
-		rs := newRSDual(t, jwks, &fakeUpstream{}, &capturingAuditor{})
+	// A handshake-era initialize names no version; a dual-era server serves it
+	// with legacy semantics (published versioning page, "Backward Compatibility").
+	t.Run("absent protocol version is served as handshake era", func(t *testing.T) {
+		up := &fakeUpstream{}
+		rs := newRSDual(t, jwks, up, &capturingAuditor{})
 		w := httptest.NewRecorder()
 		rs.ServeHTTP(w, toolsCallReq(token, "search", "{}"))
-		if w.Code != http.StatusBadRequest || rpcErrorCode(t, w.Body.String()) != rpcHeaderMismatch {
-			t.Fatalf("absent version = status %d body %s, want 400/%d", w.Code, w.Body.String(), rpcHeaderMismatch)
-		}
-		if !strings.Contains(w.Body.String(), headerMCPProtocolVersion) {
-			t.Fatalf("absent-version message must name %s: %s", headerMCPProtocolVersion, w.Body.String())
+		if w.Code != http.StatusOK || !up.called {
+			t.Fatalf("absent version = status %d body %s upstream=%v, want 200 through the legacy path", w.Code, w.Body.String(), up.called)
 		}
 	})
 

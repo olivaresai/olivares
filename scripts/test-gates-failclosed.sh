@@ -199,9 +199,13 @@ fi
 
 # --- the licence-boundary gate, with the Go toolchain off PATH ----------------------
 if want fast; then
+	NO_GO="$STUBS/no-go"
+	mkdir -p "$NO_GO"
+	printf '#!/bin/sh\nexit 127\n' >"$NO_GO/go"
+	chmod +x "$NO_GO/go"
 	row "check-boundary refuses when the Go toolchain is absent" \
 		"UNVERIFIED" -- \
-		env PATH=/usr/bin:/bin bash "$ROOT/scripts/check-boundary.sh"
+		env PATH="$NO_GO:/usr/bin:/bin" bash "$ROOT/scripts/check-boundary.sh"
 fi
 
 # --- the SAST gate, with gosec absent ------------------------------------------------

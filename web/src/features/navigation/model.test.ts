@@ -41,6 +41,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   home: 'root',
   storedBudgets: ['observation', 'cost-adoption'],
   usage: ['observation', 'cost-adoption'],
+  operations: ['observation', 'operations'],
   workspaceDashboard: ['infrastructure', 'estate'],
   inventory: ['infrastructure', 'estate'],
   estate: ['infrastructure', 'estate'],
@@ -103,7 +104,6 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
 
 /** Pages only a Business build serves (business-views.tsx); Community registers none of them. */
 const BUSINESS_ONLY_PLACEMENTS: Record<string, [string, string]> = {
-  deploy: ['deployment', 'deployments'],
   recordings: ['observation', 'audit-recordings'],
   compliance: ['observation', 'audit-recordings'],
   'session-viewer': ['observation', 'audit-recordings'],
@@ -118,7 +118,7 @@ const t = i18n.getFixedT(null, 'nav') as never
 const allow = permissionGate(() => true)
 const deny = permissionGate(() => false)
 
-describe('route map — every route sits where root ratified it', () => {
+describe('route map — every route has its designated placement', () => {
   it('keeps every Community placement exact while extensions add views', () => {
     const actual: Record<string, [string, string] | 'root'> = {}
     const extensionIds = new Set(FEATURE_EXTENSIONS.map((view) => view.id))
@@ -130,9 +130,19 @@ describe('route map — every route sits where root ratified it', () => {
           ? 'root'
           : [v.navigation.areaId, v.navigation.sectionId]
     }
-    expect(actual).toEqual(
-      businessBuild ? { ...RATIFIED, ...BUSINESS_ONLY_PLACEMENTS } : RATIFIED,
-    )
+    expect(actual).toEqual(RATIFIED)
+    if (businessBuild) {
+      for (const [id, [areaId, sectionId]] of Object.entries(
+        BUSINESS_ONLY_PLACEMENTS,
+      )) {
+        expect(
+          FEATURE_VIEWS.find((view) => view.id === id),
+          id,
+        ).toMatchObject({
+          navigation: { areaId, sectionId },
+        })
+      }
+    }
   })
 
   it('names only sections the area declares, in a declared area', () => {
@@ -259,7 +269,7 @@ describe('directory descriptions (regression)', () => {
 
 describe('resolveLocation', () => {
   it('resolves every kind of location', () => {
-    expect(resolveLocation('/').kind).toBe('home')
+    expect(resolveLocation('/now').kind).toBe('home')
     expect(resolveLocation('/areas/ai')).toMatchObject({
       kind: 'area',
       area: { id: 'ai' },
@@ -503,18 +513,12 @@ describe('search ranking — one index for the sidebar and the palette', () => {
     expect(fold('が')).toBe('が')
   })
 
-  it('shows Group › Place beside every page, the words of the sidebar', () => {
+  it('shows the place beside every page, the word of the sidebar', () => {
     const agentops = index.find((e) => e.id === 'agentops')!
-    expect(agentops.context).toBe('Work › Sessions')
-    expect(index.find((e) => e.id === 'usage')!.context).toBe(
-      'Control › Usage & cost',
-    )
-    expect(index.find((e) => e.id === 'storedBudgets')!.context).toBe(
-      'Control › Usage & cost',
-    )
-    expect(index.find((e) => e.id === 'permissions')!.context).toBe(
-      'Control › Rules & approvals',
-    )
+    expect(agentops.context).toBe('Sessions')
+    expect(index.find((e) => e.id === 'usage')!.context).toBe('Usage')
+    expect(index.find((e) => e.id === 'storedBudgets')!.context).toBe('Usage')
+    expect(index.find((e) => e.id === 'permissions')!.context).toBe('Rules')
     // No page says a retired area name beside it.
     expect(
       index.filter((e) => /Oversight|Security & identity/.test(e.context)),

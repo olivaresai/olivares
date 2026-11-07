@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	coreconfine "github.com/olivaresai/olivares/core/runtime/confine"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/gitpublish"
+	"github.com/olivaresai/olivares/modules/security"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
@@ -474,5 +476,23 @@ func gitpublishSweepTenants(st store.Store, log *slog.Logger) func(context.Conte
 			log.Warn("gitpublish-sweep: cannot enumerate orgs; skipping this tick", "err", err)
 		}
 		return tenants, err
+	}
+}
+
+// publicationSecretScanner keeps the detection catalog in its owning module.
+func publicationSecretScanner(x *gp.Executor) func(context.Context, string, string) ([]string, error) {
+	return func(ctx context.Context, repo, commit string) ([]string, error) {
+		var paths []string
+		err := x.AddedLines(ctx, repo, commit, func(path, text string) {
+			for _, hit := range security.ClassifySensitivity(text) {
+				if hit.Class == security.SensSecretCredential {
+					safe, _ := security.RedactSensitive(path)
+					paths = append(paths, safe)
+					break
+				}
+			}
+		})
+		sort.Strings(paths)
+		return paths, err
 	}
 }

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { SystemAdminOnly } from '@/components/layout/system-admin-only'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Folder,
@@ -100,7 +102,7 @@ function SecretsBody({
   scope?: 'tenant'
   namespace: TenantSecretNamespace
 }) {
-  const { t } = useTranslation(['console', 'common'])
+  const { t } = useTranslation(['console', 'common', 'errors'])
   const { isSuperadmin, can } = useAuth()
   const boundary = useAuthBoundary()
   const qc = useQueryClient()
@@ -165,14 +167,15 @@ function SecretsBody({
   })
 
   if (!admitted) {
-    return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
-        <ShieldAlert
-          className="mt-0.5 size-4 shrink-0 text-warning"
-          aria-hidden
-        />
-        {t('console:secrets.superadminOnly')}
-      </div>
+    // The installation's store is a system administrator's; an organization's own secrets
+    // are its administrators' (their roles decide, not the installation).
+    return scope === 'tenant' ? (
+      <ForbiddenState
+        title={t('errors:forbidden.title')}
+        description={t('errors:forbidden.nextStep')}
+      />
+    ) : (
+      <SystemAdminOnly />
     )
   }
 

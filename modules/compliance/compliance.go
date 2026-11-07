@@ -313,7 +313,7 @@ type Module struct {
 	aimsPackager     AIMSPackager            // ISO/IEC 42001 AIMS cert-readiness seam; nil ⇒ AIMS endpoints 501
 	depthPackager    ComplianceDepthPackager // Compliance-depth seam (US laws + sector + CCM + FedRAMP); nil ⇒ depth endpoints 501
 	nis2Packager     NIS2IncidentPackager    // NIS 2 incident seam; nil ⇒ NIS2 incident endpoints 501
-	businessRecords  bool                    // legal holds + erasure are Business (records_edition.go); false ⇒ their routes answer 501 business_required
+	businessRecords  bool                    // legal holds, erasure and retention schedules are Business (records_edition.go); false ⇒ their routes answer 501 business_required
 	tombstones       TombstoneLog            // erasure tombstones a restore replays (tombstones.go); nil ⇒ none kept
 }
 
@@ -578,15 +578,26 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/residency", permResidencyWrite, m.handleAttestResidency)
 	reg.Handle("POST", "/residency/scan", permResidencyWrite, m.handleScanResidency)
 
-	// Retention. Reading the registry/schedules/certificates is read-tier;
-	// authoring a schedule and sweeping are admin-tier and self-audited — and enabling
-	// disposition=purge additionally passes the approval gate (≥1 human, SoD).
+	// Retention. Reading the registry/schedules/certificates is read-tier and
+	// Community; authoring a schedule and sweeping are Business (retentionRoutes).
 	reg.Handle("GET", "/retention/classes", permRetentionRead, m.handleRetentionClasses)
 	reg.Handle("GET", "/retention/policies", permRetentionRead, m.handleListRetentionPolicies)
+	m.retentionRoutes(reg)
+	reg.Handle("GET", "/retention/runs", permRetentionRead, m.handleListRetentionRuns)
+}
+
+// retentionRoutes registers authoring a retention schedule and sweeping, which are Business
+// (records_edition.go): admin-tier and self-audited, and enabling disposition=purge
+// additionally passes the approval gate (≥1 human, SoD). Without WithBusinessRecords the
+// same routes keep their permissions and answer 501 business_required. It takes the registrar
+// by parameter for the same reason as recordsRoutes.
+func (m *Module) retentionRoutes(reg api.RouteRegistrar) {
+	if !m.businessRecords {
+		reg = businessOnly{reg, "Retention schedules require Olivares Business."}
+	}
 	reg.Handle("PUT", "/retention/policies/{class}", permRetentionAdmin, m.handlePutRetentionPolicy)
 	reg.Handle("DELETE", "/retention/policies/{class}", permRetentionAdmin, m.handleDeleteRetentionPolicy)
 	reg.Handle("POST", "/retention/sweep", permRetentionAdmin, m.handleRetentionSweep)
-	reg.Handle("GET", "/retention/runs", permRetentionRead, m.handleListRetentionRuns)
 }
 
 // recordsRoutes registers legal holds, right-to-erasure and the Claude Files erase, which are
@@ -596,7 +607,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 // as `records := reg` would hide these routes from the published-operation gate.
 func (m *Module) recordsRoutes(reg api.RouteRegistrar) {
 	if !m.businessRecords {
-		reg = businessOnly{reg}
+		reg = businessOnly{reg, "Legal holds and erasure require Olivares Business."}
 	}
 
 	// the governed Claude Files plane: an observe inventory (read-tier) over the

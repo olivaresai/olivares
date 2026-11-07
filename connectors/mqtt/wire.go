@@ -442,8 +442,9 @@ func (c *conn) readAck(want byte) ([]byte, error) {
 	return body, nil
 }
 
-// connackError maps a refused CONNACK reason (MQTT 5 §3.2.2.2) to the class the operator acts on:
-// credentials and authorization, or an unavailable or busy broker. Any other reason is a refusal.
+// connackError maps a refused CONNACK or SUBACK reason (MQTT 5 §3.2.2.2, §3.9.3) to the class the
+// operator acts on: credentials and authorization, or an unavailable or busy broker. Any other
+// reason is a refusal.
 // The reason byte stays in the text, so an engine log tells 0x86 from 0x87 and 0x88 from 0x97.
 func connackError(reason byte) error {
 	class := ErrBrokerRefused
@@ -502,6 +503,9 @@ func (c *conn) readSuback(packetID uint16, topicCount int) error {
 		return fmt.Errorf("mqtt: invalid SUBACK property length or reason count")
 	}
 	for _, reason := range body[off:] {
+		if reason > 2 { // a refused subscription names its class, as a refused CONNACK does
+			return connackError(reason)
+		}
 		if reason != 0 { // Granted QoS cannot exceed the requested QoS 0.
 			return fmt.Errorf("mqtt: subscription not granted at QoS 0, reason 0x%02x", reason)
 		}

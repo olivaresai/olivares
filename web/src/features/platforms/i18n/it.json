@@ -1,6 +1,6 @@
 {
-  "title": "Piattaforme e ciclo di vita",
-  "description": "La matrice di deployment multi-superficie e il ciclo di vita dei modelli per piattaforma per il parco Claude: postura di compliance per superficie e scadenze di ritiro divergenti. Riferimento fornito dal motore, mai ricalcolato.",
+  "title": "Piattaforme",
+  "description": "Dove viene eseguito Claude e quando viene ritirato ogni modello.",
   "tabs": {
     "surfaces": "Superfici e compliance",
     "lifecycle": "Ciclo di vita dei modelli"
@@ -13,7 +13,7 @@
   },
   "surfaces": {
     "title": "Superfici di deployment",
-    "description": "Le sei superfici Claude modellate (ANT2-01/17). Ognuna differisce per URL di base, autenticazione, forma dell'ID modello, fatturazione, residenza dei dati e postura di compliance: non sono intercambiabili.",
+    "description": "Le sei superfici Claude modellate. Ognuna differisce per URL di base, autenticazione, forma dell'ID modello, fatturazione, residenza dei dati e postura di compliance: non sono intercambiabili.",
     "matrixTitle": "Matrice degli attributi delle superfici",
     "matrixSummary": "Sei superfici di deployment a confronto per operatore, endpoint, autenticazione, forma dell'ID modello, supporto API, fatturazione, HIPAA, ZDR e residenza.",
     "unmodeled": "Superficie non modellata: nessuna matrice di attributi.",
@@ -60,7 +60,7 @@
   },
   "lifecycle": {
     "title": "Ciclo di vita dei modelli per piattaforma",
-    "description": "Il ritiro dei modelli è per piattaforma, non globale (ANT2-03). Le superfici gestite da Anthropic ritirano un modello in una data diversa da Bedrock e Vertex: un unico flag \"ritirato\" darebbe una scadenza di migrazione errata su metà del parco.",
+    "description": "Il ritiro dei modelli è per piattaforma, non globale. Le superfici gestite da Anthropic ritirano un modello in una data diversa da Bedrock e Vertex: un unico flag \"ritirato\" darebbe una scadenza di migrazione errata su metà del parco.",
     "datePending": "data non pubblicata / da confermare",
     "noSuccessor": "Nessun successore dichiarato",
     "noSuccessorHint": "L'autorità non ha indicato alcun modello sostitutivo per questa famiglia. Non ne viene dedotto nessuno.",
@@ -75,7 +75,7 @@
     "paramDeprecation": {
       "title": "Preavviso di deprecazione dei parametri",
       "badge": "Informativo",
-      "body": "{{affected}} rifiutano valori non predefiniti per {{params}} con un HTTP {{status}}. Si tratta di una deprecazione di Anthropic (ANT2-03), non di un bug del prodotto e non di un errore correggibile: il piano di inferenza trattiene questi parametri come preavviso.",
+      "body": "{{affected}} rifiutano valori non predefiniti per {{params}} con un HTTP {{status}}. Si tratta di una deprecazione di Anthropic, non di un bug del prodotto e non di un errore correggibile: Olivares trattiene questi parametri come preavviso.",
       "paramsJoin": ", "
     },
     "notes": {
@@ -90,11 +90,11 @@
   "empty": {
     "lifecycle": {
       "title": "Nessuna pianificazione di ritiro dei modelli dichiarata",
-      "description": "Il riferimento compilato del ciclo di vita di Claude nel motore deve fornire queste scadenze; l'attività del tenant e l'input della console non le popolano."
+      "description": "Il riferimento compilato del ciclo di vita di Claude nel motore deve fornire queste scadenze; la tua attività e l'input della console non le popolano."
     },
     "surface": {
       "title": "Nessuna superficie di deployment dichiarata",
-      "description": "Il riferimento compilato delle superfici Claude nel motore deve fornire queste righe; l'attività del tenant e l'input della console non le popolano."
+      "description": "Il riferimento compilato delle superfici Claude nel motore deve fornire queste righe; la tua attività e l'input della console non le popolano."
     }
   },
   "effectiveState": {

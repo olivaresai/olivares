@@ -12,6 +12,7 @@ import {
 import type { ListResponse } from '@/lib/api/types'
 import { agentOpsKeys } from '@/features/agentops/api'
 import type {
+  DetectedSkill,
   BuiltinPack,
   SkillUpdateCheck,
   SkillInstallRequest,
@@ -26,19 +27,28 @@ import type {
 const BASE = '/v1/m/skills'
 // The engine's own page ceiling (modules/skills/catalog.go query()).
 const LIST_CEILING = 200
+type ActionRequest = TenantRequestOptions &
+  Pick<RequestOptions, 'signal' | 'dispatchGuard'>
 
 export const skillsApi = {
+  detected: (signal?: AbortSignal) =>
+    http.get<ListResponse<DetectedSkill>>(`${BASE}/detected`, { signal }),
   builtins: (request: TenantRequestOptions & Pick<RequestOptions, 'signal'>) =>
     http.get<ListResponse<BuiltinPack>>(`${BASE}/builtins`, request),
   install: (
-    body: SkillInstallRequest,
+    body: SkillInstallRequest | FormData,
     key: string,
     request: TenantRequestOptions,
   ) =>
-    http.post<SkillInstallResult>(`${BASE}/packs`, body, {
-      ...request,
-      headers: { 'Idempotency-Key': key },
-    }),
+    http.post<SkillInstallResult>(
+      `${BASE}/packs`,
+      body instanceof FormData ? undefined : body,
+      {
+        ...(body instanceof FormData ? { rawBody: body } : {}),
+        ...request,
+        headers: { 'Idempotency-Key': key },
+      },
+    ),
   packs: () =>
     http.get<ListResponse<SkillPack>>(`${BASE}/packs`, {
       query: { limit: LIST_CEILING },
@@ -46,9 +56,13 @@ export const skillsApi = {
   /** A pack with its revisions, oldest first. The engine caps a page near 1 MiB, so the
    * latest revision of a large pack can sit on a later page: follow the cursor up to the
    * list ceiling, and keep has_more_revisions when it stops early. */
-  pack: async (id: string): Promise<SkillPackDetail> => {
+  pack: async (
+    id: string,
+    request?: ActionRequest,
+  ): Promise<SkillPackDetail> => {
     const read = (cursor?: string) =>
       http.get<SkillPackDetail>(`${BASE}/packs/${encodeURIComponent(id)}`, {
+        ...request,
         query: { limit: LIST_CEILING, cursor },
       })
     const first = await read()
@@ -66,10 +80,10 @@ export const skillsApi = {
     return { ...page, pack: first.pack, revisions }
   },
   /** Every target the caller can read that this pack is pinned to. */
-  packAssignments: (packId: string, opts?: { signal?: AbortSignal }) =>
+  packAssignments: (packId: string, opts?: Partial<ActionRequest>) =>
     http.get<ListResponse<SkillAssignment>>(
       `${BASE}/packs/${encodeURIComponent(packId)}/assignments`,
-      { query: { limit: LIST_CEILING }, signal: opts?.signal },
+      { ...opts, query: { limit: LIST_CEILING } },
     ),
   /** What a new conversation pinned to this target receives: the launch's own
    * resolution (GET /selection), its refusals included. */
@@ -78,11 +92,19 @@ export const skillsApi = {
     id: string,
     signal?: AbortSignal,
     profileRef?: string,
+    folderRef?: string,
   ) =>
     http.get<SkillSelection>(`${BASE}/selection`, {
-      query: profileRef
-        ? { target: [`${kind}:${id}`, `profile:${profileRef}`] }
-        : { target_kind: kind, target_id: id },
+      query:
+        profileRef || folderRef
+          ? {
+              target: [
+                `${kind}:${id}`,
+                ...(profileRef ? [`profile:${profileRef}`] : []),
+                ...(folderRef ? [`folder:${folderRef}`] : []),
+              ],
+            }
+          : { target_kind: kind, target_id: id },
       signal,
     }),
   /** Read the pack's recorded source again: current, or available with its diff. */
@@ -180,7 +202,13 @@ export const skillsApi = {
       cursor = page.cursor
     }
   },
-  unassign: (assignment: SkillAssignment, request: TenantRequestOptions) =>
+  retire: (pack: SkillPack, request: ActionRequest) =>
+    http.delete<{ state: string; pack: SkillPack }>(
+      `${BASE}/packs/${encodeURIComponent(pack.id)}`,
+      undefined,
+      { ...request, headers: { 'If-Match': String(pack.version) } },
+    ),
+  unassign: (assignment: SkillAssignment, request: ActionRequest) =>
     http.delete<{ state: string }>(
       `${BASE}/assignments/${encodeURIComponent(assignment.id)}`,
       undefined,

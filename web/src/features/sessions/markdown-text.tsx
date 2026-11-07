@@ -15,6 +15,7 @@ import {
   type Inline,
   type HrefResolver,
 } from './markdown'
+import { CodeOrPath } from './path-chip'
 
 interface MarkdownPresentation {
   renderLink?: (href: string, children: ReactNode) => ReactNode
@@ -31,12 +32,15 @@ function Inlines({
     switch (node.kind) {
       case 'code':
         return (
-          <code
+          <CodeOrPath
             key={i}
-            className="rounded-ctl bg-muted px-1 font-mono text-mono-s text-text"
-          >
-            {node.text}
-          </code>
+            text={node.text}
+            code={
+              <code className="rounded-ctl bg-muted px-1 font-mono text-mono-s text-text">
+                {node.text}
+              </code>
+            }
+          />
         )
       case 'strong':
         return (
@@ -232,43 +236,10 @@ function CodeCopy({ text }: { text: string }) {
 export const MarkdownText = memo(function MarkdownText({
   text,
   resolveHref,
-  copyBlocks = false,
   ...presentation
 }: {
   text: string
   resolveHref?: HrefResolver
-  copyBlocks?: boolean
 } & MarkdownPresentation) {
-  const { t } = useTranslation('common')
-  const sources = new Map<Block, string>()
-  const blocks = parseMarkdown(
-    text,
-    resolveHref,
-    copyBlocks
-      ? (block, source) => {
-          sources.set(block, source)
-        }
-      : undefined,
-  )
-  if (!copyBlocks) return <Blocks blocks={blocks} {...presentation} />
-  return (
-    <div className="flex flex-col gap-2">
-      {blocks.map((block, i) =>
-        block.kind === 'code' ? (
-          <Blocks key={i} blocks={[block]} {...presentation} />
-        ) : (
-          <div key={i} className="relative min-h-7 pe-9">
-            <Blocks blocks={[block]} {...presentation} />
-            <CopyButton
-              text={() => sources.get(block)!}
-              label={t('ui.copy.markdown')}
-              copiedLabel={t('ui.copy.copied')}
-              failedLabel={t('ui.copy.failed')}
-              className="absolute end-0 top-0"
-            />
-          </div>
-        ),
-      )}
-    </div>
-  )
+  return <Blocks blocks={parseMarkdown(text, resolveHref)} {...presentation} />
 })

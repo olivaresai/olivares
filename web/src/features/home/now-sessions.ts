@@ -2,19 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// WHAT ESTATE SAYS ABOUT THE SESSIONS IT ALREADY HOLDS: which are live (a card each),
-// what the sessions that worked on a day cost, and whom the live ones act for. Pure, over
+// WHAT OVERVIEW SAYS ABOUT THE SESSIONS IT ALREADY HOLDS: which are live (a Running row
+// each), what the sessions that worked on a day cost, and how many failed today. Pure, over
 // the merged page `home-view` reads, so a test drives it without rendering. No second
 // read and no figure the engine did not send.
-import {
-  isLiveRun,
-  primaryRun,
-  type UnifiedSession,
-} from '@/features/sessions/provenance'
+import { isLiveRun, type UnifiedSession } from '@/features/sessions/provenance'
+import { sessionDisplayState } from '@/features/sessions/session-display-state'
 import { sessionUsage } from '@/features/sessions/session-usage'
-
-/** How many live sessions Now shows as cards. The Sessions page holds the rest. */
-export const LIVE_CARDS = 6
 
 /** The observed states the Live sessions tile counts (`deriveUsage.liveNow`). */
 const LIVE_OBSERVED = ['active', 'idle', 'silent_evasion']
@@ -43,6 +37,18 @@ export interface TodaysCost {
   outputTokens: number | null
   /** Sessions among them that reported no tokens: the token sum leaves them out. */
   tokensUnreported: number
+}
+
+/** Sessions whose run failed and that last worked today: Overview's "N failed today". */
+export function failedToday(
+  sessions: readonly UnifiedSession[],
+  now: number,
+): number {
+  const from = midnightOf(now, 0)
+  return sessions.filter(
+    (s) =>
+      s.lastActivityMs >= from && sessionDisplayState(s).status === 'failed',
+  ).length
 }
 
 /** Local midnight `daysAgo` days before `now`'s day. */
@@ -112,22 +118,44 @@ export function dayIsFloor(
   return activityMs.every((ms) => !(ms < from))
 }
 
+/** One page of a half of the list, as far as the floor rule reads it. */
+interface DayPage<T> {
+  has_more?: boolean
+  items: readonly T[]
+}
+
 /**
- * How many people the sessions act for, each once; a session a work item or an agent
- * dispatched acts for nobody. `null` while one session does not say whom it acts for (an
- * engine older than the facts, an observed session with no launch record, a session
- * that predates the record): a count over the others would be a guess.
+ * Whether the loaded pages make a day's figure a floor: either half was cut short while
+ * every row it holds worked on that day or later (`dayIsFloor`). An observed row counts at
+ * its last event, a run at its last activity, else its start, else its creation. A half not
+ * read is no page and hides nothing.
  */
-export function actsForPeople(
-  sessions: readonly UnifiedSession[],
-): number | null {
-  const people = new Set<string>()
-  for (const s of sessions) {
-    const actsFor = primaryRun(s.runs)?.acts_for
-    if (!actsFor || actsFor.kind === 'unknown') return null
-    if (actsFor.kind !== 'user') continue
-    if (!actsFor.user_id) return null
-    people.add(actsFor.user_id)
-  }
-  return people.size
+export function dayIsFloorOf(
+  live: DayPage<{ last_event_at: string }> | undefined,
+  runs:
+    | DayPage<{
+        last_activity_at?: string
+        started_at?: string
+        created_at?: string
+      }>
+    | undefined,
+  now: number,
+  daysAgo = 0,
+): boolean {
+  return (
+    dayIsFloor(
+      live?.has_more,
+      (live?.items ?? []).map((l) => Date.parse(l.last_event_at)),
+      now,
+      daysAgo,
+    ) ||
+    dayIsFloor(
+      runs?.has_more,
+      (runs?.items ?? []).map((r) =>
+        Date.parse(r.last_activity_at ?? r.started_at ?? r.created_at ?? ''),
+      ),
+      now,
+      daysAgo,
+    )
+  )
 }

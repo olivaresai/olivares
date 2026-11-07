@@ -708,7 +708,11 @@ describe('LicenseTab', () => {
   it('refuses to render to a non-superadmin', async () => {
     authState.isSuperadmin = false
     wrap(<LicenseTab />)
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     expect(api.getLicense).not.toHaveBeenCalled()
   })
   /**
@@ -872,6 +876,30 @@ describe('Business activation — turning a family on or off', () => {
     api.getActivation.mockResolvedValue(status(['active', 'available']))
     wrap(<LicenseTab />)
     expect(within(await familyRow()).getByText('1 of 2 on')).toBeInTheDocument()
+  })
+
+  it('cannot turn on a family the license does not cover, and says why', async () => {
+    const uncovered = status(['available', 'available'])
+    uncovered.addons = uncovered.addons.map((a) => ({
+      ...a,
+      license_covered: false,
+    }))
+    api.getActivation.mockResolvedValue(uncovered)
+    const user = userEvent.setup()
+    wrap(<LicenseTab />)
+
+    const row = await familyRow()
+    const turnOn = within(row).getByRole('button', { name: /turn on/i })
+    expect(turnOn).toBeDisabled()
+    expect(
+      within(row).getByText(
+        'This license does not include Regulated Operations.',
+      ),
+    ).toBeInTheDocument()
+    await user.click(turnOn)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(api.previewActivation).not.toHaveBeenCalled()
+    expect(api.applyActivation).not.toHaveBeenCalled()
   })
 
   it('says how many add-ons of a family wait for input, and counts them off', async () => {

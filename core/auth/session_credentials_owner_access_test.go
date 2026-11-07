@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -274,9 +275,7 @@ func TestSessionOwnerAccessCheckPropagatesUnavailableStanding(t *testing.T) {
 
 func TestSessionStandingWithdrawalIsNotAResumableGroupChange(t *testing.T) {
 	f := newOwnerAccessFixture(t, nil)
-	if _, err := f.a.SCIMCreateGroup(t.Context(), f.admin, f.tenants[0], auth.SCIMGroupInput{DisplayName: "Directory subjects", Members: []model.ID{f.user.ID}}); err != nil {
-		t.Fatal(err)
-	}
+	authtest.Group(t, f.st, f.tenants[0], "Directory subjects", "", f.user.ID)
 	// Re-mint with that exact current closure before the standing is removed.
 
 	login, _, err := f.a.Login(t.Context(), f.user.Email, "owner-access-password", "fixture")

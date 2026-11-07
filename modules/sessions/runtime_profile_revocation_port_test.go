@@ -108,7 +108,7 @@ func TestRawInputRefusesAfterTheProfileIsRetiredOrGone(t *testing.T) {
 	t.Run("positive control: a current profile still writes", func(t *testing.T) {
 		t.Parallel()
 		fx := newRetiredProfileFixture(t)
-		if err := fx.m.sendInput(context.Background(), fx.tenant, fx.runRef, []byte(`{"type":"ok"}`)); err != nil {
+		if err := fx.m.sendInput(context.Background(), fx.tenant, fx.runRef, []byte(`{"type":"user"}`)); err != nil {
 			t.Fatalf("raw input under a CURRENT profile: %v", err)
 		}
 		if got := fx.proc.sentCount(); got != 1 {
@@ -124,7 +124,7 @@ func TestRawInputRefusesAfterTheProfileIsRetiredOrGone(t *testing.T) {
 		if _, err := fx.m.PatchProfile(ctx, fx.tenant, fx.prof.Ref, ProfilePatch{State: &retired}); err != nil {
 			t.Fatalf("retire the profile: %v", err)
 		}
-		err := fx.m.sendInput(ctx, fx.tenant, fx.runRef, []byte(`{"type":"revoked"}`))
+		err := fx.m.sendInput(ctx, fx.tenant, fx.runRef, []byte(`{"type":"user"}`))
 		var re *runErr
 		if !errors.As(err, &re) || re.status != http.StatusConflict {
 			t.Fatalf("raw input under a RETIRED profile = %v, want a 409 refusal", err)
@@ -138,7 +138,7 @@ func TestRawInputRefusesAfterTheProfileIsRetiredOrGone(t *testing.T) {
 		t.Parallel()
 		fx := newRetiredProfileFixture(t)
 		fx.deleteProfileRow(t)
-		err := fx.m.sendInput(context.Background(), fx.tenant, fx.runRef, []byte(`{"type":"orphan"}`))
+		err := fx.m.sendInput(context.Background(), fx.tenant, fx.runRef, []byte(`{"type":"user"}`))
 		var re *runErr
 		if !errors.As(err, &re) || re.status != http.StatusConflict {
 			t.Fatalf("raw input with NO profile row = %v, want a 409 refusal", err)
@@ -193,7 +193,7 @@ func TestAuthorityKeepsAnUnreadableProfileUnavailableInsteadOfCached(t *testing.
 	boom := errors.New("test: the profile table cannot be read")
 	fx.m.UseData(&profileReadFailureData{inner: fx.m.Data, err: boom})
 
-	err := fx.m.sendInput(context.Background(), fx.tenant, fx.runRef, []byte(`{"type":"unreadable"}`))
+	err := fx.m.sendInput(context.Background(), fx.tenant, fx.runRef, []byte(`{"type":"user"}`))
 	if err == nil {
 		t.Fatal("an unreadable profile must not authorise an effect")
 	}

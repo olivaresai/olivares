@@ -4,7 +4,9 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # check-guide-docs.sh — build and run the generated guide gate: the CONSOLE reference,
-# the gRPC reference, and the claims of the UPGRADE guide.
+# the gRPC reference, the claims of the UPGRADE guide, and the PROVIDERS AND TOOLS table
+# (stage 1b below: the preset catalog and the engine's tool-binding rule, written by a Go
+# test because both are Go values).
 #
 # THE REGRESSION IT FORBIDS. Measured 2026-08-15 and recorded in
 # an internal design note (not shipped):74: zero of 57 console routes had guides,
@@ -128,11 +130,32 @@ if [ ! -s "$DUMP" ]; then
 	exit 2
 fi
 
+# ── stage 1b: the provider catalog ────────────────────────────────────────────────────
+#
+# The "Providers and tools" page comes from the preset table and the engine's rule for
+# which tool serves which provider record, both Go values, so a test writes them as JSON
+# (the way check-cli-ref-docs.sh gets the command tree). Same rule as stage 1: a failed
+# test or an empty file is CANNOT LOOK, never "in sync".
+PROV="$SCRATCH/providers.json"
+prov_err="$(cd "$ROOT" && OLIVARES_PROVIDERS_DUMP_OUT="$PROV" go test -run '^TestProvidersDump$' -count=1 ./modules/sessions 2>&1)"
+prov_rc=$?
+if [ "$prov_rc" -ne 0 ]; then
+	echo "check-guide-docs: CANNOT LOOK — the provider catalog dump failed (go test exit $prov_rc), so" >&2
+	echo "  the Providers and tools page was not checked against the catalog at all." >&2
+	printf '%s\n' "$prov_err" | sed 's/^/    /' >&2
+	exit 2
+fi
+if [ ! -s "$PROV" ]; then
+	echo "check-guide-docs: CANNOT LOOK — the provider dump test passed and wrote nothing to $PROV." >&2
+	echo "  A stage that succeeds without producing its artifact is a skip in disguise." >&2
+	exit 2
+fi
+
 # ── stage 2: render and compare ───────────────────────────────────────────────────────
 case "$MODE" in
---write) "$BIN" -root "$ROOT" -dump "$DUMP" -write ;;
---list) "$BIN" -root "$ROOT" -dump "$DUMP" -list ;;
-"") "$BIN" -root "$ROOT" -dump "$DUMP" ;;
+--write) "$BIN" -root "$ROOT" -dump "$DUMP" -providers "$PROV" -write ;;
+--list) "$BIN" -root "$ROOT" -dump "$DUMP" -providers "$PROV" -list ;;
+"") "$BIN" -root "$ROOT" -dump "$DUMP" -providers "$PROV" ;;
 *)
 	echo "check-guide-docs: CANNOT LOOK — unknown argument '$MODE' (want --write, --list," >&2
 	echo "  --self-test or nothing)." >&2

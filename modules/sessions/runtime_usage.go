@@ -7,6 +7,7 @@ package sessions
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"math"
 	"sort"
 	"strings"
@@ -527,6 +528,115 @@ func (m *Module) creditUsage(ctx context.Context, lr *liveRun, r resultUsage, at
 	}
 	m.postSpendRows(ctx, lr, deltas, r.CostReported, at)
 	return true
+}
+
+// inflightUsage is what the turn in progress has used so far, summed from the usage
+// Claude Code puts on every assistant message. The result frame at the end of the
+// turn restates the whole turn, so this is shown beside the row until then and is
+// never credited: the row, the ledger and the cost cap keep reading the result only.
+// Claude Code writes one message as several frames (one per content block), all
+// naming the message id, so the frames of the message in hand replace each other.
+type inflightUsage struct {
+	done      map[string]modelUsage // finished messages, per model
+	id, model string                // the message in hand
+	current   modelUsage
+}
+
+// note folds one assistant frame into the sum.
+func (f *inflightUsage) note(id, modelRef string, u modelUsage) {
+	if id == "" || id != f.id {
+		f.finish()
+		f.id, f.model = id, modelRef
+	}
+	f.current = u
+}
+
+func (f *inflightUsage) finish() {
+	if f.current.empty() {
+		return
+	}
+	if f.done == nil {
+		f.done = map[string]modelUsage{}
+	}
+	d, c := f.done[f.model], f.current
+	f.done[f.model] = modelUsage{
+		InputTokens: d.InputTokens + c.InputTokens, OutputTokens: d.OutputTokens + c.OutputTokens,
+		CacheReadTokens: d.CacheReadTokens + c.CacheReadTokens, CacheCreationTokens: d.CacheCreationTokens + c.CacheCreationTokens,
+	}
+}
+
+// perModel is the sum so far, per model; it leaves the receiver as it was.
+func (f inflightUsage) perModel() map[string]modelUsage {
+	f.done = maps.Clone(f.done)
+	f.finish()
+	return f.done
+}
+
+// noteInflightUsage records the usage of one assistant frame of the running turn.
+func (lr *liveRun) noteInflightUsage(line []byte) {
+	var raw struct {
+		Message struct {
+			ID    string     `json:"id"`
+			Model string     `json:"model"`
+			Usage *usageJSON `json:"usage"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &raw) != nil || raw.Message.Usage == nil {
+		return
+	}
+	u := raw.Message.Usage.usage()
+	if u.empty() {
+		return
+	}
+	lr.mu.Lock()
+	lr.inflight.note(raw.Message.ID, modelRefValue(raw.Message.Model), u)
+	lr.mu.Unlock()
+}
+
+// endInflightUsage drops the running figure once the turn's result has been credited.
+func (lr *liveRun) endInflightUsage() {
+	lr.mu.Lock()
+	lr.inflight = inflightUsage{}
+	lr.mu.Unlock()
+}
+
+// addInflightUsage shows the running turn's usage on a read of its session. The cost is
+// the list price of those tokens, and only when every model in use has one: a partial
+// price would read as the whole.
+func (m *Module) addInflightUsage(lr *liveRun, out *runDTO) {
+	lr.mu.Lock()
+	sum := lr.inflight.perModel()
+	lr.mu.Unlock()
+	var input, output, cost int64
+	priced := m.rt.ListPricer != nil
+	for name, u := range sum {
+		input += u.totalInputTokens()
+		output += u.OutputTokens
+		if !priced {
+			continue
+		}
+		c, ok := m.rt.ListPricer(ProviderKindAnthropic, name, TurnTokens{
+			UncachedInput: u.InputTokens, CacheRead: u.CacheReadTokens,
+			CacheWrite: u.CacheCreationTokens, Output: u.OutputTokens,
+		})
+		priced = priced && ok && name != ""
+		cost += c
+	}
+	if input == 0 && output == 0 {
+		return
+	}
+	out.InputTokens = addTo(out.InputTokens, input)
+	out.OutputTokens = addTo(out.OutputTokens, output)
+	if priced {
+		out.CostMicroUSD = addTo(out.CostMicroUSD, cost)
+	}
+}
+
+func addTo(base *int64, n int64) *int64 {
+	if base != nil {
+		n += *base
+	}
+	return &n
 }
 
 // priceUnpriced prices, at the declared list price, each delta its tool reported

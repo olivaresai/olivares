@@ -5,7 +5,7 @@ import type { SessionLaunchReadiness } from './launch-readiness'
 
 /**
  * The profile-scoped official CLI observation (HC1): GET
- * /v1/m/sessions/provider-profiles/{ref}/host-tools, as Root ratified it. The route is
+ * /v1/m/sessions/provider-profiles/{ref}/host-tools. The route is
  * not in the generated OpenAPI yet, so the shape is declared here and every response is
  * PARSED: closed codes only, unknown future group codes weaken to `unknown`, a malformed
  * body is refused instead of painted. The observation is advisory. Nothing here changes

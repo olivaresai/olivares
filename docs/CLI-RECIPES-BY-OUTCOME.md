@@ -57,6 +57,337 @@ diagnostic, including hidden commands, used to compare release artifacts.
 
 ---
 
+## The first week from a terminal
+
+Each recipe below does from a shell what one console page does, and names that page.
+Exit codes are the published ones (`olivares --help`, and the table in
+`docs-site/src/content/docs/reference/cli.md`): **0** done, **1** failure, **2** wrong
+use or a step not completed, **3** refused, **4** not found, **5** conflict, **6** the
+engine or store is down, **9** a Business feature. Every result shown here was printed
+by the run recorded at the end of this section.
+
+### Start the engine and create the first administrator
+
+**Console:** the setup page the printed address opens.
+
+`quickstart` runs the engine in the foreground (Ctrl-C stops it) with TLS, SQLite and
+no default credentials. Without `--listen` it accepts connections from the network.
+
+```sh
+olivares quickstart --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
+```
+
+```text
+Console: https://127.0.0.1:8443
+This engine listens on loopback only (this computer).
+Next: Open the console; it guides setup, sign-in and your first session.
+  one-time token (shown once): olst_…
+```
+
+To finish setup without a browser, save that token in a file, put the password in
+another (a flag value lands in the process table), and redeem it from a second
+terminal. `$DATA` is the data directory, `~/.local/share/olivares` by default;
+its `tls.crt` is the engine's self-signed certificate.
+
+```sh
+olivares auth bootstrap --server https://127.0.0.1:8443 --ca-cert $DATA/tls.crt --setup-token-file ./setup.token --email admin@example.com --password-file ./admin.pw --save-context
+```
+
+```text
+setup complete — organization "Default Organization" (tenant 01a1a8ab-…) and superadmin admin@example.com (id 01a1a8ab-…)
+Signed in as admin@example.com until 2026-11-05 10:29 UTC.
+Saved as context "127.0.0.1" (tenant 01a1a8ab-…). The next commands use it.
+```
+
+The token works once. A second `auth bootstrap` exits **3** with `the setup token is not
+valid`: after setup, sign in with `olivares login`; while no administrator exists yet,
+`olivares first-boot --new-token` on the engine's host mints a replacement.
+
+### Sign the CLI in
+
+**Console:** the sign-in page.
+
+On the engine's host, at a terminal, `olivares login` with no flags finds the engine
+and asks for your email and password. A script, or another computer, names the engine
+and reads the password from a file or standard input:
+
+```sh
+olivares login --server https://127.0.0.1:8443 --ca-cert $DATA/tls.crt --email admin@example.com --password-file - < admin.pw
+olivares auth status
+```
+
+```text
+Signed in as admin@example.com until 2026-11-05 10:29 UTC.
+Saved as context "127.0.0.1". The next commands use it.
+```
+
+`auth status` prints the actor, tenant, role, server and context; its `TENANT` line is
+the `$TENANT` the next recipes use. A command run before any sign-in exits **2** with
+`Not signed in. Sign in first: olivares login`; a wrong password exits **3**.
+
+### Install an AI tool
+
+**Console:** AI tools (`/agent-tools`).
+
+`tool ls` shows what the engine's host has; `tool install` downloads the vendor's
+release on that host, verifies it and places it where sessions find it.
+
+```sh
+olivares tool ls
+olivares tool install claude
+olivares tool ls -o json
+```
+
+```text
+TOOL         VERSION         STATUS
+Claude Code  (on this host)  not signed in
+OpenCode                     not installed
+…
+next: olivares tool login claude
+
+Installing Claude Code <version> (verified: openpgp)…
+Installed Claude Code <version>.
+next: olivares tool login claude
+```
+
+`-o json` gives one object per tool with `driver`, `installed` and `signed_in`. A name
+the engine cannot install exits **1** and lists the ones it can (`claude codex cursor
+gemini-cli grok ollama opencode`). The download runs on the engine's host, so that host
+needs to reach the vendor's release site.
+
+### Sign a tool in
+
+**Console:** AI tools, the tool's sign-in control.
+
+`tool login` runs the tool's own sign-in on the engine's host. For Claude Code and
+Gemini CLI, open the link and paste back the code the page shows; for Codex, Grok Build
+and OpenCode's ChatGPT method, open the link and enter the code printed here. The login
+is stored where the tool keeps it, not by Olivares.
+
+```sh
+olivares tool login claude
+olivares tool ls
+```
+
+```text
+Open this link and sign in:
+
+  https://…
+
+Paste the code from the page:
+```
+
+Ending without a code exits **2** with `No code was entered. Run olivares tool login
+claude again.` Once signed in, `tool ls` shows the tool as signed in and sessions can
+start on it (recipe 2). `--account <name>` signs in one of several accounts of the same
+tool (`olivares provider account ls`).
+
+### Add people
+
+**Console:** Identity & access (`/identity`), Invite people.
+
+The console sends an invitation link. Without a browser, create the account with a
+password and its first membership in one step, then read the roster:
+
+```sh
+olivares users create --email ann@example.com --display-name Ann --password-file ./ann.pw --member-of $TENANT --role editor
+olivares members ls
+olivares members ls -o json
+```
+
+```text
+created user ann@example.com (id 01a1a8ab-…, superadmin false)
+→ member of tenant 01a1a8ab-… with the role "editor"
+
+USER ID      EMAIL              ROLE    STATUS  SSO ONLY  WORKSPACES  GROUPS
+01a1a8ab-…   admin@example.com  owner   active  false     -           -
+01a1a8ab-…   ann@example.com    editor  active  false     -           -
+```
+
+Roles are `viewer`, `editor`, `admin` and `owner`. An account that already exists gets
+a role with `olivares members grant --user <id> --role editor`; `users create` with its
+email exits **5**. Invitations sent from the console are listed and withdrawn here; an id that is not a
+pending invitation exits **4**:
+
+```sh
+olivares members invites ls
+olivares members invites revoke <invitation-id> --yes
+```
+
+### Keep a personal vault
+
+**Console:** Vault (`/vault`).
+
+The vault holds your logins, notes and authenticator keys; only you can read an item
+back, and every read is audited without its value. Secrets come from files, standard
+input or `--generate`, never from the command line.
+
+```sh
+olivares vault put bank --username ann --url https://bank.example --generate
+olivares vault ls
+olivares vault get bank --field username
+olivares vault rm bank --yes
+```
+
+```text
+Stored bank (login). Read it back: olivares vault get bank
+ITEM  TYPE   CODE  DESCRIPTION  UPDATED
+bank  login  -                  2026-11-04T22:30:19…Z
+ann
+Deleted bank.
+```
+
+`vault get` prints the password unless `--field` names another part. An item that does
+not exist exits **4**; a sign-in with an API token, or one without the step-up this
+deployment asks for, exits **3**: sign in with your own email and password
+(`olivares login`).
+
+### Add an MCP server
+
+**Console:** MCP & skills (`/capabilities`), Servers.
+
+`mcp add` registers the server **off** and tests it, listing its tools without calling
+any. `mcp enable` turns it on for sessions; every tool asks first until you allow it.
+
+```sh
+olivares mcp add files -- npx -y @modelcontextprotocol/server-filesystem /srv/projects/acme
+olivares mcp enable files
+olivares mcp ls
+olivares mcp test files
+```
+
+```text
+Added files (off). Testing it…
+files works: 16 tools.
+  read_file
+  …
+next: olivares mcp enable files
+
+files is on.
+  Ask first: read_file, read_text_file, … and 6 more
+The server says these tools only read: read_file, … To let them run without approval: olivares mcp enable files --allow-proposed
+
+NAME   STATE  RUNS                                                          TOOLS
+files  on     npx -y @modelcontextprotocol/server-filesystem /srv/projects…  16
+```
+
+`mcp ls -o json` carries each server's tools, its last test and the tools it proposes to
+allow. A server that needs a key reads it from the secret store, never from argv:
+`olivares mcp secret github --value-file ./github-token`, then `mcp add` with
+`--secret-env GITHUB_TOKEN=store:mcp/github`. A server that does not start fails its
+test: `mcp add` exits **1** with `did not start: …`, the server stays off, and `mcp ls`
+shows the reason in its TOOLS column. Fix the command and run `olivares mcp test <name>`.
+
+### Back up and restore
+
+**Console:** Backups (`/backups`).
+
+A bundle carries the store, the signing keys encrypted under your passphrase, and the
+ledger tips that restore re-verifies. Keep the passphrase apart from the bundle: without
+it the bundle cannot be opened.
+
+```sh
+olivares dr backup --data-dir $DATA --out /srv/backups/first.drbundle --passphrase-file ./dr.pass
+olivares dr ls --dir /srv/backups
+olivares dr verify --in /srv/backups/first.drbundle --passphrase-file ./dr.pass
+```
+
+```text
+DR bundle written: /srv/backups/first.drbundle
+  taken: 2026-11-04T22:30:26Z (RPO basis)
+  engine: sqlite  tenants: 2  keys: 10
+  files: 9 in 3 folders (337821836 bytes)  left out: 0
+first.drbundle	2026-11-04T22:30:34Z
+…
+DR drill PASSED: bundle restores to a continuity-safe ledger
+```
+
+`dr verify` restores into a scratch copy and leaves the live data directory alone. To
+restore, stop the engine and point the bundle at a data directory:
+
+```sh
+olivares dr restore --in /srv/backups/first.drbundle --data-dir /srv/olivares-restored --passphrase-file ./dr.pass
+```
+
+```text
+restore verified: ledger continuity and key custody intact
+restored 9 files (… bytes) from 3 folders
+```
+
+Both exit **1** when the bundle is not safe to use, and say why: without
+`--passphrase-file` the answer is `a KEK is required to decrypt the bundle's signing
+keys`. A directory that already holds an estate is replaced only with `--operator` and
+`--reason`, which are recorded in the restored ledger; `--in-place` replaces a live
+SQLite directory after staging and verifying the restore. PostgreSQL needs
+`--engine postgres` and its DSNs: see `docs/DR-RUNBOOK.md`.
+
+### Upgrade
+
+**Console:** Updates (`/updates`).
+
+Back up first. `upgrade --check` shows the plan without changing anything; `upgrade`
+downloads the release, verifies its signature and swaps the binary atomically, keeping
+the old one for rollback. Restart the engine to run the new version.
+
+```sh
+olivares upgrade --check
+olivares upgrade --check -o json
+olivares upgrade --yes
+```
+
+```text
+OTA key: embedded (fingerprint 1eee9d76)
+source: public channel stable (release assets of https://github.com, latest release)
+channel:   stable
+current:   0.6
+available: 0.6 (released 2026-11-01)
+status:    up to date
+
+already on 0.6 (channel stable) — nothing to do.
+```
+
+With `-o json`, standard output holds one object whose `status` is `up-to-date` or the
+planned action. A deb or rpm install is upgraded by its package manager
+(`docs/UPGRADE-AND-ROLLBACK.md`). A binary built from source embeds no release key:
+`upgrade` then exits **1** with `pass --pubkey`.
+
+### Check the host
+
+**Console:** none. `doctor` reads what the console cannot see: the binary, the data
+directory, the service unit, TLS and the store, then names the next first-hour step.
+
+```sh
+olivares doctor
+olivares doctor --data-dir $DATA
+olivares doctor -o json
+```
+
+```text
+OVERALL  healthy
+…
+FIRST-HOUR-NEXT-STEP       sign Claude Code in, then start a session: olivares
+                           tool login claude
+
+18 ok - 28 checks, 10 not measured, 0 required and not passing
+next: olivares tool login claude
+```
+
+It exits **0** when healthy, **1** on a measured defect (each failed check carries a
+`fix:` line) and **2** when a required check could not be measured, for example when
+the engine is not running or the data directory is not the default one: start the
+engine or pass `--data-dir`. A computer that only runs the CLI gets the client checks:
+the engine answers over a trusted certificate, takes the saved sign-in, and runs this
+CLI's version.
+
+**Executed 2026-11-04** on a build of `bad651e05` stamped as release 0.6 with the
+release update key, against a fresh data directory, on loopback ports: every command in
+this section in order, with the results shown. **Not executed:** completing a vendor
+sign-in (it needs a real Claude account; the link and the refusal without a code were
+run), a PostgreSQL backup, and an upgrade that swaps a binary (0.6 was the latest
+release, so `upgrade` had nothing to do).
+
+---
+
 ## 1 · Connect Claude Code — governed, deny-closed
 
 **The outcome:** Claude Code's tool-calls are decided by your control plane *before they
@@ -175,7 +506,10 @@ olivares session start /srv/projects/acme "explain this repository"
 Without `--tool` and `--profile` it runs the first tool that is ready, as the console's New
 session does (with `--profile` and no `--tool` the tool is Claude Code). Without `--profile`
 the engine picks how the tool runs (its own login, or a key or local model from Providers),
-and one line says which. Narrow the session when you need to:
+and one line says which. When the tool has provider accounts whose usage shows capacity, the
+session runs on the first of them (`olivares provider account ls`), and when every one is at
+its limit the start is refused before a folder or session is made. Narrow the session when you
+need to:
 
 ```sh
 olivares session start /srv/projects/acme --name acme-1 --tool claude --permission read-only --dlp deny --model opus

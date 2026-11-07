@@ -103,3 +103,38 @@ func (a *Authenticator) TenantRoster(ctx context.Context, tenant model.TenantID)
 	})
 	return out, err
 }
+
+// SecondFactorEnrolledInTenant reports only whether a member has an accepted
+// factor. Callers must authorize user:read on tenant; nonmembers remain 404.
+// Add future accepted enrollment kinds here so roster consumers share one rule.
+func (a *Authenticator) SecondFactorEnrolledInTenant(ctx context.Context, tenant model.TenantID, userID model.ID) (bool, error) {
+	if tenant.IsZero() || tenant.IsSystem() {
+		return false, ErrInvalidToken
+	}
+	var enrolled bool
+	err := a.st.AuthView(ctx, func(as store.AuthScope) error {
+		if _, member, err := membershipOf(ctx, as, userID, tenant); err != nil {
+			return err
+		} else if !member {
+			return store.ErrNotFound
+		}
+		totp, _, err := as.TOTPCredentials().List(ctx, model.Query{Limit: 1, Filters: []model.Filter{
+			{Column: "account_id", Op: model.OpEq, Value: userID.String()},
+			{Column: "confirmed_at", Op: model.OpNotNull},
+		}})
+		if err != nil {
+			return err
+		}
+		if len(totp) > 0 {
+			enrolled = true
+			return nil
+		}
+		keys, _, err := as.WebAuthnCredentials().List(ctx, byEq("user_id", userID.String(), 1))
+		if err != nil {
+			return err
+		}
+		enrolled = len(keys) > 0
+		return nil
+	})
+	return enrolled, err
+}

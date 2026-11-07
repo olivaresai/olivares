@@ -4,29 +4,18 @@
     "description": "The five most recent sessions this deployment observed.",
     "openAll": "All sessions",
     "emptyTitle": "No sessions yet",
-    "emptyDescription": "Every run a connected engine performs appears here, with what it did, how long it took and what it cost.",
+    "emptyDescription": "Each session you start appears here.",
+    "emptyAction": "Start a session",
     "unavailableTitle": "Couldn’t load recent work",
     "unavailableDescription": "The sessions read did not answer. The estate figures above are unaffected.",
     "untitled": "Untitled session"
-  },
-  "live": {
-    "title": "Live now"
   },
   "empty": {
     "title": "Nothing to show yet",
     "description": "Your role doesn't grant read access to any estate module. Ask an administrator for a read grant to see the overview."
   },
-  "start": {
-    "ready": "{{tool}} is ready.",
-    "signIn": "Sign {{tool}} in to start a session.",
-    "signInAction": "Sign in",
-    "install": "Install Claude Code or Codex to start a session.",
-    "installAction": "Set up a tool",
-    "newSession": "New session"
-  },
   "swimlane": {
     "title": "Last hour",
-    "subtitle": "{{from}} to {{to}}. Each bar is a run, stronger where it made more tool calls.",
     "lanes": "Sessions in the last hour",
     "now": "Now {{at}}",
     "range": "{{from}} to {{to}}",
@@ -62,38 +51,25 @@
     "waiting": "Waiting for approval",
     "needsYou": "Needs you",
     "idle": "Idle",
-    "approvalsUnread": "Approvals could not be read, so waits for approval are not drawn."
+    "approvalsUnread": "Approvals are not read yet or could not be read, so waits for approval are not drawn.",
+    "approvalsPartial": "Only part of the approvals is read, so some waits for approval may not be drawn.",
+    "step": {
+      "Bash": "Running {{what}}",
+      "Read": "Reading {{what}}",
+      "Edit": "Editing {{what}}",
+      "Write": "Writing {{what}}",
+      "Grep": "Searching for {{what}}",
+      "Glob": "Finding files {{what}}",
+      "WebFetch": "Reading {{what}}",
+      "WebSearch": "Searching the web for {{what}}",
+      "Task": "Working with an agent",
+      "Agent": "Working with an agent"
+    }
   },
-  "summary": {
-    "heading": "Summary",
-    "nothingRunning": "Nothing is running",
-    "running_one": "{{count}} session open",
-    "running_other": "{{count}} sessions open",
-    "runningFor_one": "{{count}} session open for {{people}}",
-    "runningFor_other": "{{count}} sessions open for {{people}}",
-    "runningMore": "{{n}}+ sessions open",
-    "people_one": "{{count}} person",
-    "people_other": "{{count}} people",
-    "today": "{{amount}} today",
-    "todayFloor": "at least {{amount}} today",
-    "needs_one": "{{count}} needs you",
-    "needs_other": "{{count}} need you",
-    "needsMore": "{{n}}+ need you",
-    "yesterday": "Yesterday {{amount}}",
-    "unpriced_one": "{{count}} reported no cost",
-    "unpriced_other": "{{count}} reported no cost",
-    "month": "{{spent}} of {{limit}} this month",
-    "monthFloor": "at least {{spent}} of {{limit}} this month",
-    "monthLabel": "Spend this month"
-  },
-  "state": {
-    "pendingIdle": "Query not started — open to load",
-    "pendingPaused": "Query paused — waiting to resume"
-  },
-  "proof": {
-    "verified": "Chain verified at {{time}}",
-    "entries_one": "{{n}} entry",
-    "entries_other": "{{n}} entries",
-    "broken": "Chain broken: open the Ledger"
+  "overview": {
+    "running": "Running",
+    "recent": "Recent",
+    "wantsToRun": "{{session}} wants to run",
+    "approvals": "Approvals: {{approved}} of {{required}}"
   }
 }

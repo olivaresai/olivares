@@ -163,7 +163,11 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 	// Gather documents OUTSIDE the transaction (a source pull is an external call).
 	docs, validate, msg, code := m.gatherDocuments(r.Context(), mc, id.String(), &req)
 	if msg != "" {
-		writeJSON(w, code, errorBody(msg))
+		body := errorBody(msg)
+		if code == http.StatusNotImplemented { // the source opener's one 501 (source_opener.go)
+			body = api.ErrorBody("connector_unavailable", msg)
+		}
+		writeJSON(w, code, body)
 		return
 	}
 	if len(docs) == 0 {
@@ -226,7 +230,7 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 	// never degrades to allow.
 	var dlpPol dlpPolicy
 	if err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		p, err := loadDLPPolicy(r.Context(), sc)
+		p, err := m.loadDLPPolicy(r.Context(), sc, mc.Principal.UserID.String())
 		dlpPol = p
 		return err
 	}); err != nil {
@@ -316,7 +320,7 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 // on a client error.
 func (m *Module) gatherDocuments(ctx context.Context, mc api.ModuleContext, kbRef string, req *ingestRequest) ([]ingestDocument, func(context.Context, store.Scope, SourceValidation) error, string, int) {
 	if name := strings.TrimSpace(req.Source); name != "" {
-		src, ok := m.sources[name]
+		src, ok := m.source(name)
 		owned := false
 		var validate func(context.Context, store.Scope, SourceValidation) error
 		if !ok && m.sourceOpener != nil {

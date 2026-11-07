@@ -97,6 +97,37 @@ func TestSessionGitActions(t *testing.T) {
 	}
 }
 
+// A session folder that is not a Git repository is made one from the session, under the
+// same confinement as every session Git command: status says it is none (404), init makes
+// it one on branch main, a second init is refused, and a read-only session cannot init.
+func TestSessionGitInitializesAFolder(t *testing.T) {
+	if confine.Probe().Mode != confine.ModeLandlock {
+		t.Skip("Landlock unavailable")
+	}
+	ctx := context.Background()
+	m := New(WithConfinement([]string{t.TempDir()}, true))
+	g := sessionGit{module: m, dir: t.TempDir(), preset: PresetEditsAndCommands}
+	if _, err := g.status(ctx); statusOf(err) != http.StatusNotFound {
+		t.Fatalf("status of a plain folder = %v, want 404", err)
+	}
+	if err := g.initialize(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if status, err := g.status(ctx); err != nil || status.Branch != "main" {
+		t.Fatalf("status after init = %+v, %v; want branch main", status, err)
+	}
+	if err := g.initialize(ctx); statusOf(err) != http.StatusConflict {
+		t.Fatalf("second init = %v, want 409", err)
+	}
+	ro := sessionGit{module: m, dir: t.TempDir(), preset: PresetReadOnly}
+	if err := ro.initialize(ctx); statusOf(err) != http.StatusForbidden {
+		t.Fatalf("read-only init = %v, want 403", err)
+	}
+	if _, err := os.Stat(filepath.Join(ro.dir, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("a refused init wrote .git: %v", err)
+	}
+}
+
 func TestSessionGitUnbornAndLiteralPaths(t *testing.T) {
 	g := gitPanelFixture(t)
 	g.dir = t.TempDir()

@@ -45,7 +45,12 @@
     "moved": "Affectation déplacée vers la dernière révision",
     "approveTitle": "Approuver des skills qui agissent au chargement ?",
     "approveDescription": "La dernière révision affecte à {{target}} des skills sur lesquelles leur outil agit sans demander : {{skills}}. Approuvez-les seulement après les avoir examinées.",
-    "approve": "Approuver et utiliser la dernière"
+    "approve": "Approuver et utiliser la dernière",
+    "disable": "Désactiver",
+    "disabled": "Skill désactivée",
+    "disableFor": "Désactiver {{skill}} pour {{target}}",
+    "disableTitle": "Désactiver cette skill ?",
+    "disableDescription": "Les nouvelles sessions de {{target}} ne reçoivent plus {{skill}} de cette affectation. Les autres skills restent affectées. Les conversations enregistrées conservent leur instantané."
   },
   "assign": {
     "title": "Attribuer",
@@ -85,7 +90,15 @@
     "gitSubmit": "Installer depuis Git",
     "name": "Nom du pack",
     "nameHint": "Facultatif ; utilise le nom du dépôt par défaut. Choisissez un nom distinct pour un autre pack du même dépôt.",
-    "held": "Pack installé. Il contient des skills qui agissent au chargement, il n’a donc pas été affecté : examinez-le puis affectez-le depuis sa fiche."
+    "held": "Pack installé. Il contient des skills qui agissent au chargement, il n’a donc pas été affecté : examinez-le puis affectez-le depuis sa fiche.",
+    "local": "Dossier ou archive",
+    "archive": "Archive",
+    "archiveHint": "ZIP ou tar.gz, 32 Mio maximum. Choisissez une archive ou un dossier.",
+    "folder": "Dossier",
+    "uploadSubmit": "Installer la sélection",
+    "selectedFiles": "Fichiers sélectionnés : {{count}}",
+    "uploadLimit": "Limites dépassées (32 Mio, 4096 fichiers, 8 Mio par fichier).",
+    "uploadName": "Nom du pack importé"
   },
   "update": {
     "title": "Mises à jour",
@@ -103,6 +116,44 @@
     "acts": "{{skill}} agit désormais au chargement : {{items}}. L’affecter demande votre approbation.",
     "pinsKeep": "Les affectations existantes gardent leur révision tant que vous ne déplacez pas chacune avec « Utiliser la dernière ».",
     "apply": "Appliquer cette mise à jour",
-    "applied": "Mise à jour publiée en révision {{n}}"
+    "applied": "Mise à jour publiée en révision {{n}}",
+    "checked": "Vérifié",
+    "noDiff": "Aucune différence textuelle disponible."
+  },
+  "catalog": {
+    "source": "Source",
+    "tool_folder": "Dossier de l’outil",
+    "pack": "Pack",
+    "uploaded": "Importé",
+    "skills": "Compétences",
+    "packs": "Paquets",
+    "name": "Nom",
+    "description": "Description",
+    "kind": "Type",
+    "search": "Rechercher par nom et description",
+    "unassigned": "Non attribué",
+    "loading": "Chargement…",
+    "incomplete": "Certaines révisions manquent ; les attributions peuvent être incomplètes.",
+    "skill": "Compétence",
+    "agent": "Agent",
+    "command": "Commande",
+    "rule": "Règle"
+  },
+  "selection": {
+    "loading": "Vérification des compétences…",
+    "count_one": "Cette session reçoit {{count}} compétence",
+    "count_other": "Cette session reçoit {{count}} compétences",
+    "count_many": "Cette session reçoit {{count}} de compétences",
+    "current_one": "Actuellement attribuée : {{count}} compétence",
+    "current_other": "Actuellement attribuées : {{count}} compétences",
+    "current_many": "Actuellement attribuées : {{count}} de compétences",
+    "unavailable": "Impossible de déterminer les compétences de ce département."
+  },
+  "remove": {
+    "action": "Supprimer le pack",
+    "title": "Supprimer ce pack ?",
+    "description": "Retire ce pack de toutes les cibles visibles et des sessions actuelles. Les révisions et l’historique d’audit sont conservés. La suppression s’arrête si une affectation ne peut pas être retirée.",
+    "done": "Pack de compétences supprimé",
+    "incomplete": "La liste des affectations n’a pas pu être complétée. Actualisez et réessayez."
   }
 }

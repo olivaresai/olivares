@@ -49,7 +49,12 @@ import type {
   CreateRoutinePolicyInput,
   UpdateRoutinePolicyInput,
   SetAgentRiskTierInput,
+  SharedVaultDTO,
+  SharedVaultInput,
   SweepReport,
+  VaultShareDTO,
+  VaultShareInput,
+  VaultShareRef,
 } from './types'
 
 const BASE = '/v1/m/governance'
@@ -120,6 +125,26 @@ export const governanceApi = {
     http.put<PolicyDTO>(`${BASE}/policies/${encodeURIComponent(id)}`, input),
   deletePolicy: (id: string) =>
     http.delete<void>(`${BASE}/policies/${encodeURIComponent(id)}`),
+
+  // --- shared vaults (Business; Community answers 501 business_required) -----
+  // Response envelopes match handleListVaults and handleListVaultShares.
+  listVaults: () => http.get<{ vaults: SharedVaultDTO[] }>(`${BASE}/vaults`),
+  createVault: (input: SharedVaultInput) =>
+    http.post<SharedVaultDTO>(`${BASE}/vaults`, input),
+  listVaultShares: (id: string) =>
+    http.get<{
+      vault: string
+      name: string
+      share_by: string
+      shares: VaultShareDTO[]
+    }>(`${BASE}/vaults/${encodeURIComponent(id)}/shares`),
+  shareVault: (id: string, input: VaultShareInput) =>
+    http.put<VaultShareDTO>(
+      `${BASE}/vaults/${encodeURIComponent(id)}/shares`,
+      input,
+    ),
+  revokeVaultShare: (id: string, input: VaultShareRef) =>
+    http.delete<void>(`${BASE}/vaults/${encodeURIComponent(id)}/shares`, input),
 
   // --- approval queue (HITL) -------------------------------------------------
   listApprovals: (params?: ListParams & { status?: string; action?: string }) =>
@@ -365,6 +390,9 @@ export const governanceKeys = {
   /** El registro es del BINARIO, no del tenant: la clave no lleva tenant a proposito. */
   emergingStandards: () => ['governance', 'emerging-standards'] as const,
   all: (t: string | null) => ['governance', t] as const,
+  vaults: (t: string | null) => ['governance', t, 'vaults'] as const,
+  vaultShares: (t: string | null, vaultId: string) =>
+    ['governance', t, 'vaults', vaultId, 'shares'] as const,
   identities: (t: string | null, params?: unknown) =>
     params === undefined
       ? (['governance', t, 'identities'] as const)

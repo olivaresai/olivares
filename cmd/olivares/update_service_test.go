@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
@@ -303,14 +304,20 @@ func TestApplyUpdateFinishesWhenTheAdministratorsRequestIsCancelled(t *testing.T
 	}
 }
 
-func TestUpdateStatusBoundsTheNetworkCheck(t *testing.T) {
-	f := &fakeUpgrade{doc: availableDoc()}
-	if _, err := newTestUpdateService(t, f, nil).UpdateStatus(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Contains(f.calls[0], "--timeout") {
-		t.Fatalf("status ran %v with no network timeout", f.calls[0])
-	}
+// A status check whose release endpoint or licensing service accepts and never answers must
+// still answer the page, with the reason: a check with no total waits forever (synctest: deadlock).
+func TestUpdateStatusAnswersAHungCheckWithItsReason(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := newTestUpdateService(t, &fakeUpgrade{}, nil)
+		s.run = func(ctx context.Context, _ []string) ([]byte, error) {
+			<-ctx.Done() // the child is killed when the context ends
+			return nil, errors.New("signal: killed")
+		}
+		got, err := s.UpdateStatus(context.Background())
+		if err != nil || !strings.Contains(got.CheckError, "did not answer within") {
+			t.Fatalf("status = %+v, %v: a hung check must answer with its reason", got, err)
+		}
+	})
 }
 
 func TestUpdateStatusRefusesAnEmptyUpgradeDocument(t *testing.T) {

@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -138,11 +139,13 @@ func TestManagedMCPSameToolNameOnTwoServersStaysQualified(t *testing.T) {
 		Error     string   `json:"error"`
 		AliasCall string   `json:"alias_call"`
 	}
+	sessionNumber := 0
 	session := func(message string) catalogue {
 		t.Helper()
+		sessionNumber++
 		result := filepath.Join(folder, "catalogue-result.json")
 		_ = os.Remove(result)
-		run := do("POST", "/v1/m/sessions/runs", map[string]any{"name": "Names session", "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": registered["workspace_ref"], "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
+		run := do("POST", "/v1/m/sessions/runs", map[string]any{"name": fmt.Sprintf("Names session %d", sessionNumber), "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": registered["workspace_ref"], "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
 		runRef := run["run_ref"].(string)
 		defer do("POST", "/v1/m/sessions/runs/"+runRef+"/stop", map[string]any{}, http.StatusOK)
 		do("POST", "/v1/m/sessions/runs/"+runRef+"/input", map[string]any{"message": map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": message}}}, http.StatusAccepted)

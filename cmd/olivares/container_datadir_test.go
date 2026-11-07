@@ -90,6 +90,9 @@ func TestContainerImageDefaultDataDirIsTheServedOne(t *testing.T) {
 type composeOlivares struct {
 	Command     []string          `yaml:"command"`
 	Environment map[string]string `yaml:"environment"`
+	// StopGracePeriod is the Compose stop_grace_period, a Go duration ("60s"); empty
+	// when the file does not set it.
+	StopGracePeriod string `yaml:"stop_grace_period"`
 }
 
 func readComposeOlivares(t *testing.T, name string) composeOlivares {

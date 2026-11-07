@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, test } from '@playwright/test'
+import { openAdvancedSession } from './session-launch-form'
 
 // Run against a disposable engine with one registered fixture-driver profile.
 // The launcher owns the engine and its session processes, including teardown.
@@ -24,25 +25,8 @@ test('launch feedback leaves the session composer clear', async ({
   await page.locator('#password').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: /^sign in$/i }).click()
   await page.waitForURL((url) => !url.pathname.startsWith('/login'))
-  await page.goto('/sessions')
-  await page
-    .getByRole('main')
-    .getByRole('button', { name: 'New session', exact: true })
-    .first()
-    .click()
-  let dialog = page.getByRole('dialog')
-  const advanced = dialog.getByRole('button', {
-    name: 'Advanced launch options',
-  })
-  await expect(
-    advanced.or(dialog.getByRole('button', { name: 'More options' })),
-  ).toBeVisible()
-  if (!(await advanced.isVisible())) {
-    await dialog.getByRole('button', { name: 'More options' }).click()
-  }
-  await dialog.getByRole('button', { name: 'Advanced launch options' }).click()
-  dialog = page.getByRole('dialog').last()
-  await dialog.getByRole('combobox', { name: 'Provider profile' }).click()
+  const dialog = await openAdvancedSession(page)
+  await dialog.getByRole('combobox', { name: 'Account' }).click()
   await page.getByRole('option', { name: /Claude stand-in/ }).click()
   await dialog.getByRole('button', { name: /^(Request launch|Start)$/ }).click()
   const composer = page.getByTestId('work-composer')

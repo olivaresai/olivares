@@ -4,10 +4,12 @@
 //
 // Stored evidence and operational records are shared across editions. The build-time
 // panel seam supplies the Business Compliance Packs page. Server routes enforce RBAC.
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileCheck2, ScrollText, ShieldQuestion } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -59,10 +61,23 @@ export function ComplianceView() {
   return <Page />
 }
 
+const COMPLIANCE_TABS = [
+  'evidence',
+  'risk',
+  'residency',
+  'retention',
+  'holds',
+  'erasure',
+] as const
+
 function CommunityComplianceView() {
   const { t } = useTranslation('compliance')
   const { can } = useAuth()
   const extensionTabs = useOfferedPanels(PANEL_EXTENSIONS.complianceTabs)
+  const [tab, setTab] = useTabParam([
+    ...COMPLIANCE_TABS,
+    ...extensionTabs.map((p) => p.id),
+  ])
 
   return (
     <IntelPage
@@ -70,7 +85,7 @@ function CommunityComplianceView() {
       title={t('title')}
       description={t('description')}
     >
-      <Tabs defaultValue="evidence">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="evidence">{t('tabs.evidence')}</TabsTrigger>
           <TabsTrigger value="risk">{t('tabs.risk')}</TabsTrigger>
@@ -128,7 +143,9 @@ function CommunityComplianceView() {
 
         {extensionTabs.map((p) => (
           <TabsContent key={p.id} value={p.id} className="flex flex-col gap-4">
-            <p.Component />
+            <PanelSlot>
+              <p.Component />
+            </PanelSlot>
           </TabsContent>
         ))}
       </Tabs>

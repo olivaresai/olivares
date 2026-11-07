@@ -389,7 +389,7 @@ env OLIVARES_HOOK_PEP_TOKEN=pep-token
 allow [MY_FLAG]
 net host
 fs rw=[/srv/work,/homes/p/config,/homes/p/user] ro=[] protect=[/srv/olivares]
-fs required=false handles=0 truncate=false
+fs required=true handles=0 truncate=false
 isolation  waitdelay 7s
 bound [] []
 `},

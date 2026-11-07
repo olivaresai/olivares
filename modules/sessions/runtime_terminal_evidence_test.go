@@ -512,3 +512,18 @@ func TestTerminalEvidenceOutputLossRetainsObservedReaping(t *testing.T) {
 		})
 	}
 }
+
+// A stop a person asked for ends the tool with a signal's exit code, and the session
+// said "REASON exit 1" as if its tool had crashed. The reason is the stop.
+func TestTerminalEvidenceARequestedStopSaysSoNotTheExitCode(t *testing.T) {
+	fr := &fakeRunner{}
+	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
+	ref, _ := launchedRun(t, m, tenant)
+	if _, err := m.stopRun(context.Background(), tenant, ref, "user:u1", model.ActorUser); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	ev, rec := terminalEventOf(t, m, st, tenant, ref)
+	if rec.String(colState) != stateStopped || ev.Detail != "stopped on request" || rec.String(colReason) != "stopped on request" {
+		t.Fatalf("state %q, event detail %q, reason %q; want stopped, \"stopped on request\"", rec.String(colState), ev.Detail, rec.String(colReason))
+	}
+}

@@ -87,6 +87,6 @@ func writeFenceRefusal(w http.ResponseWriter, err error) bool {
 	if !ok {
 		return false
 	}
-	writeJSON(w, http.StatusConflict, map[string]any{"error": map[string]string{"code": code, "message": err.Error()}})
+	writeJSON(w, http.StatusConflict, api.ErrorBody(code, err.Error()))
 	return true
 }

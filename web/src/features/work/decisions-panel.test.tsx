@@ -76,6 +76,7 @@ beforeEach(() => {
   granted.clear()
   granted.add('sessions:decision:read')
   granted.add('sessions:work:read')
+  granted.add('user:read')
   listDecisions.mockReset()
   listWorkItems.mockReset()
   listMembers.mockReset()

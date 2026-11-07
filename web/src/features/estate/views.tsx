@@ -21,6 +21,11 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: Shapes,
     permission: 'sessions:run:read',
+    changes: [
+      { permission: 'sessions:run:write' },
+      { permission: 'sessions:work:write' },
+      { permission: 'tenant:admin' },
+    ],
     element: lazyView(EstateView),
   },
 ] satisfies ViewEntry[]

@@ -334,9 +334,11 @@ func TestCodexActivity_ReadRefusals(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "too large":
+				// A rollout of any length is read; what it cannot read is counted.
 				if err := os.Truncate(file, activityFileMax+1); err != nil {
 					t.Fatal(err)
 				}
+				want = http.StatusOK
 			}
 			if _, r := f.activity(t); r.code != want {
 				t.Fatalf("%s = %d %s, want %d", scenario, r.code, r.raw, want)

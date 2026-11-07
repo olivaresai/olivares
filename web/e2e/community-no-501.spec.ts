@@ -179,7 +179,11 @@ test.describe('@sweep Community serves only Community pages', () => {
         page.getByRole('link', { name: 'About Business' }),
         path,
       ).toHaveAttribute('href', 'https://olivares.ai/business')
-      await expect(page.getByRole('button'), path).toHaveCount(0)
+      // The notice is drawn in the shell, which has buttons of its own: none is in the page's content.
+      await expect(
+        page.getByRole('main').getByRole('button'),
+        path,
+      ).toHaveCount(0)
     }
   })
 })

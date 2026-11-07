@@ -55,6 +55,14 @@ func (r *replayStore) admit(id string, notOnOrAfter time.Time) bool {
 	return true
 }
 
+// forget releases a consumed id, so a request that could not be applied can be
+// retried.
+func (r *replayStore) forget(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.seen, id)
+}
+
 // assertionExpiry returns the later of the bearer NotOnOrAfter and now+replayFloor.
 func assertionExpiry(notOnOrAfter, now time.Time) time.Time {
 	if floor := now.Add(replayFloor); notOnOrAfter.Before(floor) {

@@ -4,6 +4,7 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 """Named, offline native-version qualification with the real pinned release tools."""
 import ctypes
+import gzip
 import io
 import json
 import os
@@ -109,12 +110,28 @@ def payload_mode_owner(path, name):
         return member.mode & 0o7777, tar_owner(member)
 
 
+# The builder runs the archive's own binary for the man pages and completions.
+FIXTURE_ENGINE = b'''#!/bin/sh
+case "$1" in
+__man) printf '.TH "OLIVARES" "1"\\n' >"$2/olivares.1"; printf '.TH "OLIVARES-SESSION-START" "1"\\n' >"$2/olivares-session-start.1" ;;
+completion) echo "# olivares $2 completion" ;;
+esac
+'''
+DOCS = ('/usr/share/man/man1/olivares.1.gz', '/usr/share/man/man1/olivares-session-start.1.gz',
+        '/usr/share/bash-completion/completions/olivares', '/usr/share/fish/vendor_completions.d/olivares.fish')
+# Debian's zsh reads vendor-completions; Fedora/RHEL and Alpine read site-functions.
+ZSH = {'.deb': '/usr/share/zsh/vendor-completions/_olivares', '.rpm': '/usr/share/zsh/site-functions/_olivares',
+       '.apk': '/usr/share/zsh/site-functions/_olivares'}
+
+
 def release_fixture(dist):
     rows = []
     for arch in ('amd64', 'arm64'):
         archive = dist / f'olivares_26.1100_linux_{arch}.tar.gz'
         with tarfile.open(archive, 'w:gz') as bundle:
-            bundle.add('/bin/true', arcname='olivares')
+            engine = tarfile.TarInfo('olivares')
+            engine.size, engine.mode = len(FIXTURE_ENGINE), 0o755
+            bundle.addfile(engine, io.BytesIO(FIXTURE_ENGINE))
             notice = tarfile.TarInfo('NOTICE')
             payload = b'Generated dependency attribution\n'
             notice.size = len(payload)
@@ -124,6 +141,19 @@ def release_fixture(dist):
 
 
 class NativeReleaseVersions(unittest.TestCase):
+    def test_rpm_requires_its_scriptlet_interpreter(self) -> None:
+        with tempfile.TemporaryDirectory(prefix='native-rpm-shell-', dir=os.environ.get('TMPDIR')) as tmp:
+            dist = Path(tmp)
+            release_fixture(dist)
+            paths = builder.build(ROOT, dist, '26.1100', 1790812800, ROOT / 'packaging/nfpm/packages.json', False)
+            for path in paths:
+                if path.suffix != '.rpm':
+                    continue
+                data = path.read_bytes()
+                _, signature_end = packages._parse_rpm_header(data, 96)
+                tags, _ = packages._parse_rpm_header(data, (signature_end + 7) & ~7)
+                self.assertIn('/bin/sh', tags.get(1049, []), f'{path.name}: RPM may run %post before bash is installed')
+
     def test_deb_ships_engine_userns_profile_only(self) -> None:
         profile_path = '/usr/share/olivares/apparmor/usr.bin.olivares'
         with tempfile.TemporaryDirectory(prefix='native-apparmor-', dir=os.environ.get('TMPDIR')) as tmp:
@@ -218,6 +248,28 @@ class NativeReleaseVersions(unittest.TestCase):
             self.maxDiff = None
             self.assertEqual(got, {name: (0o640, 'root') for name in want})
 
+    def test_deb_rpm_apk_ship_man_pages_and_completions(self) -> None:
+        with tempfile.TemporaryDirectory(prefix='native-docs-', dir=os.environ.get('TMPDIR')) as tmp:
+            dist = Path(tmp)
+            release_fixture(dist)
+            paths = builder.build(ROOT, dist, '26.1100', 1790812800, ROOT / 'packaging/nfpm/packages.json', False)
+            for path in paths:
+                if path.suffix == '.deb':
+                    extracted = dist / path.stem
+                    subprocess.run(['dpkg-deb', '-x', str(path), str(extracted)], check=True)
+                    for name in DOCS + (ZSH['.deb'],):
+                        self.assertEqual(payload_mode_owner(path, name), (0o644, 'root'), f'{path.name}: {name}')
+                    self.assertEqual(gzip.decompress((extracted / DOCS[0].lstrip('/')).read_bytes()), b'.TH "OLIVARES" "1"\n')
+                    self.assertEqual((extracted / DOCS[2].lstrip('/')).read_bytes(), b'# olivares bash completion\n')
+                elif path.suffix == '.rpm':
+                    for name in DOCS + (ZSH['.rpm'],):
+                        self.assertEqual(payload_mode_owner(path, name), (0o644, 'root'), f'{path.name}: {name}')
+                elif path.suffix == '.apk':
+                    with tarfile.open(path, 'r:gz', ignore_zeros=True) as bundle:
+                        names = set(bundle.getnames())
+                    for name in DOCS + (ZSH['.apk'],):
+                        self.assertIn(name.lstrip('/'), names, path.name)
+
     def test_producer_shapes_and_historical_zero(self):
         for version in VERSIONS:
             self.assertTrue(builder.valid_version(version, False), version)
@@ -239,7 +291,7 @@ class NativeReleaseVersions(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='native-version-', dir=os.environ.get('TMPDIR')) as tmp:
             project = Path(tmp)
             (project / 'go.mod').write_text('module example.invalid/nativefixture\ngo 1.26\n')
-            (project / 'main.go').write_text('package main\nimport "fmt"\nvar version="dev"\nfunc main(){fmt.Println("olivares "+version)}\n')
+            (project / 'main.go').write_text('package main\nimport ("fmt";"os")\nvar version="dev"\nfunc main(){if len(os.Args)==3&&os.Args[1]=="__man"{_=os.WriteFile(os.Args[2]+"/olivares.1",[]byte(".TH OLIVARES 1\\n"),0o644);return};fmt.Println("olivares "+version)}\n')
             for command in (['git', 'init', '-q'], ['git', 'add', '.'],
                 ['git', '-c', 'core.hooksPath=', '-c', 'commit.gpgsign=false', '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-q', '--no-verify', '-m', 'test: native fixture'],
                 ['git', 'remote', 'add', 'origin', 'https://example.invalid/olivares/olivares.git']):

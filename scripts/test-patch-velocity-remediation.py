@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 import unittest
 import urllib.error
@@ -114,6 +115,30 @@ class RemediationConditionTest(unittest.TestCase):
             code, out, log = self.probe_answer(failure)
             self.assertEqual((code, out), (1, ""))
             self.assertIn("::error::", log)
+
+    def scanner_verdict(self, grype_levels: list[str], trivy_levels: list[str]) -> str:
+        # Run the verdict step's own bash on SARIF files holding results of the given levels.
+        step, = (s for s in self.steps if s.get("id") == "scanners")
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, levels in (("grype.sarif", grype_levels), ("trivy.sarif", trivy_levels)):
+                runs = [{"results": [{"ruleId": f"R{i}", "level": lvl} for i, lvl in enumerate(levels)]}]
+                (Path(tmp) / name).write_text(json.dumps({"version": "2.1.0", "runs": runs}))
+            out = Path(tmp) / "github_output"
+            out.touch()
+            script = step["run"].replace("${{ steps.grype.outputs.sarif }}", "grype.sarif")
+            subprocess.run(["bash", "-c", script], cwd=tmp, check=True, capture_output=True,
+                           env={"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out)})
+            return out.read_text()
+
+    def test_scanner_verdict_counts_only_high_and_critical(self) -> None:
+        # Both SARIF reports carry every fixable finding: grype's --fail-on high only sets its exit
+        # code, and trivy-action drops `severity` for SARIF. Both write Medium as "warning", so a
+        # verdict that counted warnings reported four Medium findings as "fixable at/above HIGH"
+        # (run 41646803899: grype=4 trivy=4, zero High or Critical in either scanner's JSON).
+        self.assertIn("found=false", self.scanner_verdict(["warning", "note"], ["warning", "note"]))
+        verdict = self.scanner_verdict(["error", "warning"], ["error", "error", "warning"])
+        self.assertIn("found=true", verdict)
+        self.assertIn("detail=grype=1 trivy=2 fixable findings at/above HIGH", verdict)
 
     def test_remediation_comments_on_the_open_tracking_issue_of_an_earlier_day(self) -> None:
         # The title carries the date. A new issue per day would bury the one a human must act on.

@@ -15,6 +15,9 @@ interface SessionState {
   sessionId: string | null
   expiresAt: string | null
   ready: boolean
+  /** Page-load recovery could not reach the engine (no answer in time, or a 5xx). The browser
+   * may still hold a valid session, so this is not "signed out": the shell says so and retries. */
+  engineUnreachable: boolean
   credentialGeneration: number
   endReason: SessionEndReason | null
   setSession: (s: {
@@ -41,6 +44,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   sessionId: null,
   expiresAt: null,
   ready: false,
+  engineUnreachable: false,
   credentialGeneration: 0,
   endReason: null,
   setSession: (s) => {
@@ -50,6 +54,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       sessionId: s.sessionId,
       expiresAt: s.expiresAt,
       ready: true,
+      engineUnreachable: false,
       endReason: null,
       credentialGeneration:
         cur.csrfToken === s.csrfToken && cur.sessionId === s.sessionId
@@ -64,6 +69,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       sessionId: null,
       expiresAt: null,
       ready: true,
+      engineUnreachable: false,
       // Only a live session sets the reason. A repeated notice once it is gone (the
       // refresh's 401, then the request's own) keeps it; a sign-out clears it.
       endReason: reason

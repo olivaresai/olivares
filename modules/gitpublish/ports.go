@@ -156,6 +156,7 @@ const (
 type GateRequest struct {
 	Action, SubjectKind, SubjectRef, PlanHash string
 	Reason, RequestedBy, ConsumerID           string
+	RequireApproval                           bool // credentials require a person even without a tenant policy
 }
 
 // GateDecision is the tenant's approval policy and its people's answer. Ref

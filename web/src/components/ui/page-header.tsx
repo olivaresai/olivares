@@ -23,6 +23,9 @@ import { PagePrimaryActionSlot, PageSecondaryActionsSlot } from './page-actions'
  */
 export interface PageHeaderProps {
   title: ReactNode
+  /** The heading stays for assistive technology but is not painted: a screen whose top
+   * bar already names it (the first screen, Now) does not say its name twice. */
+  titleHidden?: boolean
   description?: ReactNode
   /**
    * @deprecated Accepted and NOT rendered since the work-first pass. The icon chip
@@ -144,6 +147,7 @@ export const WORK_CHROME_ROW =
 
 export function PageHeader({
   title,
+  titleHidden = false,
   description,
   actions,
   primaryAction,
@@ -171,7 +175,12 @@ export function PageHeader({
       {/* The actions wrap below the title before the title gets narrower than 10rem. */}
       <Tag className="flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-2 sm:gap-x-4">
         <div className="min-w-[min(100%,10rem)] flex-1">
-          <h1 className="min-w-0 break-words font-display text-title text-foreground">
+          <h1
+            className={cn(
+              'min-w-0 break-words font-display text-title text-foreground',
+              titleHidden && 'sr-only',
+            )}
+          >
             {title}
           </h1>
         </div>

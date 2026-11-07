@@ -23,7 +23,7 @@ export function AccountsAndKeys({
   onAddingChange,
 }: {
   folded?: boolean
-  /** The page's "Add provider key" asks the key list for its add form. */
+  /** The page's "Add an API key" asks the key list for its add form. */
   adding?: boolean
   onAddingChange?: (open: boolean) => void
 }) {

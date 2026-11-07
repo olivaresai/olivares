@@ -53,6 +53,7 @@ func pyString(s string) string {
 
 // appendedPrompt is the system prompt a launch passed the tool, and whether it passed one. The stub
 // writes its argv when the engine has started it, a moment after the launch answered.
+// Consume each capture so a later launch in the same personal folder waits for its own.
 func appendedPrompt(t *testing.T, workspace string) (string, bool) {
 	t.Helper()
 	var raw []byte
@@ -62,6 +63,9 @@ func appendedPrompt(t *testing.T, workspace string) (string, bool) {
 	var argv []string
 	if err := json.Unmarshal(raw, &argv); err != nil {
 		t.Fatalf("the stub never wrote its argv in %s: %v", workspace, err)
+	}
+	if err := os.Remove(filepath.Join(workspace, argvFile)); err != nil {
+		t.Fatalf("consume the stub's argv in %s: %v", workspace, err)
 	}
 	for i, a := range argv {
 		if a == "--append-system-prompt" && i+1 < len(argv) {

@@ -293,3 +293,30 @@ func TestWorkspacesGetShowsTheParent(t *testing.T) {
 }
 
 var regexpParentRow = regexp.MustCompile(`(?m)^\s*PARENT\s+ws-sales\s*$`)
+
+// `workspaces ls` prints each workspace's name and slug next to its id, so
+// `workspaces show` must take what it printed.
+func TestWorkspacesShowAcceptsTheSlugOrNameTheListPrints(t *testing.T) {
+	const bearer = "fixture-workspaces-bearer"
+	t.Setenv("OLIVARES_TOKEN", bearer)
+	for _, ref := range []string{"research", "Research"} {
+		var called []string
+		srv := workspacesFixtureServer(t, bearer, &called)
+		_, stderr, err := execRoot(t, "workspaces", "show", ref, "--server", srv.URL, "--tenant", "tenant-a")
+		srv.Close()
+		if err != nil {
+			t.Fatalf("workspaces show %s: %v (stderr: %s; calls %v)", ref, err, stderr, called)
+		}
+		if got := called[len(called)-1]; got != "GET /v1/workspaces/ws-2/summary" {
+			t.Fatalf("workspaces show %s ended on %q, want the summary of ws-2 (calls %v)", ref, got, called)
+		}
+	}
+
+	var called []string
+	srv := workspacesFixtureServer(t, bearer, &called)
+	defer srv.Close()
+	_, _, err := execRoot(t, "workspaces", "show", "nope", "--server", srv.URL, "--tenant", "tenant-a")
+	if exitcode.From(err) != exitcode.NotFound || !strings.Contains(err.Error(), `No workspace has the id, name or handle "nope"`) {
+		t.Fatalf("a missing name must say so, exit 4: %v", err)
+	}
+}

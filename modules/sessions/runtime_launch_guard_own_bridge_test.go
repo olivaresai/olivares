@@ -27,9 +27,7 @@ import (
 // **Esa distinción de firma es la que cerró el espacio de búsqueda**: sólo un escritor con el
 // mismo `launch_id` la produce, y el único es el propio ganador.
 //
-// Cadena verificada el 2026-08-25 por dos carriles en cruzada (la atribución va en el trailer
-// del commit, no aquí: nombrar un carril en el FUENTE sube el trinquete de vocabulario del
-// export, y esta línea lo subió de 23 a 25 y tumbó su propio push):
+// The bridge reaches the launch row through this sequence:
 //
 //	runtime.go:953           go m.bridge(lr)      arranca ANTES del CAS de :957
 //	runtime_test.go:82-85    el frame `init` se ENCOLA en Launch, buffer 16 — no hace falta Wait()

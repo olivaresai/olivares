@@ -45,6 +45,16 @@ describe('a bookmarked page this edition does not include', () => {
     },
   )
 
+  it('sends its one primary action to the start page and keeps About Business quiet', async () => {
+    await renderAt('/deploy')
+    expect(
+      screen.getByRole('link', { name: 'Go to the start page' }),
+    ).toHaveAttribute('href', '/')
+    expect(
+      screen.getByRole('link', { name: 'About Business' }).className,
+    ).not.toMatch(/accent/)
+  })
+
   it.each(['/deploy/', '/Deploy', '/session-viewer/abc/'])(
     'answers %s like its published address',
     async (path) => {

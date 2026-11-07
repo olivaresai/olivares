@@ -3,12 +3,32 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { renderIntel, screen, within } from '@/test/intel'
+import type { ReactNode } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, renderIntel, screen, userEvent, within } from '@/test/intel'
 import '@/features/_intel' // register the shared `intel` namespace for badges/notices
-import { PoliciesTable, SessionsTable, VoiceStats } from './components'
+import {
+  LatencyByCategory,
+  PoliciesTable,
+  SessionsTable,
+  VoiceStats,
+} from './components'
 import { policiesFixture, sessionsFixture } from './fixtures'
 import './i18n'
+
+// recharts' ResponsiveContainer waits for a ResizeObserver callback that the jsdom
+// stub never fires, so it renders no children at all — the chart tree would never
+// mount. A fixed-size passthrough lets the wrapper under test render; the bars
+// themselves are planted per test, so nothing here depends on recharts drawing.
+vi.mock('recharts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('recharts')>()
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }: { children?: ReactNode }) => (
+      <div style={{ width: 800, height: 300 }}>{children}</div>
+    ),
+  }
+})
 
 describe('SessionsTable — honesty invariants', () => {
   it('renders the transcript only as a fingerprint, never text or audio', () => {
@@ -183,5 +203,46 @@ describe('voice policy gate — verified against the EFFECTIVE engine state', ()
     for (const permission of checked) {
       expect(permission.split(':').at(-1)).toBe('admin')
     }
+  })
+})
+
+describe('LatencyByCategory — Enter filters', () => {
+  /** recharts draws its band cursor only in a real browser; plant the stamped
+   * active-index element the Enter handler reads (the wrapper holds the focus the
+   * way the SVG surface does) to exercise the mapping the e2e covers end to end. */
+  function plantCursor(): { wrap: HTMLElement } {
+    const wrap = document.querySelector<HTMLElement>(
+      '[data-slot="category-bars"]',
+    )!
+    wrap.querySelectorAll('[data-cursor-index]').forEach((el) => el.remove())
+    wrap.tabIndex = -1
+    wrap.focus()
+    const cursor = document.createElement('div')
+    cursor.setAttribute('data-cursor-index', '0')
+    wrap.appendChild(cursor)
+    return { wrap }
+  }
+
+  it('filters the equivalent table to the focused bar, and back', async () => {
+    const user = userEvent.setup()
+    renderIntel(<LatencyByCategory sessions={sessionsFixture} />)
+    // LatencyByCategory sorts descending, so the first bar is the slowest fixture.
+    const slowest = [...sessionsFixture].sort(
+      (a, b) => b.latency_avg_ms - a.latency_avg_ms,
+    )[0]
+    const planted = plantCursor()
+    fireEvent.keyDown(planted.wrap, { key: 'Enter' })
+    await user.click(screen.getByRole('button', { name: 'Show as table' }))
+    const grid = screen.getByRole('grid')
+    expect(within(grid).getByText(slowest.session_ref)).toBeInTheDocument()
+    expect(within(grid).getAllByRole('row')).toHaveLength(2) // header + one row
+    // Chart view again; Enter on the same bar restores the whole set.
+    await user.click(screen.getByRole('button', { name: 'Show chart' }))
+    const again = plantCursor()
+    fireEvent.keyDown(again.wrap, { key: 'Enter' })
+    await user.click(screen.getByRole('button', { name: 'Show as table' }))
+    expect(within(screen.getByRole('grid')).getAllByRole('row')).toHaveLength(
+      sessionsFixture.length + 1,
+    )
   })
 })

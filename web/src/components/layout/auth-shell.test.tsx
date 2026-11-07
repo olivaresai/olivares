@@ -1,9 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen, userEvent } from '@/test/intel'
 import { AuthShell } from './auth-shell'
+
+// The server answers with a version. The signed-out footer must not print it: the
+// version belongs to Settings › About and the avatar menu only.
+vi.mock('@/lib/hooks/use-server-info', () => ({
+  useServerInfo: () => ({ data: { version: '0.7' } }),
+}))
 
 describe('AuthShell keyboard bypass', () => {
   it('exposes skip-to-content that focuses the main landmark', async () => {
@@ -72,22 +78,19 @@ describe('AuthShell statement column', () => {
     expect(screen.queryAllByRole('complementary')).toHaveLength(0)
   })
 
-  it('names the deployment the operator is signing into', () => {
+  it('prints neither host nor version on signed-out screens', () => {
     renderIntel(
       <AuthShell>
         <p>card</p>
       </AuthShell>,
     )
-    // jsdom's location host. The version arrives from /v1/server-info when it answers;
-    // what is pinned here is that the ADDRESS is stated without waiting for a request,
-    // because the address is the thing a phishing target most needs to read.
-    expect(screen.getByTestId('deployment-identity')).toHaveTextContent(
-      window.location.host,
-    )
+    expect(screen.queryByTestId('deployment-identity')).toBeNull()
+    expect(screen.queryByText(window.location.host)).toBeNull()
+    expect(screen.queryByText('0.7')).toBeNull()
   })
 })
 
-it('contains the statement, card and deployment identity in one primary landmark', () => {
+it('contains the statement and card in one primary landmark', () => {
   renderIntel(
     <AuthShell>
       <h1>Pair this device</h1>
@@ -97,7 +100,6 @@ it('contains the statement, card and deployment identity in one primary landmark
   expect(main).toContainElement(
     screen.getByText('One place to govern every AI agent you run.'),
   )
-  expect(main).toContainElement(screen.getByTestId('deployment-identity'))
   expect(main).toContainElement(
     screen.getByRole('heading', { name: 'Pair this device' }),
   )

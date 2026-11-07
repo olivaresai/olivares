@@ -1,0 +1,330 @@
+{
+  "title": "Catálogo",
+  "subtitle": "O catálogo selecionado de capacidades aprovadas — agentes, MCPs, skills, templates, modelos e conectores — mais instanciações de self-service governadas.",
+  "tabs": {
+    "entries": "Entradas",
+    "instances": "Instâncias",
+    "policy": "Política de admissão"
+  },
+  "kind": {
+    "agent": "Agente",
+    "mcp": "MCP",
+    "skill": "Skill",
+    "template": "Template",
+    "model": "Modelo",
+    "connector": "Conector"
+  },
+  "entries": {
+    "search": "Pesquisar entradas…",
+    "name": "Nome",
+    "kind": "Tipo",
+    "slug": "Slug",
+    "version": "Versão",
+    "status": "Estado",
+    "owner": "Responsável",
+    "signing": "Assinatura",
+    "verification": "Verificação",
+    "newEntry": "Nova entrada",
+    "empty": "Sem entradas no catálogo",
+    "emptyHint": "Crie uma entrada em rascunho, submeta-a para revisão e aprove-a para publicar uma versão congelada e fixada por hash.",
+    "filters": {
+      "kind": "Tipo",
+      "status": "Estado",
+      "all": "Todos"
+    },
+    "truncated": "{{n}} entradas do catálogo carregadas; há mais",
+    "truncatedHint": "Há mais entradas do catálogo do que as mostradas; esta página obtém as linhas por ID. Uma entrada em falta nesta lista não prova que não exista."
+  },
+  "signing": {
+    "signed": "Assinada",
+    "unsigned": "Não assinada",
+    "signedHint": "Assinada com Ed25519; impressão digital do signatário {{fingerprint}}.",
+    "unsignedHint": "Fixada por hash e atestada no registo, mas não assinada (nenhuma chave de assinatura do catálogo configurada na aprovação).",
+    "notPinned": "—"
+  },
+  "verify": {
+    "title": "Integridade",
+    "caption": "Recalculada no momento da abertura. A chave de assinatura nunca sai do motor — só é mostrada a sua impressão digital.",
+    "verified": "Assinatura verificada",
+    "verifiedHashOnly": "Fixada por hash",
+    "notVerified": "Não verificada",
+    "pending": "Ainda não fixada",
+    "verifiedHint": "O hash do conteúdo corresponde ao hash fixado e a assinatura é válida.",
+    "verifiedHashOnlyHint": "O hash do conteúdo corresponde ao hash fixado. Esta versão está fixada por hash e atestada no registo, mas não assinada.",
+    "notVerifiedHint": "O hash ou a assinatura recalculados não correspondem ao que foi fixado na aprovação. Não trate esta versão como aprovada.",
+    "pendingHint": "Nada é fixado até a entrada ser aprovada. A verificação aplica-se a versões aprovadas e descontinuadas.",
+    "contentHash": "Hash fixado",
+    "recomputedHash": "Hash recalculado",
+    "signedBy": "Impressão digital do signatário",
+    "reason": "Motivo",
+    "reverify": "Reverificar"
+  },
+  "posture": {
+    "title": "Postura de assinatura do catálogo",
+    "enabled": "Assinatura ativada",
+    "disabled": "Assinatura não configurada",
+    "algorithm": "Algoritmo",
+    "fingerprint": "Impressão digital da chave",
+    "publicKey": "Chave pública",
+    "publicKeyHint": "A chave pública Ed25519 para verificação externa — propositadamente pública, não é um segredo.",
+    "disabledNote": "Nenhuma chave de assinatura do catálogo está configurada. As entradas aprovadas são fixadas por hash e atestadas no registo, mas não assinadas."
+  },
+  "detail": {
+    "title": "Detalhe da entrada",
+    "identity": "Identidade",
+    "kind": "Tipo",
+    "slug": "Slug",
+    "version": "Versão",
+    "status": "Estado",
+    "summary": "Resumo",
+    "owner": "Responsável",
+    "spec": "Especificação",
+    "specCaption": "Definição só de leitura. Os segredos são referenciados na especificação por nome ou localizador — nunca como valores. As credenciais embutidas são rejeitadas na gravação.",
+    "specEmpty": "Sem especificação",
+    "specEmptyHint": "A especificação de interface desta entrada aparece aqui quando a entrada publica uma. Esta não publica nenhuma.",
+    "integrity": "Integridade e aprovação",
+    "contentHash": "Hash do conteúdo",
+    "signed": "Assinada",
+    "sigAlg": "Algoritmo de assinatura",
+    "signedBy": "Impressão digital do signatário",
+    "approvedBy": "Aprovada por",
+    "approvedAt": "Aprovada em",
+    "notApprovedYet": "Ainda não aprovada — nada está fixado nem assinado.",
+    "actions": {
+      "edit": "Editar rascunho",
+      "delete": "Eliminar rascunho",
+      "submit": "Submeter para revisão",
+      "approve": "Aprovar",
+      "deprecate": "Descontinuar",
+      "instantiate": "Instanciar"
+    }
+  },
+  "editor": {
+    "createTitle": "Nova entrada do catálogo",
+    "editTitle": "Editar entrada em rascunho",
+    "kind": "Tipo",
+    "name": "Nome de apresentação",
+    "slug": "Slug",
+    "slugHint": "Letras minúsculas, dígitos, «-» e «_», até 64 carateres.",
+    "version": "Versão",
+    "versionHint": "Versão semântica, p. ex. 1.2.3 ou 1.0.0-beta.1.",
+    "summary": "Resumo",
+    "ownerRef": "Referência do responsável",
+    "ownerRefHint": "Etiqueta opcional do responsável, p. ex. platform-team.",
+    "spec": "Especificação (JSON)",
+    "specHint": "Objeto JSON opcional. Referencie segredos por nome ou localizador — nunca incorpore uma credencial. As credenciais embutidas são rejeitadas.",
+    "specPlaceholder": "{\n  \"command\": \"npx\",\n  \"token_ref\": \"$GITHUB_TOKEN\"\n}",
+    "specInvalid": "A especificação tem de ser um objeto JSON válido.",
+    "credentialWarning": "Isto parece um valor de credencial. Referencie segredos por nome ou localizador (p. ex. $GITHUB_TOKEN ou um caminho do cofre), nunca o próprio segredo.",
+    "draftNotice": "As novas entradas são criadas como rascunho. Os campos de ciclo de vida e integridade (estado, hash, assinatura, aprovador) são geridos pelo motor — nunca definidos aqui.",
+    "create": "Criar rascunho",
+    "save": "Guardar alterações",
+    "created": "Entrada em rascunho criada",
+    "updated": "Entrada em rascunho atualizada",
+    "admissionStaleWarning": "Esta entrada {{kind}} tem um veredito de admissão registado. Guardar uma especificação alterada invalida-o — tem de admitir uma nova atestação antes de ela poder ser aprovada."
+  },
+  "admission": {
+    "title": "Admissão de atestação",
+    "caption": "O veredito de proveniência/SBOM registado que condiciona a aprovação no catálogo servido — o registo duradouro do motivo pelo qual esta entrada foi admitida ou recusada.",
+    "verified": "Atestação verificada",
+    "signedUnbound": "Assinatura verificada, digest não associado",
+    "notVerified": "Não verificada",
+    "none": "Nenhum veredito de admissão registado",
+    "noneHint": "Com uma política de admissão imposta, esta entrada não pode ser aprovada até ser admitida uma atestação verificada.",
+    "reason": "Motivo",
+    "noReason": "Nenhum motivo registado.",
+    "subjectDigest": "Digest do artefacto atestado",
+    "subjectName": "Artefacto atestado",
+    "method": "Método",
+    "signer": "Signatário",
+    "transparencyLog": "Registo de transparência",
+    "tlogVerified": "Inclusão verificada",
+    "tlogPresent": "Presente, não verificada",
+    "tlogAbsent": "Não presente",
+    "coverage": "Cobertura",
+    "attestedBy": "Atestada por",
+    "attestedAt": "Atestada em",
+    "admit": "Admitir atestação",
+    "admitTitle": "Admitir uma atestação",
+    "admitBodyMcp": "Verifique um pacote de atestação Sigstore (cosign download attestation / gh attestation download) deste servidor MCP face à raiz de confiança do tenant. Só um veredito verificado permite que uma política imposta o aprove no registo servido.",
+    "admitBodyConnector": "Verifique um pacote de atestação Sigstore deste artefacto de conector face à raiz de confiança do tenant. O digest esperado assume por predefinição spec.artifact_digest; só um veredito verificado permite que uma política imposta o aprove como conector verificado.",
+    "bundle": "Pacote de atestação (JSON)",
+    "bundleHint": "Cole o JSON do pacote Sigstore. É verificado no servidor; nada é registado até ser analisado.",
+    "bundleInvalid": "O pacote tem de ser JSON válido.",
+    "bundlePlaceholder": "{ \"mediaType\": \"application/vnd.dev.sigstore.bundle.v0.3+json\", … }",
+    "expectedDigest": "Digest esperado do artefacto",
+    "expectedDigestHint": "sha256 opcional com que o artefacto atestado tem de coincidir (p. ex. sha256:…). Nos conectores assume por predefinição spec.artifact_digest.",
+    "note": "Nota",
+    "admitSubmit": "Verificar e admitir",
+    "admitted": "Atestação admitida",
+    "recordedNotAdmitted": "Registada, mas a atestação não cumpriu a política — veja o veredito."
+  },
+  "confirm": {
+    "deleteTitle": "Eliminar esta entrada em rascunho?",
+    "deleteBody": "Eliminar esta entrada em rascunho de forma permanente? Esta ação não pode ser anulada. Só se podem eliminar rascunhos; as entradas aprovadas têm de ser descontinuadas.",
+    "deleteConfirm": "Eliminar de forma permanente",
+    "deletePhrase": "DELETE",
+    "deleted": "Entrada em rascunho eliminada",
+    "submitTitle": "Submeter este rascunho para revisão?",
+    "submitBody": "Passa a «pending» e deixa de ser editável como rascunho até ser decidido.",
+    "submitConfirm": "Submeter para revisão",
+    "submitted": "Entrada submetida para revisão",
+    "approveTitle": "Aprovar esta entrada?",
+    "approveBody": "A aprovação é DEFINITIVA: a versão é congelada e tornada imutável, o hash do conteúdo é fixado (e assinado se a assinatura estiver ativada) e fica disponível para instanciação em self-service. Para a retirar mais tarde tem de a descontinuar, não eliminar.",
+    "approveConfirm": "Aprovar e congelar",
+    "approvePhrase": "APPROVE",
+    "approved": "Entrada aprovada e congelada",
+    "deprecateTitle": "Descontinuar esta entrada aprovada?",
+    "deprecateBody": "Será retirada e ocultada das novas instanciações, mas o seu histórico e assinatura são mantidos para que continue verificável. Isto não pode ser revertido — publique antes uma nova versão.",
+    "deprecateConfirm": "Descontinuar",
+    "deprecated": "Entrada descontinuada"
+  },
+  "instantiate": {
+    "title": "Pedir uma instanciação",
+    "body": "Isto cria um pedido de governação (estado «requested») atribuído a si — NÃO aprovisiona nada ainda. A decisão de aprovação cabe à governação e o aprovisionamento à implementação; um administrador tem de a aprovar e ativar.",
+    "name": "Nome da instância",
+    "nameHint": "Um nome único para esta instanciação da entrada.",
+    "targetRef": "Referência do destino",
+    "targetRefHint": "Destino de implementação opcional, p. ex. env:prod.",
+    "note": "Nota",
+    "submit": "Pedir instanciação",
+    "requested": "Instanciação pedida",
+    "notApproved": "Só uma entrada aprovada pode ser instanciada."
+  },
+  "instances": {
+    "search": "Pesquisar instâncias…",
+    "name": "Nome",
+    "entry": "Entrada de origem",
+    "kind": "Tipo",
+    "version": "Versão",
+    "status": "Estado",
+    "target": "Destino",
+    "requestedBy": "Pedido por",
+    "decidedBy": "Decidido por",
+    "note": "Nota",
+    "empty": "Sem pedidos de instanciação",
+    "emptyHint": "As instanciações em self-service de entradas aprovadas aparecem aqui com o respetivo estado de governação.",
+    "filters": {
+      "status": "Estado",
+      "all": "Todos"
+    },
+    "liveNote": "Em direto — a atualizar enquanto os pedidos aguardam uma decisão de governação.",
+    "truncated": "{{n}} instâncias carregadas; há mais",
+    "truncatedHint": "Há mais instâncias do que as mostradas; esta página obtém as linhas por ID. Uma instância em falta nesta lista não prova que não exista."
+  },
+  "instanceDetail": {
+    "title": "Detalhe da instância",
+    "provenance": "Proveniência",
+    "entryId": "ID da entrada",
+    "entryKind": "Tipo da entrada",
+    "entrySlug": "Slug da entrada",
+    "entryVersion": "Versão da entrada",
+    "governance": "Governação",
+    "note": "Nota",
+    "governanceCaption": "As transições seguem o fluxo permitido e ficam registadas com a sua identidade. A política/HITL é governação; o aprovisionamento real é implementação.",
+    "actions": {
+      "approve": "Aprovar",
+      "reject": "Rejeitar",
+      "activate": "Ativar"
+    }
+  },
+  "transition": {
+    "approveTitle": "Aprovar este pedido de instância?",
+    "rejectTitle": "Rejeitar este pedido de instância?",
+    "activateTitle": "Ativar esta instância?",
+    "body": "Aprovar, rejeitar ou ativar fica registado com a sua identidade no registo de auditoria e segue o fluxo permitido (requested → approved/rejected, approved → active/rejected).",
+    "noteLabel": "Nota da decisão (opcional)",
+    "notePlaceholder": "Motivo desta decisão…",
+    "approveConfirm": "Aprovar",
+    "rejectConfirm": "Rejeitar",
+    "activateConfirm": "Ativar",
+    "done": "Decisão de governação aplicada"
+  },
+  "status": {
+    "draft": "Rascunho",
+    "pending": "Pendente",
+    "approved": "Aprovada",
+    "deprecated": "Descontinuada",
+    "requested": "Pedida",
+    "rejected": "Rejeitada",
+    "active": "Ativa"
+  },
+  "empty": {
+    "entry": {
+      "title": "Ainda não foram criadas entradas no catálogo",
+      "description": "Crie uma entrada em rascunho, submeta-a para revisão e aprove-a para publicar uma versão do catálogo congelada e fixada por hash."
+    },
+    "instance": {
+      "title": "Ainda sem pedidos de instanciação",
+      "description": "Aprove uma entrada do catálogo e peça depois uma instanciação para criar aqui o registo da respetiva instância governada."
+    }
+  },
+  "policy": {
+    "kind": {
+      "mcp": {
+        "title": "Entradas MCP",
+        "body": "Âncoras de confiança que condicionam a entrada de MCPs federados no sub-registo servido.",
+        "editTitle": "Editar a política de admissão de MCP"
+      },
+      "connector": {
+        "title": "Entradas de conectores",
+        "body": "Âncoras de confiança que condicionam as entradas de conectores de terceiros antes da aprovação.",
+        "editTitle": "Editar a política de admissão de conectores"
+      }
+    },
+    "state": {
+      "unconfigured": {
+        "title": "Sem política — todas as entradas são admitidas",
+        "body": "Sem política configurada, as entradas são admitidas SEM qualquer verificação de assinatura. Configure uma âncora de confiança para condicionar a admissão."
+      },
+      "observe": {
+        "title": "Configurada — apenas observar",
+        "body": "As assinaturas são verificadas e registadas, mas uma falha não bloqueia a admissão. Ative «exigir assinatura» para impor."
+      },
+      "enforce": {
+        "title": "A impor",
+        "body": "As entradas que não sejam verificadas face a estas âncoras de confiança têm a admissão recusada."
+      }
+    },
+    "modeName": {
+      "keyless": "Sem chave (fixada por identidade)",
+      "certificate-pki": "PKI de certificados",
+      "bare-key": "Chave simples",
+      "empty": "Sem âncora"
+    },
+    "mode": "Método de confiança",
+    "derivedMode": "Método de confiança derivado",
+    "on": "Ativado",
+    "off": "Desativado",
+    "requireSigned": "Exigir entradas assinadas",
+    "requireSignedHint": "Quando ativado, uma entrada que não seja verificada é recusada.",
+    "requireSubjectDigest": "Exigir digest do artefacto atestado",
+    "requireSubjectDigestHint": "Associa a atestação ao digest da entrada, e não apenas ao seu nome.",
+    "identities": "Identidades permitidas",
+    "identitiesHint": "Uma por linha. Tem de ser definido em conjunto com os emissores.",
+    "issuers": "Emissores permitidos",
+    "issuersHint": "Um por linha. Tem de ser definido em conjunto com as identidades.",
+    "predicates": "Predicados permitidos",
+    "predicatesHint": "Um por linha, p. ex. o tipo de predicado de proveniência. As linhas em branco são rejeitadas.",
+    "trustedRoots": "Raízes de confiança",
+    "trustedRootsHint": "Certificados de CA em PEM. Só são guardados blocos BEGIN…END completos.",
+    "trustedKeys": "Chaves de confiança",
+    "trustedKeysHint": "Chaves PÚBLICAS em PEM. Só são guardados blocos BEGIN…END completos.",
+    "note": "Nota",
+    "attestedBy": "Última alteração por",
+    "attestedAt": "Última alteração",
+    "edit": "Editar política",
+    "editBody": "As alterações produzem efeito na próxima admissão.",
+    "saved": "Política de admissão guardada",
+    "loadFailed": "Não foi possível carregar a política de admissão.",
+    "confirmTitle": "Confirmar alteração de confiança",
+    "confirmBody": "Isto torna a admissão mais restritiva ou remove uma âncora de confiança. As entradas admitidas ao abrigo da política anterior não são reverificadas, mas as novas admissões podem falhar até serem reassinadas.",
+    "err": {
+      "privateKey": "O material de confiança tem de ser público — remova qualquer bloco PRIVATE KEY.",
+      "pemResidual": "Só são guardados blocos BEGIN…END completos; remova o texto restante.",
+      "emptyPredicate": "Os predicados não podem conter entradas em branco.",
+      "anchorMissing": "A imposição exige pelo menos uma raiz ou chave de confiança, caso contrário nada seria admitido.",
+      "identityIssuer": "As identidades e os emissores têm de ser definidos em conjunto, ou nenhum."
+    }
+  }
+}

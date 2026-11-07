@@ -45,7 +45,7 @@ name: olivares
 services:
   olivares:
     # release
-    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.6}
+    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.7}
     # /release
     # A FIXED NAME, so the documented next step is one argv an operator can type:
     #   docker exec olivares olivares first-boot
@@ -54,6 +54,8 @@ services:
     # because a container name is unique per daemon. A memorable name for the
     # single-node deployment this file IS beats a second concurrent copy of it.
     container_name: olivares
+    # The container's identity: `cat /etc/hostname` prints olivares, not a random container id.
+    hostname: olivares
     # :8443 inside the container asks Go for dual-stack (IPv4+IPv6; IPv4 still
     # works on IPv6-disabled kernels); the published port below controls exposure.
     command:
@@ -150,10 +152,23 @@ services:
           cpus: "0.1"
           memory: 256M
     restart: unless-stopped
+    # Docker sends SIGKILL 10 s after SIGTERM by default. The engine drains its listeners
+    # (up to 20 s), then stops sessions, revokes their credentials and closes the store:
+    # killed earlier, every `docker compose up -d` after a pull is an unclean stop.
+    stop_grace_period: 60s
     # Direct exec: readiness uses the engine binary. The probe trusts the
     # certificate chain the engine serves, which it publishes in the persistent data
     # volume: the first-boot certificate, or the pair given with --tls-cert and
     # --tls-key. It returns 0 ready, 1 not-ready, 2 unable-to-measure.
+    # start_period is sized for the slowest first boot: measured at the documented floor
+    # (1 CPU, 1 GiB) on a Debian 13 VM, a fresh first boot reported healthy after 62-94 s
+    # over five runs (0.4 and 0.5 images) and the first start after the 0.4 -> 0.5 image
+    # upgrade after 27 s. The 190 s start period is that 94 s doubled and rounded up; the
+    # 12 x 5 s retries follow it, so a slow boot is not reported unhealthy before 250 s.
+    # A probe that passes ends the start period at once, so a fast boot reports healthy
+    # as soon as it is ready (https://docs.docker.com/reference/dockerfile/#healthcheck).
+    # The documented `up --wait --wait-timeout 120` covers every measured boot (94 s at
+    # most); on a host slower than the documented floor, raise --wait-timeout to match.
     healthcheck:
       test:
         - CMD
@@ -165,7 +180,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
-      start_period: 10s
+      start_period: 190s
 
 volumes:
   olivares-data:

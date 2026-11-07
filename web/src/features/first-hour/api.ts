@@ -36,6 +36,8 @@ export interface SignInStatus {
   method?: string
   account?: string
   account_ref?: string
+  /** Why a tool that is logged in some other way cannot run a session here. */
+  reason?: string
   /** The tool's official login methods, in the order to offer them, when it has several. */
   methods?: SignInMethod[]
   /** The login still in progress on the server for this tool and organization, so a reload
@@ -156,11 +158,30 @@ export const firstHourKeys = {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** The install this console started last, settled either way. The engine runs
+ * one install at a time and answers a second with 409, which the browser prints
+ * to its console on every try; so installs started here wait for each other. */
+let installTurn: Promise<unknown> = Promise.resolve()
+
 /** Install the latest official release of a tool in one action: the engine
  * resolves and verifies the release, then installs it; this waits for the job.
- * The engine installs one tool at a time, so a second Install waits its turn.
+ * The engine installs one tool at a time, so a second Install waits its turn:
+ * for an install started here it is not even sent until the first has ended,
+ * and an install started elsewhere (the CLI, another tab) is retried once a second.
  * `onProgress` receives every job it reads, so a page can show the download. */
-export async function installLatest(
+export function installLatest(
+  driver: SignInTool,
+  authority?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  onProgress?: (job: ToolJob) => void,
+): Promise<ToolJob> {
+  const done = installTurn.then(() =>
+    installWhenFree(driver, authority, onProgress),
+  )
+  installTurn = done.catch(() => undefined)
+  return done
+}
+
+async function installWhenFree(
   driver: SignInTool,
   authority?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
   onProgress?: (job: ToolJob) => void,

@@ -13,6 +13,7 @@
 // page. The words are the kill switch banner's, carried in the shell's `nav` namespace so
 // the shell does not load the whole kill switch dictionary.
 import { Link } from '@tanstack/react-router'
+import { OctagonAlert, OctagonX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { useKillSwitchState } from './use-killswitch-state'
@@ -22,6 +23,7 @@ export function KillSwitchStatus() {
   const { posture } = useKillSwitchState()
   if (!posture || (!posture.estate && posture.agentStops === 0)) return null
   const { estate, agentStops } = posture
+  const Icon = estate ? OctagonX : OctagonAlert
   // A live region around the link, not on it: `status` is not a role a link may take
   // (axe aria-allowed-role), and a stop that starts or ends is announced either way.
   return (
@@ -36,20 +38,14 @@ export function KillSwitchStatus() {
         }
         className={cn(
           'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2 text-[11px] leading-4 font-semibold whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-focus',
-          // On a phone the bar holds the engine and the version: the pill keeps its colour
-          // and its dot, and its words go to the accessible name and the tooltip.
+          // On a phone the pill keeps its colour and the kill switch banner's icon, and its
+          // words go to the accessible name and the tooltip: never colour alone.
           estate
             ? 'bg-danger-soft text-danger hover:bg-danger-soft/80'
             : 'bg-warning-soft text-warning hover:bg-warning-soft/80',
         )}
       >
-        <span
-          aria-hidden
-          className={cn(
-            'size-1.5 rounded-full',
-            estate ? 'bg-danger' : 'bg-warning',
-          )}
-        />
+        <Icon aria-hidden className="size-3 shrink-0" />
         <span className="max-[760px]:sr-only">
           {estate
             ? t('shell.killswitch.estateStopped')

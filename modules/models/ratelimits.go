@@ -68,7 +68,7 @@ const rateLimitsCaveat = "Managed Agents are NOT covered by the Anthropic Rate L
 func (m *Module) handleRateLimits(w http.ResponseWriter, r *http.Request, _ api.ModuleContext) {
 	out := rateLimitsResponseDTO{RateLimits: []rateLimitDTO{}, Caveat: rateLimitsCaveat}
 	if m.rateLimits == nil {
-		out.Reason = "the Claude Admin-API connector is not wired; the rate-limit inventory is unavailable (provision the read-only Admin credential to enable it)"
+		out.Reason = "Not connected yet: this server has no Anthropic Admin key. Whoever runs the server sets it as OLIVARES_CLAUDE_ADMIN_KEY (see the configuration reference) and restarts."
 		writeJSON(w, http.StatusOK, out)
 		return
 	}

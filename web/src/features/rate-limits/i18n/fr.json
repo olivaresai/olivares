@@ -4,7 +4,7 @@
     "hint": "Le résumé des limites n'a été recherché que dans les constats chargés. Un résumé absent peut se trouver au-delà de cette page."
   },
   "title": "Limites de débit",
-  "description": "Inventaire en lecture seule des limites de débit délimitées à l’organisation et à l’espace de travail qu’une passerelle ou un proxy doit maintenir synchronisées. Issu de l’API Rate Limits d’Anthropic (lecture seule) ; cette vue ne modifie jamais une limite.",
+  "description": "Limites de débit de votre organisation et de vos espaces de travail. Lecture seule.",
   "caveats": {
     "keepInSync": "Les passerelles/proxys doivent rester synchronisés : ces limites constituent l’inventaire qu’une passerelle ou un proxy en amont doit refléter. Elles ne sont pas appliquées ici, et leur modification s’effectue chez le fournisseur, non dans cette console.",
     "managedAgents": "Les Managed Agents ne sont PAS couverts par l’API Rate Limits. Leurs limites constituent une lacune documentée, et non une valeur nulle — aucune ligne Managed-Agents n’est affichée car l’API n’en signale aucune."

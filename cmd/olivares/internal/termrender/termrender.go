@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,7 +97,8 @@ const defaultWidth = 80
 type Renderer struct {
 	w     io.Writer
 	color bool
-	width int // 0 means "not a terminal": do not wrap, do not truncate
+	term  bool // a person reads it: marks are drawn
+	width int  // 0 means "not a terminal": do not wrap, do not truncate
 }
 
 // Options configures New. Every field has a working zero value; the seams exist
@@ -135,7 +137,7 @@ func New(w io.Writer, opts Options) *Renderer {
 	if width <= 0 {
 		width = resolveWidth(getenv, term)
 	}
-	return &Renderer{w: w, color: color, width: width}
+	return &Renderer{w: w, color: color, term: term, width: width}
 }
 
 // noColorRequested honours NO_COLOR, which is set to ANY value — including the
@@ -427,6 +429,39 @@ type Table struct {
 	// Empty is the sentence printed when there are no rows. A list that prints
 	// nothing is indistinguishable from a command that did nothing.
 	Empty string
+	// Marks optionally put a mark before each row's first cell on a terminal:
+	// Marks[row]. A pipe or a file gets the rows as they were, so a script that
+	// reads the columns reads the same text. A short slice is fine; an empty mark
+	// leaves its row as it is.
+	Marks []Mark
+}
+
+// Mark is the one mark of a tool or a provider (core/driverfacts): one or two
+// letters, drawn white on Color (#RRGGBB) when colour is on, plain otherwise.
+type Mark struct{ Letters, Color string }
+
+// mark draws m two columns wide, padded outside the paint like a cell.
+func (r *Renderer) mark(m Mark) string {
+	var red, green, blue uint8
+	if n, _ := fmt.Sscanf(m.Color, "#%02x%02x%02x", &red, &green, &blue); !r.color || n != 3 {
+		return pad(m.Letters, 2)
+	}
+	return pad(fmt.Sprintf("\x1b[1;38;2;255;255;255;48;2;%d;%d;%dm%s%s", red, green, blue, m.Letters, reset), 2)
+}
+
+// marked returns the rows with each row's mark before its first cell.
+func (r *Renderer) marked(t Table) [][]string {
+	if !r.term || len(t.Marks) == 0 {
+		return t.Rows
+	}
+	rows := make([][]string, len(t.Rows))
+	for i, row := range t.Rows {
+		rows[i] = slices.Clone(row)
+		if i < len(t.Marks) && t.Marks[i].Letters != "" && len(row) > 0 {
+			rows[i][0] = r.mark(t.Marks[i]) + " " + row[0]
+		}
+	}
+	return rows
 }
 
 // Table writes t, choosing between the column form and the record form by width.
@@ -444,6 +479,7 @@ func (r *Renderer) Table(t Table) {
 		}
 		return
 	}
+	t.Rows = r.marked(t)
 	cols := len(t.Header)
 	for _, row := range t.Rows {
 		if len(row) > cols {

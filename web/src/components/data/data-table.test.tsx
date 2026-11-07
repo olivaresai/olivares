@@ -216,6 +216,107 @@ describe('DataTable — ADM-CORE-02 APG grid', () => {
       ).toBe('2')
     })
   })
+
+  it('moves rows with j and k like the arrows, and Enter still activates', async () => {
+    const onRowClick = vi.fn()
+    render(
+      <DataTable
+        columns={columns}
+        data={make(3)}
+        getRowId={(r) => r.id}
+        onRowClick={onRowClick}
+        empty={BENCH_EMPTY}
+      />,
+    )
+    const grid = screen.getByRole('grid')
+    // j enters the grid at the top-left cell, exactly like the first ArrowDown.
+    fireEvent.keyDown(grid, { key: 'j' })
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAttribute('aria-colindex', '1'),
+    )
+    expect(document.activeElement).toHaveAttribute('role', 'gridcell')
+    // Then it moves down one row at a time, and k moves back up, clamping at the top.
+    fireEvent.keyDown(grid, { key: 'j' })
+    await waitFor(() =>
+      expect(
+        document.activeElement?.closest('tr')?.getAttribute('aria-rowindex'),
+      ).toBe('3'),
+    )
+    fireEvent.keyDown(grid, { key: 'k' })
+    await waitFor(() =>
+      expect(
+        document.activeElement?.closest('tr')?.getAttribute('aria-rowindex'),
+      ).toBe('2'),
+    )
+    fireEvent.keyDown(grid, { key: 'k' })
+    await waitFor(() =>
+      expect(
+        document.activeElement?.closest('tr')?.getAttribute('aria-rowindex'),
+      ).toBe('2'),
+    )
+    // Enter on the keyboard-reached cell activates its row.
+    fireEvent.keyDown(grid, { key: 'Enter' })
+    expect(onRowClick).toHaveBeenCalledTimes(1)
+    expect(onRowClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '0' }),
+      expect.any(HTMLElement),
+    )
+  })
+
+  it('moves with Shift+J and Shift+K exactly like the lowercase letters', async () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={make(3)}
+        getRowId={(r) => r.id}
+        empty={BENCH_EMPTY}
+      />,
+    )
+    const grid = screen.getByRole('grid')
+    // Shift+J arrives as key 'J': the capital is the same move, not a dead key.
+    fireEvent.keyDown(grid, { key: 'J', shiftKey: true })
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAttribute('aria-colindex', '1'),
+    )
+    fireEvent.keyDown(grid, { key: 'J', shiftKey: true })
+    await waitFor(() =>
+      expect(
+        document.activeElement?.closest('tr')?.getAttribute('aria-rowindex'),
+      ).toBe('3'),
+    )
+    fireEvent.keyDown(grid, { key: 'K', shiftKey: true })
+    await waitFor(() =>
+      expect(
+        document.activeElement?.closest('tr')?.getAttribute('aria-rowindex'),
+      ).toBe('2'),
+    )
+  })
+
+  it('leaves a Ctrl/Cmd-modified letter to its chord: no move and no swallowed key', async () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={make(3)}
+        getRowId={(r) => r.id}
+        empty={BENCH_EMPTY}
+      />,
+    )
+    const grid = screen.getByRole('grid')
+    // As the FIRST key, a modified letter must not even "enter" the grid.
+    const first = fireEvent.keyDown(grid, { key: 'J', ctrlKey: true })
+    expect(first).toBe(true)
+    expect(document.activeElement).not.toHaveAttribute('aria-colindex')
+    // Enter the grid, then prove the chord neither moves nor is swallowed.
+    fireEvent.keyDown(grid, { key: 'j' })
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAttribute('aria-colindex', '1'),
+    )
+    const before = document.activeElement
+    const dispatched = fireEvent.keyDown(grid, { key: 'j', ctrlKey: true })
+    // Not prevented: the chord belongs to the browser, and the row did not move.
+    expect(dispatched).toBe(true)
+    expect(document.activeElement).toBe(before)
+  })
 })
 
 describe('DataTable — controlled row selection', () => {

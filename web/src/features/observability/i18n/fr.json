@@ -1,6 +1,6 @@
 {
   "title": "Observabilité et interopérabilité",
-  "description": "Santé d’ingestion fondée sur les standards et exploration des traces corrélées au registre. Les chiffres concernent l’ensemble du moteur (globaux au processus), et non chaque locataire ; les standards sont épinglés aux versions et niveaux de maturité déclarés par les organismes en amont.",
+  "description": "État de la réception de télémétrie et traces.",
   "tabs": {
     "ingestion": "Santé d’ingestion",
     "traces": "Exploration des traces"
@@ -76,7 +76,7 @@
     "listTitle": "Traces récentes",
     "listDescription": "Sélectionnez une trace pour ouvrir sa vue des spans dérivée du registre.",
     "empty": "Aucune trace",
-    "emptyHint": "Aucun événement du registre d’audit dans la fenêtre de parcours (20 000 derniers événements) ne porte d’identifiant de trace W3C — les appelants ne propagent pas traceparent, ou la fenêtre les a dépassés.",
+    "emptyHint": "Les traces apparaissent ici quand les outils envoient un identifiant de trace avec leurs requêtes.",
     "noResults": "Aucune trace ne correspond à la recherche.",
     "filterNoResults": "Aucune trace ne correspond aux filtres actifs.",
     "searchPlaceholder": "Rechercher par ID de trace…",

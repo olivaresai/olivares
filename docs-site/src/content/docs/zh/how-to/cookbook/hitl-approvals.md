@@ -78,6 +78,8 @@ curl -ks -X POST "$BASE/v1/m/governance/approvals/$ID/decisions" \
 
 ## 备注
 
+对于受支持的 Codex 权限请求，**在本次会话中始终批准** 会为当前会话授予已审核的权限。**仅批准这一次** 保持其一次性行为。同样的选择可在对话和审批队列中使用。API 客户端在请求报告 `session_scope_allowed: true` 时，可发送 `{"decision":"approve","scope":"session"}`。其他请求会以 HTTP 400 拒绝该作用域，且不记录任何决定。决定轨迹与审计事件保留该作用域；当需要多人审批时，一次性决定使授权保持为一次性。
+
 - 若请求长时间未决，`escalate_in_seconds` 会通知职责分离（SoD）团队——对生产关键动作请
   使用它。
 - 取消（`POST …/{id}/cancel`）供请求者或管理员针对待决请求使用；它同样会被记录。

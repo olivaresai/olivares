@@ -78,7 +78,7 @@ import {
   useFailedActionReporter,
   usePrivilegedMutation,
 } from '@/lib/hooks/use-privileged-mutation'
-import { RecordingNotice } from '@/features/recordings/recording-notice'
+import { RecordingNoticeSlot } from '@/features/recording-notice-slot'
 import { RevisionsSheet } from '@/features/shared/revisions-sheet'
 import {
   isRedeliverable,
@@ -154,11 +154,10 @@ export function AlertingView() {
         title={t('title')}
         description={t('description')}
       />
-      {/* AC-8: notify's routes and the outbox requeue are privileged, audited surfaces,
-          and a tenant may add this namespace to its recorded set. Without this the engine
-          answers 403 `recording_consent_required` and the console had no way for the
-          operator to answer it — it told them to obtain a permission they already held. */}
-      <RecordingNotice namespace="notify" />
+      {/* AC-8: notify's routes and the outbox requeue are privileged surfaces a Business build
+          can record. Its notice fills this slot, so the operator can answer the engine's 403
+          `recording_consent_required` instead of being told to obtain a permission they hold. */}
+      <RecordingNoticeSlot namespace="notify" />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="routes">{t('tabs.routes')}</TabsTrigger>

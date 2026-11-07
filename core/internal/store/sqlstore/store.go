@@ -1016,6 +1016,7 @@ func (b *storePreparation) openPrepared(ctx context.Context, cfg store.Config, r
 			coreFederationDataMigration(dia), coreAuditSchemaMigration(dia), coreAuditTreeMigration(dia),
 			coreWorkspaceTreeMigration(dia), coreAuditTreeGuardMigration(dia), coreUserGroupWorkspaceMigration(dia),
 			coreAuthSessionInventoryMigration(dia), coreGroupDerivedTokenRoleMigration(dia),
+			coreAuthSessionIdPSessionMigration(dia),
 		}); err != nil {
 			return fmt.Errorf("sqlstore: core reconciliation migrations: %w", err)
 		}

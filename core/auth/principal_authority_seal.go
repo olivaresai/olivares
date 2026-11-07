@@ -18,14 +18,15 @@ import (
 )
 
 // principalAuthoritySealDomain is written verbatim as the first bytes of every
-// v4 preimage. The trailing NUL is part of the domain, not a separator supplied
-// by the encoder. v4 appends the durable authentication instant to v3's account
-// standing, identity and complete authority provenance.
-const principalAuthoritySealDomain = "olivares.auth.principal-authority-seal.v4\x00"
+// v5 preimage. The trailing NUL is part of the domain, not a separator supplied
+// by the encoder. v5 adds the Ask origin mark to v4's account standing, identity,
+// authentication instant and complete authority provenance. Seals are computed
+// in this process and never stored or exchanged, so no v4 verifier is kept.
+const principalAuthoritySealDomain = "olivares.auth.principal-authority-seal.v5\x00"
 
 var errInvalidPrincipalAuthoritySeal = errors.New("auth: invalid principal authority seal input")
 
-// The v4 encoding has a fixed field order and a closed set of type tags. Every
+// The v5 encoding has a fixed field order and a closed set of type tags. Every
 // variable-width value carries an unsigned 64-bit big-endian byte length; every
 // collection carries an unsigned 64-bit big-endian element count. Integers are
 // fixed-width two's-complement big-endian values. Maps and authority sets are
@@ -50,7 +51,7 @@ const (
 // computePrincipalAuthoritySeal validates and seals the complete authority
 // shape carried by a resolved Principal. The provenance seal bytes themselves
 // are excluded to avoid recursion. Email is display-only on the hot path and
-// must be empty in the closed evidence shape; v4 therefore encodes no email.
+// must be empty in the closed evidence shape; v5 therefore encodes no email.
 func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	if !validPrincipalAuthorityShape(p) {
 		return [sha256.Size]byte{}, errInvalidPrincipalAuthoritySeal
@@ -58,10 +59,10 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 
 	w := newPrincipalAuthoritySealWriter()
 	if p.credentialRef.installation {
-		// Only this new, closed OS profile uses the installation domain. Every
-		// ordinary/workflow v4 preimage remains byte-for-byte unchanged.
+		// Only this closed OS profile uses the installation domain; the field
+		// order below is the same. v2 follows the v5 field order.
 		w.h.Reset()
-		_, _ = w.h.Write([]byte("olivares.auth.os-account-installation-seal.v1\x00"))
+		_, _ = w.h.Write([]byte("olivares.auth.os-account-installation-seal.v2\x00"))
 	}
 	if p.evidence.authorityMode == principalEngineSystemAuthority {
 		// The engine system shape is the only one with local attribution, so it
@@ -87,11 +88,13 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	w.id(p.actAs)
 	w.confinementMap(p.confined)
 	w.restrictionMap(p.restricted)
+	// Ask Olivares never decides an approval; the mark that says so is authority.
+	w.boolean(p.askOrigin)
 	w.str(p.localVia)
 	w.str(p.localSubject)
 	// A resolved principal must carry no local attribution. Encode the semantic
 	// zero explicitly so adding a local shape to a future protocol requires a
-	// new domain/version rather than silently changing v4. The engine system
+	// new domain/version rather than silently changing v5. The engine system
 	// shape is that domain; its audit metadata stays attribution, not authority.
 	w.nilValue()
 	w.boolean(p.localSystem)

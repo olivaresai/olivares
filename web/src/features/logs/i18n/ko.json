@@ -1,5 +1,5 @@
 {
-  "title": "로그 뷰어",
+  "title": "로그",
   "controls": {
     "pause": "일시 중지",
     "resume": "재개",
@@ -18,7 +18,7 @@
     "clearAria": "필터 지우기"
   },
   "capture": {
-    "debugUnavailable": "DEBUG 항목은 엔진의 현재 로그 수준에서 수집되지 않습니다. OLIVARES_LOG_LEVEL=debug를 설정하십시오."
+    "debugUnavailable": "현재 로그 수준에서는 디버그 항목이 기록되지 않습니다."
   },
   "stream": {
     "empty": "표시할 로그 항목이 없습니다.",

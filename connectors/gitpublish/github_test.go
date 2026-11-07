@@ -460,3 +460,48 @@ func TestBranchReportsDefaultAndProtection(t *testing.T) {
 		t.Fatal("a failed branch read must be an error, never 'unprotected'")
 	}
 }
+
+func TestReviewRuleIsWhatTheIdentityCannotBypass(t *testing.T) {
+	_, key := testKey(t)
+	d := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/acme/widgets/rules/branches/main":
+			// Ruleset 1 asks one approval and binds this identity; ruleset 2 asks two, but
+			// this identity may bypass it; a status-check rule says nothing about reviews.
+			_, _ = io.WriteString(w, `[{"type":"pull_request","ruleset_id":1,"parameters":{"required_approving_review_count":1}},
+				{"type":"pull_request","ruleset_id":2,"parameters":{"required_approving_review_count":2}},
+				{"type":"required_status_checks","ruleset_id":1,"parameters":{}}]`)
+		case "/repos/acme/widgets/rulesets/1":
+			_, _ = io.WriteString(w, `{"id":1,"enforcement":"active","current_user_can_bypass":"never"}`)
+		case "/repos/acme/widgets/rulesets/2":
+			_, _ = io.WriteString(w, `{"id":2,"enforcement":"active","current_user_can_bypass":"always","bypass_actors":[]}`)
+		case "/repos/acme/widgets/rules/branches/open":
+			_, _ = io.WriteString(w, `[{"type":"pull_request","ruleset_id":3,"parameters":{"required_approving_review_count":1}}]`)
+		case "/repos/acme/widgets/rulesets/3":
+			_, _ = io.WriteString(w, `{"id":3,"enforcement":"active","current_user_can_bypass":"never","bypass_actors":[{"actor_type":"RepositoryRole","actor_id":5}]}`)
+		case "/repos/acme/widgets/rules/branches/bare":
+			_, _ = io.WriteString(w, `[]`)
+		default:
+			w.WriteHeader(http.StatusBadGateway)
+		}
+	})
+	g := githubFor(t, d, key)
+	tok := Token{secret: NewSecret("t")}
+	got, err := ReadReviewRule(context.Background(), g, tok, "main")
+	if err != nil || got != (ReviewRule{Approvals: 1, Bypassable: 1, Bypassers: -1}) {
+		t.Fatalf("main = %+v %v: only the rule this identity cannot bypass binds it, and a hidden bypass list is unknown", got, err)
+	}
+	if got, err := ReadReviewRule(context.Background(), g, tok, "open"); err != nil || got != (ReviewRule{Approvals: 1, Bypassers: 1}) {
+		t.Fatalf("open = %+v %v: a listed bypass actor is counted", got, err)
+	}
+	if got, err := ReadReviewRule(context.Background(), g, tok, "bare"); err != nil || got != (ReviewRule{}) {
+		t.Fatalf("bare = %+v %v", got, err)
+	}
+	if _, err := ReadReviewRule(context.Background(), g, tok, "down"); err == nil {
+		t.Fatal("a failed rule read must be an error, never 'no rule'")
+	}
+	var plain Host = &struct{ Host }{&PlainGit{}}
+	if _, err := ReadReviewRule(context.Background(), plain, tok, "main"); !errors.Is(err, ErrNotSupported) {
+		t.Fatalf("a host without a rule API = %v, want ErrNotSupported", err)
+	}
+}

@@ -82,7 +82,7 @@ corre "${bin}" version
 version_out="$SALIDA"
 echo "  version: ${version_out}"
 case "${version_out}" in
-*"olivares dev (commit none, built unknown"*) fail "binary is UNSTAMPED: ${version_out}" ;;
+*"olivares dev "*"(commit none, built unknown"*) fail "binary is UNSTAMPED: ${version_out}" ;;
 esac
 # Both legs assert the SHAPE of a real stamp, not the absence of one literal string.
 # The three defaults in cmd/olivares/main.go:36-38 (dev / none / unknown) are what an

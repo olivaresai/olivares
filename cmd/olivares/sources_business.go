@@ -11,26 +11,33 @@ import (
 )
 
 // businessSourceKinds are the enterprise-system connectors that belong to Business
-// (docs/editions.md): the SharePoint, SAP OData and Salesforce document sources, and
-// the ServiceNow CMDB, Oracle audit, KMIP and Claude Compliance API observation
-// sources, and Conjur (the NHI actuator and identity roster). Community does not
-// construct them: the Business edition adds them through inProcSourceFactories and
+// (docs/editions.md): the SharePoint, SAP OData, Salesforce, Confluence, Snowflake and
+// Azure AI Search document sources, the ServiceNow CMDB, Oracle audit, KMIP and Claude
+// Compliance API observation sources, and Conjur (the NHI actuator and identity roster).
+// Community does not construct them: the Business edition adds them through inProcSourceFactories and
 // thisEdition.contentSource. This set only lets a Community build say "Business" for them
 // instead of "unknown kind". The value is the connector's name: its directory under
 // connectors/, which scripts/check-public-counts.sh reads to know the connector has an
 // activation path in the Business edition (Conjur has no directory here; see its entry).
+// A document kind added here also goes in businessDocumentKinds.
 var businessSourceKinds = map[string]string{
+	"azure_ai_search":   "azureaisearch",
 	"claude-compliance": "claude-compliance",
+	"confluence":        "confluence",
 	"kmip":              "kmip",
 	"oracle-audit":      "oracle-audit",
 	"servicenow-cmdb":   "servicenow",
 	"salesforce":        "salesforce",
 	"sap_odata":         "sapodata",
 	"sharepoint":        "sharepoint",
+	"snowflake":         "snowflake",
 	// Conjur (NHI actuator and identity roster) is built only by the Business overlay; this tree
 	// has no connectors/conjur directory, so the value names the overlay's connector.
 	"conjur": "conjur",
 }
+
+// businessDocumentKinds are the document connectors among businessSourceKinds.
+var businessDocumentKinds = []string{"azure_ai_search", "confluence", "salesforce", "sap_odata", "sharepoint", "snowflake"}
 
 // businessKindUnavailable reports a Business kind this build cannot construct.
 func businessKindUnavailable(kind string) bool {

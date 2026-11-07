@@ -56,7 +56,30 @@ Two honesty switches worth knowing:
   cross-tenant inventory is what needs the admin role. (Running `pg_dump`
   *directly* is a different case: it is refused outright, see above.)
 
-**Scheduling:** the Compose stack ships a
+**Scheduling:** every install backs itself up from its first start. With no
+stored schedule the engine stores a daily backup at 02:00 UTC kept 30 days, a
+weekly restore test on Sunday at 03:00 UTC and a 24-hour RPO target. It writes
+the bundles to `backups/` in the data directory and seals them with
+`dr-recovery.key`, a key it generates beside them, unless
+`OLIVARES_DR_PASSPHRASE_FILE` names your own passphrase file. Change or turn the
+schedule off on the console's Backups page; a stored schedule, including one you
+emptied, is never replaced on upgrade. An install that already holds bundles in
+`backups/` when it first stores this schedule keeps every one: retention stays
+off until you set it. The bundles share free space with the live data, so watch
+that disk on a large install. `olivares dr status` shows the schedule,
+the last backup and restore test, and says when every copy is on the data disk:
+
+```bash
+olivares dr status
+```
+
+Those copies and their key share a disk with the data, so a disk failure loses
+all three. Add an offsite target on the Backups page (or copy a bundle with
+`olivares dr push`) and keep the recovery key off the host. To verify a
+scheduled bundle yourself, give `olivares dr verify` that key:
+`--passphrase-file /var/lib/olivares/dr-recovery.key`.
+
+For your own cadence or target, the Compose stack also ships a
 [backup profile](/tutorials/getting-started/docker-compose/#3-encrypted-dr-backups-the-backup-profile),
 the Helm chart a
 [CronJob](/tutorials/getting-started/kubernetes/#4-scheduled-encrypted-backups);

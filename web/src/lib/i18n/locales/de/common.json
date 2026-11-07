@@ -106,7 +106,20 @@
     "scope": "in {{name}}",
     "footerMove": "bewegen",
     "footerOpen": "öffnen",
-    "footerCommands": "nur Befehle"
+    "footerCommands": "nur Befehle",
+    "objectActions": "Für {{name}}",
+    "footerPeople": "Personen",
+    "footerSessions": "Sitzungen",
+    "peopleHint": "Geben Sie einen Namen ein.",
+    "ask": "Olivares fragen …"
+  },
+  "hintBar": {
+    "move": "bewegen",
+    "open": "öffnen",
+    "approve": "genehmigen",
+    "deny": "ablehnen",
+    "launcher": "Starter",
+    "command": "Befehle"
   },
   "permissionWords": {
     "read": "Lesezugriff",
@@ -327,11 +340,16 @@
         "last": "Letzte Sitzung",
         "open": "Sitzung öffnen",
         "pin": "Anheften oder lösen",
+        "undo": "Letztes Archivieren, Zurückstellen, Erledigt oder Lösen rückgängig machen",
         "menu": "Aktionsmenü der Sitzung öffnen"
       },
       "session": {
         "new": "Neue Sitzung",
         "previous": "Zur vorherigen Sitzung zurückkehren"
+      },
+      "list": {
+        "next": "Zur nächsten Zeile",
+        "previous": "Zur vorherigen Zeile"
       },
       "sourceDiff": {
         "nextFile": "Nächste Datei",
@@ -342,15 +360,23 @@
       "approvals": {
         "approve": "Die geöffnete Anfrage einmal genehmigen",
         "deny": "Die geöffnete Anfrage ablehnen"
+      },
+      "accessMap": {
+        "fullScreen": "Vollbild-Karte öffnen oder verlassen"
+      },
+      "ask": {
+        "open": "Olivares fragen"
       }
     },
     "when": {
       "railFocused": "in der Sitzungsleiste",
+      "outsideList": "außerhalb einer Liste",
       "launcherFocused": "im Starterfeld",
       "workSurface": "auf dem Sitzungsbildschirm",
       "sessionHistory": "wenn eine vorherige Sitzung verfügbar ist",
       "paletteRecent": "in den Palettenergebnissen bei leerer Suche",
-      "approvalQueue": "in der Genehmigungsliste"
+      "approvalQueue": "in der Genehmigungsliste",
+      "accessMap": "auf der Zugriffskarte"
     },
     "precedence": "Teilen sich zwei Zeilen dieselben Tasten, gewinnt die letzte zutreffende.",
     "problems_one": "{{count}} Tastenkürzel konnte nicht gelesen werden und löst nicht aus: {{commands}}",
@@ -404,7 +430,6 @@
     },
     "quoteReply": "Antwort zitieren",
     "copy": {
-      "markdown": "Markdown-Block kopieren",
       "message": "Nachricht kopieren",
       "code": "Code kopieren",
       "copied": "Kopiert",

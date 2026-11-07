@@ -12,7 +12,7 @@ Claude Code 状態、そして再構成可能なタイムラインである。�
 永続的なエステートを具現化するのに対し、モジュール II は同じ観測ストリーム上で、セッション
 ごとの**ライブ運用オーバーレイ**を保持し、そのストリームが誠実に運ぶものだけを表示する。
 
-Olivares <!-- release -->0.6<!-- /release --> は公式プロバイダー CLI も
+Olivares <!-- release -->0.7<!-- /release --> は公式プロバイダー CLI も
 [プロバイダープロファイル](/how-to/operate-provider-sessions/) の下で所有する子として
 **起動**します。その管理経路は同じモジュールです。オーバーレイを置き換えず、同じ
 プロバイダーセッション id を告げる 2 つのホームをマージしません
@@ -94,6 +94,59 @@ GIF の各画像をセッションとともに保存します。1 メッセー�
 拒否します。API は `POST /v1/m/sessions/runs/{ref}/attachments`（画像、base64）、
 `GET .../attachments/{id}`、および `.../input` の `attachments` です。画像はデータディレクトリの下に
 テナントごと、セッションごとに保存され、セッションとともに削除されます。
+
+## NFS または SMB 共有上のセッションフォルダー
+
+セッションフォルダーはエンジンホスト上のパスなので、ネットワーク共有はホストがマウントした後にフォルダーになります。`olivares netfolder add` は systemd 自身のマウントユニットでそれを行い、マウントポイントをフォルダーとして登録します。マウントの管理は systemd のものであり、ユニットは読んで編集できるプレーンなファイルです。エンジンホスト上で root として実行します:
+
+```sh
+printf '%s\n' "$SMB_PASSWORD" | sudo olivares netfolder add files //fileserver/projects --user svc --password-stdin
+sudo olivares netfolder add data fileserver:/export --mode write_no_delete
+olivares netfolder ls
+```
+
+ソースは、`mount(8)` が書くとおり、SMB では `//server/share`、NFS では `server:/export` です。名前は小文字と数字で、マウントポイント `/srv/olivares/mnt/<name>` の名前になります。`--mode` はフォルダーのアクセスモードです（既定は `rw`）。ユニットは、SMB フォルダーが見せるすべてのファイルの所有者としてアカウント `olivares` を指定するため、エンジンはそのアカウントで実行される必要があります。`ls` は各フォルダーを `mounted`、`unmounted`（初回使用時にマウントされます。`ls` はそれを引き起こしません）、または `not responding` として表示します。既に存在するフォルダーは決して上書きされません。
+
+SMB の例で、このコマンドが書き出すユニットは次のとおりです。Debian 13（Linux 6.12）上で、NFSv4.2 エクスポートと Samba 4.22 共有（SMB 3.1.1）に対して測定しました。ファイル名は、`systemd-escape -p /srv/olivares/mnt/files` が出力するものに `.mount` と `.automount` を付けたものです。
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.mount
+[Unit]
+Description=Olivares network folder files
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=//fileserver/projects
+Where=/srv/olivares/mnt/files
+Type=cifs
+Options=credentials=/etc/olivares/netfolders/files.cred,uid=olivares,gid=olivares,vers=3.1.1,nodev,nosuid,soft,echo_interval=5
+TimeoutSec=30
+```
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.automount
+[Unit]
+Description=Olivares network folder files (mounted on first use)
+
+[Automount]
+Where=/srv/olivares/mnt/files
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=remote-fs.target
+```
+
+NFS の場合は、`Type=nfs4`、`What=fileserver:/export` と `Options=nodev,nosuid,vers=4.2,soft,timeo=50,retrans=2` を書き、資格情報ファイルは作りません。アプライアンスのポリシーで SELinux を enforce しているホストでは、オプションに `context=system_u:object_r:olivares_workspace_t:s0` を追加します。これは、エンジンとそのセッションツールがフォルダーに既に使っているラベルです。フォルダーを削除するには、2 つのユニットに対して `systemctl disable --now` を実行し、それらと資格情報ファイルを削除して、フォルダーの登録を解除します。
+
+- **共有にアクセスできる全員が 1 つのアカウントとして動作します。** ファイルは、マウントが提示するアカウントとして読み書きされます。SMB では `uid=` と `gid=`、NFS ではエクスポートのユーザーマッピングです。共有は人を区別しません。誰にフォルダーを渡すかは Olivares が決めます。
+- **個人専用のフォルダーは、その本人として読み取ります。** `--owner <ユーザー ID>` は、個人フォルダーと同じように、SMB フォルダーを 1 人専用として登録します。内容は本人だけのもので、管理者は管理のためにフォルダー自体は引き続き見つけられます。`--user` と、その本人自身の SMB ログインのパスワードを指定すると、ファイルサーバーがその人の権限を適用します。同じ共有をマウントした 2 人は、それぞれ自分のアカウントで開けるものだけを見ます。フォルダーは 1 人につき 1 つ、それぞれ別の名前で追加します。NFS は人を区別できないため、所有者を受け付けません。管理者は本人のパスワードを 1 回入力し、共有アカウントのパスワードと同じく root だけが読めるクレデンシャルファイルに保存されます。本人のセッションがそれを保持することはありません。本人が誰にもパスワードを渡さなくて済むセッション単位の Kerberos チケットは、まだ作られていません。Samba AD ドメインの 2 つのアカウントで 1 つの共有を確認しました。各人のフォルダーには、自分のディレクトリと共通ディレクトリが表示され、自分のファイルを読め、もう一方のファイルはファイルサーバーが拒否しました。
+- **資格情報はファイルに保持されます。** コマンドは、標準入力から受け取ったパスワードを、`credentials=` ファイルに `username=` と `password=` として書き込みます。所有者は root、モードは 0600 です。パスワードはどのユニット、マウントオプション、プロセス引数、ジャーナルの行にも現れません。`mount.cifs` にはパスだけが渡されます。`sec=sys` の NFS には資格情報は不要です。
+- **automount ユニットにより、起動はファイルサーバーから独立します。** 起動時に共有を待つものはありません。初回使用でマウントされ、その時点でサーバーがダウンしていれば、起動ではなく使用が失敗します。
+- **`soft` を使用してください。** 既定の `hard` NFS マウントでは、停止したサーバーに触れたプロセスが止められない状態で止まってしまいます。上記のオプションでは、マウントされた共有への読み書きは、20 から 30 秒後に入出力エラーまたは「Host is down」で失敗し、サーバーが応答するようになると共有は再び動作します。
+- **応答しないフォルダーは報告されます。** フォルダーの登録、開く、一覧表示、そのフォルダーでのセッション起動は、それぞれ共有を 10 秒間待ち、その後「The folder ... is not responding. If it is on a network share, check that its file server is up and reachable.」というメッセージと 424 ステータスで拒否されます。セッションは起動しません。
+- **`write_no_delete` は保持されます。** Landlock がカーネルのファイルシステム層で強制します。それはネットワークファイルシステムより上で働きます。両方の共有で実際のセッション起動を行ったところ、セッションはファイルを作成して変更でき、名前変更、unlink、rmdir は、ローカルディスクとまったく同じように拒否されました。`rw` ではそれらが許可されました。閉じ込めができないホストでは、それでも起動は拒否されます。
+- **フォルダーが境界です。** 同じ起動において、両方のモードで、同じ共有上にあるフォルダーの親への書き込みは拒否され、ファイルは残りませんでした。セッションはフォルダーの中にのみ書き込みます。
 
 ## 何を消費するか(そして何を導出するか)
 

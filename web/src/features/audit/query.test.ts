@@ -15,7 +15,7 @@ const NOW = new Date('2026-10-20T16:42:31Z')
 describe('the ledger query', () => {
   it('maps each token to the audit API filter of the same meaning', () => {
     const { params, problems } = parseQuery(
-      'person:marc action:sessions. kind:sessions.run target:run-7 since:7d until:2026-10-20 approval',
+      'person:marc action:sessions. kind:sessions.run target:run-7 tool:codex folder:"/srv/my app" since:7d until:2026-10-20 approval',
       resolvePerson,
     )
     expect(problems).toEqual([])
@@ -24,6 +24,8 @@ describe('the ledger query', () => {
       action: 'sessions.',
       target_kind: 'sessions.run',
       target_id: 'run-7',
+      tool: 'codex',
+      folder: '/srv/my app',
       since: '7d',
       // A day stays the day typed, as a relative bound stays relative.
       until: '2026-10-20',
@@ -48,13 +50,13 @@ describe('the ledger query', () => {
 
   it('refuses what the API cannot filter instead of guessing', () => {
     const { params, problems } = parseQuery(
-      'person:nobody tool:codex since:soon',
+      'person:nobody status:open since:soon',
       resolvePerson,
     )
     expect(params).toEqual({})
     expect(problems).toEqual([
       { token: 'person:nobody', reason: 'person' },
-      { token: 'tool:codex', reason: 'key' },
+      { token: 'status:open', reason: 'key' },
       { token: 'since:soon', reason: 'time' },
     ])
   })

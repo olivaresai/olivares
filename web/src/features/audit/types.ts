@@ -46,6 +46,8 @@ export interface AuditFilters {
   action?: string
   target_kind?: string
   target_id?: string
+  tool?: string
+  folder?: string
   q?: string
 }
 

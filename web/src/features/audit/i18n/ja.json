@@ -3,9 +3,6 @@
   "subtitle": "AI の活動の署名付き記録を確認します。",
   "subtitleSystem": "テナント横断の管理操作を記録するシステムテナントのチェーン（読み取り専用）。",
   "searchLoaded": "読み込み済みの行のみをフィルター（クライアント側）…",
-  "scan": {
-    "incomplete": "seq {{seq}} までスキャン済み — 台帳全体ではありません。「さらに読み込む」でスキャンを続行します。"
-  },
   "scope": {
     "label": "台帳のスコープ",
     "tenant": "テナント台帳",
@@ -75,6 +72,9 @@
     "actorMember": "メンバー"
   },
   "empty": {
+    "filteredTitle": "一致する証拠はありません",
+    "searching": "これまで検索したイベントに一致するものはありません。「さらに読み込む」で検索を続けます。",
+    "noMatches": "このフィルターに一致するイベントはありません。フィルターを変更または削除してください。",
     "title": "まだ証拠はありません",
     "description": "このスコープの台帳は空です。統制された操作は、発生のたびに改ざん検知可能なイベントを追記します。"
   },
@@ -104,26 +104,27 @@
     "membership_offboard": "メンバーを削除",
     "token_issue": "API トークンを作成",
     "token_revoke": "API トークンを取り消し",
-    "secret_delete": "シークレットを削除"
+    "secret_delete": "シークレットを削除",
+    "governance_killswitch_engage": "キルスイッチを発動",
+    "sessions_run_created": "セッションを作成"
   },
   "targets": {
     "core_policy": "ポリシー"
   },
   "internal": {
-    "hidden": "非表示の内部記録: {{count}}",
     "show": "内部記録を表示",
     "hide": "内部記録を非表示",
     "allHidden": "これまでに読み込んだものはすべて内部記録です。"
   },
   "ledger": {
     "query": "台帳クエリ",
-    "placeholder": "person:  action:  since:7d  または語句",
+    "placeholder": "検索",
     "addFilter": "フィルターを追加",
     "remove": "{{token}} を削除",
     "add": "{{token}} をクエリに追加",
     "commands": "検索とコマンド",
     "problem": {
-      "key": "{{token}} は台帳のフィルターではありません。person:、action:、kind:、target:、since:、until: または語句を使ってください。",
+      "key": "{{token}} は台帳のフィルターではありません。person:、action:、kind:、target:、tool:、folder:、since:、until: または語句を使ってください。",
       "time": "{{token}} は時間ではありません。90m、24h、7d、2w、または 2026-10-20 のような日付を使ってください。",
       "person": "{{token}} に一致する人はいません。名前、メール、または user:<id> を使ってください。",
       "several": "{{token}} に一致する人が複数います。フルネーム、メール、または user:<id> を使ってください。",
@@ -146,10 +147,6 @@
       "day": "1 日ごとのエントリ",
       "week": "1 週間ごとのエントリ",
       "bar_other": "{{at}}、{{count}} 件",
-      "loaded_other": "{{count}} 件を読み込み済み",
-      "sessions_other": "{{count}} セッション",
-      "people_other": "{{count}} 人",
-      "more": "さらに読み込めます",
       "now": "現在"
     },
     "entry": {
@@ -163,5 +160,15 @@
       "chainHint": "各エントリは直前のエントリのハッシュを持ちます。1 つを変えると、それ以降のハッシュがすべて壊れます。",
       "signedEntry": "署名されたエントリ"
     }
+  },
+  "verbs": {
+    "create": "{{what}}を作成",
+    "update": "{{what}}を更新",
+    "delete": "{{what}}を削除"
+  },
+  "toolApproval": {
+    "allow": "ツール呼び出しを許可",
+    "ask": "ツール呼び出しを承認待ちに",
+    "deny": "ツール呼び出しを拒否"
   }
 }

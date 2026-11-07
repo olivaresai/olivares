@@ -71,9 +71,10 @@ function ApprovalCard({ id, run }: { id: string; run: RunDTO }) {
   const approval = query.data
   return (
     <section
+      data-trust-chrome=""
       aria-labelledby={titleId}
       data-testid="conversation-approval"
-      className="my-3 flex min-w-0 flex-col gap-3 rounded-[12px] border border-line-strong bg-accent-soft p-4"
+      className="my-3 flex min-w-0 flex-col gap-3 rounded-[12px] border border-line-strong bg-accent-soft p-4 text-foreground"
     >
       <h3
         id={titleId}

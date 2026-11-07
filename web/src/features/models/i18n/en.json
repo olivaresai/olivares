@@ -9,7 +9,8 @@
     "keys": "Provider keys",
     "gpai": "GPAI posture",
     "access": "Access",
-    "governance": "Governance"
+    "governance": "Governance",
+    "usage": "Usage"
   },
   "catalog": {
     "title": "Capability matrix",
@@ -122,9 +123,9 @@
   "keys": {
     "title": "Provider key references",
     "description": "Governed references to provider API keys and workspaces. Only a masked hint is stored — never the secret value.",
-    "new": "Add key reference",
+    "new": "Add reference",
     "empty": "No key references",
-    "emptyHint": "A key reference points at a credential the engine holds, never at the secret itself. Add one to let a model be called.",
+    "emptyHint": "A key reference points at a credential the engine holds, never at the secret itself. It is not needed to call a model: add the key itself as an API key.",
     "maskedOnly": "Reference only — the secret value is never stored or shown.",
     "columns": {
       "name": "Name",
@@ -141,7 +142,7 @@
       "workspace": "Workspace"
     },
     "dialog": {
-      "title": "Add key reference",
+      "title": "Add reference",
       "name": "Name",
       "provider": "Provider",
       "kind": "Reference kind",
@@ -273,6 +274,37 @@
     "truncatedHint": "There are more access rules than shown; this page takes rows by id. The marks on these rows reflect ONLY the loaded rules: allows that would introduce confinement or add permitted targets may be missing, and forbids that subtract access may be missing too — so this page can read wider OR narrower than reality, and a subject with no loaded rule does not appear at all. Do not infer effective access from it: the engine drains every page before deciding, and it resolves a principal across user, role and group, which a row cannot show.",
     "groupsTruncated": "Loaded {{n}} groups; there are more",
     "groupsTruncatedHint": "There are more model groups than shown; this page takes rows by id. A group not listed here does not demonstrate that it does not exist — a rule may still target it."
+  },
+  "usage": {
+    "byLabel": "Group usage by",
+    "periodLabel": "Period",
+    "by": {
+      "model": "Model",
+      "account": "Account",
+      "provider": "Provider",
+      "tool": "Tool"
+    },
+    "period": {
+      "days1": "24 hours",
+      "days7": "7 days",
+      "days30": "30 days"
+    },
+    "chartTitle": "Runs per day",
+    "chartSummary": "Runs per day. Grouped by: {{by}}. Period: {{period}}. Total {{total}}; busiest day {{day}} with {{peak}}.",
+    "totalsTitle": "Totals",
+    "columns": {
+      "day": "Day",
+      "runs": "Runs",
+      "input": "Input tokens",
+      "output": "Output tokens",
+      "cost": "Cost"
+    },
+    "noKey": "Not recorded",
+    "other": "Other",
+    "empty": {
+      "title": "No usage in this period",
+      "description": "Usage appears here after the first session runs."
+    }
   },
   "available": {
     "title": "Available now",

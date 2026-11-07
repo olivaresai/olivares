@@ -1,5 +1,5 @@
 {
-  "title": "Webhook e sottoscrizioni agli eventi",
+  "title": "Webhook",
   "description": "Sottoscrizioni agli eventi in uscita — configura gli endpoint webhook, ispeziona gli eventi consegnati e gestisci la coda delle dead letter.",
   "tabs": {
     "subscriptions": "Sottoscrizioni",
@@ -106,7 +106,7 @@
   },
   "events": {
     "title": "Eventi acquisiti",
-    "description": "Il registro degli eventi con cursore di sequenza. Filtra per tipo di evento per restringere i risultati.",
+    "description": "Il registro degli eventi. Filtra per tipo di evento per restringere i risultati.",
     "empty": "Nessun evento acquisito",
     "emptyHint": "Ogni evento acquisito dal bus è elencato qui, dal più recente. In questo intervallo non è stato pubblicato nulla.",
     "typeFilter": "Filtra per tipo",

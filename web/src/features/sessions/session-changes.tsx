@@ -7,10 +7,11 @@
 // one of them on click. The engine reads the folder without running anything in it
 // (modules/sessions/run_changes.go).
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, FileText } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { PathText } from '@/components/ui/path-text'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
@@ -21,6 +22,7 @@ import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { firstChangedLine } from '@/lib/editor-links'
 import { formatBytes } from '@/lib/format'
+import { TurnCheckpoints } from './turn-checkpoints'
 import './i18n'
 
 /** While the agent works the list follows it; a finished session does not change. */
@@ -95,6 +97,7 @@ export function SessionChanges({ run }: { run: RunDTO }) {
           {t('changes.hint')}
         </p>
       </div>
+      {open === null ? <TurnCheckpoints run={run} /> : null}
       {open !== null ? (
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-x-2">
@@ -166,9 +169,9 @@ export function SessionChanges({ run }: { run: RunDTO }) {
                 onClick={() => setOpen(f.path)}
                 className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <FileText
+                <FileTypeIcon
+                  path={f.path}
                   className="size-3.5 shrink-0 text-muted-foreground"
-                  aria-hidden
                 />
                 <PathText value={f.path} copy={false} className="flex-1" />
                 <RelTimeLabel

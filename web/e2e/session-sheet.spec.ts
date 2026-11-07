@@ -85,22 +85,22 @@ test.describe('the Estate sheet and the session page show the real conversation'
     await page.setViewportSize({ width: 1440, height: 900 })
     await prefer(page, 'dark')
     await signIn(page)
-    await page.goto('/')
-    const card = page
-      .getByTestId('now-live-card')
+    await page.goto('/now')
+    const row = page
+      .getByTestId('home-recent-row')
       .filter({ hasText: runName })
       .first()
-    await card.click()
+    await row.click()
     await expect(sheet(page)).toBeVisible()
     // The estate stays in place under the sheet, and the address names the session.
-    expect(new URL(page.url()).pathname).toBe('/')
+    expect(new URL(page.url()).pathname).toBe('/now')
     // The address is the session's own (live:<ref> once the engine observes the run,
     // run:<ref> before), and the sheet is that session, named by its run.
     expect(new URL(page.url()).searchParams.get('session')).toMatch(
       /^(live|run):/,
     )
     await expect(page.getByRole('dialog', { name: runName })).toBeVisible()
-    await expect(page.getByTestId('now-live')).toBeAttached()
+    await expect(page.getByTestId('now-needs')).toBeAttached()
 
     const log = sheet(page).getByRole('log')
     await sendTurn(page, 'Look up the readme')
@@ -127,10 +127,10 @@ test.describe('the Estate sheet and the session page show the real conversation'
     await page.goBack()
     await expect(sheet(page)).toBeHidden()
     expect(new URL(page.url()).searchParams.get('session')).toBeNull()
-    expect(new URL(page.url()).pathname).toBe('/')
+    expect(new URL(page.url()).pathname).toBe('/now')
 
     // Closed with its own button, Back does not bring it back.
-    await card.click()
+    await row.click()
     await expect(sheet(page)).toBeVisible()
     await sheet(page).getByRole('button', { name: 'Close' }).click()
     await expect(sheet(page)).toBeHidden()
@@ -139,8 +139,8 @@ test.describe('the Estate sheet and the session page show the real conversation'
     await expect(sheet(page)).toBeHidden()
 
     // The full page: the same conversation, at full height, live while it is open.
-    await page.goto('/')
-    await card.click()
+    await page.goto('/now')
+    await row.click()
     await sheet(page).getByRole('link', { name: 'Open the session' }).click()
     await page.waitForURL((url) => url.pathname === '/sessions')
     const conversation = '[data-testid="session-conversation"]'

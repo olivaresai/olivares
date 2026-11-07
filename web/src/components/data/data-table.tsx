@@ -533,6 +533,13 @@ export function DataTable<TData extends RowData>({
     'End',
     'PageDown',
     'PageUp',
+    // `j`/`k` are the arrows' letters, owned by the grid whenever
+    // focus is inside it — the shell only re-dispatches them OUTSIDE a list.
+    // The capitals are the same move (Shift+J is typing, not a new key).
+    'j',
+    'J',
+    'k',
+    'K',
   ]
   const onGridKeyDown = (e: KeyboardEvent<HTMLTableElement>) => {
     // `error` va en la guarda por lo mismo que `rows.length === 0`: lo que hay bajo la
@@ -612,6 +619,13 @@ export function DataTable<TData extends RowData>({
       posicionDelFoco.c >= 0 &&
       posicionDelFoco.c < colCount
     const desde = enRango ? posicionDelFoco : active
+    // A modified letter (Ctrl/Cmd/Alt+J) is a chord, not a move: the grid
+    // neither moves nor swallows it — the browser or the shell owns the key.
+    // Shift is deliberately absent: Shift+J arrives as key 'J' and moves.
+    const letterMoveModified =
+      (e.key === 'j' || e.key === 'J' || e.key === 'k' || e.key === 'K') &&
+      (e.metaKey || e.ctrlKey || e.altKey)
+    if (letterMoveModified) return
     // First navigation key with nothing active ENTERS the grid at {0,0} rather
     // than moving away from it.
     if (desde === null) {
@@ -641,9 +655,13 @@ export function DataTable<TData extends RowData>({
     let next: { r: number; c: number }
     switch (e.key) {
       case 'ArrowDown':
+      case 'j':
+      case 'J':
         next = { r: Math.min(cur.r + 1, last), c: cur.c }
         break
       case 'ArrowUp':
+      case 'k':
+      case 'K':
         next = { r: Math.max(cur.r - 1, 0), c: cur.c }
         break
       case 'ArrowRight':

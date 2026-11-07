@@ -29,7 +29,7 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
 
-/** The nine the console ships; `lint:i18n` proves the resources exist for each. */
+/** The eleven the console ships; `lint:i18n` proves the resources exist for each. */
 const LANGUAGES = [
   'en',
   'es',
@@ -40,7 +40,19 @@ const LANGUAGES = [
   'ko',
   'ru',
   'zh',
+  'uk',
+  'pt',
 ] as const
+
+/**
+ * A raw-key probe cannot tell translated copy from an English fallback, so each language that
+ * joined later names one login button and one sidebar place its catalogs supply.
+ */
+const PROBES: Record<string, { login: string; sessions?: RegExp }> = {
+  ko: { login: '로그인', sessions: /^세션(\s*,|$)/ },
+  uk: { login: 'Увійти' },
+  pt: { login: 'Iniciar sessão' },
+}
 
 async function signIn(page: Page) {
   await page.goto('/login')
@@ -124,50 +136,42 @@ test.describe('the first screens', () => {
     await expect(page.locator('#main-content')).toBeFocused()
   })
 
-  test('login: the deployment it signs into is named', async ({ page }) => {
+  test('login: the public page has no deployment footer', async ({ page }) => {
     await page.goto('/login')
-    const identity = page.getByTestId('deployment-identity')
-    await expect(identity).toBeVisible()
-    // The address, always. The version only once /v1/server-info answers, so it is
-    // not asserted here — an absent version is the documented behaviour, not a gap.
-    await expect(identity).toContainText(new URL(page.url()).host)
+    await expect(
+      page.getByRole('heading', { name: 'Sign in', exact: true }),
+    ).toBeVisible()
+    await expect(page.getByTestId('deployment-identity')).toHaveCount(0)
+    await expect(
+      page.getByText(new URL(page.url()).host, { exact: true }),
+    ).toHaveCount(0)
   })
 
   for (const theme of ['dark', 'light'] as const) {
-    test(`home (${theme}): one h1, the next action, and the work`, async ({
+    test(`Overview (${theme}): one h1, what needs you, and the work`, async ({
       page,
     }) => {
       await prefer(page, theme, 'en')
       await signIn(page)
-      await page.goto('/')
+      await page.goto('/now')
       await page.waitForLoadState('networkidle').catch(() => {})
 
       // at:gate holds every route to exactly one h1; the statement blocks on the
       // signed-out screens are text and section headings, never a second page title.
       await expect(page.locator('#main-content h1')).toHaveCount(1)
 
-      // The next action. The demo operator is a superadmin and may start a session, so
-      // the front door shows the start line read from the tools themselves: one named
-      // button (New session, or the setup step the tools still need).
-      const start = page.getByTestId('now-start')
-      await expect(start).toBeVisible()
-      const action = start.getByRole('button')
-      await expect(action).toHaveCount(1)
-      // A button with no accessible name is a control a screen reader cannot offer.
-      await expect(action).not.toHaveText('')
+      // What needs the person comes first; the composer on Sessions starts a session, so
+      // Overview has no New session of its own (#4427).
+      await expect(page.getByTestId('now-needs')).toBeVisible()
+      await expect(page.getByTestId('now-start')).toHaveCount(0)
 
-      // The work narrative: the seeded estate has sessions, so cards or rows, not the
-      // empty state. Live sessions are cards and ended ones rows (#2245); which appear
-      // is data, so accept either and require one, with the one link to all sessions.
-      const work = page
-        .getByTestId('now-live-cards')
-        .or(page.getByTestId('home-recent-rows'))
-      await expect(work.first()).toBeVisible()
-      await expect(
-        page
-          .getByTestId('home-recent-all')
-          .or(page.getByTestId('now-live-all')),
-      ).toHaveAttribute('href', '/sessions')
+      // The work: the seeded estate has sessions, so Running or Recent rows, not the empty
+      // state; which appear is data, so require one, with the one link to all sessions.
+      await expect(page.getByTestId('home-recent-rows').first()).toBeVisible()
+      await expect(page.getByTestId('home-recent-all')).toHaveAttribute(
+        'href',
+        '/sessions',
+      )
     })
   }
 
@@ -198,9 +202,9 @@ test.describe('the first screens', () => {
       await p.locator('input[type=password]').fill(PASSWORD)
       await p.locator('button[type=submit]').click()
       await p.waitForURL((u) => !u.pathname.startsWith('/login'))
-      await p.goto('/')
+      await p.goto('/now')
       await p.waitForLoadState('networkidle').catch(() => {})
-      await p.getByTestId('now-start').waitFor()
+      await p.getByTestId('now-needs').waitFor()
       const counts = await p.evaluate(() => {
         const root = document.getElementById('main-content')!
         return {
@@ -226,7 +230,7 @@ test.describe('the first screens', () => {
     // string would pass the first and fail here.
     await signIn(page)
     const ROUTES = [
-      '/',
+      '/now',
       '/models',
       '/evals',
       '/reporting',
@@ -271,10 +275,10 @@ test.describe('the first screens', () => {
       await page.goto('/login')
       await page.locator('input[type=password]').waitFor()
       await expect(page.locator('html')).toHaveAttribute('lang', lang)
-      if (lang === 'ko') {
-        // A raw-key probe cannot tell Korean copy from an English fallback.
+      const probe = PROBES[lang]
+      if (probe) {
         await expect(
-          page.getByRole('button', { name: '로그인', exact: true }),
+          page.getByRole('button', { name: probe.login, exact: true }),
         ).toBeVisible()
       }
       const rawOnLogin = await page.evaluate(rawKeyProbe)
@@ -283,16 +287,16 @@ test.describe('the first screens', () => {
       await signIn(page)
       await page.goto('/')
       await page.waitForLoadState('networkidle').catch(() => {})
-      if (lang === 'ko') {
-        // After auth the shell must be Korean too: a raw-key probe passes on the
+      if (probe?.sessions) {
+        // After auth the shell must be in the language too: a raw-key probe passes on the
         // English fallback, so name the left navigation's places the catalogs supply.
         const bar = page.locator('[data-slot="sidebar"]')
         await expect(bar).toBeVisible()
         // The place's name is its label, then its live count and "needs you" when the
-        // estate has sessions to show ("세션 , 2 , 확인 필요"), so it is matched from its start.
+        // estate has sessions to show ("Sessions , 2 , needs you"), so it is matched from its start.
         await expect(
           bar.locator('a[data-place="sessions"]'),
-        ).toHaveAccessibleName(/^세션(\s*,|$)/)
+        ).toHaveAccessibleName(probe.sessions)
       }
       const rawOnHome = await page.evaluate(rawKeyProbe)
       expect(rawOnHome, `raw i18n keys on / in ${lang}`).toEqual([])

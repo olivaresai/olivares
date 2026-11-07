@@ -91,6 +91,8 @@ que le ledger oublie silencieusement.
 
 ## Notes
 
+Pour les demandes Codex prises en charge, **Approuver pour cette session** accorde la permission examinée pour la session en cours. **Approuver une fois** conserve son comportement à usage unique. Le même choix est disponible dans la conversation et dans la file d'approbation. Les clients API peuvent envoyer `{"decision":"approve","scope":"session"}` lorsque la demande indique `session_scope_allowed: true`. Les autres demandes rejettent cette portée avec HTTP 400 et n'enregistrent aucune décision. La piste de décision et l'événement d'audit conservent la portée ; lorsque plusieurs personnes doivent approuver, une décision à usage unique garde l'accord à usage unique.
+
 - `escalate_in_seconds` notifie l'équipe SoD si une demande reste indécise —
   utilisez-le pour les actions critiques en production.
 - L'annulation (`POST …/{id}/cancel`) est destinée au demandeur ou à un admin

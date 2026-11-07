@@ -9,10 +9,13 @@
 // E2E_MESSAGES_FIXTURE=1 E2E_SPECS=e2e/session-messages.spec.ts.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { signInFixture } from './fixture-sign-in'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const runRef = process.env.E2E_CAPTURE_RUN_REF ?? ''
+const folder = process.env.E2E_SESSION_FOLDER ?? ''
 const SENT = 'Look up the readme'
 
 async function prefer(page: Page, theme: 'dark' | 'light') {
@@ -53,8 +56,8 @@ test.describe('the message navigator on a long session', () => {
     await prefer(page, 'dark')
     await openSession(page)
 
-    // The conversation holds only what this view shows: the sentence sent now. The
-    // session's 601 messages are in the engine's index, never loaded whole.
+    // The conversation restores the seeded history. The new sentence appears once,
+    // only after it is sent, and joins the engine's message index.
     const turn = page.getByTestId('launcher-input')
     await turn.fill(SENT)
     await turn.press('Enter')
@@ -76,12 +79,13 @@ test.describe('the message navigator on a long session', () => {
     await expect(page.getByTestId('message-preview')).toContainText(SENT)
     await marks.last().click()
     await expect(sent.locator('xpath=ancestor::li[1]')).toHaveClass(/ring-2/)
+    await expect(sent).toBeInViewport()
     await expect(
       page.getByRole('status').filter({ hasText: /Jumped to message/ }),
     ).toHaveCount(1)
 
-    // The panel: the whole session, searched on the engine; a message older than the
-    // thread on screen is shown whole.
+    // The panel searches the whole session on the engine, then reaches the restored
+    // row (including a row outside the virtual list's current window).
     const bar = page.getByTestId('message-bar')
     await bar.getByRole('button', { name: /^Messages/ }).click()
     const panel = page.getByTestId('message-panel')
@@ -95,8 +99,11 @@ test.describe('the message navigator on a long session', () => {
       'migrate the sqlite schema',
     )
     await panel.getByTestId('message-result').click()
-    const far = page.getByTestId('message-far')
-    await expect(far).toContainText('then the needle-137 index')
+    const older = conversation
+      .locator('[data-kind="operator"]')
+      .filter({ hasText: 'then the needle-137 index' })
+    await expect(older.locator('xpath=ancestor::li[1]')).toHaveClass(/ring-2/)
+    await expect(older).toBeInViewport()
 
     // A time: the first message at or after it, in the person's own zone.
     const local = await page.evaluate(() => {
@@ -106,10 +113,11 @@ test.describe('the message navigator on a long session', () => {
     })
     await panel.getByLabel('Go to date and time').fill(local)
     await panel.getByRole('button', { name: 'Go', exact: true }).click()
-    await expect(far).toContainText('request 300')
-    await expect(far).not.toContainText('needle-137')
-    await far.getByRole('button', { name: 'Close' }).click()
-    await expect(far).toHaveCount(0)
+    const timed = conversation
+      .locator('[data-kind="operator"]')
+      .filter({ hasText: /^request 300$/ })
+    await expect(timed.locator('xpath=ancestor::li[1]')).toHaveClass(/ring-2/)
+    await expect(timed).toBeInViewport()
   })
 
   for (const theme of ['dark', 'light'] as const) {
@@ -124,6 +132,20 @@ test.describe('the message navigator on a long session', () => {
       // Keyboard: a mark takes focus, previews, and Enter reaches the message.
       await marks.first().focus()
       await expect(page.getByTestId('message-preview')).toBeVisible()
+      // Drawn, not only in the page: an overflow on the rail cut the preview to its own
+      // 16 px (toBeVisible does not see a clip).
+      const clipped = await page
+        .getByTestId('message-preview')
+        .evaluate((el) => {
+          const rail = el.closest('nav')!
+          const style = getComputedStyle(rail)
+          if (style.overflowX === 'visible' && style.overflowY === 'visible')
+            return false
+          const a = el.getBoundingClientRect()
+          const b = rail.getBoundingClientRect()
+          return a.left < b.left || a.right > b.right
+        })
+      expect(clipped, 'the preview is cut by the rail').toBe(false)
       await page.keyboard.press('Enter')
       await expect(
         page.getByRole('status').filter({ hasText: /message \d+/i }),
@@ -152,4 +174,91 @@ test.describe('the message navigator on a long session', () => {
       ).toBe(true)
     })
   }
+
+  // A long message sits in the long conversation's virtual list, which measures every row
+  // it shows. The replies around it and a change of width (the navigation collapsing)
+  // measure them again, and the view must survive it: a fold of such a message crashed it
+  // (React #185, the list measuring without end), so the guard stays for the next fold.
+  test('keeps a long session whole through a long message, its replies and a change of width', async ({
+    page,
+  }) => {
+    await prefer(page, 'light')
+    await openSession(page)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    if (folder) writeFileSync(join(folder, '.fixture-echo-user'), '')
+    const turn = page.getByTestId('launcher-input')
+    const conversation = page.getByTestId('session-conversation')
+    // Last in the file and with words of its own: the tests before it count what they send.
+    const replies = conversation.locator('[data-kind="assistant"]', {
+      hasText: 'Two things matter',
+    })
+    const before = await replies.count()
+    await turn.fill('Check the build log')
+    await turn.press('Enter')
+    await expect(replies).toHaveCount(before + 1, { timeout: 30_000 })
+    await turn.fill(
+      Array.from(
+        { length: 20 },
+        (_, i) => `Brief line ${i + 1}: check the step.`,
+      ).join('\n'),
+    )
+    await turn.press('Enter')
+    await expect(replies).toHaveCount(before + 2, { timeout: 30_000 })
+    const message = conversation.locator('[data-kind="operator"]').filter({
+      hasText: 'Brief line 20: check the step.',
+    })
+    const latest = conversation.getByRole('button', { name: 'Jump to latest' })
+    if (await latest.isVisible()) await latest.click()
+    await expect(message).toBeVisible()
+    const text = message.locator('[data-slot="user-message-text"]')
+    const toggle = message.getByRole('button', {
+      name: 'Show all',
+      exact: true,
+    })
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    const folded = await text.evaluate(
+      (el) => el.getBoundingClientRect().height,
+    )
+    expect(folded).toBeLessThan(230)
+    await toggle.click()
+    await expect(
+      message.getByRole('button', { name: 'Show less' }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    await expect
+      .poll(() => text.evaluate((el) => el.getBoundingClientRect().height))
+      .toBeGreaterThan(folded * 2)
+    await message.getByRole('button', { name: 'Show less' }).click()
+    await expect
+      .poll(() => text.evaluate((el) => el.getBoundingClientRect().height))
+      .toBe(folded)
+    await expect(message).toBeInViewport()
+    // The navigation's fold changes the column's width (the button reads Collapse, or
+    // Expand once folded).
+    await page
+      .getByRole('button', { name: /^(Collapse|Expand) navigation$/ })
+      .click()
+    await page.waitForTimeout(1000)
+    await expect(page.getByText('This view crashed')).toHaveCount(0)
+    await expect(conversation.getByRole('log')).toBeVisible()
+    await expect(message).toBeInViewport()
+    await page.screenshot({
+      path:
+        process.env.E2E_FOLD_CAPTURE ??
+        'test-results/folded-message-1280-light.png',
+    })
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.evaluate(() => document.documentElement.classList.add('dark'))
+    await expect(
+      message.getByRole('button', { name: 'Show all', exact: true }),
+    ).toBeVisible()
+    const found = await new AxeBuilder({ page })
+      .include('[data-kind="operator"]')
+      .analyze()
+    expect(found.violations).toEqual([])
+    await page.screenshot({
+      path:
+        process.env.E2E_FOLD_MOBILE_CAPTURE ??
+        'test-results/folded-message-390-dark.png',
+    })
+  })
 })

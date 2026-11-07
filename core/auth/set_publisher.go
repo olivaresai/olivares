@@ -41,9 +41,11 @@ type SETPublisher struct {
 	ID string `json:"id,omitempty"`
 	// Enabled turns the receiver on for the tenant. The zero value (off) is deny-closed.
 	Enabled bool `json:"enabled"`
-	// Issuer is the expected SET "iss" (the IdP). Empty means do not check iss.
+	// Issuer is the expected SET "iss" (the IdP). Required: a publisher without one
+	// verifies no SET (fail closed).
 	Issuer string `json:"issuer,omitempty"`
-	// Audiences is the set of acceptable SET "aud" values. Empty means do not check aud.
+	// Audiences is the set of acceptable SET "aud" values. Required: a publisher
+	// without one verifies no SET (fail closed).
 	Audiences []string `json:"audiences,omitempty"`
 	// Keys are the publisher's public verification keys.
 	Keys []SETVerificationKey `json:"keys,omitempty"`
@@ -61,12 +63,14 @@ type SETPublisher struct {
 type SETEnvelope struct {
 	Alg          string
 	Kid          string
+	Typ          string // the JWS "typ" header
 	SigningInput []byte
 	Signature    []byte
 	Issuer       string
 	Audience     []string
 	JTI          string
 	IssuedAt     int64
+	ExpiresAt    int64 // the optional "exp" claim; 0 when absent
 }
 
 // ValidatePublisherKeys checks that every key in pub parses as a valid PKIX
@@ -226,40 +230,39 @@ func (a *Authenticator) CheckJTIDuplicate(ctx context.Context, publisherID, jti 
 	if jti == "" {
 		return nil
 	}
+	now := a.clock.Now()
+	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		return claimSETJTI(ctx, as, now, publisherID, jti, maxAge)
+	})
+}
+
+// claimSETJTI records jti for publisherID until maxAge seconds after now (0 uses a
+// conservative default), in the caller's transaction, so a receiver can claim it
+// atomically with the access change the SET makes: a refused change leaves the jti
+// unclaimed for the publisher's retry. A jti already recorded is ErrSETJTIDuplicate.
+func claimSETJTI(ctx context.Context, as store.AuthScope, now model.Timestamp, publisherID, jti string, maxAge int64) error {
 	if maxAge <= 0 {
 		maxAge = 3600
 	}
-	now := a.clock.Now()
-	var dup bool
-	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
-		existing, _, err := as.SeenJTIs().List(ctx, model.Query{
-			Filters: []model.Filter{
-				{Column: "publisher_id", Op: model.OpEq, Value: publisherID},
-				{Column: "jti", Op: model.OpEq, Value: jti},
-			},
-			Limit: 1,
-		})
-		if err != nil {
-			return err
-		}
-		if len(existing) > 0 {
-			dup = true
-			return nil
-		}
-		_, err = as.SeenJTIs().Create(ctx, model.SETSeenJTI{
-			JTI:         jti,
-			PublisherID: publisherID,
-			ExpiresAt:   model.NewTimestamp(now.Time().Add(time.Duration(maxAge) * time.Second)),
-		})
-		return err
+	existing, _, err := as.SeenJTIs().List(ctx, model.Query{
+		Filters: []model.Filter{
+			{Column: "publisher_id", Op: model.OpEq, Value: publisherID},
+			{Column: "jti", Op: model.OpEq, Value: jti},
+		},
+		Limit: 1,
 	})
 	if err != nil {
 		return err
 	}
-	if dup {
+	if len(existing) > 0 {
 		return ErrSETJTIDuplicate
 	}
-	return nil
+	_, err = as.SeenJTIs().Create(ctx, model.SETSeenJTI{
+		JTI:         jti,
+		PublisherID: publisherID,
+		ExpiresAt:   model.NewTimestamp(now.Time().Add(time.Duration(maxAge) * time.Second)),
+	})
+	return err
 }
 
 // decodePublisherRegistry decodes the registry from the tenant's org settings.

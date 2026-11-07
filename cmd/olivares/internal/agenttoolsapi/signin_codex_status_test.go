@@ -21,9 +21,42 @@ esac
 exit 2
 `
 
+// codex-cli 0.166 run confined, with a home it may not write, first warns on stderr that it
+// could not create its PATH aliases and then answers (measured on the real tool, 2026-11-01).
+const stubCodexStatusAfterAWarning = `#!/bin/sh
+case "$1 $2" in
+"login status")
+  echo "WARNING: proceeding, even though we could not create PATH aliases: Permission denied (os error 13)" >&2
+  if [ -f "$CODEX_HOME/auth.json" ]; then echo "Logged in using ChatGPT" >&2; exit 0; fi
+  echo "Not logged in" >&2; exit 1;;
+esac
+exit 2
+`
+
+// codex-cli 0.166 on a login that is an API key: it names the key, masked, and says when it
+// is checked (measured on the real tool with a fake key, 2026-11-03).
+const stubCodexStatusAPIKey = `#!/bin/sh
+case "$1 $2" in
+"login status")
+  if [ -f "$CODEX_HOME/auth.json" ]; then printf 'API key configured - sk-stand***00000\nAuthentication is checked when you send a request.\n' >&2; exit 0; fi
+  echo "Not logged in" >&2; exit 1;;
+esac
+exit 2
+`
+
 func TestCodexSignInStatusIsReadFromTheStreamTheToolWrites(t *testing.T) {
+	for name, tc := range map[string]struct{ stub, method string }{
+		"answer alone":    {stubCodexStatusOnStderr, "ChatGPT"},
+		"after a warning": {stubCodexStatusAfterAWarning, "ChatGPT"},
+		"an API key":      {stubCodexStatusAPIKey, "API key"},
+	} {
+		t.Run(name, func(t *testing.T) { codexSignInStatusIsRead(t, tc.stub, tc.method) })
+	}
+}
+
+func codexSignInStatusIsRead(t *testing.T, stub, method string) {
 	call, home := newSignInServer(t, func(_ *Module, bin string) {
-		if err := os.WriteFile(filepath.Join(bin, "codex"), []byte(stubCodexStatusOnStderr), 0o755); err != nil {
+		if err := os.WriteFile(filepath.Join(bin, "codex"), []byte(stub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -36,7 +69,7 @@ func TestCodexSignInStatusIsReadFromTheStreamTheToolWrites(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "codex", ".codex", "auth.json"), []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if code, st := call("GET", "/v1/m/agenttools/sign-in?driver=codex", nil); code != 200 || st["signed_in"] != true || st["method"] != "ChatGPT" {
-		t.Fatalf("after the login: %d %v, want signed in with ChatGPT", code, st)
+	if code, st := call("GET", "/v1/m/agenttools/sign-in?driver=codex", nil); code != 200 || st["signed_in"] != true || st["method"] != method {
+		t.Fatalf("after the login: %d %v, want signed in with %s", code, st, method)
 	}
 }

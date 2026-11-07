@@ -73,11 +73,11 @@
     "bypassPermissions": "bypassPermissions"
   },
   "effort": {
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-    "max": "max"
+    "low": "Bajo",
+    "medium": "Medio",
+    "high": "Alto",
+    "xhigh": "Muy alto",
+    "max": "Máximo"
   },
   "summary": {
     "total": "Total",
@@ -91,7 +91,7 @@
     "state": "Estado",
     "workspace": "Espacio de trabajo",
     "model": "Modelo",
-    "effort": "Effort",
+    "effort": "Esfuerzo",
     "mode": "Modo",
     "transport": "Transporte",
     "identity": "Identidad",
@@ -140,11 +140,11 @@
     "namePlaceholder": "Una etiqueta de display (opcional)",
     "transport": "Transporte",
     "permissionMode": "Modo de permisos",
-    "effort": "Effort",
-    "effortDefault": "Por defecto del modelo",
+    "effort": "Esfuerzo",
+    "effortDefault": "Predeterminado del modelo",
     "model": "Modelo",
     "workspace": "Carpeta",
-    "workspaceNone": "Carpeta temporal de esta sesión",
+    "workspaceNone": "Predeterminada (Mis archivos)",
     "worktree": "Trabajar en un nuevo git worktree",
     "worktreeHint": "Crea una rama nueva en un worktree propio, para que las sesiones del mismo repositorio no compartan archivos. La carpeta debe ser la carpeta raíz del repositorio.",
     "worktreeFrom": "Empieza en",
@@ -168,8 +168,8 @@
     "templateOverrides_one": "La plantilla sobrescribe {{count}} de tus elecciones:",
     "templateOverrides_many": "La plantilla sobrescribe {{count}} de tus elecciones:",
     "templateOverrides_other": "La plantilla sobrescribe {{count}} de tus elecciones:",
-    "profile": "Perfil de proveedor",
-    "profileNone": "Selecciona un perfil",
+    "profile": "Cuenta",
+    "profileNone": "Selecciona una cuenta",
     "profileNotOperable": "no habilitado en este entorno",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME y GROK_HOME pertenecen al perfil: aquí se rechaza un lanzamiento que reenvíe cualquiera de ellas. Los demás nombres siguen sujetos a la validación del servidor.",
     "identity": {
@@ -199,7 +199,7 @@
     "failed": "La herramienta no respondió, así que no hay lista. Escribe un modelo o deja el valor por defecto.",
     "unsupported": "Esta herramienta no lista sus modelos. Escribe uno o deja el valor por defecto.",
     "unavailable": "La lista de modelos no está disponible aquí. Escribe un modelo o deja el valor por defecto.",
-    "default": "por defecto",
+    "default": "predeterminado",
     "new": "Nuevo",
     "favorites": "Favoritos",
     "models": "Modelos",
@@ -207,10 +207,11 @@
     "star": "Añadir {{model}} a favoritos",
     "unstar": "Quitar {{model}} de favoritos",
     "use": "Usar «{{model}}»",
-    "defaultNamed": "Por defecto ({{model}})",
+    "defaultNamed": "Predeterminado ({{model}})",
     "defaultUnnamed": "{{tool}} por defecto",
-    "effortDefaultNamed": "Por defecto del modelo ({{effort}})",
-    "effortNeedsModel": "Elige primero un modelo: el effort es un nivel de un modelo."
+    "toolDefault": "Predeterminado (recomendado)",
+    "effortDefaultNamed": "Predeterminado del modelo ({{effort}})",
+    "effortNeedsModel": "Elige primero un modelo: el esfuerzo es un nivel de un modelo."
   },
   "detail": {
     "live": "En vivo",
@@ -230,7 +231,7 @@
     "transport": "Transporte",
     "isolation": "Aislamiento",
     "permissionMode": "Modo de permisos",
-    "effort": "Effort",
+    "effort": "Esfuerzo",
     "model": "Modelo",
     "workspace": "Espacio de trabajo",
     "workspaceDirectory": "Directorio de trabajo",
@@ -334,6 +335,8 @@
     "title": "Espacios de trabajo",
     "subtitle": "Directorios del host donde trabaja una sesión — montados, enjaulados y clasificados por DLP.",
     "register": "Registrar espacio de trabajo",
+    "personalFolders": "Dar a cada persona una carpeta propia (Mis archivos)",
+    "personalFoldersSaved": "Ajuste de carpetas personales guardado.",
     "cols": {
       "name": "Espacio de trabajo",
       "rootPath": "Ruta raíz",
@@ -407,6 +410,22 @@
     }
   },
   "browser": {
+    "notes": {
+      "title": "Notas",
+      "add": "Añadir una nota",
+      "select": "Selecciona primero un pasaje del archivo y después añade una nota.",
+      "note": "Nota",
+      "keep": "Añadir",
+      "cancel": "Cancelar",
+      "sendTo": "Enviar notas a",
+      "send": "Enviar",
+      "sent": "Notas enviadas a la sesión.",
+      "failed": "No se pudieron enviar las notas. Inténtalo de nuevo en un momento.",
+      "noSession": "No hay ninguna sesión activa en este espacio a la que enviarlas.",
+      "count_one": "{{count}} nota",
+      "count_many": "{{count}} notas",
+      "count_other": "{{count}} notas"
+    },
     "title": "Ficheros",
     "root": "raíz",
     "upDir": "Subir",
@@ -449,7 +468,20 @@
     "deletedFile": "Borrado",
     "sizeLabel": "Tamaño",
     "modifiedLabel": "Modificado",
-    "create": "Crear"
+    "create": "Crear",
+    "upload": "Subir",
+    "uploadLimit": "Hasta {{size}} por archivo",
+    "uploadReadOnly": "Esta carpeta es de solo lectura, así que no se pueden añadir archivos.",
+    "uploadNoAccess": "No tienes acceso de escritura a esta carpeta.",
+    "uploaded": "Subidos: {{n}}",
+    "uploadTooLarge": "{{name}} supera el límite de {{size}} y no se subió.",
+    "uploadExists": "{{name}} ya existe y no se reemplazó.",
+    "uploadFailed": "Error al subir",
+    "downloadSelected": "Descargar selección ({{n}})",
+    "downloadFolder": "Descargar carpeta",
+    "downloadFailed": "Error al descargar",
+    "labeled": "Etiquetas DLP: {{classes}}",
+    "select": "Seleccionar {{name}}"
   },
   "empty": {
     "title": "No hay sesiones de Claude Code",
@@ -842,6 +874,10 @@
         "amber": "Ámbar",
         "red": "Rojo",
         "blue": "Azul",
+        "purple": "Morado",
+        "pink": "Rosa",
+        "teal": "Verde azulado",
+        "slate": "Gris pizarra",
         "unknown": "Color guardado desconocido"
       }
     }
@@ -1044,15 +1080,19 @@
   "usage": {
     "fiveHour": "5 horas",
     "week": "Semanal",
+    "weekModel": "Solo {{model}}",
     "percent": "{{window}} {{percent}} %",
+    "shareOfWeek": "{{percent}} % de la semana",
+    "shareOfFiveHours": "{{percent}} % de 5 horas",
+    "resets": "Se restablece {{when}}",
     "unknown": "Uso desconocido",
     "limit": {
       "fiveHour": "Límite de 5 horas alcanzado",
       "fiveHourResets": "Límite de 5 horas alcanzado, se restablece {{time}}",
       "week": "Límite semanal alcanzado",
       "weekResets": "Límite semanal alcanzado, se restablece {{time}}",
-      "other": "Límite de {{label}} alcanzado",
-      "otherResets": "Límite de {{label}} alcanzado, se restablece {{time}}"
+      "other": "Límite alcanzado",
+      "otherResets": "Límite alcanzado, se restablece {{time}}"
     }
   }
 }

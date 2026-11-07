@@ -123,8 +123,11 @@ func ReadDualControlRestorePolicy(ctx context.Context, st store.Store, now time.
 }
 
 // loadDRSchedule reloads the persisted schedule. Missing state is unconfigured;
-// unreadable state is an error and must not reset the restore gate.
-func (s *Server) loadDRSchedule(ctx context.Context) error {
+// unreadable state is an error and must not reset the restore gate. seed stores
+// the first-start default when none is stored; only the leader-gated tick passes
+// it, so the node whose backup directory the schedule prunes is the one that
+// decides its retention. The single-node appliance seeds at boot.
+func (s *Server) loadDRSchedule(ctx context.Context, seed bool) error {
 	if s.drSvc == nil {
 		return nil
 	}
@@ -132,8 +135,11 @@ func (s *Server) loadDRSchedule(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if s.drSvc.cfg.Appliance {
-		if err := s.prepareApplianceRecoveryKey(!found); err != nil {
+	// The appliance holds custody of its key on every start. Elsewhere the key is
+	// made at the first start; a later start never fails on a missing one, because a
+	// schedule saved before this key existed ran on an operator passphrase.
+	if s.drSvc.cfg.Appliance || (s.drSvc.autoRecoveryKey && !found) {
+		if err := s.prepareRecoveryKey(!found); err != nil {
 			return err
 		}
 	}
@@ -142,21 +148,42 @@ func (s *Server) loadDRSchedule(ctx context.Context) error {
 		if p.RPOHours != 0 {
 			policy.RPOHours = &p.RPOHours
 		}
+		if p.RTOMinutes != 0 {
+			policy.RTOMinutes = &p.RTOMinutes
+		}
 		if err := validateDRProtection(policy); err != nil {
 			return fmt.Errorf("stored DR protection policy: %w", err)
 		}
 	}
-	if !found {
-		if s.drSvc.cfg.Appliance {
-			initial := drSchedule{Enabled: true, Cron: "0 2 * * *", Retain: 30,
-				drProtection: drProtection{VerifyCron: "0 3 * * 0", RPOHours: 24}}
-			if err := s.saveDRSchedule(ctx, initial); err != nil {
-				return err
-			}
-			s.drSvc.setSchedule(func(d *drSchedule) { *d = initial })
-			return nil
-		}
+	// No stored schedule: protect the install from its first start. A stored one,
+	// including one emptied on purpose, is never replaced.
+	if !found && !seed && !s.drSvc.cfg.Appliance {
 		s.drSvc.setSchedule(func(d *drSchedule) { *d = drSchedule{} })
+		return nil
+	}
+	if !found {
+		retain := 30
+		// Bundles an upgraded install made before this default are the operator's:
+		// keep every one until an administrator sets a retention. A directory that
+		// cannot be listed may hold them too.
+		if !s.drSvc.cfg.Appliance {
+			entries, err := os.ReadDir(s.drSvc.cfg.BackupDir)
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				s.log.Warn("dr: backup directory unreadable; the default schedule keeps every bundle", "err", err)
+				retain = 0
+			}
+			for _, e := range entries {
+				if strings.HasSuffix(e.Name(), ".drbundle") {
+					retain = 0
+				}
+			}
+		}
+		initial := drSchedule{Enabled: true, Cron: "0 2 * * *", Retain: retain,
+			drProtection: drProtection{VerifyCron: "0 3 * * 0", RPOHours: 24}}
+		if err := s.saveDRSchedule(ctx, initial); err != nil {
+			return err
+		}
+		s.drSvc.setSchedule(func(d *drSchedule) { *d = initial })
 		return nil
 	}
 	requireDualControl := p.armedDualControl()
@@ -220,10 +247,23 @@ func (s *Server) persistDRSchedule(ctx context.Context, sched drSchedule, action
 		settings[drScheduleSettingsKey] = string(raw)
 		_, err = sc.SetOrgSettings(ctx, settings, org.Version)
 		if err == nil && action != "" {
-			_, err = sc.Audit().Append(ctx, model.AuditDraft{Actor: drScheduleActor, ActorKind: "system", Action: action, Meta: map[string]any{"status": sched.LastVerifyStatus, "bundle": sched.LastBundle, "verified_at": sched.LastVerify}})
+			_, err = sc.Audit().Append(ctx, model.AuditDraft{Actor: drScheduleActor, ActorKind: "system", Action: action, Meta: drVerifyAuditMeta(sched)})
 		}
 		return err
 	})
+}
+
+// drVerifyAuditMeta is what the ledger records for a scheduled restore test: the
+// verdict and the restore time against the RTO target, so an auditor reads the
+// test from the ledger without the console.
+func drVerifyAuditMeta(sched drSchedule) map[string]any {
+	meta := map[string]any{"status": sched.LastVerifyStatus, "bundle": sched.LastBundle, "verified_at": sched.LastVerify}
+	if sched.LastVerifyStatus == drJobCompleted {
+		meta["rto_ms"] = sched.LastVerifyRTOMillis
+		meta["rto_target_ms"] = int64(sched.RTOMinutes) * 60_000
+		meta["rto_exceeded"] = sched.rtoExceeded()
+	}
+	return meta
 }
 
 // ScheduledBackupConfigured reloads the persisted state and reports whether an
@@ -234,7 +274,7 @@ func (s *Server) ScheduledBackupConfigured(ctx context.Context) (bool, error) {
 	}
 	s.drSvc.scheduleOpMu.Lock()
 	defer s.drSvc.scheduleOpMu.Unlock()
-	if err := s.loadDRSchedule(ctx); err != nil {
+	if err := s.loadDRSchedule(ctx, false); err != nil {
 		return false, err
 	}
 	sched := s.drSvc.scheduleSnapshot()
@@ -253,7 +293,7 @@ func (s *Server) RunDueScheduledBackup(ctx context.Context, now time.Time) (bool
 	// A standby may have been running since before the current leader changed the
 	// schedule. Refresh from the shared estate on every leader-gated tick so a
 	// promotion never evaluates boot-time state or a stale last_run.
-	if err := s.loadDRSchedule(ctx); err != nil {
+	if err := s.loadDRSchedule(ctx, true); err != nil {
 		return false, fmt.Errorf("dr schedule: reload persisted state: %w", err)
 	}
 	ran, backupErr := s.runDueBackup(ctx, now)

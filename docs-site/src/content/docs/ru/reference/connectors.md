@@ -507,14 +507,14 @@ blueprint, поставщики учётных данных, агенты на �
 | Вид | Принимает |
 |---|---|
 | `gdrive` | Документы Google Drive (Docs/Sheets/Slides/файлы) |
-| `confluence` | Пространства и страницы Atlassian Confluence |
+| `confluence` | Пространства и страницы Atlassian Confluence (Business) |
 | `notion` | Рабочие пространства, базы данных и страницы Notion |
 | `sharepoint` | Сайты и документы Microsoft SharePoint / OneDrive (Business) |
 | `s3content` | Содержимое объектного хранилища (объекты S3 / R2 / GCS) |
 | `sap_odata` | Сущности сервиса SAP OData как управляемые документы (Business) |
 | `salesforce` | Объекты/записи Salesforce как управляемые документы (Business) |
-| `snowflake` | Таблицы/строки Snowflake как управляемые документы (отличается от наблюдателя R/RW `snowflake-audit`) |
-| `azure_ai_search` | Документы индекса Azure AI Search |
+| `snowflake` | Таблицы/строки Snowflake как управляемые документы (отличается от наблюдателя R/RW `snowflake-audit`) (Business) |
+| `azure_ai_search` | Документы индекса Azure AI Search (Business) |
 | `postgres` | Строки PostgreSQL как управляемые документы — только чтение по построению, объявленная ACL каждой строки, классификация каждого столбца (отличается от наблюдателя R/RW `pgaudit`; не NL-to-SQL). См. [Postgres как источник управляемого контекста](/ru/how-to/govern-postgres-content/). |
 | `filesystem` | Содержимое файлового сервера (локальный / NFS / SMB) — чтение ограничено корнем по построению, owner/group/ACL POSIX отображаются в ACL Document, классификация xattr (отличается от log sink `filelog`). См. [Управление файловым сервером](/ru/how-to/govern-your-file-server/). |
 
@@ -522,8 +522,8 @@ blueprint, поставщики учётных данных, агенты на �
 // OLIVARES_SOURCES_CONFIG — источники документов живут под "documents", никогда "sources"
 {
   "documents": [
-    { "name": "eng-wiki", "kind": "confluence",
-      "config": { "export_path": "/var/lib/olivares/confluence" } }
+    { "name": "eng-wiki", "kind": "notion",
+      "config": { "export_path": "/var/lib/olivares/notion" } }
   ]
 }
 ```

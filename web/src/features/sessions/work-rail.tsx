@@ -33,9 +33,11 @@
 //    table and the sidebar can never tell the same session two different ways. The action
 //    and resource a connector reported are the secondary fact: on the row's hover and in
 //    the thread, never the title (#2266).
+import { PathText } from '@/components/ui/path-text'
 import {
   ChevronDown,
   Columns2,
+  GitBranch,
   MoreHorizontal,
   Pin,
   SquareTerminal,
@@ -49,7 +51,9 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { runFolder } from './folder'
+import { AccountBadge } from '@/features/agent-tools/account-marks'
 import { workLine } from '@/features/home/work-line'
 import { humanDurationSeconds } from '@/features/shared'
 import { resolveBinding } from '@/lib/keybindings/model'
@@ -63,18 +67,22 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { usePreferencesStore, type Density } from '@/stores/preferences'
 import { IconTip } from './icon-tip'
+import { undoLatest } from './list-undo'
 import {
   StateWord,
   useForgetTurnsOnLeave,
   useSeenTurns,
 } from './session-state-word'
-import { ToolMark } from './tool-mark'
+import { ToolMark } from '@/features/agentops/tool-mark'
 import {
   primaryRun,
   sessionFolder,
   sessionNaming,
   sessionPlace,
+  sessionDriver,
   sessionTool,
+  sessionWorkspace,
+  sessionWorktree,
   sharedNames,
   type UnifiedSession,
 } from './provenance'
@@ -82,12 +90,15 @@ import { addressOf } from './session-address'
 import { isPinnable } from './session-pins'
 import {
   groupSessions,
+  isUnread,
   railOrder,
   WORK_GROUPS,
   type WorkGroup,
 } from './session-groups'
 
 export interface WorkRailProps {
+  /** The workspaces' names by ref, for the row a workspace's sessions sit under. */
+  workspaceNames?: ReadonlyMap<string, string>
   sessions: readonly UnifiedSession[]
   /** The address of the session on screen, or null. */
   selected: string | null
@@ -99,26 +110,34 @@ export interface WorkRailProps {
   /** The items of a row's actions menu; absent, a row has no menu and a right-click is
    * the browser's. */
   rowMenu?: (session: UnifiedSession) => ReactNode
-  /** Rendered when the estate has no sessions at all. One action, already authorized. */
-  emptyAction?: ReactNode
+  /** Why the estate could not be read. With no session listed it replaces the empty state:
+   * "no sessions yet" over an engine that failed to answer is false. */
+  error?: unknown
+  onRetry?: () => void
   loading?: boolean
 }
 
 /**
- * THE LIST'S ONE ROW HEIGHT: the `h-*` token of `DENSITY_ROW` for the operator's density
+ * THE LIST'S LEAST ROW HEIGHT: the `h-*` token of `DENSITY_ROW` for the operator's density
  * (stores/preferences.ts; work-rail.test.tsx pins the two together), from the shell's
- * breakpoint up. Below it the row keeps a 44 px touch target. A literal per density so
- * the class is in the stylesheet.
+ * breakpoint up, as a minimum: a title on two lines makes the row taller. Below it the row
+ * keeps a 44 px touch target. A literal per density so the class is in the stylesheet.
  */
 const ROW_HEIGHT: Record<Density, string> = {
-  compact: 'h-14 min-[761px]:h-11',
-  comfortable: 'h-14 min-[761px]:h-12',
+  compact: 'min-h-14 min-[761px]:min-h-11',
+  comfortable: 'min-h-14 min-[761px]:min-h-12',
+}
+
+/** Whether every session of the list has the same value: then no row needs to say it. */
+function sharedByAll(values: readonly (string | null)[]): boolean {
+  return values.length > 1 && values.every((v) => v === values[0])
 }
 
 /**
- * A ROW: the tool's mark; the folder small above what
- * the session is called; at the right what it is doing in a word with its time. The full
- * path and what it is doing now are on the row's hover and in the thread it opens.
+ * A ROW (#3970): what the session is called first, on up to two lines; under it, small,
+ * the folder and at the right what it is doing in a word with its time. The tool's mark
+ * and the folder are left out when every row of the list shares them. The full path and
+ * what it is doing now are on the row's hover and in the thread it opens.
  */
 function RailRow({
   session,
@@ -134,6 +153,9 @@ function RailRow({
   onMenuOpenChange,
   onMenuClosed,
   onFocused,
+  showTool,
+  showFolder,
+  showBranch,
 }: {
   session: UnifiedSession
   selected: boolean
@@ -152,11 +174,17 @@ function RailRow({
   onMenuClosed: () => void
   /** The row took DOM focus, by a click or by the keyboard. */
   onFocused: () => void
+  /** Draw the tool's mark and the folder: false when every row of the list shares it. */
+  showTool: boolean
+  showFolder: boolean
+  /** Name the worktree's branch on the row: false under the worktree's own heading. */
+  showBranch: boolean
 }) {
   const { t } = useTranslation('sessions')
   const density = usePreferencesStore((s) => s.density)
   const address = addressOf(session)
   const run = primaryRun(session.runs)
+  const unread = isUnread(session)
   // The clause comes from the OBSERVED half, through that same ladder. With no observed
   // half there is no sentence to tell — a launched run whose telemetry has not arrived
   // is a real state, and saying so beats printing its reference twice.
@@ -166,8 +194,9 @@ function RailRow({
   //    `sessionLabel`'s second rung is `s.sessionRef`, so a rail of six discovered
   //    sessions read `sess-coder-7a3f`, `sess-batch-1` … — six machine ids where the
   //    operator has to choose one. `sessionNaming` is the front door's ladder; when it
-  //    has no sentence the row says so and keeps the distinguishing tail beside it.
+  //    has no sentence the row says so, and the distinguishing tail stays in its description.
   const naming = sessionNaming(session, t('untitled'), shared)
+  const branch = showBranch ? sessionWorktree(session) : null
   // Name, tail and WHOLE reference on one hover, the way the front door's rows do it:
   // a truncated name stays readable and the identifier stays reachable from the row
   // that no longer paints it. Duplicates are dropped — an untitled row whose tail IS
@@ -189,9 +218,17 @@ function RailRow({
       runFolder(run) ? run?.workspace_path : null,
       seconds > 0 ? humanDurationSeconds(seconds) : null,
       line,
+      // The tail that tells two untitled rows apart is no text on the row: it stays in the
+      // row's description, on the name's hover and under Technical details.
+      naming.shortId,
     ]
       .filter(Boolean)
       .join(' · ') || undefined
+
+  // The account and the state fade, not hide, under the pointer's row buttons: they keep
+  // their place and the row's accessible name. Hover only: a focused row is not asking for
+  // the buttons.
+  const fade = (onOpenBeside || menu) && 'min-[761px]:group-hover/row:opacity-0'
 
   return (
     <div className="group/row relative">
@@ -222,47 +259,32 @@ function RailRow({
          brand; "this is open" is a tonal fill, and the state is a word. */
         title={rowTitle}
         className={cn(
-          'group relative flex cursor-pointer items-center gap-2.5 px-3 outline-none transition-colors',
+          'group relative flex cursor-pointer items-center gap-2.5 px-3 py-1.5 outline-none transition-colors',
           ROW_HEIGHT[density],
           selected ? 'bg-active' : 'hover:bg-hover',
           'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
           // The pointer's Open beside button takes the time's place on hover (below), so the
           // name keeps the room: reserving 48 px for it on every row left a title 103 px.
-          // On a phone, or with a coarse pointer (a tablet has no hover to reveal it), the
-          // button is always painted and keeps its own column.
+          // With a coarse pointer from the shell breakpoint up (a tablet has no hover to
+          // reveal it), the button is always painted and keeps its own column. A phone has
+          // no row buttons at all (#3975): a tap opens the thread, whose `⋯` holds the same
+          // actions, and a long press opens the row's menu where the browser offers one.
           onOpenBeside && menu
-            ? 'max-[760px]:pr-22 pointer-coarse:pr-22'
-            : (onOpenBeside || menu) &&
-                'max-[760px]:pr-12 pointer-coarse:pr-12',
+            ? 'min-[761px]:pointer-coarse:pr-22'
+            : (onOpenBeside || menu) && 'min-[761px]:pointer-coarse:pr-12',
         )}
       >
-        <ToolMark tool={sessionTool(session)} />
+        {showTool ? (
+          <ToolMark driver={sessionDriver(session)} labelled />
+        ) : null}
         <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-          {/* The place above the name, small; the state and its time at
-            its right. */}
-          <span className="flex min-w-0 items-center gap-2">
-            <span
-              data-testid="rail-row-place"
-              className="min-w-0 flex-1 truncate text-overline font-normal text-text-3"
-            >
-              {folder}
-            </span>
-            <span
-              className={cn(
-                'flex shrink-0 items-center gap-1.5',
-                // Faded, not hidden: it keeps its place and the row's accessible name.
-                // Hover only: a focused row is not asking for the button.
-                (onOpenBeside || menu) &&
-                  'min-[761px]:group-hover/row:opacity-0',
-              )}
-            >
-              <StateWord session={session} />
-            </span>
-          </span>
           <span
             data-testid="rail-row-name"
             title={nameTitle}
-            className="min-w-0 truncate text-body font-medium text-text"
+            className={cn(
+              'line-clamp-2 min-w-0 text-body [overflow-wrap:anywhere] text-text',
+              unread ? 'font-semibold' : 'font-medium',
+            )}
           >
             {pinned ? (
               <>
@@ -278,13 +300,54 @@ function RailRow({
                 <span className="sr-only">{t('rail.pinnedMark')}</span>{' '}
               </>
             ) : null}
-            {naming.name}
-            {naming.shortId ? (
-              <span className="font-mono text-caption text-text-3">
+            {unread ? (
+              <>
+                {/* The word joins the row's accessible name, as the pin's does; the dot is
+                  the sighted person's mark. */}
+                <span
+                  aria-hidden="true"
+                  className="mr-1.5 inline-block size-1.5 rounded-full bg-text align-[1px]"
+                />
+                <span className="sr-only">{t('rail.unreadMark')}</span>{' '}
+              </>
+            ) : null}
+            <span>{naming.name}</span>
+            {branch ? (
+              <span className="font-normal text-caption text-text-3">
                 {' '}
-                {naming.shortId}
+                <GitBranch
+                  className="inline size-3 align-[-1px]"
+                  aria-hidden="true"
+                />{' '}
+                <PathText
+                  value={branch}
+                  size="small"
+                  tone="muted"
+                  copy={false}
+                />
               </span>
             ) : null}
+          </span>
+          {/* Under the name, small: the folder, and the state and its time at the right.
+            The folder and the account give up room together, by their length, and the
+            folder keeps six characters; the state word never gives up any. A folder left to
+            shrink alone was cut to one letter ("d.", "i...") beside a whole account. */}
+          <span className="flex min-w-0 items-center justify-end gap-2">
+            {showFolder ? (
+              <span
+                data-testid="rail-row-place"
+                className="min-w-[6ch] flex-auto truncate text-overline font-normal text-text-3"
+              >
+                {folder}
+              </span>
+            ) : null}
+            <AccountBadge
+              profileRef={session.profileRef}
+              className={cn('max-w-24', fade)}
+            />
+            <span className={cn('flex shrink-0 items-center gap-1.5', fade)}>
+              <StateWord session={session} />
+            </span>
           </span>
         </span>
       </div>
@@ -298,15 +361,15 @@ function RailRow({
             // options, and a button per row would add a tab stop per row. Keyboard and
             // screen-reader users have the declared command (Alt+Shift+O on the row)
             // and the palette; this stays for the mouse and the touch screen.
-            // Painted on hover (always on a phone or with a coarse pointer, which has no
-            // hover) and never on focus: a clicked or arrowed-to row is focus-within with
+            // Painted on hover (always with a coarse pointer, which has no hover; never on a
+            // phone, which cannot open a session beside another, #3975) and never on focus: a clicked or arrowed-to row is focus-within with
             // the pointer elsewhere, and the button sits over the time's end, which only a
             // hover fades out.
             aria-hidden="true"
             tabIndex={-1}
             onClick={() => onOpenBeside(session)}
             className={cn(
-              'absolute top-1/2 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 max-[760px]:opacity-100 pointer-coarse:opacity-100',
+              'absolute top-1/2 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 pointer-coarse:opacity-100 max-[760px]:hidden',
               menu ? 'right-11' : 'right-1',
             )}
           >
@@ -325,11 +388,14 @@ function RailRow({
                 // THE POINTER'S WAY TO THE MENU, beside the option and not in it (see the
                 // head of this file): out of the tab order and the accessibility tree,
                 // like Open beside. Painted on hover, while its menu is open, and always
-                // on a phone or with a coarse pointer.
+                // with a coarse pointer; not on a phone, where the thread's `⋯` and a long
+                // press on the row hold the same items (#3975). There it stays laid out,
+                // unseen and untouchable, because the menu a long press opens is placed
+                // against it: a `display:none` trigger would put the menu at the corner.
                 aria-hidden="true"
                 tabIndex={-1}
                 data-testid="rail-row-menu"
-                className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 data-[state=open]:opacity-100 max-[760px]:opacity-100 pointer-coarse:opacity-100"
+                className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 data-[state=open]:opacity-100 min-[761px]:pointer-coarse:opacity-100 max-[760px]:pointer-events-none"
               >
                 <MoreHorizontal aria-hidden="true" />
               </Button>
@@ -356,8 +422,10 @@ export function WorkRail({
   selected,
   onOpen,
   pinned,
+  workspaceNames,
   onTogglePin,
-  emptyAction,
+  error,
+  onRetry,
   loading,
   onOpenBeside,
   rowMenu,
@@ -377,16 +445,16 @@ export function WorkRail({
   const [showArchived, setShowArchived] = useState(false)
   const archivedCount =
     groups.find((group) => group.id === 'archived')?.sessions.length ?? 0
-  // THE WORKING SECTION IS FOLDED TOO: a running session never moves a row
-  // under the pointer, so the rows stay shut until asked. It arrives open when the session
-  // on screen is one of them, so the open session is never hidden by its own list.
-  const workingRows =
-    groups.find((group) => group.id === 'active')?.sessions ?? []
-  const [showWorking, setShowWorking] = useState(() =>
-    workingRows.some((s) => addressOf(s) === selected),
-  )
+  // THE WORKING SECTION ARRIVES OPEN (#3969): what is working now is what a person opens
+  // the list for, so it is never hidden under what has finished. Its rows keep the order
+  // they started in (`groupSessions`), so a running session does not move under the
+  // pointer. A fold is the person's choice and the console remembers it.
+  const showWorking = !usePreferencesStore((s) => s.workingFolded)
+  const setWorkingFolded = usePreferencesStore((s) => s.setWorkingFolded)
   const order = railOrder(groups, showSnoozed, showArchived, showWorking)
   const shared = sharedNames(sessions, t('untitled'))
+  const showTool = !sharedByAll(sessions.map(sessionTool))
+  const showFolder = !sharedByAll(sessions.map(sessionFolder))
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
 
   // WHICH ROW THE KEYBOARD IS ON. It is NOT the selection: moving focus down a rail of
@@ -463,21 +531,27 @@ export function WorkRail({
       if (row) setMenuAddress(addressOf(row))
       return
     }
+    if (command === 'rail.undo') {
+      // Nothing to take back is not a claim on the key: the browser keeps it.
+      if (undoLatest()) e.preventDefault()
+      return
+    }
     if (command === 'rail.pin' && onTogglePin) {
       e.preventDefault()
       const row = order[at]
-      // A session with no run has nothing to keep a pin on (`isPinnable`): not offered.
+      // A session with neither a run nor an observed live row has nothing to keep a pin on
+      // (`isPinnable`): not offered.
       if (row && isPinnable(row)) onTogglePin(addressOf(row))
     }
   }
 
   if (!loading && sessions.length === 0) {
+    if (error) return <QueryErrorState error={error} retry={onRetry} />
     return (
       <EmptyState
         icon={<SquareTerminal />}
         title={t('empty.title')}
         description={t('empty.description')}
-        action={emptyAction}
       />
     )
   }
@@ -496,7 +570,50 @@ export function WorkRail({
   const below = visible.filter(
     (group) => group !== fold && !above.includes(group),
   )
-  const rowsOf = (list: readonly UnifiedSession[]) =>
+  // THE SESSIONS OF ONE WORKSPACE ARE ONE GROUP (the section already put them side by side):
+  // "shop · 2 sessions" above them, each still its own row with its mark, state and age.
+  // One session of a workspace in a section is a row like any other. Inside it (or
+  // alone), a session in a git worktree sits under that worktree's branch.
+  const workspaceName = (run: readonly UnifiedSession[], ref: string) =>
+    workspaceNames?.get(ref) ??
+    run
+      .map((s) => (sessionWorktree(s) ? null : sessionFolder(s)))
+      .find(Boolean) ??
+    t('list.unnamedFolder')
+  const nested = (key: string, name: string, children: ReactNode) => (
+    <div key={key} role="group" aria-label={name}>
+      <p
+        aria-hidden="true"
+        className="truncate px-3 pt-2 pb-0.5 text-caption text-text-3"
+      >
+        {name}
+      </p>
+      <div className="ms-3 border-s border-line">{children}</div>
+    </div>
+  )
+  const worktreeRows = (list: readonly UnifiedSession[]) =>
+    list.map((s) => {
+      const branch = sessionWorktree(s)
+      return branch
+        ? nested(`wt:${s.key}`, branch, rowList([s], false))
+        : rowList([s])
+    })
+  const rowsOf = (list: readonly UnifiedSession[]) => {
+    const runs: UnifiedSession[][] = []
+    for (const s of list) {
+      const last = runs[runs.length - 1]
+      const ref = sessionWorkspace(s)
+      if (last && ref && sessionWorkspace(last[0]!) === ref) last.push(s)
+      else runs.push([s])
+    }
+    return runs.map((run) => {
+      const ref = run.length > 1 ? sessionWorkspace(run[0]!) : null
+      if (!ref) return worktreeRows(run)
+      const name = `${workspaceName(run, ref)} · ${t('summary.sessions', { count: run.length, n: run.length })}`
+      return nested(`ws:${ref}`, name, worktreeRows(run))
+    })
+  }
+  const rowList = (list: readonly UnifiedSession[], showBranch = true) =>
     list.map((s) => (
       <RailRow
         key={s.key}
@@ -518,6 +635,9 @@ export function WorkRail({
         // THE KEYBOARD'S ROW IS THE ONE THAT HAS FOCUS, however it got there:
         // a click on a row moves it too, so `p` and Shift+F10 act on that row.
         onFocused={() => setFocusedAddress(addressOf(s))}
+        showTool={showTool}
+        showFolder={showFolder}
+        showBranch={showBranch}
       />
     ))
   const sections = (list: WorkGroup[]) =>
@@ -578,7 +698,7 @@ export function WorkRail({
                 type="button"
                 id="rail-group-active"
                 aria-expanded={showWorking}
-                onClick={() => setShowWorking((shown) => !shown)}
+                onClick={() => setWorkingFolded(showWorking)}
                 className="sticky top-0 z-10 flex w-full items-center gap-1 bg-canvas px-3 pt-4 pb-1 text-left text-overline font-medium text-text-3 outline-none hover:text-text-2 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
               >
                 <ChevronDown

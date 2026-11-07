@@ -119,7 +119,7 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 （推理代理监听器为可选启用、回环默认；实时摄取受环境门控；态势导出是一个中立的只读投影）；
 `—` = 该模块在本质上是治理/观察型的，没有执行表面。这一拆分就是诚实的契约：产品**今天广泛地
 观察并治理，并在一个不断扩大、大多受预置门控的子集上执行** —— 参见
-[诚实与局限](/zh/start/honesty-and-limits/)。可选目录来自 `core/modulespec/modules.json`，这也是 `olivares modules ls` 和控制台**版本与模块**列表使用的来源。`npm run test:modules` 检查每个可选命名空间是否链接到参考页面，并验证计数。
+[诚实与局限](/zh/start/honesty-and-limits/)。可选目录来自 `core/modulespec/modules.json`，这也是 `olivares modules ls` 和控制台**模块**列表使用的来源。`npm run test:modules` 检查每个可选命名空间是否链接到参考页面，并验证计数。
 
 ## 版本可用性接缝（不计入 35 个可选模块之内）
 

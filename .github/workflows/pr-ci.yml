@@ -239,7 +239,24 @@ jobs:
           GOFLAGS: -trimpath
         run: task build:go
       - name: the core session journey works on this build
-        run: bash scripts/session-journey-smoke.sh --binary bin/olivares --label pr-build
+        run: |
+          set -euo pipefail
+          nobody_dir=$(mktemp -d /tmp/olivares-pr-build-nobody.XXXXXX)
+          trap 'rm -rf "$nobody_dir"' EXIT
+          chmod 0755 "$nobody_dir"
+          cp bin/olivares "$nobody_dir/olivares"
+          chmod 0755 "$nobody_dir/olivares"
+          mkdir -m 0755 "$nobody_dir/scripts"
+          mkdir "$nobody_dir/tmp"
+          chmod 1777 "$nobody_dir/tmp"
+          cp scripts/session-journey-smoke.sh scripts/install-service.sh "$nobody_dir/scripts/"
+          chmod 0755 "$nobody_dir/scripts/session-journey-smoke.sh"
+          chmod 0644 "$nobody_dir/scripts/install-service.sh"
+          if command -v sudo >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
+            sudo -u nobody env -u XDG_RUNTIME_DIR TMPDIR="$nobody_dir/tmp" bash "$nobody_dir/scripts/session-journey-smoke.sh" --binary "$nobody_dir/olivares" --label pr-build
+          else
+            TMPDIR="$RUNNER_TEMP" bash scripts/session-journey-smoke.sh --binary bin/olivares --label pr-build
+          fi
       - name: verify and package the development CLI
         env:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
@@ -666,6 +683,11 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: bash scripts/ci-postgres-service.sh provision
+      - name: Install OpenSSH tools for real SFTP tests
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends openssh-client openssh-sftp-server
       - name: the runner allows the session boundary's user and network namespaces
         # A bound session starts behind the session boundary and fails closed where the host
         # refuses it (SECURITY.md, Requirements), in every shard: modules/sessions reproduces

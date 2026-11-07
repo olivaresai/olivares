@@ -11,13 +11,17 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { agentOpsApi } from '@/features/agentops/api'
+import { useObjectActionsStore } from '@/stores/object-actions'
 import type { ApprovalDTO } from './types'
 
 const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  dismiss: vi.fn(),
 }))
+import { fakeRouter } from '@/test/fake-router'
+
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 const auth = vi.hoisted(() => ({
   activeTenant: 't1',
@@ -176,6 +180,19 @@ describe('Approvals: the flag stays on the request that needs you', () => {
     )
     expect(rowOf('pnpm db:migrate')).not.toHaveAttribute('aria-current')
     expect(flagged()).toEqual([rowOf('pnpm db:migrate')])
+  })
+
+  it('marks the flagged request without a coloured side border; selection stays a background tone', async () => {
+    api.listApprovals.mockResolvedValue({
+      items: [own, migration, registry],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    await screen.findByText('Terraform needs the provider registry')
+
+    expect(rowOf('pnpm db:migrate')).toHaveAttribute('data-flagged', 'true')
+    expect(rowOf('pnpm db:migrate')).not.toHaveClass('border-l-accent')
+    expect(rowOf('pnpm db:migrate')).toHaveClass('bg-active')
   })
 
   it('flags nothing for a person who may not decide', async () => {
@@ -384,6 +401,10 @@ describe('Approvals: approving the flagged request is one action', () => {
 
 import { navLeader } from '@/lib/keybindings/model'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 describe('Approvals: a bare key never decides what the person is not reading', () => {
   it('D does nothing while the status filter has the focus (its own typeahead)', async () => {
     const user = userEvent.setup()
@@ -458,11 +479,7 @@ describe('Approvals: a bare key never decides what the person is not reading', (
   })
 
   it('opens the linked request even when the queue does not list it, never another one', async () => {
-    window.history.replaceState(
-      {},
-      '',
-      '/permissions?tab=approvals&approval=apr-gone',
-    )
+    fakeRouter.reset('/permissions?tab=approvals&approval=apr-gone')
     try {
       api.listApprovals.mockResolvedValue({
         items: [migration, registry],
@@ -493,7 +510,7 @@ describe('Approvals: a bare key never decides what the person is not reading', (
       // The flag still marks the request that waits for this person.
       expect(rowOf('pnpm db:migrate')).toHaveAttribute('data-flagged', 'true')
     } finally {
-      window.history.replaceState({}, '', '/')
+      fakeRouter.reset('/')
     }
   })
 
@@ -596,5 +613,44 @@ describe('Approvals: the queue around the decision', () => {
     await waitFor(() =>
       expect(api.cancelApproval).toHaveBeenCalledWith('apr-migrate'),
     )
+  })
+})
+
+describe('Approvals: the queue from the keyboard', () => {
+  it('offers the open request to the palette by its words, never its id', async () => {
+    api.listApprovals.mockResolvedValue({
+      items: [registry],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    await waitFor(() =>
+      expect(useObjectActionsStore.getState().current?.label).toBe(
+        'Terraform needs the provider registry',
+      ),
+    )
+  })
+
+  it('walks the rows on j and k and opens the focused one on Enter', async () => {
+    const user = userEvent.setup()
+    api.listApprovals.mockResolvedValue({
+      items: [migration, registry],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    await screen.findByText('Terraform needs the provider registry')
+    rowOf('pnpm db:migrate').focus()
+
+    await user.keyboard('j')
+    expect(rowOf('Terraform needs the provider registry')).toHaveFocus()
+    // The last row holds: `j` past it moves nothing.
+    await user.keyboard('j')
+    expect(rowOf('Terraform needs the provider registry')).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(rowOf('Terraform needs the provider registry')).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    await user.keyboard('k')
+    expect(rowOf('pnpm db:migrate')).toHaveFocus()
   })
 })

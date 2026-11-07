@@ -46,6 +46,9 @@ var proofRoutes = map[string]bool{
 	"POST /v1/auth/totp/activate":           true,
 	"POST /v1/auth/totp/challenge":          true,
 	"POST /v1/invites/accept":               true,
+
+	// The IdP supplies a signed logout_token, not a session credential.
+	"POST /v1/auth/federation/oidc/backchannel-logout": true,
 }
 
 // proofRefusal are the answers of a proofRoute without its proof: rejected, or

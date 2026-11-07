@@ -10,7 +10,7 @@ import {
 
 test('journey links resolve under the Playwright loader', () => {
   expect(JOURNEYS.firstHour.map((step) => stepHref(step))).toEqual([
-    '/onboarding',
+    '/sessions',
     '/providers',
     '/sessions',
   ])

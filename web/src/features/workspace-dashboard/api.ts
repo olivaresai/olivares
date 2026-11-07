@@ -52,7 +52,27 @@ export interface AgentBriefDTO {
   workspace_id?: string
 }
 
+/** Where a session folder is served over SFTP and SCP, from GET .../workspaces/{ref}/sftp. */
+export interface FolderSftpDTO {
+  user: string
+  port: number
+  /** SHA256 fingerprint of the host key a client should compare. */
+  host_key: string
+}
+
+/** The short-lived credential of POST .../workspaces/{ref}/sftp. The private key is shown once. */
+export interface FolderSftpCredentialDTO extends FolderSftpDTO {
+  private_key: string
+  /** True: the person lacks write, create or erase on the folder, so the key only reads. */
+  read_only: boolean
+  expires_at: string
+  expires_in: number
+}
+
 const DASHBOARD_LIST_CEILING = 10
+
+const folderSftpPath = (folderRef: string) =>
+  `/v1/m/sessions/workspaces/${encodeURIComponent(folderRef)}/sftp`
 
 export const workspaceDashboardApi = {
   summary: (workspaceId: string) =>
@@ -79,6 +99,19 @@ export const workspaceDashboardApi = {
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/contents`,
       scope,
     ),
+
+  /** 404 where this server does not serve SFTP for the folder. */
+  folderSftp: (
+    folderRef: string,
+    scope: TenantRequestOptions & { signal?: AbortSignal },
+  ) => http.get<FolderSftpDTO>(folderSftpPath(folderRef), scope),
+
+  folderSftpConnect: (folderRef: string, scope: TenantRequestOptions) =>
+    http.post<FolderSftpCredentialDTO>(
+      folderSftpPath(folderRef),
+      undefined,
+      scope,
+    ),
 }
 
 export const workspaceDashboardKeys = {
@@ -92,4 +125,6 @@ export const workspaceDashboardKeys = {
     ['workspace-dashboard', 'workspace', tenant, wsId] as const,
   contents: (tenant: string, wsId: string) =>
     ['workspace-dashboard', 'contents', tenant, wsId] as const,
+  folderSftp: (tenant: string, folderRef: string) =>
+    ['workspace-dashboard', 'folder-sftp', tenant, folderRef] as const,
 }

@@ -33,8 +33,7 @@
     "urlRejected_other": "このリンクの値 {{count}} 件は使用できませんでした（{{keys}}）。ビューは既定値に戻りました。",
     "savedViewRejected": "「{{name}}」に保存された値 {{count}} 件は使用できませんでした（{{keys}}）。ビューは既定値に戻りました。",
     "savedViewRejected_other": "「{{name}}」に保存された値 {{count}} 件は使用できませんでした（{{keys}}）。ビューは既定値に戻りました。",
-    "thisSavedView": "この保存済みビュー",
-    "dismiss": "閉じる"
+    "thisSavedView": "この保存済みビュー"
   },
   "workspaceRequired": {
     "use": "{{name}} を使う",

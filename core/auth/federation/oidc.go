@@ -6,9 +6,11 @@ package federation
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -65,6 +67,14 @@ func oidcFromParts(ctx context.Context, issuer, clientID, clientSecret, groupsCl
 	if err != nil {
 		return nil, fmt.Errorf("%w: discovery: %v", ErrNotConfigured, err)
 	}
+	// OIDC Back-Channel Logout 1.0 section 2.1: an OP that does not advertise support
+	// will not post logout tokens, so a sign-out there keeps sessions here until expiry.
+	var bcl struct {
+		Supported bool `json:"backchannel_logout_supported"`
+	}
+	if err := prov.Claims(&bcl); err != nil || !bcl.Supported {
+		slog.Warn("federation: the OIDC provider does not advertise backchannel_logout_supported; a sign-out there will not end sessions here", "issuer", issuer)
+	}
 	op := &oidcProvider{
 		allowAMRCombination: true,
 		assurance:           assuranceMapping(nil),
@@ -105,12 +115,88 @@ func (o *oidcProvider) beginAuth(_ context.Context, p auth.AuthParams) (string, 
 	), nil
 }
 
+// backchannelLogoutEvent is the one event a logout token carries (OIDC Back-Channel
+// Logout 1.0 section 2.4).
+const backchannelLogoutEvent = "http://schemas.openid.net/event/backchannel-logout"
+
+// logoutTokenMaxAge bounds how far a logout token's iat may lie in the past, and
+// logoutTokenSkew how far in the future; the jti is remembered for the whole window.
+const (
+	logoutTokenMaxAge = 10 * time.Minute
+	logoutTokenSkew   = 2 * time.Minute
+)
+
+// logoutReplay remembers consumed logout-token ids per tenant and provider. Like the
+// SAML store it is in memory: a restart only reopens the window of a token captured
+// in transit, whose replay ends sessions of the same person again.
+// ponytail: single-node memory, upgrade to a store table when the engine runs replicated.
+var logoutReplay = newReplayStore()
+
+// validateLogoutToken verifies a back-channel logout token (OIDC Back-Channel Logout
+// 1.0 section 2.6) with the provider's own ID-token verifier: the signature against
+// the discovered JWKS with the pinned RS256/ES256 algorithms (the kid only selects
+// among those keys), iss, aud and exp. It then requires iat within the window, the
+// logout event, no nonce, a sub or sid, and a jti not seen before under replayScope.
+// The jti is consumed only by a token that passed every other check.
+func (o *oidcProvider) validateLogoutToken(ctx context.Context, raw, replayScope string) (auth.LogoutToken, error) {
+	ctx = oidc.ClientContext(ctx, httpClient())
+	tok, err := o.verifier.Verify(ctx, raw)
+	if err != nil {
+		// Only the class: the verifier's message quotes the unverified token's own iss
+		// and aud, caller text that an anonymous endpoint would write to the log.
+		return auth.LogoutToken{}, fmt.Errorf("%w: signature, issuer, audience or expiry refused", auth.ErrInvalidLogoutToken)
+	}
+	var c struct {
+		Subject string                     `json:"sub"`
+		SID     string                     `json:"sid"`
+		IAT     *int64                     `json:"iat"`
+		JTI     string                     `json:"jti"`
+		Events  map[string]json.RawMessage `json:"events"`
+	}
+	var all map[string]json.RawMessage
+	if err := tok.Claims(&c); err != nil || tok.Claims(&all) != nil {
+		return auth.LogoutToken{}, fmt.Errorf("%w: claims: %v", auth.ErrInvalidLogoutToken, err)
+	}
+	_, hasNonce := all["nonce"]
+	now := time.Now()
+	var event map[string]json.RawMessage
+	switch {
+	case hasNonce:
+		return auth.LogoutToken{}, fmt.Errorf("%w: nonce present", auth.ErrInvalidLogoutToken)
+	case json.Unmarshal(c.Events[backchannelLogoutEvent], &event) != nil || event == nil:
+		return auth.LogoutToken{}, fmt.Errorf("%w: no back-channel logout event", auth.ErrInvalidLogoutToken)
+	case c.Subject == "" && c.SID == "":
+		return auth.LogoutToken{}, fmt.Errorf("%w: neither sub nor sid", auth.ErrInvalidLogoutToken)
+	case c.IAT == nil:
+		return auth.LogoutToken{}, fmt.Errorf("%w: no iat", auth.ErrInvalidLogoutToken)
+	case time.Unix(*c.IAT, 0).Before(now.Add(-logoutTokenMaxAge)) || time.Unix(*c.IAT, 0).After(now.Add(logoutTokenSkew)):
+		return auth.LogoutToken{}, fmt.Errorf("%w: iat outside the accepted window", auth.ErrInvalidLogoutToken)
+	case c.JTI == "":
+		return auth.LogoutToken{}, fmt.Errorf("%w: no jti", auth.ErrInvalidLogoutToken)
+	}
+	keep := time.Unix(*c.IAT, 0).Add(logoutTokenMaxAge)
+	if tok.Expiry.After(keep) {
+		keep = tok.Expiry
+	}
+	if !logoutReplay.admit(logoutReplayKey(replayScope, tok.Issuer, c.JTI), keep) {
+		return auth.LogoutToken{}, fmt.Errorf("%w: replayed jti", auth.ErrInvalidLogoutToken)
+	}
+	return auth.LogoutToken{Issuer: tok.Issuer, Subject: c.Subject, SessionID: c.SID, JTI: c.JTI}, nil
+}
+
+// logoutReplayKey is the replay-store id of a logout token's jti from issuer under
+// replayScope.
+func logoutReplayKey(replayScope, issuer, jti string) string {
+	return replayScope + "\x1f" + issuer + "\x1f" + jti
+}
+
 // idClaims are the identity claims read from the ID token / userinfo.
 type idClaims struct {
 	Subject       string `json:"sub"`
 	Email         string `json:"email"`
 	EmailVerified *bool  `json:"email_verified"`
 	Name          string `json:"name"`
+	SID           string `json:"sid"`
 }
 
 // validate exchanges the authorization code (with the PKCE verifier), verifies the
@@ -161,6 +247,9 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	aal, authenticatedAt := o.assertionAssurance(idToken)
 	_ = idToken.Claims(&claims)
 	_ = idToken.Claims(&raw)
+	// The IdP session id is read from the signed ID token only (OIDC Back-Channel
+	// Logout 1.0 section 3), before the UserInfo merge below can touch claims.
+	sid := claims.SID
 	if raw == nil {
 		raw = map[string]any{} // defensive: a degenerate token must never nil-panic the merge/read below
 	}
@@ -242,7 +331,7 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	// idToken.Issuer is the verified `iss`: the verifier enforced it equal to the
 	// discovery-bound issuer (SkipIssuerCheck is never set), so it is a trustworthy
 	// qualifier for the subject, not a self-asserted claim (U3).
-	id := auth.FederatedIdentity{Protocol: auth.ProtocolOIDC, Subject: subject, Issuer: idToken.Issuer, Email: claims.Email, EmailVerified: claims.EmailVerified != nil && *claims.EmailVerified, DisplayName: claims.Name}
+	id := auth.FederatedIdentity{Protocol: auth.ProtocolOIDC, Subject: subject, Issuer: idToken.Issuer, Email: claims.Email, EmailVerified: claims.EmailVerified != nil && *claims.EmailVerified, DisplayName: claims.Name, SessionID: sid}
 	id.AAL, id.AuthenticatedAt = aal, authenticatedAt
 	if o.groupsClaim != "" {
 		id.Groups = claimStrings(raw[o.groupsClaim])

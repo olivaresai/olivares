@@ -44,7 +44,7 @@ AI のための control plane（コントロールプレーン）はセキュリ
   複数の SIEM 形式でエクスポートできます。
 - **リリースは署名され、検証可能。** 署名、SLSA 来歴、SBOM、OpenVEX はすべて[検証](/ja/how-to/verify-a-release/)できます。
   検証はまだ完全にはネットワーク不要ではありません。キーレス検証には Sigstore のトラストルート素材が必要で、SLSA の手順には
-  オフラインモードがありません。製品は[エアギャップバンドル](/ja/how-to/air-gap-install/)を同梱します。次のリリースは **<!-- release -->0.6<!-- /release -->** で、まだ公開されていません。公開まではソースからビルドしてください。
+  オフラインモードがありません。製品は[エアギャップバンドル](/ja/how-to/air-gap-install/)を同梱します。次のリリースは **<!-- release -->0.7<!-- /release -->** で、まだ公開されていません。公開まではソースからビルドしてください。
 
 ## オープンコア — オープンと商用の境界
 
@@ -90,7 +90,7 @@ Olivares AI は**1.0 未満**です。製品設計ドキュメントは、エン
   mongo/redshift/gcs/azure-blob/iceberg/openlineage/delta-sharing）とともに登録し、
   すべて `OLIVARES_SOURCES_CONFIG` で構成可能です（[クイックスタート](/ja/start/quickstart/)は
   標準バイナリに対して実際の `pgaudit` ソースを配線し、スモークテストがそれを検証します）。
-  ナレッジの**ドキュメントソース**（gdrive/confluence/notion/s3content）は
+  ナレッジの**ドキュメントソース**（gdrive/notion/s3content）は
   意図的にランタイムソース*ではなく*、ナレッジ取り込みリクエストによってオンデマンドで
   ロードされます。[コネクタリファレンス](/ja/reference/connectors/)が各種別をマークします。
 - **既定は単一バイナリ。分散イベントバスは存在し、そのセマンティクスについて誠実。**

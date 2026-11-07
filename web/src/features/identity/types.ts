@@ -189,15 +189,6 @@ export interface SsoStatus {
   reason?: string
 }
 
-/** The env keys that configure SSO (rendered as read-only documentation — there is
- *  NO config-write API; config is read once at boot via FromEnv). */
-export interface SsoEnvField {
-  key: string
-  required: boolean
-  protocol: 'oidc' | 'saml' | 'common'
-  secret?: boolean
-}
-
 // ---------------------------------------------------------------------------
 // REAL — SCIM 2.0 (v1/scim/v2). SCIM envelopes are distinct from the core
 // ListResponse (capitalised `Resources`, string `status` in errors).
@@ -424,6 +415,8 @@ export interface AuthSessionItem {
   created_at: string
   last_used_at: string | null
   kind: 'browser' | 'token' | 'unknown' | 'pairing'
+  /** Client address at sign-in; absent on engines that predate the field. */
+  created_ip?: string
   current: boolean
   expires_at: string
 }

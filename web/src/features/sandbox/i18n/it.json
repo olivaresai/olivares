@@ -160,7 +160,6 @@
     }
   },
   "seam": {
-    "synthetic": "Generazione locale dei dati",
     "syntheticData": "Genera input di scenario riproducibili tramite l'API della sandbox usando template locali limitati. Non viene fatta alcuna richiesta a modelli o alla rete."
   },
   "empty": {
@@ -182,7 +181,7 @@
     "scenarioRef": "Riferimento dello scenario (facoltativo)",
     "baseline": "Variante baseline",
     "candidate": "Variante candidata",
-    "replayHint": "Riesegue in modo deterministico una sessione storica su mock. Se la timeline non può essere ricostruita, la riesecuzione risulta DEGRADED con zero passi — non è una sessione che non ha fatto nulla, è una timeline che non si è potuta ricostruire.",
+    "replayHint": "Riesegue una sessione passata su dei mock. Una riproduzione senza passi significa che la sua cronologia non è stata ricostruita.",
     "compareHint": "Un confronto è un'evidenza di DECISIONE pre/post-deploy e viene salvato in sola aggiunta, per questo richiede il livello di amministrazione e non quello che si limita a eseguire.",
     "liveRef": "Riferimento dell'istanza di sessione",
     "legacySessionRef": "Riferimento della sessione legacy (alternativa)"

@@ -7,10 +7,14 @@ package sessions
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -257,14 +261,14 @@ func TestTemplateList_FilterBuiltin(t *testing.T) {
 		"name": "Custom One",
 	}, hdr)
 
-	// List all (includes 9 builtins + 1 custom).
+	// List all (includes builtins + 1 custom).
 	r := h.do("GET", "/v1/m/sessions/templates", admin, hdr)
 	if r.code != http.StatusOK {
 		t.Fatalf("list all = %d %s", r.code, r.raw)
 	}
 	allItems := r.body["items"].([]any)
-	if len(allItems) < 10 {
-		t.Fatalf("expected at least 10 templates (9 builtins + 1 custom), got %d", len(allItems))
+	if want := len(builtinTemplates) + 1; len(allItems) != want {
+		t.Fatalf("all templates = %d, want %d (builtins + 1 custom)", len(allItems), want)
 	}
 
 	// Filter by builtin=true.
@@ -273,8 +277,8 @@ func TestTemplateList_FilterBuiltin(t *testing.T) {
 		t.Fatalf("list builtin = %d %s", r.code, r.raw)
 	}
 	builtinItems := r.body["items"].([]any)
-	if len(builtinItems) != 9 {
-		t.Errorf("builtin items = %d, want 9", len(builtinItems))
+	if want := len(builtinTemplates); len(builtinItems) != want {
+		t.Errorf("builtin items = %d, want %d", len(builtinItems), want)
 	}
 
 	// Filter by builtin=false.
@@ -384,7 +388,10 @@ func TestTemplateApply_RefusesWhatTheLaunchWouldRefuse(t *testing.T) {
 
 	cr := h.doJSON("POST", "/v1/m/sessions/templates", admin, map[string]any{
 		"name": "Retired",
-		"body": map[string]any{"settings": map[string]any{"effort": "high"}},
+		"body": map[string]any{
+			"settings": map[string]any{"effort": "high"},
+			"policies": map[string]any{"require_read_only_folders": true},
+		},
 	}, hdr)
 	if cr.code != http.StatusCreated {
 		t.Fatalf("create = %d %s", cr.code, cr.raw)
@@ -577,4 +584,267 @@ func countBuiltins(t *testing.T, m *Module, ctx context.Context, tenant model.Te
 		return nil
 	})
 	return count
+}
+
+// Course presets use the ordinary template merge and never widen a plan launch.
+func TestAIASPresets(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode                  string
+		disabled, recording, strict bool
+	}{
+		{"AIAS 1 — No AI", "", true, false, false},
+		{"AIAS 2 — Plan only tutor", "plan", false, false, true},
+		{"AIAS 3 — Scratch practice", "acceptEdits", false, false, true},
+		{"AIAS 4 — AI with review", "acceptEdits", false, true, false},
+		{"AIAS 5 — Full AI", "bypassPermissions", false, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &fakeRunner{}
+			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(r), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, false))
+			var body *tplBody
+			for i := range builtinTemplates {
+				if builtinTemplates[i].name == tc.name {
+					body = &builtinTemplates[i].body
+					break
+				}
+			}
+			if body == nil {
+				t.Fatal("missing course preset")
+			}
+			id := seedTemplate(t, m, tenant, tc.name, *body)
+			if tc.name == "AIAS 3 — Scratch practice" {
+				_, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{TemplateID: id, Actor: actorU, ActorKind: actorKindU})
+				if err == nil || !strings.Contains(err.Error(), "read_only_folders") {
+					t.Fatalf("unconfigured scratch launch: %v", err)
+				}
+			}
+			course, scratch := t.TempDir(), t.TempDir()
+			folder := course
+			var references []string
+			if tc.name == "AIAS 3 — Scratch practice" {
+				folder, references = scratch, []string{course}
+			}
+			ws := mkWorkspace(t, m, tenant, CreateWorkspaceParams{RootPath: folder, ReadOnlyFolders: references})
+			run, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{TemplateID: id, WorkspaceRef: ws.WorkspaceRef, Transport: TransportStreamJSON, PermissionMode: "bypassPermissions", MayRunUnrestricted: true, Actor: actorU, ActorKind: actorKindU})
+			if tc.disabled {
+				if err == nil || !strings.Contains(err.Error(), "sessions are disabled") {
+					t.Fatalf("no-AI launch: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			spec := r.lastSpec()
+			if mode, _ := argvFlag(spec.Args, "--permission-mode"); mode != tc.mode {
+				t.Fatalf("mode=%q want=%q", mode, tc.mode)
+			}
+			if run.RecordIO != tc.recording || spec.ConfinementRequireTruncateProtection != tc.strict {
+				t.Fatalf("recording=%v strict=%v", run.RecordIO, spec.ConfinementRequireTruncateProtection)
+			}
+			if tc.mode == "plan" && (spec.Confinement == nil || len(spec.Confinement.Sealed) == 0 || !spec.ConfinementRequired) {
+				t.Fatal("tutor folder is not confined read-only")
+			}
+			if len(references) > 0 {
+				if spec.Dir != scratch || len(spec.ConfinementFiles) != 1 || !spec.ConfinementRequired {
+					t.Fatal("scratch workspace did not carry the read-only course boundary")
+				}
+				for _, path := range spec.Confinement.ReadWrite {
+					if pathsOverlap(path, course) {
+						t.Fatal("course folder received a writable grant")
+					}
+				}
+			}
+			if !strings.Contains(body.Settings.CustomInstructions, "final answer") {
+				t.Fatal("missing assessment instructions")
+			}
+		})
+	}
+}
+
+// Ownership is a current responsibility; authorship remains historical evidence.
+func TestOwnershipTransferPreservesTemplateAuthorship(t *testing.T) {
+	m := New()
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "ownership")
+	created := h.doJSON("POST", "/v1/m/sessions/templates", admin, map[string]any{"name": "Owned template"}, tenantHdr(tenant))
+	if created.code != http.StatusCreated {
+		t.Fatalf("create: %d %s", created.code, created.raw)
+	}
+	if created.body["owner"] == nil || created.body["owner"] != created.body["author"] {
+		t.Fatalf("current ownership is missing: %s", created.raw)
+	}
+	ctx := context.Background()
+	source, err := model.ParseID(strings.TrimPrefix(created.body["author"].(string), "user:"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := h.userToken(admin, tenant, "manager@ownership.test", auth.RoleAdmin)
+	who := h.do("GET", "/v1/auth/whoami", manager, nil)
+	target, err := model.ParseID(who.body["user_id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.WorkIdentity = allowWorkIdentity{}
+	WithWorkContentGuard(allowWorkContent{})(m)
+	principal := WorkPrincipal{Actor: "user:" + source.String(), ActorKind: model.ActorUser, ActorRef: source.String(), Admin: true}
+	var folder model.Resource
+	var workspace model.ID
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		ws, e := sc.DefaultWorkspace(ctx)
+		if e != nil {
+			return e
+		}
+		workspace = ws.ID
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.UsePersonalFilesRoot(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	personalRef, err := m.ensurePersonalFolder(ctx, tenant, auth.Principal{Kind: auth.KindUser, UserID: source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(m.rt.personalFilesRoot, source.String())); !os.IsNotExist(err) {
+		t.Fatalf("fresh allocation created the shared account-only path: %v", err)
+	}
+
+	if err := h.st.View(ctx, tenant, func(sc store.Scope) error {
+		repo, e := sc.Ext(workspaceKind)
+		if e != nil {
+			return e
+		}
+		rows, _, e := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colWsRef, personalRef)}, Limit: 1})
+		if e != nil {
+			return e
+		}
+		folder, e = sc.Resources().Get(ctx, recordID(rows[0]))
+		return e
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f := workFixture{m: m, st: h.st, tenant: tenant, workspace: workspace, principal: principal}
+	for _, title := range []string{"First task", "Second task"} {
+		applyCreate(t, f, title)
+	}
+	inventory, err := m.OwnershipInventory(ctx, tenant, source)
+	if err != nil || len(inventory.Folders) != 1 || len(inventory.WorkItems) != 2 || len(inventory.Templates) != 1 {
+		t.Fatalf("inventory: %+v, %v", inventory, err)
+	}
+	prepared, err := m.PrepareOwnershipTransfer(ctx, tenant, principal, source, target, inventory.Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The caller's completion audit and all ownership writes share one transaction.
+	sentinel := errors.New("completion audit failed")
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		if e := m.ApplyOwnershipTransfer(ctx, tenant, sc, prepared); e != nil {
+			return e
+		}
+		return sentinel
+	}); !errors.Is(err, sentinel) {
+		t.Fatalf("rollback: %v", err)
+	}
+	after, err := m.OwnershipInventory(ctx, tenant, source)
+	if err != nil || after.Digest != inventory.Digest {
+		t.Fatalf("partial transfer escaped rollback: %+v %v", after, err)
+	}
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error { return m.ApplyOwnershipTransfer(ctx, tenant, sc, prepared) }); err != nil {
+		t.Fatal(err)
+	}
+	targetInventory, err := m.OwnershipInventory(ctx, tenant, target)
+	if err != nil || len(targetInventory.Folders) != 1 || len(targetInventory.WorkItems) != 2 || len(targetInventory.Templates) != 1 {
+		t.Fatalf("recipient inventory: %+v %v", targetInventory, err)
+	}
+	got := h.do("GET", "/v1/m/sessions/templates/"+created.body["id"].(string), admin, tenantHdr(tenant))
+	if got.code != 200 || got.body["author"] != created.body["author"] || got.body["owner"] != "user:"+target.String() {
+		t.Fatalf("authorship or owner: %s", got.raw)
+	}
+	if err := h.st.View(ctx, tenant, func(sc store.Scope) error {
+		r, e := sc.Resources().Get(ctx, folder.ID)
+		if e != nil {
+			return e
+		}
+		if e = personalFolderAdmits(r, auth.Principal{UserID: target}, auth.TrusteeRead); e != nil {
+			return e
+		}
+		if e = personalFolderAdmits(r, auth.Principal{UserID: source}, auth.TrusteeRead); e == nil {
+			return errors.New("old owner can still read")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error { return m.ApplyOwnershipTransfer(ctx, tenant, sc, prepared) }); err == nil {
+		t.Fatal("stale review applied twice")
+	}
+	replacement, err := m.ensurePersonalFolder(ctx, tenant, auth.Principal{Kind: auth.KindUser, UserID: source})
+	if err != nil || replacement == personalRef {
+		t.Fatalf("mover cannot get fresh personal files: %s %v", replacement, err)
+	}
+	stable, err := m.ensurePersonalFolder(ctx, tenant, auth.Principal{Kind: auth.KindUser, UserID: source})
+	if err != nil || stable != replacement {
+		t.Fatalf("replacement folder is not stable: %s %v", stable, err)
+	}
+	// A later organization must not adopt the physical folder handed over here.
+	otherTenant := h.createOrg(admin, "later-organization")
+	otherRef, err := m.ensurePersonalFolder(ctx, otherTenant, auth.Principal{Kind: auth.KindUser, UserID: source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.st.View(ctx, otherTenant, func(sc store.Scope) error {
+		repo, e := sc.Ext(workspaceKind)
+		if e != nil {
+			return e
+		}
+		rows, _, e := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colWsRef, otherRef)}, Limit: 1})
+		if e != nil {
+			return e
+		}
+		if !strings.Contains(rows[0].String(colWsRootPath), "tenant-"+otherTenant.String()) {
+			return errors.New("later tenant adopted the transferred account folder")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+// Template ownership is a retained obligation, not authority that blocks retirement.
+// Community has no route to change the owner, and DELETE only archives the template.
+func TestArchivedTemplateDoesNotBlockRetirement(t *testing.T) {
+	m := New()
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "tpl-retire")
+	created := h.doJSON("POST", "/v1/m/sessions/templates", admin, map[string]any{"name": "Leaver template"}, tenantHdr(tenant))
+	if created.code != http.StatusCreated {
+		t.Fatalf("create: %d %s", created.code, created.raw)
+	}
+	id := created.body["id"].(string)
+	if got := h.do("DELETE", "/v1/m/sessions/templates/"+id, admin, tenantHdr(tenant)); got.code != http.StatusNoContent {
+		t.Fatalf("archive: %d %s", got.code, got.raw)
+	}
+	author, err := model.ParseID(strings.TrimPrefix(created.body["author"].(string), "user:"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	var blocking []string
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		var e error
+		blocking, _, e = retirementBlockers(ctx, sc, auth.RetirementRequest{Tenant: tenant, User: author, Generation: 1})
+		return e
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range blocking {
+		if strings.HasPrefix(ref, string(templateKind)+":") {
+			t.Fatalf("archived template blocks its author's retirement: %v", blocking)
+		}
+	}
 }

@@ -123,6 +123,9 @@ describe('a long conversation', () => {
         <SessionConversation run={run} composerId="composer" />
       </QueryClientProvider>,
     )
+    // A short list keeps the browser's scroll anchoring; the virtual list keeps the view in
+    // place itself, and both doing it moved the view every frame (#4128).
+    expect(screen.getByRole('log')).not.toHaveClass('[overflow-anchor:none]')
     act(() => {
       for (let i = 0; i < 2000; i++) push(i)
     })
@@ -131,6 +134,43 @@ describe('a long conversation', () => {
     )
     expect(rows.length).toBeGreaterThan(0)
     expect(rows.length).toBeLessThanOrEqual(120)
+    expect(screen.getByRole('log')).toHaveClass('[overflow-anchor:none]')
+  })
+
+  it('does not remeasure unchanged virtual rows when selection changes', async () => {
+    const client = new QueryClient()
+    const view = render(
+      <QueryClientProvider client={client}>
+        <SessionConversation run={run} selectedId="before" />
+      </QueryClientProvider>,
+    )
+    act(() => {
+      for (let i = 0; i < 2000; i++) push(i)
+    })
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    try {
+      await waitFor(() =>
+        expect(
+          rect.mock.contexts.some((node) => node instanceof HTMLLIElement),
+        ).toBe(true),
+      )
+      rect.mockClear()
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <SessionConversation run={run} selectedId="after" />
+        </QueryClientProvider>,
+      )
+      await act(async () => {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        )
+      })
+      expect(
+        rect.mock.contexts.filter((node) => node instanceof HTMLLIElement),
+      ).toHaveLength(0)
+    } finally {
+      rect.mockRestore()
+    }
   })
 
   it('keeps the first turn of a view that stays open past MAX_FRAMES frames', () => {

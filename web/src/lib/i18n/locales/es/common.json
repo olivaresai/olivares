@@ -106,7 +106,20 @@
     "scope": "en {{name}}",
     "footerMove": "mover",
     "footerOpen": "abrir",
-    "footerCommands": "solo comandos"
+    "footerCommands": "solo comandos",
+    "objectActions": "Para {{name}}",
+    "footerPeople": "personas",
+    "footerSessions": "sesiones",
+    "peopleHint": "Escribe un nombre.",
+    "ask": "Preguntar a Olivares…"
+  },
+  "hintBar": {
+    "move": "mover",
+    "open": "abrir",
+    "approve": "aprobar",
+    "deny": "denegar",
+    "launcher": "lanzador",
+    "command": "comandos"
   },
   "permissionWords": {
     "read": "acceso de lectura",
@@ -327,11 +340,16 @@
         "last": "Última sesión",
         "open": "Abrir la sesión",
         "pin": "Fijarla o dejar de fijarla",
+        "undo": "Deshacer el último archivado, posposición, hecho o desfijado",
         "menu": "Abrir el menú de acciones de la sesión"
       },
       "session": {
         "new": "Nueva sesión",
         "previous": "Volver a la sesión anterior"
+      },
+      "list": {
+        "next": "Ir a la siguiente fila",
+        "previous": "Ir a la fila anterior"
       },
       "sourceDiff": {
         "nextFile": "Fichero siguiente",
@@ -342,15 +360,23 @@
       "approvals": {
         "approve": "Aprobar una vez la solicitud abierta",
         "deny": "Rechazar la solicitud abierta"
+      },
+      "accessMap": {
+        "fullScreen": "Entrar o salir del mapa a pantalla completa"
+      },
+      "ask": {
+        "open": "Preguntar a Olivares"
       }
     },
     "when": {
       "railFocused": "en el carril de sesiones",
+      "outsideList": "fuera de una lista",
       "launcherFocused": "en el campo del lanzador",
       "workSurface": "en la pantalla de sesiones",
       "sessionHistory": "cuando hay una sesión anterior",
       "paletteRecent": "en los resultados de la paleta con la búsqueda vacía",
-      "approvalQueue": "en la cola de aprobaciones"
+      "approvalQueue": "en la cola de aprobaciones",
+      "accessMap": "en el mapa de acceso"
     },
     "precedence": "Cuando dos filas comparten teclas, gana la última que aplica.",
     "problems_one": "No se ha podido leer {{count}} atajo y no funciona: {{commands}}",
@@ -406,7 +432,6 @@
     },
     "quoteReply": "Citar respuesta",
     "copy": {
-      "markdown": "Copiar bloque Markdown",
       "message": "Copiar mensaje",
       "code": "Copiar código",
       "copied": "Copiado",

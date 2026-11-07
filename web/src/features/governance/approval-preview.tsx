@@ -277,10 +277,14 @@ function askedBy(
           : requester.startsWith('token:')
             ? t('preview.apiToken')
             : t('detail.requestedBy')))
-  return a.launched_by
+  if (!a.launched_by) return person
+  return a.action === SESSION_LAUNCH
     ? t('preview.askedByForSession', { name: person })
-    : person
+    : t('preview.askedByThroughSession', { name: person })
 }
+
+/** The action of a session launch's own approval: the session does not exist yet. */
+const SESSION_LAUNCH = 'sessions.run.launch'
 
 /** The action of a tool's own permission request (cmd/olivares/providerapproval.go). */
 const PROVIDER_APPROVAL = 'sessions.provider.approval'
@@ -372,6 +376,22 @@ export function approvalExpectsCommand(approval: ApprovalDTO): boolean {
 /** Reviewed text this long is cut to a few lines until the person opens it in full. */
 export function reviewIsLong(text: string): boolean {
   return text.split('\n').length > 4 || text.length > 320
+}
+
+/** How long a request that just took a place on screen ignores Approve: the queue's poll
+ * can swap or move it under a pointer already on its way to the button. */
+export const FLAG_ARM_MS = 500
+
+/**
+ * One click approves only what the card shows in full: a reviewed command short enough
+ * not to be cut, or a request that runs nothing by itself. A long command, one the tool
+ * did not name, or a tool call stored without its review opens the request beside the
+ * queue, where the whole of it is read above Approve once.
+ */
+export function oneClickApprove(approval: ApprovalDTO): boolean {
+  if (approvalCommandUnknown(approval)) return false
+  const text = approval.review?.text
+  return text ? !reviewIsLong(text) : !approvalExpectsCommand(approval)
 }
 
 /** The reviewed text, verbatim and monospace; long text opens in full on demand. */

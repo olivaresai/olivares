@@ -1,6 +1,6 @@
 {
-  "title": "模型运维",
-  "subtitle": "治理自有模型及其签名模型准入与本地推理部署。",
+  "title": "模型运营",
+  "subtitle": "您自己的模型及其运行位置。",
   "tabs": {
     "owned": "自有模型",
     "admission": "准入",
@@ -120,7 +120,7 @@
   },
   "policy": {
     "title": "准入策略",
-    "description": "用于签名模型准入的租户信任策略。签名方法由你的配置推导得出。",
+    "description": "用于签名模型准入的组织信任策略。签名方法由你的配置推导得出。",
     "edit": "编辑策略",
     "editTitle": "编辑准入策略",
     "editBody": "编写信任锚。原子性保存；引擎始终是最终权威。",
@@ -285,14 +285,14 @@
   },
   "finetune": {
     "title": "微调作业",
-    "description": "微调作业及其产出版本的记录。该平面绝不训练模型，也不持有权重。",
+    "description": "微调作业及其产出版本的记录。Olivares 绝不训练模型，也不持有权重。",
     "new": "新建作业记录",
     "search": "搜索作业…",
     "created": "作业已记录。",
     "updated": "作业已更新。",
     "newTitle": "记录微调作业",
     "editTitle": "更新微调作业",
-    "formBody": "记录作业的状态及其产出的版本。这是一条清单记录——控制平面不运行训练。",
+    "formBody": "记录作业的状态及其产出的版本。这是一条清单记录——Olivares 不运行训练。",
     "columns": {
       "name": "名称",
       "runtime": "运行时",
@@ -405,7 +405,7 @@
     },
     "finetune": {
       "title": "尚无微调作业记录",
-      "description": "记录在 Olivares 外部运行的微调作业，以跟踪其状态、血缘和产出的模型版本；控制平面不运行训练。"
+      "description": "记录在 Olivares 外部运行的微调作业，以跟踪其状态、血缘和产出的模型版本；Olivares 不运行训练。"
     },
     "modelEvidence": {
       "title": "尚无 AIBOM 封存记录",

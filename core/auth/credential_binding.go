@@ -906,3 +906,27 @@ func credentialBindingUnavailable(what string, cause error) error {
 	}
 	return fmt.Errorf("%w: %s: %w", ErrCredentialBindingUnavailable, what, cause)
 }
+
+// CredentialBindingsForUser reads current account-owned bindings for a trusted
+// composition caller that has already authorized the tenant inventory. Returned
+// rows contain references and seals, never bearer credentials; an external view
+// must project only the fields that its caller is authorized to inspect.
+func (a *Authenticator) CredentialBindingsForUser(ctx context.Context, tenant model.TenantID, user model.ID) ([]model.CredentialBinding, error) {
+	if a == nil || a.st == nil || tenant.IsZero() || tenant.IsSystem() || user.IsZero() {
+		return nil, store.ErrInvalidID
+	}
+	var rows []model.CredentialBinding
+	err := a.st.AuthView(ctx, func(as store.AuthScope) error {
+		bindings, err := credentialBindingStore(as)
+		if err != nil {
+			return err
+		}
+		reader, ok := bindings.(store.CredentialBindingUserReader)
+		if !ok {
+			return errors.New("auth: credential binding inventory unavailable")
+		}
+		rows, err = reader.ListByUser(ctx, tenant, user)
+		return err
+	})
+	return rows, err
+}

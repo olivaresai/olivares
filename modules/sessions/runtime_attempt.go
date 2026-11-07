@@ -125,7 +125,7 @@ func (m *Module) AttachRuntimeOutput(ctx context.Context, target RuntimeLaunchId
 	}
 	if err == nil {
 		err = m.runtimeData(ctx).Mutate(ctx, target.Tenant, func(sc store.Scope) error {
-			_, err := sc.Audit().Append(ctx, model.AuditDraft{Actor: actor, ActorKind: actorKind, Action: "sessions.run.attach", TargetKind: runKind, Meta: map[string]any{"run_ref": target.RunRef, "runtime_launch_id": target.RuntimeLaunchID.String(), "reason": reason}})
+			_, err := sc.Audit().Append(ctx, model.AuditDraft{Actor: actor, ActorKind: actorKind, Action: "sessions.run.attach", TargetKind: runKind, TargetID: live.runID, Meta: map[string]any{"run_ref": target.RunRef, "runtime_launch_id": target.RuntimeLaunchID.String(), "reason": reason}})
 			return err
 		})
 	}

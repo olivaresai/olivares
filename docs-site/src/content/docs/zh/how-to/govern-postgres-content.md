@@ -8,7 +8,7 @@ PostgreSQL database，并把其中的 row 转为**受治理知识文档**。文�
 经过同一条 pipeline：redact → classify → chunk → embed → index → 通过 MCP 提供，
 并带有每文档 ACL 和每 column classification。
 
-它是 SaaS/data warehouse 内容源（gdrive、confluence、s3content、snowflake…）在
+它是 SaaS/data warehouse 内容源（gdrive、s3content…）在
 运营 database 一侧的对应物。但它**不是**以下两类产品：
 
 - **不是 `pgaudit`。** `pgaudit` 为 access map 观测 R/RW *access edge*，绝不读取

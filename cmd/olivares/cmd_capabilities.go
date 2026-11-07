@@ -45,11 +45,14 @@ func newCapabilitiesCmd() *cobra.Command {
 			"(/v1/m/capabilities), so a route and its verb are one translation apart.\n\n" +
 			"Tool PINS live under `olivares mcp pins`: they were already operator surface and are\n" +
 			"not duplicated here.",
-		Example: "  olivares capabilities servers ls\n" +
+		Example: "  olivares capabilities ls\n" +
 			"  olivares capabilities tools --server-id 018f0000-0000-7000-8000-000000000001",
 	}
 	flags.addPersistent(root)
-	root.AddCommand(capabilitiesServersCmd(flags), capabilitiesSkillsCmd(flags),
+	// `capabilities ls` is the listing the group's own example leads with: the connected servers.
+	ls := capabilitiesServersListCmd(flags)
+	ls.Example = "  olivares capabilities ls"
+	root.AddCommand(ls, capabilitiesServersCmd(flags), capabilitiesSkillsCmd(flags),
 		capabilitiesToolsCmd(flags), capabilitiesWiringCmd(flags))
 	return root
 }

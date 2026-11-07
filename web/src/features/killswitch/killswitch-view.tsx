@@ -69,7 +69,7 @@ export default function KillswitchView() {
     <div className="flex flex-col gap-5 pb-10">
       <PageHeader
         title={t('title')}
-        description={t('subtitle')}
+        description={t(canAdmin ? 'subtitle' : 'subtitleNoStop')}
         icon={OctagonAlert}
         actions={canAdmin ? <StopAgentMenu /> : undefined}
         primaryAction={

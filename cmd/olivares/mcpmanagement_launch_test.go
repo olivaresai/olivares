@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -118,6 +119,28 @@ func TestManagedMCPLaunchGivesGeminiAndGrokTheSessionServer(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestReachableServerNamesKeepsOnlyEnabledAssignedServers(t *testing.T) {
+	servers := []auth.MCPGatewayServer{
+		{ID: "a", MCPGatewayServerInput: auth.MCPGatewayServerInput{Name: "assigned", Enabled: true}},
+		{ID: "b", MCPGatewayServerInput: auth.MCPGatewayServerInput{Name: "off", Enabled: false}},
+		{ID: "c", MCPGatewayServerInput: auth.MCPGatewayServerInput{Name: "elsewhere", Enabled: true}},
+		{ID: "d", MCPGatewayServerInput: auth.MCPGatewayServerInput{Name: "unreadable", Enabled: true}},
+	}
+	assigned := func(s auth.MCPGatewayServer) (bool, error) {
+		switch s.ID {
+		case "a":
+			return true, nil
+		case "d":
+			return false, auth.ErrMCPGatewayUnavailable
+		}
+		return false, nil
+	}
+	names, undecided := reachableServerNames(servers, assigned)
+	if !slices.Equal(names, []string{"assigned"}) || !slices.Equal(undecided, []string{"d"}) {
+		t.Fatalf("reach = %v undecided = %v, want [assigned] and [d]", names, undecided)
 	}
 }
 

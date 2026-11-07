@@ -21,19 +21,18 @@ func TestSessionStopCancellationKeepsOtherSessionsAndGovernance(t *testing.T) {
 	tenant := h.createOrg(admin, "session-stop")
 	ctx := context.Background()
 	open := func(action, session string) string {
-		r := h.do("POST", "/v1/m/governance/approvals", admin, map[string]any{"action": action, "session_ref": session, "subject_kind": "repository", "subject_ref": "proof"}, tenantHdr(tenant))
-		if r.code != 201 {
+		if session != "" {
+			return h.engineSessionApproval(tenant, action, "repository", "proof", session)
+		}
+		r := h.createApproval(admin, tenant, map[string]any{"action": action, "subject_kind": "repository", "subject_ref": "proof"})
+		if r.code != http.StatusCreated {
 			t.Fatalf("create=%d %s", r.code, r.raw)
 		}
 		return r.body["id"].(string)
 	}
 
 	otherTenant := h.createOrg(admin, "other-session-stop")
-	other := h.do("POST", "/v1/m/governance/approvals", admin, map[string]any{"action": "github.write", "session_ref": "session-own", "subject_kind": "repository", "subject_ref": "other-tenant"}, tenantHdr(otherTenant))
-	if other.code != http.StatusCreated {
-		t.Fatalf("other tenant request=%d %s", other.code, other.raw)
-	}
-	otherID := other.body["id"].(string)
+	otherID := h.engineSessionApproval(otherTenant, "github.write", "repository", "other-tenant", "session-own")
 	canceled := open("github.write", "session-own")
 	kept := []string{open("github.write", "session-other"), open("nhi.rotate", "session-own"), open("security.posture.change", "session-own"), open("compliance.attest", "session-own"), open("evidence.export", "")}
 	if err := h.gov.CancelSessionApprovals(ctx, tenant, []string{"session-own"}, "operator", model.ActorUser); err != nil {
@@ -138,11 +137,7 @@ func TestSessionStopCancellationSurvivesCommittedDecisionRace(t *testing.T) {
 	_, approver := h.roleUser(admin, tenant, "stop-approver@example.test", "admin")
 	var ids []string
 	for _, subject := range []string{"decision-race-one", "decision-race-two", "decision-race-three"} {
-		r := h.do("POST", "/v1/m/governance/approvals", admin, map[string]any{"action": "github.write", "session_ref": "racing-session", "subject_kind": "repository", "subject_ref": subject}, tenantHdr(tenant))
-		if r.code != http.StatusCreated {
-			t.Fatalf("create=%d %s", r.code, r.raw)
-		}
-		ids = append(ids, r.body["id"].(string))
+		ids = append(ids, h.engineSessionApproval(tenant, "github.write", "repository", subject, "racing-session"))
 	}
 	raced := ids[1]
 	data := &sessionStopDecisionRaceData{ModuleData: api.NewModuleData(h.st), afterRead: func() {

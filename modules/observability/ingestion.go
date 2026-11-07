@@ -174,7 +174,7 @@ func (m *Module) handleIngestionHealth(w http.ResponseWriter, _ *http.Request, _
 //     (0 releases; public README Schema URL TODO). otelGenAIGate mirrors
 //     cfgSemconvOptIn "=" genAIOptInToken (connectors/claude/config.go +
 //     genai.go) — all unexported there, by design.
-//   - siemwire.OCSFVersion is imported live (sdk/siemwire/ocsf.go:60).
+//   - siemwire.OCSFVersion is imported live (sdk/siemwire/catalog.go).
 //   - asimVersion mirrors ASIMSchemaVersion (connectors/internal/siemfmt/
 //     aiformats.go:226 — an internal package this module cannot import).
 //   - promTextVersion mirrors the exposition version in core/metrics/metrics.go:46.

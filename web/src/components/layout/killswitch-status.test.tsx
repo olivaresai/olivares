@@ -71,6 +71,25 @@ describe('KillSwitchStatus', () => {
     expect(pill.className).toContain('text-warning')
   })
 
+  it('marks each stop with the kill switch banner icon, not a color dot alone', async () => {
+    // On a phone the words go to the accessible name: the icon is what is left to see.
+    const state = vi.spyOn(killswitchApi, 'state').mockResolvedValue({
+      estate_stopped: false,
+      active: [stop({ id: 'a' })],
+    })
+    const { unmount } = renderIntel(<KillSwitchStatus />)
+    const agents = await screen.findByTestId('killswitch-status')
+    expect(agents.querySelector('svg.lucide-octagon-alert')).not.toBeNull()
+    unmount()
+    state.mockResolvedValue({
+      estate_stopped: true,
+      active: [stop({ scope_kind: 'estate' })],
+    })
+    renderIntel(<KillSwitchStatus />)
+    const estate = await screen.findByTestId('killswitch-status')
+    expect(estate.querySelector('svg.lucide-octagon-x')).not.toBeNull()
+  })
+
   it('draws nothing when no stop is active', async () => {
     const read = vi
       .spyOn(killswitchApi, 'state')

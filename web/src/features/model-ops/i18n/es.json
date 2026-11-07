@@ -1,6 +1,6 @@
 {
   "title": "Operaciones de modelos",
-  "subtitle": "Gobierna los modelos propios, su admisión de modelos firmados y los despliegues de inferencia local.",
+  "subtitle": "Sus propios modelos y dónde se ejecutan.",
   "tabs": {
     "owned": "Modelos propios",
     "admission": "Admisión",
@@ -120,7 +120,7 @@
   },
   "policy": {
     "title": "Política de admisión",
-    "description": "La política de confianza del inquilino para la admisión de modelos firmados. El método de firma se deriva de lo que configures.",
+    "description": "La política de confianza de la organización para la admisión de modelos firmados. El método de firma se deriva de lo que configures.",
     "edit": "Editar política",
     "editTitle": "Editar política de admisión",
     "editBody": "Define los anclajes de confianza. Se guarda de forma atómica; el motor sigue siendo la autoridad.",
@@ -285,14 +285,14 @@
   },
   "finetune": {
     "title": "Trabajos de ajuste fino",
-    "description": "Registros de trabajos de ajuste fino y las versiones que produjeron. El plano nunca entrena un modelo ni almacena pesos.",
+    "description": "Registros de trabajos de ajuste fino y las versiones que produjeron. Olivares nunca entrena un modelo ni almacena pesos.",
     "new": "Nuevo registro de trabajo",
     "search": "Buscar trabajos…",
     "created": "Trabajo registrado.",
     "updated": "Trabajo actualizado.",
     "newTitle": "Registrar un trabajo de ajuste fino",
     "editTitle": "Actualizar trabajo de ajuste fino",
-    "formBody": "Registra el estado de un trabajo y la versión que produjo. Es un registro de inventario: el plano de control no ejecuta entrenamiento.",
+    "formBody": "Registra el estado de un trabajo y la versión que produjo. Es un registro de inventario: Olivares no ejecuta entrenamiento.",
     "columns": {
       "name": "Nombre",
       "runtime": "Entorno de ejecución",
@@ -405,7 +405,7 @@
     },
     "finetune": {
       "title": "Aún no se han registrado trabajos de ajuste fino",
-      "description": "Registra un trabajo de ajuste fino ejecutado fuera de Olivares para seguir su estado, su linaje y la versión de modelo producida; el plano de control no ejecuta entrenamiento."
+      "description": "Registra un trabajo de ajuste fino ejecutado fuera de Olivares para seguir su estado, su linaje y la versión de modelo producida; Olivares no ejecuta entrenamiento."
     },
     "modelEvidence": {
       "title": "Aún no se han registrado sellos AIBOM",

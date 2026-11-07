@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -25,8 +26,10 @@ import (
 // and it is not an auditable act on the tenant — so the routes take the module's
 // READ permission (every signed-in role keeps its own) and write no ledger row.
 //
-// One row per (tenant, owner, run): the run's public ref plus the actor that
-// pinned it, with the row's created_at as when. The ceiling is the rule the
+// One row per (tenant, owner, subject): the subject's address plus the actor that
+// pinned it, with the row's created_at as when. The subject is a run's public ref,
+// or "live:<live_ref>" for a session the plane only observes (no run launched
+// through Olivares), so both share one order and the one ceiling. The ceiling is the rule the
 // console had while it kept pins in the browser: past twenty pins the oldest
 // leaves, which is what a person means by pinning a twenty-first session.
 const (
@@ -37,6 +40,9 @@ const (
 	// maxRunPins is the per-person ceiling, owned here: the console reads the
 	// engine's answer and keeps no count of its own.
 	maxRunPins = 20
+	// livePinPrefix marks an observed session's address in the run_ref column. A run
+	// ref is a bare UUID, so the prefix cannot collide with one.
+	livePinPrefix = "live:"
 )
 
 // sessions.run_pin columns. run_ref repeats the run table's column name on its
@@ -135,7 +141,17 @@ func decorateRunPin(dto *runDTO, rec model.Record, pins map[string]string) {
 // pinRun pins the run for the caller, idempotently, keeping the ceiling by
 // dropping the oldest pin. The pin row carries the run's workspace lineage.
 func pinRun(ctx context.Context, sc store.Scope, caller string, run model.Record) (string, error) {
-	runRef := run.String(colRunRef)
+	return pinKey(ctx, sc, caller, run.String(colRunRef), run.String(colRunAuthzWorkspaceID))
+}
+
+// pinObserved pins a session the plane only observes, by its live row.
+func pinObserved(ctx context.Context, sc store.Scope, caller string, live model.Record) (string, error) {
+	return pinKey(ctx, sc, caller, livePinPrefix+live.String(model.ColID), "")
+}
+
+// pinKey is the one pin: idempotent, and past the ceiling the pins whose session is
+// gone leave first, then the oldest.
+func pinKey(ctx context.Context, sc store.Scope, caller, key, workspaceID string) (string, error) {
 	repo, err := sc.Ext(runPinKind)
 	if err != nil {
 		return "", err
@@ -145,7 +161,7 @@ func pinRun(ctx context.Context, sc store.Scope, caller string, run model.Record
 		return "", err
 	}
 	for _, p := range own {
-		if p.run == runRef {
+		if p.run == key {
 			return p.at, nil
 		}
 	}
@@ -163,9 +179,9 @@ func pinRun(ctx context.Context, sc store.Scope, caller string, run model.Record
 			return "", err
 		}
 	}
-	row := model.Record{colRunPinRun: runRef, colRunPinOwner: caller}
-	if ws := run.String(colRunAuthzWorkspaceID); ws != "" {
-		row[colRunAuthzWorkspaceID] = ws
+	row := model.Record{colRunPinRun: key, colRunPinOwner: caller}
+	if workspaceID != "" {
+		row[colRunAuthzWorkspaceID] = workspaceID
 	}
 	created, err := repo.Create(ctx, row)
 	if err != nil {
@@ -174,10 +190,11 @@ func pinRun(ctx context.Context, sc store.Scope, caller string, run model.Record
 	return created.String(model.ColCreatedAt), nil
 }
 
-// dropReleasedPins removes the pin rows whose session is released or gone, which a
-// failed cleanup can leave behind (they read as unpinned but still count against
-// the ceiling), and returns the pins that remain. It runs only when a person is at
-// the ceiling, so it costs at most maxRunPins lookups and only then.
+// dropReleasedPins removes the pin rows whose session is released or gone (a run
+// released, an observed session erased), which a failed cleanup can leave behind
+// (they read as unpinned but still count against the ceiling), and returns the pins
+// that remain. It runs only when a person is at the ceiling, so it costs at most
+// maxRunPins lookups and only then.
 func dropReleasedPins(ctx context.Context, sc store.Scope, pins store.GenericRepo, own []ownRunPin) ([]ownRunPin, error) {
 	runs, err := sc.Ext(runKind)
 	if err != nil {
@@ -185,14 +202,13 @@ func dropReleasedPins(ctx context.Context, sc store.Scope, pins store.GenericRep
 	}
 	kept := make([]ownRunPin, 0, len(own))
 	for _, p := range own {
-		rec, err := findRunRec(ctx, runs, p.run)
-		if err == nil && rec.String(colState) != stateCleaned {
+		alive, err := pinnedSessionLives(ctx, sc, runs, p.run)
+		if err != nil {
+			return nil, err
+		}
+		if alive {
 			kept = append(kept, p)
 			continue
-		}
-		var re *runErr
-		if err != nil && !(errors.As(err, &re) && re.status == http.StatusNotFound) {
-			return nil, err
 		}
 		id, err := model.ParseID(p.id)
 		if err != nil {
@@ -205,15 +221,39 @@ func dropReleasedPins(ctx context.Context, sc store.Scope, pins store.GenericRep
 	return kept, nil
 }
 
-// unpinRun removes the caller's pin. Unpinning what is not pinned is the same
+// pinnedSessionLives says whether the session a pin names is still listed: a run not
+// released, or an observed session whose live row exists. A missing one is false, not
+// an error; any other failure is.
+func pinnedSessionLives(ctx context.Context, sc store.Scope, runs store.GenericRepo, key string) (bool, error) {
+	if live, ok := strings.CutPrefix(key, livePinPrefix); ok {
+		id, ok := parseLiveRef(live)
+		if !ok {
+			return false, nil
+		}
+		_, err := findLiveByID(ctx, sc, id)
+		if errors.Is(err, store.ErrNotFound) {
+			return false, nil
+		}
+		return err == nil, err
+	}
+	rec, err := findRunRec(ctx, runs, key)
+	var re *runErr
+	if errors.As(err, &re) && re.status == http.StatusNotFound {
+		return false, nil
+	}
+	return err == nil && rec.String(colState) != stateCleaned, err
+}
+
+// unpinRun removes the caller's pin on a run or, by its "live:" address, on an observed
+// session. Unpinning what is not pinned is the same
 // success, never a 409: the state the caller asked for is the state that holds.
-func unpinRun(ctx context.Context, sc store.Scope, caller, runRef string) error {
+func unpinRun(ctx context.Context, sc store.Scope, caller, key string) error {
 	repo, err := sc.Ext(runPinKind)
 	if err != nil {
 		return err
 	}
 	recs, _, err := repo.List(ctx, model.Query{
-		Filters: []model.Filter{eq(colRunPinOwner, caller), eq(colRunPinRun, runRef)}, Limit: 1,
+		Filters: []model.Filter{eq(colRunPinOwner, caller), eq(colRunPinRun, key)}, Limit: 1,
 	})
 	if err != nil {
 		return err
@@ -288,7 +328,7 @@ func pinnedRunsOutside(ctx context.Context, sc store.Scope, pins map[string]stri
 	}
 	var missing []string
 	for ref := range pins {
-		if !inPage[ref] {
+		if !inPage[ref] && !strings.HasPrefix(ref, livePinPrefix) {
 			missing = append(missing, ref)
 		}
 	}
@@ -310,7 +350,7 @@ func pinnedRunsOutside(ctx context.Context, sc store.Scope, pins map[string]stri
 	return out, nil
 }
 
-// pinDTO is the answer of both pin routes: the run, the state its caller's pin
+// pinDTO is the answer of both run pin routes: the run, the state its caller's pin
 // is now in, and when it was pinned.
 type pinDTO struct {
 	RunRef   string `json:"run_ref"`
@@ -381,4 +421,95 @@ func (m *Module) handleUnpinRun(w http.ResponseWriter, r *http.Request, mc api.M
 		return
 	}
 	writeJSON(w, http.StatusOK, pinDTO{RunRef: ref, Pinned: false})
+}
+
+// pinnedLiveOutside returns the caller's pinned observed sessions that a live page did
+// not carry, oldest pin first, as pinnedRunsOutside does for runs. A pin whose live row
+// is gone, or belongs to a run (pinned through the run), is skipped.
+func pinnedLiveOutside(ctx context.Context, sc store.Scope, pins map[string]string, inPage map[string]bool) ([]model.Record, error) {
+	var missing []string
+	for key := range pins {
+		if ref, ok := strings.CutPrefix(key, livePinPrefix); ok && !inPage[ref] {
+			missing = append(missing, key)
+		}
+	}
+	sort.Slice(missing, func(i, j int) bool { return pins[missing[i]] < pins[missing[j]] })
+	var out []model.Record
+	for _, key := range missing {
+		id, ok := parseLiveRef(strings.TrimPrefix(key, livePinPrefix))
+		if !ok {
+			continue
+		}
+		rec, err := findLiveByID(ctx, sc, id)
+		if errors.Is(err, store.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rec)
+	}
+	return out, nil
+}
+
+// decorateLivePin marks one live DTO with the caller's pin. A row that belongs to a run
+// reads the run's pin, which is how a launched session is pinned.
+func decorateLivePin(dto *liveDTO, pins map[string]string) {
+	at, pinned := pins[livePinPrefix+dto.LiveRef]
+	if dto.RunRef != "" {
+		at, pinned = pins[dto.RunRef]
+	}
+	dto.Pinned = &pinned
+	if pinned {
+		dto.PinnedAt = at
+	}
+}
+
+// livePinDTO is the answer of both observed-session pin routes, pinDTO's twin.
+type livePinDTO struct {
+	LiveRef  string `json:"live_ref"`
+	Pinned   bool   `json:"pinned"`
+	PinnedAt string `json:"pinned_at,omitempty"`
+}
+
+// handlePinLive pins an observed session for the caller, idempotently. A session the
+// plane launched has a run: its pin is the run's, so this refuses with a 409 that says so.
+func (m *Module) handlePinLive(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	m.changeLivePin(w, r, mc, true)
+}
+
+// handleUnpinLive removes the caller's pin on an observed session, idempotently.
+func (m *Module) handleUnpinLive(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	m.changeLivePin(w, r, mc, false)
+}
+
+func (m *Module) changeLivePin(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, pin bool) {
+	id, ok := parseLiveRef(chi.URLParam(r, "live_ref"))
+	if !ok {
+		writeJSON(w, http.StatusNotFound, errorBody("not found"))
+		return
+	}
+	caller := mc.Principal.Actor()
+	var out livePinDTO
+	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		live, err := findLiveByID(r.Context(), sc, id)
+		if err != nil {
+			return err
+		}
+		if !pin {
+			out = livePinDTO{LiveRef: id.String(), Pinned: false}
+			return unpinRun(r.Context(), sc, caller, livePinPrefix+id.String())
+		}
+		if live.String(colLiveRunRef) != "" {
+			return conflictErr("this session was launched through Olivares: pin its run")
+		}
+		at, err := pinObserved(r.Context(), sc, caller, live)
+		out = livePinDTO{LiveRef: id.String(), Pinned: true, PinnedAt: at}
+		return err
+	})
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }

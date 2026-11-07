@@ -13,6 +13,7 @@ export function EditionBadge({ compact = false }: { compact?: boolean }) {
   return (
     <Badge
       variant="neutral"
+      data-trust-chrome=""
       role="img"
       aria-label={t('edition.badge.accessibleName', { edition: name })}
       className="shrink-0 bg-muted/50 text-foreground"

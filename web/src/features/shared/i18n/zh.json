@@ -33,8 +33,7 @@
     "urlRejected_other": "此链接中有 {{count}} 个值无法使用（{{keys}}），视图已回退到默认值。",
     "savedViewRejected": "“{{name}}”中保存的 {{count}} 个值无法使用（{{keys}}），视图已回退到默认值。",
     "savedViewRejected_other": "“{{name}}”中保存的 {{count}} 个值无法使用（{{keys}}），视图已回退到默认值。",
-    "thisSavedView": "这个保存的视图",
-    "dismiss": "关闭"
+    "thisSavedView": "这个保存的视图"
   },
   "workspaceRequired": {
     "use": "使用 {{name}}",

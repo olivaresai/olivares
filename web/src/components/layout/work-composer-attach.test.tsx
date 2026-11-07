@@ -8,6 +8,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useTenantStore } from '@/stores/tenant'
 import { renderIntel } from '@/test/intel'
 
 const auth = vi.hoisted(() => ({
@@ -18,6 +19,10 @@ const auth = vi.hoisted(() => ({
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 
 const api = vi.hoisted(() => ({
+  listRuns: vi.fn(),
+  listFiles: vi.fn(),
+  messages: vi.fn(),
+  sourceItem: vi.fn(),
   listProfiles: vi.fn(),
   listWorkspaces: vi.fn(),
   input: vi.fn(),
@@ -66,6 +71,8 @@ beforeEach(() => {
   n = 0
   auth.activeTenant = 'tnt-demo'
   auth.can = () => true
+  api.listRuns.mockResolvedValue({ items: [], has_more: false })
+  api.listFiles.mockResolvedValue({ entries: [] })
   api.listProfiles.mockResolvedValue({ items: [], has_more: false })
   api.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
   api.input.mockResolvedValue({ accepted: true })
@@ -283,6 +290,27 @@ describe('WorkComposer attachments', () => {
     )
   })
 
+  it('an image the engine is too busy to store now waits for its turn', async () => {
+    api.uploadAttachment.mockRejectedValueOnce(
+      new ApiError(
+        429,
+        'busy',
+        'other images are being stored; try again in a moment',
+        undefined,
+        {},
+        undefined,
+        '0',
+      ),
+    )
+    const field = await mount()
+    paste(field, pngFile('busy.png'))
+    expect(
+      await screen.findByRole('button', { name: 'Remove busy.png' }),
+    ).toBeTruthy()
+    expect(api.uploadAttachment).toHaveBeenCalledTimes(2)
+    expect(toasts.error).not.toHaveBeenCalled()
+  })
+
   it('pasting text is left to the field', async () => {
     const field = await mount()
     const event = fireEvent.paste(field, {
@@ -416,4 +444,85 @@ describe('WorkComposer attachments across a send and a session switch', () => {
       within(screen.getByTestId('attachment-tray')).getByRole('img'),
     ).toHaveAttribute('alt', 'b.png')
   })
+})
+
+it('inserts a session or its linked PR as reviewable context using @', async () => {
+  useTenantStore.setState({ activeTenant: 'tnt-demo' })
+  api.listRuns.mockResolvedValue({
+    items: [
+      {
+        ...RUN,
+        run_ref: 'run_context',
+        name: 'Earlier discussion',
+        source_url: 'https://github.com/acme/widgets/pull/12',
+      },
+    ],
+    has_more: false,
+  })
+  api.messages.mockResolvedValue({
+    transcript: 'read',
+    items: [
+      {
+        id: 1,
+        role: 'assistant',
+        first_line: 'Earlier answer',
+        text: 'Earlier answer',
+      },
+    ],
+  })
+  api.sourceItem.mockResolvedValue({
+    url: 'https://github.com/acme/widgets/pull/12',
+    title: 'Fix save',
+    body: 'Keep all edits',
+  })
+  renderIntel(
+    <WorkComposer
+      attached={{ run: { ...RUN, workspace_ref: 'ws_demo' }, group: 'active' }}
+    />,
+  )
+  const field = await screen.findByTestId('launcher-input')
+  fireEvent.change(field, { target: { value: '@Earlier' } })
+  fireEvent.mouseDown(
+    await screen.findByRole('option', { name: /Earlier discussion/ }),
+    { button: 0 },
+  )
+  await waitFor(() =>
+    expect((field as HTMLTextAreaElement).value).toContain('Earlier answer'),
+  )
+  expect(api.input).not.toHaveBeenCalled()
+  fireEvent.change(field, { target: { value: '@acme' } })
+  fireEvent.mouseDown(
+    await screen.findByRole('option', { name: /acme\/widgets#12/ }),
+    { button: 0 },
+  )
+  await waitFor(() =>
+    expect((field as HTMLTextAreaElement).value).toContain('Keep all edits'),
+  )
+  expect(api.sourceItem).toHaveBeenCalledWith(
+    'ws_demo',
+    'https://github.com/acme/widgets/pull/12',
+    expect.objectContaining({
+      tenant: 'tnt-demo',
+      dispatchGuard: expect.any(Function),
+    }),
+  )
+  api.messages.mockResolvedValue({ transcript: 'missing', items: [] })
+  fireEvent.change(field, { target: { value: '@Earlier' } })
+  fireEvent.mouseDown(
+    await screen.findByRole('option', { name: /Earlier discussion/ }),
+    { button: 0 },
+  )
+  await waitFor(() =>
+    expect(toasts.error).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read complete context'),
+    ),
+  )
+  expect(field).toHaveValue('@Earlier')
+  api.listRuns.mockRejectedValue(new Error('session list unavailable'))
+  fireEvent.change(field, { target: { value: '@Earl' } })
+  await waitFor(() =>
+    expect(screen.getByTestId('slash-notice-status')).toHaveTextContent(
+      'Could not read complete context',
+    ),
+  )
 })

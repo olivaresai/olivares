@@ -8,6 +8,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
@@ -58,8 +59,13 @@ import type { ProviderAccountDTO } from '@/features/agentops/types'
 import { readinessOf } from '@/features/first-hour/readiness.fixture'
 import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
+import { AccountBadge, AccountMarksProvider } from './account-marks'
 import { AgentToolsView } from './agent-tools-view'
 import type { ProviderSnapshot } from './api'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 const snap = (driver: string, over: Partial<ProviderSnapshot> = {}) =>
   ({
@@ -101,11 +107,12 @@ const account = (
 
 const page = <T,>(items: T[]) => ({ items, has_more: false })
 
-function mount() {
+function mount(elsewhere?: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
       <AgentToolsView />
+      {elsewhere}
     </QueryClientProvider>,
   )
 }
@@ -220,6 +227,101 @@ describe('Profile sheet', () => {
         expect.objectContaining({ tenant: 't1' }),
       ),
     )
+  })
+
+  it('edits the display name and color in place, and the row wears them with no reload', async () => {
+    // The engine keeps what it was sent; the list and the single read answer from it.
+    let stored = account('ppf_b', 'claude-b')
+    vi.spyOn(agentOpsApi, 'listAccounts').mockImplementation(async () =>
+      page([stored, account('ppf_c', 'claude-c')]),
+    )
+    vi.spyOn(agentOpsApi, 'getAccount').mockImplementation(async () => stored)
+    vi.spyOn(agentOpsApi, 'patchAccountMetadata').mockImplementation(
+      async (_ref, body) => {
+        stored = {
+          ...stored,
+          ...(body.display_name !== undefined && {
+            display_name: body.display_name,
+          }),
+          ...(body.accent !== undefined && { accent: body.accent }),
+        }
+        return stored
+      },
+    )
+    const user = userEvent.setup()
+    // A badge elsewhere in the console (Sessions, the header, Now): the same component.
+    mount(
+      <AccountMarksProvider>
+        <div data-testid="elsewhere">
+          <AccountBadge profileRef="ppf_b" />
+        </div>
+      </AccountMarksProvider>,
+    )
+    const sheet = await openSheet(user, 'claude-b')
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Edit label and color' }),
+    )
+    await user.type(
+      await within(sheet).findByRole('textbox', { name: 'Display name' }),
+      'Research',
+    )
+    await user.selectOptions(
+      within(sheet).getByRole('combobox', { name: 'Color' }),
+      'purple',
+    )
+    await user.click(within(sheet).getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(agentOpsApi.patchAccountMetadata).toHaveBeenCalledWith(
+        'ppf_b',
+        { display_name: 'Research', accent: 'purple' },
+        expect.objectContaining({ tenant: 't1' }),
+      ),
+    )
+    const row = within(await screen.findByTestId('tool-claude')).getByTestId(
+      'profile-claude-b',
+    )
+    await waitFor(() =>
+      expect(
+        within(row).getByText('Research', { ignore: '.sr-only' }),
+      ).toBeTruthy(),
+    )
+    expect(row.querySelector('[data-provider-accent="purple"]')).not.toBeNull()
+    const elsewhere = screen.getByTestId('elsewhere')
+    await waitFor(() =>
+      expect(within(elsewhere).getByText('Research')).toBeTruthy(),
+    )
+    expect(
+      elsewhere.querySelector('[data-provider-accent="purple"]'),
+    ).not.toBeNull()
+  })
+
+  it('offers the new colors of the palette in the editor', async () => {
+    vi.spyOn(agentOpsApi, 'getAccount').mockResolvedValue(
+      account('ppf_b', 'claude-b'),
+    )
+    const user = userEvent.setup()
+    mount()
+    const sheet = await openSheet(user, 'claude-b')
+    await user.click(
+      within(sheet).getByRole('button', { name: 'Edit label and color' }),
+    )
+    const color = await within(sheet).findByRole('combobox', { name: 'Color' })
+    expect(
+      within(color)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual([
+      'Default',
+      'Orange',
+      'Green',
+      'Amber',
+      'Red',
+      'Blue',
+      'Purple',
+      'Pink',
+      'Teal',
+      'Slate',
+    ])
   })
 
   it.each([400, 422])(

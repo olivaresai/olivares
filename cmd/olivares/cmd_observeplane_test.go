@@ -629,6 +629,10 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares reporting templates set", false, false},
 		{"olivares notify deliveries", true, true},
 		{"olivares notify destinations", false, false},
+		{"olivares notify destinations add", false, false},
+		{"olivares notify destinations ls", false, false},
+		{"olivares notify destinations rm", false, false},
+		{"olivares notify destinations test", false, false},
 		{"olivares notify evaluate", false, false},
 		{"olivares notify match-types", false, false},
 		{"olivares notify outbox ls", true, true},
@@ -673,6 +677,7 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares observability traces get", false, false},
 		{"olivares observability traces ls", true, true},
 		{"olivares consoleviews create", false, false},
+		{"olivares capabilities ls", true, true},
 		{"olivares capabilities servers get", false, false},
 		{"olivares capabilities servers ls", true, true},
 		{"olivares capabilities skills", true, true},
@@ -725,7 +730,7 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		})
 	}
 	if len(cases) != editionPagingCounts().rows {
-		t.Fatalf("the table has %d rows, not the %d leaves this edition exposes", len(cases), editionPagingCounts().rows)
+		t.Fatalf("the table has %d rows, not the %d verbs this edition exposes", len(cases), editionPagingCounts().rows)
 	}
 	cursorN, limitN := 0, 0
 	for _, tc := range cases {
@@ -751,7 +756,8 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 			if cmd == nil {
 				t.Fatalf("%s does not resolve — this row can prove nothing", tc.path)
 			}
-			if cmd.HasSubCommands() {
+			// A verb may also have children; help-only group stubs address no route.
+			if !cmd.Runnable() || isGroupStub(cmd) {
 				t.Fatalf("%s is a group, not a verb: it addresses no route", tc.path)
 			}
 			hasCursor := cmd.Flags().Lookup("cursor") != nil
@@ -1722,14 +1728,16 @@ func TestEveryFamilyInTheLotIsRegistered(t *testing.T) {
 	}
 }
 
-// TestLaneVerbCountMatchesTheRouteCensus pins the surface at the 76 routes the
+// TestLaneVerbCountMatchesTheRouteCensus pins the surface at the 79 routes the
 // census counts, so a verb silently lost in a merge is a failing test rather
 // than a quietly smaller CLI. Reporting is 18 since `reporting signing status`,
-// `enable` and `disable` (1df5479c): the census of 73 had 15.
+// `enable` and `disable` (1df5479c): the census of 73 had 15. Notify is 17 since
+// `notify destinations ls`, `add`, `test` and `rm` made `destinations` a group
+// of four leaves: the census of 76 had 14.
 func TestLaneVerbCountMatchesTheRouteCensus(t *testing.T) {
 	root := newRootCmd()
 	want := map[string]int{
-		"reporting": 18, "notify": 14, "health": 14,
+		"reporting": 18, "notify": 17, "health": 14,
 		"observability": 5, "consoleviews": 5, "adoption": 5,
 		"identity": editionIdentityVerbCount(), "inventory": 3, "posture": 1,
 	}

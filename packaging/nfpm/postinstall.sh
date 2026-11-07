@@ -44,6 +44,11 @@ pkg_init() {
     OLIVARES_PKG_INIT=systemd
     return 0
   fi
+  # Only Anaconda's /run/install witnesses an installroot; /run/initramfs can persist after boot.
+  if [ -d /run/install ]; then
+    OLIVARES_PKG_INIT=systemd
+    return 0
+  fi
   echo "error: olivares package: refused: package-init-unknown — cannot determine package init from installed units" >&2
   receipt unknown unknown refused:package-init-unknown
   return 1
@@ -328,6 +333,22 @@ if ! getent passwd olivares >/dev/null 2>&1; then
   fi
 fi
 
+# BEGIN subordinate IDs
+# System users get no subordinate IDs from useradd. RPM's rootless session runtime
+# needs a range in each file; retain administrator assignments on upgrade. Allocate
+# beyond all existing ranges, never a fixed range that might belong to another user.
+if [ "$format" = rpm ]; then
+  for olv_id_kind in uids gids; do
+    case "$olv_id_kind" in uids) olv_id_file=/etc/subuid ;; gids) olv_id_file=/etc/subgid ;; esac
+    if [ ! -e "$olv_id_file" ]; then install -m 0644 /dev/null "$olv_id_file"; fi
+    if ! grep -q '^olivares:' "$olv_id_file"; then
+      olv_id_start=$(awk -F: 'BEGIN { n=100000 } NF==3 && $2+$3>n { n=$2+$3 } END { printf "%.0f", n }' "$olv_id_file")
+      usermod "--add-sub$olv_id_kind" "$olv_id_start-$((olv_id_start + 65535))" olivares
+    fi
+  done
+fi
+# END subordinate IDs
+
 mkdir -p /var/lib/olivares /etc/olivares
 chmod 0750 /var/lib/olivares
 olivares_uid=$(id -u olivares) || {
@@ -388,7 +409,12 @@ fi
 
 # deb/rpm and apk upgrades share this migration. APK normally uses OpenRC, but
 # preserve or replace a previous native systemd drop-in if one is present.
-/bin/sh /usr/share/olivares/migrate-agentops-dropin.sh /etc/systemd/system/olivares.service.d/agentops.conf
+if [ -x /usr/share/olivares/migrate-agentops-dropin.sh ]; then
+  /bin/sh /usr/share/olivares/migrate-agentops-dropin.sh /etc/systemd/system/olivares.service.d/agentops.conf
+elif [ ! -d /run/install ]; then
+  echo "error: olivares package: migration helper is missing: /usr/share/olivares/migrate-agentops-dropin.sh" >&2
+  exit 1
+fi
 
 # Package-owned paths are listed but not marked managed: dpkg/rpm/apk removes
 # them. The same v2 manifest still drives plan/preserve/purge and bounds an
@@ -472,9 +498,12 @@ if ! { rm -f "$contract_marker" &&
 fi
 
 # Keep AppArmor 4 syntax out of older hosts' profile directories. The deb ships
-# it as data and activates it only where the kernel exposes the userns restriction.
+# it as data and activates it only where the kernel exposes the userns restriction
+# and AppArmor policy is managed here: a container sees the host kernel's switch but
+# no AppArmor filesystem, and the host's policy governs it (as postremove assumes).
 # Load before any start/restart: an already running engine acquires it on exec.
-if [ "$format" = deb ] && [ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+if [ "$format" = deb ] && [ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ] &&
+  [ -d /sys/kernel/security/apparmor ]; then
   apparmor_profile=/etc/apparmor.d/usr.bin.olivares
   if [ -e "$apparmor_profile" ] || [ -L "$apparmor_profile" ]; then
     if [ ! -f "$apparmor_profile" ] || [ -L "$apparmor_profile" ]; then
@@ -494,22 +523,6 @@ upgrade_state=/run/olivares.pkg-upgrade-state
 deconfigured=/run/olivares.pkg-deconfigured
 pending=/run/olivares.pkg-pending
 package_phase=/usr/libexec/olivares/olivares-product-package-phase
-# Only the appliance grants the engine user the daemon socket's DAC access (rootful Docker, DOCK-04). The group exists
-# after Docker's own package install. GNU usermod and BusyBox addgroup are both supported; lookup and membership failures are fatal.
-if [ -x "$package_phase" ]; then
-  group_rc=0; getent group docker >/dev/null 2>&1 || group_rc=$?
-  if [ "$group_rc" -eq 0 ]; then
-    if command -v usermod >/dev/null 2>&1; then
-      usermod -aG docker olivares || { echo "error: could not add olivares to the docker group" >&2; exit 1; }
-    else
-      addgroup olivares docker || { echo "error: could not add olivares to the docker group with addgroup" >&2; exit 1; }
-    fi
-    id -nG olivares | grep -qw docker || { echo "error: olivares is not in the docker group after the membership update" >&2; exit 1; }
-  elif [ "$group_rc" -ne 2 ]; then
-    echo "error: could not look up the docker group (getent exit $group_rc)" >&2
-    exit "$group_rc"
-  fi
-fi
 # The first release whose prerm honors the upgrade contract; "~" sorts before
 # any of its pre-releases.
 first_contract_version='1.0~'
@@ -517,6 +530,12 @@ unit_enabled=
 unit_active=
 if [ "$OLIVARES_PKG_INIT" = systemd ] && command -v systemctl >/dev/null 2>&1; then
   systemctl daemon-reload >/dev/null 2>&1 || true
+  # A user manager for the service account lets the engine give each session its own
+  # systemd scope, with the memory and task ceilings. Best effort: without it sessions
+  # start without the ceilings and the session says why. Only for the account this
+  # package created: uninstall releases that manager again, and an account that was
+  # here before is not ours to change.
+  if [ "$user_created" = true ] && command -v loginctl >/dev/null 2>&1; then loginctl enable-linger olivares >/dev/null 2>&1 || true; fi
   unit_enabled=$(systemctl is-enabled olivares 2>/dev/null || true)
   unit_active=$(systemctl is-active olivares 2>/dev/null || true)
   case "$unit_enabled" in ''|*[!a-z-]*) unit_enabled=unknown ;; esac
@@ -552,13 +571,36 @@ write_pending() {
     "condition=$1" "reason=$2" "prior=$3" "instruction=$4" || true
 }
 
+# On the appliance, the product transaction owner publishes this request before the package
+# transaction, with the digest of the read-only data snapshot it took then, and holds the lock on
+# the root-only snapshot directory until the transaction ends (the package state directory is
+# world-readable, so any local user could hold a lock on it). Keep that identity while the lock is
+# held and the completed snapshot exists. Any other request, such as one left by an earlier owner
+# transaction under a later plain rpm or dnf upgrade, is minted below.
+pretransaction_request=no
+if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ] &&
+  [ -f "$package_state_dir/upgrade-snapshot" ] && [ ! -L "$package_state_dir/upgrade-snapshot" ] &&
+  [ -d /var/lib/olivares-snapshots ] && [ ! -L /var/lib/olivares-snapshots ] &&
+  command -v flock >/dev/null 2>&1 && ! flock -n /var/lib/olivares-snapshots true; then
+  olv_request=
+  read -r olv_request <"$package_state_dir/upgrade-snapshot" || olv_request=
+  olv_digest=${olv_request#upgrade-snapshot.}
+  case "$olv_digest" in
+    *[!0-9a-f]*) ;;
+    *)
+      if [ "$olv_digest" != "$olv_request" ] && [ "${#olv_digest}" -eq 32 ] &&
+        [ -d "/var/lib/olivares-snapshots/$olv_digest" ] && [ ! -L "/var/lib/olivares-snapshots/$olv_digest" ]; then
+        pretransaction_request=yes
+      fi ;;
+  esac
+fi
 # The installed binary consumes this request with its resolved store configuration,
 # before opening/migrating the store. Keep it outside the service-owned data tree;
 # the completed snapshot lives under that installation's backups/pre-upgrade.
 if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = install ]; then
   rm -f "$package_state_dir/upgrade-snapshot"
 fi
-if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ]; then
+if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ] && [ "$pretransaction_request" = no ]; then
   snapshot_request=$(mktemp "$package_state_dir/upgrade-snapshot.XXXXXXXX") ||
     refuse snapshot-request-failed "cannot stage a pre-migration snapshot request"
   if ! { printf '%s\n' "${snapshot_request##*/}" >"$snapshot_request" &&

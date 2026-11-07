@@ -86,7 +86,9 @@ func (u *retrievalUpstream) Forward(ctx context.Context, req mcp.UpstreamRequest
 	case "tools/call":
 		raw, err = u.handleToolsCall(ctx, req)
 	case "initialize":
-		raw, err = u.handleInitialize()
+		raw, err = u.handleInitialize(req.Params)
+	case "server/discover":
+		raw, err = u.handleDiscover()
 	default:
 		err = fmt.Errorf("mcp retrieval: unsupported method %q", req.Method)
 	}
@@ -96,17 +98,35 @@ func (u *retrievalUpstream) Forward(ctx context.Context, req mcp.UpstreamRequest
 	return mcp.UpstreamResult{Result: raw, State: mcp.DispatchCompleted}, nil
 }
 
-// handleInitialize returns a minimal server info response.
-func (u *retrievalUpstream) handleInitialize() (json.RawMessage, error) {
-	info := map[string]any{
-		"protocolVersion": "2025-03-26",
-		"capabilities":    map[string]any{"tools": map[string]any{}},
-		"serverInfo": map[string]any{
-			"name":    "olivares-retrieval",
-			"version": "0.1.0",
-		},
+// retrievalServerInfo identifies the retrieval surface to clients of both eras.
+var retrievalServerInfo = map[string]any{"name": "olivares-retrieval", "version": "0.1.0"}
+
+// handleInitialize answers a handshake-era client with the revision it asked
+// for when the connector knows it, else the connector's LegacyRevision.
+func (u *retrievalUpstream) handleInitialize(params json.RawMessage) (json.RawMessage, error) {
+	var req struct {
+		ProtocolVersion string `json:"protocolVersion"`
 	}
-	return json.Marshal(info)
+	_ = json.Unmarshal(params, &req) // absent or malformed: answer LegacyRevision
+	return json.Marshal(map[string]any{
+		"protocolVersion": mcp.HandshakeRevision(req.ProtocolVersion),
+		"capabilities":    map[string]any{"tools": map[string]any{}},
+		"serverInfo":      retrievalServerInfo,
+	})
+}
+
+// handleDiscover answers a LatestRevision client, for which server/discover
+// replaces the initialize exchange. The tool list varies per caller, so it is
+// cached privately and never reused stale.
+func (u *retrievalUpstream) handleDiscover() (json.RawMessage, error) {
+	return json.Marshal(map[string]any{
+		"resultType":        "complete",
+		"supportedVersions": []string{mcp.LatestRevision, mcp.LegacyRevision},
+		"capabilities":      map[string]any{"tools": map[string]any{}},
+		"ttlMs":             0,
+		"cacheScope":        "private",
+		"_meta":             map[string]any{"io.modelcontextprotocol/serverInfo": retrievalServerInfo},
+	})
 }
 
 // retrievalToolDefs are the MCP tool definitions for the governed retrieval
@@ -166,7 +186,7 @@ const (
 
 // handleToolsList returns the retrieval tool definitions.
 func (u *retrievalUpstream) handleToolsList() (json.RawMessage, error) {
-	result := map[string]any{"tools": retrievalToolDefs}
+	result := map[string]any{"resultType": "complete", "tools": retrievalToolDefs, "ttlMs": 0, "cacheScope": "private"}
 	return json.Marshal(result)
 }
 
@@ -275,6 +295,7 @@ func toolSuccessResult(v any) (json.RawMessage, error) {
 		return toolErrorResult("result serialization failed"), nil
 	}
 	result := map[string]any{
+		"resultType": "complete",
 		"content": []map[string]any{
 			{"type": "text", "text": string(text)},
 		},
@@ -286,6 +307,7 @@ func toolSuccessResult(v any) (json.RawMessage, error) {
 // response (SEP-1303 Tool Execution Error — the model can self-correct).
 func toolErrorResult(msg string) json.RawMessage {
 	result := map[string]any{
+		"resultType": "complete",
 		"content": []map[string]any{
 			{"type": "text", "text": strings.TrimSpace(msg)},
 		},

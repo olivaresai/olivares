@@ -26,7 +26,7 @@ Installation hierher zurück.
 ## Voraussetzungen
 
 - Ein Linux-Host mit systemd und `curl`.
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.6`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.7`{/* /release */} is the next release, not yet published.
 
 ## 1. Das Binary bauen und installieren
 
@@ -59,6 +59,8 @@ Description=Olivares AI — self-hosted engine for enterprise AI
 Documentation=https://olivares.ai/docs
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -70,6 +72,8 @@ ExecStart=/usr/local/bin/olivares serve \
   --data-dir /var/lib/olivares
 Restart=on-failure
 RestartSec=5
+RestartPreventExitStatus=15
+KillMode=mixed
 
 # The data directory holds the SQLite store, the audit signing key and the TLS
 # material. StateDirectory creates /var/lib/olivares owned by the service user.
@@ -247,7 +251,7 @@ die genauen Warnungen und deren jeweilige Bedeutung.
 ## 6. Den Graphen erreichen
 
 Bei einer frischen Installation ist `accessmap` deaktiviert. Aktivieren Sie
-`accessmap` als Administrator unter **Settings > Edition & modules** und lassen
+`accessmap` als Administrator unter **Settings > Modules** und lassen
 Sie die anderen ausgewählten Module an. Für die CLI melden Sie sich zuerst
 mit `olivares login` als Administrator bei dieser Engine an und führen dann
 `olivares modules on accessmap` aus. Warten Sie vor dem Fortfahren auf jeden Neustart der Engine;

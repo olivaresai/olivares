@@ -131,11 +131,16 @@ func writeConsoleState(dataDir string, state consoleState) error {
 // "no engine has ever started here" and "the engine wrote something unreadable"
 // are different things to tell an operator.
 func readConsoleState(dataDir string) (consoleState, error) {
-	var state consoleState
 	body, err := os.ReadFile(filepath.Join(dataDir, consoleStateFile))
 	if err != nil {
-		return state, err
+		return consoleState{}, err
 	}
+	return parseConsoleState(dataDir, body)
+}
+
+// parseConsoleState decodes the record body read from dataDir.
+func parseConsoleState(dataDir string, body []byte) (consoleState, error) {
+	var state consoleState
 	if err := json.Unmarshal(body, &state); err != nil {
 		return state, fmt.Errorf("the console state in %s is not readable JSON: %w", dataDir, err)
 	}

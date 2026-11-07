@@ -63,7 +63,8 @@ func (m *Module) refuseRemoteInputs(p CreateRunParams) error {
 }
 
 func remoteLaunchSpecRefusal(spec LaunchSpec) error {
-	if spec.RunOn != "" && (spec.ScratchHome != nil || spec.OnStart != nil || len(spec.ConfinementFiles) != 0) {
+	if spec.RunOn != "" && (spec.ScratchHome != nil || spec.OnStart != nil || len(spec.ConfinementFiles) != 0 ||
+		len(spec.ConfinementReadFiles) != 0 || len(spec.ConfinementNoDelete) != 0) {
 		return conflictErr("remote sessions cannot use central-only launch handles")
 	}
 	if spec.RunOn != "" && spec.NetworkPolicy == nil {

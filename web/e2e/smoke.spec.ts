@@ -44,7 +44,7 @@ test('first-boot setup → login → shell, in light and dark', async ({
     await setupPage
       .getByRole('button', { name: /create administrator/i })
       .click()
-    await expect(setupPage).toHaveURL(/\/onboarding$/)
+    await expect(setupPage).toHaveURL(/\/sessions$/)
   } finally {
     await setupPage.close()
   }
@@ -81,7 +81,7 @@ test('first-boot setup → login → shell, in light and dark', async ({
   await expect(
     page
       .getByRole('navigation', { name: 'Main navigation', exact: true })
-      .getByRole('link', { name: 'Now', exact: true }),
+      .getByRole('link', { name: 'Settings', exact: true }),
   ).toBeVisible()
   await page.screenshot({ path: 'playwright-report/shell-light.png' })
 

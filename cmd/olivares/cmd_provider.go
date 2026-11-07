@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -293,6 +294,69 @@ func (c *agentClientConfig) listItems(ctx context.Context, path string) ([]map[s
 	return page.Items, nil
 }
 
+// providerRefPrefix marks a provider reference (modules/sessions providerRecordRefPrefix).
+const providerRefPrefix = "prv_"
+
+// providerRefOf is the reference a verb acts on for what the person typed: a prv_
+// reference as it is, else the name `provider ls` prints. A name must match one
+// provider; when a revoked provider carries the name of an active one, the active
+// one is meant.
+func (c *agentClientConfig) providerRefOf(ctx context.Context, typed string) (string, error) {
+	if strings.HasPrefix(typed, providerRefPrefix) {
+		return typed, nil
+	}
+	var named, active []string
+	cursor := ""
+	for seen := map[string]bool{}; ; {
+		q := url.Values{"limit": []string{"200"}}
+		if cursor != "" {
+			q.Set("cursor", cursor)
+		}
+		status, b, err := c.do(ctx, "GET", providersPath+"?"+q.Encode(), nil)
+		if err != nil {
+			return "", err
+		}
+		if status != 200 {
+			return "", httpErr(status, b)
+		}
+		var page struct {
+			Items   []map[string]any `json:"items"`
+			HasMore bool             `json:"has_more"`
+			Cursor  string           `json:"cursor"`
+		}
+		if err := json.Unmarshal(b, &page); err != nil {
+			return "", err
+		}
+		for _, rec := range page.Items {
+			if str(rec, "display_name") != typed {
+				continue
+			}
+			named = append(named, str(rec, "provider_ref"))
+			if str(rec, "state") == "active" {
+				active = append(active, str(rec, "provider_ref"))
+			}
+		}
+		if !page.HasMore {
+			break
+		}
+		if page.Cursor == "" || seen[page.Cursor] {
+			return "", sentence(exitcode.Server, "The provider list could not be read completely. Use the provider reference (prv_...) from olivares provider ls.")
+		}
+		cursor = page.Cursor
+		seen[cursor] = true
+	}
+	if len(active) > 0 {
+		named = active
+	}
+	switch len(named) {
+	case 0:
+		return "", sentence(exitcode.NotFound, "No provider is named %q. List them: olivares provider ls", termSafe(typed))
+	case 1:
+		return named[0], nil
+	}
+	return "", sentence(exitcode.Conflict, "More than one provider is named %q. Use its reference (prv_...) from olivares provider ls.", termSafe(typed))
+}
+
 // providerKindFromKey is the provider a key belongs to by its own prefix, or
 // openai_compatible when an endpoint is named; "" when neither says.
 func providerKindFromKey(key, baseURL string) string {
@@ -390,7 +454,11 @@ func newProviderGetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "GET", "/"+args[0], nil, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "GET", "/"+ref, nil, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -400,6 +468,7 @@ func newProviderGetCmd() *cobra.Command {
 
 func newProviderTestCmd() *cobra.Command {
 	var cfg agentClientConfig
+	var deep bool
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
 		Use:         "test <provider-ref>",
@@ -410,9 +479,10 @@ func newProviderTestCmd() *cobra.Command {
 		// of docs-site/src/site-locales.mjs, seven in all. `recording sessions
 		// verify` is the pattern.
 		Short: "Ask the provider which models it serves, with the registered credential — " +
-			"exit 7 when the provider REFUSES it, 8 when the endpoint is unreachable",
+			"exit 7 when the provider REFUSES it or --deep finds a missing capability, 8 when the endpoint is unreachable",
 		Long: "test performs one model-list call against the provider and records what came back.\n" +
-			"It sends NO completion and spends nothing.\n\n" +
+			"By default it sends NO completion and spends nothing.\n" +
+			"--deep qualifies a self-hosted OpenAI-compatible model with three requests capped at 64 output tokens each; it can incur usage.\n\n" +
 			"Three outcomes, and they are not the same question: `ok` means the provider answered\n" +
 			"and listed its models; `refused` means the provider answered and rejected this\n" +
 			"credential; `unreachable` means no answer was obtained, which is not a verdict about\n" +
@@ -421,16 +491,26 @@ func newProviderTestCmd() *cobra.Command {
 			"prose: 0 when the provider accepted the credential, 7 when it REFUSED it (the\n" +
 			"command worked and the answer is bad), and 8 when the endpoint could not be\n" +
 			"reached (no verdict about the credential — never read that as clean). The same\n" +
-			"outcome is the `probe_state` field of `-o json`.",
+			"outcome is the `probe_state` field of `-o json`. With --deep, exit 7 also means\n" +
+			"the provider answered but a required capability was not observed.",
 		Example: "  olivares provider test prv_01J8ABCDEF",
 		Args:    exactRef("provider-ref"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "POST", "/"+args[0]+"/test", nil, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			suffix := "/" + ref + "/test"
+			if deep {
+				suffix += "?deep=true"
+			}
+			return providerPointCall(cmd, &cfg, "POST", suffix, nil, 200)
 		},
 	}
+	cmd.Flags().BoolVar(&deep, "deep", false, "generate up to 192 output tokens to check a self-hosted model (may incur usage)")
 	cfg.addFlags(cmd)
 	addDeprecatedJSONFlag(cmd)
 	return cmd
@@ -453,7 +533,11 @@ func newProviderSetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "PATCH", "/"+args[0], map[string]any{"default_model": strings.TrimSpace(defaultModel)}, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "PATCH", "/"+ref, map[string]any{"default_model": strings.TrimSpace(defaultModel)}, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -486,7 +570,11 @@ func newProviderRotateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "PATCH", "/"+args[0], map[string]any{"api_key": key}, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "PATCH", "/"+ref, map[string]any{"api_key": key}, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -528,6 +616,12 @@ func newProviderBindCmd() *cobra.Command {
 				return sessionCLIUsage("--unbind takes no provider reference: it clears whatever the profile names")
 			case !unbind && ref == "":
 				return sessionCLIUsage("name the provider to bind, or pass --unbind to clear the profile's binding")
+			}
+			if ref != "" {
+				var err error
+				if ref, err = cfg.providerRefOf(cmd.Context(), ref); err != nil {
+					return err
+				}
 			}
 			saved, err := bindProviderToProfile(cmd, &cfg, ref, profile)
 			if err != nil {
@@ -607,7 +701,11 @@ func newProviderRemoveCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "POST", "/"+args[0]+"/revoke", nil, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "POST", "/"+ref+"/revoke", nil, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -639,7 +737,18 @@ func providerPointCall(cmd *cobra.Command, cfg *agentClientConfig, method, suffi
 	// prose. Only the test verb: `get` and `ls` show the last recorded probe of a
 	// provider they were asked to display, and reading a stored refusal is not the
 	// same act as measuring one.
-	if strings.HasSuffix(suffix, "/test") {
+	if strings.HasSuffix(strings.SplitN(suffix, "?", 2)[0], "/test") {
+		if strings.Contains(suffix, "?deep=true") {
+			if str(rec, "probe_state") == "ok" {
+				c, ok := rec["capabilities"].(map[string]any)
+				if !ok {
+					return exitcode.New(exitcode.Indeterminate, nil)
+				}
+				if c["tools"] != true || c["streaming"] != true || c["usage"] != true {
+					return exitcode.New(exitcode.Degraded, nil)
+				}
+			}
+		}
 		return probeExit(rec)
 	}
 	return nil
@@ -752,6 +861,24 @@ func providerRecordFields(rec map[string]any, boundProfile string) []termrender.
 			Value: fmt.Sprintf("%d (%s)", len(names), strings.Join(firstN(names, 5), ", ")),
 		})
 	}
+	if c, ok := rec["capabilities"].(map[string]any); ok {
+		fields = append(fields, termrender.Field{Key: "tested model", Value: str(c, "model")})
+		for _, key := range []string{"tools", "streaming", "usage"} {
+			value := "no"
+			if c[key] == true {
+				value = "yes"
+			}
+			fields = append(fields, termrender.Field{Key: key, Value: value})
+		}
+		context := "unknown"
+		if n, ok := c["max_context"].(float64); ok && n > 0 {
+			context = fmt.Sprintf("%.0f (server-advertised)", n)
+		}
+		fields = append(fields, termrender.Field{Key: "max_context", Value: context})
+		if detail := str(c, "detail"); detail != "" {
+			fields = append(fields, termrender.Field{Key: "capability detail", Value: detail})
+		}
+	}
 	if boundProfile != "" {
 		fields = append(fields, termrender.Field{Key: "bound to", Value: boundProfile})
 	}
@@ -806,6 +933,7 @@ func providerTable(items []map[string]any) termrender.Table {
 		if connection == "" {
 			connection = "not tested"
 		}
+		t.Marks = append(t.Marks, providerMark(str(rec, "display_name"), str(rec, "kind")))
 		t.Rows = append(t.Rows, []string{
 			str(rec, "provider_ref"), str(rec, "display_name"), str(rec, "kind"),
 			str(rec, "key_hint"), str(rec, "state"), connection,

@@ -61,6 +61,9 @@ func (a *EngineApprovals) Request(ctx context.Context, tenant model.TenantID, pr
 	if err != nil {
 		return Approval{}, err
 	}
+	if principal.SessionIdentity != "" && in.LaunchedBy == "" {
+		in.LaunchedBy = sessionLauncher(principal)
+	}
 	if err := normalizeApprovalRequest(&in); err != nil {
 		return Approval{}, err
 	}
@@ -116,7 +119,7 @@ func (a *EngineApprovals) Read(ctx context.Context, tenant model.TenantID, ref s
 		if err != nil {
 			return err
 		}
-		pols, err := loadApprovalPolicies(ctx, sc)
+		pols, err := a.module.approvalPolicies(ctx, sc, approvalPolicySubject(rec))
 		if err != nil {
 			return err
 		}
@@ -160,6 +163,10 @@ func (a *EngineApprovals) ApprovedBySession(ctx context.Context, tenant model.Te
 				return err
 			}
 			for _, rec := range rows {
+				pols, err := a.module.approvalPolicyLookup(ctx, sc, pols)(rec)
+				if err != nil {
+					return err
+				}
 				if approvalGrantStatus(rec, now, liveRiskTier(pols, rec)) == statusApproved {
 					out[rec.String(colApprovalSessionRef)]++
 				}
@@ -204,11 +211,15 @@ func (a *EngineApprovals) List(ctx context.Context, tenant model.TenantID, actio
 		if err != nil {
 			return err
 		}
-		rows, p, err := listEffectiveApprovals(ctx, repo, q, status, now, pols)
+		rows, p, err := listEffectiveApprovals(ctx, repo, q, status, now, a.module.approvalPolicyLookup(ctx, sc, pols))
 		if err != nil {
 			return err
 		}
 		for _, r := range rows {
+			pols, err := a.module.approvalPolicyLookup(ctx, sc, pols)(r)
+			if err != nil {
+				return err
+			}
 			items = append(items, toApprovalDTO(r, now, liveRiskTier(pols, r)))
 		}
 		page = p
@@ -323,13 +334,14 @@ func (a *EngineApprovals) Decide(ctx context.Context, tenant model.TenantID, pri
 // human review. It uses the same ordered policy match as Request; unavailable
 // or unreadable policy state is an error, never an implicit allow.
 func (a *EngineApprovals) ReviewPolicy(ctx context.Context, tenant model.TenantID, action, subjectKind string) (policyRef string, err error) {
+	requester, _ := api.RequestPrincipal(ctx)
 	ctx = api.DetachRequestContext(ctx)
 	d, _, err := a.scope(tenant)
 	if err != nil {
 		return "", err
 	}
 	err = d.View(ctx, func(sc store.Scope) error {
-		policies, err := loadApprovalPolicies(ctx, sc)
+		policies, err := a.module.approvalPolicies(ctx, sc, requester.UserID.String())
 		if err != nil {
 			return err
 		}

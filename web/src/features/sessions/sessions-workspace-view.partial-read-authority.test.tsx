@@ -208,6 +208,16 @@ vi.mock('@/features/agentops/api', async (importOriginal) => ({
 
 import { SessionsWorkspaceView } from './sessions-workspace-view'
 
+vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+import { notify } from '@/lib/notify'
+
+// What the page has told: a half that could not be loaded is a toast, not a strip.
+const toldNotice = (condition: string) =>
+  vi
+    .mocked(notify)
+    .mock.calls.map(([n]) => n)
+    .findLast((n) => n.condition === condition)
+
 // Distinct origins, so a row can be attributed to the half it came from by TEXT.
 const LIVE_ONLY: LiveDTO = {
   session_ref: 'spr-live-only',
@@ -633,9 +643,9 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/started outside Olivares could not be loaded/i),
+        toldNotice('sessions.live-lookup-failed')?.message,
         'spr-auth/live-403/setup-live-error-notice',
-      ).toBeInTheDocument()
+      ).toMatch(/started outside Olivares could not be loaded/i)
     })
 
     expect
@@ -746,9 +756,9 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/started in Olivares could not be loaded/i),
+        toldNotice('sessions.run-lookup-failed')?.message,
         'spr-auth/run-stepup/setup-run-error-notice',
-      ).toBeInTheDocument()
+      ).toMatch(/started in Olivares could not be loaded/i)
     })
 
     expect
@@ -791,15 +801,16 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
         'spr-auth/run-stepup/running-count-not-stated',
       )
       .toBeUndefined()
-    // ⛔ THE MISSING FIGURE STILL EXPLAINS ITSELF. What says why is the partial notice
-    //    above the table, painted permanently, so the pairing is asserted HERE, at the
-    //    same moment as the absence, rather than left to the setup that waited for it.
+    // ⛔ THE MISSING FIGURE STILL EXPLAINS ITSELF. What says why is the notice the page
+    //    told for the failed half (a toast, held for as long as the condition holds), so
+    //    the pairing is asserted HERE, at the same moment as the absence, rather than left
+    //    to the setup that waited for it.
     expect
       .soft(
-        screen.getByText(/started in Olivares could not be loaded/i),
+        toldNotice('sessions.run-lookup-failed')?.message,
         'spr-auth/run-stepup/launched-count-explains-itself',
       )
-      .toBeInTheDocument()
+      .toMatch(/started in Olivares could not be loaded/i)
     // The healthy half's own count remains.
     expect
       .soft(
@@ -832,9 +843,9 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/started outside Olivares could not be loaded/i),
+        toldNotice('sessions.live-lookup-failed')?.message,
         'spr-auth/live-5xx/setup-live-error-notice',
-      ).toBeInTheDocument()
+      ).toMatch(/started outside Olivares could not be loaded/i)
     })
 
     // Admission was never withdrawn: the engine broke, it did not refuse. Hiding the
@@ -1158,9 +1169,9 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/started in Olivares could not be loaded/i),
+        toldNotice('sessions.run-lookup-failed')?.message,
         'spr-auth/joined-run-out/setup-run-error-notice',
-      ).toBeInTheDocument()
+      ).toMatch(/started in Olivares could not be loaded/i)
     })
 
     // The ROW stays — it is the run HALF that leaves it — so the assertion here is
@@ -1239,9 +1250,9 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/started outside Olivares could not be loaded/i),
+        toldNotice('sessions.live-lookup-failed')?.message,
         'spr-auth/joined-live-out/setup-live-error-notice',
-      ).toBeInTheDocument()
+      ).toMatch(/started outside Olivares could not be loaded/i)
     })
 
     const row = await rowFor(

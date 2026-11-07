@@ -98,7 +98,11 @@ export function ConfirmDialog({
       open={open}
       onOpenChange={(o) => (pending ? undefined : onOpenChange(o))}
     >
-      <DialogContent className="max-w-md" onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent
+        trust
+        className="max-w-md"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description != null && (

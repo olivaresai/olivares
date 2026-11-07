@@ -9,11 +9,11 @@
 // place's row, or Settings and its row.
 import { cleanup } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 
 const routerState = vi.hoisted(() => ({
-  pathname: '/',
+  pathname: '/now',
   search: {} as Record<string, unknown>,
 }))
 vi.mock('@tanstack/react-router', () => ({
@@ -91,10 +91,13 @@ import { JOURNEYS, stepHref } from './journeys'
 import { placeOfView } from './places'
 import { DestinationSections } from '@/components/layout/destination-sections'
 import { Sidebar } from '@/components/layout/sidebar'
+import { usePreferencesStore } from '@/stores/preferences'
 
+// What the first screen offers with More open: a new person's fold is sidebar.test.tsx's.
+beforeEach(() => usePreferencesStore.setState({ navAll: true }))
 afterEach(() => {
   cleanup()
-  routerState.pathname = '/'
+  routerState.pathname = '/now'
   routerState.search = {}
 })
 
@@ -137,7 +140,7 @@ const viewAt = (path: string) => FEATURE_VIEWS.find((v) => v.path === path)
 /** Every address the first screen offers: its places, Settings, and the strip each of
  *  those opens on. */
 function offeredFromFirstScreen(): Set<string> {
-  const { rows } = shownAt('/')
+  const { rows } = shownAt('/now')
   const offered = new Set(rows)
   for (const start of [...rows, SETTINGS_UTILITY.path]) {
     offered.add(start)
@@ -165,24 +168,18 @@ describe('the first screen', () => {
   })
 
   it('names the places and only the places, on a new installation and any other', () => {
-    expect(shownAt('/').rows).toEqual([
-      '/',
+    expect(shownAt('/now').rows).toEqual([
       '/sessions',
       '/workspace',
-      '/work',
       '/agent-tools',
-      '/models',
-      '/capabilities',
-      '/knowledge',
+      '/now',
       '/permissions?tab=approvals',
-      // Usage & cost leads with the accounts and today, before Business's FinOps.
+      // Usage leads with the accounts and today, before Business's FinOps.
       '/usage',
       '/audit',
-      '/access-map',
       '/identity',
       '/security',
-      '/estate',
-      '/settings?section=edition',
+      '/operations',
       '/settings',
     ])
     // A tool, a key or a local model, a session, its approval, stop and resume, history.
@@ -194,7 +191,7 @@ describe('the first screen', () => {
     ])
       expect(offered).toContain(stepHref(step))
     // The rest of the product is in its places' rows, not in a second list of places.
-    expect(shownAt('/').rows).not.toContain('/model-operations')
+    expect(shownAt('/now').rows).not.toContain('/model-operations')
   })
 })
 
@@ -235,7 +232,8 @@ describe('every page sits in one place', () => {
         `${v.path} (${placeOf(v)}) marks ${marked.join(', ') || 'nothing'}`,
       ]
     })
-    expect(listed.length).toBeGreaterThan(50)
+    // A floor, not a count: doors folded into their room (`doorTo`) are not listed.
+    expect(listed.length).toBeGreaterThan(40)
     expect(wrong).toEqual([])
   })
 })

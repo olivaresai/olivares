@@ -69,6 +69,16 @@ function wrap(ui: ReactElement) {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
 }
 
+/** A member row's actions sit behind its one menu button. */
+async function openRowActions(
+  user: ReturnType<typeof userEvent.setup>,
+  email: string,
+) {
+  await user.click(
+    await screen.findByRole('button', { name: `Row actions for ${email}` }),
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   authState.can = (_p: string, _opts?: unknown) => true
@@ -211,9 +221,13 @@ describe('PeopleTab members roster', () => {
     expect(screen.getByText('platform')).toBeInTheDocument()
     expect(screen.getByText('Active')).toBeInTheDocument()
     expect(screen.getByText('SSO only')).toBeInTheDocument()
+    // One control per row: three action buttons pushed the table past its card.
+    const row = screen.getByText('ada@acme.io').closest('tr') as HTMLElement
+    expect(within(row).getAllByRole('button')).toHaveLength(1)
 
+    await openRowActions(user, 'ada@acme.io')
     await user.click(
-      screen.getByRole('button', {
+      screen.getByRole('menuitem', {
         name: /remove ada@acme\.io from the organization/i,
       }),
     )
@@ -234,8 +248,9 @@ describe('PeopleTab members roster', () => {
     const user = userEvent.setup()
     wrap(<PeopleTab />)
 
+    await openRowActions(user, 'ada@acme.io')
     await user.click(
-      await screen.findByRole('button', {
+      await screen.findByRole('menuitem', {
         name: /end sign-ins for ada@acme\.io/i,
       }),
     )
@@ -273,24 +288,26 @@ describe('PeopleTab members roster', () => {
       aal: 3,
       user_id: 'u-self',
     } as typeof authState.principal
+    const user = userEvent.setup()
     wrap(<PeopleTab />)
 
     expect(await screen.findByText('owner@acme.io')).toBeInTheDocument()
+    // Your own row offers nothing: no removal, and your own sign-ins are ended from
+    // Settings, never from your own People row.
     expect(
-      screen.queryByRole('button', { name: /remove owner@acme\.io/i }),
+      screen.queryByRole('button', { name: 'Row actions for me@acme.io' }),
     ).toBeNull()
+    await openRowActions(user, 'owner@acme.io')
     expect(
-      screen.queryByRole('button', { name: /remove me@acme\.io/i }),
+      screen.queryByRole('menuitem', { name: /remove owner@acme\.io/i }),
     ).toBeNull()
+    await user.keyboard('{Escape}')
+    await openRowActions(user, 'ada@acme.io')
     expect(
-      screen.getByRole('button', { name: /remove ada@acme\.io/i }),
+      screen.getByRole('menuitem', { name: /remove ada@acme\.io/i }),
     ).toBeInTheDocument()
-    // Your own sign-ins are ended from Settings, never from your own People row.
     expect(
-      screen.queryByRole('button', { name: /end sign-ins for me@acme\.io/i }),
-    ).toBeNull()
-    expect(
-      screen.getByRole('button', { name: /end sign-ins for ada@acme\.io/i }),
+      screen.getByRole('menuitem', { name: /end sign-ins for ada@acme\.io/i }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('switch')).toBeNull()
     authState.principal = { aal: 3 }
@@ -310,8 +327,9 @@ describe('PeopleTab members roster', () => {
     expect(screen.queryByRole('switch')).not.toBeInTheDocument()
     expect(screen.queryByText(/^enable$/i)).not.toBeInTheDocument()
 
+    await openRowActions(user, 'ada@acme.io')
     await user.click(
-      screen.getByRole('button', {
+      screen.getByRole('menuitem', {
         name: /remove ada@acme\.io from the organization/i,
       }),
     )

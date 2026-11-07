@@ -79,6 +79,11 @@ import { setEngineTools } from '@/features/agentops/engine-tools'
 setEngineTools(engineTools.tools)
 beforeEach(() => setEngineTools(engineTools.tools))
 
+// The fake router's address is module state: a tab one test opens must not be where the
+// next test starts (views keep their tab in the address).
+import { fakeRouter } from './fake-router'
+beforeEach(() => fakeRouter.reset())
+
 const win = window as unknown as Record<string, unknown>
 const proto = Element.prototype as unknown as Record<string, unknown>
 

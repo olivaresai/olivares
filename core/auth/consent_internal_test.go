@@ -264,6 +264,7 @@ var principalBuilders = map[string]string{
 	"worksession.go:workSessionPrincipal":                   "runtime credential: no account subject",
 	"communicationsession.go:communicationSessionPrincipal": "runtime credential: no account subject",
 	"orchestrationsession.go:orchestrationSessionPrincipal": "runtime credential: no account subject; exact tenant/workspace and restricted orchestration capabilities",
+	"agentlaunch.go:agentLaunchPrincipal":                   "agent launch credential: no account subject; one bound tenant at the editor ceiling, never an HTTP bearer, narrowed to one session",
 	"scoped.go:ScopedPrincipal":                             "in-process subject: no account",
 	"ema.go:PrincipalForExternalID":                         "unwired",
 	"ema.go:PrincipalForSSOSubject":                         "unwired",

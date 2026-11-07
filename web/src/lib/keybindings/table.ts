@@ -31,6 +31,8 @@ export const KEY_CONTEXTS = [
   'workSurface',
   /** No field has focus, so a bare letter is a command and not text. */
   'outsideField',
+  /** Focus is not inside a list surface, so bare `j`/`k` move the tracked row. */
+  'outsideList',
   /** The source diff view is on screen and the event is outside a field. */
   'sourceDiff',
   /** A previous opened session is available, outside a modal. */
@@ -39,6 +41,8 @@ export const KEY_CONTEXTS = [
   'paletteRecent',
   /** The approvals queue is on screen, outside a field and outside a modal. */
   'approvalQueue',
+  /** The access map is on screen, outside a field, a menu and a modal. */
+  'accessMap',
 ] as const
 
 export type KeyContextName = (typeof KEY_CONTEXTS)[number]
@@ -58,12 +62,15 @@ const PREVIOUS_SESSION_CHORD = 'Mod+Shift+Enter'
 /** A command's group, for the one page that documents the table. */
 export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'palette.open': 'general',
+  'ask.open': 'general',
   'session.new': 'general',
   'session.previous': 'general',
   ...Object.fromEntries(
     PALETTE_RECENT_COMMANDS.map((command) => [command, 'general' as const]),
   ),
   'help.toggle': 'general',
+  'list.next': 'general',
+  'list.previous': 'general',
   'launcher.focus': 'launcher',
   'launcher.start': 'launcher',
   'launcher.startBackground': 'launcher',
@@ -79,6 +86,7 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'rail.last': 'surface',
   'rail.open': 'surface',
   'rail.pin': 'surface',
+  'rail.undo': 'surface',
   'rail.menu': 'surface',
   'sourceDiff.nextFile': 'surface',
   'sourceDiff.previousFile': 'surface',
@@ -86,16 +94,24 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'sourceDiff.previousHunk': 'surface',
   'approvals.approve': 'surface',
   'approvals.deny': 'surface',
+  'accessMap.fullScreen': 'surface',
 }
 
 export const KEYBINDINGS: readonly KeyRule[] = [
   // ── shell-wide ────────────────────────────────────────────────────────────
   { command: 'palette.open', keys: 'Mod+k' },
+  // Ask Olivares: outside a field only, so the chord can never be typed into one; the
+  // palette's "Ask Olivares…" opens it from anywhere.
+  { command: 'ask.open', keys: 'Alt+Shift+a', when: 'outsideField' },
   { command: 'help.toggle', keys: '?' },
   { command: 'launcher.focus', keys: '/' },
   // New session (redesign §3.7.13): a bare letter, so only outside a field. `Shift+N`
   // (with another account) waits for the composer's account picker.
   { command: 'session.new', keys: 'n', when: 'outsideField' },
+  // List movement: bare `j`/`k` walk the page's list, outside a field and outside a
+  // list that answers its own keys.
+  { command: 'list.next', keys: 'j', when: 'outsideList' },
+  { command: 'list.previous', keys: 'k', when: 'outsideList' },
 
   // Avoid browser tab/history chords and the launcher's Mod+Enter.
   {
@@ -138,9 +154,15 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   { command: 'rail.open', keys: 'Enter', when: 'railFocused' },
   { command: 'rail.open', keys: 'Space', when: 'railFocused' },
   { command: 'rail.pin', keys: 'p', when: 'railFocused' },
+  // Takes back the last archive, snooze, done or unpin while its notice is up.
+  { command: 'rail.undo', keys: 'Mod+z', when: 'railFocused' },
   // The row's actions menu, by the two keys a platform's own lists open one with.
   { command: 'rail.menu', keys: 'Shift+F10', when: 'railFocused' },
   { command: 'rail.menu', keys: 'ContextMenu', when: 'railFocused' },
+  // The rail walks on `j`/`k` too. These rows sit BELOW the list rows so the rail
+  // wins when both contexts are true; an armed `g k` is consumed before either.
+  { command: 'rail.next', keys: 'j', when: 'railFocused' },
+  { command: 'rail.previous', keys: 'k', when: 'railFocused' },
 
   // ── source diff, only while that view is listening and the target is not a field
   { command: 'sourceDiff.nextFile', keys: 'Alt+ArrowDown', when: 'sourceDiff' },
@@ -163,6 +185,9 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   // ── the approvals queue: the open request, outside a field and a modal (#2548)
   { command: 'approvals.approve', keys: 'a', when: 'approvalQueue' },
   { command: 'approvals.deny', keys: 'd', when: 'approvalQueue' },
+
+  // ── the access map: the graph fills the window, and the same key leaves it
+  { command: 'accessMap.fullScreen', keys: 'f', when: 'accessMap' },
 ]
 
 /** The palette's chord, as the table declares it (Mod+k): no rule, no hint. */

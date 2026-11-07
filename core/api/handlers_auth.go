@@ -129,6 +129,9 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, mc ModuleCo
 		s.log.Error("api: failed to consume setup token", "err", cerr)
 	}
 	s.setupComplete.Store(true)
+	if s.afterSetup != nil {
+		s.afterSetup(r.Context())
+	}
 	writeJSON(w, http.StatusCreated, setupResponse{UserDTO: toUserDTO(u), Organization: toOrgDTO(org)})
 }
 
@@ -465,6 +468,7 @@ type authSessionDTO struct {
 	CreatedAt  string  `json:"created_at"`
 	LastUsedAt *string `json:"last_used_at"`
 	Kind       string  `json:"kind"`
+	CreatedIP  string  `json:"created_ip,omitempty"`
 	Current    bool    `json:"current"`
 	ExpiresAt  string  `json:"expires_at"`
 }
@@ -481,7 +485,7 @@ func handleAuthSessionDTO(session model.AuthSession, current bool) authSessionDT
 	}
 	return authSessionDTO{
 		Name: session.DeviceName, ID: session.ID.String(), CreatedAt: session.CreatedAt.String(), LastUsedAt: lastUsed,
-		Kind: kind, Current: current, ExpiresAt: session.ExpiresAt.String(),
+		Kind: kind, CreatedIP: session.CreatedIP, Current: current, ExpiresAt: session.ExpiresAt.String(),
 	}
 }
 

@@ -23,6 +23,31 @@ import (
 
 const unexpectedMarker = "pg-m1-synthetic-environment-must-not-be-printed"
 
+// Fixture database creation forces checkpoints; disk-backed data makes each
+// checkpoint pay the runner's fsync latency, even with almost no test data.
+func TestPGMajorsFixtureDataUsesMemory(t *testing.T) {
+	_, root := workflowYAML(t)
+	services := mappingValue(mappingValue(mappingValue(root, "jobs"), "pg-majors"), "services")
+	for _, major := range []string{"15", "16", "17", "18"} {
+		t.Run(major, func(t *testing.T) {
+			service := mappingValue(services, "pg"+major)
+			options := mappingValue(service, "options")
+			if options == nil {
+				t.Fatal("service options missing")
+			}
+			data := "/var/lib/postgresql/data"
+			if major == "18" {
+				data = "/var/lib/postgresql"
+			}
+			for _, want := range []string{"--tmpfs " + data + ":rw,size=1g", "--memory=2g", "--memory-swap=2g"} {
+				if !strings.Contains(options.Value, want) {
+					t.Errorf("pg%s missing %q: fixture checkpoints must not wait on runner disk", major, want)
+				}
+			}
+		})
+	}
+}
+
 func TestPGMajorsEnvironment(t *testing.T) {
 	script := workflowScript(t)
 	if err := checkPasses(executePasses(t, script)); err != nil {

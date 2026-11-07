@@ -166,9 +166,6 @@ func (p *prober) status(driver string) (SignInStatus, error) {
 	command := cmdLine(p.program, facts.StatusArgs...)
 	p.sources = append(p.sources, command)
 	st, err := p.m.readNativeStatus(p.ctx, SignInStatus{Driver: driver, Installed: true}, p.program, p.cfgDir, p.env)
-	if err == nil && st.unrecognized {
-		err = errors.New("the tool's answer was not recognized")
-	}
 	if err != nil {
 		var probe *probeError
 		if errors.As(err, &probe) {

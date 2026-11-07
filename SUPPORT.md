@@ -76,7 +76,7 @@ sized for a single-maintainer vendor, not penalty-backed SLAs (see
 
 **The support label is attested in the license, for display only.** A commercial license
 can carry an attested, free-form `support_tier` label (for example `business` or
-`enterprise`) that the deployment's own console (**Edition & license**) and
+`enterprise`) that the deployment's own console (**Settings › Edition**) and
 `GET /v1/server-info` surface, so an operator can see which label their own license
 records. Like every license claim in the **open (AGPL) binary** it is **display/record
 only: it gates nothing there** ([`LICENSING.md`](LICENSING.md)); commercial add-ons are a

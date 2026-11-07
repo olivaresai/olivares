@@ -28,6 +28,10 @@ vi.mock('@/lib/auth/context', () => ({
 
 import { EvalsView } from './evals-view'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 const FIXTURE = resolve(
   process.cwd(),
   '../modules/evals/testdata/ab_request_console.json',

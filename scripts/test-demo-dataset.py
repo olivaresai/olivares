@@ -350,6 +350,44 @@ class DataContract(unittest.TestCase):
                     self.assertIsNone(pattern.search(text.lower() if pattern in HARNESS_NAMES[:1] else text),
                                       "refused by the capture check: %r" % text[:80])
 
+    def test_the_estate_seeds_the_core_workspace_eval_suite_and_backup_the_captures_read(self):
+        # The workspace, evals and backups captures read data these three steps create through the product's routes.
+        posted = []
+
+        class Recorder(StubApi):
+            def call(self, method, path, body=None, headers=None, token=None, anonymous=False):
+                if method == "GET":
+                    return 200, {"items": []}
+                if method == "POST":
+                    posted.append((path, body))
+                    return (202 if path.endswith("/backup") else 201), {"id": "suite-1", "job_id": "job-1"}
+                raise AssertionError(method)
+
+            def events(self, path, timeout):
+                yield {"status": "completed"}
+
+        api = Recorder({})
+        for step in (SEEDER.step_core_workspaces, SEEDER.step_evals, SEEDER.step_backup):
+            step(api, {"root": tempfile.gettempdir()})
+        paths = [path for path, _ in posted]
+        self.assertIn(("Billing", "billing"), [(b["name"], b["slug"]) for p, b in posted if p == "/v1/workspaces"])
+        self.assertEqual(sum(p == "/v1/m/evals/suites/suite-1/cases" for p in paths), len(SEEDER.EVAL_CASES))
+        self.assertEqual(sum(p == "/v1/m/evals/runs" for p in paths), len(SEEDER.EVAL_RUNS))
+        self.assertIn("/v1/console/dr/backup", paths)
+
+    def test_a_backup_job_that_fails_stops_the_seed_with_its_error(self):
+        class Failing(StubApi):
+            def call(self, method, path, body=None, headers=None, token=None, anonymous=False):
+                if method == "GET":
+                    return 200, {"items": []}
+                return 202, {"job_id": "job-1"}
+
+            def events(self, path, timeout):
+                yield {"status": "failed", "error": "disk full"}
+
+        with self.assertRaisesRegex(SEEDER.SeedError, "disk full"):
+            SEEDER.step_backup(Failing({}), {"root": tempfile.gettempdir()})
+
     def test_the_steps_run_in_the_order_the_engine_needs(self):
         order = [name for name, _ in SEEDER.STEPS]
         self.assertEqual(len(order), len(set(order)))
@@ -696,6 +734,35 @@ class ClaudeStandIn(unittest.TestCase):
                               capture_output=True, text=True, timeout=30)
         self.assertEqual(proc.returncode, 4)
 
+    def test_a_call_id_is_never_reused_by_a_later_turn(self):
+        # A tool's call ids are unique in its session: the console joins an answer to its call by
+        # id, so a second turn that reused the first turn's ids left its own calls unanswered.
+        s = session("claude", "Refactor cart totals in checkout")
+        inputs = [{"type": "user", "message": {"role": "user", "content": t["prompt"]}} for t in s["turns"]]
+        _, frames = run_tool("claude", [], inputs, {"DEMO_SESSION_UNIQUE": "1"})
+        claude = [c["id"] for f in frames if f["type"] == "assistant"
+                  for c in f["message"]["content"] if c["type"] == "tool_use"]
+        s = session("opencode", "Review the staging load balancer change")
+        flow = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+                {"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {}}] + [
+            {"jsonrpc": "2.0", "id": 3 + i, "method": "session/prompt",
+             "params": {"prompt": [{"type": "text", "text": t["prompt"]}]}} for i, t in enumerate(s["turns"])]
+        _, frames = run_tool("opencode", ["acp"], flow)
+        acp = [f["params"]["update"]["toolCallId"] for f in frames if f.get("method") == "session/update"
+               and f["params"]["update"]["sessionUpdate"] == "tool_call"]
+        for ids, want in ((claude, 4), (acp, 2)):
+            self.assertEqual(len(ids), want)
+            self.assertEqual(len(set(ids)), len(ids), ids)
+
+    def test_the_persons_message_is_replayed_as_claude_code_does(self):
+        # The engine launches Claude Code with --replay-user-messages; the console shows the
+        # person's turn from that replay, so a stand-in that drops it shows no prompt at all.
+        s = session("claude", "Refactor cart totals in checkout")
+        inputs = [{"type": "user", "message": {"role": "user", "content": t["prompt"]}} for t in s["turns"]]
+        _, frames = run_tool("claude", ["--replay-user-messages"], inputs, {"DEMO_SESSION_UNIQUE": "1"})
+        replayed = [f["message"]["content"] for f in frames if f["type"] == "user" and f.get("isReplay")]
+        self.assertEqual(replayed, [t["prompt"] for t in s["turns"]])
+
     def test_the_session_id_joins_the_observed_session_unless_unique(self):
         _, fixed = run_tool("claude", [], [], {})
         self.assertEqual(fixed[0]["session_id"], STAND_IN.LIVE_SESSION)
@@ -761,6 +828,32 @@ class CodexStandIn(unittest.TestCase):
     def test_a_method_it_does_not_implement_is_refused_not_ignored(self):
         _, frames = run_tool("codex", ["app-server"], [{"id": 9, "method": "something/unknown"}])
         self.assertEqual(frames[0]["error"]["code"], -32601)
+
+    def test_the_stand_ins_report_plan_limits_and_one_turn_waits_for_a_person(self):
+        # The review set photographs account shares and a session in Needs you: the engine reads the
+        # windows the way it reads the real tools, and a held turn asks once for approval.
+        home = {"CODEX_HOME": "/demo/homes/codex-team/config", "CLAUDE_CONFIG_DIR": "/demo/homes/claude-lena/config"}
+        _, frames = run_tool("codex", ["app-server"], [{"id": 1, "method": "account/rateLimits/read"}], home)
+        windows = frames[0]["result"]["rateLimits"]
+        self.assertEqual({windows["primary"]["windowDurationMins"], windows["secondary"]["windowDurationMins"]},
+                         {300, 7 * 24 * 60})
+        self.assertTrue(all(0 < w["usedPercent"] < 100 for w in (windows["primary"], windows["secondary"])))
+        _, frames = run_tool("claude", ["-p"], [{"type": "control_request", "request_id": "usage",
+                                                 "request": {"subtype": "get_usage"}}], home)
+        usage = next(f for f in frames if f.get("type") == "control_response")["response"]
+        self.assertEqual((usage["subtype"], usage["request_id"]), ("success", "usage"))
+        self.assertTrue(usage["response"]["rate_limits_available"])
+        self.assertEqual({l["kind"] for l in usage["response"]["rate_limits"]["limits"]}, {"session", "weekly_all"})
+        asking = next(s for s in CONVERSATIONS if any(t.get("ask") for t in s["turns"]))
+        self.assertTrue(asking.get("fixture"), "the canonical estate's queue holds no session request")
+        turn = asking["turns"][-1]
+        _, frames = run_tool("codex", ["app-server"], [
+            {"id": 1, "method": "thread/start", "params": {}},
+            {"id": 2, "method": "turn/start", "params": {"input": [{"type": "text", "text": turn["prompt"]}]}}])
+        asks = [f for f in frames if f.get("method") == "item/commandExecution/requestApproval"]
+        self.assertEqual(len(asks), 1)
+        self.assertEqual(asks[0]["params"]["command"], turn["ask"]["command"])
+        self.assertEqual(asks[0]["params"]["turnId"], "turn-1")
 
 
 class AcpStandIns(unittest.TestCase):
@@ -905,6 +998,28 @@ class PublishBlock(unittest.TestCase):
         self.assertIn("NOT PUBLISHED 1 capture(s)", proc.stderr)
 
 
+class SeederWorkspaces(unittest.TestCase):
+    def test_the_engines_own_my_files_folder_is_not_a_sixth_estate_folder(self):
+        # On first boot the engine registers the signed-in person's "My files" folder under
+        # <data>/files/<user-id> and lists it to whoever asks: it is not part of the canonical estate.
+        with tempfile.TemporaryDirectory() as work:
+            ctx = {"root": os.path.realpath(work)}
+            items = []
+            for name, (folder, mode, dlp) in SEEDER.WORKSPACES.items():
+                root = SEEDER.make_repo(ctx["root"], folder, SEEDER.REPOS[folder])
+                items.append({"name": name, "root_path": root, "mount_mode": mode, "dlp_mode": dlp,
+                              "workspace_ref": "ws-" + folder})
+            personal = os.path.join(ctx["root"], "data", "files", "0f3c9a2e-1b7d-4c1e-9a55-2d6f0e8b7a10")
+            os.makedirs(personal)
+            items.append({"name": "My files", "root_path": os.path.realpath(personal), "mount_mode": "rw",
+                          "dlp_mode": "off", "workspace_ref": "ws-personal"})
+            # No POST route: the seed must reuse the five canonical registrations and create nothing.
+            api = StubApi({("GET", "/v1/m/sessions/workspaces"): (200, {"items": items, "has_more": False})})
+            SEEDER.step_workspaces(api, ctx)
+        self.assertEqual(ctx["workspaces"],
+                         {name: "ws-" + folder for name, (folder, _, _) in SEEDER.WORKSPACES.items()})
+
+
 class StubApi(SEEDER.Api):
     """The engine's answers for the seeder's own decisions, from a table: what the seeder does with a
     list, a decision or a refusal is its logic, and the product contract is exercised against a real
@@ -977,7 +1092,7 @@ class SeederLogic(unittest.TestCase):
         SEEDER.step_approvals(api, {})
         self.assertEqual(decided, [], "a decided request received a second decision")
 
-    def test_every_canonical_request_names_its_action_subject_session_and_asker(self):
+    def test_every_canonical_request_names_its_action_subject_and_human_asker(self):
         created = []
 
         def made(body):
@@ -1006,8 +1121,8 @@ class SeederLogic(unittest.TestCase):
             key = (body["action"], body["subject_ref"])
             state, session, _ = want[key]
             if state == "pending":
-                self.assertEqual(body.get("session_ref"), refs[session],
-                                 "%s %s does not name the session that asked" % key)
+                self.assertNotIn("session_ref", body,
+                                 "%s %s impersonates a session with a human token" % key)
             for field in ("expires_in_seconds", "escalate_in_seconds"):
                 self.assertNotIn(field, body,
                                  "%s %s carries an expiry, which would end a request the estate keeps "
@@ -1474,6 +1589,35 @@ class SeederLogic(unittest.TestCase):
 
 
 class LiveSnapshotCommand(unittest.TestCase):
+    def test_pending_human_approvals_have_no_session_reference(self):
+        script = (ROOT / "scripts" / "test-demo-dataset-live.sh").read_text(encoding="utf8")
+        program = re.search(r"<<'PY'\n(.*?)\nPY\n", script, re.S).group(1)
+        # Exercise the snapshot's queue validation without launching the sixteen sessions.
+        queue_check = program[program.index("COMMUNITY_QUEUE ="):]
+        approvals = [
+            {"action": action, "subject_ref": subject, "status": "pending"}
+            for action, _, subject, *_ in SEEDER.PENDING_APPROVALS
+            if SEEDER.keeps_action("community", action)
+        ] + [
+            {"action": action, "subject_ref": subject,
+             "status": "approved" if decision == "approve" else "rejected"}
+            for action, _, subject, _, _, decision in SEEDER.DECIDED_APPROVALS
+            if SEEDER.keeps_action("community", action)
+        ]
+        def check():
+            exec(compile(queue_check, "live-snapshot-queue", "exec"), {
+                "edition": "community", "problems": [], "sys": sys,
+                "get": lambda path: {"items": approvals},
+                "live_rows": [], "run_refs": set(),
+            })
+        check()
+        approvals[0]["session_ref"] = "unowned-session"
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as errors:
+            with self.assertRaises(SystemExit) as stopped:
+                check()
+        self.assertEqual(stopped.exception.code, 1)
+        self.assertIn("impersonates a session", errors.getvalue())
+
     def test_snapshot_passes_bearer_through_environment_only(self) -> None:
         script = (ROOT / "scripts" / "test-demo-dataset-live.sh").read_text(encoding="utf8")
         snapshot = script.split("snapshot() {", 1)[1].split("\nPY\n}\n", 1)[0] + "\nPY\n"

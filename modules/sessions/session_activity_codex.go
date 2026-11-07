@@ -109,9 +109,6 @@ func findCodexActivityTranscript(ctx context.Context, dir *os.Root, sid string, 
 			if err == nil && (!info.Mode().IsRegular() || !singleLink(info)) {
 				err = errClaudeStateSpecial
 			}
-			if err == nil && info.Size() > activityFileMax {
-				err = errActivityTooLarge
-			}
 			if err != nil {
 				f.Close()
 				return err

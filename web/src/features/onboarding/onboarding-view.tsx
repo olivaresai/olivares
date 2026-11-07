@@ -15,7 +15,9 @@ import { Link } from '@tanstack/react-router'
 import { Rocket } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { INSTALL_COMMAND } from '@/components/layout/command-line-dialog'
 import { Button } from '@/components/ui/button'
+import { CodeLine } from '@/components/ui/code-line'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { PageHeader } from '@/components/ui/page-header'
@@ -45,30 +47,6 @@ const NEXT: readonly { key: string; to: string; view?: string }[] = [
   // Stored budgets remain useful after an edition change; Community offers their read view.
   { key: 'budgets', to: COST_VIEW.path, view: COST_VIEW.id },
 ]
-
-/** A command with the one button that copies it. */
-function CopyCommand({ command }: { command: string }) {
-  const { t } = useTranslation('firstHour')
-  const [copied, setCopied] = useState(false)
-  return (
-    <div className="flex w-fit max-w-full items-center gap-2 rounded-[6px] bg-surface py-1 pl-2 pr-1">
-      <code className="min-w-0 text-mono [overflow-wrap:anywhere] text-text select-all">
-        {command}
-      </code>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          void navigator.clipboard
-            ?.writeText(command)
-            .then(() => setCopied(true))
-        }}
-      >
-        {copied ? t('next.copied') : t('next.copy')}
-      </Button>
-    </div>
-  )
-}
 
 export function OnboardingView() {
   const { t } = useTranslation(['onboarding', 'firstHour'])
@@ -150,7 +128,7 @@ export function OnboardingView() {
         <p className="text-caption text-text-2">
           {t('firstHour:next.cliHint')}
         </p>
-        <CopyCommand command="curl -fsSL https://olivares.ai/olivares/install.sh | sh" />
+        <CodeLine command={INSTALL_COMMAND} label={null} />
       </section>
     </div>
   )

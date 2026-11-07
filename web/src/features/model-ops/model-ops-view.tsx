@@ -13,8 +13,7 @@
 // registries, the cross-model AIBOM seal ledger (Model evidence), and per-model AIBOM /
 // model-card generate·export·seal in the Owned-models drawer. GPAI posture and the agent
 // supply chain land in slice 3.
-import { useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { BadgeCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -52,41 +51,16 @@ const TABS: readonly TabSpec[] = [
   { value: 'evidence', read: 'models:registry:read', Panel: ModelEvidenceTab },
 ] as const
 
-function initialTab(accessible: readonly TabSpec[]): string {
-  const fallback = accessible[0]?.value ?? 'owned'
-  if (typeof window === 'undefined') return fallback
-  const want = new URLSearchParams(window.location.search).get('tab')
-  return want && accessible.some((tb) => tb.value === want) ? want : fallback
-}
-
 export function ModelOpsView() {
   const { t } = useTranslation('model-ops')
   const { can } = useAuth()
-  const navigate = useNavigate()
 
   // Nav visibility is the coarse models:read (RBAC is verb-tier: any models reader
   // inherits it). Per-tab we still gate on the specific read so the surface stays
   // correct if the model ever becomes capability-scoped; the default tab is the FIRST
   // one the principal may see, never assumed to be Owned models.
   const accessible = TABS.filter((tb) => can(tb.read))
-  const [tab, setTabState] = useState(() => initialTab(accessible))
-
-  function setTab(value: string) {
-    setTabState(value)
-    // Reflect the tab in the URL so an audit link is shareable. Merge into the
-    // existing search rather than replacing it, and REPLACE the history entry:
-    // without it every tab click pushed one, so Back walked the tabs instead of
-    // leaving the view — the opposite of the contract use-url-state.ts states
-    // ("Back leaves the view, it does not undo a filter click").
-    void navigate({
-      search: (prev: Record<string, unknown>) => ({ ...prev, tab: value }),
-      replace: true,
-      // A tab change is not a page change: keep the router's scroll restoration out of
-      // it, or it writes a stale cached scrollLeft back onto the tab strip after render
-      // (see console-view.tsx, measured 2026-09-06).
-      resetScroll: false,
-    } as never)
-  }
+  const [tab, setTab] = useTabParam(accessible.map((tb) => tb.value))
 
   return (
     <IntelPage icon={BadgeCheck} title={t('title')} description={t('subtitle')}>

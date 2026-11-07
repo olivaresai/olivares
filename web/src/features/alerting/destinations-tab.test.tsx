@@ -54,9 +54,10 @@ const fileRow = {
   source: 'file' as const,
   live: true,
 }
+const urlField = [{ key: 'webhook_url', secret: true, required: true }]
 const kinds = [
-  { kind: 'slack', title: 'Slack' },
-  { kind: 'teams', title: 'Microsoft Teams' },
+  { kind: 'slack', title: 'Slack', fields: urlField },
+  { kind: 'teams', title: 'Microsoft Teams', fields: urlField },
 ]
 
 function wrap(ui: ReactElement) {

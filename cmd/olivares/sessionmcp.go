@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	sessionMCPRevision     = "2025-11-25"
+	sessionMCPRevision     = mcpc.LegacyRevision
 	maxSessionPeerKeyChars = 256
 )
 

@@ -9,10 +9,7 @@
 # unreadable contract (2).
 set -u
 
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-  echo "test-demo-agent: cannot inspect files outside a git worktree" >&2
-  exit 2
-}
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "$0")/.." && pwd))"
 
 SEED="$ROOT/cmd/olivares/seed/seed.go"
 AGENT="$ROOT/scripts/demo-tools/demo-tool.py"

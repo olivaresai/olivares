@@ -25,16 +25,22 @@ import (
 )
 
 type drProtection struct {
-	LocalTarget string     `json:"local_target,omitempty"`
-	VerifyCron  string     `json:"verify_cron,omitempty"`
-	RPOHours    int        `json:"rpo_hours,omitempty"`
-	Offsite     *drOffsite `json:"offsite,omitempty"`
+	LocalTarget string `json:"local_target,omitempty"`
+	VerifyCron  string `json:"verify_cron,omitempty"`
+	RPOHours    int    `json:"rpo_hours,omitempty"`
+	// RTOMinutes is the restore time the operator commits to. The scheduled
+	// restore test measures against it; zero sets no target.
+	RTOMinutes int        `json:"rto_minutes,omitempty"`
+	Offsite    *drOffsite `json:"offsite,omitempty"`
 }
 
 type drVerificationResult struct {
 	LastVerify       string `json:"last_verify,omitempty"`
 	LastVerifyStatus string `json:"last_verify_status,omitempty"`
 	LastVerifyError  string `json:"last_verify_error,omitempty"`
+	// LastVerifyRTOMillis is how long the last restore test took (extract,
+	// authenticate, decrypt, restore into scratch, re-verify the ledger).
+	LastVerifyRTOMillis int64 `json:"last_verify_rto_ms,omitempty"`
 }
 
 type drOffsite struct {
@@ -66,6 +72,9 @@ func validateDRProtection(req drScheduleRequest) error {
 	if req.RPOHours != nil && (*req.RPOHours < 1 || *req.RPOHours > 8760) {
 		return errors.New("rpo_hours must be between 1 and 8760")
 	}
+	if req.RTOMinutes != nil && (*req.RTOMinutes < 0 || *req.RTOMinutes > 10080) {
+		return errors.New("rto_minutes must be between 0 (no target) and 10080")
+	}
 	o := req.Offsite
 	if o == nil || o.Bucket == "" {
 		return nil
@@ -94,7 +103,7 @@ var drManagedBundleGlob = "/mnt/olivares-backups/*/*.drbundle"
 // The recovery secret is generated on the data volume, never baked into an image
 // or included among the sealed signing keys. A link publishes it without replacing
 // an existing key; an interrupted write cannot publish a partial secret.
-func (s *Server) prepareApplianceRecoveryKey(allowCreate bool) error {
+func (s *Server) prepareRecoveryKey(allowCreate bool) error {
 	path := s.drSvc.cfg.PassphraseFile
 	if !s.drSvc.autoRecoveryKey {
 		_, err := s.drSchedulePassphrase()
@@ -119,8 +128,14 @@ func (s *Server) prepareApplianceRecoveryKey(allowCreate bool) error {
 	if !allowCreate {
 		return errors.New("appliance recovery key is missing; restore the original key")
 	}
-	// Existing bundles must remain recoverable with their original key.
-	for _, pattern := range []string{filepath.Join(s.drSvc.cfg.BackupDir, "*.drbundle"), drManagedBundleGlob} {
+	// Appliance bundles are sealed with this key from the first boot, so they must
+	// remain recoverable with it. Another install's earlier bundles were sealed with
+	// an operator passphrase and are unaffected by a new key.
+	patterns := []string{filepath.Join(s.drSvc.cfg.BackupDir, "*.drbundle"), drManagedBundleGlob}
+	if !s.drSvc.cfg.Appliance {
+		patterns = nil
+	}
+	for _, pattern := range patterns {
 		bundles, err := filepath.Glob(pattern)
 		if err != nil {
 			return err
@@ -265,15 +280,19 @@ func (s *Server) runDueVerification(ctx context.Context, now time.Time) (bool, e
 	sched.LastVerify = now.Format(time.RFC3339)
 	sched.LastVerifyStatus = drJobRunning
 	sched.LastVerifyError = ""
+	sched.LastVerifyRTOMillis = 0
 	if err := s.saveDRSchedule(ctx, sched); err != nil {
 		return false, fmt.Errorf("claim verification: %w", err)
 	}
 	s.drSvc.setSchedule(func(d *drSchedule) { *d = sched })
+	started := time.Now()
 	verifyErr := s.verifyScheduledBundles(ctx)
 	sched.LastVerifyStatus = drJobCompleted
 	if verifyErr != nil {
 		sched.LastVerifyStatus = drJobFailed
 		sched.LastVerifyError = verifyErr.Error()
+	} else {
+		sched.LastVerifyRTOMillis = time.Since(started).Milliseconds()
 	}
 	if err := s.persistDRSchedule(ctx, sched, "dr.verify."+sched.LastVerifyStatus); err != nil {
 		sched.LastVerifyStatus = drJobFailed
@@ -285,8 +304,53 @@ func (s *Server) runDueVerification(ctx context.Context, now time.Time) (bool, e
 		return false, errors.Join(verifyErr, fmt.Errorf("record verification: %w", err), saveErr)
 	}
 	s.drSvc.setSchedule(func(d *drSchedule) { *d = sched })
+	if sched.rtoExceeded() {
+		s.alertRTOExceeded(ctx)
+	}
 	return verifyErr == nil, verifyErr
 }
+
+// rtoExceeded reports whether the last completed restore test took longer than
+// the operator's RTO target.
+func (d drSchedule) rtoExceeded() bool {
+	return d.LastVerifyStatus == drJobCompleted && d.RTOMinutes > 0 &&
+		d.LastVerifyRTOMillis > int64(d.RTOMinutes)*60_000
+}
+
+// alertRTOExceeded raises a dr_rto_exceeded finding in every organization, the
+// stream notification routes match on. The finding is estate-level and an
+// organization (or the route that forwards it) can read it, so it names neither
+// the bundle nor the timings: those are in the system-tenant ledger event that
+// persistDRSchedule sealed and on the Backups schedule. A failed alert is logged,
+// never swallowed into the test's verdict.
+func (s *Server) alertRTOExceeded(ctx context.Context) {
+	if s.drSvc.cfg.Alert == nil {
+		return
+	}
+	var orgs []model.Org
+	var authoritative bool
+	if err := s.st.System(ctx, func(sys store.SystemScope) (err error) {
+		orgs, authoritative, err = sys.ListOrgsVisible(ctx)
+		return err
+	}); err != nil {
+		s.log.Error("dr: could not list organizations to alert on an exceeded RTO", "err", err)
+		return
+	}
+	if !authoritative {
+		s.log.Warn("dr: the organization list is not authoritative, so the RTO alert reaches only the organizations this role can see")
+	}
+	for _, o := range orgs {
+		if o.TenantID == model.SystemTenantID {
+			continue
+		}
+		if err := s.drSvc.cfg.Alert(ctx, o.TenantID, drRTOAlertTitle); err != nil {
+			s.log.Error("dr: the RTO alert could not be published", "tenant", o.TenantID, "err", err)
+		}
+	}
+}
+
+// drRTOAlertTitle is the organization-visible text of the exceeded-RTO finding.
+const drRTOAlertTitle = "The scheduled DR restore test took longer than the RTO target"
 
 func (s *Server) verifyScheduledBundles(ctx context.Context) error {
 	pass, err := s.drSchedulePassphrase()

@@ -45,7 +45,12 @@
     "moved": "Assegnazione spostata all'ultima revisione",
     "approveTitle": "Approvare le skill che agiscono al caricamento?",
     "approveDescription": "L'ultima revisione fissa per {{target}} skill su cui il loro strumento agisce senza chiedere: {{skills}}. Approva solo dopo averle esaminate.",
-    "approve": "Approva e usa l'ultima"
+    "approve": "Approva e usa l'ultima",
+    "disable": "Disattiva",
+    "disabled": "Skill disattivata",
+    "disableFor": "Disattiva {{skill}} per {{target}}",
+    "disableTitle": "Disattivare questa skill?",
+    "disableDescription": "Le nuove sessioni di {{target}} non ricevono più {{skill}} da questa assegnazione. Le altre skill restano assegnate. Le conversazioni registrate mantengono la propria istantanea."
   },
   "assign": {
     "title": "Assegna",
@@ -85,7 +90,15 @@
     "gitSubmit": "Installa da Git",
     "name": "Nome del pacchetto",
     "nameHint": "Facoltativo; per impostazione predefinita è il nome del repository. Scegli un nome distinto per un altro pacchetto dallo stesso repository.",
-    "held": "Pacchetto di skill installato. Contiene skill che agiscono al caricamento, quindi non è stato assegnato: esaminalo e assegnalo dalla sua scheda."
+    "held": "Pacchetto di skill installato. Contiene skill che agiscono al caricamento, quindi non è stato assegnato: esaminalo e assegnalo dalla sua scheda.",
+    "local": "Cartella o archivio",
+    "archive": "Archivio",
+    "archiveHint": "ZIP o tar.gz, fino a 32 MiB. Seleziona un archivio o una cartella.",
+    "folder": "Cartella",
+    "uploadSubmit": "Installa selezione",
+    "selectedFiles": "File selezionati: {{count}}",
+    "uploadLimit": "Limiti superati (32 MiB, 4096 file, 8 MiB per file).",
+    "uploadName": "Nome del pacchetto caricato"
   },
   "update": {
     "title": "Aggiornamenti",
@@ -103,6 +116,44 @@
     "acts": "{{skill}} ora agisce al caricamento: {{items}}. Assegnarla richiede la tua approvazione.",
     "pinsKeep": "Le assegnazioni esistenti mantengono la loro revisione finché non sposti ciascuna con “Usa l’ultima”.",
     "apply": "Applica questo aggiornamento",
-    "applied": "Aggiornamento pubblicato come revisione {{n}}"
+    "applied": "Aggiornamento pubblicato come revisione {{n}}",
+    "checked": "Verificato",
+    "noDiff": "Nessuna differenza di testo disponibile."
+  },
+  "catalog": {
+    "source": "Origine",
+    "tool_folder": "Cartella dello strumento",
+    "pack": "Pacchetto",
+    "uploaded": "Caricato",
+    "skills": "Competenze",
+    "packs": "Pacchetti",
+    "name": "Nome",
+    "description": "Descrizione",
+    "kind": "Tipo",
+    "search": "Cerca nomi e descrizioni",
+    "unassigned": "Non assegnato",
+    "loading": "Caricamento…",
+    "incomplete": "Alcune revisioni mancano; le assegnazioni possono essere incomplete.",
+    "skill": "Competenza",
+    "agent": "Agente",
+    "command": "Comando",
+    "rule": "Regola"
+  },
+  "selection": {
+    "loading": "Verifica delle competenze…",
+    "count_one": "Questa sessione riceve {{count}} competenza",
+    "count_other": "Questa sessione riceve {{count}} competenze",
+    "count_many": "Questa sessione riceve {{count}} di competenze",
+    "current_one": "Attualmente assegnata: {{count}} competenza",
+    "current_other": "Attualmente assegnate: {{count}} competenze",
+    "current_many": "Attualmente assegnate: {{count}} di competenze",
+    "unavailable": "Impossibile determinare le competenze di questo reparto."
+  },
+  "remove": {
+    "action": "Rimuovi pacchetto",
+    "title": "Rimuovere questo pacchetto?",
+    "description": "Rimuove le assegnazioni del pacchetto da tutte le destinazioni visibili e il pacchetto dalle sessioni attuali. Le revisioni e la cronologia di audit vengono conservate. La rimozione si interrompe se non è possibile eliminare un’assegnazione.",
+    "done": "Pacchetto di competenze rimosso",
+    "incomplete": "Impossibile completare l’elenco delle assegnazioni. Aggiorna e riprova."
   }
 }

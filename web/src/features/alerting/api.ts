@@ -92,10 +92,19 @@ export interface NotifyDestinationRow {
   webhook_host?: string
 }
 
-/** A kind the console can create (Slack, Teams). */
+/** One setting of a kind; a secret one is sealed and never returned. */
+export interface NotifyDestinationField {
+  key: string
+  secret: boolean
+  required: boolean
+  description?: string
+}
+
+/** A kind that can be added (Slack, Teams, webhook, email, Twilio) and its settings. */
 export interface NotifyDestinationKind {
   kind: string
   title: string
+  fields: NotifyDestinationField[]
 }
 
 export interface NotifyDestinationList {

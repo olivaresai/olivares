@@ -15,7 +15,7 @@ test('no Settings link lands on a not-enabled notice on a fresh installation (#4
   await page.locator('#setup-email').fill('admin@example.com')
   await page.locator('#setup-password').fill('correct-horse-battery-staple-42')
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
 
   // A Settings link is a full page load, and the module list arrives with server-info:
   // every check below waits for that read, then for the page's reads to settle.

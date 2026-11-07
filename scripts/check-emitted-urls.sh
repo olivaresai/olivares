@@ -299,19 +299,21 @@ MAX_RECORD_AGE_DAYS=45
 # canon, so literal rows broke at every cut and cost the regression/PR #2187 three review rounds. The rows
 # keep their 0.2 measurements; a cut re-probes and pastes the template row back with the fresh date,
 # and the record itself no longer changes between releases.
+# 2026-11-02 · the executor guide row left the record: the Deployment page was its only emitter and
+# its source now lives in the private overlay, so nothing in this tree emits it.
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
 https://docs.olivares.ai 200 2026-09-24
 https://docs.olivares.ai/cli 200 2026-09-24
 https://docs.olivares.ai/how-to/install-a-license/#3--community--business-in-place 200 2026-10-14
 https://docs.olivares.ai/reference/api-stability/ 200 2026-09-24
 https://docs.olivares.ai/reference/configuration/ 200 2026-09-24
-https://docs.olivares.ai/reference/modules/vii-deploy/#connect-an-executor 200 2026-10-05
 https://github.com/olivaresai/olivares 200 2026-09-24
 https://github.com/olivaresai/olivares#install 200 2026-10-14
 https://github.com/olivaresai/olivares.git 200 2026-09-24
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$ver 404 2026-10-08 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-24 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${RELEASE} 404 2026-10-31 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/blob/main/docs/CLI-RECIPES-BY-OUTCOME.md 200 2026-11-06
 https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/INSTALL.md#installation-qualification 200 2026-10-14

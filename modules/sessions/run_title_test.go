@@ -246,3 +246,55 @@ func TestRunTitleIsShownOnlyToReadersOfTheOutput(t *testing.T) {
 		}
 	}
 }
+
+// Every session is titled from the first words a person sends it, on the engine: a
+// session nobody opened in the console (one a script or another person started) used to
+// stay "tool · folder" because only the console asked for a title. A later input keeps
+// the first title, and a name is never replaced by one.
+func TestRunIsTitledFromItsFirstInput(t *testing.T) {
+	fx := newGrokHTTPFixture(t, "title-first-input", AuthSourceAccountHome)
+	setGrokFixture(t, fx.prof, grokFixture{SessionID: "conv-title-first-input"})
+	runRef := fx.createRun(t)
+	const first = "Refactor the authentication middleware to use the new session store. Then run the tests."
+	want := titleFromMessage(first, titleStyleSentence)
+	if want == "" {
+		t.Fatal("the fixture message makes no title")
+	}
+	title := func() any {
+		return fx.h.do("GET", "/v1/m/sessions/runs/"+runRef, fx.admin, tenantHdr(fx.tenant)).body["title"]
+	}
+	if r := fx.input(first, runRef); r.code != http.StatusAccepted {
+		t.Fatalf("first input = %d %s", r.code, r.raw)
+	}
+	if got := title(); got != want {
+		t.Fatalf("title after the first input = %v, want %q", got, want)
+	}
+	// Accepted means dispatched; a second input needs the first turn to finish.
+	live, ok := fx.m.rt.getLive(fx.tenant, runRef)
+	if !ok {
+		t.Fatal("the run is not live")
+	}
+	session := live.session.(*grokSession)
+	waitFor(t, "the first provider turn to finish", func() bool {
+		session.mu.Lock()
+		defer session.mu.Unlock()
+		return session.promptID == ""
+	})
+	if r := fx.input("Now something else entirely, please.", runRef); r.code != http.StatusAccepted {
+		t.Fatalf("second input = %d %s", r.code, r.raw)
+	}
+	if got := title(); got != want {
+		t.Fatalf("title after a second input = %v, want the first one %q", got, want)
+	}
+
+	named := fx.createRun(t)
+	if r := fx.h.doJSON("PUT", "/v1/m/sessions/runs/"+named+"/name", fx.admin, map[string]any{"name": "migration"}, tenantHdr(fx.tenant)); r.code != http.StatusOK {
+		t.Fatalf("rename = %d %s", r.code, r.raw)
+	}
+	if r := fx.input(first, named); r.code != http.StatusAccepted {
+		t.Fatalf("input to a named run = %d %s", r.code, r.raw)
+	}
+	if got := fx.h.do("GET", "/v1/m/sessions/runs/"+named, fx.admin, tenantHdr(fx.tenant)).body; got["title"] != nil || got["name"] != "migration" {
+		t.Fatalf("a named run = name %v title %v, want its name and no title", got["name"], got["title"])
+	}
+}

@@ -278,6 +278,9 @@ func (a *Authenticator) principalFromToken(ctx context.Context, as store.AuthSco
 	case CommunicationSessionCredentialPurpose:
 		p, ok := communicationSessionPrincipal(t)
 		return p, ok, nil
+	case AgentLaunchCredentialPurpose:
+		p, ok := agentLaunchPrincipal(t)
+		return p, ok, nil
 	case "":
 		// Continue through ordinary token validation below.
 	default:

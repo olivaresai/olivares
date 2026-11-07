@@ -343,9 +343,30 @@ describe('DictateButton', () => {
     expect(await check()).toEqual([])
   })
 
-  it('cannot start while the composer cannot take text', () => {
+  it('cannot start while the composer cannot take text, and says why', () => {
     render(<DictateButton disabled onText={vi.fn()} />)
     expect(button()).toBeDisabled()
+    expect(button()).toHaveAttribute(
+      'title',
+      'Dictation works while the session runs.',
+    )
+  })
+
+  it('names what a press does now: start, or stop while it listens', async () => {
+    const user = userEvent.setup()
+    render(<DictateButton onText={vi.fn()} />)
+    expect(button()).toHaveAttribute(
+      'title',
+      'Dictate. Your voice stays in this browser.',
+    )
+    await user.click(button())
+    await waitFor(() =>
+      expect(button()).toHaveAttribute('aria-pressed', 'true'),
+    )
+    expect(button()).toHaveAttribute(
+      'title',
+      'Listening. Press again or Esc to stop.',
+    )
   })
 })
 

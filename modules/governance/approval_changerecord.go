@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -38,6 +39,12 @@ const (
 	// changeRecordTimeout bounds one read; the connector has its own, this is the ceiling
 	// over it so a hung system cannot hold an approval open.
 	changeRecordTimeout = 10 * time.Second
+	// A dead tenant destination is not read again until its wait passes: the
+	// first refused read waits changeRecordRetryFirst, each refused read after it doubles
+	// the wait up to changeRecordRetryMax. A sweep visits every approval each tick, so one
+	// read per approval per tick would stall every other containment behind it.
+	changeRecordRetryFirst = 30 * time.Second
+	changeRecordRetryMax   = 2 * time.Minute
 
 	codeChangeRecordNotApproved = "change_record_not_approved"
 	codeChangeRecordUnavailable = "change_record_unavailable"
@@ -193,6 +200,71 @@ func changeRecordCovers(want *changeRecordSpec, seen *changeRecordObservation, n
 // errChangeRecordRead rolls a transaction back to say: read this record, then run it again.
 var errChangeRecordRead = errors.New("change record read needed")
 
+// changeRecordEndpoint scopes an outage to the tenant and destination, not the record.
+type changeRecordEndpoint struct {
+	tenant              model.TenantID
+	system, destination string
+}
+
+func endpointForChangeRecord(tenant model.TenantID, spec changeRecordSpec) changeRecordEndpoint {
+	return changeRecordEndpoint{tenant: tenant, system: spec.System, destination: spec.destination()}
+}
+
+// ponytail: an unused destination keeps one entry until it answers or the process
+// restarts. Upgrade: prune entries when destinations are removed.
+type changeRecordOutage struct {
+	retryAt time.Time
+	wait    time.Duration
+	logged  *atomic.Bool
+}
+
+func unavailableChangeRecord(spec changeRecordSpec, why string) error {
+	return approvalDecisionError{Status: http.StatusServiceUnavailable, Code: codeChangeRecordUnavailable,
+		Message: fmt.Sprintf("Change record %s could not be checked because %s, so nothing is approved under it until it can be.", spec.Key, why)}
+}
+
+// changeRecordHeld returns the retry time while a destination is held.
+func (m *Module) changeRecordHeld(key changeRecordEndpoint, now model.Timestamp) time.Time {
+	if v, down := m.changeRecordOutages.Load(key); down && now.Time().Before(v.(changeRecordOutage).retryAt) {
+		return v.(changeRecordOutage).retryAt
+	}
+	return time.Time{}
+}
+
+func (m *Module) noteChangeRecordOutage(key changeRecordEndpoint, now model.Timestamp) {
+	for {
+		prev, down := m.changeRecordOutages.Load(key)
+		next := changeRecordOutage{wait: changeRecordRetryFirst, logged: &atomic.Bool{}}
+		if down {
+			next = prev.(changeRecordOutage)
+			next.wait = min(next.wait*2, changeRecordRetryMax)
+		}
+		next.retryAt = now.Time().Add(next.wait)
+		if !down {
+			if _, loaded := m.changeRecordOutages.LoadOrStore(key, next); !loaded {
+				return
+			}
+		} else if m.changeRecordOutages.CompareAndSwap(key, prev, next) {
+			return
+		}
+	}
+}
+
+// Claim the ledger entry once, giving the claim back if the write fails.
+func (m *Module) recordChangeRecordOutage(ctx context.Context, data approvalData, mc api.ModuleContext, id model.ID, spec changeRecordSpec, refusal error) {
+	key := endpointForChangeRecord(mc.Tenant, spec)
+	v, down := m.changeRecordOutages.Load(key)
+	if !down {
+		return
+	}
+	logged := v.(changeRecordOutage).logged
+	if logged.CompareAndSwap(false, true) {
+		if !m.recordChangeRecordRefusal(ctx, data, mc, id, "spend", spec, nil, refusal) {
+			logged.Store(false)
+		}
+	}
+}
+
 // verifyChangeRecord reads the record and answers whether the change may proceed now.
 // It returns what it saw whenever it saw anything, so a refusal can be recorded
 // (recordChangeRecordRefusal), and whether a refusal is final. A state that does not allow the change and a window that
@@ -203,28 +275,27 @@ var errChangeRecordRead = errors.New("change record read needed")
 // approved on a record that cannot be checked. The connector's own error stays in the
 // log; it can name a host.
 func (m *Module) verifyChangeRecord(ctx context.Context, tenant model.TenantID, spec changeRecordSpec) (seen *changeRecordObservation, final bool, err error) {
-	unavailable := func(why string) error {
-		return approvalDecisionError{Status: http.StatusServiceUnavailable, Code: codeChangeRecordUnavailable,
-			Message: fmt.Sprintf("Change record %s could not be checked because %s, so nothing is approved under it until it can be.", spec.Key, why)}
-	}
 	refuse := func(why string) error {
 		return approvalDecisionError{Status: http.StatusConflict, Code: codeChangeRecordNotApproved,
 			Message: fmt.Sprintf("Change record %s %s.", spec.Key, why)}
 	}
 	if m.changeRecords == nil {
 		m.warnf("governance: a change-record policy cannot be checked, this deployment wires no reader", "system", spec.System)
-		return nil, false, unavailable("this deployment cannot read " + spec.System + " change records")
+		return nil, false, unavailableChangeRecord(spec, "this deployment cannot read "+spec.System+" change records")
 	}
 	rctx, cancel := context.WithTimeout(ctx, changeRecordTimeout)
 	defer cancel()
 	rec, rerr := m.changeRecords(rctx, tenant, spec.System, spec.destination(), spec.Key)
 	at := m.clock.Now()
+	if rerr == nil || errors.Is(rerr, ErrChangeRecordNotFound) {
+		m.changeRecordOutages.Delete(endpointForChangeRecord(tenant, spec))
+	}
 	if errors.Is(rerr, ErrChangeRecordNotFound) {
 		return &changeRecordObservation{spec: spec, state: "not found", observedAt: at}, false, refuse("was not found in " + spec.System)
 	}
 	if rerr != nil {
 		m.warnf("governance: change record could not be read", "tenant", tenant.String(), "system", spec.System, "destination", spec.destination(), "key", spec.Key, "err", rerr)
-		return nil, false, unavailable("the " + spec.System + " destination did not answer")
+		return nil, false, unavailableChangeRecord(spec, "the "+spec.System+" destination did not answer")
 	}
 	seen = &changeRecordObservation{spec: spec, state: boundedText(rec.State), observedAt: at, start: rec.Start, end: rec.End}
 	// The state is compared as the system returned it; the printable part is only what a
@@ -290,7 +361,7 @@ func (m *Module) revokeForChangeRecord(ctx context.Context, data approvalData, m
 			resp.Status = eff
 			return nil
 		}
-		pols, err := loadApprovalPolicies(ctx, sc)
+		pols, err := m.approvalPolicies(ctx, sc, approvalPolicySubject(rec))
 		if err != nil {
 			return err
 		}
@@ -371,7 +442,7 @@ func (a *EngineApprovals) StillHolds(ctx context.Context, tenant model.TenantID,
 			if err != nil {
 				return err
 			}
-			pols, err := loadApprovalPolicies(ctx, sc)
+			pols, err := a.module.approvalPolicies(ctx, sc, approvalPolicySubject(rec))
 			if err != nil {
 				return err
 			}

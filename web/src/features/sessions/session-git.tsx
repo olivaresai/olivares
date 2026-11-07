@@ -18,12 +18,21 @@ import type {
   RunGitAction,
   RunGitRequest,
 } from '@/features/agentops/types'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { currentControlFence } from '@/features/agentops/work-fence'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import './i18n'
 
-export function SessionGit({ run }: { run: RunDTO }) {
+/** The session folder's Git. `init` is the header's form: only an Initialize Git button,
+ * shown where the folder is not a repository, with the panel's read and write path. */
+export function SessionGit({
+  run,
+  variant = 'panel',
+}: {
+  run: RunDTO
+  variant?: 'panel' | 'init'
+}) {
   const boundary = useAuthBoundary()
   // Discard a draft and pending UI when the run or authenticated actor changes.
   return (
@@ -31,6 +40,7 @@ export function SessionGit({ run }: { run: RunDTO }) {
       key={`${boundary.epoch}:${run.run_ref}`}
       run={run}
       boundary={boundary}
+      variant={variant}
     />
   )
 }
@@ -38,9 +48,11 @@ export function SessionGit({ run }: { run: RunDTO }) {
 function SessionGitPanel({
   run,
   boundary,
+  variant,
 }: {
   run: RunDTO
   boundary: AuthBoundary
+  variant: 'panel' | 'init'
 }) {
   const { t } = useTranslation('sessions')
   const { activeTenant, can } = useAuth()
@@ -50,17 +62,16 @@ function SessionGitPanel({
   const [message, setMessage] = useState('')
   const [branchName, setBranchName] = useState('')
   const [creating, setCreating] = useState(false)
-  const key = [
-    ...agentOpsKeys.boundaryScope(activeTenant, boundary.epoch),
-    'git',
-    run.run_ref,
-  ]
+  const key = agentOpsKeys.runGit(activeTenant, boundary.epoch, run.run_ref)
   const status = useQuery({
     queryKey: key,
     queryFn: ({ signal }) => agentOpsApi.gitStatus(run.run_ref, { signal }),
     enabled: !!activeTenant && !!run.workspace_path && run.state !== 'cleaned',
+    // The header's button reads once; the panel follows a live session.
     refetchInterval:
-      run.state === 'running' || run.state === 'idle' ? 5_000 : false,
+      variant === 'panel' && (run.state === 'running' || run.state === 'idle')
+        ? 5_000
+        : false,
     retry: false,
   })
   const mutation = useMutation({
@@ -75,7 +86,12 @@ function SessionGitPanel({
       attempt: StepUpAttempt
     }) => {
       attempt.dispatchGuard()
-      if (!can('sessions:run:write') || !status.data?.writable)
+      // A folder with no repository has no status to say it is writable; the engine
+      // refuses an init the folder does not permit.
+      if (
+        !can('sessions:run:write') ||
+        (action !== 'init' && !status.data?.writable)
+      )
         throw new Error(t('git.readOnly'))
       const options = {
         tenant: activeTenant,
@@ -115,6 +131,22 @@ function SessionGitPanel({
   const act = (action: RunGitAction, body: RunGitRequest) =>
     mutation.mutate({ action, body, attempt: captureOwner().begin() })
   if (!run.workspace_path || run.state === 'cleaned') return null
+  // The engine answers 404 for a session folder that is not a Git repository.
+  const noRepository =
+    status.error instanceof ApiError && status.error.status === 404
+  const initButton =
+    noRepository && can('sessions:run:write') ? (
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={mutation.isPending}
+        onClick={() => act('init', {})}
+      >
+        <GitBranch className="size-3.5" aria-hidden="true" />
+        {t('git.init')}
+      </Button>
+    ) : null
+  if (variant === 'init') return initButton
   const data = status.data
   const staged =
     data?.files.some((f) => f.index !== ' ' && f.index !== '?') ?? false
@@ -146,7 +178,14 @@ function SessionGitPanel({
           {t('git.loading')}
         </p>
       ) : null}
-      {status.isError ? (
+      {noRepository ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-caption text-muted-foreground">
+            {t('git.noRepository')}
+          </p>
+          {initButton}
+        </div>
+      ) : status.isError ? (
         <p role="alert" className="text-caption text-destructive">
           {status.error.message}
         </p>

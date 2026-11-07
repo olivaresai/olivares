@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { Spinner } from '@/components/ui/spinner'
@@ -60,7 +61,9 @@ export function PrivilegedLoginTab() {
       <AssuranceStatusSection />
       <PasskeysManagementSection />
       {cards.map(({ id, Component }) => (
-        <Component key={id} />
+        <PanelSlot key={id}>
+          <Component />
+        </PanelSlot>
       ))}
       <AuthorityReferences area="login" keys={['webauthn']} />
     </div>
@@ -92,7 +95,7 @@ export function AssuranceStatusSection() {
             <span className="flex flex-wrap gap-1">
               {amr.map((m) => (
                 <Badge key={m} variant="outline">
-                  {m}
+                  {t(`login.methodNames.${m}`, { defaultValue: m })}
                 </Badge>
               ))}
             </span>

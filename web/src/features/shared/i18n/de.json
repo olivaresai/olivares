@@ -35,8 +35,7 @@
     "savedViewRejected": "{{count}} in „{{name}}“ gespeicherter Wert konnte nicht verwendet werden ({{keys}}); die Ansicht hat auf ihren Standard zurückgesetzt.",
     "savedViewRejected_one": "{{count}} in „{{name}}“ gespeicherter Wert konnte nicht verwendet werden ({{keys}}); die Ansicht hat auf ihren Standard zurückgesetzt.",
     "savedViewRejected_other": "{{count}} in „{{name}}“ gespeicherte Werte konnten nicht verwendet werden ({{keys}}); die Ansicht hat auf ihre Standardwerte zurückgesetzt.",
-    "thisSavedView": "diese gespeicherte Ansicht",
-    "dismiss": "Schliessen"
+    "thisSavedView": "diese gespeicherte Ansicht"
   },
   "workspaceRequired": {
     "use": "{{name}} verwenden",

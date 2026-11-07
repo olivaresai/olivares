@@ -145,7 +145,11 @@ describe('SecretsTab', () => {
   it('is superadmin-only', async () => {
     authState.isSuperadmin = false
     wrap(<SecretsTab />)
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     expect(api.listSecrets).not.toHaveBeenCalled()
   })
 

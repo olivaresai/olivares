@@ -33,6 +33,8 @@ export interface AvailableRow {
   providerKind?: string
   /** The tool's default model: what a launch with no model named runs. */
   isDefault?: boolean
+  /** The exact id a Claude Code selector launches on, which its sessions record. */
+  launchModel?: string
   /** The live sessions running this model. */
   sessions: RunDTO[]
 }
@@ -110,6 +112,7 @@ function toolRows(
             state: 'ready',
             viaProvider: group.viaProvider || undefined,
             isDefault,
+            launchModel: m.launch_model,
             sessions: [],
           })
         }
@@ -308,8 +311,14 @@ function rowOf(
         r.model !== '' &&
         r.owner === run.provider_driver,
     )
+    // A Claude Code selector (`sonnet`) records the exact id it launches on
+    // (`claude-sonnet-5-5`). `default` and a named selector can share that id: the named
+    // row is the model's own, the default row takes only a launch that named no model.
+    const launched = ownRows.filter((r) => r.launchModel?.toLowerCase() === ref)
     const own =
       ownRows.find((r) => r.model.toLowerCase() === ref) ??
+      launched.find((r) => !r.isDefault) ??
+      launched[0] ??
       // A list the tool took from a provider names the bare model; the run names it under
       // that provider (`olivares_ollama/<model>`).
       ownRows.find(

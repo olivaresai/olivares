@@ -146,6 +146,34 @@ describe('the model list', () => {
     )
   })
 
+  it("names Claude Code's own default once, in the console's words", async () => {
+    vi.mocked(agentOpsApi.profileModels).mockResolvedValue(
+      catalog([
+        model('default', {
+          display_name: 'Default (recommended)',
+          is_default: true,
+        }),
+        model('opus', { display_name: 'Opus 5.5' }),
+      ]),
+    )
+    const user = userEvent.setup()
+    wrap()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
+        /^Default \(recommended\)$/,
+      ),
+    )
+    const list = await openModels(user)
+    await waitFor(() =>
+      expect(within(list).getByText('Opus 5.5')).toBeInTheDocument(),
+    )
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Default (recommended)', 'Opus 5.5'])
+  })
+
   it('searches the list', async () => {
     const user = userEvent.setup()
     wrap()
@@ -273,12 +301,12 @@ describe('the effort', () => {
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
     ).toEqual([
-      'Model default (medium)',
-      'low',
-      'medium',
-      'high',
-      'xhigh',
-      'max',
+      'Model default (Medium)',
+      'Low',
+      'Medium',
+      'High',
+      'Extra high',
+      'Max',
     ])
   })
 
@@ -293,7 +321,7 @@ describe('the effort', () => {
     await user.click(screen.getByLabelText('Effort'))
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual(['Model default', 'low', 'high'])
+    ).toEqual(['Model default', 'Low', 'High'])
   })
 
   it('offers a Claude launch only the levels it accepts, so no choice ends in a 400', async () => {
@@ -304,7 +332,7 @@ describe('the effort', () => {
     const levels = (await screen.findAllByRole('option')).map(
       (o) => o.textContent,
     )
-    expect(levels).toEqual(['Model default', 'low', 'medium', 'high'])
+    expect(levels).toEqual(['Model default', 'Low', 'Medium', 'High'])
     expect(levels).not.toContain('ultra')
   })
 
@@ -324,7 +352,7 @@ describe('the effort', () => {
     await user.click(screen.getByLabelText('Effort'))
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual(['Model default', 'minimal', 'low', 'ultra'])
+    ).toEqual(['Model default', 'minimal', 'Low', 'ultra'])
   })
 })
 
@@ -462,6 +490,6 @@ describe('a tool that cannot list its models', () => {
       ),
     )
     // The failure is said, and the choice made is still the one shown and kept.
-    expect(screen.getByLabelText('Effort')).toHaveTextContent('high')
+    expect(screen.getByLabelText('Effort')).toHaveTextContent('High')
   })
 })

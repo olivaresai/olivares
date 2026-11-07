@@ -169,6 +169,9 @@ func (a *Authenticator) auditLoginBlocked(ctx context.Context, actor, ip, reason
 // provisioning. Session issuance requires it; an absent attempt cannot mint a session.
 type loginAttempt struct {
 	ip string
+	// idpSession is the issuer-qualified OIDC sid the identity provider named for
+	// this sign-in; the minted session carries it for a back-channel logout.
+	idpSession string
 }
 
 func (a *Authenticator) beginLogin(ctx context.Context, ip string) (*loginAttempt, error) {

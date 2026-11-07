@@ -21,10 +21,14 @@ import {
 } from './fixtures'
 import './i18n'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 describe('BoundaryBanner', () => {
   it('renders the honest Claude-API-only note naming the excluded providers', () => {
     renderIntel(<BoundaryBanner excludes={summaryFixture.boundary.excludes} />)
-    expect(screen.getByText(/only Claude API traffic/i)).toBeInTheDocument()
+    expect(screen.getByText(/Claude API usage only/i)).toBeInTheDocument()
     expect(screen.getByText(/Amazon Bedrock/)).toBeInTheDocument()
     expect(screen.getByText(/Vertex AI/)).toBeInTheDocument()
   })

@@ -1,6 +1,6 @@
 {
-  "title": "Plateformes et cycle de vie",
-  "description": "La matrice de déploiement multi-surface et le cycle de vie des modèles par plateforme pour le parc Claude — posture de conformité par surface et échéances de retrait divergentes. Référence servie par le moteur, jamais recalculée.",
+  "title": "Plateformes",
+  "description": "Où Claude s’exécute et quand chaque modèle est retiré.",
   "tabs": {
     "surfaces": "Surfaces et conformité",
     "lifecycle": "Cycle de vie des modèles"
@@ -13,7 +13,7 @@
   },
   "surfaces": {
     "title": "Surfaces de déploiement",
-    "description": "Les six surfaces Claude modélisées (ANT2-01/17). Chacune diffère par son URL de base, son authentification, sa forme d’identifiant de modèle, sa facturation, sa résidence et sa posture de conformité — elles ne sont pas interchangeables.",
+    "description": "Les six surfaces Claude modélisées. Chacune diffère par son URL de base, son authentification, sa forme d’identifiant de modèle, sa facturation, sa résidence et sa posture de conformité — elles ne sont pas interchangeables.",
     "matrixTitle": "Matrice des attributs de surface",
     "matrixSummary": "Six surfaces de déploiement comparées selon l’opérateur, le point de terminaison, l’authentification, la forme d’identifiant de modèle, la prise en charge de l’API, la facturation, HIPAA, ZDR et la résidence.",
     "unmodeled": "Surface non modélisée — aucune matrice d’attributs.",
@@ -60,7 +60,7 @@
   },
   "lifecycle": {
     "title": "Cycle de vie des modèles par plateforme",
-    "description": "Le retrait des modèles se fait par plateforme, et non globalement (ANT2-03). Les surfaces opérées par Anthropic retirent un modèle à une date différente de Bedrock et Vertex — un unique indicateur « retiré » donnerait une fausse échéance de migration sur la moitié du parc.",
+    "description": "Le retrait des modèles se fait par plateforme, et non globalement. Les surfaces opérées par Anthropic retirent un modèle à une date différente de Bedrock et Vertex — un unique indicateur « retiré » donnerait une fausse échéance de migration sur la moitié du parc.",
     "datePending": "date non publiée / à confirmer",
     "noSuccessor": "Aucun successeur déclaré",
     "noSuccessorHint": "L’autorité n’a désigné aucun modèle de remplacement pour cette famille. Aucun n’est déduit.",
@@ -75,7 +75,7 @@
     "paramDeprecation": {
       "title": "Avis préalable d’obsolescence de paramètre",
       "badge": "Informatif",
-      "body": "{{affected}} rejettent un {{params}} non par défaut avec un HTTP {{status}}. Il s’agit d’une obsolescence d’Anthropic (ANT2-03), ni d’un défaut produit ni d’une erreur corrigible — le plan d’inférence retient ces paramètres à titre d’avis préalable.",
+      "body": "{{affected}} rejettent un {{params}} non par défaut avec un HTTP {{status}}. Il s’agit d’une obsolescence d’Anthropic, ni d’un défaut produit ni d’une erreur corrigible — Olivares retient ces paramètres à titre d’avis préalable.",
       "paramsJoin": ", "
     },
     "notes": {
@@ -90,11 +90,11 @@
   "empty": {
     "lifecycle": {
       "title": "Aucune échéance de retrait de modèle déclarée",
-      "description": "La référence compilée du cycle de vie Claude du moteur doit fournir ces échéances ; ni l’activité du locataire ni les saisies dans la console ne les alimentent."
+      "description": "La référence compilée du cycle de vie Claude du moteur doit fournir ces échéances ; ni votre activité ni les saisies dans la console ne les alimentent."
     },
     "surface": {
       "title": "Aucune surface de déploiement déclarée",
-      "description": "La référence compilée des surfaces Claude du moteur doit fournir ces lignes ; ni l’activité du locataire ni les saisies dans la console ne les alimentent."
+      "description": "La référence compilée des surfaces Claude du moteur doit fournir ces lignes ; ni votre activité ni les saisies dans la console ne les alimentent."
     }
   },
   "effectiveState": {

@@ -1,5 +1,5 @@
 {
-  "title": "Copia de seguridad y restauración",
+  "title": "Copias de seguridad",
   "description": "Gestiona instantáneas de recuperación ante desastres de Olivares AI.",
   "tabs": {
     "backups": "Copias de seguridad",
@@ -30,6 +30,7 @@
       "date": "Fecha",
       "filename": "Nombre de archivo",
       "size": "Tamaño",
+      "duration": "Duración",
       "engine": "Motor",
       "tenants": "Tenants",
       "notes": "Notas"
@@ -88,6 +89,9 @@
     "freeSpace": "Espacio libre en el destino",
     "notAvailable": "No disponible",
     "overdue": "Objetivo de recuperación superado",
+    "rtoMinutes": "Objetivo de tiempo de recuperación (minutos)",
+    "rtoExceeded": "La última prueba de restauración tardó más que el objetivo de {{minutes}} minutos",
+    "restoreTook": "La prueba de restauración tardó {{seconds}} s",
     "age": "Hace {{hours}} horas",
     "offsiteLockMissing": "El bucket {{bucket}} no bloquea las copias nuevas en modo `COMPLIANCE`, así que la credencial de este servidor podría borrarlas. Activa S3 Object Lock con una retención predeterminada `COMPLIANCE` y poda con otra credencial.",
     "offsiteLockUnknown": "No se pudo leer el Object Lock del bucket {{bucket}}, así que estas copias pueden no estar protegidas contra el borrado."
@@ -126,6 +130,14 @@
     "confirmLabel": "Aprobar y restaurar ahora"
   },
   "restore": {
+    "postgres": {
+      "description": "Usa un destino independiente y vacío de db init y referencias file: o env: del servidor. Otro administrador debe aprobarlo.",
+      "dsn_ref": "Referencia de conexión de la aplicación",
+      "owner_dsn_ref": "Referencia del propietario (opcional)",
+      "admin_dsn_ref": "Referencia del administrador de copias",
+      "scratch_dsn_ref": "Referencia de mantenimiento temporal",
+      "confirm": "Restaura solo el destino vacío aprobado. Tras verificar, configura el motor con el directorio recuperado y las conexiones del destino y reinícialo."
+    },
     "notAuthorized": "No autorizado",
     "uploadFailed": "Error al subir",
     "started": "Restauración iniciada",
@@ -166,6 +178,8 @@
     "tenants": "Tenants",
     "keys": "Claves selladas",
     "empty": "Ninguna",
+    "notIncluded": "No incluido en esta copia",
+    "notIncludedHint": "Estas rutas no se copian. Haz tu propia copia de ellas.",
     "loadFailed": "No se pudo cargar el detalle de la copia."
   },
   "empty": {

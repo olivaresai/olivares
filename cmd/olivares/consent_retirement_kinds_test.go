@@ -246,6 +246,12 @@ func attemptRecord(binding, targets string) model.Record {
 // retirementSeeders maps every counted declaration, as "<kind>.<column>", to the
 // row that exercises it and what the declared module's step must do with it.
 var retirementSeeders = map[string]retirementSeeder{
+	"sessions.template.owner": {"sessions.template", retireKeeps, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.template", model.Record{
+			"name": "owned-" + s.id.String(), "description": "", "author": "system:seeded",
+			"owner": "user:" + s.id.String(), "builtin": false, "body": "{}",
+		}, s.id)
+	}},
 	"governance.scoped_grant.subject_ref": {"governance.scoped_grant", retireDeletes, func(e *consentEstate, s retirementSubject) model.ID {
 		return e.seedFencedWith(e.tT, "governance.scoped_grant", model.Record{
 			"subject_kind": "user", "subject_ref": s.id.String(), "grant_role": "editor", "role_custom": false,

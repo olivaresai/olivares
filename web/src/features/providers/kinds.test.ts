@@ -10,7 +10,11 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import engineTools from '@/features/agentops/engine-tools.fixture.json'
 import { setEngineTools } from '@/features/agentops/engine-tools'
-import { LOCAL_HTTP_KINDS, recordServesDriver } from './kinds'
+import {
+  LOCAL_HTTP_KINDS,
+  OPENCODE_PRESET_ENDPOINTS,
+  recordServesDriver,
+} from './kinds'
 
 const KINDS = [
   'anthropic',
@@ -57,6 +61,17 @@ describe("the engine's rule for which records a tool runs on", () => {
     expect(recordServesDriver('anthropic', undefined, ' Claude ')).toBe(true)
   })
 
+  // The engine lists the presets Codex (Responses API only) is refused for; a preset that
+  // serves Responses and a record with no preset are offered.
+  it('does not offer Codex a preset the engine refuses for it', () => {
+    const openai = (url: string, service?: string) =>
+      recordServesDriver('openai_compatible', url, 'codex', service)
+    expect(openai('https://api.deepseek.com', 'deepseek')).toBe(false)
+    expect(openai('https://api.z.ai/api/paas/v4', 'zai')).toBe(false)
+    expect(openai('https://openrouter.ai/api/v1', 'openrouter')).toBe(true)
+    expect(openai('https://gateway.example/v1')).toBe(true)
+  })
+
   // driverfacts.LocalHTTPEndpoint: OpenCode is held to an OpenAI-compatible server
   // only at a local http address (vLLM, llama.cpp), never to a gateway.
   it.each([
@@ -93,6 +108,9 @@ describe("the engine's rule for which records a tool runs on", () => {
         key: 'hermes',
         name: 'Hermes Agent',
         name_stem: 'hermes',
+        vendor: 'nous',
+        monogram: 'HA',
+        color: '#888892',
         session: true,
         bindings: [{ kind: 'gemini', egress: 'vendor-default-only' }],
       },
@@ -110,6 +128,9 @@ describe("the engine's rule for which records a tool runs on", () => {
         key: 'claude',
         name: 'Claude Code',
         name_stem: 'claude',
+        vendor: 'anthropic',
+        monogram: 'CC',
+        color: '#CA7152',
         session: true,
         bindings: [{ kind: 'anthropic', egress: 'some-future-rule' }],
       },
@@ -122,6 +143,36 @@ describe("the engine's rule for which records a tool runs on", () => {
       recordServesDriver(
         'openai_compatible',
         'http://127.0.0.1:8080/v1',
+        'gemini-cli',
+      ),
+    ).toBe(false)
+  })
+
+  // #2985: OpenCode ships a native provider for each of these vendors at their own
+  // documented address; a BYO key record at exactly that address is held to it.
+  it.each(OPENCODE_PRESET_ENDPOINTS)(
+    'OpenCode on openai_compatible at the preset catalog address %s',
+    (baseURL) => {
+      expect(recordServesDriver('openai_compatible', baseURL, 'opencode')).toBe(
+        true,
+      )
+    },
+  )
+
+  // The governed DeepSeek row is API-only; an untagged record at its address still runs.
+  it('never offers the governed DeepSeek preset record to OpenCode', () => {
+    const base = 'https://api.deepseek.com'
+    expect(
+      recordServesDriver('openai_compatible', base, 'opencode', 'deepseek'),
+    ).toBe(false)
+    expect(recordServesDriver('openai_compatible', base, 'opencode')).toBe(true)
+  })
+
+  it('never holds another driver to a preset catalog address it was not given', () => {
+    expect(
+      recordServesDriver(
+        'openai_compatible',
+        OPENCODE_PRESET_ENDPOINTS[0],
         'gemini-cli',
       ),
     ).toBe(false)
@@ -162,4 +213,25 @@ it("LOCAL_HTTP_KINDS is the engine's plain-http kind list", () => {
   ]
   expect(engine.length).toBeGreaterThan(0)
   expect([...engine].sort()).toEqual([...LOCAL_HTTP_KINDS].sort())
+})
+
+// OPENCODE_PRESET_ENDPOINTS is every openai_compatible row's own address, read from the
+// preset catalog's source (connectors/modelprovider/presets.go), so a row added, moved
+// or renamed there fails here instead of silently falling out of sync.
+it('OPENCODE_PRESET_ENDPOINTS is the catalog openai_compatible endpoint list', () => {
+  const go = readFileSync('../connectors/modelprovider/presets.go', 'utf8')
+  const consts = Object.fromEntries(
+    [...go.matchAll(/(\w+)\s*=\s*"([^"]+)"/g)].map((m) => [m[1], m[2]]),
+  )
+  const rows = [
+    ...go.matchAll(
+      /Ref:\s*(?:"[^"]+"|\w+),\s*Title:\s*"[^"]*",(?:\s*(?:Monogram|Color):\s*"[^"]*",)*\s*Kind:\s*KindOpenAICompatible,\s*BaseURL:\s*(?:"([^"]+)"|(\w+))/g,
+    ),
+  ]
+  expect(rows.length, 'no openai_compatible row in presets.go').toBeGreaterThan(
+    0,
+  )
+  const engine = rows.map((m) => m[1] ?? consts[m[2]])
+  expect(engine.every((v): v is string => typeof v === 'string')).toBe(true)
+  expect([...engine].sort()).toEqual([...OPENCODE_PRESET_ENDPOINTS].sort())
 })

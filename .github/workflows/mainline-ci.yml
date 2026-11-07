@@ -56,8 +56,8 @@ jobs:
     # job does not need classify and keeps running on every push.
     #
     # A repository that sets OLIVARES_DEV_CI to 'true' (the opt-in pr-ci.yml reads) is selected
-    # as well. Without it a development repository ran this workflow as one job, `secrets`, and
-    # reported success with the functional shards skipped.
+    # as well. Without it a development repository runs this workflow as one job, `secrets`, whose
+    # last step ends that run red: a run with the functional shards skipped never reports success.
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
     # CI_RUNNER_LIGHT FIRST (2026-08-01). This job gates every other one through
     # `needs`, so a run cannot start while it queues — and measured today, it was
@@ -2197,6 +2197,11 @@ jobs:
             echo "DATABASE_EXPORTER_URL=postgres://cloud_cp_exporter_ro:${PW_exporter}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
             echo "DATABASE_IDEMPOTENCY_URL=postgres://cloud_cp_webhook_idempotency_ro:${PW_webhook_idempotency}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
           } >> "$GITHUB_ENV"
+      - name: Install OpenSSH tools for real SFTP tests
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends openssh-client openssh-sftp-server
       - name: the runner allows the session boundary's user and network namespaces
         # Every shard can start a bound session, which fails closed where the host refuses
         # the namespaces (SECURITY.md, Requirements). Same step as pr-ci.yml.
@@ -3376,6 +3381,11 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: bash scripts/ci-postgres-service.sh provision
+      - name: Install OpenSSH tools for real SFTP tests
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends openssh-client openssh-sftp-server
       - name: the runner allows the session boundary's user and network namespaces
         # This leg races the boundary reproducers, which fail closed where the host refuses
         # the namespaces (SECURITY.md, Requirements). Same step as pr-ci.yml.
@@ -3902,6 +3912,8 @@ jobs:
       # solo para invocarlos: menos piezas que puedan fallar por su cuenta en el runner.
       - name: axe-core WCAG 2.2 A+AA over both themes
         id: a11y-gate
+        env:
+          AT_HOSTILE_ACCENT: trust
         # GUARDA DE PASO, y no es adorno: `lint:ci-timeout-arithmetic` cuenta cuantos jobs con techo
         # la tienen (18 de 23 al escribir esto) porque un techo de JOB se reporta como `cancelled`,
         # se lee como flake y cancela los pasos siguientes sin decir cual murio — asi estuvo `web`
@@ -5048,6 +5060,14 @@ jobs:
         uses: ./.github/actions/pr-failure-report
         with:
           steps-json: ${{ toJSON(steps) }}
+      # Where classify is not selected this scan is the whole run: end it red, not green, so a skipped
+      # suite is never read as a passed one.
+      - name: the suite behind classify ran in this repository
+        if: ${{ !(github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true') }}
+        timeout-minutes: 1
+        run: |
+          echo "::error::mainline-ci ran only its secrets scan: classify and every job behind it are not selected in this repository (set OLIVARES_DEV_CI to 'true' to run them)."
+          exit 1
 
   # Source-level SAST (E1): gosec over every module, blocking only the curated
   # high-signal rules (injection, SSRF, weak crypto, TLS misconfig). Needs gosec, so it

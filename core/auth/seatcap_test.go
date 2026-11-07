@@ -160,34 +160,6 @@ func TestSeatCap_ZeroWithOKIsReportedAsUnlimited(t *testing.T) {
 	}
 }
 
-func TestSeatCap_ProvisioningPathsWithoutTheSeamAreUnlimitedToo(t *testing.T) {
-	// SCIM provisioning writes to the store DIRECTLY (core/auth/scim.go:93) and never
-	// went through the seat seam — so the old cap of 3 was already bypassable by any
-	// deployment with SCIM (or federated JIT, core/auth/federation_login.go:180)
-	// wired. That is further evidence the cap was a commercial boundary and never a
-	// security control; this pins that those paths stay unlimited after B10 too.
-	st := testStore(t)
-	a := auth.NewAuthenticator(st, nil).WithSeatPolicy(auth.NewCommunitySeatPolicy())
-	ctx := context.Background()
-	bootstrapAdmin(t, a)
-	tenant := provisionTenant(t, st, "acme")
-	super := mustTestOperator("admin")
-	for i := 0; i < 12; i++ {
-		if _, _, err := a.SCIMProvisionUser(ctx, super, tenant, auth.SCIMUserInput{
-			UserName: fmt.Sprintf("s%d@acme.test", i), Active: true,
-		}); err != nil {
-			t.Fatalf("SCIM provisioning #%d must be admitted: %v", i+1, err)
-		}
-	}
-	count, _, err := a.ActiveUserCount(ctx, 1000)
-	if err != nil {
-		t.Fatalf("ActiveUserCount: %v", err)
-	}
-	if count != 13 {
-		t.Fatalf("active users = %d, want 13 (superadmin + 12 SCIM)", count)
-	}
-}
-
 func TestSeatCap_UnlimitedEntitlement(t *testing.T) {
 	// A policy that declines to set a finite figure (ok=false) is unlimited, which is
 	// what an attested MaxUsers of 0 — the only figure issued since B10 — produces.

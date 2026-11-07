@@ -1,6 +1,6 @@
 {
   "title": "Operazioni sui modelli",
-  "subtitle": "Governa i modelli di tua proprietà, l'ammissione dei modelli firmati e i deployment di inferenza locale.",
+  "subtitle": "I tuoi modelli e dove vengono eseguiti.",
   "tabs": {
     "owned": "Modelli di proprietà",
     "admission": "Ammissione",
@@ -120,7 +120,7 @@
   },
   "policy": {
     "title": "Policy di ammissione",
-    "description": "La policy di trust del tenant per l'ammissione dei modelli firmati. Il metodo di firma è derivato da ciò che configuri.",
+    "description": "La policy di trust dell'organizzazione per l'ammissione dei modelli firmati. Il metodo di firma è derivato da ciò che configuri.",
     "edit": "Modifica policy",
     "editTitle": "Modifica policy di ammissione",
     "editBody": "Definisci i trust anchor. Il salvataggio è atomico; il motore resta l'autorità.",
@@ -285,14 +285,14 @@
   },
   "finetune": {
     "title": "Job di fine-tuning",
-    "description": "Record dei job di fine-tuning e delle versioni che hanno prodotto. Il control plane non addestra mai un modello né conserva pesi.",
+    "description": "Record dei job di fine-tuning e delle versioni che hanno prodotto. Olivares non addestra mai un modello né conserva pesi.",
     "new": "Nuovo record di job",
     "search": "Cerca job…",
     "created": "Job registrato.",
     "updated": "Job aggiornato.",
     "newTitle": "Registra un job di fine-tuning",
     "editTitle": "Aggiorna job di fine-tuning",
-    "formBody": "Registra lo stato di un job e la versione che ha prodotto. È un record di inventario: il control plane non esegue addestramenti.",
+    "formBody": "Registra lo stato di un job e la versione che ha prodotto. È un record di inventario: Olivares non esegue addestramenti.",
     "trackBanner": "Qui si registra il lavoro di fine-tuning eseguito altrove. Olivares non avvia, non annulla né esegue addestramenti e non conserva pesi né contenuti di dataset.",
     "columns": {
       "name": "Nome",
@@ -405,7 +405,7 @@
     },
     "finetune": {
       "title": "Ancora nessun record di job di fine-tuning",
-      "description": "Registra un job di fine-tuning eseguito fuori da Olivares per tracciarne stato, lineage e versione di modello prodotta; il control plane non esegue addestramenti."
+      "description": "Registra un job di fine-tuning eseguito fuori da Olivares per tracciarne stato, lineage e versione di modello prodotta; Olivares non esegue addestramenti."
     },
     "modelEvidence": {
       "title": "Ancora nessun sigillo AIBOM registrato",

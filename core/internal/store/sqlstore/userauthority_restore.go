@@ -91,7 +91,10 @@ func RestorePostgresUserAuthorityPrivileges(ctx context.Context, cfg store.Confi
 			return err
 		}
 		witnesses := directoryActivationWitnesses{}
-		defer witnesses.close()
+		// close has a value receiver: a plain `defer witnesses.close()` would copy
+		// the struct now, before the app witness below is assigned, and leave that
+		// transaction open on the application database.
+		defer func() { witnesses.close() }()
 		if ownerDB != appDB {
 			witnesses.app, err = appDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 			if err != nil {

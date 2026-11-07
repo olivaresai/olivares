@@ -112,6 +112,10 @@ type FederatedIdentity struct {
 	EmailVerified bool
 	// DisplayName is a human label, when the IdP provides one.
 	DisplayName string
+	// SessionID is the OIDC `sid` of the IdP session that authenticated this
+	// sign-in, when the ID token carries one. A back-channel logout naming it ends
+	// the Olivares sessions it produced.
+	SessionID string
 	// Groups are the directory group identifiers the IdP asserted for this
 	// subject (OIDC groups claim / SAML group attribute), verbatim as sent — an
 	// externalId or a displayName depending on the IdP (Entra sends object-ids,
@@ -142,6 +146,21 @@ type FederatedIdentity struct {
 	// issue time or the callback time. Missing/stale events confer no elevation.
 	AuthenticatedAt time.Time
 }
+
+// LogoutToken is a verified OpenID Connect Back-Channel Logout 1.0 logout token:
+// the provider's verified issuer and the subject and/or IdP session it ends. At
+// least one of Subject and SessionID is set. JTI is the token id consumed against
+// replay.
+type LogoutToken struct {
+	Issuer    string
+	Subject   string
+	SessionID string
+	JTI       string
+}
+
+// ErrInvalidLogoutToken refuses a logout token that fails verification. It ends
+// nothing; the endpoint answers 400.
+var ErrInvalidLogoutToken = errors.New("auth: invalid logout_token")
 
 // ssoSubjectSep joins the issuer and subject into the stored SsoSubject key. U+001F
 // (ASCII Unit Separator) never appears in an OIDC issuer URL, a SAML entityID, or a

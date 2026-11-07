@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
@@ -77,6 +78,79 @@ func TestSessionStartByAccountRefusals(t *testing.T) {
 			}
 			if len(f.postsTo(sessionWorkspacesPath)) != 0 || len(f.postsTo(sessionRunsPath)) != 0 {
 				t.Fatal("a refused start registered a folder or launched a session")
+			}
+		})
+	}
+}
+
+// A start without --account runs on an account that can answer now. The engine's own
+// choice for the tool made a profile on the host's login, which can be at its weekly
+// limit, and left it registered with no name. So the account list (with the usage each
+// tool reported) is read first: the first account with no exhausted window is the
+// profile, and the engine is not asked to choose. Every account at its limit refuses
+// before a folder or a session is made. With no usage reported nothing is known about
+// any account, and the engine chooses as it always did.
+func TestSessionStartWithoutAccountSkipsAccountsAtTheirLimit(t *testing.T) {
+	next := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	past := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	account := func(ref, name string, windows ...map[string]any) map[string]any {
+		a := map[string]any{"account_ref": ref, "name": name, "driver": "claude", "state": "active"}
+		if len(windows) > 0 {
+			a["usage"] = windows
+		}
+		return a
+	}
+	window := func(name string, used float64, resets string) map[string]any {
+		return map[string]any{"window": name, "utilization": used, "resets_at": resets}
+	}
+	for _, tc := range []struct {
+		name        string
+		accounts    []map[string]any
+		wantProfile string
+		wantResolve int
+		wantErr     string
+	}{
+		{"the first account with capacity", []map[string]any{
+			account("ppf_b", "claude-b", window("five_hour", 12, next), window("seven_day", 100, next)),
+			account("ppf_c", "claude-c", window("seven_day", 74, next)),
+			account("ppf_a", "claude-a", window("seven_day", 34, next)),
+		}, "ppf_c", 0, ""},
+		{"a window of one model leaves the account usable", []map[string]any{
+			account("ppf_b", "claude-b", window("seven_day:opus", 100, next), window("seven_day", 20, next)),
+		}, "ppf_b", 0, ""},
+		{"a window that has reset is not a limit", []map[string]any{
+			account("ppf_b", "claude-b", window("seven_day", 100, past)),
+		}, "ppf_b", 0, ""},
+		{"every account at its limit refuses", []map[string]any{
+			account("ppf_b", "claude-b", window("seven_day", 100, next)),
+			account("ppf_t", "team-b", window("five_hour", 100, next)),
+		}, "", 0, "at its limit"},
+		{"no usage reported leaves the choice to the engine", []map[string]any{
+			account("ppf_b", "claude-b"),
+		}, "ppf-new-claude", 1, ""},
+		{"an account of unknown usage is not skipped for the engine's choice", []map[string]any{
+			account("ppf_b", "claude-b", window("seven_day", 100, next)),
+			account("ppf_n", "claude-n"),
+		}, "ppf-new-claude", 1, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeSessionEngine(t, func(f *fakeSessionEngine) { f.accounts = tc.accounts })
+			_, errb, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir()}, sessionCreds(f.URL)...)...)
+			if (tc.wantErr == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.wantErr)) {
+				t.Fatalf("start: %v\n%s, want error %q", err, errb, tc.wantErr)
+			}
+			if got := len(f.postsTo(profilesPath + "/resolve")); got != tc.wantResolve {
+				t.Fatalf("the start asked the engine to choose %d times, want %d", got, tc.wantResolve)
+			}
+			runs := f.postsTo(sessionRunsPath)
+			if tc.wantProfile == "" {
+				if exitcode.From(err) != exitcode.Conflict || len(runs) != 0 || len(f.postsTo(sessionWorkspacesPath)) != 0 {
+					t.Fatalf("exit %d, runs %v: a refused start must be a conflict that made no folder and no session", exitcode.From(err), runs)
+				}
+				return
+			}
+			if len(runs) != 1 || runs[0]["provider_profile_ref"] != tc.wantProfile {
+				t.Fatalf("launch = %v, want the profile %s", runs, tc.wantProfile)
 			}
 		})
 	}

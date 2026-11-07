@@ -61,6 +61,8 @@ export interface RailRow {
   reference: string
   /** Engine and agent of a session; null when the engine sent neither. */
   meta: string | null
+  /** The provider profile (an account) the session runs under, when it has one. */
+  profileRef?: string
   /** The sender of a handoff. */
   from?: string
   /** Whole minutes since the row last changed (a running session: since it started). */
@@ -163,6 +165,7 @@ function sessionRow(
     reference: sessionReference(s),
     // A title that IS the tool and folder already says what the caption would.
     meta: named.from === 'place' ? null : meta || null,
+    ...(s.profileRef ? { profileRef: s.profileRef } : {}),
     minutes: minutesSince(state === 'live' ? started : last, now),
     to,
     search,
@@ -202,6 +205,15 @@ export function aliveSessions(
   return mergeSessions([...sources.live], [...(sources.runs ?? [])]).filter(
     (s) => displayOf(s).rail !== 'ended' && shown(s),
   ).length
+}
+
+/** The sessions that work or wait for a person, snoozed, archived or marked done too: a
+ * fold hides a row, never an agent that still runs, so these are what Stop all is for. */
+export function activeSessions(sources: RailSources): number {
+  return aliveSessions(sources, (s) => {
+    const { rail } = displayOf(s)
+    return rail === 'live' || rail === 'need'
+  })
 }
 
 /** The sessions open as the list shows them: alive, and not folded away (archived or

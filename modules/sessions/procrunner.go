@@ -130,6 +130,9 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	if err != nil {
 		return nil, err
 	}
+	release = withGoBuildCacheBound(release, spec.Env)
+	// Asked before the network boundary wraps the command: the mount layer is in its payload then.
+	busHidden := !confine.UserBusExposed(cmd)
 	cmd.Dir = spec.Dir
 	cmd.Env = sanitizedEnv(spec.EnvAllow, env)
 	var waitReady func() error
@@ -144,6 +147,9 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 		releaseFiles := release
 		release = func() { releaseNetwork(); releaseFiles() }
 	}
+	// The scope wraps the command as built above, the network boundary's stage
+	// included, so the whole session lives in it; the guard added below stays outside.
+	state.Reason = joinReasons(state.Reason, applySessionScope(cmd, spec.MemoryMax, spec.TasksMax, busHidden))
 	if spec.WaitDelay > 0 {
 		cmd.WaitDelay = spec.WaitDelay
 	}
@@ -156,7 +162,8 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	if err != nil {
 		release()
 		if waitReady != nil {
-			return nil, networkBoundaryErr(fmt.Errorf("the host or container must allow unprivileged user and network namespaces and Landlock: %w", err))
+			// Docker's default seccomp and AppArmor profiles refuse these namespaces; the image ships the ones that allow them.
+			return nil, networkBoundaryErr(fmt.Errorf("the host or container must allow unprivileged user and network namespaces and Landlock (in Docker, run the container with --security-opt seccomp=olivares-sessions.json and, where AppArmor controls user namespaces, --security-opt apparmor=olivares-sessions, the profiles the image ships in /usr/share/olivares/): %w", err))
 		}
 		return nil, err
 	}
@@ -258,6 +265,7 @@ func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr 
 	}
 	if engine != nil {
 		p.endTree = engine.endLifetime
+		p.endTreeBound = treeKillBound
 	}
 
 	// Reaping and output drain have separate ownership. Wait does not own these
@@ -497,6 +505,9 @@ type procProcess struct {
 	// group included — and exits with it. nil where no guard stands (non-Linux),
 	// so Stop's escalation falls back to the process-group kill there.
 	endTree func()
+	// endTreeBound is how long Stop waits for endTree before the group kill:
+	// the guard's tree-kill bound, set with endTree; zero leaves the delay.
+	endTreeBound time.Duration
 
 	// confinement is how the child runs (Landlock, or none and why).
 	confinement confine.State
@@ -773,7 +784,8 @@ func (p *procProcess) WorktreeSetupCleanup() (failed, known bool) {
 	return p.guardCleanupFailed, p.guardOutcomeKnown
 }
 
-// Stop closes stdin, signals the process group, and escalates after WaitDelay.
+// Stop closes stdin, signals the process group, and escalates after WaitDelay;
+// the guard's tree kill then gets its own bound before the group kill.
 // If output still cannot finish, it forces pipe closure and joins the pumps.
 // The child is reaped independently; incomplete output is reported by Stop.
 //
@@ -781,7 +793,7 @@ func (p *procProcess) WorktreeSetupCleanup() (failed, known bool) {
 // and one of them already passes context.WithoutCancel: honouring cancellation
 // here would return from a teardown that had signalled a process and then not
 // waited for it, which is how a session leaks a live child and its group. The
-// bound is the ladder itself (at most three WaitDelay steps), not the caller.
+// bound is the ladder itself (WaitDelay steps and the tree-kill bound), not the caller.
 func (p *procProcess) Stop(_ context.Context) error {
 	select {
 	case <-p.waitDone:
@@ -805,11 +817,13 @@ func (p *procProcess) Stop(_ context.Context) error {
 	// tree, what left the process group included, and exits with it. Killing the
 	// group would kill the guard with the program and leak the rest.
 	p.endSessionTree()
-	if p.finishedWithin(delay) {
+	// A group kill before the guard's tree kill ends would kill the guard
+	// mid-kill and leave what it had not reached yet.
+	if p.finishedWithin(max(delay, p.endTreeBound)) {
 		return p.completedStopReport()
 	}
 	if p.endTree != nil {
-		// The guard did not end the tree within the delay (its watch is gone, or a
+		// The guard did not end the tree within its bound (its watch is gone, or a
 		// process will not die): the group kill is all that is left to send.
 		_ = procGroupKill(p.cmd)
 		if p.finishedWithin(delay) {

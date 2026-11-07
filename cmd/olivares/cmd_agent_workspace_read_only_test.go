@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -77,5 +79,48 @@ func TestWorkspaceReadOnlyFoldersCLIReplacesAndClears(t *testing.T) {
 				t.Fatalf("PATCH calls=%d want 1", calls)
 			}
 		})
+	}
+}
+
+func TestWorkspaceArchiveCLIDownloadsOneZipAndShowsTheRefusal(t *testing.T) {
+	const body = "PK-zip-bytes\x00\xff"
+	refuse := false
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/m/sessions/workspaces/ws-1/files/archive" || r.Header.Get("Authorization") != "Bearer olvs_workspace-fixture" {
+			t.Errorf("archive used the wrong route or authority: %s %s", r.Method, r.URL)
+		}
+		if got := r.URL.Query()["path"]; !reflect.DeepEqual(got, []string{"reports", "docs/a b.md"}) {
+			t.Errorf("paths = %q; want both, repeated", got)
+		}
+		if refuse {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":"archive denied by workspace DLP policy: reports/key.pem"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("X-Olivares-Sensitivity", "secret.credential,pii.email")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	base := []string{"agent", "workspace", "archive", "ws-1", "reports", "docs/a b.md", "--server", server.URL, "--token", "olvs_workspace-fixture", "--tenant", "tenant-a", "--insecure"}
+
+	out, stderr, err := execRoot(t, base...)
+	if err != nil || out != body {
+		t.Fatalf("stdout zip = %q, err=%v, stderr=%s", out, err, stderr)
+	}
+	if !strings.Contains(stderr, "secret.credential,pii.email") {
+		t.Fatalf("the labels of the zip did not reach stderr: %q", stderr)
+	}
+	file := filepath.Join(t.TempDir(), "files.zip")
+	if _, stderr, err := execRoot(t, append(base, "--out", file)...); err != nil {
+		t.Fatalf("--out: %v; %s", err, stderr)
+	}
+	if got, err := os.ReadFile(file); err != nil || string(got) != body {
+		t.Fatalf("file zip = %q, err=%v", got, err)
+	}
+	refuse = true
+	if _, _, err := execRoot(t, base...); err == nil || !strings.Contains(err.Error(), "archive denied by workspace DLP policy") {
+		t.Fatalf("refusal lost: %v", err)
 	}
 }

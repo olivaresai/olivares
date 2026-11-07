@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { currentLanguage } from '@/lib/i18n'
 import {
+  MoreHorizontal,
   Plus,
   Send,
   ShieldCheck,
@@ -19,6 +20,12 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -597,6 +604,9 @@ function RosterMemberRow({
 }) {
   const { t } = useTranslation(['console', 'common'])
   const active = member.status === 'active'
+  const canEnd = canManage && active && canEndSessions
+  const canReset = canManage && !member.sso_only
+  const canDrop = canManage && canRemove
   const displayName =
     member.display_name && member.display_name !== member.email
       ? member.display_name
@@ -655,66 +665,68 @@ function RosterMemberRow({
         </Badge>
       </td>
       <td className="text-right">
-        <div className="flex items-center justify-end gap-2">
-          {canManage && active && canEndSessions ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onEndSessions(member)}
-              aria-label={t('console:members.endSessionsFor', {
-                email: member.email,
-              })}
-            >
-              {t('console:members.endSessions')}
-            </Button>
-          ) : null}
-          {canManage && !member.sso_only ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onResetTOTP(member)}
-              aria-label={t('console:members.totpResetLabel', {
-                email: member.email,
-              })}
-            >
-              {t('console:members.totpReset')}
-            </Button>
-          ) : null}
-          {/* Removing a member is an action with a confirmation, never a switch: a
-              switch read "on" beside "Remove". */}
-          {canManage && active && canRemove ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onToggle(member)}
-              aria-label={t('console:members.toggleDisableLabel', {
-                email: member.email,
-              })}
-            >
-              {t('console:members.disable')}
-            </Button>
-          ) : canManage && active ? null : canManage && canRemove ? (
-            // An account the deployment suspended cannot be re-activated by an
-            // organization; removing it is the one thing this organization can do.
-            <div className="flex items-center justify-end gap-2">
+        {canEnd || canReset || canDrop ? (
+          <div className="flex items-center justify-end gap-2">
+            {/* An account the deployment suspended cannot be re-activated by an
+                organization; removing it is the one thing this organization can do. */}
+            {canDrop && !active ? (
               <span className="text-caption text-muted-foreground">
                 {t('console:members.suspendedHint')}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onToggle(member)}
-                aria-label={t('console:members.toggleDisableLabel', {
-                  email: member.email,
-                })}
-              >
-                {t('console:members.disable')}
-              </Button>
-            </div>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          )}
-        </div>
+            ) : null}
+            {/* One menu per row: three text buttons per row pushed the table past
+                the edge of its card. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('console:agents.rowMenu', {
+                    name: member.email,
+                  })}
+                >
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canEnd ? (
+                  <DropdownMenuItem
+                    onSelect={() => onEndSessions(member)}
+                    aria-label={t('console:members.endSessionsFor', {
+                      email: member.email,
+                    })}
+                  >
+                    {t('console:members.endSessions')}
+                  </DropdownMenuItem>
+                ) : null}
+                {canReset ? (
+                  <DropdownMenuItem
+                    onSelect={() => onResetTOTP(member)}
+                    aria-label={t('console:members.totpResetLabel', {
+                      email: member.email,
+                    })}
+                  >
+                    {t('console:members.totpReset')}
+                  </DropdownMenuItem>
+                ) : null}
+                {/* Removing a member is an action with a confirmation, never a switch. */}
+                {canDrop ? (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => onToggle(member)}
+                    aria-label={t('console:members.toggleDisableLabel', {
+                      email: member.email,
+                    })}
+                  >
+                    {t('console:members.disable')}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
       </td>
     </tr>
   )

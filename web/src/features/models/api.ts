@@ -45,6 +45,8 @@ import type {
   OwnedModelInput,
   RoutingPolicy,
   RoutingPolicyInput,
+  UsageQuery,
+  UsageResponse,
 } from './types'
 
 const BASE = '/v1/m/models'
@@ -63,6 +65,11 @@ const BASE = '/v1/m/models'
 export const EVIDENCE_PAGE = 1000
 
 export const modelsApi = {
+  /** Runs the caller may read, totalled by model, account, provider or tool. It is the
+   *  sessions module's read (`sessions:run:read`), not a models route. */
+  usage: (query: UsageQuery) =>
+    http.get<UsageResponse>('/v1/m/sessions/usage', { query }),
+
   // ── C07-04 · las diez rutas de models que la consola nunca llamaba ─────────────────
   //
   // 67 rutas en `modules/models/api.go` y 57 llamadas. Las diez que faltaban incluyen dos
@@ -320,6 +327,8 @@ export const modelsKeys = {
     params === undefined
       ? (['models', tenant, 'workspace-residency'] as const)
       : (['models', tenant, 'workspace-residency', params] as const),
+  usage: (tenant: string | null, params: KeyParams) =>
+    ['models', tenant, 'usage', params] as const,
   routingPolicies: (tenant: string | null, params?: KeyParams) =>
     params === undefined
       ? (['models', tenant, 'routing-policies'] as const)

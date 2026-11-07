@@ -17,25 +17,24 @@ test('the people list renders within five seconds on a fresh installation', asyn
   await page.locator('#setup-email').fill(email)
   await page.locator('#setup-password').fill(password)
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
   await expect(
     page
       .getByRole('navigation', { name: 'Main navigation', exact: true })
-      .getByRole('link', { name: 'Now', exact: true }),
+      .getByRole('link', { name: 'Settings', exact: true }),
   ).toBeVisible()
 
   // A fresh installation lists every page the person may open: Settings offers the setup
-  // wizard beside it, People & groups offers Administration, and the address opens the
-  // people list (People & groups, 0.5) directly.
+  // wizard beside it, People offers Administration, and the address opens the people list
+  // (People, 0.7) directly.
   await page.goto('/settings')
   const row = page.locator('[data-slot="destination-sections"]')
   await expect(
-    row.getByRole('link', { name: 'Setup wizard', exact: true }),
+    row.getByRole('link', { name: 'Setup', exact: true }),
   ).toBeVisible()
-  await page
-    .locator('[data-slot="sidebar"]')
-    .getByRole('link', { name: 'People & groups', exact: true })
-    .click()
+  const sidebar = page.locator('[data-slot="sidebar"]')
+  await sidebar.getByRole('button', { name: 'More', exact: true }).click()
+  await sidebar.getByRole('link', { name: 'People', exact: true }).click()
   await expect(
     row.getByRole('link', { name: 'Administration', exact: true }),
   ).toBeVisible()
@@ -43,7 +42,7 @@ test('the people list renders within five seconds on a fresh installation', asyn
   const started = performance.now()
   await page.goto('/identity?tab=people')
   await expect(
-    page.getByRole('heading', { name: 'Identity & access', exact: true }),
+    page.getByRole('heading', { name: 'Identity', exact: true }),
   ).toBeVisible({ timeout: 5_000 })
   await expect(page.getByRole('tabpanel')).toContainText(email, {
     timeout: 5_000,

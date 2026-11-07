@@ -89,11 +89,11 @@
   },
   "catalog": {
     "title": "Visible channels",
-    "description": "Only the active channels this principal may read now, with its own current local bits. A page is not a search of the whole catalog: load more to continue from the server's continuation.",
+    "description": "The active channels you can read now, with your own access. A page is not a search of the whole catalog: load more to see further channels.",
     "emptyTitle": "No visible channels",
-    "emptyBody": "This principal has no channel it may read in this workspace, or none exists yet. A read grant and the channel:read permission make one appear here.",
+    "emptyBody": "You can read no channel in this workspace, or none exists yet. Read access to a channel, with the channel:read permission, makes it appear here.",
     "truncated": "More channels exist beyond this page",
-    "truncatedHint": "The server reported more visible channels. Load more to continue from its continuation.",
+    "truncatedHint": "There are more visible channels. Load more to see them.",
     "columns": {
       "name": "Name",
       "slug": "Slug",
@@ -111,9 +111,9 @@
     "read": "read",
     "write": "write",
     "admin": "admin",
-    "none": "no local bits",
+    "none": "no access",
     "unknown": "not reported by this read",
-    "hint": "Local bits are the channel's own grants for this principal. A core permission is required as well, and the engine decides every act at the moment it is asked."
+    "hint": "Your access is what the channel itself grants you. The permission is required as well, and the engine decides every act at the moment it is asked."
   },
   "kind": {
     "coordination": "Coordination",
@@ -171,15 +171,15 @@
       "tenant": "Tenant"
     },
     "sendHint": {
-      "canWrite": "Your local write bit is current on this catalog page and you hold the send permission. The engine decides again on the send.",
-      "noWrite": "This catalog page reports no local write bit for you. The engine would refuse a send; composing is not offered.",
-      "unknown": "This read does not report your local bits. You hold the send permission; the engine decides local authority on the send.",
+      "canWrite": "You can write to this channel and you hold the send permission. The engine decides again on the send.",
+      "noWrite": "This catalog page shows you cannot write to this channel. The engine would refuse a send; composing is not offered.",
+      "unknown": "This read does not show your access to the channel. You hold the send permission; the engine decides on the send.",
       "noPermission": "You do not hold the message-send permission, so composing is not offered."
     }
   },
   "create": {
     "title": "Create a channel",
-    "description": "Every field of the contract is available. Initial grants are explicit: add each subject and tick each bit you intend. Nothing is added on your behalf.",
+    "description": "Every field of the contract is available. Initial grants are explicit: add each subject and tick each access you intend. Nothing is added on your behalf.",
     "fields": {
       "slug": "Slug",
       "slugHint": "Lowercase letters, digits and hyphens; unique in the workspace.",
@@ -196,7 +196,7 @@
       "maxFanout": "Max fanout",
       "maxAutomationDepth": "Max automation depth",
       "grants": "Initial grants",
-      "grantsHint": "At least one grant with at least one bit. A grant is a subject and its three bits, each independent. Your own account is a subject like any other."
+      "grantsHint": "At least one grant with at least one access. A grant is a subject and its three accesses, each independent. Your own account is a subject like any other."
     },
     "grant": {
       "subject": "Subject",
@@ -211,7 +211,7 @@
       "name": "A name is required.",
       "grants": "At least one initial grant is required.",
       "grantRef": "Every grant needs a subject reference.",
-      "grantBits": "Every grant needs at least one bit.",
+      "grantBits": "Every grant needs at least one access.",
       "number": "Must be a whole number of zero or more.",
       "fanout": "Must be a whole number of one or more."
     },
@@ -325,11 +325,12 @@
   },
   "inbox": {
     "title": "Personal inbox",
-    "description": "Deliveries addressed to this principal in this workspace, as the engine authorizes them now. Reading a page acknowledges nothing and advances no cursor.",
-    "emptyTitle": "No deliveries",
-    "emptyBody": "Nothing addressed to this principal is visible in this workspace right now.",
+    "description": "Deliveries addressed to you in this workspace, as the engine authorizes them now. Reading a page acknowledges nothing and moves no seen mark.",
+    "emptyTitle": "Your inbox is empty",
+    "emptyBody": "Messages that people or sessions send you through a channel appear here. To send one, open Channels, pick a channel and choose Send notice.",
+    "showChannels": "Go to Channels",
     "truncated": "More deliveries exist beyond this page",
-    "truncatedHint": "The server reported more visible deliveries. Load more to continue from its continuation.",
+    "truncatedHint": "There are more visible deliveries. Load more to see them.",
     "columns": {
       "subject": "Subject",
       "sender": "Sender",
@@ -343,7 +344,7 @@
   },
   "delivery": {
     "title": "Delivery",
-    "description": "Read fresh for this principal. Acknowledging is an explicit act with the version you just read.",
+    "description": "Read fresh for you. Acknowledging is an explicit act with the version you just read.",
     "fields": {
       "id": "Delivery ID",
       "messageId": "Message ID",
@@ -439,9 +440,9 @@
     "late": "Late"
   },
   "failure": {
-    "forbidden": "The engine refused this for the current principal.",
+    "forbidden": "The engine refused this for you.",
     "step_up": "Your role permits this, but the session must be elevated first.",
-    "not_found": "Not found, or not visible to this principal.",
+    "not_found": "Not found, or not visible to you.",
     "unavailable": "The engine could not look: current authority, custody or store evidence is unavailable. This is neither an empty result nor a refusal.",
     "version_mismatch": "The version you read is no longer current.",
     "version_required": "The engine required a version precondition the console did not send.",
@@ -462,7 +463,7 @@
   "authority": {
     "lost": "The permission for this act is no longer held; nothing was sent.",
     "confirmationClosed": "A pending confirmation was closed because the permission behind it was lost.",
-    "notAddressable": "This principal has no directory reference for this kind and cannot be addressed."
+    "notAddressable": "This subject has no directory reference for this kind and cannot be addressed."
   },
   "states": {
     "loading": "Loading…",
@@ -470,7 +471,7 @@
   },
   "administration": {
     "title": "Administrable channels",
-    "description": "Channels this principal may administer now: core channel:admin and a current local admin bit, decided by the engine on every read. Archived channels stay listed and inspectable. This is not the read catalog: a local read bit is neither required nor implied.",
+    "description": "Channels you can administer now: the channel:admin permission and admin access on the channel, decided by the engine on every read. Archived channels stay listed and inspectable. This is not the read catalog: read access to a channel is neither required nor implied.",
     "stateFilter": "Persisted state",
     "states": {
       "all": "All states",
@@ -490,9 +491,9 @@
     "openById": "Administer a channel by ID",
     "openByIdHint": "The sheet is read through the grant history under channel:admin; it never uses the read-tier channel read.",
     "emptyTitle": "No administrable channels",
-    "emptyBody": "No channel in this workspace grants this principal a current admin bit, or none matches the persisted state selected. A local admin grant and the channel:admin permission make one appear here.",
+    "emptyBody": "No channel in this workspace gives you admin access, or none matches the state selected. Admin access to a channel, with the channel:admin permission, makes it appear here.",
     "truncated": "More administrable channels exist beyond this page",
-    "truncatedHint": "The server reported more administrable channels. Load more to continue from its continuation."
+    "truncatedHint": "There are more administrable channels. Load more to see them."
   },
   "channelState": {
     "active": "Active",
@@ -580,7 +581,7 @@
     },
     "columns": {
       "subject": "Subject",
-      "bits": "Bits",
+      "bits": "Access",
       "generation": "Generation",
       "stored": "Stored state",
       "temporal": "At observation",
@@ -589,7 +590,7 @@
       "created": "Created"
     },
     "truncated": "More generations exist beyond this page",
-    "truncatedHint": "The server reported more generations. Load more to continue from its continuation; a channel change between pages restarts the listing.",
+    "truncatedHint": "There are more generations. Load more to see them; a channel change between pages restarts the listing.",
     "emptyTitle": "No generations",
     "emptyBody": "No stored grant generation matches the selected state and subject. A new grant adds one.",
     "temporalHint": "“Stored state” is what the engine persisted; “at observation” is whether the row was in force at the observed instant. An expiry that has passed is reported, not materialized: it does not revoke the row, and a successor for that subject still requires an explicit revocation first.",
@@ -605,7 +606,7 @@
     },
     "form": {
       "title": "New grant generation",
-      "hint": "One subject, three independent bits, an optional expiry. A directory row is a candidate, not an eligible subject: the engine decides on the act, and a recorded generation is not a promise of effective access."
+      "hint": "One subject, three independent accesses, an optional expiry. A directory row is a candidate, not an eligible subject: the engine decides on the act, and a recorded generation is not a promise of effective access."
     },
     "validation": {
       "expiry": "The expiry could not be read as a date.",
@@ -646,17 +647,17 @@
   },
   "cursor": {
     "title": "Mark seen up to here",
-    "description": "Advances your personal seen cursor to the last delivery of one inbox page. It acknowledges nothing and changes no delivery.",
+    "description": "Moves your personal seen mark to the last delivery of one inbox page. It acknowledges nothing and changes no delivery.",
     "section": {
-      "title": "Seen cursor",
+      "title": "Seen mark",
       "hint": "Each loaded page can be marked seen up to its last delivery. The target is the page's own, minted by the engine for that exact delivery; the table's local filter must be empty so the scope is unambiguous.",
       "page": "Page {{page}} · {{count}} deliveries",
       "upTo": "up to"
     },
     "reasons": {
       "noPermission": "Requires the delivery:write permission.",
-      "noRecipient": "This session is not a user identity; the personal cursor belongs to a user mailbox.",
-      "filtered": "Clear the table filter first: the cursor target is the server page, not the filtered rows.",
+      "noRecipient": "This session is not a user identity; the personal seen mark belongs to a user mailbox.",
+      "filtered": "Clear the table filter first: the seen mark targets the server page, not the filtered rows.",
       "emptyPage": "This page has no deliveries to mark.",
       "otherRecipient": "The last delivery of this page is not addressed to your user identity."
     },
@@ -668,36 +669,36 @@
       "lastSubject": "Last subject",
       "lastDelivery": "Last delivery",
       "lastSeq": "Delivery sequence",
-      "cursorVersion": "Cursor version",
-      "cursorId": "Cursor ID",
+      "cursorVersion": "Seen mark version",
+      "cursorId": "Seen mark ID",
       "replayed": "Replayed",
       "lastSeenSeq": "Last seen sequence",
       "barrierDelivery": "Barrier delivery",
       "barrierReason": "Barrier reason",
       "barrierSince": "Barrier since"
     },
-    "preparing": "Preparing: asking the engine for the cursor target of this page…",
-    "prepareFailedTitle": "The cursor target could not be prepared",
+    "preparing": "Preparing: asking the engine for the target of this page…",
+    "prepareFailedTitle": "The target could not be prepared",
     "prepareFailedBody": "Nothing was advanced. Refresh the inbox and prepare again from a current page.",
     "confirm": {
       "title": "Confirm the advance",
-      "body": "This sends the prepared target and the delivery above with the cursor version you read, and a key of its own. Only confirming advances anything. A retry after an ambiguous result re-sends exactly this."
+      "body": "This sends the prepared target and the delivery above with the seen mark version you read, and a key of its own. Only confirming moves anything. A retry after an ambiguous result re-sends exactly this."
     },
-    "conflictTitle": "The cursor changed since it was prepared",
-    "conflictBody": "The engine refused the advance: the cursor version or the target is no longer current. Nothing was re-sent. Refresh the inbox and prepare again from a current page.",
+    "conflictTitle": "The seen mark changed since it was prepared",
+    "conflictBody": "The engine refused the move: the seen mark version or the target is no longer current. Nothing was re-sent. Refresh the inbox and prepare again from a current page.",
     "ambiguousTitle": "Outcome unknown",
     "ambiguousBody": "The connection failed before an answer arrived. Retrying sends the same target, the same version and the same key; the engine either applies it once, replays it, or refuses it with its current version. Leaving it undetermined keeps the previous result unknown.",
     "refusedTitle": "Advance refused",
-    "refusedBody": "The engine did not advance the cursor. Refresh the inbox before preparing again.",
+    "refusedBody": "The engine did not move the seen mark. Refresh the inbox before preparing again.",
     "result": {
-      "appliedTitle": "Cursor advanced",
-      "appliedBody": "The engine committed the advance and returned the position below. The inbox is re-read from the durable cursor.",
+      "appliedTitle": "Seen mark moved",
+      "appliedBody": "The engine committed the move and returned the position below. The inbox is re-read from the saved seen mark.",
       "replayedTitle": "Already advanced",
       "replayedBody": "The engine replayed the result of an identical earlier command. Nothing was applied twice.",
       "barrierTitle": "Advance limited by a barrier",
-      "barrierBody": "The engine stopped at the delivery below for the reason it names; the cursor did not reach the target. This is not a full advance.",
+      "barrierBody": "The engine stopped at the delivery below for the reason it names; the seen mark did not reach the target. This is not a full move.",
       "barrierHint": "Open the barrier delivery with a fresh read. Resolving it does not advance anything by itself: refresh the inbox, prepare a new target and confirm again.",
-      "notAck": "A seen cursor is not an acknowledgement and does not change any delivery's state or first-seen mark."
+      "notAck": "A seen mark is not an acknowledgement and does not change any delivery's state or first-seen mark."
     }
   },
   "capability": {
@@ -832,12 +833,12 @@
     },
     "inbox": {
       "title": "Handoffs addressed to you",
-      "description": "One page at a time on the server's continuation. This collection is content-free: the summary, next action and risk of an offer are only readable by opening it.",
+      "description": "One page at a time; load more to see further handoffs. This collection is content-free: the summary, next action and risk of an offer are only readable by opening it.",
       "filter": "State",
       "truncated": "More offers exist beyond this page",
       "truncatedHint": "The engine reports that a further offer was authorized in the same transaction. It is not a total, and it is not a count of hidden rows.",
       "emptyTitle": "No {{state}} handoffs in this workspace",
-      "emptyBody": "This is an empty authorized result, not a refusal and not a failure to look.",
+      "emptyBody": "Handoffs sent to this workspace appear here.",
       "unavailableTitle": "Handoff information cannot be verified",
       "unavailableBody": "Handoff information cannot currently be loaded. Retry, or contact an administrator if it persists.",
       "accountGuidanceTitle": "Use a member account for personal handoffs",

@@ -1,4 +1,5 @@
 {
+  "deepSummary": "{{model}}: strumenti {{tools}} · streaming {{streaming}} · utilizzo {{usage}} · contesto {{context}} (server)",
   "title": "Provider",
   "subtitle": "Una credenziale di un provider cloud o un endpoint di modelli locale su cui girano i tuoi strumenti per agenti.",
   "nav": "Provider",
@@ -95,7 +96,11 @@
     "localNameHint": "Facoltativo. Lascia vuoto per usare il nome del provider.",
     "advanced": "Avanzate: endpoint personalizzato",
     "missingFields": "Compila i campi mancanti: {{fields}}.",
-    "requiredEndpointHint": "Inserisci l'endpoint del servizio: https, oppure http semplice a un indirizzo di loopback o di rete privata."
+    "requiredEndpointHint": "Inserisci l'endpoint del servizio: https, oppure http semplice a un indirizzo di loopback o di rete privata.",
+    "worksWith": "Funziona con {{tools}}",
+    "otherKinds": "Altro (endpoint personalizzato)",
+    "keyLink": "Ottieni una chiave API da {{vendor}}",
+    "docsLink": "Guida alla configurazione di {{vendor}}"
   },
   "rotate": {
     "title": "Ruota la chiave di questo provider",

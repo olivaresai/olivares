@@ -101,7 +101,7 @@ func (e *cliRefusalError) Unwrap() error { return e.cause }
 func printCLIError(out io.Writer, err error) error { return printCLIErrorAs(out, err, false) }
 
 // cliErrorJSON is the -o json form of an error: one line on stderr with the message and,
-// for an engine refusal, its status and code.
+// for an engine refusal, its status, code and remedy (kept out of the message).
 func cliErrorJSON(message string, err error) []byte {
 	e := map[string]any{"message": message}
 	var refusal *apiRefusal
@@ -109,6 +109,10 @@ func cliErrorJSON(message string, err error) []byte {
 		e["status"] = refusal.status
 		if refusal.code != "" {
 			e["code"] = refusal.code
+		}
+		if refusal.remedy != "" {
+			e["remedy"] = refusal.remedy
+			e["message"] = strings.TrimSuffix(message, "\n"+refusal.remedy)
 		}
 	}
 	b, _ := json.Marshal(map[string]any{"error": e})

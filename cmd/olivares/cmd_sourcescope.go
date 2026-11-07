@@ -127,7 +127,7 @@ func (f *sourcescopeBindingFlags) add(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.sourceRef, "source-ref", "", "reference of the source being confined")
 	cmd.Flags().StringVar(&f.scopeTree, "scope-tree", "", "scope tree the binding attaches to (e.g. workspace, agent_group)")
 	cmd.Flags().StringVar(&f.scopeRef, "scope-ref", "", "reference within the scope tree")
-	cmd.Flags().StringVar(&f.effect, "effect", "", "allow or forbid")
+	cmd.Flags().StringVar(&f.effect, "effect", "", "allow or forbid; require makes a template mandatory for its department; decline stops an instruction or template reaching a department from above")
 	cmd.Flags().StringVar(&f.expiresAt, "expires-at", "", "optional RFC3339 time when the binding stops granting access")
 	cmd.Flags().StringVar(&f.folderPath, "folder-path", "", "folder or subtree the binding is anchored to")
 	cmd.Flags().StringVar(&f.credName, "cred-name", "", "name of the scoped credential the binding carries")
@@ -1090,8 +1090,8 @@ func newSourceScopeWsConnectorsCmd(client datalaneClient) *cobra.Command {
 			"Secrets are supplied ONLY through --secrets-file (a JSON object of string\n" +
 			"values, - for stdin). There is no --secret flag on purpose: a credential passed\n" +
 			"as an argument is readable in the process table by every user on the machine.",
-		Example: `  olivares sourcescope workspace-connectors create --name docs --kind confluence --workspace-ref ws-1 --enabled
-  olivares sourcescope workspace-connectors create --name docs --kind confluence --workspace-ref ws-1 --secrets-file ./secrets.json --config base_url=https://wiki.example.com`,
+		Example: `  olivares sourcescope workspace-connectors create --name docs --kind notion --workspace-ref ws-1 --enabled
+  olivares sourcescope workspace-connectors create --name docs --kind notion --workspace-ref ws-1 --secrets-file ./secrets.json --config mode=live`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			body, err := createFields.body(cmd)

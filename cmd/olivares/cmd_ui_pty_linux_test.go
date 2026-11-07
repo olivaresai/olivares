@@ -399,3 +399,50 @@ func TestBareOlivaresHintsTheUIOnATerminal(t *testing.T) {
 		}
 	}
 }
+
+// A supervised turn asks at a real terminal. Keys typed before the question was shown are
+// not its answer, and a question the engine stopped waiting on is closed, not left open.
+
+func TestSessionTurnAsksOnATerminalOnlyAboutWhatWasShown(t *testing.T) {
+	t.Run("keys typed before the question are dropped", func(t *testing.T) {
+		f := supervisedTurn(t, writeApproval())
+		master, slave := openPTY(t, 80, 24)
+		// An Enter-y typed while watching the turn, before any request existed.
+		if _, err := master.WriteString("y\n"); err != nil {
+			t.Fatal(err)
+		}
+		// The question is up once the engine has served the request and the flush has run.
+		afterApprovalReads(t, f, 1, 0, func() {
+			time.Sleep(150 * time.Millisecond)
+			_, _ = master.WriteString("n\n")
+		})
+		_, errb, err := sendTurnWith(t, f, slave)
+		if err != nil {
+			t.Fatalf("send: %v\n%s", err, errb)
+		}
+		if got := f.postsTo(toolDecisions); len(got) != 1 || got[0]["decision"] != "reject" {
+			t.Fatalf("decisions = %v, want the one reject typed after the question\n%s", got, errb)
+		}
+	})
+	t.Run("a request the engine dropped closes the question", func(t *testing.T) {
+		f := supervisedTurn(t, writeApproval())
+		f.approvalDeadline = 600 * time.Millisecond
+		_, slave := openPTY(t, 80, 24)
+		afterApprovalReads(t, f, 1, 0, func() {
+			time.Sleep(150 * time.Millisecond)
+			f.mu.Lock()
+			delete(f.runs[0], "pending_approval_ref")
+			f.mu.Unlock()
+		})
+		_, errb, err := sendTurnWith(t, f, slave)
+		if err != nil {
+			t.Fatalf("send: %v\n%s", err, errb)
+		}
+		if want := "no longer waiting"; !strings.Contains(errb, want) {
+			t.Fatalf("the open question is not closed (%q missing):\n%s", want, errb)
+		}
+		if got := f.postsTo(toolDecisions); len(got) != 0 {
+			t.Fatalf("a request that was gone recorded %v", got)
+		}
+	})
+}

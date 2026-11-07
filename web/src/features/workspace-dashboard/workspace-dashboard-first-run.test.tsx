@@ -54,6 +54,17 @@ function show() {
     ),
   }
 }
+// The overview of one workspace: the page heading is shared with the "select one" prompt, so
+// the workspace's own name in the subtitle is what tells the two apart. The overview re-mounts
+// when the scope changes, so both are read together until they settle.
+async function expectOverviewOf(name: string) {
+  await waitFor(() => {
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Workspace overview' }),
+    ).toBeVisible()
+    expect(screen.getByTitle(name)).toBeVisible()
+  })
+}
 beforeEach(() => {
   useWorkspaceStore.getState().clear()
   listWorkspaces.mockReset().mockResolvedValue({
@@ -89,9 +100,7 @@ it('opens the sole active workspace overview without asking the user to select i
     expect(summary).toHaveBeenCalledWith('opaque-workspace-17'),
   )
   expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
-  expect(
-    await screen.findByRole('heading', { level: 1, name: 'Default' }),
-  ).toBeVisible()
+  await expectOverviewOf('Default')
   expect(screen.queryByText('No workspace selected')).not.toBeInTheDocument()
 })
 it('does not turn an inactive workspace named Default into an available selection', async () => {
@@ -113,7 +122,7 @@ it('does not turn an inactive workspace named Default into an available selectio
   })
   const { client } = show()
   await waitFor(() => expect(client.isFetching()).toBe(0))
-  await screen.findByRole('link', { name: 'Open inventory' })
+  await screen.findByRole('link', { name: 'Open discovered resources' })
   expect(
     screen.queryByRole('button', { name: 'Open Default' }),
   ).not.toBeInTheDocument()
@@ -140,7 +149,7 @@ it.each([0, 2])(
     })
     const { client } = show()
     await waitFor(() => expect(client.isFetching()).toBe(0))
-    await screen.findByRole('link', { name: 'Open inventory' })
+    await screen.findByRole('link', { name: 'Open discovered resources' })
     expect(
       screen.queryByRole('button', { name: 'Open Default' }),
     ).not.toBeInTheDocument()
@@ -166,9 +175,7 @@ it('does not auto-select from an incomplete list, but Open still opens its overv
   expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
   expect(summary).not.toHaveBeenCalled()
   await user.click(open)
-  expect(
-    await screen.findByRole('heading', { level: 1, name: 'Default' }),
-  ).toBeVisible()
+  await expectOverviewOf('Default')
   expect(summary).toHaveBeenCalledWith('opaque-workspace-17')
 })
 
@@ -187,13 +194,9 @@ it('keeps an explicit All workspaces scope while showing the sole workspace over
     .getState()
     .setActiveWorkspace('opaque-workspace-17', 'Default')
   show()
-  expect(
-    await screen.findByRole('heading', { level: 1, name: 'Default' }),
-  ).toBeVisible()
+  await expectOverviewOf('Default')
   act(() => useWorkspaceStore.getState().setActiveWorkspace(null))
   await waitFor(() => expect(listWorkspaces).toHaveBeenCalled())
-  expect(
-    await screen.findByRole('heading', { level: 1, name: 'Default' }),
-  ).toBeVisible()
+  await expectOverviewOf('Default')
   expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
 })

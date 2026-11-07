@@ -79,7 +79,7 @@ olivares quickstart --data-dir /var/lib/olivares
 Если это новая установка, завершите первоначальную настройку консоли.
 
 В новой установке `knowledge` и `sourcescope` отключены. Как администратор включите
-`knowledge` и `sourcescope` в **Settings > Edition & modules**, сохранив остальные выбранные
+`knowledge` и `sourcescope` в **Settings > Modules**, сохранив остальные выбранные
 модули включёнными. Для CLI сначала войдите в этот движок как администратор
 через `olivares login`, затем выполните `olivares modules on knowledge` и `olivares modules on sourcescope`. Перед продолжением
 дождитесь каждого перезапуска движка; работающие сессии остановятся, и их

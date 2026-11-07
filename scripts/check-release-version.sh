@@ -112,7 +112,7 @@
 #       inside is judged again (fail-closed toward scanning). Selftest: INTERNAL_CONTEXT.
 #   Go test fixtures — a `_test.go` file never enters a non-test build (the Go toolchain's own
 #       rule), so a version literal there is test data. Production Go stays in arm B's walk:
-#       a pin in any other .go file is still a shipped coordinate. Selftest: go_test_fixture.
+#       a pin in any other .go file is still a shipped coordinate. Selftest: test_fixture.
 #
 # Both are the narrowest class that names the case, not a skip of docs/ or of source: a
 # docs/*.md runbook, a deploy manifest and a non-test .go pin at the wrong version stay red,
@@ -677,7 +677,7 @@ DEPENDENCY_WORDS = (
     "SAML", "OpenAPI", "AsyncAPI", "WCAG", "SPDX", "SARIF", r"Compose(?=[ \t]*(?:>=|≥))", "Python", "PostgreSQL",
     "SQLite", "modernc", "Ubuntu", "Alpine", "NIST", "CNSA", "AICM", "AI Controls Matrix", "AI-CAIQ", "RMF",
     "CVSS", "VCDM", "LEEF", "ECS", "CFTC", "grpc", "axe-core", "Grok Build", "OpenCode", "Google ADK",
-    "pgx", "cosign", "nFPM", "cloudflare/circl", "PCI DSS", "Google-ADK", "Keep a Changelog",
+    "pgx", "cosign", "nFPM", "OpenSSH", "Samba", "cloudflare/circl", "PCI DSS", "Google-ADK", "Keep a Changelog",
     "DoD Zero Trust Strategy",
 )
 # A package we build whose Version and Release are its own, set in its spec and not by ${VERSION}: a floor on it
@@ -687,6 +687,11 @@ DEPENDENCY_WORDS = (
 # export-closure: absent-by-design packaging/nfpm/olivares-appliance-portal.yaml — presence selects a dependency word; this data file is never executed.
 if os.path.exists("packaging/nfpm/olivares-appliance-portal.yaml"):
     DEPENDENCY_WORDS += ("olivares-selinux",)
+# These dependencies are documented by the optional deployment source.
+if os.path.isdir("deploy/helm"):
+    DEPENDENCY_WORDS += ("Helm",)
+if os.path.isdir("oscap"):
+    DEPENDENCY_WORDS += ("openscap",)
 DEPENDENCY = "(?:" + "|".join(DEPENDENCY_WORDS) + ")"
 
 
@@ -722,6 +727,7 @@ NOT_RELEASES = (
      r"^\|[ \t]*" + DEPENDENCY + r"[ \t]*\|(?:(?![^|\n]*(?i:olivares|release|version|community|business|enterprise|edition))[^|\n]*\|)?[ \t]*"
      r"\x00(?:2\.0|9\.4\.0|2\.1\.0|1\.8\.0)\x01"),
     ("a Linux kernel release", None, r"\bLinux[ \t]+\x00[3-9]\.[0-9]+\.[0-9]+-[a-z][0-9a-z.-]*\x01"),
+    ("an SMB protocol version", None, r"(?:\bSMB[ \t]+|\bvers=)\x00[0-9]+\.[0-9]+(?:\.[0-9]+)?\x01"),
     ("a document's own revision", None,
      r"\b(?:Rev(?:ision)?\.?|" + word("revision") + r")(?:\*\*)?[ \t]*(?:[0-9]+\.[0-9]+/)?\x00"),
     # Any dotted quad with its port or prefix length, and without one only the reserved ranges a
@@ -1284,9 +1290,11 @@ def internal_context(path, curated):
     return False
 
 
-def go_test_fixture(path):
-    """-> True iff Go's own build rule keeps this file out of every non-test binary."""
-    return path.endswith("_test.go")
+def test_fixture(path):
+    """-> True for Go test source or a top-level shell regression script."""
+    return (path.endswith("_test.go")
+            or (os.path.dirname(path) == "scripts"
+                and os.path.basename(path).startswith("test-") and path.endswith(".sh")))
 
 
 # ── THE DATED RECORD OF A RELEASE THAT ALREADY HAPPENED (added 2026-09-15) ────────────────
@@ -1339,8 +1347,8 @@ def go_test_fixture(path):
 # constant: a third directory member that is neither tied nor self-bound fails there.
 #
 # EVERY OTHER MEMBER IS AN EXACT FILE, which is the shape DERIVED_ALLOW has always used: a named
-# path, a named kind, a written reason, reviewable on sight. Three of them ship (the VPAT,
-# docs/RELEASE-INSTALLER.md and the console capture manifest), and that is exactly why they are
+# path, a named kind, a written reason, reviewable on sight. Two of them ship (the VPAT and
+# docs/RELEASE-INSTALLER.md), and that is exactly why they are
 # files and not the directories they sit in — a published subtree may not carry an allowance for
 # prose that does not exist yet.
 HISTORICAL_ALLOW = [
@@ -1394,17 +1402,6 @@ HISTORICAL_ALLOW = [
     ("docs/emitted-urls-hub-record.txt", "excluded-url-record",
      "the emitted-URL declarations of files the export drops, among them a posted launch record's "
      "link to a past release page; tied to the one exact entry that curates the record out"),
-    # The console capture manifest is the dated record of the run that took the published PNGs:
-    # scripts/docs-captures.sh writes release_image from DOCS_CAPTURE_IMAGE beside taken_at, the
-    # commit and the engine digest, and the captures were taken from the RELEASED image of an
-    # earlier release (0.1 under the 0.2 canon, measured 2026-10-14). Sweeping the field to the
-    # canon would state those PNGs ran under an image they did not run under; a recapture under a
-    # new release rewrites it by itself. A shipped file, so an exact member as the header's rule
-    # for shipped records requires, never a directory. (added 2026-10-14)
-    ("docs-site/public/console/manifest.json", "capture-record",
-     "the capture manifest's release_image is the released image the published PNGs beside it "
-     "were taken from; the dated record of a capture run may not be swept to a canon that run "
-     "did not use"),
 ]
 
 # Directory members whose allowance is granted only while the export curation removes them.
@@ -1589,7 +1586,7 @@ def judge_pins(canon, hits, curated=None, kept=None):
         # A `_test.go` pin is fixture data (see header): the multi-version regression keys an
         # object at the version AFTER the canon precisely to prove a stale token cannot fetch
         # it. Judging it would force the fixture to lie about the case it tests.
-        if go_test_fixture(hit.path):
+        if test_fixture(hit.path) and not hit.marked:
             continue
         if hit.marked:
             if marked_allowed(canon, hit.path, hit.token, hit.line):
@@ -1755,7 +1752,7 @@ def artifact_files():
         for r, dirs, files in walk(root):
             dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "vendor")]
             out += [os.path.join(r, f) for f in files]
-    return sorted(f for f in out if regular_file(f) and not go_test_fixture(f))
+    return sorted(f for f in out if regular_file(f) and not test_fixture(f))
 
 def read_canon(text):
     """Schema, not scrape: exactly ONE non-comment MAJOR.MINOR record. Anything else refuses before any surface scan — a malformed canon
@@ -2503,6 +2500,20 @@ def selftest():
     tree = {portal: '"depends": ["olivares-appliance-base >= 26.700"]'}
     expect("a floor on a package that carries the release is still a stale coordinate",
            judge_artifacts("26.800", scan(tree, rd(tree))) == [(portal, 1, "26.700")])
+    tree = {"d.md": "measured on a Samba 4.22 share (SMB 3.1.1), mounted with vers=3.1.1,nodev"}
+    expect("an SMB protocol version is no release", judge("0.6", scan(tree, rd(tree)))[0] == [])
+    tree = {"d.md": "the release 3.1.1 ships"}
+    expect("a bare three-number release outside an SMB word stays red",
+           judge("0.6", scan(tree, rd(tree)))[0] == [("d.md", 1, "3.1.1")])
+    tree = {"docs/design/workspace-sftp-v1.md": "measured with OpenSSH 9.2p1"}
+    expect("an OpenSSH dependency version is no Olivares release",
+           judge("0.7", scan(tree, rd(tree)))[0] == [])
+    tree = {"docs-site/src/content/docs/de/reference/modules/ii-sessions.md": "eine Samba-4.22-Freigabe (SMB 3.1.1)"}
+    expect("a localized Samba dependency version is no Olivares release",
+           judge("0.7", scan(tree, rd(tree)))[0] == [])
+    tree = {"d.md": "Olivares 9.2p1 is the current release"}
+    expect("the same version shape after the product name stays red",
+           judge("0.7", scan(tree, rd(tree)))[0] == [("d.md", 1, "9.2p1")])
     references = {"d.md": "target 99.900% uptime; see SPEC §47.100 and ORD-47.100"}
     expect("percentage and specification section are not monthly releases", scan(references, rd(references)) == [])
     tree = {"e.md": "since 26.9 things"}
@@ -2794,24 +2805,22 @@ def selftest():
     expect("manifest: a NEW image pin in deploy/ stays red (a target is not what ships)",
            pins8("  image: docker.io/olivaresai/olivares:26.900\n", "deploy/manifests/install.yaml")
            == [("deploy/manifests/install.yaml", 1, "26.900")])
-    # The capture manifest is a RECORD, and its pin is judged by the record rules below:
-    # release_image names the released image the published PNGs were taken from
-    # (scripts/docs-captures.sh writes it from DOCS_CAPTURE_IMAGE), so it may name the
-    # release that happened and never one that did not.
-    expect("manifest: the capture record's released image below the canon -> green",
+    # JSON takes no release mark, so a generated JSON record names a fixed image by its
+    # digest alone: the digest is the image, and no version token is left to drift.
+    # scripts/docs-captures-release.sh writes the capture manifest's release_image that way.
+    expect("manifest: a JSON record naming a released image by tag -> red (JSON takes no mark)",
            pins8('  "release_image": "olivaresai/olivares:26.700@sha256:fb9e",\n',
-                 "docs-site/public/console/manifest.json") == [])
-    expect("manifest: an image ABOVE the canon in the capture record -> red (nobody released it)",
-           pins8('  "release_image": "olivaresai/olivares:26.900@sha256:fb9e",\n',
                  "docs-site/public/console/manifest.json")
-           == [("docs-site/public/console/manifest.json", 1, "26.900")])
-    expect("manifest: a sibling JSON is not the capture record -> red (exact file)",
-           pins8('  "release_image": "olivaresai/olivares:26.700@sha256:fb9e",\n',
-                 "docs-site/public/console/retakes.json")
-           == [("docs-site/public/console/retakes.json", 1, "26.700")])
+           == [("docs-site/public/console/manifest.json", 1, "26.700")])
+    expect("manifest: a JSON record naming its image by digest alone -> green",
+           pins8('  "release_image": "olivaresai/olivares@sha256:fb9e",\n',
+                 "docs-site/public/console/manifest.json") == [])
     expect("the fixture class is Go's rule, not a directory: testdata-looking .go that is not _test.go is judged",
            len(pins8('"olivares_26.700"\n', "cmd/olivares/testdata_helpers.go")) == 1
-           and go_test_fixture("a/b_test.go") and not go_test_fixture("a/b_test.go.txt"))
+           and test_fixture("a/b_test.go") and not test_fixture("a/b_test.go.txt")
+           and test_fixture("scripts/test-release.sh")
+           and not test_fixture("scripts/release.sh")
+           and not test_fixture("scripts/test-tools/release.sh"))
 
     # ── the dated record of a release that already happened (added 2026-09-15) ──
     # THE CASE THIS EXISTS FOR, measured on the 26.900 cut: with the canon re-derived, 383 of
@@ -4315,13 +4324,14 @@ if failures or afailures:
         elif tok.lstrip("v") == base and (p, i) in unmarked:
             note = ("  <- the canon outside a release mark: wrap a live release in "
                     "<!-- release -->…<!-- /release --> (MDX {/* release */}, other files a "
-                    "`# release` line pair); a fixed one takes <!-- release-fixed --> after it")
+                    "`# release` line pair); a fixed one takes <!-- release-fixed --> after it, "
+                    "and JSON, which takes no mark, names a fixed image by digest alone")
         print(f"  {p}:{i}: {tok}{note}")
     for p, i, tok in afailures[:40]:
         print(f"  {p}:{i}: {tok}   [shipped release coordinate]")
     sys.exit(1)
 marked = {(hit.path, hit.number, hit.column) for hit in hits + pin_hits + ahits if hit.marked}
-pins = sum(1 for hit in pin_hits if not hit.marked and not go_test_fixture(hit.path))
+pins = sum(1 for hit in pin_hits if not hit.marked and not test_fixture(hit.path))
 judged = sum(1 for hit in ahits if hit.marked or product_line(hit.token) or in_record(hit))
 print(f"OK check-release-version: every release-bearing surface states {canon} (or a derived form) "
       f"\u2014 {len(files)} documentation surface(s) scanned whole, {len(marked)} marked release "

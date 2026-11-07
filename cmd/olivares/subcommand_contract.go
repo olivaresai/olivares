@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -92,6 +93,7 @@ func enforceSubcommandContract(root *cobra.Command) {
 	})
 
 	walkCommands(root, func(cmd *cobra.Command) {
+		answerListToLs(cmd)
 		switch {
 		case cmd.Name() == "help" && cmd.HasParent() && cmd.Parent() == root:
 			adoptHelpCommand(cmd)
@@ -103,6 +105,24 @@ func enforceSubcommandContract(root *cobra.Command) {
 			cmd.Args = usageCodedArgs(cmd.Args)
 		}
 	})
+}
+
+// answerListToLs makes every `ls` command answer to `list`, and every `get` to `show`, so one
+// listing and one reading habit works in every group (`session list` always did, `modules list` did
+// not). It is done here, once, not by hand on each constructor, so a new `ls` or `get` is covered
+// without its author knowing the rule. A sibling that already answers to the verb, by name or alias,
+// keeps it.
+func answerListToLs(cmd *cobra.Command) {
+	verb := map[string]string{"ls": "list", "get": "show"}[cmd.Name()]
+	if verb == "" || !cmd.HasParent() || slices.Contains(cmd.Aliases, verb) {
+		return
+	}
+	for _, sibling := range cmd.Parent().Commands() {
+		if sibling.Name() == verb || slices.Contains(sibling.Aliases, verb) {
+			return
+		}
+	}
+	cmd.Aliases = append(cmd.Aliases, verb)
 }
 
 // walkCommands applies fn to cmd and every command beneath it.

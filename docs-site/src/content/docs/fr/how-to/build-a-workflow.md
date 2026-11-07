@@ -44,7 +44,7 @@ autre module.
 ## 1. Déclarer le workflow
 
 Sur une nouvelle installation, `orchestration` est désactivé. En tant
-qu’administrateur, activez `orchestration` dans **Settings > Edition & modules**,
+qu’administrateur, activez `orchestration` dans **Settings > Modules**,
 en conservant les autres modules sélectionnés. Pour la CLI, connectez-vous
 d’abord à ce moteur en tant qu’administrateur avec `olivares login`, puis
 exécutez `olivares modules on orchestration`. Attendez chaque redémarrage du moteur avant de continuer ;

@@ -19,8 +19,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 > IV sections the control plane can populate **from live evidence**, so the
 > document is generated, not hand-curated.
 >
-> **Dates note:** application timelines for high-risk obligations are in flux
-> (Digital Omnibus provisional agreement, 2026-05-07). Do not copy dates from
+> **Dates note:** application dates for high-risk obligations were amended by
+> Regulation (EU) 2026/1744 (Digital Omnibus on AI, OJ 2026-07-24). Do not copy dates from
 > static documents — the product serves them as data with source + verified-on:
 > `GET /v1/m/compliance/calendar`.
 >

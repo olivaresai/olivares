@@ -433,7 +433,7 @@ func TestWorktreeLaunchRefusals(t *testing.T) {
 		edit    func(*CreateRunParams)
 		mention string
 	}{
-		"folder that is not a git repository": {func(p *CreateRunParams) { p.WorkspaceRef = plainWS }, "git"},
+		"folder that is not a git repository": {func(p *CreateRunParams) { p.WorkspaceRef = plainWS }, "is not one: run git init there, or start without a worktree."},
 		"folder inside a repository":          {func(p *CreateRunParams) { p.WorkspaceRef = subfolderWS }, "top folder"},
 		"no workspace at all":                 {func(p *CreateRunParams) { p.WorkspaceRef = "" }, "workspace"},
 		"workspace with read-only folders":    {func(p *CreateRunParams) { p.WorkspaceRef = locked.WorkspaceRef }, "read-only"},
@@ -826,14 +826,14 @@ func TestResumeRefusesAWorkspaceThatBecameReadOnlyForTheCopy(t *testing.T) {
 	h, ctx := newWorktreeHarness(t)
 	dto := h.launch(ctx, true)
 	h.stop(ctx, dto.RunRef)
-	if _, err := h.m.patchWorkspace(ctx, h.tenant, h.ws, &[]string{filepath.Join(h.repo, "sub")}, nil, nil, false, nil, nil, "user:u1", "user"); err != nil {
+	if _, err := h.m.patchWorkspace(ctx, h.tenant, h.ws, &[]string{filepath.Join(h.repo, "sub")}, nil, nil, false, nil, nil, nil, "user:u1", "user", nil); err != nil {
 		t.Fatal(err)
 	}
 
 	_, err := h.resume(ctx, dto.RunRef)
 
 	wantRunErr(t, err, http.StatusConflict, "read-only")
-	if _, err := h.m.patchWorkspace(ctx, h.tenant, h.ws, &[]string{}, nil, nil, false, nil, nil, "user:u1", "user"); err != nil {
+	if _, err := h.m.patchWorkspace(ctx, h.tenant, h.ws, &[]string{}, nil, nil, false, nil, nil, nil, "user:u1", "user", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.resume(ctx, dto.RunRef); err != nil {

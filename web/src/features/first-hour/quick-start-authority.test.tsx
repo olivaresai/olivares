@@ -38,6 +38,8 @@ const accessExtension = vi.hoisted(() => ({
 }))
 vi.mock('@/features/extensions', async (orig) => ({
   ...(await orig<typeof import('@/features/extensions')>()),
+  LAUNCH_IDENTITY_EXTENSION: undefined,
+  RUN_ON_EXTENSION: undefined,
   PANEL_EXTENSIONS: {
     get accessRequestAction() {
       return (props: {
@@ -54,7 +56,10 @@ vi.mock('@/features/extensions', async (orig) => ({
 
 import { agentOpsApi } from '@/features/agentops/api'
 import { ApiError } from '@/lib/api/errors'
-import { readinessOf } from '@/features/first-hour/readiness.fixture'
+import {
+  readinessOf,
+  chooseTool,
+} from '@/features/first-hour/readiness.fixture'
 import type { RunDTO } from '@/features/agentops/types'
 import { providersApi } from '@/features/providers/api'
 import { useSentTurns } from '@/features/sessions/sent-turns'
@@ -170,6 +175,24 @@ afterEach(() => {
 })
 
 describe('the quick New session launch authority', () => {
+  it('explains disabled composer Start while its folder is loading', async () => {
+    vi.spyOn(agentOpsApi, 'listRuns').mockImplementation(
+      () => new Promise(() => {}),
+    )
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <StartSessionForm composer />
+      </QueryClientProvider>,
+    )
+    const button = await screen.findByRole('button', { name: 'Start' })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAccessibleDescription(
+      "Reading the last session's folder…",
+    )
+    qc.clear()
+  })
+
   it('offers access request on a refused quick launch', async () => {
     startWithRetry()
     vi.spyOn(agentOpsApi, 'createRun').mockRejectedValue(
@@ -189,7 +212,7 @@ describe('the quick New session launch authority', () => {
       workspaceRef: '',
     })
     const user = userEvent.setup()
-    await user.click(screen.getByRole('radio', { name: 'Codex' }))
+    await chooseTool(user, 'Codex')
     expect(accessExtension.props).toEqual({
       sourceType: 'tool',
       sourceRef: 'claude',

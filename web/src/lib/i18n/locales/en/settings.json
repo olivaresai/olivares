@@ -1,4 +1,25 @@
 {
+  "exposure": {
+    "title": "Console access",
+    "listen": "HTTPS / HTTP listener",
+    "grpc": "gRPC listener",
+    "addresses": "Local addresses",
+    "url": "Public URL",
+    "tls": "Transport",
+    "encrypted": "TLS enabled",
+    "unencrypted": "Plain HTTP",
+    "policy": "Administrative step-up",
+    "unverified": "External reachability is not verified.",
+    "hint": "These are local facts; a public URL or local address does not prove that a phone outside this network can reach the console.",
+    "guard": "Enable an authenticator code or passkey in Administrative step-up before enabling public exposure.",
+    "saved": "Console access updated.",
+    "managed": "Managed public exposure is registered.",
+    "unmanaged": "No managed public exposure is registered.",
+    "urlHint": "Use the address of your tailnet or named tunnel; leave empty to remove the managed public URL.",
+    "unchanged": "Edit the public URL to save it.",
+    "tunnelHint": "Use a tailnet client for private access or a named Cloudflare Tunnel for public access. A tunnel needs no inbound WAN port.",
+    "notSet": "Not set"
+  },
   "title": "Settings",
   "restoreAll": "Restore all defaults",
   "search": "Search settings",
@@ -15,9 +36,10 @@
     "aiTools": "AI tools",
     "workspaces": "Workspaces",
     "deploy": "Deploy and updates",
-    "signIn": "Sign-in and security",
+    "signIn": "Sign-in",
     "setup": "Setup",
-    "edition": "Edition & modules",
+    "edition": "Edition",
+    "modules": "Modules",
     "about": "About",
     "sections": "Settings sections",
     "signing": "Report signing",
@@ -36,13 +58,13 @@
     "density": "Density",
     "densityHint": "Compact shows more rows; comfortable is easier to read.",
     "language": "Language",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Time",
     "timeHint": "Times show in your zone ({{zone}}). Records and exports stay in UTC.",
     "clock24": "24-hour",
     "clock12": "12-hour",
     "startPage": "Start page",
-    "startPageHint": "What opens when you sign in. Default: Now.",
+    "startPageHint": "What opens when you sign in. Default: Sessions.",
     "confirmStop": "Confirm before stopping a session",
     "confirmStopHint": "Ask once before Stop ends a session that is still working.",
     "editor": "Editor for file links",
@@ -71,23 +93,22 @@
     "scope": "The keys this installation answers. They are the same for everyone."
   },
   "edition": {
-    "title": "Edition & modules",
-    "scope": "The edition of this build, the modules it runs, and what Business adds.",
+    "scope": "The edition of this build, its license, and what Business adds.",
     "label": "Edition",
-    "licenseAlias": "License",
     "unknown": "Not reported by this engine",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
     "businessAdds": "Business adds",
-    "adds": {
-      "loginEnforcement": "Login enforcement: require SSO and a network allow-list",
-      "identityProviders": "Several identity providers, per organization and routed by email domain",
-      "groupMapping": "Directory groups mapped to roles at sign-in",
-      "regulatory": "Regulatory operations: DORA registers, NIS 2 incident classification, OSCAL profiles, US and sector packs, and continuous control monitoring",
-      "reports": "Business reports and scheduled reports",
-      "toolPins": "Tool pins"
+    "summary": {
+      "Session cockpit and fleet deployment.": "Session cockpit and fleet deployment.",
+      "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Live session sharing with named, expiring guest access and owner-approved message proposals.",
+      "Directories and several identity providers, departments and delegated administration.": "Directories and several identity providers, departments and delegated administration.",
+      "Compliance and reporting, regulated records.": "Compliance and reporting, regulated records.",
+      "Deeper runtime inspection and key management.": "Deeper runtime inspection and key management.",
+      "Integrations with enterprise systems, commercial license and support.": "Integrations with enterprise systems, commercial license and support.",
+      "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them."
     },
     "badge": {
       "business": "Business",
@@ -153,7 +174,7 @@
     "names": {
       "accessmap": "Access map",
       "adoption": "Adoption",
-      "capabilities": "MCP & skills catalog",
+      "capabilities": "Extensions",
       "catalog": "Catalog",
       "claude-agents": "Claude agents",
       "claude-policy": "Claude policy",
@@ -246,7 +267,7 @@
     "activatedBy": "Enabled by {{addons}}. It stays on while that add-on is active.",
     "turnOnPlain": "Turn on",
     "alsoTurnsOn": "Turning this on also turns on {{names}} and restarts the engine.",
-    "openEdition": "Open Edition & modules",
+    "openModules": "Open Modules",
     "askAdmin": "Ask an administrator to turn it on.",
     "notSetUp": "It is not set up on this installation yet.",
     "stillRestarting": "Still restarting. Reload the page."
@@ -371,6 +392,7 @@
     "tool": "Default tool",
     "account": "Default account",
     "model": "Default model",
+    "effort": "Default effort",
     "folder": "Default folder",
     "automatic": "Automatic",
     "unavailable": "No longer available",
@@ -383,5 +405,9 @@
     "needsYou": "Needs you",
     "finished": "Finished",
     "failed": "Failed"
+  },
+  "aliases": {
+    "edition": "License",
+    "signIn": "Sign-in and security"
   }
 }

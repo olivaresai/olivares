@@ -59,6 +59,7 @@ const A: Whoami = {
   ],
 }
 const home = personalLink('home')!
+const homePath = FEATURE_VIEWS.find((v) => v.id === 'home')!.path
 const clients: QueryClient[] = []
 let latest: NonNullable<ReturnType<typeof usePersonalNavigation>>
 function Probe() {
@@ -458,7 +459,7 @@ it('records real permitted mounts once, preserves URL, removes/clears and starts
   await waitFor(() => expect(recentIds()).toEqual(['agentops']))
   const whoamiReads = vi.mocked(authApi.whoami).mock.calls.length
   await act(async () => {
-    await router.navigate({ to: '/' })
+    await router.navigate({ to: homePath })
   })
   expect(recentIds()).toEqual(['home', 'agentops'])
   await act(async () => {
@@ -485,7 +486,7 @@ it('records real permitted mounts once, preserves URL, removes/clears and starts
     Object.keys(localStorage).filter((key) => key.includes('navigation')),
   ).toEqual([])
   unmount()
-  await mount({ path: '/' })
+  await mount({ path: homePath })
   await waitFor(() => expect(recentIds()).toEqual(['home']))
 })
 
@@ -493,7 +494,7 @@ it('keeps the same identity history on renewal, clears departures and rejects ol
   const { client, router } = await mount()
   await waitFor(() => expect(recentIds()).toEqual(['agentops']))
   await act(async () => {
-    await router.navigate({ to: '/' })
+    await router.navigate({ to: homePath })
   })
   const beforeRenewal = latest
   await act(async () =>
@@ -720,7 +721,7 @@ it('preserves the real continuity owner across an unknown gap and does not re-ad
   ).toEqual(hold)
   expect(recentIds()).toEqual([])
   await act(async () => {
-    await router.navigate({ to: '/' })
+    await router.navigate({ to: homePath })
     await router.navigate({ to: admin.path })
   })
   await waitFor(() => expect(recentIds()).toEqual([admin.id, 'home']))
@@ -748,7 +749,7 @@ it('Settings uses its real tenant-free utility admission; a feature behind Tenan
     expect(latest.recents).toEqual([{ kind: 'utility', id: 'settings' }]),
   )
   await act(async () => {
-    await router.navigate({ to: '/' })
+    await router.navigate({ to: homePath })
   })
   expect(screen.queryByText('Admitted fixture home')).not.toBeInTheDocument()
   expect(recentIds()).toEqual(['settings'])

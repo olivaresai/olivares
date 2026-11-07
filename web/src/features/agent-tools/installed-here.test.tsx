@@ -17,6 +17,9 @@ const { auth, skills, mcp, consoleApiMock, agentOps } = vi.hoisted(() => ({
   mcp: { get: vi.fn() },
   consoleApiMock: { listWorkspaces: vi.fn() },
 }))
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 vi.mock('@/features/skills/api', async (orig) => ({
   ...(await orig<typeof import('@/features/skills/api')>()),
@@ -157,7 +160,7 @@ it('lists what a new session in the active workspace receives, each linked to it
   const skillRow = within(await row('Skills'))
   expect(
     await skillRow.findByRole('link', { name: 'research' }),
-  ).toHaveAttribute('href', '/capabilities?tab=skills&pack=p1')
+  ).toHaveAttribute('href', '/capabilities?tab=skills&pack=p1&skill=research')
   expect(skills.selection).toHaveBeenCalledWith(
     'workspace',
     'ws-eng',
@@ -309,7 +312,7 @@ it("lists the programs and npm registries of each tool's launch profile, never t
       : { reason: 'own_login' },
   )
   mount()
-  const packages = within(await row('Programs and registries'))
+  const packages = within(await row('Programs'))
   expect(await packages.findByRole('link', { name: 'jq' })).toHaveAttribute(
     'href',
     '#tool-claude',
@@ -354,9 +357,7 @@ it('shows no network hosts row when no profile declares one', async () => {
     driver === 'claude' ? profile('ppf_claude', {}) : { reason: 'own_login' },
   )
   mount()
-  await within(await row('Programs and registries')).findByText(
-    /each tool's new session uses/,
-  )
+  await within(await row('Programs')).findByText(/each tool's new session uses/)
   expect(screen.queryByText('Network hosts')).toBeNull()
 })
 
@@ -371,7 +372,7 @@ it('names the launch profile by its account name when it has no display name', a
       : { reason: 'own_login' },
   )
   mount()
-  const packages = within(await row('Programs and registries'))
+  const packages = within(await row('Programs'))
   expect(
     await packages.findByText(
       /each tool's new session uses \(Claude Code: claude-b\)/,
@@ -379,11 +380,10 @@ it('names the launch profile by its account name when it has no display name', a
   ).toBeInTheDocument()
 })
 
-it('says no profile exists yet when a launch would create one that declares nothing', async () => {
+it('shows no programs row when no launch profile exists yet', async () => {
   mount()
-  const packages = within(await row('Programs and registries'))
-  expect(await packages.findByText('None')).toBeInTheDocument()
-  expect(packages.getByText(/None exists yet/)).toBeInTheDocument()
+  await within(await row('Skills')).findByRole('link', { name: 'research' })
+  expect(screen.queryByText('Programs')).toBeNull()
 })
 
 it('asks no preview of a tool the tools readiness already refuses', async () => {
@@ -401,11 +401,8 @@ it('asks no preview of a tool the tools readiness already refuses', async () => 
     ],
   })
   mount()
-  const packages = within(await row('Programs and registries'))
   expect(
-    await packages.findByText(
-      /Not listed because no session can start yet: Claude Code\.$/,
-    ),
+    within(await row('Claude Code')).getByRole('link', { name: 'Sign in' }),
   ).toBeInTheDocument()
   expect(agentOps.previewProfile).toHaveBeenCalledTimes(1)
   expect(agentOps.previewProfile.mock.calls[0][0]).toBe('grok')
@@ -420,12 +417,12 @@ it('names the tools no session can start on, and shows any other failure as unre
     ),
   )
   const { unmount } = mount()
-  const refusedRow = within(await row('Programs and registries'))
-  expect(await refusedRow.findByText('None')).toBeInTheDocument()
   expect(
-    refusedRow.getByText(
-      /Not listed because no session can start yet: Claude Code, Grok Build/,
-    ),
+    within(await row('Claude Code')).getByRole('link', { name: 'Sign in' }),
+  ).toHaveAttribute('href', '#tool-claude')
+  // Grok runs from the PATH: the page has no box of its own to sign it in from.
+  expect(
+    within(await row('Grok Build')).getByText('Sign in'),
   ).toBeInTheDocument()
   const refusedSkills = within(await row('Skills'))
   expect(await refusedSkills.findByText('None')).toBeInTheDocument()
@@ -437,7 +434,7 @@ it('names the tools no session can start on, and shows any other failure as unre
   )
   const second = mount()
   expect(
-    await within(await row('Programs and registries')).findByText(
+    await within(await row('Skills')).findByText(
       /Could not read it: .*default model/,
     ),
   ).toBeInTheDocument()
@@ -446,19 +443,20 @@ it('names the tools no session can start on, and shows any other failure as unre
     new ApiError(503, 'unavailable', 'The sign-in status could not be read.'),
   )
   mount()
-  const packages = within(await row('Programs and registries'))
+  const skillRow = within(await row('Skills'))
   expect(
-    await packages.findByText(/Could not read it: .*sign-in status/),
+    await skillRow.findByText(/Could not read it: .*sign-in status/),
   ).toBeInTheDocument()
-  expect(packages.queryByText('None')).toBeNull()
+  expect(skillRow.queryByText('None')).toBeNull()
 })
 
 it('says the role cannot read provider profiles instead of "None"', async () => {
   auth.can = (p) => p !== 'sessions:profile:read'
   mount()
-  const packages = within(await row('Programs and registries'))
   expect(
-    packages.getByText('Your role cannot read provider profiles.'),
+    within(await row('Skills')).getByText(
+      'Your role cannot read provider profiles.',
+    ),
   ).toBeInTheDocument()
   expect(agentOps.previewProfile).not.toHaveBeenCalled()
 })
@@ -483,7 +481,10 @@ it('resolves workspace and profile skills together for each launchable tool', as
   const skillRow = within(await row('Skills'))
   expect(
     await skillRow.findByRole('link', { name: 'claude-review' }),
-  ).toHaveAttribute('href', '/capabilities?tab=skills&pack=pack-profile')
+  ).toHaveAttribute(
+    'href',
+    '/capabilities?tab=skills&pack=pack-profile&skill=claude-review',
+  )
   expect(
     await skillRow.findByRole('link', { name: 'grok-review' }),
   ).toBeInTheDocument()
@@ -499,4 +500,33 @@ it('resolves workspace and profile skills together for each launchable tool', as
     expect.any(AbortSignal),
     'ppf_grok',
   )
+})
+
+it('shows each row on one line with its explanation behind the chevron, and a tool no session can start on as its own row with its action', async () => {
+  agentOps.toolsReadiness.mockResolvedValue({
+    tools: [
+      {
+        driver: 'claude',
+        ready: false,
+        code: 'nothing_to_run_on',
+        message: 'Claude Code has nothing to run on yet.',
+      },
+      { driver: 'grok', ready: true, reason: 'own_login' },
+    ],
+  })
+  mount()
+  await within(await row('Skills')).findByRole('link', {
+    name: 'research',
+    hidden: true,
+  })
+  for (const hint of [
+    /Install details replaces this/,
+    /pinned there/,
+    /For Claude Code, Codex, OpenCode sessions/,
+  ])
+    expect(screen.getByText(hint)).not.toBeVisible()
+  expect(screen.queryByText(/Not listed because/)).toBeNull()
+  expect(
+    within(await row('Claude Code')).getByRole('link', { name: 'Sign in' }),
+  ).toHaveAttribute('href', '#tool-claude')
 })

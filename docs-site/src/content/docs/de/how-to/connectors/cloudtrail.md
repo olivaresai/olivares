@@ -72,7 +72,7 @@ Reads und Writes werden anhand des `readOnly`-Flags eingefärbt. Das
 Drift-Panel kreuzt sie genau wie bei jeder anderen Quelle gegen deklarierte
 Grants.
 
-In **Inventory** erscheinen die Principals, denen CloudTrail Aufrufe
+In **Erkannte Ressourcen** erscheinen die Principals, denen CloudTrail Aufrufe
 zuschreibt, als Identitäten, bereit, an Agenten gebunden zu werden — diese
 Bindung ist es, die aus einem Shared-Role-`approximate` ein
 Per-Agent-`attributed` macht.

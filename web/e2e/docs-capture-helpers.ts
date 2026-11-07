@@ -74,6 +74,7 @@ export async function tomar(
     recorte,
     actor,
     testigo,
+    aviso,
   }: {
     id: string
     theme: string
@@ -91,6 +92,8 @@ export async function tomar(
     actor?: Record<string, unknown>
     // What the cell's `despues` proved about the data it photographs (the HTTP 200 read).
     testigo?: Record<string, unknown>
+    // The alert a view that shows a refusal exists to show; it must be on the page and no other alert may be.
+    aviso?: RegExp
   },
 ) {
   // Wait for the declared route or modal heading; the shell heading can appear before
@@ -111,8 +114,8 @@ export async function tomar(
   await ocultarMarcasDeRelease(page, version)
   // Errors, unavailable features, raw markdown and placeholders are checked on the text as the product wrote it;
   // then the dates, which are the day of the capture, are masked, and the check below refuses any left.
-  await exigirPantallaTerminada(page, id)
-  await ocultarFechas(page)
+  await exigirPantallaTerminada(page, id, { aviso })
+  await ocultarFechas(page, { version })
   await exigirInstanteLimpio(page, id, { version })
 
   // Record empty-panel counts and main-text size without assigning a cause to empty

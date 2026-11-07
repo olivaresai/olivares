@@ -13,6 +13,9 @@ const auth = vi.hoisted(() => ({
   tenant: 't1',
   permissions: new Set<string>(),
 }))
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: auth.tenant,

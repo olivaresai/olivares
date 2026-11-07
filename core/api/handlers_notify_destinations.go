@@ -6,8 +6,8 @@ package api
 
 import "net/http"
 
-// Console notification-destination endpoints (notify_destinations.go): list, test,
-// save and remove a Slack or Teams destination. SUPERADMIN-gated; the test send and
+// Notification-destination endpoints (notify_destinations.go): list, test, save and
+// remove a destination. SUPERADMIN-gated; the test send and
 // every write require the AAL3 step-up. The list is a plain superadmin read.
 
 func (s *Server) notifyDestinationsSvc(w http.ResponseWriter, r *http.Request) (NotifyDestinations, bool) {

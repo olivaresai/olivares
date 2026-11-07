@@ -278,3 +278,34 @@ func TestAuthenticationEvidenceRefreshAndDegradePreserveEventMeaning(t *testing.
 		t.Fatal(err)
 	}
 }
+
+// TestResolvePrincipalScopeKeepsRightsStaleMark holds that the principal a
+// governed route reconstructs is marked by the freshness port like the one
+// Authenticate returns: a stale session passes no administrative step-up and
+// is refused with the stable code, and a fresh answer changes nothing.
+func TestResolvePrincipalScopeKeepsRightsStaleMark(t *testing.T) {
+	f := newPrincipalEvidenceFixture(t)
+	policy := WithStepUpSource(f.ctx, func(context.Context) (string, error) { return StepUpNone, nil })
+	notAfter := time.Unix(1, 0)
+	f.a.WithFreshnessSource(func(context.Context, model.ID) (time.Time, error) { return notAfter, nil })
+
+	stale, err := f.a.ResolvePrincipalScope(f.deadline(30*time.Minute), f.sessionRef(), f.tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if StepUpSatisfied(policy, stale) {
+		t.Error("a stale session passed the administrative step-up through the governed principal")
+	}
+	if !(RouteMetadata{MinimumAAL: AAL3}).RequiresStepUp(policy, stale) {
+		t.Error("a stale session passed an AAL3 route floor through the governed principal")
+	}
+	if got := StepUpRefusal(policy, stale); !errors.Is(got, ErrRightsDataStale) {
+		t.Errorf("refusal = %v, want ErrRightsDataStale", got)
+	}
+
+	notAfter = time.Time{}
+	fresh, err := f.a.ResolvePrincipalScope(f.deadline(30*time.Minute), f.sessionRef(), f.tenant)
+	if err != nil || !StepUpSatisfied(policy, fresh) {
+		t.Errorf("a session with no bound lost its step-up: err=%v", err)
+	}
+}

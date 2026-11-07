@@ -206,6 +206,14 @@ type CanonicalWalker interface {
 // (strings.ToLower + strings.Contains) — the store applies it in Go on the
 // structurally-narrowed rows, because SQL's case folding is not Go's (SQLite's
 // lower() folds ASCII only) and there is no portable position function.
+//
+// Tool and Folder are not columns of the ledger row: they are facts of the
+// sessions.run row an entry targets (its provider driver and its working
+// directory), and of the approval that run names. An entry matches when it is on
+// such a run, or on the approval that run names now: they are read from the
+// run's current record, so an entry of a deleted run, or of an approval the run
+// no longer names, does not match. A store that cannot resolve them answers
+// ErrAuditFilterUnavailable.
 type AuditFilter struct {
 	Actor                 string     // exact
 	ActionPrefix          string     // literal prefix
@@ -215,6 +223,8 @@ type AuditFilter struct {
 	Since                 *time.Time // occurred_at >=
 	Until                 *time.Time // occurred_at <=
 	Q                     string     // case-insensitive substring over the four text fields
+	Tool                  string     // exact: the provider driver of the run (codex, claude, ...)
+	Folder                string     // exact: the run's working directory
 }
 
 // FilteredWalker is an OPTIONAL capability of an AuditLog (the CanonicalWalker

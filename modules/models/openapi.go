@@ -676,6 +676,9 @@ func modelsModelAccessSchema() map[string]any {
 // OperationDocumentation publishes the request body each mutation's handler decodes.
 // A route this module has not classified stays unclassified.
 func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
+	if doc, ok := askOperationDocumentation(method, pattern); ok {
+		return doc, true
+	}
 	decl, ok := modelsRequestBodyDeclarationFor(method, pattern)
 	if !ok {
 		return api.ModuleOperationDocumentation{}, false

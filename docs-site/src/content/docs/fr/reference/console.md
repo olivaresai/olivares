@@ -15,22 +15,22 @@ Cette page est la carte de la console. Elle répertorie **toutes les routes mont
 l'application** — pas une sélection, ni celles que quelqu'un a pensé à documenter — avec la
 permission nécessaire à un principal pour y accéder et l'endroit où en savoir plus.
 
-La console a **une seule navigation : la barre latérale gauche**. Elle liste les lieux en
-quatre groupes — **Travail** (Accueil, Sessions, Fichiers et espaces, Travail et
-communications), **Outils** (Outils d’IA, Modèles, MCP et compétences, Sources),
-**Contrôle** (Règles et approbations, Usage et coût, Activité et audit, Carte des accès)
-et **Administration** (Personnes et groupes, Sécurité, Exploitation, Licence) — avec
-Paramètres en bas. Chaque écran appartient à un lieu, et la rangée de liens au-dessus d’un
-écran liste les autres écrans de ce lieu. Un lieu n’apparaît que si vos permissions
-autorisent au moins un de ses écrans, et un écran Business uniquement dans l’édition
-Business. La barre latérale se replie sur ses icônes et se rouvre ; sur un écran étroit,
-la même barre s’ouvre en tiroir depuis le bouton de menu. La barre supérieure contient le
-titre de la page, la recherche (⌘K ou Ctrl+K), les notifications et le menu du compte. La
-palette de commandes cherche les mêmes écrans avec les mêmes permissions. Les anciennes
-adresses d’annuaire de domaine (`/areas/…`) ouvrent le lieu qui contient désormais leurs
-écrans, en conservant la requête et le fragment.
+La console a **une seule navigation : la barre latérale gauche**. Elle liste **Sessions**,
+**Fichiers** et **Outils**, puis **Plus**, qui ouvre en dessous **Vue d’ensemble**,
+**Règles**, **Usage**, **Audit**, **Personnes**, **Sécurité** et **Exploitation**, avec
+Paramètres en bas ; l’édition et sa licence sont une section des Paramètres. Plus est
+d’abord fermé, et un lieu en dessous reste affiché tant que vous y êtes ou qu’il contient
+quelque chose qui vous attend (Règles avec une approbation en attente). Chaque écran
+appartient à un lieu, et la rangée de liens au-dessus d’un écran liste les autres écrans de
+ce lieu. Un lieu n’apparaît que si vos permissions autorisent au moins un de ses écrans, et
+un écran Business uniquement dans l’édition Business. La barre latérale se replie sur ses
+icônes et se rouvre ; sur un écran étroit, la même barre s’ouvre en tiroir depuis le bouton
+de menu. La barre supérieure contient le titre de la page, la recherche (⌘K ou Ctrl+K), les
+notifications et le menu du compte. La palette de commandes cherche les mêmes écrans avec
+les mêmes permissions. Les anciennes adresses d’annuaire de domaine (`/areas/…`) ouvrent le
+lieu qui contient désormais leurs écrans, en conservant la requête et le fragment.
 
-Une nouvelle installation n’affiche que le premier travail : Accueil, Sessions, Outils d’IA,
+Une nouvelle installation n’affiche que le premier travail : Vue d’ensemble, Sessions, Outils d’IA,
 Approbations, l’assistant de configuration et Paramètres. Tout autre
 écran y est un aperçu : son adresse, son API et sa CLI continuent de fonctionner, et la
 navigation, la palette de commandes et les raccourcis ne l’affichent pas. Une installation
@@ -43,7 +43,7 @@ recensement append-only que `registry.route-conservation.test.ts` compare au rou
 un écran ne peut donc être ajouté, déplacé ou perdu sans que cette page change avec lui. Le
 nom et la description en une ligne de chaque écran sont **les propres chaînes de la console**,
 tirées du même catalogue de traduction que la console : ce que vous lisez ici est ce
-que vous voyez dans le produit. Les tableaux ci-dessous regroupent ces lignes par domaine, après Accueil (la vue d’ensemble)
+que vous voyez dans le produit. Les tableaux ci-dessous regroupent ces lignes par domaine, après Vue d’ensemble
 et avant connexion, configuration et compte. Les neuf anciennes adresses d’annuaire de domaine figurent
 parmi les routes montées hors du registre de fonctionnalités ; chacune redirige désormais vers
 son lieu.
@@ -75,21 +75,21 @@ Sécurité & identité, Livraison, Supervision, puis Système & paramètres.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La console publie **66 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
+La console publie **68 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
 permission requise et la page de référence ouverte par leur lien d'aide dans le produit.
 
-### Accueil
+### Vue d’ensemble
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Accueil | `/` | Vue d'ensemble du parc et état de santé en un coup d'œil | tout utilisateur connecté | [accueil de la documentation](/fr/) |
+| Vue d’ensemble | `/now` | Vue d'ensemble du parc et état de santé en un coup d'œil | tout utilisateur connecté | [accueil de la documentation](/fr/) |
 
 ### Infrastructure
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Parc | `/estate` | Consultez les ressources configurées et leurs relations, y compris les dépendances des éléments de travail. | `sessions:run:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Inventaire | `/inventory` | Découvrez et cataloguez les agents, serveurs MCP et modèles que les connecteurs ont observés. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
+| Ressources configurées | `/estate` | Ce que vous avez configuré et la façon dont ses éléments dépendent les uns des autres, éléments de travail compris. | `sessions:run:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Ressources découvertes | `/inventory` | Agents, serveurs MCP et modèles observés par les connecteurs, et quand chacun a été vu pour la dernière fois. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
 | Espace de travail | `/workspace` | Agents, sessions, ressources et activité limités à un espace de travail | `tenant:read` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
 
 ### IA
@@ -172,6 +172,7 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Évaluations | `/evals` | Qualité, évaluations et régression | `evals:run:read` | [reference/modules/xii-evals](/fr/reference/modules/xii-evals/) |
 | Santé et SLA | `/health` | Disponibilité et SLA des agents et des MCP | `health:status:read` | [reference/modules/xxii-health](/fr/reference/modules/xxii-health/) |
 | Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
+| Exploitation | `/operations` | L'hôte, ses disques, les sessions en direct et leur utilisation, sur 24 heures, 7 ou 30 jours. | `sessions:run:read` | [reference/console](/fr/reference/console/) |
 | Conservation | `/retention` | Durée de conservation de chaque classe d’enregistrements, balayage qui l’applique et ses certificats scellés | `compliance:retention:read` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite. | `finops:budget:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
 | Usage | `/usage` | Les limites officielles sur 5 heures et à la semaine de chaque compte, la plus proche d'abord, et les jetons et le coût du jour. | `sessions:run:read` | [reference/console](/fr/reference/console/) |
@@ -196,6 +197,7 @@ console dans ce cas.
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
+| Page de démarrage | `/` | Ouvre votre page de démarrage enregistrée, ou Sessions si vous n’en avez enregistré aucune. | tout utilisateur connecté | — |
 | Accepter une invitation | `/accept-invite` | Destination d'un lien d'invitation envoyé par e-mail : l'invité définit un mot de passe et rejoint l'espace de travail, sans session préalable. | **sans connexion** | — |
 | Se connecter | `/login` | Page de connexion par identifiants et token pour un compte déjà provisionné. | **sans connexion** | — |
 | Associer un appareil | `/pair` | Destination d’un lien d’association d’appareil à usage unique : le nouvel appareil se connecte sans session préalable. | **sans connexion** | — |

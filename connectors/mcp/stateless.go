@@ -120,6 +120,57 @@ func nextRequestMeta() requestMeta {
 	}
 }
 
+// LatestParams returns forwarded params with the per-request `_meta` that
+// LatestRevision requires: the protocol version, this client's identity and no
+// client capabilities, so a conforming server never asks for input a
+// handshake-era caller could not answer. Every other member and `_meta` key is
+// kept byte for byte, because forwarded params are governed bytes.
+func LatestParams(params json.RawMessage) (json.RawMessage, error) {
+	var obj, meta map[string]json.RawMessage
+	if len(params) > 0 && json.Unmarshal(params, &obj) != nil {
+		return nil, fmt.Errorf("mcp: %s params must be a JSON object", LatestRevision)
+	}
+	if obj == nil {
+		obj = map[string]json.RawMessage{}
+	}
+	if raw, ok := obj["_meta"]; ok && json.Unmarshal(raw, &meta) != nil {
+		return nil, fmt.Errorf("mcp: %s params _meta must be a JSON object", LatestRevision)
+	}
+	if meta == nil {
+		meta = map[string]json.RawMessage{}
+	}
+	m := nextRequestMeta()
+	var err error
+	if meta[metaProtocolVersion], err = json.Marshal(m.version); err != nil {
+		return nil, err
+	}
+	if meta[metaClientInfo], err = json.Marshal(m.info); err != nil {
+		return nil, err
+	}
+	meta[metaClientCapabilities] = json.RawMessage(`{}`)
+	if obj["_meta"], err = json.Marshal(meta); err != nil {
+		return nil, err
+	}
+	return json.Marshal(obj)
+}
+
+// InitializeFromDiscover maps a server/discover result that lists
+// LatestRevision onto the initialize result a handshake-era caller expects, at
+// LegacyRevision. ok is false for any other answer: the server has not moved and
+// the caller falls back to the LegacyRevision initialize. The fallback is keyed
+// to no error code, as the published stdio and Streamable HTTP "Backward
+// Compatibility" sections require.
+func InitializeFromDiscover(raw json.RawMessage) (json.RawMessage, bool) {
+	var disc discoverResult
+	if json.Unmarshal(raw, &disc) != nil || !disc.supports(LatestRevision) {
+		return nil, false
+	}
+	init := disc.initializeResult()
+	init.ProtocolVersion = LegacyRevision
+	out, err := json.Marshal(init)
+	return out, err == nil
+}
+
 // withExtensions returns a copy of m declaring the given extension ids (empty
 // settings objects), e.g. the tasks extension for tasks/get|update|cancel — a
 // server MUST NOT honor an extension the request did not declare (-32021).
@@ -207,6 +258,18 @@ func (d discoverResult) serverIdentity() serverInfo {
 		si.Version = v
 	}
 	return si
+}
+
+// initializeResult maps the discover result onto the initialize view every
+// consumer reads, so surface, posture and capability gating work in both eras.
+func (d discoverResult) initializeResult() InitializeResult {
+	return InitializeResult{
+		ProtocolVersion: revision20260728,
+		ServerInfo:      d.serverIdentity(),
+		Capabilities:    d.Capabilities,
+		Instructions:    d.Instructions,
+		Meta:            d.Meta,
+	}
 }
 
 // supports reports whether the server lists rev among its supported protocol

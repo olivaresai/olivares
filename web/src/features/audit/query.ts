@@ -7,9 +7,10 @@
 //
 // ⛔ ONE TOKEN, ONE FILTER. Every key names exactly one GET /v1/audit filter and a bare
 //    word is its `q`, so a typed query and the same filters on the URL ask the engine the
-//    same question. A key the API has no filter for (`tool:`, `folder:`) is refused and
+//    same question. A key the API has no filter for (`status:`, say) is refused and
 //    said, never approximated with `q`: an approximation would answer a different
-//    question under the name of this one.
+//    question under the name of this one. `tool:` and `folder:` are facts of the session
+//    an entry is about, which the engine resolves, so they are filters like the rest.
 //
 // The URL carries the filters under the API's own keys (`?actor=…&since=7d`), the form
 // existing links and saved views already use; a relative bound or a day stays as typed
@@ -24,6 +25,8 @@ export const FILTER_KEYS = [
   'action',
   'target_kind',
   'target_id',
+  'tool',
+  'folder',
   'since',
   'until',
   'q',
@@ -37,6 +40,8 @@ export const TOKEN_KEYS = {
   action: 'action',
   kind: 'target_kind',
   target: 'target_id',
+  tool: 'tool',
+  folder: 'folder',
   since: 'since',
   until: 'until',
 } as const satisfies Record<string, Exclude<FilterKey, 'q'>>

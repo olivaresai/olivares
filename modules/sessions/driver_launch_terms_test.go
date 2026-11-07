@@ -173,7 +173,7 @@ func TestLaunchTerms_DeclarationMatchesWhatTheLaunchCarries(t *testing.T) {
 				// nothing about this one, so it is not asked.
 				served := false
 				for _, kind := range []string{ProviderKindAnthropic, ProviderKindOpenAI, ProviderKindXAI} {
-					served = served || recordServesDriver(kind, "", tc.driver)
+					served = served || recordServesDriver(kind, "", "", tc.driver)
 				}
 				if !served {
 					t.Errorf("%s declares model discovery %q, but no provider record of a named kind can be bound to it",

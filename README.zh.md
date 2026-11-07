@@ -1,8 +1,10 @@
 <div align="center">
 
-<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth for enterprise AI" width="720"></a>
+<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI™ — Ground truth for enterprise AI" width="720"></a>
 
-**语言:** [English](./README.md) · [Español](./README.es.md) · **简体中文** · [Русский](./README.ru.md) · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md)
+<a href="https://olivares.ai/business"><img src=".github/assets/film-poster-business.webp" alt="观看 Olivares AI Business 影片" width="720"></a>
+
+**语言:** [English](./README.md) · [Español](./README.es.md) · **简体中文** · [Русский](./README.ru.md) · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md) · [Українська](./README.uk.md) · [한국어](./README.ko.md) · [Português](./README.pt.md)
 
 **运行团队已经在用的 AI，像管理其他基础设施一样掌握它。**
 
@@ -10,7 +12,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.6](https://img.shields.io/badge/release-0.6-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.6)<!-- /release -->
+[![Next release: 0.7](https://img.shields.io/badge/release-0.7-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.7)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -23,52 +25,34 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 
 <div align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
-  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Olivares AI 控制台的驾驶舱页面">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-overview-dark.webp">
+  <img src=".github/assets/console-overview-light.webp" width="840" alt="Olivares AI 控制台的概览页面：一项与规则匹配的审批，以及五个正在工作的代理及其费用和账户">
 </picture>
-<br><sub><b>驾驶舱</b> — 每个 agent 正在做什么、等待你审批的操作，以及每个账户的用量限制。</sub>
+<br><sub><b>概览</b>：需要您审批的事项、与您的规则匹配的结果，以及每个正在工作的代理及其费用。</sub>
 <br><br>
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
-  <img src=".github/assets/console-session-light.webp" width="840" alt="Olivares AI 控制台的会话页面">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-changed-files-dark.webp">
+  <img src=".github/assets/console-changed-files-light.webp" width="840" alt="Olivares AI 控制台中正在工作的会话，已打开“更改”面板">
 </picture>
-<br><sub><b>会话</b> — 对话旁边是它的计划、agent、后台任务、已更改的文件和用量限制。</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
-  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Olivares AI 控制台的并行会话页面">
-</picture>
-<br><sub><b>并行会话</b> — 六个 agent 并排工作，各自在自己的分支上，显示最新输出、成本和用量限制。</sub>
-<br><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
-  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Olivares AI 控制台的访问图页面">
-</picture>
-<br><sub><b>访问图</b> — 每个 agent 读取和写入了什么，并与授予它的权限对照。</sub>
+<br><sub><b>会话</b>：对话与其所更改的文件并列显示。</sub>
 </div>
 
-<div align="center">
-<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
-<br><sub><b>目录</b>： 已批准的 agent、MCP 服务器、skill 和连接器，每项都有状态和签名情况。</sub>
-<br><br>
-<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
-<br><sub><b>工作</b>： 会话结束后仍然保留的任务、负责人和决定。</sub>
-</div>
+[支持的工具](docs-site/src/content/docs/reference/supported-tools.md) (English).
 
 ## 它做什么
 
 - **知道什么在运行。** 在一份清单中查看所有 agent、会话、模型、MCP 服务器和工具。读写访问图展示每个对象读取和写入的内容，并标出没有任何规则允许的访问。
 - **在操作造成损害之前拦住它。** Olivares AI 有**四个 deny-closed 执行点**，在每次操作执行前进行检查：Claude Code 内部、模型代理、每次 MCP 工具调用，以及 agent 之间。有风险的操作等待第二个人确认，被禁止的操作不会执行，一个开关就能同时停止所有 agent。检查无法作出判断时，操作也不会执行。
 - **控制 AI 支出。** 按团队、agent 或模型设置预算，在账单到来之前发出警告、减缓或停止支出。
-- **安全地让 agent 使用公司知识。** 连接 Google Drive、Confluence、Notion、Snowflake、S3 和 PostgreSQL；Business 版另支持 SharePoint、SAP 和 Salesforce。每个 agent 只能看到使用它的人有权看到的内容。
+- **安全地让 agent 使用公司知识。** 连接 Google Drive、Notion、S3 和 PostgreSQL；Business 版另支持 Confluence、Snowflake、Azure AI Search、SharePoint、SAP 和 Salesforce。每个 agent 只能看到使用它的人有权看到的内容。
 - **跨会话继续工作。** 会话结束后，任务、负责人和决策仍然保留。无需 SSH，就能从浏览器启动、加入和停止 Claude Code、Codex 和 Grok 会话。
 - **需要时提供证据。** 每项决策都写入签名日志，事后的任何篡改都可被检测到。Business Compliance Packs 将证据对应到 26 个框架目录，并为安全团队和审计人员生成报告。Community 保留已存证据的读取和 JSON/CSV 导出功能。
 
 支持你已有的工具：Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands，以及通过 Ollama 运行的本地模型。**32 个模块**和 **136 项集成**：[所有模块](docs-site/src/content/docs/reference/modules/overview.md) · [所有连接器](connectors/README.md)。
 
-Community 保留本地可观测性、已保存的设置和备份导出。SIEM/ITSM 推送、外部遥测传输和安全态势导出包含在 Business 基础版中。
+Community 保留本地可观测性、已保存的设置和备份导出。SIEM/ITSM 推送、外部遥测传输、安全态势导出、主备 HA 主节点路由和边缘采集器包含在 Business 基础版中。
 
-**会话网络隔离覆盖绑定到提供商密钥的 Claude Code、Codex 和 OpenCode 会话，以及使用工具自身登录的 OpenCode 会话。** 这类会话只能通过其网络命名空间中的每会话代理访问其提供商的端点或其登录所用的主机，否则不会启动。对于使用提供商密钥的 OpenCode，主机列表基于先前的清单，而不是在代理之后实际演示过的一轮对话。Grok Build 会话以及其他工具的账户登录会话仍可访问网络允许的任何主机。在运行需要独占访问单一提供商的工作负载之前，请参阅[会话网络隔离](SECURITY.md#session-network-isolation)。
+网络隔离取决于工具和连接方式。Claude Code、Codex、OpenCode 和 Gemini CLI 的提供商密钥会话，以及受支持的 OpenCode 和 Cursor 账户会话，具有网络命名空间和代理边界。Grok Build 和其他账户会话没有此边界。具体范围和验证限制请参阅[支持的工具和隔离限制](docs-site/src/content/docs/reference/supported-tools.md#confinement-depends-on-the-connection)（英文）。
 
 ## 安装
 
@@ -85,40 +69,56 @@ olivares quickstart
 
 <!-- release -->
 ```sh
-docker pull docker.io/olivaresai/olivares:0.6 &&
-img=$(docker image inspect --format '{{index .RepoDigests 0}}' docker.io/olivaresai/olivares:0.6) &&
+docker pull docker.io/olivaresai/olivares:0.7 &&
+img=$(docker image inspect --format '{{index .RepoDigests 0}}' docker.io/olivaresai/olivares:0.7) &&
 cosign verify "$img" \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.6 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null &&
-docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
+docker run --rm --entrypoint cat "$img" /usr/share/olivares/olivares-sessions.json >olivares-sessions.json &&
+apparmor= &&
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat "$img" /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null &&
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions &&
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi &&
+docker run -d --name olivares --hostname olivares -p 8443:8443 -p 8444:8444 \
+  --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   "$img" \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
 
+会话需要已验证镜像自带的配置文件：始终需要 seccomp 配置文件；在 AppArmor 控制用户命名空间的主机上（Debian 13、Ubuntu 24.04 及更高版本），还需要 AppArmor 配置文件，代码块会用 `sudo` 加载它。参见 [Docker](INSTALL.md#docker)。
+
 **Docker Compose。** 单节点 SQLite，可选 Postgres 和备份。
 
 ```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares &&
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  sudo install -m 0644 deploy/apparmor/olivares-sessions.conf /etc/apparmor.d/olivares-sessions &&
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions &&
+  export OLIVARES_APPARMOR_PROFILE=olivares-sessions
+fi &&
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-会话在主机上的一个文件夹中工作：在 `up` 之前把 `OLIVARES_PROJECT_DIR` 设为它的绝对路径，Compose 会把它挂载到 `/project`。在 AppArmor 策略限制用户命名空间的主机上（Ubuntu 24.04 及更高版本），请先加载会话配置文件：参见 [Docker Compose](INSTALL.md#docker-compose)。
+会话在主机上的一个文件夹中工作：在 `up` 之前把 `OLIVARES_PROJECT_DIR` 设为它的绝对路径，Compose 会把它挂载到 `/project`。在 AppArmor 控制用户命名空间的主机上（Debian 13、Ubuntu 24.04 及更高版本），代码块会先用 `sudo` 加载会话 AppArmor 配置文件：参见 [Docker Compose](INSTALL.md#docker-compose)。
 
 **Debian 和 Ubuntu。** 软件包添加一个无法登录的 `olivares` 用户和一个经过安全加固的服务；服务由你启动。
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/olivares_0.6_linux_amd64.deb" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.deb" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.6 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.6_linux_amd64.deb$' checksums.txt | sha256sum -c &&
-sudo dpkg -i olivares_0.6_linux_amd64.deb && sudo systemctl enable --now olivares
+grep ' olivares_0.7_linux_amd64.deb$' checksums.txt | sha256sum -c &&
+sudo dpkg -i olivares_0.7_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -126,15 +126,15 @@ sudo dpkg -i olivares_0.6_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/olivares_0.6_linux_amd64.rpm" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.rpm" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.6 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.6_linux_amd64.rpm$' checksums.txt | sha256sum -c &&
-sudo rpm -i olivares_0.6_linux_amd64.rpm && sudo systemctl enable --now olivares
+grep ' olivares_0.7_linux_amd64.rpm$' checksums.txt | sha256sum -c &&
+sudo rpm -i olivares_0.7_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -142,19 +142,19 @@ sudo rpm -i olivares_0.6_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/olivares_0.6_linux_amd64.apk" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.sig" \
-  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.6/checksums.txt.pem"
+curl -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/olivares_0.7_linux_amd64.apk" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.sig" \
+  -fsSLO "https://github.com/olivaresai/olivares/releases/download/0.7/checksums.txt.pem"
 cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.6 \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.7 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt &&
-grep ' olivares_0.6_linux_amd64.apk$' checksums.txt | sha256sum -c &&
-sudo apk add --allow-untrusted olivares_0.6_linux_amd64.apk && sudo rc-service olivares start
+grep ' olivares_0.7_linux_amd64.apk$' checksums.txt | sha256sum -c &&
+sudo apk add --allow-untrusted olivares_0.7_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见<!-- release -->[发布页面](https://github.com/olivaresai/olivares/releases/tag/0.6)<!-- /release -->。
+ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见<!-- release -->[发布页面](https://github.com/olivaresai/olivares/releases/tag/0.7)<!-- /release -->。
 
 **Homebrew。** macOS 和 Linux。
 

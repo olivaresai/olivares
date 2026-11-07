@@ -24,6 +24,7 @@
 #   title        display name, or "-" when nav.items.<id> already names it
 #   summary      one sentence, or "-" when nav.descriptions.<id> already says it
 #
+/	Start page	Opens your saved start page, or Sessions when no start page has been saved.
 /accept-invite	Accept an invitation	Where an emailed invitation link lands: the invitee sets a password and joins the workspace, with no prior session.
 /agentcore-export	-	-
 /backups	-	-

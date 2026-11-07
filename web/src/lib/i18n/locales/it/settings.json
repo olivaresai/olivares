@@ -1,4 +1,25 @@
 {
+  "exposure": {
+    "title": "Accesso alla console",
+    "listen": "Listener HTTPS / HTTP",
+    "grpc": "Listener gRPC",
+    "addresses": "Indirizzi locali",
+    "url": "URL pubblico",
+    "tls": "Trasporto",
+    "encrypted": "TLS abilitato",
+    "unencrypted": "HTTP non cifrato",
+    "policy": "Autenticazione amministrativa rafforzata",
+    "unverified": "La raggiungibilità esterna non è stata verificata.",
+    "hint": "Questi sono dati locali; un URL pubblico o un indirizzo locale non dimostra che un telefono esterno a questa rete possa raggiungere la console.",
+    "guard": "Abilita un codice di autenticazione o una passkey in Autenticazione amministrativa rafforzata prima di abilitare l’accesso pubblico.",
+    "saved": "Accesso alla console aggiornato.",
+    "managed": "L’accesso pubblico gestito è registrato.",
+    "unmanaged": "Nessun accesso pubblico gestito è registrato.",
+    "urlHint": "Usa l’indirizzo del tuo tailnet o tunnel con nome; lascia vuoto per rimuovere l’URL pubblico gestito.",
+    "unchanged": "Modifica l’URL pubblico per salvarlo.",
+    "tunnelHint": "Usa un client tailnet per l’accesso privato o un Cloudflare Tunnel con nome per l’accesso pubblico. Un tunnel non richiede porte WAN in ingresso.",
+    "notSet": "Non impostato"
+  },
   "title": "Impostazioni",
   "restoreAll": "Ripristina tutti i predefiniti",
   "search": "Cerca nelle impostazioni",
@@ -15,9 +36,10 @@
     "aiTools": "Strumenti AI",
     "workspaces": "Workspace",
     "deploy": "Deploy e aggiornamenti",
-    "signIn": "Accesso e sicurezza",
+    "signIn": "Accesso",
     "setup": "Setup",
-    "edition": "Edizione e moduli",
+    "edition": "Edizione",
+    "modules": "Moduli",
     "about": "Informazioni",
     "sections": "Sezioni delle impostazioni",
     "signing": "Firma dei report",
@@ -36,13 +58,13 @@
     "density": "Densità",
     "densityHint": "Compatta mostra più righe; comoda è più facile da leggere.",
     "language": "Lingua",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Ora",
     "timeHint": "Gli orari sono mostrati nel tuo fuso orario ({{zone}}). I record e le esportazioni restano in UTC.",
     "clock24": "24 ore",
     "clock12": "12 ore",
     "startPage": "Pagina iniziale",
-    "startPageHint": "Quello che si apre quando accedi. Predefinita: Adesso.",
+    "startPageHint": "Quello che si apre quando accedi. Predefinita: Sessioni.",
     "confirmStop": "Chiedi conferma prima di fermare una sessione",
     "confirmStopHint": "Chiede una volta prima che Ferma interrompa una sessione ancora in corso.",
     "editor": "Editor per i link ai file",
@@ -71,23 +93,22 @@
     "scope": "I tasti a cui risponde questa installazione. Sono gli stessi per tutti."
   },
   "edition": {
-    "title": "Edizione e moduli",
-    "scope": "L'edizione di questa build, i moduli che esegue e cosa aggiunge Business.",
+    "scope": "L'edizione di questa build, la sua licenza e cosa aggiunge Business.",
     "label": "Edizione",
-    "licenseAlias": "Licenza",
     "unknown": "Non indicato da questo motore",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
     "businessAdds": "Cosa aggiunge Business",
-    "adds": {
-      "loginEnforcement": "Obbligo di accesso: richiedi SSO e una allow-list di rete",
-      "identityProviders": "Più provider di identità, per organizzazione e instradati in base al dominio email",
-      "groupMapping": "Gruppi della directory associati ai ruoli all'accesso",
-      "regulatory": "Operazioni normative: registri DORA, classificazione degli incidenti NIS 2, profili OSCAL, pacchetti per gli USA e per i settori, e monitoraggio continuo dei controlli",
-      "reports": "Report Business e report pianificati",
-      "toolPins": "Pin degli strumenti"
+    "summary": {
+      "Session cockpit and fleet deployment.": "Cockpit delle sessioni e distribuzione sulla flotta.",
+      "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Condivisione delle sessioni in tempo reale con accesso ospite nominativo e a scadenza, e proposte di messaggi approvate dal proprietario.",
+      "Directories and several identity providers, departments and delegated administration.": "Directory e più provider di identità, dipartimenti e amministrazione delegata.",
+      "Compliance and reporting, regulated records.": "Conformità e reportistica, registri regolamentati.",
+      "Deeper runtime inspection and key management.": "Ispezione più approfondita del runtime e gestione delle chiavi.",
+      "Integrations with enterprise systems, commercial license and support.": "Integrazioni con i sistemi aziendali, licenza commerciale e supporto.",
+      "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise include tutto ciò che offre Business, più i termini concordati in un contratto e le funzionalità che ne dipendono."
     },
     "badge": {
       "business": "Business",
@@ -156,7 +177,7 @@
     "names": {
       "accessmap": "Mappa degli accessi",
       "adoption": "Adozione",
-      "capabilities": "Catalogo MCP e skill",
+      "capabilities": "Estensioni",
       "catalog": "Catalogo",
       "claude-agents": "Agenti Claude",
       "claude-policy": "Policy di Claude",
@@ -249,7 +270,7 @@
     "activatedBy": "Abilitato da {{addons}}. Resta attivo finché quell'add-on è attivo.",
     "turnOnPlain": "Attiva",
     "alsoTurnsOn": "Attivandolo si attiva anche {{names}} e si riavvia il motore.",
-    "openEdition": "Apri Edizione e moduli",
+    "openModules": "Apri Moduli",
     "askAdmin": "Chiedi a un amministratore di attivarlo.",
     "notSetUp": "Non è ancora configurato su questa installazione.",
     "stillRestarting": "Riavvio ancora in corso. Ricarica la pagina."
@@ -376,6 +397,7 @@
     "tool": "Strumento predefinito",
     "account": "Account predefinito",
     "model": "Modello predefinito",
+    "effort": "Sforzo predefinito",
     "folder": "Cartella predefinita",
     "automatic": "Automatico",
     "unavailable": "Non più disponibile",
@@ -388,5 +410,9 @@
     "needsYou": "Richiede attenzione",
     "finished": "Completata",
     "failed": "Non riuscita"
+  },
+  "aliases": {
+    "edition": "Licenza",
+    "signIn": "Accesso e sicurezza"
   }
 }

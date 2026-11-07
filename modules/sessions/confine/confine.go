@@ -149,6 +149,7 @@ func CommandWithTruncateProtection(ctx context.Context, p Policy, required bool,
 	helperArgs := append(policyArgs, "--", resolved)
 	helperArgs = append(helperArgs, args...)
 	cmd := exec.CommandContext(ctx, self, append([]string{HelperArg}, helperArgs...)...) // #nosec G204 -- the engine re-executes itself with a fixed helper argument
+	hideUserBus(cmd)
 	return cmd, state, nil
 }
 

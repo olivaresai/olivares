@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Spinner } from '@/components/ui/spinner'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { useAuth } from '@/lib/auth/context'
+import { usePermissionWords } from '@/lib/auth/permission-words'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import {
   consoleApi,
@@ -230,12 +231,26 @@ export function RolesTab() {
 
 // --- delegation authority (the ceiling, shown honestly) ----------------------
 
+// The ceiling as a person reads it: how many permissions at each level, never the ids.
+function countByWords(
+  permissions: string[],
+  words: (permission: string) => string,
+): [string, number][] {
+  const counts = new Map<string, number>()
+  for (const p of permissions) {
+    const w = words(p)
+    counts.set(w, (counts.get(w) ?? 0) + 1)
+  }
+  return [...counts]
+}
+
 function DelegationAuthorityCard({
   query,
 }: {
   query: { data?: DelegationAuthorityDTO; isLoading: boolean; isError: boolean }
 }) {
   const { t } = useTranslation('console')
+  const permissionWords = usePermissionWords()
   return (
     <section className="rounded-lg border border-border bg-muted/20 p-4">
       <div className="flex items-center gap-2">
@@ -284,21 +299,36 @@ function DelegationAuthorityCard({
                     </span>
                   )}
                 </div>
-                <div
-                  aria-label={scopeLabel(t, d.scope_tree, d.scope_ref)}
-                  className="mt-2 flex max-h-24 flex-wrap gap-1 overflow-y-auto"
-                  role="region"
-                  tabIndex={0}
-                >
-                  {d.permissions.map((p) => (
-                    <code
-                      key={p}
-                      className="rounded bg-muted px-1.5 py-0.5 font-mono text-caption text-muted-foreground"
-                    >
-                      {p}
-                    </code>
-                  ))}
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {countByWords(d.permissions, permissionWords).map(
+                    ([words, count]) => (
+                      <span
+                        key={words}
+                        className="rounded bg-muted px-1.5 py-0.5 text-caption text-muted-foreground"
+                      >
+                        {t('roles.authority.levelCount', {
+                          level: words,
+                          count,
+                        })}
+                      </span>
+                    ),
+                  )}
                 </div>
+                <details className="mt-2 text-caption text-muted-foreground">
+                  <summary className="cursor-pointer">
+                    {t('roles.authority.exactPermissions')}
+                  </summary>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {d.permissions.map((p) => (
+                      <code
+                        key={p}
+                        className="rounded bg-muted px-1.5 py-0.5 font-mono"
+                      >
+                        {p}
+                      </code>
+                    ))}
+                  </div>
+                </details>
               </li>
             ))}
           </ul>

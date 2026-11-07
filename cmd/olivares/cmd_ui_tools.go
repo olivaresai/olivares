@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/tui"
+	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
 // cmd_ui_tools.go is the Get started and AI tools screens of CLI-CONCEPT §5.2 and
@@ -27,6 +29,10 @@ import (
 // command resolves it.
 type uiTools struct {
 	cfg agentClientConfig
+
+	// launch is what the command runs once the menu has closed, set on the loop by
+	// a row that needs the whole terminal (the session shell).
+	launch func(in, out *os.File) error
 
 	// kept are sentences for the command to say after the screens close: a
 	// sign-in that could not be ended cannot be said on a list that is gone.
@@ -92,6 +98,9 @@ type uiToolsData struct {
 	// no tool is ready when there is one.
 	refused string
 	warn    string
+	// readOnly: the caller is an organization admin, who sees the accounts and keys but not
+	// the tool inventory; the tool rows are empty and a system administrator installs.
+	readOnly bool
 }
 
 // getStartedSteps are the steps Get started counts: the engine answers, a tool
@@ -103,16 +112,25 @@ const getStartedSteps = 3
 // 80 x 24 would be drawn in part, which is a link nobody can use.
 const maxLinkLen = 800
 
-// safeLink is whether a sign-in link may be shown: the engine's text, opened by a
-// person, so only a plain https address with a host, no credentials and no
-// character a terminal or a browser could read differently. url.Parse decodes a
-// percent-encoded host, so the host is checked as decoded: a browser would read
-// it as a name other than the text the person sees.
-func safeLink(link string) bool {
+// plainHTTPS is whether a sign-in link has the shape a person may open: only a
+// plain https address with a host, no credentials and no character a terminal or
+// a browser could read differently. url.Parse decodes a percent-encoded host, so
+// the host is checked as decoded: a browser would read it as a name other than
+// the text the person sees.
+func plainHTTPS(link string) bool {
 	u, err := url.Parse(link)
 	return err == nil && len(link) <= maxLinkLen && u.Scheme == "https" && u.Hostname() != "" &&
 		u.User == nil && !strings.ContainsFunc(u.Host, func(r rune) bool { return r > '~' }) &&
 		!strings.ContainsFunc(link, func(r rune) bool { return r <= ' ' || r > '~' })
+}
+
+// safeLink is whether a sign-in link may be shown: the engine's text, opened by a
+// person, so a plain https address on a host the tool's own login names
+// (driverfacts), whole: a page on any other host is not the tool's sign-in.
+func safeLink(driver, link string) bool {
+	u, err := url.Parse(link)
+	facts, _ := driverfacts.Lookup(driver)
+	return err == nil && plainHTTPS(link) && facts.LoginHost(u.Hostname())
 }
 
 // readFailedFrame is the screen when the engine could not be read. An action that
@@ -128,34 +146,93 @@ func readFailedFrame(heading, notice string, err error) tui.Frame {
 
 // linkRefused is whether a sign-in's link is one the screen will not draw. A
 // login that finished draws nothing, so a stale link in its answer is not judged.
-func linkRefused(s toolSignIn) bool {
-	return s.State != "signed_in" && s.URL != "" && !safeLink(s.URL)
+func linkRefused(driver string, s toolSignIn) bool {
+	return s.State != "signed_in" && s.URL != "" && !safeLink(driver, s.URL)
 }
 
 // userCodeText is what a device code looks like: the code a person types where
 // the link leads, not a sentence.
 var userCodeText = regexp.MustCompile(`^[A-Za-z0-9-]{1,32}$`)
 
-// bareHost is a host name or a machine's address followed by what continues it
-// (a path, a port, a query), as "claude-login.example:8443/auth" or "10.0.0.7/x".
-var bareHost = regexp.MustCompile(`[a-z0-9-]+\.(xn--[a-z0-9-]+|[a-z]{2,})[/:?#\\]|\b\d{1,3}(\.\d{1,3}){3}\b`)
+// addressText is what in engine text a person could open: a URL with a scheme, a
+// host name (dots, the last label letters) or a machine's IPv4 address, each with
+// the port, path or query that continues it.
+// shortcut: only ASCII dots join a host name; a name written with U+3002, which a
+// browser reads as a dot, is not found. Upgrade: fold the text with NFKC first.
+var addressText = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s"'<>()]+|` +
+	`\b(?:[a-z0-9-]+\.)+(?:xn--[a-z0-9-]+|[a-z]{2,})\b(?::\d+)?(?:[/?#\\][^\s"'<>()]*)?|` +
+	`\b\d{1,3}(?:\.\d{1,3}){3}\b(?::\d+)?(?:[/?#\\][^\s"'<>()]*)?`)
 
-// namesAddress is whether engine text carries an address a person could open.
-func namesAddress(text string) bool {
-	text = strings.ToLower(text)
-	return strings.Contains(text, "://") || strings.Contains(text, "www.") || bareHost.MatchString(text)
+// shownAddress is whether one address found in engine text may be shown: an https
+// address on a host the tool's own login names, whole. A host name alone is judged
+// only when strict, since in a failure's reason it may be a file (auth.json).
+func shownAddress(facts driverfacts.Facts, address string, strict bool) bool {
+	address = strings.TrimRight(address, ".,;:!?")
+	host := address
+	if strings.Contains(address, "://") {
+		u, err := url.Parse(address)
+		if err != nil || u.Scheme != "https" || u.User != nil {
+			return false
+		}
+		host = u.Hostname()
+	} else if i := strings.IndexAny(address, `/?#\:`); i >= 0 {
+		host = address[:i]
+	} else if !strict {
+		return true
+	}
+	return facts.LoginHost(host)
+}
+
+// namesOtherAddress is whether engine text, as a person would read it, carries an
+// address that is not on a host the tool's own login names.
+func namesOtherAddress(driver, text string) bool {
+	facts, _ := driverfacts.Lookup(driver)
+	for _, address := range addressText.FindAllString(oneRow(text), -1) {
+		if !shownAddress(facts, address, true) {
+			return true
+		}
+	}
+	return false
+}
+
+// hideOtherAddresses is a failure's reason with each address off the tool's hosts
+// replaced: the reason stays the tool's own, and no page the person was not sent to
+// is named in it.
+func hideOtherAddresses(driver, text string) string {
+	facts, _ := driverfacts.Lookup(driver)
+	return addressText.ReplaceAllStringFunc(oneRow(text), func(address string) string {
+		if shownAddress(facts, address, false) {
+			return address
+		}
+		return "[address]" + address[len(strings.TrimRight(address, ".,;:!?")):]
+	})
 }
 
 // textRefused is whether the code or the message drawn beside a sign-in link is
 // one the screen will not draw. The link passed safeLink and is the one address
 // the page carries; text that names another, or a code that is not a code, would
-// send the person somewhere nobody checked. A failed login keeps its reason and a
-// login that finished draws nothing, so neither is judged.
-func textRefused(s toolSignIn) bool {
+// send the person somewhere nobody checked. A failed login keeps its reason (with
+// the addresses hidden, toolSignInFailed) and a login that finished draws nothing,
+// so neither is judged.
+func textRefused(driver string, s toolSignIn) bool {
 	if s.State == "signed_in" || s.State == "failed" {
 		return false
 	}
-	return namesAddress(s.Message) || namesAddress(s.UserCode) || (s.UserCode != "" && !userCodeText.MatchString(s.UserCode))
+	return namesOtherAddress(driver, s.Message) || namesOtherAddress(driver, s.UserCode) || (s.UserCode != "" && !userCodeText.MatchString(s.UserCode))
+}
+
+// signInRefusal is why the engine's answer for a login is not shown, or "" when it
+// is. `tool login` and the AI tools screen both ask it before they draw the link,
+// the code or the message, so they refuse the same answers in the same words and
+// both end the login on the engine.
+func signInRefusal(driver string, s toolSignIn) string {
+	switch {
+	case linkRefused(driver, s):
+		return "The sign-in link from the engine is not a plain https address on a host " + toolName(driver) + " signs in at, so it is not shown."
+	case textRefused(driver, s):
+		return "The engine's sign-in text names another address, so it is not shown."
+	}
+	return ""
 }
 
 // installClient is the config an install runs with: the request limit of the
@@ -170,14 +247,15 @@ func (u *uiTools) installClient() agentClientConfig {
 // `session ls --state running` and the readiness behind `olivares` would show.
 func (u *uiTools) read(ctx context.Context) (uiToolsData, error) {
 	rows, err := u.cfg.toolRows(ctx)
-	if err != nil {
+	readOnly := notSystemAdmin(err)
+	if err != nil && !readOnly {
 		return uiToolsData{}, err
 	}
 	// A driver id is the engine's text, and it names a command and a request:
 	// one that would draw on a terminal is not a tool this screen can show.
 	total := len(rows)
 	rows = slices.DeleteFunc(rows, func(r toolRow) bool { return !plainName.MatchString(r.Driver) })
-	d := uiToolsData{rows: rows, running: map[string]int{}}
+	d := uiToolsData{rows: rows, running: map[string]int{}, readOnly: readOnly}
 	var warned []string
 	if len(rows) < total {
 		warned = append(warned, "a tool with an unusual name")
@@ -284,6 +362,9 @@ func (u *uiTools) toolsFrame(d uiToolsData, heading string, getStarted bool, rel
 		}
 	} else {
 		frame.Right, cursor = fmt.Sprint(len(d.rows)), 0
+	}
+	if d.readOnly {
+		frame.Footer, frame.FooterRole = toolsSystemAdminNote, termrender.RoleNone
 	}
 	if d.warn != "" {
 		frame.Footer, frame.FooterRole = d.warn, termrender.RoleWarn

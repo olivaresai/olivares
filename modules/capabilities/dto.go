@@ -141,5 +141,5 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 // The envelope already carries `code` end to end (core/api/errors.go; the console's
 // parseErrorEnvelope projects it into ApiError.code) — this module simply never sent one.
 func writeErrorCode(w http.ResponseWriter, status int, code, msg string) {
-	writeJSON(w, status, map[string]any{"error": map[string]any{"code": code, "message": msg}})
+	writeJSON(w, status, api.ErrorBody(code, msg))
 }

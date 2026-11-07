@@ -8,7 +8,7 @@
 // action. It is neither an error nor a refusal (that is a permission, and stays hidden).
 //
 //   · a person who may change modules: "Turn on", the same selection as Settings >
-//     Edition & modules (the engine restarts to apply it, after the usual confirmation when
+//     Modules (the engine restarts to apply it, after the usual confirmation when
 //     sessions run); the view appears here without a reload once the engine is back;
 //   · anyone else: whom to ask;
 //   · the communication plane is no module a switch turns on: only the sentence.
@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { viewDescription, viewLabel } from '@/features/navigation/model'
 import type { FeatureView } from '@/features/registry'
 import { useAuth } from '@/lib/auth/context'
+import { cn } from '@/lib/utils'
 import { moduleOfView } from '@/stores/modules'
 
 // The turn-on action lives with the Modules screen; it loads only when the page offers it.
@@ -26,7 +27,14 @@ const TurnOnPage = lazy(() =>
   })),
 )
 
-export function ModuleOffPage({ view }: { view: FeatureView }) {
+export function ModuleOffPage({
+  view,
+  titleHidden = false,
+}: {
+  view: FeatureView
+  /** The top bar already says this name: kept for assistive technology, not painted. */
+  titleHidden?: boolean
+}) {
   const { t } = useTranslation(['nav', 'errors', 'settings'])
   const { isSuperadmin } = useAuth()
   const module = moduleOfView(view.permission, view.id)
@@ -42,7 +50,9 @@ export function ModuleOffPage({ view }: { view: FeatureView }) {
         {Icon ? (
           <Icon aria-hidden strokeWidth={1.5} className="size-8 text-text-3" />
         ) : null}
-        <h1 className="text-title text-text">{viewLabel(t, view.id)}</h1>
+        <h1 className={cn('text-title text-text', titleHidden && 'sr-only')}>
+          {viewLabel(t, view.id)}
+        </h1>
         <p className="text-body text-text-2">{description}</p>
         <div className="mt-2 flex flex-col items-center gap-2">
           {module === 'communication' || !module ? (

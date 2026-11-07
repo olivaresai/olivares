@@ -6,6 +6,16 @@
 // in the catalog is DECLARED reference (list defaults, dated `as_of`) — editable,
 // not immutable truth. Key references carry only a masked `hint` — NEVER a usable
 // credential (docs/SECURITY-HARDENING.md): there is no field that can hold the secret.
+import type { paths } from '@/lib/api/openapi.gen'
+
+type UsageGet = paths['/v1/m/sessions/usage']['get']
+
+/** What the runs the caller may read used, totalled by one dimension (the sessions module's
+ *  `GET /usage`). A sum is `null` when no run reported it: that is "not reported", not 0. */
+export type UsageResponse =
+  UsageGet['responses'][200]['content']['application/json']
+export type UsageRow = UsageResponse['items'][number]
+export type UsageQuery = UsageGet['parameters']['query']
 
 export type ModelCapability =
   | 'streaming'
@@ -72,20 +82,22 @@ export interface CatalogResponse {
   pricing_note: string
 }
 
-/** A model in the governed estate (enriched from the catalog). */
+/** A model in the governed estate (enriched from the catalog). The enrichment fields are
+ * `omitempty` in modules/models/dto.go governedModelDTO: a model the engine has not
+ * enriched (`enriched: false`) arrives without them. */
 export interface GovernedModel {
   id: string
   name: string
-  provider_id: string
-  provider: string
-  family: string
-  context_window: number
+  provider_id?: string
+  provider?: string
+  family?: string
+  context_window?: number
   /** µUSD per token (integer, coarse — the authoritative cost is the FinOps ledger). */
   input_cost_micro_usd: number
   output_cost_micro_usd: number
-  modality: string
+  modality?: string
   status: string
-  capabilities: ModelCapability[]
+  capabilities?: ModelCapability[]
   /** false = no declared family yet (no price). */
   enriched: boolean
 }

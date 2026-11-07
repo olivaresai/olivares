@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useRef, useState } from 'react'
+import { AppLink } from '@/components/ui/app-link'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,13 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Field } from '@/components/ui/field'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { getWorkItem } from '@/features/work/api'
 import { DependencyChange } from './dependency-change'
 import { EstateStatus } from './estate-status'
@@ -202,19 +210,18 @@ export function EstateInspector({
                       label={t('chooseDependency')}
                       htmlFor="estate-dependency"
                     >
-                      <select
-                        id="estate-dependency"
-                        value={choice}
-                        onChange={(event) => setChoice(event.target.value)}
-                        className="min-h-11 w-full rounded-ctl border border-ctl-border bg-surface px-2 text-body"
-                      >
-                        <option value="">{t('chooseDependency')}</option>
-                        {candidates.map((other) => (
-                          <option key={other.ref} value={other.ref}>
-                            {other.label}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={choice} onValueChange={setChoice}>
+                        <SelectTrigger id="estate-dependency">
+                          <SelectValue placeholder={t('chooseDependency')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {candidates.map((other) => (
+                            <SelectItem key={other.ref} value={other.ref}>
+                              {other.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </Field>
                     {candidates.length === 0 && (
                       <p className="text-caption text-text-2">
@@ -247,7 +254,9 @@ export function EstateInspector({
             )}
           {canOpenOwner && (
             <Button asChild>
-              <a href={estateOwnerHref(node)}>{t('openOwner')}</a>
+              <AppLink href={estateOwnerHref(node)}>
+                {t('openOwner', { resource: t('kinds.' + node.kind) })}
+              </AppLink>
             </Button>
           )}
         </SheetContent>

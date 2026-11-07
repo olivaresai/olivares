@@ -80,7 +80,10 @@ func (a *Authenticator) RevalidateQueuedCredential(ctx context.Context, q Queued
 		}
 		return nil
 	})
-	return p, err
+	if err != nil {
+		return p, err
+	}
+	return a.withFreshness(ctx, p), nil
 }
 
 // BindQueuedCredential records an irreversible verifier fingerprint of the exact

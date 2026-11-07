@@ -8,6 +8,7 @@ import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { StatusChip } from '@/components/ui/status-chip'
 import { Button } from '@/components/ui/button'
+import { ProviderAccent } from '@/features/agentops/provider-accent'
 import { useProfileProviders } from '@/features/agentops/profile-authentication'
 import { isSigningIn, type SignInTool } from '@/features/first-hour/api'
 import { useAccountSignInStatus } from '@/features/agentops/provider-account-signin'
@@ -22,6 +23,7 @@ import {
 } from '@/features/first-hour/first-hour'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
+import { accountLabel } from './account-marks'
 
 /** What a row says about a profile, in the words the page prints. */
 export type ProfileState =
@@ -38,8 +40,13 @@ export type ProfileState =
 export interface ProfileRowModel {
   /** The row's stable id: the account's name, or `default` for the default login. */
   id: string
-  /** What the row is called: the account's name, or "Default sign-in". */
+  /** What the row is called: the account's display name, else its name, or "Default
+   * sign-in". */
   name: string
+  /** The account's stored accent: the dot before the name. */
+  accent?: string
+  /** The account's own name when a display name hides it: the CLI names the account by it. */
+  handle?: string
   state: ProfileState
   /** Ready to start a session. */
   ready: boolean
@@ -115,10 +122,13 @@ export function ProfileRowView({
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         )}
       >
-        <span className="truncate text-body font-medium text-text">
-          {model.name}
+        <span className="flex min-w-0 items-center text-body font-medium text-text">
+          <ProviderAccent accent={model.accent} />
+          <span className="truncate">{model.name}</span>
         </span>
-        <span className="truncate text-caption text-text-2">{detail}</span>
+        <span className="truncate text-caption text-text-2">
+          {model.handle ? `${model.handle} · ${detail}` : detail}
+        </span>
         <AccountUsage usage={model.usage} className="truncate" />
         {model.state.kind === 'account' &&
         model.state.failed &&
@@ -186,10 +196,16 @@ export function useAccountRow(account: ProviderAccountDTO): ProfileRowModel {
   )
   const key = useKeyOf(account)
   const off = account.state !== 'active'
+  const label = accountLabel(account)
+  const shown = {
+    id: account.name,
+    name: label,
+    accent: account.accent,
+    handle: label === account.name ? undefined : account.name,
+  }
   if (keyed)
     return {
-      id: account.name,
-      name: account.name,
+      ...shown,
       state: { kind: 'key', ...key },
       ready: !off && !!account.provider_record_ref,
       off,
@@ -197,8 +213,7 @@ export function useAccountRow(account: ProviderAccountDTO): ProfileRowModel {
     }
   const signedIn = status.data ? status.data.signed_in : undefined
   return {
-    id: account.name,
-    name: account.name,
+    ...shown,
     state: {
       kind: 'account',
       signedIn,

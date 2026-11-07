@@ -32,7 +32,7 @@ async function browserSessionFlow(page: Page, origin: string) {
   await expect(
     page
       .getByLabel('Main navigation')
-      .getByRole('link', { name: 'Now', exact: true }),
+      .getByRole('link', { name: 'Settings', exact: true }),
   ).toBeVisible()
   const cookies = await page.context().cookies()
   const cookie = cookies.find(
@@ -45,7 +45,7 @@ async function browserSessionFlow(page: Page, origin: string) {
   await expect(
     page
       .getByLabel('Main navigation')
-      .getByRole('link', { name: 'Now', exact: true }),
+      .getByRole('link', { name: 'Settings', exact: true }),
   ).toBeVisible()
 
   async function sessionRequest(

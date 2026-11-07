@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { SystemAdminOnly } from '@/components/layout/system-admin-only'
 import { EditionBadge } from './edition-badge'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -133,14 +135,14 @@ function LicenseFacts({
     >
       <dl className="divide-y divide-border">
         <Row label={t('console:license.edition')}>
-          <Badge variant={editionVariant}>
+          <Badge variant={editionVariant} data-trust-chrome="">
             {t(`console:license.editions.${license.edition}`, {
               defaultValue: license.edition,
             })}
           </Badge>
         </Row>
         <Row label={t('console:license.status')}>
-          <Badge variant={statusTone}>
+          <Badge variant={statusTone} data-trust-chrome="">
             {showCheck ? (
               <BadgeCheck className="size-3 shrink-0" aria-hidden />
             ) : null}
@@ -204,19 +206,21 @@ function LicenseFacts({
             {new Date(license.issued_at).toLocaleDateString(currentLanguage())}
           </Row>
         )}
-        <Row label={t('console:license.sourceLabel')}>
-          <span className="font-mono text-caption break-all">
-            {t(`console:license.sources.${license.source}`, {
-              defaultValue: license.source,
-            })}
-            {license.source_path ? (
-              <>
-                {' '}
-                (<PathText value={license.source_path} />)
-              </>
-            ) : null}
-          </span>
-        </Row>
+        {license.source !== 'none' && (
+          <Row label={t('console:license.sourceLabel')}>
+            <span className="font-mono text-caption break-all">
+              {t(`console:license.sources.${license.source}`, {
+                defaultValue: license.source,
+              })}
+              {license.source_path ? (
+                <>
+                  {' '}
+                  (<PathText value={license.source_path} />)
+                </>
+              ) : null}
+            </span>
+          </Row>
+        )}
       </dl>
     </div>
   )
@@ -253,13 +257,13 @@ export function LicenseTab() {
   })
 
   if (!isSuperadmin) {
+    // Under the Edition section's heading, the notice keeps the license's own heading.
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
-        <ShieldAlert
-          className="mt-0.5 size-4 shrink-0 text-warning"
-          aria-hidden
-        />
-        {t('console:license.superadminOnly')}
+      <div className="flex flex-col gap-2">
+        <h2 className="text-heading text-foreground">
+          {t('console:license.title')}
+        </h2>
+        <SystemAdminOnly />
       </div>
     )
   }
@@ -439,7 +443,9 @@ export function LicenseTab() {
         </DialogContent>
       </Dialog>
       {extensionCards.map((p) => (
-        <p.Component key={p.id} />
+        <PanelSlot key={p.id}>
+          <p.Component />
+        </PanelSlot>
       ))}
     </div>
   )
@@ -961,12 +967,18 @@ function FamilyRow({
 }) {
   const { t } = useTranslation(['console'])
   const titleId = useId()
+  const reasonId = useId()
   const total = family.addons.length
   const on = family.active.length
   // Staged add-ons wait for a secret or a review the administrator provides.
   const waiting = addons.filter(
     (a) => family.addons.includes(a.key) && a.state === 'pending',
   ).length
+  // The engine says the verified license does not cover the family. Not known is
+  // not "no": the engine still checks the license on every change.
+  const notCovered = addons.some(
+    (a) => family.addons.includes(a.key) && a.license_covered === false,
+  )
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
       <div className="min-w-0">
@@ -978,13 +990,21 @@ function FamilyRow({
           {waiting > 0 &&
             ` · ${t('console:activation.familyWaiting', { count: waiting })}`}
         </div>
+        {notCovered && (
+          <div id={reasonId} className="text-caption text-muted-foreground">
+            {t('console:activation.familyNotCovered', {
+              family: family.title,
+            })}
+          </div>
+        )}
       </div>
       <div className="flex gap-2">
         {on < total && (
           <Button
             variant="secondary"
             size="sm"
-            aria-describedby={titleId}
+            aria-describedby={notCovered ? `${titleId} ${reasonId}` : titleId}
+            disabled={notCovered}
             onClick={() => onChange('enable')}
           >
             <Power className="size-3.5" aria-hidden />

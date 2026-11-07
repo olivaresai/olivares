@@ -33,7 +33,8 @@ import (
 //   - a delivery or an audience arc naming the account and a WorkItem it owns are
 //     kept and reported by nothing: a delivery is bound to the tenant's
 //     membership, which the offboard already removed, and a WorkItem owner is a
-//     duty the tenant reassigns through the work plane.
+//     duty the tenant reassigns through the work plane. Template ownership is also
+//     a retained obligation, not authority that blocks retirement.
 // The step's transaction first pins the tenant's authorization epoch and the
 // account's authority version the pass read, so a pass that read before a lift or
 // a new offboard conflicts and changes nothing.
@@ -47,6 +48,7 @@ const communicationChannelRetireAudit = "sessions.communication.channel.retire"
 
 // retirementCovers are the counted columns this module's step reads.
 var retirementCovers = []string{
+	string(templateKind) + "." + colTplOwner,
 	string(limitResumeSettingsKind) + "." + colLimitResumeOwner,
 	"sessions.share.owner_id",
 	"sessions.share.guest_id",

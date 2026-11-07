@@ -940,7 +940,7 @@ func Drop(tb testing.TB, superDSN, database string, roles ...string) {
 		}
 	}
 	if err := execIdent(ctx, db, "DROP DATABASE IF EXISTS %s WITH (FORCE)", database); err != nil {
-		tb.Errorf("pgtest: drop database %q: %v", database, err)
+		tb.Errorf("pgtest: drop database %q: %v\n%s", database, err, dropDiagnostics(db, database))
 		// The roles still hold privileges inside the surviving database; dropping
 		// them would fail with a confusing dependency error. Leave them with the
 		// database so the leak is one object group, not two.
@@ -951,6 +951,34 @@ func Drop(tb testing.TB, superDSN, database string, roles ...string) {
 			tb.Errorf("pgtest: drop role %q: %v", role, err)
 		}
 	}
+}
+
+// dropDiagnostics uses a fresh deadline because the DROP context may have expired.
+func dropDiagnostics(db *sql.DB, database string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var out strings.Builder
+	for _, probe := range []struct{ name, query string }{
+		{"pg_stat_activity", `SELECT COALESCE(jsonb_agg(s), '[]'::jsonb)::text FROM (
+   SELECT pid, usename, application_name, state, xact_start, query_start,
+    left(query, 200) AS query, pg_blocking_pids(pid) AS blocking_pids
+   FROM pg_stat_activity WHERE datname = $1 ORDER BY pid
+  ) s`},
+		{"pg_locks", `SELECT COALESCE(jsonb_agg(l), '[]'::jsonb)::text FROM (
+   SELECT * FROM pg_locks
+   WHERE database = (SELECT oid FROM pg_database WHERE datname = $1)
+    OR pid IN (SELECT pid FROM pg_stat_activity WHERE datname = $1)
+   ORDER BY pid, locktype, mode
+  ) l`},
+	} {
+		var snapshot string
+		if err := db.QueryRowContext(ctx, probe.query, database).Scan(&snapshot); err != nil {
+			fmt.Fprintf(&out, "%s: unavailable: %v\n", probe.name, err)
+			continue
+		}
+		fmt.Fprintf(&out, "%s: %s\n", probe.name, snapshot)
+	}
+	return out.String()
 }
 
 // ownedDatabase / ownedTempRole are the name shapes this package mints. Teardown

@@ -274,10 +274,15 @@ func TestRunPreviewGate(t *testing.T) {
 
 // droppingAuditData answers every audit append the way the degrade spool policy
 // answers one it drops (sqlstore audit.go: an empty event and no error).
-type droppingAuditData struct{ api.ScopedData }
+// Every other read, such as the run row an entry targets, is the real store's.
+type droppingAuditData struct {
+	api.ScopedData
+	st     store.Store
+	tenant model.TenantID
+}
 
-func (droppingAuditData) Mutate(_ context.Context, fn func(store.Scope) error) error {
-	return fn(droppingAuditScope{})
+func (d droppingAuditData) Mutate(ctx context.Context, fn func(store.Scope) error) error {
+	return d.st.Mutate(ctx, d.tenant, func(sc store.Scope) error { return fn(droppingAuditScope{sc}) })
 }
 
 type droppingAuditScope struct{ store.Scope }
@@ -302,7 +307,7 @@ func TestRunPreviewDroppedAuditRefusesTheLink(t *testing.T) {
 		route.URLParams.Add("ref", f.runRef)
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, route))
 		rec := httptest.NewRecorder()
-		f.m.handleOpenRunPreview(rec, req, api.ModuleContext{Tenant: f.tenant, Data: droppingAuditData{}})
+		f.m.handleOpenRunPreview(rec, req, api.ModuleContext{Tenant: f.tenant, Data: droppingAuditData{st: f.st, tenant: f.tenant}})
 		return rec
 	}
 	if rec := open(f.appPort); rec.Code != http.StatusServiceUnavailable || strings.Contains(rec.Body.String(), "/session/preview/") {

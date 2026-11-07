@@ -16,6 +16,8 @@ import ja from './i18n/ja.json'
 import ko from './i18n/ko.json'
 import ru from './i18n/ru.json'
 import zh from './i18n/zh.json'
+import uk from './i18n/uk.json'
+import pt from './i18n/pt.json'
 
 // THE DEFECT. The Compliance console renders `response.disclaimer` — the
 // engine's own words — verbatim. The engine speaks only English, so the sentence
@@ -40,6 +42,10 @@ const REPORT_DISCLAIMER =
 const AIMS_PACK_DISCLAIMER =
   "Draft ISO/IEC 42001:2023 certification-readiness pack based on Olivares AI's current assessment and operator-supplied context. All artifacts are drafts; a competent person must review them before submission to a certification body, auditor or buyer. This pack provides neither certification nor conformity assurance nor legal advice. Certification requires an accredited body (ISO/IEC 42006:2025). Control status reflects current tenant evidence; gaps remain unsatisfied."
 
+// prettier-ignore
+const portugueseNegativeClause = 'não fornece certificação, garantia de conformidade nem aconselhamento jurídico' // language-data: Portuguese disclaimer assertion
+// prettier-ignore
+const portugueseNegatedCertification = 'NÃO é uma certificação e NÃO é aconselhamento jurídico' // language-data: Portuguese disclaimer assertion
 // prettier-ignore
 const spanishNegativeClause = 'ni certificación ni garantía de conformidad ni asesoramiento jurídico' // language-data: Spanish disclaimer assertion
 // prettier-ignore
@@ -107,6 +113,19 @@ const AIMS_LOCALES: [
       /인증, 적합성 보증 또는 법률 자문을 제공하지 않습니다/,
       /공백은 충족되지 않은 상태/,
     ],
+  ],
+  [
+    'uk',
+    uk,
+    [
+      /не надає ні сертифікації, ні гарантії відповідності, ні юридичної консультації/,
+      /прогалини залишаються невиконаними/,
+    ],
+  ],
+  [
+    'pt',
+    pt,
+    [new RegExp(portugueseNegativeClause), /lacunas continuam por satisfazer/],
   ],
 ]
 
@@ -200,6 +219,8 @@ describe('the canonical map', () => {
     ['ja', ja, /認証ではなく|認証では ?ありません/],
     ['zh', zh, /不是认证|并非认证/],
     ['ko', ko, /인증이 아니며[^.]*법률 자문도 아닙니다/],
+    ['uk', uk, /НЕ сертифікація і НЕ юридична консультація/],
+    ['pt', pt, new RegExp(portugueseNegatedCertification)],
   ])(
     'the %s translation NEGATES the certification claim, in that order',
     (_loc, catalog, negatedCertification) => {

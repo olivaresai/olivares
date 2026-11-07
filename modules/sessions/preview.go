@@ -331,9 +331,13 @@ func (m *Module) auditPreview(r *http.Request, mc api.ModuleContext, action, ref
 				return err
 			}
 		}
+		target, err := runAuditTarget(r.Context(), sc, ref)
+		if err != nil {
+			return err
+		}
 		e, err := sc.Audit().Append(r.Context(), model.AuditDraft{
 			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
-			Action: action, TargetKind: runKind, Meta: meta,
+			Action: action, TargetKind: runKind, TargetID: target, Meta: meta,
 		})
 		seq = e.Seq
 		if err == nil && seq != 0 && verify != nil {
@@ -471,6 +475,8 @@ func (m *Module) newPreviewProxy(g *previewGrant) *httputil.ReverseProxy {
 			pr.Out.Host = pr.In.Host
 			// The engine session cookie is the user's credential, never the app's.
 			pr.Out.Header.Del("Cookie")
+			// An HTML page gets the element picker appended: it must arrive unencoded.
+			pr.Out.Header.Set("Accept-Encoding", "identity")
 		},
 		Transport:     transport,
 		FlushInterval: -1,
@@ -484,6 +490,7 @@ func (m *Module) newPreviewProxy(g *previewGrant) *httputil.ReverseProxy {
 					delete(resp.Header, name)
 				}
 			}
+			addPicker(resp)
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {

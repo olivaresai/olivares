@@ -221,6 +221,9 @@ describe('Models > Available', () => {
     expect(within(tool).getAllByText('OpenCode')).toHaveLength(2)
     expect(within(tool).getByText(/live list/i)).toBeInTheDocument()
     expect(within(tool).getByText('Ready')).toBeInTheDocument()
+    // A tool's row wears its vendor's mark (narrow and wide owner cells alike).
+    for (const mark of within(tool).getAllByTestId('tool-mark'))
+      expect(mark).toHaveAttribute('data-vendor', 'opencode')
 
     expect(screen.getByRole('row', { name: /O3/ })).toBeInTheDocument()
 
@@ -228,11 +231,14 @@ describe('Models > Available', () => {
     expect(within(provider).getAllByText('Local API stub')).toHaveLength(2)
     expect(within(provider).getByText('API provider')).toBeInTheDocument()
     expect(within(provider).getByText('Ready')).toBeInTheDocument()
+    expect(within(provider).queryByTestId('tool-mark')).toBeNull()
 
     const ollama = screen.getByRole('row', { name: /qwen3:8b/ })
     expect(within(ollama).getAllByText('Ollama')).toHaveLength(2)
     expect(within(ollama).getByText(/installed/i)).toBeInTheDocument()
     expect(within(ollama).getByText('Ready')).toBeInTheDocument()
+    for (const mark of within(ollama).getAllByTestId('tool-mark'))
+      expect(mark).toHaveAttribute('data-vendor', 'ollama')
   })
 
   it('reads every provider metadata page before naming or deduping', async () => {

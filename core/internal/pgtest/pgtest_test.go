@@ -644,3 +644,62 @@ func TestLockSharedRoleExcludesAConcurrentProvisioner(t *testing.T) {
 		t.Fatal("the provisioning lock never became takeable in 30s after LockSharedRole released it: every later Provision in this cluster would queue behind a lock nobody owns")
 	}
 }
+
+// dropFailure captures the teardown error without marking the parent test failed.
+type dropFailure struct {
+	testing.TB
+	message string
+}
+
+func (*dropFailure) Helper()                             {}
+func (f *dropFailure) Errorf(format string, args ...any) { f.message = fmt.Sprintf(format, args...) }
+
+func TestDropFailureNamesHeldSession(t *testing.T) {
+	super := os.Getenv(EnvSuperuserDSN)
+	if super == "" {
+		t.Skipf("set %s for real teardown diagnostics", EnvSuperuserDSN)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	maintenance, err := sql.Open("pgx", super)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer maintenance.Close()
+	database := "olv_t_" + Suffix(t)
+	if err := execIdent(ctx, maintenance, "CREATE DATABASE %s", database); err != nil {
+		t.Fatal(err)
+	}
+	defer Drop(t, super, database)
+	u, err := url.Parse(super)
+	if err != nil {
+		t.Fatal("parse maintenance DSN")
+	}
+	u.Path = "/" + database
+	q := u.Query()
+	q.Set("application_name", "pgtest-held-session")
+	u.RawQuery = q.Encode()
+	held, err := sql.Open("pgx", u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+	tx, err := held.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	var pid int
+	if err := tx.QueryRowContext(ctx, "SELECT pg_backend_pid() FROM pg_advisory_xact_lock(4515)").Scan(&pid); err != nil {
+		t.Fatal(err)
+	}
+	failure := &dropFailure{}
+	// A maintenance connection to the target itself makes DROP fail immediately,
+	// preserving the held transaction for the same diagnostics used after a timeout.
+	Drop(failure, u.String(), database)
+	for _, want := range []string{"pgtest: drop database", "pg_stat_activity", "pg_locks", "pgtest-held-session", fmt.Sprintf(`"pid": %d`, pid), "idle in transaction", "advisory", "xact_start", "query_start", "pg_advisory_xact_lock(4515)"} {
+		if !strings.Contains(failure.message, want) {
+			t.Errorf("drop failure missing %q: %s", want, failure.message)
+		}
+	}
+}

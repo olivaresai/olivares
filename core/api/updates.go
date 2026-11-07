@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 )
@@ -109,11 +108,6 @@ func (s *Server) handleUpdateStatus(w http.ResponseWriter, r *http.Request, mc M
 	writeJSON(w, http.StatusOK, dto)
 }
 
-// applyUpdateWriteWindow is how long the reply to an apply may take: the install
-// downloads and verifies a release, which outlasts the server's 60-second write timeout
-// (and `olivares upgrade` bounds one run at 10 minutes).
-const applyUpdateWriteWindow = 12 * time.Minute
-
 // handleApplyUpdate replaces the engine binary, so it needs the administrative
 // step-up like the other privilege-shaped writes (license, modules, activation).
 func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
@@ -125,8 +119,8 @@ func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request, mc Mo
 	if !ok {
 		return
 	}
-	// A writer that cannot move its deadline keeps the server's; the install still finishes.
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(applyUpdateWriteWindow))
+	// The reply waits for the install with no total of its own: stallDeadlines bounds only a
+	// client that stops reading, and `olivares upgrade` ends a stalled transfer (--timeout).
 	dto, err := svc.ApplyUpdate(r.Context(), p)
 	if err != nil {
 		s.writeError(w, r, err)

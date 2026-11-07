@@ -152,6 +152,10 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// never pick "the first" of several profile-scoped rows sharing an id.
 	reg.Handle("GET", "/live/by-id/{live_ref}", permLiveRead, m.handleGetLiveByID)
 	reg.Handle("GET", "/live/by-id/{live_ref}/timeline", permLiveRead, m.handleTimelineByID)
+	// The caller's own pin on an observed session (run_pin.go): interface state, so the
+	// READ permission, as the run pin takes.
+	reg.Handle("POST", "/live/by-id/{live_ref}/pin", permLiveRead, m.handlePinLive)
+	reg.Handle("DELETE", "/live/by-id/{live_ref}/pin", permLiveRead, m.handleUnpinLive)
 	reg.Handle("GET", "/live/{ref}", permLiveRead, m.handleGetLive)
 	reg.Handle("GET", "/live/{ref}/timeline", permLiveRead, m.handleTimeline)
 	reg.Handle("GET", "/stream", permLiveRead, m.handleStream)
@@ -206,11 +210,31 @@ func (m *Module) handleListLive(w http.ResponseWriter, r *http.Request, mc api.M
 		if err != nil {
 			return err
 		}
+		pins, err := ownRunPinAts(r.Context(), sc, mc.Principal.Actor())
+		if err != nil {
+			return err
+		}
+		// Unless the list is narrowed or walked by cursor, it also carries the caller's
+		// pinned sessions the page was too short to reach (as the run list does).
+		query := r.URL.Query()
+		if query.Get("pagination") != "cursor" && query.Get("provider_profile_ref") == "" &&
+			query.Get("session_ref") == "" && ccFilter == "" {
+			inPage := make(map[string]bool, len(recs))
+			for _, rec := range recs {
+				inPage[rec.String(model.ColID)] = true
+			}
+			extra, err := pinnedLiveOutside(r.Context(), sc, pins, inPage)
+			if err != nil {
+				return err
+			}
+			recs = append(recs, extra...)
+		}
 		for _, rec := range recs {
 			dto := m.toLiveDTO(rec)
 			if ccFilter != "" && dto.CCState != ccFilter {
 				continue
 			}
+			decorateLivePin(&dto, pins)
 			out.Items = append(out.Items, dto)
 		}
 		out.HasMore = page.HasMore
@@ -250,6 +274,11 @@ func (m *Module) handleGetLive(w http.ResponseWriter, r *http.Request, mc api.Mo
 		}
 		found = true
 		dto = m.toLiveDTO(recs[0])
+		pins, err := ownRunPinAts(r.Context(), sc, mc.Principal.Actor())
+		if err != nil {
+			return err
+		}
+		decorateLivePin(&dto, pins)
 		return nil
 	})
 	if err != nil {
@@ -277,6 +306,11 @@ func (m *Module) handleGetLiveByID(w http.ResponseWriter, r *http.Request, mc ap
 			return err
 		}
 		dto = m.toLiveDTO(rec)
+		pins, err := ownRunPinAts(r.Context(), sc, mc.Principal.Actor())
+		if err != nil {
+			return err
+		}
+		decorateLivePin(&dto, pins)
 		return nil
 	})
 	if err != nil {

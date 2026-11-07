@@ -32,6 +32,9 @@ NEVER_APPLIED = {
 # the regression: bootGuardCensus, which openPrepared calls before the migration plan, also selects the census without the
 # AI terms pair for a directory an earlier Community release wrote; no migration statement, plan or callback changes.
 # The final pairs bind the boot census to the reviewed AI terms profile transition.
+# The last pairs add a Business census's second profile predecessor, the same census without the AI terms pair
+# that Business 0.4 recorded: bootGuardCensus selects it by admission-graph digests; no migration statement,
+# plan or callback changes.
 REVIEWED_BINDINGS = {
     'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/1': (
         ('07c7ca1548c23d82288a3184efe7e02a1b142a316f77fcc072ffb6ce907b19b4',
@@ -46,6 +49,10 @@ REVIEWED_BINDINGS = {
          '33fd1813557f335c77148596632848f266fd8c4e670ddcc38c0ca9c98aa507d3'),
         ('f348a0c80cd65335f5f8c422a46b7ef1a615dc38ea8500aed9e646382de6d14c',
          '73036cf26ed0371af0696f2106d3fdd0b4c6af30748a5b22411e220f1a71cff2'),
+        ('33fd1813557f335c77148596632848f266fd8c4e670ddcc38c0ca9c98aa507d3',
+         'af6b39114b0c6011ef466aeb6cf2f07a9c6f692ba4454604eff5dc23c0f29067'),
+        ('af6b39114b0c6011ef466aeb6cf2f07a9c6f692ba4454604eff5dc23c0f29067',
+         '131ac53a39570527135c7a5247da738e47235afd77c1bc67d75c0f03fc4e5951'),
     ),
     'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrations/1': (
         ('d6916f0bf171360672387c95e4b5a48291871c238aafa8f5037ea67b6b67df34',
@@ -60,6 +67,10 @@ REVIEWED_BINDINGS = {
          'd2ba848889a9602d7375334cc201b925da0fd2e12ee33a26513422fa0f151841'),
         ('f7264bf98632902afa007091ba78aa1dbca1aa57edea3964a5fec73aa882273f',
          '75bb181a5a5e7ac35712d7e36b2e161e7a487595b2a4a2ae408ce707a8fb0369'),
+        ('d2ba848889a9602d7375334cc201b925da0fd2e12ee33a26513422fa0f151841',
+         'dbb98538a3998aa19496645ca92e9b2f7b0255f38a3f0b70e8dfa5c044aa417f'),
+        ('dbb98538a3998aa19496645ca92e9b2f7b0255f38a3f0b70e8dfa5c044aa417f',
+         'cb67404870e9b89fd4aba11a18d8e45c63b22c608cdcfa32c9cad3f638f0e2d2'),
     ),
 }
 
@@ -68,94 +79,131 @@ REVIEWED_BINDINGS = {
 # current Community to Business. Constructor-reference hashing reaches the shared graph
 # from buildCoreMigrations, even for versions whose SQL statements are unchanged.
 # Historical pairs remain valid; unknown digests and SQL changes still refuse.
+# The last pair of each key (origin/main 3e0538f7e and the Community 0.6 pin 1af2f1689, the same digests) adds
+# that Business-without-AI-terms predecessor layer to the shared admission graph.
 # guardMetadataSpecs gained a clone-on-read cache for the compiled format. Its fresh derivation and cached result are
 # asserted equal by TestGuardMetadataSpecsAreDerivedOnce, and the migration/variant suites prove the same reads. afb4bec77
 # adds a variadic expectedVersion to SetOrgSettings, a concurrency check that is not a migration input. These exact pairs
 # admit only those behavior-preserving source changes, not changed migrations.
+# The guard inventory classifiers read and verify the inventory chain once per start and check every candidate
+# history against that one fold (guardInventoryFold), instead of rescanning it per candidate. The last core/7 and
+# core/9 pairs and the last openPrepared binding pairs (baseline origin/main 3d866d57c) admit only that change.
 REVIEWED_MIGRATIONS = {
     'core/1': (
         ('bc9a5e27315cc700fcd890c0dfefec5f96c8b144b9e4c91efd4443683573aa53',
          'aa887d4d437bdd5f7aec8d26e4e94d4d36d602f2d39d6b063b6455eb7a7c7bf6'),
         ('004859b10f95bb7163c0337c8380d96cf32e284b07b697be253b1e8288fbf39a',
          'a534d53f4a7589e30045bee526ea60328ae6898252768ff6a103a2ac37bfb1d8'),
+        ('a534d53f4a7589e30045bee526ea60328ae6898252768ff6a103a2ac37bfb1d8',
+         '12c77243612fb16cde9e1db10be26272a8ea5be78ec4f9ede2df7d963d448ca4'),
     ),
     'core/2': (
         ('71942827679f3eeae3b7589cc8aed81c33d62aa2a99ebc6b5e4dac8e7066e544',
          'c6897a066298ef9c926ac119157bbacd343e3682d49f60bd321720981d594a5f'),
         ('c380be05ae6274be555a7c97ca8a02c7b327de72c73873abd4a24f43cc73c760',
          '1761090a3a19c646c435723d2d4bc224d89db359985c409eae2db64a758d20ce'),
+        ('1761090a3a19c646c435723d2d4bc224d89db359985c409eae2db64a758d20ce',
+         '8c8ed91e365f4a50bac71a383136c9e20d42169468e0166a79aef0c4709b6d96'),
     ),
     'core/3': (
         ('5ee1843b11004b240e1c74d9c248949b78f67104bbec8c3a37f2d26723be2918',
          'b5d1f30999400ec981ac505a97587ad264e7f92701260ed116c424357c7bf2c3'),
         ('c7edffc8f3727bed340506dd319b8560db97997088035b18d60f02dcd6dacafd',
          'dbfc54a576c3edb603a0d2622f6a0b5d3e16f252837a4bf66b3cbe985f3f4968'),
+        ('dbfc54a576c3edb603a0d2622f6a0b5d3e16f252837a4bf66b3cbe985f3f4968',
+         '1d22f9e302ea9c28c2c8b1f3f08dbc02f55bb596d734cbc90004b189f7260440'),
     ),
     'core/4': (
         ('66b7684292ef81d0b934faa0a896aa0137057fac2ad7c8a245f3728c9b391161',
          '430b3c14716b349cee5ada8534cd46e0a385ede02c1b10e09a8278585fca1157'),
         ('b14e95087f7a2cfafed705296871e7a873da4259ea1e47c5fb474d9482f634e9',
          'a1e461751f5527951a98e07c5fea9452b6b3e89a7c343f179baaf159a1279ed6'),
+        ('a1e461751f5527951a98e07c5fea9452b6b3e89a7c343f179baaf159a1279ed6',
+         '5b0e96402938bb4e816fcb482a2d34b70086afb3e1a1182e269cf99aa1f4e1c0'),
     ),
     'core/5': (
         ('b58ee7949cb3d737379716fe9259ecae0ab76bc94aa2232104256eac95ec9ccf',
          '3f71139ead1b476197539674dbf4dd0224a8096b89706d4ee8d5c61c0cf8f1de'),
         ('e3cda396761823d6a71a78fd5d2168c7279ee44d67de6622af0483f12d5b20b2',
          'd3b1768214829fd766fc04ed5ac6bd8e160e826cd23dfde415be7f017ccdd30e'),
+        ('d3b1768214829fd766fc04ed5ac6bd8e160e826cd23dfde415be7f017ccdd30e',
+         '918b08c88fef9f43f8f4fbcfa52b76f3955d3619e69ca690c708799dec899afe'),
     ),
     'core/6': (
         ('d4b8fd1ffb453430088cfc14a51cfc2392d2d37e767152aaf46a8fc75ebce931',
          'cc82a1e36d6e4f1c73710096e03bf508b615a6b89a6c23b9c0c6b8f91b1ae176'),
         ('4d904b8f6c265665f75cb32b6df2b3e792e75b022a41e7e3a254052066454e90',
          'dc94c32fa7e69279c6fb5b826f2ca4da429c8d4c27ad4feb892317d1f20f2f1b'),
+        ('dc94c32fa7e69279c6fb5b826f2ca4da429c8d4c27ad4feb892317d1f20f2f1b',
+         '08ddc951ff8871a5f85193ee7c41b4990b3567c1be6e0aee4db79d24cff602a8'),
     ),
     'core/7': (
         ('231d8a581e6510f8f26ac8949b7707eb4c3ad82d35ed4603becabfa42eaa0352',
          '3766e9f24c314efa43618ce262fbca92235ef219fb0d829110b56e60b5c1cd02'),
         ('fb5e3f97ed9967d2fffb42309ac3df52a4d2c8adede96273f7b45bcd20a870af',
          '59f2f65871beabdf26390c44ccfd0b01a30a8b83f0697b9834939d9768419a5e'),
+        ('59f2f65871beabdf26390c44ccfd0b01a30a8b83f0697b9834939d9768419a5e',
+         '9684b55f1718a0d522d651f67e66811f840c95d2ff5ec3a31887159df318853e'),
+        ('9684b55f1718a0d522d651f67e66811f840c95d2ff5ec3a31887159df318853e',
+         '5ee618cabcbaa3189bbdeb0678c8e72d124ea01c36060e6bc8e9f0e2226966fe'),
     ),
     'core/9': (
         ('e33d675a7e57c70c19931154b07154a31b820867063b50c1bdd9bf0bfd24c1a3',
          'd070a769e56f6680da5150f034c32ba0a2c96743865c4ccab9620e3efa219a8c'),
         ('cd4d9b9b0aa103d42bb25728b98b34278f5f2c516896574dd99eaad31e7f3ca8',
          'eb3d7cc2cde16db814741ef5cf02ab5c9c306e17d5321a82bd1b01b47e290392'),
+        ('eb3d7cc2cde16db814741ef5cf02ab5c9c306e17d5321a82bd1b01b47e290392',
+         'e443a3487473c807fc6ab404ad15bd38a12c9fb841eee1006f4163ae1817b96e'),
+        ('e443a3487473c807fc6ab404ad15bd38a12c9fb841eee1006f4163ae1817b96e',
+         '61258d6fb0024f78434e719c37818106fd8df8f1f5a8cc019c138ada73ce67b2'),
     ),
     'core/10': (
         ('b6aa309a1d4860a777f140de8ae141849b8d8318dff63b0abda93ddda4a65cc5',
          'ebc12bdb353abed7287918c7cf27f222fc40a1a50ed7cd3e9c80ab85db40f89f'),
         ('ef4ec4f94614f36dac476a60c2d646d7cfb2efabe63a8a58a2dfa6bea002532e',
          'bfa7cf03272408daad35d40b9d7633be32903efc23d8c2a7d8b995964a2b16de'),
+        ('bfa7cf03272408daad35d40b9d7633be32903efc23d8c2a7d8b995964a2b16de',
+         '5e022529ba6e1a49204322ca7afe66f8132c1b56941f5040d6320209b090abb2'),
     ),
     'core/11': (
         ('0c0722de2b28e2122d3045635cd9a5749689f3a8047b3d1122aa65f3891cd313',
          '70665ff96e263d6dc617a8e227a555916c57d37d71b3794abf0ff170c17f6708'),
         ('1b445125df8cd2663795366f2728ee11c47c1d9ab3c97a0dc8a71c9d8e63d51f',
          'cbf65f126b52dc9a88df35a7a9d8edd83bbdbb41f4c1815394661b19d71d92d1'),
+        ('cbf65f126b52dc9a88df35a7a9d8edd83bbdbb41f4c1815394661b19d71d92d1',
+         '9296796d20a9d3ed12f22ad730d47b834082d0b4bd9a2f8d7d35c17eb8bc07ac'),
     ),
     'core/13': (
         ('2296a1cb514e63bd93bab226d039650dd86a06970cf055508af5d478a2ce86fe',
          '34b51848371a480500533d55dfea2821aff295870567e29c31e4fef783b115f4'),
         ('9c36d189b0acf09c54ffe505fee8e70f123bae75c8ce6367c87d0e77fc3ea2e3',
          '34e74b0ba11d8889c8fb9303bad88ae1571b494541cac1b1445fc3cb0d5c5e86'),
+        ('34e74b0ba11d8889c8fb9303bad88ae1571b494541cac1b1445fc3cb0d5c5e86',
+         '2353f0b193a765cd6a5e2cb1c0db5a8301e957830f91b8bc306efc5866d7e156'),
     ),
     'core/19': (
         ('47c40a76e7f35499d0f910e8106790679fc65b3ce423cbfdc4657840caffcd1b',
          'c8ab02f836c382c96f232f9ec5a7c89969dac4c30dcf7f862eb11bbb3d517a7f'),
         ('ba73a0eafda6b2bb62819f40f7a2180308b30f4f1987b7b278b380bc0503e2e6',
          '3c5d6c28c60250550ffd4f96cccb1b0bec086b20f143e89ea17f071422914132'),
+        ('3c5d6c28c60250550ffd4f96cccb1b0bec086b20f143e89ea17f071422914132',
+         '49bad3639c144e9f6d6c57b9d090669d6d4567473cce1cadd634e6f254bd86b4'),
     ),
     'core/26': (
         ('04f4cfd58bc6c2931037007e2a5e8e5b9b86f52290502eea40fd9ba08f74f565',
          'a8f1bba1492a077c7ce6c584db92d6871b7e7c992506317a1a2635bc160a65e8'),
         ('ab9748bdf7b9c1475a67a4b8c269f2f57cd48f01076b45860972191c3bbadea7',
          '6a3767cb73b4e9819c4c6b2f4de65f04ad75753800e1ddff23d4cc5ca7a29b62'),
+        ('6a3767cb73b4e9819c4c6b2f4de65f04ad75753800e1ddff23d4cc5ca7a29b62',
+         '2de658602fe5f7b3d58df93372ebdded7eaa3cbae65d65a6b0f8f0cc781d8b6b'),
     ),
     'runner/core/internal/store/sqlstore/versioned_schema.go/reconcileVersionedDirectoryGuards/"schema_migrations_directory_guards"/1': (
         ('e4294291500fcb91228b4a1fc559a9e65806a349bca6d78d2d6b6ace93e3c094',
          'f07781dda48eff96e011bac3d40a7cc870b696db5ebb3a80cc32c6e845b998be'),
         ('ef2ca3e86f3743160f3dbe404644f72c24554c3abcca459b49a3189fc2dfd589',
          '02b3220a9809d91cfd847a5ff67c2ac86d445c24646a4555104e0f23d1029595'),
+        ('02b3220a9809d91cfd847a5ff67c2ac86d445c24646a4555104e0f23d1029595',
+         'e41e9f0c90c732d208dc157cbff268f260ab993ff766bcc5c5f64f1b21333149'),
     ),
 }
 
@@ -195,6 +243,56 @@ REVIEWED_BASE = {
     'core/plan/buildCoreMigrations': ('73a844e03db76f709f0811920529d7db808ce475155b0d7f0a390b4abcd35c00',
                                       '857a6d70122953124624eb9cb9dd3d76506d6210e7cf15b5407333f6ff84f575'),
 }
+# Measured 2026-11-04: exact reviewed old/new fingerprints for 0.7 source refactors with no SQL migration edits; migration suites pass.
+for key, pairs in {
+    'core/1': (('a534d53f4a7589e30045bee526ea60328ae6898252768ff6a103a2ac37bfb1d8',
+         'bb1f8c88258b808b8254e4403123c2c8eac558c7e52a3707eb28ed0ea4dcbb87'),),
+    'core/10': (('bfa7cf03272408daad35d40b9d7633be32903efc23d8c2a7d8b995964a2b16de',
+         '282c669908f6c1f05c8f9001773983499b798ac8c802e389e1ca044423b5b839'),),
+    'core/11': (('cbf65f126b52dc9a88df35a7a9d8edd83bbdbb41f4c1815394661b19d71d92d1',
+         '8e77670e17a030f96c37dfe1275ded108cb733469915a4dad35b463758dfb127'),),
+    'core/13': (('34e74b0ba11d8889c8fb9303bad88ae1571b494541cac1b1445fc3cb0d5c5e86',
+         'cb141015a7f64578e3752b7d7cbbdf6274feaad85724257d85be940b7caffbf1'),),
+    'core/19': (('3c5d6c28c60250550ffd4f96cccb1b0bec086b20f143e89ea17f071422914132',
+         'c1682d5839a1d88c97016146a356cb5e67d25f41998babd782809a70777ef2e9'),),
+    'core/2': (('1761090a3a19c646c435723d2d4bc224d89db359985c409eae2db64a758d20ce',
+         'b8b6c5905d7adca20c2120ace1e726a97be9fa7944116127e536b6d4745257d0'),),
+    'core/21': (('8833a3c0600474d931512a0a384f0adacfb2bb00112a9318b0cda7f19e076243',
+         'ca0644cfe0e97c134338124a773b09699a8f7979959ba78de03de8a17ac51f78'),),
+    'core/26': (('6a3767cb73b4e9819c4c6b2f4de65f04ad75753800e1ddff23d4cc5ca7a29b62',
+         '86df127519a540c78abf5dcd30e217932ba531c30777b0c451e9dc109312ac46'),),
+    'core/3': (('dbfc54a576c3edb603a0d2622f6a0b5d3e16f252837a4bf66b3cbe985f3f4968',
+         '1785e357eb99e464ee535bec05deab356c751d919c19082dac2f0af523398285'),),
+    'core/4': (('a1e461751f5527951a98e07c5fea9452b6b3e89a7c343f179baaf159a1279ed6',
+         '674967b677b00c3bfdd524cf8571e69721635cb29b4fff78f15fa0ab6de7a130'),),
+    'core/5': (('d3b1768214829fd766fc04ed5ac6bd8e160e826cd23dfde415be7f017ccdd30e',
+         '553457c9331b315deb1e0b91006596da908e0907d483bc75bb8e0fdac922b30b'),),
+    'core/6': (('dc94c32fa7e69279c6fb5b826f2ca4da429c8d4c27ad4feb892317d1f20f2f1b',
+         'add36d0c51be974d98b0127cbac8e87e733e768f03a105a3d880ba1abb535276'),),
+    'core/7': (('59f2f65871beabdf26390c44ccfd0b01a30a8b83f0697b9834939d9768419a5e',
+         'a9011d1cb44fbf75887f6c5b68deef9216bd8635d4fff07804c633f2c6abbc31'),),
+    'core/9': (('eb3d7cc2cde16db814741ef5cf02ab5c9c306e17d5321a82bd1b01b47e290392',
+         '817a15d5ae26d06a37eaf80dbac31fb390c662e82e7628b885af6cc8f6a075bd'),),
+    'modules/transition-hooks': (('9c5c80d2dbaa4e224177c4cd8c6e00e1e3122d88ba8e315e6a623db342c02087',
+         'f89f9b9a6125b51d39ecb7c32ccafe2de3afd95bdebec40ebcd13fff35de1c8e'),),
+    'runner/core/internal/store/sqlstore/lineage_migration.go/reconcileLineageGuards/"schema_migrations_lineage_guards"/1': (('17ec171b966053f3dbb0e248431d4fbafdc3cd13d110b0a5ce6dbc6522682b93',
+         'd8dadef83ff5a175ee2d5d6828417663f76685a0e6c6d5e47671e1c8a1bb2fad'),),
+    'runner/core/internal/store/sqlstore/lineage_workspace_tree.go/reconcileLineageWorkspaceTreeGuards/lineageGuardsTracker/2': (('f2db28183048dae8332745b8ba0389f26e6f226f8a7f839ee74e0dc48127e46e',
+         '67ddf47be7a4ec0fa659fc7623e659f4ff1507d4982803a11d1ee65737e1aaba'),),
+    'runner/core/internal/store/sqlstore/versioned_schema.go/reconcileVersionedDirectoryGuards/"schema_migrations_directory_guards"/1': (('02b3220a9809d91cfd847a5ff67c2ac86d445c24646a4555104e0f23d1029595',
+         'ecb1691e804b7edcdd40c3005a615cc0e5f8d6c04539e61d48b6a7d1c9f30241'),),
+    'runner/core/internal/store/sqlstore/versioned_schema.go/reconcileVersionedOSAccountReservations/"schema_migrations_os_account_guards"/1': (('35f3b4146f1e1389dc0090aec02d53c5ff91bdc77576ef1a05d7cbfc28ab80a4',
+         '58af44d7164747dc405ed8582a23c574eab8a5dbe01914573cd9f215ae5b01db'),),
+}.items():
+    REVIEWED_MIGRATIONS[key] = REVIEWED_MIGRATIONS.get(key, ()) + pairs
+
+for key, pairs in {
+    'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/1': (('33fd1813557f335c77148596632848f266fd8c4e670ddcc38c0ca9c98aa507d3',
+         'cd8e55b0af14972255e9d596e17c30e23cf17dc46e205e7d17b6ee511ab86026'),),
+    'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrations/1': (('d2ba848889a9602d7375334cc201b925da0fd2e12ee33a26513422fa0f151841',
+         '2a526aedc9a168f949e8b4162f07b18a1db1fe2b4db0682eb0a2b5c41dc76537'),),
+}.items():
+    REVIEWED_BINDINGS[key] = REVIEWED_BINDINGS.get(key, ()) + pairs
 
 
 def git(*args):
@@ -312,8 +410,8 @@ def main():
         raise ValueError('baseline contains no migrations')
     if any(not key.startswith('core/binding/') or key.endswith('.sql') for key in REVIEWED_BINDINGS):
         raise ValueError('REVIEWED_BINDINGS may hold binding keys only')
-    if any(re.fullmatch(r'(?:core/\d+|runner/.+)', key) is None for key in REVIEWED_MIGRATIONS):
-        raise ValueError('REVIEWED_MIGRATIONS may hold numeric core or runner migration keys only')
+    if any(re.fullmatch(r'(?:core/\d+|runner/.+|modules/.+)', key) is None for key in REVIEWED_MIGRATIONS):
+        raise ValueError('REVIEWED_MIGRATIONS may hold numeric core, runner or module migration keys only')
     base_key = re.compile(r'core/(?:binding/.+|\d+|descriptor-registration/\d+|descriptor/[^/]+|plan/[^/]+)$')
     if any(base_key.fullmatch(key) is None or key.endswith('.sql') for key in REVIEWED_BASE):
         raise ValueError('REVIEWED_BASE may hold reviewed core keys only')

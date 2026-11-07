@@ -41,7 +41,7 @@ description: "既存のガバナンス対象アクションを依存関係グラ
 ## 1. ワークフローを宣言する
 
 新規インストールでは、`orchestration` は無効です。管理者として
-**Settings > Edition & modules** で `orchestration` を有効にし、ほかの選択済み
+**Settings > Modules** で `orchestration` を有効にし、ほかの選択済み
 モジュールも有効のままにしてください。CLI を使う場合は、まず `olivares login`
 でこのエンジンに管理者としてログインし、次に `olivares modules on orchestration` を実行します。
 続行する前に、毎回のエンジン再起動が完了するのを待ってください。実行中の

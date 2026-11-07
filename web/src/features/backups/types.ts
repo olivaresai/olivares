@@ -18,6 +18,8 @@ export interface BackupListItem {
   engine: string
   tenant_count: number
   notes: string
+  /** How long the backup took to prepare; absent for an older bundle. */
+  duration_ms?: number
 }
 
 /** One tenant chain tip from core/dr.Manifest.Tenants. */
@@ -46,6 +48,17 @@ export interface Manifest {
   created_at: string
   tenants: ManifestTenant[]
   keys: ManifestKey[]
+  /** Directories the bundle leaves out, with the real path and the reason.
+   *  Absent in bundles taken before the list existed. */
+  not_included?: ManifestNotIncluded[]
+}
+
+/** One entry of core/dr.Manifest.NotIncluded. */
+export interface ManifestNotIncluded {
+  kind: string
+  name: string
+  path: string
+  reason: string
 }
 
 /** GET /v1/console/dr/backups/{id} — full detail with the decoded manifest. */
@@ -91,10 +104,14 @@ export interface RestoreUploadResponse {
 export interface DRSchedule {
   verify_cron?: string
   rpo_hours?: number
+  /** The restore time the operator commits to; the scheduled restore test is measured against it. */
+  rto_minutes?: number
   offsite?: DROffsite
   last_backup?: string
   backup_age_seconds?: number
   rpo_exceeded?: boolean
+  /** The last completed restore test took longer than `rto_minutes`. */
+  rto_exceeded?: boolean
   target_free_bytes?: number
   last_run?: string
   last_run_status?: string
@@ -105,6 +122,8 @@ export interface DRSchedule {
   last_verify?: string
   last_verify_status?: string
   last_verify_error?: string
+  /** How long the last completed restore test took, in milliseconds. */
+  last_verify_rto_ms?: number
   enabled: boolean
   cron: string
   retain_days: number
@@ -114,9 +133,9 @@ export interface DRSchedule {
    *
    *  Two limits the copy has to state, because both were measured:
    *  it covers restores driven from THIS console and not `olivares dr restore`
-   *  on the host — the path the console itself sends Postgres estates to, which
-   *  replaces an estate outside this gate and records a declared operator
-   *  instead; and this field is the gate's EFFECTIVE state, which is not always
+   *  on the host, which replaces an occupied estate outside this gate and records
+   *  a declared operator instead; PostgreSQL console restores always require a
+   *  second account and accept only a separate empty target; and this field is the gate's EFFECTIVE state, which is not always
    *  what was last PUT — see dual_control_disarm_effective_at. */
   require_dual_control_restore?: boolean
   /** Set while a requested DISARM of the gate has not yet taken effect (RFC3339).
@@ -157,6 +176,7 @@ export interface DROffsite {
 
 /** One restore awaiting a second approver (GET /v1/console/dr/restore/pending). */
 export interface PendingRestore {
+  postgres?: PostgresRestoreTarget
   request_id: string
   upload_id: string
   /** The requester's CREDENTIAL actor string ("user:<id>" or "token:<id>"). */
@@ -179,7 +199,15 @@ export interface CreateBackupResponse {
   job_id: string
 }
 
+export interface PostgresRestoreTarget {
+  dsn_ref: string
+  owner_dsn_ref?: string
+  admin_dsn_ref: string
+  scratch_dsn_ref: string
+}
+
 export interface ApplyRestoreRequest {
+  postgres?: PostgresRestoreTarget
   passphrase: string
 }
 

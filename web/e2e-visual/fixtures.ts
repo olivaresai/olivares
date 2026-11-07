@@ -40,6 +40,18 @@ export const serverInfo = {
   communication_ready: true,
 }
 
+export const consoleExposure = {
+  listen: '0.0.0.0:8443',
+  grpc_listen: '127.0.0.1:9090',
+  public_url: '',
+  saved_public_url: '',
+  tls: true,
+  admin_step_up: 'none',
+  external_reachability: 'not verified',
+  addresses: ['https://192.168.1.10:8443', 'https://100.64.0.2:8443'],
+  managed_public: false,
+}
+
 // ⛔ SIN ESTE FIXTURE EL ARNÉS SE DESAUTENTICA SOLO, y lo hace EN SILENCIO — medido el 2026-08-18.
 //    El mock devuelve `{items: [], has_more: false}` a toda ruta `/v1/**` sin fixture. Para un
 //    listado eso es una lista vacía y se ve; para `/v1/auth/refresh` es una respuesta SIN `token`, y
@@ -2555,6 +2567,7 @@ export function fixtureFor(pathname: string): unknown | null {
   if (pathname.endsWith('/v1/m/finops/spend')) return finopsSpendTeam
   if (pathname.endsWith('/v1/m/finops/forecast')) return finopsForecast
   if (pathname.endsWith('/v1/console/mcp-gateway')) return mcpGateway
+  if (pathname.endsWith('/v1/console/exposure')) return consoleExposure
   if (pathname.endsWith('/v1/m/models/availability')) return modelsAvailability
   if (pathname.endsWith('/v1/m/models/models')) return modelsList
   if (pathname.endsWith('/v1/m/security/findings')) return securityFindings

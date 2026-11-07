@@ -152,32 +152,40 @@ func aggregatePeriod(ctx context.Context, sc store.Scope, extra []model.Filter, 
 	return res, err
 }
 
+// groupMemberCap bounds membership lookup and ledger fan-out on every budget path.
+const groupMemberCap = 100
+
+type groupMemberRefs struct {
+	refs      []string
+	truncated bool
+}
+
 // aggregateGroupPeriod sums the spend of a group's members. log, when set, hears about a member
 // that is skipped (see agentGroupMemberRefs); the enforcement paths pass nil, a request must not log.
-func aggregateGroupPeriod(ctx context.Context, sc store.Scope, log *slog.Logger, userGroups func(string) ([]string, error), dimension, key string, pStart time.Time, hasLower bool, pEnd time.Time, bounded bool) (aggResult, error) {
+func aggregateGroupPeriod(ctx context.Context, sc store.Scope, log *slog.Logger, userGroups func(string) (groupMemberRefs, error), dimension, key string, pStart time.Time, hasLower bool, pEnd time.Time, bounded bool) (aggResult, error) {
 	var (
-		col  string
-		refs []string
-		err  error
+		col     string
+		members groupMemberRefs
+		err     error
 	)
 	switch dimension {
 	case "agent_group":
 		col = colAgentRef
-		refs, err = agentGroupMemberRefs(ctx, sc, log, key)
+		members, err = agentGroupMemberRefs(ctx, sc, log, key)
 	case "user_group":
 		col = colActor
 		if userGroups == nil {
 			return aggResult{}, fmt.Errorf("finops: user_group %q members were not resolved: %w", key, errGroupUnresolved)
 		}
-		refs, err = userGroups(key)
+		members, err = userGroups(key)
 	default:
 		return aggResult{}, fmt.Errorf("finops: unsupported group budget dimension %q", dimension)
 	}
 	if err != nil {
 		return aggResult{}, err
 	}
-	var total aggResult
-	for _, ref := range refs {
+	total := aggResult{Truncated: members.truncated}
+	for _, ref := range members.refs {
 		part, err := aggregatePeriod(ctx, sc, []model.Filter{eq(col, ref)}, pStart, hasLower, pEnd, bounded)
 		if err != nil {
 			return aggResult{}, err
@@ -196,14 +204,20 @@ func aggregateGroupPeriod(ctx context.Context, sc store.Scope, log *slog.Logger,
 // key, so the row stays. The group is then counted over the members that are left, the same
 // floor every group figure is, instead of failing every read of the group (the Business
 // recommendations loop reads every budget) or letting CheckBudget fail open.
-func agentGroupMemberRefs(ctx context.Context, sc store.Scope, log *slog.Logger, key string) ([]string, error) {
+func agentGroupMemberRefs(ctx context.Context, sc store.Scope, log *slog.Logger, key string) (groupMemberRefs, error) {
 	g, err := agentGroupByKey(ctx, sc, key)
 	if err != nil {
-		return nil, err
+		return groupMemberRefs{}, err
 	}
-	members, err := listAgentGroupMembersByGroup(ctx, sc, g.ID)
+	members, page, err := sc.AgentGroupMembers().List(ctx, model.Query{
+		Filters: []model.Filter{eq("group_id", g.ID.String())}, Limit: groupMemberCap + 1,
+	})
 	if err != nil {
-		return nil, err
+		return groupMemberRefs{}, err
+	}
+	truncated := page.HasMore || len(members) > groupMemberCap
+	if len(members) > groupMemberCap {
+		members = members[:groupMemberCap]
 	}
 	seen := map[string]bool{}
 	refs := make([]string, 0, len(members))
@@ -216,7 +230,7 @@ func agentGroupMemberRefs(ctx context.Context, sc store.Scope, log *slog.Logger,
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return groupMemberRefs{}, err
 		}
 		ref := a.ExternalID
 		if ref == "" {
@@ -229,7 +243,7 @@ func agentGroupMemberRefs(ctx context.Context, sc store.Scope, log *slog.Logger,
 		refs = append(refs, ref)
 	}
 	sort.Strings(refs)
-	return refs, nil
+	return groupMemberRefs{refs: refs, truncated: truncated}, nil
 }
 
 func agentGroupByKey(ctx context.Context, sc store.Scope, key string) (model.AgentGroup, error) {
@@ -246,22 +260,6 @@ func agentGroupByKey(ctx context.Context, sc store.Scope, key string) (model.Age
 		return g, err
 	}
 	return model.AgentGroup{}, fmt.Errorf("finops: agent_group %q not found: %w", key, errGroupUnresolved)
-}
-
-func listAgentGroupMembersByGroup(ctx context.Context, sc store.Scope, groupID model.ID) ([]model.AgentGroupMember, error) {
-	var out []model.AgentGroupMember
-	q := model.Query{Filters: []model.Filter{eq("group_id", groupID.String())}, Limit: listCap}
-	for {
-		recs, page, err := sc.AgentGroupMembers().List(ctx, q)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, recs...)
-		if !page.HasMore || page.Cursor == "" {
-			return out, nil
-		}
-		q.Cursor = page.Cursor
-	}
 }
 
 func listAgentGroupMembersByAgent(ctx context.Context, sc store.Scope, agentID model.ID) ([]model.AgentGroupMember, error) {

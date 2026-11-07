@@ -7,6 +7,7 @@ package governance
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // The built-in default classifier encodes the decided CRITICAL set:
@@ -127,5 +130,42 @@ func TestResolveRiskTierCanonicalizesStoredWord(t *testing.T) {
 	tier := resolveRiskTier(approvalSpec{RiskTier: " Critical "}, true, "claude.tool.use")
 	if tier != RiskTierCritical || floorRequiredApprovals(1, tier) != 2 {
 		t.Fatalf("stored \" Critical \" resolved to %q with quorum %d, want critical at 2", tier, floorRequiredApprovals(1, tier))
+	}
+}
+
+// These are the actions filed by the tool hook, MCP bridge, publication tools,
+// provider permission adapter, and session launch gate. Keep the census explicit when adding an action.
+func TestKillSwitchEngineActionsAreNeverKept(t *testing.T) {
+	for _, action := range []string{"claude.tool.use", "mcp.tool.call", "gitpublish.push", "gitpublish.pull_request", "sessions.provider.approval", "sessions.run.launch"} {
+		if !ksSessionRequest(model.Record{colApprovalSessionRef: "engine-session", colAction: action}) {
+			t.Errorf("engine action %q is kept by an estate stop", action)
+		}
+	}
+}
+
+type personPolicyResolver struct {
+	user string
+	err  error
+}
+
+func (r *personPolicyResolver) ApprovalPolicies(_ context.Context, _ store.Scope, user string) ([]model.Policy, bool, error) {
+	r.user = user
+	return []model.Policy{{BaseFields: model.BaseFields{ID: "person-policy"}, Enabled: true, Spec: map[string]any{"required_approvals": 2, "match": map[string]any{"action": "deploy"}}}}, true, r.err
+}
+func (r *personPolicyResolver) DLPRules(context.Context, store.Scope, string) ([]model.Record, bool, error) {
+	panic("unexpected DLP resolution")
+}
+
+func TestApprovalPersonPolicyResolver(t *testing.T) {
+	resolver := &personPolicyResolver{}
+	m := New(WithPolicyResolver(resolver))
+	id, spec, matched, err := m.matchApprovalPolicy(t.Context(), nil, "requester", "deploy", "", "")
+	if err != nil || !matched || id != "person-policy" || spec.RequiredApprovals != 2 || resolver.user != "requester" {
+		t.Fatalf("selection = %s %+v %v %v, user=%s", id, spec, matched, err, resolver.user)
+	}
+	sentinel := errors.New("directory unavailable")
+	resolver.err = sentinel
+	if _, _, _, err := m.matchApprovalPolicy(t.Context(), nil, "requester", "deploy", "", ""); !errors.Is(err, sentinel) {
+		t.Fatalf("resolver failure must propagate: %v", err)
 	}
 }

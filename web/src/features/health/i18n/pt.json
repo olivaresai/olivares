@@ -1,0 +1,482 @@
+{
+  "title": "Estado de saúde",
+  "subtitle": "Disponibilidade, fiabilidade e dependências em todo o parque — derivadas da atividade observada e da verificação de obsolescência, nunca por sondagem da infraestrutura.",
+  "auditedNote": "O fluxo em direto e qualquer ação de resolução/edição são operações privilegiadas e auditadas. O estado de funcionamento é derivado; o motor nunca transporta aqui texto de erro nem payloads.",
+  "refresh": "Atualizar",
+  "statusPageLink": "Página de estado pública",
+  "tabs": {
+    "status": "Estado",
+    "checks": "Verificações",
+    "sla": "SLA",
+    "incidents": "Incidentes",
+    "timeline": "Cronologia",
+    "connectors": "Conectores",
+    "dependencies": "Dependências",
+    "system": "Sistema"
+  },
+  "state": {
+    "healthy": "Saudável",
+    "degraded": "Degradado",
+    "down": "Em baixo",
+    "observed": "Observado",
+    "unknown": "Desconhecido"
+  },
+  "stateHint": {
+    "unknown": "Nenhuma verificação acompanha este objeto — não é o mesmo que saudável.",
+    "observed": "Visto ativo por um edge, mas sem verificação declarada — o estado de funcionamento não é medido (nem saudável nem desconhecido)."
+  },
+  "desired": {
+    "active": "Ativo",
+    "paused": "Em pausa",
+    "retired": "Retirado"
+  },
+  "desiredHint": {
+    "paused": "Sem alertas — em pausa por um operador.",
+    "retired": "Sem alertas — retirado."
+  },
+  "subjectKind": {
+    "agent": "Agente",
+    "mcp": "MCP",
+    "session": "Sessão",
+    "mcp_tool": "Ferramenta"
+  },
+  "tiles": {
+    "healthy": "Saudável",
+    "degraded": "Degradado",
+    "down": "Em baixo",
+    "unknown": "Desconhecido"
+  },
+  "facets": {
+    "allStates": "Todos os estados",
+    "allKinds": "Todos os tipos"
+  },
+  "status": {
+    "unnamed": "Sem nome",
+    "title": "Objetos monitorizados",
+    "slaBreach": "Incumprimento de SLA",
+    "slaBreachHint": "Existe um incumprimento de SLA em aberto para este objeto.",
+    "notAlerting": "Sem alertas",
+    "cols": {
+      "subject": "Objeto",
+      "kind": "Tipo",
+      "state": "Estado",
+      "desired": "Intenção",
+      "sla": "SLA",
+      "latency": "Latência",
+      "lastSeen": "Visto pela última vez"
+    },
+    "searchPlaceholder": "Pesquisar objeto…",
+    "empty": {
+      "title": "Ainda não há objetos monitorizados",
+      "description": "Quando for declarada uma verificação de estado de funcionamento para um agente ou servidor MCP, a sua disponibilidade aparece aqui.",
+      "declare": "Declarar uma verificação"
+    }
+  },
+  "checks": {
+    "title": "Verificações de estado de funcionamento",
+    "description": "Declare e governe a cadência, a janela de tolerância, o objetivo de SLA e a intenção de ciclo de vida dos agentes e servidores MCP monitorizados.",
+    "create": "Criar verificação",
+    "created": "Verificação de estado de funcionamento criada",
+    "updated": "Verificação de estado de funcionamento atualizada",
+    "deleted": "Verificação de estado de funcionamento eliminada",
+    "failed": "A operação da verificação de estado de funcionamento falhou.",
+    "duplicate": "Já existe uma verificação de estado de funcionamento para este objeto.",
+    "searchPlaceholder": "Pesquisar verificações de estado de funcionamento…",
+    "reportTooltipLabel": "Sobre os relatórios de sondagem",
+    "reportTooltip": "A ingestão de relatórios de sondagem destina-se a máquinas e é intencionalmente omitida da consola.",
+    "seconds": "{{count}} s",
+    "cols": {
+      "subject": "Objeto",
+      "kind": "Tipo",
+      "state": "Estado",
+      "intent": "Intenção",
+      "cadence": "Cadência",
+      "sla": "SLA",
+      "lastChecked": "Última verificação",
+      "actions": "Ações"
+    },
+    "actions": {
+      "edit": "Editar",
+      "editAria": "Editar a verificação de estado de funcionamento de {{subject}}",
+      "pause": "Pausar",
+      "pauseAria": "Pausar a verificação de estado de funcionamento de {{subject}}",
+      "resume": "Retomar",
+      "resumeAria": "Retomar a verificação de estado de funcionamento de {{subject}}",
+      "retire": "Retirar",
+      "retireAria": "Retirar a verificação de estado de funcionamento de {{subject}}",
+      "delete": "Eliminar",
+      "deleteAria": "Eliminar a verificação de estado de funcionamento de {{subject}}"
+    },
+    "form": {
+      "name": "Nome",
+      "subjectKind": "Tipo de objeto",
+      "subjectRef": "Referência do objeto",
+      "expectedInterval": "Intervalo esperado (segundos)",
+      "graceFactor": "Fator de tolerância",
+      "slaTarget": "Objetivo de SLA (PPM)",
+      "slaTargetHint": "0 limpa o objetivo de SLA; 999000 significa 99,9 %.",
+      "desiredStatus": "Estado pretendido",
+      "validation": "Introduza uma referência do objeto, valores inteiros positivos de cadência e de tolerância, e um objetivo de SLA entre 0 e 1000000."
+    },
+    "createDialog": {
+      "title": "Criar verificação de estado de funcionamento",
+      "description": "Declare um agente ou servidor MCP monitorizado. Um objeto só pode ter uma verificação de estado de funcionamento."
+    },
+    "edit": {
+      "title": "Editar verificação de estado de funcionamento",
+      "description": "O objeto é imutável. Atualize a configuração apresentada e a intenção de ciclo de vida."
+    },
+    "delete": {
+      "title": "Eliminar verificação de estado de funcionamento",
+      "description": "Eliminar permanentemente a verificação de estado de funcionamento de {{subject}}. Esta ação de administração fica registada no registo de auditoria."
+    },
+    "empty": {
+      "title": "Nenhuma verificação de estado de funcionamento declarada",
+      "description": "Crie uma verificação para governar a cadência de disponibilidade esperada de um agente ou servidor MCP."
+    }
+  },
+  "sla": {
+    "title": "Fiabilidade (SLA)",
+    "pick": "Objeto",
+    "pickPlaceholder": "Escolha um objeto…",
+    "pickEmpty": "Ainda não há objetos monitorizados para reportar.",
+    "pickEmptyHint": "Um relatório de SLA é elaborado a partir de objetos monitorizados. Adicione uma verificação de estado de funcionamento a um objeto para que possa ser reportado.",
+    "pickPrompt": {
+      "title": "Escolha um objeto",
+      "description": "Escolha um objeto monitorizado para ver a sua disponibilidade face ao objetivo, reconstruída a partir do registo de fiabilidade."
+    },
+    "window": "Janela",
+    "uptime": "Disponibilidade",
+    "target": "Objetivo",
+    "noTarget": "Sem objetivo",
+    "breaching": "Em incumprimento",
+    "withinTarget": "Dentro do objetivo",
+    "downtime": "Indisponibilidade",
+    "degraded": "Degradado",
+    "degradedNote": "Degradado conta como disponível para o SLA — é mostrado em separado, não como indisponibilidade.",
+    "currentState": "Estado atual",
+    "noCheck": {
+      "title": "Nenhuma verificação declarada",
+      "description": "Não existe nenhuma verificação de estado de funcionamento para este objeto, pelo que não é possível reportar a fiabilidade. Este é um estado verdadeiro, não uma falha."
+    },
+    "noData": {
+      "title": "Ainda sem histórico",
+      "description": "Este objeto tem uma verificação, mas não tem histórico de fiabilidade na janela — a disponibilidade é indefinida, não 0 %. Aparece quando forem registadas transições."
+    }
+  },
+  "incidents": {
+    "title": "Incidentes",
+    "filterState": "Estado",
+    "allStates": "Todos",
+    "open": "Abertos",
+    "resolved": "Resolvidos",
+    "resolve": "Resolver",
+    "resolving": "A resolver…",
+    "resolveTitle": "Fechar este registo de incidente",
+    "resolveHint": "Resolver reconhece que o período termina — NÃO afirma que o objeto recuperou. A recuperação vem da disponibilidade real. Esta ação é privilegiada e auditada.",
+    "cols": {
+      "subject": "Objeto",
+      "subjectKind": "Tipo",
+      "incidentKind": "Incidente",
+      "severity": "Gravidade",
+      "opened": "Aberto",
+      "state": "Estado",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "Degradado",
+      "down": "Em baixo",
+      "sla_breach": "Incumprimento de SLA"
+    },
+    "possibleEvasion": "Possível evasão",
+    "possibleEvasionHint": "Um objeto ficou em silêncio dentro da cadência esperada (uma indisponibilidade detetada pela verificação). Um objeto que deixa de emitir é, em si, um sinal, não uma falha da interface.",
+    "searchPlaceholder": "Pesquisar incidente…",
+    "empty": {
+      "title": "Sem incidentes",
+      "description": "Nenhum incidente de fiabilidade corresponde a este filtro. Os incidentes abertos aparecem aqui quando os objetos se degradam ou ficam em baixo."
+    },
+    "truncated": "A mostrar os primeiros {{n}}",
+    "truncatedHint": "Há mais incidentes do que os mostrados; esta página tem um limite, por isso um resto vazio NÃO prova que não existem mais."
+  },
+  "timeline": {
+    "title": "Cronologia de fiabilidade",
+    "pick": "Objeto",
+    "pickPlaceholder": "Escolha um objeto…",
+    "pickPrompt": {
+      "title": "Escolha um objeto",
+      "description": "Escolha um objeto monitorizado para acompanhar as suas transições de fiabilidade a partir do registo só de acrescentos."
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "Latência",
+    "latencyUnknown": "Desconhecida",
+    "cause": {
+      "edge": "Disponibilidade observada",
+      "report": "Sondagem ativa",
+      "sweep": "Verificação de obsolescência"
+    },
+    "causeHint": {
+      "edge": "Inferida a partir da atividade observada (um edge de disponibilidade).",
+      "report": "Uma sondagem ativa de estado de funcionamento reportou este estado.",
+      "sweep": "Detetada pela verificação de obsolescência — silêncio dentro da cadência esperada."
+    },
+    "possibleEvasion": "Possível evasão",
+    "possibleEvasionHint": "Uma indisponibilidade detetada pela verificação de obsolescência significa silêncio dentro da cadência esperada — apresentada como possível evasão, não como erro de carregamento.",
+    "empty": {
+      "title": "Nenhuma transição registada",
+      "description": "Este objeto ainda não tem transições de fiabilidade no registo."
+    },
+    "truncated": "A mostrar os primeiros {{n}}",
+    "truncatedHint": "Há mais eventos do que os mostrados. A página está ordenada por ID (os mais antigos primeiro), pelo que o que fica de fora é o troço MAIS RECENTE — um evento que não vê aqui não é um evento que não aconteceu."
+  },
+  "deps": {
+    "title": "Mapa de dependências",
+    "subtitle": "Descoberto automaticamente a partir da atividade observada. Cada nó é colorido consoante o seu estado de funcionamento atual — um nó visto ativo mas sem verificação é «observado» (azul, estado de funcionamento não medido), um nó sem qualquer sinal fica cinzento (desconhecido); nenhum dos dois é alguma vez verde.",
+    "legendTitle": "Estado de funcionamento",
+    "relation": {
+      "uses_mcp": "Usa MCP",
+      "uses_tool": "Usa ferramenta",
+      "delegates_to": "Delega em"
+    },
+    "observed": "Observado",
+    "truncated": "Nem todas as dependências são mostradas.",
+    "empty": {
+      "title": "Ainda não foram descobertas dependências",
+      "description": "Quando os agentes chamarem servidores e ferramentas MCP, o grafo de dependências observado aparece aqui."
+    },
+    "mobile": {
+      "title": "O mapa precisa de um ecrã mais largo",
+      "summary": "{{nodes}} nós · {{edges}} dependências",
+      "hint": "Abra esta vista num ecrã maior para ver o grafo de dependências interativo."
+    }
+  },
+  "detail": {
+    "statusTitle": "Estado de funcionamento do objeto",
+    "incidentTitle": "Incidente",
+    "ref": "Referência",
+    "id": "ID",
+    "name": "Nome",
+    "kind": "Tipo",
+    "state": "Estado",
+    "desired": "Intenção",
+    "cadence": "Cadência esperada",
+    "grace": "Fator de tolerância",
+    "slaTarget": "Objetivo de SLA",
+    "slaBreach": "Incumprimento de SLA em aberto",
+    "latency": "Última latência",
+    "lastSeen": "Visto pela última vez",
+    "lastChecked": "Última verificação",
+    "owner": "Proprietário",
+    "lastDetail": "Último detalhe",
+    "severity": "Gravidade",
+    "opened": "Aberto",
+    "resolved": "Resolvido",
+    "summary": "Resumo",
+    "viewSla": "Ver SLA",
+    "viewTimeline": "Ver cronologia",
+    "yes": "Sim",
+    "no": "Não",
+    "minimalData": "Só são mostrados metadados. Por conceção, o motor nunca transporta aqui texto de erro, payloads nem segredos (dados mínimos)."
+  },
+  "live": {
+    "note": "As linhas atualizam em direto quando o estado de funcionamento muda; reconciliadas por ID, sem presumir continuidade."
+  },
+  "empty": {
+    "title": "Nada para mostrar",
+    "description": "Ainda não há dados de estado de funcionamento para este tenant."
+  },
+  "forbidden": {
+    "title": "Estado de funcionamento não autorizado",
+    "description": "A sua função não inclui permissão para ver o estado de funcionamento e o SLA."
+  },
+  "forbiddenResolve": {
+    "title": "Resolução não autorizada",
+    "description": "A sua função não pode resolver incidentes."
+  },
+  "connectors": {
+    "autoRefresh": "Atualiza automaticamente a cada 15 segundos.",
+    "searchPlaceholder": "Pesquisar conector…",
+    "modeFilter": "Filtro de modo",
+    "modeAll": "Todos os modos",
+    "summary": {
+      "running": "A executar",
+      "failed": "Com falha",
+      "stopped": "Parados",
+      "disabled": "Desativados"
+    },
+    "cols": {
+      "name": "Conector",
+      "kind": "Tipo",
+      "mode": "Modo",
+      "health": "Estado de funcionamento",
+      "status": "Estado",
+      "trend": "Tendência",
+      "lastPoll": "Última consulta"
+    },
+    "status": {
+      "running": "A executar",
+      "failed": "Com falha",
+      "stopped": "Parado",
+      "disabled": "Desativado",
+      "not_wired": "Não configurado"
+    },
+    "trend": {
+      "up": "A melhorar",
+      "down": "A piorar",
+      "stable": "Estável"
+    },
+    "empty": {
+      "title": "Nenhum conector configurado",
+      "description": "Quando os conectores forem integrados, o seu estado de funcionamento operacional aparece aqui."
+    },
+    "emptyMode": {
+      "title": "Nenhum conector corresponde a este modo",
+      "description": "Altere o filtro de modo para ver outros conectores."
+    }
+  },
+  "statusPage": {
+    "title": "Olivares AI — Estado",
+    "subtitle": "Estado operacional atual de todos os componentes.",
+    "unavailable": "As informações de estado não estão disponíveis neste momento.",
+    "lastUpdated": "Última atualização: {{time}}",
+    "overall": {
+      "operational": "Todos os sistemas operacionais",
+      "not_configured": "Operacional — capacidades opcionais não configuradas",
+      "degraded": "Falha parcial do sistema",
+      "outage": "Falha grave do sistema"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "Obtenção de conhecimento",
+      "store": "Base de dados",
+      "connectors": "Conectores",
+      "ingest": "Ingestão de dados",
+      "audit_spool": "Fila de auditoria"
+    },
+    "status": {
+      "operational": "Operacional",
+      "not_configured": "Não configurado",
+      "degraded": "Degradado",
+      "outage": "Falha"
+    }
+  },
+  "update": {
+    "title": "Atualizações",
+    "available": "Atualização disponível",
+    "security": "Atualização de segurança",
+    "channel": "Canal",
+    "upToDate": "Atualizado",
+    "notChecked": "Sem verificação recente",
+    "failed": "A verificação de atualizações falhou",
+    "checked": "Verificação de atualizações concluída",
+    "advisories": "Avisos de segurança corrigidos",
+    "checkNow": "Verificar agora",
+    "unconfigured": "A verificação de atualizações não está configurada. Não foi verificada nenhuma atualização; as verificações de rede ficam desligadas.",
+    "unavailable": "Verificação indisponível",
+    "instructions": "Instruções de atualização",
+    "configure": "Para ativar as verificações, use uma versão oficial com a sua chave de verificação incorporada. Defina OLIVARES_UPDATE_ENDPOINT para o seu canal assinado aprovado na configuração do serviço e reinicie o Olivares. Deixe-o por definir para manter as verificações de rede desligadas.",
+    "manual": "Para atualizar manualmente, faça uma cópia de segurança dos dados, verifique o novo pacote ou imagem e atualize com o seu método de instalação. Mantenha o mesmo diretório de dados. Uma compilação de desenvolvimento sem chave de verificação não pode consultar um canal assinado."
+  },
+  "system": {
+    "title": "Estado de funcionamento do sistema",
+    "systemStatus": "Estado do sistema",
+    "healthy": "Saudável",
+    "unhealthy": "Não saudável",
+    "ready": "Pronto",
+    "notReady": "Não pronto",
+    "storeEngine": "Motor de armazenamento",
+    "version": "Versão",
+    "connectors": "Conectores",
+    "connectorsRunning": "{{count}} a executar",
+    "connectorsConfigured": "{{count}} configurados",
+    "connectorsAvailable": "{{count}} disponíveis para configurar",
+    "connectorsError": "{{count}} com erro",
+    "noConnectors": "Nenhum conector configurado",
+    "users": "Utilizadores",
+    "usersCount": "{{count}} registados",
+    "identity": "Identidade",
+    "ssoConfigured": "SSO configurado",
+    "ssoNotConfigured": "SSO não configurado",
+    "unavailable": "Os dados operacionais não estão disponíveis ou não está autorizado."
+  },
+  "tls": {
+    "title": "Certificado TLS",
+    "notAfter": "Válido até",
+    "daysLeft": "{{count}} dias restantes",
+    "expired": "Expirou há {{count}} dias"
+  },
+  "keys": {
+    "title": "Custódia de chaves",
+    "empty": "Não existem metadados de custódia de chaves disponíveis.",
+    "sealers": "Seladores simétricos",
+    "sourceUnknown": "origem indisponível",
+    "copyFingerprint": "Copiar a impressão digital completa de {{purpose}}",
+    "copied": "Impressão digital copiada",
+    "cols": {
+      "purpose": "Finalidade",
+      "algorithm": "Algoritmo",
+      "mode": "Modo de custódia",
+      "kek": "KEK",
+      "created": "Criada",
+      "fingerprint": "Impressão digital",
+      "prior": "Chaves anteriores"
+    }
+  },
+  "config": {
+    "title": "Configuração efetiva",
+    "empty": "Não existem entradas de configuração efetiva disponíveis.",
+    "strictViolations": "Violações da configuração estrita",
+    "redacted": "Ocultado",
+    "cols": {
+      "key": "Chave",
+      "value": "Valor efetivo",
+      "source": "Origem"
+    }
+  },
+  "bus": {
+    "title": "Barramento de eventos",
+    "noSubscribers": "Não há subscritores do barramento de eventos registados.",
+    "depthAria": "Profundidade da fila de {{subscriber}}",
+    "counters": {
+      "publishBlocked": "Publicação bloqueada",
+      "dropped": "Descartados",
+      "droppedTelemetry": "Telemetria descartada",
+      "droppedNotify": "Notificações descartadas",
+      "handlerErrors": "Erros do handler",
+      "enqueued": "Em fila",
+      "handled": "Processados"
+    },
+    "bridge": {
+      "title": "Ponte",
+      "pendingMessages": "Mensagens pendentes",
+      "pendingBytes": "Bytes pendentes",
+      "dropped": "Descartados",
+      "publishErrors": "Erros de publicação",
+      "decodeErrors": "Erros de descodificação",
+      "gateSkipped": "Porta ignorada",
+      "invalidSubject": "Assunto inválido"
+    }
+  },
+  "support": {
+    "title": "Pacote de suporte",
+    "description": "Gere um arquivo de diagnóstico para o suporte sem expor os valores dos segredos guardados.",
+    "download": "Transferir pacote de suporte",
+    "generate": "Gerar e transferir",
+    "confirmTitle": "Gerar um pacote de suporte?",
+    "confirmDescription": "Esta ação privilegiada fica registada no registo de auditoria.",
+    "contents": "O pacote contém a configuração efetiva ocultada, o estado operacional e registos. Reveja-o antes de o partilhar.",
+    "downloaded": "Pacote de suporte transferido",
+    "failed": "A geração do pacote de suporte falhou."
+  },
+  "auditSpool": {
+    "title": "Fila de auditoria",
+    "withinBudget": "Dentro do orçamento",
+    "nearFull": "Perto do orçamento",
+    "engaged": "Orçamento atingido",
+    "modes": {
+      "block": "Bloquear quando cheia",
+      "degrade": "Degradar quando cheia"
+    },
+    "usage": "{{used}} de {{max}} utilizados ({{pct}})",
+    "pendingDrops": "{{drops}} descartes de evidência não selados em {{tenants}} tenants"
+  }
+}

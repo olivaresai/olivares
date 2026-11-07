@@ -1,6 +1,6 @@
 {
   "title": "Observability & interop",
-  "description": "Standards-based ingestion health and ledger-correlated trace drill-down. Figures are engine-wide (process-global), not per-tenant; standards are pinned to the versions and maturities the upstream bodies declare.",
+  "description": "Telemetry intake health and traces.",
   "tabs": {
     "ingestion": "Ingestion health",
     "traces": "Trace drill-down"
@@ -76,7 +76,7 @@
     "listTitle": "Recent traces",
     "listDescription": "Select a trace to open its ledger-derived span view.",
     "empty": "No traces",
-    "emptyHint": "No audit-ledger event in the walk window (last 20,000 events) carries a W3C trace id — callers are not propagating traceparent, or the window has rolled past them.",
+    "emptyHint": "Traces appear here when tools send a trace ID with their requests.",
     "noResults": "No traces match the search.",
     "filterNoResults": "No traces match the active filters.",
     "searchPlaceholder": "Search by trace ID…",

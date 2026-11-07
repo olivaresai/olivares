@@ -212,7 +212,7 @@ func TestWikiCLIExplicitDisabledReferenceRefuses(t *testing.T) {
 	}
 }
 
-func TestWikiFolderAssignmentDeliversOnlyToItsSessionsAndRetainsOnResume(t *testing.T) {
+func TestWikiFolderAssignmentDeliversOnlyToItsSessionsAndResolvesOnResume(t *testing.T) {
 	if state := confine.Probe(); state.Mode != confine.ModeLandlock || state.ABI < 3 {
 		t.Skip("truncate-protected Landlock required")
 	}
@@ -303,8 +303,25 @@ while IFS= read -r line; do :; done
 	if err := os.Remove(filepath.Join(folders[0], "delivered.md")); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Remove(filepath.Join(folders[0], "peer-started.md")); err != nil {
+		t.Fatal(err)
+	}
 	call("POST", sessionRunsPath+"/"+runs[0]+"/resume", nil, 200)
-	waitDelivered()
+	// Resume resolves current assignments. Wait for discovery to finish before
+	// checking that the removed folder pin was not delivered again.
+	deadline = time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(folders[0], "peer-started.md")); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("resumed native peer did not perform its skill discovery check")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(folders[0], "delivered.md")); !os.IsNotExist(err) {
+		t.Fatalf("unassigned wiki skill returned on resume: %v", err)
+	}
 }
 
 func TestWikiInitAPIHonorsEveryRequiredPermission(t *testing.T) {

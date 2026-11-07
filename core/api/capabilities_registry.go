@@ -208,6 +208,9 @@ func collectionScopeSelector(r *http.Request, scope CollectionScopeRef) (string,
 	if err != nil {
 		return "", false
 	}
+	if scope.PrincipalWorkspace {
+		return "", true // selected from authentication after tenant resolution
+	}
 	if scope.WorkspaceBodyField != "" {
 		if scope.WorkspaceScopeField != "" {
 			kind, err := bodyEntityID(r, scope.WorkspaceScopeField)

@@ -50,6 +50,7 @@ type resolvedWorkspace struct {
 	containerTgt    string
 	dlpMode         string
 	maxReadBytes    int64
+	retentionDays   int64
 	allowSubpaths   []string
 	readOnlyFolders []string
 	readOnlyHandles []*os.File
@@ -57,6 +58,11 @@ type resolvedWorkspace struct {
 
 // CreateWorkspaceParams is the validated input to register a workspace.
 type CreateWorkspaceParams struct {
+	// Bind request admission to the canonical paths persisted below. Internal
+	// engine registrations have no request-bound check.
+	checkHostPaths func([]string) error
+	// Department is the department the folder belongs to; empty is the tenant.
+	Department      model.ID
 	Backup          *bool
 	Name            string
 	RootPath        string
@@ -67,8 +73,11 @@ type CreateWorkspaceParams struct {
 	MaxReadBytes    int64
 	DataClass       string
 	DLPMode         string
-	Actor           string
-	ActorKind       string
+	// Owner makes the folder a person's own (personal_folder.go); empty is an
+	// ordinary folder.
+	Owner     string
+	Actor     string
+	ActorKind string
 }
 
 // createWorkspace validates the registration, canonicalizes the host root (which MUST
@@ -89,13 +98,22 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 	// path so a later symlink swap cannot redirect the jail.
 	// The refusals name the folder as the person typed it (SC 09b item 7): the field
 	// name root_path means nothing on the New session form.
-	rootReal, err := filepath.EvalSymlinks(p.RootPath)
-	if err != nil {
+	rootReal, info, err := resolveRoot(p.RootPath)
+	switch {
+	case errors.Is(err, errRootNotResponding):
+		return workspaceDTO{}, rootNotResponding(p.RootPath)
+	case rootReal == "":
 		return workspaceDTO{}, badRequest(fmt.Sprintf("The folder %s does not exist or cannot be opened on this server. Choose an existing folder.", p.RootPath))
-	}
-	info, err := os.Stat(rootReal)
-	if err != nil || !info.IsDir() {
+	case err != nil || !info.IsDir():
 		return workspaceDTO{}, badRequest(fmt.Sprintf("%s is a file, not a folder.", p.RootPath))
+	}
+	if p.checkHostPaths != nil {
+		if err := p.checkHostPaths(append([]string{rootReal}, folders...)); err != nil {
+			return workspaceDTO{}, err
+		}
+	}
+	if err := m.guardRecordsRegistration(ctx, tenant, rootReal); err != nil {
+		return workspaceDTO{}, err
 	}
 	if p.MountMode != mountRO {
 		// Probe as the engine user: mode bits alone miss ACLs and read-only mounts.
@@ -153,8 +171,14 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 		if name == "" {
 			name = ref
 		}
+		if !p.Department.IsZero() {
+			department, err := sc.Workspaces().Get(ctx, p.Department)
+			if err != nil || department.Status != model.StatusActive {
+				return badRequest("The department does not exist or is not active.")
+			}
+		}
 		resource, err := sc.Resources().Create(ctx, model.Resource{
-			Name: name, Kind: "folder", URI: "workspace:" + ref,
+			Name: name, Kind: "folder", URI: "workspace:" + ref, Owner: p.Owner, WorkspaceID: p.Department,
 		})
 		if err != nil {
 			return err
@@ -230,7 +254,14 @@ func (m *Module) getWorkspace(ctx context.Context, tenant model.TenantID, ref st
 // inherit grants through it. The deregister audit and row delete are ATOMIC (deny-closed:
 // no deregistration without recorded evidence).
 func (m *Module) deleteWorkspace(ctx context.Context, tenant model.TenantID, ref, actor, actorKind string) error {
-	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	rec, err := m.loadWorkspaceRec(ctx, tenant, ref)
+	if err != nil {
+		return err
+	}
+	if err := m.guardRecordsRegistration(ctx, tenant, rec.String(colWsRootPath)); err != nil {
+		return err
+	}
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err
@@ -253,6 +284,7 @@ func (m *Module) deleteWorkspace(ctx context.Context, tenant model.TenantID, ref
 	})
 	if err == nil {
 		m.terminals.closeFolder(tenant, ref, "folder_removed")
+		m.sftp.Load().closeFolder(tenant, ref, "folder_removed")
 	}
 	return err
 }
@@ -277,12 +309,13 @@ func (m *Module) resolveWorkspace(ctx context.Context, tenant model.TenantID, re
 		return nil, err
 	}
 	root := rec.String(colWsRootPath)
-	rootReal, err := filepath.EvalSymlinks(root)
-	if err != nil {
+	rootReal, info, err := resolveRoot(root)
+	switch {
+	case errors.Is(err, errRootNotResponding):
+		return nil, rootNotResponding(root)
+	case rootReal == "":
 		return nil, &runErr{http.StatusFailedDependency, "workspace root path is unavailable on this node"}
-	}
-	info, err := os.Stat(rootReal)
-	if err != nil || !info.IsDir() {
+	case err != nil || !info.IsDir():
 		return nil, &runErr{http.StatusFailedDependency, "workspace root is not a directory on this node"}
 	}
 	tgt := rec.String(colWsContainerTgt)
@@ -299,6 +332,7 @@ func (m *Module) resolveWorkspace(ctx context.Context, tenant model.TenantID, re
 		containerTgt:    tgt,
 		dlpMode:         rec.String(colWsDLPMode),
 		maxReadBytes:    workspaceMaxRead(rec),
+		retentionDays:   rec.Int(colWsRetentionDays),
 		allowSubpaths:   subpaths,
 		readOnlyFolders: folders,
 	}, nil
@@ -546,10 +580,18 @@ func (m *Module) writeWorkspaceFile(ctx context.Context, tenant model.TenantID, 
 		return writeResponse{}, badRequest("cannot write the workspace root itself")
 	}
 	created := !pathExists(abs)
+	if !exclusive {
+		if err := m.guardRecords(ctx, tenant, ws, abs); err != nil {
+			return writeResponse{}, err
+		}
+	}
 	hash := sha256Hex(content)
+	// The write is labeled like a read of the same bytes. The deny posture guards reads: the
+	// published write contract stays open, so the verdict is dropped and only the labels stay.
+	hits, _ := m.classifyContent(ctx, ws.dlpMode, content)
 	if serr := m.sealWorkspaceMutation(ctx, tenant, wsMutationInput{
 		workspaceID: ws.id, workspaceRef: ref, op: "write", path: normRel(rel), contentHash: hash,
-		actor: actor, actorKind: actorKind,
+		actor: actor, actorKind: actorKind, classes: dlpClasses(hits),
 	}); serr != nil {
 		return writeResponse{}, &runErr{http.StatusServiceUnavailable, "could not record the write (denied)"}
 	}
@@ -578,7 +620,7 @@ func (m *Module) writeWorkspaceFile(ctx context.Context, tenant model.TenantID, 
 	} else if err := os.WriteFile(abs, content, 0o644); err != nil {
 		return writeResponse{}, mapFSErr(err)
 	}
-	return writeResponse{Path: normRel(rel), Size: int64(len(content)), SHA256: hash, Created: created}, nil
+	return writeResponse{Path: normRel(rel), Size: int64(len(content)), SHA256: hash, Created: created, Sensitivity: hits}, nil
 }
 
 // mkdir creates a directory (and parents) under the workspace.
@@ -636,6 +678,9 @@ func (m *Module) moveFile(ctx context.Context, tenant model.TenantID, ref, from,
 	if fromAbs == ws.rootReal || toAbs == ws.rootReal {
 		return badRequest("cannot move the workspace root itself")
 	}
+	if err := m.guardRecords(ctx, tenant, ws, fromAbs, toAbs); err != nil {
+		return err
+	}
 	if serr := m.sealWorkspaceMutation(ctx, tenant, wsMutationInput{
 		workspaceID: ws.id, workspaceRef: ref, op: "move", path: normRel(from), path2: normRel(to),
 		actor: actor, actorKind: actorKind,
@@ -667,6 +712,9 @@ func (m *Module) deleteFile(ctx context.Context, tenant model.TenantID, ref, rel
 	}
 	if abs == ws.rootReal {
 		return badRequest("cannot delete the workspace root itself")
+	}
+	if err := m.guardRecords(ctx, tenant, ws, abs); err != nil {
+		return err
 	}
 	op := "delete"
 	if recursive {

@@ -43,7 +43,7 @@ cover something, the page says so rather than implying it does.
   in several SIEM formats.
 - **Releases are signed and verifiable.** Signatures, SLSA provenance, SBOM and OpenVEX can all be
   [verified](/how-to/verify-a-release/). Verification is not yet fully network-free: keyless checks need Sigstore trusted-root
-  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The next release is **<!-- release -->0.6<!-- /release -->**, not yet published.
+  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The next release is **<!-- release -->0.7<!-- /release -->**, not yet published.
 
 ## Open core — what is open vs commercial
 
@@ -107,7 +107,7 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
   `OLIVARES_SOURCES_CONFIG` (the
   [quickstart](/start/quickstart/) wires a real `pgaudit` source against the stock
   binary and the smoke test asserts it). The knowledge **document sources**
-  (gdrive/confluence/notion/s3content) are deliberately *not* runtime
+  (gdrive/notion/s3content) are deliberately *not* runtime
   sources — they are loaded on demand by knowledge ingest requests. The
   [connectors reference](/reference/connectors/) marks each kind.
 - **The default is a single binary; the distributed event bus exists and is honest

@@ -114,7 +114,7 @@ func (s *grokSession) onServerRequest(id json.RawMessage, method string, params 
 		}()
 		return
 	}
-	req := &acpServerRequest{id: id, method: method}
+	req := newACPServerRequest(id, method)
 	key := string(id)
 	s.mu.Lock()
 	if s.closed {
@@ -245,7 +245,7 @@ func (s *grokSession) resolveServerRequest(req *acpServerRequest, key string, ra
 	if deadline <= 0 {
 		deadline = defaultDriverApprovalDeadline
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	ctx, cancel := context.WithTimeout(req.wait, deadline)
 	defer cancel()
 
 	offered := acpOfferedOptionIDs(params.Options)
@@ -259,6 +259,11 @@ func (s *grokSession) resolveServerRequest(req *acpServerRequest, key string, ra
 			// was shown, because a selection is checked back against this list.
 			Requested: offered,
 		})
+		if req.wait.Err() != nil {
+			// An interrupt or stop answered the request, or its session closed: that
+			// ended the wait, and the request has nothing left to answer.
+			return
+		}
 		if err != nil {
 			// An authority that could not decide never means "allow".
 			s.warn("sessions: the provider approval authority failed; refusing deny-closed",

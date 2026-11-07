@@ -1,13 +1,13 @@
 {
   "notFound": {
     "title": "Seite nicht gefunden",
-    "description": "Diese Seite existiert nicht oder wurde verschoben.",
-    "back": "Zurück zur Übersicht"
+    "description": "Diese Seite existiert nicht oder wurde verschoben."
   },
   "businessOnly": {
     "title": "Teil von Business",
     "description": "Diese Seite gehört zu Olivares AI Business. Diese Edition enthält sie nicht.",
-    "link": "Mehr zu Business"
+    "link": "Mehr zu Business",
+    "start": "Zur Startseite"
   },
   "forbidden": {
     "title": "Nicht autorisiert",
@@ -17,6 +17,7 @@
     "nextStep": "Ihre Rollen oder eine Gruppenrichtlinie erlauben es nicht. Ein Eigentümer oder Administrator dieser Organisation kann es gewähren.",
     "deniedByPolicy": "Die Richtlinie „{{policy}}“ verweigert es. Ein Eigentümer oder Administrator dieser Organisation kann sie ändern."
   },
+  "systemAdminOnly": "Das gilt für die gesamte Installation. Bitten Sie einen Systemadministrator, es anzusehen oder zu ändern.",
   "serverError": {
     "title": "Etwas ist schiefgelaufen",
     "description": "In Olivares ist ein unerwarteter Fehler aufgetreten. Bitte versuchen Sie es erneut.",
@@ -30,14 +31,21 @@
     "title": "Control Plane nicht erreichbar",
     "description": "Die Control Plane konnte nicht erreicht werden. Prüfen Sie Ihre Verbindung und ob die Engine läuft."
   },
+  "engineRetrying": {
+    "title": "Die Engine ist nicht erreichbar",
+    "description": "Es wird automatisch erneut versucht. Diese Seite öffnet sich, sobald die Engine antwortet."
+  },
   "networkSecure": {
     "title": "Sichere Verbindung fehlgeschlagen",
     "description": "Ihr Browser konnte keine sichere Verbindung zu {{origin}} herstellen. Vertraut er dem Zertifikat der Engine nicht, öffnen Sie diese Adresse in einem neuen Tab und vertrauen Sie dem Zertifikat, oder installieren Sie die CA der Engine (tls.crt.ca in deren Datenverzeichnis). Prüfen Sie andernfalls Ihre Verbindung und ob die Engine läuft."
   },
   "boundary": {
     "title": "Diese Ansicht ist abgestürzt",
-    "description": "Beim Rendern ist ein unerwarteter Fehler aufgetreten. Ein erneutes Laden behebt dies meist.",
-    "reload": "Neu laden"
+    "description": "Beim Rendern ist ein unerwarteter Fehler aufgetreten. Ein neuer Versuch behebt dies meist.",
+    "reload": "Neu laden",
+    "errorId": "Fehler-ID",
+    "copyErrorId": "Fehler-ID kopieren",
+    "goToNow": "Zur Übersicht"
   },
   "generic": "Etwas ist schiefgelaufen.",
   "sessionTemplateUnavailable": "Die Vorlage „Edits and commands“ ist nicht verfügbar, daher wurde die Sitzung nicht gestartet. Wählen Sie eine andere Berechtigung oder bitten Sie einen Administrator, die Vorlage wiederherzustellen.",

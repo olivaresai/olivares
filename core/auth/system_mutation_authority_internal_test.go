@@ -476,7 +476,7 @@ func TestSystemAuthoritySealGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "87784b47b007fac15ceb72bd63e69551505d42c3ea4bd49d941da7f9049e93f2"
+	const want = "20219e58f5c0e00f8d7d62fd560bc36752097876e7437e716c29331ba27747b0"
 	if got := hex.EncodeToString(seal[:]); got != want {
 		t.Fatalf("engine-system seal = %s, want %s", got, want)
 	}

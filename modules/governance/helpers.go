@@ -41,7 +41,7 @@ var errorBody = api.ModuleErrorBody
 // errorBodyCode is errorBody with a stable machine-readable code (the core API
 // envelope shape), for denials a client routes on (e.g. step_up_required).
 func errorBodyCode(code, msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"code": code, "message": msg}}
+	return api.ErrorBody(code, msg)
 }
 
 // writeStoreError maps a store error to an HTTP status. THE MAPPING ITSELF IS NOT

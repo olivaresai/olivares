@@ -211,7 +211,7 @@ func (m *Module) Query(ctx context.Context, mc api.ModuleContext, req QueryReque
 		extLabels  map[string][]string
 	)
 	if err := mc.Data.View(ctx, func(sc store.Scope) error {
-		policy, perr := loadDLPPolicy(ctx, sc)
+		policy, perr := m.loadDLPPolicy(ctx, sc, mc.Principal.UserID.String())
 		if perr != nil {
 			return perr
 		}

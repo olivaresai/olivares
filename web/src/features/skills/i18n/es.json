@@ -45,7 +45,12 @@
     "moved": "Asignación movida a la última revisión",
     "approveTitle": "¿Aprobar skills que actúan al cargarse?",
     "approveDescription": "La última revisión asigna a {{target}} skills sobre las que su herramienta actúa sin preguntar: {{skills}}. Apruébalas solo después de revisarlas.",
-    "approve": "Aprobar y usar la última"
+    "approve": "Aprobar y usar la última",
+    "disable": "Desactivar",
+    "disabled": "Skill desactivada",
+    "disableFor": "Desactivar {{skill}} para {{target}}",
+    "disableTitle": "¿Desactivar esta skill?",
+    "disableDescription": "Las nuevas sesiones de {{target}} dejan de recibir {{skill}} de esta asignación. Las demás skills siguen asignadas. Las conversaciones guardadas conservan su instantánea."
   },
   "assign": {
     "title": "Asignar",
@@ -85,7 +90,15 @@
     "gitSubmit": "Instalar desde Git",
     "name": "Nombre del paquete",
     "nameHint": "Opcional; usa el nombre del repositorio por defecto. Elige otro nombre para un paquete del mismo repositorio.",
-    "held": "Paquete instalado. Contiene skills que actúan al cargarse, así que no se asignó: revísalo y asígnalo desde su hoja."
+    "held": "Paquete instalado. Contiene skills que actúan al cargarse, así que no se asignó: revísalo y asígnalo desde su hoja.",
+    "local": "Carpeta o archivo",
+    "archive": "Archivo",
+    "archiveHint": "ZIP o tar.gz, hasta 32 MiB. Selecciona un archivo o una carpeta.",
+    "folder": "Carpeta",
+    "uploadSubmit": "Instalar selección",
+    "selectedFiles": "Archivos seleccionados: {{count}}",
+    "uploadLimit": "La carga supera los límites (32 MiB, 4096 archivos, 8 MiB por archivo).",
+    "uploadName": "Nombre del paquete cargado"
   },
   "update": {
     "title": "Actualizaciones",
@@ -103,6 +116,44 @@
     "acts": "{{skill}} ahora actúa al cargarse: {{items}}. Asignarla requiere tu aprobación.",
     "pinsKeep": "Las asignaciones existentes conservan su revisión hasta que muevas cada una con «Usar la última».",
     "apply": "Aplicar esta actualización",
-    "applied": "Actualización publicada como revisión {{n}}"
+    "applied": "Actualización publicada como revisión {{n}}",
+    "checked": "Comprobado",
+    "noDiff": "No hay diferencias de texto disponibles."
+  },
+  "catalog": {
+    "source": "Origen",
+    "tool_folder": "Carpeta de herramienta",
+    "pack": "Paquete",
+    "uploaded": "Subido",
+    "skills": "Habilidades",
+    "packs": "Paquetes",
+    "name": "Nombre",
+    "description": "Descripción",
+    "kind": "Tipo",
+    "search": "Buscar nombres y descripciones",
+    "unassigned": "Sin asignar",
+    "loading": "Cargando…",
+    "incomplete": "Faltan revisiones; las asignaciones pueden estar incompletas.",
+    "skill": "Habilidad",
+    "agent": "Agente",
+    "command": "Comando",
+    "rule": "Regla"
+  },
+  "selection": {
+    "loading": "Consultando habilidades…",
+    "count_one": "Esta sesión recibe {{count}} habilidad",
+    "count_other": "Esta sesión recibe {{count}} habilidades",
+    "count_many": "Esta sesión recibe {{count}} de habilidades",
+    "current_one": "Asignadas actualmente: {{count}} habilidad",
+    "current_other": "Asignadas actualmente: {{count}} habilidades",
+    "current_many": "Asignadas actualmente: {{count}} de habilidades",
+    "unavailable": "No se pudieron resolver las habilidades de este departamento."
+  },
+  "remove": {
+    "action": "Eliminar paquete",
+    "title": "¿Eliminar este paquete?",
+    "description": "Desasigna este paquete de todos los destinos visibles y lo elimina de las sesiones actuales. Se conservan las revisiones y el historial de auditoría. La eliminación se detiene si no se puede quitar una asignación.",
+    "done": "Paquete de habilidades eliminado",
+    "incomplete": "No se pudo completar la lista de asignaciones. Actualiza e inténtalo de nuevo."
   }
 }

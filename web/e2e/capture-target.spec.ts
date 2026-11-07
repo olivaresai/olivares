@@ -495,14 +495,11 @@ test.describe('capture target — a capture that outlives its release', () => {
 test.describe('capture target — session surfaces', () => {
   const VISTAS = [...VISTAS_DE_SESION]
   // The tile counts the live sessions (working, idle, gone silent) and captions the idle and silent ones.
-  // Estate's summary sentence (#2546): the sessions open (not yet ended), then today's cost.
-  const SENTENCE = (open: number) =>
-    `<section><p>${open} sessions open · $6.84 today</p></section>`
+  // Overview's strip (#4427): the sessions running, then today's cost; absent when nothing is said.
+  const STRIP = (running: number) =>
+    `<nav>${running} working · $6.84 today</nav>`
   const FILA = (estado: string) =>
     `<li data-testid="home-recent-row"><span>${estado}</span> <span>dependency upgrade scan</span></li>`
-  // A live session on Estate is a card: its tool first, its state in a cell of its own (#2245).
-  const TARJETA = (estado: string) =>
-    `<li><a data-testid="now-live-card"><span>Claude Code</span><span data-testid="now-live-card-state">${estado}</span></a></li>`
 
   test('accepts a conversation with a rendered reply, a glob, a masked value and relative times', async ({
     page,
@@ -526,7 +523,7 @@ test.describe('capture target — session surfaces', () => {
       ]) {
         await monta(
           page,
-          `<main><h1>Session</h1><pre style="white-space:pre-wrap">${crudo}</pre>${id === 'home' ? SENTENCE(0) : ''}</main>`,
+          `<main><h1>Session</h1><pre style="white-space:pre-wrap">${crudo}</pre></main>`,
         )
         await expect(
           exigirInstanteLimpio(page, id, { version: VERSION }),
@@ -592,89 +589,47 @@ test.describe('capture target — session surfaces', () => {
     }
   })
 
-  test('rejects an Estate page that lists more rows Working than sessions open', async ({
+  test('rejects an Overview page that lists more rows Working than sessions running', async ({
     page,
   }) => {
-    // Three open; five Working rows is the #1785 page.
+    // Three running; five Working rows is the #1785 page.
     await monta(
       page,
-      `<main><h1>Estate</h1>${SENTENCE(3)}<ul>${FILA('Working').repeat(5)}</ul></main>`,
+      `<main><h1>Overview</h1>${STRIP(3)}<ul>${FILA('Working').repeat(5)}</ul></main>`,
     )
     await expect(
       exigirInstanteLimpio(page, 'home', { version: VERSION }),
     ).rejects.toThrow(
-      /5 recent rows and live cards read Working beside a sentence that counts 3 sessions open/,
+      /5 rows read Working beside a strip that counts 3 sessions running/,
     )
   })
 
-  test('accepts an Estate page whose rows agree with its sentence', async ({
+  test('accepts an Overview page whose rows agree with its strip', async ({
     page,
   }) => {
     await monta(
       page,
-      `<main><h1>Estate</h1>${SENTENCE(5)}<ul>${FILA('Working').repeat(3)}${FILA('Idle').repeat(2)}</ul></main>`,
+      `<main><h1>Overview</h1>${STRIP(5)}<ul>${FILA('Working').repeat(3)}${FILA('Idle').repeat(2)}</ul></main>`,
     )
     await exigirInstanteLimpio(page, 'home', { version: VERSION })
-    // More sessions are open than the recent list can hold.
+    // More sessions run than the list can hold.
     await monta(
       page,
-      `<main><h1>Estate</h1>${SENTENCE(8)}<ul>${FILA('Working').repeat(5)}</ul></main>`,
+      `<main><h1>Overview</h1>${STRIP(8)}<ul>${FILA('Working').repeat(5)}</ul></main>`,
     )
     await exigirInstanteLimpio(page, 'home', { version: VERSION })
-    // A quiet estate lists nothing and says so.
-    await monta(
-      page,
-      '<main><h1>Estate</h1><p>Nothing is running</p><ul></ul></main>',
-    )
+    // A quiet installation has no strip and no row.
+    await monta(page, '<main><h1>Overview</h1><ul></ul></main>')
     await exigirInstanteLimpio(page, 'home', { version: VERSION })
   })
 
-  test('reads a sentence cut short at a page of sessions ("7+ sessions open")', async ({
+  test('refuses an Overview page whose strip counts sessions running but lists none', async ({
     page,
   }) => {
-    // Now says "N+" when its live read stopped at a page; the gate still reads the count.
-    await monta(
-      page,
-      `<main><h1>Estate</h1><section><p>7+ sessions open · $6.84 today</p></section><ul>${FILA('Working').repeat(8)}</ul></main>`,
-    )
+    await monta(page, `<main><h1>Overview</h1>${STRIP(3)}<ul></ul></main>`)
     await expect(
       exigirInstanteLimpio(page, 'home', { version: VERSION }),
-    ).rejects.toThrow(
-      /8 recent rows and live cards read Working beside a sentence that counts 7 sessions open/,
-    )
-  })
-
-  test('reads a live card the way it reads a row', async ({ page }) => {
-    await monta(
-      page,
-      `<main><h1>Estate</h1>${SENTENCE(1)}<ul>${TARJETA('Working').repeat(2)}</ul></main>`,
-    )
-    await expect(
-      exigirInstanteLimpio(page, 'home', { version: VERSION }),
-    ).rejects.toThrow(/2 recent rows and live cards read Working/)
-    await monta(
-      page,
-      `<main><h1>Estate</h1>${SENTENCE(2)}<ul>${TARJETA('Working')}${TARJETA('Idle')}</ul></main>`,
-    )
-    await exigirInstanteLimpio(page, 'home', { version: VERSION })
-  })
-
-  test('refuses an Estate page whose sentence counts sessions open but lists none', async ({
-    page,
-  }) => {
-    await monta(page, `<main><h1>Estate</h1>${SENTENCE(3)}<ul></ul></main>`)
-    await expect(
-      exigirInstanteLimpio(page, 'home', { version: VERSION }),
-    ).rejects.toThrow(/no recent row or live card is on the page/)
-  })
-
-  test('refuses an Estate page without its summary sentence', async ({
-    page,
-  }) => {
-    await monta(page, `<main><h1>Estate</h1><ul>${FILA('Idle')}</ul></main>`)
-    await expect(
-      exigirInstanteLimpio(page, 'home', { version: VERSION }),
-    ).rejects.toThrow(/summary sentence is absent or unreadable/)
+    ).rejects.toThrow(/no row is on the page/)
   })
 
   test('names only cells that exist in the capture spec', async () => {
@@ -721,6 +676,31 @@ test.describe('capture target — a screen that looks broken or unfinished', () 
       )
       await expect(clean(page, 'sessions')).rejects.toThrow(message)
     }
+  })
+
+  test('accepts the alert a view declares it exists to show, requires it, and refuses any other', async ({
+    page,
+  }) => {
+    const aviso = /Someone else changed this item/
+    await monta(
+      page,
+      '<main><h1>Work</h1><div role="alert">Someone else changed this item</div></main>',
+    )
+    await expect(exigirPantallaTerminada(page, 'work')).rejects.toThrow(
+      /shows an error/,
+    )
+    await exigirPantallaTerminada(page, 'work-apply-refused', { aviso })
+    await monta(page, '<main><h1>Work</h1><p>Plan: clean</p></main>')
+    await expect(
+      exigirPantallaTerminada(page, 'work-apply-refused', { aviso }),
+    ).rejects.toThrow(/state its id names was not reached/)
+    await monta(
+      page,
+      '<main><h1>Work</h1><div role="alert">Someone else changed this item</div><div role="alert">Upstream unavailable</div></main>',
+    )
+    await expect(
+      exigirPantallaTerminada(page, 'work-apply-refused', { aviso }),
+    ).rejects.toThrow(/Upstream unavailable/)
   })
 
   test('accepts an empty or hidden live region and an ordinary status line', async ({
@@ -799,6 +779,29 @@ test.describe('capture target — a screen that looks broken or unfinished', () 
   })
 })
 
+test.describe('capture target — a font for every character the page prints', () => {
+  const FUENTE = '<style>body{font-family:system-ui,sans-serif}</style>'
+  const ACCENTS = 'Español · Français · Русский · “quotes” — …' // language-data: glyph coverage
+
+  test('rejects a character that no installed font draws, and accepts accents and Cyrillic', async ({
+    page,
+  }) => {
+    await monta(
+      page,
+      `${FUENTE}<main><h1>Settings</h1><p>${ACCENTS}</p></main>`,
+    )
+    await exigirInstanteLimpio(page, 'settings', { version: VERSION })
+    // U+10FFFD is in no font: the same box stands in for every character a host cannot draw.
+    await monta(
+      page,
+      `${FUENTE}<main><h1>Settings</h1><p>Language: \u{10FFFD}\u{10FFFD}</p></main>`,
+    )
+    await expect(
+      exigirInstanteLimpio(page, 'settings', { version: VERSION }),
+    ).rejects.toThrow(/no installed font/)
+  })
+})
+
 test.describe('capture target — the dates a capture would carry', () => {
   const clean = (page: import('@playwright/test').Page, id: string) =>
     exigirInstanteLimpio(page, id, { version: VERSION })
@@ -817,6 +820,39 @@ test.describe('capture target — the dates a capture would carry', () => {
     const text = await page.locator('main').innerText()
     expect(text).toContain('claude-platform')
     expect(text).not.toMatch(/Oct|2026|PM|T11/)
+  })
+
+  test('masks the clock time of a read ("Last updated: 3:15:42 PM") and leaves durations and times in prose', async ({
+    page,
+  }) => {
+    await monta(
+      page,
+      `<main><h1>Status</h1><p>Last updated: 3:15:42\u202fPM</p>
+        <p>Took 1:30:00, ran at 12:05 a.m. and again at 9:07 AM.</p></main>`,
+    )
+    await expect(clean(page, 'status-page')).rejects.toThrow(/clock time/)
+    expect(await ocultarFechas(page)).toBe(3)
+    await clean(page, 'status-page')
+    const text = await page.locator('main').innerText()
+    expect(text).toContain('Last updated:')
+    expect(text).toContain('Took 1:30:00')
+    expect(text).not.toMatch(/3:15|a\.m\.|9:07|PM|AM/)
+  })
+
+  test('masks the release number inside a sentence and keeps "$0.1" and "10.1"', async ({
+    page,
+  }) => {
+    await monta(
+      page,
+      `<main><h1>Supply chain</h1><p>release-stamped ${VERSION} (self-declared); V${VERSION} and v${VERSION}.</p>
+        <p>$${VERSION} and 1${VERSION} and ${VERSION}.2</p></main>`,
+    )
+    await expect(clean(page, 'attestation')).rejects.toThrow(/release number/)
+    expect(await ocultarFechas(page, { version: VERSION })).toBe(3)
+    await clean(page, 'attestation')
+    const text = await page.locator('main').innerText()
+    expect(text).toContain('release-stamped')
+    expect(text).toContain(`$${VERSION} and 1${VERSION} and ${VERSION}.2`)
   })
 
   test('keeps the width of what it masks and draws it as a bar, not as a hole', async ({

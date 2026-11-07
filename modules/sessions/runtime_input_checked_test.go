@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -93,6 +94,7 @@ type runtimeInputObservedData struct {
 	bundle              store.AuthoritySnapshotBundle
 	scope               store.Scope
 	afterCommit         func()
+	unwatchedDelay      atomic.Int64 // nanoseconds every other Mutate waits: a loaded runner
 }
 
 func (d *runtimeInputObservedData) watch(ctx context.Context) {
@@ -106,6 +108,7 @@ func (d *runtimeInputObservedData) Mutate(ctx context.Context, tenant model.Tena
 	watched := ctx == d.watched
 	d.watchMu.Unlock()
 	if !watched {
+		time.Sleep(time.Duration(d.unwatchedDelay.Load()))
 		return d.ModuleData.Mutate(ctx, tenant, fn)
 	}
 	d.mutations++
@@ -665,7 +668,7 @@ func TestRuntimeInputCheckedOwnedDriverAndProfile(t *testing.T) {
 			f.m.Data = observed
 			dto, live := f.launch("checked-exact-driver")
 			target := runtimeInputTargetForTest(t, f, dto.RunRef)
-			request := RuntimeInputRequest{Target: target, Authority: runtimeInputAuthorityForTest(t, f, target), Mode: RuntimeInputRaw, Raw: []byte(`{"jsonrpc":"2.0"}`)}
+			request := RuntimeInputRequest{Target: target, Authority: runtimeInputAuthorityForTest(t, f, target), Mode: RuntimeInputRaw, Raw: []byte(`{"type":"user"}`)}
 			path := filepath.Join(f.profile.ConfigHome, codexFixtureRecordFile)
 			before := readFixtureRecord(t, path)
 			version := runtimeInputClaimVersionForTest(t, f, target)
@@ -854,7 +857,15 @@ func TestRuntimeInputCheckedOriginalDeadlineAtActualDriverAndPipe(t *testing.T) 
 			// A later acknowledged input orders the same pipe and proves the negative
 			// without relying on an immediate filesystem read racing the peer.
 			request.Text = preservedOperatorText
-			result, err := checkedRuntimeInputForTest(f.m, request, runtimeInputChecksAllowForTest())
+			// The control only orders the pipe; its budget is not the 250ms of the
+			// expiry under test, which a loaded runner can spend before the commit.
+			// The seam widens the ceiling after the call under test has returned.
+			observed.unwatchedDelay.Store(int64(300 * time.Millisecond))
+			restoreCeiling := SetTestCheckedRuntimeInputCeiling(10 * time.Second)
+			defer restoreCeiling()
+			controlCtx, stopControl := context.WithTimeout(context.Background(), 10*time.Second)
+			defer stopControl()
+			result, err := f.m.DeliverRuntimeInputChecked(controlCtx, request, runtimeInputChecksAllowForTest())
 			if err != nil || !result.Attempted || result.Outcome != RuntimeInputAccepted {
 				t.Fatalf("control input: %#v %v", result, err)
 			}

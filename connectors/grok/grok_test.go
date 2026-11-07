@@ -45,10 +45,7 @@ func gather(t *testing.T, cfg map[string]string) []model.FindingReport {
 	//    una hereda la hermeticidad en vez de heredar el fallo. El caso que quiera medir un
 	//    fichero de verdad la sobreescribe, que es lo que hacen las de abajo.
 	//
-	//    No es una precaución teórica: esta misma jornada, en `cmd/olivares`, un test con
-	//    `t.TempDir()` fijaba dos eslabones de una cadena de cuatro y acabó midiendo una
-	//    instalación real de 7,9 MB del `$HOME`. Rojo en `main` limpio, verde en CI, una noche
-	//    de dos carriles.
+	//    Use nonexistent paths for every input so a test never reads installed configuration.
 	sinTocar := t.TempDir()
 	base := map[string]string{
 		"config_path":         filepath.Join(sinTocar, "config-inexistente.toml"),

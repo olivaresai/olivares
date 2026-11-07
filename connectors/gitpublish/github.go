@@ -277,6 +277,80 @@ func (g *GitHub) Branch(ctx context.Context, t Token, branch string) (BranchInfo
 	return info, nil
 }
 
+// ReviewRuleHost is the additive review-rule read. A host without one answers
+// ErrNotSupported through ReadReviewRule.
+type ReviewRuleHost interface {
+	ReviewRule(ctx context.Context, t Token, branch string) (ReviewRule, error)
+}
+
+// ReadReviewRule reads branch's review rule through a host that offers one.
+func ReadReviewRule(ctx context.Context, host Host, t Token, branch string) (ReviewRule, error) {
+	h, ok := host.(ReviewRuleHost)
+	if !ok {
+		return ReviewRule{}, ErrNotSupported
+	}
+	return h.ReviewRule(ctx, t, branch)
+}
+
+// rulesPage is the most rules one read returns; a full page may hide more.
+const rulesPage = 100
+
+// ReviewRule reads the branch's active pull-request rules and, for each one
+// that asks an approval, whether this identity may bypass its ruleset. Both
+// reads need only the repository metadata every installation token holds.
+func (g *GitHub) ReviewRule(ctx context.Context, t Token, branch string) (ReviewRule, error) {
+	var rules []struct {
+		Type       string `json:"type"`
+		RulesetID  int64  `json:"ruleset_id"`
+		Parameters struct {
+			Approvals int `json:"required_approving_review_count"`
+		} `json:"parameters"`
+	}
+	if err := g.getJSON(ctx, t, "/rules/branches/"+escapeRef(branch)+"?per_page="+strconv.Itoa(rulesPage), &rules); err != nil {
+		return ReviewRule{}, err
+	}
+	if len(rules) >= rulesPage {
+		return ReviewRule{}, ErrLookupIncomplete
+	}
+	var out ReviewRule
+	for _, r := range rules {
+		if r.Type != "pull_request" || r.Parameters.Approvals < 1 {
+			continue
+		}
+		var rs struct {
+			Bypass string             `json:"current_user_can_bypass"`
+			Actors *[]json.RawMessage `json:"bypass_actors"`
+		}
+		if err := g.getJSON(ctx, t, "/rulesets/"+strconv.FormatInt(r.RulesetID, 10)+"?includes_parents=true", &rs); err != nil {
+			return ReviewRule{}, err
+		}
+		// Anything but an explicit "never" may let this identity merge unapproved.
+		if rs.Bypass != "never" {
+			out.Bypassable++
+			continue
+		}
+		out.Approvals = max(out.Approvals, r.Parameters.Approvals)
+		if rs.Actors == nil || out.Bypassers < 0 {
+			out.Bypassers = -1
+		} else {
+			out.Bypassers += len(*rs.Actors)
+		}
+	}
+	return out, nil
+}
+
+func (g *GitHub) getJSON(ctx context.Context, t Token, suffix string, out any) error {
+	c, err := do(ctx, g.d, http.MethodGet, g.repoURL(suffix), g.headers(t.secret.Reveal()), nil)
+	if err != nil || c.status != http.StatusOK {
+		he := hostError(c.status, c.header, ErrHostUnavailable)
+		return &he
+	}
+	if json.Unmarshal(c.body, out) != nil {
+		return ErrHostUnavailable
+	}
+	return nil
+}
+
 // CommitTree reads a commit's tree id.
 func (g *GitHub) CommitTree(ctx context.Context, t Token, sha string) (string, error) {
 	c, err := do(ctx, g.d, http.MethodGet, g.repoURL("/git/commits/"+url.PathEscape(sha)), g.headers(t.secret.Reveal()), nil)

@@ -9,6 +9,7 @@ package confine
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,5 +160,37 @@ if ( printf changed > "$1" ) 2>/dev/null; then echo reopened-write; exit 8; fi
 	}
 	if value, err := os.ReadFile(path); err != nil || strings.TrimSpace(string(value)) != "synthetic-shared-handle" {
 		t.Fatal("the sealed file changed")
+	}
+}
+
+// A caller of Wrap that asks for the launch handshake hears "ready" only once the child
+// is confined, through the same explicit helper the engine re-executes.
+func TestWrapCarriesTheReadyHandshakeThroughTheHelper(t *testing.T) {
+	if Probe().Mode != ModeLandlock {
+		t.Skip(Probe().Reason)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Close()
+	cmd := exec.CommandContext(t.Context(), self, "__owned_limits_probe", "/nonexistent")
+	if _, err := Wrap(cmd, Policy{ReadOnly: []string{self, "/lib", "/lib64"}, Ready: write}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	_ = write.Close()
+	got, err := io.ReadAll(read)
+	if waitErr := cmd.Wait(); waitErr != nil {
+		t.Fatalf("confined child: %v", waitErr)
+	}
+	if err != nil || string(got) != "ready\n" {
+		t.Fatalf("handshake = %q, %v; want %q", got, err, "ready\n")
 	}
 }

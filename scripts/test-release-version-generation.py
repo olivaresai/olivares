@@ -275,6 +275,13 @@ class ReleaseGeneration(unittest.TestCase):
             hits = CHECKER['scan'](['README.md'], lambda _: coordinate)
             self.assertTrue(CHECKER['judge']('1.0', hits, set(), set())[0], coordinate)
 
+    def test_openssh_and_samba_versions_are_not_product_coordinates(self):
+        # The OpenSSH and Samba version literals of two documents are dependency versions, never release coordinates.
+        text = ('measured 2026-11-04 with OpenSSH 9.2p1\n'
+                'gegen eine Samba-4.22-Freigabe (SMB 3.1.1).\n')
+        hits = CHECKER['scan'](['docs/design/workspace-sftp-v1.md'], lambda _: text)
+        self.assertEqual(CHECKER['judge']('0.6', hits, set(), set())[0], [])
+
     def test_third_party_tool_examples_are_not_release_coordinates(self) -> None:
         guide = (ROOT / 'docs/THIRD-PARTY-TOOLS.md').read_text()
         declaration = json.loads(guide.split('```json\n', 1)[1].split('```', 1)[0])
@@ -969,7 +976,8 @@ class ReleaseGeneration(unittest.TestCase):
                     result = run('--stamp')
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 for path, old, new in (('INSTALL.md', '', 'Olivares 1.0.1 is out.\n'),
-                                       ('scripts/test-rpm-repository.sh', '', 'FIXTURE=olivares-1.0-1.x86_64.rpm\n'),
+                                       ('scripts/test-rpm-repository.sh', '',
+                                        '# release\nFIXTURE=olivares-1.0.1-1.x86_64.rpm\n# /release\n'),
                                        ('deploy/compose/.env.example', '', '# olivares 1.0.1 is required\n')):
                     with self.subTest(red=path):
                         target = Path(folder, path)
@@ -1009,7 +1017,8 @@ class ReleaseGeneration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             (root / 'scripts/lib').mkdir(parents=True)
-            for file in ('scripts/build-ldflags.sh', 'scripts/lib/git-env.sh', 'scripts/goreleaser-build-wrapper.sh'):
+            for file in ('scripts/build-ldflags.sh', 'scripts/lib/git-env.sh', 'scripts/goreleaser-build-wrapper.sh',
+                         'scripts/check-web-bundle-freshness.sh', 'scripts/web-bundle-source-digest.sh'):
                 shutil.copyfile(ROOT / file, root / file)
             (root / 'RELEASE-VERSION').write_text('26.11\n')
             (root / 'scripts/build-connectors.sh').write_text('#!/bin/sh\nexit 0\n')
@@ -1018,6 +1027,33 @@ class ReleaseGeneration(unittest.TestCase):
             env = dict(os.environ, PATH=str(root) + ':' + os.environ['PATH'], GOOS='linux', GOARCH='amd64',
                        OLIVARES_BUILD_VERSION='26.11-snapshot', OLIVARES_BUILD_COMMIT='123abcd',
                        OLIVARES_BUILD_DATE='2026-10-01T00:00:00Z')
+            (root / 'web').mkdir()
+            (root / 'web/index.html').write_text('console source')
+            dist = root / 'core/internal/webui/dist'
+            dist.mkdir(parents=True)
+            (dist / 'PLACEHOLDER').write_text('compile-only placeholder')
+            wrapper = ['bash', str(root / 'scripts/goreleaser-build-wrapper.sh')]
+            # Both native calls and cross-target release calls must stop before Go.
+            for cross in (False, True):
+                build_env = dict(env)
+                if not cross:
+                    build_env.pop('GOOS', None)
+                    build_env.pop('GOARCH', None)
+                result = subprocess.run([*wrapper, 'build', './cmd/olivares'], env=build_env,
+                                        capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0, 'placeholder-only console reached Go')
+                self.assertEqual(result.stdout, '', 'Go must not run after console failure')
+                self.assertIn('console build failed', result.stderr)
+            optional = subprocess.run([*wrapper, 'build', './cmd/olivares'],
+                                      env=dict(env, OLIVARES_REQUIRE_CONSOLE='0'),
+                                      capture_output=True, text=True)
+            self.assertEqual(optional.returncode, 0, optional.stderr)
+            (dist / 'index.html').write_text('<script src="/assets/app.js"></script>')
+            (dist / 'assets').mkdir()
+            (dist / 'assets/app.js').write_text('console output')
+            stamp = subprocess.check_output(['bash', str(root / 'scripts/web-bundle-source-digest.sh')],
+                                            cwd=root, text=True)
+            (dist.parent / 'bundle-source.stamp').write_text(stamp)
             for flags in (['-ldflags', '-s -w -X example.key=anchor'], ['-ldflags=-s -w'], []):
                 args = subprocess.check_output(['bash', str(root / 'scripts/goreleaser-build-wrapper.sh'),
                                                 'build', *flags, '-o', 'output with spaces', './cmd/olivares'],

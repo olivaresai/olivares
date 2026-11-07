@@ -31,6 +31,7 @@ export type FactTranslate = (
 ) => string
 
 export interface FactFormatters {
+  modelName?: (id: string) => string
   /**
    * Milliseconds → "15s". The console's own `formatDuration`. Absent: another part
    * of the screen says the elapsed time (or that it is unknown), and this line does not.
@@ -72,6 +73,6 @@ export function workFacts(
       ? t('sessions:work.events', { count: s.event_count })
       : null,
     s.cost_micro_usd > 0 && fmt.cost ? fmt.cost(s.cost_micro_usd) : null,
-    model ? modelName(model) : null,
+    model ? (fmt.modelName ?? modelName)(model) : null,
   ].filter((f): f is string => f !== null)
 }

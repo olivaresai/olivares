@@ -101,9 +101,9 @@ curl -X POST .../v1/console/runtime/reload    # the API half
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` はオフラインで動作し、エンジンと同じ優先順位でライセンスを解決します。そのため
+エンジンのホスト上、または `--data-dir` を付けると、`status` はオフラインで動作し、エンジンと同じ優先順位でライセンスを解決します。そのため
 「ファイルがあるか」ではなく、重要な問いである*実際に有効なライセンスはどれか*に答えます。
-解決したソース、保持者、プラン、有効期限を表示します。
+解決したソース、保持者、プラン、有効期限を表示します。別のホストのエンジンにサインインしている場合は、そのエンジンに問い合わせます。
 
 インストールするたび、また override を削除した後に実行してください。
 
@@ -111,7 +111,7 @@ olivares license status --data-dir /var/lib/olivares
 
 Community ビルドに有効な Business または Enterprise ライセンスをインストールしても、そのビルドは
 そのまま動作し続けます。セッションコックピットとその他の商用ページは、このインストールを
-Business に切り替えて初めて表示されます。コンソールの **Edition & license** ビューには、
+Business に切り替えて初めて表示されます。コンソールの **設定 › エディション** ビューには、
 インストール済みのライセンスがビルドとは別に表示されます。**Expires** は有料の期間で、
 **Lease until** は、表示される場合、それとは別の暫定的なインスタンスリースです。
 Docker で実行している場合は、下の [Docker と Compose](#docker-と-compose) に進んでください。
@@ -131,7 +131,7 @@ export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is c
 olivares upgrade --edition business
 ```
 
-`olivares license install` と `olivares license status` は、このインストールの導入方法に合わせた正確なコマンドを表示します。コンソールの **Edition & license** ビューも同じ手順を 1 つのボタン **Business に切り替える** として表示します。エンジンがビルドをダウンロードして検証し、その場で置き換えて、そのビルドで再起動します。ダウンロードトークンは、ライセンス付きダウンロードポータルの **Downloads** ページ ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)) にこれらのコマンドと並んで表示され、ライセンスのメールにも記載されています。上のように名前で渡すと、プロセス一覧に出ません。接続済みのインストール (`olivares license connect start`) にはトークンは不要です。`--enterprise` は同じルートの旧来の書き方です。コンソールのボタンには、エンジン自身の環境にあるトークンかこの接続のどちらかが必要です。どちらもない場合、ビューにはボタンの代わりにコマンドが表示されます。
+`olivares license install` と `olivares license status` は、このインストールの導入方法に合わせた正確なコマンドを表示します。コンソールの **設定 › エディション** ビューも同じ手順を 1 つのボタン **Business に切り替える** として表示します。エンジンがビルドをダウンロードして検証し、その場で置き換えて、そのビルドで再起動します。ダウンロードトークンは、ライセンス付きダウンロードポータルの **Downloads** ページ ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)) にこれらのコマンドと並んで表示され、ライセンスのメールにも記載されています。上のように名前で渡すと、プロセス一覧に出ません。接続済みのインストール (`olivares license connect start`) にはトークンは不要です。`--enterprise` は同じルートの旧来の書き方です。コンソールのボタンには、エンジン自身の環境にあるトークンかこの接続のどちらかが必要です。どちらもない場合、ビューにはボタンの代わりにコマンドが表示されます。
 
 :::caution[パッケージインストール]
 deb、rpm、apk、AUR でインストールした場合、`/usr/bin/olivares` はパッケージマネージャが所有するため、
@@ -164,6 +164,13 @@ olivares enterprise enable <preset>     # starter | regulated | full
 ものを報告します。これらのコマンドは**商用バイナリにのみ存在します**。
 `olivares enterprise` がコマンドとして存在しない場合、まだ Community ビルドが稼働して
 おり、上記の切り替えは完了していません。
+
+コンソールでもファミリーごとに同じことができます。**設定 › エディション** ビューには、
+各ファミリーとオンになっているモジュール数が表示されます。**オンにする** は適用前に同じ diff を
+表示し、**オフにする** は停止するモジュールを示します。ライセンスに含まれないファミリーでは
+**オンにする** が無効のままで、*このライセンスには* そのファミリーが *含まれていません* と表示
+されます。エンジンはコンソールでも CLI でも、オンにするたびにライセンスを再確認するため、
+期限切れまたは存在しないライセンスでファミリーをオンにすることはできません。
 
 :::caution[切り替え前にバックアップする]
 切り替えで置き換えるのはバイナリであり、データではありません。それでも
@@ -231,7 +238,7 @@ Compose サービスの `image` を `olivares-business-local:X.Y` に設定し�
 単体の Docker では、このイメージと同じボリューム、同じ引数でコンテナを再作成します。
 データボリュームは保持してください。`down --volumes` は使わないでください。
 
-再起動後に **Edition & license** を確認します。エディションが **Business** と表示され、
+再起動後に **設定 › エディション** を確認します。エディションが **Business** と表示され、
 インストール済みのライセンスはデータボリューム内に残っているはずです。Enterprise の契約も
 この商用ビルドを使用します。契約固有のアーティファクトは、そのダウンロードの手順に従います。
 

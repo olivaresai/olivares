@@ -145,7 +145,7 @@ Produkt **beobachtet und regelt heute breit und agiert auf einer wachsenden,
 überwiegend bereitstellungs-gegateten Teilmenge** — siehe
 [Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/). Der auswählbare Katalog stammt aus
 `core/modulespec/modules.json`, derselben Quelle wie `olivares modules ls` und
-die Liste **Edition & Module** der Konsole. `npm run test:modules` prüft jeden
+die Liste **Module** der Konsole. `npm run test:modules` prüft jeden
 auswählbaren Namensraum auf eine verlinkte Referenzseite und verifiziert die Anzahl.
 
 ## Editions-Verfügbarkeitsnaht (nicht zu den 35 auswählbaren Modulen gezählt)

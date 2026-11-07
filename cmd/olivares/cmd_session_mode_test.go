@@ -25,15 +25,16 @@ func TestSessionShowNamesTheModeTheToolReported(t *testing.T) {
 		}
 		return out
 	}
-	// The MODE row carries the tool's word, not the requested permission mode.
+	// The MODE row carries what the tool reported, not the requested permission mode, by
+	// the permission name a person picks (acceptEdits is auto-accept-edits).
 	modeRow := ""
 	for _, l := range strings.Split(show("alpha"), "\n") {
 		if strings.Contains(l, "MODE") {
 			modeRow = l
 		}
 	}
-	if !strings.Contains(modeRow, "acceptEdits") || strings.Contains(modeRow, "default") {
-		t.Fatalf("the MODE row = %q, want the tool's acceptEdits", modeRow)
+	if !strings.Contains(modeRow, "auto-accept-edits") || strings.Contains(modeRow, "default") || strings.Contains(modeRow, "supervised") {
+		t.Fatalf("the MODE row = %q, want the tool's acceptEdits as auto-accept-edits", modeRow)
 	}
 	if out := show("quiet"); strings.Contains(out, "MODE") {
 		t.Fatalf("a session whose tool reported no mode shows a mode row:\n%s", out)

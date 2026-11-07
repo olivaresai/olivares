@@ -404,6 +404,26 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
   })
 })
 
+describe('KillswitchView — without the stop permission', () => {
+  it('says why there is no stop button instead of promising one click', async () => {
+    authState.can = (p) => p !== 'governance:killswitch:admin'
+    wrap(<KillswitchView />)
+    expect(
+      await screen.findByText(/Stopping needs the admin role\./),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Stopping takes one click/)).toBeNull()
+    expect(screen.queryByRole('button', { name: en.engage.stopAll })).toBeNull()
+  })
+
+  it('keeps the promise for whoever can stop', async () => {
+    wrap(<KillswitchView />)
+    expect(
+      await screen.findByText(/Stopping takes one click/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Stopping needs the admin role/)).toBeNull()
+  })
+})
+
 describe('KillswitchView — the live session list', () => {
   const run = (over: Partial<RunDTO>): RunDTO =>
     ({

@@ -133,18 +133,18 @@ const VIEWS: {
   path: string
   heading: string
 }[] = [
-  { id: 'capabilities', path: '/capabilities', heading: 'MCP & skills' },
+  { id: 'capabilities', path: '/capabilities', heading: 'Extensions' },
   { id: 'catalog', path: '/catalog', heading: 'Catalog' },
   {
     id: 'permissions',
     path: '/permissions',
-    heading: 'Approvals and permissions',
+    heading: 'Permissions',
   },
   // Deployment is a Business page: only a build that carries edition views registers it.
   ...(FEATURE_EXTENSIONS.length > 0
     ? [{ id: 'deploy', path: '/deploy', heading: 'Deployment & integration' }]
     : []),
-  { id: 'knowledge', path: '/knowledge', heading: 'Data, knowledge & context' },
+  { id: 'knowledge', path: '/knowledge', heading: 'Knowledge' },
 ]
 
 async function seed(page: Page, theme: 'light' | 'dark') {

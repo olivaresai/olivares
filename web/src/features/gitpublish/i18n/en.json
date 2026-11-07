@@ -271,15 +271,16 @@
     "submit": "Ship",
     "message": "Commit message",
     "messageHint": "Used only when the session’s folder has changes. Defaults to the title.",
-    "shipped": "Shipped: {{branch}} is pushed.",
+    "shipped": "Shipped: <branch /> is pushed.",
+    "shippedToast": "Shipped.",
     "pullRequest": "Pull request #{{number}}",
     "pullRequestOpen": "Open the pull request",
     "awaitingTitle": "Waiting for another person’s approval",
     "awaitingBody": "Your changes are committed. Another person has to approve the push (approval {{id}}) before it goes out. When they have, ship again.",
     "again": "Ship again",
     "incompleteTitle": "The ship did not finish",
-    "incompletePush": "The push of {{branch}} did not apply ({{state}}). Check this target’s intents, then ship again.",
-    "incompletePullRequest": "{{branch}} is pushed, but the pull request was not opened ({{code}}). Ship again to retry it.",
+    "incompletePush": "The push of <branch /> did not apply ({{state}}). Check this target’s intents, then ship again.",
+    "incompletePullRequest": "<branch /> is pushed, but the pull request was not opened ({{code}}). Ship again to retry it.",
     "pullRequests": "Pull requests"
   }
 }

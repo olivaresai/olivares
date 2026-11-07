@@ -1,5 +1,5 @@
 {
-  "title": "Visualizzatore log",
+  "title": "Log",
   "controls": {
     "pause": "Pausa",
     "resume": "Riprendi",
@@ -18,7 +18,7 @@
     "clearAria": "Azzera i filtri"
   },
   "capture": {
-    "debugUnavailable": "Le voci DEBUG non vengono acquisite con il livello di log attuale del motore: imposta OLIVARES_LOG_LEVEL=debug."
+    "debugUnavailable": "Le voci di debug non vengono registrate con il livello di log attuale."
   },
   "stream": {
     "empty": "Nessuna voce di log da mostrare.",

@@ -220,27 +220,30 @@ describe('mapConversationFrames — kinds from the golden-path attach', () => {
     expect(items.map((i) => i.kind)).toEqual([
       'system',
       'system',
-      'system',
       'operator',
       'assistant',
       'result',
     ])
-    expect(items[2]?.systemKind).toBe('init')
-    expect(items[2]?.cwd).toBe('/home/operator/project')
-    expect(items[2]?.summary).toContain('claude-opus-5[1m]')
-    expect(items[2]?.summary).toContain('4 tools')
+    // A hook that ran and passed is the tool's bookkeeping, not a row: the two
+    // frames are one quiet item, kept for the inspector.
+    expect(isQuiet(items[0]!)).toBe(true)
+    expect(items[0]?.raw).toEqual([HOOK_STARTED, HOOK_RESPONSE])
+    expect(items[1]?.systemKind).toBe('init')
+    expect(items[1]?.cwd).toBe('/home/operator/project')
+    expect(items[1]?.summary).toContain('claude-opus-5[1m]')
+    expect(items[1]?.summary).toContain('4 tools')
     // A limit warning that did not stop the turn is no row: it joins the line
     // before it, for the inspector.
-    expect(items[2]?.raw).toEqual([INIT, RATE_LIMIT])
-    expect(items[3]?.text).toBe('Reply with the single word OK')
-    expect(items[4]?.text).toBe('OK')
-    expect(items[5]?.costUsd).toBe(0.0274295)
-    expect(items[5]?.durationMs).toBe(1575)
-    expect(items[5]?.inputTokens).toBe(2)
-    expect(items[5]?.outputTokens).toBe(4)
+    expect(items[1]?.raw).toEqual([INIT, RATE_LIMIT])
+    expect(items[2]?.text).toBe('Reply with the single word OK')
+    expect(items[3]?.text).toBe('OK')
+    expect(items[4]?.costUsd).toBe(0.0274295)
+    expect(items[4]?.durationMs).toBe(1575)
+    expect(items[4]?.inputTokens).toBe(2)
+    expect(items[4]?.outputTokens).toBe(4)
     // The turn is named after its own reply's model, not the costliest usage key.
-    expect(items[5]?.model).toBe('claude-opus-5')
-    expect(items[5]?.text).toBe('OK')
+    expect(items[4]?.model).toBe('claude-opus-5')
+    expect(items[4]?.text).toBe('OK')
   })
 
   it('keeps the raw line on every item so the inspector can show the wire', () => {
@@ -442,6 +445,22 @@ describe('mapConversationFrames — Claude Code tool progress and control replie
     expect(items).toHaveLength(1)
     expect(items[0]?.kind).toBe('tool')
     expect(items[0]?.raw).toEqual([BASH_USE, INTERRUPT_REPLY])
+  })
+})
+
+describe('mapConversationFrames — a hook that failed is told', () => {
+  it('shows a failed hook as one notice in the hook own words', () => {
+    const failed = JSON.stringify({
+      ...JSON.parse(HOOK_RESPONSE),
+      outcome: 'error',
+      exit_code: 2,
+      stderr: 'lint hook: staged files do not format',
+    })
+    const items = mapConversationFrames([HOOK_STARTED, failed])
+    const rows = items.filter((item) => !isQuiet(item))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.systemKind).toBe('notice')
+    expect(rows[0]?.summary).toBe('lint hook: staged files do not format')
   })
 })
 
@@ -866,6 +885,55 @@ describe('a result the tool marked as an error (F1C)', () => {
       }),
     ])
     expect(item.resultFailed).toBeUndefined()
+  })
+})
+
+// The interrupt button (issue 3989, Claude Code 2.1.x): the tool answers it with a
+// synthetic user frame, then a `result` of subtype error_during_execution. Neither is the
+// person's message or a failure; the words the turn had streamed stay.
+describe('an interrupted Claude Code turn', () => {
+  const marker = (text: string) =>
+    JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'text', text }] },
+    })
+  const interruptedResult = JSON.stringify({
+    type: 'result',
+    subtype: 'error_during_execution',
+    is_error: true,
+    duration_ms: 9400,
+    modelUsage: { 'claude-sonnet-5-5': { costUSD: 0.01 } },
+  })
+
+  it.each([
+    '[Request interrupted by user]',
+    '[Request interrupted by user for tool use]',
+  ])(
+    'keeps the streamed text and ends in one quiet interrupted row for %s',
+    (text) => {
+      const lines = [
+        STREAM_DELTA,
+        STREAM_DELTA_2,
+        marker(text),
+        interruptedResult,
+      ]
+      const items = mapConversationFrames(lines)
+      expect(items.map((i) => i.kind)).toEqual(['assistant', 'result'])
+      expect(items[0]?.text).toBe('Hello')
+      expect(items[1]).toMatchObject({
+        interrupted: true,
+        durationMs: 9400,
+        model: 'claude-sonnet-5-5',
+      })
+      expect(items[1]?.resultFailed).toBeUndefined()
+      expect(items.flatMap((i) => i.raw).sort()).toEqual([...lines].sort())
+    },
+  )
+
+  it('still shows a failed result that no interrupt came before', () => {
+    const [item] = mapConversationFrames([interruptedResult])
+    expect(item?.resultFailed).toBe(true)
+    expect(item?.stopReason).toBeUndefined()
   })
 })
 
@@ -1370,13 +1438,19 @@ describe('a tool call in its own short form', () => {
     expect(target('Read', { file_path: '/etc/hosts' })).toBe('/etc/hosts')
   })
 
-  it('reads an unknown tool by its plain fields, not as JSON', () => {
-    const shown = target('mcp__db__query', {
-      sql: 'select 1',
-      limit: 5,
-      opts: {},
-    })
-    expect(shown).toBe('sql select 1 · limit 5')
+  it('reads an unknown tool by its one-line subject, never its fields or JSON', () => {
+    // The row is the tool's name and what it acts on; its input stays for the expanded row.
+    expect(
+      target('mcp__db__query', { sql: 'select 1', limit: 5, opts: {} }),
+    ).toBe('select 1')
+    expect(
+      target('CronCreate', {
+        cron: '*/20 * * * *',
+        prompt: 'Check the queue.\nThen report.',
+        recurring: true,
+      }),
+    ).toBe('*/20 * * * *')
+    expect(target('mcp__peer__inbox', { limit: 10 })).toBe('')
   })
 
   // #3135: the path stays whole; the console cuts it in its middle (PathText) and keeps it all.
@@ -1622,4 +1696,64 @@ describe('mapConversationFrames — ids that outlive the frame window', () => {
     expect(ids(after)).toEqual(ids(before))
     expect(new Set(after.map((item) => item.id)).size).toBe(after.length)
   })
+})
+
+// Claude Code 2.1.316 reports each message the person sent through its queue with
+// command_lifecycle frames (queued, started, completed). They carry the message's uuid
+// and its state, no words, and 0.6 painted each one as an "Unrecognised frame" card.
+describe('mapConversationFrames — command_lifecycle is bookkeeping, not a card', () => {
+  const lifecycle = (state: string) =>
+    JSON.stringify({
+      type: 'command_lifecycle',
+      uuid: '5b0c6a0e-6d7a-4b1e-9c3f-2a1d4e5f6a7b',
+      state,
+    })
+  it('folds every command_lifecycle frame and keeps the turn as person, reply, result', () => {
+    const items = mapConversationFrames([
+      lifecycle('queued'),
+      USER,
+      lifecycle('started'),
+      ASSISTANT,
+      lifecycle('completed'),
+      RESULT,
+    ])
+    expect(items.filter((i) => i.kind === 'unknown')).toEqual([])
+    expect(items.map((i) => i.kind)).toEqual(
+      expect.arrayContaining(['operator', 'assistant', 'result']),
+    )
+    // Nothing is lost: every frame stays readable in the inspector.
+    expect(
+      items
+        .flatMap((i) => i.raw)
+        .filter((r) => r.includes('command_lifecycle')),
+    ).toHaveLength(3)
+  })
+})
+
+it('fork context ends at the selected finished turn, including failed turns', async () => {
+  const { forkContext } = await import('./session-context')
+  const items: ConversationItem[] = [
+    { raw: [], id: 'u1', kind: 'operator', summary: 'first', text: 'first' },
+    { raw: [], id: 'a1', kind: 'assistant', summary: 'answer', text: 'answer' },
+    {
+      raw: [],
+      id: 'r1',
+      kind: 'result',
+      summary: 'failed',
+      resultFailed: true,
+    },
+    {
+      raw: [],
+      id: 'u2',
+      kind: 'operator',
+      summary: 'later secret',
+      text: 'later secret',
+    },
+  ]
+  const text = forkContext('session-one', items, 'r1')
+  expect(text).toContain('first')
+  expect(text).toContain('answer')
+  expect(text).toContain('session-one')
+  expect(text).not.toContain('later secret')
+  expect(() => forkContext('session-one', items, 'a1')).toThrow()
 })

@@ -65,7 +65,7 @@ S3 存储桶和对象会带着 clean 层徽标加入**访问图（Access map）*
 读与写依据 `readOnly` 标志着色。漂移面板将它们与已声明的授权交叉比对，
 方式与任何其他 source 完全一致。
 
-在 **Inventory** 中，CloudTrail 将调用归属到的主体会作为身份出现，
+在 **已发现的资源** 中，CloudTrail 将调用归属到的主体会作为身份出现，
 随时可绑定到 agent —— 正是这种绑定，把一个共享角色的 `approximate`
 变成按 agent 的 `attributed`。
 

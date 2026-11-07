@@ -221,7 +221,7 @@ func TestVerifyBundleScratchWrongPassphrase(t *testing.T) {
 func TestDualControlDistinctApprover(t *testing.T) {
 	ds := newDRService(DRConfig{DataDir: t.TempDir()})
 	alice := auth.PersonRef{User: "alice", Actor: "user:alice"}
-	pr := ds.registerPending("upload-123.drbundle", alice, time.Now().UTC().Format(time.RFC3339))
+	pr := ds.registerPending("upload-123.drbundle", alice, time.Now().UTC().Format(time.RFC3339), nil)
 
 	// Self-approval refused — including through a DIFFERENT credential of the same
 	// person ("token:alice-pat" is not "user:alice", but alice is alice).
@@ -263,7 +263,7 @@ func TestDualControlDistinctApprover(t *testing.T) {
 func TestDualControlRefusesPartyWithoutAStableUser(t *testing.T) {
 	ds := newDRService(DRConfig{DataDir: t.TempDir()})
 	alice := auth.PersonRef{User: "alice", Actor: "user:alice"}
-	pr := ds.registerPending("u.drbundle", alice, time.Now().UTC().Format(time.RFC3339))
+	pr := ds.registerPending("u.drbundle", alice, time.Now().UTC().Format(time.RFC3339), nil)
 
 	// An approver with no user is refused — not compared.
 	sysTok := auth.PersonRef{Actor: "token:sys"}
@@ -279,7 +279,7 @@ func TestDualControlRefusesPartyWithoutAStableUser(t *testing.T) {
 
 	// A request registered without a person cannot be approved by anyone: one
 	// nameable human plus one anonymous credential is not two humans.
-	anon := ds.registerPending("v.drbundle", auth.PersonRef{Actor: "token:sys"}, time.Now().UTC().Format(time.RFC3339))
+	anon := ds.registerPending("v.drbundle", auth.PersonRef{Actor: "token:sys"}, time.Now().UTC().Format(time.RFC3339), nil)
 	bob := auth.PersonRef{User: "bob", Actor: "user:bob"}
 	if _, err := ds.approvePending(anon.RequestID, "v.drbundle", bob); err != errNoStableIdentity {
 		t.Fatalf("a person-less initiator must not be approvable, got %v", err)

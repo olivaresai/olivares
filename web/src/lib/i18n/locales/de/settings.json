@@ -1,4 +1,25 @@
 {
+  "exposure": {
+    "title": "Konsolenzugriff",
+    "listen": "HTTPS-/HTTP-Listener",
+    "grpc": "gRPC-Listener",
+    "addresses": "Lokale Adressen",
+    "url": "Öffentliche URL",
+    "tls": "Transport",
+    "encrypted": "TLS aktiviert",
+    "unencrypted": "Unverschlüsseltes HTTP",
+    "policy": "Zusätzliche administrative Authentifizierung",
+    "unverified": "Die externe Erreichbarkeit wurde nicht überprüft.",
+    "hint": "Dies sind lokale Angaben; eine öffentliche URL oder lokale Adresse belegt nicht, dass ein Telefon außerhalb dieses Netzwerks die Konsole erreichen kann.",
+    "guard": "Aktivieren Sie einen Authentifizierungscode oder Passkey unter Zusätzliche administrative Authentifizierung, bevor Sie den öffentlichen Zugriff aktivieren.",
+    "saved": "Konsolenzugriff aktualisiert.",
+    "managed": "Der verwaltete öffentliche Zugriff ist registriert.",
+    "unmanaged": "Es ist kein verwalteter öffentlicher Zugriff registriert.",
+    "urlHint": "Verwenden Sie die Adresse Ihres Tailnets oder benannten Tunnels; lassen Sie das Feld leer, um die verwaltete öffentliche URL zu entfernen.",
+    "unchanged": "Ändern Sie die öffentliche URL, um sie zu speichern.",
+    "tunnelHint": "Verwenden Sie einen Tailnet-Client für privaten Zugriff oder einen benannten Cloudflare Tunnel für öffentlichen Zugriff. Ein Tunnel benötigt keinen eingehenden WAN-Port.",
+    "notSet": "Nicht festgelegt"
+  },
   "title": "Einstellungen",
   "restoreAll": "Alle Standards wiederherstellen",
   "search": "Einstellungen suchen",
@@ -15,9 +36,10 @@
     "aiTools": "KI-Werkzeuge",
     "workspaces": "Arbeitsbereiche",
     "deploy": "Bereitstellung und Updates",
-    "signIn": "Anmeldung und Sicherheit",
+    "signIn": "Anmeldung",
     "setup": "Einrichtung",
-    "edition": "Edition & Module",
+    "edition": "Edition",
+    "modules": "Module",
     "about": "Info",
     "sections": "Einstellungsbereiche",
     "signing": "Berichtssignierung",
@@ -36,13 +58,13 @@
     "density": "Dichte",
     "densityHint": "Kompakt zeigt mehr Zeilen; bequem lässt sich leichter lesen.",
     "language": "Sprache",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Uhrzeit",
     "timeHint": "Zeiten erscheinen in Ihrer Zone ({{zone}}). Aufzeichnungen und Exporte bleiben in UTC.",
     "clock24": "24 Stunden",
     "clock12": "12 Stunden",
     "startPage": "Startseite",
-    "startPageHint": "Was sich nach der Anmeldung öffnet. Standard: Start.",
+    "startPageHint": "Was sich nach der Anmeldung öffnet. Standard: Sitzungen.",
     "confirmStop": "Vor dem Beenden einer Sitzung bestätigen",
     "confirmStopHint": "Einmal fragen, bevor Stopp eine noch laufende Sitzung beendet.",
     "editor": "Editor für Dateilinks",
@@ -71,23 +93,22 @@
     "scope": "Die Tasten, die diese Installation beantwortet. Sie gelten für alle gleich."
   },
   "edition": {
-    "title": "Edition & Module",
-    "scope": "Die Edition dieses Builds, die Module, die er ausführt, und was Business hinzufügt.",
+    "scope": "Die Edition dieses Builds, ihre Lizenz und was Business hinzufügt.",
     "label": "Edition",
-    "licenseAlias": "Lizenz",
     "unknown": "Von dieser Engine nicht gemeldet",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
     "businessAdds": "Business fügt hinzu",
-    "adds": {
-      "loginEnforcement": "Anmeldedurchsetzung: SSO erzwingen und eine Netzwerk-Zulassungsliste",
-      "identityProviders": "Mehrere Identitätsanbieter, pro Organisation und nach E-Mail-Domain geroutet",
-      "groupMapping": "Verzeichnisgruppen, die bei der Anmeldung Rollen zugeordnet werden",
-      "regulatory": "Regulatorischer Betrieb: DORA-Register, NIS-2-Vorfallklassifizierung, OSCAL-Profile, US- und Branchenpakete sowie kontinuierliche Kontrollüberwachung",
-      "reports": "Business-Berichte und geplante Berichte",
-      "toolPins": "Werkzeug-Pins"
+    "summary": {
+      "Session cockpit and fleet deployment.": "Sitzungs-Cockpit und Flottenbereitstellung.",
+      "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Live-Freigabe von Sitzungen mit namentlichem, ablaufendem Gastzugang und vom Eigentümer genehmigten Nachrichtenvorschlägen.",
+      "Directories and several identity providers, departments and delegated administration.": "Verzeichnisse und mehrere Identitätsanbieter, Abteilungen und delegierte Administration.",
+      "Compliance and reporting, regulated records.": "Compliance und Berichte, regulierte Aufzeichnungen.",
+      "Deeper runtime inspection and key management.": "Tiefere Laufzeitprüfung und Schlüsselverwaltung.",
+      "Integrations with enterprise systems, commercial license and support.": "Integrationen mit Unternehmenssystemen, kommerzielle Lizenz und Support.",
+      "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise umfasst alles aus Business sowie vertraglich vereinbarte Bedingungen und die Funktionen, die davon abhängen."
     },
     "badge": {
       "business": "Business",
@@ -153,7 +174,7 @@
     "names": {
       "accessmap": "Zugriffskarte",
       "adoption": "Nutzung",
-      "capabilities": "MCP- und Skill-Katalog",
+      "capabilities": "Erweiterungen",
       "catalog": "Katalog",
       "claude-agents": "Claude-Agenten",
       "claude-policy": "Claude-Richtlinie",
@@ -246,7 +267,7 @@
     "activatedBy": "Aktiviert durch {{addons}}. Es bleibt an, solange dieses Add-on aktiv ist.",
     "turnOnPlain": "Einschalten",
     "alsoTurnsOn": "Wenn Sie dies einschalten, werden auch {{names}} eingeschaltet und die Engine startet neu.",
-    "openEdition": "„Edition & Module“ öffnen",
+    "openModules": "„Module“ öffnen",
     "askAdmin": "Bitten Sie eine Administratorin oder einen Administrator, es einzuschalten.",
     "notSetUp": "Es ist auf dieser Installation noch nicht eingerichtet.",
     "stillRestarting": "Neustart dauert noch an. Laden Sie die Seite neu."
@@ -371,6 +392,7 @@
     "tool": "Standardwerkzeug",
     "account": "Standardkonto",
     "model": "Standardmodell",
+    "effort": "Standardaufwand",
     "folder": "Standardordner",
     "automatic": "Automatisch",
     "unavailable": "Nicht mehr verfügbar",
@@ -383,5 +405,9 @@
     "needsYou": "Benötigt Ihre Aufmerksamkeit",
     "finished": "Abgeschlossen",
     "failed": "Fehlgeschlagen"
+  },
+  "aliases": {
+    "edition": "Lizenz",
+    "signIn": "Anmeldung und Sicherheit"
   }
 }

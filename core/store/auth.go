@@ -269,3 +269,10 @@ type OSAccountBindingStore interface {
 	// RevokeOSAccount retires the current binding without releasing its tuple.
 	RevokeOSAccount(context.Context, model.CredentialBinding, model.Timestamp) error
 }
+
+// CredentialBindingUserReader is an optional read-only account inventory. It
+// returns current bindings in the named business tenant, never another tenant.
+// Implementations refuse an incomplete inventory instead of truncating it.
+type CredentialBindingUserReader interface {
+	ListByUser(context.Context, model.TenantID, model.ID) ([]model.CredentialBinding, error)
+}

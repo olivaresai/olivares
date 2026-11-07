@@ -32,6 +32,7 @@ const (
 	colWsRef             = "workspace_ref"
 	colWsName            = "name"
 	colWsRootPath        = "root_path"
+	colWsTransferred     = "ownership_transferred"
 	colWsMountMode       = "mount_mode"        // rw | ro | write_no_delete
 	colWsContainerTgt    = "container_target"  // e.g. /workspace
 	colWsAllowSubpaths   = "allow_subpaths"    // JSON array of relative subpaths (empty = whole root)
@@ -39,8 +40,9 @@ const (
 	colWsMaxReadBytes    = "max_read_bytes"
 	colWsBackup          = "backup"
 	colWsDataClass       = "data_class"
-	colWsDLPMode         = "dlp_mode" // label | deny | off
-	colWsState           = "state"    // active | disabled
+	colWsRetentionDays   = "retention_days" // minimum days an entry is kept after its last change; NULL or 0 = none
+	colWsDLPMode         = "dlp_mode"       // label | deny | off
+	colWsState           = "state"          // active | disabled
 	// colWsDefaultPermission is the permission name (permission_modes.go) a session
 	// started in this folder is offered by default; empty means the folder has none.
 	colWsDefaultPermission = "default_permission"
@@ -93,12 +95,14 @@ func (m *Module) registerWorkspaceSchema(reg store.ExtensionRegistry) error {
 			{Name: colWsRef, Kind: model.KindText, Principal: model.None("an opaque workspace registry id (a UUID) minted by this module: workspace.go:82, workspace_dto.go:27")},
 			{Name: colWsName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen workspace label, shown only: workspace_dto.go:28")},
 			{Name: colWsRootPath, Kind: model.KindText, Principal: model.None("the canonical host root path of the workspace: workspace.go:73, workspace_dto.go:29")},
+			{Name: colWsTransferred, Kind: model.KindBool, Nullable: true},
 			{Name: colWsMountMode, Kind: model.KindText, Principal: model.None("a mount mode, a closed set: workspace.go:545, workspace_schema.go:41-42")},
 			{Name: colWsContainerTgt, Kind: model.KindText, Nullable: true, Principal: model.None("an absolute in-container mount path: workspace.go:554-558, workspace_dto.go:31")},
 			{Name: colWsAllowSubpaths, Kind: model.KindJSON, Nullable: true, Principal: pdeclWorkspaceSubpaths},
 			{Name: colWsMaxReadBytes, Kind: model.KindInt, Nullable: true},
 			{Name: colWsBackup, Kind: model.KindBool, Nullable: true},
 			{Name: colWsDataClass, Kind: model.KindText, Nullable: true, Principal: model.None("operator-selected folder classification metadata, a closed enum: data_class.go:9-16")},
+			{Name: colWsRetentionDays, Kind: model.KindInt, Nullable: true},
 			{Name: colWsDLPMode, Kind: model.KindText, Principal: model.None("a DLP read posture, a closed set: workspace.go:551, workspace_schema.go:47-49")},
 			{Name: colWsState, Kind: model.KindText, Indexed: true, Principal: model.None("a workspace state, a closed set: workspace_schema.go:54-55, workspace.go:199")},
 			{Name: colWsReadOnlyFolders, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,

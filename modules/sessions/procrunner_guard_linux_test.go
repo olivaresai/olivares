@@ -338,9 +338,9 @@ func TestSessionGuardEndsWhatAnEscalatedStopLeftRunning(t *testing.T) {
 }
 
 // When the guard cannot end the tree (its watch is gone, or it is stuck), Stop
-// falls back to the group kill after the delay: a tool that ignores SIGTERM must
-// not outlive it. A launch with no guard, whose tree-end does nothing here,
-// stands in for a guard that cannot act.
+// falls back to the group kill after the tree-kill bound: a tool that ignores
+// SIGTERM must not outlive it. A launch with no guard, whose tree-end does nothing
+// here and whose bound is zero, stands in for a guard that cannot act.
 func TestProcProcessStopKillsTheGroupWhenTheGuardCannotEndTheTree(t *testing.T) {
 	p := launchUnguardedChild(t, "#!/bin/sh\ntrap '' TERM\nprintf 'up\\n'\nexec sleep 300\n", 200*time.Millisecond)
 	p.endTree = func() {}
@@ -400,7 +400,9 @@ func TestProcProcessStopKillsAHolderThatEscapedTheGroup(t *testing.T) {
 
 // A launch whose context ends (a timed probe, a stored-reader read) ends the tree
 // too: the cancellation closes the guard's watch rather than killing the group,
-// which would take the guard with the program and leak what left the group.
+// which would take the guard with the program and leak what left the group. The
+// command sits under a chain of 100 shells, so the tree kill takes 100 passes,
+// longer than the launch's WaitDelay: os/exec must not kill the guard mid-kill.
 func TestSessionGuardEndsWhatACancelledLaunchLeftRunning(t *testing.T) {
 	if _, err := exec.LookPath("setsid"); err != nil {
 		t.Skip("setsid(1) is not installed here")
@@ -408,10 +410,16 @@ func TestSessionGuardEndsWhatACancelledLaunchLeftRunning(t *testing.T) {
 	for name, runner := range map[string]Runner{"pipes": NewProcRunner(), "pty": NewPTYRunner()} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
+			chain := `if [ "$1" -gt 0 ]; then /bin/sh "$0" $(($1 - 1)); exit; fi
+setsid sleep 600 </dev/null >/dev/null 2>&1 & echo $! > left; : > ready; exec sleep 600
+`
+			if err := os.WriteFile(filepath.Join(dir, "chain.sh"), []byte(chain), 0o600); err != nil {
+				t.Fatal(err)
+			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			proc, err := runner.Launch(ctx, LaunchSpec{Dir: dir, Program: "/bin/sh", WaitDelay: 200 * time.Millisecond,
-				Args: []string{"-c", `setsid sleep 600 </dev/null >/dev/null 2>&1 & echo $! > left; : > ready; exec sleep 600`}})
+				Args: []string{filepath.Join(dir, "chain.sh"), "100"}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -730,5 +738,38 @@ func TestKillTreeKillsWhatItListsWhenAStateCannotBeRead(t *testing.T) {
 	case <-exited:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the pass returned its error without killing the child it listed")
+	}
+}
+
+// A program another package starts itself (the cockpit's terminal panes) gets the
+// same guard: ending it reaches what left the session with setsid, which a signal to
+// the session cannot.
+func TestGuardSessionEndsWhatLeftTheSessionOfAProgramStartedElsewhere(t *testing.T) {
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skip("setsid(1) is not installed here")
+	}
+	dir := t.TempDir()
+	cmd := exec.Command("/bin/sh", "-c", `trap '' TERM; setsid sleep 600 </dev/null >/dev/null 2>&1 & echo $! > left; : > ready; sleep 600 & wait`)
+	cmd.Dir = dir
+	guard, err := GuardSession(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	guard.Started()
+	if !waitForFile(filepath.Join(dir, "ready")) {
+		t.Fatal("the program never reached the wait")
+	}
+	left := waitForPID(t, filepath.Join(dir, "left"))
+	defer func() { _ = syscall.Kill(left, syscall.SIGKILL) }() // never leave the sleep behind
+	guard.End()
+	if !endsWithin(left, 5*time.Second) {
+		t.Errorf("process %d that left the session survived the guard's end", left)
+	}
+	var exit *exec.ExitError
+	if err := cmd.Wait(); !errors.As(err, &exit) || exit.Sys().(syscall.WaitStatus).Signal() != syscall.SIGKILL {
+		t.Errorf("the guard ended with %v, want SIGKILL", err)
 	}
 }

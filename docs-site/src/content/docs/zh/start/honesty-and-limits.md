@@ -39,7 +39,7 @@ description: >-
   append-only（仅追加）且哈希链式（hash-chained）的，并带有 Ed25519 签名的检查点，
   可导出为多种 SIEM 格式。
 - **发布版本经过签名且可验证。** 签名、SLSA 来源、SBOM 和 OpenVEX 都可[验证](/zh/how-to/verify-a-release/)。
-  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.6<!-- /release -->**，尚未发布。发布前请从源码构建。
+  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.7<!-- /release -->**，尚未发布。发布前请从源码构建。
 
 ## 开放内核 —— 哪些开放、哪些属于 Business
 
@@ -90,7 +90,7 @@ Olivares AI 处于 **1.0 之前**阶段。产品设计文档明确指出，
   `OLIVARES_SOURCES_CONFIG` 配置（[快速上手](/zh/start/quickstart/)
   针对标准二进制接好了一个真实的 `pgaudit` 源，冒烟测试会断言这一点）。
   知识**文档源**
-  （gdrive/confluence/notion/s3content）有意**不**作为运行时
+  （gdrive/notion/s3content）有意**不**作为运行时
   源 —— 它们由知识摄取请求按需加载。
   [连接器参考](/zh/reference/connectors/)标注了每种类型。
 - **默认是单一二进制文件；分布式事件总线确实存在，并对其语义保持诚实。**

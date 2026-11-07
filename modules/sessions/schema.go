@@ -112,6 +112,7 @@ const (
 	colTplName        = "name"
 	colTplDescription = "description"
 	colTplAuthor      = "author"
+	colTplOwner       = "owner"
 	colTplBuiltin     = "builtin"
 	colTplArchivedAt  = "archived_at"
 	colTplBody        = "body"
@@ -219,6 +220,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colTplName, Kind: model.KindText, Principal: model.None("an operator-chosen template name, the natural key, shown only: templates.go:85, templates.go:675")},
 			{Name: colTplDescription, Kind: model.KindText, Principal: model.None("template prose, shown only: templates.go:86")},
 			{Name: colTplAuthor, Kind: model.KindText, Principal: pdeclActorRef},
+			{Name: colTplOwner, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserRef, model.ClassObligation)},
 			{Name: colTplBuiltin, Kind: model.KindBool},
 			{Name: colTplArchivedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colTplBody, Kind: model.KindText, Principal: pdeclTemplateBody},
@@ -310,6 +312,7 @@ var (
 		model.Leaf("hooks.post_tool[].command", pdeclNoneTemplateHook),
 		model.Leaf("hooks.pre_session[].command", pdeclNoneTemplateHook),
 		model.Leaf("hooks.post_session[].command", pdeclNoneTemplateHook),
+		model.Leaf("settings.ai_attribution", model.None("an AI attribution mode, a closed set of off, assisted-by or co-authored-by: templateapply.go:130, git_attribution.go:117")),
 		model.Leaf("settings.permission_mode", model.None("a permission mode, checked against a closed set: templateapply.go:145, templateapply.go:180")),
 		model.Leaf("settings.effort", model.None("an effort level, checked against a closed set: templateapply.go:146, templateapply.go:183")),
 		model.Leaf("settings.model", model.None("a model id a launch passes to the child: templateapply.go:147")),

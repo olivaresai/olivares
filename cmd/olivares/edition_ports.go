@@ -26,6 +26,7 @@ import (
 	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/modules/reporting"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sourcescope"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	"github.com/spf13/cobra"
@@ -124,6 +125,10 @@ type editionPorts struct {
 	// nil gives a session no managed credentials: a launch that names one answers 501
 	// business_required (modules/sessions session_credentials.go).
 	sessionCredentialBroker func(deps sessionCredentialDeps, log *slog.Logger) sessions.SessionCredentialBroker
+	// nil: a session's publish proposal runs as its launcher through any target of its
+	// workspace. Otherwise it names the forge identity one session run publishes as and the
+	// lines its pull requests end with (an agent role's), or refuses with a *publicationRefusal.
+	publicationIdentity func(ctx context.Context, eng *engine, tenant model.TenantID, run string) (publicationIdentity, error)
 	// Business choices inside routes and commands Community also serves. Each gate is asked
 	// at the moment of the call and answers whether the live licence covers it; its error is
 	// the add-on refusal (403 addon_requires_license, or the CLI's error). nil is Community,
@@ -134,6 +139,9 @@ type editionPorts struct {
 	siemSink func() error
 	// businessApprovals: an approval policy beyond the Community line (modules/governance policy.go).
 	businessApprovals func() error
+	// nil preserves tenant-wide approval and DLP policies in Community. A resolver that is also
+	// an api.Module is registered with the edition's modules.
+	policyResolver func(*sourcescope.Resolver) store.PolicyResolver
 	// profileAssignment: assigning provider profiles, AI tools and department instructions and
 	// templates (modules/sourcescope profile_assignment.go).
 	profileAssignment func() error

@@ -1,6 +1,6 @@
 {
   "title": "Osservabilità e interoperabilità",
-  "description": "Salute dell'ingestione basata su standard e approfondimento delle trace correlate al registro. I valori sono a livello di motore (globali al processo), non per tenant; gli standard sono fissati alle versioni e alle maturità dichiarate dagli enti di origine.",
+  "description": "Stato della ricezione della telemetria e tracce.",
   "tabs": {
     "ingestion": "Salute dell'ingestione",
     "traces": "Approfondimento trace"
@@ -76,7 +76,7 @@
     "listTitle": "Trace recenti",
     "listDescription": "Seleziona una trace per aprire la sua vista degli span derivata dal registro.",
     "empty": "Nessuna trace",
-    "emptyHint": "Nessun evento del registro di audit nella finestra di scansione (ultimi 20.000 eventi) riporta un id di trace W3C: i chiamanti non propagano traceparent, oppure la finestra li ha superati.",
+    "emptyHint": "Le tracce compaiono qui quando gli strumenti inviano un ID di traccia con le loro richieste.",
     "noResults": "Nessuna trace corrisponde alla ricerca.",
     "filterNoResults": "Nessuna trace corrisponde ai filtri attivi.",
     "searchPlaceholder": "Cerca per ID trace…",

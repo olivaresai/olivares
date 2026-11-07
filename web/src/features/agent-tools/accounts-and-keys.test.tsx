@@ -27,6 +27,10 @@ import { useModulesStore } from '@/stores/modules'
 import { providersApi } from '@/features/providers/api'
 import { AccountsAndKeys } from './accounts-and-keys'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 const workClaude: ProviderAccountDTO = {
   account_ref: 'ppf_a',
   name: 'work-claude',

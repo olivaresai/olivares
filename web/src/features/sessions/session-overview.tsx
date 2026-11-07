@@ -25,6 +25,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { PathText } from '@/components/ui/path-text'
 import { ForbiddenState } from '@/components/ui/error-state'
+import { AccountBadge } from '@/features/agent-tools/account-marks'
 import { workLine } from '@/features/home/work-line'
 import { LiveDot } from '@/features/shared'
 import { tickLive, useSecondClock } from '@/features/shared/use-second-clock'
@@ -38,6 +39,7 @@ import { SessionMeter, SessionMode } from './session-meter'
 import { sessionModelRef, sessionUsage } from './session-usage'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkClause } from './work-clause'
+import { useModelName } from '@/features/agentops/model-choices'
 import { workFacts } from './work-facts'
 import './i18n'
 
@@ -47,6 +49,7 @@ export function SessionOverview({
   onExpandEvidence,
   peerSessions,
   frameCwd,
+  showMode = true,
 }: {
   resolution: SessionResolution
   evidence?: EvidenceBlock
@@ -55,11 +58,16 @@ export function SessionOverview({
   peerSessions?: readonly UnifiedSession[]
   /** The folder the tool's own first frame names, when the run recorded none. */
   frameCwd?: string | null
+  /** False beside a conversation, whose composer already says the access in its chip. */
+  showMode?: boolean
 }) {
   const { t, i18n } = useTranslation('sessions')
   const lang = i18n.language
   const { session, live, observeUnknown, observeError, grants } = resolution
   const run = primaryRun(session.runs)
+  const modelName = useModelName(
+    run?.provider_profile_ref ?? session.profileRef,
+  )
   const line = live ? workLine(live) : null
   const usage = sessionUsage(session.runs, live)
   // C2-DESIGN §3: an active session's elapsed figure ticks each second, extrapolated
@@ -73,6 +81,7 @@ export function SessionOverview({
         tickedLive,
         t,
         {
+          modelName,
           duration: (ms) => formatDuration(ms),
           cost: usage
             ? undefined
@@ -85,12 +94,13 @@ export function SessionOverview({
   return (
     <div className="flex flex-col gap-4" data-testid="session-overview">
       <div className="flex flex-wrap items-center gap-2 empty:hidden">
+        <AccountBadge profileRef={session.profileRef} className="max-w-48" />
         {/* A session Olivares started is the normal case and needs no chip;
             one that came another way says which. */}
         {live && isScopedRow(live) && live.attribution !== 'managed' ? (
           <AttributionChip attribution={live.attribution} />
         ) : null}
-        <SessionMode run={run} />
+        {showMode ? <SessionMode run={run} /> : null}
         {live && (!run || run.state === 'running' || run.state === 'idle') ? (
           <LiveDot status={resolution.streamStatus} />
         ) : null}
@@ -99,11 +109,10 @@ export function SessionOverview({
         ) : null}
       </div>
 
-      {/* WHAT IT HAS SPENT. The header paints it only where it has room (from 1100 px);
-          here it is always one look away. */}
+      {/* WHAT IT HAS SPENT: its tokens and cost, said here and not in the header. */}
       {usage ? (
         <p className="text-caption text-muted-foreground">
-          <SessionMeter run={run} usage={usage} where="context" />
+          <SessionMeter usage={usage} />
         </p>
       ) : null}
 

@@ -25,6 +25,7 @@ export interface TemplateHooks {
 
 /** Agent runtime settings carried in a template. */
 export interface TemplateSettings {
+  ai_attribution?: string
   permission_mode?: string
   effort?: string
   model?: string
@@ -40,6 +41,8 @@ export interface TemplatePolicies {
   max_session_duration_minutes?: number
   allowed_tools?: string[]
   record_io?: boolean
+  sessions_disabled?: boolean
+  require_read_only_folders?: boolean
   require_truncate_protection?: boolean
 }
 

@@ -62,6 +62,14 @@ type fakeHost struct {
 	mintSecret     string // returned by Mint when set (the ssh key, say)
 	sshTarget      bool   // PushTarget answers the ssh transport
 	branchErr      error
+	reviewRule     gp.ReviewRule
+	reviewErr      error
+}
+
+func (h *fakeHost) ReviewRule(context.Context, gp.Token, string) (gp.ReviewRule, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.reviewRule, h.reviewErr
 }
 
 func newFakeHost() *fakeHost {
@@ -247,6 +255,7 @@ type fakeGit struct {
 	checkedPaths []string
 	treeFor      map[string]string
 	localErr     error
+	pushRes      *gp.Result
 	lastReq      gp.PushRequest
 	afterApply   func()
 	// sessionTrees is what a session folder holds: a fetch adds it to treeFor.
@@ -327,6 +336,11 @@ func (g *fakeGit) Push(ctx context.Context, r gp.PushRequest) (gp.Result, error)
 	}
 	g.pushes++
 	g.lastReq = r
+	if g.pushRes != nil {
+		res := *g.pushRes
+		g.mu.Unlock()
+		return res, nil
+	}
 	hold := g.hold
 	g.mu.Unlock()
 	if hold != nil {
@@ -484,7 +498,7 @@ func newHarness(t *testing.T) *harness {
 	h := &harness{t: t, host: newFakeHost(), authz: &fakeAuthority{deny: map[model.ID]error{}}}
 	h.git = &fakeGit{host: h.host, treeFor: map[string]string{shaCommit: shaTree, shaBase: shaTree, shaOther: shaTree}}
 	h.custody = &fakeCustody{host: h.host, cbVer: 1, rbVer: 1, owners: []string{"acme"}, approved: map[string]bool{"cb1": true, "rb1": true, "rb2": true}}
-	h.m = New(Options{Custody: h.custody, Git: h.git, Authority: h.authz, DispatchTimeout: 2 * time.Second})
+	h.m = New(Options{ScanSecrets: cleanPublicationScan, Custody: h.custody, Git: h.git, Authority: h.authz, DispatchTimeout: 2 * time.Second})
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, h.m.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)
@@ -554,3 +568,5 @@ func (h *harness) balanced() {
 		h.t.Fatalf("tokens minted %d, released %d", h.host.mints, h.host.releases)
 	}
 }
+
+func cleanPublicationScan(context.Context, string, string) ([]string, error) { return nil, nil }

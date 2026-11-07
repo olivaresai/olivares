@@ -41,6 +41,8 @@ type Handler func(ctx context.Context, e Event) error
 const (
 	// TypeEdgeObserved wraps a model.EdgeObservation.
 	TypeEdgeObserved Type = "edge.observed"
+	// TypeSessionReachExpired retires a managed launch's temporary access edges.
+	TypeSessionReachExpired Type = "sessions.reach_expired"
 	// TypeCostSampled wraps a model.CostSample.
 	TypeCostSampled Type = "cost.sampled"
 	// TypeFindingReported wraps a model.FindingReport.

@@ -1,6 +1,6 @@
 {
   "title": "Binding di protocollo",
-  "subtitle": "Componi, ispeziona e riconcilia binding A2A e MCP governati, senza trattare come riuscite le evidenze non disponibili.",
+  "subtitle": "Componi, ispeziona e riconcilia i binding A2A e MCP.",
   "actions": {
     "newDraft": "Nuova bozza",
     "refresh": "Aggiorna",

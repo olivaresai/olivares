@@ -65,6 +65,8 @@ export function useSecondClock(enabled = true): number {
 
   useEffect(() => {
     if (!enabled) return
+    // A capture flag read at each (re)start of the clock, not view state: nothing to restore.
+    // eslint-disable-next-line no-restricted-syntax
     const still = new URLSearchParams(window.location.search).has('still')
     if (still) return
     const query = window.matchMedia(REDUCE_QUERY)

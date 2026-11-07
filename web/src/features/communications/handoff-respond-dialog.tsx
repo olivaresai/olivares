@@ -192,6 +192,7 @@ export function HandoffRespondDialog({
     // tracking it and the outcome classification does not change.
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        trust
         className="flex max-h-[85vh] w-full flex-col gap-4 sm:max-w-xl"
         onCloseAutoFocus={opener.onCloseAutoFocus}
       >

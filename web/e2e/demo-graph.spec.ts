@@ -4,7 +4,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
   browserSessionHeaders,
-  journeyNowLink,
+  journeyShellLink,
   type BrowserSession,
 } from './browser-session'
 
@@ -76,7 +76,7 @@ async function loginDemo(page: Page): Promise<BrowserSession> {
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
-  await expect(journeyNowLink(page)).toBeVisible({ timeout: 15_000 })
+  await expect(journeyShellLink(page)).toBeVisible({ timeout: 15_000 })
   authHeaders(body)
   return body
 }
@@ -219,7 +219,7 @@ test.describe('embedded web over real seeded data', () => {
     })
     // A fresh sign-in lists the navigation areas, not the pages inside a closed one,
     // so the Access map link is not on screen: open the route as the other cases do.
-    await page.goto('/access-map')
+    await page.goto('/access-map?view=graph')
     const initialResponse = await initialGraphResponse
     expect(initialResponse.status()).toBe(200)
     let graph = (await initialResponse.json()) as LiveAccessGraph
@@ -379,7 +379,7 @@ test.describe('embedded web over real seeded data', () => {
           url.pathname === '/v1/m/accessmap/graph'
         )
       })
-      await page.goto('/access-map')
+      await page.goto('/access-map?view=graph')
       expect((await graphRead).status()).toBe(200)
       await expect(page.locator('.react-flow__node').first()).toBeVisible({
         timeout: 15_000,
@@ -589,8 +589,9 @@ test.describe('embedded web over real seeded data', () => {
         )
       }
       await page.goto('/permissions?tab=identities')
+      // The page's Identities tab comes first; the panel it opens has its own.
       await expect(
-        page.getByRole('tab', { name: 'Identities & groups', exact: true }),
+        page.getByRole('tab', { name: 'Identities', exact: true }).first(),
       ).toHaveAttribute('aria-selected', 'true')
     }
     if (graph.status() === 501) {
@@ -619,7 +620,7 @@ test.describe('embedded web over real seeded data', () => {
     expect((await ingestion.json()).engine_scope).toBe(true)
     await page.goto('/inventory')
     await expect(
-      page.getByRole('heading', { name: 'Inventory', exact: true }),
+      page.getByRole('heading', { name: 'Discovered resources', exact: true }),
     ).toBeVisible()
   })
 
@@ -656,7 +657,7 @@ test.describe('embedded web over real seeded data', () => {
         url.pathname === '/v1/m/accessmap/graph'
       )
     })
-    await page.goto('/access-map')
+    await page.goto('/access-map?view=graph')
     const graphResponse = await graphRead
     expect(graphResponse.status()).toBe(200)
     const graph = (await graphResponse.json()) as LiveAccessGraph

@@ -1,5 +1,5 @@
 {
-  "title": "Claude Code-Adoption",
+  "title": "Adoption",
   "description": "Wie viel Claude Code genutzt wird und wie viel von dem, was es vorschlägt, von den Entwicklern übernommen wird.",
   "range": {
     "label": "Zeitraum",
@@ -15,7 +15,7 @@
     "trend": "Trend"
   },
   "boundary": {
-    "note": "Erfasst nur den Claude API-Traffic — den Admin-Analytics-Feed und die OTLP-Telemetrieebene. Über {{providers}} bereitgestellte Nutzung ist nicht enthalten, daher ist das Fehlen von Adoption hier kein Beweis für deren Abwesenheit.",
+    "note": "Nur Nutzung der Claude API. Nicht enthalten: {{providers}}.",
     "providers": {
       "claude-platform-aws": "Claude Platform on AWS",
       "microsoft-foundry": "Microsoft Foundry",
@@ -25,14 +25,14 @@
   },
   "lenses": {
     "analytics": {
-      "title": "Pro Entwickler (Admin-Analytics)",
-      "description_one": "Maßgebliche Tagessummen pro Entwickler aus dem Admin-Analytics-Feed über {{count}} Entwickler.",
-      "description_other": "Maßgebliche Tagessummen pro Entwickler aus dem Admin-Analytics-Feed über {{count}} Entwickler."
+      "title": "Pro Entwickler",
+      "description_one": "Tagessummen für {{count}} Entwickler.",
+      "description_other": "Tagessummen für {{count}} Entwickler."
     },
     "telemetry": {
-      "title": "Pro Sitzung (Live-Telemetrie)",
-      "description_one": "Echtzeit-Aktivität pro Sitzung aus der OTLP-Ebene über {{count}} Team; enthält die aktive Zeit.",
-      "description_other": "Echtzeit-Aktivität pro Sitzung aus der OTLP-Ebene über {{count}} Teams; enthält die aktive Zeit."
+      "title": "Pro Sitzung",
+      "description_one": "Live-Aktivität und aktive Zeit für {{count}} Team.",
+      "description_other": "Live-Aktivität und aktive Zeit für {{count}} Teams."
     }
   },
   "comparison": {

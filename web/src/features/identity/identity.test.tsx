@@ -21,6 +21,7 @@ const { api, mockNavigate, authState } = vi.hoisted(() => ({
     groups: vi.fn(),
     findings: vi.fn(),
     audit: vi.fn(),
+    auditHead: vi.fn(),
     wifGraph: vi.fn(),
     externalKeys: vi.fn(),
     workspaceResidency: vi.fn(),
@@ -44,7 +45,7 @@ const { api, mockNavigate, authState } = vi.hoisted(() => ({
       actor?: string
       authentication_configuration?: { piv_configured: boolean }
     } | null,
-    can: (_p: string) => true,
+    can: (_p: string): boolean => true,
   },
 }))
 
@@ -127,6 +128,7 @@ beforeEach(() => {
   api.groups.mockResolvedValue(empty)
   api.findings.mockResolvedValue(empty)
   api.audit.mockResolvedValue(empty)
+  api.auditHead.mockResolvedValue(0)
   // WIF graph is LIVE: the route always answers 200. Default to an empty
   // federation (the honest empty state); the populated case overrides per-test.
   api.wifGraph.mockResolvedValue({
@@ -170,6 +172,40 @@ describe('ADM-IDN-01 — SSO config', () => {
     await user.clear(input)
     await user.type(input, expected)
     expect(screen.getByText(/exact match/i)).toBeInTheDocument()
+  })
+
+  // One place sets SSO up: the Identity provider tab has the form and applies it without a restart.
+  // This tab used to list OLIVARES_* variables and say there is no write API, which sent an
+  // administrator to the engine's environment for something the console does.
+  it('names no environment variable and points an administrator to the Identity provider form', async () => {
+    const user = userEvent.setup()
+    wrap(<FederationTab />)
+    await screen.findByText('Not configured')
+
+    expect(screen.queryByText(/OLIVARES_/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/write API|restart/i)).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: /open identity provider/i }),
+    )
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/identity',
+      search: { tab: 'sso' },
+    })
+  })
+
+  it('offers no way to the Identity provider tab to someone who may not administer', async () => {
+    const can = authState.can
+    authState.can = () => false
+    try {
+      wrap(<FederationTab />)
+      await screen.findByText('Not configured')
+      expect(
+        screen.queryByRole('button', { name: /open identity provider/i }),
+      ).not.toBeInTheDocument()
+    } finally {
+      authState.can = can
+    }
   })
 
   // El estado se dice en el idioma del operador, NO con el nombre del símbolo Go.
@@ -443,7 +479,7 @@ describe('ADM-IDN-02 — NHI roster', () => {
 
     await screen.findAllByText('nhi_first')
     await user.click(
-      screen.getByRole('combobox', { name: 'Filter by principal' }),
+      screen.getByRole('combobox', { name: 'Filter by person or tool' }),
     )
     await user.click(screen.getByRole('option', { name: 'Human' }))
 
@@ -488,12 +524,12 @@ describe('ADM-IDN-02 — NHI roster', () => {
 
     await screen.findAllByText('nhi_first')
     await user.click(
-      screen.getByRole('combobox', { name: 'Filter by principal' }),
+      screen.getByRole('combobox', { name: 'Filter by person or tool' }),
     )
     await user.click(screen.getByRole('option', { name: 'Non-human' }))
     await waitFor(() =>
       expect(
-        screen.getByRole('combobox', { name: 'Filter by principal' }),
+        screen.getByRole('combobox', { name: 'Filter by person or tool' }),
         ROSTER_MATCH_STOP_CONTRACT,
       ).toHaveTextContent('Non-human'),
     )
@@ -539,7 +575,7 @@ describe('ADM-IDN-02 — NHI roster', () => {
 
     await screen.findAllByText('nhi_first')
     await user.click(
-      screen.getByRole('combobox', { name: 'Filter by principal' }),
+      screen.getByRole('combobox', { name: 'Filter by person or tool' }),
     )
     await user.click(screen.getByRole('option', { name: 'Human' }))
 
@@ -597,7 +633,7 @@ describe('ADM-IDN-02 — NHI roster', () => {
 
     await screen.findAllByText('nhi_first')
     await user.click(
-      screen.getByRole('combobox', { name: 'Filter by principal' }),
+      screen.getByRole('combobox', { name: 'Filter by person or tool' }),
     )
     await user.click(screen.getByRole('option', { name: 'Human' }))
 

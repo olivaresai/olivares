@@ -21,13 +21,15 @@
 //
 // ⛔ AND THE CLICK REACHES THE SESSION. Every row links to the one session it tells, by the
 //    same address the Sessions page uses (`features/sessions/session-address.ts`).
+import { useId } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AccountBadge } from '@/features/agent-tools/account-marks'
 import { CcStateBadge } from '@/features/sessions/cc-state-badge'
 import {
   primaryRun,
@@ -41,6 +43,7 @@ import { useRunLedger } from '@/features/agentops/run-state-word'
 import { addressOf, SESSION_PARAM } from '@/features/sessions/session-address'
 import { opensInSheet } from '@/features/sessions/opens-in-sheet'
 import { sessionModelRef } from '@/features/sessions/session-usage'
+import { useModelName } from '@/features/agentops/model-choices'
 import { workFacts } from '@/features/sessions/work-facts'
 import { RelTime } from '@/features/shared/rel-time'
 import { formatDuration, formatMicroUsd } from '@/lib/format'
@@ -64,6 +67,9 @@ function WorkRow({
   // (mergeSessions), named by what its operator typed, else by what it did.
   const live = session.live
   const run = primaryRun(session.runs)
+  const modelName = useModelName(
+    run?.provider_profile_ref ?? session.profileRef,
+  )
   // Finished or stopped: the run's own ledger says which.
   const ledger = useRunLedger(run)
   const naming = sessionNaming(session, t('recent.untitled'), shared)
@@ -79,6 +85,7 @@ function WorkRow({
         live,
         ts,
         {
+          modelName,
           duration: (ms) => formatDuration(ms),
           cost: (micro) => formatMicroUsd(micro, { compact: true }),
         },
@@ -177,12 +184,17 @@ function WorkRow({
             </span>
           ) : null}
         </span>
+        <AccountBadge profileRef={session.profileRef} className="max-w-28" />
         {at ? (
           <RelTime
             ts={at}
             className="shrink-0 whitespace-nowrap text-caption text-muted-foreground max-sm:ml-auto"
           />
         ) : null}
+        <ChevronRight
+          aria-hidden
+          className="size-4 shrink-0 text-muted-foreground"
+        />
       </Link>
     </li>
   )
@@ -192,11 +204,17 @@ export function RecentWork({
   sessions,
   state,
   titled = false,
+  title,
+  openAll = true,
   onOpen,
 }: {
-  /** Show the section title (Now, where the list follows "Needs you"); otherwise it is
-   *  for assistive technology only. */
+  /** Show the section title (Overview, where the list follows "Needs you"); otherwise it
+   *  is for assistive technology only. */
   titled?: boolean
+  /** The section's name; Recent work when not given. */
+  title?: string
+  /** End the rows with the way to every session (one list on a page carries it). */
+  openAll?: boolean
   /** The sessions `home-view` holds (runs and live rows merged), most recent first. */
   sessions: UnifiedSession[] | undefined
   state: TileState
@@ -204,18 +222,19 @@ export function RecentWork({
   onOpen?: (address: string) => void
 }) {
   const { t } = useTranslation('home')
+  const headingId = useId()
   const rows = (sessions ?? []).slice(0, RECENT_WORK_ROWS)
   const shared = sharedNames(rows, t('recent.untitled'))
 
   return (
-    <section aria-labelledby="home-recent-heading" data-testid="home-recent">
+    <section aria-labelledby={headingId} data-testid="home-recent">
       <h2
-        id="home-recent-heading"
+        id={headingId}
         className={
           titled ? 'mb-1.5 text-heading font-semibold text-text' : 'sr-only'
         }
       >
-        {t('recent.title')}
+        {title ?? t('recent.title')}
       </h2>
       {state === 'loading' ? (
         <div className="flex flex-col gap-3" data-testid="home-recent-loading">
@@ -230,12 +249,16 @@ export function RecentWork({
           description={t('recent.unavailableDescription')}
         />
       ) : rows.length === 0 ? (
-        // Now's start line above is the one next step (it knows what each tool can run on);
-        // a second "Start a session" here offered it twice, and while no tool was ready it
-        // contradicted the line's Install or Sign in.
+        // Its one action: Sessions, whose composer starts a session and says what a tool
+        // still needs (install, sign in) before it can.
         <EmptyState
           title={t('recent.emptyTitle')}
           description={t('recent.emptyDescription')}
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to={'/sessions' as never}>{t('recent.emptyAction')}</Link>
+            </Button>
+          }
         />
       ) : (
         <>
@@ -249,14 +272,16 @@ export function RecentWork({
               />
             ))}
           </ul>
-          <div className="flex h-6 items-center justify-end">
-            <Button asChild variant="ghost" size="sm">
-              <Link to={'/sessions' as never} data-testid="home-recent-all">
-                {t('recent.openAll')}
-                <ArrowRight />
-              </Link>
-            </Button>
-          </div>
+          {openAll ? (
+            <div className="flex h-6 items-center justify-end">
+              <Button asChild variant="ghost" size="sm">
+                <Link to={'/sessions' as never} data-testid="home-recent-all">
+                  {t('recent.openAll')}
+                  <ArrowRight />
+                </Link>
+              </Button>
+            </div>
+          ) : null}
         </>
       )}
     </section>

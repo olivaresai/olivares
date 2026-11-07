@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // A session's TITLE is a phrase cut from the first message the person sent, shown
@@ -196,16 +198,51 @@ func (m *Module) handleGenerateRunTitle(w http.ResponseWriter, r *http.Request, 
 		writeRunErr(w, err)
 		return
 	}
-	m.changeRun(w, r, mc, "sessions.run.title_generated", func(rec model.Record) bool {
+	m.changeRun(w, r, mc, "sessions.run.title_generated", func(_ context.Context, _ store.Scope, rec model.Record) (bool, error) {
 		if body.IfUntitled && (rec.String(colRunName) != "" || rec.String(colRunTitle) != "") {
-			return false
+			return false, nil
 		}
 		if rec.String(colRunTitle) == title {
-			return false
+			return false, nil
 		}
 		rec[colRunTitle] = title
-		return true
+		return true, nil
 	})
+}
+
+// titleFromFirstInput titles a run that has neither a name nor a title from the words a
+// person sends it, so every session is titled from its first message on the engine, and
+// not only one somebody opened in the console (which asked for the title). The input is
+// already accepted and a title is display-only, so a failure here is logged and the
+// input's answer does not change; the console still asks later, as before.
+func (m *Module) titleFromFirstInput(ctx context.Context, mc api.ModuleContext, ref, text string) {
+	title := titleFromMessage(text, titleStyleSentence)
+	if title == "" || checkRunName(title) != nil {
+		return
+	}
+	if _, err := m.applyRunChange(ctx, mc, ref, "sessions.run.title_generated", func(_ context.Context, _ store.Scope, rec model.Record) (bool, error) {
+		if rec.String(colRunName) != "" || rec.String(colRunTitle) != "" {
+			return false, nil
+		}
+		rec[colRunTitle] = title
+		return true, nil
+	}); err != nil {
+		m.log.Warn("sessions: could not title a run from its first input", "run_ref", ref, "err", err)
+	}
+}
+
+// inputLineText is the person's words in a raw input line: a Claude stream-json user
+// frame has the shape of a transcript record, so the transcript's own reader says what
+// in it the person wrote. Anything else holds no words.
+func inputLineText(line []byte) string {
+	var rec claudeLine
+	if json.Unmarshal(line, &rec) != nil {
+		return ""
+	}
+	if role, text, _ := claudeMessage(rec); role == messageRoleUser {
+		return text
+	}
+	return ""
 }
 
 // showTitle puts the run's title on dto when the caller may read the conversation it was
@@ -216,11 +253,14 @@ func (m *Module) handleGenerateRunTitle(w http.ResponseWriter, r *http.Request, 
 // has no title until one is made, so the common read asks nothing.
 func (m *Module) showTitle(ctx context.Context, mc api.ModuleContext, rec model.Record, dto *runDTO) {
 	title := rec.String(colRunTitle)
-	if title == "" {
-		return
-	}
-	res := auth.ResourceAttrs{Kind: permRunRead.Resource(), ID: rec.String(model.ColID), WorkspaceID: model.ID(rec.String(colRunAuthzWorkspaceID))}
-	if mc.Admits(ctx, permRunOutput, res) {
+	if title != "" && titleReadable(ctx, mc, rec) {
 		dto.Title = title
 	}
+}
+
+// titleReadable is the rule a run's title is shown and searched by: the caller may read
+// the conversation it was cut from, on that run in its own workspace.
+func titleReadable(ctx context.Context, mc api.ModuleContext, rec model.Record) bool {
+	res := auth.ResourceAttrs{Kind: permRunRead.Resource(), ID: rec.String(model.ColID), WorkspaceID: model.ID(rec.String(colRunAuthzWorkspaceID))}
+	return mc.Admits(ctx, permRunOutput, res)
 }

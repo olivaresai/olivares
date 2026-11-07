@@ -33,6 +33,10 @@ type ssoConfigDTO struct {
 	Protocol          string                            `json:"protocol,omitempty"`
 	Status            string                            `json:"status,omitempty"`
 	RedirectURI       string                            `json:"redirect_uri"`
+	// BackchannelLogoutURI is the OIDC backchannel_logout_uri of THIS provider (its
+	// tenant and alias in the query) to paste into the IdP, so a sign-out there ends
+	// the person's sessions here. OIDC only.
+	BackchannelLogoutURI string `json:"backchannel_logout_uri,omitempty"`
 
 	// TargetTenant is the scope this config governs (U6): "" for the
 	// deployment-wide global config, else the tenant id whose IdP this is. The
@@ -91,7 +95,7 @@ type ssoConfigDTO struct {
 	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
-func toSSOConfigDTO(v auth.FederationConfigView, scope model.TenantID, redirectURI, enforcedBy, groupsMappedBy, routedBy string) ssoConfigDTO {
+func toSSOConfigDTO(r *http.Request, v auth.FederationConfigView, scope model.TenantID, enforcedBy, groupsMappedBy, routedBy string) ssoConfigDTO {
 	cidrs := v.NetworkAllowCIDRs
 	if cidrs == nil {
 		cidrs = []string{} // the console expects an array, never null
@@ -108,7 +112,7 @@ func toSSOConfigDTO(v auth.FederationConfigView, scope model.TenantID, redirectU
 		AssuranceMapping: v.AssuranceMapping,
 		DisplayName:      v.DisplayName,
 		Configured:       v.Configured, ProviderAvailable: v.ProviderAvailable, Protocol: v.Protocol,
-		Status: v.Status, RedirectURI: redirectURI, TargetTenant: targetTenant, Alias: v.Alias,
+		Status: v.Status, RedirectURI: federationCallbackURL(r), TargetTenant: targetTenant, Alias: v.Alias,
 		OIDCIssuer: v.OIDCIssuer, OIDCClientID: v.OIDCClientID, OIDCClientSecretHint: v.OIDCClientSecretHint,
 		SAMLMetadataURL: v.SAMLMetadataURL, SAMLEntityID: v.SAMLEntityID, SAMLACSURL: v.SAMLACSURL,
 		SAMLIDPSSOURL: v.SAMLIDPSSOURL, SAMLEmailAttr: v.SAMLEmailAttr, SAMLSPCertPEM: v.SAMLSPCertPEM,
@@ -117,6 +121,9 @@ func toSSOConfigDTO(v auth.FederationConfigView, scope model.TenantID, redirectU
 		OIDCGroupsClaim: v.OIDCGroupsClaim, SAMLGroupsAttr: v.SAMLGroupsAttr,
 		SCIMAuthoritative: v.SCIMAuthoritative, GroupsMappedBy: groupsMappedBy,
 		ClaimedDomains: domains, RoutedBy: routedBy,
+	}
+	if v.Protocol == auth.ProtocolOIDC {
+		d.BackchannelLogoutURI = FederationBackchannelLogoutURL(r, scope, v.Alias)
 	}
 	if !v.UpdatedAt.IsZero() {
 		d.UpdatedAt = v.UpdatedAt.String()
@@ -345,10 +352,10 @@ func (s *Server) handleListSSOIdPs(w http.ResponseWriter, r *http.Request, mc Mo
 	// row. enforced_by is NOT: it depends on the row's own (scope, alias), because the
 	// posture reader the enforcement engine composes resolves exactly one of them. Hoisting
 	// it out of the loop is what stamped "enterprise" onto every IdP in the list.
-	redirectURI, groupsMappedBy, routedBy := federationCallbackURL(r), s.ssoGroupsMappedBy(), s.ssoRoutedBy()
+	groupsMappedBy, routedBy := s.ssoGroupsMappedBy(), s.ssoRoutedBy()
 	items := make([]ssoConfigDTO, 0, len(views))
 	for _, v := range views {
-		items = append(items, toSSOConfigDTO(v, scope, redirectURI, s.ssoEnforcedBy(scope, v.Alias), groupsMappedBy, routedBy))
+		items = append(items, toSSOConfigDTO(r, v, scope, s.ssoEnforcedBy(scope, v.Alias), groupsMappedBy, routedBy))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"idps": items})
 }
@@ -371,7 +378,7 @@ func (s *Server) handleGetSSOConfig(w http.ResponseWriter, r *http.Request, mc M
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toSSOConfigDTO(view, scope, federationCallbackURL(r), s.ssoEnforcedBy(scope, alias), s.ssoGroupsMappedBy(), s.ssoRoutedBy()))
+	writeJSON(w, http.StatusOK, toSSOConfigDTO(r, view, scope, s.ssoEnforcedBy(scope, alias), s.ssoGroupsMappedBy(), s.ssoRoutedBy()))
 }
 
 func (s *Server) handlePutSSOConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
@@ -409,7 +416,7 @@ func (s *Server) handlePutSSOConfig(w http.ResponseWriter, r *http.Request, mc M
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toSSOConfigDTO(view, scope, federationCallbackURL(r), s.ssoEnforcedBy(scope, alias), s.ssoGroupsMappedBy(), s.ssoRoutedBy()))
+	writeJSON(w, http.StatusOK, toSSOConfigDTO(r, view, scope, s.ssoEnforcedBy(scope, alias), s.ssoGroupsMappedBy(), s.ssoRoutedBy()))
 }
 
 func (s *Server) handleDeleteSSOConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {

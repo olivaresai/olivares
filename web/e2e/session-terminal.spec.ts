@@ -69,7 +69,7 @@ test('a terminal in a folder: git status, confined, recorded, resumed, closed, r
     await page.locator('#setup-password').fill('')
   }
   expect(setup.ok(), `Setup HTTP status: ${setup.status()}`).toBe(true)
-  await page.waitForURL('**/onboarding', { timeout: 15_000 })
+  await page.waitForURL('**/sessions', { timeout: 15_000 })
 
   const token = await sessionToken(page)
   const who = await page.request.get('/v1/auth/whoami', {

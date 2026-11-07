@@ -27,6 +27,9 @@ What it creates, all through the same HTTP routes the console and the CLI use:
                                        seven live and nine finished, $6.84 today, one unpriced
   budgets                              one $400 monthly budget; only on a build that serves FinOps
                                        (Business), and a build that refuses it is reported, not failed
+  core workspaces                      Billing, beside Default: the All workspaces switcher the views select
+  evals                                suite governance-regression: ten golden cases and two completed runs
+  backups                              one encrypted backup of the estate, taken through the DR route
   edition                              read from the engine first: a Community estate holds no approval
                                        for a Business action (scripts/lib/demo_edition.py)
 
@@ -262,6 +265,22 @@ MESSAGES = (
 BUDGETS = (
     ("Northwind · monthly", 400_000_000, "monthly", "global", "alert"),
 )
+# The second core workspace (Default is the first). The workspace and communications captures select it from the
+# All workspaces switcher, which is mounted only when there is more than one.
+CORE_WORKSPACES = (("Billing", "billing"),)
+# The eval suite the evals capture scores: ten golden cases, and two runs of the reviewer, oldest first. Each run
+# lists the case numbers it answers wrongly, so the runs score 8 of 10 and then 9 of 10.
+EVAL_SUITE = {"name": "governance-regression", "description": "Checks the reviewer against the governance expectations of the estate.",
+              "subject_kind": "agent", "scorer": "exact", "criterion": "The reviewer names the highest-priority governance risk.",
+              "pass_threshold": 0.8, "regression_threshold": 0.1, "suite_version": 1}
+EVAL_SUBJECT = "northwind-reviewer"
+EVAL_CASES = tuple(("gov-%02d" % n, "Name the highest-priority governance risk in change %d." % n, "risk-%02d" % n)
+                   for n in range(1, 11))
+EVAL_RUNS = ({3, 7}, {7})
+# The DR passphrase of the demo's one backup: a published demo value, like DEMO_PASSWORD, that encrypts a bundle
+# nobody restores. It meets the engine's 12-character floor.
+DEMO_BACKUP_PASSPHRASE = "olivares-demo-backup"
+BACKUP_NOTES = "Northwind estate, first backup"
 
 
 class SeedError(Exception):
@@ -568,6 +587,14 @@ def make_repo(root, name, files):
     return os.path.realpath(final)
 
 
+def is_personal_folder(folder):
+    # The engine's own "My files" folder of a signed-in person, <data>/files/<user-id>
+    # (modules/sessions/personal_folder.go). The engine lists it to whoever asks, so it is never one of the five.
+    # ponytail: the workspace list carries no owner, so any folder named "My files" under a files/ path is skipped
+    # too; upgrade to an owner check when the list exposes one.
+    return folder.get("name") == "My files" and os.path.basename(os.path.dirname(folder.get("root_path") or "")) == "files"
+
+
 def step_workspaces(api, ctx):
     existing = {w["root_path"]: w for w in api.items("workspaces", "/v1/m/sessions/workspaces")}
     refs, roots = {}, {}
@@ -589,7 +616,7 @@ def step_workspaces(api, ctx):
             "name": name, "root_path": root, "mount_mode": mode, "container_target": "/workspace",
             "dlp_mode": dlp})
         refs[name] = created["workspace_ref"]
-    final = api.items("workspaces", "/v1/m/sessions/workspaces")
+    final = [w for w in api.items("workspaces", "/v1/m/sessions/workspaces") if not is_personal_folder(w)]
     by_root = {w["root_path"]: w for w in final}
     missing = sorted(set(roots.values()) - set(by_root))
     extra = sorted(set(by_root) - set(roots.values()))
@@ -727,20 +754,12 @@ def step_approvals(api, ctx):
             tokens[email] = person_token(api, email)
         return tokens[email]
 
-    def session_ref_for(name):
-        """The provider session id the engine recorded for the run that asked: the approval's link to it."""
-        ref = (ctx.get("session_refs") or {}).get(name)
-        if not ref:
-            raise SeedError("approval of session %r: the seeder captured no provider session id, so the "
-                            "request could not name the session that asked" % name)
-        return ref
-
     for action, kind, subject, reason, session, who, required in PENDING_APPROVALS:
         if not keeps_action(edition, action) or (action, subject) in have:
             continue
         api.ok("approval " + subject, "POST", "/v1/m/governance/approvals", {
             "action": action, "subject_kind": kind, "subject_ref": subject, "reason": reason,
-            "session_ref": session_ref_for(session), "required_approvals": required},
+            "required_approvals": required},
             token=token_for(who))
         have[(action, subject)] = {"action": action, "subject_ref": subject}
     reviewer = next(p for p in PEOPLE if p[2] == "admin")
@@ -786,11 +805,11 @@ def step_verify_approvals(api, ctx):
     """
     edition = ctx.get("edition")
     final = api.items("approvals", "/v1/m/governance/approvals")
-    wanted, waiting = {}, {}
-    for action, _, subject, _, session, _, _ in PENDING_APPROVALS:
+    wanted, waiting = {}, set()
+    for action, _, subject, _, _, _, _ in PENDING_APPROVALS:
         if keeps_action(edition, action):
             wanted[(action, subject)] = "pending"
-            waiting[(action, subject)] = session
+            waiting.add((action, subject))
     for action, _, subject, _, _, decision in DECIDED_APPROVALS:
         if keeps_action(edition, action):
             wanted[(action, subject)] = "approved" if decision == "approve" else "rejected"
@@ -800,12 +819,11 @@ def step_verify_approvals(api, ctx):
                 if (action, subject) in actual else "missing", state)
              for (action, subject), state in wanted.items()
              if (action, subject) not in actual or approval_status(actual[(action, subject)]) != state]
-    for key, session in waiting.items():
+    # These requests are filed with the people's tokens, outside an engine session.
+    for key in waiting:
         row = actual.get(key)
-        want_ref = (ctx.get("session_refs") or {}).get(session)
-        if row is None or not want_ref or row.get("session_ref") != want_ref:
-            wrong.append("%s %s names session %r, expected the run's provider id %r"
-                         % (key[0], key[1], (row or {}).get("session_ref"), want_ref))
+        if row and row.get("session_ref"):
+            wrong.append("%s %s impersonates a session instead of its human requester" % key)
     if len(final) != len(wanted):
         wrong.append("%d requests in the queue, expected %d" % (len(final), len(wanted)))
     if wrong:
@@ -966,9 +984,17 @@ def turn_marker(turn, written):
                     "attach proof cannot tell them apart" % turn["prompt"])
 
 
-def dataset_sessions():
+def dataset_sessions(names=None):
+    """The seeded sessions, or the recorded sessions with these names (a fixture included)."""
     with open(os.path.join(HERE, "demo-tools", "conversations.json"), encoding="utf8") as fh:
-        return [s for s in json.load(fh)["sessions"] if not s.get("fixture")]
+        every = json.load(fh)["sessions"]
+    if names is None:
+        return [s for s in every if not s.get("fixture")]
+    picked = [s for s in every if s["name"] in names]
+    unknown = sorted(set(names) - {s["name"] for s in picked})
+    if unknown:
+        raise SeedError("sessions: no recorded session is named %s" % ", ".join(unknown))
+    return picked
 
 
 # The Northwind estate's figures, carried by the recorded sessions: seven live and nine finished, $6.84 today, and the
@@ -979,7 +1005,7 @@ CANONICAL_FINISHED = 9
 
 
 def step_sessions(api, ctx):
-    sessions = dataset_sessions()
+    sessions = dataset_sessions(ctx.get("sessions"))
     expected = {s["name"]: s for s in sessions}
     profiles = {p["key"]: p for p in PROFILES}
     have = {r["name"]: r for r in api.items("runs", "/v1/m/sessions/runs") if r.get("name") in expected}
@@ -1066,6 +1092,13 @@ def step_sessions(api, ctx):
                                     % (s["name"], final.get("state"), want_state,
                                        "on an open turn" if want_state == "running" else "for its next input"))
                 time.sleep(0.3)
+            # A turn that asks (a fixture's) leaves its run waiting for a person, as the review set shows it.
+            deadline = time.time() + 30
+            while any(t.get("ask") for t in s["turns"]) and not final.get("pending_approval_ref"):
+                if time.time() > deadline:
+                    raise SeedError("session %s: its tool asked for approval and the run waits for nobody" % s["name"])
+                time.sleep(0.3)
+                final = api.ok("run", "GET", "/v1/m/sessions/runs/" + ref)
         else:
             deadline = time.time() + 30
             while True:
@@ -1106,6 +1139,10 @@ def step_sessions(api, ctx):
         if rows[name].get("workspace_ref") != ctx["workspaces"][s["folder"]]:
             raise SeedError("session %s reads back in folder %r, expected %r"
                             % (name, rows[name].get("workspace_ref"), ctx["workspaces"][s["folder"]]))
+    if ctx.get("sessions") is not None:
+        # The canonical figures below are the whole estate's; a chosen few cannot add up to them.
+        say("sessions: %s started" % ", ".join(sorted(rows)))
+        return
     # Sum what the engine returned, not the table the seeder just read: the two agree today, and the
     # day they stop agreeing is the day the captures would show a figure nobody seeded.
     total = sum(r.get("cost_micro_usd") for r in rows.values() if r.get("cost_micro_usd") is not None)
@@ -1125,9 +1162,8 @@ def step_sessions(api, ctx):
                         "count them: start from a fresh estate"
                         % (len(outside), ", ".join(sorted({r.get("live_ref") or r.get("session_ref") or "-"
                                                            for r in outside})[:5])))
-    # The three requests below name the session that asked by its provider id. The home (and the approval
-    # page) can only follow that name when the live list holds the run's own managed row under it; a
-    # request pointing at a row the plane did not launch would open onto nothing.
+    # Each run associated with a pending human request must have its own managed live row.
+    # The requests themselves are filed outside a session.
     by_sid = {r.get("session_ref"): r for r in observed}
     for action, _, subject, _, session, _, _ in PENDING_APPROVALS:
         if not keeps_action(ctx.get("edition"), action):
@@ -1135,7 +1171,7 @@ def step_sessions(api, ctx):
         sid = (ctx.get("session_refs") or {}).get(session)
         row = by_sid.get(sid)
         if row is None or row.get("run_ref") != rows[session].get("run_ref"):
-            raise SeedError("approval %s %s names session %r, which is not the managed live row of its run"
+            raise SeedError("run for approval %s %s has session %r, which is not its managed live row"
                             % (action, subject, sid))
     say("sessions: %d finished, %d live (%d new), $%.2f today, %d unpriced"
         % (finished, live, started, total / 1e6, unpriced))
@@ -1261,6 +1297,53 @@ def step_budgets(api, ctx):
     say("budgets: %d" % len(api.items("budgets", "/v1/m/finops/budgets")))
 
 
+def step_core_workspaces(api, ctx):
+    have = {w.get("slug") for w in api.items("workspaces", "/v1/workspaces")}
+    for name, slug in CORE_WORKSPACES:
+        if slug not in have:
+            api.ok("workspace " + name, "POST", "/v1/workspaces", {"name": name, "slug": slug})
+    say("core workspaces: %s" % ", ".join(name for name, _ in CORE_WORKSPACES))
+
+
+def step_evals(api, ctx):
+    suite = next((s for s in api.items("eval suites", "/v1/m/evals/suites")
+                  if s.get("name") == EVAL_SUITE["name"]), None)
+    if suite is None:
+        suite = api.ok("eval suite", "POST", "/v1/m/evals/suites", EVAL_SUITE)
+    path = "/v1/m/evals/suites/%s/cases" % suite["id"]
+    have = {c.get("case_key") for c in api.items("eval cases", path)}
+    for key, text, expected in EVAL_CASES:
+        if key not in have:
+            api.ok("eval case " + key, "POST", path, {"case_key": key, "input": text, "expected": expected})
+    runs_path = "/v1/m/evals/runs?suite_ref=" + suite["id"]
+    runs = api.items("eval runs", runs_path)
+    if not runs:
+        for wrong in EVAL_RUNS:
+            outputs = {key: ("risk-00" if int(key[-2:]) in wrong else expected) for key, _, expected in EVAL_CASES}
+            api.ok("eval run", "POST", "/v1/m/evals/runs", {
+                "suite_ref": suite["id"], "subject_kind": "agent", "subject_ref": EVAL_SUBJECT, "outputs": outputs},
+                accept=(201,))
+        runs = api.items("eval runs", runs_path)
+    say("evals: %s, %d runs" % (EVAL_SUITE["name"], len(runs)))
+
+
+def step_backup(api, ctx):
+    backups = api.items("backups", "/v1/console/dr/backups")
+    if backups:
+        say("backups: %d" % len(backups))
+        return
+    job = api.ok("backup", "POST", "/v1/console/dr/backup",
+                 {"notes": BACKUP_NOTES, "passphrase": DEMO_BACKUP_PASSPHRASE}, accept=(202,))["job_id"]
+    for event in api.events("/v1/console/dr/jobs/%s/stream" % job, timeout=300):
+        if event.get("status") == "failed":
+            raise SeedError("backup: %s" % clip(event.get("error") or "the job failed", 300))
+        if event.get("status") == "completed":
+            break
+    else:
+        raise SeedError("backup: the job stream ended before the job did")
+    say("backups: %d" % len(api.items("backups", "/v1/console/dr/backups")))
+
+
 # ------------------------------------------------------------------------------ after adoption
 LIVE_STATES = ("active", "idle", "silent_evasion")
 
@@ -1312,9 +1395,11 @@ def verify_live_plane(api, midnight):
 STEPS = (("edition", step_edition), ("estate", step_demo_estate), ("modules", step_modules),
          ("providers", step_providers),
          ("people", step_people), ("profiles", step_profiles), ("workspaces", step_workspaces),
+         ("core-workspaces", step_core_workspaces),
          ("templates", step_templates), ("skills", step_skills), ("mcp", step_mcp),
          ("policies", step_policies), ("communications", step_communications), ("dlp", step_dlp),
          ("sessions", step_sessions), ("approvals", step_approvals), ("budgets", step_budgets),
+         ("evals", step_evals), ("backups", step_backup),
          ("verify-approvals", step_verify_approvals))
 
 
@@ -1330,7 +1415,16 @@ def main():
     parser.add_argument("--verify-live-plane", action="store_true",
                         help="read the live plane back after the adoption seed and refuse any observed "
                              "row the home would count beside the canonical estate; makes no writes")
+    parser.add_argument("--steps", type=lambda v: v.split(","), default=[name for name, _ in STEPS],
+                        help="comma-separated steps to run, in the canonical order; the review set's fresh "
+                             "install runs edition,estate,providers,people,profiles to sign the tools in")
+    parser.add_argument("--sessions", type=lambda v: v.split(","), default=None,
+                        help="comma-separated names of the recorded sessions the sessions step starts, a fixture "
+                             "included; the default is the canonical estate's")
     args = parser.parse_args()
+    unknown = sorted(set(args.steps) - {name for name, _ in STEPS})
+    if unknown:
+        parser.error("unknown step(s): %s" % ", ".join(unknown))
     if args.token != "-":
         parser.error("the token is read from OLIVARES_TOKEN; pass - here, never the value")
     token = os.environ.get("OLIVARES_TOKEN", "")
@@ -1342,17 +1436,19 @@ def main():
                      "runs against a loopback demo engine" % host)
     os.makedirs(args.work_root, exist_ok=True)
     api = Api(args.base_url, token, args.tenant)
-    ctx = {"root": os.path.realpath(args.work_root), "no_communications": args.no_communications}
+    ctx = {"root": os.path.realpath(args.work_root), "no_communications": args.no_communications,
+           "sessions": args.sessions}
     instala_excepthook(_REDACT, LABEL)
-    _REDACT.recuerda(token, DEMO_PASSWORD)
+    _REDACT.recuerda(token, DEMO_PASSWORD, DEMO_BACKUP_PASSPHRASE)
     try:
         if args.verify_live_plane:
             midnight = datetime.datetime.now().astimezone().replace(
                 hour=0, minute=0, second=0, microsecond=0)
             verify_live_plane(api, midnight)
         else:
-            for _, fn in STEPS:
-                fn(api, ctx)
+            for name, fn in STEPS:
+                if name in args.steps:
+                    fn(api, ctx)
     except SeedError as exc:
         print(_REDACT("%s: ERROR: %s" % (LABEL, exc)), file=sys.stderr)
         return 1

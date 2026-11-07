@@ -184,6 +184,11 @@ func TestSourceItemRoute(t *testing.T) {
 		t.Fatalf("pull request = %d %s", r.code, r.raw)
 	}
 
+	reads := acctAuditsOf(t, m, model.TenantID(tenant), "sessions.workspace.source-item")
+	if len(reads) != 2 || reads[1].meta["path"] != "https://github.com/acme/widgets/pull/18" || reads[1].meta["workspace_ref"] != ws {
+		t.Fatalf("source item reads = %v; want issue and PR reads naming the workspace and URL", reads)
+	}
+
 	for name, c := range map[string]struct {
 		token, workspace, page string
 		err                    error

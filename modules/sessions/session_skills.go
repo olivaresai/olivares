@@ -20,6 +20,7 @@ import (
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 	"github.com/olivaresai/olivares/modules/skills"
 )
 
@@ -41,7 +42,7 @@ var pdeclSkillsSelection = func() *model.ColumnDecl {
 }()
 
 // UseSessionSkills wires native discovery without writing into account homes or
-// user repositories. A launch with no assignment keeps its existing HOME.
+// user repositories. Native launches reserve discovery even before their first pin.
 func (m *Module) UseSessionSkills(source SessionSkillsSource, homeRoot string) error {
 	root, err := validateSessionWorkspaceRoot(homeRoot, m.dirOwnerCheck())
 	if err != nil {
@@ -55,9 +56,8 @@ func (m *Module) UseSessionSkills(source SessionSkillsSource, homeRoot string) e
 }
 
 // PinSessionSkillsSelection is called by the trusted composition root in its
-// transaction. Inherited pins survive resume; new session-specific pins take
-// effect on the next launch. Legacy runs acquire their first
-// snapshot on their next launch. Target IDs and lineage come from stored rows.
+// transaction. Each launch or live delivery resolves the current stored targets.
+// Target IDs and lineage come from stored rows.
 func (m *Module) PinSessionSkillsSelection(ctx context.Context, sc store.Scope, runRef string, catalog *skills.Module) (skills.Selection, error) {
 	repo, err := sc.Ext(runKind)
 	if err != nil {
@@ -70,20 +70,11 @@ func (m *Module) PinSessionSkillsSelection(ctx context.Context, sc store.Scope, 
 	if err := fenceWithin(ctx, sc, rec.String(colRunClaimSID), rec.String(colClaimHolder), rec.Int(colClaimFence), m.now()); err != nil {
 		return skills.Selection{}, err
 	}
-	var selection skills.Selection
-	if saved := rec.String(colRunSkillsSelection); saved != "" {
-		if err := json.Unmarshal([]byte(saved), &selection); err != nil {
-			return selection, store.ErrStoreUnavailable
-		}
+	targets, err := m.runSkillsTargets(ctx, sc, rec)
+	if err != nil {
+		return skills.Selection{}, err
 	}
-	targets := []skills.StoredTarget{{Target: skills.Target{Kind: "session", ID: runRef}, Version: rec.Int(model.ColVersion), WorkspaceID: model.ID(rec.String(colRunAuthzWorkspaceID))}}
-	if selection.Digest == "" {
-		targets, err = m.runSkillsTargets(ctx, sc, rec)
-		if err != nil {
-			return selection, err
-		}
-	}
-	selection, err = catalog.ExtendStoredSelection(ctx, sc, targets, selection)
+	selection, err := catalog.ResolveStoredSelection(ctx, sc, targets)
 	if err != nil {
 		return selection, err
 	}
@@ -96,24 +87,26 @@ func (m *Module) PinSessionSkillsSelection(ctx context.Context, sc store.Scope, 
 	return selection, err
 }
 
-// RefuseReferencedSkillsPack fences retirement against recorded conversation
-// snapshots in the catalog transaction, including conversations that may resume.
+// RefuseReferencedSkillsPack fences retirement against live deliveries. Stopped
+// conversations resolve current assignments on resume; historical pins are evidence.
 func (m *Module) RefuseReferencedSkillsPack(ctx context.Context, sc store.Scope, packID model.ID) error {
 	repo, err := sc.Ext(runKind)
 	if err != nil {
 		return err
 	}
-	return store.WalkPages(ctx, repo.List, model.Query{Limit: 100}, math.MaxInt, func(rows []model.Record) error {
+	return store.WalkPages(ctx, repo.List, model.Query{Limit: 100, Filters: []model.Filter{eq(colState, stateRunning)}}, math.MaxInt, func(rows []model.Record) error {
 		for _, row := range rows {
-			if saved := row.String(colRunSkillsSelection); saved != "" {
-				var selection skills.Selection
-				if err := json.Unmarshal([]byte(saved), &selection); err != nil {
-					return store.ErrStoreUnavailable
-				}
-				for _, member := range selection.Members {
-					if member.PackID == packID.String() {
-						return &skills.ImportError{Code: "pack_in_use", Message: "This skills pack is retained by a recorded conversation."}
-					}
+			saved := row.String(colRunSkillsSelection)
+			if saved == "" {
+				continue
+			}
+			var selection skills.Selection
+			if err := json.Unmarshal([]byte(saved), &selection); err != nil {
+				return store.ErrStoreUnavailable
+			}
+			for _, member := range selection.Members {
+				if member.PackID == packID.String() {
+					return &skills.ImportError{Code: "pack_in_use", Message: "This skills pack is still delivered to a live conversation. Unassign it before removing it."}
 				}
 			}
 		}
@@ -224,7 +217,47 @@ func (m *Module) runSkillsTargets(ctx context.Context, sc store.Scope, rec model
 	return out, nil
 }
 
+type sessionSkillDelivery struct {
+	tenant model.TenantID
+	runRef string
+	runCtx context.Context
+	params CreateRunParams
+	spec   LaunchSpec
+	dir    string
+	digest string
+}
+
+// RefreshSessionSkills re-resolves this tenant's active discovery trees after a
+// committed catalog change. Unchanged selections do not rewrite files or audit.
+func (m *Module) RefreshSessionSkills(ctx context.Context, tenant model.TenantID) error {
+	m.rt.skillsMu.Lock()
+	defer m.rt.skillsMu.Unlock()
+	var errs []error
+	for _, delivery := range m.rt.skillDeliveries {
+		if delivery.tenant != tenant || delivery.runCtx.Err() != nil {
+			continue
+		}
+		spec := delivery.spec
+		if spec.Confinement != nil {
+			policy := *spec.Confinement
+			spec.Confinement = &policy
+		}
+		if err := m.deliverSessionSkills(ctx, delivery.runCtx, tenant, delivery.runRef, delivery.params, &spec, delivery); err != nil {
+			errs = append(errs, fmt.Errorf("refresh session skills %s: %w", delivery.runRef, err))
+		} else if live, ok := m.rt.getLive(tenant, delivery.runRef); ok {
+			live.commands.dirty.Store(true)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p CreateRunParams, spec *LaunchSpec) error {
+	m.rt.skillsMu.Lock()
+	defer m.rt.skillsMu.Unlock()
+	return m.deliverSessionSkills(ctx, runCtx, tenant, runRef, p, spec, nil)
+}
+
+func (m *Module) deliverSessionSkills(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p CreateRunParams, spec *LaunchSpec, existing *sessionSkillDelivery) error {
 	if m.rt.sessionSkills == nil {
 		return nil
 	}
@@ -232,7 +265,10 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	if err != nil {
 		return err
 	}
-	if len(selection.Members) == 0 {
+	if existing != nil && existing.digest == selection.Digest {
+		return nil
+	}
+	if spec.RunOn != "" && len(selection.Members) == 0 {
 		return nil
 	}
 	if spec.RunOn != "" {
@@ -260,6 +296,9 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		}
 	}
 	facts, known := driverfacts.Lookup(driver)
+	if len(selection.Members) == 0 && (!known || facts.SkillsDir == "" || spec.Isolation != IsolationNative || spec.Confinement == nil) {
+		return nil
+	}
 	if !known || facts.SkillsDir == "" {
 		name := facts.Name
 		if !known {
@@ -277,10 +316,9 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	if err != nil {
 		return err
 	}
-	if len(files) == 0 {
+	if len(files) == 0 && len(selection.Members) != 0 {
 		return errors.New("assigned skills have no verified files")
 	}
-	hasRules := false
 	files = slices.Clone(files)
 	var agents []string // a skill's @name of one starts it (openCodeSkill)
 	for _, file := range files {
@@ -307,7 +345,6 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 				if file.Scoped {
 					return &runErr{503, fmt.Sprintf("assigned path-scoped rules cannot be delivered to %s in a governed session", facts.Name)}
 				}
-				hasRules = true
 			} else if driver == providerDriverOpenCode {
 				if files[i].Bytes, err = openCodeComponent(file.Kind, file.Path, file.Bytes); err != nil {
 					return err
@@ -327,9 +364,14 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	if err := os.MkdirAll(root, 0700); err != nil {
 		return err
 	}
-	dir, err := os.MkdirTemp(root, runRef+"-")
-	if err != nil {
-		return err
+	dir := ""
+	if existing != nil {
+		dir = existing.dir
+	} else {
+		dir, err = os.MkdirTemp(root, runRef+"-")
+		if err != nil {
+			return err
+		}
 	}
 	cleanup := func() {
 		if err := os.RemoveAll(dir); err != nil {
@@ -338,7 +380,7 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	}
 	keep := false
 	defer func() {
-		if !keep {
+		if !keep && existing == nil {
 			cleanup()
 		}
 	}()
@@ -352,7 +394,7 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	if err := os.MkdirAll(destination, 0700); err != nil {
 		return err
 	}
-	if driver == providerDriverGemini {
+	if driver == providerDriverGemini && existing == nil {
 		// Gemini resolves both configuration and global skills from GEMINI_CLI_HOME.
 		// Keep the selected, already-validated configuration via a link, rather
 		// than copying credentials into the temporary discovery home.
@@ -368,10 +410,28 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	// existing grant. A writable HOME ancestor would reopen the skill tree.
 	for _, cache := range []string{".cache", ".local"} {
 		path := filepath.Join(home, cache)
-		if err := os.Mkdir(path, 0700); err != nil {
+		if err := os.MkdirAll(path, 0700); err != nil {
 			return err
 		}
 		spec.Confinement.ReadWrite = append(spec.Confinement.ReadWrite, path)
+	}
+	// Keep discovery directory inodes: the child's confinement is attached to
+	// them. Only the engine can replace their contents.
+	for _, base := range []string{destination, filepath.Join(components, "agents"), filepath.Join(components, "commands"), filepath.Join(components, "rules")} {
+		if err := os.MkdirAll(base, 0700); err != nil {
+			return err
+		}
+		if existing != nil {
+			entries, err := os.ReadDir(base)
+			if err != nil {
+				return err
+			}
+			for _, entry := range entries {
+				if err := os.RemoveAll(filepath.Join(base, entry.Name())); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	var rules []string
 	for _, file := range files {
@@ -399,31 +459,83 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 			return err
 		}
 	}
-	if driver == providerDriverClaude {
+	// Keep the account's own discovery entries visible. Assigned names take
+	// precedence; removing a pin reveals the original entry again. Account paths
+	// use their existing home grants: a child-writable discovery path must never
+	// add a grant that could follow a symlink outside that home.
+	if p.ProviderHome != nil && p.ProviderHome.UserHome != "" {
+		original := filepath.Join(p.ProviderHome.UserHome, filepath.FromSlash(facts.SkillsDir))
+		// The driver-owned path has fixed depth. Open each component as a real
+		// directory so neither intermediate nor final links can expose names.
+		var entries []fs.DirEntry
+		var account *os.Root
+		engineHome, err := os.UserHomeDir()
+		if err == nil {
+			engineHome, err = filepath.EvalSymlinks(engineHome)
+		}
+		if err == nil && engineHome == p.ProviderHome.UserHome && (m.ServerLoginOpen == nil || !m.ServerLoginOpen(ctx, tenant)) {
+			err = errors.New("server home skills are not available to this organization")
+		}
+		if err == nil {
+			account, err = os.OpenRoot(p.ProviderHome.UserHome)
+		}
+		if err == nil {
+			for _, part := range strings.Split(facts.SkillsDir, "/") {
+				next, openErr := openRealDir(account, part)
+				closeErr := account.Close()
+				account, err = next, errors.Join(openErr, closeErr)
+				if err != nil {
+					break
+				}
+			}
+			if account != nil {
+				if err == nil {
+					entries, err = readDirBounded(ctx, account, skills.MaxFiles)
+				}
+				err = errors.Join(err, account.Close())
+			}
+		}
+		if err != nil {
+			entries = nil
+			if !errors.Is(err, os.ErrNotExist) {
+				m.warnf("sessions: account skills discovery skipped", "run_ref", runRef, "error", redactErr(err))
+			}
+		}
+		for _, entry := range entries {
+			name := filepath.Join(destination, entry.Name())
+			if _, err := os.Lstat(name); err == nil {
+				continue
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			if err := os.Symlink(filepath.Join(original, entry.Name()), name); err != nil {
+				return err
+			}
+		}
+	}
+	if driver == providerDriverClaude && existing == nil {
 		// Session-only native discovery works even when governed launches disable
 		// mutable project settings. The login/configuration HOME stays unchanged.
-		if err := os.Mkdir(filepath.Join(native, ".claude-plugin"), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Join(native, ".claude-plugin"), 0700); err != nil {
 			return err
 		}
 		if err := os.WriteFile(filepath.Join(native, ".claude-plugin", "plugin.json"), []byte(`{"name":"olivares"}`), 0444); err != nil {
 			return err
 		}
 		spec.Args = append(spec.Args, "--plugin-dir", native)
-		if hasRules {
-			// Rules have no plugin slot. Claude's explicit additional-directory
-			// memory discovery reads this private HOME's .claude/rules, without
-			// enabling mutable project settings or changing the account config.
-			// https://code.claude.com/docs/en/memory#load-from-additional-directories
-			spec.Args = append(spec.Args, "--add-dir", home)
-			spec.Env = append(spec.Env, EnvVar{Name: "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", Value: "1"})
-		}
+		// Rules have no plugin slot. Claude's explicit additional-directory
+		// memory discovery reads this private HOME's .claude/rules, without
+		// enabling mutable project settings or changing the account config.
+		// https://code.claude.com/docs/en/memory#load-from-additional-directories
+		spec.Args = append(spec.Args, "--add-dir", home)
+		spec.Env = append(spec.Env, EnvVar{Name: "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", Value: "1"})
 	}
 	if driver == providerDriverOpenCode && len(rules) > 0 {
 		if err := addOpenCodeInstructions(spec, rules); err != nil {
 			return err
 		}
 	}
-	if components != native && slices.ContainsFunc(files, func(f skills.DeliveryFile) bool { return f.Kind != "" }) {
+	if components != native {
 		spec.Confinement.Sealed = append(spec.Confinement.Sealed, components)
 	}
 	for i := range spec.Env {
@@ -456,6 +568,27 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		return err
 	}
 	keep = true
-	context.AfterFunc(runCtx, cleanup)
+	if existing != nil {
+		existing.digest = selection.Digest
+		return nil
+	}
+	if m.rt.skillDeliveries == nil {
+		m.rt.skillDeliveries = make(map[string]*sessionSkillDelivery)
+	}
+	// Refresh needs discovery facts, not the launched process's environment,
+	// credentials or mutable launch slices.
+	deliverySpec := LaunchSpec{Dir: spec.Dir, RunOn: spec.RunOn, Isolation: spec.Isolation, Confinement: &confine.Policy{}}
+	deliveryParams := CreateRunParams{ProviderHome: p.ProviderHome, Actor: p.Actor, ActorKind: p.ActorKind}
+	delivery := &sessionSkillDelivery{tenant: tenant, runRef: runRef, runCtx: runCtx, params: deliveryParams, spec: deliverySpec, dir: dir, digest: selection.Digest}
+	key := liveKey(tenant, runRef)
+	m.rt.skillDeliveries[key] = delivery
+	context.AfterFunc(runCtx, func() {
+		m.rt.skillsMu.Lock()
+		defer m.rt.skillsMu.Unlock()
+		if m.rt.skillDeliveries[key] == delivery {
+			delete(m.rt.skillDeliveries, key)
+		}
+		cleanup()
+	})
 	return nil
 }

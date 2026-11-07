@@ -20,6 +20,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/contentsource"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -61,24 +62,28 @@ type syncRequest struct {
 
 // syncResponse summarizes one sync run.
 type syncResponse struct {
-	DocsSynced         int      `json:"docs_synced"`
-	DocsDeleted        int      `json:"docs_deleted"`
-	DocsSkipped        int      `json:"docs_skipped"`
-	DeletesDeferred    bool     `json:"deletes_deferred"`
-	ACLsRefreshed      int      `json:"acls_refreshed"`
-	HeldDocs           []string `json:"held_docs,omitempty"`
-	Errors             []string `json:"errors,omitempty"`
-	SyncTokenSaved     bool     `json:"sync_token_saved"`
-	FullReconciliation bool     `json:"full_reconciliation"`
-	SyncWindow         string   `json:"sync_window"`
+	DocsSynced      int  `json:"docs_synced"`
+	DocsDeleted     int  `json:"docs_deleted"`
+	DocsSkipped     int  `json:"docs_skipped"`
+	DeletesDeferred bool `json:"deletes_deferred"`
+	// DeletesWithheldReason says why the source's deletion safeguard kept every
+	// document this run would have deleted; empty when it did not.
+	DeletesWithheldReason string   `json:"deletes_withheld_reason,omitempty"`
+	ACLsRefreshed         int      `json:"acls_refreshed"`
+	HeldDocs              []string `json:"held_docs,omitempty"`
+	Errors                []string `json:"errors,omitempty"`
+	SyncTokenSaved        bool     `json:"sync_token_saved"`
+	FullReconciliation    bool     `json:"full_reconciliation"`
+	SyncWindow            string   `json:"sync_window"`
 }
 
 // syncStats accumulates per-run counters across the sync helper functions.
 type syncStats struct {
 	docsSynced      int
 	docsDeleted     int
-	docsSkipped     int  // detected but deterministically not ingestable (contentsource.ErrSkipDocument)
-	deletesDeferred bool // orphan deletion withheld because the source listing was incomplete
+	docsSkipped     int    // detected but deterministically not ingestable (contentsource.ErrSkipDocument)
+	deletesDeferred bool   // orphan deletion withheld because the source listing was incomplete
+	deletesWithheld string // why the deletion safeguard withheld this run's deletions
 	aclsRefreshed   int
 	heldDocs        []string
 	errors          []string
@@ -191,41 +196,97 @@ func (m *Module) handleSync(w http.ResponseWriter, r *http.Request, mc api.Modul
 		return
 	}
 
-	src, srcFound := m.sources[req.Source]
+	resp, err := m.runSync(r.Context(), mc, id, req.Source)
+	var refused syncRefusal
+	switch {
+	case errors.As(err, &refused):
+		writeJSON(w, refused.status, errorBody(refused.msg))
+	case err != nil:
+		writeStoreError(w, err)
+	default:
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+// syncRefusal is a sync the request or the source could not run, with its status.
+type syncRefusal struct {
+	status int
+	msg    string
+}
+
+func (e syncRefusal) Error() string { return e.msg }
+
+// SyncResult summarizes one scheduled sync run.
+type SyncResult struct {
+	DocsSynced, DocsDeleted, DocsSkipped int
+	// DeletesWithheld says why the deletion safeguard kept every document.
+	DeletesWithheld string
+	Errors          []string
+}
+
+// SyncSource runs one sync of the named source into the knowledge base kbID of
+// tenant, as actor. The engine's source scheduler calls it; it is the same run
+// POST /kbs/{id}/sync performs, audited the same way.
+func (m *Module) SyncSource(ctx context.Context, tenant model.TenantID, actor auth.Principal, kbID model.ID, source string) (SyncResult, error) {
+	if m.data == nil {
+		return SyncResult{}, errors.New("knowledge: no data handle")
+	}
+	mc := api.ModuleContext{Principal: actor, Tenant: tenant, Data: tenantData{m.data, tenant}}
+	resp, err := m.runSync(ctx, mc, kbID, strings.TrimSpace(source))
+	return SyncResult{DocsSynced: resp.DocsSynced, DocsDeleted: resp.DocsDeleted, DocsSkipped: resp.DocsSkipped,
+		DeletesWithheld: resp.DeletesWithheldReason, Errors: resp.Errors}, err
+}
+
+// tenantData pins the module's boot data handle to one tenant for an engine run.
+type tenantData struct {
+	data   api.ModuleData
+	tenant model.TenantID
+}
+
+func (d tenantData) View(ctx context.Context, fn func(store.Scope) error) error {
+	return d.data.View(ctx, d.tenant, fn)
+}
+
+func (d tenantData) Mutate(ctx context.Context, fn func(store.Scope) error) error {
+	return d.data.Mutate(ctx, d.tenant, fn)
+}
+
+func (tenantData) Export(context.Context, func(store.ExportScope) error) error {
+	return errors.New("knowledge: an engine sync does not export")
+}
+
+// runSync is one sync of source into kbID (steps 2-6 above).
+func (m *Module) runSync(ctx context.Context, mc api.ModuleContext, id model.ID, source string) (syncResponse, error) {
+	src, srcFound := m.source(source)
 	if !srcFound {
-		writeJSON(w, http.StatusBadRequest, errorBody("unknown source: "+req.Source))
-		return
+		return syncResponse{}, syncRefusal{http.StatusBadRequest, "unknown source: " + source}
 	}
 	if src.Kind() != contentsource.ClassDocument {
-		writeJSON(w, http.StatusBadRequest, errorBody("source "+req.Source+" is not a document content source"))
-		return
+		return syncResponse{}, syncRefusal{http.StatusBadRequest, "source " + source + " is not a document content source"}
 	}
 
 	// Load the knowledge base.
 	var kb model.Record
 	var kbFound bool
-	if err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		rec, found, err := loadKB(r.Context(), sc, id)
+	if err := mc.Data.View(ctx, func(sc store.Scope) error {
+		rec, found, err := loadKB(ctx, sc, id)
 		kb, kbFound = rec, found
 		return err
 	}); err != nil {
-		writeStoreError(w, err)
-		return
+		return syncResponse{}, err
 	}
 	if !kbFound {
-		writeJSON(w, http.StatusNotFound, errorBody("not found"))
-		return
+		return syncResponse{}, syncRefusal{http.StatusNotFound, "not found"}
 	}
 
 	// Load prior sync state (the cursor token).
 	var syncState model.Record
-	if err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+	if err := mc.Data.View(ctx, func(sc store.Scope) error {
 		var err error
-		syncState, err = loadSyncState(r.Context(), sc, id, req.Source)
+		syncState, err = loadSyncState(ctx, sc, id, source)
 		return err
 	}); err != nil {
-		writeStoreError(w, err)
-		return
+		return syncResponse{}, err
 	}
 
 	startTS := m.clock.Now()
@@ -237,10 +298,9 @@ func (m *Module) handleSync(w http.ResponseWriter, r *http.Request, mc api.Modul
 		// Attempt delta sync.
 		var fallback bool
 		var err error
-		stats, nextToken, fallback, err = m.syncDelta(r.Context(), mc, liveSrc, kb, id, syncState)
+		stats, nextToken, fallback, err = m.syncDelta(ctx, mc, liveSrc, kb, id, syncState)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, errorBody("sync delta failed: "+err.Error()))
-			return
+			return syncResponse{}, syncRefusal{http.StatusBadGateway, "sync delta failed: " + err.Error()}
 		}
 		if fallback {
 			// Token expired — fall back to full-list reconciliation.
@@ -248,20 +308,18 @@ func (m *Module) handleSync(w http.ResponseWriter, r *http.Request, mc api.Modul
 			nextToken = ""
 			fullReconciliation = true
 			var ferr error
-			stats, ferr = m.syncFull(r.Context(), mc, src, kb, id)
+			stats, ferr = m.syncFull(ctx, mc, src, kb, id)
 			if ferr != nil {
-				writeJSON(w, http.StatusBadGateway, errorBody("sync full failed: "+ferr.Error()))
-				return
+				return syncResponse{}, syncRefusal{http.StatusBadGateway, "sync full failed: " + ferr.Error()}
 			}
 		}
 	} else {
 		// Static source — always do a full-list reconciliation.
 		fullReconciliation = true
 		var err error
-		stats, err = m.syncFull(r.Context(), mc, src, kb, id)
+		stats, err = m.syncFull(ctx, mc, src, kb, id)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, errorBody("sync full failed: "+err.Error()))
-			return
+			return syncResponse{}, syncRefusal{http.StatusBadGateway, "sync full failed: " + err.Error()}
 		}
 	}
 
@@ -274,35 +332,37 @@ func (m *Module) handleSync(w http.ResponseWriter, r *http.Request, mc api.Modul
 		syncStatus = syncStatusError
 	}
 	tokenSaved := false
-	if err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		return saveSyncState(r.Context(), sc, id, req.Source, nextToken, syncStatus, stats, m.clock.Now())
+	if err := mc.Data.Mutate(ctx, func(sc store.Scope) error {
+		return saveSyncState(ctx, sc, id, source, nextToken, syncStatus, stats, m.clock.Now())
 	}); err != nil {
-		m.errorf("knowledge: failed to save sync state", "kb", id.String(), "source", req.Source, "err", err)
+		m.errorf("knowledge: failed to save sync state", "kb", id.String(), "source", source, "err", err)
 	} else {
 		tokenSaved = true
 	}
 
 	// Audit event (best-effort: a lost audit row is logged, not fatal).
-	_ = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		return auditEvent(r.Context(), sc, mc, "knowledge.sync", baseKind, id, map[string]any{
-			"source": req.Source, "docs_synced": stats.docsSynced,
+	_ = mc.Data.Mutate(ctx, func(sc store.Scope) error {
+		return auditEvent(ctx, sc, mc, "knowledge.sync", baseKind, id, map[string]any{
+			"source": source, "docs_synced": stats.docsSynced,
 			"docs_deleted": stats.docsDeleted, "docs_skipped": stats.docsSkipped,
 			"deletes_deferred": stats.deletesDeferred, "acls_refreshed": stats.aclsRefreshed,
-			"full_reconciliation": fullReconciliation,
+			"deletes_withheld_reason": stats.deletesWithheld,
+			"full_reconciliation":     fullReconciliation,
 		})
 	})
 
 	resp := syncResponse{
-		DocsSynced:         stats.docsSynced,
-		DocsDeleted:        stats.docsDeleted,
-		DocsSkipped:        stats.docsSkipped,
-		DeletesDeferred:    stats.deletesDeferred,
-		ACLsRefreshed:      stats.aclsRefreshed,
-		HeldDocs:           stats.heldDocs,
-		Errors:             stats.errors,
-		SyncTokenSaved:     tokenSaved,
-		FullReconciliation: fullReconciliation,
-		SyncWindow:         syncWindow,
+		DocsSynced:            stats.docsSynced,
+		DocsDeleted:           stats.docsDeleted,
+		DocsSkipped:           stats.docsSkipped,
+		DeletesDeferred:       stats.deletesDeferred,
+		DeletesWithheldReason: stats.deletesWithheld,
+		ACLsRefreshed:         stats.aclsRefreshed,
+		HeldDocs:              stats.heldDocs,
+		Errors:                stats.errors,
+		SyncTokenSaved:        tokenSaved,
+		FullReconciliation:    fullReconciliation,
+		SyncWindow:            syncWindow,
 	}
 	if resp.HeldDocs == nil {
 		resp.HeldDocs = []string{}
@@ -310,7 +370,7 @@ func (m *Module) handleSync(w http.ResponseWriter, r *http.Request, mc api.Modul
 	if resp.Errors == nil {
 		resp.Errors = []string{}
 	}
-	writeJSON(w, http.StatusOK, resp)
+	return resp, nil
 }
 
 // syncDelta runs an incremental sync via DeltaList. It returns (stats,
@@ -332,6 +392,7 @@ func (m *Module) syncDelta(ctx context.Context, mc api.ModuleContext, src conten
 	// cache it, so a delta delete removes the row for THIS source's kind, never a shared-DocID
 	// row of another source (F7). Empty ⇒ fall back to a DocID-only delete.
 	deltaKind, deltaKindDone := "", false
+	deletes := map[string]contentsource.DocRef{}
 	sourceKindFor := func() string {
 		if !deltaKindDone {
 			deltaKindDone = true
@@ -356,6 +417,7 @@ func (m *Module) syncDelta(ctx context.Context, mc api.ModuleContext, src conten
 		for _, entry := range page.Changes {
 			switch entry.ChangeKind {
 			case contentsource.ChangeContent, contentsource.ChangeMetadata:
+				delete(deletes, entry.DocRef.DocID) // re-listed after a delete: the delete is superseded
 				stats.recordContent(entry.DocRef.DocID, m.processContentChange(ctx, mc, src, kbID, kb, entry.DocRef))
 			case contentsource.ChangeACL:
 				if err := m.processACLChange(ctx, mc, src, kbID, sourceKindFor(), entry.DocRef); err != nil {
@@ -364,14 +426,9 @@ func (m *Module) syncDelta(ctx context.Context, mc api.ModuleContext, src conten
 					stats.aclsRefreshed++
 				}
 			case contentsource.ChangeDeleted:
-				held, err := m.processDelete(ctx, mc, kbID, sourceKindFor(), entry.DocRef)
-				if err != nil {
-					stats.errors = append(stats.errors, fmt.Sprintf("delete %s: %v", entry.DocRef.DocID, err))
-				} else if held {
-					stats.heldDocs = append(stats.heldDocs, entry.DocRef.DocID)
-				} else {
-					stats.docsDeleted++
-				}
+				// Applied after the whole delta is read, so the deletion safeguard
+				// can weigh the run's deletions together.
+				deletes[entry.DocRef.DocID] = entry.DocRef
 			}
 		}
 		if page.NextToken == "" {
@@ -382,7 +439,75 @@ func (m *Module) syncDelta(ctx context.Context, mc api.ModuleContext, src conten
 	if resumeToken == "" {
 		resumeToken = sinceToken
 	}
+	if len(deletes) == 0 {
+		return stats, resumeToken, false, nil
+	}
+	kind := sourceKindFor()
+	if limit := maxDeletePercent(src); limit > 0 {
+		total, err := m.countKBDocs(ctx, mc, kbID, kind)
+		if err != nil {
+			return stats, "", false, fmt.Errorf("count kb docs: %w", err)
+		}
+		if reason := deleteSafeguard(len(deletes), total, limit); reason != "" {
+			// Keep the previous cursor: the withheld deletions come back on the next run.
+			m.withholdDeletes(&stats, kbID, reason)
+			return stats, sinceToken, false, nil
+		}
+	}
+	for _, ref := range deletes {
+		held, err := m.processDelete(ctx, mc, kbID, kind, ref)
+		if err != nil {
+			stats.errors = append(stats.errors, fmt.Sprintf("delete %s: %v", ref.DocID, err))
+		} else if held {
+			stats.heldDocs = append(stats.heldDocs, ref.DocID)
+		} else {
+			stats.docsDeleted++
+		}
+	}
 	return stats, resumeToken, false, nil
+}
+
+// deleteLimiter is a source whose operator capped the share of its documents one
+// sync may delete (the max_delete_percent setting).
+type deleteLimiter interface{ MaxDeletePercent() int }
+
+// maxDeletePercent is the source's deletion safeguard, or 0 when it has none.
+func maxDeletePercent(src contentsource.Source) int {
+	if l, ok := src.(deleteLimiter); ok {
+		return l.MaxDeletePercent()
+	}
+	return 0
+}
+
+// deleteSafeguard says why deleting n of total documents exceeds limit percent, or
+// "" when the deletion may proceed. Above the limit nothing is deleted.
+func deleteSafeguard(n, total, limit int) string {
+	if limit <= 0 || n == 0 || total == 0 || n*100 <= limit*total {
+		return ""
+	}
+	return fmt.Sprintf("deletion withheld: %d of %d documents (%d%%) are no longer listed by the source, above its %d%% safeguard; nothing was deleted", n, total, n*100/total, limit)
+}
+
+func (m *Module) withholdDeletes(stats *syncStats, kbID model.ID, reason string) {
+	stats.deletesDeferred, stats.deletesWithheld = true, reason
+	if m.log != nil {
+		m.log.Warn("knowledge: "+reason, "kb", kbID.String())
+	}
+}
+
+// countKBDocs counts the knowledge base's documents of one source kind.
+func (m *Module) countKBDocs(ctx context.Context, mc api.ModuleContext, kbID model.ID, kind string) (int, error) {
+	var n int
+	err := mc.Data.View(ctx, func(sc store.Scope) error {
+		repo, err := sc.Ext(documentKind)
+		if err != nil {
+			return err
+		}
+		docs, err := listAll(ctx, repo, eq(colKBRef, kbID.String()), eq(colSourceKind, kind))
+		n = len(docs)
+		return err
+	})
+	return n, err
 }
 
 // syncFull performs a full-list reconciliation that STREAMS the source instead of
@@ -561,6 +686,16 @@ func (m *Module) syncFull(ctx context.Context, mc api.ModuleContext, src content
 		}
 		return stats, nil
 	}
+	total := 0
+	for _, dbDoc := range allKBDocs {
+		if dbDoc.String(colSourceKind) == sourceKind {
+			total++
+		}
+	}
+	if reason := deleteSafeguard(len(orphanSet), total, maxDeletePercent(src)); reason != "" {
+		m.withholdDeletes(&stats, kbID, reason)
+		return stats, nil
+	}
 	for sid := range orphanSet {
 		held, err := m.processDelete(ctx, mc, kbID, sourceKind, contentsource.DocRef{DocID: sid})
 		if err != nil {
@@ -627,7 +762,7 @@ func (m *Module) processContentChange(ctx context.Context, mc api.ModuleContext,
 	var dlpPol dlpPolicy
 	if err := mc.Data.View(ctx, func(sc store.Scope) error {
 		var e error
-		dlpPol, e = loadDLPPolicy(ctx, sc)
+		dlpPol, e = m.loadDLPPolicy(ctx, sc, mc.Principal.UserID.String())
 		return e
 	}); err != nil {
 		return fmt.Errorf("load dlp: %w", err)

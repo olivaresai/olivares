@@ -146,6 +146,30 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
     expect(toast.error).not.toHaveBeenCalled()
   })
 
+  it('shows the licence refusal text instead of a role refusal', async () => {
+    const qc = new QueryClient()
+    const refusal =
+      'the "reporting" add-on is required for reporting.posture; reading, verifying and exporting your data are unaffected'
+    const request = vi.fn(async () => {
+      throw new ApiError(403, 'addon_requires_license', refusal)
+    })
+    const { result } = renderHook(
+      () =>
+        usePrivilegedMutation({
+          mutationFn: request,
+          successMessage: 'unused',
+        }),
+      { wrapper: makeWrapper(qc) },
+    )
+    result.current.mutate(undefined)
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(refusal))
+    expect(toast.warning).not.toHaveBeenCalledWith(
+      "Not authorized — your role can't perform this action.",
+    )
+    expect(useStepUpStore.getState().request).toBeNull()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   // THE defect this suite exists for: the engine answers 403 with TWO different
   // codes and the hook branched on the STATUS, so an assurance demand was reported
   // as "your role can't perform this action" — an accusation against an operator

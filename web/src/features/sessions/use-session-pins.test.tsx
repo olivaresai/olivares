@@ -11,15 +11,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
 import { mergeSessions } from './provenance'
+import { addressOf } from './session-address'
+import type { LiveDTO } from './types'
 import { encodePins, pinStorageKey } from './session-pins'
 import { useSessionPins } from './use-session-pins'
+import './i18n'
 
 const api = vi.hoisted(() => ({
   pin: vi.fn(),
   unpin: vi.fn(),
   listRuns: vi.fn(),
+  getRun: vi.fn(),
 }))
-const toast = vi.hoisted(() => ({ error: vi.fn() }))
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  dismiss: vi.fn(),
+}))
+const liveApi = vi.hoisted(() => ({
+  pinLive: vi.fn(),
+  unpinLive: vi.fn(),
+  liveOne: vi.fn(),
+}))
+vi.mock('./api', async (original) => ({
+  ...(await original<typeof import('./api')>()),
+  sessionsApi: liveApi,
+}))
 vi.mock('@/features/agentops/api', async (original) => ({
   ...(await original<typeof import('@/features/agentops/api')>()),
   agentOpsApi: api,
@@ -32,9 +50,28 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
+function observedRow(over: Partial<LiveDTO> = {}): LiveDTO {
+  return {
+    session_ref: 'obs-1',
+    cc_state: 'active',
+    input_tokens: 0,
+    output_tokens: 0,
+    cost_micro_usd: 0,
+    event_count: 0,
+    tool_call_count: 0,
+    first_event_at: '2026-10-14T10:00:00Z',
+    last_event_at: '2026-10-14T10:00:00Z',
+    duration_seconds: 0,
+    live_ref: 'lr-obs-1',
+    attribution: 'observed',
+    ...over,
+  }
+}
+
 function run(over: Partial<RunDTO> = {}): RunDTO {
   return {
     run_ref: 'run-1',
+    name: 'nightly',
     transport: 'stream-json',
     permission_mode: 'default',
     isolation: 'native',
@@ -58,6 +95,9 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
   api.pin.mockResolvedValue({ run_ref: 'run-1', pinned: true })
   api.unpin.mockResolvedValue({ run_ref: 'run-1', pinned: false })
+  liveApi.pinLive.mockResolvedValue({ live_ref: 'lr-obs-1', pinned: true })
+  liveApi.unpinLive.mockResolvedValue({ live_ref: 'lr-obs-1', pinned: false })
+  liveApi.liveOne.mockReset()
 })
 afterEach(() => {
   vi.clearAllMocks()
@@ -132,6 +172,121 @@ describe('useSessionPins', () => {
     expect(api.pin).not.toHaveBeenCalled()
   })
 
+  it('pins an observed session (no run) on its live row, and unpins it the same way', async () => {
+    const sessions = mergeSessions([observedRow()], [])
+    const { result, rerender } = renderHook(
+      ({ list }) => useSessionPins(list, false),
+      { wrapper, initialProps: { list: sessions } },
+    )
+    act(() => result.current.toggle('live:lr-obs-1'))
+    await waitFor(() => expect(liveApi.pinLive).toHaveBeenCalledTimes(1))
+    expect(liveApi.pinLive).toHaveBeenCalledWith('lr-obs-1')
+    expect(api.pin).not.toHaveBeenCalled()
+
+    const pinned = mergeSessions(
+      [observedRow({ pinned: true, pinned_at: '2026-10-14T10:00:01Z' })],
+      [],
+    )
+    rerender({ list: pinned })
+    expect([...result.current.pinned]).toEqual(['live:lr-obs-1'])
+    act(() => result.current.toggle('live:lr-obs-1'))
+    await waitFor(() => expect(liveApi.unpinLive).toHaveBeenCalledTimes(1))
+    expect(liveApi.unpinLive).toHaveBeenCalledWith('lr-obs-1')
+  })
+
+  describe('Undo', () => {
+    const pinnedSession = () =>
+      mergeSessions(
+        [],
+        [
+          run({
+            run_ref: 'run-1',
+            claude_session_id: 'sid-x',
+            pinned: true,
+            pinned_at: '2026-10-14T10:00:02Z',
+          }),
+          run({
+            run_ref: 'run-2',
+            claude_session_id: 'sid-x',
+            pinned: true,
+            pinned_at: '2026-10-14T10:00:01Z',
+          }),
+        ],
+      )
+
+    const notice = () => {
+      const [text, options] = toast.success.mock.calls.at(-1) as [
+        string,
+        { duration: number; action: { label: string; onClick: () => void } },
+      ]
+      return { text, ...options }
+    }
+
+    it('unpins with an Undo that pins every run again, oldest pin first', async () => {
+      const sessions = pinnedSession()
+      const { result } = renderHook(() => useSessionPins(sessions, false), {
+        wrapper,
+      })
+      act(() => result.current.toggle(addressOf(sessions[0])))
+      await waitFor(() => expect(toast.success).toHaveBeenCalled())
+      expect(notice().text).toBe('Unpinned "nightly"')
+      expect(notice().duration).toBe(5000)
+      expect(notice().action.label).toBe('Undo')
+      expect(api.pin).not.toHaveBeenCalled()
+
+      api.getRun.mockResolvedValue(run({ pinned: false }))
+      notice().action.onClick()
+      await waitFor(() => expect(api.pin).toHaveBeenCalledTimes(2))
+      expect(api.pin.mock.calls.map((c) => c[0])).toEqual(['run-2', 'run-1'])
+    })
+
+    it('refuses Undo, and pins nothing, when the session was pinned again meanwhile', async () => {
+      const sessions = pinnedSession()
+      const { result } = renderHook(() => useSessionPins(sessions, false), {
+        wrapper,
+      })
+      act(() => result.current.toggle(addressOf(sessions[0])))
+      await waitFor(() => expect(toast.success).toHaveBeenCalled())
+      api.getRun.mockResolvedValue(run({ pinned: true }))
+      notice().action.onClick()
+      await waitFor(() =>
+        expect(toast.warning).toHaveBeenCalledWith(
+          'This session changed; nothing was undone',
+        ),
+      )
+      expect(api.pin).not.toHaveBeenCalled()
+    })
+
+    it('offers no Undo for a pin, which is its own undo', async () => {
+      const sessions = mergeSessions([], [run()])
+      const { result } = renderHook(() => useSessionPins(sessions, false), {
+        wrapper,
+      })
+      act(() => result.current.toggle('run:run-1'))
+      await waitFor(() => expect(api.pin).toHaveBeenCalled())
+      expect(toast.success).not.toHaveBeenCalled()
+    })
+
+    it('unpins an observed session with an Undo that pins its live row again', async () => {
+      const sessions = mergeSessions(
+        [observedRow({ pinned: true, pinned_at: '2026-10-14T10:00:01Z' })],
+        [],
+      )
+      const { result } = renderHook(() => useSessionPins(sessions, false), {
+        wrapper,
+      })
+      act(() => result.current.toggle('live:lr-obs-1'))
+      await waitFor(() => expect(liveApi.unpinLive).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(toast.success).toHaveBeenCalled())
+      expect(liveApi.pinLive).not.toHaveBeenCalled()
+
+      notice().action.onClick()
+      await waitFor(() =>
+        expect(liveApi.pinLive).toHaveBeenCalledWith('lr-obs-1'),
+      )
+    })
+  })
+
   it('says so, and calls nothing, for a session with no run to pin', () => {
     const observed = [{ key: 'live:lr-x', runs: [] }] as unknown as Parameters<
       typeof useSessionPins
@@ -142,6 +297,7 @@ describe('useSessionPins', () => {
     act(() => result.current.toggle('live:lr-x'))
     expect(api.pin).not.toHaveBeenCalled()
     expect(api.unpin).not.toHaveBeenCalled()
+    expect(liveApi.pinLive).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalledTimes(1)
   })
 
@@ -244,19 +400,23 @@ describe('useSessionPins — pins the browser kept before the engine did', () =>
     expect(refetch).toHaveBeenCalled()
   })
 
-  it('keeps stored a session that has no run to pin (an observed one), and pins nothing for it', async () => {
+  it('moves an observed session (no run) onto its live row, then removes the old key', async () => {
     api.listRuns.mockResolvedValue({ items: [] })
+    liveApi.liveOne.mockResolvedValue(observedRow({ live_ref: 'lr-legacy' }))
     store(['sess:observed-only', 'live:lr-observed'])
-    const refetch = vi.spyOn(client, 'invalidateQueries')
     renderHook(() => useSessionPins([], true), { wrapper })
-    await waitFor(() => expect(refetch).toHaveBeenCalled())
+    await waitFor(() => expect(stored()).toBeNull())
+    expect(liveApi.liveOne).toHaveBeenCalledWith('observed-only', {
+      tenant: 't-1',
+    })
+    expect(liveApi.pinLive.mock.calls).toEqual([
+      ['lr-legacy', { tenant: 't-1' }],
+      ['lr-observed', { tenant: 't-1' }],
+    ])
     expect(api.pin).not.toHaveBeenCalled()
-    expect(stored()).toBe(
-      encodePins(['sess:observed-only', 'live:lr-observed']),
-    )
   })
 
-  it('moves the sessions that have a run, and keeps the observed ones stored in their order', async () => {
+  it('moves runs and observed sessions together, oldest stored first, and drops an observed one that is gone', async () => {
     api.listRuns.mockImplementation(async (params: Record<string, string>) => {
       const name = Object.values(params)[0]
       return {
@@ -265,14 +425,27 @@ describe('useSessionPins — pins the browser kept before the engine did', () =>
           : [run({ run_ref: `run-for-${name}` })],
       }
     })
-    store(['sess:observed-1', 'run:run-1', 'live:observed-2', 'sess:sid-3'])
+    liveApi.liveOne.mockImplementation(async (ref: string) => {
+      if (ref === 'observed-gone')
+        throw new ApiError(404, 'not_found', 'No such session')
+      return observedRow({ live_ref: `lr-${ref}` })
+    })
+    store([
+      'sess:observed-1',
+      'run:run-1',
+      'sess:observed-gone',
+      'live:observed-2',
+      'sess:sid-3',
+    ])
     renderHook(() => useSessionPins([], true), { wrapper })
-    await waitFor(() =>
-      expect(stored()).toBe(encodePins(['sess:observed-1', 'live:observed-2'])),
-    )
+    await waitFor(() => expect(stored()).toBeNull())
     expect(api.pin.mock.calls.map((c) => c[0])).toEqual([
       'run-1',
       'run-for-sid-3',
+    ])
+    expect(liveApi.pinLive.mock.calls.map((c) => c[0])).toEqual([
+      'lr-observed-1',
+      'observed-2',
     ])
   })
 
@@ -353,14 +526,20 @@ describe('useSessionPins — pins the browser kept before the engine did', () =>
     expect(api.pin.mock.calls.map((c) => c[0])).toEqual(['run-old'])
   })
 
-  it('lets observed sessions that stay stored take none of the free slots', async () => {
+  it('gives an observed session a slot as it does a run, newest stored first', async () => {
     api.listRuns.mockResolvedValue({ items: [] })
+    liveApi.liveOne.mockImplementation(async (ref: string) =>
+      observedRow({ live_ref: `lr-${ref}` }),
+    )
     store(['run:run-old', 'run:run-new', 'sess:observed-1', 'sess:observed-2'])
     renderHook(() => useSessionPins(pinnedRuns(18), true), { wrapper })
-    await waitFor(() =>
-      expect(stored()).toBe(encodePins(['sess:observed-1', 'sess:observed-2'])),
-    )
-    expect(api.pin.mock.calls.map((c) => c[0])).toEqual(['run-old', 'run-new'])
+    // The two oldest do not fit: the ceiling would push them out, so they leave.
+    await waitFor(() => expect(stored()).toBeNull())
+    expect(liveApi.pinLive.mock.calls.map((c) => c[0])).toEqual([
+      'lr-observed-1',
+      'lr-observed-2',
+    ])
+    expect(api.pin).not.toHaveBeenCalled()
   })
 
   it('counts the engine slots by pinned run, not by row: a session with two pinned runs holds two', async () => {
@@ -433,6 +612,7 @@ describe('useSessionPins — pins the browser kept before the engine did', () =>
       if (ref === 'run-flaky') throw new ApiError(503, 'unavailable', 'Down')
       return { run_ref: ref, pinned: true }
     })
+    liveApi.liveOne.mockRejectedValue(new ApiError(503, 'unavailable', 'Down'))
     store(['run:run-flaky', 'sess:observed', 'run:run-ok'])
     renderHook(() => useSessionPins([], true), { wrapper })
     await waitFor(() =>

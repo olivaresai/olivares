@@ -20,6 +20,7 @@ The status commands the engine runs answer as the real tool prints them: Claude 
 signed in, OpenCode holds an Anthropic API key rather than an OpenAI login. A tool never reads,
 writes or prints a credential.
 """
+import hashlib
 import json
 import os
 import sys
@@ -93,6 +94,18 @@ def pause(seconds=0.05):
     time.sleep(seconds)
 
 
+def plan_share(home_var):
+    """The percent of the week this account has used: steady per account (the profile key names the
+    home's parent folder), so each account in a capture shows its own share. The 5-hour window is half."""
+    account = os.path.basename(os.path.dirname(os.environ.get(home_var, "").rstrip("/"))) or "default"
+    weekly = 10 + int(hashlib.sha256(account.encode()).hexdigest()[:4], 16) % 70
+    return {"five_hour": (weekly // 2, time.time() + 2 * 3600), "weekly": (weekly, time.time() + 3 * 86400)}
+
+
+def rfc3339(seconds):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(seconds))
+
+
 # ---------------------------------------------------------------- Claude Code: stream-json
 def claude(args):
     if args[:2] == ["auth", "status"]:
@@ -106,12 +119,25 @@ def claude(args):
     emit({"type": "system", "subtype": "init", "session_id": sid, "cwd": os.getcwd(), "model": model,
           "tools": ["Read", "Grep", "Bash", "Edit"], "permissionMode": "default"})
     totals = {"in": 0, "out": 0, "cache": 0, "cost": 0.0}
+    calls = 0
+    replay = "--replay-user-messages" in args  # the person's message comes back on stdout, as the engine asks
     for msg in lines():
+        if msg.get("type") == "control_request" and (msg.get("request") or {}).get("subtype") == "get_usage":
+            share = plan_share("CLAUDE_CONFIG_DIR")
+            emit({"type": "control_response", "response": {
+                "subtype": "success", "request_id": msg.get("request_id"), "response": {
+                    "subscription_type": "team", "rate_limits_available": True, "rate_limits": {"limits": [
+                        {"kind": "session", "percent": share["five_hour"][0], "resets_at": rfc3339(share["five_hour"][1])},
+                        {"kind": "weekly_all", "percent": share["weekly"][0], "resets_at": rfc3339(share["weekly"][1])}]}}}})
+            continue
         if msg.get("type") != "user":
             continue
         content = (msg.get("message") or {}).get("content")
         prompt = content if isinstance(content, str) else text_blocks(content)
         turn = lookup(turns, prompt)
+        if replay:
+            emit({"type": "user", "message": msg.get("message"), "session_id": sid, "parent_tool_use_id": None,
+                  "uuid": str(uuid.uuid4()), "isReplay": True})
         n = 0
         for step in turn["steps"]:
             n += 1
@@ -120,7 +146,8 @@ def claude(args):
                     "role": "assistant", "model": model, "content": [{"type": "text", "text": step["say"]}]}})
             else:
                 call = step["tool"]
-                tid = "toolu_%s_%d" % (sid[-6:], n)
+                calls += 1  # a call id is unique in the session, as Claude Code's are
+                tid = "toolu_%s_%d" % (sid[-6:], calls)
                 emit({"type": "assistant", "session_id": sid, "message": {
                     "role": "assistant", "model": model, "content": [
                         {"type": "tool_use", "id": tid, "name": call["name"], "input": call["input"]}]}})
@@ -157,7 +184,8 @@ def codex(args):
     turns = load_turns("codex")
     default_model = offered_models("codex")[0]
     thread, turn_no, usage_total = "thr_%s" % uuid.uuid4().hex[:12], 0, {"in": 0, "cached": 0, "out": 0}
-    for frame in lines():
+    frames = lines()
+    for frame in frames:
         method, rid, params = frame.get("method"), frame.get("id"), frame.get("params") or {}
         if method is None or rid is None:
             continue  # `initialized` notification or a reply to a request of ours
@@ -167,6 +195,13 @@ def codex(args):
         elif method == "account/read":
             emit({"id": rid, "result": {"account": {"type": "chatgpt", "email": None, "planType": "pro"},
                                         "requiresOpenaiAuth": False}})
+        elif method == "account/rateLimits/read":
+            share = plan_share("CODEX_HOME")
+            emit({"id": rid, "result": {"rateLimits": {
+                "primary": {"usedPercent": share["five_hour"][0], "windowDurationMins": 300,
+                            "resetsAt": int(share["five_hour"][1])},
+                "secondary": {"usedPercent": share["weekly"][0], "windowDurationMins": 7 * 24 * 60,
+                              "resetsAt": int(share["weekly"][1])}}}})
         elif method in ("thread/start", "thread/resume"):
             # A bound session is told which provider to use (`olivares_record` for a managed
             # injection) and the engine refuses input unless the thread confirms it.
@@ -196,6 +231,8 @@ def codex(args):
             usage_total["in"] += usage.get("input", 0)
             usage_total["cached"] += usage.get("cache_read", 0)
             usage_total["out"] += usage.get("output", 0)
+            if turn.get("ask"):
+                ask_turn(frames, thread, tid, turn["ask"])
             if turn.get("hold"):
                 continue  # no tokenUsage or turn/completed: the run stays live
 
@@ -216,6 +253,27 @@ def codex(args):
             emit({"id": rid, "result": {"status": "unsubscribed"}})
         else:
             emit({"id": rid, "error": {"code": -32601, "message": "not implemented: %s" % method}})
+
+
+def ask_turn(frames, thread, tid, ask):
+    """Ask the engine once to approve a command, as Codex does for one outside its sandbox, and wait for
+    the person's answer (or the engine's refusal when nobody answers in time). An interrupt ends the wait."""
+    ask_id, item = "ask-%s" % tid, "cmd_%s_ask" % tid
+    emit({"id": ask_id, "method": "item/commandExecution/requestApproval", "params": {
+        "threadId": thread, "turnId": tid, "itemId": item, "command": ask["command"], "cwd": os.getcwd()}})
+    decision = None
+    for frame in frames:
+        if frame.get("method") == "turn/interrupt" and frame.get("id") is not None:
+            emit({"id": frame["id"], "result": {}})
+            return
+        if frame.get("id") == ask_id and frame.get("method") is None:
+            decision = (frame.get("result") or {}).get("decision")
+            break
+    accepted = decision in ("accept", "acceptForSession")
+    emit({"method": "item/completed", "params": {"threadId": thread, "turnId": tid, "item": {
+        "type": "commandExecution", "id": item, "command": ask["command"],
+        "aggregatedOutput": ask["output"] if accepted else "", "status": "completed" if accepted else "declined",
+        "exitCode": 0 if accepted else None}}})
 
 
 # ---------------------------------------------------------------- OpenCode and Gemini CLI: ACP v1
@@ -276,7 +334,7 @@ def acp(kind, args):
                             "content": {"type": "text", "text": step["say"]}})
                 else:
                     call = step["tool"]
-                    cid = "call_%d" % i
+                    cid = "call_%s_%d" % (msg[4:], i)  # unique in the session, not only in the turn
                     update({"sessionUpdate": "tool_call", "toolCallId": cid, "title": call["name"],
                             "kind": "execute", "status": "in_progress", "rawInput": {"command": call["command"]}})
                     update({"sessionUpdate": "tool_call_update", "toolCallId": cid, "status": "completed",

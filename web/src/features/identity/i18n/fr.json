@@ -1,14 +1,10 @@
 {
-  "title": "Identité et accès",
+  "title": "Identité",
   "subtitle": "Qui peut se connecter, ce qu’il peut faire et comment il le prouve.",
+  "ownSignInOnly": "Vous pouvez configurer ici vos propres facteurs de connexion. Un administrateur de l'organisation modifie le reste de cette page.",
   "sections": "Sections d’identité",
-  "groups": {
-    "people": "Personnes",
-    "signIn": "Connexion",
-    "machines": "Identités machine"
-  },
   "tabs": {
-    "federation": "SSO & SCIM",
+    "federation": "Authentification unique",
     "inventory": "Inventaire des identités",
     "mcp": "Auth MCP",
     "login": "Connexion privilégiée",
@@ -47,9 +43,9 @@
       "signing": "Activer ou désactiver la signature des rapports"
     },
     "aal": {
-      "aal1": "AAL1 (mot de passe)",
-      "aal2": "AAL2 (multifacteur)",
-      "aal3": "AAL3 (résistant à l’hameçonnage)"
+      "aal1": "Connexion standard",
+      "aal2": "Authentification unique avec second facteur",
+      "aal3": "Clé d’accès ou clé de sécurité"
     },
     "unenrolled": "Aucune clé d’accès n’est encore enregistrée pour votre compte. Enregistrez une clé d’accès sur votre appareil ou une clé de sécurité dans l’onglet Connexion privilégiée, puis authentifiez-vous.",
     "unenrolledInline": "Aucune clé d’accès n’est encore enregistrée pour votre compte. Enregistrez-en une ci-dessous.",
@@ -101,9 +97,9 @@
   },
   "sso": {
     "title": "Authentification unique (OIDC / SAML)",
-    "description": "La connexion fédérée se configure dans SSO / IdP, ou par l’environnement au démarrage. Ce panneau documente la configuration, vérifie l’URI de redirection exacte et expose l’état de la connexion — il n’écrit pas la configuration.",
+    "description": "La connexion unique est configurée par un superadmin dans « Fournisseur d’identité ». Ce panneau vérifie l’URI de redirection exacte et expose l’état de la connexion.",
     "notConfigured": "Non configuré",
-    "notConfiguredHint": "Aucun fournisseur d’identité n’est configuré, les requêtes de fédération renvoient donc 501. Définissez les clés d’environnement ci-dessous et redémarrez le moteur pour activer le SSO.",
+    "notConfiguredHint": "Aucun fournisseur d’identité n’est configuré, les requêtes de fédération renvoient donc 501. Un superadmin en configure un dans « Fournisseur d’identité ».",
     "seamWhat": "Le résumé de l’état de connexion SSO",
     "protocol": "Protocole",
     "state": "Connexion",
@@ -114,14 +110,7 @@
     "redirectCheckHint": "Collez l’URI de redirection/ACS configurée dans votre fournisseur d’identité. Elle doit correspondre exactement à la valeur ci-dessus (RFC 9700).",
     "redirectMatch": "Correspondance exacte — cette URI de redirection est valide.",
     "redirectMismatch": "Ne correspond pas exactement. L’IdP doit utiliser l’URI de redirection ci-dessus, caractère pour caractère.",
-    "proto": {
-      "common": "Commun",
-      "oidc": "OIDC",
-      "saml": "SAML"
-    },
-    "required": "Requis",
-    "secret": "Secret",
-    "envNote": "La configuration est lue une seule fois au démarrage depuis l’environnement ; il n’existe pas d’API d’écriture de configuration. Les secrets ne sont jamais relus.",
+    "configure": "Ouvrir « Fournisseur d’identité »",
     "testLogin": "Démarrer une connexion de test"
   },
   "scim": {
@@ -145,6 +134,7 @@
     "noLeaverHint": "Lorsqu’un départ SCIM (delete / prov:delete) est traité, le backend révoque les sessions et les jetons de l’utilisateur et l’enregistre ici.",
     "leaverTruncated": "{{n}} derniers départs ; il y en a d’anciens",
     "leaverTruncatedHint": "Il y a plus d’événements de départ que ceux affichés. Cette carte liste les plus récents ; ce qui est coupé, ce sont donc les événements les plus anciens. Un utilisateur absent de cette liste ne prouve pas qu’il n’a jamais été déprovisionné.",
+    "leaverWindow": "Cette carte ne lit que les {{n}} dernières entrées du registre ; les événements de départ plus anciens ne sont donc pas listés. Un utilisateur absent de cette liste ne prouve pas qu’il n’a jamais été déprovisionné.",
     "revoked": "Sessions + jetons révoqués",
     "col": {
       "userName": "Utilisateur",
@@ -162,7 +152,7 @@
       "name": "Nom",
       "externalId": "External ID",
       "kind": "Type",
-      "principalType": "Principal",
+      "principalType": "Personne ou outil",
       "source": "Source",
       "state": "État"
     },
@@ -172,7 +162,7 @@
       "unknown": "Inconnue"
     },
     "filter": {
-      "principalType": "Filtrer par principal",
+      "principalType": "Filtrer par personne ou outil",
       "kind": "Filtrer par type",
       "all": "Toutes"
     }
@@ -223,8 +213,18 @@
     "currentAal": "Niveau actuel",
     "methods": "Méthodes",
     "methodsUnknown": "Non signalé",
+    "methodNames": {
+      "pwd": "Mot de passe",
+      "sso": "Authentification unique",
+      "external": "Connexion externe",
+      "totp": "Code d’authentification",
+      "mfa": "Second facteur",
+      "webauthn": "Clé d’accès",
+      "piv": "Carte à puce",
+      "pairing": "Appareil associé"
+    },
     "policy": {
-      "none": "Ce déploiement ne demande aucune vérification supplémentaire avant les actions d’administration. Un administrateur système peut en activer une dans Paramètres › Connexion et sécurité.",
+      "none": "Ce déploiement ne demande aucune vérification supplémentaire avant les actions d’administration. Un administrateur système peut en activer une.",
       "totp": "Sur ce déploiement, les actions d’administration demandent une connexion avec un code d’application d’authentification.",
       "passkey": "Sur ce déploiement, les actions d’administration demandent une clé d’accès."
     },
@@ -256,7 +256,7 @@
       "registerFailed": "Échec de l’enregistrement de la clé d’accès. Votre navigateur ne prend peut-être pas en charge WebAuthn, ou l’enregistrement a été annulé.",
       "unsupported": "Ce navigateur ne prend pas en charge WebAuthn/FIDO2.",
       "none": "Aucune passkey enregistrée",
-      "noneHint": "Enregistrez une passkey pour activer la connexion résistante au phishing liée au matériel (AAL3).",
+      "noneHint": "Enregistrez une passkey pour activer la connexion résistante au phishing liée au matériel.",
       "colName": "Nom",
       "colCreated": "Enregistrée",
       "colBackup": "Sauvegarde",
@@ -267,7 +267,7 @@
       "renamed": "Passkey renommée.",
       "delete": "Supprimer",
       "deleteTitle": "Supprimer la passkey",
-      "deleteBody": "Supprimer la passkey \"{{name}}\" ? Cette action est permanente. Vous aurez besoin d'une autre passkey enregistrée pour maintenir l'accès AAL3.",
+      "deleteBody": "Supprimer la passkey \"{{name}}\" ? Cette action est permanente. Vous aurez besoin d'une autre passkey enregistrée pour continuer à vous connecter avec une passkey.",
       "deleted": "Passkey supprimée.",
       "lastCredential": "Impossible de supprimer votre seule passkey. Enregistrez-en une autre d'abord."
     }
@@ -342,7 +342,7 @@
     "policyEnable": "Exiger des administrateurs",
     "policyConfirmOn": "Confirmer : exiger",
     "policyDisable": "Désactiver",
-    "policyAal3Note": "Modifier cette politique exige une session AAL3. Les comptes sans facteur sont orientés vers l'enregistrement à leur prochaine connexion — jamais verrouillés."
+    "policyAal3Note": "Les comptes sans facteur sont orientés vers l'enregistrement à leur prochaine connexion — jamais verrouillés."
   },
   "stepUpPolicy": {
     "title": "Vérification supplémentaire pour les actions d’administration",

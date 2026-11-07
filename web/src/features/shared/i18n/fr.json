@@ -37,8 +37,7 @@
     "savedViewRejected_one": "{{count}} valeur enregistrée dans « {{name}} » n’a pas pu être utilisée ({{keys}}) ; la vue est revenue à sa valeur par défaut.",
     "savedViewRejected_many": "{{count}} de valeurs enregistrées dans « {{name}} » n’ont pas pu être utilisées ({{keys}}) ; la vue est revenue à ses valeurs par défaut.",
     "savedViewRejected_other": "{{count}} valeurs enregistrées dans « {{name}} » n’ont pas pu être utilisées ({{keys}}) ; la vue est revenue à ses valeurs par défaut.",
-    "thisSavedView": "cette vue enregistrée",
-    "dismiss": "Fermer"
+    "thisSavedView": "cette vue enregistrée"
   },
   "workspaceRequired": {
     "use": "Utiliser {{name}}",

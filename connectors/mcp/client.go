@@ -6,6 +6,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -96,6 +97,27 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
 		return InitializeResult{}, fmt.Errorf("initialized notification: %w", err)
 	}
 	return res, nil
+}
+
+// Connect opens an HTTP inspection client at the newest revision the server
+// speaks: server/discover at LatestRevision first, then the LegacyRevision
+// initialize when the answer is anything but a discover result listing
+// LatestRevision. The result's ProtocolVersion names the revision in use. A
+// credential found in the probe answer ends the connection; it never falls back.
+func (c *Client) Connect(ctx context.Context) (InitializeResult, error) {
+	if h, ok := c.t.(*httpTransport); ok && !c.stateless() {
+		m := nextRequestMeta()
+		latest := &Client{t: &statelessHTTPTransport{client: h.client, url: h.url, headers: h.headers}, inspection: c.inspection, meta: &m}
+		disc, err := latest.Discover(ctx)
+		if errors.Is(err, ErrUpstreamCredentialDisclosure) {
+			return InitializeResult{}, err
+		}
+		if err == nil && disc.supports(LatestRevision) {
+			c.t, c.meta = latest.t, latest.meta
+			return disc.initializeResult(), nil
+		}
+	}
+	return c.Initialize(ctx)
 }
 
 // Discover queries server/discover (RC: servers MUST implement it) for the

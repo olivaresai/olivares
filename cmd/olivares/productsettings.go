@@ -41,10 +41,11 @@ const settingsRestartMarker = "settings-restart.marker"
 
 // productSettingsDoc is the record's document.
 type productSettingsDoc struct {
-	SessionIdle *api.SessionIdleSettings `json:"session_idle,omitempty"`
-	Tracing     *obstrace.Settings       `json:"tracing,omitempty"`
-	Version     string                   `json:"version"`
-	Activation  *ActivationManifest      `json:"activation,omitempty"`
+	ConsoleExposure *auth.ConsoleExposureSettings `json:"console_exposure,omitempty"`
+	SessionIdle     *api.SessionIdleSettings      `json:"session_idle,omitempty"`
+	Tracing         *obstrace.Settings            `json:"tracing,omitempty"`
+	Version         string                        `json:"version"`
+	Activation      *ActivationManifest           `json:"activation,omitempty"`
 	// Modules is the module selection (moduleprofile.go); absent until the
 	// first start that records one.
 	Modules          *moduleSelectionDoc     `json:"modules,omitempty"`
@@ -243,6 +244,9 @@ func (p *productSettings) updateChecked(ctx context.Context, actor auth.Principa
 
 func (p *productSettings) updateOnce(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc) error, requireEvidence bool) error {
 	return p.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := auth.LockDeploymentSettings(ctx, as); err != nil {
+			return err
+		}
 		rows, _, err := as.DeploymentSettings().List(ctx, model.Query{Filters: []model.Filter{}})
 		if err != nil {
 			return err
@@ -342,8 +346,13 @@ func reconcileBeforeServing(ctx context.Context, eng *engine, log *slog.Logger) 
 	mods := &moduleReconcile{booted: eng.moduleProfile, used: func(ctx context.Context) ([]string, error) { return usedModules(ctx, eng.store, eng.census) }, demo: !eng.demoTenant.IsZero()}
 	settings := newProductSettings(eng.store, eng.dataDir)
 	settings.used = mods.used
-	if err := reconcileSettings(ctx, settings, mods, log); err != nil {
+	reconcileErr := reconcileSettings(ctx, settings, mods, log)
+	// Reconciliation can refresh the manifest even when the node cannot restart.
+	if err := refuseBusinessActivationInCommunity(eng.dataDir); err != nil {
 		return err
+	}
+	if reconcileErr != nil {
+		return reconcileErr
 	}
 	doc, _, err := settings.load(ctx)
 	if err != nil {

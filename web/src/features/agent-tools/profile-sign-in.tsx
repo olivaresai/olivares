@@ -6,6 +6,7 @@
 // Olivares (POST /v1/m/agenttools/sign-in). Olivares never sees a password: it relays the
 // tool's link and code. Used by a row's Sign in button and by Add profile, which
 // continues here in place.
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -34,6 +35,44 @@ import { useAuth } from '@/lib/auth/context'
 import { PHONE_SHEET } from './phone-sheet'
 import './i18n'
 
+/** The API key as a way in: a button that turns into the key form in place (#2551). */
+function KeyOffer({
+  driver,
+  accountRef,
+  addingKey,
+  onAddingKeyChange,
+  onCreated,
+}: {
+  driver: string
+  accountRef?: string
+  addingKey: boolean
+  onAddingKeyChange: (adding: boolean) => void
+  onCreated?: (record: ProviderRecordDTO) => void
+}) {
+  const { t: hour } = useTranslation('firstHour')
+  // The organization's default login can run on an API key from Providers instead.
+  const keyKind = useKeyKind(driver as SignInTool, accountRef)
+  const keyTriggerRef = useKeyTriggerFocus(addingKey)
+  if (!keyKind) return null
+  return addingKey ? (
+    <KeyInstead
+      driver={driver as SignInTool}
+      onCancel={() => onAddingKeyChange(false)}
+      onCreated={onCreated}
+    />
+  ) : (
+    <Button
+      type="button"
+      variant="link"
+      className="self-start"
+      ref={keyTriggerRef}
+      onClick={() => onAddingKeyChange(true)}
+    >
+      {hour('actions.useApiKey')}
+    </Button>
+  )
+}
+
 /** The other ways to sign in: the same official login from a terminal, and what a paid
  * build adds through its extensions (nothing in the default console). */
 function OtherWays({
@@ -41,6 +80,7 @@ function OtherWays({
   name,
   accountRef,
   addingKey,
+  keyOffered,
   onAddingKeyChange,
   onCreated,
 }: {
@@ -49,16 +89,14 @@ function OtherWays({
   accountRef?: string
   /** The key form is open in place of the trigger; the panel owns it (#2551). */
   addingKey: boolean
+  /** The key is offered here; false where the panel already offered it first. */
+  keyOffered: boolean
   onAddingKeyChange: (adding: boolean) => void
   /** After the key is stored: the caller shows what comes next. */
   onCreated?: (record: ProviderRecordDTO) => void
 }) {
   const { t } = useTranslation('agentTools')
-  const { t: hour } = useTranslation('firstHour')
   const { can } = useAuth()
-  // The organization's default login can run on an API key from Providers instead.
-  const keyKind = useKeyKind(driver as SignInTool, accountRef)
-  const keyTriggerRef = useKeyTriggerFocus(addingKey)
   const extra = (PANEL_EXTENSIONS.profileSignInWays ?? []).filter(
     (way) => way.permission === undefined || can(way.permission),
   )
@@ -77,32 +115,23 @@ function OtherWays({
           </span>
           <CodeLine inline command={command} />
         </div>
-        {keyKind ? (
-          addingKey ? (
-            <KeyInstead
-              driver={driver as SignInTool}
-              onCancel={() => onAddingKeyChange(false)}
-              onCreated={onCreated}
-            />
-          ) : (
-            <Button
-              type="button"
-              variant="link"
-              className="self-start"
-              ref={keyTriggerRef}
-              onClick={() => onAddingKeyChange(true)}
-            >
-              {hour('actions.useApiKey')}
-            </Button>
-          )
-        ) : null}
-        {extra.map((way) => (
-          <way.Component
-            key={way.id}
+        {keyOffered ? (
+          <KeyOffer
             driver={driver}
             accountRef={accountRef}
-            {...(accountRef ? { accountName: name } : {})}
+            addingKey={addingKey}
+            onAddingKeyChange={onAddingKeyChange}
+            onCreated={onCreated}
           />
+        ) : null}
+        {extra.map((way) => (
+          <PanelSlot key={way.id}>
+            <way.Component
+              driver={driver}
+              accountRef={accountRef}
+              {...(accountRef ? { accountName: name } : {})}
+            />
+          </PanelSlot>
         ))}
       </div>
     </details>
@@ -133,8 +162,26 @@ export function ProfileSignInPanel({
   // must not close the sheet over a key being typed (#2551). Its close re-renders the
   // sign-in, which reports the login again.
   const [addingKey, setAddingKey] = useState(false)
+  const { t } = useTranslation('agentTools')
+  // Gemini CLI no longer serves free personal Google accounts (#2990): say which accounts
+  // work and offer the API key first. The person then picks; no Google login starts
+  // under the key offer. Where no key can be added, the Google sign-in runs as before.
+  const gemini = driver === 'gemini-cli'
+  const keyKind = useKeyKind(driver as SignInTool, account?.account_ref)
+  const keyFirst = gemini && keyKind !== undefined
   return (
     <div className="flex flex-col gap-4">
+      {gemini ? (
+        <p className="text-body text-text-2">{t('signIn.geminiAccounts')}</p>
+      ) : null}
+      {keyFirst ? (
+        <KeyOffer
+          driver={driver}
+          addingKey={addingKey}
+          onAddingKeyChange={setAddingKey}
+          onCreated={onKeyCreated}
+        />
+      ) : null}
       {account && tenant ? (
         <AccountSignIn
           account={account}
@@ -148,8 +195,8 @@ export function ProfileSignInPanel({
         <SignIn
           driver={driver as SignInTool}
           tenantId={tenant}
-          autoStart={autoStart}
-          // Other ways below offers the key form once for this sheet.
+          autoStart={autoStart && !keyFirst}
+          // The key form is offered once for this sheet: first for Gemini, else in Other ways.
           offerKey={false}
           onSignedIn={() => {
             void qc.invalidateQueries({ queryKey: firstHourKeys.all(tenant) })
@@ -162,6 +209,7 @@ export function ProfileSignInPanel({
         name={name}
         accountRef={account?.account_ref}
         addingKey={addingKey}
+        keyOffered={!keyFirst}
         onAddingKeyChange={setAddingKey}
         onCreated={onKeyCreated}
       />

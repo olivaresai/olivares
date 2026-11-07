@@ -37,6 +37,14 @@ export const VIEWS = [
     helpHref: '/reference/modules/vi-governance',
     icon: ShieldCheck,
     permission: 'governance:identity:read',
+    changes: [
+      { permission: 'governance:approval:write' },
+      { permission: 'governance:approval:admin' },
+      { permission: 'governance:policy:admin' },
+      { permission: 'governance:identity:admin' },
+      { permission: 'governance:agent-risk:write' },
+      { permission: 'governance:agent-risk:admin' },
+    ],
     element: lazyView(GovernanceView),
   },
   {
@@ -58,6 +66,7 @@ export const VIEWS = [
     // governance OVER a schedule, not the schedule itself.
     icon: CalendarCog,
     permission: 'governance:routine:read',
+    changes: [{ permission: 'governance:routine:admin' }],
     element: lazyView(RoutinePoliciesView),
   },
   {

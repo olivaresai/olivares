@@ -37,7 +37,7 @@ ingestion。
 ## 1. 声明工作流
 
 全新安装默认关闭 `orchestration`。请以管理员身份在
-**Settings > Edition & modules** 中启用 `orchestration`，并保留其他已选模块。
+**Settings > Modules** 中启用 `orchestration`，并保留其他已选模块。
 使用 CLI 时，先通过 `olivares login` 以管理员身份登录此引擎，
 然后运行 `olivares modules on orchestration`。每次都要等待引擎重启完成后再继续；
 运行中的会话会停止，可以恢复。否则，这些 API 调用会返回

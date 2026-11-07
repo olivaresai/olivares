@@ -81,7 +81,7 @@ for (const theme of ['light', 'dark']) {
     }, testInfo) => {
       await page.setViewportSize({ width, height: 900 })
       await mockApi(page, theme, true)
-      await page.goto('/access-map')
+      await page.goto('/access-map?view=graph')
       await expect(page.locator('.react-flow__node')).toHaveCount(8)
       await expect(
         page
@@ -231,7 +231,7 @@ for (const theme of ['light', 'dark']) {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),
       ).toBeLessThanOrEqual(viewport.width)
-      await page.goto('/access-map')
+      await page.goto('/access-map?view=graph')
       await page.getByRole('button', { name: /permitted vs observed/i }).click()
       await expect(
         page

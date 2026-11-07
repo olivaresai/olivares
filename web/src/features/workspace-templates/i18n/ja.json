@@ -3,19 +3,19 @@
     "label": "{{n}} 件のテンプレートを読み込みました。さらに存在します",
     "hint": "このカタログでは読み込み済みのテンプレートだけが利用できます。表示されないテンプレートが次のページに存在する可能性があります。"
   },
-  "title": "ワークスペーステンプレート",
+  "title": "テンプレート",
   "subtitle": "ワークスペースセッション用のフック、設定、コネクター、ポリシーの再利用可能なスナップショット。",
   "catalog": {
     "builtin": "組み込み",
     "version": "v{{version}}",
     "author": "作成者: {{author}}",
     "archived": "アーカイブ済み",
-    "noTemplates": "テンプレートが見つかりません。",
-    "noTemplatesHint": "最初のテンプレートを作成してワークスペース構成を再利用しましょう。",
-    "filterAll": "すべて",
-    "filterBuiltin": "組み込み",
-    "filterCustom": "カスタム",
     "showArchived": "アーカイブ済みを表示"
+  },
+  "groups": {
+    "yours": "あなたのテンプレート",
+    "builtin": "組み込みテンプレート（{{n}}）",
+    "yoursEmpty": "まだありません。テンプレートは新しいセッションで再利用できる出発点です。"
   },
   "editor": {
     "nameLabel": "名前",
@@ -30,7 +30,18 @@
       "connectors": "コネクター",
       "connectorsHint": "このテンプレートを適用するときに接続するコネクターID。",
       "policies": "ガバナンスポリシー",
-      "policiesHint": "DLPモード、セッション時間制限、許可ツール、I/O記録。"
+      "policiesHint": "DLPモード、セッション時間制限、許可ツール、I/O記録。",
+      "secrets": "シークレット",
+      "secretsHint": "このテンプレートのセッションが環境変数として受け取る保管庫シークレット。",
+      "summary": {
+        "hooks_other": "フック {{count}} 件",
+        "secrets_other": "変数 {{count}} 件",
+        "connectors_other": "コネクター {{count}} 件",
+        "set_other": "{{count}} 件設定済み",
+        "model": "モデル: {{model}}",
+        "none": "なし",
+        "defaults": "デフォルト"
+      }
     },
     "hooks": {
       "preTool": "ツール前",

@@ -2,15 +2,15 @@
   "title": "管理",
   "subtitle": "此组织的智能体、工作区、来源绑定、密钥和连接器。人员、登录和角色位于“人员与组”。",
   "tabs": {
-    "people": "用户与组",
+    "people": "人员",
     "agents": "智能体",
-    "sso": "SSO / 身份提供商",
+    "sso": "身份提供商",
     "scopes": "工作区",
-    "roles": "角色与委派",
+    "roles": "角色",
     "secrets": "密钥",
     "connectors": "连接器",
     "apiKeys": "API 密钥",
-    "license": "版本与许可证",
+    "license": "版本",
     "bindings": "来源绑定",
     "wsConnectors": "工作区连接器"
   },
@@ -56,12 +56,11 @@
     "truncatedHint": "API 令牌多于此处所示；本页按行 id（创建时分配）取数，因此更靠后的会缺失。这些是仍然有效的凭据：此处看不到的令牌依然可以通过认证，且无法从本界面吊销。密钥未列出，并不能证明它不存在。"
   },
   "license": {
-    "title": "版本与许可证",
+    "title": "许可证",
     "caption": "此安装的当前版本、许可证状态和可用操作。",
     "helpSummary": "许可证应用与此构建的区别",
     "helpBody": "替换许可证会在此进程中即时生效，无需重启。这既不是二进制替换，也不是数据升级：那些是各自有流程的独立操作。在 Community 中，应用已验证的许可证会在此显示其详情；这不会改变此构建。",
-    "superadminOnly": "只有超级管理员才能查看或更改许可证。",
-    "install": "安装 / 更新",
+    "install": "安装许可证",
     "remove": "移除许可证",
     "edition": "版本",
     "editions": {
@@ -200,7 +199,7 @@
     "mode": "他们的登录方式",
     "modePassword": "设置初始密码",
     "modeInvite": "发送电子邮件邀请",
-    "inviteUnavailable": "此服务器无法通过电子邮件发送邀请（参见配置参考中的 OLIVARES_INVITE_MAIL_DESTINATION），请设置初始密码。",
+    "inviteUnavailable": "此服务器无法通过电子邮件发送邀请，请设置初始密码。",
     "password": "初始密码",
     "passwordHint": "至少 8 个字符。用户之后可以更改。",
     "submit": "入驻",
@@ -216,7 +215,6 @@
   "sso": {
     "title": "单点登录（SSO）",
     "caption": "连接你的身份提供商（OIDC 或 SAML）。密钥在静态存储时加密，且不再显示。配置 SSO 是一项覆盖整个部署、仅限超级管理员的操作。",
-    "superadminOnly": "SSO 是覆盖整个部署的设置；只有超级管理员才能查看或更改。",
     "builderUnavailable": "此构建可以存储 SSO 配置，但无法将其激活：此引擎没有可用的 OIDC/SAML 提供商。",
     "statusConfigured": "已配置",
     "statusNotConfigured": "未配置",
@@ -285,7 +283,6 @@
   "secrets": {
     "title": "密钥存储",
     "caption": "部署级密封存储中的命名密钥。在连接器配置中以 store:<name> 引用某个密钥；该值在连接时解析，因此无需重启即可重新配置。值永远不会显示——只有一个短指纹用于确认密钥已设置或已更改。",
-    "superadminOnly": "密钥存储是部署级设置；只有超级管理员才能查看或更改。",
     "sealerUnavailable": "此构建可以列出密钥，但未接入封装器，因此无法存储值。请配置封装器后端以启用该存储。",
     "create": "新建密钥",
     "colName": "名称",
@@ -345,7 +342,6 @@
   "connectors": {
     "title": "连接器",
     "caption": "添加并配置引擎从中摄取数据的连接器，其凭据在静态存储时密封。变更会在无需重启的情况下应用到运行中的引擎。这是一项覆盖整个部署、仅限超级管理员的操作。",
-    "superadminOnly": "连接器是覆盖整个部署的设置；只有超级管理员才能查看或更改。",
     "unavailable": "此构建未接入连接器入驻功能；连接器改为从启动文件配置。",
     "sourcesUnavailable": "此构建不提供来源清单；无法在此列出正在运行的连接器。",
     "catalogForbidden": "无权查看连接器目录",
@@ -362,7 +358,8 @@
       "failed": "失败",
       "stopped": "已停止",
       "disabled": "已禁用",
-      "not_wired": "未接入"
+      "not_wired": "未接入",
+      "credential_missing": "缺少凭据"
     },
     "edit": "编辑",
     "delete": "删除",
@@ -477,7 +474,24 @@
       "unknownHint": "该连接器未声明任何端点，因此无法确定其运行位置。这并不表示它是厂商托管的。",
       "vendor_hosted": "厂商云端",
       "vendor_hostedHint": "由厂商运营的 API——连接器声明的端点默认指向厂商的 URL。"
-    }
+    },
+    "import": "导入定义",
+    "export": "导出定义",
+    "imported": "已导入数据源。",
+    "importInvalid": "该文件不是导出的数据源定义。",
+    "previewTitle": "预览",
+    "previewEmpty": "该数据源未列出任何文档。",
+    "previewDocument": "文档",
+    "previewAcl": "访问权限 (ACL)",
+    "previewSkipped": "已跳过：无法摄取",
+    "previewUnreadable": "无法读取",
+    "previewNoAcl": "无 ACL：除非数据源公开，否则拒绝",
+    "scheduleTitle": "计划",
+    "kb": "知识库",
+    "kbHint": "保存时同步，之后每个轮询间隔同步一次。未设置时，仅在显式摄取或同步时读取该数据源。",
+    "kbNone": "无（手动摄取）",
+    "maxDelete": "删除保护 (%)",
+    "maxDeleteHint": "如果一次同步将删除超过此比例的数据源文档，则不删除任何文档并说明原因。0 表示关闭。"
   },
   "workspaces": {
     "title": "工作区",
@@ -500,7 +514,12 @@
     "renamed": "工作区已重命名。",
     "none": "尚无工作区。",
     "noneHint": "工作区用于在本组织内限定智能体、会话与授权的范围。先创建一个。",
-    "ownerOnly": "只有组织所有者才能创建工作区。"
+    "ownerOnly": "只有组织所有者才能创建工作区。",
+    "template": "从模板开始",
+    "templateNone": "无模板",
+    "templateHint": "部门的默认会话模板：未指定模板的启动将从它开始。",
+    "templateMandatory": "强制：启动不得指定其他模板",
+    "templateNotAssigned": "工作区已创建，但未分配其模板：{{reason}}"
   },
   "agents": {
     "readOnlyNotice": "需要智能体读取权限才能查看智能体。",
@@ -609,7 +628,9 @@
       "groupScope": "智能体组：{{ref}}",
       "classLabel": "限于 {{class}}",
       "loadError": "无法加载您的委派权限。请重试。",
-      "folderScope": "文件夹：{{ref}}"
+      "folderScope": "文件夹：{{ref}}",
+      "levelCount": "{{level}}: {{count}}",
+      "exactPermissions": "具体权限"
     },
     "grants": {
       "title": "范围授权",
@@ -748,7 +769,7 @@
     "groupSubjects": {
       "managedBy": "由 {{provisioner}} 管理 · 只读",
       "title": "组主体与层次结构",
-      "caption": "向已预置的用户组授予角色并构建组层次结构。子组成员继承父组的授权。",
+      "caption": "向已预置的用户组授予角色。子组成员继承父组的授权。",
       "noGroups": "尚无组。组来自你的身份提供商。",
       "noGroupsHint": "控制台不会创建组。在身份提供商中添加组后，它会显示在这里。",
       "colName": "组",
@@ -756,16 +777,7 @@
       "colMembers": "成员",
       "colRole": "映射角色",
       "noParent": "无（根）",
-      "setParent": "设置父组",
-      "clearParent": "移除父组",
-      "setParentTitle": "设置组父级",
-      "setParentBody": "{{child}} 的成员将继承 {{parent}} 的授权。引擎将在下次请求时重新评估。",
-      "clearParentTitle": "移除组父级",
-      "clearParentBody": "{{child}} 将不再继承其父组的授权。",
-      "parentSet": "组父级已更新。",
-      "selectParent": "选择父组…",
       "selectGroup": "选择组…",
-      "cycleError": "无法设置父组：这将形成循环。",
       "mapRole": "映射角色",
       "changeRole": "更改角色",
       "role": "租户角色",
@@ -952,6 +964,7 @@
     "familyEnabled": "{{family}}已开启。",
     "familyDisabled": "{{family}}已关闭。",
     "familyChangeFailed": "无法更改{{family}}。",
+    "familyNotCovered": "此许可证不包含{{family}}。",
     "familyWaiting_other": "{{count}} 项等待你的输入"
   },
   "bindings": {
@@ -968,7 +981,9 @@
       "knowledge": "知识",
       "data": "数据",
       "profile": "提供商配置",
-      "tool": "AI 工具"
+      "tool": "AI 工具",
+      "instructions": "部门指令",
+      "template": "默认会话模板"
     },
     "sourceRef": "来源引用",
     "sourceRefHint": "使用准确的来源引用。并非每种来源类型都有统一的目录。",
@@ -1020,7 +1035,9 @@
     "folderSelectedId": "已选 Resource ID：{{id}}",
     "effects": {
       "allow": "允许",
-      "forbid": "禁止"
+      "forbid": "禁止",
+      "require": "要求",
+      "decline": "排除"
     },
     "credName": "凭据名称",
     "credentialHint": "可选。如果设置了任一凭据字段，则名称、类型和定位符为必填。",
@@ -1161,7 +1178,7 @@
   },
   "mcpGateway": {
     "title": "MCP 网关",
-    "caption": "管理此租户的 MCP 服务器和会话工具。测试用于发现工具；执行工具需要明确的策略。",
+    "caption": "管理此组织的 MCP 服务器和会话工具。测试用于发现工具；执行工具需要明确的策略。",
     "add": "添加服务器",
     "configure": "配置",
     "test": "测试连接",
@@ -1174,18 +1191,16 @@
     "empty": "没有 MCP 服务器",
     "emptyHint": "添加 Streamable HTTP 服务器，测试连接，并在启用前配置信任和权限。",
     "source": {
-      "file": "运营者文件",
-      "store": "租户配置"
+      "file": "运营者文件"
     },
     "fileOwned": "运营者文件管理其配置的监听器上的 MCP。此视图为只读。已保存的配置保持停用，不会合并或覆盖。",
-    "storeOwned": "租户配置管理此安装的 HTTP 监听器上的 MCP。无需配置文件。",
     "sessionTitle": "会话工具",
     "sessionHint": "会话可以互相发送消息并使用分配给它们的工作。这不会给会话任何新权限。",
     "tools": "工具（{{count}}）",
     "observationHint": "发现工具不会授予权限。请为每个工具指定明确的范围，并决定破坏性操作是否需要审批。",
     "destructive": "需要破坏性操作审批",
     "credentials": "管理凭据",
-    "credentialCaption": "仅包含租户的 MCP 密钥（名称以 mcp/ 开头）。请保存服务器完整的 Authorization 值，例如 Bearer 后接令牌。值会被封存，永不返回。",
+    "credentialCaption": "仅包含组织的 MCP 密钥（名称以 mcp/ 开头）。请保存服务器完整的 Authorization 值，例如 Bearer 后接令牌。值会被封存，永不返回。",
     "noCredential": "无需登录",
     "name": "名称",
     "url": "服务器地址",
@@ -1210,7 +1225,7 @@
     "formHint": "新服务器默认关闭。保存后测试连接、查看其工具并启用它。",
     "saveDisabled": "保存",
     "removeTitle": "移除 MCP 服务器",
-    "removeHint": "从此租户的网关中移除 {{name}}？新的请求会被拒绝；其封存凭据将保留在密钥管理器中。",
+    "removeHint": "从此组织的网关中移除 {{name}}？新的请求会被拒绝；其封存凭据将保留在密钥管理器中。",
     "conflict": "配置已更改。再次提交前请刷新并检查当前版本。",
     "enableHint": "启用需要当前的成功测试、匹配的资源与签发者信任，以及已发现工具的明确范围。",
     "governance": "已应用的治理",
@@ -1241,8 +1256,8 @@
       "network_confinement": "网络隔离"
     },
     "governanceValues": {
-      "tenant_store": "租户存储",
-      "tenant_sealed_reference": "当前租户的封存引用",
+      "tenant_store": "组织设置",
+      "tenant_sealed_reference": "当前组织的封存引用",
       "control_plane_http_listener": "安装的 HTTP 监听器",
       "declared_inventory_and_consent": "已声明模板和同意",
       "not_configured": "未配置",
@@ -1316,8 +1331,8 @@
       "notAllowed": "不允许（在“配置”中更改）",
       "confirm": "开启"
     },
-    "sessionOn": "已开启：关闭即可停止。",
-    "sessionOff": "已关闭：会话不能互相发送消息，也不能使用分配的工作。",
+    "sessionOn": "开启",
+    "sessionOff": "关闭",
     "startersTitle": "入门服务器",
     "startersHint": "精选的服务器，每个都带有隔离和网络限制。添加会填好表单；服务器保存后处于关闭状态，在你测试并启用之前不会运行任何内容。",
     "starterAdd": "添加 {{name}}",

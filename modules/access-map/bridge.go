@@ -118,7 +118,7 @@ func resolveOrigin(ctx context.Context, sc store.Scope, edge sdkmodel.EdgeObserv
 			}
 			return attribution{OriginKind: originSession, OriginID: created.ID, Confidence: confOr(edge.Confidence), Reason: "session (newly discovered)"}, nil
 		}
-		if !s.AgentID.IsZero() {
+		if !s.AgentID.IsZero() && edge.Source != sdkmodel.SignalSessionLaunch {
 			return attribution{OriginKind: originAgent, OriginID: s.AgentID, Confidence: confOr(edge.Confidence), Reason: "session → agent"}, nil
 		}
 		return attribution{OriginKind: originSession, OriginID: s.ID, Confidence: confOr(edge.Confidence), Reason: "session (no agent link yet)"}, nil

@@ -1,12 +1,57 @@
 {
-  "title": "Sicurezza e forensics",
-  "description": "Segnalazioni dei guardrail, postura di enforcement, coda delle anomalie e forensics degli incidenti a prova di manomissione. Per impostazione predefinita la piattaforma è in sola rilevazione: registra, non blocca da sola a meno che l'enforcement sia attivato e governato.",
+  "title": "Sicurezza",
+  "description": "Esamina le segnalazioni dei guardrail, scegli quali regole bloccano e indaga sugli incidenti. Nulla viene bloccato finché non attivi una regola.",
   "tabs": {
+    "overview": "Panoramica",
     "safety": "Postura di sicurezza",
     "findings": "Segnalazioni",
     "guardrails": "Guardrail",
     "anomalies": "Anomalie",
     "forensics": "Forensics"
+  },
+  "posture": {
+    "title": "Esposizione attuale",
+    "description": "Letture live di persone, credenziali e controlli che richiedono attenzione ora.",
+    "review": "Esamina",
+    "notAvailable": "Non disponibile",
+    "partialHint": "Il segno più indica che la lettura contiene altre righe oltre questa pagina; il conteggio è un minimo.",
+    "secondFactor": {
+      "label": "Persone senza un secondo fattore",
+      "description": "Membri attivi senza un codice di autenticazione confermato o una passkey registrata."
+    },
+    "administrators": {
+      "label": "Amministratori",
+      "description": "Proprietari e amministratori attivi di questa organizzazione."
+    },
+    "apiKeys": {
+      "label": "Chiavi API senza scadenza o inutilizzate",
+      "description": "Chiavi registrate senza scadenza o senza uso registrato. Le chiavi revocate non contano.",
+      "value": "{{noExpiry}} senza scadenza · {{unused}} inutilizzate"
+    },
+    "approvals": {
+      "label": "Approvazioni in sospeso",
+      "description": "Richieste in attesa che una persona le approvi o respinga."
+    },
+    "killSwitch": {
+      "label": "Interruttore di arresto",
+      "description": "Lo stato di arresto attuale dell’estate e dei singoli agent.",
+      "estateStopped": "Estate arrestato",
+      "agentStops_one": "{{count}} agent arrestato",
+      "agentStops_many": "{{count}} agent arrestati",
+      "agentStops_other": "{{count}} agent arrestati",
+      "notEngaged": "Non attivato"
+    },
+    "providers": {
+      "label": "Provider con una chiave",
+      "description": "Registrazioni attive di credenziali provider. I valori segreti non vengono mai letti."
+    },
+    "policy": {
+      "label": "Modalità della policy",
+      "description": "Indica se l’ammissione dei modelli firmati è non configurata, in osservazione o in applicazione.",
+      "unconfigured": "Non configurata",
+      "observe": "Osserva",
+      "enforce": "Applica"
+    }
   },
   "findings": {
     "title": "Segnalazioni",
@@ -62,7 +107,7 @@
     "description": "Postura di sicurezza AI in sola lettura, acquisita dai controlli dei provider stessi: OpenAI Moderation, AWS Bedrock Guardrails e Azure Responsible AI. La piattaforma la legge e la registra; l'enforcement resta al provider.",
     "empty": "Nessuna segnalazione sulla postura di sicurezza",
     "emptyHint": "Collega i connettori OpenAI, AWS o Azure con le letture di sicurezza abilitate per popolare questa vista.",
-    "countsPartial": "Mostrato un riepilogo parziale: questo tenant ha più segnalazioni sulla postura di sicurezza di quante ne copra la scansione di riepilogo.",
+    "countsPartial": "Mostrato un riepilogo parziale: questa organizzazione ha più segnalazioni sulla postura di sicurezza di quante ne copra la scansione di riepilogo.",
     "columns": {
       "open": "Aperte"
     }
@@ -72,7 +117,7 @@
     "description": "Esegui il servizio di ispezione dei guardrail su una superficie. Il testo viene sottoposto a hash dopo la redazione e non viene mai conservato: il risultato è un verdetto più un'evidenza minima, già redatta.",
     "verdictTitle": "Verdetto",
     "clean": "Nessun rilevamento: pulito.",
-    "detectiveNote": "Questo verdetto viene dalla modalità di sola rilevazione: la violazione è stata rilevata e registrata, non bloccata. Un blocco è possibile solo quando l'enforcement è attivato e governato.",
+    "detectiveNote": "Questo verdetto ha solo registrato la violazione: è stata rilevata, non bloccata. Un blocco è possibile solo quando l'enforcement è attivato e governato.",
     "wouldBlock": "Bloccherebbe (enforcement)",
     "detectOnly": "Solo rilevazione",
     "findingsRecorded": "{{count}} segnalazioni registrate",
@@ -80,7 +125,7 @@
     "findingsRecorded_many": "{{count}} segnalazioni registrate",
     "findingsRecorded_other": "{{count}} segnalazioni registrate",
     "enforcement": {
-      "detective": "Solo rilevazione",
+      "detective": "Solo registrazione",
       "enforced": "Enforcement attivo"
     },
     "class": {
@@ -109,10 +154,10 @@
   },
   "enforcement": {
     "title": "Postura di enforcement",
-    "description": "L'unica azione che tocca la produzione. Ogni classe di guardrail è in sola rilevazione per impostazione predefinita; attivare l'enforcement inline è un'azione da amministratore, governata dove è configurato un gate.",
-    "defaultDetectiveNote": "La modalità predefinita è la sola rilevazione: le classi bloccano solo se attivate qui in modo esplicito e governate.",
-    "fullyDetective": "Nessun enforcement attivo: la piattaforma è in sola rilevazione, l'impostazione predefinita sicura. Nulla blocca da solo.",
-    "detective": "Solo rilevazione",
+    "description": "L'unica azione che tocca la produzione. Ogni classe di guardrail per impostazione predefinita registra soltanto; attivare l'enforcement inline è un'azione da amministratore, governata dove è configurato un gate.",
+    "defaultDetectiveNote": "Per impostazione predefinita nulla viene bloccato: le classi bloccano solo se attivate qui in modo esplicito e governate.",
+    "fullyDetective": "Nessun enforcement attivo: registra soltanto e non blocca nulla finché non attivi una regola.",
+    "detective": "Solo registrazione",
     "enforced": "Enforcement attivo",
     "governed": "Governata",
     "ungoverned": "Attivata senza governance umana",
@@ -128,7 +173,7 @@
     },
     "dialog": {
       "title": "Modifica l'enforcement",
-      "description": "Disattivare (tornare alla sola rilevazione) è sempre consentito. Attivare l'enforcement inline è governato dove è configurato un gate: un rifiuto della governance viene mostrato come motivo.",
+      "description": "Disattivare (tornare alla sola registrazione) è sempre consentito. Attivare l'enforcement inline è governato dove è configurato un gate: un rifiuto della governance viene mostrato come motivo.",
       "enabledLabel": "Attiva l'enforcement inline",
       "minSeverity": "Gravità minima",
       "reason": "Motivo",
@@ -208,7 +253,7 @@
   "empty": {
     "enforcement": {
       "title": "Nessuna classe di enforcement configurata",
-      "description": "Le righe compaiono solo dopo che è stata impostata la postura di una classe di guardrail; fino ad allora ogni classe resta in sola rilevazione e nulla blocca inline."
+      "description": "Le righe compaiono solo dopo che è stata impostata la postura di una classe di guardrail; fino ad allora ogni classe registra soltanto e nulla blocca inline."
     },
     "findings": {
       "title": "Ancora nessuna segnalazione di sicurezza registrata",

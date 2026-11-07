@@ -99,6 +99,11 @@ const (
 	// envSessionCursorBin names the OFFICIAL Cursor CLI (`agent`) this node may operate;
 	// pinning it registers the Cursor ACP driver and turns no other driver on.
 	envSessionCursorBin = driverfacts.CursorRuntimeBinEnv
+	// envSessionsSFTPListen is the address (host:port) the SFTP and SCP access to a folder
+	// listens on. Unset it is off, the console shows no Connect card and nothing listens.
+	envSessionsSFTPListen = "OLIVARES_SESSIONS_SFTP_LISTEN"
+	// sessionSFTPHostKeyFile keeps the listener's host key in the data directory.
+	sessionSFTPHostKeyFile = "sftp-host-key"
 )
 
 // buildSessionRuntimeOptions assembles the operate-runtime options for module II
@@ -151,6 +156,12 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	// Images attached to a message are kept under the data directory, per tenant and
 	// session, never in the folder a session works in.
 	opts = append(opts, sessions.WithAttachmentRoot(filepath.Join(dataDir, sessionAttachmentDirName)))
+	// So are the copies of its folder that each turn starts from (run_checkpoints.go).
+	opts = append(opts, sessions.WithCheckpointRoot(filepath.Join(dataDir, sessionCheckpointDirName)))
+	// SFTP and SCP to a folder is optional: off until an address is named.
+	if addr := strings.TrimSpace(getenv(envSessionsSFTPListen)); addr != "" && filepath.IsAbs(dataDir) {
+		opts = append(opts, sessions.WithSFTP(addr, filepath.Join(dataDir, sessionSFTPHostKeyFile)))
+	}
 	// The version Olivares presents to an official CLI's handshake is the BUILD's,
 	// never a constant the module invented.
 	opts = append(opts, sessions.WithProductVersion(version))
@@ -182,6 +193,7 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	// (without it, deny-mode fails closed — see the module seam).
 	opts = append(opts, sessions.WithClassifier(securityWorkspaceClassifier{}))
 	opts = append(opts, sessionConfinementOption(dataDir, log))
+	opts = append(opts, sessionLimitsOption(getenv, log))
 	return opts
 }
 
@@ -224,6 +236,11 @@ func sessionProtectPaths(dataDir string) []string {
 // one directory per session that named no registered workspace. It sits beside
 // `tools` and the store, under the data directory's own 0700 and its .gitignore.
 const sessionWorkspaceDirName = "session-workspaces"
+
+// personalFilesDirName is the subdirectory of the data directory that holds each
+// person's own folder, "My files" (<data>/files/<user-id>), so the backup and the
+// pre-upgrade snapshot of the data directory cover it.
+const personalFilesDirName = "files"
 
 // sessionWorkspaceRootFor derives that root from the engine's resolved data
 // directory. An empty or relative data directory yields NO root, which the module
@@ -289,6 +306,10 @@ func useSessionWorkspaceRoot(m *sessions.Module, dataDir string, log *slog.Logge
 // sessionAttachmentDirName is the subdirectory of the data directory that holds the
 // images attached to session messages.
 const sessionAttachmentDirName = "session-attachments"
+
+// sessionCheckpointDirName is the subdirectory of the data directory that holds the
+// copies of a session's folder that each of its turns started from.
+const sessionCheckpointDirName = "session-checkpoints"
 
 const (
 	// sessionWorktreeDirName is the subdirectory of the data directory that holds

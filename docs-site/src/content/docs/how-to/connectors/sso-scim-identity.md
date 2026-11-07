@@ -39,6 +39,25 @@ posture is honest by construction:
 - The redirect/ACS URI your IdP must carry is **exact**
   (`…/v1/auth/federation/callback` on your console origin — RFC 9700 exact
   matching, no prefix tricks).
+- **Sign-out at the IdP ends the Olivares sessions (OIDC).** Paste
+  `…/v1/auth/federation/oidc/backchannel-logout` on your console origin as the
+  client's back-channel logout URL (OpenID Connect Back-Channel Logout 1.0; in
+  Keycloak, *Backchannel logout URL* with *Backchannel logout session required*
+  on). When the provider ends a person's session (their own sign-out, or an
+  administrator signing them out), it posts a signed `logout_token`, and the
+  engine revokes every console and CLI session of that person; a token that
+  names only an IdP session (`sid`), or whose `sub` is not yet linked to an
+  Olivares account, ends the sessions that came from that IdP session. The next request
+  with a revoked session answers `401`. The token must be signed with a key from
+  the provider's JWKS (RS256 or ES256), name your client as its audience, carry
+  the logout event and no nonce, and be fresh; a forged, replayed or
+  wrong-audience token ends nothing and answers `400`. Each logout is recorded
+  as `sso.logout.backchannel`. The SSO status and each OIDC provider's SSO
+  configuration show this URL as `backchannel_logout_uri`; a tenant's or a
+  non-default provider's URL names it with `?tenant=<tenant id>&idp=<alias>`, so
+  paste the URL of that provider. If the provider's discovery document does not
+  advertise `backchannel_logout_supported`, the engine logs a warning, because
+  that provider will not send the token.
 
 The console's **Identity & NHI → SSO & SCIM** tab documents the live
 configuration, checks your IdP's redirect URI against the exact expected

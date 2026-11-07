@@ -15,9 +15,12 @@ import (
 	"sync"
 )
 
-// maxHTTPBody caps a Streamable HTTP response body so a hostile or runaway server
-// cannot exhaust memory.
-const maxHTTPBody = 32 << 20 // 32 MiB
+// MaxHTTPBody caps an MCP response body so a hostile or runaway server cannot exhaust
+// memory. A tool's result reaches the model inside the next request, which takes at
+// most 128 MB on the first-party Claude API
+// (https://platform.claude.com/docs/en/api/overview#request-size-limits), so no larger
+// result can be used; every MCP client and gateway of the engine reads up to it.
+const MaxHTTPBody = 128_000_000
 
 // httpTransport speaks MCP over Streamable HTTP: each request is a POST that the
 // server answers with either a single application/json response or a
@@ -136,10 +139,10 @@ func (t *httpTransport) send(ctx context.Context, body []byte, id int64) (json.R
 		t.sessionID = sid
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxHTTPBody))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxHTTPBody))
 		return nil, resp.StatusCode, resp.Header.Get("WWW-Authenticate"), nil
 	}
-	reader := io.LimitReader(resp.Body, maxHTTPBody)
+	reader := io.LimitReader(resp.Body, MaxHTTPBody)
 	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
 		res, err := responseFromSSE(reader, id, &t.obs)
 		return res, resp.StatusCode, "", err
@@ -162,7 +165,7 @@ func (t *httpTransport) notify(ctx context.Context, method string, params any) e
 		return err
 	}
 	defer resp.Body.Close()
-	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxHTTPBody)); err != nil {
+	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, MaxHTTPBody)); err != nil {
 		return fmt.Errorf("mcp: read notification acknowledgment: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -254,7 +257,7 @@ func responseFromJSON(r io.Reader, id int64) (json.RawMessage, error) {
 // obs skips observation.
 func responseFromSSE(r io.Reader, id int64, obs *requestObserver) (json.RawMessage, error) {
 	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64*1024), maxHTTPBody)
+	sc.Buffer(make([]byte, 0, 64*1024), MaxHTTPBody)
 	var data strings.Builder
 	flush := func() (json.RawMessage, bool, error) {
 		if data.Len() == 0 {

@@ -276,7 +276,13 @@ type codexSession struct {
 	configReadID    string
 	threadID        string
 	turnID          string
-	authState       string
+	// authState is the readiness the handshake read, and the input gate: a
+	// required one refuses every message. reportedAuth is what the run row was last
+	// told. What the provider says during the run moves only reportedAuth, so the
+	// next message is still sent and judged by its own result: the person may have
+	// signed in again, and Stop + Resume must not be the only way back.
+	authState    string
+	reportedAuth string
 	// model and modelProvider are what the thread answer named: the model its
 	// usage is metered on, and who serves it (what a list price is looked up under).
 	model, modelProvider string
@@ -427,12 +433,13 @@ func (r codexThreadResponse) toolMode() string {
 	return strings.Join(words, " · ")
 }
 
-// codexUserInput is one block of a turn's input: text, or an image by data URL
-// (the app-server's UserInput "image" variant, codex-cli 0.162.1 schema).
+// codexUserInput is a text, image or skill block (codex-cli 0.162.1 UserInput schema).
 type codexUserInput struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 	URL  string `json:"url,omitempty"`
+	Name string `json:"name,omitempty"`
+	Path string `json:"path,omitempty"`
 }
 
 type codexUserInputText = codexUserInput
@@ -522,6 +529,14 @@ func (s *codexSession) projectProfileModelResponse(data []byte) []byte {
 	decodeErr := json.Unmarshal(data, &frame)
 	if decodeErr == nil && ((len(frame.Method) != 0 && string(frame.Method) != "null" && string(frame.Method) != `""`) || string(frame.ID) != id) {
 		return data
+	}
+	if decodeErr == nil {
+		// This is the one reply; later stdout is no longer config/read's.
+		s.mu.Lock()
+		if s.configReadID == id {
+			s.configReadID = ""
+		}
+		s.mu.Unlock()
 	}
 	var model codexConfigReadResponse
 	var reply any = responseOut{ID: frame.ID, Result: &model}
@@ -692,6 +707,27 @@ func (s *codexSession) InputImages(ctx context.Context, text string, images []tu
 	if strings.TrimSpace(text) != "" {
 		input = append(input, codexUserInput{Type: "text", Text: text})
 	}
+	// Resolve /name against this child's current enabled skills. Never accept
+	// a path from the console or fall back to plain text when discovery fails.
+	if words := strings.Fields(text); len(words) > 0 && strings.HasPrefix(words[0], "/") {
+		name := strings.TrimPrefix(words[0], "/")
+		if validToolCommandName(name) && !strings.Contains(name, "/") {
+			commands, _, err := s.commandCatalog(ctx)
+			if err != nil {
+				return false, err
+			}
+			for _, command := range commands {
+				if command.Name != name {
+					continue
+				}
+				if command.codexSkillPath == "" {
+					return false, &runErr{http.StatusBadGateway, "Codex did not report the skill's path"}
+				}
+				input = append(input, codexUserInput{Type: "skill", Name: name, Path: command.codexSkillPath})
+				break
+			}
+		}
+	}
 	// Before the request: the turn's usage can be read before its answer is.
 	s.mu.Lock()
 	s.turnSent = true
@@ -810,8 +846,12 @@ func (s *codexSession) ConversationID() string {
 func (s *codexSession) Close(err error) {
 	s.mu.Lock()
 	s.closed = true
+	pending := s.pending
 	s.pending = map[string]*codexServerRequest{}
 	s.mu.Unlock()
+	for _, req := range pending {
+		req.stop()
+	}
 	s.conn.close(err)
 }
 
@@ -869,7 +909,7 @@ func (s *codexSession) onNotification(method string, params json.RawMessage) {
 		if err := json.Unmarshal(params, &n); err != nil || s.foreignConversation(n.ThreadID) {
 			return
 		}
-		s.setAuthState(AuthStateRequired)
+		s.reportAuthState(AuthStateRequired)
 	case codexNotifyAuthRecoveryCompleted:
 		var n codexAuthRecoveryNotification
 		if err := json.Unmarshal(params, &n); err != nil || s.foreignConversation(n.ThreadID) {
@@ -990,10 +1030,10 @@ func (s *codexSession) refreshAuthState() {
 	raw, err := s.conn.call(ctx, codexMethodAccountRead, codexAccountReadParams{RefreshToken: false}, s.callTimeout())
 	if err != nil {
 		// We could not ask. That is not "ready" and it is not "required" either.
-		s.setAuthState(AuthStateUnknown)
+		s.reportAuthState(AuthStateUnknown)
 		return
 	}
-	s.setAuthState(codexAuthStateFrom(raw))
+	s.reportAuthState(codexAuthStateFrom(raw))
 }
 
 func (s *codexSession) callTimeout() time.Duration {
@@ -1003,13 +1043,21 @@ func (s *codexSession) callTimeout() time.Duration {
 	return defaultDriverCallTimeout
 }
 
-// setAuthState records readiness and publishes the CHANGE to the runtime, which
-// persists it on the run row. Only a change is published: a re-read that confirms
-// what the row already says is not news.
+// setAuthState records the handshake's readiness, the input gate, and publishes it.
 func (s *codexSession) setAuthState(state string) {
 	s.mu.Lock()
-	changed := s.authState != state
 	s.authState = state
+	s.mu.Unlock()
+	s.reportAuthState(state)
+}
+
+// reportAuthState publishes a readiness CHANGE to the runtime, which persists it
+// on the run row, without moving the input gate. Only a change is published: a
+// re-read that confirms what the row already says is not news.
+func (s *codexSession) reportAuthState(state string) {
+	s.mu.Lock()
+	changed := s.reportedAuth != state
+	s.reportedAuth = state
 	s.mu.Unlock()
 	if changed && s.cfg.OnAuthState != nil {
 		s.cfg.OnAuthState(state)

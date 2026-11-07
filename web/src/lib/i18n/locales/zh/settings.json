@@ -1,4 +1,25 @@
 {
+  "exposure": {
+    "title": "控制台访问",
+    "listen": "HTTPS / HTTP 监听地址",
+    "grpc": "gRPC 监听地址",
+    "addresses": "本地地址",
+    "url": "公共 URL",
+    "tls": "传输方式",
+    "encrypted": "已启用 TLS",
+    "unencrypted": "未加密的 HTTP",
+    "policy": "管理操作增强认证",
+    "unverified": "尚未验证外部可达性。",
+    "hint": "这些是本地信息；公共 URL 或本地地址并不能证明此网络以外的手机可以访问控制台。",
+    "guard": "启用公共访问前，请在“管理操作增强认证”中启用身份验证器代码或通行密钥。",
+    "saved": "控制台访问设置已更新。",
+    "managed": "已登记托管的公共访问。",
+    "unmanaged": "未登记任何托管的公共访问。",
+    "urlHint": "使用 tailnet 或命名隧道的地址；留空可移除托管的公共 URL。",
+    "unchanged": "编辑公共 URL 后即可保存。",
+    "tunnelHint": "使用 tailnet 客户端进行私有访问，或使用命名 Cloudflare Tunnel 进行公共访问。隧道无需开放 WAN 入站端口。",
+    "notSet": "未设置"
+  },
   "title": "设置",
   "restoreAll": "全部恢复默认",
   "search": "搜索设置",
@@ -15,9 +36,10 @@
     "aiTools": "AI 工具",
     "workspaces": "工作区",
     "deploy": "部署与更新",
-    "signIn": "登录与安全",
+    "signIn": "登录",
     "setup": "设置向导",
-    "edition": "版本与模块",
+    "edition": "版本",
+    "modules": "模块",
     "about": "关于",
     "sections": "设置分区",
     "signing": "报告签名",
@@ -36,13 +58,13 @@
     "density": "密度",
     "densityHint": "紧凑显示更多行；舒适更易阅读。",
     "language": "语言",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "时间",
     "timeHint": "时间按你的时区显示（{{zone}}）。记录和导出会保持 UTC。",
     "clock24": "24 小时",
     "clock12": "12 小时",
     "startPage": "起始页",
-    "startPageHint": "登录后打开的页面。默认：主页。",
+    "startPageHint": "登录后打开的页面。默认：会话。",
     "confirmStop": "停止会话前确认",
     "confirmStopHint": "在停止结束仍在工作的会话之前，询问一次。",
     "editor": "文件链接使用的编辑器",
@@ -71,23 +93,22 @@
     "scope": "此安装响应的按键。对每个人都相同。"
   },
   "edition": {
-    "title": "版本与模块",
-    "scope": "此构建的版本、它运行的模块，以及 Business 增加的功能。",
+    "scope": "此构建的版本、其许可证，以及 Business 增加的功能。",
     "label": "版本",
-    "licenseAlias": "许可证",
     "unknown": "此引擎未报告",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
     "businessAdds": "Business 新增",
-    "adds": {
-      "loginEnforcement": "登录强制：要求 SSO 和网络允许列表",
-      "identityProviders": "多个身份提供商，按组织配置并按电子邮件域路由",
-      "groupMapping": "登录时将目录组映射为角色",
-      "regulatory": "监管运营：DORA 登记册、NIS 2 事件分类、OSCAL 配置文件、美国及行业合规包，以及持续控制监控",
-      "reports": "Business 报告和定时报告",
-      "toolPins": "工具固定"
+    "summary": {
+      "Session cockpit and fleet deployment.": "会话驾驶舱与批量部署。",
+      "Live session sharing with named, expiring guest access and owner-approved message proposals.": "实时会话共享，提供具名且会过期的访客访问，以及由所有者批准的消息提议。",
+      "Directories and several identity providers, departments and delegated administration.": "目录与多个身份提供商、部门及委派管理。",
+      "Compliance and reporting, regulated records.": "合规与报告，受监管记录。",
+      "Deeper runtime inspection and key management.": "更深入的运行时检查与密钥管理。",
+      "Integrations with enterprise systems, commercial license and support.": "与企业系统的集成、商业许可证及支持。",
+      "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise 包含 Business 的全部内容，另加合同约定的条款以及依赖这些条款的功能。"
     },
     "badge": {
       "business": "Business",
@@ -150,7 +171,7 @@
     "names": {
       "accessmap": "访问图",
       "adoption": "采用情况",
-      "capabilities": "MCP 与技能目录",
+      "capabilities": "扩展",
       "catalog": "目录",
       "claude-agents": "Claude 智能体",
       "claude-policy": "Claude 策略",
@@ -243,7 +264,7 @@
     "activatedBy": "由 {{addons}} 启用。只要该附加组件处于活动状态，它就保持开启。",
     "turnOnPlain": "开启",
     "alsoTurnsOn": "开启后还会同时开启 {{names}}，并重启引擎。",
-    "openEdition": "打开“版本与模块”",
+    "openModules": "打开“模块”",
     "askAdmin": "请管理员开启它。",
     "notSetUp": "此安装中尚未设置。",
     "stillRestarting": "仍在重启。请刷新页面。"
@@ -366,6 +387,7 @@
     "tool": "默认工具",
     "account": "默认账户",
     "model": "默认模型",
+    "effort": "默认推理强度",
     "folder": "默认文件夹",
     "automatic": "自动",
     "unavailable": "已不可用",
@@ -378,5 +400,9 @@
     "needsYou": "需要处理",
     "finished": "已完成",
     "failed": "已失败"
+  },
+  "aliases": {
+    "edition": "许可证",
+    "signIn": "登录与安全"
   }
 }

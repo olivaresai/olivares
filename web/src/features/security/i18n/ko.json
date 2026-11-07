@@ -1,12 +1,55 @@
 {
-  "title": "보안 및 포렌식",
-  "description": "가드레일 발견 사항, 강제 태세, 이상 대기열 및 변조 감지 사건 포렌식입니다. 이 플레인은 기본적으로 탐지형입니다 — 강제가 활성화되고 거버넌스되지 않는 한 자체적으로 차단하지 않고 기록합니다.",
+  "title": "보안",
+  "description": "가드레일이 표시한 내용을 검토하고, 어떤 규칙으로 차단할지 고르며, 사건을 조사하세요. 규칙을 켜기 전까지는 아무것도 차단되지 않습니다.",
   "tabs": {
+    "overview": "개요",
     "safety": "안전 태세",
     "findings": "발견 사항",
     "guardrails": "가드레일",
     "anomalies": "이상",
     "forensics": "포렌식"
+  },
+  "posture": {
+    "title": "현재 노출 현황",
+    "description": "지금 주의가 필요한 사람, 자격 증명 및 제어 항목을 실시간으로 읽어 보여줍니다.",
+    "review": "검토",
+    "notAvailable": "사용할 수 없음",
+    "partialHint": "더하기 기호는 이 페이지 외에 더 많은 행이 있어 개수가 하한값임을 나타냅니다.",
+    "secondFactor": {
+      "label": "두 번째 인증 요소가 없는 사람",
+      "description": "확인된 인증 앱 코드나 등록된 패스키가 없는 활성 구성원입니다."
+    },
+    "administrators": {
+      "label": "관리자",
+      "description": "이 조직의 활성 소유자 및 관리자입니다."
+    },
+    "apiKeys": {
+      "label": "만료일이 없거나 사용하지 않은 API 키",
+      "description": "만료일 또는 사용 기록이 없는 등록된 키입니다. 해지된 키는 제외합니다.",
+      "value": "만료일 없음 {{noExpiry}}개 · 미사용 {{unused}}개"
+    },
+    "approvals": {
+      "label": "대기 중인 승인",
+      "description": "담당자의 승인 또는 거부를 기다리는 요청입니다."
+    },
+    "killSwitch": {
+      "label": "긴급 중지 스위치",
+      "description": "에스테이트 및 개별 에이전트의 현재 중지 상태입니다.",
+      "estateStopped": "에스테이트 중지됨",
+      "agentStops_other": "에이전트 {{count}}개 중지됨",
+      "notEngaged": "작동하지 않음"
+    },
+    "providers": {
+      "label": "키가 있는 프로바이더",
+      "description": "활성 프로바이더 자격 증명 등록입니다. 비밀 값은 절대 읽지 않습니다."
+    },
+    "policy": {
+      "label": "정책 모드",
+      "description": "서명된 모델 허용이 미구성, 관찰 또는 강제 상태인지 보여줍니다.",
+      "unconfigured": "구성되지 않음",
+      "observe": "관찰",
+      "enforce": "강제"
+    }
   },
   "findings": {
     "title": "발견 사항",
@@ -59,10 +102,10 @@
   },
   "safetyPosture": {
     "title": "프로바이더 안전 태세",
-    "description": "프로바이더 자체 제어에서 수집한 읽기 우선 AI 안전 태세입니다 — OpenAI Moderation, AWS Bedrock Guardrails 및 Azure Responsible AI. 플레인은 이를 읽고 기록하며 강제는 프로바이더에 남습니다.",
+    "description": "프로바이더 자체 제어에서 수집한 읽기 우선 AI 안전 태세입니다 — OpenAI Moderation, AWS Bedrock Guardrails 및 Azure Responsible AI. Olivares는 이를 읽고 기록하며 강제는 프로바이더에 남습니다.",
     "empty": "안전 태세 발견 사항 없음",
     "emptyHint": "OpenAI, AWS 또는 Azure 커넥터를 안전 읽기가 활성화된 상태로 연결하여 이 보기를 채우십시오.",
-    "countsPartial": "부분 롤업 표시 중 — 이 테넌트에는 요약 스캔이 다루는 것보다 많은 안전 태세 발견 사항이 있습니다.",
+    "countsPartial": "부분 롤업 표시 중 — 이 조직에는 요약 스캔이 다루는 것보다 많은 안전 태세 발견 사항이 있습니다.",
     "columns": {
       "open": "열림"
     }
@@ -72,13 +115,13 @@
     "description": "서피스에서 가드레일 검사 서비스를 실행합니다. 텍스트는 해시되고 마스킹되며 절대 저장되지 않습니다 — 결과는 판정과 최소한의 이미 마스킹된 증거입니다.",
     "verdictTitle": "판정",
     "clean": "탐지 없음 — 깨끗함.",
-    "detectiveNote": "이 판정은 탐지 플레인에서 나왔습니다: 적발은 탐지되고 기록되었지만 차단되지 않았습니다. 차단은 강제가 활성화되고 거버넌스될 때만 가능합니다.",
+    "detectiveNote": "이 판정은 적발을 기록만 했습니다: 탐지되었지만 차단되지 않았습니다. 차단은 강제가 활성화되고 거버넌스될 때만 가능합니다.",
     "wouldBlock": "차단 예정(강제됨)",
     "detectOnly": "탐지만",
     "findingsRecorded": "발견 사항 {{count}}개 기록됨",
     "findingsRecorded_other": "발견 사항 {{count}}개 기록됨",
     "enforcement": {
-      "detective": "탐지형",
+      "detective": "기록만",
       "enforced": "강제됨"
     },
     "class": {
@@ -107,10 +150,10 @@
   },
   "enforcement": {
     "title": "강제 태세",
-    "description": "프로덕션에 닿는 유일한 작업입니다. 각 가드레일 클래스는 기본적으로 탐지형이며, 인라인 강제 활성화는 관리자 작업이고 게이트가 설정된 곳에서는 거버넌스됩니다.",
-    "defaultDetectiveNote": "기본 플레인은 탐지형입니다: 클래스는 여기서 명시적으로 활성화되고 거버넌스될 때만 차단합니다.",
-    "fullyDetective": "활성화된 강제가 없습니다 — 플레인은 완전히 탐지형이며 안전한 기본값입니다. 아무것도 자체적으로 차단하지 않습니다.",
-    "detective": "탐지형",
+    "description": "프로덕션에 닿는 유일한 작업입니다. 각 가드레일 클래스는 기본적으로 기록만 하며, 인라인 강제 활성화는 관리자 작업이고 게이트가 설정된 곳에서는 거버넌스됩니다.",
+    "defaultDetectiveNote": "기본적으로 아무것도 차단되지 않습니다: 클래스는 여기서 명시적으로 활성화되고 거버넌스될 때만 차단합니다.",
+    "fullyDetective": "활성화된 강제가 없습니다 — 기록만 하며, 규칙을 켜기 전에는 아무것도 차단하지 않습니다.",
+    "detective": "기록만",
     "enforced": "강제됨",
     "governed": "거버넌스됨",
     "ungoverned": "사람 거버넌스 없이 활성화됨",
@@ -126,7 +169,7 @@
     },
     "dialog": {
       "title": "강제 변경",
-      "description": "비활성화(탐지형으로 복귀)는 항상 허용됩니다. 인라인 강제 활성화는 게이트가 설정된 곳에서 거버넌스됩니다 — 거버넌스 거부는 사유로 표시됩니다.",
+      "description": "비활성화(기록만으로 복귀)는 항상 허용됩니다. 인라인 강제 활성화는 게이트가 설정된 곳에서 거버넌스됩니다 — 거버넌스 거부는 사유로 표시됩니다.",
       "enabledLabel": "인라인 강제 활성화",
       "minSeverity": "최소 심각도",
       "reason": "사유",
@@ -202,7 +245,7 @@
   "empty": {
     "enforcement": {
       "title": "구성된 강제 클래스 없음",
-      "description": "가드레일 클래스 태세가 설정된 후에야 행이 나타나며, 그때까지 모든 클래스는 탐지형으로 남고 인라인으로 차단하는 것은 없습니다."
+      "description": "가드레일 클래스 태세가 설정된 후에야 행이 나타나며, 그때까지 모든 클래스는 기록만 하고 인라인으로 차단하는 것은 없습니다."
     },
     "findings": {
       "title": "아직 기록된 보안 발견 사항 없음",

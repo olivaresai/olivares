@@ -198,11 +198,11 @@ func (m *Module) handleSweepBindings(w http.ResponseWriter, r *http.Request, mc 
 }
 
 // resolveBindingExpiry applies the tenant grant_expiry policy to an allow. A
-// forbid is a restriction: a policy default would make it lift itself and a
-// maximum would refuse it, so a forbid keeps only the expiry its writer sent.
+// forbid or a require is a restriction: a policy default would make it lift itself
+// and a maximum would refuse it, so it keeps only the expiry its writer sent.
 func (m *Module) resolveBindingExpiry(ctx context.Context, sc store.Scope, b *bindingDTO) (string, error) {
 	now := m.clock.Now().Time()
-	if normalizeEffect(b.Effect) == effectForbid {
+	if restricts(normalizeEffect(b.Effect)) {
 		return auth.ResolveGrantExpiry(b.ExpiresAt, now, auth.GrantExpiryPolicy{})
 	}
 	return auth.ResolveGrantExpiryForTenant(ctx, sc, b.ExpiresAt, now)

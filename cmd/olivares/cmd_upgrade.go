@@ -175,8 +175,48 @@ func newUpgradeCmd() *cobra.Command {
 	f.BoolVar(&o.connect, "connect", false, "with --enterprise: refresh this data directory's connected credential and download token by proof of possession ('license connect') instead of a pasted token; works when the installed credential has expired. It refreshes only when upgrade runs: a timer runs it on --timer-schedule, not at the credential's refresh planning boundary")
 	f.StringVar(&o.timerDir, "timer-dir", "", "write the systemd units to this directory instead of printing them")
 	f.StringVar(&o.timerSchedule, "timer-schedule", "Sun *-*-* 03:00:00", "systemd OnCalendar expression for the auto-check timer; when omitted, an --enterprise --connect timer runs daily (*-*-* 03:00:00)")
-	f.DurationVar(&o.timeout, "timeout", 5*time.Minute, "overall network timeout")
+	f.DurationVar(&o.timeout, "timeout", upgradeStallDefault, "give up on a transfer that delivers no data for this long; a download that keeps arriving is never cut")
+	cmd.AddCommand(newUpgradeRollbackCmd())
 	return cmd
+}
+
+// applianceRollbackUnit is the Olivares appliance's rollback of its last product update: only a host with that unit
+// has the data snapshot and the kept packages to return to. A variable so a test can stand a fake path in.
+var applianceRollbackUnit = "/usr/lib/systemd/system/olivares-appliance-rollback.service"
+
+// startUnit starts a unit and waits for its job, as systemctl start does for a oneshot unit; the tool's own
+// messages go to standard error.
+var startUnit = func(ctx context.Context, unit string) error {
+	cmd := exec.CommandContext(ctx, "systemctl", "start", unit)
+	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+	return cmd.Run()
+}
+
+func newUpgradeRollbackCmd() *cobra.Command {
+	return &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rollback",
+		Short:       "On the Olivares appliance: return the product to its data and packages before the last update",
+		Long: "rollback starts the appliance's olivares-appliance-rollback.service and waits for it: it restores the\n" +
+			"read-only snapshot of /var/lib/olivares that the last product update took, reinstalls the packages that\n" +
+			"update replaced, and starts the product. Data written since the update is lost. It refuses, before it stops\n" +
+			"anything, when the last package transaction took no snapshot or kept no packages. Run it as root. Only the\n" +
+			"Olivares appliance keeps these restore points (docs/UPGRADE-AND-ROLLBACK.md).",
+		Example:      "  sudo olivares upgrade rollback",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			unit := filepath.Base(applianceRollbackUnit)
+			if _, err := os.Stat(applianceRollbackUnit); err != nil {
+				return exitcode.New(exitcode.Usage, fmt.Errorf("upgrade rollback returns the Olivares appliance to the data snapshot of its last product update, and this host has no %s", unit))
+			}
+			if err := startUnit(cmd.Context(), unit); err != nil {
+				return fmt.Errorf("the rollback did not complete (%v); journalctl -u %s says why", err, unit)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "The product runs with its data and packages from before the last update.")
+			return nil
+		},
+	}
 }
 
 // Actions `upgrade` reports — what the run DID, as distinct from what it FOUND.
@@ -359,8 +399,9 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	out := progressStream(cmd)
 	warnings := []string{}
 
-	ctx, cancel := context.WithTimeout(cmd.Context(), o.timeout)
-	defer cancel()
+	// No total deadline: each request is bounded by --timeout of silence (newUpgradeClient), so a
+	// release that keeps arriving on a slow link installs.
+	ctx := cmd.Context()
 
 	// Resolve the data dir ONCE, the same way serve does (defaultDataDir reads
 	// OLIVARES_DATA_DIR), so the install-id, license lookup and the CRL
@@ -661,7 +702,11 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 			fmt.Fprintf(w, "rollback: remove %s to return to the image's binary\n", filepath.Dir(applied))
 			fmt.Fprint(w, appliedNote(pub, release.EmbeddedKey(), imageVer, m.Version, target, keySrc))
 		} else {
-			fmt.Fprintf(w, "rollback: the previous binary is backed up at %s (restore it to revert)\n", backup)
+			// The swap backs up the binary only. The restart migrates the store, which the previous
+			// binary then refuses, so "restore it" alone leaves an engine that does not start.
+			fmt.Fprintf(w, "rollback: the previous binary is backed up at %s; it does not open a store this release\n"+
+				"      has migrated, so take a DR bundle (olivares dr backup) before the restart and restore it\n"+
+				"      with that binary to revert (see docs/UPGRADE-AND-ROLLBACK.md, section 5).\n", backup)
 		}
 		// These two lines are a pinned contract, not a presentation choice: VER-06
 		// lot L4 compares this pane whole because two mutants deleted the pair and
@@ -698,7 +743,7 @@ func buildUpdateSource(o *upgradeOptions, pub ed25519.PublicKey) (updateSource, 
 	// bytes arrive (docs/RELEASE-VERIFICATION.md) — not TLS. It reaches a public
 	// release endpoint, not the operator's control plane, so the client context
 	// and its pins do not apply and must not be attached to it.
-	client := &http.Client{Timeout: o.timeout}
+	client := newUpgradeClient(o.timeout)
 	if o.enterprise {
 		// The gated download is the self-serve counterpart to a live license — refuse
 		// locally with the next step rather than fetch and be rejected by the worker.
@@ -737,7 +782,8 @@ func buildUpdateSource(o *upgradeOptions, pub ed25519.PublicKey) (updateSource, 
 		// than the public one, not looser — no redirect at all (refuseGatedRedirect), so no
 		// second authenticated request is ever issued — and the gated tests hold that policy
 		// on the exact same code path this client feeds.
-		gated := &http.Client{Timeout: o.timeout, CheckRedirect: refuseGatedRedirect}
+		gated := newUpgradeClient(o.timeout)
+		gated.CheckRedirect = refuseGatedRedirect
 		return &gatedSource{o: o, client: gated, pub: pub}, nil, nil
 	}
 	base := o.endpoint
@@ -1475,7 +1521,7 @@ func gatedGet(
 	req.Header.Set("Authorization", "Bearer "+token)
 	// The redirect policy is a property of the REQUEST CLASS, not of whichever client a caller
 	// happened to build: every gated request goes out through a copy of the caller's client
-	// (same transport, timeout and TLS settings) that refuses to follow any redirect.
+	// (same transport, stall bound and TLS settings) that refuses to follow any redirect.
 	gated := *client
 	gated.CheckRedirect = refuseGatedRedirect
 	resp, err := gated.Do(req)

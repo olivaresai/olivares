@@ -78,22 +78,22 @@ func TestMCPManagementProbeGuardsEveryCredentialedResponse(t *testing.T) {
 	for _, tc := range []struct {
 		name, header, echo, at string
 		escaped, sse, rpcError bool
-		wantCalls              int
+		wantCalls              int // counts the server/discover probe sent before initialize
 	}{
-		{name: "basic_literal_password_name", header: basic, echo: password, at: "tools/list", wantCalls: 3},
-		{name: "basic_escaped_password_name", header: basic, echo: password, at: "tools/list", escaped: true, wantCalls: 3},
-		{name: "basic_header_initialize", header: basic, echo: basic, at: "initialize", wantCalls: 1},
-		{name: "basic_pair_error_initialize", header: basic, echo: pair, at: "initialize", escaped: true, rpcError: true, wantCalls: 1},
-		{name: "basic_payload_second_page", header: basic, echo: payload, at: "second_page", wantCalls: 4},
-		{name: "basic_pair_sse_description", header: basic, echo: pair, at: "tools/list", escaped: true, sse: true, wantCalls: 3},
-		{name: "basic_password_sse_error_data", header: basic, echo: password, at: "tools/list", escaped: true, sse: true, rpcError: true, wantCalls: 3},
-		{name: "basic_password_notification", header: basic, echo: password, at: "notifications/initialized", escaped: true, wantCalls: 2},
-		{name: "bearer_token_initialize", header: "Bearer k8P2n5T9q4R7", echo: "k8P2n5T9q4R7", at: "initialize", wantCalls: 1},
-		{name: "bearer_header_description", header: "Bearer k8P2n5T9q4R7", echo: "Bearer k8P2n5T9q4R7", at: "tools/list", wantCalls: 3},
-		{name: "opaque_token_name", header: "t4J8m2R9n6P3", echo: "t4J8m2R9n6P3", at: "tools/list", wantCalls: 3},
-		{name: "healthy_basic_eight_bytes", header: basic, wantCalls: 3},
-		{name: "healthy_bearer", header: "Bearer k8P2n5T9q4R7", wantCalls: 3},
-		{name: "healthy_without_credential", wantCalls: 3},
+		{name: "basic_literal_password_name", header: basic, echo: password, at: "tools/list", wantCalls: 4},
+		{name: "basic_escaped_password_name", header: basic, echo: password, at: "tools/list", escaped: true, wantCalls: 4},
+		{name: "basic_header_initialize", header: basic, echo: basic, at: "initialize", wantCalls: 2},
+		{name: "basic_pair_error_initialize", header: basic, echo: pair, at: "initialize", escaped: true, rpcError: true, wantCalls: 2},
+		{name: "basic_payload_second_page", header: basic, echo: payload, at: "second_page", wantCalls: 5},
+		{name: "basic_pair_sse_description", header: basic, echo: pair, at: "tools/list", escaped: true, sse: true, wantCalls: 4},
+		{name: "basic_password_sse_error_data", header: basic, echo: password, at: "tools/list", escaped: true, sse: true, rpcError: true, wantCalls: 4},
+		{name: "basic_password_notification", header: basic, echo: password, at: "notifications/initialized", escaped: true, wantCalls: 3},
+		{name: "bearer_token_initialize", header: "Bearer k8P2n5T9q4R7", echo: "k8P2n5T9q4R7", at: "initialize", wantCalls: 2},
+		{name: "bearer_header_description", header: "Bearer k8P2n5T9q4R7", echo: "Bearer k8P2n5T9q4R7", at: "tools/list", wantCalls: 4},
+		{name: "opaque_token_name", header: "t4J8m2R9n6P3", echo: "t4J8m2R9n6P3", at: "tools/list", wantCalls: 4},
+		{name: "healthy_basic_eight_bytes", header: basic, wantCalls: 4},
+		{name: "healthy_bearer", header: "Bearer k8P2n5T9q4R7", wantCalls: 4},
+		{name: "healthy_without_credential", wantCalls: 4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, f, p := mcpManagementFixture(t)
@@ -135,7 +135,7 @@ func TestMCPManagementProbeGuardsEveryCredentialedResponse(t *testing.T) {
 				result := `{"tools":[{"name":"search","description":"healthy prose, password=abc","inputSchema":{"type":"object"}}]}`
 				if req.Method == "initialize" {
 					result = `{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"fixture","version":"1"}}`
-				} else if req.Method != "tools/list" {
+				} else if req.Method != "tools/list" && req.Method != "server/discover" {
 					t.Error("probe attempted an operation beyond discovery")
 				}
 				if tc.at == "second_page" && req.Method == "tools/list" && lists == 1 {

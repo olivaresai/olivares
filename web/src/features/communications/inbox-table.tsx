@@ -66,12 +66,15 @@ export function InboxTable({
   canDeliveryWrite = false,
   me,
   onOpenDelivery,
+  onShowChannels,
 }: {
   scope: CommunicationsScope
   canDeliveryRead: boolean
   canDeliveryWrite?: boolean
   me?: Me
   onOpenDelivery: (deliveryId: string) => void
+  /** Where a message is sent from. Offered only to someone who can read channels. */
+  onShowChannels?: () => void
 }) {
   const { t, i18n } = useTranslation('communications')
   const idp = useId()
@@ -426,6 +429,13 @@ export function InboxTable({
             icon={<Inbox />}
             title={t('inbox.emptyTitle')}
             description={t('inbox.emptyBody')}
+            action={
+              onShowChannels ? (
+                <Button variant="outline" size="sm" onClick={onShowChannels}>
+                  {t('inbox.showChannels')}
+                </Button>
+              ) : undefined
+            }
           />
         }
       />

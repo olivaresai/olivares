@@ -1,0 +1,204 @@
+{
+  "truncation": {
+    "label": "Carregadas {{n}} linhas; há mais",
+    "hint": "Esta lista tem um limite. Só são mostradas as linhas carregadas; a ausência aqui não prova que um registo de avaliação não exista."
+  },
+  "title": "Avaliações",
+  "description": "Quadros de pontuação, resultados de execuções, comparações A/B e desvio — medidos com suites de referência versionadas. As saídas nunca são guardadas; apenas pontuações e impressões digitais de hash.",
+  "forbidden": {
+    "title": "Não autorizado",
+    "description": "Precisa da permissão de leitura de avaliações para ver as medições de qualidade."
+  },
+  "tabs": {
+    "scorecards": "Quadros de pontuação",
+    "runs": "Execuções",
+    "ab": "A/B",
+    "drift": "Desvio",
+    "gate": "Barreira de CI",
+    "calibration": "Calibração do avaliador"
+  },
+  "subjectKind": {
+    "suite": "Suite",
+    "agent": "Agente",
+    "model": "Modelo",
+    "prompt_variant": "Variante de prompt",
+    "prompt": "Prompt",
+    "session": "Sessão",
+    "sandbox_run": "Execução em sandbox"
+  },
+  "scorecards": {
+    "title": "Quadros de pontuação de qualidade",
+    "description": "Pontuação média, taxa de aprovação e tendência por sujeito, agregadas na leitura.",
+    "groupBy": "Agrupar por",
+    "by": {
+      "agent": "Por agente",
+      "model": "Por modelo",
+      "suite": "Por suite",
+      "prompt_variant": "Por variante de prompt"
+    },
+    "meanScore": "Pontuação média",
+    "passRate": "Taxa de aprovação",
+    "runs": "Execuções",
+    "lastScore": "Última pontuação",
+    "regressed": "Em regressão",
+    "empty": "Ainda não há quadros de pontuação — execute uma avaliação com uma suite de referência.",
+    "emptyHint": "Um quadro de pontuação resume como um modelo pontuou nos casos de uma suite. Execute uma avaliação com uma suite de referência para produzir um."
+  },
+  "runs": {
+    "title": "Execuções de avaliação",
+    "description": "Cada execução pontua um sujeito face a uma versão de suite. Uma regressão é assinalada aqui; a deteção é tratada pela vista de segurança.",
+    "columns": {
+      "subject": "Sujeito",
+      "status": "Estado",
+      "score": "Pontuação",
+      "passRate": "Taxa de aprovação",
+      "regression": "Regressão",
+      "startedAt": "Iniciada"
+    },
+    "regressed": "Em regressão · desvio {{drift}}",
+    "withinNoise": "Queda dentro do ruído · desvio {{drift}}",
+    "passRateDiff": "Queda da taxa de aprovação {{drop}} (IC 95% {{lo}}–{{hi}}) — {{passed}}/{{n}} pontuados face a {{baselinePassed}}/{{baselineN}} de base",
+    "noRegression": "Nenhuma",
+    "empty": "Sem execuções no intervalo.",
+    "emptyHint": "Todas as execuções de avaliação do intervalo selecionado são listadas aqui com a respetiva pontuação. Alargue o intervalo ou inicie uma execução.",
+    "overN": "em {{n}}",
+    "notScored": "não pontuada — sem veredicto",
+    "noBaseline": "sem base — nada comparado"
+  },
+  "cases": {
+    "title": "{{subject}} — resultados dos casos",
+    "titleEmpty": "Resultados dos casos",
+    "description": "Resultado e pontuação de cada caso desta execução.",
+    "noPayload": "O resultado do candidato nunca é guardado — cada caso traz apenas uma impressão digital unidirecional e uma etiqueta curta e truncada, nunca um conteúdo expansível.",
+    "fingerprint": "fp",
+    "columns": {
+      "case": "Caso",
+      "outcome": "Resultado",
+      "score": "Pontuação",
+      "label": "Etiqueta",
+      "fingerprint": "Impressão digital"
+    },
+    "empty": "Sem resultados de casos para esta execução.",
+    "emptyHint": "Cada caso da suite é listado aqui com o veredicto do avaliador. Esta execução não registou resultados de casos."
+  },
+  "ab": {
+    "title": "Comparação A/B",
+    "description": "Duas variantes de prompt pontuadas com a mesma suite; ganha a pontuação mais alta e os empates são explícitos.",
+    "winner": "Vencedora: {{label}} · Δ {{delta}}",
+    "winnerTag": "Vencedora",
+    "tie": "Empate",
+    "passRate": "Taxa de aprovação {{value}}",
+    "seamNote": "Uma comparação A/B é uma escrita privilegiada através de POST /ab; o motor não expõe nenhuma comparação guardada para voltar a ler.",
+    "seamLabel": "Escrita privilegiada",
+    "pickerTitle": "Executar uma comparação A/B",
+    "pickerDescription": "Escolha a suite e depois indique os resultados candidatos que cada variante produziu.",
+    "runComparison": "Executar comparação",
+    "runError": "Não foi possível executar a comparação A/B. Tente novamente.",
+    "empty": "Nenhuma comparação A/B foi executada nesta sessão.",
+    "emptyDescription": "Um resultado só aparece depois de a escrita privilegiada POST /ab terminar. Não existe um endpoint GET para uma comparação guardada.",
+    "suiteLabel": "Suite",
+    "selectSuite": "Selecione uma suite",
+    "noSuites": "Ainda não há suites. Uma comparação é pontuada com os casos de uma suite, pelo que tem de criar uma primeiro.",
+    "noSuitesHint": "Uma comparação é pontuada com os casos de uma suite, pelo que uma suite tem de existir primeiro. Crie uma no separador Suites.",
+    "labelA": "Etiqueta da variante A",
+    "labelB": "Etiqueta da variante B",
+    "outputsA": "Resultados da variante A",
+    "outputsB": "Resultados da variante B",
+    "outputsHint": "Objeto JSON que associa case_key ao resultado que essa variante produziu. O motor pontua-os e guarda apenas um hash — o texto nunca é guardado.",
+    "outputsInvalid": "Não é um objeto JSON que associe case_key ao texto do resultado.",
+    "outputsEmpty": "Indique pelo menos um resultado de caso. Um conjunto vazio não pontua nada e seria guardado como uma execução sem resultado.",
+    "pairwiseLabel": "Avaliar também as variantes frente a frente",
+    "pairwiseHint": "Avalia cada caso partilhado duas vezes, trocando a ordem dos dois candidatos, e só conta uma vitória quando ambas as ordens coincidem. Duas chamadas ao avaliador por caso (faturáveis) e a suite tem de ter um critério.",
+    "pairwiseTitle": "Avaliado frente a frente",
+    "pairwiseSkippedTag": "Ignorada",
+    "pairwiseWinner": "Vencedora avaliada: {{label}}",
+    "pairwiseCounts": "{{compared}} comparados · {{aWins}} A · {{bWins}} B · {{ties}} empates · {{inconsistent}} inconsistentes na ordem · {{errors}} erros",
+    "pairwiseConsistency": "Consistência de posição {{rate}} (n={{n}}, IC 95% {{lo}}–{{hi}})",
+    "outputsTooLong": "Uma chave de caso deve ter no máximo {{maxKey}} carateres e um resultado no máximo {{maxOutput}}. O motor trunca os valores mais longos e pontua o texto truncado.",
+    "outputsPlaceholder": "{\"case-1\": \"o resultado que essa variante produziu\"}",
+    "pairwiseSkippedBody": "O motor não executou a comparação avaliada. O motivo:"
+  },
+  "drift": {
+    "title": "Desvio — {{subject}}",
+    "description": "Pontuação ao longo do tempo face ao limiar de aprovação da suite. A regressão é uma comparação com uma execução de base: a queda de pontuação tem de ultrapassar o limiar da suite e o intervalo de 95% da diferença da taxa de aprovação tem de excluir o zero. Essa execução pode usar outra versão da suite, outro modelo ou outro avaliador, e a comparação não indica o que mudou. Após uma alteração de versão da suite, fixe uma base.",
+    "score": "Pontuação",
+    "threshold": "Limiar de aprovação",
+    "pickerTitle": "Sujeito",
+    "note": "A linha do limiar é o limiar de aprovação da suite; os pontos abaixo dela não cumpriram o critério nesse momento.",
+    "empty": "Ainda não há dados de tendência.",
+    "emptyHint": "O desvio compara as pontuações recentes de um modelo com o seu próprio histórico. Duas ou mais execuções da mesma suite produzem a primeira tendência."
+  },
+  "outcomeBar": {
+    "passed": "Aprovados",
+    "failed": "Reprovados",
+    "errors": "Erros",
+    "skipped": "Ignorados"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "Nenhum resultado de caso registado para esta execução",
+      "description": "A execução tem de pontuar ou ignorar casos da suite selecionada antes de os resultados, as pontuações e as impressões digitais de cada caso aparecerem aqui."
+    },
+    "runs": {
+      "title": "Ainda não há execuções de avaliação registadas",
+      "description": "Um chamador tem de submeter resultados candidatos a uma suite de referência versionada através da API de execução de avaliações antes de uma execução pontuada aparecer aqui."
+    }
+  },
+  "gate": {
+    "title": "Barreira de CI",
+    "description": "Avaliações da barreira de regressão: o que a barreira mediu e em que o CI tem de atuar.",
+    "empty": "Sem avaliações da barreira",
+    "emptyHint": "Uma avaliação da barreira decide se um candidato pode ser lançado. Execute uma avaliação com uma suite com barreira para registar uma.",
+    "measured": "medido {{verdict}}",
+    "effective": "O CI atua com base em {{verdict}}",
+    "sampled": "{{sampled}} de {{total}} casos amostrados",
+    "overriddenBy": "substituída por {{actor}}",
+    "override": "Substituir",
+    "overrideTitle": "Substituir uma barreira {{verdict}}",
+    "overrideDescription": "É obrigatório um motivo escrito. É registado junto do veredicto original, na linha e no registo de evidências.",
+    "reason": "Motivo",
+    "reasonHint": "Porque é que esta barreira está a ser substituída. O veredicto original não é apagado.",
+    "confirmOverride": "Substituir barreira",
+    "overrideDone": "Barreira substituída",
+    "cancel": "Cancelar",
+    "correctedRate": "Taxa de aprovação corrigida do enviesamento {{rate}} (sensibilidade do avaliador {{sens}}, especificidade {{spec}}) — mostrada a par da taxa bruta, nunca em vez dela.",
+    "noCorrection": "Sem estimativa corrigida do enviesamento: não há uma calibração fiável com que corrigir, pelo que a taxa bruta não está ajustada — isso não é o mesmo que as duas coincidirem."
+  },
+  "calibration": {
+    "title": "Calibração do avaliador",
+    "description": "Até que ponto o avaliador LLM concorda com as etiquetas humanas. Um conjunto que não consegue medir a concordância corrigida do acaso não consegue certificar nada.",
+    "empty": "Sem relatórios de calibração",
+    "emptyHint": "Um relatório de calibração compara as pontuações do avaliador com etiquetas humanas. Execute uma calibração para produzir um.",
+    "meets": "cumpre o objetivo",
+    "below": "abaixo do objetivo",
+    "cannotCertify": "não é possível certificar — kappa indefinido",
+    "agreement": "Concordância",
+    "kappa": "Kappa",
+    "sensitivity": "Sensibilidade",
+    "specificity": "Especificidade",
+    "ciOverN": "IC 95% {{lo}}–{{hi}} em n={{n}}",
+    "degradedWithErrors": "degradado · {{n}} com erro",
+    "verbosityCorr": "Corr. de verbosidade"
+  },
+  "calibItems": {
+    "title": "Conjunto de referência",
+    "description": "As etiquetas humanas com que o avaliador é medido — e a razão pela qual um relatório pode ou não certificar.",
+    "run": "Executar calibração",
+    "empty": "Ainda não há itens etiquetados",
+    "emptyHint": "Os itens etiquetados são os juízos humanos com que um relatório de calibração é pontuado. Etiquete um caso para adicionar o primeiro.",
+    "distribution": "{{pass}} etiquetados como aprovados · {{fail}} etiquetados como reprovados",
+    "degenerate": "⛔ Todas as etiquetas são iguais, pelo que o kappa NÃO PODE ser calculado e nenhum relatório deste conjunto pode certificar. Etiquete casos do outro tipo.",
+    "humanPass": "humano: aprovado",
+    "humanFail": "humano: reprovado",
+    "unscored": "sem pontuação",
+    "noJudge": "Não há nenhum avaliador configurado, pelo que não há nada para medir. Não se trata de uma indisponibilidade nem de um limite de edição: uma calibração não pode ser simulada."
+  },
+  "baseline": {
+    "pin": "Fixar como base",
+    "confirm": "Substituir a base",
+    "pinned": "Base fixada",
+    "replaceWarning": "⛔ Existe UMA base por suite e sujeito, e é mutável. Fixar não adiciona — SUBSTITUI a que for atualmente a base de {{suite}} / {{subject}}. Todas as regressões futuras são medidas face a ela.",
+    "thisRunScores": "Esta execução obteve aprovação de {{score}} em n={{n}}.",
+    "cannotShowCurrent": "A consola não consegue mostrar o que isto substitui: POST /baselines é a única rota que o motor expõe, e a referência anterior fica registada na autoauditoria e não num endpoint legível. Fixar uma execução PIOR baixa a fasquia, que é como uma barreira de qualidade deixa de atuar sem que ninguém a desative."
+  }
+}

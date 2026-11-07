@@ -5,8 +5,11 @@
 // THE NAME OF A MODEL, said one way wherever the console says it: "Claude Opus 5.5",
 // never "claude-opus-5-5" cut to "clau…". The tool's own catalog names its models
 // (GET /provider-profiles/{ref}/models, `display_name`) and wins wherever it was read.
-// Elsewhere (a header, a card, a row) the id is put in words by one rule; nothing here
+// A model absent from the profile catalog is put in words by one rule; nothing here
 // lists a model. The id itself stays on the hover, in the CLI and in the API.
+// Some tools write the id behind its vendor ("anthropic/claude-sonnet-5-5"): the vendor
+// is not part of the model's name.
+import { findModel } from './model-catalog'
 import type { ProfileModelDTO } from './types'
 
 /** Words written in capitals in the vendors' own names. */
@@ -18,6 +21,9 @@ const READABLE = /^[a-z][a-z0-9.]*(-[a-z0-9.]+)*$/
 /** A release date the vendor appends to a pinned id ("-20250929", "-2024-08-06"). */
 const DATE_SUFFIX = /-(\d{8}|\d{4}-\d{2}-\d{2})$/
 
+/** The vendor some tools put before the id ("anthropic/", "openai/"). */
+const VENDOR = /^[a-z][a-z0-9-]*\//
+
 /** A variant the tool appends in brackets ("claude-sonnet-5-5[1m]", the 1M context). */
 const VARIANT = /\[([a-z0-9]+)\]$/i
 
@@ -27,12 +33,17 @@ const VARIANT = /\[([a-z0-9]+)\]$/i
  */
 export function modelName(
   id: string,
-  listed?: readonly Pick<ProfileModelDTO, 'id' | 'display_name'>[],
+  listed?: readonly Pick<
+    ProfileModelDTO,
+    'id' | 'display_name' | 'launch_model'
+  >[],
 ): string {
-  const named = listed?.find((m) => m.id === id)?.display_name?.trim()
+  const entry = findModel(listed ? { models: listed } : undefined, id)
+  const named = entry?.display_name?.trim()
   if (named) return named
-  const variant = VARIANT.exec(id)
-  const base = variant ? id.slice(0, variant.index) : id
+  const bare = id.replace(VENDOR, '')
+  const variant = VARIANT.exec(bare)
+  const base = variant ? bare.slice(0, variant.index) : bare
   if (!READABLE.test(base)) return id
   const words: string[] = []
   for (const part of base.replace(DATE_SUFFIX, '').split('-')) {

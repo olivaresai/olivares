@@ -6,6 +6,7 @@ package api
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/go-chi/chi/v5"
 
@@ -21,15 +22,16 @@ import (
 // deliberately NO "last access" field: the platform tracks no per-user login
 // timestamp, so the roster never fabricates one.
 type rosterMemberDTO struct {
-	UserID       string   `json:"user_id"`
-	Email        string   `json:"email"`
-	DisplayName  string   `json:"display_name,omitempty"`
-	Status       string   `json:"status"`
-	ExternalID   string   `json:"external_id,omitempty"`
-	SSOOnly      bool     `json:"sso_only"`
-	Role         string   `json:"role"`
-	WorkspaceIDs []string `json:"workspace_ids,omitempty"`
-	Groups       []string `json:"groups,omitempty"`
+	SecondFactorEnrolled *bool    `json:"second_factor_enrolled,omitempty"`
+	UserID               string   `json:"user_id"`
+	Email                string   `json:"email"`
+	DisplayName          string   `json:"display_name,omitempty"`
+	Status               string   `json:"status"`
+	ExternalID           string   `json:"external_id,omitempty"`
+	SSOOnly              bool     `json:"sso_only"`
+	Role                 string   `json:"role"`
+	WorkspaceIDs         []string `json:"workspace_ids,omitempty"`
+	Groups               []string `json:"groups,omitempty"`
 }
 
 func toRosterMemberDTO(m auth.RosterMember) rosterMemberDTO {
@@ -57,8 +59,8 @@ func toRosterMemberDTO(m auth.RosterMember) rosterMemberDTO {
 // (user:read) and tenant-scoped — authzTenant resolves and authorizes the caller's
 // single bound tenant, and TenantRoster returns ONLY that tenant's members (the
 // isolation is the target_tenant_id filter, deny-closed by construction, so no
-// cross-tenant roster is ever reachable). The set is bounded and returned complete
-// (no paging), mirroring the SCIM member set.
+// cross-tenant roster is ever reachable). Enrollment reads run only for the
+// requested page, after tenant and workspace filtering.
 func (s *Server) handleListMembers(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	p := mc.Principal
 	tenant := mc.Tenant
@@ -74,9 +76,43 @@ func (s *Server) handleListMembers(w http.ResponseWriter, r *http.Request, mc Mo
 	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined {
 		roster = filterRosterToWorkspace(roster, confinedWS)
 	}
-	out := listResponse[rosterMemberDTO]{Items: make([]rosterMemberDTO, 0, len(roster))}
+	// Existing roster consumers expect a complete list. The enrollment read
+	// explicitly opts into bounded pagination; ordinary roster reads stay unchanged.
+	if r.URL.Query().Get("include_second_factors") != "true" {
+		out := listResponse[rosterMemberDTO]{Items: make([]rosterMemberDTO, 0, len(roster))}
+		for _, m := range roster {
+			out.Items = append(out.Items, toRosterMemberDTO(m))
+		}
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	q := parseListQuery(r, stableListDefaultLimit)
+	if q.Limit <= 0 {
+		q.Limit = stableListDefaultLimit
+	}
+	if q.Limit > 1000 {
+		q.Limit = 1000
+	}
+	sort.Slice(roster, func(i, j int) bool { return roster[i].User.ID < roster[j].User.ID })
+	start := sort.Search(len(roster), func(i int) bool { return roster[i].User.ID.String() > q.Cursor })
+	roster = roster[start:]
+	more := len(roster) > q.Limit
+	if more {
+		roster = roster[:q.Limit]
+	}
+	out := listResponse[rosterMemberDTO]{HasMore: more, Items: make([]rosterMemberDTO, 0, len(roster))}
 	for _, m := range roster {
-		out.Items = append(out.Items, toRosterMemberDTO(m))
+		enrolled, err := s.authr.SecondFactorEnrolledInTenant(r.Context(), tenant, m.User.ID)
+		if err != nil {
+			s.writeError(w, r, err)
+			return
+		}
+		dto := toRosterMemberDTO(m)
+		dto.SecondFactorEnrolled = &enrolled
+		out.Items = append(out.Items, dto)
+	}
+	if more {
+		out.Cursor = roster[len(roster)-1].User.ID.String()
 	}
 	writeJSON(w, http.StatusOK, out)
 }

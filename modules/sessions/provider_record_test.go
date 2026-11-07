@@ -9,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -512,8 +514,90 @@ func TestRecordServesDriver(t *testing.T) {
 		{ProviderKindOpenAI, "some-future-driver", false},
 	}
 	for _, tc := range cases {
-		if got := recordServesDriver(tc.kind, "", tc.driver); got != tc.want {
+		if got := recordServesDriver(tc.kind, "", "", tc.driver); got != tc.want {
 			t.Fatalf("recordServesDriver(%q, %q) = %v, want %v", tc.kind, tc.driver, got, tc.want)
+		}
+	}
+}
+
+// The governed DeepSeek preset is API-only: it serves no native session. A record of it at
+// the catalog address must not count as serving OpenCode, or the automatic choice picks it
+// (oldest first) over a working local server, and over a preset key that could run.
+func TestOpenCodeNeverPicksTheGovernedDeepSeekRecord(t *testing.T) {
+	t.Parallel()
+	row := func(service string) ProviderRecord {
+		p, ok := modelprovider.LookupPreset(service)
+		if !ok {
+			t.Fatalf("no preset %q", service)
+		}
+		return ProviderRecord{State: ProviderRecordActive, Kind: p.Kind, BaseURL: p.BaseURL, Service: service}
+	}
+	governed := row(modelprovider.ServiceDeepSeek)
+	if recordServesDriver(governed.Kind, governed.BaseURL, governed.Service, providerDriverOpenCode) {
+		t.Fatal("a governed DeepSeek record serves OpenCode")
+	}
+	// Untagged, the same address is an ordinary key record and still runs OpenCode.
+	if !recordServesDriver(governed.Kind, governed.BaseURL, "", providerDriverOpenCode) {
+		t.Fatal("an untagged record at the DeepSeek address no longer serves OpenCode")
+	}
+	local := ProviderRecord{State: ProviderRecordActive, Kind: ProviderKindOpenAICompatible, BaseURL: "http://127.0.0.1:8080/v1"}
+	openrouter := row("openrouter")
+	for _, want := range []ProviderRecord{local, openrouter} {
+		got := pickRecord(providerDriverOpenCode, resolveTool{}, []ProviderRecord{governed, want})
+		if got == nil || got.BaseURL != want.BaseURL {
+			t.Fatalf("pickRecord over an older governed record and %q = %+v", want.BaseURL, got)
+		}
+	}
+	if got := pickRecord(providerDriverOpenCode, resolveTool{}, []ProviderRecord{governed}); got != nil {
+		t.Fatalf("pickRecord over only a governed record = %+v, want none", got)
+	}
+}
+
+// Codex speaks only the Responses API. A preset whose vendor documents Chat
+// Completions alone is refused with one sentence, in the rule that binds, resolves and
+// launches and in the tools table the console reads; a preset that serves Responses and
+// a custom openai_compatible record (no preset) still bind.
+func TestCodexBindsAPresetOnlyWhereItServesResponses(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		service, title string
+		want           bool
+	}{
+		{"", "", true},
+		{"openrouter", "OpenRouter", true},
+		{"moonshot", "Moonshot", true},
+		{"mistral", "Mistral", true},
+		{"zai", "Z.ai", false},
+		{"deepseek", "DeepSeek", false},
+	}
+	for _, tc := range cases {
+		row, _ := modelprovider.LookupPreset(tc.service)
+		base := row.BaseURL
+		if tc.service == "" {
+			base = "https://gateway.example/v1"
+		}
+		if row.Title != tc.title {
+			t.Fatalf("preset %q is titled %q, the case expects %q", tc.service, row.Title, tc.title)
+		}
+		if got := recordServesDriver(ProviderKindOpenAICompatible, base, tc.service, providerDriverCodex); got != tc.want {
+			t.Fatalf("recordServesDriver(openai_compatible, %q, codex) = %v, want %v", tc.service, got, tc.want)
+		}
+		if !tc.want {
+			const sentence = "Codex needs the Responses API; %s offers Chat Completions. Use OpenCode or Claude Code."
+			if got := recordDriverRefusal(providerDriverCodex, "my key", ProviderKindOpenAICompatible, tc.service); got != fmt.Sprintf(sentence, tc.title) {
+				t.Fatalf("refusal for %q = %q", tc.service, got)
+			}
+		}
+	}
+	for _, row := range toolsAnswer(t)["tools"].([]any) {
+		tool := row.(map[string]any)
+		refused, _ := tool["refused_services"].([]any)
+		if tool["key"] == providerDriverCodex {
+			if !reflect.DeepEqual(refused, []any{"deepseek", "zai"}) {
+				t.Fatalf("codex refused_services = %v, want [deepseek zai]", refused)
+			}
+		} else if len(refused) != 0 {
+			t.Fatalf("%v refused_services = %v, want none", tool["key"], refused)
 		}
 	}
 }

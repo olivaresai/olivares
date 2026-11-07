@@ -157,9 +157,15 @@ async function openIt() {
 describe('SessionTerminal', () => {
   it('starts nothing until a person asks', () => {
     render(<SessionTerminal workspaceRef="ws_1" />)
-    expect(
-      screen.getByRole('button', { name: 'Open terminal' }),
-    ).toBeInTheDocument()
+    const open = screen.getByRole('button', { name: 'Open terminal' })
+    // The empty tab is its one action; what the shell is, is that action's hover.
+    expect(screen.getByTestId('session-terminal').textContent).toBe(
+      'Open terminal',
+    )
+    expect(open).toHaveAttribute(
+      'title',
+      expect.stringContaining('each command line you type is recorded'),
+    )
     expect(agentOpsApi.startTerminal).not.toHaveBeenCalled()
     expect(streams).toBe(0)
     expect(xterm.terms).toHaveLength(0)

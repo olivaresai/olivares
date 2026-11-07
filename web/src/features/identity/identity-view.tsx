@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useNavigate } from '@tanstack/react-router'
 import { Fingerprint } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useState } from 'react'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { useAuth } from '@/lib/auth/context'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
@@ -17,7 +18,7 @@ import { PeopleTab } from '@/features/console/people-tab'
 import { RolesTab } from '@/features/console/roles-tab'
 import { SSOTab } from '@/features/console/sso-tab'
 import '@/features/console/i18n'
-import { RecordingNotice } from '@/features/recordings/recording-notice'
+import { RecordingNoticeSlot } from '@/features/recording-notice-slot'
 import { FederationTab } from './federation'
 import { McpAuthTab } from './mcp-auth'
 import { NhiRosterTab } from './nhi-roster'
@@ -43,20 +44,8 @@ const GROUPS: readonly { id: string; tabs: readonly TabKey[] }[] = [
   { id: 'machines', tabs: ['inventory', 'mcp', 'apiKeys'] },
 ]
 
-function initialTab(available: readonly TabKey[]): TabKey {
-  const fallback: TabKey = available.includes('people')
-    ? 'people'
-    : 'federation'
-  if (typeof window === 'undefined') return fallback
-  const want = new URLSearchParams(window.location.search).get('tab')
-  return want && (available as readonly string[]).includes(want)
-    ? (want as TabKey)
-    : fallback
-}
-
 export default function IdentityView() {
   const { t } = useTranslation(['identity', 'console'])
-  const navigate = useNavigate()
   const { can } = useAuth()
   const admin = can(ADMIN_PERMISSION)
   const panels = useOfferedPanels(PANEL_EXTENSIONS.identityTabs)
@@ -76,12 +65,11 @@ export default function IdentityView() {
     }
   }
   const available = groups.flatMap((g) => g.tabs)
-  const [tab, setTabState] = useState<TabKey>(() => initialTab(available))
-  const selectedTab = available.includes(tab) ? tab : initialTab(available)
-  const pendingTab = useRef<TabKey | null>(null)
-  useEffect(() => {
-    pendingTab.current = null
-  }, [selectedTab])
+  // The people tab is first where the principal may administer; otherwise the sign-in
+  // federation tab. An unknown or no longer offered `?tab=` falls back to it.
+  const [selectedTab, setTab] = useTabParam(available, {
+    fallback: available.includes('people') ? 'people' : 'federation',
+  })
   // A vertical section list beside the work at `lg` (Up/Down move between sections), a
   // scrolling strip below it (Left/Right): the orientation decides the arrow keys.
   const wide = useMinWidth(1024)
@@ -94,20 +82,6 @@ export default function IdentityView() {
     setTab('people')
     setInviteRequested(true)
   })
-
-  function setTab(value: TabKey) {
-    if (value === selectedTab || value === pendingTab.current) return
-    // Radix focus and mouse-down can request the same tab before state commits.
-    pendingTab.current = value
-    setTabState(value)
-    // `replace`, not push: the section is a facet of this screen, and preserving the
-    // other params keeps a link from the access map intact.
-    void navigate({
-      search: (prev: Record<string, unknown>) => ({ ...prev, tab: value }),
-      replace: true,
-      resetScroll: false,
-    } as never)
-  }
 
   const label = (key: TabKey) =>
     panels.find((p) => p.id === key)?.label() ??
@@ -127,11 +101,21 @@ export default function IdentityView() {
         title={t('identity:title')}
         description={t('identity:subtitle')}
         icon={Fingerprint}
+        notices={
+          admin ? undefined : (
+            <p
+              data-slot="read-only-notice"
+              className="text-caption text-muted-foreground"
+            >
+              {t('identity:ownSignInOnly')}
+            </p>
+          )
+        }
       />
-      <RecordingNotice namespace="identity" />
+      <RecordingNoticeSlot namespace="identity" />
       <Tabs
         value={selectedTab}
-        onValueChange={(v) => setTab(v as TabKey)}
+        onValueChange={setTab}
         orientation={wide ? 'vertical' : 'horizontal'}
         className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-8"
       >
@@ -139,17 +123,13 @@ export default function IdentityView() {
           aria-label={t('identity:sections')}
           className="min-w-0 lg:sticky lg:top-0 lg:w-56 lg:shrink-0"
         >
+          {/* The groups are told apart by space alone: a label above them read as an
+              eyebrow and repeated its first section ("People" over People). */}
           {groups.map((group, i) => (
             <Fragment key={group.id}>
-              <span
-                role="presentation"
-                className={
-                  'hidden px-2 pb-1 text-overline font-medium tracking-[0.06em] text-text-3 uppercase lg:block' +
-                  (i > 0 ? ' lg:mt-3' : '')
-                }
-              >
-                {t(`identity:groups.${group.id}`)}
-              </span>
+              {i > 0 ? (
+                <span role="presentation" className="hidden h-3 lg:block" />
+              ) : null}
               {group.tabs.map((key) => (
                 <TabsTrigger key={key} value={key}>
                   {label(key)}
@@ -191,7 +171,9 @@ export default function IdentityView() {
 
           {panels.map(({ id, Component }) => (
             <TabsContent key={id} value={id} className="pt-0">
-              <Component />
+              <PanelSlot>
+                <Component />
+              </PanelSlot>
             </TabsContent>
           ))}
           <TabsContent value="login" className="pt-0">

@@ -1,12 +1,13 @@
 {
-  "title": "Genehmigungen und Berechtigungen",
+  "title": "Berechtigungen",
   "subtitle": "Anfragen, die auf die Entscheidung einer Person warten, die Regeln, die Aktionen erlauben oder verweigern, und wer handeln darf.",
   "tabs": {
     "approvals": "Genehmigungen",
     "policies": "Richtlinien",
-    "identities": "Identitäten & Gruppen",
+    "identities": "Identitäten",
     "breakGlass": "Notfallzugriff",
-    "agentRisk": "Agentenrisiko"
+    "agentRisk": "Agentenrisiko",
+    "vaults": "Geteilte Tresore"
   },
   "breakGlass": {
     "title": "Notfallzugriff",
@@ -130,7 +131,7 @@
     "noSubject": "Kein Gegenstand",
     "filterStatus": "Status",
     "statusAll": "Alle Status",
-    "runSweep": "Überfällige Anfragen ablaufen lassen und eskalieren",
+    "runSweep": "Überfällige Anfragen bearbeiten",
     "newRequest": "Neue Anfrage",
     "empty": "Keine Genehmigungsanfragen",
     "emptyHint": "Wenn eine Aktion eine menschliche Genehmigung erfordert, erscheint sie hier zur Prüfung.",
@@ -223,7 +224,7 @@
     "decisionApproveForSession": "Für diese Sitzung genehmigt",
     "decisionReject": "Abgelehnt",
     "reenableNeedsAdmins": "Zwei andere Administratorkonten müssen dies genehmigen. Legen Sie sie unter Identität & Zugriff an oder mit `olivares users create`.",
-    "openIdentity": "Identität & Zugriff öffnen",
+    "openIdentity": "Identität öffnen",
     "cannotDecideOwn": "Sie können Ihre eigene Anfrage nicht genehmigen. Ein anderer Administrator muss entscheiden.",
     "requesterCannotApprove": "Wer die Anfrage gestellt hat, kann sie nicht selbst genehmigen.",
     "launchedBy": "Gestartet von",
@@ -475,7 +476,7 @@
     "subtitle": "Kadenz-Untergrenzen, Nebenläufigkeitsgrenzen, Genehmigungspflichten, Cron-Zulassungslisten und gesperrte Umgebungen für Claude-Code-Routinen. Überlappende Richtlinien werden so kombiniert, dass stets die restriktivste gilt.",
     "search": "Routine-Richtlinien durchsuchen…",
     "newPolicy": "Neue Richtlinie",
-    "enforcementCaption": "Diese Kontrollen greifen bei der Deklaration einer Routine und erneut bei jedem Auslösen. Eine deaktivierte Richtlinie wird gespeichert, trägt aber nichts zur Komposition bei.",
+    "enforcementCaption": "Diese Kontrollen greifen bei der Deklaration einer Routine und erneut bei jedem Auslösen. Eine deaktivierte Richtlinie wird gespeichert, wirkt aber auf nichts.",
     "enabledYes": "Aktiviert",
     "enabledNo": "Deaktiviert",
     "approvalYes": "Erforderlich",
@@ -494,7 +495,7 @@
       "envs": "Gesperrte Umgebungen"
     },
     "scope": {
-      "tenant": "Mandant",
+      "tenant": "Organisation",
       "workspace": "Arbeitsbereich",
       "user": "Benutzer"
     },
@@ -512,12 +513,12 @@
       "unreadableCaveat": "Die Engine konnte diese gespeicherte Spalte nicht parsen. Die Durchsetzung lehnt eine solche Richtlinie vollständig ab, verweigert also grundsätzlich, statt irgendetwas zu erlauben."
     },
     "posture": {
-      "title": "Wirksame Lage",
+      "title": "Geltende Regeln",
       "counts": "{{enabled}} von {{total}} Richtlinien aktiviert",
       "workspaceRef": "Arbeitsbereich",
       "userRef": "Benutzer",
-      "defaultWorkspace": "Mandanten-Standard",
-      "noUser": "Kein besitzender Benutzer",
+      "defaultWorkspace": "Organisations-Standard",
+      "noUser": "Kein Besitzer",
       "resolve": "Auflösen",
       "indeterminate": "Diese Auflösung ist auf der Achse {{axis}} unbestimmt. Die Durchsetzung verweigert hier grundsätzlich — das ist eine Ablehnung, kein Fehlen von Kontrollen.",
       "floor": "Kadenz-Untergrenze",
@@ -527,17 +528,17 @@
       "cap": "{{scope}} · max. {{max}}",
       "origin": "Zusammengesetzt aus:",
       "none": "Keine aktivierte Richtlinie regelt diesen Geltungsbereich.",
-      "failed": "Die Lage konnte nicht gelesen werden",
+      "failed": "Die geltenden Regeln konnten nicht gelesen werden",
       "resolvedFor": "Aufgelöst für Arbeitsbereich {{workspace}} · Benutzer {{user}}",
       "stale": "der Geltungsbereich oben hat sich geändert; erneut auflösen",
-      "unknownUser": "nicht beantwortbare Benutzerachse",
-      "unknownUserAxis": "Benutzerachse nicht beantwortbar",
+      "unknownUser": "Besitzer unbekannt",
+      "unknownUserAxis": "Besitzer unbekannt",
       "supersededByIndeterminate": "Die Werte unten sind das bisher Zusammengesetzte. Sie sind NICHT das Ergebnis: eine unbestimmte Auflösung wird vollständig abgelehnt, was auch immer dort steht.",
-      "noneIndeterminate": "Für diesen Geltungsbereich wurde keine Richtlinie zusammengesetzt, und die Auflösung wurde auf einer nicht beantwortbaren Achse VERWEIGERT — das ist nicht dasselbe, als würden hier keine Kontrollen gelten."
+      "noneIndeterminate": "Olivares konnte nicht feststellen, welche Richtlinien für diesen Geltungsbereich gelten, daher wurde die Abfrage VERWEIGERT — das ist nicht dasselbe, als würden hier keine Kontrollen gelten."
     },
     "remove": {
       "title": "Routine-Richtlinie löschen",
-      "body": "„{{name}}“ fliesst dann nicht mehr in die wirksame Lage ein. Die zuvor eingeschränkten Routinen unterliegen nur noch den verbleibenden Richtlinien.",
+      "body": "„{{name}}“ gilt dann nicht mehr. Die zuvor eingeschränkten Routinen unterliegen nur noch den verbleibenden Richtlinien.",
       "confirm": "Richtlinie löschen",
       "done": "Routine-Richtlinie gelöscht"
     },
@@ -553,7 +554,7 @@
       "scopeImmutable": "Nach der Erstellung unveränderlich.",
       "scopeRef": "Referenz des Geltungsbereichs",
       "scopeRefRequired": "Eine Arbeitsbereich- oder benutzerbezogene Richtlinie braucht ihre Referenz.",
-      "tenantScopeRef": "Eine mandantenweite Richtlinie darf keine Referenz tragen.",
+      "tenantScopeRef": "Eine organisationsweite Richtlinie darf keine Referenz tragen.",
       "enabled": "Richtlinie aktiviert",
       "floorToggle": "Kadenz-Untergrenze durchsetzen",
       "floor": "Mindestintervall (Sekunden)",
@@ -656,8 +657,7 @@
     "partialBody": "Der Export wurde genehmigt und ausgeführt, aber einige Schreibvorgänge waren nicht erfolgreich. Die entfernte Engine hat sich verändert; berechnen Sie den Plan erneut, um zu sehen, was übrig ist.",
     "applyFailed": "Der Export konnte nicht angewendet werden.",
     "notWiredTitle": "Der AgentCore-Export ist in dieser Installation nicht eingerichtet",
-    "notWiredBody": "Für diesen Mandanten ist kein AgentCore-Exporter konfiguriert, daher lehnt die Engine die Anfrage ab. Ein Betreiber aktiviert ihn auf dem Host, indem er diese Variable auf die Export-Konfigurationsdatei zeigen lässt:",
-    "notWiredCredentials": "Diese Datei gehört dem Betreiber und enthält AWS-Schreibanmeldedaten. Die Konsole zeigt sie nie an, fragt sie nie ab und bearbeitet sie nie.",
+    "notWiredBody": "Ein Admin aktiviert ihn in der Serverkonfiguration.",
     "deniedTitle": "Die Engine hat diesen Export abgelehnt",
     "pageTitle": "AgentCore-Export",
     "emptyAction": "Ersten Plan berechnen"
@@ -669,6 +669,7 @@
     "askedBy": "Angefragt von",
     "askedBySession": "Die Sitzung selbst",
     "askedByForSession": "{{name}} für eine neue Sitzung",
+    "askedByThroughSession": "{{name}} über die eigene Sitzung",
     "tool": "Werkzeug",
     "willRun": "Was ausgeführt wird",
     "noReview": "Diese Anfrage enthält nicht, was ausgeführt wird.",
@@ -705,5 +706,31 @@
   },
   "queue": {
     "needsYou": "Wartet auf Sie"
+  },
+  "vaults": {
+    "heading": "Geteilte Tresore",
+    "name": "Tresorname",
+    "create": "Tresor anlegen",
+    "created": "Tresor angelegt",
+    "empty": "Noch keine geteilten Tresore.",
+    "shares": "Freigaben",
+    "sharesFor": "Freigaben von {{name}}",
+    "noShares": "Noch mit niemandem geteilt.",
+    "sharedWith": "Geteilt mit",
+    "subjectKind": "Art",
+    "role": "Rolle",
+    "share": "Teilen",
+    "shared": "Tresor geteilt",
+    "revoke": "Widerrufen",
+    "revoked": "Freigabe widerrufen",
+    "kind": {
+      "user": "Benutzer",
+      "group": "Gruppe"
+    },
+    "roles": {
+      "viewer": "Leser",
+      "editor": "Bearbeiter",
+      "owner": "Eigentümer"
+    }
   }
 }

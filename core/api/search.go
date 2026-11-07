@@ -137,7 +137,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, mc ModuleC
 		// be the way around the seat. It is marked per kind, after that kind's own
 		// authorization, matching how the module routes do it.
 		kindCtx := withModuleRequestBoundary(ctx, tenant, p)
-		mc := ModuleContext{Principal: p, Tenant: tenant, Data: NewScopedData(s.st, tenant)}
+		// The same admission seam a module route gets, so a provider can ask about a
+		// branch its kind's permission does not cover (sessions: a title is matched only
+		// for a reader of the conversation). Without it every such question was refused.
+		mc := ModuleContext{Principal: p, Tenant: tenant, Data: NewScopedData(s.st, tenant), Admission: s.Admits}
 		res, err := k.Search(kindCtx, mc, q, searchPerKindLimit+1)
 		if err != nil {
 			// One broken provider degrades that kind, never the whole search — and the

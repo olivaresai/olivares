@@ -13,7 +13,7 @@ and a reconstructable timeline. Where module I (inventory) materializes the dura
 estate, module II keeps a **live operational overlay** per session over the same
 observation stream — and shows only what that stream honestly carries.
 
-Olivares <!-- release -->0.6<!-- /release --> also **launches** official provider CLIs as owned children under a
+Olivares <!-- release -->0.7<!-- /release --> also **launches** official provider CLIs as owned children under a
 [provider profile](/how-to/operate-provider-sessions/). That managed path is
 the same module. It does not replace the overlay, and it does not merge two
 homes that announce the same provider session id (`CHANGELOG.md` `[26.9.0]` B1/B2).
@@ -199,6 +199,96 @@ the mount namespace and the `mount` call this needs. A host that has the
 namespaces but cannot bind one of the files at launch (a path removed in between, an
 unusual filesystem) does not start the session: a protection the host should give
 and does not is a failure, not a limit.
+
+## Session folders on NFS or SMB shares
+
+A session folder is a path on the engine host, so a network share is a folder once the host has
+mounted it. `olivares netfolder add` does that with systemd's own mount units and registers the mount
+point as a folder; the mounting stays systemd's, and the units are plain files you can read and edit.
+Run it as root on the engine host:
+
+```sh
+printf '%s\n' "$SMB_PASSWORD" | sudo olivares netfolder add files //fileserver/projects --user svc --password-stdin
+sudo olivares netfolder add data fileserver:/export --mode write_no_delete
+olivares netfolder ls
+```
+
+The source is `//server/share` for SMB or `server:/export` for NFS, as `mount(8)` writes them. The name is
+lower-case letters and digits, and names the mount point `/srv/olivares/mnt/<name>`. `--mode` is the folder's
+access mode (`rw` by default). The units name the account `olivares` as the owner of every file an SMB
+folder shows, so the engine must run as that account. `ls` shows each folder as `mounted`, `unmounted` (it mounts on first use, and
+`ls` does not trigger that) or `not responding`. A folder that exists is never overwritten.
+
+For the SMB example the command writes these units, measured on Debian 13 (Linux 6.12) against an NFSv4.2
+export and a Samba 4.22 share (SMB 3.1.1). The file names are what
+`systemd-escape -p /srv/olivares/mnt/files` prints with `.mount` and `.automount` added.
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.mount
+[Unit]
+Description=Olivares network folder files
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=//fileserver/projects
+Where=/srv/olivares/mnt/files
+Type=cifs
+Options=credentials=/etc/olivares/netfolders/files.cred,uid=olivares,gid=olivares,vers=3.1.1,nodev,nosuid,soft,echo_interval=5
+TimeoutSec=30
+```
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.automount
+[Unit]
+Description=Olivares network folder files (mounted on first use)
+
+[Automount]
+Where=/srv/olivares/mnt/files
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=remote-fs.target
+```
+
+For NFS it writes `Type=nfs4`, `What=fileserver:/export` and
+`Options=nodev,nosuid,vers=4.2,soft,timeo=50,retrans=2`, and no credential file. On a host that enforces
+SELinux with the appliance's policy it adds `context=system_u:object_r:olivares_workspace_t:s0` to the options,
+the label the engine and its session tools already use for a folder. To remove a folder, run
+`systemctl disable --now` on its two units, delete them and its credential file, and deregister the folder.
+
+- **Everyone who has the folder acts as one account.** Files are read and written as the account the
+  mount presents: `uid=` and `gid=` for SMB, the export's user mapping for NFS. The share does not tell
+  people apart. Olivares decides who receives the folder.
+- **A person's own folder reads as that person.** `--owner <user id>` registers an SMB folder as one
+  person's own, as a personal folder is: its content is theirs alone, and administrators still find the
+  folder to manage it. Give `--user` and the password of that person's own SMB login and the file server
+  applies their rights, so two people mounting the same share each see what their own account may open.
+  Add one folder per person, each with its own name. NFS cannot tell people apart and takes no owner.
+  The administrator types the person's password once, and it stays in the root-only credential file like
+  the shared account's; the person's session never holds it. A per-session Kerberos ticket, so that the
+  person need not hand the password to anyone, is not built. Checked with two accounts of a Samba AD
+  domain on one share: each person's folder listed their own directory and the common one, read their
+  own file, and the file server refused the other person's file.
+- **The credential stays in a file.** The command writes `username=` and `password=` to the `credentials=` file,
+  owned by root with mode 0600, from the password on standard input. The password appears in no unit, mount option, process argument or
+  journal line: `mount.cifs` receives the path only. NFS with `sec=sys` needs no credential.
+- **The automount unit keeps boot independent of the file server.** Nothing waits for the share at
+  boot. The first use mounts it, and a server that is down at that moment fails the use, not the boot.
+- **Use `soft`.** A `hard` NFS mount, the default, leaves a process that touches a dead server stuck
+  where it cannot be stopped. With the options above, a read or write on a mounted share fails with an
+  input/output error or "Host is down" after 20 to 30 seconds, and the share works again once the server
+  answers.
+- **A folder that does not respond is reported.** Registering the folder, opening it, listing it and
+  starting a session in it each wait 10 seconds for the share, then refuse with
+  "The folder ... is not responding. If it is on a network share, check that its file server is up and
+  reachable." and a 424 status. The session does not start.
+- **`write_no_delete` holds.** Landlock enforces it in the kernel's file system layer, above the
+  network file system. In a real session launch on both shares, a session created and changed files and
+  was refused rename, unlink and rmdir, exactly as on a local disk, and `rw` allowed them. A host that
+  cannot confine still refuses the launch.
+- **The folder is the boundary.** In the same launches, in both modes, a write to the folder's parent,
+  which is on the same share, was refused and left no file. The session writes inside its folder only.
 
 ## What it consumes (and what it derives)
 

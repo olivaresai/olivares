@@ -162,7 +162,9 @@ export function RouteFrame({
   }
   const path = pathname.replace(/\/+$/, '') || '/'
   return (
-    <ConsolePage pad={path === '/' ? 'flush' : 'default'}>
+    <ConsolePage
+      pad={resolveLocation(path).kind === 'home' ? 'flush' : 'default'}
+    >
       {children}
     </ConsolePage>
   )

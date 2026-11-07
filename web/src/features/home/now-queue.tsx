@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { readableAction } from '@/components/layout/bell-events'
+import { AccountBadge } from '@/features/agent-tools/account-marks'
 import {
   railGroups,
   type RailRow,
@@ -42,9 +43,8 @@ import {
   ApprovalRequestCell,
   ApprovalWhatRuns,
   ApprovalWhy,
-  approvalCommandUnknown,
-  approvalExpectsCommand,
-  reviewIsLong,
+  FLAG_ARM_MS,
+  oneClickApprove,
   useApprovalSession,
 } from '@/features/governance/approval-preview'
 import { governanceApi, governanceKeys } from '@/features/governance/api'
@@ -104,6 +104,7 @@ function QueueRow({ row }: { row: RailRow }) {
             <span className="truncate text-caption text-text-2">{meta}</span>
           ) : null}
         </span>
+        <AccountBadge profileRef={row.profileRef} className="max-w-28" />
         {/* The state as the Sessions list says it: its word and how long ago. */}
         <span
           data-testid="now-needs-row-status"
@@ -119,22 +120,6 @@ function QueueRow({ row }: { row: RailRow }) {
 
 /** The permission that decides a request (governance-view.tsx `canDecide`). */
 const APPROVAL_DECIDE = 'governance:approval:admin'
-
-/** How long a request that just took the flagged place ignores Approve: the queue's poll
- * can swap the card under a pointer already on its way to the button. */
-export const FLAG_ARM_MS = 500
-
-/**
- * One click approves only what the card shows in full: a reviewed command short enough
- * not to be cut, or a request that runs nothing by itself. A long command, one the tool
- * did not name, or a tool call stored without its review opens the request beside the
- * queue, where the whole of it is read above Approve once.
- */
-function oneClickApprove(approval: ApprovalDTO): boolean {
-  if (approvalCommandUnknown(approval)) return false
-  const text = approval.review?.text
-  return text ? !reviewIsLong(text) : !approvalExpectsCommand(approval)
-}
 
 /** The request Estate's card holds, and whether the queue still holds it. */
 export interface FlaggedRequest {
@@ -243,26 +228,38 @@ function FlaggedCard({
     if (decidedByMe) onSettled()
   }, [decidedByMe, onSettled])
   const toolCall = approval.subject_kind?.endsWith('.tool')
+  // A request a person raised leads with their own words (the queue's rule,
+  // ApprovalRequestCell): the card then names itself by them, and its kind ("Db migrate")
+  // heads it only when they wrote none.
+  const words = !toolCall && !!approval.reason
   const head =
     [approval.review?.tool, session.name].filter(Boolean).join(' · ') ||
-    (!toolCall && approval.action
-      ? readableAction(approval.action)
-      : t('governance:preview.requestSummary'))
+    (words
+      ? ''
+      : !toolCall && approval.action
+        ? readableAction(approval.action)
+        : t('governance:preview.requestSummary'))
   const headingId = `now-flagged-${approval.id}`
   return (
     <article
-      aria-labelledby={headingId}
+      aria-labelledby={head ? headingId : undefined}
+      aria-label={head ? undefined : approval.reason}
       data-testid="now-flagged-request"
-      className="flex min-w-0 flex-col gap-3 rounded-lg border-l-2 border-accent bg-surface px-4 py-3"
+      data-trust-chrome=""
+      className="flex min-w-0 flex-col gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-foreground"
     >
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <h3 id={headingId} className="break-words text-heading text-text">
-          {head}
-        </h3>
-        {session.folder ? (
-          <PathText value={session.folder} tone="muted" />
-        ) : null}
-      </div>
+      {head || session.folder ? (
+        <div className="flex min-w-0 flex-col gap-0.5">
+          {head ? (
+            <h3 id={headingId} className="break-words text-heading text-text">
+              {head}
+            </h3>
+          ) : null}
+          {session.folder ? (
+            <PathText value={session.folder} tone="muted" />
+          ) : null}
+        </div>
+      ) : null}
       <ApprovalWhatRuns approval={approval} />
       {/* The rule that asked and what it reaches: the queue's own two lines. */}
       <ApprovalWhy approval={approval} reaches={session.reaches} />
@@ -324,7 +321,16 @@ function FlaggedCard({
 }
 
 function ApprovalRow({ approval }: { approval: ApprovalDTO }) {
-  const { t } = useTranslation(['governance'])
+  const { t } = useTranslation(['home', 'governance'])
+  const session = useApprovalSession(approval)
+  // One line, as the sketch says it: "<session> wants to run <command>". The kind of tool,
+  // the folder and the full review stay on the request itself.
+  const command =
+    approval.review?.tool === 'Command' ? approval.review.text : undefined
+  const wants =
+    command && session.name
+      ? t('home:overview.wantsToRun', { session: session.name })
+      : null
   return (
     <li className="border-b border-line last:border-b-0">
       <Link
@@ -338,17 +344,33 @@ function ApprovalRow({ approval }: { approval: ApprovalDTO }) {
           <ShieldCheck aria-hidden className="size-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <ApprovalRequestCell
-            approval={approval}
-            className="w-full max-w-full"
-          />
+          {wants && command ? (
+            <span
+              className="block truncate"
+              title={`${wants} ${command}`}
+              data-slot="now-approval-wants"
+            >
+              <span className="font-medium text-text">{wants}</span>{' '}
+              <code className="font-mono text-caption text-text">
+                {command.replace(/\s*\n\s*/g, ' ')}
+              </code>
+            </span>
+          ) : (
+            <ApprovalRequestCell
+              approval={approval}
+              className="w-full max-w-full"
+            />
+          )}
         </span>
-        <span className="shrink-0 text-caption text-text-3 tabular-nums">
-          {t('governance:approvals.progressOf', {
-            approved: approval.approve_count,
-            required: approval.required_approvals,
-          })}
-        </span>
+        {/* A count only where more than one person decides, and with its noun. */}
+        {approval.required_approvals > 1 ? (
+          <span className="shrink-0 text-caption text-text-3 tabular-nums">
+            {t('home:overview.approvals', {
+              approved: approval.approve_count,
+              required: approval.required_approvals,
+            })}
+          </span>
+        ) : null}
       </Link>
     </li>
   )
@@ -362,72 +384,31 @@ export function useNeedsYouRows(
   sessionsReadable = true,
   runs?: readonly RunDTO[],
   approvals: readonly ApprovalDTO[] = [],
+  state: TileState = 'ready',
+  approvalsState: TileState = 'ready',
 ) {
   const now = useMinuteClock()
   const { readHandoffs, handoffs } = useOfferedHandoffs()
   const canOpenApprovals = useCanOpenApprovals()
   const listedApprovals = new Set(approvals.map((a) => a.id))
-  const rows =
-    railGroups(
-      {
-        live: sessionsReadable ? (sessions ?? []) : [],
-        handoffs: handoffs.data?.items ?? [],
-        runs: runs ?? [],
-      },
-      now,
-      {
-        canOpenApprovals,
-        // Keep the live page's sessions, including echoes folded into a run.
-        // A listed approval already has its own row; filter before the cap.
-        keepNeeds: (row, session) =>
-          (!!session.live || !!session.echoes?.length) &&
-          !(
-            row.to === '/permissions' &&
-            listedApprovals.has(row.search.approval)
-          ),
-      },
-    ).find((g) => g.id === 'needsYou')?.rows ?? []
-  return { rows, readHandoffs, handoffs }
-}
-
-export function NowQueue({
-  sessions,
-  state,
-  sessionsReadable = true,
-  approvals = [],
-  approvalsState = 'ready',
-  runs,
-  flag,
-}: {
-  /** The live page Estate already fetched (its sentence reads the same page). */
-  sessions: LiveDTO[] | undefined
-  /** The runs Estate already read carry the archived, snoozed and done marks. */
-  runs?: readonly RunDTO[]
-  state: TileState
-  /** False for a principal who may not read live sessions: the queue then holds what it
-   * may read (approvals, offered handoffs) and says nothing about sessions. */
-  sessionsReadable?: boolean
-  /** The pending approvals this principal may read (none when it may not). */
-  approvals?: readonly ApprovalDTO[]
-  /** The approvals read's own state: a failed read is said, never "nothing waits". */
-  approvalsState?: TileState
-  /** The request the card holds: Estate's own, which also decides its orange control. */
-  flag: FlaggedRequest
-}) {
-  const { t } = useTranslation(['home', 'nav'])
-  const { rows, readHandoffs, handoffs } = useNeedsYouRows(
-    sessions,
-    sessionsReadable,
-    runs,
-    approvals,
-  )
-  const flagged = flag.approval
-  const quiet = approvals.filter((a) => a.id !== flagged?.id)
-  const { settle } = flag
-  const flaggedId = flagged?.id
-  const settleFlagged = useCallback(() => {
-    if (flaggedId) settle(flaggedId)
-  }, [settle, flaggedId])
+  const group = railGroups(
+    {
+      live: sessionsReadable ? (sessions ?? []) : [],
+      handoffs: handoffs.data?.items ?? [],
+      runs: runs ?? [],
+    },
+    now,
+    {
+      canOpenApprovals,
+      // Keep the live page's sessions, including echoes folded into a run.
+      // A listed approval already has its own row; filter before the cap.
+      keepNeeds: (row, session) =>
+        (!!session.live || !!session.echoes?.length) &&
+        !(
+          row.to === '/permissions' && listedApprovals.has(row.search.approval)
+        ),
+    },
+  ).find((g) => g.id === 'needsYou')
   const sessionsState: TileState = sessionsReadable ? state : 'ready'
   const status: 'loading' | 'error' | 'ready' =
     sessionsState === 'unavailable' && (!readHandoffs || handoffs.isError)
@@ -439,6 +420,44 @@ export function NowQueue({
             handoffs.fetchStatus !== 'idle')
         ? 'loading'
         : 'ready'
+  // THE COUNT the section header and the Overview strip both print: every row the rail
+  // holds (the list shows eight) and every pending approval listed above it.
+  const count =
+    status === 'ready' &&
+    sessionsState === 'ready' &&
+    approvalsState === 'ready' &&
+    (!readHandoffs || !handoffs.isError)
+      ? (group?.total ?? 0) + approvals.length
+      : null
+  return { rows: group?.rows ?? [], count, status }
+}
+
+export type NeedsYou = ReturnType<typeof useNeedsYouRows>
+
+export function NowQueue({
+  needs,
+  approvals = [],
+  approvalsState = 'ready',
+  flag,
+}: {
+  /** The rows and their count, read once by Overview (the strip prints the same count). */
+  needs: NeedsYou
+  /** The pending approvals this principal may read (none when it may not). */
+  approvals?: readonly ApprovalDTO[]
+  /** The approvals read's own state: a failed read is said, never "nothing waits". */
+  approvalsState?: TileState
+  /** The request the card holds: Estate's own, which also decides its orange control. */
+  flag: FlaggedRequest
+}) {
+  const { t } = useTranslation(['home', 'nav'])
+  const { rows, count, status } = needs
+  const flagged = flag.approval
+  const quiet = approvals.filter((a) => a.id !== flagged?.id)
+  const { settle } = flag
+  const flaggedId = flagged?.id
+  const settleFlagged = useCallback(() => {
+    if (flaggedId) settle(flaggedId)
+  }, [settle, flaggedId])
   return (
     <section
       aria-labelledby="now-needs-heading"
@@ -452,9 +471,9 @@ export function NowQueue({
         >
           {t('nav:shell.rail.groups.needsYou')}
         </h2>
-        {status === 'ready' && approvalsState !== 'unavailable' ? (
+        {count !== null ? (
           <span className="text-metadata-s text-text-3 tabular-nums">
-            {rows.length + approvals.length}
+            {count}
           </span>
         ) : null}
       </div>

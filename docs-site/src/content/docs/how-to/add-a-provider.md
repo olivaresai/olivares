@@ -86,6 +86,31 @@ It answers one of three things, and they are three different questions:
 A provider you have not tested is shown as **not tested**, never as working.
 Registering a credential is an intention; a test is a fact.
 
+### Check a self-hosted model
+
+For a self-hosted `openai_compatible` provider without a vendor preset, run
+`olivares provider test <ref> --deep`. The API equivalent is
+`POST /v1/m/sessions/providers/{ref}/test?deep=true`.
+This opt-in check generates tokens and can incur usage: three requests, each capped
+at 64 output tokens, within the probe's ten-second timeout. Set a default model
+first if the server lists more than one model.
+
+The saved `capabilities` observation names the tested model and reports `tools`,
+`streaming`, `usage`, and `max_context`. Context length comes from the server's
+`max_model_len` or `context_length` metadata; zero means unknown. It is not a
+measured maximum. The console shows these results next to the default model.
+A failed capability check exits 7. Missing results from an older engine exit 8.
+Ordinary tests keep their existing connection exit codes and send no completion.
+Retesting, changing the default model, rotating the key, or changing the endpoint
+clears the previous capability observation.
+
+The tool check asks the model to call a harmless function with `tool_choice: auto`.
+A forced named tool can bypass vLLM's automatic parser and conceal a missing setup
+flag. If no usable tool call is observed, check `--enable-auto-tool-choice` and
+`--tool-call-parser` for the selected model. See the
+[vLLM tool-calling documentation](https://docs.vllm.ai/en/latest/features/tool_calling/).
+No returned function is executed.
+
 ## 3. Register a profile and bind the provider
 
 Explicit home paths must already exist on the machine that runs the control plane.
@@ -146,7 +171,10 @@ For `anthropic`, `openai` and `xai`, OpenCode accepts only the vendor's own endp
 Gemini CLI uses a `gemini` provider key at Google's own API address; it accepts no
 custom endpoint. Install it under **AI tools** or with `olivares tool install gemini`.
 The official portable bundle needs Node.js 20 or newer on the engine host.
-For a Google account, create a Gemini profile and use
+Start with an API key. Since 18 June 2026 Gemini CLI works with a paid Gemini API key
+or a Gemini Code Assist Standard or Enterprise account; free personal Google accounts,
+Google AI Pro and Google AI Ultra no longer work.
+For a Code Assist Google account, create a Gemini profile and use
 `olivares tool login gemini --account <name>`; each profile has its own native
 `.gemini` authentication home. API-key profiles refuse conflicting native Google,
 Vertex or gateway settings rather than selecting another identity.
@@ -226,6 +254,7 @@ uses its authorized tool login and needs neither variable.
 
 ## Related
 
+- [Providers and tools](/reference/providers-and-tools/)
 - [Operate a provider session](/how-to/operate-provider-sessions/)
 - [Your first hour](/how-to/first-hour/)
 - [CLI reference](/reference/cli/)

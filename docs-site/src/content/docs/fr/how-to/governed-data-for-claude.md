@@ -80,7 +80,7 @@ S'il s'agit d'une nouvelle installation, terminez la configuration initiale dans
 console.
 
 Sur une nouvelle installation, `knowledge` et `sourcescope` sont désactivés. En tant
-qu’administrateur, activez `knowledge` et `sourcescope` dans **Settings > Edition & modules**,
+qu’administrateur, activez `knowledge` et `sourcescope` dans **Settings > Modules**,
 en conservant les autres modules sélectionnés. Pour la CLI, connectez-vous
 d’abord à ce moteur en tant qu’administrateur avec `olivares login`, puis
 exécutez `olivares modules on knowledge` et `olivares modules on sourcescope`. Attendez chaque redémarrage du moteur avant de continuer ;

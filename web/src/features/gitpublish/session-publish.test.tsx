@@ -352,9 +352,18 @@ describe('shipping a session', () => {
       shipped({ pull_request_url: 'javascript:alert(1)' }),
     )
     const dialog = await ship()
-    await within(dialog).findByText(`Shipped: ${BRANCH} is pushed.`)
+    await within(dialog).findByText('Pull request #7')
     expect(within(dialog).queryByRole('link')).not.toBeInTheDocument()
     expect(within(dialog).getByText('Pull request #7')).toBeInTheDocument()
+  })
+
+  it('names the shipped branch whole, through PathText', async () => {
+    vi.spyOn(gitpublishApi, 'ship').mockResolvedValue(shipped())
+    const dialog = await ship()
+    const outcome = await within(dialog).findByRole('status')
+    expect(outcome).toHaveTextContent(`Shipped: ${BRANCH} is pushed.`)
+    // PathText gives the branch its own hover with the whole value; plain text has none.
+    expect(within(outcome).getByTitle(BRANCH)).toBeInTheDocument()
   })
 
   it('says the push waits for another person and offers to ship again', async () => {
@@ -396,11 +405,27 @@ describe('shipping a session', () => {
       pull_request_error: 'base_not_allowed',
     })
     const dialog = await ship()
-    expect(
-      await within(dialog).findByText(
-        /is pushed, but the pull request was not opened \(base_not_allowed\)/,
-      ),
-    ).toBeInTheDocument()
+    const outcome = await within(dialog).findByRole('status')
+    expect(outcome).toHaveTextContent(
+      `${BRANCH} is pushed, but the pull request was not opened (base_not_allowed)`,
+    )
+    expect(within(outcome).getByTitle(BRANCH)).toBeInTheDocument()
+  })
+
+  it('names the branch whole when the push did not apply', async () => {
+    vi.spyOn(gitpublishApi, 'ship').mockResolvedValue({
+      state: 'incomplete',
+      branch: BRANCH,
+      commit: SHA,
+      committed: true,
+      push: applied({ state: 'rejected' }),
+    })
+    const dialog = await ship()
+    const outcome = await within(dialog).findByRole('status')
+    expect(outcome).toHaveTextContent(
+      `The push of ${BRANCH} did not apply (Rejected by the host).`,
+    )
+    expect(within(outcome).getByTitle(BRANCH)).toBeInTheDocument()
   })
 
   it('names the engine’s refusal, such as a folder on no branch', async () => {

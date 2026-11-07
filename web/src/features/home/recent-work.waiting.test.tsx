@@ -5,7 +5,7 @@
 // RECENT WORK TELLS A WAITING SESSION AS IDLE, AND NAMES THE MODEL THE RUN USED (#1785).
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen, within } from '@/test/intel'
+import { DEFAULT_AUTH, renderIntel, screen, within } from '@/test/intel'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from '@/features/sessions/types'
 import { mergeSessions } from '@/features/sessions/provenance'
@@ -14,6 +14,7 @@ import { RecentWork } from './recent-work'
 import './i18n'
 import '@/features/sessions/i18n'
 
+vi.mock('@/lib/auth/context', () => ({ useAuth: () => DEFAULT_AUTH }))
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => '',
   Link: ({

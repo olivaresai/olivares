@@ -5,21 +5,30 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/federation"
 	"github.com/olivaresai/olivares/core/internal/store/sqlstore"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/secure"
@@ -567,5 +576,168 @@ func TestSSOCallback_GroupOverageIsRefusedWithTheFix(t *testing.T) {
 		if c.Value != "" { // the one-time flow cookie is cleared (empty); nothing else may be set
 			t.Fatalf("a refused callback set cookie %s", c.Name)
 		}
+	}
+}
+
+// TestSSOBackChannelLogoutEndsTheIdPSession is the OpenID Connect Back-Channel Logout
+// journey through the real OIDC provider: a person signs in twice through an in-test
+// OpenID Provider (two IdP sessions). A token with only a sid ends the Olivares session
+// of that IdP session; a token naming the person (sub) ends every session of the person,
+// as Keycloak sends on an administrator's sign-out: the person's sub and the sid of only
+// one of their sessions. A sub that names no account still ends the sessions of its sid.
+// Forged, wrong-audience and replayed tokens end nothing, and the warning for a refused
+// token carries none of the token's own text. A revocation that fails leaves the jti
+// unconsumed, so the provider's retry of the same token is applied.
+func TestSSOBackChannelLogoutEndsTheIdPSession(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil))) // the server logs to the default logger
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var idToken string
+	mux := http.NewServeMux()
+	op := httptest.NewServer(mux)
+	t.Cleanup(op.Close)
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"issuer": op.URL, "authorization_endpoint": op.URL + "/authorize", "token_endpoint": op.URL + "/token",
+			"jwks_uri": op.URL + "/jwks", "id_token_signing_alg_values_supported": []string{"RS256"},
+			"backchannel_logout_supported": true, "backchannel_logout_session_supported": true,
+		})
+	})
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"}}})
+	})
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "token_type": "Bearer", "id_token": idToken})
+	})
+	sign := func(signer *rsa.PrivateKey, claims map[string]any) string {
+		s, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: jose.JSONWebKey{Key: signer, KeyID: "k1"}}, (&jose.SignerOptions{}).WithType("logout+jwt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := jwt.Signed(s).Claims(claims).Serialize()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	env := map[string]string{"OLIVARES_SSO_PROTOCOL": "oidc", "OLIVARES_OIDC_ISSUER": op.URL, "OLIVARES_OIDC_CLIENT_ID": "olivares", "OLIVARES_OIDC_CLIENT_SECRET": "s"}
+	fed, err := federation.FromEnv(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newFedHarness(t, fed)
+	h.adminLogin()
+
+	signIn := func(sid string) string {
+		start := h.raw("GET", "/v1/auth/federation/start", nil)
+		loc, err := url.Parse(start.Header().Get("Location"))
+		if err != nil || start.Code != http.StatusFound {
+			t.Fatalf("start = %d %v", start.Code, err)
+		}
+		now := time.Now()
+		idToken = sign(key, map[string]any{"iss": op.URL, "aud": "olivares", "sub": "kc-user-1", "sid": sid,
+			"iat": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(), "nonce": loc.Query().Get("nonce"),
+			"email": "leaver@acme.com", "email_verified": true})
+		cb := h.raw("GET", "/v1/auth/federation/callback?code=c&state="+url.QueryEscape(loc.Query().Get("state")),
+			[]*http.Cookie{findCookie(start.Result().Cookies(), "olv_sso")})
+		var body map[string]any
+		_ = json.Unmarshal(cb.Body.Bytes(), &body)
+		token, _ := body["token"].(string)
+		if cb.Code != http.StatusOK || token == "" {
+			t.Fatalf("callback = %d %s", cb.Code, cb.Body.String())
+		}
+		return token
+	}
+	console, cli, unbound := signIn("kc-sid-1"), signIn("kc-sid-2"), signIn("kc-sid-3")
+
+	jti := 0
+	logoutToken := func(signer *rsa.PrivateKey, mutate func(map[string]any)) string {
+		jti++
+		now := time.Now()
+		claims := map[string]any{"iss": op.URL, "aud": "olivares", "sub": "kc-user-1", "sid": "kc-sid-1",
+			"iat": now.Unix(), "exp": now.Add(2 * time.Minute).Unix(), "jti": fmt.Sprintf("jti-%d", jti),
+			"events": map[string]any{"http://schemas.openid.net/event/backchannel-logout": map[string]any{}}}
+		if mutate != nil {
+			mutate(claims)
+		}
+		return sign(signer, claims)
+	}
+	postCtx := func(ctx context.Context, raw string, query ...string) int {
+		req := httptest.NewRequestWithContext(ctx, "POST", "/v1/auth/federation/oidc/backchannel-logout"+strings.Join(query, ""), strings.NewReader(url.Values{"logout_token": {raw}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "10.0.0.1:1234"
+		rec := httptest.NewRecorder()
+		h.srv.Handler().ServeHTTP(rec, req)
+		return rec.Code
+	}
+	post := func(raw string, query ...string) int { return postCtx(context.Background(), raw, query...) }
+	alive := func(token string) bool {
+		_, err := h.authr.Authenticate(context.Background(), token)
+		return err == nil
+	}
+
+	forger, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, raw := range map[string]string{
+		"forged":         logoutToken(forger, nil),
+		"wrong audience": logoutToken(key, func(c map[string]any) { c["aud"] = "caller-text-" + strings.Repeat("x", 4096) }),
+		"with a nonce":   logoutToken(key, func(c map[string]any) { c["nonce"] = "n" }),
+		"no event":       logoutToken(key, func(c map[string]any) { delete(c, "events") }),
+		"no sid or sub":  logoutToken(key, func(c map[string]any) { delete(c, "sid"); delete(c, "sub") }),
+	} {
+		if code := post(raw); code != http.StatusBadRequest {
+			t.Errorf("%s logout token = %d, want 400", name, code)
+		}
+	}
+	// A malformed tenant names no provider: it is refused, never read as the global one.
+	if code := post(logoutToken(key, nil), "?tenant=not%20a%20tenant"); code != http.StatusBadRequest {
+		t.Errorf("logout with a malformed tenant = %d, want 400", code)
+	}
+	if !alive(console) || !alive(cli) {
+		t.Fatal("a refused logout token ended a session")
+	}
+	if !strings.Contains(logs.String(), "back-channel logout token refused") || strings.Contains(logs.String(), "caller-text-") {
+		t.Errorf("the refused-token warning must be logged without the token's own text; log holds %d bytes", logs.Len())
+	}
+
+	bySID := logoutToken(key, func(c map[string]any) { delete(c, "sub") })
+	if code := post(bySID); code != http.StatusOK {
+		t.Fatalf("logout of IdP session kc-sid-1 = %d, want 200", code)
+	}
+	if alive(console) || !alive(cli) {
+		t.Fatalf("after the kc-sid-1 logout: console alive=%v (want false), cli alive=%v (want true)", alive(console), alive(cli))
+	}
+	if code := post(bySID); code != http.StatusBadRequest {
+		t.Errorf("replayed logout token = %d, want 400", code)
+	}
+	// The account of kc-sid-3 has no bound subject (the bind after its first sign-in failed),
+	// so the provider's sub names nobody: the sid still ends that IdP session.
+	if code := post(logoutToken(key, func(c map[string]any) { c["sub"] = "kc-unbound"; c["sid"] = "kc-sid-3" })); code != http.StatusOK {
+		t.Fatalf("logout of unknown subject with sid kc-sid-3 = %d, want 200", code)
+	}
+	if alive(unbound) || !alive(cli) {
+		t.Errorf("after the unknown-sub kc-sid-3 logout: kc-sid-3 alive=%v (want false), cli alive=%v (want true)", alive(unbound), alive(cli))
+	}
+	// The revocation fails (the request ends before its transaction): the provider's retry
+	// of the same token must be applied, not refused as replayed.
+	bySub := logoutToken(key, nil)
+	failed, cancel := context.WithCancel(context.Background())
+	cancel()
+	if code := postCtx(failed, bySub); code == http.StatusOK || !alive(cli) {
+		t.Fatalf("a logout whose revocation failed = %d with cli alive=%v, want an error and the session kept", code, alive(cli))
+	}
+	if code := post(bySub); code != http.StatusOK {
+		t.Fatalf("retry of logout of subject kc-user-1 with sid kc-sid-1 = %d, want 200", code)
+	}
+	if alive(cli) {
+		t.Fatal("a logout naming the person left one of their sessions alive")
 	}
 }

@@ -101,12 +101,6 @@ export function DependencyMap({ tenant }: { tenant: string | null }) {
         {t('deps.subtitle')}
       </p>
 
-      <ListTruncationBadge
-        query={query}
-        label={t('deps.truncated', { n: DEP_LIMIT })}
-        hint={t('deps.truncatedHint')}
-      />
-
       {/* Graph (desktop) */}
       <div className="hidden h-[64vh] min-h-[440px] md:block">
         <GraphCanvas
@@ -163,6 +157,12 @@ export function DependencyMap({ tenant }: { tenant: string | null }) {
           ))}
         </div>
       </div>
+
+      <ListTruncationBadge
+        query={query}
+        label={t('deps.truncated')}
+        className="px-0 pt-0"
+      />
     </div>
   )
 }

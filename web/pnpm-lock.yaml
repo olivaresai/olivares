@@ -16,6 +16,9 @@ importers:
 
   .:
     dependencies:
+      '@zip.js/zip.js':
+        specifier: 2.24.0
+        version: 2.24.0
       '@codemirror/commands':
         specifier: ^6.11.1
         version: 6.11.1

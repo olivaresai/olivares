@@ -191,7 +191,7 @@ describe('the content-free personal handoff page', () => {
     expect(opened).toEqual([id(4)])
   })
 
-  it('an empty authorized page is EMPTY, not a refusal and not a failure to look', async () => {
+  it('an empty authorized page is EMPTY and says where handoffs appear', async () => {
     api.listHandoffInbox.mockResolvedValue({ items: [], has_more: false })
     renderWithQuery(() => (
       <HandoffInbox
@@ -205,7 +205,7 @@ describe('the content-free personal handoff page', () => {
       await screen.findByText('No Offered handoffs in this workspace'),
     ).toBeVisible()
     expect(
-      screen.getByText(/not a refusal and not a failure to look/i),
+      screen.getByText('Handoffs sent to this workspace appear here.'),
     ).toBeVisible()
   })
 

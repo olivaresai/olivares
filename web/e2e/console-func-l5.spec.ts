@@ -81,7 +81,7 @@ async function loginDemo(
   await expect(
     page
       .getByRole('navigation', { name: 'Main navigation', exact: true })
-      .getByRole('link', { name: 'Now', exact: true }),
+      .getByRole('link', { name: 'Settings', exact: true }),
   ).toBeVisible({
     timeout: 20_000,
   })
@@ -293,8 +293,10 @@ test('health controls fire real handlers and detail links reach their destinatio
   expect(
     statusBody.items.some((item) => item.subject_ref === 'l5-live-agent'),
   ).toBe(true)
+  // Health is a page of the Operations place, no longer the one the place opens, so it keeps
+  // its own title.
   await expect(
-    page.getByRole('heading', { name: 'Health & SLA' }),
+    page.getByRole('heading', { name: 'Health', exact: true }),
   ).toBeVisible()
   await expect(await rowFor(page, 'L5 live agent')).toContainText('Down')
   const alternateSubject = statusBody.items.find(
@@ -832,7 +834,7 @@ test('public status and API playground send use real handlers', async ({
   await stableSpec
   await betaSpec
   await expect(
-    page.getByRole('heading', { name: 'API Playground' }),
+    page.getByRole('heading', { name: 'API playground' }),
   ).toBeVisible()
 
   const group = page

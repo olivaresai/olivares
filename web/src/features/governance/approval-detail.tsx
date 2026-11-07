@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { AppLink } from '@/components/ui/app-link'
 import { useQuery } from '@tanstack/react-query'
 import { Check, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -28,6 +29,7 @@ import {
 } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { RelTimeLabel } from '@/features/shared'
+import { useObjectActionsStore } from '@/stores/object-actions'
 import { governanceApi, governanceKeys } from './api'
 import {
   ApprovalDetails,
@@ -159,14 +161,45 @@ export function ApprovalDetailPanel({
     return () => window.removeEventListener('keydown', onKey)
   }, [mayDecide, approveRequest])
 
+  // ⌘K lists the open request's decisions first, with the keys that make them.
+  // In words: what the request says, never its id.
+  const objectLabel = detail
+    ? (detail.review?.tool ??
+      detail.reason ??
+      detail.subject_ref ??
+      t('approvals.title'))
+    : ''
+  useEffect(() => {
+    if (!mayDecide || !objectLabel) return
+    useObjectActionsStore.getState().set({
+      label: objectLabel,
+      actions: [
+        {
+          id: 'approve',
+          label: t('approvals.approveOnce'),
+          shortcut: 'A',
+          run: () => approveRequest(),
+        },
+        {
+          id: 'deny',
+          label: t('approvals.deny'),
+          shortcut: 'D',
+          run: () => setDenyOpen(true),
+        },
+      ],
+    })
+    return () => useObjectActionsStore.getState().set(null)
+  }, [mayDecide, objectLabel, approveRequest, t])
+
   const requesterIsPerson =
     !!detail?.requested_by?.startsWith('user:') && !detail.launched_by
 
   return (
     <aside
       aria-label={t('preview.requestSummary')}
-      className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-surface p-4"
+      className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-surface p-4 text-foreground"
       data-slot="approval-panel"
+      data-trust-chrome=""
     >
       {query.error instanceof ApiError && query.error.isStepUpRequired ? (
         // ⛔ ASSURANCE BEFORE ROLE, and here the engine really sends it:
@@ -236,12 +269,12 @@ export function ApprovalDetailPanel({
               {/* The command in the sentence reads as a command (the inline chip with Copy),
                   not as text between backticks (Root, 047 review). */}
               {withInlineCommands(t('detail.reenableNeedsAdmins'))}{' '}
-              <a
+              <AppLink
                 href="/identity"
                 className="text-accent-text underline underline-offset-2"
               >
                 {t('detail.openIdentity')}
-              </a>
+              </AppLink>
             </div>
           ) : null}
 

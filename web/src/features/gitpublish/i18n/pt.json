@@ -1,0 +1,286 @@
+{
+  "title": "Publicação Git",
+  "subtitle": "Envie commits, abra pull requests e faça merge através de destinos de publicação aprovados.",
+  "notice": "Cada pedido é verificado face aos vínculos aprovados do destino e à sua autoridade no momento em que o envia. Um resultado incerto no host nunca é reenviado: reconcilie-o para ler o host.",
+  "actions": {
+    "refresh": "Atualizar",
+    "newTarget": "Novo destino",
+    "open": "Abrir",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "push": "Push",
+    "pull_request": "Abrir pull request",
+    "draftPullRequest": "Abrir um pull request em rascunho",
+    "merge": "Merge",
+    "reconcile": "Reconciliar",
+    "abandon": "Abandonar"
+  },
+  "columns": {
+    "target": "Destino",
+    "workspace": "Espaço de trabalho",
+    "pushPrefix": "Prefixo de push",
+    "mergeBases": "Bases de merge",
+    "version": "Versão",
+    "actions": "Ações"
+  },
+  "targets": {
+    "title": "Destinos de publicação",
+    "description": "Cada destino associa uma credencial e um repositório aprovados a um prefixo de push e às ramificações em que pode fazer merge.",
+    "empty": "Sem destinos de publicação",
+    "emptyAdmin": "Selecione um espaço de trabalho e crie um destino a partir de um vínculo de credencial e de um vínculo de repositório aprovados.",
+    "emptyReader": "Um administrador de destinos cria os destinos. Os destinos que pode ler são listados aqui.",
+    "open": "Abrir destino {{id}}"
+  },
+  "target": {
+    "title": "Destino {{id}}",
+    "description": "O vínculo através do qual este destino publica, a autoridade que cada ação exige e as intenções que mantém.",
+    "binding": "Vínculo",
+    "credentialBinding": "Vínculo de credencial",
+    "repositoryBinding": "Vínculo de repositório",
+    "withheld": "Mostrado apenas aos administradores do destino",
+    "noMergeBases": "Nenhuma",
+    "bindingHint": "Os push ficam sob o prefixo de push, e os pull requests e merges vão apenas para as bases de merge. O motor verifica se ambos os vínculos estão aprovados no espaço de trabalho de cada vez que um pedido é enviado.",
+    "actions": "Ações",
+    "administration": "Administração do destino",
+    "notHeld": "Não detida",
+    "created": "Destino de publicação criado",
+    "updated": "Destino de publicação atualizado",
+    "deleted": "Destino de publicação eliminado",
+    "deleteTitle": "Eliminar destino {{id}}?",
+    "deleteDescription": "O motor recusa eliminar um destino que uma intenção em envio, incerta ou abandonada ainda mantenha."
+  },
+  "targetForm": {
+    "createTitle": "Novo destino de publicação",
+    "editTitle": "Editar destino {{id}}",
+    "description": "Associe uma credencial e um repositório aprovados às ramificações que este destino pode publicar.",
+    "credentialHint": "O ID de um vínculo de credencial aprovado neste espaço de trabalho. A consola nunca vê o seu segredo.",
+    "repositoryHint": "O ID de um vínculo de repositório aprovado neste espaço de trabalho. O seu proprietário tem de ser um dos que o vínculo de credencial permite.",
+    "keepBinding": "Deixe vazio para manter o vínculo atual.",
+    "prefixHint": "Os push têm de ficar sob este prefixo de ramificação. Termina com uma barra e não pode abranger uma base de merge.",
+    "prefixSlash": "O prefixo de push tem de terminar com uma barra.",
+    "basesHint": "As ramificações que os pull requests e merges podem ter como alvo, uma por linha. No máximo 16.",
+    "create": "Criar destino",
+    "save": "Guardar alterações"
+  },
+  "effects": {
+    "push": "Push",
+    "pull_request": "Pull request",
+    "merge": "Merge",
+    "issue_comment": "Comentário de issue"
+  },
+  "authority": {
+    "requires": "Requer {{permission}}",
+    "requiresStepUp": "Requer {{permission}} e a verificação adicional para ações administrativas"
+  },
+  "publish": {
+    "push": {
+      "title": "Fazer push de um commit",
+      "description": "Faz push de um commit exato para uma ramificação sob {{prefix}}, com lease no commit atual esperado da ramificação.",
+      "submit": "Pedir push"
+    },
+    "pull_request": {
+      "title": "Abrir um pull request",
+      "description": "Abre um pull request de uma ramificação sob {{prefix}} para uma base de merge, ou adota o que já estiver aberto e corresponder.",
+      "submit": "Pedir pull request"
+    },
+    "merge": {
+      "title": "Fazer merge de um pull request",
+      "description": "Faz merge de um pull request apenas enquanto o seu head ainda for o commit revisto.",
+      "submit": "Pedir merge"
+    }
+  },
+  "session": {
+    "title": "Publicar",
+    "hint": "Faça push do commit desta sessão através do destino de publicação do respetivo espaço de trabalho. O motor obtém o commit da pasta da sessão.",
+    "publish": "Publicar",
+    "publishTo": "Publicar em {{prefix}}"
+  },
+  "fields": {
+    "ref": "Ref da ramificação",
+    "refHint": "Uma ref completa sob o prefixo de push, por exemplo refs/heads/{{prefix}}change.",
+    "expectedOld": "Commit atual esperado",
+    "expectedOldHint": "Opcional. O push tem lease neste valor; deixe vazio para uma ramificação nova.",
+    "commit": "Commit",
+    "tree": "Árvore",
+    "treeHint": "O ID da árvore do commit. O motor recusa o push se o repositório gerido tiver uma árvore diferente.",
+    "sessionRun": "Execução da sessão",
+    "sessionRunHint": "Opcional. A execução da sessão cuja pasta contém o commit. O motor obtém primeiro o commit dela para o repositório gerido.",
+    "sessionRunFixedHint": "A sessão de onde vem este push. O motor obtém primeiro o commit da pasta dela para o repositório gerido.",
+    "headRef": "Ramificação head",
+    "headRefHint": "Uma ramificação sob {{prefix}}.",
+    "base": "Ramificação base",
+    "title": "Título",
+    "body": "Descrição",
+    "draft": "Abrir como rascunho",
+    "number": "Número do pull request",
+    "expectedHead": "Commit head revisto",
+    "expectedHeadHint": "O merge só acontece enquanto o head do pull request for este commit.",
+    "method": "Método de merge",
+    "acknowledgeIntent": "Reconhecer intenção abandonada",
+    "acknowledgeIntentHint": "Opcional. O ID de uma intenção abandonada que mantém este âmbito. Indicá-lo exige administração do destino.",
+    "operationId": "ID da operação",
+    "operationIdHint": "Enviar de novo este mesmo pedido com este ID devolve a intenção registada. Não envia uma segunda vez."
+  },
+  "methods": {
+    "merge": "Commit de merge",
+    "squash": "Squash",
+    "rebase": "Rebase"
+  },
+  "states": {
+    "dispatching": "Em envio",
+    "applied": "Aplicada",
+    "adopted": "Adotada",
+    "rejected": "Rejeitada pelo host",
+    "not_dispatched": "Não enviada",
+    "uncertain": "Incerta",
+    "abandoned": "Abandonada"
+  },
+  "receipts": {
+    "caused": "Este pedido causou o efeito no host.",
+    "existing_effect": "Já existia no host um efeito correspondente, que foi adotado.",
+    "none": "Nenhum efeito no host é atribuído a este pedido."
+  },
+  "outcome": {
+    "toast": "O motor respondeu: {{state}}",
+    "settled": {
+      "title": "O pedido está concluído"
+    },
+    "uncertain": {
+      "title": "O resultado no host é incerto",
+      "body": "O pedido foi enviado, mas o seu resultado no host não está confirmado. Pode ter sido aplicado. Não o envie de novo: a reconciliação lê o host e regista o que observa."
+    },
+    "rejected": {
+      "title": "O host rejeitou o pedido",
+      "body": "O host recusou o efeito. A intenção regista a recusa."
+    },
+    "refused": {
+      "title": "O motor recusou o pedido",
+      "code": "Código de recusa:"
+    },
+    "unknown": {
+      "title": "A resposta do motor não chegou",
+      "body": "O pedido pode ter sido registado. Abra as intenções deste destino para ver se foi e, se estiver incerto, reconcilie-o aí."
+    }
+  },
+  "refusals": {
+    "authority_expired": "A verificação de autoridade não terminou a tempo, pelo que o pedido não foi executado.",
+    "authority_unavailable": "O motor não conseguiu decidir sobre este pedido, pelo que não foi executado.",
+    "base_not_allowed": "A ramificação base não é uma das bases de merge deste destino.",
+    "binding_not_approved": "Um vínculo de credencial ou de repositório não está aprovado neste espaço de trabalho.",
+    "content_mismatch": "O commit ou a árvore não corresponde ao que o repositório gerido contém.",
+    "default_branch_refused": "A ramificação é a predefinida do repositório, e a publicação nela é recusada.",
+    "dispatch_deadline_passed": "O prazo de envio terminou antes de o pedido ser enviado. Nada foi enviado.",
+    "field_not_accepted": "O pedido continha um campo que esta rota não aceita.",
+    "forbidden": "A sua autoridade atual não permite esta ação neste destino.",
+    "head_mismatch": "O head do pull request já não é o commit revisto.",
+    "link_not_allowed": "A ligação do pull request tem de apontar para um pull request do repositório aprovado.",
+    "host_credential_refused": "O host Git recusou a credencial do vínculo ou o seu âmbito. Nada foi enviado.",
+    "host_unavailable": "Não foi possível contactar o host Git. Nada foi enviado.",
+    "intent_settled": "A intenção já está concluída, pelo que não pode ser abandonada.",
+    "invalid_request": "O pedido está incompleto ou malformado. Verifique os nomes das ramificações e os IDs dos commits.",
+    "lookup_incomplete": "O estado atual do host não pôde ser lido por completo, pelo que nada foi enviado.",
+    "not_found": "O destino ou a intenção não existe, ou não o pode ver.",
+    "not_mergeable": "O host indica que não é possível fazer merge do pull request.",
+    "operation_conflict": "Este ID de operação já foi usado para um pedido diferente.",
+    "protected_branch_refused": "A ramificação está protegida no host, e a publicação nela é recusada.",
+    "push_prefix_overlaps_base": "O prefixo de push permitiria que um push chegasse a uma base de merge.",
+    "ref_not_allowed": "A ramificação não está sob o prefixo de push deste destino.",
+    "repository_config_refused": "A configuração do repositório gerido não é a que o motor gere. Nada foi enviado por push.",
+    "repository_outside_binding": "O repositório está fora dos proprietários que o vínculo de credencial permite.",
+    "runtime_credential_refused": "A credencial de execução de uma sessão não pode publicar. Atue com a sua própria credencial.",
+    "scoped_grant_required": "Esta ação precisa de uma concessão com âmbito neste destino.",
+    "separation_of_duty": "Iniciou a sessão que criou esta alteração. Peça a outra pessoa que a reveja e faça merge.",
+    "session_source_refused": "A execução da sessão não está no espaço de trabalho deste destino, ou a sua pasta não é um repositório de onde o motor possa obter dados.",
+    "session_source_unavailable": "Não foi possível ler a pasta da sessão a tempo. Nada foi enviado por push.",
+    "stale_lease": "A ramificação já não contém o commit atual esperado.",
+    "step_up_required": "Esta ação precisa da verificação adicional para ações administrativas que esta implementação exige. Conclua-a quando lhe for pedido.",
+    "subject_mismatch": "Este ID de operação pertence a um pedido feito por outra identidade.",
+    "target_changed": "O destino mudou depois de o pedido ser admitido. Nada foi enviado.",
+    "target_in_use": "Uma intenção em envio, incerta ou abandonada ainda mantém este destino.",
+    "unresolved_intent": "Uma intenção por resolver já mantém esta ramificação, este pull request ou este merge.",
+    "unsupported_requirement": "O host não consegue cumprir este requisito, por exemplo um merge com rebase no GitLab.",
+    "version_conflict": "O destino mudou desde que o abriu. Volte a abri-lo para ver a versão atual.",
+    "workflow_change_refused": "O commit altera ficheiros de fluxo de trabalho de CI, que este destino se recusa a publicar.",
+    "unknown": "O motor recusou o pedido com um código que esta consola não descreve.",
+    "no_branch": "A pasta da sessão não está em nenhuma ramificação. Mude-a para uma ramificação e volte a entregar.",
+    "no_commit": "A ramificação da sessão ainda não tem nenhum commit.",
+    "nothing_to_ship": "O commit da sessão não acrescenta nada à ramificação em que seria feito o merge.",
+    "commit_refused": "A pasta da sessão recusou o commit: está só de leitura, ainda em curso, ou o seu perfil não tem nome e e-mail.",
+    "approval_denied": "Uma pessoa não aprovou este push, ou a sua aprovação terminou. Entregue de novo para pedir uma nova revisão.",
+    "approval_unavailable": "O serviço de aprovação não conseguiu responder. Volte a entregar daqui a pouco."
+  },
+  "intents": {
+    "title": "Intenções",
+    "empty": "Não há intenções de publicação registadas para este destino.",
+    "open": "Abrir intenção {{id}}"
+  },
+  "intent": {
+    "title": "Intenção {{id}}",
+    "description": "O que foi pedido, o que o host foi observado a conter pela última vez e se o host reconheceu o pedido são registados em separado.",
+    "state": "Estado",
+    "effect": "Efeito",
+    "receipt": "Recibo",
+    "operationId": "ID da operação",
+    "attempt": "Tentativa",
+    "targetVersion": "Versão do destino",
+    "reason": "Motivo",
+    "authorizedBy": "Assumida por",
+    "dispatchDeadline": "Prazo de envio",
+    "releaseFailure": "Falha na libertação da credencial",
+    "requested": "Pedido",
+    "observed": "Observado no host",
+    "notObserved": "O host não foi observado para esta intenção.",
+    "present": "Presente",
+    "sha": "Commit no host",
+    "headSha": "Commit head",
+    "merged": "Merge feito",
+    "mergeCommit": "Commit de merge",
+    "mergeTree": "Árvore do merge",
+    "contentMatch": "O head corresponde ao commit pedido",
+    "source": "Origem",
+    "at": "Em",
+    "acknowledged": "Reconhecido pelo host",
+    "acknowledgedValue": "Reconhecido",
+    "status": "Estado do host",
+    "requestId": "ID do pedido no host",
+    "acknowledgedHint": "Um reconhecimento é a resposta de sucesso do host a este pedido. Não é uma observação do efeito.",
+    "yes": "Sim",
+    "no": "Não",
+    "observations": "Observações",
+    "observationsEmpty": "Não há observações registadas para esta intenção.",
+    "obs": {
+      "at": "Em",
+      "attempt": "Tentativa",
+      "source": "Origem",
+      "result": "Resultado",
+      "host": "Objeto, estado e pedido do host"
+    },
+    "abandonedNote": "Um administrador assumiu a responsabilidade por esta intenção. Isso não prova nada sobre o host. O seu âmbito continua retido até um novo pedido indicar esta intenção em Reconhecer intenção abandonada.",
+    "abandoned": "Intenção abandonada",
+    "abandonTitle": "Abandonar intenção {{id}}?",
+    "abandonDescription": "Abandonar regista que assume a responsabilidade por esta intenção por resolver. Não altera nem lê o host, e o âmbito continua retido até um novo pedido reconhecer esta intenção.",
+    "abandonReason": "Motivo (no máximo 256 carateres)"
+  },
+  "ship": {
+    "button": "Entregar",
+    "shipTo": "Entregar em {{prefix}}",
+    "title": "Entregar esta sessão",
+    "description": "Faz commit das alterações da sessão em seu nome, faz push delas para uma ramificação sob {{prefix}} e abre um pull request, numa só ação.",
+    "submit": "Entregar",
+    "message": "Mensagem do commit",
+    "messageHint": "Usada apenas quando a pasta da sessão tem alterações. Por predefinição, o título.",
+    "shipped": "Entregue: foi feito push de <branch />.",
+    "shippedToast": "Entregue.",
+    "pullRequest": "Pull request n.º {{number}}",
+    "pullRequestOpen": "Abrir o pull request",
+    "awaitingTitle": "A aguardar a aprovação de outra pessoa",
+    "awaitingBody": "As suas alterações foram registadas num commit. Outra pessoa tem de aprovar o push (aprovação {{id}}) antes de ele sair. Quando o fizer, entregue de novo.",
+    "again": "Entregar de novo",
+    "incompleteTitle": "A entrega não terminou",
+    "incompletePush": "O push de <branch /> não foi aplicado ({{state}}). Verifique as intenções deste destino e depois entregue de novo.",
+    "incompletePullRequest": "Foi feito push de <branch />, mas o pull request não foi aberto ({{code}}). Entregue de novo para tentar outra vez.",
+    "pullRequests": "Pull requests"
+  }
+}

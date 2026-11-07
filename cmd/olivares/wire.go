@@ -19,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	obstrace "github.com/olivaresai/olivares/core/observability/trace"
 	"github.com/olivaresai/olivares/core/runtime/executor"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/capabilities"
 	"github.com/olivaresai/olivares/modules/catalog"
 	"github.com/olivaresai/olivares/modules/compliance"
@@ -135,7 +136,7 @@ import (
 //
 // Wired on demand (operator config, no code change):
 //   - knowledge.Source: the `documents` section of OLIVARES_SOURCES_CONFIG wires
-//     contentsource connectors (gdrive/confluence/notion/s3content; sharepoint is Business) via
+//     contentsource connectors (gdrive/notion/s3content; confluence and sharepoint are Business) via
 //     knowledge.WithSource. See sources.go (knowledgeContentOptions,
 //     buildContentSource). No documents configured => the module has no pull sources.
 
@@ -372,6 +373,12 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 		sourcescope.WithWorkspaceSealer(workspaceSecrets),
 		sourcescope.WithProfileAssignment(thisEdition.profileAssignment))
 	ssResolver := ss.Resolver()
+	var policyResolver store.PolicyResolver
+	if thisEdition.policyResolver != nil {
+		policyResolver = thisEdition.policyResolver(ssResolver)
+		// Source scope needs governance authorization before policy selection can bind.
+		governance.WithPolicyResolver(policyResolver)(gov)
+	}
 	// CLA-17-A: resolve the Claude inference seams (Judge / model-backed Embedder)
 	// from env. Both stay fail-closed (offline judge / zero-egress local embedder) when
 	// no credential is configured — never a false pass, never a silent egress.
@@ -422,6 +429,13 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// engine — it deny-closes exactly those launches, and the ERROR line names the
 	// remedy — so the error is reported here and not returned.
 	_ = useSessionWorkspaceRoot(sm, dataDir, log)
+	// Each person's own folder, "My files", lives in the data directory so the backup
+	// and the pre-upgrade snapshot cover it. No data directory, no personal folders.
+	if dataDir != "" && filepath.IsAbs(dataDir) {
+		if err := sm.UsePersonalFilesRoot(filepath.Join(filepath.Clean(dataDir), personalFilesDirName)); err != nil && log != nil {
+			log.Error("session runtime: personal folders are off on this node", "remedy", err.Error())
+		}
+	}
 	// K4.A1: where a session launched with the opt-in new worktree works. A refusal
 	// refuses that option only.
 	_ = useSessionWorktrees(sm, dataDir, osGetenv, log)
@@ -453,14 +467,17 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	knowledgeGuard.useGuardPostureResolver(ssResolver)
 	knowledgeOpts := append([]knowledge.Option(nil), knowledgeOptions...)
 	knowledgeOpts = append(knowledgeOpts, knowledge.WithRetrievalGuard(knowledgeGuard))
+	if thisEdition.policyResolver != nil {
+		knowledgeOpts = append(knowledgeOpts, knowledge.WithPolicyResolver(policyResolver))
+	}
 	// the source-scope gate (orthogonal to the guard's sensitivity/ACL) — is the
 	// requesting agent in the KB's workspace/agent-group scope? Deny-closed; an unbound
 	// KB is allowed (back-compat).
 	knowledgeOpts = append(knowledgeOpts, knowledge.WithRetrievalScopeGate(knowledgeScopeGate{resolver: ssResolver, log: log}))
 	vecOpts, vecAdapter := knowledgeVectorOptions(osGetenv, log)
 	knowledgeOpts = append(knowledgeOpts, vecOpts...)
-	// (B1): wire the configured knowledge DOCUMENT sources (gdrive/confluence/
-	// notion/s3content) the module drives on ingest. They are NOT runtime
+	// (B1): wire the configured knowledge DOCUMENT sources (gdrive/notion/
+	// s3content) the module drives on ingest. They are NOT runtime
 	// observation sources (no R/RW edge) — they are pulled by the module — so they are
 	// wired here at construction, not in wireSources. Deny-closed: none configured ⇒ no
 	// pull sources (knowledgeContentOptions warns per honest-posture).
@@ -515,7 +532,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	bridge := newApprovalBridge(approvalCfg, log)
 	if bridge != nil {
 		sessionDependencies.ApprovalGate = providerApprovalAdapter{bridge: bridge, approvalWait: sm.BeginApprovalWait}
-		sessions.WithDriverTimeouts(0, 15*time.Minute)(sm)
+		sessions.WithDriverTimeouts(0, sessions.ApprovalWait)(sm)
 	}
 	var (
 		deployOpts []deploy.Option
@@ -668,6 +685,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	compOpts = append(compOpts, complianceRecordsOptions(thisEdition.name)...)
 	comp := compliance.New(compOpts...)
 	knowledgeOpts = append(knowledgeOpts, knowledge.WithHoldGate(complianceHoldGate{m: comp}))
+	sessions.WithHoldGate(sessionsHoldGate{m: comp})(sm)
 
 	// wire the REAL deploy executor (module VII ACTS), the firm IdentityBinder
 	// and the drift loop from the operator config (OLIVARES_DEPLOY_EXECUTOR_CONFIG).
@@ -988,6 +1006,9 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 		return moduleSet{}, err
 	}
 	editionModules := append([]api.Module{}, thisEdition.moduleRegistrars(edition)...)
+	if m, ok := policyResolver.(api.Module); ok {
+		editionModules = append(editionModules, m) // the same instance governance and knowledge ask
+	}
 	editionModules = append(editionModules, managedSCIM...)
 	all, err := registry.Build([]api.Module{
 		capabilities.New(capabilitiesOpts(pinVerifier)...), ss,
@@ -1043,7 +1064,7 @@ var (
 // errors above it is FIXED: it never carries the supplied engine string, path, URL or token.
 var errPDPEngineBusiness = errors.New("OLIVARES_PDP_ENGINE selects an external policy engine (a Cedar file or Open Policy Agent), " +
 	"which is a Business capability: run the Business edition, or remove OLIVARES_PDP_ENGINE from the environment " +
-	"and from the activation manifest (or set it to none) to use the native engine alone: " + pricingURL)
+	"and from the activation manifest and deployment settings record (use the Business edition's `olivares enterprise disable <preset>`, or set the engine to none) to use the native engine alone: " + pricingURL)
 
 // pdpEngineSelector is the trimmed OLIVARES_PDP_ENGINE, or "" when it is unset, blank or
 // a case-insensitive "none": the native ABAC engine alone, valid in every edition.
@@ -1104,6 +1125,22 @@ var businessProtectionKeys = []struct {
 	{"OLIVARES_ORCH_WORKFLOW_INTERVAL", false},
 	{"OLIVARES_ORCH_WORKFLOW_MAX", false},
 	{"OLIVARES_ORCH_WORKFLOW_STEPS_MAX", false},
+}
+
+// refuseBusinessActivationInCommunity checks the current node file both at boot
+// and after reconciliation, before any listener starts.
+func refuseBusinessActivationInCommunity(dataDir string) error {
+	if thisEdition.name != "community" {
+		return nil
+	}
+	getenv, manifestErr := environmentWithActivationManifest(dataDir)
+	if err := refuseUnreadableActivationManifestInCommunity(manifestErr); err != nil {
+		return err
+	}
+	if err := refuseExternalPDPInCommunity(getenv); err != nil {
+		return err
+	}
+	return refuseBusinessProtectionsInCommunity(getenv)
 }
 
 // environmentWithActivationManifest is osGetenv as it will read after boot loads the
@@ -1177,7 +1214,7 @@ func refuseBusinessProtectionsInCommunity(getenv func(string) string) error {
 			continue
 		}
 		return exitcode.New(exitcode.Edition, fmt.Errorf("%s configures a Business capability, which this Community binary does not enforce: "+
-			"run the Business edition, or remove %s from the environment and from the activation manifest: %s", k.env, k.env, pricingURL))
+			"run the Business edition, or remove %s from the environment and from the activation manifest and deployment settings record (use the Business edition's `olivares enterprise disable <preset>`): %s", k.env, k.env, pricingURL))
 	}
 	return nil
 }
@@ -1269,9 +1306,9 @@ func loadGovernancePDP(getenv func(string) string, log *slog.Logger) ([]governan
 	return []governance.Option{governance.WithExternalPDP(pdp)}, nil
 }
 
-// complianceRecordsOptions enables legal holds and erasure in every edition but Community: they
-// are Business capabilities (docs/editions.md), and the compliance module answers their routes
-// 501 business_required without the option (modules/compliance/records_edition.go). The hold
+// complianceRecordsOptions enables legal holds, erasure and retention schedules in every edition
+// but Community: they are Business capabilities (docs/editions.md), and the compliance module
+// answers their routes 501 business_required without the option (modules/compliance/records_edition.go). The hold
 // gate below keeps reading stored holds in every edition.
 func complianceRecordsOptions(edition string) []compliance.Option {
 	if edition == "community" {
@@ -1301,6 +1338,18 @@ func (g complianceHoldGate) Check(ctx context.Context, tenant model.TenantID, su
 		holds = append(holds, knowledge.HoldRef{ID: h.ID, MatterRef: h.MatterRef, ScopeKind: h.ScopeKind})
 	}
 	return dec.Held, holds, nil
+}
+
+// sessionsHoldGate bridges the sessions.HoldGate seam to the same CheckHold: a
+// registered folder is the subject ("workspace", workspace_ref). An error propagates
+// so the folder edit is refused (fail closed).
+type sessionsHoldGate struct{ m *compliance.Module }
+
+var _ sessions.HoldGate = sessionsHoldGate{}
+
+func (g sessionsHoldGate) Check(ctx context.Context, tenant model.TenantID, subjectKind, subjectRef string) (bool, error) {
+	dec, err := g.m.CheckHold(ctx, tenant, compliance.HoldSubject{Kind: subjectKind, Ref: subjectRef})
+	return dec.Held, err
 }
 
 // modelsProviderRetention bridges compliance.ProviderRetention to the models

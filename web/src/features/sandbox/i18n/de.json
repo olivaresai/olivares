@@ -159,7 +159,6 @@
     }
   },
   "seam": {
-    "synthetic": "Lokale Datengenerierung",
     "syntheticData": "Reproduzierbare Szenario-Eingaben über die Sandbox-API aus begrenzten lokalen Vorlagen erzeugen. Keine Modell- oder Netzwerkanfragen."
   },
   "empty": {
@@ -181,7 +180,7 @@
     "scenarioRef": "Scenario ref (optional)",
     "baseline": "Baseline variant",
     "candidate": "Candidate variant",
-    "replayHint": "Führt eine historische Sitzung deterministisch gegen Mocks erneut aus. Lässt sich die Zeitleiste nicht rekonstruieren, kommt die Wiedergabe DEGRADIERT mit null Schritten zurück — das ist keine Sitzung, die nichts getan hat, sondern eine Zeitleiste, die nicht wiederhergestellt werden konnte.",
+    "replayHint": "Führt eine frühere Sitzung erneut gegen Mocks aus. Eine Wiederholung ohne Schritte bedeutet, dass ihre Zeitleiste nicht rekonstruiert werden konnte.",
     "compareHint": "Ein Vergleich ist Entscheidungsnachweis vor und nach der Bereitstellung und wird nur anhängend gespeichert; deshalb braucht er die Administratorstufe statt der Stufe, die nur ausführt.",
     "liveRef": "Sitzungsinstanz-Referenz",
     "legacySessionRef": "Alte Sitzungsreferenz (alternativ)"

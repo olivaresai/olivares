@@ -1,5 +1,5 @@
 {
-  "title": "Santé et SLA",
+  "title": "Santé",
   "subtitle": "Disponibilité, fiabilité et dépendances de votre parc — dérivées de l’activité observée et du balayage d’obsolescence, jamais par sondage de l’infrastructure.",
   "auditedNote": "Le flux en direct et toute action de résolution ou de modification sont des opérations privilégiées et auditées. La santé est dérivée ; le moteur ne transporte ici aucun texte d’erreur ni aucune charge utile.",
   "refresh": "Actualiser",
@@ -175,8 +175,7 @@
       "delegates_to": "Délègue à"
     },
     "observed": "Observé",
-    "truncated": "Affichage des {{n}} premiers",
-    "truncatedHint": "Le graphe de dépendances comporte plus de nœuds qu’affiché ; ceci est la première page par jeu de clés.",
+    "truncated": "Toutes les dépendances ne sont pas affichées.",
     "empty": {
       "title": "Aucune dépendance découverte pour l’instant",
       "description": "Dès que des agents appellent des serveurs MCP et des outils, le graphe de dépendances observé apparaît ici."

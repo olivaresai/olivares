@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
 import { Aal3Policy } from './aal3-policy'
-import { journeyNowLink } from './browser-session'
+import { journeyShellLink } from './browser-session'
 import {
   encabezadoDeDialogo,
   encabezadoDelDialogoAbierto,
@@ -30,7 +30,7 @@ const DEMO_EMAIL = 'demo@olivares.local'
 const DEMO_PASSWORD = 'olivares-demo-estate'
 
 // The left navigation is present after account adoption.
-const navReady = journeyNowLink
+const navReady = journeyShellLink
 
 // One entry per view the docs reference. `settle` gives slow views (graph
 // layout, charts) extra time after networkidle before the shot. `live` views
@@ -94,7 +94,7 @@ async function eligeWorkspaceConcretoK3(page: import('@playwright/test').Page) {
 // run and keep it out of captures, evidence and logs.
 async function provisionaMiembroK3(
   page: import('@playwright/test').Page,
-  rol: 'editor' | 'admin',
+  rol: 'viewer' | 'editor' | 'admin',
 ) {
   const api = page.request
   const entrada = await api.post('/v1/auth/login', {
@@ -273,6 +273,79 @@ async function seedMemberHandoff(
   expect(offered.status(), `handoff offer: ${await offered.text()}`).toBe(201)
 }
 
+// The demo superadmin's bearer and tenant headers, for a capture that changes the estate through the product API
+// beside the page.
+async function cabecerasDelSuperadmin(page: import('@playwright/test').Page) {
+  const entrada = await page.request.post('/v1/auth/login', {
+    data: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
+  })
+  expect(entrada.status(), 'docs-captures: demo superadmin login').toBe(200)
+  return {
+    Authorization: `Bearer ${((await entrada.json()) as { token: string }).token}`,
+    'X-Olivares-Tenant': demoTenant,
+  }
+}
+
+// The workspace a page chooses is kept in the person's server preferences, where it follows them into every later
+// capture (the top bar would read that workspace's name). Delete the saved choice so the next view starts as the first.
+async function sueltaElWorkspaceElegido(page: import('@playwright/test').Page) {
+  const api = page.request
+  const cabeceras = await cabecerasDelSuperadmin(page)
+  const ruta = '/v1/m/consoleviews/ui-state'
+  const leido = await api.get(ruta, { headers: cabeceras })
+  expect(leido.status(), 'docs-captures: preference cleanup read').toBe(200)
+  const claves = Object.keys(
+    ((await leido.json()) as { preferences?: Record<string, string> })
+      .preferences ?? {},
+  ).filter((k) => k.startsWith('olivares.workspace'))
+  if (claves.length === 0) return
+  const guardado = await api.put(ruta, {
+    headers: cabeceras,
+    data: { preferences: Object.fromEntries(claves.map((k) => [k, null])) },
+  })
+  expect(guardado.status(), 'docs-captures: preference cleanup save').toBe(200)
+}
+
+// A second writer moves a work item between the plan the page showed and the apply the page sends: it changes the
+// brief through the product API, so the item's version is no longer the one the page read. Two briefs alternate, so
+// each call changes the item whatever its state.
+async function otroEscritorCambiaElItem(
+  page: import('@playwright/test').Page,
+  itemId: string,
+) {
+  const api = page.request
+  const cabeceras = await cabecerasDelSuperadmin(page)
+  const ruta = `/v1/m/sessions/work-items/${itemId}`
+  const leido = await api.get(ruta, { headers: cabeceras })
+  expect(leido.status(), 'docs-captures: second writer read').toBe(200)
+  const etag = leido.headers()['etag']
+  const actual = ((await leido.json()) as { item: { brief_md: string } }).item
+    .brief_md
+  const NOTA = ' Keep the weekday baseline.'
+  const brief_md = actual.endsWith(NOTA)
+    ? actual.slice(0, -NOTA.length)
+    : actual + NOTA
+  const plan = await api.patch(`${ruta}?mode=plan`, {
+    headers: { ...cabeceras, 'If-Match': etag },
+    data: { brief_md },
+  })
+  expect(plan.status(), 'docs-captures: second writer plan').toBe(200)
+  const { plan_hash } = (await plan.json()) as { plan_hash: string }
+  const aplicado = await api.patch(`${ruta}?mode=apply`, {
+    headers: {
+      ...cabeceras,
+      'If-Match': etag,
+      'If-Plan-Hash': plan_hash,
+      'Idempotency-Key': randomUUID(),
+    },
+    data: { brief_md },
+  })
+  expect(
+    aplicado.status(),
+    `docs-captures: second writer apply: ${await aplicado.text()}`,
+  ).toBe(200)
+}
+
 async function seedProtocolDraft(page: import('@playwright/test').Page) {
   const api = page.request
   const login = await api.post('/v1/auth/login', {
@@ -424,7 +497,7 @@ async function grantChannelAdministration(
 // The card the adoption overview is framed on: the nearest card around the live telemetry title.
 const tarjetaDeTelemetria = (page: import('@playwright/test').Page) =>
   page
-    .getByText(/Per session \(live telemetry\)/i)
+    .getByText(/^Per session$/i)
     .first()
     .locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]')
 
@@ -446,12 +519,14 @@ const A_MANO: {
   ) => Promise<void | Record<string, unknown>>
   // Runs after the capture, pass or fail, for a view whose `prepara` changed deployment
   // state that later captures must not inherit.
-  limpia?: () => Promise<void>
+  limpia?: (page: import('@playwright/test').Page) => Promise<void>
   // Use a provisioned tenant member when scoped access excludes the demo global
   // account.
-  actor?: 'k3-tenant-editor' | 'k3-tenant-admin'
+  actor?: 'k3-tenant-viewer' | 'k3-tenant-editor' | 'k3-tenant-admin'
   // Modal captures temporarily close the dialog to change the theme.
   modal?: boolean
+  // The alert a view that shows a refusal exists to show: it must be on the page, and no other alert may be.
+  aviso?: RegExp
   // A capture can name a target surface instead of the page heading.
   objetivo?: (
     page: import('@playwright/test').Page,
@@ -502,50 +577,81 @@ const A_MANO: {
   {
     id: 'work-apply-refused',
     path: '/work',
-    heading: /^Work$/,
     settle: 800,
     live: true,
-    // Exercise the engine error envelope, including error.message, with a deterministic
-    // refusal.
-    prepara: async (page) => {
-      await page.route('**/v1/m/sessions/work-items/**', async (route) => {
-        if (route.request().method() !== 'POST') return route.fallback()
-        await route.fulfill({
-          status: 409,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            verdict: 'RECHAZADO',
-            code: 'lease_held_elsewhere',
-            error: {
-              message:
-                'the lease is held by session sesion-7 until 2026-08-30T09:00:00Z; take it over or wait',
-            },
-          }),
-        })
+    // The state is an apply the engine refused. The page plans "Mark ready" for a draft item and shows the plan;
+    // a second writer then changes the item through the API; the page applies with the version it read, which is no
+    // longer the item's, and the engine refuses it. Nothing here answers for the engine: the request is the page's own.
+    aviso: /Someone else changed this item/,
+    // Two dialogs are open (the item sheet and the apply dialog), so the target is the apply dialog's own title.
+    objetivo: (page) =>
+      page
+        .getByRole('dialog')
+        .getByRole('heading', { name: /^Mark '.+' ready$/ }),
+    despues: async (page) => {
+      const fila = page.locator('[data-slot="work-item-row"]').filter({
+        hasText: 'Why does the nightly eval suite drift on weekends?',
       })
+      await fila.click()
+      const itemId = new URL(page.url()).searchParams.get('item')
+      expect(
+        itemId,
+        'docs-captures: the row did not open its item',
+      ).toBeTruthy()
+      await page
+        .locator('[data-slot="work-detail"]')
+        .getByRole('button', { name: 'Mark ready' })
+        .click()
+      const dialogo = page.getByRole('dialog', { name: /^Mark '.+' ready$/ })
+      await expect(
+        dialogo.getByText('Clean', { exact: true }).first(),
+        'docs-captures: the plan was not shown, clean, before the apply',
+      ).toBeVisible()
+      await otroEscritorCambiaElItem(page, itemId as string)
+      const envio = page.waitForRequest(
+        (r) =>
+          r.method() === 'POST' &&
+          new URL(r.url()).searchParams.get('mode') === 'apply',
+      )
+      await dialogo.getByRole('button', { name: 'Apply', exact: true }).click()
+      await envio
+      await expect(dialogo.getByRole('alert')).toBeVisible()
     },
   },
   {
     id: 'templates-readonly',
     path: '/workspace-templates',
-    heading: /^Workspace Templates$/,
+    heading: /^Templates$/,
     settle: 800,
-    // Remove only template write/admin permissions so read access remains.
-    prepara: async (page) => {
-      await page.route('**/v1/auth/whoami', async (route) => {
-        const res = await route.fetch()
-        const cuerpo = await res.json()
-        const fuera = new Set([
-          'sessions:template:write',
-          'sessions:template:admin',
-        ])
-        if (Array.isArray(cuerpo?.permissions)) {
-          cuerpo.permissions = cuerpo.permissions.filter(
-            (p: string) => !fuera.has(p),
-          )
-        }
-        await route.fulfill({ response: res, json: cuerpo })
-      })
+    // The state is a member who may read templates and cannot change them: a tenant viewer, signed in
+    // through the login form. The demo account is a superadmin, whom the console never asks for a
+    // permission, so no change to what whoami reports could make it read-only.
+    actor: 'k3-tenant-viewer',
+    despues: async (page) => {
+      // The page must have loaded its templates, and every action that writes must be refused to this member.
+      await esperaTablasCargadas(page)
+      // The header and the empty "Your templates" group each offer New template.
+      const nuevas = page.getByRole('button', { name: 'New template' })
+      await expect(nuevas.first()).toBeVisible()
+      for (const nueva of await nuevas.all()) {
+        await expect(
+          nueva,
+          'docs-captures: templates-readonly offers New template to a viewer',
+        ).toBeDisabled()
+      }
+      // The built-ins are folded under a closed disclosure: open it first.
+      await page.getByText(/^Built-in templates \(\d+\)$/).click()
+      await page
+        .getByRole('button', { name: 'Edit', exact: true })
+        .first()
+        .click()
+      for (const accion of ['Duplicate', 'Archive']) {
+        await expect(
+          page.getByRole('menuitem', { name: accion, exact: true }).first(),
+          `docs-captures: templates-readonly offers ${accion} to a viewer`,
+        ).toBeDisabled()
+      }
+      await page.keyboard.press('Escape')
     },
   },
   {
@@ -568,7 +674,7 @@ const A_MANO: {
   {
     id: 'list-truncated',
     path: '/identity?tab=people',
-    heading: /^Identity & access$/,
+    heading: /^Identity$/,
     settle: 800,
     // Exercise the partial-list notice with has_more in the response.
     prepara: async (page) => {
@@ -592,7 +698,7 @@ const A_MANO: {
     settle: 1500,
     heading: /^Reach$/,
   },
-  { id: 'inventory', path: '/inventory', heading: /^Inventory$/ },
+  { id: 'inventory', path: '/inventory', heading: /^Discovered resources$/ },
   {
     id: 'communications-protocol-bindings',
     path: '/communications/protocol-bindings',
@@ -656,7 +762,29 @@ const A_MANO: {
     id: 'communications-new',
     path: '/communications/new',
     heading: /^New channel$/,
-    despues: eligeWorkspaceConcretoK3,
+    // The form is photographed as a person fills it in: through its own controls, ready to create. The slug, the
+    // name and one grant are what the form requires; the harness submits nothing.
+    limpia: sueltaElWorkspaceElegido,
+    despues: async (page) => {
+      // The estate has one workspace, so the switcher is not mounted and the page offers its own door to it.
+      await page.getByRole('button', { name: 'Use Default' }).click()
+      await page.getByLabel(/^Slug/).fill('release-announcements')
+      await page.getByLabel(/^Name/).fill('Release announcements')
+      await page
+        .getByLabel(/^Description/)
+        .fill('Where a release is announced before it reaches the whole team.')
+      await page
+        .getByRole('button', { name: 'Add my account as a subject' })
+        .click()
+      await expect(
+        page.locator('[data-slot="grant-row"]'),
+        'docs-captures: communications-new has no grant to show',
+      ).toHaveCount(1)
+      await expect(
+        page.getByRole('button', { name: 'Create channel' }),
+        'docs-captures: the filled form cannot create a channel',
+      ).toBeEnabled()
+    },
   },
   // Choose a workspace and require the Handoffs tab to be selected.
   {
@@ -821,17 +949,18 @@ const A_MANO: {
       )
     },
   },
-  { id: 'capabilities', path: '/capabilities', heading: /^MCP & skills$/ },
+  { id: 'capabilities', path: '/capabilities', heading: /^Extensions$/ },
   {
     id: 'identity',
     path: '/identity',
     settle: 1500,
-    heading: /^Identity & access$/,
+    heading: /^Identity$/,
   },
   { id: 'vault', path: '/vault', heading: /^Vault$/ },
-  { id: 'usage', path: '/usage', heading: /^Usage and cost, by account$/ },
+  { id: 'usage', path: '/usage', heading: /^Usage$/ },
+  { id: 'operations', path: '/operations', heading: /^Server$/ },
   { id: 'stored-budgets', path: '/stored-budgets', heading: /^Budgets$/ },
-  { id: 'security', path: '/security', heading: /^Security & forensics$/ },
+  { id: 'security', path: '/security', heading: /^Security$/ },
   {
     id: 'dashboards',
     path: '/dashboards',
@@ -842,7 +971,7 @@ const A_MANO: {
   {
     id: 'claude-policy',
     path: '/claude-policy',
-    heading: /^Claude Code governance$/,
+    heading: /^Managed policy$/,
   },
   { id: 'models', path: '/models', heading: /^Models$/ },
   {
@@ -902,7 +1031,7 @@ const A_MANO: {
     id: 'knowledge',
     path: '/knowledge',
     settle: 1500,
-    heading: /^Data, knowledge & context$/,
+    heading: /^Sources$/,
   },
   { id: 'catalog', path: '/catalog', settle: 1000, heading: /^Catalog$/ },
   {
@@ -910,9 +1039,14 @@ const A_MANO: {
     path: '/health',
     live: true,
     settle: 2500,
-    heading: /^Health & SLA$/,
+    heading: /^Health$/,
   },
-  { id: 'audit', path: '/audit', settle: 1000, heading: /^Audit ledger$/ },
+  {
+    id: 'audit',
+    path: '/audit',
+    settle: 1000,
+    heading: /^Audit ledger$/,
+  },
   {
     id: 'compliance',
     path: '/compliance',
@@ -924,11 +1058,12 @@ const A_MANO: {
     id: 'workspace',
     path: '/workspace',
     settle: 1500,
-    // The selected workspace name is the page heading.
-    heading: /^Billing$/,
+    // The page heading names the page; the selected workspace name is its subtitle.
+    heading: /^Workspace overview$/,
     // The workspace switcher requires multiple workspaces; the demo supplies Billing.
+    // The sidebar's scope switcher names the organization and lists the workspaces in its menu.
     prepara: async (page) => {
-      await page.getByRole('button', { name: /All workspaces/i }).click()
+      await page.locator('[data-slot="scope-switcher"]').click()
       await page.getByRole('menuitem', { name: /Billing/i }).click()
     },
   },
@@ -937,16 +1072,16 @@ const A_MANO: {
     id: 'backups',
     path: '/backups',
     settle: 1000,
-    heading: /^Backup & Restore$/,
+    heading: /^Backups$/,
   },
   { id: 'updates', path: '/updates', settle: 1000, heading: /^Updates$/ },
   // Parameterized and first-boot routes use their own setup below.
-  { id: 'home', path: '/', settle: 1000, heading: /^Now$/ },
+  { id: 'home', path: '/now', settle: 1000, heading: /^Now$/ },
   {
     id: 'onboarding',
     path: '/onboarding',
     settle: 1000,
-    heading: /^Get started$/,
+    heading: /^Setup$/,
   },
   {
     id: 'console',
@@ -959,12 +1094,21 @@ const A_MANO: {
     path: '/console/sources/diff',
     settle: 1000,
     heading: /^Source diff$/,
+    // The state is a comparison of two refs with its changed files. The diff is read live from a running GitHub or
+    // GitLab source, which an offline estate does not have: the page then shows its blank form and "A source is
+    // required", which passes every other shutter check. This view is held until a source answers (see the held list).
+    despues: async (page) => {
+      await expect(
+        page.getByRole('listbox', { name: 'Changed files' }),
+        'docs-captures: sourceDiff shows no diff; the estate has no running Git host source',
+      ).toBeVisible({ timeout: 5_000 })
+    },
   },
   {
     id: 'permissions',
     path: '/permissions',
     settle: 1000,
-    heading: /^Approvals and permissions$/,
+    heading: /^Permissions$/,
   },
   {
     id: 'routine-policies',
@@ -1003,7 +1147,7 @@ const A_MANO: {
       )
     },
   },
-  { id: 'estate', path: '/estate', heading: /^Estate$/ },
+  { id: 'estate', path: '/estate', heading: /^Configured resources$/ },
   {
     id: 'agentops',
     path: '/agentops',
@@ -1054,19 +1198,19 @@ const A_MANO: {
     id: 'agent-artifacts',
     path: '/agent-artifacts',
     settle: 1000,
-    heading: /^Agent Artifacts$/,
+    heading: /^Agent artifacts$/,
   },
   {
     id: 'workspace-templates',
     path: '/workspace-templates',
     settle: 1000,
-    heading: /^Workspace Templates$/,
+    heading: /^Templates$/,
   },
   {
     id: 'eventing',
     path: '/eventing',
     settle: 1000,
-    heading: /^Webhooks & event subscriptions$/,
+    heading: /^Webhooks$/,
   },
   {
     id: 'automations',
@@ -1085,13 +1229,13 @@ const A_MANO: {
     id: 'model-operations',
     path: '/model-operations',
     settle: 1000,
-    heading: /^Model Operations$/,
+    heading: /^Model operations$/,
   },
   {
     id: 'adoption',
     path: '/adoption',
     settle: 1000,
-    heading: /^Claude Code Adoption$/,
+    heading: /^Adoption$/,
     // Use the telemetry trend for seeded metrics; the demo does not populate
     // organization analytics.
     despues: async (page) => {
@@ -1118,7 +1262,7 @@ const A_MANO: {
         )
       }
       // Choose the live telemetry lens by its label.
-      await page.getByRole('option', { name: /live telemetry/i }).click()
+      await page.getByRole('option', { name: /^Per session$/i }).click()
     },
   },
   {
@@ -1127,7 +1271,7 @@ const A_MANO: {
     id: 'adoption-overview',
     path: '/adoption',
     settle: 1000,
-    heading: /^Claude Code Adoption$/,
+    heading: /^Adoption$/,
     // Frame the telemetry acceptance card rather than the empty organization analytics card: pinned just under
     // the page header, then cropped to the card, so the image starts at its title and stops before the
     // official-versus-observed comparison below it.
@@ -1137,7 +1281,7 @@ const A_MANO: {
         await tarjeta.waitFor({ timeout: 8_000 })
       } catch {
         throw new Error(
-          'docs-captures: no encuentro la tarjeta `Per session (live telemetry)` en /adoption ' +
+          'docs-captures: no encuentro la tarjeta `Per session` en /adoption ' +
             '(adoption-view.tsx:109). Sin ella la foto encuadra la tarjeta `analytics`, que esta ' +
             'a cero POR DISENO, y se lee como que el producto no mide la aceptacion.',
         )
@@ -1238,7 +1382,7 @@ const A_MANO: {
     id: 'platforms',
     path: '/platforms',
     settle: 1000,
-    heading: /^Platforms & lifecycle$/,
+    heading: /^Platforms$/,
   },
   {
     id: 'rate-limits',
@@ -1256,7 +1400,7 @@ const A_MANO: {
     id: 'api-playground',
     path: '/api-playground',
     settle: 1000,
-    heading: /^API Playground$/,
+    heading: /^API playground$/,
     // Send a request before opening History; the tab lists requests made in this
     // session.
     despues: async (page) => {
@@ -1306,6 +1450,25 @@ const A_MANO: {
             '(api-playground-view.tsx:185).',
         )
       }
+      // The summary line and the group counts are the size of this release's API: they change with every release.
+      await page.evaluate(() => {
+        const resumen = /^\d[\d,]* endpoints across \d+ groups/
+        for (const el of Array.from(
+          document.querySelectorAll<HTMLElement>('main *'),
+        ))
+          if (el.children.length === 0 && resumen.test(el.textContent ?? ''))
+            el.style.visibility = 'hidden'
+        for (const el of Array.from(
+          document.querySelectorAll<HTMLElement>(
+            'nav[aria-label="API endpoints"] button > span:last-child',
+          ),
+        ))
+          if (/^\d+$/.test(el.textContent ?? '')) el.style.visibility = 'hidden'
+      })
+      await expect(
+        page.getByText(/endpoints across/),
+        'docs-captures: api-playground still prints the endpoint and route counts',
+      ).toBeHidden()
     },
   },
   {
@@ -1313,7 +1476,18 @@ const A_MANO: {
     path: '/logs',
     settle: 1000,
     live: true,
-    heading: /^Log Viewer$/,
+    heading: /^Logs$/,
+    // The stream prints the engine's own lines, and some of them name the folders of the machine that took the
+    // shot. The viewer's search keeps the access log: one line per API request, with its method, route and status.
+    despues: async (page) => {
+      await page
+        .getByRole('textbox', { name: 'Search in log messages' })
+        .fill('api request')
+      await expect(
+        page.getByText('api request', { exact: true }).first(),
+        'docs-captures: logs shows no access-log line',
+      ).toBeVisible()
+    },
   },
   // The guide connector list is the Connectors tab. Its named example connectors are
   // seeded before navigation.
@@ -1397,6 +1571,13 @@ function objetivoDeLaVista(
   )
 }
 
+// The tenant role each provisioned actor signs in with.
+const ROL_DEL_ACTOR = {
+  'k3-tenant-viewer': 'viewer',
+  'k3-tenant-editor': 'editor',
+  'k3-tenant-admin': 'admin',
+} as const
+
 // The title of a view's test; the afterEach below finds the view by it.
 const tituloDeVista = (id: string) => `capture ${id}`
 
@@ -1408,15 +1589,13 @@ test.describe('Docs captures over real seeded data', () => {
 
   // A view that changed deployment state cleans up even when its capture failed, so one
   // red view cannot turn every later capture red.
-  // Playwright requires destructuring to reach testInfo, even with no fixtures.
-  // eslint-disable-next-line no-empty-pattern
-  test.afterEach(async ({}, testInfo) => {
+  test.afterEach(async ({ page }, testInfo) => {
     // lower() can outwait a hook's default 30 s budget; a hook killed mid-restore would
     // leave the policy raised and blame the next view. The budget is lower()'s own waits
     // plus margin.
     testInfo.setTimeout(120_000)
     const view = VIEWS.find((v) => testInfo.title === tituloDeVista(v.id))
-    if (view) await view.limpia?.()
+    if (view) await view.limpia?.(page)
     // A renamed test would match no view above and leave the policy raised for the next one.
     expect(
       aal3Policy,
@@ -1467,10 +1646,7 @@ test.describe('Docs captures over real seeded data', () => {
         // Use an exact sidebar link for the global account and the ordinary member
         // login for scoped captures.
         const actor = view.actor
-          ? await provisionaMiembroK3(
-              page,
-              view.actor === 'k3-tenant-admin' ? 'admin' : 'editor',
-            )
+          ? await provisionaMiembroK3(page, ROL_DEL_ACTOR[view.actor])
           : undefined
         const login = page.waitForResponse(
           (response) =>
@@ -1544,6 +1720,7 @@ test.describe('Docs captures over real seeded data', () => {
             recorte: view.recorte,
             actor: actor?.procedencia,
             testigo: testigo || undefined,
+            aviso: view.aviso,
           })
         }
       })
@@ -1576,7 +1753,7 @@ test.describe('Docs captures over real seeded data', () => {
         timeout: 60_000,
       })
 
-      await page.goto('/access-map')
+      await page.goto('/access-map?view=graph')
       await expect(page.locator('.react-flow__node').first()).toBeAttached({
         timeout: 60_000,
       })
@@ -1694,7 +1871,7 @@ test.describe('Docs captures over real seeded data', () => {
       ruta: '/access-map',
       objetivo: (page) => encabezadoDePagina(page, 'Access map'),
       prepara: async (page) => {
-        await page.goto('/access-map')
+        await page.goto('/access-map?view=graph')
         // Require a graph edge before capturing the interaction.
         const arista = page.locator('.react-flow__edge').first()
         await expect(arista).toBeAttached({ timeout: 60_000 })

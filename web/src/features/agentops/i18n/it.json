@@ -73,11 +73,11 @@
     "bypassPermissions": "bypassPermissions"
   },
   "effort": {
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-    "max": "max"
+    "low": "Basso",
+    "medium": "Medio",
+    "high": "Alto",
+    "xhigh": "Molto alto",
+    "max": "Massimo"
   },
   "summary": {
     "total": "Totale",
@@ -91,7 +91,7 @@
     "state": "Stato",
     "workspace": "Workspace",
     "model": "Modello",
-    "effort": "Effort",
+    "effort": "Sforzo",
     "mode": "Modalità",
     "transport": "Trasporto",
     "identity": "Identità",
@@ -140,11 +140,11 @@
     "namePlaceholder": "Un'etichetta visibile (facoltativa)",
     "transport": "Trasporto",
     "permissionMode": "Modalità dei permessi",
-    "effort": "Effort",
+    "effort": "Sforzo",
     "effortDefault": "Predefinito del modello",
     "model": "Modello",
     "workspace": "Cartella",
-    "workspaceNone": "Cartella temporanea per questa sessione",
+    "workspaceNone": "Predefinita (I miei file)",
     "worktree": "Lavora in un nuovo git worktree",
     "worktreeHint": "Avvia un nuovo branch in un worktree dedicato, così le sessioni sullo stesso repository non condividono file. La cartella deve essere la cartella principale del repository.",
     "worktreeFrom": "Parte da",
@@ -168,8 +168,8 @@
     "templateOverrides_one": "Il template sostituisce {{count}} delle tue scelte:",
     "templateOverrides_many": "Il template sostituisce {{count}} delle tue scelte:",
     "templateOverrides_other": "Il template sostituisce {{count}} delle tue scelte:",
-    "profile": "Profilo del provider",
-    "profileNone": "Seleziona un profilo",
+    "profile": "Account",
+    "profileNone": "Seleziona un account",
     "profileNotOperable": "non abilitato in questo ambiente",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME e GROK_HOME appartengono al profilo: un avvio che ne inoltra una qualsiasi viene rifiutato qui. Gli altri nomi restano soggetti alla validazione del server.",
     "identity": {
@@ -199,7 +199,7 @@
     "failed": "Lo strumento non ha risposto, quindi non c'è un elenco. Digita un modello o mantieni il predefinito.",
     "unsupported": "Questo strumento non elenca i suoi modelli. Digitane uno o mantieni il predefinito.",
     "unavailable": "L'elenco dei modelli non è disponibile qui. Digita un modello o mantieni il predefinito.",
-    "default": "default",
+    "default": "predefinito",
     "new": "Nuovi",
     "favorites": "Preferiti",
     "models": "Modelli",
@@ -209,8 +209,9 @@
     "use": "Usa “{{model}}”",
     "defaultNamed": "Predefinito ({{model}})",
     "defaultUnnamed": "Predefinito di {{tool}}",
+    "toolDefault": "Predefinito (consigliato)",
     "effortDefaultNamed": "Predefinito del modello ({{effort}})",
-    "effortNeedsModel": "Scegli prima un modello: un effort è un livello di un modello."
+    "effortNeedsModel": "Scegli prima un modello: lo sforzo è un livello di un modello."
   },
   "detail": {
     "live": "Live",
@@ -230,7 +231,7 @@
     "transport": "Trasporto",
     "isolation": "Isolamento",
     "permissionMode": "Modalità dei permessi",
-    "effort": "Effort",
+    "effort": "Sforzo",
     "model": "Modello",
     "workspace": "Workspace",
     "workspaceDirectory": "Directory di lavoro",
@@ -334,6 +335,8 @@
     "title": "Workspace",
     "subtitle": "Directory dell'host in cui lavora una sessione: montate, confinate e classificate DLP.",
     "register": "Registra workspace",
+    "personalFolders": "Dare a ogni persona una cartella personale (I miei file)",
+    "personalFoldersSaved": "Impostazione delle cartelle personali salvata.",
     "cols": {
       "name": "Workspace",
       "rootPath": "Percorso radice",
@@ -407,6 +410,22 @@
     }
   },
   "browser": {
+    "notes": {
+      "title": "Note",
+      "add": "Aggiungi una nota",
+      "select": "Seleziona prima un passaggio del file, poi aggiungi una nota.",
+      "note": "Nota",
+      "keep": "Aggiungi",
+      "cancel": "Annulla",
+      "sendTo": "Invia le note a",
+      "send": "Invia",
+      "sent": "Note inviate alla sessione.",
+      "failed": "Non è stato possibile inviare le note. Riprova tra un momento.",
+      "noSession": "Nessuna sessione attiva in questo spazio a cui inviarle.",
+      "count_one": "{{count}} nota",
+      "count_many": "{{count}} note",
+      "count_other": "{{count}} note"
+    },
     "title": "File",
     "root": "radice",
     "upDir": "Su",
@@ -449,7 +468,20 @@
     "deletedFile": "Eliminato",
     "sizeLabel": "Dimensione",
     "modifiedLabel": "Modificato",
-    "create": "Crea"
+    "create": "Crea",
+    "upload": "Carica",
+    "uploadLimit": "Fino a {{size}} per file",
+    "uploadReadOnly": "Questa cartella è di sola lettura, quindi non si possono aggiungere file.",
+    "uploadNoAccess": "Non hai accesso in scrittura a questa cartella.",
+    "uploaded": "Caricati: {{n}}",
+    "uploadTooLarge": "{{name}} supera il limite di {{size}} e non è stato caricato.",
+    "uploadExists": "{{name}} esiste già e non è stato sostituito.",
+    "uploadFailed": "Caricamento non riuscito",
+    "downloadSelected": "Scarica la selezione ({{n}})",
+    "downloadFolder": "Scarica la cartella",
+    "downloadFailed": "Download non riuscito",
+    "labeled": "Etichette DLP: {{classes}}",
+    "select": "Seleziona {{name}}"
   },
   "empty": {
     "title": "Nessuna sessione di Claude Code",
@@ -842,6 +874,10 @@
         "amber": "Ambra",
         "red": "Rosso",
         "blue": "Blu",
+        "purple": "Viola",
+        "pink": "Rosa",
+        "teal": "Verde acqua",
+        "slate": "Ardesia",
         "unknown": "Colore salvato sconosciuto"
       }
     }
@@ -1044,15 +1080,19 @@
   "usage": {
     "fiveHour": "5 ore",
     "week": "Settimanale",
+    "weekModel": "Solo {{model}}",
     "percent": "{{window}} {{percent}}%",
+    "shareOfWeek": "{{percent}}% della settimana",
+    "shareOfFiveHours": "{{percent}}% di 5 ore",
+    "resets": "Si azzera {{when}}",
     "unknown": "Utilizzo sconosciuto",
     "limit": {
       "fiveHour": "Limite di 5 ore raggiunto",
       "fiveHourResets": "Limite di 5 ore raggiunto, si azzera {{time}}",
       "week": "Limite settimanale raggiunto",
       "weekResets": "Limite settimanale raggiunto, si azzera {{time}}",
-      "other": "Limite {{label}} raggiunto",
-      "otherResets": "Limite {{label}} raggiunto, si azzera {{time}}"
+      "other": "Limite raggiunto",
+      "otherResets": "Limite raggiunto, si azzera {{time}}"
     }
   }
 }

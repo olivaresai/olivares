@@ -13,16 +13,7 @@
 // ⛔ WHAT THE LINE DOES NOT SAY IS NOT LOST: the badges (who manages the session, its mode,
 //    the live stream) and the working folder's path are the Context pane's, in plain
 //    words (`session-overview.tsx`). Paths, ids and sandbox names are never in a header.
-import {
-  AlarmClock,
-  AlarmClockOff,
-  ArrowUpRight,
-  CircleCheck,
-  CircleDashed,
-  MoreHorizontal,
-  Pin,
-  PinOff,
-} from 'lucide-react'
+import { ArrowUpRight, Folder, MoreHorizontal, Pin, PinOff } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -42,25 +33,23 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
 import { toast } from '@/components/ui/toaster'
-import {
-  AccountUsage,
-  AtLimit,
-  useAccountUsageOf,
-} from '@/features/agentops/account-usage'
+import { AtLimit, useAccountUsageOf } from '@/features/agentops/account-usage'
 import { toolName } from '@/features/agentops/engine-tools'
+import { ToolMark } from '@/features/agentops/tool-mark'
+import { AccountBadge } from '@/features/agent-tools/account-marks'
 import type { RunDTO } from '@/features/agentops/types'
 import { cn } from '@/lib/utils'
-import { runFolder } from './folder'
+import { OpenInEditor } from '@/features/shared/open-in-editor'
+import { folderName, runFolder } from './folder'
 import type { Capability, UnifiedSession } from './provenance'
 import { hostIsolationUnavailable } from './provenance'
 import { IconTip } from './icon-tip'
 import { RunActions } from './run-actions'
-import { isMarkedDone, isSnoozed } from './session-groups'
+import { SessionGit } from './session-git'
+import { SessionMarkItems } from './session-mark-items'
 import { LimitNotice } from './session-limit'
 import { StateDot } from './session-state-dot'
-import { SessionMeter } from './session-meter'
-import { sessionUsage } from './session-usage'
-import { markableRun, useSessionMarks } from './use-session-marks'
+import { useSessionMarks } from './use-session-marks'
 import type { LiveDTO } from './types'
 import './i18n'
 
@@ -78,15 +67,6 @@ async function copyReference(reference: string): Promise<boolean> {
     return false
   }
 }
-
-const HOUR_MS = 3_600_000
-
-/** The moments a snooze offers, from now (#2480). The CLI takes any duration or time. */
-const SNOOZE_FOR = [
-  { label: 'rail.snoozeHour', ms: HOUR_MS },
-  { label: 'rail.snoozeDay', ms: 24 * HOUR_MS },
-  { label: 'rail.snoozeWeek', ms: 7 * 24 * HOUR_MS },
-] as const
 
 /** The three commands that follow the session from a terminal. */
 function terminalCommands(run: RunDTO): string[] {
@@ -158,6 +138,11 @@ export function ThreadHeader({
   const { t } = useTranslation('sessions')
   const [terminalOpen, setTerminalOpen] = useState(false)
   const folder = runFolder(run)
+  // THE FOLDER AS A BREADCRUMB (#4014): the folder above it, then its own name, as T3 draws
+  // "workspace / folder"; the whole path on the hover.
+  const parentPath =
+    run?.workspace_path?.replace(/[/\\]+[^/\\]+[/\\]*$/, '') ?? ''
+  const parent = folderName(parentPath)
   const driver = run?.provider_driver || live?.provider || live?.engine
   // THE SESSION, THEN ITS TOOL. Two panes beside each other must say which
   // session each is, so the header is the name and the tool; the model and the effort
@@ -167,13 +152,7 @@ export function ThreadHeader({
   const accountUsage = useAccountUsageOf(
     live?.provider_profile_ref || run?.provider_profile_ref,
   )
-  const usage = sessionUsage(session.runs, live)
   const marks = useSessionMarks()
-  // The person's own snooze and done (#2480) need a run the engine still lists; an observed
-  // session or a released one is not offered them.
-  const markable = !!markableRun(session)
-  const snoozed = isSnoozed(session)
-  const markedDone = isMarkedDone(session)
 
   // The one-line form gives way by the width of ITS PANE, not the window's (a container
   // query): two panes beside each other at 1280 px are 340 px each, and there the name
@@ -183,25 +162,27 @@ export function ThreadHeader({
   const facts = (
     <>
       {tool ? (
-        <span
-          data-testid="thread-tool"
-          className={cn(
-            'min-w-0 truncate text-caption text-text-2',
-            !stackedFacts && 'hidden @min-[26rem]/thread:inline',
-          )}
-        >
-          {tool}
-        </span>
+        <>
+          <ToolMark
+            driver={driver!}
+            className={cn(
+              !stackedFacts && 'hidden @min-[26rem]/thread:inline-grid',
+            )}
+          />
+          <span
+            data-testid="thread-tool"
+            className={cn(
+              'min-w-0 truncate text-caption text-text-2',
+              !stackedFacts && 'hidden @min-[26rem]/thread:inline',
+            )}
+          >
+            {tool}
+          </span>
+        </>
       ) : null}
-      {accountUsage ? (
-        <AccountUsage
-          usage={accountUsage}
-          className={cn(
-            'min-w-0 shrink-0 truncate',
-            !stackedFacts && 'hidden @min-[26rem]/thread:inline',
-          )}
-        />
-      ) : null}
+      {/* The account's quota is not the session's: it is the status bar's, and Details'
+          "Account usage" (`session-facts.tsx`). Here only a reached limit is said, as it
+          stops the turn. */}
       <AtLimit usage={accountUsage} className="min-w-0 truncate" />
       {folder ? (
         <span
@@ -212,27 +193,29 @@ export function ThreadHeader({
             !stackedFacts && 'hidden @min-[40rem]/thread:inline-block',
           )}
         >
-          {folder}
+          <Folder
+            className="me-1 inline size-3 align-[-2px] text-text-3"
+            aria-hidden="true"
+          />
+          {parent ? `${parent} / ${folder}` : folder}
+        </span>
+      ) : null}
+      {folder && run?.workspace_path ? (
+        <span
+          className={cn(
+            'shrink-0 items-center gap-1',
+            !stackedFacts ? 'hidden @min-[40rem]/thread:flex' : 'flex',
+          )}
+        >
+          <OpenInEditor
+            root={parentPath || '/'}
+            file={folder}
+            labelClassName="sr-only"
+          />
+          <SessionGit run={run} variant="init" />
         </span>
       ) : null}
       {run ? <LimitNotice run={run} caps={caps} /> : null}
-      {/* WHOLE FIGURES OR NONE. On the one line the usage takes the room left; a figure
-          that does not fit wraps to a second line the header clips, so "701.2K in" never
-          shows as "701.2". The zero-width lead lets even the first figure wrap. The Context
-          pane says the usage in full (SessionMeter where="context"). */}
-      <span
-        className={cn(
-          'min-w-0 flex-wrap items-center gap-x-2 [&>*]:shrink-0',
-          stackedFacts
-            ? 'flex gap-y-1'
-            : 'hidden h-5 flex-1 content-start overflow-hidden @min-[48rem]/thread:flex',
-        )}
-      >
-        {stackedFacts ? null : (
-          <span aria-hidden="true" className="-mr-2 h-5 w-0" />
-        )}
-        <SessionMeter run={run} usage={usage} />
-      </span>
     </>
   )
 
@@ -249,7 +232,9 @@ export function ThreadHeader({
       <h2
         title={titleHint}
         className={cn(
-          'min-w-0 truncate text-body-l font-semibold text-text',
+          // THE TITLE GIVES WAY LAST (#3938): it keeps 16 characters before anything
+          // beside it shrinks, and takes the room the facts leave.
+          'min-w-[16ch] truncate text-body-l font-semibold text-text',
           // A zero basis keeps a long name on the controls' line, cut, instead of
           // wrapping the controls under it.
           stackedFacts && 'flex-1 basis-0',
@@ -258,6 +243,12 @@ export function ThreadHeader({
       >
         {title}
       </h2>
+      {/* Beside the name, not among the facts: those hide on a phone, and which account a
+          thread runs under is what tells two of the same tool apart there too. */}
+      <AccountBadge
+        profileRef={session.profileRef}
+        className="max-w-20 shrink-0 min-[761px]:max-w-32"
+      />
       {stackedFacts ? (
         <div
           data-slot="thread-facts"
@@ -305,32 +296,9 @@ export function ThreadHeader({
                 </span>
               </DropdownMenuItem>
             ) : null}
-            {snoozed ? (
-              <DropdownMenuItem onSelect={() => marks.unsnooze(session)}>
-                <AlarmClockOff />
-                {t('rail.unsnooze')}
-              </DropdownMenuItem>
-            ) : markable ? (
-              // Three plain items, not a submenu: no hover to hold, the same on a touch
-              // screen, and each one names the whole action.
-              SNOOZE_FOR.map(({ label, ms }) => (
-                <DropdownMenuItem
-                  key={label}
-                  onSelect={() => marks.snooze(session, ms)}
-                >
-                  <AlarmClock />
-                  {t(label)}
-                </DropdownMenuItem>
-              ))
-            ) : null}
-            {markedDone || markable ? (
-              <DropdownMenuItem
-                onSelect={() => marks.setDone(session, !markedDone)}
-              >
-                {markedDone ? <CircleDashed /> : <CircleCheck />}
-                {markedDone ? t('rail.markNotDone') : t('rail.markDone')}
-              </DropdownMenuItem>
-            ) : null}
+            {/* The person's own unread, snooze and done (#2480, #2866) need a run the engine
+                still lists; an observed or released session is offered only the way back. */}
+            <SessionMarkItems session={session} marks={marks} />
             {onOpenDetail ? (
               <DropdownMenuItem
                 onSelect={onOpenDetail}

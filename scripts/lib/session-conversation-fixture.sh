@@ -66,7 +66,7 @@ PY
 
 # A long conversation in the tool's own transcript, for the message navigator's journey
 # (#2129): 600 requests and answers a minute apart from 2026-10-14T08:00Z, one phrase on
-# the second line of request 137, and the sentence the journey sends last. Needs the
+# the second line of request 137. New turns are recorded by the driver. Needs the
 # session of seed_conversation_fixture, whose provider id the engine learns from the
 # fixture driver's init frame.
 seed_messages_transcript() {
@@ -79,8 +79,9 @@ seed_messages_transcript() {
     sleep 0.5
   done
   [ -n "$sid" ] || { echo "seed_messages_transcript: the session reported no provider id" >&2; return 1; }
-  # The driver echoes what is sent, as the tool does, so the thread holds the row of it.
-  : >"$DATA/ws/.fixture-echo-user"
+  # The driver records and echoes new turns, as the tool does. Do not seed a turn
+  # before it is sent: opening the session already restores the seeded transcript.
+  printf '%s' "$DATA/claude-config/projects/messages-journey/$sid.jsonl" >"$DATA/ws/.fixture-echo-user"
   mkdir -p "$DATA/claude-config/projects/messages-journey"
   python3 - "$DATA/claude-config/projects/messages-journey/$sid.jsonl" <<'PY'
 import datetime
@@ -94,6 +95,5 @@ with open(sys.argv[1], "w") as out:
         text = "migrate the sqlite schema\nthen the needle-137 index" if i == 137 else f"request {i}"
         out.write(json.dumps({"type": "user", "timestamp": stamp(i), "message": {"role": "user", "content": text}}) + "\n")
         out.write(json.dumps({"type": "assistant", "timestamp": stamp(i), "message": {"content": [{"type": "text", "text": f"answer {i}"}]}}) + "\n")
-    out.write(json.dumps({"type": "user", "timestamp": stamp(601), "message": {"role": "user", "content": "Look up the readme"}}) + "\n")
 PY
 }

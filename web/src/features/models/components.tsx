@@ -326,7 +326,9 @@ export function ModelsTable({ models }: { models: GovernedModel[] }) {
         id: 'capabilities',
         header: t('estate.columns.capabilities'),
         cell: ({ row }) => (
-          <Badge variant="neutral">{row.original.capabilities.length}</Badge>
+          <Badge variant="neutral">
+            {row.original.capabilities?.length ?? '—'}
+          </Badge>
         ),
       },
       {

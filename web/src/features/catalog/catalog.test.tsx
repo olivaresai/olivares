@@ -267,6 +267,13 @@ describe('EntryDetailSheet — privileged lifecycle actions', () => {
     ).toBeInTheDocument()
   })
 
+  it('marks the Approve action as trust chrome so a brand accent cannot restyle it', async () => {
+    api.getEntry.mockResolvedValue(draftEntry)
+    wrap(<EntryDetailSheet entryId="e-draft" open onOpenChange={() => {}} />)
+    const approve = await screen.findByRole('button', { name: /^approve$/i })
+    expect(approve.closest('[data-trust-chrome]')).not.toBeNull()
+  })
+
   it('asks for confirmation (with typed phrase) before approving', async () => {
     api.getEntry.mockResolvedValue(draftEntry)
     wrap(<EntryDetailSheet entryId="e-draft" open onOpenChange={() => {}} />)

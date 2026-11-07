@@ -128,16 +128,20 @@ type progressWriter struct {
 
 func (p progressWriter) Write(b []byte) (int, error) {
 	p.m.mu.Lock()
-	defer p.m.mu.Unlock()
 	// Keep the latest progress and disclose journal failures.
 	p.j.Progress += string(b)
 	if len(p.j.Progress) > 16<<10 {
 		p.j.Progress = p.j.Progress[len(p.j.Progress)-(16<<10):]
 	}
 	p.j.UpdatedAt = time.Now().UTC()
+	record := *p.j
+	p.m.mu.Unlock()
 	// Engine logging is advisory: it does not inspect writer errors. Retain the failure visibly.
-	if err := p.m.save(p.j); err != nil {
+	// The journal fsyncs run outside m.mu, which the sign-in output also takes.
+	if err := p.m.save(&record); err != nil {
+		p.m.mu.Lock()
 		p.j.Error = "Progress could not be retained in the job journal."
+		p.m.mu.Unlock()
 	}
 	return len(b), nil
 }
@@ -159,30 +163,36 @@ func (m *Module) run(j *savedJob, p *Plan, mc api.ModuleContext) {
 			receipt, _, err = m.engine.InstallV2(ctx, req, p.v2, out)
 		}
 	}
+	// The outcome is audited and journaled outside m.mu, then published at once:
+	// a poll reads running until the outcome is retained, as before.
+	m.mu.Lock()
+	outcome := *j
+	m.mu.Unlock()
+	outcome.State = "succeeded"
+	outcome.Receipt = receipt
+	if err != nil {
+		outcome.State = "failed"
+		outcome.Error = err.Error()
+		if errors.Is(err, context.Canceled) {
+			outcome.State = "interrupted"
+		}
+	}
+	outcome.UpdatedAt = time.Now().UTC()
+	auditCtx, done := context.WithTimeout(context.WithoutCancel(m.ctx), 5*time.Second)
+	defer done()
+	if ae := audit(auditCtx, mc, "install."+outcome.State, outcome.ID, map[string]any{"driver": outcome.Driver, "version": outcome.Version, "plan_digest": outcome.Digest}); ae != nil {
+		outcome.AuditError = "The installation outcome could not be appended to the audit ledger."
+	}
+	if se := m.save(&outcome); se != nil {
+		outcome.Error = "The final installation outcome could not be retained. Check inventory before retrying."
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	j.Job = outcome.Job
 	m.active = false
 	for key := range m.statusReads {
 		if key.driver == p.Driver {
 			delete(m.statusReads, key)
 		}
-	}
-	j.State = "succeeded"
-	j.Receipt = receipt
-	if err != nil {
-		j.State = "failed"
-		j.Error = err.Error()
-		if errors.Is(err, context.Canceled) {
-			j.State = "interrupted"
-		}
-	}
-	j.UpdatedAt = time.Now().UTC()
-	auditCtx, done := context.WithTimeout(context.WithoutCancel(m.ctx), 5*time.Second)
-	defer done()
-	if ae := audit(auditCtx, mc, "install."+j.State, j.ID, map[string]any{"driver": j.Driver, "version": j.Version, "plan_digest": j.Digest}); ae != nil {
-		j.AuditError = "The installation outcome could not be appended to the audit ledger."
-	}
-	if se := m.save(j); se != nil {
-		j.Error = "The final installation outcome could not be retained. Check inventory before retrying."
 	}
 }

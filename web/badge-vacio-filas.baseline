@@ -6,9 +6,6 @@ web/src/features/capabilities/revisions.tsx	1
 web/src/features/catalog/catalog-view.tsx	2
 web/src/features/claude-policy/drift.tsx	1
 web/src/features/claude-policy/managed-agents-hitl.tsx	1
-web/src/features/deploy/deploy-view.tsx	1
-web/src/features/deploy/operations-table.tsx	1
-web/src/features/deploy/wirings-table.tsx	1
 web/src/features/evals/evals-view.tsx	6
 web/src/features/health/dependency-map.tsx	1
 web/src/features/health/reliability-timeline.tsx	1
@@ -27,7 +24,7 @@ web/src/features/model-ops/evidence.tsx	1
 web/src/features/model-ops/finetune.tsx	1
 web/src/features/model-ops/owned-models.tsx	2
 web/src/features/models/gpai.tsx	1
-web/src/features/models/models-view.tsx	6
+web/src/features/models/models-view.tsx	5
 web/src/features/sandbox/sandbox-view.tsx	3
 web/src/features/security/security-view.tsx	2
 web/src/features/work/work-view.tsx	1

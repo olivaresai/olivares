@@ -21,6 +21,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -56,6 +57,17 @@ export interface GraphCanvasProps {
    * `LEGIBLE_FIT_MIN_ZOOM` es el valor calibrado para las etiquetas `text-xs`.
    */
   fitMinZoom?: number
+  /** Ceiling of the automatic fit, opt-in. With `fitMinZoom` equal to it the page always
+   * lands on exactly that zoom, so a level-of-detail caller that reads `onViewportZoom`
+   * is never told a zoom its own refit chose and cannot flip back and forth. */
+  fitMaxZoom?: number
+  /** Floor of the zoom the USER can reach (default 0.1). A caller whose labels are
+   * 12 px at zoom 1 raises it to 1 while it shows its coarsest level of detail, so
+   * there is nothing left to shrink the text. */
+  minZoom?: number
+  /** The zoom the viewport settled on after a pan, wheel, pinch or control press.
+   * A level-of-detail caller reads it to group what it can no longer draw legibly. */
+  onViewportZoom?: (zoom: number) => void
   /** Minimum clearance between measured nodes in each existing column. Opt in
    * when labels wrap; the original layout remains the minimum row spacing. */
   verticalNodeGap?: number
@@ -143,37 +155,81 @@ function spaceMeasuredNodes(nodes: Node[], gap: number): Node[] {
 }
 
 /**
- * Suelo de zoom del AJUSTE automático, **por llamante**.
+ * Minimum zoom for automatic fitting, **per caller**.
  *
- * ⛔ POR QUÉ EXISTE, medido sobre el access map: sin suelo, `fitView` hace lo que se
- * le pide —meter el grafo entero— aunque para lograrlo tenga que encoger a ~0,12, y
- * a ese factor una etiqueta `text-xs` (12 px) se pinta a ~1,5 px. Un ajuste que no
- * se puede leer no ha ajustado nada.
+ * ⛔ WHY THIS EXISTS, measured on the access map: without a floor, `fitView` does what
+ * it is asked — fit the whole graph — even when that shrinks it to about 0.12, which
+ * paints a `text-xs` label (12 px) at about 1.5 px. A fit that cannot be read has not
+ * fitted anything.
  *
- * ⛔ Y POR QUÉ NO ES GLOBAL, que es la corrección: lo puse como constante compartida
- * y el contraste `sol max` (F-02) midió el precio — `GraphCanvas` lo usan también
- * health, capabilities y sigma, y a **health le recorta el overview inicial con 15
- * nodos** (473 px de grafo en 440 de lienzo). Esas vistas no pidieron esto y su
- * problema no es el mismo. Quien quiera suelo lo pide; el valor por defecto es no
- * tenerlo, que es exactamente lo que había antes de este cambio.
+ * The value is 1: the smallest text on the canvas is 12 px at zoom 1, and painted size
+ * equals size × zoom, so 1 is the lowest value at which the page's chosen fit never
+ * paints text below 12 px. A graph that does not fit at that zoom is panned; showing
+ * everything is the grouped-detail level's job.
+ *
+ * Callers opt into this floor because applying it globally clips other views.
+ * For example, health's 15-node overview needs 473 px of graph in 440 px of canvas.
+ * Views without a legibility requirement keep the default with no zoom floor.
  */
-export const LEGIBLE_FIT_MIN_ZOOM = 0.45
+export const LEGIBLE_FIT_MIN_ZOOM = 1
 
 function FitOnChange({
   dep,
+  baseDep,
   minZoom,
+  maxZoom,
 }: {
   dep: string | undefined
+  baseDep: string | undefined
   minZoom?: number
+  maxZoom?: number
 }) {
-  const { fitView } = useReactFlow()
+  const { fitView, getViewport, getNodes, getNodesBounds, setCenter } =
+    useReactFlow()
+  const previousMaxZoom = useRef(maxZoom)
+  const previousBaseDep = useRef(baseDep)
+  const preserveZoom = useRef(false)
   useEffect(() => {
+    const baseChanged = previousBaseDep.current !== baseDep
+    previousBaseDep.current = baseDep
+    const ceilingRemoved =
+      previousMaxZoom.current !== undefined && maxZoom === undefined
+    previousMaxZoom.current = maxZoom
+    if (maxZoom !== undefined || baseChanged) preserveZoom.current = false
+    else if (ceilingRemoved && getViewport().zoom >= (minZoom ?? 0)) {
+      // Removing the ceiling is the detailed half of an LOD switch. Preserve a
+      // deliberate zoom-in through the new nodes and their measurements too.
+      preserveZoom.current = true
+    }
+    if (preserveZoom.current) {
+      const nodes = getNodes()
+      if (nodes.length === 0) return
+      const bounds = getNodesBounds(nodes)
+      const zoom = getViewport().zoom
+      // Recenter on the new layout without undoing the operator's pinch or wheel.
+      void setCenter(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2,
+        { zoom, duration: 200 },
+      )
+      return
+    }
     // Defer to the next frame so nodes are measured before fitting.
     const id = requestAnimationFrame(() =>
-      fitView({ padding: 0.18, minZoom, duration: 200 }),
+      fitView({ padding: 0.18, minZoom, maxZoom, duration: 200 }),
     )
     return () => cancelAnimationFrame(id)
-  }, [dep, fitView, minZoom])
+  }, [
+    dep,
+    baseDep,
+    fitView,
+    getViewport,
+    getNodes,
+    getNodesBounds,
+    setCenter,
+    minZoom,
+    maxZoom,
+  ])
   return null
 }
 
@@ -188,12 +244,16 @@ export function GraphCanvas({
   minimapColor,
   fitKey,
   fitMinZoom,
+  fitMaxZoom,
+  minZoom = 0.1,
+  onViewportZoom,
   verticalNodeGap,
   ariaLabel,
   children,
   className,
 }: GraphCanvasProps) {
   const isDark = useIsDark()
+  const controlZoomPending = useRef(false)
   const { t } = useTranslation('common')
   const { rfNodes, onNodesChange } = useMeasurableNodes(nodes)
   const renderedNodes = useMemo(
@@ -225,23 +285,28 @@ export function GraphCanvas({
           edgeTypes={edgeTypes}
           colorMode={isDark ? 'dark' : 'light'}
           fitView
-          fitViewOptions={{ padding: 0.18, minZoom: fitMinZoom }}
+          fitViewOptions={{
+            padding: 0.18,
+            minZoom: fitMinZoom,
+            maxZoom: fitMaxZoom,
+          }}
           // El SUELO va en `fitViewOptions`, no aquí: esta prop es el límite del
           // usuario, y subirla le impediría alejar para ver el conjunto — que es
           // justo el escape que el minimapa y los Controls ofrecen.
-          minZoom={0.1}
+          minZoom={minZoom}
           maxZoom={2.5}
+          onMoveEnd={(event, viewport) => {
+            // fitView and control-button zooms both end with a null source event.
+            // Only the latter are operator intent: automatic layout must not switch LOD.
+            if (event !== null || controlZoomPending.current)
+              onViewportZoom?.(viewport.zoom)
+            controlZoomPending.current = false
+          }}
           nodesDraggable={false}
           nodesConnectable={false}
-          // ⛔ `nodesFocusable` SE PROBÓ Y SE RETIRA, y la razón está medida en la
-          // propia librería: un nodo enfocable recibe `tabIndex=0` y `role="group"`
-          // (`@xyflow/react` → `isFocusable ? 'group' : undefined`, `aria-label:
-          // node.ariaLabel`), y NUESTROS nodos no llevan `ariaLabel`. Con
-          // GRAPH_LIMIT=500 eso mete hasta quinientos grupos SIN NOMBRE en el orden
-          // de tabulación, delante de todo lo que venga después del lienzo. Es un
-          // teclado PEOR, no mejor. El camino de teclado del mapa es la lista
-          // «Map as a list» que abre debajo del lienzo: un solo tab stop que lleva a
-          // la misma selección, con nombre.
+          // Forcing focusability gives nodes tabIndex=0 and role="group", but
+          // these nodes have no ariaLabel. Keep keyboard navigation in the named
+          // "Map as a list" view instead of adding up to 500 unnamed tab stops.
           elementsSelectable
           panOnScroll
           selectionOnDrag={false}
@@ -258,14 +323,19 @@ export function GraphCanvas({
           />
           <Controls
             showInteractive={false}
-            // ⛔ LA TERCERA RUTA DE `fitView`, y me la dejé. El contraste `sol max`
-            // del 2026-08-31 (F-01, MEDIUM) la encontró: el botón «fit» de estos
-            // controles llama a `fitView` por su cuenta, y sin esto volvía al
-            // `minZoom` GLOBAL de 0,1 — o sea, el usuario podía reproducir con un
-            // clic exactamente el defecto que las otras dos rutas ya no cometen.
-            // Mi propia batería tenía un mutante por cada una de las OTRAS dos y
-            // pasaba igual: una batería sólo prueba los casos que su autor imaginó.
-            fitViewOptions={{ padding: 0.18, minZoom: fitMinZoom }}
+            onZoomIn={() => {
+              controlZoomPending.current = true
+            }}
+            onZoomOut={() => {
+              controlZoomPending.current = true
+            }}
+            // Controls calls fitView independently, so its fit button must use
+            // this canvas's zoom limits as well.
+            fitViewOptions={{
+              padding: 0.18,
+              minZoom: fitMinZoom,
+              maxZoom: fitMaxZoom,
+            }}
             // WCAG 2.2 SC 2.5.8: keep every control button ≥24×24 CSS px. The
             // zoom-in / zoom-out / fit-view buttons are also the single-pointer,
             // non-drag alternative to wheel-zoom / drag-pan (SC 2.5.7).
@@ -279,7 +349,12 @@ export function GraphCanvas({
             maskColor="color-mix(in oklab, var(--overlay) 40%, transparent)"
             className="!bg-elevated"
           />
-          <FitOnChange dep={measuredFitKey} minZoom={fitMinZoom} />
+          <FitOnChange
+            dep={measuredFitKey}
+            baseDep={fitKey}
+            minZoom={fitMinZoom}
+            maxZoom={fitMaxZoom}
+          />
           {children}
         </ReactFlow>
       </ReactFlowProvider>

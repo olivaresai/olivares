@@ -125,7 +125,10 @@ describe('SetupPage', () => {
       ),
     )
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' }),
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/login',
+        search: { returnTo: '/sessions' },
+      }),
     )
   })
   it('selects the organization setup returned, so the console lands usable', async () => {
@@ -163,7 +166,10 @@ describe('SetupPage', () => {
     await waitFor(() =>
       expect(useTenantStore.getState().activeTenant).toBe(TENANT_ID),
     )
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' })
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/login',
+      search: { returnTo: '/sessions' },
+    })
   })
 
   it('signs the new administrator in with what they typed and opens the setup wizard', async () => {
@@ -193,13 +199,16 @@ describe('SetupPage', () => {
     )
 
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/onboarding' }),
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/sessions' }),
     )
     expect(mockLogin).toHaveBeenCalledWith({
       email: 'admin@example.com',
       password: 'correct-horse-battery',
     })
-    expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/login' })
+    expect(mockNavigate).not.toHaveBeenCalledWith({
+      to: '/login',
+      search: { returnTo: '/sessions' },
+    })
   })
 
   // /onboarding loads lazily, so this page is still mounted when its refreshed server
@@ -234,12 +243,15 @@ describe('SetupPage', () => {
     )
 
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/onboarding' }),
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/sessions' }),
     )
     // Let the server-info refresh that follows the navigation settle.
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(screen.queryByTestId('navigate')).toBeNull()
-    expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/login' })
+    expect(mockNavigate).not.toHaveBeenCalledWith({
+      to: '/login',
+      search: { returnTo: '/sessions' },
+    })
   })
 
   it('sends a visitor who arrives after setup to the sign-in page', async () => {
@@ -275,9 +287,12 @@ describe('SetupPage', () => {
     )
 
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/onboarding' }),
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/sessions' }),
     )
-    expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/login' })
+    expect(mockNavigate).not.toHaveBeenCalledWith({
+      to: '/login',
+      search: { returnTo: '/sessions' },
+    })
   })
 
   it('falls back to the sign-in page when the new session needs a second factor', async () => {
@@ -303,7 +318,10 @@ describe('SetupPage', () => {
     )
 
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' }),
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/login',
+        search: { returnTo: '/sessions' },
+      }),
     )
   })
 
@@ -332,7 +350,10 @@ describe('SetupPage', () => {
     )
 
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' }),
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/login',
+        search: { returnTo: '/sessions' },
+      }),
     )
     expect(useTenantStore.getState().activeTenant).toBeNull()
   })

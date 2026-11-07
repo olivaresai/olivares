@@ -49,7 +49,7 @@ func currentAuthDescriptors() []model.EntityDescriptor {
 	ds := authDescriptors()
 	for i, d := range ds {
 		if d.Kind == authSessionDescriptor.Kind {
-			ds[i] = authSessionDescriptorV28
+			ds[i] = authSessionDescriptorV30
 		}
 		if d.Kind == apiTokenDescriptor.Kind {
 			ds[i] = apiTokenDescriptorV29
@@ -357,9 +357,9 @@ var authSessionDescriptor = model.EntityDescriptor{
 	},
 }
 
-// authSessionDescriptorV28 is the current auth-session schema. Historical
-// migrations keep authSessionDescriptor frozen; v28 and runtime repositories
-// use this descriptor for the observed-use columns.
+// authSessionDescriptorV28 is the v28 auth-session schema. Historical
+// migrations keep authSessionDescriptor frozen; v28 uses this descriptor for
+// the observed-use columns.
 var authSessionDescriptorV28 = func() model.EntityDescriptor {
 	d := authSessionDescriptor
 	d.Fields = append(slices.Clone(d.Fields),
@@ -368,6 +368,16 @@ var authSessionDescriptorV28 = func() model.EntityDescriptor {
 			model.None("the last observed client transport, rendered only: core/api/handlers_auth.go:478-484")),
 		pdecl(field("device_name", model.KindText, true), model.None("owner-chosen device display label, rendered only: core/api/handlers_auth.go:483")),
 		pdecl(field("pairing_source_id", model.KindUUID, true), model.None("a source auth-session row id, not an account, for one-time pairing: core/auth/session_pairing.go:116-119, core/auth/session_pairing.go:154-157")),
+	)
+	return d
+}()
+
+// authSessionDescriptorV30 adds the identity provider session a back-channel
+// logout names. Runtime repositories use it; v28 keeps its own frozen input.
+var authSessionDescriptorV30 = func() model.EntityDescriptor {
+	d := authSessionDescriptorV28
+	d.Fields = append(slices.Clone(d.Fields),
+		pdecl(field("idp_session", model.KindText, true), model.None("the issuer-qualified OIDC sid a back-channel logout names, not an account: core/auth/backchannel_logout.go:57-62")),
 	)
 	return d
 }()
@@ -386,6 +396,7 @@ var authSessionCodec = model.Codec[model.AuthSession]{
 			"tenant_scope": encOptTenant(s.TenantScope), "aal_authenticated_at": encOptTS(s.AALAuthenticatedAt),
 			"last_used_at": encOptTS(s.LastUsedAt), "client_kind": s.ClientKind,
 			"device_name": s.DeviceName, "pairing_source_id": encOptID(s.PairingSourceID),
+			"idp_session": s.IdPSession,
 		}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.AuthSession, error) {
@@ -414,7 +425,8 @@ var authSessionCodec = model.Codec[model.AuthSession]{
 			CreatedIP: r.String("created_ip"), AAL: int(r.Int("aal")), AMR: amr, AALExpiresAt: aalExp,
 			TenantScope: decTenant(r, "tenant_scope"), AALAuthenticatedAt: authenticatedAt,
 			LastUsedAt: lastUsedAt, ClientKind: r.String("client_kind"),
-			DeviceName: r.String("device_name"), PairingSourceID: decID(r, "pairing_source_id")}, nil
+			DeviceName: r.String("device_name"), PairingSourceID: decID(r, "pairing_source_id"),
+			IdPSession: r.String("idp_session")}, nil
 	},
 }
 

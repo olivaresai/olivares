@@ -44,6 +44,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { NamedRef } from '@/features/shared'
+import { refTail } from '@/features/shared/entity-names'
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatDateTime } from '@/lib/format'
@@ -53,6 +54,7 @@ import { USAGE_REFRESH_MS } from '@/features/agent-tools/use-profiles'
 import { AccountUsage } from './account-usage'
 import { agentOpsApi, agentOpsKeys, PROFILE_PAGE } from './api'
 import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
+import { toolName } from './engine-tools'
 import { ProviderAccountCreate } from './provider-account-create'
 import { ProviderAccountMetadata } from './provider-account-metadata'
 import { ProviderAccountSignIn } from './provider-account-signin'
@@ -540,11 +542,16 @@ function AccountsTable({
   isFetchingMore: boolean
 }) {
   const { t, i18n } = useTranslation(['agentops', 'common'])
+  // A server column tells apart rows that live on different servers; with one server it
+  // would repeat a raw id on every row and push Created off the page (details keep it).
+  const manyServers = accounts.some(
+    (a) => a.environment_ref !== accounts[0]?.environment_ref,
+  )
   return (
     <FillingTable
       fill={false}
       oneLine
-      colSpan={6}
+      colSpan={manyServers ? 6 : 5}
       after={
         more || nextPageFailed ? (
           <div className="flex flex-col items-center gap-1 border-t border-border p-2">
@@ -574,7 +581,11 @@ function AccountsTable({
         <tr>
           <th>{t('accounts.cols.name')}</th>
           <th className={HIDDEN_ON_PHONE}>{t('accounts.cols.driver')}</th>
-          <th className={HIDDEN_ON_PHONE}>{t('accounts.cols.environment')}</th>
+          {manyServers && (
+            <th className={HIDDEN_ON_PHONE}>
+              {t('accounts.cols.environment')}
+            </th>
+          )}
           <th>{t('accounts.cols.state')}</th>
           <th className={HIDDEN_ON_PHONE}>{t('accounts.cols.isolation')}</th>
           <th className={HIDDEN_ON_PHONE}>{t('accounts.cols.created')}</th>
@@ -612,16 +623,19 @@ function AccountsTable({
               )}
             </td>
             <td
-              className={`font-mono text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
+              className={`text-foreground ${HIDDEN_ON_PHONE}`}
+              title={account.driver}
             >
-              {account.driver}
+              {toolName(account.driver)}
             </td>
-            <td
-              className={`font-mono text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
-              title={account.environment_ref}
-            >
-              {account.environment_ref}
-            </td>
+            {manyServers && (
+              <td
+                className={`font-mono text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
+                title={account.environment_ref}
+              >
+                {refTail(account.environment_ref)}
+              </td>
+            )}
             <td>
               <StateBadge state={account.state} />
             </td>

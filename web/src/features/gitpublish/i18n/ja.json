@@ -271,15 +271,16 @@
     "submit": "提出",
     "message": "コミットメッセージ",
     "messageHint": "セッションのフォルダーに変更がある場合のみ使用されます。既定はタイトルです。",
-    "shipped": "提出しました：{{branch}} をプッシュしました。",
+    "shipped": "提出しました：<branch /> をプッシュしました。",
+    "shippedToast": "提出しました。",
     "pullRequest": "プルリクエスト #{{number}}",
     "pullRequestOpen": "プルリクエストを開く",
     "awaitingTitle": "別の担当者の承認を待っています",
     "awaitingBody": "変更はコミット済みです。プッシュが実行される前に、別の担当者が承認する必要があります（承認 {{id}}）。承認されたら、もう一度提出してください。",
     "again": "もう一度提出",
     "incompleteTitle": "提出が完了しませんでした",
-    "incompletePush": "{{branch}} のプッシュは適用されませんでした（{{state}}）。このターゲットのインテントを確認してから、もう一度提出してください。",
-    "incompletePullRequest": "{{branch}} はプッシュされましたが、プルリクエストは作成されませんでした（{{code}}）。もう一度提出して再試行してください。",
+    "incompletePush": "<branch /> のプッシュは適用されませんでした（{{state}}）。このターゲットのインテントを確認してから、もう一度提出してください。",
+    "incompletePullRequest": "<branch /> はプッシュされましたが、プルリクエストは作成されませんでした（{{code}}）。もう一度提出して再試行してください。",
     "pullRequests": "プルリクエスト"
   }
 }

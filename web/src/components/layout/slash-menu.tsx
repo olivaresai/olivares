@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useEffect, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { RunCommandDTO } from '@/features/agentops/types'
+import type { MenuCommand } from './slash-menu-model'
 import { cn } from '@/lib/utils'
 import { commandLabel, slashOptionId } from './slash-menu-model'
 
@@ -19,6 +19,7 @@ const SOURCES = new Set(['built-in', 'user', 'project', 'plugin'])
  */
 export function SlashMenu({
   listId,
+  label,
   items,
   active,
   emptyText,
@@ -26,14 +27,15 @@ export function SlashMenu({
   onPick,
 }: {
   listId: string
-  items: readonly RunCommandDTO[]
+  /** The listbox's name: what the menu lists. */
+  label: string
+  items: readonly MenuCommand[]
   active: number
   emptyText: string
   /** One line under the list when what it shows may be out of date; "" for none. Its own live region in the composer says it once. */
   notice: string
-  onPick: (command: RunCommandDTO) => void
+  onPick: (command: MenuCommand) => void
 }) {
-  const { t } = useTranslation('nav')
   useEffect(() => {
     document
       .getElementById(slashOptionId(listId, active))
@@ -60,12 +62,12 @@ export function SlashMenu({
       <ul
         id={listId}
         role="listbox"
-        aria-label={t('launcher.slashLabel')}
+        aria-label={label}
         className="max-h-64 overflow-y-auto p-1"
       >
         {items.map((command, index) => (
           <li
-            key={`${command.kind}:${command.source}:${command.name}`}
+            key={`${command.kind}:${command.context ?? command.source}:${command.context ? command.insert_text : command.name}`}
             id={slashOptionId(listId, index)}
             role="option"
             aria-selected={index === active}
@@ -122,14 +124,16 @@ function Notice({ text }: { text: string }) {
   ) : null
 }
 
-function SourceTag({ command }: { command: RunCommandDTO }) {
+function SourceTag({ command }: { command: MenuCommand }) {
   const { t } = useTranslation('nav')
   const word =
-    command.kind === 'agent'
-      ? t('launcher.slash.agent')
-      : SOURCES.has(command.source)
-        ? t(`launcher.slash.source.${command.source}`)
-        : null
+    command.context === 'session'
+      ? t('items.sessions')
+      : command.kind === 'agent'
+        ? t('launcher.slash.agent')
+        : SOURCES.has(command.source)
+          ? t(`launcher.slash.source.${command.source}`)
+          : null
   return word ? (
     <span className="shrink-0 rounded-[6px] border border-line px-1.5 py-0.5 text-overline font-normal text-text-2">
       {word}

@@ -1,13 +1,13 @@
 {
   "notFound": {
     "title": "페이지를 찾을 수 없습니다",
-    "description": "이 페이지는 존재하지 않거나 이동되었습니다.",
-    "back": "개요로 돌아가기"
+    "description": "이 페이지는 존재하지 않거나 이동되었습니다."
   },
   "businessOnly": {
     "title": "Business에 포함됨",
     "description": "이 페이지는 Olivares AI Business에 포함됩니다. 이 에디션에는 포함되지 않습니다.",
-    "link": "Business 정보"
+    "link": "Business 정보",
+    "start": "시작 페이지로 이동"
   },
   "forbidden": {
     "title": "권한 없음",
@@ -17,6 +17,7 @@
     "nextStep": "역할 또는 그룹 정책이 이를 허용하지 않습니다. 이 조직의 소유자 또는 관리자가 부여할 수 있습니다.",
     "deniedByPolicy": "“{{policy}}” 정책이 이를 거부합니다. 이 조직의 소유자 또는 관리자가 변경할 수 있습니다."
   },
+  "systemAdminOnly": "이 항목은 설치 전체에 적용됩니다. 보거나 변경하려면 시스템 관리자에게 요청하세요.",
   "serverError": {
     "title": "문제가 발생했습니다",
     "description": "Olivares에 예기치 않은 오류가 발생했습니다. 다시 시도하십시오.",
@@ -30,14 +31,21 @@
     "title": "컨트롤 플레인에 연결할 수 없음",
     "description": "컨트롤 플레인에 연결하지 못했습니다. 연결 상태와 엔진이 실행 중인지 확인하십시오."
   },
+  "engineRetrying": {
+    "title": "엔진에 연결할 수 없음",
+    "description": "자동으로 다시 시도하는 중입니다. 엔진이 응답하면 이 페이지가 열립니다."
+  },
   "networkSecure": {
     "title": "보안 연결 실패",
     "description": "브라우저가 {{origin}}에 보안 연결을 열지 못했습니다. 엔진의 인증서를 신뢰하지 않는 경우 해당 주소를 새 탭에서 열어 인증서를 신뢰하거나, 엔진 데이터 디렉터리의 tls.crt.ca에서 엔진의 CA를 설치하십시오. 그렇지 않다면 연결 상태와 엔진이 실행 중인지 확인하십시오."
   },
   "boundary": {
     "title": "이 보기가 중단되었습니다",
-    "description": "렌더링 중 예기치 않은 오류가 발생했습니다. 새로 고치면 대개 해결됩니다.",
-    "reload": "새로 고침"
+    "description": "렌더링 중 예기치 않은 오류가 발생했습니다. 다시 시도하면 대개 해결됩니다.",
+    "reload": "새로 고침",
+    "errorId": "오류 ID",
+    "copyErrorId": "오류 ID 복사",
+    "goToNow": "개요로 이동"
   },
   "generic": "문제가 발생했습니다.",
   "sessionTemplateUnavailable": "“편집 및 명령” 템플릿을 사용할 수 없어 세션을 시작하지 않았습니다. 다른 권한을 선택하거나 관리자에게 템플릿 복원을 요청하십시오.",

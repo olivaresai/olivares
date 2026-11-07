@@ -262,7 +262,7 @@ PY
 STUB_FINGERPRINT=0123456789ABCDEF0123456789ABCDEF01234567
 # The olivares package the fixture repositories hold, named for the release this tree builds.
 # release
-FIXTURE_RPM=olivares-0.6-1.x86_64.rpm
+FIXTURE_RPM=olivares-0.7-1.x86_64.rpm
 # /release
 
 # Stub gpg, rpm, rpmkeys, rpmsign and createrepo_c for the path tests. Every call
@@ -616,6 +616,7 @@ self_test() {
 	bash -n "$client"
 	bash -n "$0"
 	python3 -m py_compile "$signer" "$renderer"
+	python3 -B "$root/scripts/test-rpm-payload-sign.py"
 	# shellcheck disable=SC1090
 	source "$client"
 	local rendered_dir rendered rc
@@ -1090,7 +1091,7 @@ import sys
 document = json.load(open(sys.argv[1], encoding="utf-8"))
 want_packages = [
     # release
-    ["olivares", "olivares-0.6-1.x86_64", "x86_64", "olivares-0.6-1.x86_64.rpm"],
+    ["olivares", "olivares-0.7-1.x86_64", "x86_64", "olivares-0.7-1.x86_64.rpm"],
     # /release
     ["olivares-appliance-base", "olivares-appliance-base-26.900-1.noarch", "noarch",
      "olivares-appliance-base-26.900-1.noarch.rpm"],
@@ -1661,9 +1662,9 @@ PY
 # The signing and client toolchain, by exact NEVRA. Fedora 44 stable on
 # https://packages.fedoraproject.org/pkgs/<source>/<name>/ read 2026-09-27T15:16Z
 # for rpm, rpm-sign, createrepo_c, dnf5 and gnupg2. python3 and python3-libs
-# (source python3.14) were re-pinned on 2026-10-18 from `dnf5 repoquery
-# --available` in the pinned base image: 3.14.7-1 had left the repositories
-# (`dnf install` answered "No match") and 3.14.8-1 is in updates. rpm, dnf5 and
+# (source python3.14) were re-pinned on 2026-11-05 from `dnf5 repoquery
+# --available` in the pinned base image: 3.14.8-1 had left the repositories
+# (`dnf install` answered "No match") and 3.14.10-1 is in updates. rpm, dnf5 and
 # gnupg2 are the NEVRAs the pinned base image already holds (its rpmdb, the
 # same day).
 # python3 is here because the signer and the renderer are python3 programs that
@@ -1677,8 +1678,8 @@ TOOL_NEVRAS=(
 	createrepo_c-1.2.1-5.fc44.x86_64
 	dnf5-5.4.5.0-1.fc44.x86_64
 	gnupg2-2.4.9-16.fc44.x86_64
-	python3-3.14.8-1.fc44.x86_64
-	python3-libs-3.14.8-1.fc44.x86_64
+	python3-3.14.10-1.fc44.x86_64
+	python3-libs-3.14.10-1.fc44.x86_64
 )
 
 # Print the tool names of TOOL_NEVRAS, in order, one per line.

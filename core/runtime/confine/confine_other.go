@@ -8,6 +8,7 @@ package confine
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"runtime"
 )
@@ -20,6 +21,9 @@ func probe() State {
 func restrictAndExec(Policy, string, []string) error {
 	return errors.New(probe().Reason)
 }
+
+// ReadFileOf names the file at path; with no confinement here, nothing grants it.
+func ReadFileOf(path string, _ fs.FileInfo) ReadFile { return ReadFile{Path: path} }
 
 func openDirectory(string) (*os.File, error) { return nil, errors.New(probe().Reason) }
 

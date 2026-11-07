@@ -23,7 +23,7 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 ## 先决条件
 
 - 一台带有 systemd 和 `curl` 的 Linux 主机。
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.6`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.7`{/* /release */} is the next release, not yet published.
 
 ## 1. 构建并安装二进制
 
@@ -56,6 +56,8 @@ Description=Olivares AI — self-hosted engine for enterprise AI
 Documentation=https://olivares.ai/docs
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -67,6 +69,8 @@ ExecStart=/usr/local/bin/olivares serve \
   --data-dir /var/lib/olivares
 Restart=on-failure
 RestartSec=5
+RestartPreventExitStatus=15
+KillMode=mixed
 
 # The data directory holds the SQLite store, the audit signing key and the TLS
 # material. StateDirectory creates /var/lib/olivares owned by the service user.
@@ -237,7 +241,7 @@ ingest: wired source (in-process fast-path) name=salesdb-pgaudit kind=pgaudit
 ## 6. 到达图
 
 全新安装默认关闭 `accessmap`。请以管理员身份在
-**Settings > Edition & modules** 中启用 `accessmap`，并保留其他已选模块。
+**Settings > Modules** 中启用 `accessmap`，并保留其他已选模块。
 使用 CLI 时，先通过 `olivares login` 以管理员身份登录此引擎，
 然后运行 `olivares modules on accessmap`。每次都要等待引擎重启完成后再继续；
 运行中的会话会停止，可以恢复。否则，这些 API 调用会返回

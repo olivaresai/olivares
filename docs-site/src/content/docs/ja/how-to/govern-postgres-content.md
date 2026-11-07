@@ -9,8 +9,8 @@ description: "PostgreSQL database を読み取り専用のガバナンス対象�
 embed → index → MCP で提供）を通り、文書ごとの ACL と列ごとの classification を
 持ちます。
 
-これは SaaS/data warehouse のコンテンツソース（gdrive、confluence、s3content、
-snowflake…）に対応する、業務 database 向けのコネクタです。ただし、次の 2 つ
+これは SaaS/data warehouse のコンテンツソース（gdrive、s3content…）
+に対応する、業務 database 向けのコネクタです。ただし、次の 2 つ
 **ではありません**。
 
 - **`pgaudit` ではありません。** `pgaudit` は access map のために R/RW の

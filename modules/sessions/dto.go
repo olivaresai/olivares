@@ -71,6 +71,10 @@ type liveDTO struct {
 	// Project is the folder name the session works in, as its hooks reported it. A name
 	// only: the path is not kept. Omitted until a producer reports one.
 	Project string `json:"project,omitempty"`
+	// Pinned and PinnedAt are the CALLER's own pin on this row (run_pin.go), as on a run:
+	// another person's pin never shows. A row that belongs to a run reads that run's pin.
+	Pinned   *bool  `json:"pinned,omitempty"`
+	PinnedAt string `json:"pinned_at,omitempty"`
 }
 
 // toLiveDTO projects a live record to its DTO, deriving the Claude Code state and

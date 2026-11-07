@@ -1,0 +1,11 @@
+{
+  "dictate": "Ditar",
+  "hint": "Ditar. A sua voz fica neste browser.",
+  "loading": "A carregar o reconhecimento de voz…",
+  "listening": "A ouvir. Prima novamente ou Esc para parar.",
+  "transcribing": "A transcrever…",
+  "nothing": "Nenhuma fala detetada.",
+  "unavailable": "O ditado funciona enquanto a sessão estiver em execução.",
+  "failed": "O ditado falhou. Tente novamente.",
+  "blocked": "O browser bloqueou o microfone."
+}

@@ -23,6 +23,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/xii-evals',
     icon: ClipboardCheck,
     permission: 'evals:run:read',
+    changes: [
+      { permission: 'evals:run:write' },
+      { permission: 'evals:run:admin' },
+    ],
     element: lazyView(EvalsView),
   },
 ] satisfies ViewEntry[]

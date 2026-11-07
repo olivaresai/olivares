@@ -12,7 +12,7 @@
 // the clock, so reduced motion changes nothing.
 import { useQueries } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { CalendarClock } from 'lucide-react'
+import { ArrowRight, CalendarClock } from 'lucide-react'
 import {
   useEffect,
   useMemo,
@@ -25,7 +25,9 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { MonoMark } from '@/components/ui/mono-mark'
+import { RelTime } from '@/features/shared/rel-time'
 import { StatusChip } from '@/components/ui/status-chip'
+import { AccountBadge } from '@/features/agent-tools/account-marks'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import type { ApprovalDTO } from '@/features/governance/types'
 import { sessionsApi } from '@/features/sessions/api'
@@ -62,6 +64,24 @@ const PAGE = 1000
 const MAX_PAGES = 10
 /** A drag shorter than this is a click, not a range. */
 const DRAG_PX = 4
+/** Below this axis width six ten-minute labels run into each other ("0:10:20:30"), so
+ * only the hour and the half hour keep their label; the grid line of every mark stays. */
+const narrowAxisHides = (tick: number) =>
+  new Date(tick).getMinutes() % 30 === 0
+    ? undefined
+    : '@max-[22rem]/axis:hidden'
+
+/** What a live session is doing now, in words: "Running sed" rather than the engine's
+ * "Bash · sed". A tool the console has no verb for keeps its own name. */
+function stepOf(s: UnifiedSession, t: TFunction): string {
+  const action = s.live?.current_action?.trim()
+  if (!action) return ''
+  const what = s.live?.current_resource?.trim() ?? ''
+  return t(`swimlane.step.${action}`, {
+    what,
+    defaultValue: what ? `${action} · ${what}` : action,
+  }).trim()
+}
 
 /** The four density tones, weakest first: the share of the text colour a minute of a
  * run is drawn in. One hue, an ordinal ramp the dataviz validator passed in both themes;
@@ -275,19 +295,26 @@ export interface SwimlaneProps {
   sessions: readonly UnifiedSession[]
   /** The pending approvals in the queue's order. */
   approvals: readonly ApprovalDTO[]
-  /** False when the approvals could not be read (refused or failed): no wait is drawn,
-   * and the swimlane says why instead of implying that nothing waits. */
+  /** False when the approvals could not be read (refused, failed or not answered yet): no
+   * wait is drawn, and the swimlane says why instead of implying that nothing waits. */
   approvalsRead?: boolean
+  /** True when the approvals page has more than it holds: read, but only in part, so the
+   * swimlane says some waits may be missing instead of implying that none else waits. */
+  approvalsMore?: boolean
   now: number
   onOpen?: (address: string) => void
+  /** The way to every session, when no other list on the page carries it. */
+  showAll?: boolean
 }
 
 export function Swimlane({
   sessions,
   approvals,
   approvalsRead = true,
+  approvalsMore = false,
   now,
   onOpen,
+  showAll = false,
 }: SwimlaneProps) {
   const { t, i18n } = useTranslation(['home', 'sessions'])
   const { activeTenant } = useAuth()
@@ -395,6 +422,20 @@ export function Swimlane({
   }
   const selected = range ? ledgerRange(range.a, range.b) : null
 
+  // Tool, person and folder of each row, and which of the three every row shares.
+  const metas = lanes.map(({ session: s }) => {
+    const run = primaryRun(s.runs)
+    const actsFor = run?.acts_for
+    return [
+      sessionTool(s),
+      actsFor?.kind === 'automation' ? t('swimlane.automation') : actsFor?.name,
+      runFolder(run),
+    ]
+  })
+  const common = [0, 1, 2].map(
+    (k) => metas.length > 1 && metas.every((m) => m[k] === metas[0]![k]),
+  )
+
   if (lanes.length === 0) return null
   return (
     <section
@@ -402,7 +443,7 @@ export function Swimlane({
       tabIndex={-1}
       aria-labelledby="swimlane-heading"
       data-testid="estate-swimlane"
-      className="mb-6 min-w-0 outline-none rounded-card border border-line bg-surface p-4 [--label:15rem] [--side:8.5rem] xl:[--label:18rem]"
+      className="@container/swim mb-6 min-w-0 outline-none rounded-card border border-line bg-surface p-4"
     >
       <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2
@@ -412,21 +453,37 @@ export function Swimlane({
           {t('swimlane.title')}
         </h2>
         <p className="text-caption text-text-3">
-          {t('swimlane.subtitle', {
+          {t('swimlane.range', {
             from: clock(now - WINDOW_MS),
             to: clock(now),
           })}
         </p>
-        {approvalsRead ? null : (
+        {showAll ? (
+          <Link
+            to={'/sessions' as never}
+            data-testid="now-live-all"
+            className="ms-auto inline-flex items-center gap-1 text-caption text-text-2 hover:text-text"
+          >
+            {t('recent.openAll')}
+            <ArrowRight aria-hidden className="size-3.5" />
+          </Link>
+        ) : null}
+        {approvalsRead && !approvalsMore ? null : (
           <p className="w-full text-caption text-text-3">
-            {t('swimlane.approvalsUnread')}
+            {t(
+              approvalsRead
+                ? 'swimlane.approvalsPartial'
+                : 'swimlane.approvalsUnread',
+            )}
           </p>
         )}
       </div>
 
       <div
         data-testid="swimlane-area"
-        className="relative touch-pan-y select-none"
+        // Narrow card (a phone): the name and state sit above each bar, which takes the
+        // whole width. From 42rem the name and state flank the bar in two side columns.
+        className="relative touch-pan-y select-none [--label:0px] [--side:0px] @2xl/swim:[--label:15rem] @2xl/swim:[--side:8.5rem] @2xl/swim:xl:[--label:18rem]"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -438,7 +495,7 @@ export function Swimlane({
           <div
             ref={plotRef}
             data-testid="swimlane-plot"
-            className="relative h-7"
+            className="@container/axis relative h-7"
           >
             {ticks.map((tick) => (
               <button
@@ -452,14 +509,17 @@ export function Swimlane({
                   focusLedger.current = true
                   setRange({ a: tick, b: Math.min(tick + TICK_MS, now) })
                 }}
-                className="absolute top-0 h-7 -translate-x-1/2 rounded-full px-1.5 text-caption tabular-nums text-text-3 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+                className={cn(
+                  'absolute top-0 h-7 -translate-x-1/2 rounded-full px-1.5 text-caption tabular-nums text-text-3 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus',
+                  narrowAxisHides(tick),
+                )}
                 style={{ left: pct(tick, now) }}
               >
                 {clock(tick)}
               </button>
             ))}
           </div>
-          <span className="justify-self-start pl-2 text-caption font-medium tabular-nums text-text">
+          <span className="hidden justify-self-start pl-2 text-caption font-medium tabular-nums text-text @2xl/swim:inline">
             {t('swimlane.now', { at: clock(now) })}
           </span>
         </div>
@@ -491,25 +551,31 @@ export function Swimlane({
         </div>
 
         <ol className="relative grid gap-0.5" aria-label={t('swimlane.lanes')}>
-          {lanes.map((lane) => {
+          {lanes.map((lane, i) => {
             const s = lane.session
             const run = primaryRun(s.runs)
             const naming = sessionNaming(s, untitled, shared)
-            const tool = sessionTool(s)
             const driver =
               run?.provider_driver || s.live?.provider || s.live?.engine
             const actsFor = run?.acts_for
-            const person =
-              actsFor?.kind === 'automation'
-                ? t('swimlane.automation')
-                : actsFor?.name
-            const folder = runFolder(run)
-            const meta = [tool, person, folder].filter(Boolean).join(' · ')
+            const meta = metas[i]!.filter(Boolean).join(' · ')
+            // The row leads with its title; the tool, person and folder every row
+            // shares are not repeated on each row (the row's sentence keeps them).
+            const seen = [
+              ...metas[i]!.filter((part, k) => part && !common[k]),
+              stepOf(s, t),
+            ]
+              .filter(Boolean)
+              .join(' · ')
+            const at =
+              s.lastActivityMs > 0
+                ? new Date(s.lastActivityMs).toISOString()
+                : s.live?.last_event_at
             return (
               <li
                 key={s.key}
                 data-testid="swimlane-lane"
-                className="grid h-[60px] grid-cols-[var(--label)_minmax(0,1fr)_var(--side)] items-center rounded-ctl hover:bg-hover"
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center rounded-ctl hover:bg-hover @2xl/swim:h-[60px] @2xl/swim:grid-cols-[var(--label)_minmax(0,1fr)_var(--side)]"
               >
                 <Link
                   to={'/sessions' as never}
@@ -519,7 +585,7 @@ export function Swimlane({
                     e.preventDefault()
                     onOpen(addressOf(s))
                   }}
-                  className="flex min-w-0 items-center gap-2.5 rounded-ctl py-1 pr-3 pl-1 outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                  className="col-start-1 row-start-1 flex min-w-0 items-center gap-2.5 rounded-ctl bg-surface py-1 pr-3 pl-1 outline-none focus-visible:ring-2 focus-visible:ring-focus @2xl/swim:bg-transparent"
                 >
                   {actsFor?.kind === 'automation' ? (
                     <span
@@ -550,7 +616,17 @@ export function Swimlane({
                           )}
                         />
                       ) : null}
-                      <span className="truncate">{meta}</span>
+                      <AccountBadge
+                        profileRef={s.profileRef}
+                        className="max-w-28 shrink-0"
+                      />
+                      <span className="min-w-0 truncate">{seen}</span>
+                      {at ? (
+                        <RelTime
+                          ts={at}
+                          className="shrink-0 whitespace-nowrap"
+                        />
+                      ) : null}
                     </span>
                   </span>
                 </Link>
@@ -563,11 +639,14 @@ export function Swimlane({
                     clock,
                     t,
                   )}
-                  className="relative h-full overflow-hidden"
+                  className="relative col-span-2 col-start-1 row-start-2 h-11 overflow-hidden @2xl/swim:col-span-1 @2xl/swim:col-start-2 @2xl/swim:row-start-1 @2xl/swim:h-full"
                 >
                   <LanePlot lane={lane} now={now} clock={clock} />
                 </div>
-                <span className="justify-self-end pl-2">
+                <span
+                  data-testid="swimlane-lane-state"
+                  className="col-start-2 row-start-1 max-w-24 justify-self-end bg-surface pl-2 @2xl/swim:col-start-3 @2xl/swim:max-w-none @2xl/swim:bg-transparent"
+                >
                   {lane.state === 'waiting' ? (
                     // A run stays `running` while a tool call waits on a person (HU-R12):
                     // the row says what it waits for, not the process state.

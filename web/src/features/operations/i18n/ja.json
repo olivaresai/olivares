@@ -1,0 +1,80 @@
+{
+  "title": "サーバー",
+  "subtitle": "ホスト、そのディスク、稼働中のセッション、そして使用量。",
+  "range": {
+    "label": "期間",
+    "24h": "24 時間",
+    "7d": "7 日間",
+    "30d": "30 日間"
+  },
+  "host": {
+    "heading": "ホスト",
+    "keeps24": "ホストは 24 時間分の履歴を保持するため、グラフは直近 24 時間を表示します。",
+    "unavailable": "このホストではホストのメトリクスを利用できません。報告できるのは Linux のみです。",
+    "noHistory": "ホストはまだサンプルを記録していません。",
+    "noFilesystems": "サイズを報告したファイルシステムはありません。",
+    "noFolders": "セッションフォルダーはありません。",
+    "facts": {
+      "load": "負荷 {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "メモリ {{used}} / {{total}}",
+      "swap": "スワップ {{used}} / {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "直近 24 時間の CPU 使用率: 現在 {{now}}、ピーク {{peak}}、平均 {{average}}。"
+    },
+    "memory": {
+      "title": "メモリ",
+      "total": "合計",
+      "summary": "直近 24 時間のメモリ使用量: 現在 {{total}} 中 {{used}}、ピーク {{peak}}。"
+    },
+    "disks": {
+      "title": "ファイルシステム",
+      "summary_other": "{{count}} 件のファイルシステム。最も使用率が高いのは {{mount}} で {{pct}} 使用中です。"
+    },
+    "folders": {
+      "title": "セッションフォルダー",
+      "summary_other": "{{count}} 件のセッションフォルダーが {{total}} を使用。最大は {{largest}} で {{size}} です。",
+      "floor": "計測が上限で止まったため、サイズは最小値です。"
+    },
+    "columns": {
+      "time": "時刻",
+      "cpu": "CPU 使用率",
+      "memory": "メモリ使用量",
+      "swap": "スワップ使用量",
+      "mount": "マウント先",
+      "device": "デバイス",
+      "type": "種類",
+      "used": "使用中",
+      "size": "サイズ",
+      "usedPercent": "使用率",
+      "folder": "フォルダー"
+    }
+  },
+  "live": {
+    "heading": "稼働中のセッション",
+    "loading": "稼働中のセッションを読み込んでいます…",
+    "error": "稼働中のセッションを読み込めませんでした。",
+    "none": "稼働中のセッションはありません。",
+    "more": "一覧が途中で切られました。ここで数えた以上のセッションが開いているため、件数は最小値です。",
+    "automation": "自動化",
+    "unknown": "記録なし",
+    "columns": {
+      "tool": "ツール",
+      "person": "担当者",
+      "sessions": "セッション"
+    },
+    "byTool": {
+      "title": "ツール別の稼働中セッション",
+      "summary_other": "ツール別の稼働中セッション {{count}} 件: {{list}}。"
+    },
+    "byPerson": {
+      "title": "担当者別の稼働中セッション",
+      "summary_other": "担当者別の稼働中セッション {{count}} 件: {{list}}。"
+    }
+  },
+  "usage": {
+    "heading": "使用量"
+  }
+}

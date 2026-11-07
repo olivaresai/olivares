@@ -10,7 +10,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -32,11 +35,27 @@ type workspaceKnowledgeSources struct {
 	scopes     *sourcescope.Resolver
 	authz      *auth.Authorizer
 	vault      *auth.SecretStore
+	roster     *auth.SourceStore
+}
+
+// businessRowRefusal answers an ingest by the name of a roster document row of this tenant whose
+// kind is a Business connector this build does not construct (a Community engine reading what a
+// Business engine stored) with the one Business refusal, 501 connector_unavailable. Any other
+// name keeps the ordinary unknown-source answer.
+func (s workspaceKnowledgeSources) businessRowRefusal(ctx context.Context, mc api.ModuleContext, name string) (*knowledge.OpenedSource, string, int) {
+	if s.roster == nil {
+		return nil, "", 0
+	}
+	def, ok, err := s.roster.Get(ctx, auth.GlobalSourceScope, name)
+	if err != nil || !ok || !isDocumentRow(def) || def.Tenant != mc.Tenant.String() || !businessKindUnavailable(def.Kind) {
+		return nil, "", 0
+	}
+	return nil, errBusinessSourceKind(def.Kind).Error(), http.StatusNotImplemented
 }
 
 func (s workspaceKnowledgeSources) Open(ctx context.Context, mc api.ModuleContext, kbRef, sourceName string) (*knowledge.OpenedSource, string, int) {
 	if !strings.HasPrefix(sourceName, "workspace:") {
-		return nil, "", 0 // preserve ordinary unknown-source handling
+		return s.businessRowRefusal(ctx, mc, sourceName)
 	}
 	name := strings.TrimPrefix(sourceName, "workspace:")
 	if name == "" || mc.Data == nil || mc.Tenant.IsZero() || mc.Tenant == model.SystemTenantID || s.principals == nil || s.scopes == nil || s.authz == nil || s.vault == nil {
@@ -199,6 +218,12 @@ func (s workspaceKnowledgeSources) Open(ctx context.Context, mc api.ModuleContex
 	}
 	switch connector.kind {
 	case "confluence", "gdrive", "notion", "sharepoint", "sap_odata", "salesforce", "snowflake", "azure_ai_search":
+	case "s3content":
+		// The connector falls back to the engine's own AWS environment for any credential
+		// it is not given, so it is admitted only where the person supplies all of them.
+		if strings.TrimSpace(connector.config["identity"]) != "user" {
+			return nil, "workspace ingest does not support this document source kind", http.StatusBadRequest
+		}
 	default:
 		return nil, "workspace ingest does not support this document source kind", http.StatusBadRequest
 	}
@@ -212,6 +237,9 @@ func (s workspaceKnowledgeSources) Open(ctx context.Context, mc api.ModuleContex
 	}
 	settings := make(map[string]string, len(connector.config)+len(connector.secrets))
 	for key, value := range connector.config {
+		if key == "identity" {
+			continue // the opener's own switch, read below; never a connector setting
+		}
 		field, known := fields[key]
 		if !known || key == "export_path" || field.Secret || secret.IsCredentialBearingConfigKey(key) || secret.IsReference(value) || secret.ContainsInlineCredential(value) {
 			return nil, "workspace source configuration must use declared live settings and workspace secret references", http.StatusBadRequest
@@ -220,6 +248,23 @@ func (s workspaceKnowledgeSources) Open(ctx context.Context, mc api.ModuleContex
 	}
 	if strings.TrimSpace(settings["mode"]) != "live" {
 		return nil, "workspace document ingest requires live mode", http.StatusBadRequest
+	}
+	readAsUser, refusal, status := workspaceSourceIdentity(connector.kind, connector.config["identity"], len(connector.secrets) > 0)
+	if refusal != "" {
+		return nil, refusal, status
+	}
+	live, isLive := src.(contentsource.LiveSource)
+	if readAsUser && !isLive {
+		return nil, "workspace document source kind cannot read as the user", http.StatusBadRequest
+	}
+	var onlyACL string
+	if readAsUser {
+		credential, refusal, status := s.personCredential(ctx, mc, name, connector.kind, settings, fields)
+		if refusal != "" {
+			return nil, refusal, status
+		}
+		maps.Copy(settings, credential)
+		onlyACL = "user:" + mc.Principal.UserID.String()
 	}
 	prefix := fmt.Sprintf("ws/%x/", sha256.Sum256([]byte(ws.Slug)))
 	for key, value := range connector.secrets {
@@ -240,5 +285,127 @@ func (s workspaceKnowledgeSources) Open(ctx context.Context, mc api.ModuleContex
 		cancel()
 		return nil, "workspace document source could not be opened", http.StatusBadGateway
 	}
-	return &knowledge.OpenedSource{Source: wrapContentSourceMode(src, "live"), Validate: validate}, "", 0
+	opened := wrapContentSourceMode(src, "live")
+	if readAsUser {
+		opened = modeLiveContentSource{LiveSource: live, mode: "live", onlyACL: onlyACL}
+	}
+	return &knowledge.OpenedSource{Source: opened, Validate: validate}, "", 0
+}
+
+// workspaceSourceIdentity reads a workspace source's identity setting: "service" (the
+// default) reads with the workspace's shared credential, "user" with the credential the
+// requesting person keeps in their own vault. User is for the sources whose live API takes
+// a person's bearer token, and a source that names both a shared credential and the user
+// is refused, so no request is ever made under the wrong one.
+func workspaceSourceIdentity(kind, identity string, hasSharedCredential bool) (readAsUser bool, refusal string, status int) {
+	switch strings.TrimSpace(identity) {
+	case "", "service":
+		return false, "", 0
+	case "user":
+	default:
+		return false, `workspace source identity must be "service" or "user"`, http.StatusBadRequest
+	}
+	if _, ok := personalEndpoints[kind]; !ok {
+		return false, "workspace document source kind cannot read as the user", http.StatusBadRequest
+	}
+	if hasSharedCredential {
+		return false, "a workspace source that reads as the user must not hold a shared credential", http.StatusBadRequest
+	}
+	return true, "", 0
+}
+
+// personalEndpoints names, for each source kind that can read as the user, the setting
+// that says where its bearer token is sent and the service's own address when that is
+// unset. A person's token goes only to the origin they stored it for.
+var personalEndpoints = map[string]struct{ setting, fallback string }{
+	"confluence": {setting: "base_url"},
+	"gdrive":     {setting: "api_base", fallback: "https://www.googleapis.com/drive/v3"},
+	"notion":     {setting: "base_url", fallback: "https://api.notion.com/v1"},
+	"sharepoint": {fallback: "https://graph.microsoft.com/v1.0"},
+	// An object store's token service answers at its own address, and at AWS's when none is set.
+	"s3content": {setting: "endpoint", fallback: "https://sts.amazonaws.com"},
+}
+
+// endpointOrigin returns scheme://host:port of an http(s) address, with the default port filled in.
+func endpointOrigin(raw string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Hostname() == "" || u.User != nil {
+		return "", false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	port := u.Port()
+	switch {
+	case scheme == "https" && port == "":
+		port = "443"
+	case scheme == "http" && port == "":
+		port = "80"
+	case scheme != "http" && scheme != "https":
+		return "", false
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port), true
+}
+
+// personCredential opens the requesting person's own credential for a source: the vault
+// item sources/<name>, a login whose password is their token and whose url is the service
+// it belongs to. The token is released only when that url has the origin the source is
+// configured to call, because whoever manages the connector chooses its endpoint and the
+// token is the person's. Without it the source is not read, and there is no fallback to
+// any other credential. The reveal is on the ledger.
+func (s workspaceKnowledgeSources) personCredential(ctx context.Context, mc api.ModuleContext, name, kind string, settings map[string]string, fields map[string]sdk.ConfigField) (map[string]string, string, int) {
+	var secretFields []string
+	for key, field := range fields {
+		if field.Secret {
+			secretFields = append(secretFields, key)
+		}
+	}
+	vaultName, ok := auth.PersonalVaultName(mc.Principal, "sources/"+name)
+	if !ok {
+		return nil, "reading a source as the user needs a signed-in person", http.StatusForbidden
+	}
+	endpoint := personalEndpoints[kind]
+	callsTo := strings.TrimSpace(settings[endpoint.setting])
+	if callsTo == "" {
+		callsTo = endpoint.fallback
+	}
+	callsOrigin, validEndpoint := endpointOrigin(callsTo)
+	if (kind != "s3content" && len(secretFields) != 1) || auth.ValidateSecretName(vaultName) != "" || !validEndpoint {
+		return nil, "workspace source cannot read as the user", http.StatusBadRequest
+	}
+	connect := "connect your account: store your credential for " + name + " in your vault as sources/" + name +
+		", a login whose password is your token and whose url is " + callsOrigin
+	if kind == "s3content" {
+		connect += ", and whose user name is the role to assume (empty where the storage needs none)"
+	}
+	raw, err := s.vault.Reveal(ctx, mc.Principal, mc.Tenant, vaultName)
+	switch {
+	case errors.Is(err, auth.ErrSecretNotFound):
+		return nil, connect, http.StatusForbidden
+	case err != nil:
+		return nil, "your credential could not be read", http.StatusServiceUnavailable
+	}
+	item, err := auth.ParseVaultItem(string(raw))
+	clear(raw)
+	token := strings.TrimSpace(item.Password)
+	if err != nil || item.Type != auth.VaultLogin || token == "" {
+		return nil, "your credential for " + name + " is not a login holding your token: " + connect, http.StatusForbidden
+	}
+	if storedOrigin, _ := endpointOrigin(item.URL); storedOrigin != callsOrigin {
+		return nil, connect, http.StatusForbidden
+	}
+	if kind != "s3content" {
+		return map[string]string{secretFields[0]: token}, "", 0
+	}
+	// An object store takes the token to its token service, and only the temporary
+	// credentials it issues sign the reads. The login's user name is the role to assume.
+	// shortcut: the credentials are not refreshed, so an ingest that outlasts their lifetime
+	// (an hour by default) fails and is run again; refresh them when ingests take longer.
+	credentials, err := assumeWebIdentity(ctx, callsTo, strings.TrimSpace(item.Username), token, "olivares-"+mc.Principal.UserID.String())
+	var refused stsRefused
+	switch {
+	case errors.As(err, &refused):
+		return nil, "connect your account: " + refused.Error() + ". Store a current identity token for " + name + " in your vault as sources/" + name, http.StatusForbidden
+	case err != nil:
+		return nil, err.Error(), http.StatusBadGateway
+	}
+	return map[string]string{"access_key_id": credentials.AccessKeyID, "secret_access_key": credentials.SecretAccessKey, "session_token": credentials.SessionToken}, "", 0
 }

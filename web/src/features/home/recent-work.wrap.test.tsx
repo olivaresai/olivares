@@ -10,7 +10,7 @@
 // the browser capture at 1280 px in German and Japanese measures that nothing overflows.
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen } from '@/test/intel'
+import { DEFAULT_AUTH, renderIntel, screen } from '@/test/intel'
 import type { LiveDTO } from '@/features/sessions/types'
 import { RecentWork } from './recent-work'
 import { mergeSessions } from '@/features/sessions/provenance'
@@ -22,6 +22,7 @@ import '@/features/sessions/i18n'
 const asSessions = (rows: Parameters<typeof mergeSessions>[0]) =>
   mergeSessions(rows, [])
 
+vi.mock('@/lib/auth/context', () => ({ useAuth: () => DEFAULT_AUTH }))
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => '',
   Link: ({

@@ -50,6 +50,43 @@ func guardProfileParent(node int64) int64 {
 	return node - guardProfileNodeStride
 }
 
+// A Business census that holds the AI terms pair has a second profile predecessor: the same
+// census without the pair, which Business recorded before Community registered it (0.4). Its
+// nodes are -(epoch + 10*stride), past every range the Community profile chain reaches, and its
+// own Community predecessor sits in the chain's next range, -(epoch + 11*stride).
+const guardBusinessAITermsLayer = 10 * guardProfileNodeStride
+
+func guardBusinessAITermsParent(node int64) int64 {
+	return -(node + guardBusinessAITermsLayer)
+}
+
+func guardManifestHolds(m guardManifest, tables []string) bool {
+	for _, table := range tables {
+		if !slices.ContainsFunc(m.Specs, func(spec guardSpec) bool { return spec.Key.Relation == table }) {
+			return false
+		}
+	}
+	return true
+}
+
+// guardProfileDeltaTables is the compiled profile set a profile edge adds: exactly the AI terms
+// pair or exactly the three Business relations. Any other difference is no profile edge (nil).
+func guardProfileDeltaTables(from, to guardManifest) []string {
+	var added []string
+	for _, spec := range to.Specs {
+		if !guardManifestHolds(from, []string{spec.Key.Relation}) {
+			added = append(added, spec.Key.Relation)
+		}
+	}
+	sort.Strings(added)
+	for _, set := range [][]string{guardCommercialTables[:], guardAITermsTables[:]} {
+		if slices.Equal(added, set) {
+			return set
+		}
+	}
+	return nil
+}
+
 func guardProfileTables(current guardManifest) []string {
 	present := make(map[string]bool, len(current.Specs))
 	for _, spec := range current.Specs {
@@ -70,23 +107,38 @@ func addGuardCommunityPredecessors(g guardEditionGraph, current guardManifest) (
 	if profile == nil {
 		return g, nil
 	}
+	g, err := addGuardProfileLayer(g, current, profile, guardProfileParent)
+	if err != nil || !slices.Equal(profile, guardCommercialTables[:]) || !guardManifestHolds(current, guardAITermsTables[:]) {
+		return g, err
+	}
+	return addGuardProfileLayer(g, current, guardAITermsTables[:], func(epoch int64) int64 {
+		if epoch > 0 {
+			return guardBusinessAITermsParent(epoch)
+		}
+		return guardProfileParent(epoch - guardBusinessAITermsLayer)
+	})
+}
+
+// addGuardProfileLayer adds the compiled admission graph of current without profile, its node
+// ids moved by relabel into a range of their own.
+func addGuardProfileLayer(g guardEditionGraph, current guardManifest, profile []string, relabel func(int64) int64) (guardEditionGraph, error) {
 	tables := make([]string, 0, len(current.Specs))
 	for _, spec := range current.Specs {
 		if !slices.Contains(profile, spec.Key.Relation) {
 			tables = append(tables, spec.Key.Relation)
 		}
 	}
-	community, err := buildGuardManifestAtEpoch(tables, current.CodeEpoch)
+	predecessor, err := buildGuardManifestAtEpoch(tables, current.CodeEpoch)
 	if err != nil {
 		return g, err
 	}
-	ancestors, err := buildGuardAdmissionGraph(community)
+	ancestors, err := buildGuardAdmissionGraph(predecessor)
 	if err != nil {
 		return g, err
 	}
 	for _, epoch := range ancestors.order {
 		node, _ := ancestors.node(epoch)
-		node.Epoch = guardProfileParent(epoch)
+		node.Epoch = relabel(epoch)
 		g.nodes[node.Epoch] = node
 		g.order = append(g.order, node.Epoch)
 	}
@@ -154,7 +206,12 @@ func bootGuardCensus(ctx context.Context, db guardEditionQuerier, dia dialect.Di
 		slog.Log(ctx, level, "sqlstore: guard receipts not read for the census; using the registry census", "error", rerr)
 		return registered, manifest, graph, nil
 	}
-	own := guardGraphDigests(graph)
+	// Both censuses are compared with every edition their admission compiles, predecessor
+	// profiles included: a Business 0.4 ledger (no AI terms pair) is one of the wider census's.
+	own, err := guardAdmissionDigests(manifest)
+	if err != nil {
+		return nil, guardManifest{}, guardEditionGraph{}, err
+	}
 	foreign := slices.ContainsFunc(receipts, func(r guardReceipt) bool { return !own[r.CodeSHA256] })
 	if !foreign {
 		return registered, manifest, graph, nil
@@ -168,7 +225,10 @@ func bootGuardCensus(ctx context.Context, db guardEditionQuerier, dia dialect.Di
 		if err != nil {
 			return nil, guardManifest{}, guardEditionGraph{}, err
 		}
-		known := guardGraphDigests(otherGraph)
+		known, err := guardAdmissionDigests(other)
+		if err != nil {
+			return nil, guardManifest{}, guardEditionGraph{}, err
+		}
 		// Every receipt must be a digest one of the two censuses compiles: a stray or unknown one
 		// leaves the registry census, which refuses the history. This only selects a census. A
 		// ledger that mixes the two passes it, and the exact history verification of the selected
@@ -185,6 +245,15 @@ func bootGuardCensus(ctx context.Context, db guardEditionQuerier, dia dialect.Di
 var guardAITermsTables = [...]string{
 	"aiterms_acceptance",
 	"aiterms_policy",
+}
+
+// guardAdmissionDigests is the set of code digests the admission graph of m compiles.
+func guardAdmissionDigests(m guardManifest) (map[[32]byte]bool, error) {
+	graph, err := guardAdmissionGraphFor(m)
+	if err != nil {
+		return nil, err
+	}
+	return guardGraphDigests(graph), nil
 }
 
 // guardGraphDigests is the set of code digests a graph's compiled editions carry.

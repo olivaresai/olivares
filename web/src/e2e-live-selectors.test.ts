@@ -25,8 +25,9 @@ const SPEC_DIRS = readdirSync(WEB, { withFileTypes: true })
 
 /** The nav catalogue read the other way round: the address a name is reached at. */
 const NAV_NAME_BY_SEGMENT = nav.items as Record<string, string>
-/** The overview's place in the left navigation: the first link a sign-in paints. */
-const ESTATE = nav.places.now
+/** Settings at the left navigation's foot: the link every sign-in paints, for every person,
+ * on every page, with the navigation folded or not (the other places under More may not be). */
+const SHELL_LINK = nav.places.settings
 
 /**
  * THE FIRST LINK A SPEC WAITS FOR AFTER SIGNING IN, AND WHETHER IT CAN BE PAINTED.
@@ -35,7 +36,7 @@ const ESTATE = nav.places.now
  *    becomes the reason nobody checks the real thing. It reads SOURCE TEXT — the spec
  *    files as characters — and it knows two facts: the English nav catalogue, and that
  *    a sign-in leaves the console on the root, which belongs to no area, so the top bar
- *    paints the places, the overview (Now) first, and no page of an area.
+ *    paints the places, Settings at the foot for everyone, and no page of an area.
  *    It does not render the top bar, does not read the feature registry, and cannot say
  *    which area any given leaf belongs to. So the exemption is narrow ON PURPOSE: a
  *    navigation exempts the wait that the navigation's own address names in the nav
@@ -45,20 +46,20 @@ const ESTATE = nav.places.now
  *    stop. Widening it means teaching it the registry, not loosening the match.
  */
 function waitsASignInCannotPaint(file: string, src: string): string[] {
-  const overview = `name: '${ESTATE}', exact: true`
+  const shell = `name: '${SHELL_LINK}', exact: true`
   const found: string[] = []
   for (const signIn of src.matchAll(/name: \/\^sign in\$\/i \}\)/g)) {
     const after = src.slice((signIn.index ?? 0) + signIn[0].length)
     const link = /getByRole\(\s*'link',\s*\{([^}]*)\}/.exec(after)
-    // The shared locator is the same scoped overview wait, not a later journey link.
-    const sharedOverview =
-      /await\s+expect\(\s*journeyNowLink\(\s*page\s*\)\s*\)\s*\.toBeVisible\s*\(/.exec(
+    // The shared locator is the same scoped shell wait, not a later journey link.
+    const sharedShell =
+      /await\s+expect\(\s*journeyShellLink\(\s*page\s*\)\s*\)\s*\.toBeVisible\s*\(/.exec(
         after,
       )
-    if (sharedOverview && (!link || sharedOverview.index < link.index)) continue
+    if (sharedShell && (!link || sharedShell.index < link.index)) continue
     if (!link) continue
     const body = link[1].replace(/\s+/g, ' ').trim()
-    if (body === overview) continue
+    if (body === shell) continue
     // A navigation between the sign-in and the wait proves the area is open — but only
     // the area of the address it went to. The address's first segment is the nav key.
     const navigated = [
@@ -72,7 +73,7 @@ function waitsASignInCannotPaint(file: string, src: string): string[] {
 }
 
 /**
- * THE OVERVIEW LINK READ OUTSIDE THE JOURNEYS NAVIGATION.
+ * THE SHELL LINK READ OUTSIDE THE JOURNEYS NAVIGATION.
  *
  * ⛔ THE TOP BAR'S CURRENT-PAGE CRUMB WAS A LINK TOO (`BreadcrumbPage` is `role="link"`
  *    with `aria-current`), named like the page it marked, so a page-level
@@ -83,9 +84,9 @@ function waitsASignInCannotPaint(file: string, src: string): string[] {
  *    (#1181): nine cases failed at their sign-in helper. The wait is read inside the
  *    left navigation, as the specs that already passed read it.
  */
-function overviewLinksOutsideNavigation(file: string, src: string): string[] {
+function shellLinksOutsideNavigation(file: string, src: string): string[] {
   const label = common.a11y.mainNavigation
-  const link = `getByRole('link', { name: '${ESTATE}', exact: true })`
+  const link = `getByRole('link', { name: '${SHELL_LINK}', exact: true })`
   const inNavigation = [
     `getByRole('navigation', { name: '${label}', exact: true }).`,
     `getByLabel('${label}').`,
@@ -124,13 +125,13 @@ describe('live end-to-end specs name what the console paints', () => {
     expect(src).not.toContain(`name: 'Claude Code'`)
   })
 
-  it('signed-in waits use the overview link and the Playwright base URL', () => {
+  it('signed-in waits use the shell link and the Playwright base URL', () => {
     const four = spec('four-tabs-live.spec.ts')
     const rid = spec('request-id-live.spec.ts')
-    const overview = `getByRole('link', { name: '${ESTATE}'`
-    expect(four).toContain(overview)
+    const shell = `getByRole('link', { name: '${SHELL_LINK}'`
+    expect(four).toContain(shell)
     expect(four).not.toContain("name: 'Inventory'")
-    expect(rid).toContain(overview)
+    expect(rid).toContain(shell)
     expect(rid).not.toContain("name: 'Inventory'")
     expect(rid).not.toContain('127.0.0.1:8489')
     expect(rid).not.toMatch(/PLAYWRIGHT_BASE_URL \?\? 'http/)
@@ -142,7 +143,7 @@ describe('live end-to-end specs name what the console paints', () => {
   //    the areas with every panel but the active one hidden). A wait
   //    on a leaf of a closed area — "Inventory" was the one they all used — can only
   //    pass by a substring accident, and three of them did pass that way.
-  it('every spec file waits first for the overview link, or for the one its navigation names', () => {
+  it('every spec file waits first for the shell link, or for the one its navigation names', () => {
     const waits: string[] = []
     for (const file of readdirSync(E2E)) {
       if (!file.endsWith('.spec.ts')) continue
@@ -151,32 +152,32 @@ describe('live end-to-end specs name what the console paints', () => {
     expect(waits).toEqual([])
   })
 
-  it('the shared overview locator names the exact link inside the left navigation', () => {
+  it('the shared shell locator names the exact link inside the left navigation', () => {
     const src = spec('browser-session.ts').replace(/\s+\./g, '.')
     expect(src).toContain(
-      `getByRole('navigation', { name: '${common.a11y.mainNavigation}', exact: true }).getByRole('link', { name: '${ESTATE}', exact: true })`,
+      `getByRole('navigation', { name: '${common.a11y.mainNavigation}', exact: true }).getByRole('link', { name: '${SHELL_LINK}', exact: true })`,
     )
   })
 
   it.each(['console-func-l4.spec.ts', 'demo-graph.spec.ts'])(
-    '%s stops at the shared overview assertion before later journey links',
+    '%s stops at the shared shell assertion before later journey links',
     (file) => {
       expect(waitsASignInCannotPaint(file, spec(file))).toEqual([])
     },
   )
 
-  it('recognizes a wrapped shared overview assertion before a later leaf', () => {
+  it('recognizes a wrapped shared shell assertion before a later leaf', () => {
     const src = [
       "await page.getByRole('button', { name: /^sign in$/i }).click()",
-      'await expect(\n journeyNowLink(page)\n ).toBeVisible({ timeout: 15_000 })',
+      'await expect(\n journeyShellLink(page)\n ).toBeVisible({ timeout: 15_000 })',
       `await page.getByRole('link', { name: '${nav.items.inventory}', exact: true }).click()`,
     ].join(' ')
     expect(waitsASignInCannotPaint('shared.spec.ts', src)).toEqual([])
   })
 
   it.each([
-    'await expect(journeyNowLink(page)).toBeVisible()',
-    'journeyNowLink(page)',
+    'await expect(journeyShellLink(page)).toBeVisible()',
+    'journeyShellLink(page)',
   ])('still rejects a leaf wait before %s', (later) => {
     const body = `name: '${nav.items.inventory}', exact: true`
     const src = [
@@ -193,7 +194,7 @@ describe('live end-to-end specs name what the console paints', () => {
     const body = `name: '${nav.items.inventory}', exact: true`
     const src = [
       "await page.getByRole('button', { name: /^sign in$/i }).click()",
-      'journeyNowLink(page)',
+      'journeyShellLink(page)',
       `await expect(page.getByRole('link', { ${body} })).toBeVisible()`,
     ].join(' ')
     expect(waitsASignInCannotPaint('unsafe.spec.ts', src)).toEqual([
@@ -201,14 +202,14 @@ describe('live end-to-end specs name what the console paints', () => {
     ])
   })
 
-  it('the overview link is read inside the left navigation, never at page level', () => {
+  it('the shell link is read inside the left navigation, never at page level', () => {
     expect(SPEC_DIRS).toEqual(expect.arrayContaining(['e2e', 'e2e-release']))
     const loose: string[] = []
     for (const dir of SPEC_DIRS) {
       for (const file of readdirSync(join(WEB, dir))) {
         if (!file.endsWith('.spec.ts')) continue
         loose.push(
-          ...overviewLinksOutsideNavigation(
+          ...shellLinksOutsideNavigation(
             `${dir}/${file}`,
             spec(file, join(WEB, dir)),
           ),
@@ -221,26 +222,26 @@ describe('live end-to-end specs name what the console paints', () => {
   it.each([
     [
       'a page-level link',
-      "await expect(page.getByRole('link', { name: 'Now', exact: true })).toBeVisible()",
+      "await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeVisible()",
       1,
     ],
     [
       'a link inside the left navigation',
-      "await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).getByRole('link', { name: 'Now', exact: true })).toBeVisible()",
+      "await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).getByRole('link', { name: 'Settings', exact: true })).toBeVisible()",
       0,
     ],
     [
       'a wrapped chain inside the left navigation label',
-      "page\n  .getByLabel('Main navigation')\n  .getByRole('link', { name: 'Now', exact: true })",
+      "page\n  .getByLabel('Main navigation')\n  .getByRole('link', { name: 'Settings', exact: true })",
       0,
     ],
     [
       'a link scoped to something else',
-      "page.getByRole('main').getByRole('link', { name: 'Now', exact: true })",
+      "page.getByRole('main').getByRole('link', { name: 'Settings', exact: true })",
       1,
     ],
   ])('classifies %s', (_name, src, loose) => {
-    expect(overviewLinksOutsideNavigation('probe.spec.ts', src)).toHaveLength(
+    expect(shellLinksOutsideNavigation('probe.spec.ts', src)).toHaveLength(
       loose,
     )
   })
@@ -249,13 +250,13 @@ describe('live end-to-end specs name what the console paints', () => {
     const src = spec('deploy-executor.spec.ts')
     const after = src.slice(src.indexOf('name: /^sign in$/i'))
     const link = /getByRole\(\s*'link',\s*\{([^}]*)\}/.exec(after)
-    expect(link?.[1].trim()).toBe(`name: '${ESTATE}', exact: true`)
+    expect(link?.[1].trim()).toBe(`name: '${SHELL_LINK}', exact: true`)
     expect(link?.index).toBeLessThan(after.indexOf('async function openDeploy'))
   })
 
   it.each([
     ['a closed leaf', '', `name: '${nav.items.inventory}', exact: true`],
-    ['an inexact overview', '', `name: '${ESTATE}'`],
+    ['an inexact shell link', '', `name: '${SHELL_LINK}'`],
     [
       'an arbitrary help link',
       "await page.goto('/deploy')",

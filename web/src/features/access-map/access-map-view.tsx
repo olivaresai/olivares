@@ -9,15 +9,25 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { Eye, Network, RefreshCw } from 'lucide-react'
+import {
+  Eye,
+  List,
+  Maximize2,
+  Minimize2,
+  Network,
+  RefreshCw,
+  X,
+} from 'lucide-react'
 import {
   type KeyboardEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -27,16 +37,25 @@ import { ForbiddenState } from '@/components/ui/error-state'
 import { CaveatNotice } from '@/features/_intel'
 import { PageHeader } from '@/components/ui/page-header'
 import { Spinner } from '@/components/ui/spinner'
-import { RecordingNotice } from '@/features/recordings/recording-notice'
+import { RecordingNoticeSlot } from '@/features/recording-notice-slot'
 import {
-  clusterByHost,
   GraphCanvas,
   SigmaGraph,
-  UrlStateNotice,
+  useSessionNames,
+  useUrlStateNotice,
 } from '@/features/shared'
+import { toolName } from '@/features/agentops/engine-tools'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
-import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
+import { useUrlState, useValidatedUrlState } from '@/lib/hooks/use-url-state'
+import { useMinWidth } from '@/lib/hooks/use-min-width'
+import {
+  isTypingTarget,
+  modalIsOpen,
+  navLeader,
+  resolveBinding,
+} from '@/lib/keybindings/model'
+import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import { accessMapApi, accessMapKeys } from './api'
 import {
@@ -58,9 +77,11 @@ import {
   buildGraph,
   distinctSignalSources,
 } from './graph-model'
+import { type GroupNodeData, groupAccessGraph } from './groups'
 import { AccessLegend } from './legend'
 import { type ArrowKey, connectedNeighbor } from './neighbor-nav'
 import { accessNodeTypes } from './nodes'
+import { OriginList } from './origin-list'
 import { selectionFromNodeData } from './selection'
 import {
   ACCESS_URL_KEYS,
@@ -92,12 +113,22 @@ const GRAPH_LIMIT = 500
  */
 const WEBGL_NODE_THRESHOLD = 400
 
-/**
- * At extreme scale even WebGL benefits from level-of-detail: above this we collapse
- * resources by host into labelled supernodes (clusterByHost) — honest aggregation
- * that never hides a finding (any group with unexpected access stays flagged).
- */
-const WEBGL_CLUSTER_THRESHOLD = 1200
+/** Initial slot for a grouped phone row; GraphCanvas reflows it after measuring. */
+const GROUPED_PHONE_ROW_PX = 96
+
+/** The search param that holds full-screen mode: the state is the address, so a
+ * reload or a pasted link opens the same view. */
+const FULL_PARAM = 'full'
+
+/** The search param that holds the groups the operator opened, comma-separated. */
+const GROUP_PARAM = 'group'
+const groupsIn = (value: unknown): string[] =>
+  String(value ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(decodeURIComponent)
+const groupsValue = (keys: readonly string[]) =>
+  keys.length > 0 ? keys.map(encodeURIComponent).join(',') : undefined
 
 /** Node fill (a CSS-var token string) shared by the minimap and the WebGL renderer:
  * danger for a resource with unexpected access, accent for origins, graphite for
@@ -193,6 +224,7 @@ export function AccessMapView() {
   const { t } = useTranslation('accessMap')
   const { activeTenant, can } = useAuth()
   const canDrift = can(DRIFT_PERMISSION)
+  const wideGraph = useMinWidth(768)
 
   // The view IS the address (url-state.ts): filters, overlay, selection and expanded
   // neighbors round-trip through the URL, so a pasted link restores the same map.
@@ -227,6 +259,21 @@ export function AccessMapView() {
     filter.confidence !== 'all' ||
     filter.signalSource !== null
   const [listOpen, setListOpen] = useState(false)
+  // FULL SCREEN IS THE ADDRESS (?full=1), the same hook every other deep link uses, so a
+  // reload, a pasted link and Back all land on the view the operator was looking at, and
+  // ?focus= is kept. It is a window over the page, not the browser's Fullscreen API: that
+  // one shows only its own element, so the detail sheet (a portal) would vanish, and
+  // iOS Safari has no such API for a div, which is where the phone view needs it most.
+  const [urlState, patchFullUrl] = useUrlState([FULL_PARAM, GROUP_PARAM])
+  // The optimistic patch is numeric; the location that follows is a string.
+  const full = String(urlState[FULL_PARAM] ?? '') === '1'
+  // The address's own (encoded) value: a folder name may hold a comma.
+  const openKey = String(urlState[GROUP_PARAM] ?? '')
+  const openGroups = groupsIn(openKey)
+  // Text is 12 px at zoom 1, so a zoom below 1 would draw it smaller. Zooming out past 1
+  // groups every side instead (groupAccessGraph), at a zoom floor of 1: fewer, readable
+  // labels, never smaller ones. A phone starts grouped so its first view fits the width.
+  const [zoomedOut, setZoomedOut] = useState(!wideGraph)
   const [expandFailure, setExpandFailure] = useState<{
     id: string
     kind: string
@@ -284,17 +331,23 @@ export function AccessMapView() {
   // Turning the overlay off takes the nodes only it drew off the map, so the expansions on
   // them go in the SAME change: they were the operator's own, and left in the address the
   // gate would drop them later and blame the link.
-  const setOverlay = (on: boolean) => {
+  const overlayPatch = (on: boolean) => {
     const stillReadable = on
       ? readable
       : resolveMap(graphQuery.data, undefined, expanded, readCached).readable
     // A value the gate already refuses is its business, not this switch's.
     const keep = expanded.filter((_, i) => stillReadable[i] || !readable[i])
-    drive({
+    return {
       drift: on ? '1' : undefined,
       ...(keep.length < expanded.length ? { expand: expandedValue(keep) } : {}),
-    })
+    }
   }
+  const setOverlay = (on: boolean) => drive(overlayPatch(on))
+  // The list opens first. The graph is the address's `view=graph`, and full screen and the
+  // drift overlay are the graph's own, so a link naming either opens it too. Back to the
+  // list takes the overlay off in the same change.
+  const showGraph = view.graph || full || overlay
+  const showList = () => drive({ ...overlayPatch(false), view: undefined })
   const neighborReads = useQueries({
     queries: expanded.map((node, i) => ({
       ...neighborsRead(activeTenant, node),
@@ -330,17 +383,61 @@ export function AccessMapView() {
     [merged, driftQuery.data, driftQuery.isSuccess, overlay, canDrift, filter],
   )
 
-  // Pick the renderer by node count. The WebGL view draws the SAME built model;
-  // above an extreme ceiling we cluster resources by host first (LOD). The cluster
-  // transform is honest aggregation (labelled "host (N)", never hides a finding).
-  const useWebGL = built.nodes.length > WEBGL_NODE_THRESHOLD
+  // What the canvas draws: each side within what reads at zoom 1 (groups.ts). Sessions
+  // group by the tool that ran them, as the live page names it.
+  const sessionNames = useSessionNames()
+  // The list groups origins the way the graph does.
+  const originGroup = useCallback(
+    (d: OriginNodeData) => {
+      const engine = d.kind === 'session' ? sessionNames.engineOf(d.ref) : null
+      return engine
+        ? { key: `tool:${engine}`, label: toolName(engine), ref: engine }
+        : {
+            key: `origin:${d.kind}`,
+            label: t(`groupKinds.${d.kind}`, { defaultValue: d.kind }),
+            ref: d.kind,
+          }
+    },
+    [sessionNames, t],
+  )
   const render = useMemo(() => {
-    if (!useWebGL)
-      return { nodes: built.nodes, edges: built.edges, clustered: false }
-    return clusterByHost(built.nodes, built.edges, {
-      threshold: WEBGL_CLUSTER_THRESHOLD,
+    const result = groupAccessGraph(built.nodes, built.edges, {
+      open: new Set(groupsIn(openKey)),
+      force: zoomedOut,
+      originGroup,
     })
-  }, [useWebGL, built.nodes, built.edges])
+    if (wideGraph || !result.grouped) return result
+    // Two columns cannot fit a phone at the readable zoom. Stack only the coarse
+    // view; edges keep their meaning and the detail view still pans horizontally.
+    return {
+      ...result,
+      nodes: result.nodes.map((node, index) => ({
+        ...node,
+        position: { x: 0, y: index * GROUPED_PHONE_ROW_PX },
+      })),
+    }
+  }, [wideGraph, zoomedOut, openKey, originGroup, built.nodes, built.edges])
+  // Pick the renderer by what is drawn: WebGL takes the same nodes past the ceiling.
+  const useWebGL = render.nodes.length > WEBGL_NODE_THRESHOLD
+  // Strictly below or above the readable zoom: exactly at it, which is where the refit
+  // after a switch lands, changes nothing, so the two views cannot flip each other.
+  const onViewportZoom = (zoom: number) => {
+    if (zoom < LEGIBLE_FIT_MIN_ZOOM) setZoomedOut(true)
+    else if (zoom > LEGIBLE_FIT_MIN_ZOOM) setZoomedOut(false)
+  }
+  const grouped = !useWebGL && render.grouped
+
+  const setFull = useCallback(
+    (on: boolean) => {
+      // The canvas is mounted again in the other place and refits: start at the
+      // readable layout for this width.
+      setZoomedOut(!wideGraph)
+      // TanStack serializes strings as JSON: a numeric 1 keeps the public URL
+      // `?full=1`, not `?full=%221%22`. useUrlState owns the string-only type.
+      patchFullUrl({ [FULL_PARAM]: on ? (1 as unknown as string) : undefined })
+    },
+    [patchFullUrl, wideGraph],
+  )
 
   // THE SELECTION IS READ FROM THE ADDRESS, never held beside it. A node is looked up on
   // what the canvas draws (so unused grants and cluster supernodes are addressable), an
@@ -353,7 +450,8 @@ export function AccessMapView() {
   const selectedNode =
     addressNode === null
       ? undefined
-      : render.nodes.find((n) => n.id === addressNode)
+      : (render.nodes.find((n) => n.id === addressNode) ??
+        built.nodes.find((n) => n.id === addressNode))
   const selectedEdge =
     addressEdge === null
       ? undefined
@@ -404,11 +502,14 @@ export function AccessMapView() {
     if (droppedKeys.length > 0) setDroppedNotice(droppedKeys)
   }
   // One array per change, never per render: the notice reads a new array as a new event
-  // and shows itself again, which undoes a dismissal.
+  // and says itself again.
   const noticeIssues = useMemo(
     () => [...new Set([...urlIssues, ...droppedNotice])],
     [urlIssues, droppedNotice],
   )
+  // What the link asked for and the map could not give: a refused value, a node or edge
+  // that is not on this map, an expansion whose read failed.
+  useUrlStateNotice(noticeIssues)
   useEffect(() => {
     if (!dropped && !refusedExpansions) return
     patchUrl(
@@ -473,6 +574,36 @@ export function AccessMapView() {
   const selectEdge = (id: string) => drive({ edge: id, node: undefined })
   const clearSelection = () => drive({ node: undefined, edge: undefined })
   const selectDrift = (entry: DriftEntry) => selectEdge(entry.edge.id)
+  // A group opens in place; a "+N more" node and every other node open the sheet.
+  const setOpenGroups = (keys: readonly string[]) =>
+    patchFullUrl({ [GROUP_PARAM]: groupsValue(keys) })
+  const onNode = (id: string) => {
+    const data = render.nodes.find((n) => n.id === id)?.data as
+      Partial<GroupNodeData> | undefined
+    if (!data?.groupKey) return selectNode(id)
+    if (zoomedOut) return setZoomedOut(false)
+    setOpenGroups([...openGroups, data.groupKey])
+  }
+  // The chip of an open group: the name its node had (a group key is kind:name).
+  const groupName = (key: string) => {
+    const [kind, name = ''] = [
+      key.slice(0, key.indexOf(':')),
+      key.slice(key.indexOf(':') + 1),
+    ]
+    if (kind === 'tool') return toolName(name)
+    if (kind === 'origin')
+      return t(`groupKinds.${name}`, { defaultValue: name })
+    return name.split('/').filter(Boolean).at(-1) ?? name
+  }
+  // An edge that stands for several leads into its group.
+  const onEdge = (id: string) => {
+    if (!id.startsWith('agg:')) return selectEdge(id)
+    const edge = render.edges.find((e) => e.id === id)
+    const end = [edge?.target, edge?.source].find((n) =>
+      n?.startsWith('group:'),
+    )
+    if (end) onNode(end)
+  }
 
   // Arrow keys walk the canvas from node to connected node (React Flow nodes are
   // focusable); Enter or Space opens the focused one. The list below the graph stays
@@ -487,7 +618,7 @@ export function AccessMapView() {
     if (event.altKey || event.ctrlKey || event.metaKey) return
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      selectNode(id)
+      onNode(id)
       return
     }
     if (!ARROWS.includes(event.key)) return
@@ -605,48 +736,182 @@ export function AccessMapView() {
     overlay && canDrift && (driftQuery.isError || driftQuery.isLoading)
   const isEmpty =
     !isLoading && !error && built.nodes.length === 0 && !driftUnreadable
+  const showMap = !isLoading && !error && !isEmpty
 
-  return (
-    <div className="flex h-full flex-col gap-4">
-      {/* Header */}
-      <PageHeader
-        icon={Network}
-        title={t('title')}
-        description={t('subtitle')}
-        notices={
-          <RecordingNotice
-            namespace="accessmap"
-            fallback={
-              <CaveatNotice tone="info">{t('auditedNote')}</CaveatNotice>
-            }
-          />
-        }
-        actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              drive({ expand: undefined })
-              setExpandFailure(null)
-              void graphQuery.refetch()
-              if (overlay) void driftQuery.refetch()
-            }}
-            disabled={graphQuery.isFetching}
-          >
-            <RefreshCw
-              className={cn(
-                'size-3.5',
-                graphQuery.isFetching && 'animate-spin',
-              )}
-            />
-            {t('refresh')}
-          </Button>
-        }
+  // F enters and leaves, Escape leaves. A bare key is the map's only where the operator
+  // is not typing, not in an open menu, not behind a dialog (the detail sheet takes its
+  // own Escape first) and not the second half of a `g` sequence (`g f` is Cost).
+  const enterRef = useRef<HTMLButtonElement>(null)
+  const exitRef = useRef<HTMLButtonElement>(null)
+  const returnFocus = useRef(false)
+  useEffect(() => {
+    if (!showMap && !full) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.defaultPrevented || e.repeat || e.isComposing) return
+      if (navLeader.armed() || modalIsOpen()) return
+      if (e.key === 'Escape') {
+        if (
+          !full ||
+          (e.target instanceof Element &&
+            e.target.closest('[role="menu"],[role="listbox"]'))
+        )
+          return
+        returnFocus.current = true
+        setFull(false)
+        return
+      }
+      if (isTypingTarget(e.target)) return
+      if (
+        resolveBinding(KEYBINDINGS, e, { accessMap: true }) !==
+        'accessMap.fullScreen'
+      )
+        return
+      e.preventDefault()
+      if (full) returnFocus.current = true
+      setFull(!full)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showMap, full, setFull])
+  useEffect(() => {
+    if (!full) return
+    // The fullscreen surface is portalled beside the shell. Keep the covered shell
+    // out of keyboard and screen-reader navigation while detail dialogs remain usable.
+    const root = document.getElementById('root')
+    const wasInert = root?.inert ?? false
+    const overflow = document.body.style.overflow
+    if (root) root.inert = true
+    document.body.style.overflow = 'hidden'
+    return () => {
+      if (root) root.inert = wasInert
+      document.body.style.overflow = overflow
+    }
+  }, [full])
+  // Keyboard and screen-reader focus follows the mode: into the window on entering, back
+  // to the control that opened it on leaving.
+  useEffect(() => {
+    if (full) exitRef.current?.focus()
+    else if (returnFocus.current) {
+      returnFocus.current = false
+      enterRef.current?.focus()
+    }
+  }, [full])
+
+  const refreshButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => {
+        drive({ expand: undefined })
+        setExpandFailure(null)
+        void graphQuery.refetch()
+        if (overlay) void driftQuery.refetch()
+      }}
+      disabled={graphQuery.isFetching}
+    >
+      <RefreshCw
+        className={cn('size-3.5', graphQuery.isFetching && 'animate-spin')}
       />
+      {t('refresh')}
+    </Button>
+  )
+
+  const fullScreenButton = (
+    <Button
+      ref={full ? exitRef : enterRef}
+      variant="outline"
+      size="sm"
+      className="shrink-0"
+      onClick={() => {
+        returnFocus.current = full
+        setFull(!full)
+      }}
+    >
+      {full ? <Minimize2 /> : <Maximize2 />}
+      {full ? t('fullscreen.exit') : t('fullscreen.enter')}
+    </Button>
+  )
+
+  // ⛔ NOT CONVERTED TO ListTruncationBadge ON PURPOSE: `merged` is a derived useMemo,
+  // NOT a query object -- it has no .error, which is half of the rule the component
+  // applies. Passing it would compile and lie: the notice would depend only on
+  // has_more. Doing it right requires deciding WHICH query it inherits the error from.
+  // The list is built from the same cut read, so it says so too.
+  const truncatedBadge = merged.has_more && (
+    <Badge variant="warning" title={t('stats.truncatedHint')}>
+      {t('stats.truncated', { n: GRAPH_LIMIT })}
+    </Badge>
+  )
+
+  // Opening this map is audited: the subtitle says so, in full screen too. A Business
+  // build that records this view adds its own notice.
+  const auditNotice = <RecordingNoticeSlot namespace="accessmap" />
+  const viewButton = showGraph ? (
+    <Button variant="outline" size="sm" className="shrink-0" onClick={showList}>
+      <List />
+      {t('showList')}
+    </Button>
+  ) : (
+    <Button
+      variant="outline"
+      size="sm"
+      className="shrink-0"
+      onClick={() => drive({ view: 'graph' })}
+    >
+      <Network />
+      {t('showGraph')}
+    </Button>
+  )
+
+  const page = (
+    <div
+      role={full ? 'main' : undefined}
+      className={cn(
+        'flex flex-col gap-4',
+        full
+          ? 'fixed inset-0 z-40 gap-3 overflow-y-auto bg-canvas p-4 text-text max-md:p-2'
+          : 'h-full',
+      )}
+    >
+      {/* Header. Full screen replaces it with one line: the page header publishes its
+          actions to the shell, which the window covers. */}
+      {full ? (
+        <>
+          <div className="flex items-center gap-2">
+            <Network className="size-4 shrink-0 text-muted-foreground" />
+            <h1 className="min-w-0 flex-1 truncate text-body font-semibold">
+              {t('title')}
+            </h1>
+            {fullScreenButton}
+            {refreshButton}
+          </div>
+          <p className="text-caption text-muted-foreground">{t('subtitle')}</p>
+          {auditNotice}
+        </>
+      ) : (
+        <PageHeader
+          icon={Network}
+          title={t('title')}
+          description={t('subtitle')}
+          notices={auditNotice}
+          actions={
+            <>
+              {viewButton}
+              {showGraph && fullScreenButton}
+              {refreshButton}
+            </>
+          }
+        />
+      )}
 
       {/* Stat strip */}
-      {!isLoading && !error && (
-        <div className="flex flex-wrap items-center gap-2 text-caption">
+      {showGraph && !isLoading && !error && (
+        <div
+          className={cn(
+            'flex flex-wrap items-center gap-2 text-caption',
+            full && 'max-md:hidden',
+          )}
+        >
           <StatChip label={t('stats.origins')} value={built.stats.origins} />
           <StatChip
             label={t('stats.resources')}
@@ -677,25 +942,12 @@ export function AccessMapView() {
               tone="danger"
             />
           )}
-          {/* ⛔ NOT CONVERTED TO ListTruncationBadge ON PURPOSE: `merged` is a derived useMemo,
-              NOT a query object -- it has no .error, which is half of the rule the
-              component applies. Passing it would compile and lie: the notice would depend
-              only on has_more. Doing it right requires deciding WHICH query it inherits the
-              error from. */}
-          {merged.has_more && (
-            <Badge variant="warning" title={t('stats.truncatedHint')}>
-              {t('stats.truncated', { n: GRAPH_LIMIT })}
-            </Badge>
-          )}
+          {truncatedBadge}
           {/* Make the renderer degradation visible/documented in-UI. */}
           {useWebGL && (
             <Badge
               variant="info"
-              title={
-                render.clustered
-                  ? t('webgl.clustered')
-                  : t('webgl.hint', { n: built.nodes.length })
-              }
+              title={t('webgl.hint', { n: render.nodes.length })}
             >
               {t('webgl.badge')}
             </Badge>
@@ -703,9 +955,7 @@ export function AccessMapView() {
         </div>
       )}
 
-      {/* What the link asked for and the map could not give: a refused value, a node or
-          edge that is not on this map, an expansion whose read failed. */}
-      <UrlStateNotice issues={noticeIssues} />
+      {/* An expansion whose read failed: the map is partial, and the caveat says so. */}
       {neighborReads.some((r) => r.isError) && (
         <CaveatNotice tone="warning">
           {t('expand.partial')}{' '}
@@ -731,6 +981,7 @@ export function AccessMapView() {
           onOverlayChange={setOverlay}
           unexpectedCount={driftQuery.data?.unexpected_count}
           canDrift={canDrift}
+          compact={!showGraph}
         />
       )}
 
@@ -767,13 +1018,31 @@ export function AccessMapView() {
           title={t('empty.title')}
           description={t('empty.description')}
         />
+      ) : !showGraph ? (
+        <>
+          {truncatedBadge && <div>{truncatedBadge}</div>}
+          <OriginList
+            nodes={built.nodes}
+            edges={built.edges}
+            groupOf={originGroup}
+            onSelect={selectNode}
+          />
+        </>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             {/* Graph (desktop). React Flow ≤ threshold (the polished view); Sigma
               WebGL above it — SAME built model, same selection/click contract. */}
             <div
-              className="hidden h-[70vh] min-h-[460px] flex-1 md:block"
+              // In the page the box is 70vh tall and the page scrolls: as a flex-1 item
+              // its basis was 0, so it shrank to its 460 px floor and the fit drew the
+              // text at half size. Only the full-screen window fills what is left.
+              className={cn(
+                'relative',
+                full
+                  ? 'min-h-[16rem] flex-1'
+                  : 'hidden h-[70vh] min-h-[460px] shrink-0 md:block',
+              )}
               onKeyDown={onGraphKeyDown}
             >
               {!useWebGL && (
@@ -784,11 +1053,11 @@ export function AccessMapView() {
                   nodes={render.nodes}
                   edges={render.edges}
                   nodeColor={accessNodeColor}
-                  ariaLabel={t('subtitle')}
-                  onNodeClick={(id) => selectNode(id)}
-                  onEdgeClick={(id) => selectEdge(id)}
+                  ariaLabel={t('graph.label')}
+                  onNodeClick={onNode}
+                  onEdgeClick={onEdge}
                   onPaneClick={clearSelection}
-                  fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${render.nodes.length}|${render.clustered}`}
+                  fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${render.nodes.length}|${render.grouped}`}
                 >
                   <div className="pointer-events-none absolute bottom-3 left-3 z-10">
                     <AccessLegend overlay={overlay && canDrift} />
@@ -796,15 +1065,24 @@ export function AccessMapView() {
                 </SigmaGraph>
               ) : (
                 <GraphCanvas
+                  className="max-sm:[&_.react-flow\_\_minimap]:!hidden"
                   fitMinZoom={LEGIBLE_FIT_MIN_ZOOM}
+                  // Grouped: nothing below the readable zoom to shrink the text. Grouped
+                  // because the operator zoomed out: the refit lands on exactly it (see
+                  // onViewportZoom); a pinch back in lifts the ceiling and keeps its zoom.
+                  fitMaxZoom={
+                    grouped && zoomedOut ? LEGIBLE_FIT_MIN_ZOOM : undefined
+                  }
+                  minZoom={grouped ? LEGIBLE_FIT_MIN_ZOOM : undefined}
+                  onViewportZoom={onViewportZoom}
                   verticalNodeGap={16}
-                  nodes={built.nodes}
-                  edges={built.edges}
+                  nodes={render.nodes}
+                  edges={render.edges}
                   nodeTypes={accessNodeTypes}
                   edgeTypes={accessEdgeTypes}
-                  ariaLabel={t('subtitle')}
-                  onNodeClick={(n) => selectNode(n.id)}
-                  onEdgeClick={(e) => selectEdge(e.id)}
+                  ariaLabel={t('graph.label')}
+                  onNodeClick={(n) => onNode(n.id)}
+                  onEdgeClick={(e) => onEdge(e.id)}
                   onPaneClick={clearSelection}
                   minimapColor={(n) =>
                     (n.data as { hasUnexpected?: boolean }).hasUnexpected
@@ -813,7 +1091,7 @@ export function AccessMapView() {
                         ? 'var(--color-accent-text)'
                         : 'var(--color-graphite-400)'
                   }
-                  fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${built.nodes.length}`}
+                  fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${built.nodes.length}|${full}|${openKey}`}
                 >
                   <Panel
                     position="top-left"
@@ -823,18 +1101,51 @@ export function AccessMapView() {
                   </Panel>
                 </GraphCanvas>
               )}
+              {(grouped || openGroups.length > 0) && (
+                <div className="absolute bottom-12 right-3 z-10 flex max-w-[60%] flex-wrap justify-end gap-1.5 sm:bottom-auto sm:top-3">
+                  {openGroups.map((key) => (
+                    <Button
+                      key={key}
+                      variant="outline"
+                      size="sm"
+                      aria-label={t('group.close', { name: groupName(key) })}
+                      onClick={() =>
+                        setOpenGroups(openGroups.filter((k) => k !== key))
+                      }
+                    >
+                      {groupName(key)}
+                      <X />
+                    </Button>
+                  ))}
+                  {grouped && openGroups.length === 0 && (
+                    <Badge variant="info">{t('lod.grouped')}</Badge>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Mobile fallback: the graph needs width; show a dignified summary. */}
-            <div className="rounded-lg border border-border bg-surface p-6 text-center md:hidden">
-              <Network className="mx-auto mb-2 size-6 text-muted-foreground" />
-              <p className="text-body font-medium text-foreground">
-                {t('mobile.title')}
-              </p>
-              <p className="mt-1 text-caption text-muted-foreground">
-                {t('mobile.hint')}
-              </p>
-            </div>
+            {/* Narrow screens: the graph is not drawn in the page, it opens full screen
+                (pan with one finger, pinch to zoom). The list below stays. */}
+            {!full && (
+              <div className="rounded-lg border border-border bg-surface p-6 text-center md:hidden">
+                <Network className="mx-auto mb-2 size-6 text-muted-foreground" />
+                <p className="text-body font-medium text-foreground">
+                  {t('mobile.title')}
+                </p>
+                <p className="mt-1 text-caption text-muted-foreground">
+                  {t('mobile.hint')}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setFull(true)}
+                >
+                  <Maximize2 />
+                  {t('mobile.open')}
+                </Button>
+              </div>
+            )}
 
             {/* Keyboard path: the canvas is pointer-first; this list is the same
               selection contract without requiring a mouse. */}
@@ -877,6 +1188,7 @@ export function AccessMapView() {
                               <button
                                 type="button"
                                 onClick={() => selectNode(n.id)}
+                                title={data.ref}
                                 className="text-left text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                               >
                                 {data.label}
@@ -897,7 +1209,12 @@ export function AccessMapView() {
 
           {/* Drift side panel */}
           {overlay && (
-            <aside className="w-full shrink-0 overflow-y-auto rounded-lg border border-border bg-surface p-4 lg:w-80">
+            <aside
+              className={cn(
+                'w-full shrink-0 overflow-y-auto rounded-lg border border-border bg-surface p-4 lg:w-80',
+                full && 'max-lg:max-h-56',
+              )}
+            >
               <h2 className="mb-3 flex items-center gap-1.5 text-body font-semibold text-foreground">
                 <Eye className="size-4" />
                 {t('drift.title')}
@@ -1002,6 +1319,10 @@ export function AccessMapView() {
       />
     </div>
   )
+
+  // The window sits on the body, not inside the shell: no ancestor's stacking context or
+  // overflow can cover it, and the dialogs the detail sheet opens (z-50) stay above it.
+  return full ? createPortal(page, document.body) : page
 }
 
 function StatChip({

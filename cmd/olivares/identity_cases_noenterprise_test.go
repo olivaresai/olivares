@@ -75,9 +75,9 @@ func editionLaneReadVerbs() []laneReadVerb {
 
 func editionPagingCounts() pagingCounts {
 	if thisEdition.name == "enterprise" {
-		return pagingCounts{107, 21, 23}
+		return pagingCounts{112, 22, 24}
 	}
-	return pagingCounts{105, 21, 23}
+	return pagingCounts{110, 22, 24}
 }
 
 func editionIdentityVerbCount() int { return 1 }
@@ -86,9 +86,9 @@ func editionLaneVerbCounts() map[string]int { return map[string]int{"accessmap":
 
 func editionLaneTotal() int {
 	if thisEdition.name == "enterprise" {
-		return 73
+		return 76
 	}
-	return 71
+	return 74
 }
 
 func editionVerEngineRoutes() []string {

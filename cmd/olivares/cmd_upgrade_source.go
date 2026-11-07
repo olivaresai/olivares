@@ -21,6 +21,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/olivaresai/olivares/core/release"
 )
@@ -633,6 +634,85 @@ func isHTTPStatus(err error, status int) bool {
 	return errors.As(err, &se) && se.status == status
 }
 
+// upgradeStallDefault is how long an upgrade transfer may deliver no data before it is given
+// up: DNF's default for the same condition (dnf.conf `timeout`, "Default is 30 seconds",
+// https://dnf.readthedocs.io/en/latest/conf_ref.html), the package manager the appliance
+// upgrades with. A release that keeps arriving is never cut, however slow the link.
+const upgradeStallDefault = 30 * time.Second
+
+// upgradeStallError is a request that delivered no data for the --timeout window.
+type upgradeStallError struct{ after time.Duration }
+
+func (e *upgradeStallError) Error() string {
+	return fmt.Sprintf("no data received for %s (on a slower link, raise --timeout)", e.after)
+}
+
+// newUpgradeClient is the upgrade's HTTP client: no total deadline, only the stall bound.
+func newUpgradeClient(stall time.Duration) *http.Client {
+	// cli-transport-exempt: the release downloads buildUpdateSource feeds (the public OTA
+	// source and the gated licensed one) reach a release endpoint, not the operator's
+	// control plane. Their trust anchor is the Ed25519 manifest signature and the
+	// cosign-verified checksums checked after the bytes arrive, not TLS, so cliTransport's
+	// client context, pins and control-plane bearer must not travel with them.
+	return &http.Client{Transport: stallTransport{base: http.DefaultTransport, stall: stall}}
+}
+
+// stallTransport ends a request that delivers nothing for stall: no answer, or a body that
+// stops arriving. Every byte read re-arms the window.
+type stallTransport struct {
+	base  http.RoundTripper
+	stall time.Duration
+}
+
+func (t stallTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx, cancel := context.WithCancelCause(req.Context())
+	timer := time.AfterFunc(t.stall, func() { cancel(&upgradeStallError{after: t.stall}) })
+	resp, err := t.base.RoundTrip(req.WithContext(ctx))
+	if err != nil {
+		timer.Stop()
+		err = stallCause(ctx, err)
+		cancel(nil)
+		return nil, err
+	}
+	timer.Reset(t.stall) // the headers are data: the body gets its own full window
+	resp.Body = &stallBody{ReadCloser: resp.Body, ctx: ctx, cancel: cancel, timer: timer, stall: t.stall}
+	return resp, nil
+}
+
+type stallBody struct {
+	io.ReadCloser
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+	timer  *time.Timer
+	stall  time.Duration
+}
+
+func (b *stallBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if n > 0 {
+		b.timer.Reset(b.stall)
+	}
+	if err != nil && err != io.EOF {
+		err = stallCause(b.ctx, err)
+	}
+	return n, err
+}
+
+func (b *stallBody) Close() error {
+	b.timer.Stop()
+	b.cancel(nil)
+	return b.ReadCloser.Close()
+}
+
+// stallCause names the stall when the window, not the caller, ended the request.
+func stallCause(ctx context.Context, err error) error {
+	var stalled *upgradeStallError
+	if errors.As(context.Cause(ctx), &stalled) {
+		return stalled
+	}
+	return err
+}
+
 // httpGet fetches a URL with a bounded body and a clear error on non-200.
 // The request URL is used as configured (userinfo remains a live credential on
 // the wire). Operator-facing errors name a display-only endpoint and never a
@@ -763,6 +843,10 @@ func upgradeInnerMessage(err error) string {
 	var re *upgradeRedirectRefusal
 	if errors.As(err, &re) {
 		return re.Error()
+	}
+	var stalled *upgradeStallError
+	if errors.As(err, &stalled) {
+		return stalled.Error()
 	}
 	return "network error"
 }

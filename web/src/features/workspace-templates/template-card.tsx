@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// TemplateCard — displays a single workspace template in the catalog grid.
-// Shows name, description, version, author, and a builtin lock badge.
-// Actions: Apply to session, Edit (opens editor sheet), Duplicate (calls API),
-// Archive (with confirmation, blocked for built-in templates).
+// TemplateCard — one workspace template as a row of the catalog list.
+// Shows name and description, and the word "Built-in" once for a built-in; version
+// and author live in its detail sheet. The name opens that sheet (read-only for a
+// built-in). Actions: Apply to session, Edit (opens editor sheet), Duplicate (calls
+// API), Archive (with confirmation, blocked for built-in templates).
 //
 // ⛔ "Apply to session" LAUNCHES a session under the template. It used to POST
 // /apply and raise a toast, and nothing else happened anywhere: the endpoint answered
@@ -15,19 +16,11 @@
 // dialog is where a session is configured, and the engine merges the template into it
 // before the governance gates.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Copy, Lock, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react'
+import { Copy, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   DropdownMenu,
@@ -37,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { toast } from '@/components/ui/toaster'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { templatesApi, templatesKeys } from './api'
 import type { ApplyResult, TemplateDTO } from './types'
@@ -121,108 +115,98 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
       setConfirmArchive(false)
       toast.success(t('actions.archive'))
     },
-    onError: () => toast.error(t('errors.archiveFailed')),
+    // A 409 is the engine saying why: a department or group is assigned this template.
+    onError: (err) =>
+      toast.error(t('errors.archiveFailed'), {
+        description:
+          err instanceof ApiError && err.status === 409
+            ? err.message
+            : undefined,
+      }),
   })
 
   const isArchived = !!template.archived_at
 
   return (
     <>
-      <Card className="flex flex-col">
-        <CardHeader>
-          <div className="flex min-w-0 flex-1 items-start gap-2">
-            {template.builtin && (
-              <Lock
-                className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                aria-label={t('catalog.builtin')}
-              />
-            )}
-            <CardTitle
-              as="h2"
-              className="min-w-0 break-words text-body font-semibold"
+      <li className="flex min-w-0 items-center gap-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          {template.builtin || canWrite ? (
+            <button
+              type="button"
+              onClick={() => onEdit(template)}
+              className="max-w-full break-words text-left text-body font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {template.name}
-            </CardTitle>
-          </div>
-          {/* Actions menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('actions.edit')}
-                className="shrink-0"
-              >
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onSelect={() => setConfirmApply(true)}
-                disabled={!canLaunch || isArchived || apply.isPending}
-              >
-                <Play className="size-4" />
-                {t('actions.apply')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => onEdit(template)}
-                disabled={!canWrite || template.builtin}
-              >
-                <Pencil className="size-4" />
-                {t('actions.edit')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => duplicate.mutate()}
-                disabled={!canWrite || duplicate.isPending}
-              >
-                <Copy className="size-4" />
-                {t('actions.duplicate')}
-              </DropdownMenuItem>
-              {!isArchived && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={() => setConfirmArchive(true)}
-                    disabled={!canAdmin || template.builtin}
-                    className="text-danger focus:text-danger"
-                  >
-                    <Trash2 className="size-4" />
-                    {t('actions.archive')}
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </CardHeader>
-
-        <CardContent className="flex-1">
-          {template.description ? (
-            <CardDescription className="whitespace-normal text-caption [overflow-wrap:anywhere]">
-              {template.description}
-            </CardDescription>
+            </button>
           ) : (
-            <CardDescription className="text-caption italic text-muted-foreground/60">
-              —
-            </CardDescription>
+            <span className="break-words text-body font-medium">
+              {template.name}
+            </span>
           )}
-        </CardContent>
-
-        <CardFooter className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline">
-            {t('catalog.version', { version: template.version })}
-          </Badge>
-          {template.builtin && (
-            <Badge variant="accent">{t('catalog.builtin')}</Badge>
+          {template.description && (
+            <p className="text-caption text-muted-foreground [overflow-wrap:anywhere]">
+              {template.description}
+            </p>
           )}
-          {isArchived && (
-            <Badge variant="neutral">{t('catalog.archived')}</Badge>
-          )}
-          <span className="ml-auto min-w-0 break-words text-caption text-muted-foreground">
-            {t('catalog.author', { author: template.author })}
+        </div>
+        {template.builtin && (
+          <span className="shrink-0 text-caption text-muted-foreground">
+            {t('catalog.builtin')}
           </span>
-        </CardFooter>
-      </Card>
+        )}
+        {isArchived && <Badge variant="neutral">{t('catalog.archived')}</Badge>}
+        {/* Actions menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('actions.edit')}
+              className="shrink-0"
+            >
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => setConfirmApply(true)}
+              disabled={!canLaunch || isArchived || apply.isPending}
+            >
+              <Play className="size-4" />
+              {t('actions.apply')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => onEdit(template)}
+              disabled={!canWrite || template.builtin}
+            >
+              <Pencil className="size-4" />
+              {t('actions.edit')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => duplicate.mutate()}
+              disabled={!canWrite || duplicate.isPending}
+            >
+              <Copy className="size-4" />
+              {t('actions.duplicate')}
+            </DropdownMenuItem>
+            {!isArchived && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => setConfirmArchive(true)}
+                  disabled={!canAdmin || template.builtin}
+                  className="text-danger focus:text-danger"
+                >
+                  <Trash2 className="size-4" />
+                  {t('actions.archive')}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </li>
 
       <ConfirmDialog
         open={confirmArchive}

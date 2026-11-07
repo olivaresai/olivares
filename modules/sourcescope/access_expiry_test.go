@@ -441,6 +441,62 @@ func TestAccessRequestSelfApprovalIsRefused(t *testing.T) {
 	}
 }
 
+// The approve route's floor is sourcescope:binding:read, which the viewer role holds.
+// A request names a workspace, never an approver; the decision needs
+// sourcescope:posture:admin there, so no read-only principal can approve, not even a
+// member of the named department or the requester.
+func TestAccessRequestReadOnlyPrincipalCannotApprove(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	dept := h.createWorkspace(tenant, "dept")
+	departmentViewer := func(email string) string {
+		t.Helper()
+		r := h.do("POST", "/v1/users", admin, map[string]any{"email": email, "password": "memberpass1"}, nil)
+		if r.code != http.StatusCreated {
+			t.Fatalf("create %s = %d %s", email, r.code, r.raw)
+		}
+		if err := h.st.AuthMutate(t.Context(), func(as store.AuthScope) error {
+			_, err := as.Memberships().Create(t.Context(), model.Membership{
+				UserID: model.ID(r.body["id"].(string)), TargetTenantID: tenant, Role: auth.RoleViewer, WorkspaceID: dept,
+			})
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return existingToken(h, email)
+	}
+	requester := departmentViewer("requester@acme.io")
+	colleague := departmentViewer("colleague@acme.io")
+	h.principalFor(admin, tenant, "viewer@acme.io", auth.RoleViewer)
+	tenantViewer := existingToken(h, "viewer@acme.io")
+	// A permanent department allow makes dept the source's owner, so only the
+	// department-level posture:admin check stands between a caller and the grant.
+	if seed := h.createBinding(admin, tenant, map[string]any{
+		"source_type": "tool", "source_ref": "claude", "scope_tree": "workspace", "scope_ref": "dept", "enabled": true,
+	}); seed.code != http.StatusCreated {
+		t.Fatalf("seed department source = %d %s", seed.code, seed.raw)
+	}
+	r := h.do("POST", "/v1/m/sourcescope/access-requests", requester, map[string]any{
+		"source_type": "tool", "source_ref": "claude", "workspace_ref": "dept",
+	}, tenantHdr(tenant))
+	if r.code != http.StatusAccepted {
+		t.Fatalf("request access = %d %s", r.code, r.raw)
+	}
+	requestID := r.body["id"].(string)
+	for name, token := range map[string]string{"department viewer": colleague, "tenant viewer": tenantViewer, "requester": requester} {
+		if got := h.do("POST", "/v1/m/sourcescope/access-requests/"+requestID+"/approve", token, nil, tenantHdr(tenant)); got.code != http.StatusForbidden {
+			t.Errorf("%s approved an access request = %d %s, want 403", name, got.code, got.raw)
+		}
+	}
+	if got := h.do("GET", "/v1/m/sourcescope/posture-requests/"+requestID, admin, nil, tenantHdr(tenant)); got.code != http.StatusOK || got.body["status"] != "pending" {
+		t.Fatalf("request after refused approvals = %d %s, want pending", got.code, got.raw)
+	}
+	if got := h.do("POST", "/v1/m/sourcescope/access-requests/"+requestID+"/approve", admin, nil, tenantHdr(tenant)); got.code != http.StatusOK {
+		t.Fatalf("admin approval = %d %s, want 200", got.code, got.raw)
+	}
+}
+
 func TestBindingReminderRetriesAfterPublishFailure(t *testing.T) {
 	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()

@@ -1,4 +1,25 @@
 {
+  "exposure": {
+    "title": "Accès à la console",
+    "listen": "Écoute HTTPS / HTTP",
+    "grpc": "Écoute gRPC",
+    "addresses": "Adresses locales",
+    "url": "URL publique",
+    "tls": "Transport",
+    "encrypted": "TLS activé",
+    "unencrypted": "HTTP non chiffré",
+    "policy": "Authentification renforcée administrative",
+    "unverified": "L’accessibilité externe n’a pas été vérifiée.",
+    "hint": "Ces informations sont locales ; une URL publique ou une adresse locale ne prouve pas qu’un téléphone hors de ce réseau peut accéder à la console.",
+    "guard": "Activez un code d’authentification ou une clé d’accès dans Authentification renforcée administrative avant d’activer l’accès public.",
+    "saved": "Accès à la console mis à jour.",
+    "managed": "L’accès public géré est enregistré.",
+    "unmanaged": "Aucun accès public géré n’est enregistré.",
+    "urlHint": "Utilisez l’adresse de votre tailnet ou tunnel nommé ; laissez ce champ vide pour supprimer l’URL publique gérée.",
+    "unchanged": "Modifiez l’URL publique pour l’enregistrer.",
+    "tunnelHint": "Utilisez un client tailnet pour un accès privé ou un Cloudflare Tunnel nommé pour un accès public. Un tunnel ne nécessite aucun port WAN entrant.",
+    "notSet": "Non défini"
+  },
   "title": "Paramètres",
   "restoreAll": "Rétablir toutes les valeurs",
   "search": "Rechercher dans les paramètres",
@@ -15,9 +36,10 @@
     "aiTools": "Outils d’IA",
     "workspaces": "Espaces de travail",
     "deploy": "Déploiement et mises à jour",
-    "signIn": "Connexion et sécurité",
+    "signIn": "Connexion",
     "setup": "Installation",
-    "edition": "Édition et modules",
+    "edition": "Édition",
+    "modules": "Modules",
     "about": "À propos",
     "sections": "Sections des paramètres",
     "signing": "Signature des rapports",
@@ -36,13 +58,13 @@
     "density": "Densité",
     "densityHint": "Compact affiche plus de lignes ; confortable se lit plus facilement.",
     "language": "Langue",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Heure",
     "timeHint": "Les heures s’affichent dans votre fuseau ({{zone}}). Les enregistrements et les exports restent en UTC.",
     "clock24": "24 heures",
     "clock12": "12 heures",
     "startPage": "Page de départ",
-    "startPageHint": "Ce qui s’ouvre à la connexion. Valeur par défaut : Accueil.",
+    "startPageHint": "Ce qui s’ouvre à la connexion. Valeur par défaut : Sessions.",
     "confirmStop": "Confirmer avant d’arrêter une session",
     "confirmStopHint": "Demander une fois avant qu’Arrêter ne termine une session encore au travail.",
     "editor": "Éditeur pour les liens de fichier",
@@ -71,23 +93,22 @@
     "scope": "Les touches auxquelles cette installation répond. Elles sont les mêmes pour tout le monde."
   },
   "edition": {
-    "title": "Édition et modules",
-    "scope": "L'édition de ce build, les modules qu'il exécute et ce qu'ajoute Business.",
+    "scope": "L'édition de ce build, sa licence et ce qu'ajoute Business.",
     "label": "Édition",
-    "licenseAlias": "Licence",
     "unknown": "Non indiquée par ce moteur",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
     "businessAdds": "Business ajoute",
-    "adds": {
-      "loginEnforcement": "Application de la connexion : exiger le SSO et une liste de réseaux autorisés",
-      "identityProviders": "Plusieurs fournisseurs d'identité, par organisation et routés par domaine de messagerie",
-      "groupMapping": "Groupes d'annuaire associés à des rôles à la connexion",
-      "regulatory": "Opérations réglementaires : registres DORA, classification des incidents NIS 2, profils OSCAL, packs américains et sectoriels, et surveillance continue des contrôles",
-      "reports": "Rapports Business et rapports planifiés",
-      "toolPins": "Épinglage d'outils"
+    "summary": {
+      "Session cockpit and fleet deployment.": "Cockpit des sessions et déploiement sur le parc.",
+      "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Partage de sessions en direct avec un accès invité nominatif et à durée limitée, et des propositions de messages approuvées par le propriétaire.",
+      "Directories and several identity providers, departments and delegated administration.": "Annuaires et plusieurs fournisseurs d'identité, départements et administration déléguée.",
+      "Compliance and reporting, regulated records.": "Conformité et rapports, registres réglementés.",
+      "Deeper runtime inspection and key management.": "Inspection approfondie de l'exécution et gestion des clés.",
+      "Integrations with enterprise systems, commercial license and support.": "Intégrations avec les systèmes d'entreprise, licence commerciale et support.",
+      "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise comprend tout ce que contient Business, ainsi que les conditions convenues dans un contrat et les fonctionnalités qui en dépendent."
     },
     "badge": {
       "business": "Business",
@@ -156,7 +177,7 @@
     "names": {
       "accessmap": "Carte des accès",
       "adoption": "Adoption",
-      "capabilities": "Catalogue MCP et compétences",
+      "capabilities": "Extensions",
       "catalog": "Catalogue",
       "claude-agents": "Agents Claude",
       "claude-policy": "Politique Claude",
@@ -249,7 +270,7 @@
     "activatedBy": "Activé par {{addons}}. Il reste actif tant que ce module complémentaire est actif.",
     "turnOnPlain": "Activer",
     "alsoTurnsOn": "L’activer active aussi {{names}} et redémarre le moteur.",
-    "openEdition": "Ouvrir Édition et modules",
+    "openModules": "Ouvrir Modules",
     "askAdmin": "Demandez à un administrateur de l’activer.",
     "notSetUp": "Il n’est pas encore configuré sur cette installation.",
     "stillRestarting": "Redémarrage toujours en cours. Rechargez la page."
@@ -376,6 +397,7 @@
     "tool": "Outil par défaut",
     "account": "Compte par défaut",
     "model": "Modèle par défaut",
+    "effort": "Effort par défaut",
     "folder": "Dossier par défaut",
     "automatic": "Automatique",
     "unavailable": "N’est plus disponible",
@@ -388,5 +410,9 @@
     "needsYou": "A besoin de vous",
     "finished": "Terminée",
     "failed": "Échec"
+  },
+  "aliases": {
+    "edition": "Licence",
+    "signIn": "Connexion et sécurité"
   }
 }

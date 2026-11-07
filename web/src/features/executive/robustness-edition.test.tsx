@@ -5,8 +5,8 @@ import { expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { renderIntel, screen } from '@/test/intel'
 import { RiskSection } from './components'
-import { deriveRisk } from './derive'
-import { securityFindingsFixture } from './fixtures'
+import { deriveDrift, deriveRisk } from './derive'
+import { accessDriftFixture, securityFindingsFixture } from './fixtures'
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))
@@ -30,4 +30,20 @@ it('does not offer red-team robustness in the shared security section', () => {
   renderIntel(<RiskSection risk={deriveRisk(securityFindingsFixture)!} />)
   expect(screen.queryAllByText(/robustness/i)).toHaveLength(0)
   expect(screen.getByText('Open findings')).toBeInTheDocument()
+})
+
+// #3936: with no grant declared every observed access is "unexpected" by
+// construction; the card must say there is nothing to compare, not headline it.
+it('shows no red unexpected count when the engine reports no grants declared', () => {
+  const drift = deriveDrift({
+    ...accessDriftFixture,
+    unexpected_count: 12913,
+    grants_declared: false,
+  })
+  renderIntel(
+    <RiskSection risk={deriveRisk(securityFindingsFixture)!} drift={drift} />,
+  )
+  expect(screen.queryByText('12,913')).not.toBeInTheDocument()
+  expect(screen.queryByText('Unexpected accesses')).not.toBeInTheDocument()
+  expect(screen.getByText(/No access rules declared/i)).toBeInTheDocument()
 })

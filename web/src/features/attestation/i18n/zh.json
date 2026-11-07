@@ -4,13 +4,12 @@
   "forbiddenTitle": "未授权",
   "forbidden": "查看证明契约需要 compliance:read 权限。",
   "disclaimer": {
-    "tag": "Beta",
-    "body": "本项目处于 beta 阶段：尚无任何发布版本，发布流水线已编写但尚未启用。运行中二进制文件面板是从本进程中实测得出的；契约标签页展示的是声明的契约，而非已发布版本或实时的加密验证——本控制台从不在浏览器中重新验证签名。",
+    "body": "此构建不是已发布的版本。",
     "declaredRef": "声明的引用——截至 {{date}}。逐字取自 docs/RELEASE-VERIFICATION.md、SECURITY.md、.goreleaser.yaml 以及 release / scorecard / patch-velocity 工作流。引擎无法观测仓库或 CI 状态，因此这一部分不提供实时数据。"
   },
   "live": {
     "title": "运行中二进制文件（实测）",
-    "description": "本引擎进程能够对自身证明的内容——从二进制文件中实时读取（ldflags、debug.ReadBuildInfo、crypto/fips140、可执行文件的自哈希）——以及真实的发布状态：在 v* 标签触发流水线之前，不会发布或验证任何内容。",
+    "description": "此运行中的构建对自身的报告。",
     "status": {
       "measured": "已实测"
     },
@@ -58,11 +57,11 @@
   },
   "tabs": {
     "artifacts": "制品",
-    "provenance": "溯源与 VEX",
+    "provenance": "溯源",
     "sbom": "SBOM",
     "scorecard": "Scorecard",
     "remediation": "修复 SLA",
-    "airgap": "隔离网络与 chart"
+    "airgap": "隔离网络"
   },
   "artifacts": {
     "title": "发布制品",

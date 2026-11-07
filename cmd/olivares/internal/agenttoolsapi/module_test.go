@@ -70,8 +70,9 @@ func TestEveryRouteRequiresSystemAdministrator(t *testing.T) {
 	r := &registrar{}
 	m.APIRoutes(r)
 	// The existing host routes plus release removal, stored version selection and the three
-	// model-server routes (list, start, stop). Each is run below as a non-administrator.
-	if len(r.routes) != 22 {
+	// model-server routes (list, start, stop), and the download cancel and model removal.
+	// Each is run below as a non-administrator.
+	if len(r.routes) != 24 {
 		t.Fatalf("routes = %d", len(r.routes))
 	}
 	for _, rt := range r.routes {

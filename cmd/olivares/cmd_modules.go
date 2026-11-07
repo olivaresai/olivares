@@ -21,7 +21,7 @@ func newModulesCmd() *cobra.Command {
 	root := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "modules", Short: "List, turn on and turn off optional modules",
-		Long: "Manage the same module selection as Edition & modules in the console. Sign in with\n" +
+		Long: "Manage the same module selection as Settings > Modules in the console. Sign in with\n" +
 			"olivares login, then see the current selection with olivares modules ls.",
 		Example: "  olivares modules ls\n  olivares modules on adoption\n  olivares modules off adoption",
 	}

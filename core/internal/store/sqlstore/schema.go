@@ -163,6 +163,7 @@ func buildCoreMigrationPlan(
 		coreUserGroupWorkspaceMigration(dia),
 		coreAuthSessionInventoryMigration(dia),
 		coreGroupDerivedTokenRoleMigration(dia),
+		coreAuthSessionIdPSessionMigration(dia),
 	)
 }
 

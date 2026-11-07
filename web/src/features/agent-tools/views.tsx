@@ -33,6 +33,12 @@ export const VIEWS = [
     // (inventory, versions, login probes, sign-in) stays the deployment administrator's,
     // inside the room.
     permission: 'sessions:account:read',
+    changes: [
+      { permission: 'sessions:account:write' },
+      { permission: 'sessions:profile:write' },
+      { permission: 'sessions:profile:admin' },
+      { permission: 'sessions:provider:write' },
+    ],
     element: toolsRoom,
   },
 ] satisfies ViewEntry[]

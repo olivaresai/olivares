@@ -6,7 +6,7 @@ import { LayoutDashboard } from 'lucide-react'
 import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
 
-// Estate overview — the home front door (route `/`), the real overview that
+// Estate overview — the Now overview (route `/now`), the real overview that
 // replaced the foundation placeholder (the last one). Named export → default for lazy().
 const HomeView = lazy(() =>
   import('./home-view').then((m) => ({ default: m.HomeView })),
@@ -16,10 +16,14 @@ export const VIEWS = [
   {
     order: 10,
     id: 'home',
-    path: '/',
+    path: '/now',
     navigation: { kind: 'root' },
     helpHref: '/',
     icon: LayoutDashboard,
+    changes: [
+      { permission: 'sessions:run:write' },
+      { permission: 'governance:approval:admin' },
+    ],
     element: lazyView(HomeView),
   },
 ] satisfies ViewEntry[]

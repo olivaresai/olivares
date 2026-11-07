@@ -1040,16 +1040,38 @@ func verifyInventoryChainExact(ctx context.Context, q dialect.Querier, dia diale
 	})
 }
 
-func verifyInventoryChainExpectations(
-	ctx context.Context,
-	q dialect.Querier,
-	dia dialect.Dialect,
-	manifest guardManifest,
-	expected []guardActivationExpectation,
-) (int64, [32]byte, error) {
-	return verifyInventoryChainMode(ctx, q, dia, manifest, func(activations map[guardKey]inventoryEvent) error {
-		return verifyGuardActivationExpectations(expected, activations)
+// guardInventoryFold is one verified read of the inventory chain. verifyInventoryChainMode checks a
+// census only after the whole chain, so every candidate history a boot weighs is a census over this
+// one fold: the stream is scanned and hashed once per start, not once per candidate (an upgraded
+// directory scanned it 17 times on every start).
+type guardInventoryFold struct {
+	revision    int64
+	retained    [32]byte
+	activations map[guardKey]inventoryEvent
+	err         error // the chain's own failure; every census reports it
+}
+
+func foldGuardInventory(ctx context.Context, q dialect.Querier, dia dialect.Dialect, manifest guardManifest) guardInventoryFold {
+	var f guardInventoryFold
+	f.revision, f.retained, f.err = verifyInventoryChainMode(ctx, q, dia, manifest, func(activations map[guardKey]inventoryEvent) error {
+		f.activations = activations
+		return nil
 	})
+	return f
+}
+
+func (f guardInventoryFold) expect(expected []guardActivationExpectation) error {
+	if f.err != nil {
+		return f.err
+	}
+	return verifyGuardActivationExpectations(expected, f.activations)
+}
+
+func (f guardInventoryFold) exact(manifest guardManifest) error {
+	if f.err != nil {
+		return f.err
+	}
+	return verifyGuardActivationsExact(manifest, f.activations)
 }
 
 func verifyInventoryChainMode(
@@ -1450,9 +1472,11 @@ func classifyGuardEditionInventory(
 	current guardManifest,
 ) (guardEditionInventorySelection, error) {
 	trivial := guardEditionPathOf([]guardEditionNode{{Epoch: current.CodeEpoch}})
-	if revision, retained, err := verifyInventoryChainExact(ctx, q, dia, current); err == nil {
+	inventory := foldGuardInventory(ctx, q, dia, current)
+	currentErr := inventory.exact(current)
+	if currentErr == nil {
 		return guardEditionInventorySelection{
-			State: guardEditionInventoryCurrent, Path: trivial, Revision: revision, Retained: retained,
+			State: guardEditionInventoryCurrent, Path: trivial, Revision: inventory.revision, Retained: inventory.retained,
 		}, nil
 	}
 	graph, err := guardEditionGraphFor(current)
@@ -1461,7 +1485,6 @@ func classifyGuardEditionInventory(
 	}
 	parents := graph.parentEpochs(current.CodeEpoch)
 	if len(parents) == 0 {
-		_, _, currentErr := verifyInventoryChainExact(ctx, q, dia, current)
 		return guardEditionInventorySelection{}, currentErr
 	}
 
@@ -1487,12 +1510,11 @@ func classifyGuardEditionInventory(
 			return guardEditionInventorySelection{}, lerr
 		}
 		for _, lineage := range lineages {
-			revision, retained, xerr := verifyInventoryChainExpectations(
-				ctx, q, dia, current, guardActivationExpectationsForLineage(lineage))
+			xerr := inventory.expect(guardActivationExpectationsForLineage(lineage))
 			if xerr == nil {
 				matches = append(matches, candidate{guardEditionInventorySelection{
 					State: guardEditionInventoryPredecessor, Path: lineage.path(),
-					ParentEpoch: parent, Revision: revision, Retained: retained,
+					ParentEpoch: parent, Revision: inventory.revision, Retained: inventory.retained,
 				}, lineage})
 				continue
 			}
@@ -1509,13 +1531,12 @@ func classifyGuardEditionInventory(
 		if len(lineage.Edges) == 0 {
 			continue // the trivial lineage is the exact-current case tried above
 		}
-		revision, retained, xerr := verifyInventoryChainExpectations(
-			ctx, q, dia, current, guardActivationExpectationsForLineage(lineage))
+		xerr := inventory.expect(guardActivationExpectationsForLineage(lineage))
 		if xerr == nil {
 			last := lineage.Edges[len(lineage.Edges)-1]
 			matches = append(matches, candidate{guardEditionInventorySelection{
 				State: guardEditionInventoryMixed, Path: lineage.path(),
-				ParentEpoch: last.From.CodeEpoch, Revision: revision, Retained: retained,
+				ParentEpoch: last.From.CodeEpoch, Revision: inventory.revision, Retained: inventory.retained,
 			}, lineage})
 			continue
 		}
@@ -1537,7 +1558,6 @@ func classifyGuardEditionInventory(
 			ErrGuardManifestNoEdge, len(matches), strings.Join(paths, ", "))
 	}
 
-	_, _, currentErr := verifyInventoryChainExact(ctx, q, dia, current)
 	summary := fmt.Errorf("%w: inventory is neither current, a complete predecessor lineage, nor its authorized carry-forward (current: %v; predecessor: %s; carry-forward: %s)",
 		ErrGuardInventoryUnsupported, currentErr,
 		strings.Join(predecessorErrs, "; "), strings.Join(mixedErrs, "; "))

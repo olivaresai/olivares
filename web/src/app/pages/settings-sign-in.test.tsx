@@ -12,10 +12,25 @@ import { identityApi } from '@/features/identity/api'
 import { StepUpPolicySetting } from '@/features/identity/step-up-policy'
 import { SettingsPage } from './settings'
 
-const state = vi.hoisted(() => ({ admin: true, satisfied: true }))
-vi.mock('@tanstack/react-router', () => ({
+const oneKey = vi.hoisted(() => ({
+  items: [
+    {
+      id: 'key-one',
+      name: 'My laptop',
+      created_at: '2026-10-01T00:00:00Z',
+    },
+  ],
+}))
+const state = vi.hoisted(() => ({
+  admin: true,
+  satisfied: true,
+  amr: ['pwd'] as string[],
+}))
+vi.mock('@tanstack/react-router', async () => ({
   useNavigate: () => vi.fn(),
+  useRouter: () => undefined,
   useRouterState: () => undefined,
+  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
 }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
@@ -23,7 +38,7 @@ vi.mock('@/lib/auth/context', () => ({
       kind: 'user',
       user_id: 'user-one',
       aal: 1,
-      amr: ['pwd'],
+      amr: state.amr,
       admin_step_up: 'none',
       step_up_satisfied: state.satisfied,
       session_ttl_seconds: 43200,
@@ -50,15 +65,7 @@ vi.mock('@/features/identity/api', async (original) => ({
   ...(await original<typeof import('@/features/identity/api')>()),
   identityApi: {
     pivStatus: vi.fn(async () => ({ configured: false, presented: false })),
-    webauthnCredentials: vi.fn(async () => ({
-      items: [
-        {
-          id: 'key-one',
-          name: 'My laptop',
-          created_at: '2026-10-01T00:00:00Z',
-        },
-      ],
-    })),
+    webauthnCredentials: vi.fn(async () => oneKey),
     authSessions: vi.fn(async () => ({ items: [] })),
     authSessionDelete: vi.fn(async () => undefined),
     pairSession: vi.fn(async () => ({
@@ -82,6 +89,8 @@ vi.mock('@/lib/api', async (original) => ({
 beforeEach(() => {
   state.admin = true
   state.satisfied = true
+  state.amr = ['pwd']
+  vi.mocked(identityApi.webauthnCredentials).mockResolvedValue(oneKey)
   vi.mocked(identityApi.authSessions).mockClear()
   vi.mocked(identityApi.authSessions).mockResolvedValue({ items: [] })
   vi.mocked(identityApi.authSessionDelete).mockClear()
@@ -100,13 +109,11 @@ it.each([true, false])(
         <SettingsPage />
       </QueryClientProvider>,
     )
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Sign-in and security' }),
-    )
+    await userEvent.click(screen.getByRole('button', { name: 'Sign-in' }))
     expect(await screen.findByText('My laptop')).toBeInTheDocument()
     expect(screen.getByText('Session lifetime')).toBeInTheDocument()
     expect(screen.getByText('12 hours')).toBeInTheDocument()
-    expect(screen.getByText('Password')).toBeInTheDocument()
+    expect(screen.getByText('Password', { selector: 'p' })).toBeInTheDocument()
     expect(
       screen.queryByText(/not edited from this screen yet/),
     ).not.toBeInTheDocument()
@@ -160,7 +167,7 @@ it('lists and ends other sign-ins without ending the current one', async () => {
       <SettingsPage />
     </QueryClientProvider>,
   )
-  await user.click(screen.getByRole('button', { name: 'Sign-in and security' }))
+  await user.click(screen.getByRole('button', { name: 'Sign-in' }))
 
   expect(await screen.findByText('Your sign-ins')).toBeInTheDocument()
   expect(screen.getByText('Browser')).toBeInTheDocument()
@@ -242,7 +249,7 @@ it('waits for every end-all request before reporting partial failure', async () 
       <SettingsPage />
     </QueryClientProvider>,
   )
-  await user.click(screen.getByRole('button', { name: 'Sign-in and security' }))
+  await user.click(screen.getByRole('button', { name: 'Sign-in' }))
   await user.click(
     await screen.findByRole('button', { name: 'End all others' }),
   )
@@ -302,7 +309,7 @@ async function openSignIn() {
       <SettingsPage />
     </QueryClientProvider>,
   )
-  await user.click(screen.getByRole('button', { name: 'Sign-in and security' }))
+  await user.click(screen.getByRole('button', { name: 'Sign-in' }))
   await screen.findByText('Your sign-ins')
   return user
 }
@@ -408,9 +415,7 @@ it('does not report an empty passkey list when reading credentials fails', async
       <SettingsPage />
     </QueryClientProvider>,
   )
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Sign-in and security' }),
-  )
+  await userEvent.click(screen.getByRole('button', { name: 'Sign-in' }))
   expect(
     await screen.findByRole('button', { name: /retry/i }),
   ).toBeInTheDocument()
@@ -435,9 +440,7 @@ it('reports the configured password restriction instead of assuming password sig
       <SettingsPage />
     </QueryClientProvider>,
   )
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Sign-in and security' }),
-  )
+  await userEvent.click(screen.getByRole('button', { name: 'Sign-in' }))
   expect(
     await screen.findByText(
       'Single sign-on is required. Local password sign-in is blocked.',
@@ -455,9 +458,7 @@ it('offers the existing step-up remedy alongside factor management', async () =>
       <SettingsPage />
     </QueryClientProvider>,
   )
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Sign-in and security' }),
-  )
+  await userEvent.click(screen.getByRole('button', { name: 'Sign-in' }))
   expect(
     await screen.findByRole('button', { name: 'Authenticate with passkey' }),
   ).toBeInTheDocument()
@@ -478,9 +479,7 @@ it('does not claim a disabled identity provider blocks password sign-in', async 
       <SettingsPage />
     </QueryClientProvider>,
   )
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Sign-in and security' }),
-  )
+  await userEvent.click(screen.getByRole('button', { name: 'Sign-in' }))
   expect(
     await screen.findByText(
       'Single sign-on is requested, but its identity provider is inactive. This requirement does not block password sign-in.',
@@ -510,17 +509,90 @@ it('creates a named one-time device link and shows the paired device name', asyn
       <SettingsPage />
     </QueryClientProvider>,
   )
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Sign-in and security' }),
-  )
+  await userEvent.click(screen.getByRole('button', { name: 'Sign-in' }))
   expect(await screen.findByText('Lost phone')).toBeInTheDocument()
-  expect(
-    screen.getByRole('button', { name: 'Pair a device' }),
-  ).toHaveAccessibleDescription('Device name: This field is required.')
+  // Nothing has been typed yet: the empty field is not an error, and the
+  // button is a normal one. The browser itself refuses an empty submit.
+  expect(screen.queryByText(/This field is required/)).not.toBeInTheDocument()
+  // A static title would show "required" on hover even once a name is typed.
+  expect(screen.getByLabelText('Device name')).not.toHaveAttribute('title')
+  expect(screen.getByRole('button', { name: 'Pair a device' })).toBeEnabled()
+  await userEvent.click(screen.getByRole('button', { name: 'Pair a device' }))
+  expect(identityApi.pairSession).not.toHaveBeenCalled()
   await userEvent.type(screen.getByLabelText('Device name'), 'My phone')
   await userEvent.click(screen.getByRole('button', { name: 'Pair a device' }))
   expect(await screen.findByLabelText('One-time link')).toHaveValue(
     `${window.location.origin}/pair#pair=one-time-secret`,
   )
   expect(identityApi.pairSession).toHaveBeenCalledWith('My phone')
+})
+
+async function openSignInSettings() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  render(
+    <QueryClientProvider client={client}>
+      <SettingsPage />
+    </QueryClientProvider>,
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Sign-in' }))
+}
+
+it('names the session assurance in plain words and never points back at its own page', async () => {
+  // No passkey yet, so the register hint is on the page too.
+  vi.mocked(identityApi.webauthnCredentials).mockResolvedValue({ items: [] })
+  await openSignInSettings()
+  expect(await screen.findByText('Standard sign-in')).toBeInTheDocument()
+  expect(screen.getByText(/Register a passkey/)).toBeInTheDocument()
+  expect(screen.getAllByText('Password').length).toBeGreaterThan(1)
+  expect(document.body).not.toHaveTextContent(/AAL\d/)
+  expect(screen.queryByText('pwd')).not.toBeInTheDocument()
+  expect(
+    screen.getByText(/asks for no extra check before administrative actions/),
+  ).not.toHaveTextContent('Sign-in')
+})
+
+it('names no standard-body level in the passkey delete prompt', async () => {
+  await openSignInSettings()
+  await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+  expect(
+    await screen.findByText(/another registered passkey/),
+  ).not.toHaveTextContent(/AAL\d/)
+})
+
+// The level is stored for every primary sign-in, so its words must hold for
+// each of these sessions, not only a password one.
+it.each([
+  [['pwd', 'totp'], 'Authenticator code'],
+  [['sso'], 'Single sign-on'],
+  [['external'], 'External sign-in'],
+  [['pairing'], 'Paired device'],
+])('does not claim a password for a %s session', async (amr, method) => {
+  state.amr = amr
+  await openSignInSettings()
+  // The method name can also title a section of the page, so allow several.
+  expect((await screen.findAllByText(method)).length).toBeGreaterThan(0)
+  expect(screen.queryByText(/Password only/)).not.toBeInTheDocument()
+  expect(screen.getByText('Standard sign-in')).toBeInTheDocument()
+})
+
+it('tells apart two browser sign-ins by the address they came from', async () => {
+  vi.mocked(identityApi.authSessions).mockResolvedValue({
+    items: ['203.0.113.7', '198.51.100.9'].map((ip, i) => ({
+      id: `browser-${i}`,
+      name: '',
+      created_at: '2026-10-27T00:00:00Z',
+      last_used_at: null,
+      kind: 'browser' as const,
+      created_ip: ip,
+      current: false,
+      expires_at: '2026-10-28T00:00:00Z',
+    })),
+  })
+  await openSignInSettings()
+  expect(await screen.findByText('203.0.113.7')).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: /End Browser 198\.51\.100\.9 sign-in/ }),
+  ).toBeInTheDocument()
 })

@@ -38,16 +38,16 @@ func (m *Module) CancelSessionApprovals(ctx context.Context, tenant model.Tenant
 		if err != nil {
 			return err
 		}
-		policies, err := loadApprovalPolicies(ctx, sc)
-		if err != nil {
-			return err
-		}
 		for _, id := range ids {
 			rec, err := repo.Get(ctx, model.ID(id))
 			if err != nil {
 				return err
 			}
 			if _, err = sc.Audit().Append(ctx, model.AuditDraft{Actor: actor, ActorKind: actorKind, Action: "governance.approval.cancel", TargetKind: approvalKind, TargetID: model.ID(id)}); err != nil {
+				return err
+			}
+			policies, err := m.approvalPolicies(ctx, sc, approvalPolicySubject(rec))
+			if err != nil {
 				return err
 			}
 			closed = append(closed, toApprovalDTO(rec, now, liveRiskTier(policies, rec)))

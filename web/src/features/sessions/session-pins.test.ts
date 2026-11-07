@@ -108,19 +108,33 @@ describe('pinnedKeys — the sessions this person pinned, oldest pin first', () 
   })
 })
 
-describe('isPinnable — a pin hangs on a run that is still listed', () => {
-  it('is false for a session the plane only observes', () => {
+describe('isPinnable — a pin hangs on a run still listed, or on an observed live row', () => {
+  const observed = { live_ref: 'lr-1' } as never
+  it('is false for a row with neither a run nor a live row', () => {
     expect(isPinnable({ runs: [] })).toBe(false)
+  })
+  it('is true for a session the plane only observes (a live row, no run)', () => {
+    expect(isPinnable({ runs: [], live: observed })).toBe(true)
+  })
+  it("is false for the plane's own row of a run: the run takes the pin", () => {
+    expect(
+      isPinnable({
+        runs: [],
+        live: { live_ref: 'lr-1', run_ref: 'r' } as never,
+      }),
+    ).toBe(false)
   })
   it('is true once a run drives it', () => {
     expect(
       isPinnable({ runs: [{ run_ref: 'r', state: 'running' }] as never }),
     ).toBe(true)
   })
-  it('is false when every run is released', () => {
-    expect(
-      isPinnable({ runs: [{ run_ref: 'r', state: 'cleaned' }] as never }),
-    ).toBe(false)
+  it('is false when every run is released, even with an observed row beside it', () => {
+    const released = { run_ref: 'r', state: 'cleaned' }
+    expect(isPinnable({ runs: [released] as never })).toBe(false)
+    expect(isPinnable({ runs: [released] as never, live: observed })).toBe(
+      false,
+    )
   })
 })
 

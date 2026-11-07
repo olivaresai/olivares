@@ -10,6 +10,20 @@ describe('modelName: one name for a model everywhere the console says it', () =>
     expect(modelName('claude-opus-5-5', listed)).toBe('Opus 5.5 (1M)')
   })
 
+  it('names a resolved session model by its catalog selector, preferring a concrete selector', () => {
+    const listed = [
+      {
+        id: 'default',
+        launch_model: 'claude-opus-5-5',
+        display_name: 'Default (recommended)',
+      },
+      { id: 'opus', launch_model: 'claude-opus-5-5', display_name: 'Opus 5.5' },
+      { id: 'claude-custom', display_name: 'Custom model' },
+    ]
+    expect(modelName('claude-opus-5-5', listed)).toBe(modelName('opus', listed))
+    expect(modelName('claude-custom', listed)).toBe('Custom model')
+  })
+
   it('names a model the tool did not list in words, not as its id', () => {
     expect(modelName('claude-opus-5-5')).toBe('Claude Opus 5.5')
     expect(modelName('claude-haiku-5-5')).toBe('Claude Haiku 5.5')
@@ -29,8 +43,13 @@ describe('modelName: one name for a model everywhere the console says it', () =>
     expect(modelName('x-constructor')).toBe('x Constructor')
   })
 
+  it('names a model behind its vendor prefix, as some tools write the id', () => {
+    expect(modelName('anthropic/claude-sonnet-5-5')).toBe('Claude Sonnet 5.5')
+    expect(modelName('openai/gpt-5.5-codex')).toBe('GPT-5.5 Codex')
+  })
+
   it('leaves an id it cannot read as it is', () => {
-    for (const id of ['o3', 'qwen3:32b', 'anthropic/claude-opus-5.5', 'X-1'])
+    for (const id of ['o3', 'qwen3:32b', 'org/team/model-1', 'X-1'])
       expect(modelName(id)).toBe(id)
   })
 

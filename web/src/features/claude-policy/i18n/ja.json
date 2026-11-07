@@ -1,14 +1,15 @@
 {
-  "title": "Claude Code ガバナンス",
+  "title": "管理ポリシー",
   "subtitle": "マネージドポリシー、フック、MCP およびサンドボックス統制、Cedar/OPA のポリシーアズコードを作成し、エンジンが報告するポリシーと観測値のドリフトを確認します。",
   "tabs": {
-    "drift": "ドリフトと態勢",
+    "drift": "ドリフト",
     "managedSettings": "マネージド設定",
     "hooks": "フック",
-    "managedMcp": "MCP とプラグイン",
-    "sandbox": "サンドボックスと外向き通信",
+    "managedMcp": "MCP",
+    "sandbox": "サンドボックス",
     "policyAsCode": "ポリシーアズコード",
-    "hitl": "マネージドエージェント HITL"
+    "hitl": "マネージドエージェント HITL",
+    "departmentInstructions": "部門の指示"
   },
   "seam": {
     "badge": "バックエンド対応待ち",
@@ -74,7 +75,7 @@
   },
   "drift": {
     "title": "ポリシードリフトと態勢",
-    "subtitle": "読み取り専用コネクターが報告する、PERMITTED ポリシーと OBSERVED ホスト構成の比較。",
+    "subtitle": "各ホストの設定がポリシーと異なる箇所。",
     "listLabel": "ドリフト検出結果",
     "subject": "サブジェクト",
     "fingerprint": "フィンガープリント",
@@ -292,5 +293,18 @@
     "unverified": "未検証",
     "contentUnknown": "コンテンツ不明（証明のみ）",
     "openFindings_other": "{{count}} 件の未対応検出結果"
+  },
+  "department": {
+    "title": "部門の指示ファイル",
+    "hint": "部門が持つ内容から生成される指示ファイル。部門のセッションに渡されるものと同じテキストです。プレビューしてから、部門のワークステーション向けに公開します。指示が残っていない部門は、公開済みのファイルを取り下げます。",
+    "select": "部門",
+    "selectPlaceholder": "部門を選択",
+    "preview": "プレビュー",
+    "publish": "公開",
+    "published": "指示ファイルを公開しました。",
+    "previewFailed": "部門のファイルをプレビューできませんでした",
+    "fileLabel": "部門の指示ファイル",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_other": "公開済みリビジョン {{count}} 件"
   }
 }

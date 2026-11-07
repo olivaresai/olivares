@@ -17,6 +17,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -101,6 +102,20 @@ func TestProfileModelCatalogHTTP(t *testing.T) {
 	}
 }
 
+// catalogReadsIdle waits for the read that runs behind a late answer to end.
+func catalogReadsIdle(t *testing.T, m *Module) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		m.profileCatalogs.mu.Lock()
+		n := len(m.profileCatalogs.pending)
+		m.profileCatalogs.mu.Unlock()
+		if n == 0 {
+			return
+		}
+	}
+	t.Fatal("the read behind the answer never ended")
+}
+
 func TestProfileModelCatalogTTLAndRevocation(t *testing.T) {
 	peer := &catalogToolPeer{t: t, signed: true, modelIDs: []string{"first-model"}}
 	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(peer), WithProviderDriver(NewCodexDriver()))
@@ -112,6 +127,10 @@ func TestProfileModelCatalogTTLAndRevocation(t *testing.T) {
 	}
 	peer.modelIDs = []string{"second-model"}
 	clk.set(baseTime.Add(3 * time.Minute))
+	if late, err := m.ProfileModelCatalog(context.Background(), tenant, profile.Ref, false); err != nil || late.Models[0].ID != "first-model" {
+		t.Fatalf("expired catalog is answered from the last read: %+v %v", late, err)
+	}
+	catalogReadsIdle(t, m)
 	next, err := m.ProfileModelCatalog(context.Background(), tenant, profile.Ref, false)
 	if err != nil || next.Models[0].ID != "second-model" {
 		t.Fatalf("expired catalog: %+v %v", next, err)
@@ -370,6 +389,89 @@ func TestProfileModelCatalogCoalescesAndDiscardsChangedProfile(t *testing.T) {
 	}
 }
 
+// gatedCatalogRunner lets the first tool start through and holds every later one until
+// release is closed: the read behind a stale answer is slow.
+type gatedCatalogRunner struct {
+	peer    *catalogToolPeer
+	started atomic.Int32
+	release chan struct{}
+}
+
+func (r *gatedCatalogRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, error) {
+	if r.started.Add(1) > 1 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-r.release:
+		}
+	}
+	return r.peer.Launch(ctx, spec)
+}
+
+// A list past its lifetime is not waited for: the page that asks gets the last list at once,
+// the tool is asked again behind it, and a failed read behind it drops the list so the next
+// read says so instead of showing models the tool no longer reports (#3931).
+func TestProfileModelCatalogPastItsLifetimeAnswersAtOnceAndRefreshesBehind(t *testing.T) {
+	peer := &catalogToolPeer{t: t, signed: true, modelIDs: []string{"first-model"}}
+	runner := &gatedCatalogRunner{peer: peer, release: make(chan struct{})}
+	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(runner), WithProviderDriver(NewCodexDriver()))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "codex", UserHome: t.TempDir(), ConfigHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	if _, err := m.ProfileModelCatalog(t.Context(), tenant, profile.Ref, false); err != nil {
+		t.Fatal(err)
+	}
+	idle := func() { catalogReadsIdle(t, m) }
+	readAtOnce := func() ProfileModelCatalog {
+		t.Helper()
+		type result struct {
+			out ProfileModelCatalog
+			err error
+		}
+		answered := make(chan result, 1)
+		go func() {
+			out, err := m.ProfileModelCatalog(t.Context(), tenant, profile.Ref, false)
+			answered <- result{out, err}
+		}()
+		select {
+		case got := <-answered:
+			if got.err != nil {
+				t.Fatal(got.err)
+			}
+			return got.out
+		case <-time.After(5 * time.Second):
+			close(runner.release)
+			t.Fatal("a list past its lifetime waited for the tool")
+			return ProfileModelCatalog{}
+		}
+	}
+	peer.modelIDs = []string{"second-model"}
+	clk.set(baseTime.Add(3 * time.Minute))
+	if got := readAtOnce(); got.State != "fresh" || len(got.Models) != 1 || got.Models[0].ID != "first-model" {
+		t.Fatalf("last list not served: %+v", got)
+	}
+	if got := readAtOnce(); len(got.Models) != 1 || got.Models[0].ID != "first-model" {
+		t.Fatalf("a read during the refresh waited or changed the answer: %+v", got)
+	}
+	waitFor(t, "the background refresh launch", func() bool { return runner.started.Load() == 2 })
+	close(runner.release)
+	idle()
+	if n := runner.started.Load(); n != 2 {
+		t.Fatalf("a read during the refresh started another: launches=%d", n)
+	}
+	if got := readAtOnce(); len(got.Models) != 1 || got.Models[0].ID != "second-model" {
+		t.Fatalf("refresh behind the answer not kept: %+v", got)
+	}
+	peer.launchErr = errors.New("tool is gone")
+	clk.set(baseTime.Add(6 * time.Minute))
+	if got := readAtOnce(); got.Models[0].ID != "second-model" {
+		t.Fatalf("last list not served before the failed refresh: %+v", got)
+	}
+	idle()
+	if got := readAtOnce(); got.State != "failed" || len(got.Models) != 0 {
+		t.Fatalf("failed refresh left its old list standing: %+v", got)
+	}
+}
+
 func TestProfileModelCatalogClaudeNativeDefault(t *testing.T) {
 	peer := &catalogToolPeer{t: t, signed: true, claudeModels: []map[string]any{{"value": "default", "displayName": "Default", "supportedEffortLevels": []string{"medium", "future-max"}, "supportsFastMode": true}}}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(peer))
@@ -455,8 +557,8 @@ func TestProfileModelCatalogFailureIsNotCached(t *testing.T) {
 	probe.result = ProviderProbeResult{Models: []string{"recovered-model"}}
 	probe.mu.Unlock()
 	out, err = m.ProfileModelCatalog(t.Context(), tenant, profile.Ref, false)
-	if err != nil || out.State != "fresh" || len(out.Models) != 1 || out.Models[0].ID != "recovered-model" {
-		t.Fatalf("failure was cached: %+v %v", out, err)
+	if err != nil || out.State != "fresh" || len(out.Models) != 1 || out.Models[0].ID != "recovered-model" || out.Models[0].LaunchModel != "" {
+		t.Fatalf("failure was cached or a bound model names a launch model: %+v %v", out, err)
 	}
 }
 
@@ -505,6 +607,11 @@ func TestProfileModelCatalogCodexRealRecords(t *testing.T) {
 	if out.DefaultModel != "gpt-6.1-sol" || out.RefreshIntervalSeconds != 120 || out.CheckedAt == "" {
 		t.Fatalf("envelope: %+v", out)
 	}
+	for _, md := range out.Models {
+		if md.LaunchModel != "" {
+			t.Errorf("%s: only a Claude Code selector names a launch model: %+v", md.ID, md)
+		}
+	}
 }
 
 // Records copied from Claude Code 2.1.296 `initialize`. It reports no default,
@@ -534,9 +641,13 @@ func TestProfileModelCatalogClaudeRealRecords(t *testing.T) {
 	if out.DefaultModel != "default" {
 		t.Fatalf("default model = %q", out.DefaultModel)
 	}
+	// The catalog names the exact id each selector launches on, from the one alias table.
+	if alias.LaunchModel != claudeModelAliases["default"] || fable.LaunchModel != claudeModelAliases["fable"] {
+		t.Errorf("launch models: default=%q fable=%q", alias.LaunchModel, fable.LaunchModel)
+	}
 }
 
-// The cache is per profile and lasts the TTL, no longer.
+// The cache is per profile and lasts the TTL; after it the last list answers while the tool is read again.
 func TestProfileModelCatalogCacheKeyAndTTLWindow(t *testing.T) {
 	peer := &catalogToolPeer{t: t, signed: true, modelIDs: []string{"model-a"}}
 	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(peer), WithProviderDriver(NewCodexDriver()))
@@ -561,6 +672,7 @@ func TestProfileModelCatalogCacheKeyAndTTLWindow(t *testing.T) {
 	}
 	clk.set(baseTime.Add(121 * time.Second))
 	read(a.Ref)
+	catalogReadsIdle(t, m)
 	if len(peer.specs) != 3 {
 		t.Fatalf("entry outlived its TTL: %d launches", len(peer.specs))
 	}

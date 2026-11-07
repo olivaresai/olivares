@@ -24,7 +24,7 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 ## 前提条件
 
 - systemd と `curl` を備えた Linux ホスト。
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.6`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.7`{/* /release */} is the next release, not yet published.
 
 ## 1. バイナリをビルドしてインストールする
 
@@ -57,6 +57,8 @@ Description=Olivares AI — self-hosted engine for enterprise AI
 Documentation=https://olivares.ai/docs
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -68,6 +70,8 @@ ExecStart=/usr/local/bin/olivares serve \
   --data-dir /var/lib/olivares
 Restart=on-failure
 RestartSec=5
+RestartPreventExitStatus=15
+KillMode=mixed
 
 # The data directory holds the SQLite store, the audit signing key and the TLS
 # material. StateDirectory creates /var/lib/olivares owned by the service user.
@@ -241,7 +245,7 @@ ingest: wired source (in-process fast-path) name=salesdb-pgaudit kind=pgaudit
 ## 6. グラフに到達する
 
 新規インストールでは、`accessmap` は無効です。管理者として
-**Settings > Edition & modules** で `accessmap` を有効にし、ほかの選択済み
+**Settings > Modules** で `accessmap` を有効にし、ほかの選択済み
 モジュールも有効のままにしてください。CLI を使う場合は、まず `olivares login`
 でこのエンジンに管理者としてログインし、次に `olivares modules on accessmap` を実行します。
 続行する前に、毎回のエンジン再起動が完了するのを待ってください。実行中の

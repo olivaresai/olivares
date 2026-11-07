@@ -3,7 +3,8 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // the credentials picked in New session's More options reach the launch's
-// quick form — the one link no component or launch test pins on its own.
+// quick form — the one link no component or launch test pins on its own. The
+// same form shows the skills the session will get before it starts.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -28,13 +29,17 @@ vi.mock('@/features/agentops/session-launch', async (orig) => ({
   ...((await orig()) as Record<string, unknown>),
   launchSession: launch.launchSession,
 }))
-const consoleApi = vi.hoisted(() => ({ listSecrets: vi.fn() }))
+const consoleApi = vi.hoisted(() => ({
+  listSecrets: vi.fn(),
+  listWorkspaces: vi.fn(),
+}))
 vi.mock('@/features/console/api', async (orig) => ({
   ...((await orig()) as Record<string, unknown>),
   consoleApi,
 }))
 
 import { agentOpsApi } from '@/features/agentops/api'
+import { skillsApi } from '@/features/skills/api'
 import { useTenantStore } from '@/stores/tenant'
 import { StartSessionForm } from './first-hour'
 import { readinessOf } from './readiness.fixture'
@@ -75,6 +80,39 @@ beforeEach(() => {
   consoleApi.listSecrets.mockResolvedValue({
     sealer_available: true,
     secrets: [{ name: 'credential/prod-db', hint: 'ab12' }],
+  })
+  consoleApi.listWorkspaces.mockReset()
+  consoleApi.listWorkspaces.mockResolvedValue({
+    items: [{ id: 'ws-default', is_default: true }],
+    has_more: false,
+  })
+})
+
+describe('New session: the skills it will get are shown before it starts', () => {
+  it('lists what the server resolves for the default department', async () => {
+    const selection = vi.spyOn(skillsApi, 'selection').mockResolvedValue({
+      digest: 'resolved',
+      members: [
+        {
+          name: 'review',
+          directory: 'review',
+          pack_id: 'p',
+          pack_revision_id: 'r',
+        },
+      ],
+    })
+    wrap(<StartSessionForm />)
+    expect(
+      await screen.findByText('This session gets 1 skill'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('review')).toBeInTheDocument()
+    expect(selection).toHaveBeenCalledWith(
+      'workspace',
+      'ws-default',
+      expect.any(AbortSignal),
+      undefined,
+      undefined,
+    )
   })
 })
 

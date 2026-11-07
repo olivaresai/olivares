@@ -4,7 +4,16 @@
 import { EditionBadge } from '@/features/console/edition-badge'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { Circle, LogOut, Moon, Play, Search, Sun, Columns2 } from 'lucide-react'
+import {
+  Circle,
+  LogOut,
+  MessageSquare,
+  Moon,
+  Play,
+  Search,
+  Sun,
+  Columns2,
+} from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -27,9 +36,10 @@ import { useProviderBoundary } from '@/features/providers/auth-boundary'
 import { settingsSearchEntries } from '@/features/settings/sections'
 import { useAuth } from '@/lib/auth/context'
 import { usePermissionWords } from '@/lib/auth/permission-words'
+import { useModuleOn } from '@/stores/modules'
 import {
   SEARCH_KIND_FEATURE,
-  SEARCH_KIND_ROUTES,
+  searchHitRoute,
   searchConsole,
   searchKeys,
 } from '@/lib/api/search'
@@ -53,7 +63,10 @@ import {
   NAV_SEQUENCES,
   PALETTE_RECENT_COMMANDS,
 } from '@/lib/keybindings/table'
+import { askApi, askKeys as askQueryKeys } from '@/features/ask/ask'
+import { useAskStore } from '@/stores/ask'
 import { useCommandStore } from '@/stores/command'
+import { useObjectActionsStore } from '@/stores/object-actions'
 import { useThemeStore } from '@/stores/theme'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useStatusWord } from '@/features/sessions/session-status'
@@ -67,14 +80,24 @@ import {
   isSessionAddress,
 } from '@/features/sessions/session-address'
 
-/** The characters the operator typed, without a leading ">" command limit. */
-function matchQueryOf(query: string): { commandOnly: boolean; text: string } {
+/** The palette scopes. A leading `>` limits the list to commands,
+ * `@` to people, `#` to sessions; anything else is the full palette. The prefix
+ * is stripped from `text`, which feeds the weighted (marked, not underlined) match. */
+type PaletteScope = 'all' | 'commands' | 'people' | 'sessions'
+
+/** The characters the operator typed, split into scope and match text. */
+function matchQueryOf(query: string): { scope: PaletteScope; text: string } {
   const raw = query.trim()
-  const commandOnly = raw.startsWith('>')
-  return {
-    commandOnly,
-    text: (commandOnly ? raw.slice(1) : raw).trim(),
-  }
+  const lead = raw.charAt(0)
+  const scope: PaletteScope =
+    lead === '>'
+      ? 'commands'
+      : lead === '@'
+        ? 'people'
+        : lead === '#'
+          ? 'sessions'
+          : 'all'
+  return { scope, text: (scope === 'all' ? raw : raw.slice(1)).trim() }
 }
 
 /** Mark the first occurrence of the query. The mark is accent text, not a highlight fill. */
@@ -192,6 +215,13 @@ function PaletteBody() {
   const statusWord = useStatusWord()
   const permissionWords = usePermissionWords()
   const setOpen = useCommandStore((s) => s.setOpen)
+  // Ask is the models module's: its view is not read while that module is off.
+  const modelsOn = useModuleOn('models')
+  const askView = useQuery({
+    queryKey: askQueryKeys.view,
+    queryFn: ({ signal }) => askApi.view(signal),
+    enabled: modelsOn,
+  })
   const navigate = useNavigate()
   const location = useRouterState({ select: (state) => state.location })
   const routeSearch = searchStrings(location?.search)
@@ -215,7 +245,10 @@ function PaletteBody() {
   const rail = useSessionRail()
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
-  const { commandOnly, text: matchQuery } = matchQueryOf(query)
+  const { scope: paletteScope, text: matchQuery } = matchQueryOf(query)
+  // The selected object's actions, listed first by the palette when it opens with an
+  // empty query. The surface that owns the object registers them here.
+  const objectActions = useObjectActionsStore((s) => s.current)
   const boundary = useProviderBoundary()
   // Freeze on opening, or on the first read if the palette opened before it arrived.
   // The whole list, not the visible window: a query must still find a session that
@@ -271,14 +304,14 @@ function PaletteBody() {
   const inventoryQ = useQuery({
     queryKey: [...toolScope, 'inventory', activeTenant],
     queryFn: ({ signal }) => agentToolsApi.inventory(signal),
-    enabled: readTools && !commandOnly,
+    enabled: readTools && paletteScope === 'all',
     staleTime: 30_000,
     retry: false,
   })
   const providersQ = useQuery({
     queryKey: [...toolScope, 'providers', activeTenant],
     queryFn: ({ signal }) => agentToolsApi.providers(activeTenant, signal),
-    enabled: readTools && !commandOnly,
+    enabled: readTools && paletteScope === 'all',
     staleTime: 30_000,
     retry: false,
   })
@@ -288,9 +321,13 @@ function PaletteBody() {
     return () => window.clearTimeout(id)
   }, [query])
 
-  const term = matchQueryOf(debounced).commandOnly
-    ? ''
-    : matchQueryOf(debounced).text
+  // `>` and `#` never search data: commands come from the action table, sessions from
+  // the rail. `@` does — it narrows /v1/search to people.
+  const scopedTerm = matchQueryOf(debounced)
+  const term =
+    scopedTerm.scope === 'commands' || scopedTerm.scope === 'sessions'
+      ? ''
+      : scopedTerm.text
   const searchQ = useQuery({
     queryKey: searchKeys.query(activeTenant, term),
     queryFn: () => searchConsole(term),
@@ -339,22 +376,25 @@ function PaletteBody() {
     () => rankNavMatches(authorized, matchQuery),
     [authorized, matchQuery],
   )
-  // Pages stay in ONE ranked list; Settings is its own group, after Go to.
-  const goToHits = commandOnly ? [] : ranked.filter((e) => e.kind === 'view')
-  const settingsHits = commandOnly
-    ? []
-    : rankNavMatches(
-        [
-          ...authorized.filter((e) => e.kind === 'settings'),
-          ...settingsSearchEntries(t, !!isSuperadmin, navigable),
-        ],
-        matchQuery,
-      )
+  // Pages stay in ONE ranked list; Settings is its own group, after Go to. Both are
+  // the full palette's: a `>`, `@` or `#` scope owns the list instead.
+  const goToHits =
+    paletteScope !== 'all' ? [] : ranked.filter((e) => e.kind === 'view')
+  const settingsHits =
+    paletteScope !== 'all'
+      ? []
+      : rankNavMatches(
+          [
+            ...authorized.filter((e) => e.kind === 'settings'),
+            ...settingsSearchEntries(t, !!isSuperadmin, navigable),
+          ],
+          matchQuery,
+        )
 
   const needle = fold(matchQuery)
   const shows = (label: string) => !needle || fold(label).includes(needle)
   const tools =
-    commandOnly || !readTools
+    paletteScope !== 'all' || !readTools
       ? []
       : toolFacts(
           inventoryQ.isError ? undefined : inventoryQ.data,
@@ -363,12 +403,13 @@ function PaletteBody() {
           (tool) =>
             tool.installed && shows(`${toolName(tool.driver)} ${tool.driver}`),
         )
-  const recentSessions = commandOnly
-    ? []
-    : (recentSnapshot.rows ?? [])
-        .filter(canOpenRecent)
-        .filter((row) => shows(row.title ?? row.reference))
-        .slice(0, 8)
+  const recentSessions =
+    paletteScope === 'commands' || paletteScope === 'people'
+      ? []
+      : (recentSnapshot.rows ?? [])
+          .filter(canOpenRecent)
+          .filter((row) => shows(row.title ?? row.reference))
+          .slice(0, 8)
   const openBesideLabel = t('common:keys.command.surface.openBeside')
   const besideSessions =
     location?.pathname === '/sessions' &&
@@ -535,6 +576,13 @@ function PaletteBody() {
     KEYBINDINGS.find((rule) => rule.command === 'session.new')?.keys ?? '',
   ).map((part) => (part.length === 1 ? part.toUpperCase() : part))
 
+  const askLabel = t('common:commandPalette.ask')
+  // With no model chosen by an administrator, Ask is off and the entry does not appear.
+  const showAsk = askView.data?.enabled === true && shows(askLabel)
+  const askBlocked = refusal('models:ask:write')
+  const askKeys = chordKeys(
+    KEYBINDINGS.find((rule) => rule.command === 'ask.open')?.keys ?? '',
+  ).map((part) => (part.length === 1 ? part.toUpperCase() : part))
   const lightLabel = t('common:theme.light')
   const darkLabel = t('common:theme.dark')
   const blackLabel = t('common:theme.black')
@@ -544,23 +592,40 @@ function PaletteBody() {
   const showDark = shows(`${themeLabel} ${darkLabel}`)
   const showBlack = shows(`${themeLabel} ${blackLabel}`)
   const showSignOut = shows(signOutLabel)
+  // Actions ARE the commands: they stay for `>` and leave for the people and sessions
+  // scopes, which own the list.
   const anyAction =
-    besideSessions.length > 0 ||
-    actionItems.length > 0 ||
-    showStartSession ||
-    showLight ||
-    showDark ||
-    showBlack ||
-    showSignOut
-  const visibleSearch = commandOnly
-    ? []
-    : searchHits.filter((hit) => {
-        const featureId = SEARCH_KIND_FEATURE[hit.kind]
-        const route = SEARCH_KIND_ROUTES[hit.kind]
-        const view = rooms.find((v) => v.id === featureId)
-        return !!route && !(featureId && !view)
-      })
+    (paletteScope === 'all' || paletteScope === 'commands') &&
+    (besideSessions.length > 0 ||
+      actionItems.length > 0 ||
+      showStartSession ||
+      showAsk ||
+      showLight ||
+      showDark ||
+      showBlack ||
+      showSignOut)
+  // `@` narrows the data search to people; `#` and `>` do not search data at all.
+  const visibleSearch =
+    paletteScope === 'commands' || paletteScope === 'sessions'
+      ? []
+      : searchHits.filter((hit) => {
+          if (paletteScope === 'people' && hit.kind !== 'user') return false
+          const featureId = SEARCH_KIND_FEATURE[hit.kind]
+          const route = searchHitRoute(hit)
+          const view = rooms.find((v) => v.id === featureId)
+          return !!route && !(featureId && !view)
+        })
+  // The selected object's actions lead the palette when it opens with an empty query;
+  // a typed query or a scope owns the list instead.
+  const objectSelection =
+    paletteScope === 'all' &&
+    query.trim() === '' &&
+    objectActions !== null &&
+    objectActions.actions.length > 0
+      ? objectActions
+      : null
   const anyListed =
+    objectSelection !== null ||
     visibleSearch.length > 0 ||
     tools.length > 0 ||
     anyAction ||
@@ -609,9 +674,38 @@ function PaletteBody() {
       >
         {anyListed ? null : (
           <CommandItem disabled value="empty:none">
-            {t('common:commandPalette.empty')}
+            {paletteScope === 'people' && !matchQuery
+              ? t('common:commandPalette.peopleHint')
+              : t('common:commandPalette.empty')}
           </CommandItem>
         )}
+
+        {objectSelection ? (
+          <CommandGroup
+            heading={t('common:commandPalette.objectActions', {
+              name: objectSelection.label,
+            })}
+          >
+            {objectSelection.actions.map((action) => (
+              <CommandItem
+                key={`object:${action.id}`}
+                value={`object:${action.id} ${action.label}`}
+                data-testid={`palette-object-${action.id}`}
+                onSelect={() => {
+                  setOpen(false)
+                  action.run()
+                }}
+              >
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate" data-slot="palette-name">
+                    {action.label}
+                  </span>
+                </span>
+                {action.shortcut ? <KeyHint keys={[action.shortcut]} /> : null}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ) : null}
 
         {anyAction ? (
           <CommandGroup heading={t('common:commandPalette.actions')}>
@@ -640,6 +734,34 @@ function PaletteBody() {
                   </span>
                 </span>
                 <KeyHint keys={startKeys} />
+              </CommandItem>
+            ) : null}
+            {showAsk ? (
+              <CommandItem
+                value={`ask:open ${askLabel}`}
+                data-testid="palette-ask"
+                disabled={askBlocked !== null}
+                onSelect={() => {
+                  if (askBlocked) return
+                  setOpen(false)
+                  useAskStore.getState().setOpen(true)
+                }}
+              >
+                <MessageSquare />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate" data-slot="palette-name">
+                    {markMatch(askLabel, matchQuery)}
+                  </span>
+                  {askBlocked ? (
+                    <span
+                      className="truncate text-caption leading-4 text-muted-foreground"
+                      data-slot="palette-context"
+                    >
+                      {`${askBlocked.reason} ${askBlocked.help}`}
+                    </span>
+                  ) : null}
+                </span>
+                <KeyHint keys={askKeys} />
               </CommandItem>
             ) : null}
             {actionItems}
@@ -796,7 +918,7 @@ function PaletteBody() {
             ))}
             {visibleSearch.map((hit) => {
               const featureId = SEARCH_KIND_FEATURE[hit.kind]
-              const route = SEARCH_KIND_ROUTES[hit.kind]
+              const route = searchHitRoute(hit)
               const view = rooms.find((v) => v.id === featureId)
               const Icon = view?.icon ?? Search
               if (!route) return null
@@ -833,7 +955,7 @@ function PaletteBody() {
       ) : null}
       {searchQ.data?.degraded ||
       (readTools &&
-        !commandOnly &&
+        paletteScope === 'all' &&
         (inventoryQ.isError || providersQ.isError)) ? (
         <p className="px-3 py-1 text-caption text-destructive">
           {t('common:commandPalette.searchDegraded')}
@@ -855,6 +977,23 @@ function PaletteBody() {
         <span className="ml-auto inline-flex items-center gap-1">
           <Kbd>&gt;</Kbd>
           {t('common:commandPalette.footerCommands')}
+        </span>
+        {/* The scope hints are a map, not a breadcrumb of where the operator
+            is: `>` commands, `@` people and `#` sessions show before any
+            scope is chosen, so the keys are discoverable. */}
+        <span
+          data-testid="footer-people"
+          className="inline-flex items-center gap-1"
+        >
+          <Kbd>@</Kbd>
+          {t('common:commandPalette.footerPeople')}
+        </span>
+        <span
+          data-testid="footer-sessions"
+          className="inline-flex items-center gap-1"
+        >
+          <Kbd>#</Kbd>
+          {t('common:commandPalette.footerSessions')}
         </span>
       </div>
     </>

@@ -4,8 +4,12 @@
 import { CatchBoundary, type ErrorRouteComponent } from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { RouteErrorPage } from './route-error'
+
+vi.mock('@/lib/api/client', () => ({
+  http: { post: vi.fn().mockResolvedValue(undefined) },
+}))
 
 // Checked by the app typecheck: the boundary can pass any thrown value.
 const ErrorPage: ErrorRouteComponent = RouteErrorPage

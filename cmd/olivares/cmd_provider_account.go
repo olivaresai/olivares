@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // cmd_provider_account.go is the CLI half of the provider-account plane: creating
@@ -229,7 +230,7 @@ func newProviderAccountEditCmd() *cobra.Command {
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&name, "name", "", "the account's new name: lowercase letters, digits and '-', starting with a letter, at most 32 characters")
 	cmd.Flags().StringVar(&displayName, "display-name", "", "display label; an explicit empty string clears it")
-	cmd.Flags().StringVar(&accent, "accent", "", "accent: orange, green, amber, red or blue; empty clears it")
+	cmd.Flags().StringVar(&accent, "accent", "", "accent: "+sessions.ProviderAccentChoices()+"; empty clears it")
 	addDeprecatedJSONFlag(cmd)
 	return cmd
 }

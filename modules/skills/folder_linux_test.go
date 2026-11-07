@@ -13,8 +13,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/modules/skills"
 	"golang.org/x/sys/unix"
 )
@@ -218,5 +220,65 @@ func TestNativeComponentFoldersRefuseAccountFilesBeforeReading(t *testing.T) {
 				t.Fatalf("account bytes were read before refusal: %d %v", n, err)
 			}
 		})
+	}
+}
+
+func TestSkillsFolderImportsNativeSkillsWithoutAccountFiles(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, facts := range driverfacts.All() {
+		if facts.SkillsDir == "" {
+			continue
+		}
+		t.Run(facts.Key, func(t *testing.T) {
+			root := filepath.Join(home, filepath.FromSlash(facts.SkillsDir))
+			dir := filepath.Join(root, "research")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(harmless), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, selected := range []string{dir, root} {
+				pack, err := skills.ImportFolder(t.Context(), selected)
+				if err != nil {
+					t.Errorf("native skills folder refused: %v", err)
+					continue
+				}
+				if len(pack.Members) != 1 || pack.Members[0].Name != "research" {
+					t.Fatalf("wrong members: %+v", pack.Members)
+				}
+			}
+		})
+	}
+	for _, rel := range []string{".claude", ".claude/account", ".claude/skills-other/research", ".codex/account", ".config/opencode/account", ".ssh/.claude/skills/research", ".claude/skills/research/.config/account"} {
+		t.Run(rel, func(t *testing.T) {
+			dir := filepath.Join(home, filepath.FromSlash(rel))
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(strings.Replace(harmless, "name: research", "name: "+filepath.Base(dir), 1)), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if pack, err := skills.ImportFolder(t.Context(), dir); pack != nil || err == nil {
+				t.Fatal("protected folder imported")
+			}
+		})
+	}
+	dir := filepath.Join(home, ".claude", "skills", "credential-skill")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(strings.Replace(harmless, "name: research", "name: credential-skill", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	credential := filepath.Join(dir, "credentials.json")
+	if err := os.WriteFile(credential, []byte("private fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, selected := range []string{credential, filepath.Dir(credential)} {
+		if pack, err := skills.ImportFolder(t.Context(), selected); pack != nil || err == nil {
+			t.Fatal("credential source imported")
+		}
 	}
 }

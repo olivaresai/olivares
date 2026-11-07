@@ -1,5 +1,5 @@
 {
-  "title": "备份与恢复",
+  "title": "备份",
   "description": "管理 Olivares AI 的灾难恢复快照。",
   "tabs": {
     "backups": "备份",
@@ -30,6 +30,7 @@
       "date": "日期",
       "filename": "文件名",
       "size": "大小",
+      "duration": "耗时",
       "engine": "引擎",
       "tenants": "租户",
       "notes": "备注"
@@ -88,6 +89,9 @@
     "freeSpace": "目标可用空间",
     "notAvailable": "不可用",
     "overdue": "已超过恢复点目标",
+    "rtoMinutes": "恢复时间目标（分钟）",
+    "rtoExceeded": "上次恢复测试耗时超过了 {{minutes}} 分钟的恢复时间目标",
+    "restoreTook": "恢复测试耗时 {{seconds}} 秒",
     "age": "{{hours}}小时前",
     "offsiteLockMissing": "存储桶 {{bucket}} 不会以 `COMPLIANCE` 模式锁定新副本，因此此服务器的凭据可能会删除它们。请启用带默认 `COMPLIANCE` 保留期的 S3 Object Lock，并使用单独的凭据进行清理。",
     "offsiteLockUnknown": "无法读取存储桶 {{bucket}} 的 Object Lock，因此这些副本可能未受到删除保护。"
@@ -126,6 +130,14 @@
     "confirmLabel": "立即批准并恢复"
   },
   "restore": {
+    "postgres": {
+      "description": "请使用独立的空 db init 目标和服务器端 file: 或 env: 引用。必须由另一位管理员批准。",
+      "dsn_ref": "应用程序连接引用",
+      "owner_dsn_ref": "所有者引用（可选）",
+      "admin_dsn_ref": "备份管理员引用",
+      "scratch_dsn_ref": "临时数据库维护引用",
+      "confirm": "仅恢复已批准的空目标。验证后，将引擎配置为使用恢复的数据目录和目标连接，然后重新启动。"
+    },
     "notAuthorized": "未授权",
     "uploadFailed": "上传失败",
     "started": "恢复已开始",
@@ -164,6 +176,8 @@
     "tenants": "租户",
     "keys": "密封密钥",
     "empty": "无",
+    "notIncluded": "此备份不包含",
+    "notIncludedHint": "这些路径不会被复制，请自行备份。",
     "loadFailed": "无法加载备份详情。"
   },
   "empty": {

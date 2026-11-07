@@ -50,7 +50,7 @@ test.beforeEach(async ({ page }) => {
 test('access map — R/RW graph, light + dark + drift overlay (marketing asset)', async ({
   page,
 }) => {
-  await page.goto('/access-map')
+  await page.goto('/access-map?view=graph')
   // Wait for React Flow to actually lay the graph out. Nodes are <div>s (visible);
   // edges are SVG <g> elements (Playwright reports those as "hidden" — they have no
   // layout box — so wait for them ATTACHED, not visible).
@@ -99,7 +99,7 @@ test('health — status + SLA + dependency map, light + dark', async ({
 }) => {
   await page.goto('/health')
   await page
-    .getByRole('heading', { level: 1, name: 'Health & SLA', exact: true })
+    .getByRole('heading', { level: 1, name: 'Health', exact: true })
     .waitFor({ state: 'visible' })
   await page.waitForTimeout(900)
   await page.screenshot({ path: `${SHOTS}/health-light.png`, fullPage: true })

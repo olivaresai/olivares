@@ -10,10 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/olivaresai/olivares/core/auth"
-	coreengine "github.com/olivaresai/olivares/core/engine"
-	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,6 +17,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/core/auth/authtest"
+	coreengine "github.com/olivaresai/olivares/core/engine"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // workCreateSteps is a workflow graph of one work-create step whose owner is
@@ -235,7 +236,7 @@ func (e *consentEstate) fenceMember(label string) fenceSubject {
 	email := label + "@fence.test"
 	ext := "ext-" + label
 	id := e.onboard(e.tT, email, "admin")
-	if err := patchDirectoryUserErr(e.eng.authr, e.directoryActor(e.tT), e.tT, id, func(in *auth.SCIMUserInput) { in.ExternalID = ext }); err != nil {
+	if err := patchDirectoryUserErr(e.eng.store, e.eng.authr, e.directoryActor(e.tT), e.tT, id, func(in *directoryAttrs) { in.ExternalID = ext }); err != nil {
 		e.t.Fatalf("give %s its external id: %v", email, err)
 	}
 	e.rosterHuman(e.tT, ext)
@@ -349,6 +350,52 @@ func TestFencedWritersAndAccountWritersNeverDeadlock(t *testing.T) {
 	writers := fenceWriters(collector.URL)
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
 		if e.engine == "postgres" {
+			t.Run("account update reads after directory admission", func(t *testing.T) {
+				ctx := context.Background()
+				id := e.createUser("admission-update@fence.test")
+				held, release := make(chan struct{}), make(chan struct{})
+				releaseWriter := sync.OnceFunc(func() { close(release) })
+				defer releaseWriter()
+				first := make(chan error, 1)
+				go func() {
+					first <- e.eng.store.AuthMutate(ctx, func(as store.AuthScope) error {
+						u, err := as.Users().Get(ctx, id)
+						if err == nil {
+							u.DisplayName = "first writer"
+							_, err = as.Users().Update(ctx, u)
+						}
+						close(held)
+						<-release
+						return err
+					})
+				}()
+				<-held
+				done := make(chan consentResp, 1)
+				go func() {
+					err := authtest.WriteUser(ctx, e.eng.store, id, func(u *model.User) { u.Department = "second writer" })
+					done <- consentResp{raw: fmt.Sprint(err)}
+				}()
+				waited, early := waitsForAdmission(t, consentAppDSN(t, e), done)
+				releaseWriter()
+				if err := <-first; err != nil {
+					t.Fatal(err)
+				}
+				if !waited {
+					t.Fatalf("account writer finished before admission: %s", early.raw)
+				}
+				if r := <-done; r.raw != "<nil>" {
+					t.Fatalf("account update after admission: %s", r.raw)
+				}
+				if err := e.eng.store.AuthView(ctx, func(as store.AuthScope) error {
+					u, err := as.Users().Get(ctx, id)
+					if err == nil && (u.DisplayName != "first writer" || u.Department != "second writer") {
+						t.Errorf("account updates were lost: display=%q department=%q", u.DisplayName, u.Department)
+					}
+					return err
+				}); err != nil {
+					t.Fatal(err)
+				}
+			})
 			t.Run("every writer waits for directory admission", func(t *testing.T) {
 				waitForAdmissionEach(t, e, writers)
 			})
@@ -469,12 +516,12 @@ func interleaveWithRemovals(t *testing.T, e *consentEstate, writers []fenceWrite
 				}
 			},
 			func() {
-				if err := e.eng.authr.SCIMDeprovisionUser(context.Background(), actorT, e.tT, v); err != nil && !isDirectoryRefusal(err) {
+				if err := e.eng.authr.RemoveMember(context.Background(), actorT, e.tT, v); err != nil && !isDirectoryRefusal(err) {
 					failures <- "offboard: " + err.Error()
 				}
 			},
 			func() {
-				if err := patchDirectoryUserErr(e.eng.authr, actorB, e.tB, v, func(in *auth.SCIMUserInput) { in.DisplayName = "x" }); err != nil && !isDirectoryRefusal(err) {
+				if err := patchDirectoryUserErr(e.eng.store, e.eng.authr, actorB, e.tB, v, func(in *directoryAttrs) { in.DisplayName = "x" }); err != nil && !isDirectoryRefusal(err) {
 					failures <- "account update: " + err.Error()
 				}
 			},

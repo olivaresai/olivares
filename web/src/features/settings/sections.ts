@@ -3,6 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { TFunction } from 'i18next'
 import {
+  Blocks,
   Info,
   Bell,
   Keyboard,
@@ -39,8 +40,10 @@ export const SETTINGS_SECTIONS = [
   { id: 'permissions', icon: Shield, adminOnly: false },
   { id: 'signIn', icon: Shield, adminOnly: false },
   { id: 'setup', icon: Play, adminOnly: false, view: 'onboarding' },
-  // The License place of the sidebar (features/navigation/places.ts), not a row of Settings.
+  // Edition and the license: a section of this installation (the License place until 0.7).
   { id: 'edition', icon: Package, adminOnly: false },
+  // The module switches: a system administrator turns modules on and off here (ARCH C1).
+  { id: 'modules', icon: Blocks, adminOnly: true },
   { id: 'sessionIdle', icon: Server, adminOnly: true },
   { id: 'tracing', icon: Server, adminOnly: true },
   { id: 'signing', icon: KeyRound, adminOnly: true },
@@ -96,17 +99,14 @@ export function settingsSearchEntries(
       order,
       haystack: {
         label: fold(label),
+        // A section's former names (settings:aliases.<id>), in this language and in
+        // English. The palette builds its haystack from eagerly loaded namespaces only,
+        // so they live here, not in a feature bundle.
         aliases: [
           fold(t(`settings:nav.${s.id}`, { lng: 'en' })),
-          // The palette builds its haystack from eagerly loaded namespaces only,
-          // so the license word lives here — not in the console bundle.
-          ...(s.id === 'edition'
-            ? [
-                fold(t('settings:edition.licenseAlias')),
-                fold(t('settings:edition.licenseAlias', { lng: 'en' })),
-              ]
-            : []),
-        ],
+          fold(t(`settings:aliases.${s.id}`, { defaultValue: '' })),
+          fold(t(`settings:aliases.${s.id}`, { lng: 'en', defaultValue: '' })),
+        ].filter(Boolean),
         path: fold(path),
         context: [fold(context)],
         description: '',

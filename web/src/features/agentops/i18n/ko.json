@@ -73,11 +73,11 @@
     "bypassPermissions": "bypassPermissions"
   },
   "effort": {
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-    "max": "max"
+    "low": "낮음",
+    "medium": "보통",
+    "high": "높음",
+    "xhigh": "매우 높음",
+    "max": "최대"
   },
   "summary": {
     "total": "전체",
@@ -144,7 +144,7 @@
     "effortDefault": "모델 기본값",
     "model": "모델",
     "workspace": "폴더",
-    "workspaceNone": "이 세션의 임시 폴더",
+    "workspaceNone": "기본값 (내 파일)",
     "worktree": "새 git 워크트리에서 작업",
     "worktreeHint": "자체 워크트리에 새 브랜치를 시작하여 한 리포지토리의 세션들이 파일을 공유하지 않습니다. 폴더는 리포지토리의 최상위 폴더여야 합니다.",
     "worktreeFrom": "시작 지점",
@@ -166,8 +166,8 @@
     "templateHint": "템플릿의 규칙이 여기서 일치하는 선택을 대체하며 세션 전체에 적용됩니다.",
     "templateUnenforceable": "이 템플릿이 이 시작이 강제할 수 없는 조건을 선언하므로, 그 조건 없이 시작하지 않고 시작을 거부합니다:",
     "templateOverrides_other": "템플릿이 귀하의 선택 {{count}}개를 재정의합니다:",
-    "profile": "프로바이더 프로필",
-    "profileNone": "프로필 선택",
+    "profile": "계정",
+    "profileNone": "계정 선택",
     "profileNotOperable": "이 환경에서 활성화되지 않음",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME 및 GROK_HOME은 프로필에 속합니다: 그중 하나를 전달하는 시작은 여기서 거부됩니다. 다른 이름은 서버 자체의 검증을 받습니다.",
     "identity": {
@@ -197,7 +197,7 @@
     "failed": "도구가 응답하지 않아 목록이 없습니다. 모델을 입력하거나 기본값을 유지하십시오.",
     "unsupported": "이 도구는 모델을 나열하지 않습니다. 하나를 입력하거나 기본값을 유지하십시오.",
     "unavailable": "여기서 모델 목록을 사용할 수 없습니다. 모델을 입력하거나 기본값을 유지하십시오.",
-    "default": "default",
+    "default": "기본값",
     "new": "새 항목",
     "favorites": "즐겨찾기",
     "models": "모델",
@@ -207,6 +207,7 @@
     "use": "“{{model}}” 사용",
     "defaultNamed": "기본값({{model}})",
     "defaultUnnamed": "{{tool}} 기본값",
+    "toolDefault": "기본값(권장)",
     "effortDefaultNamed": "모델 기본값({{effort}})",
     "effortNeedsModel": "먼저 모델을 선택하십시오: 노력은 모델의 수준입니다."
   },
@@ -330,6 +331,8 @@
     "title": "Workspaces",
     "subtitle": "세션이 작업하는 호스트 디렉터리 — 마운트되고 감금되며 DLP로 분류됩니다.",
     "register": "Workspace 등록",
+    "personalFolders": "모든 사용자에게 개인 폴더(내 파일) 제공",
+    "personalFoldersSaved": "개인 폴더 설정을 저장했습니다.",
     "cols": {
       "name": "Workspace",
       "rootPath": "루트 경로",
@@ -403,6 +406,20 @@
     }
   },
   "browser": {
+    "notes": {
+      "title": "메모",
+      "add": "메모 추가",
+      "select": "먼저 파일의 한 부분을 선택한 다음 메모를 추가하세요.",
+      "note": "메모",
+      "keep": "추가",
+      "cancel": "취소",
+      "sendTo": "메모 보낼 곳",
+      "send": "보내기",
+      "sent": "메모를 세션에 보냈습니다.",
+      "failed": "메모를 보내지 못했습니다. 잠시 후 다시 시도하세요.",
+      "noSession": "이 작업 공간에 보낼 수 있는 실행 중인 세션이 없습니다.",
+      "count_other": "메모 {{count}}개"
+    },
     "title": "파일",
     "root": "루트",
     "upDir": "위로",
@@ -445,7 +462,20 @@
     "deletedFile": "삭제됨",
     "sizeLabel": "크기",
     "modifiedLabel": "수정됨",
-    "create": "만들기"
+    "create": "만들기",
+    "upload": "업로드",
+    "uploadLimit": "파일당 최대 {{size}}",
+    "uploadReadOnly": "이 폴더는 읽기 전용이라 파일을 추가할 수 없습니다.",
+    "uploadNoAccess": "이 폴더에 대한 쓰기 권한이 없습니다.",
+    "uploaded": "업로드됨: {{n}}",
+    "uploadTooLarge": "{{name}}은(는) {{size}} 제한을 초과하여 업로드되지 않았습니다.",
+    "uploadExists": "{{name}}은(는) 이미 있어 바꾸지 않았습니다.",
+    "uploadFailed": "업로드하지 못했습니다",
+    "downloadSelected": "선택 항목 다운로드({{n}})",
+    "downloadFolder": "폴더 다운로드",
+    "downloadFailed": "다운로드하지 못했습니다",
+    "labeled": "DLP 레이블: {{classes}}",
+    "select": "{{name}} 선택"
   },
   "empty": {
     "title": "Claude Code 세션 없음",
@@ -838,6 +868,10 @@
         "amber": "호박",
         "red": "빨강",
         "blue": "파랑",
+        "purple": "보라",
+        "pink": "분홍",
+        "teal": "청록",
+        "slate": "슬레이트",
         "unknown": "알 수 없는 저장 색상"
       }
     }
@@ -1040,15 +1074,19 @@
   "usage": {
     "fiveHour": "5시간",
     "week": "주간",
+    "weekModel": "{{model}} 전용",
     "percent": "{{window}} {{percent}}%",
+    "shareOfWeek": "이번 주 {{percent}}%",
+    "shareOfFiveHours": "5시간 중 {{percent}}%",
+    "resets": "{{when}}에 재설정",
     "unknown": "사용량 알 수 없음",
     "limit": {
       "fiveHour": "5시간 한도에 도달했습니다",
       "fiveHourResets": "5시간 한도에 도달했습니다. 초기화: {{time}}",
       "week": "주간 한도에 도달했습니다",
       "weekResets": "주간 한도에 도달했습니다. 초기화: {{time}}",
-      "other": "{{label}} 한도에 도달했습니다",
-      "otherResets": "{{label}} 한도에 도달했습니다. 초기화: {{time}}"
+      "other": "한도에 도달했습니다",
+      "otherResets": "한도에 도달했습니다. 초기화: {{time}}"
     }
   }
 }

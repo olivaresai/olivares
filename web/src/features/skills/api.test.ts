@@ -247,3 +247,18 @@ it('previews a workspace and provider profile in the same server selection', asy
   ])
   expect(captured[0].url.searchParams.has('target_kind')).toBe(false)
 })
+
+it('resolves folder overrides with the department and profile before launch', async () => {
+  await skillsApi.selection(
+    'workspace',
+    'ws-1',
+    undefined,
+    'ppf_profile-1',
+    'folder-1',
+  )
+  expect(captured[0].url.searchParams.getAll('target')).toEqual([
+    'workspace:ws-1',
+    'profile:ppf_profile-1',
+    'folder:folder-1',
+  ])
+})

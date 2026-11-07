@@ -1,10 +1,11 @@
 {
-  "title": "Inventario",
+  "title": "Risorse rilevate",
   "unnamed": "Senza nome",
-  "subtitle": "Ogni agente, sessione, MCP, modello e identità rilevati nel tuo parco.",
+  "subtitle": "Ogni agente, sessione, MCP, modello e identità rilevati dai connettori.",
+  "mcpPointer": "Aggiungi e governa i server MCP in MCP e skill",
   "refresh": "Aggiorna",
   "scope": {
-    "note": "Inventario a livello di tenant. Il selettore dei workspace non filtra questa vista."
+    "note": "Copre tutti i workspace."
   },
   "summary": {
     "total": "Entità",

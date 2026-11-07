@@ -201,7 +201,7 @@ function RestartWarning({
   )
 }
 
-/** Mounted for a system administrator only (Settings > Edition & modules); the engine
+/** Mounted for a system administrator only (Settings > Modules); the engine
  * checks system:admin and the step-up itself. */
 export function ModulesSettings() {
   const { t } = useTranslation('settings')
@@ -286,17 +286,13 @@ export function ModulesSettings() {
 
   return (
     <section
-      className="mt-4 flex flex-col gap-2"
-      aria-labelledby="modules-title"
+      className="flex flex-col gap-2"
+      aria-label={t('modules.title')}
       data-slot="modules-settings"
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <h2 id="modules-title" className="text-body font-semibold text-text">
-            {t('modules.title')}
-          </h2>
-          <p className="text-caption text-text-2">{t('modules.description')}</p>
-        </div>
+      {/* The section's title and description are the page header above (Settings ›
+          Modules); Apply stays with the switches it applies. */}
+      <div className="flex justify-end">
         <Button
           variant="primary"
           size="sm"
@@ -520,10 +516,10 @@ export function TurnOnPage({ module }: { module: string }) {
       {t('modules.alsoTurnsOn', { names })}{' '}
       <Link
         to="/settings"
-        search={{ section: 'edition' } as never}
+        search={{ section: 'modules' } as never}
         className="underline underline-offset-[3px] hover:text-text"
       >
-        {t('modules.openEdition')}
+        {t('modules.openModules')}
       </Link>
     </p>
   )

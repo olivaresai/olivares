@@ -52,6 +52,8 @@ export type Selection =
       role: 'origin' | 'resource'
       /** Aggregate graph nodes have no engine resource id and cannot root exfil. */
       cluster?: boolean
+      /** What an aggregate node stands for, each with its whole ref. */
+      members?: readonly { id: string; label: string; ref: string }[]
       /** The engine's own ref, absent when it sent none. `ref` falls back to a shortened
        * id for display, which no link may be built from. */
       originRef?: string
@@ -127,7 +129,11 @@ export function AccessDetailSheet({
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Network className="size-4 text-accent-text" />
-              {t(`kinds.${selection.kind}`, { defaultValue: selection.kind })}
+              {selection.cluster
+                ? t('group.items', { count: selection.members?.length ?? 0 })
+                : t(`kinds.${selection.kind}`, {
+                    defaultValue: selection.kind,
+                  })}
             </SheetTitle>
             <SheetDescription>{t('detail.nodeSubtitle')}</SheetDescription>
             <Separator className="my-2" />
@@ -135,10 +141,24 @@ export function AccessDetailSheet({
               <Row label={t('detail.ref')}>
                 <Mono>{selection.ref || selection.id}</Mono>
               </Row>
-              <Row label={t('detail.id')}>
-                <Mono>{selection.id}</Mono>
-              </Row>
+              {!selection.cluster && (
+                <Row label={t('detail.id')}>
+                  <Mono>{selection.id}</Mono>
+                </Row>
+              )}
             </div>
+            {selection.cluster && (
+              <ul
+                aria-label={t('group.members')}
+                className="mt-2 max-h-80 overflow-y-auto text-left"
+              >
+                {selection.members?.map((m) => (
+                  <li key={m.id} className="py-1">
+                    <Mono>{m.ref}</Mono>
+                  </li>
+                ))}
+              </ul>
+            )}
             {selection.role === 'origin' && !selection.cluster && (
               <OpenLinks kind={selection.kind} refValue={selection.originRef} />
             )}
@@ -349,7 +369,7 @@ function EdgeDetail({
         />
 
         <Separator className="my-2" />
-        <p className="flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
+        <p className="flex items-start gap-1.5 text-caption leading-snug text-muted-foreground">
           <Lock className="mt-0.5 size-3 shrink-0" />
           {t('detail.minimalData')}
         </p>
@@ -419,7 +439,7 @@ function AuthoritySection({
             did not arrive, every sentence on this panel about which signals are or are not
             present is qualified here rather than quietly drawn from the scalar. */}
         {!authority.signalsFused && (
-          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+          <p className="mt-1.5 text-caption leading-snug text-muted-foreground">
             {t('authority.signalsNotFused')}
           </p>
         )}
@@ -428,7 +448,7 @@ function AuthoritySection({
             so editing the source does not remove the edge; and a fused edge can carry more
             than one independent permit, so addressing one leaves the other standing. */}
         {authority.multiple && (
-          <p className="mt-1.5 text-[11px] leading-snug text-warning">
+          <p className="mt-1.5 text-caption leading-snug text-warning">
             {t('authority.multiple')}
           </p>
         )}
@@ -439,12 +459,12 @@ function AuthoritySection({
             for a failure that did not happen. `closure` is only non-`unknown` when the drift
             read named which half this is, so neither sentence is ever a guess. */}
         {authority.closure === 'cannotClose' && (
-          <p className="mt-1.5 text-[11px] leading-snug text-warning">
+          <p className="mt-1.5 text-caption leading-snug text-warning">
             {t('authority.cannotClose')}
           </p>
         )}
         {authority.closure === 'closes' && (
-          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+          <p className="mt-1.5 text-caption leading-snug text-muted-foreground">
             {t('authority.closes')}
           </p>
         )}
@@ -452,7 +472,7 @@ function AuthoritySection({
             happen to name it: an `unattributed` permit is just as unretractable, and gating
             on the signal list hid the warning exactly where the map knows least. */}
         {edge.permitted && authority.closure === 'unknown' && (
-          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+          <p className="mt-1.5 text-caption leading-snug text-muted-foreground">
             {t('authority.noRetraction')}
           </p>
         )}
@@ -474,7 +494,7 @@ function AuthoritySection({
               {t('authority.checkDrift')}
             </Button>
           ) : canDrift === false ? (
-            <p className="mt-2.5 text-[11px] leading-snug text-muted-foreground">
+            <p className="mt-2.5 text-caption leading-snug text-muted-foreground">
               {t('authority.needsPermission', {
                 action: t('authority.checkDrift'),
                 permission: permissionWords(DRIFT_PERMISSION),
@@ -492,7 +512,7 @@ function AuthoritySection({
               return (
                 <p
                   key={`${target.key}-denied`}
-                  className="text-[11px] leading-snug text-muted-foreground"
+                  className="text-caption leading-snug text-muted-foreground"
                 >
                   {t('authority.needsPermission', {
                     action: t(`authority.target.${target.key}`),
@@ -546,7 +566,7 @@ function AuthoritySection({
             {verdict !== 'idle' && verdict !== 'checking' && (
               <p
                 className={cn(
-                  'mt-1.5 flex items-start gap-1.5 text-[11px] leading-snug',
+                  'mt-1.5 flex items-start gap-1.5 text-caption leading-snug',
                   verdict === 'clear'
                     ? 'text-confidence-attributed'
                     : verdict === 'present'

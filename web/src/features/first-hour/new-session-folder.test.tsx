@@ -4,13 +4,15 @@
 //
 // A first session needs no typed folder. The form shows the folder the product fills in
 // (the last session's folder while it is still registered, else a new folder of the
-// session's own, which the engine creates) and a typed path only after Change folder.
+// session's own, which the engine creates) in one dropdown, and a typed path only after
+// "Another folder…".
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const link = vi.hoisted(() => ({ search: '', navigate: vi.fn() }))
 const auth = vi.hoisted(() => ({ canReadFolders: true }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
@@ -21,8 +23,8 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
-  useRouterState: () => '',
+  useNavigate: () => link.navigate,
+  useRouterState: () => link.search,
 }))
 const launch = vi.hoisted(() => ({ launchSession: vi.fn() }))
 vi.mock('@/features/agentops/session-launch', async (orig) => ({
@@ -43,7 +45,9 @@ import type { RunDTO, WorkspaceDTO } from '@/features/agentops/types'
 import { providersApi } from '@/features/providers/api'
 import { http } from '@/lib/api'
 import { useTenantStore } from '@/stores/tenant'
-import { StartSessionForm } from './first-hour'
+import { NewSessionHost } from './new-session-host'
+import { useNewSessionDialog } from './new-session-store'
+import { StartSessionForm, WorkStart } from './first-hour'
 import { useClientSettings } from '@/features/settings/preferences'
 import { SessionDefaultsSettings } from '@/features/settings/session-defaults-settings'
 
@@ -75,6 +79,14 @@ const REPO = {
   state: 'active',
 }
 
+// "Another folder…" in the Folder dropdown: the one way to a typed path.
+async function chooseTypedFolder(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('combobox', { name: 'Folder' }))
+  await user.click(
+    await screen.findByRole('option', { name: 'Another folder…' }),
+  )
+}
+
 beforeEach(() => {
   useClientSettings.getState().restore()
   vi.restoreAllMocks()
@@ -100,7 +112,13 @@ it.each([false, true])(
       has_more: hasMore,
     } as Awaited<ReturnType<typeof agentOpsApi.listWorkspaces>>)
     useClientSettings.setState({
-      sessionDefaults: { tool: '', account: '', model: '', folder: 'ws_1' },
+      sessionDefaults: {
+        tool: '',
+        account: '',
+        model: '',
+        effort: '',
+        folder: 'ws_1',
+      },
     })
     wrap(<SessionDefaultsSettings />)
     await waitFor(() =>
@@ -116,11 +134,212 @@ it.each([false, true])(
   },
 )
 
+it('the work surface keeps the composer while no tool can start, and Enter does not start one', async () => {
+  runs([])
+  vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
+  wrap(<WorkStart />)
+  const composer = await screen.findByRole('textbox', {
+    name: 'First message (optional)',
+  })
+  expect(await screen.findByRole('button', { name: 'Start' })).toBeDisabled()
+  // The way to get a tool ready sits on the same screen: one card, for the tool the
+  // composer would start, and it follows the tool the person picks.
+  expect(
+    await screen.findByRole('heading', { name: 'Sign it in' }),
+  ).toBeVisible()
+  expect(await screen.findByTestId('tool-claude')).toBeVisible()
+  expect(screen.queryByTestId('tool-codex')).toBeNull()
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: /^Tool and account: / }))
+  await user.click(await screen.findByRole('menuitemradio', { name: 'Codex' }))
+  expect(await screen.findByTestId('tool-codex')).toBeVisible()
+  expect(screen.queryByTestId('tool-claude')).toBeNull()
+  await user.type(composer, 'look at the repo{Enter}')
+  expect(launch.launchSession).not.toHaveBeenCalled()
+})
+
+it('the composer is on screen before the engine says which tools can start, and keeps what is typed', async () => {
+  runs([])
+  let answer = (_: ReturnType<typeof readinessOf>) => {}
+  vi.spyOn(agentOpsApi, 'toolsReadiness').mockReturnValue(
+    new Promise((resolve) => {
+      answer = resolve
+    }),
+  )
+  wrap(<WorkStart />)
+  const composer = screen.getByRole('textbox', {
+    name: 'First message (optional)',
+  })
+  // Unknown is not "no": no tool is called not ready, and Enter has nothing to send yet.
+  expect(screen.queryByRole('heading', { name: 'Sign it in' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+  const user = userEvent.setup()
+  await user.type(composer, 'typed early{Enter}')
+  expect(launch.launchSession).not.toHaveBeenCalled()
+  answer(readinessOf({ claude: 'own_login' }))
+  await screen.findByRole('button', { name: 'Start' })
+  expect(composer).toHaveValue('typed early')
+  expect(composer).toHaveFocus()
+})
+
+it('the composer comes first and Enter starts the session', async () => {
+  runs([])
+  wrap(<WorkStart />)
+  const composer = await screen.findByRole('textbox', {
+    name: 'First message (optional)',
+  })
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+  )
+  expect(screen.queryByRole('heading', { name: 'Sign it in' })).toBeNull()
+  expect(
+    composer.compareDocumentPosition(
+      screen.getByRole('button', { name: /^Tool and account: / }),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+  const user = userEvent.setup()
+  await user.type(composer, 'first line{Shift>}{Enter}{/Shift}second')
+  expect(launch.launchSession).not.toHaveBeenCalled()
+  await user.keyboard('{Enter}')
+  await waitFor(() => expect(launch.launchSession).toHaveBeenCalledOnce())
+  expect(launch.launchSession.mock.calls[0][0].message).toBe(
+    'first line\nsecond',
+  )
+})
+
+it('the composer starts on Enter with its pills, and the next composer opens on that choice', async () => {
+  runs([])
+  const OTHER = {
+    workspace_ref: 'ws_2',
+    root_path: '/srv/work/other',
+    state: 'active',
+  }
+  workspaces([REPO, OTHER])
+  vi.spyOn(agentOpsApi, 'previewProfile').mockResolvedValue({
+    reason: 'own_login',
+    profile: {
+      profile_ref: 'ppf_claude',
+      driver: 'claude',
+      environment_ref: 'xenv_1',
+      state: 'active',
+      local_environment: true,
+      operable: true,
+    },
+  })
+  vi.spyOn(agentOpsApi, 'profileModels').mockResolvedValue({
+    profile_ref: 'ppf_claude',
+    driver: 'claude',
+    state: 'fresh',
+    default_model: '',
+    free_text: true,
+    checked_at: '2026-10-12T10:00:00Z',
+    refresh_interval_seconds: 120,
+    models: [
+      {
+        id: 'opus-5-5',
+        display_name: 'Claude Opus 5.5',
+        is_default: true,
+        effort_levels: ['low', 'medium', 'high'],
+      },
+      {
+        id: 'haiku-5-5',
+        display_name: 'Claude Haiku 5.5',
+        effort_levels: ['low', 'high'],
+      },
+    ],
+  })
+  const user = userEvent.setup()
+  wrap(<WorkStart />)
+  const composer = await screen.findByRole('textbox', {
+    name: 'First message (optional)',
+  })
+  await user.click(await screen.findByRole('button', { name: /^Model: / }))
+  await user.click(await screen.findByText('Claude Haiku 5.5'))
+  await user.click(screen.getByRole('button', { name: /^Effort: / }))
+  await user.click(await screen.findByRole('menuitemradio', { name: 'High' }))
+  await user.click(screen.getByRole('button', { name: /^Folder: / }))
+  await user.click(
+    await screen.findByRole('menuitemradio', { name: '/srv/work/other' }),
+  )
+  await user.type(composer, 'fix the tests{Enter}')
+  await waitFor(() => expect(launch.launchSession).toHaveBeenCalledOnce())
+  expect(launch.launchSession.mock.calls[0][0]).toMatchObject({
+    quick: {
+      driver: 'claude',
+      model: 'haiku-5-5',
+      effort: 'high',
+      workspace_ref: 'ws_2',
+    },
+    message: 'fix the tests',
+  })
+  // The start is remembered where Settings › New sessions reads it.
+  expect(useClientSettings.getState().sessionDefaults).toEqual({
+    tool: 'claude',
+    account: '',
+    model: 'haiku-5-5',
+    effort: 'high',
+    folder: 'ws_2',
+  })
+  cleanup()
+  wrap(<WorkStart />)
+  expect(
+    await screen.findByRole('button', {
+      name: 'Tool and account: Claude Code',
+    }),
+  ).toBeVisible()
+  expect(
+    await screen.findByRole('button', { name: 'Model: Claude Haiku 5.5' }),
+  ).toBeVisible()
+  expect(
+    await screen.findByRole('button', { name: 'Effort: High' }),
+  ).toBeVisible()
+  expect(
+    await screen.findByRole('button', { name: 'Folder: /srv/work/other' }),
+  ).toBeVisible()
+})
+
+it('New session focuses the composer, and More options hands the advanced launch its text and pills', async () => {
+  runs([])
+  workspaces([REPO])
+  useNewSessionDialog.setState({ advanced: null, opener: null })
+  const user = userEvent.setup()
+  wrap(<WorkStart />)
+  const composer = await screen.findByRole('textbox', {
+    name: 'First message (optional)',
+  })
+  act(() => useNewSessionDialog.getState().compose())
+  expect(composer).toHaveFocus()
+  await user.type(composer, 'review the repo')
+  await user.click(await screen.findByRole('button', { name: /^Folder: / }))
+  await user.click(
+    await screen.findByRole('menuitemradio', { name: '/srv/work/repo' }),
+  )
+  await user.click(screen.getByRole('button', { name: /^Folder: / }))
+  await user.click(
+    await screen.findByRole('menuitem', { name: 'More options' }),
+  )
+  expect(useNewSessionDialog.getState().advanced).toMatchObject({
+    open: true,
+    message: 'review the repo',
+    driver: 'claude',
+    workspaceRef: 'ws_1',
+  })
+  // Focus comes back to the text when the advanced launch closes.
+  expect(useNewSessionDialog.getState().opener).toBe(composer)
+  expect(launch.launchSession).not.toHaveBeenCalled()
+})
+
 it('starts in the saved registered folder without a typed path', async () => {
   runs([])
   workspaces([REPO])
   useClientSettings.setState({
-    sessionDefaults: { tool: '', account: '', model: '', folder: 'ws_1' },
+    sessionDefaults: {
+      tool: '',
+      account: '',
+      model: '',
+      effort: '',
+      folder: 'ws_1',
+    },
   })
   wrap(<StartSessionForm />)
   const start = await screen.findByRole('button', { name: 'Start' })
@@ -137,7 +356,13 @@ it('explains a removed default folder and uses the first available folder', asyn
   runs([])
   workspaces([REPO])
   useClientSettings.setState({
-    sessionDefaults: { tool: '', account: '', model: '', folder: 'removed' },
+    sessionDefaults: {
+      tool: '',
+      account: '',
+      model: '',
+      effort: '',
+      folder: 'removed',
+    },
   })
   wrap(<StartSessionForm />)
   const start = await screen.findByRole('button', { name: 'Start' })
@@ -158,7 +383,7 @@ describe('the folder in the New session form', () => {
     wrap(<StartSessionForm />)
     await screen.findByRole('button', { name: 'Start' })
     expect(
-      await screen.findByText('A new folder for this session'),
+      await screen.findByRole('combobox', { name: 'Folder' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Start' }))
@@ -202,7 +427,9 @@ describe('the folder in the New session form', () => {
       },
     ])
     wrap(<StartSessionForm />)
-    expect(await screen.findByText('/srv/work/repo')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('combobox', { name: 'Folder' }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -224,8 +451,7 @@ describe('the folder in the New session form', () => {
     ])
     workspaces([REPO])
     wrap(<StartSessionForm />)
-    await screen.findByText('/srv/work/repo')
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
+    await screen.findByRole('combobox', { name: 'Folder' })
     // A typed path is the fallback: it opens from the list, not instead of it.
     await user.click(await screen.findByRole('combobox', { name: 'Folder' }))
     await user.click(
@@ -273,12 +499,9 @@ describe('the folder in the New session form', () => {
       },
     ])
     wrap(<StartSessionForm />)
-    await screen.findByText('/srv/work/repo')
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
+    await screen.findByRole('combobox', { name: 'Folder' })
     expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
-    // Focus stays in the form: the button that was pressed is gone, the list takes it.
     const picker = await screen.findByRole('combobox', { name: 'Folder' })
-    expect(picker).toHaveFocus()
     expect(picker).toHaveTextContent('/srv/work/repo')
     await user.click(picker)
     const options = await screen.findAllByRole('option')
@@ -315,8 +538,7 @@ describe('the folder in the New session form', () => {
     runs([{ run_ref: 'run_1', state: 'stopped', workspace_ref: 'ws_1' }])
     workspaces([REPO])
     wrap(<StartSessionForm />)
-    await screen.findByText('/srv/work/repo')
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
+    await screen.findByRole('combobox', { name: 'Folder' })
     await user.click(await screen.findByRole('combobox', { name: 'Folder' }))
     await user.click(
       await screen.findByRole('option', {
@@ -331,18 +553,18 @@ describe('the folder in the New session form', () => {
     })
   })
 
-  it('asks for a path only when no folder is registered', async () => {
+  it('offers a new folder or a typed path when no folder is registered, and asks for a path only on the second', async () => {
     const user = userEvent.setup()
     runs([])
     workspaces([])
     wrap(<StartSessionForm />)
-    await screen.findByText('A new folder for this session')
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
-    expect(screen.queryByRole('combobox', { name: 'Folder' })).toBeNull()
+    await screen.findByRole('combobox', { name: 'Folder' })
+    expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
+    await chooseTypedFolder(user)
     expect(screen.getByRole('textbox', { name: 'Folder' })).toHaveFocus()
   })
 
-  // The text field is decided when Change folder opens it: a list that arrives later
+  // The text field is decided when "Another folder…" opens it: a list that arrives later
   // must not swap it for a Select under the user's hands and drop what they typed.
   it('keeps the path being typed when the registered folders arrive late', async () => {
     const user = userEvent.setup()
@@ -351,8 +573,8 @@ describe('the folder in the New session form', () => {
       new Error('offline'),
     )
     const qc = wrap(<StartSessionForm />)
-    await screen.findByText('A new folder for this session')
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
+    await screen.findByRole('combobox', { name: 'Folder' })
+    await chooseTypedFolder(user)
     await user.type(
       screen.getByRole('textbox', { name: 'Folder' }),
       '/srv/work/typed',
@@ -362,11 +584,11 @@ describe('the folder in the New session form', () => {
       has_more: true,
     } as Awaited<ReturnType<typeof agentOpsApi.listWorkspaces>>)
     await qc.refetchQueries()
-    // Absence proves nothing until the list has rendered: its cut-short notice is the sign.
-    expect(
-      await screen.findByText(/Registered folders: 1 loaded/),
-    ).toBeVisible()
-    expect(screen.queryByRole('combobox', { name: 'Folder' })).toBeNull()
+    // Absence proves nothing until the list has arrived.
+    await waitFor(() => expect(qc.isFetching()).toBe(0))
+    expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveTextContent(
+      'Another folder…',
+    )
     expect(screen.getByRole('textbox', { name: 'Folder' })).toHaveValue(
       '/srv/work/typed',
     )
@@ -378,6 +600,29 @@ describe('the folder in the New session form', () => {
     })
   })
 
+  // review on 102dac51: a typed path was remembered as '' (Automatic), not as the folder
+  // the engine registered for it.
+  it('remembers a typed path as the folder the engine registered for it', async () => {
+    const user = userEvent.setup()
+    runs([])
+    launch.launchSession.mockResolvedValue({
+      run_ref: 'run_new',
+      workspace_ref: 'ws_typed',
+    })
+    wrap(<StartSessionForm />)
+    await chooseTypedFolder(user)
+    await user.type(
+      screen.getByRole('textbox', { name: 'Folder' }),
+      '/srv/work/typed',
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() =>
+      expect(useClientSettings.getState().sessionDefaults.folder).toBe(
+        'ws_typed',
+      ),
+    )
+  })
+
   // An unreadable list is not an empty one: the person who could pick is told why they
   // are asked for a path.
   it('says the registered folders could not be read, beside the typed-path field', async () => {
@@ -387,8 +632,9 @@ describe('the folder in the New session form', () => {
       new Error('offline'),
     )
     wrap(<StartSessionForm />)
-    await screen.findByText('A new folder for this session')
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
+    await screen.findByRole('combobox', { name: 'Folder' })
+    expect(screen.queryByText(/could not be read/)).toBeNull()
+    await chooseTypedFolder(user)
     expect(screen.getByRole('textbox', { name: 'Folder' })).toBeVisible()
     expect(screen.getByText(/could not be read/)).toBeVisible()
   })
@@ -401,8 +647,8 @@ describe('the folder in the New session form', () => {
       new Error('forbidden'),
     )
     wrap(<StartSessionForm />)
-    await screen.findByText('A new folder for this session')
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
+    await screen.findByRole('combobox', { name: 'Folder' })
+    await chooseTypedFolder(user)
     expect(screen.getByRole('textbox', { name: 'Folder' })).toBeVisible()
     expect(screen.queryByText(/could not be read/)).toBeNull()
   })
@@ -416,11 +662,16 @@ describe('the folder in the New session form', () => {
       has_more: true,
     } as Awaited<ReturnType<typeof agentOpsApi.listWorkspaces>>)
     wrap(<StartSessionForm />)
+    await screen.findByRole('combobox', { name: 'Folder' })
+    // No chip about an internal list in the form; the picker says the list is cut.
+    expect(screen.queryByText(/Registered folders: 1 loaded/)).toBeNull()
     expect(
-      await screen.findByText(/Registered folders: 1 loaded/),
-    ).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
+      screen.queryByText('Some registered folders are outside this list.'),
+    ).toBeNull()
     await user.click(await screen.findByRole('combobox', { name: 'Folder' }))
+    expect(
+      await screen.findByText('Some registered folders are outside this list.'),
+    ).toBeVisible()
     expect(
       await screen.findByRole('option', { name: 'Another folder…' }),
     ).toBeVisible()
@@ -433,8 +684,7 @@ describe('the folder in the New session form', () => {
     runs([{ run_ref: 'run_1', state: 'stopped', workspace_ref: 'ws_1' }])
     workspaces([REPO, PAYMENTS])
     const qc = wrap(<StartSessionForm />)
-    await screen.findByText('/srv/work/repo')
-    await user.click(screen.getByRole('button', { name: 'Change folder' }))
+    await screen.findByRole('combobox', { name: 'Folder' })
     await user.click(await screen.findByRole('combobox', { name: 'Folder' }))
     await user.click(
       await screen.findByRole('option', { name: /payments-api/ }),
@@ -444,11 +694,13 @@ describe('the folder in the New session form', () => {
       has_more: true,
     } as Awaited<ReturnType<typeof agentOpsApi.listWorkspaces>>)
     await qc.refetchQueries()
-    // The new list has rendered once its cut-short notice shows.
-    await screen.findByText(/Registered folders: 1 loaded/)
-    expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveTextContent(
-      '/srv/work/payments',
-    )
+    await waitFor(() => expect(qc.isFetching()).toBe(0))
+    // The new list has rendered once the open picker says it is cut short.
+    const picker = screen.getByRole('combobox', { name: 'Folder' })
+    await user.click(picker)
+    await screen.findByText('Some registered folders are outside this list.')
+    await user.keyboard('{Escape}')
+    expect(picker).toHaveTextContent('/srv/work/payments')
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
@@ -483,7 +735,9 @@ describe('the folder in the New session form', () => {
       ],
       has_more: false,
     } as Awaited<ReturnType<typeof agentOpsApi.listRuns>>)
-    expect(await screen.findByText('/srv/work/repo')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('combobox', { name: 'Folder' }),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
@@ -508,7 +762,7 @@ describe('the folder in the New session form', () => {
       { workspace_ref: 'ws_2', root_path: '/srv/work/other', state: 'active' },
     ])
     const qc = wrap(<StartSessionForm />)
-    await screen.findByText('/srv/work/repo')
+    await screen.findByRole('combobox', { name: 'Folder' })
     runs([
       {
         run_ref: 'run_2',
@@ -526,10 +780,10 @@ describe('the folder in the New session form', () => {
           .some(([, data]) => data?.items?.[0]?.run_ref === 'run_2'),
       ).toBe(true),
     )
-    await expect(
-      screen.findByText('/srv/work/other', {}, { timeout: 500 }),
-    ).rejects.toThrow()
-    expect(screen.getByText('/srv/work/repo')).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 500))
+    const folder = screen.getByRole('combobox', { name: 'Folder' })
+    expect(folder).toHaveTextContent('/srv/work/repo')
+    expect(folder).not.toHaveTextContent('/srv/work/other')
   })
 
   // An unreadable session list is no reason to block a start: the engine still gives the
@@ -539,7 +793,7 @@ describe('the folder in the New session form', () => {
     vi.spyOn(agentOpsApi, 'listRuns').mockRejectedValue(new Error('offline'))
     wrap(<StartSessionForm />)
     expect(
-      await screen.findByText('A new folder for this session'),
+      await screen.findByRole('combobox', { name: 'Folder' }),
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -570,7 +824,9 @@ describe('the folder in the New session form', () => {
     // Only ws_1 is still registered, and its folder is the registration's, not the run's.
     workspaces([REPO])
     wrap(<StartSessionForm />)
-    expect(await screen.findByText('/srv/work/repo')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('combobox', { name: 'Folder' }),
+    ).toBeInTheDocument()
     expect(screen.queryByText('/srv/work/removed')).toBeNull()
   })
 
@@ -602,7 +858,7 @@ describe('the folder in the New session form', () => {
     })
     wrap(<StartSessionForm />)
     expect(
-      await screen.findByText('A new folder for this session'),
+      await screen.findByRole('combobox', { name: 'Folder' }),
     ).toBeInTheDocument()
     expect(screen.queryByText('/srv/work/removed')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Start' }))
@@ -639,7 +895,7 @@ describe('the folder in the New session form', () => {
       items: [{ id: 'tpl-ec', name: 'Edits and commands', builtin: true }],
     })
     const qc = wrap(<StartSessionForm />)
-    await screen.findByText('/srv/work/repo')
+    await screen.findByRole('combobox', { name: 'Folder' })
     workspaces([])
     await qc.refetchQueries()
     await user.click(screen.getByRole('button', { name: 'Start' }))
@@ -661,7 +917,7 @@ describe('the folder in the New session form', () => {
       { ...REPO, workspace_ref: 'ws_readonly', mount_mode: 'ro' },
     ])
     wrap(<StartSessionForm />)
-    await screen.findByText('/srv/work/repo')
+    await screen.findByRole('combobox', { name: 'Folder' })
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
@@ -683,12 +939,14 @@ describe('the folder in the New session form', () => {
     ])
     workspaces([REPO])
     const qc = wrap(<StartSessionForm />)
-    expect(await screen.findByText('/srv/work/repo')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('combobox', { name: 'Folder' }),
+    ).toBeInTheDocument()
     cleanup()
     workspaces([])
     wrap(<StartSessionForm />, qc)
     expect(
-      await screen.findByText('A new folder for this session'),
+      await screen.findByRole('combobox', { name: 'Folder' }),
     ).toBeInTheDocument()
     expect(screen.queryByText('/srv/work/repo')).toBeNull()
   })
@@ -710,7 +968,7 @@ describe('the folder in the New session form', () => {
     )
     wrap(<StartSessionForm />)
     expect(
-      await screen.findByText('A new folder for this session'),
+      await screen.findByRole('combobox', { name: 'Folder' }),
     ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -718,5 +976,73 @@ describe('the folder in the New session form', () => {
       folder: '',
       workspace_ref: undefined,
     })
+  })
+})
+
+it('opens a session link as an editable draft and launches only on Start', async () => {
+  const unicodePrompt = 'Review café & tests\nDo not edit yet.' // language-data: non-ASCII prompt fixture
+  vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
+  vi.spyOn(agentOpsApi, 'listProfiles').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
+  runs([])
+  workspaces([REPO])
+  link.search =
+    '?' +
+    new URLSearchParams({
+      newSession: '1',
+      tool: 'codex',
+      workspace: 'ws_1',
+      prompt: unicodePrompt,
+    })
+  useNewSessionDialog.setState({ open: false, opener: null, advanced: null })
+  vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
+    readinessOf({ claude: 'own_login', codex: 'own_login' }),
+  )
+  wrap(<NewSessionHost />)
+  expect(
+    await screen.findByRole('dialog', { name: 'New session' }),
+  ).toBeVisible()
+  const prompt = await screen.findByRole('textbox', {
+    name: 'First message (optional)',
+  })
+  expect(prompt).toHaveValue(unicodePrompt)
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Tool' })).toHaveTextContent(
+      'Codex',
+    ),
+  )
+  expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveTextContent(
+    '/srv/work/repo',
+  )
+  expect(launch.launchSession).not.toHaveBeenCalled()
+  const user = userEvent.setup()
+  await user.clear(prompt)
+  await user.type(prompt, 'Review only')
+  await user.click(screen.getByRole('button', { name: 'Start' }))
+  await waitFor(() =>
+    expect(launch.launchSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quick: expect.objectContaining({
+          driver: 'codex',
+          workspace_ref: 'ws_1',
+        }),
+        message: 'Review only',
+      }),
+      expect.anything(),
+    ),
+  )
+  expect(link.navigate).toHaveBeenCalledWith(
+    expect.objectContaining({ replace: true, search: expect.any(Function) }),
+  )
+  link.search = ''
+  useTenantStore.setState({ activeTenant: 'tnt-b' })
+  expect(useNewSessionDialog.getState()).toMatchObject({
+    open: false,
+    draft: null,
   })
 })

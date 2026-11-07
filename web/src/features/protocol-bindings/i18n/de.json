@@ -1,6 +1,6 @@
 {
   "title": "Protokollbindungen",
-  "subtitle": "Verwaltete A2A- und MCP-Bindungen erstellen, prüfen und abgleichen, ohne unbekannte Evidenz als Erfolg auszugeben.",
+  "subtitle": "A2A- und MCP-Bindungen erstellen, prüfen und abgleichen.",
   "actions": {
     "newDraft": "Neuer Entwurf",
     "refresh": "Aktualisieren",

@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -70,8 +71,9 @@ type providerRecordDTO struct {
 	// Models are what the LAST SUCCESSFUL probe reported. They are an observation
 	// with a timestamp, not a catalog: a provider can add or retire a model without
 	// this list moving, which is why probed_at travels beside it.
-	Models       []string `json:"models,omitempty"`
-	DefaultModel *string  `json:"default_model"`
+	Models       []string              `json:"models,omitempty"`
+	Capabilities *ProviderCapabilities `json:"capabilities,omitempty"`
+	DefaultModel *string               `json:"default_model"`
 	// ProbeState is "" (never tested), ok, refused or unreachable. It is three
 	// values and not a boolean because "the provider rejected this credential" and
 	// "I could not reach the provider" send an operator to different places.
@@ -114,8 +116,8 @@ func toProviderRecordDTO(r ProviderRecord) providerRecordDTO {
 		ProviderRef: r.Ref, Kind: r.Kind, DisplayName: r.DisplayName, BaseURL: r.BaseURL,
 		Service: r.Service, Version: version,
 		KeyHint: r.KeyHint, State: r.State, Models: r.Models,
-		DefaultModel: r.DefaultModel,
-		ProbeState:   r.ProbeState, ProbeDetail: r.ProbeDetail, ProbeLatencyMS: r.ProbeMillis,
+		DefaultModel: r.DefaultModel, Capabilities: r.Capabilities,
+		ProbeState: r.ProbeState, ProbeDetail: r.ProbeDetail, ProbeLatencyMS: r.ProbeMillis,
 		ProbedAt: r.ProbedAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, RevokedAt: r.RevokedAt,
 	}
 }
@@ -217,14 +219,20 @@ func (m *Module) handlePatchProviderRecord(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, toProviderRecordDTO(rec))
 }
 
-// handleTestProviderRecord asks the provider which models it serves with the registered credential; it sends no completion and spends nothing.
+// handleTestProviderRecord lists models; deep=true also qualifies the selected model.
 func (m *Module) handleTestProviderRecord(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	deep := r.URL.Query().Get("deep")
+	if deep != "" && deep != "true" && deep != "false" {
+		writeJSON(w, http.StatusBadRequest, errorBody("deep must be true or false"))
+		return
+	}
+
 	ref, err := m.addressedRecord(r.Context(), mc, chi.URLParam(r, "ref"))
 	if err != nil {
 		writeRunErr(w, err)
 		return
 	}
-	rec, err := m.TestProviderRecord(r.Context(), mc.Tenant, ref)
+	rec, err := m.TestProviderRecord(r.Context(), mc.Tenant, ref, deep == "true")
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -261,5 +269,9 @@ func providerStepUp(r *http.Request, p auth.Principal) error {
 	if p.Kind != auth.KindUser || auth.StepUpSatisfied(r.Context(), p) {
 		return nil
 	}
-	return &codedRunErr{&runErr{http.StatusForbidden, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())).Error()}, "step_up_required"}
+	refusal := auth.StepUpRefusal(r.Context(), p)
+	if errors.Is(refusal, auth.ErrRightsDataStale) {
+		return &codedRunErr{&runErr{http.StatusForbidden, refusal.Error()}, "rights_data_stale"}
+	}
+	return &codedRunErr{&runErr{http.StatusForbidden, refusal.Error()}, "step_up_required"}
 }

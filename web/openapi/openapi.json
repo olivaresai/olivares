@@ -552,6 +552,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "created_ip": {
+            "description": "Client address when the sign-in was issued; absent for a legacy row.",
+            "type": "string"
+          },
           "current": {
             "type": "boolean"
           },
@@ -1032,6 +1036,13 @@
       },
       "ConnectorInfo": {
         "properties": {
+          "class": {
+            "description": "document for a knowledge document source; absent for an observation source.",
+            "enum": [
+              "document"
+            ],
+            "type": "string"
+          },
           "description": {
             "type": "string"
           },
@@ -1144,6 +1155,98 @@
           },
           "total": {
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ConsoleErrorReport": {
+        "additionalProperties": false,
+        "properties": {
+          "component_stack": {
+            "description": "Logged up to its first 64 KiB.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "description": "Logged up to its first 16 KiB.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "error_id": {
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "type": "string"
+          },
+          "route_path": {
+            "description": "Logged up to its first 2 KiB.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "error_id",
+          "error"
+        ],
+        "type": "object"
+      },
+      "ConsoleExposure": {
+        "properties": {
+          "addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "admin_step_up": {
+            "type": "string"
+          },
+          "external_reachability": {
+            "type": "string"
+          },
+          "grpc_listen": {
+            "type": "string"
+          },
+          "listen": {
+            "type": "string"
+          },
+          "managed_public": {
+            "type": "boolean"
+          },
+          "public_url": {
+            "type": "string"
+          },
+          "saved_public_url": {
+            "type": "string"
+          },
+          "tls": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ConsoleExposureInput": {
+        "properties": {
+          "public_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "public_url"
+        ],
+        "type": "object"
+      },
+      "ConsoleExposureUpdate": {
+        "properties": {
+          "public_url": {
+            "type": "string"
+          },
+          "restart_required": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -1293,6 +1396,11 @@
           "created_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "duration_ms": {
+            "description": "How long the backup took to prepare, in milliseconds. Absent for a bundle taken before the manifest recorded it.",
+            "format": "int64",
+            "type": "integer"
           },
           "engine": {
             "enum": [
@@ -1519,6 +1627,9 @@
           "initiator_user": {
             "type": "string"
           },
+          "postgres": {
+            "$ref": "#/components/schemas/DRPostgresRestoreTarget"
+          },
           "request_id": {
             "type": "string"
           },
@@ -1531,6 +1642,36 @@
           "upload_id",
           "initiator",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "DRPostgresRestoreTarget": {
+        "additionalProperties": false,
+        "description": "A separate empty db init target. Every connection is a file: or env: reference resolved on the server. PostgreSQL console restore always requires two distinct administrator accounts.",
+        "properties": {
+          "admin_dsn_ref": {
+            "pattern": "^(file:|env:).+",
+            "type": "string"
+          },
+          "dsn_ref": {
+            "pattern": "^(file:|env:).+",
+            "type": "string"
+          },
+          "owner_dsn_ref": {
+            "description": "Optional for a single-role target.",
+            "pattern": "^(file:|env:).+",
+            "type": "string"
+          },
+          "scratch_dsn_ref": {
+            "description": "Maintenance connection allowed to create and drop scratch databases and roles.",
+            "pattern": "^(file:|env:).+",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dsn_ref",
+          "admin_dsn_ref",
+          "scratch_dsn_ref"
         ],
         "type": "object"
       },
@@ -1620,6 +1761,11 @@
           "last_verify_error": {
             "type": "string"
           },
+          "last_verify_rto_ms": {
+            "description": "How long the last completed scheduled restore test took, from extracting the bundle to the ledger re-verified.",
+            "minimum": 0,
+            "type": "integer"
+          },
           "last_verify_status": {
             "enum": [
               "running",
@@ -1663,6 +1809,16 @@
           },
           "rpo_hours": {
             "maximum": 8760,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "rto_exceeded": {
+            "description": "The last completed restore test took longer than rto_minutes. Absent without a target or a completed test.",
+            "type": "boolean"
+          },
+          "rto_minutes": {
+            "description": "The restore time the operator commits to; the scheduled restore test is measured against it. Absent sets no target.",
+            "maximum": 10080,
             "minimum": 1,
             "type": "integer"
           },
@@ -1713,6 +1869,12 @@
           "rpo_hours": {
             "maximum": 8760,
             "minimum": 1,
+            "type": "integer"
+          },
+          "rto_minutes": {
+            "description": "The restore time the operator commits to; 0 clears the target, omitted preserves it.",
+            "maximum": 10080,
+            "minimum": 0,
             "type": "integer"
           },
           "verify_cron": {
@@ -1825,7 +1987,7 @@
             "type": "integer"
           },
           "membership_as_of": {
-            "description": "The oldest update timestamp of the directory group and membership rows used for this subject; absent without directory groups.",
+            "description": "How old the directory data of the subject is: when the directory last answered for the subject where a directory module holds it, otherwise the oldest update timestamp of the directory group and membership rows used for this subject; absent without directory data.",
             "format": "date-time",
             "type": "string"
           },
@@ -2105,6 +2267,10 @@
               "module": {
                 "description": "With code module_not_enabled: the namespace of the module this node does not run.",
                 "type": "string"
+              },
+              "remedy": {
+                "description": "When a person can act on the failure: the one next step, fixed text chosen by the code.",
+                "type": "string"
               }
             },
             "required": [
@@ -2351,6 +2517,226 @@
           "ready",
           "store_engine",
           "version"
+        ],
+        "type": "object"
+      },
+      "HostStatus": {
+        "properties": {
+          "collected_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cpu_percent": {
+            "description": "Average CPU use since the last one-minute sample.",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number"
+          },
+          "filesystems": {
+            "items": {
+              "properties": {
+                "device": {
+                  "type": "string"
+                },
+                "mount": {
+                  "type": "string"
+                },
+                "total_bytes": {
+                  "description": "Size of the filesystem.",
+                  "format": "int64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "used_bytes": {
+                  "description": "Bytes in use.",
+                  "format": "int64",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "mount",
+                "device",
+                "type",
+                "total_bytes",
+                "used_bytes"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "history": {
+            "description": "The last 24 hours at one sample a minute, oldest first.",
+            "items": {
+              "properties": {
+                "at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "cpu_percent": {
+                  "maximum": 100,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "load_1": {
+                  "type": "number"
+                },
+                "memory_used_bytes": {
+                  "description": "Memory in use.",
+                  "format": "int64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "swap_used_bytes": {
+                  "description": "Swap in use.",
+                  "format": "int64",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "at",
+                "cpu_percent",
+                "load_1",
+                "memory_used_bytes",
+                "swap_used_bytes"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "load": {
+            "properties": {
+              "fifteen": {
+                "type": "number"
+              },
+              "five": {
+                "type": "number"
+              },
+              "one": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "one",
+              "five",
+              "fifteen"
+            ],
+            "type": "object"
+          },
+          "memory": {
+            "properties": {
+              "available_bytes": {
+                "description": "Memory available without swapping.",
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total_bytes": {
+                "description": "Physical memory.",
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "used_bytes": {
+                "description": "Total minus available.",
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total_bytes",
+              "used_bytes",
+              "available_bytes"
+            ],
+            "type": "object"
+          },
+          "session_folders": {
+            "properties": {
+              "folders": {
+                "items": {
+                  "properties": {
+                    "bytes": {
+                      "description": "Allocated bytes of the folder.",
+                      "format": "int64",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "name": {
+                      "description": "The session folder's name under root.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "bytes"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "measured_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "root": {
+                "type": "string"
+              },
+              "total_bytes": {
+                "description": "Allocated bytes of every session folder.",
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "truncated": {
+                "description": "True when the measurement stopped at its entry or time bound, so the sizes are a floor.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "root",
+              "measured_at",
+              "total_bytes",
+              "folders",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "swap": {
+            "properties": {
+              "total_bytes": {
+                "description": "Zero on a host without swap.",
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "used_bytes": {
+                "description": "Swap in use.",
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total_bytes",
+              "used_bytes"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "collected_at",
+          "load",
+          "cpu_percent",
+          "memory",
+          "swap",
+          "filesystems",
+          "session_folders",
+          "history"
         ],
         "type": "object"
       },
@@ -3173,6 +3559,7 @@
             "type": "string"
           },
           "webhook_host": {
+            "description": "The non-secret host the destination sends to: the webhook host or the SMTP server.",
             "type": "string"
           }
         },
@@ -3187,24 +3574,34 @@
       "NotifyDestinationInput": {
         "properties": {
           "kind": {
+            "description": "Required to save. On a test, blank means the stored destination's kind.",
             "enum": [
               "slack",
-              "teams"
+              "teams",
+              "webhook",
+              "email",
+              "twilio"
             ],
             "type": "string"
           },
           "name": {
             "type": "string"
           },
+          "settings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The kind's settings, as listed in kinds[].fields. Values are typed, never secret references. A secret setting is sealed on save and never returned; left blank it keeps the stored value, and when the destination's address (url, smtp_host) changes every stored secret must be given again. Any other setting left out is cleared.",
+            "type": "object"
+          },
           "webhook_url": {
-            "description": "The vendor's incoming-webhook URL. Sealed on save and never returned. Blank keeps the stored value.",
+            "description": "The Slack or Teams incoming-webhook URL (the webhook_url setting). Sealed on save and never returned. Blank keeps the stored value.",
             "format": "password",
             "type": "string"
           }
         },
         "required": [
-          "name",
-          "kind"
+          "name"
         ],
         "type": "object"
       },
@@ -3219,6 +3616,33 @@
           "kinds": {
             "items": {
               "properties": {
+                "fields": {
+                  "description": "The settings of this kind.",
+                  "items": {
+                    "properties": {
+                      "description": {
+                        "type": "string"
+                      },
+                      "key": {
+                        "type": "string"
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "secret": {
+                        "description": "Sealed on save and never returned.",
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "secret",
+                      "required"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
                 "kind": {
                   "type": "string"
                 },
@@ -3228,7 +3652,8 @@
               },
               "required": [
                 "kind",
-                "title"
+                "title",
+                "fields"
               ],
               "type": "object"
             },
@@ -3680,6 +4105,10 @@
             ],
             "type": "string"
           },
+          "second_factor_enrolled": {
+            "description": "True when a confirmed TOTP factor or registered passkey is enrolled; contains no credential material.",
+            "type": "boolean"
+          },
           "sso_only": {
             "type": "boolean"
           },
@@ -3719,6 +4148,10 @@
           },
           "assurance_mapping": {
             "$ref": "#/components/schemas/FederationAssuranceMapping"
+          },
+          "backchannel_logout_uri": {
+            "format": "uri",
+            "type": "string"
           },
           "claimed_domains": {
             "items": {
@@ -7912,6 +8345,24 @@
                 "type": "string"
               },
               "type": "array"
+            }
+          },
+          {
+            "description": "Only entries about sessions run with this AI tool (its provider driver, for example `codex` or `claude`): an entry on such a session, and the approval that session names now. It is matched exactly, given once, and read from each session's current record, so these entries are not matched: those of a session that was deleted, those that name their session only in their metadata (reads of its attach, activity, messages and preview, and denial-budget notices), and those of an approval the session no longer names. It pages by `from` and `next_from` like every other filter. The system ledger refuses it (400). A deployment without the sessions module answers 501 `audit_filter_unavailable`.",
+            "in": "query",
+            "name": "tool",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only entries about sessions that work in this folder (the exact working-directory path, not a prefix: a trailing slash is another path), and the approval each session names now, with the same limits as `tool`. Combine it with `tool` to narrow both. It is given once. The system ledger refuses it (400). A deployment without the sessions module answers 501 `audit_filter_unavailable`.",
+            "in": "query",
+            "name": "folder",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -13374,6 +13825,41 @@
                     "message": {
                       "type": "string"
                     },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "preview": {
+                      "description": "For a document source: its first ten documents with the ACL each would be stored with. Nothing is stored.",
+                      "items": {
+                        "properties": {
+                          "acl": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "enum": [
+                              "skipped",
+                              "unreadable"
+                            ],
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "acl"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "success": {
                       "type": "boolean"
                     }
@@ -14418,6 +14904,9 @@
                     "description": "Passphrase decrypting the backup keys (the single-actor path).",
                     "type": "string",
                     "writeOnly": true
+                  },
+                  "postgres": {
+                    "$ref": "#/components/schemas/DRPostgresRestoreTarget"
                   }
                 },
                 "required": [
@@ -14509,7 +14998,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Apply an uploaded bundle: with the dual-control gate armed this records an intent for a second administrator to approve (request_id); otherwise it starts the restore job (job_id)",
+        "summary": "Apply an uploaded bundle: with the dual-control gate armed this records an intent for a second administrator to approve (request_id); otherwise it starts the restore job (job_id). PostgreSQL always requires a second account and a separate empty target",
         "tags": [
           "console"
         ],
@@ -14830,6 +15319,292 @@
           }
         ],
         "summary": "Save the schedule (enabled, cron, retention); the dual-control restore gate's armed state is preserved, and server-owned bookkeeping fields are ignored",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/errors": {
+      "post": {
+        "description": "Records a console view's render failure (error id, error text, component stack, route) from a person's browser session in the engine log when telemetry is enabled, shortened to 16 KiB, 64 KiB and 2 KiB; otherwise it logs nothing. Either way it answers 204; API and machine tokens get 401.",
+        "operationId": "reportConsoleError",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleErrorReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Report a console render error from a person's browser session; the engine logs it, shortened to its limits, only when telemetry is enabled",
+        "tags": [
+          "console"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/exposure": {
+      "get": {
+        "description": "Reports this node’s recorded console listeners, transport, effective and saved public URLs and administrative step-up policy without probing external reachability.",
+        "operationId": "getConsoleExposure",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsoleExposure"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Console exposure from local node facts; external reachability is not verified",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      },
+      "put": {
+        "description": "Saves or removes the managed HTTPS public URL, refusing public exposure without administrative step-up; a restart applies the saved address.",
+        "operationId": "setConsoleExposure",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleExposureInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsoleExposureUpdate"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Set the managed public HTTPS console origin; requires configured administrative step-up and a restart",
         "tags": [
           "console"
         ],
@@ -16447,7 +17222,7 @@
     },
     "/v1/console/notify-destinations": {
       "delete": {
-        "description": "Removes one console notification destination by the name carried in the body, closes it in the running engine and deletes its sealed webhook URL. A destination provisioned in the operator file is refused with 404.",
+        "description": "Removes one added notification destination by the name carried in the body, closes it in the running engine and deletes its sealed settings. A destination provisioned in the operator file is refused with 404.",
         "operationId": "deleteNotifyDestination",
         "requestBody": {
           "content": {
@@ -16552,7 +17327,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Remove a console notification destination",
+        "summary": "Remove an added notification destination and its sealed settings; delivery to it stops at once",
         "tags": [
           "console"
         ],
@@ -16560,7 +17335,7 @@
         "x-stability": "stable"
       },
       "get": {
-        "description": "Lists every notification destination, console and operator file, with whether it is open and the host its webhook points at, plus the kinds the console can create. A webhook URL is never returned.",
+        "description": "Lists every notification destination, added and operator file, with whether it is open and the host it sends to, plus the kinds that can be added and their settings. A secret setting is never returned.",
         "operationId": "listNotifyDestinations",
         "responses": {
           "200": {
@@ -16642,7 +17417,7 @@
             "browserSession": []
           }
         ],
-        "summary": "List notification destinations and the kinds the console can create",
+        "summary": "List notification destinations and the kinds that can be added, with their settings",
         "tags": [
           "console"
         ],
@@ -16650,7 +17425,7 @@
         "x-stability": "stable"
       },
       "put": {
-        "description": "Creates or updates a Slack or Teams destination: the webhook URL is checked against the vendor's hosts, sealed, stored in the deployment settings and opened without a restart. A blank URL keeps the stored one.",
+        "description": "Creates or updates a Slack, Teams, signed webhook, email (SMTP) or Twilio destination: a Slack or Teams URL is checked against the vendor's hosts, a webhook or SMTP host must not resolve to a private or reserved address, secret settings are sealed, and the definition is stored in the deployment settings and opened without a restart. A blank secret keeps the stored one.",
         "operationId": "putNotifyDestination",
         "requestBody": {
           "content": {
@@ -16742,7 +17517,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Create or update a Slack or Teams notification destination",
+        "summary": "Create or update a Slack, Teams, signed webhook, email or Twilio notification destination; it applies without restart",
         "tags": [
           "console"
         ],
@@ -16752,7 +17527,7 @@
     },
     "/v1/console/notify-destinations/test": {
       "post": {
-        "description": "Sends one real test message through a candidate destination without saving it. A blank URL tests the stored one. Returns 422 when the destination does not accept it.",
+        "description": "Sends one real test message through a candidate destination without saving it: the given settings over the stored ones of that name, whose kind is used when none is given. Returns 422 when the destination does not accept it.",
         "operationId": "testNotifyDestination",
         "requestBody": {
           "content": {
@@ -16849,7 +17624,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Send a test message through a candidate notification destination",
+        "summary": "Send a test message through a candidate or stored notification destination without saving it",
         "tags": [
           "console"
         ],
@@ -16951,7 +17726,7 @@
     },
     "/v1/console/secrets": {
       "delete": {
-        "description": "Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/\u003cuser-id\u003e/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.",
+        "description": "Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/\u003cuser-id\u003e/ items and, where a Business grant gives the write right at the vault, the items of that shared vault (vault/\u003cvault-id\u003e/), which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.",
         "operationId": "deleteSecret",
         "responses": {
           "204": {
@@ -17034,7 +17809,7 @@
         "x-stability": "stable"
       },
       "get": {
-        "description": "Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/, env/ and credential/ names to its admins only, and to every member only their own vault/\u003cuser-id\u003e/ items, whose hint is the item's kind (login, login+totp, note or totp).",
+        "description": "Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/, env/ and credential/ names to its admins only, and to every member only their own vault/\u003cuser-id\u003e/ items and the items of the shared vaults granted to them, whose hint is the item's kind (login, login+totp, note or totp).",
         "operationId": "listSecrets",
         "responses": {
           "200": {
@@ -17125,7 +17900,7 @@
       },
       "parameters": [
         {
-          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone. Writes require the deployment's step-up in either scope.",
+          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone, and a shared vault's vault/\u003cvault-id\u003e/ items for the people granted it. Writes require the deployment's step-up in either scope.",
           "in": "query",
           "name": "scope",
           "required": false,
@@ -17148,7 +17923,7 @@
         }
       ],
       "put": {
-        "description": "Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/\u003cuser-id\u003e/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.",
+        "description": "Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/\u003cuser-id\u003e/ items and, where a Business grant gives the write right at the vault, the items of that shared vault (vault/\u003cvault-id\u003e/), which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.",
         "operationId": "putSecret",
         "requestBody": {
           "content": {
@@ -17259,7 +18034,7 @@
     "/v1/console/secrets/generate": {
       "parameters": [
         {
-          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone. Writes require the deployment's step-up in either scope.",
+          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone, and a shared vault's vault/\u003cvault-id\u003e/ items for the people granted it. Writes require the deployment's step-up in either scope.",
           "in": "query",
           "name": "scope",
           "required": false,
@@ -17391,7 +18166,7 @@
     "/v1/console/secrets/reveal": {
       "parameters": [
         {
-          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone. Writes require the deployment's step-up in either scope.",
+          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone, and a shared vault's vault/\u003cvault-id\u003e/ items for the people granted it. Writes require the deployment's step-up in either scope.",
           "in": "query",
           "name": "scope",
           "required": false,
@@ -17414,7 +18189,7 @@
         }
       ],
       "post": {
-        "description": "Returns the plaintext of one item of the caller's own vault/\u003cuser-id\u003e/ namespace, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; another user, the superadmin and every token are refused, and global, mcp/, env/ and credential/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.",
+        "description": "Returns the plaintext of one item of the caller's own vault/\u003cuser-id\u003e/ namespace or of a shared vault the caller was granted read on, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; a person with no grant at the vault, the superadmin and every token are refused, and global, mcp/, env/ and credential/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.",
         "operationId": "revealSecret",
         "requestBody": {
           "content": {
@@ -17514,7 +18289,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Reveal one item of the caller's own personal vault (step-up, audited, rate limited)",
+        "summary": "Reveal one vault item the caller owns or may read in a shared vault (step-up, audited, rate limited)",
         "tags": [
           "console"
         ],
@@ -17525,7 +18300,7 @@
     "/v1/console/secrets/totp": {
       "parameters": [
         {
-          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone. Writes require the deployment's step-up in either scope.",
+          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone, and a shared vault's vault/\u003cvault-id\u003e/ items for the people granted it. Writes require the deployment's step-up in either scope.",
           "in": "query",
           "name": "scope",
           "required": false,
@@ -17548,7 +18323,7 @@
         }
       ],
       "post": {
-        "description": "Returns the current RFC 6238 authenticator code and the seconds it stays valid for one item of the caller's own vault/\u003cuser-id\u003e/ namespace, from the tenant scope only; the seed is never returned. Guarded and limited exactly like reveal (signed-in person with the deployment's step-up, owner only, rate limited per person), never cached, and recorded in the audit ledger without the code.",
+        "description": "Returns the current RFC 6238 authenticator code and the seconds it stays valid for one item of the caller's own vault/\u003cuser-id\u003e/ namespace or of a shared vault the caller was granted read on, from the tenant scope only; the seed is never returned. Guarded and limited exactly like reveal (signed-in person with the deployment's step-up, the owner or a grantee, rate limited per person), never cached, and recorded in the audit ledger without the code.",
         "operationId": "getVaultCode",
         "requestBody": {
           "content": {
@@ -17640,7 +18415,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Current authenticator code of one of the caller's own vault items (step-up, audited, rate limited; never the seed)",
+        "summary": "Current authenticator code of a vault item the caller owns or may read in a shared vault (step-up, audited, rate limited; never the seed)",
         "tags": [
           "console"
         ],
@@ -21552,6 +22327,37 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "Maximum number of items to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Pagination cursor from a previous response.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Include accepted second-factor enrollment and enable cursor pagination (default 50, maximum 1000). Without this option the legacy complete roster is returned.",
+            "in": "query",
+            "name": "include_second_factors",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -22332,6 +23138,108 @@
         "tags": [
           "auth"
         ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/system/host": {
+      "get": {
+        "description": "Reads the host the engine runs on: load average, CPU percent, memory, swap, each mounted filesystem, the disk use of each session folder (cached for 60 seconds, bounded) and the last 24 hours of one-minute samples. Linux only; other hosts answer 501. Requires system administration.",
+        "operationId": "getHostStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Host metrics are not available on this platform"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Read the host's CPU, memory, load, filesystems and session-folder disk use (superadmin)",
+        "tags": [
+          "system"
+        ],
+        "x-required-permission": "system:admin",
         "x-stability": "stable"
       }
     },

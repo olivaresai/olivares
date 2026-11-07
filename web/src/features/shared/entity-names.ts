@@ -213,7 +213,10 @@ export function useWorkspaceNames(): NameLookup {
  *    the caller paints its fallback. That is the same honest gap the front door's own
  *    tile carries, not a new one.
  */
-export function useSessionNames(): NameLookup {
+export function useSessionNames(): NameLookup & {
+  /** The tool driving the session (`claude`, `codex`), or `null` when not known. */
+  engineOf: (reference: string | undefined | null) => string | null
+} {
   const { activeTenant, can } = useAuth()
   const permitted = can('sessions:live:read')
   const params = { limit: SESSION_PAGE }
@@ -225,17 +228,26 @@ export function useSessionNames(): NameLookup {
   })
   return useMemo(() => {
     const byRef = new Map<string, string>()
+    const engines = new Map<string, string>()
     for (const s of data?.items ?? []) {
+      if (s.engine) {
+        engines.set(s.session_ref, s.engine)
+        if (s.live_ref) engines.set(s.live_ref, s.engine)
+      }
       const title = sessionTitle(s)
       if (title) {
         byRef.set(s.session_ref, title)
         if (s.live_ref) byRef.set(s.live_ref, title)
+        // The ledger writes a session's own tool calls as `session:<osn_…>`.
+        if (s.canonical_sid) byRef.set(s.canonical_sid, title)
       }
     }
     return {
       ready: isSuccess,
       nameOf: (reference: string | undefined | null) =>
         reference ? (byRef.get(reference) ?? null) : null,
+      engineOf: (reference: string | undefined | null) =>
+        reference ? (engines.get(reference) ?? null) : null,
     }
   }, [data, isSuccess])
 }

@@ -25,12 +25,19 @@ import type { ReactNode } from 'react'
 const capturado: {
   nodes?: unknown[]
   onNodesChange?: (changes: unknown[]) => void
-  fitViewOptions?: { padding?: number; minZoom?: number }
-  controlsFitViewOptions?: { padding?: number; minZoom?: number }
+  fitViewOptions?: { padding?: number; minZoom?: number; maxZoom?: number }
+  controlsFitViewOptions?: {
+    padding?: number
+    minZoom?: number
+    maxZoom?: number
+  }
   minZoomProp?: number
+  onMoveEnd?: (event: unknown, viewport: { zoom: number }) => void
+  onControlZoomOut?: () => void
 } = {}
 /** Cada llamada imperativa a `fitView`, con sus opciones. */
-const ajustes: { padding?: number; minZoom?: number }[] = []
+const ajustes: { padding?: number; minZoom?: number; maxZoom?: number }[] = []
+const centers: { x: number; y: number; zoom?: number }[] = []
 
 vi.mock('@xyflow/react', () => ({
   ReactFlow: ({
@@ -38,14 +45,17 @@ vi.mock('@xyflow/react', () => ({
     onNodesChange,
     fitViewOptions,
     minZoom,
+    onMoveEnd,
     children,
   }: {
     nodes: unknown[]
     onNodesChange?: (changes: unknown[]) => void
-    fitViewOptions?: { padding?: number; minZoom?: number }
+    fitViewOptions?: { padding?: number; minZoom?: number; maxZoom?: number }
     minZoom?: number
+    onMoveEnd?: (event: unknown, viewport: { zoom: number }) => void
     children?: ReactNode
   }) => {
+    capturado.onMoveEnd = onMoveEnd
     capturado.nodes = nodes
     capturado.onNodesChange = onNodesChange
     capturado.fitViewOptions = fitViewOptions
@@ -59,16 +69,25 @@ vi.mock('@xyflow/react', () => ({
   BackgroundVariant: { Dots: 'dots' },
   Controls: ({
     fitViewOptions,
+    onZoomOut,
   }: {
-    fitViewOptions?: { padding?: number; minZoom?: number }
+    fitViewOptions?: { padding?: number; minZoom?: number; maxZoom?: number }
+    onZoomOut?: () => void
   }) => {
     capturado.controlsFitViewOptions = fitViewOptions
+    capturado.onControlZoomOut = onZoomOut
     return null
   },
   MiniMap: () => null,
   useReactFlow: () => ({
-    fitView: (o?: { padding?: number; minZoom?: number }) => {
+    fitView: (o?: { padding?: number; minZoom?: number; maxZoom?: number }) => {
       ajustes.push(o ?? {})
+    },
+    getViewport: () => ({ zoom: 1.3 }),
+    getNodes: () => NODES,
+    getNodesBounds: () => ({ x: 0, y: 0, width: 300, height: 100 }),
+    setCenter: (x: number, y: number, options?: { zoom?: number }) => {
+      centers.push({ x, y, zoom: options?.zoom })
     },
   }),
   // El de verdad: aplicar un cambio de dimensiones deja `measured` en el nodo.
@@ -331,5 +350,125 @@ describe('GraphCanvas y las dimensiones que el minimapa necesita', () => {
     expect(capturado.controlsFitViewOptions?.minZoom).toBeUndefined()
     await waitFor(() => expect(ajustes.length).toBeGreaterThan(0))
     expect(ajustes.every((o) => o.minZoom === undefined)).toBe(true)
+  })
+})
+
+describe('GraphCanvas zoom contract for a level-of-detail caller', () => {
+  it('reports the zoom the viewport settled on, so a caller can group what it cannot draw legibly', () => {
+    const seen: number[] = []
+    render(
+      <GraphCanvas
+        nodes={NODES as never}
+        edges={[]}
+        onViewportZoom={(z) => seen.push(z)}
+      />,
+    )
+    act(() => capturado.onMoveEnd?.({}, { zoom: 0.6 }))
+    act(() => capturado.onMoveEnd?.({}, { zoom: 1.3 }))
+    expect(seen).toEqual([0.6, 1.3])
+  })
+
+  it('ignores an automatic fit so layout cannot switch the level of detail', () => {
+    const seen: number[] = []
+    render(
+      <GraphCanvas
+        nodes={NODES as never}
+        edges={[]}
+        onViewportZoom={(z) => seen.push(z)}
+      />,
+    )
+    act(() => capturado.onMoveEnd?.(null, { zoom: 0.6 }))
+    expect(seen).toEqual([])
+  })
+
+  it('keeps control-button zooms distinguishable from an automatic fit', () => {
+    const seen: number[] = []
+    render(
+      <GraphCanvas
+        nodes={NODES as never}
+        edges={[]}
+        onViewportZoom={(z) => seen.push(z)}
+      />,
+    )
+    expect(capturado.onControlZoomOut).toBeTypeOf('function')
+    act(() => capturado.onControlZoomOut?.())
+    act(() => capturado.onMoveEnd?.(null, { zoom: 0.6 }))
+    expect(seen).toEqual([0.6])
+  })
+
+  it('lets the caller raise the user zoom-out floor, and keeps 0.1 for everyone else', () => {
+    render(<GraphCanvas nodes={NODES as never} edges={[]} />)
+    expect(capturado.minZoomProp).toBe(0.1)
+    render(<GraphCanvas nodes={NODES as never} edges={[]} minZoom={1} />)
+    expect(capturado.minZoomProp).toBe(1)
+  })
+
+  it('keeps the operator zoom when the fit ceiling is removed', async () => {
+    ajustes.length = 0
+    centers.length = 0
+    const { rerender } = render(
+      <GraphCanvas
+        nodes={NODES as never}
+        edges={[]}
+        fitKey="stable"
+        fitMinZoom={1}
+        fitMaxZoom={1}
+      />,
+    )
+    await waitFor(() => expect(ajustes.length).toBeGreaterThan(0))
+    const before = ajustes.length
+
+    rerender(
+      <GraphCanvas
+        nodes={NODES as never}
+        edges={[]}
+        fitKey="stable"
+        fitMinZoom={1}
+      />,
+    )
+    await act(async () => {
+      await new Promise(requestAnimationFrame)
+    })
+    expect(ajustes).toHaveLength(before)
+    await waitFor(() => expect(centers.length).toBeGreaterThan(0))
+    expect(centers.every((center) => center.zoom === 1.3)).toBe(true)
+
+    // A later caller-driven change still refits; preservation is scoped to the
+    // level-of-detail transition, not a permanent freeze of the canvas.
+    rerender(
+      <GraphCanvas
+        nodes={NODES as never}
+        edges={[]}
+        fitKey="changed"
+        fitMinZoom={1}
+      />,
+    )
+    await waitFor(() => expect(ajustes.length).toBeGreaterThan(before))
+  })
+
+  it('hands the fit ceiling to every fit the page triggers, and none unless asked', async () => {
+    ajustes.length = 0
+    const { unmount } = render(
+      <GraphCanvas
+        nodes={NODES as never}
+        edges={[]}
+        fitKey="max"
+        fitMinZoom={1}
+        fitMaxZoom={1}
+      />,
+    )
+    // The three routes, as for the floor: first render, a fitKey change, the fit button.
+    expect(capturado.fitViewOptions?.maxZoom).toBe(1)
+    expect(capturado.controlsFitViewOptions?.maxZoom).toBe(1)
+    await waitFor(() => expect(ajustes.length).toBeGreaterThan(0))
+    expect(ajustes.every((o) => o.maxZoom === 1)).toBe(true)
+    unmount()
+
+    ajustes.length = 0
+    render(<GraphCanvas nodes={NODES as never} edges={[]} fitKey="nomax" />)
+    expect(capturado.fitViewOptions?.maxZoom).toBeUndefined()
+    expect(capturado.controlsFitViewOptions?.maxZoom).toBeUndefined()
+    await waitFor(() => expect(ajustes.length).toBeGreaterThan(0))
+    expect(ajustes.every((o) => o.maxZoom === undefined)).toBe(true)
   })
 })

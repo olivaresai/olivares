@@ -11,19 +11,3 @@ export function tileState(
   if (queries.some((q) => q.isLoading)) return 'loading'
   return 'ready'
 }
-
-export type SourceQuery = {
-  isPending: boolean
-  isLoading: boolean
-  isError: boolean
-  fetchStatus: 'fetching' | 'paused' | 'idle'
-}
-
-export type PendingReason = 'pendingIdle' | 'pendingPaused' | null
-
-export function pendingReason(query: SourceQuery): PendingReason {
-  if (!query.isPending || query.isError) return null
-  if (query.fetchStatus === 'paused') return 'pendingPaused'
-  if (query.fetchStatus === 'idle') return 'pendingIdle'
-  return null
-}

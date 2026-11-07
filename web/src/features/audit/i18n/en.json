@@ -3,9 +3,6 @@
   "subtitle": "Read the signed record of AI activity.",
   "subtitleSystem": "The system-tenant chain of cross-tenant administrative operations (read-only).",
   "searchLoaded": "Filter loaded rows only (client-side)…",
-  "scan": {
-    "incomplete": "Scanned up to seq {{seq}} — not the full ledger; Load more continues the scan."
-  },
   "scope": {
     "label": "Ledger scope",
     "tenant": "Tenant ledger",
@@ -75,6 +72,9 @@
     "actorMember": "A member"
   },
   "empty": {
+    "filteredTitle": "No matching evidence",
+    "searching": "Nothing matched in the events searched so far. Load more keeps searching.",
+    "noMatches": "No events match these filters. Try changing or removing a filter.",
     "title": "No evidence yet",
     "description": "The ledger is empty for this scope. Governed operations append tamper-evident events as they happen."
   },
@@ -104,26 +104,27 @@
     "membership_offboard": "Person removed",
     "token_issue": "API token created",
     "token_revoke": "API token revoked",
-    "secret_delete": "Secret deleted"
+    "secret_delete": "Secret deleted",
+    "governance_killswitch_engage": "Kill switch engaged",
+    "sessions_run_created": "Session created"
   },
   "targets": {
     "core_policy": "Policy"
   },
   "internal": {
-    "hidden": "Internal records hidden: {{count}}",
     "show": "Show internal records",
     "hide": "Hide internal records",
     "allHidden": "Everything loaded so far is an internal record."
   },
   "ledger": {
     "query": "Ledger query",
-    "placeholder": "person:  action:  since:7d  or words",
+    "placeholder": "Search",
     "addFilter": "Add a filter",
     "remove": "Remove {{token}}",
     "add": "Add {{token}} to the query",
     "commands": "Search and commands",
     "problem": {
-      "key": "{{token}} is not a ledger filter. Use person:, action:, kind:, target:, since:, until: or plain words.",
+      "key": "{{token}} is not a ledger filter. Use person:, action:, kind:, target:, tool:, folder:, since:, until: or plain words.",
       "time": "{{token}} is not a time. Use 90m, 24h, 7d, 2w or a date such as 2026-10-20.",
       "person": "No one matches {{token}}. Use a name, an email or user:<id>.",
       "several": "{{token}} fits several people. Use the full name, an email or user:<id>.",
@@ -148,13 +149,6 @@
       "week": "Entries per week",
       "bar_one": "{{at}}, {{count}} entry",
       "bar_other": "{{at}}, {{count}} entries",
-      "loaded_one": "{{count}} entry loaded",
-      "loaded_other": "{{count}} entries loaded",
-      "sessions_one": "{{count}} session",
-      "sessions_other": "{{count}} sessions",
-      "people_one": "{{count}} person",
-      "people_other": "{{count}} people",
-      "more": "more to load",
       "now": "Now"
     },
     "entry": {
@@ -168,5 +162,15 @@
       "chainHint": "Each entry carries the hash of the one before it. Change one and every later hash breaks.",
       "signedEntry": "The signed entry"
     }
+  },
+  "verbs": {
+    "create": "{{what}} created",
+    "update": "{{what}} updated",
+    "delete": "{{what}} deleted"
+  },
+  "toolApproval": {
+    "allow": "Tool call allowed",
+    "ask": "Tool call held for approval",
+    "deny": "Tool call denied"
   }
 }

@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -120,11 +121,13 @@ func TestManagedMCPProductAPIEnableAndConfigureReachNewSession(t *testing.T) {
 			t.Fatal("Test/enable changed the configured Allow scope")
 		}
 	}
+	sessionNumber := 0
 	newSession := func(visible, callTool bool) {
 		t.Helper()
+		sessionNumber++
 		resultPath := filepath.Join(folder, "catalogue-result.json")
 		_ = os.Remove(resultPath)
-		run := do("POST", "/v1/m/sessions/runs", map[string]any{"name": "HU new session", "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": registered["workspace_ref"], "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
+		run := do("POST", "/v1/m/sessions/runs", map[string]any{"name": fmt.Sprintf("HU new session %d", sessionNumber), "transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": registered["workspace_ref"], "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
 		ref := run["run_ref"].(string)
 		defer do("POST", "/v1/m/sessions/runs/"+ref+"/stop", map[string]any{}, http.StatusOK)
 		message := "List the catalogue."

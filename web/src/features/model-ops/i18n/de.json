@@ -1,6 +1,6 @@
 {
   "title": "Modellbetrieb",
-  "subtitle": "Verwalten Sie eigene Modelle, ihre signierte Modell-Zulassung und lokale Inferenz-Deployments.",
+  "subtitle": "Ihre eigenen Modelle und wo sie laufen.",
   "tabs": {
     "owned": "Eigene Modelle",
     "admission": "Zulassung",
@@ -120,7 +120,7 @@
   },
   "policy": {
     "title": "Zulassungsrichtlinie",
-    "description": "Die Mandanten-Vertrauensrichtlinie für die Zulassung signierter Modelle. Die Signaturmethode wird aus Ihrer Konfiguration abgeleitet.",
+    "description": "Die Vertrauensrichtlinie der Organisation für die Zulassung signierter Modelle. Die Signaturmethode wird aus Ihrer Konfiguration abgeleitet.",
     "edit": "Richtlinie bearbeiten",
     "editTitle": "Zulassungsrichtlinie bearbeiten",
     "editBody": "Legen Sie die Vertrauensanker fest. Atomar gespeichert; die Engine bleibt maßgeblich.",
@@ -285,14 +285,14 @@
   },
   "finetune": {
     "title": "Fine-Tuning-Jobs",
-    "description": "Aufzeichnungen von Fine-Tuning-Jobs und den daraus entstandenen Versionen. Die Ebene trainiert niemals ein Modell und hält keine Gewichte.",
+    "description": "Aufzeichnungen von Fine-Tuning-Jobs und den daraus entstandenen Versionen. Olivares trainiert niemals ein Modell und hält keine Gewichte.",
     "new": "Neuer Job-Eintrag",
     "search": "Jobs suchen…",
     "created": "Job erfasst.",
     "updated": "Job aktualisiert.",
     "newTitle": "Fine-Tuning-Job erfassen",
     "editTitle": "Fine-Tuning-Job aktualisieren",
-    "formBody": "Erfassen Sie den Zustand eines Jobs und die daraus entstandene Version. Dies ist ein Inventareintrag – die Control Plane führt kein Training aus.",
+    "formBody": "Erfassen Sie den Zustand eines Jobs und die daraus entstandene Version. Dies ist ein Inventareintrag – Olivares führt kein Training aus.",
     "columns": {
       "name": "Name",
       "runtime": "Laufzeit",
@@ -405,7 +405,7 @@
     },
     "finetune": {
       "title": "Noch keine Fine-Tuning-Job-Einträge",
-      "description": "Erfassen Sie einen außerhalb von Olivares ausgeführten Fine-Tuning-Job samt Zustand, Lineage und erzeugter Modellversion; die Control Plane führt kein Training aus."
+      "description": "Erfassen Sie einen außerhalb von Olivares ausgeführten Fine-Tuning-Job samt Zustand, Lineage und erzeugter Modellversion; Olivares führt kein Training aus."
     },
     "modelEvidence": {
       "title": "Noch keine AIBOM-Siegel erfasst",

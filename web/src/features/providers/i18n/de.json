@@ -1,4 +1,5 @@
 {
+  "deepSummary": "{{model}}: Werkzeuge {{tools}} · Streaming {{streaming}} · Nutzung {{usage}} · Kontext {{context}} (Server)",
   "title": "Anbieter",
   "subtitle": "Ein Cloud-Zugangsschlüssel oder ein lokaler Modell-Endpunkt, mit dem Ihre Agentenwerkzeuge arbeiten.",
   "nav": "Anbieter",
@@ -95,7 +96,11 @@
     "localNameHint": "Ihre Bezeichnung für diesen Endpunkt. Sie erscheint in der Auswahl.",
     "advanced": "Advanced: custom endpoint",
     "missingFields": "Füllen Sie die fehlenden Felder aus: {{fields}}.",
-    "requiredEndpointHint": "Geben Sie den Endpunkt des Dienstes ein: https oder unverschlüsseltes http an einer Loopback- oder privaten Netzwerkadresse."
+    "requiredEndpointHint": "Geben Sie den Endpunkt des Dienstes ein: https oder unverschlüsseltes http an einer Loopback- oder privaten Netzwerkadresse.",
+    "worksWith": "Funktioniert mit {{tools}}",
+    "otherKinds": "Andere (eigener Endpunkt)",
+    "keyLink": "API-Schlüssel bei {{vendor}} holen",
+    "docsLink": "Einrichtungsanleitung von {{vendor}}"
   },
   "rotate": {
     "title": "Schlüssel dieses Anbieters wechseln",

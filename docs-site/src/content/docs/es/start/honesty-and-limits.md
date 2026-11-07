@@ -44,7 +44,7 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
 - **Las releases están firmadas y son verificables.** Firma, procedencia SLSA, SBOM y OpenVEX pueden todos
   [verificarse](/es/how-to/verify-a-release/). La verificación aún no funciona del todo sin red: las comprobaciones sin clave
   necesitan el material de raíz de confianza de Sigstore y el paso SLSA no tiene modo sin conexión. El producto incluye un
-  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.6<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
+  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.7<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
 
 ## Open core — qué es abierto vs comercial
 
@@ -102,7 +102,7 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
   `OLIVARES_SOURCES_CONFIG` (el
   [quickstart](/es/start/quickstart/) cablea una fuente `pgaudit` real contra el binario
   de fábrica y el smoke test lo verifica). Las **fuentes de documentos** de conocimiento
-  (gdrive/confluence/notion/s3content) deliberadamente *no* son fuentes
+  (gdrive/notion/s3content) deliberadamente *no* son fuentes
   en tiempo de ejecución — se cargan bajo demanda mediante peticiones de ingesta de conocimiento. La
   [referencia de conectores](/es/reference/connectors/) marca cada tipo.
 - **El valor por defecto es un binario único; el bus de eventos distribuido existe y es honesto

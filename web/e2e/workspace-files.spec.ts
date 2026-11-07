@@ -36,7 +36,7 @@ test('workspace files: rendered previews, confined HTML and URL continuity', asy
     await page.locator('#setup-email').fill('admin@example.com')
     await page.locator('#setup-password').fill(PASSWORD)
     await page.getByRole('button', { name: /create administrator/i }).click()
-    await page.waitForURL('**/onboarding')
+    await page.waitForURL('**/sessions')
 
     const token = await sessionToken(page)
     const who = await page.request.get('/v1/auth/whoami', {

@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
@@ -935,5 +936,137 @@ func TestRunsThatCannotResumeByThemselvesAreOneWarningAtEachStart(t *testing.T) 
 		if strings.Contains(logs.String(), ref) {
 			t.Fatalf("run %s is named in a warning; the summary counts them: %s", ref, logs.String())
 		}
+	}
+}
+
+// queueForTest writes a queued message the way the queue's add writes it, without the
+// drain an add starts: the message waits for whatever sends the queue next.
+func queueForTest(t *testing.T, m *Module, tenant model.TenantID, runRef, text string, pos int64) {
+	t.Helper()
+	rec, err := m.loadRun(context.Background(), tenant, runRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		row := model.Record{colRunQueueRun: runRef, colRunQueueBy: actorU, colRunQueueText: text, colRunQueuePos: pos}
+		if ws := rec.String(colRunAuthzWorkspaceID); ws != "" {
+			row[colRunAuthzWorkspaceID] = ws
+		}
+		repo, err := sc.Ext(runQueueKind)
+		if err != nil {
+			return err
+		}
+		_, err = repo.Create(context.Background(), row)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Messages queued while a turn ran go after the engine's automatic resume, as they do
+// after a person's: no turn ends to send them, so the resume is the moment they go.
+func TestTheEnginesResumeSendsTheQueueTheSessionKept(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{initSID: "engine-stop-queue"}
+	options := []Option{WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithCredentialSource(staticCred())}
+	m, st, tenant, _ := newRuntimeHarness(t, options...)
+	m.QueuedCredentialCapture = sealCredential
+	run, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU, queuedCredential: launchCredential(model.NewID())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "conversation id", func() bool {
+		d, _ := m.getRun(ctx, tenant, run.RunRef)
+		return d.ClaudeSessionID == "engine-stop-queue"
+	})
+	queueForTest(t, m, tenant, run.RunRef, "first follow-up", 1)
+	queueForTest(t, m, tenant, run.RunRef, "second follow-up", 2)
+	if err := m.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	before := launchCount(runner)
+
+	restarted := restartModule(t, m, st, tenant, options...)
+	if err := restarted.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the run running again", func() bool {
+		d, err := restarted.getRun(ctx, tenant, run.RunRef)
+		return err == nil && d.State == stateRunning
+	})
+	restarted.rt.approvalWG.Wait()
+	if launchCount(runner) != before+1 {
+		t.Fatalf("launches at the restart = %d, want 1", launchCount(runner)-before)
+	}
+	waitFor(t, "the first queued message reached the resumed child", func() bool { return runner.lastProc().sentCount() == 1 })
+	var left []string
+	if err := restarted.Data.View(ctx, tenant, func(sc store.Scope) error {
+		rows, err := queueRows(ctx, sc, run.RunRef)
+		for _, r := range rows {
+			left = append(left, r.String(colRunQueueText))
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(left, []string{"second follow-up"}) {
+		t.Fatalf("queue after the engine's resume = %q, want the second follow-up only", left)
+	}
+}
+
+// A template's maximum session time is not granted again by the engine's own restarts:
+// its automatic resume arms what the session had left when the engine stopped it, the
+// time the engine was down not counted, across any number of restarts.
+func TestTheEnginesResumeKeepsTheTimeTheSessionHadLeft(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{initSID: "engine-stop-ceiling"}
+	options := []Option{WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithCredentialSource(staticCred())}
+	m, st, tenant, clk := newRuntimeHarness(t, options...)
+	options = append(options, WithClock(clk))
+	m.QueuedCredentialCapture = sealCredential
+	tpl := seedTemplate(t, m, tenant, "Bounded", tplBody{Policies: &tplPolicies{MaxSessionDurationMinutes: 60}})
+	run, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{TemplateID: tpl, Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU, queuedCredential: launchCredential(model.NewID())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "conversation id", func() bool {
+		d, _ := m.getRun(ctx, tenant, run.RunRef)
+		return d.ClaudeSessionID == "engine-stop-ceiling"
+	})
+
+	// restart stops the engine `ran` into the session, keeps it down `down`, starts the
+	// next one and returns it with the ceiling its resume armed.
+	restart := func(previous *Module, ran, down time.Duration) (*Module, time.Duration) {
+		t.Helper()
+		clk.advance(ran)
+		if err := previous.Stop(ctx); err != nil {
+			t.Fatal(err)
+		}
+		clk.advance(down)
+		next := restartModule(t, previous, st, tenant, options...)
+		armed := make(chan time.Duration, 4)
+		next.rt.afterFunc = func(d time.Duration, f func()) runTimer { armed <- d; return &fakeTimer{d: d, fire: f} }
+		if err := next.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, "the run running again", func() bool {
+			d, err := next.getRun(ctx, tenant, run.RunRef)
+			return err == nil && d.State == stateRunning
+		})
+		next.rt.approvalWG.Wait()
+		select {
+		case d := <-armed:
+			return next, d
+		default:
+			t.Fatal("the engine's resume armed no ceiling")
+			return nil, 0
+		}
+	}
+	second, d := restart(m, 50*time.Minute, 5*time.Minute)
+	if d != 10*time.Minute {
+		t.Fatalf("ceiling after a restart at minute 50 of 60 = %v, want 10m", d)
+	}
+	if _, d = restart(second, 4*time.Minute, time.Hour); d != 6*time.Minute {
+		t.Fatalf("ceiling after a second restart 4 minutes later = %v, want 6m", d)
 	}
 }

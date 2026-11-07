@@ -60,7 +60,7 @@ for (const theme of ['dark', 'light'] as const) {
       await page.waitForURL((url) => !url.pathname.startsWith('/login'))
       const dialog = await openAdvancedSession(page)
       await dialog
-        .getByRole('combobox', { name: 'Provider profile', exact: true })
+        .getByRole('combobox', { name: 'Account', exact: true })
         .click()
       await page.getByRole('option', { name: /Fixture Claude/ }).click()
       await dialog

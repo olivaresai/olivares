@@ -43,7 +43,7 @@ import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useNewRowIds } from '@/lib/use-new-row-ids'
 import { AuditEntryDetail } from './audit-detail'
 import { EvidenceControls } from './evidence'
-import { DAY, SESSION_KIND, useEntryNames } from './ledger'
+import { DAY, useEntryNames } from './ledger'
 import { LedgerEntries } from './ledger-entries'
 import { LedgerHistogram } from './ledger-histogram'
 import { LedgerQuery } from './ledger-query'
@@ -198,13 +198,6 @@ export function AuditView() {
     rows.map((r) => r.id),
     JSON.stringify([scope, activeTenant, listParams, foldInternal]),
   )
-  const lastPage = listQuery.data?.pages[listQuery.data.pages.length - 1]
-  const scannedThrough =
-    filtersActive &&
-    lastPage?.scan_complete === false &&
-    lastPage.next_from !== undefined
-      ? lastPage.next_from - 1
-      : undefined
   const savedViewParams = useMemo(
     () => ({ ...query, scope: scope === 'system' ? 'system' : undefined }),
     [query, scope],
@@ -252,22 +245,6 @@ export function AuditView() {
           ...allRows.map((e) => new Date(e.occurred_at).getTime()),
         ),
       )
-  const caption = [
-    t('ledger.histogram.loaded', { count: rows.length }),
-    t('ledger.histogram.sessions', {
-      count: new Set(
-        rows
-          .filter((e) => e.target_kind === SESSION_KIND)
-          .map((e) => e.target_id),
-      ).size,
-    }),
-    t('ledger.histogram.people', {
-      count: new Set(
-        rows.filter((e) => e.actor_kind === 'user').map((e) => e.actor),
-      ).size,
-    }),
-    ...(listQuery.hasNextPage ? [t('ledger.histogram.more')] : []),
-  ].join(' · ')
   const loading = headQuery.isLoading || listQuery.isLoading
   // A filtered list does not read the head: an error the head kept from before says nothing.
   const headError = filtersActive ? null : headQuery.error
@@ -334,12 +311,6 @@ export function AuditView() {
         />
       </div>
 
-      {scannedThrough !== undefined && (
-        <div role="status" className="text-caption text-info">
-          {t('scan.incomplete', { seq: formatInt(scannedThrough, lang) })}
-        </div>
-      )}
-
       {queryInBar ? null : queryField}
 
       <LedgerHistogram
@@ -347,7 +318,6 @@ export function AuditView() {
         from={from}
         to={to}
         now={now}
-        caption={caption}
         onPick={(b) =>
           setQuery({
             ...query,
@@ -369,20 +339,14 @@ export function AuditView() {
           ]}
         />
         {internalCount > 0 || (showInternal && !filters.action) ? (
-          <div className="ml-auto flex items-center gap-2 text-caption text-muted-foreground">
-            {showInternal ? null : (
-              <span role="status">
-                {t('internal.hidden', { count: internalCount })}
-              </span>
-            )}
-            <Button
-              variant="link"
-              size="sm"
-              onClick={() => setShowInternal((v) => !v)}
-            >
-              {t(showInternal ? 'internal.hide' : 'internal.show')}
-            </Button>
-          </div>
+          <Button
+            variant="link"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setShowInternal((v) => !v)}
+          >
+            {t(showInternal ? 'internal.hide' : 'internal.show')}
+          </Button>
         ) : null}
       </div>
 
@@ -407,7 +371,10 @@ export function AuditView() {
           internalCount > 0 ? (
             <FoldedHint />
           ) : (
-            <EmptyHint />
+            <EmptyHint
+              filtered={filtersActive}
+              hasMore={listQuery.hasNextPage}
+            />
           )
         ) : (
           <LedgerEntries
@@ -471,15 +438,26 @@ function FoldedHint() {
   )
 }
 
-function EmptyHint() {
+function EmptyHint({
+  filtered,
+  hasMore,
+}: {
+  filtered: boolean
+  hasMore: boolean
+}) {
   const { t } = useTranslation('audit')
+  const description = filtered
+    ? hasMore
+      ? 'empty.searching'
+      : 'empty.noMatches'
+    : 'empty.description'
   return (
     <div className="px-6 py-12 text-center">
       <p className="text-body font-medium text-foreground">
-        {t('empty.title')}
+        {t(filtered ? 'empty.filteredTitle' : 'empty.title')}
       </p>
       <p className="mx-auto mt-1 max-w-sm text-body text-muted-foreground">
-        {t('empty.description')}
+        {t(description)}
       </p>
     </div>
   )

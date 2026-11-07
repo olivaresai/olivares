@@ -4,29 +4,18 @@
     "description": "Le cinque sessioni più recenti osservate da questa installazione.",
     "openAll": "Tutte le sessioni",
     "emptyTitle": "Ancora nessuna sessione",
-    "emptyDescription": "Ogni esecuzione di un motore collegato compare qui, con ciò che ha fatto, quanto è durata e quanto è costata.",
+    "emptyDescription": "Qui compare ogni sessione che avvii.",
+    "emptyAction": "Avvia una sessione",
     "unavailableTitle": "Impossibile caricare il lavoro recente",
     "unavailableDescription": "La lettura delle sessioni non ha risposto. Le cifre del parco qui sopra non sono influenzate.",
     "untitled": "Sessione senza titolo"
-  },
-  "live": {
-    "title": "Live ora"
   },
   "empty": {
     "title": "Ancora niente da mostrare",
     "description": "Il tuo ruolo non concede l'accesso in lettura a nessun modulo del parco. Chiedi a un amministratore un permesso di lettura per vedere il riepilogo."
   },
-  "start": {
-    "ready": "{{tool}} è pronto.",
-    "signIn": "Accedi a {{tool}} per avviare una sessione.",
-    "signInAction": "Accedi",
-    "install": "Installa Claude Code o Codex per avviare una sessione.",
-    "installAction": "Configura uno strumento",
-    "newSession": "Nuova sessione"
-  },
   "swimlane": {
     "title": "Ultima ora",
-    "subtitle": "Dalle {{from}} alle {{to}}. Ogni barra è un’esecuzione, più marcata dove ha fatto più chiamate agli strumenti.",
     "lanes": "Sessioni dell’ultima ora",
     "now": "Ora {{at}}",
     "range": "dalle {{from}} alle {{to}}",
@@ -64,44 +53,25 @@
     "waiting": "In attesa di approvazione",
     "needsYou": "Ti aspetta",
     "idle": "Inattiva",
-    "approvalsUnread": "Non è stato possibile leggere le approvazioni, quindi le attese di approvazione non sono disegnate."
+    "approvalsUnread": "Le approvazioni non sono ancora state lette o non è stato possibile leggerle, quindi le attese di approvazione non sono disegnate.",
+    "approvalsPartial": "Solo una parte delle approvazioni è stata letta, quindi alcune attese di approvazione potrebbero non essere disegnate.",
+    "step": {
+      "Bash": "Esegue {{what}}",
+      "Read": "Legge {{what}}",
+      "Edit": "Modifica {{what}}",
+      "Write": "Scrive {{what}}",
+      "Grep": "Cerca {{what}}",
+      "Glob": "Cerca file {{what}}",
+      "WebFetch": "Legge {{what}}",
+      "WebSearch": "Cerca sul web {{what}}",
+      "Task": "Lavora con un agente",
+      "Agent": "Lavora con un agente"
+    }
   },
-  "summary": {
-    "heading": "Riepilogo",
-    "nothingRunning": "Non è in corso nulla",
-    "running_one": "{{count}} sessione aperta",
-    "running_many": "{{count}} sessioni aperte",
-    "running_other": "{{count}} sessioni aperte",
-    "runningFor_one": "{{count}} sessione aperta per {{people}}",
-    "runningFor_many": "{{count}} sessioni aperte per {{people}}",
-    "runningFor_other": "{{count}} sessioni aperte per {{people}}",
-    "runningMore": "{{n}}+ sessioni aperte",
-    "people_one": "{{count}} persona",
-    "people_many": "{{count}} persone",
-    "people_other": "{{count}} persone",
-    "today": "{{amount}} oggi",
-    "todayFloor": "almeno {{amount}} oggi",
-    "needs_one": "{{count}} ti aspetta",
-    "needs_many": "{{count}} ti aspettano",
-    "needs_other": "{{count}} ti aspettano",
-    "needsMore": "{{n}}+ ti aspettano",
-    "yesterday": "Ieri {{amount}}",
-    "unpriced_one": "{{count}} senza costo dichiarato",
-    "unpriced_many": "{{count}} senza costo dichiarato",
-    "unpriced_other": "{{count}} senza costo dichiarato",
-    "month": "{{spent}} su {{limit}} questo mese",
-    "monthFloor": "almeno {{spent}} su {{limit}} questo mese",
-    "monthLabel": "Spesa di questo mese"
-  },
-  "state": {
-    "pendingIdle": "Query non avviata: apri per caricare",
-    "pendingPaused": "Query in pausa: in attesa di riprendere"
-  },
-  "proof": {
-    "verified": "Catena verificata alle {{time}}",
-    "entries_one": "{{n}} voce",
-    "entries_many": "{{n}} voci",
-    "entries_other": "{{n}} voci",
-    "broken": "Catena interrotta: apri il Registro"
+  "overview": {
+    "running": "In corso",
+    "recent": "Recenti",
+    "wantsToRun": "{{session}} vuole eseguire",
+    "approvals": "Approvazioni: {{approved}} su {{required}}"
   }
 }

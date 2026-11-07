@@ -144,6 +144,7 @@ func parseCodexCommands(raw []byte, cwd string) ([]toolCommand, error) {
 	for _, raw := range *entry.Skills {
 		var skill struct {
 			Name             string  `json:"name"`
+			Path             string  `json:"path"`
 			Description      string  `json:"description"`
 			ShortDescription string  `json:"shortDescription"`
 			Enabled          *bool   `json:"enabled"`
@@ -177,7 +178,7 @@ func parseCodexCommands(raw []byte, cwd string) ([]toolCommand, error) {
 		if skill.PluginID != nil && *skill.PluginID != "" {
 			source = "plugin"
 		}
-		items = append(items, toolCommand{Name: skill.Name, Description: clipToolText(description), Source: source, Kind: "command", InsertText: "$" + skill.Name})
+		items = append(items, toolCommand{Name: skill.Name, Description: clipToolText(description), Source: source, Kind: "command", codexSkillPath: skill.Path})
 		if len(items) == maxToolCommands {
 			break
 		}

@@ -5,37 +5,78 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
-// TestSessionListTellsApartSessionsWithTheSameName is acceptance on refresh 08b: two sessions
-// named "notes" were two identical rows in `session ls`. The console gives a row whose name
-// another row of the same list also carries the short tail of its reference; the CLI does
-// the same with the run's id, and a name nobody else carries stays as it is.
-func TestSessionListTellsApartSessionsWithTheSameName(t *testing.T) {
+// TestSessionListDefaultView: `session ls` printed every session the engine
+// returned (500 on a busy engine), pasted the id's tail onto a name another row shared
+// (the id column already carries it) and switched STARTED from "2d ago" to a date after a week.
+// The plain list now holds every open session plus the newest 20 finished ones, says how many it
+// left out, and --limit or --all widens it; -o json keeps every session.
+func TestSessionListDefaultView(t *testing.T) {
+	now := time.Now()
+	stamp := func(ago time.Duration) string { return now.Add(-ago).UTC().Format(time.RFC3339Nano) }
 	f := newFakeSessionEngine(t)
 	f.runs = []map[string]any{
-		{"run_ref": "01a0f99f-3b69-71a6-9c03-4ee43fcc157e", "name": "notes", "state": "running", "provider_driver": "claude"},
-		{"run_ref": "01a0f99f-569b-7d77-a064-041945d8cedb", "name": "notes", "state": "stopped", "provider_driver": "claude"},
-		{"run_ref": "01a0f99f-56c1-793d-95f4-3fa76388cd64", "name": "docs", "state": "running", "provider_driver": "codex"},
+		{"run_ref": "01a0f99f-0000-7000-8000-00000000a001", "name": "live", "state": "running", "provider_driver": "claude", "created_at": stamp(time.Minute)},
+		// An open session started long ago is still open: the limit never hides it.
+		{"run_ref": "01a0f99f-0000-7000-8000-00000000a002", "name": "waiting", "state": "idle", "provider_driver": "claude", "created_at": stamp(40 * 24 * time.Hour)},
 	}
-	out, _, err := execSessionCLI(t, nil, append([]string{"session", "ls", "-o", "text"}, sessionCreds(f.URL)...)...)
-	if err != nil {
-		t.Fatalf("ls: %v", err)
+	for i := 1; i <= 30; i++ {
+		f.runs = append(f.runs, map[string]any{
+			"run_ref": fmt.Sprintf("01a0f99f-0000-7000-8000-%012x", i), "name": "notes", "state": "stopped",
+			"provider_driver": "claude", "created_at": stamp(time.Duration(i) * 24 * time.Hour),
+		})
 	}
-	for _, want := range []string{"notes …4ee43fcc157e", "notes …041945d8cedb"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("ls does not tell the two notes sessions apart (%q):\n%s", want, out)
+	list := func(extra ...string) string {
+		t.Helper()
+		out, _, err := execSessionCLI(t, nil, append(append([]string{"session", "ls", "-o", "text"}, extra...), sessionCreds(f.URL)...)...)
+		if err != nil {
+			t.Fatalf("ls %v: %v", extra, err)
+		}
+		return out
+	}
+
+	out := list()
+	if got := strings.Count(out, " stopped "); got != 20 {
+		t.Fatalf("the plain list holds %d finished sessions, want the newest 20:\n%s", got, out)
+	}
+	for _, open := range []string{"live ", "waiting "} {
+		if !strings.Contains(out, open) {
+			t.Fatalf("the plain list left out the open session %q:\n%s", open, out)
 		}
 	}
-	// Every row has an id column, so the tail is on the docs row too; what stays
-	// as it is is the NAME of a session no other row shares.
-	if strings.Contains(out, "docs …") {
-		t.Fatalf("a name no other row carries got a tail:\n%s", out)
+	if !strings.Contains(out, "Showing 22 of 32 sessions") || !strings.Contains(out, "--all") {
+		t.Fatalf("the plain list does not say it left sessions out:\n%s", out)
+	}
+	if strings.Contains(out, "notes …") {
+		t.Fatalf("a shared name got the id's tail pasted on (the id column has it):\n%s", out)
+	}
+	if regexp.MustCompile(`\d{4}-\d{2}-\d{2}`).MatchString(out) || !strings.Contains(out, "20d ago") {
+		t.Fatalf("STARTED mixes relative and absolute forms:\n%s", out)
+	}
+
+	if got := strings.Count(list("--limit", "5"), " stopped "); got != 5 {
+		t.Fatalf("--limit 5 holds %d finished sessions", got)
+	}
+	all := list("--all")
+	if got := strings.Count(all, " stopped "); got != 30 || strings.Contains(all, "Showing") {
+		t.Fatalf("--all must list every session and say nothing was left out:\n%s", all)
+	}
+	raw, _, err := execSessionCLI(t, nil, append([]string{"session", "ls", "-o", "json"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("ls -o json: %v", err)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(raw), &rows); err != nil || len(rows) != 32 {
+		t.Fatalf("-o json must keep every session (a script reads it): %d rows, err %v", len(rows), err)
 	}
 }
 

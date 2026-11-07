@@ -33,7 +33,11 @@ import {
 import { formatDateTime } from '@/lib/format'
 import { drApi, drKeys } from './api'
 import { JobProgress } from './job-progress'
-import type { Manifest, RestoreUploadResponse } from './types'
+import type {
+  Manifest,
+  RestoreUploadResponse,
+  PostgresRestoreTarget,
+} from './types'
 
 export interface RestoreDialogProps {
   open: boolean
@@ -48,6 +52,20 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
   const [file, setFile] = useState<File | null>(null)
   const [upload, setUpload] = useState<RestoreUploadResponse | null>(null)
   const [passphrase, setPassphrase] = useState('')
+  const [postgres, setPostgres] = useState<PostgresRestoreTarget>({
+    dsn_ref: '',
+    owner_dsn_ref: '',
+    admin_dsn_ref: '',
+    scratch_dsn_ref: '',
+  })
+  const isPostgres = upload?.manifest.engine === 'postgres'
+  const validRef = (v: string) => /^(file:|env:).+/.test(v.trim())
+  const targetReady =
+    !isPostgres ||
+    (validRef(postgres.dsn_ref) &&
+      validRef(postgres.admin_dsn_ref) &&
+      validRef(postgres.scratch_dsn_ref) &&
+      (!postgres.owner_dsn_ref || validRef(postgres.owner_dsn_ref)))
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
   const [awaiting, setAwaiting] = useState<{
@@ -88,6 +106,16 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
     mutationFn: () =>
       drApi.applyRestore(upload!.upload_id, {
         passphrase: passphrase.trim(),
+        ...(isPostgres
+          ? {
+              postgres: {
+                dsn_ref: postgres.dsn_ref.trim(),
+                owner_dsn_ref: postgres.owner_dsn_ref?.trim() || undefined,
+                admin_dsn_ref: postgres.admin_dsn_ref.trim(),
+                scratch_dsn_ref: postgres.scratch_dsn_ref.trim(),
+              },
+            }
+          : {}),
       }),
     invalidateKeys: [drKeys.backups(), drKeys.jobs(), drKeys.pending()],
     successMessage: t('restore.started'),
@@ -109,6 +137,12 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
     setFile(null)
     setUpload(null)
     setPassphrase('')
+    setPostgres({
+      dsn_ref: '',
+      owner_dsn_ref: '',
+      admin_dsn_ref: '',
+      scratch_dsn_ref: '',
+    })
     setConfirmOpen(false)
     setJobId(null)
     setAwaiting(null)
@@ -139,11 +173,45 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
               isPending={uploadMutation.isPending}
             />
           ) : (
-            <ManifestStep
-              upload={upload}
-              passphrase={passphrase}
-              onPassphraseChange={setPassphrase}
-            />
+            <div className="flex flex-col gap-4">
+              {isPostgres && (
+                <fieldset className="flex flex-col gap-3">
+                  <legend>PostgreSQL</legend>
+                  <p className="text-body text-muted-foreground">
+                    {t('restore.postgres.description')}
+                  </p>
+                  {(
+                    [
+                      'dsn_ref',
+                      'owner_dsn_ref',
+                      'admin_dsn_ref',
+                      'scratch_dsn_ref',
+                    ] as const
+                  ).map((key) => (
+                    <Field
+                      key={key}
+                      label={t(`restore.postgres.${key}`)}
+                      htmlFor={`restore-${key}`}
+                    >
+                      <Input
+                        id={`restore-${key}`}
+                        value={postgres[key] ?? ''}
+                        onChange={(e) =>
+                          setPostgres({ ...postgres, [key]: e.target.value })
+                        }
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </Field>
+                  ))}
+                </fieldset>
+              )}
+              <ManifestStep
+                upload={upload}
+                passphrase={passphrase}
+                onPassphraseChange={setPassphrase}
+              />
+            </div>
           )}
 
           <DialogFooter>
@@ -168,7 +236,7 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
               <Button
                 variant="primary"
                 onClick={() => setConfirmOpen(true)}
-                disabled={!passphrase.trim()}
+                disabled={!passphrase.trim() || !targetReady}
               >
                 <ShieldAlert className="size-4" />
                 {t('restore.apply')}
@@ -183,7 +251,11 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={t('restore.confirmTitle')}
-        description={t('restore.confirmDescription')}
+        description={t(
+          isPostgres
+            ? 'restore.postgres.confirm'
+            : 'restore.confirmDescription',
+        )}
         tone="danger"
         confirmPhrase={t('restore.confirmPhrase')}
         confirmLabel={t('restore.confirmLabel')}

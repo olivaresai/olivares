@@ -137,7 +137,7 @@ async function loginDemo(page: Page): Promise<BrowserSession> {
   await expect(
     page
       .getByLabel('Main navigation')
-      .getByRole('link', { name: 'Now', exact: true }),
+      .getByRole('link', { name: 'Settings', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
   return body
 }
@@ -238,9 +238,7 @@ test('knowledge governs KB, prompt, memory, context, DLP and data-product lifecy
   const initialKbs = observe(page, 'GET', '/v1/m/knowledge/kbs', 200)
   await page.goto('/knowledge')
   await initialKbs
-  await expect(
-    page.getByRole('heading', { name: 'Data, knowledge & context' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Knowledge' })).toBeVisible()
 
   const refreshed = observe(page, 'GET', '/v1/m/knowledge/kbs', 200)
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
@@ -468,9 +466,9 @@ test('knowledge governs KB, prompt, memory, context, DLP and data-product lifecy
   await exportRead
 
   await page.getByRole('tab', { name: 'Context' }).click()
-  await page.getByRole('button', { name: 'Upsert policy' }).click()
+  await page.getByRole('button', { name: 'Add policy' }).click()
   let contextEditor = page.getByRole('dialog', {
-    name: 'Upsert context policy',
+    name: 'Context policy',
   })
   await contextEditor.locator('#ctx-scope-ref').fill(contextRef)
   await contextEditor.locator('#ctx-max-tokens').fill('4096')
@@ -489,7 +487,7 @@ test('knowledge governs KB, prompt, memory, context, DLP and data-product lifecy
 
   await (await rowFor(page, contextRef)).click()
   contextEditor = page.getByRole('dialog', {
-    name: 'Upsert context policy',
+    name: 'Context policy',
   })
   await contextEditor.locator('#ctx-max-tokens').fill('2048')
   await choose(page, contextEditor.locator('#ctx-strategy'), 'Truncate')
@@ -951,9 +949,7 @@ test('capabilities reads the live graph and preserves config revisions, with no 
   const initial = observe(page, 'GET', '/v1/m/capabilities/servers', 200)
   await page.goto('/capabilities')
   await initial
-  await expect(
-    page.getByRole('heading', { name: 'MCP & skills' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Extensions' })).toBeVisible()
   await expect(page.getByText('github', { exact: true })).toBeVisible()
   const refreshed = observe(page, 'GET', '/v1/m/capabilities/servers', 200)
   await page.getByRole('button', { name: 'Refresh' }).click()

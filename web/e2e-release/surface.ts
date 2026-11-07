@@ -3,30 +3,55 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { globSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { expect, type Page, type Request } from '@playwright/test'
+import {
+  expect,
+  type ConsoleMessage,
+  type Page,
+  type Request,
+} from '@playwright/test'
 import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 
 /** The release grammar: bare MAJOR.MINOR, the one scripts/release-first-hour.sh admits. */
 export const RELEASE_VERSION = /^\d+\.\d+$/
 
-/** Where the console says which deployment this is: the status bar's version, and the
- * signed-out line. Both carry the one data-testid, so nothing else is read. */
-const IDENTITY = '[data-testid="deployment-identity"]'
+/** The signed-in Settings > About version; public screens carry no identity. */
+const IDENTITY = '[data-testid="about-version"]'
 
 /** An identity element that is only a version (0.1, v1.0, 26.10.1, 1.0-rc1), never a host
  * such as 127.0.0.1:8443. A bare MAJOR.MINOR elsewhere is prose (CVSS v3.1, SCIM 2.0). */
 const VERSION_DISPLAY = /^v?\d+\.\d+(?:\.\d+)?(?:[-+][\w.+-]+)?$/
 
+/** The running engine is the release: the page asks GET /v1/server-info, the anonymous
+ * read the console paints its version from, so no page chrome is needed to prove it. */
 export async function expectReleaseVersion(
   page: Page,
   version: string,
 ): Promise<void> {
-  // Dialogs hide the status bar from the accessibility tree, but its version stays
-  // painted. Match the deployment identity itself, never a release in page copy.
-  await expect(
-    page.locator(IDENTITY).getByText(version, { exact: true }),
-    `release version ${version} must be visible in the console identity`,
-  ).toBeVisible()
+  const reported = await page.evaluate(async () => {
+    const response = await fetch('/v1/server-info', { cache: 'no-store' })
+    if (!response.ok) return `HTTP ${response.status}`
+    return ((await response.json()) as { version?: unknown }).version
+  })
+  expect(reported, `/v1/server-info must report release ${version}`).toBe(
+    version,
+  )
+}
+
+/** The signed-in About stage must paint the release identity, never an empty read. */
+export async function expectPaintedReleaseVersion(
+  page: Page,
+  version: string,
+): Promise<string[]> {
+  const versions = await page.evaluate(() => window.__firstHourVersions?.())
+  expect(
+    versions?.length,
+    'Settings > About must display a version',
+  ).toBeGreaterThan(0)
+  for (const found of versions!)
+    expect(found, `page version ${found} differs from release ${version}`).toBe(
+      version,
+    )
+  return versions!
 }
 
 // Like src/test/i18n-keys.ts, use the real dictionaries. Playwright runs in
@@ -82,6 +107,20 @@ declare global {
     __firstHourLoading?: () => boolean
     __firstHourVersions?: () => string[]
   }
+}
+
+export function isExpectedNoRepositoryConsoleError(
+  message: ConsoleMessage,
+): boolean {
+  // GET run/git deliberately answers 404 when the folder has no repository; the
+  // console offers Initialize Git in that state. Any other resource failure is red.
+  return (
+    message.type() === 'error' &&
+    message.text().includes('status of 404') &&
+    /^https?:\/\/[^/]+\/v1\/m\/sessions\/runs\/[^/]+\/git$/.test(
+      message.location().url,
+    )
+  )
 }
 
 /** Runs in the page, across SPA transitions; report text, never input values. */
@@ -182,7 +221,9 @@ export function watchSurface({
     }
     for (const field of document.querySelectorAll<
       HTMLInputElement | HTMLTextAreaElement
-    >('input:not([type=hidden]), textarea')) {
+    >(
+      'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea',
+    )) {
       if (!visible(field)) continue
       const label = [...(field.labels ?? [])]
         .map((node) => node.textContent)

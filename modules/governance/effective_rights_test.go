@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -345,13 +346,7 @@ func TestEffectiveRightsExplainANestedDirectoryGrant(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed nested directory groups: %v", err)
 	}
-	adminPrincipal, err := h.authr.Authenticate(context.Background(), admin)
-	if err != nil {
-		t.Fatalf("authenticate group administrator: %v", err)
-	}
-	if _, err := h.authr.ConfigureGroupParent(context.Background(), adminPrincipal, tenant, child.ID, parent.ID); err != nil {
-		t.Fatalf("nest G1 under G2: %v", err)
-	}
+	authtest.Nest(t, h.st, child.ID, parent.ID)
 	principal, found, err := h.authr.PrincipalForUser(context.Background(), uid, auth.AAL3)
 	if err != nil || !found {
 		t.Fatalf("resolve nested member = %v %v", found, err)

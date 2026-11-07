@@ -104,10 +104,10 @@ question qui compte.
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` fonctionne hors ligne et résout la licence selon la même priorité que le moteur. Il
+Sur l'hôte du moteur et avec `--data-dir`, `status` fonctionne hors ligne et résout la licence selon la même priorité que le moteur. Il
 répond donc à la question qui compte — *quelle licence est réellement en vigueur* — plutôt
 qu'à « existe-t-il un fichier ? ». Il indique la source résolue, le titulaire, l'offre et la
-date d'expiration.
+date d'expiration. Connecté à un moteur situé sur un autre hôte, il interroge ce moteur.
 
 Exécutez-le après chaque installation et après le retrait d'un override.
 
@@ -115,7 +115,7 @@ Exécutez-le après chaque installation et après le retrait d'un override.
 
 Installer une licence Business ou Enterprise valide sur un build Community laisse ce
 build en fonctionnement. Le cockpit de session et les autres pages commerciales
-n'apparaissent qu'une fois cette installation passée en Business. La vue **Edition & license**
+n'apparaissent qu'une fois cette installation passée en Business. La vue **Paramètres › Édition**
 de la console nomme la licence installée séparément du build. **Expires** est la durée
 payée ; **Lease until**, lorsqu'il est affiché, est le bail d'instance provisoire
 distinct. Vous utilisez Docker ? Allez à [Docker et Compose](#docker-et-compose) ci-dessous.
@@ -135,7 +135,7 @@ export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is c
 olivares upgrade --edition business
 ```
 
-`olivares license install` et `olivares license status` affichent la commande exacte pour la façon dont cette installation a été faite, et la vue **Edition & license** de la console propose la même étape sous la forme d'un bouton, **Passer à Business** : le moteur télécharge le build, le vérifie, le remplace sur place et redémarre dessus. Le jeton de téléchargement se trouve sur la page **Downloads** du portail de téléchargement sous licence ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), à côté de ces commandes, et dans votre e-mail de licence ; passez-le par son nom, comme ci-dessus, pour qu'il reste hors de la liste des processus. Une installation connectée (`olivares license connect start`) n'a besoin d'aucun jeton. `--enterprise` est l'ancienne graphie de la même route. Le bouton de la console demande l'un des deux, le jeton dans l'environnement du moteur lui-même ou cette connexion ; sans l'un ni l'autre, la vue affiche la commande à la place.
+`olivares license install` et `olivares license status` affichent la commande exacte pour la façon dont cette installation a été faite, et la vue **Paramètres › Édition** de la console propose la même étape sous la forme d'un bouton, **Passer à Business** : le moteur télécharge le build, le vérifie, le remplace sur place et redémarre dessus. Le jeton de téléchargement se trouve sur la page **Downloads** du portail de téléchargement sous licence ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), à côté de ces commandes, et dans votre e-mail de licence ; passez-le par son nom, comme ci-dessus, pour qu'il reste hors de la liste des processus. Une installation connectée (`olivares license connect start`) n'a besoin d'aucun jeton. `--enterprise` est l'ancienne graphie de la même route. Le bouton de la console demande l'un des deux, le jeton dans l'environnement du moteur lui-même ou cette connexion ; sans l'un ni l'autre, la vue affiche la commande à la place.
 
 :::caution[Installations par paquet]
 Sur une installation deb, rpm, apk ou AUR, le gestionnaire de paquets possède `/usr/bin/olivares` : la
@@ -168,6 +168,13 @@ tout module nécessitant un secret ou une revue au lieu de l'activer à moitié.
 `olivares enterprise status` indique ce qui est actif. Ces commandes existent **uniquement
 dans le binaire commercial** — si `olivares enterprise` n'est pas une commande, vous utilisez
 encore le build Community et le remplacement ci-dessus n'a pas encore eu lieu.
+
+La console fait de même pour chaque famille : la vue **Paramètres › Édition** liste chaque famille
+avec le nombre de ses modules activés. **Activer** montre le même diff avant de l'appliquer, et
+**Désactiver** nomme les modules qui s'arrêtent. Une famille que votre licence n'inclut pas garde
+**Activer** désactivé et le dit : *Cette licence n'inclut pas* la famille. Le moteur vérifie à
+nouveau la licence à chaque activation, depuis la console ou la CLI ; une licence expirée ou
+absente ne peut donc activer aucune famille.
 
 :::caution[Sauvegardez avant le remplacement]
 Le remplacement porte sur un binaire, pas sur vos données — mais effectuez tout de même la
@@ -238,7 +245,7 @@ dans le contexte de build. Définissez l'`image` de votre service Compose sur
 autonome, recréez le conteneur avec cette image, le même volume et les mêmes arguments.
 Conservez le volume de données : n'utilisez pas `down --volumes`.
 
-Vérifiez **Edition & license** après le redémarrage : l'édition doit indiquer **Business**,
+Vérifiez **Paramètres › Édition** après le redémarrage : l'édition doit indiquer **Business**,
 et la licence installée reste dans le volume de données. Les contrats Enterprise utilisent
 aussi ce build commercial ; tout artefact propre à un contrat suit ses instructions de
 téléchargement.

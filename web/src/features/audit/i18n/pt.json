@@ -1,0 +1,178 @@
+{
+  "title": "Registo de auditoria",
+  "subtitle": "Leia o registo assinado da atividade de IA.",
+  "subtitleSystem": "A cadeia do tenant de sistema das operações administrativas entre tenants (só de leitura).",
+  "searchLoaded": "Filtrar só as linhas carregadas (no cliente)…",
+  "scope": {
+    "label": "Âmbito do registo",
+    "tenant": "Registo do tenant",
+    "system": "Registo do sistema",
+    "systemHint": "A cadeia do tenant de sistema regista operações administrativas entre tenants e aqui é só de leitura. A verificação e a exportação operam sobre os registos dos tenants."
+  },
+  "actorKind": {
+    "user": "Utilizador",
+    "agent": "Agente",
+    "connector": "Conector",
+    "system": "Sistema"
+  },
+  "verify": {
+    "action": "Verificar cadeia",
+    "failed": "Não foi possível concluir a verificação.",
+    "chain": "Cadeia · {{checked}} ligações",
+    "checkpoints": "Pontos de controlo · {{count}} assinados",
+    "noCheckpoints": "Ainda sem pontos de controlo assinados",
+    "attested": "Atestado até à sequência n.º {{seq}}",
+    "chainBreak": "Cadeia quebrada em seq {{seq}}",
+    "checkpointBreak": "A assinatura do ponto de controlo falhou em seq {{seq}}"
+  },
+  "pubkey": {
+    "label": "Chave de assinatura do registo",
+    "key": "chave",
+    "hint": "Partilhe esta chave pública Ed25519 para que uma parte externa possa verificar offline os eventos exportados E os pontos de controlo — a mesma chave assina ambos.",
+    "failed": "A chave de verificação não está disponível."
+  },
+  "export": {
+    "action": "Exportar",
+    "formatLabel": "Formato de exportação",
+    "fromSeq": "Da seq",
+    "toSeq": "Até à seq",
+    "optional": "Opcional",
+    "useCurrent": "Usar filtros e intervalo atuais",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "Pedido OTLP",
+      "otlp_envelope": "Pedido OTLP (alias)",
+      "otlp_log_record": "Linhas OTLP LogRecord",
+      "ocsf": "OCSF"
+    },
+    "done": "Exportação transferida.",
+    "failed": "A exportação falhou.",
+    "forbidden": "Não tem autorização para exportar o registo.",
+    "download": "Transferir"
+  },
+  "detail": {
+    "title": "Evento de evidência",
+    "seqTitle": "Evento n.º {{seq}}",
+    "signed": "Evento assinado — esta linha tem a sua própria assinatura sobre o respetivo hash da cadeia",
+    "seq": "Sequência",
+    "occurred": "Ocorreu",
+    "action": "Ação",
+    "actor": "Ator",
+    "actorSystem": "sistema",
+    "target": "Alvo",
+    "id": "ID do evento",
+    "prevHash": "Hash anterior",
+    "prev": "ant.",
+    "hash": "Hash do evento",
+    "this": "este",
+    "sig": "Assinatura do evento",
+    "checkpoint": "ass.",
+    "actorMember": "Um membro"
+  },
+  "empty": {
+    "filteredTitle": "Nenhuma evidência correspondente",
+    "searching": "Nenhuma correspondência nos eventos pesquisados até agora. Carregar mais continua a pesquisa.",
+    "noMatches": "Nenhum evento corresponde a estes filtros. Tente alterar ou remover um filtro.",
+    "title": "Ainda sem evidências",
+    "description": "O registo está vazio para este âmbito. As operações governadas acrescentam eventos com deteção de adulteração à medida que acontecem."
+  },
+  "actions": {
+    "governance_approval_create": "Aprovação pedida",
+    "governance_approval_decision": "Decisão de aprovação registada",
+    "governance_approval_cancel": "Aprovação cancelada",
+    "sessions_run_launched": "Sessão iniciada",
+    "sessions_run_stopping": "Paragem da sessão pedida",
+    "sessions_work_item_create": "Item de trabalho criado",
+    "sessions_work_item_ready": "Item de trabalho marcado como pronto",
+    "sessions_work_item_complete": "Item de trabalho concluído",
+    "authorization_decision_record": "Decisão de autorização registada",
+    "policy_artifact_record": "Evidência de política registada",
+    "governance_policy_create": "Política criada",
+    "governance_policy_update": "Política atualizada",
+    "governance_policy_delete": "Política eliminada",
+    "auth_login": "Sessão iniciada",
+    "auth_logout": "Sessão terminada",
+    "auth_login_failed": "Início de sessão falhado",
+    "auth_webauthn_register": "Passkey adicionada",
+    "auth_webauthn_unregister": "Passkey removida",
+    "user_set_password": "Palavra-passe alterada",
+    "user_create": "Pessoa adicionada",
+    "membership_grant": "Função atribuída",
+    "membership_update": "Função alterada",
+    "membership_offboard": "Pessoa removida",
+    "token_issue": "Token de API criado",
+    "token_revoke": "Token de API revogado",
+    "secret_delete": "Segredo eliminado",
+    "governance_killswitch_engage": "Kill switch acionado",
+    "sessions_run_created": "Sessão criada"
+  },
+  "targets": {
+    "core_policy": "Política"
+  },
+  "internal": {
+    "show": "Mostrar registos internos",
+    "hide": "Ocultar registos internos",
+    "allHidden": "Tudo o que foi carregado até agora é um registo interno."
+  },
+  "ledger": {
+    "query": "Consulta ao registo",
+    "placeholder": "Pesquisar",
+    "addFilter": "Adicionar um filtro",
+    "remove": "Remover {{token}}",
+    "add": "Adicionar {{token}} à consulta",
+    "commands": "Pesquisa e comandos",
+    "problem": {
+      "key": "{{token}} não é um filtro do registo. Use person:, action:, kind:, target:, tool:, folder:, since:, until: ou palavras simples.",
+      "time": "{{token}} não é uma hora. Use 90m, 24h, 7d, 2w ou uma data como 2026-10-20.",
+      "person": "Ninguém corresponde a {{token}}. Use um nome, um e-mail ou user:<id>.",
+      "several": "{{token}} corresponde a várias pessoas. Use o nome completo, um e-mail ou user:<id>.",
+      "names": "{{token}} não pode ser consultado aqui. Use user:<id>."
+    },
+    "entries": "Entradas do registo",
+    "group": {
+      "label": "Mostrar",
+      "session": "Por sessão",
+      "events": "Todas as entradas"
+    },
+    "needsYou": "Precisa de si",
+    "outside": "Fora de uma sessão",
+    "session": "Sessão {{ref}}",
+    "count_one": "{{count}} entrada",
+    "count_many": "{{count}} de entradas",
+    "count_other": "{{count}} entradas",
+    "sentence": "{{what}} por {{who}}",
+    "signed": "Assinada",
+    "histogram": {
+      "hour": "Entradas por hora",
+      "day": "Entradas por dia",
+      "week": "Entradas por semana",
+      "bar_one": "{{at}}, {{count}} entrada",
+      "bar_many": "{{at}}, {{count}} de entradas",
+      "bar_other": "{{at}}, {{count}} entradas",
+      "now": "Agora"
+    },
+    "entry": {
+      "title": "Entrada {{seq}}",
+      "chain": "Posição na cadeia",
+      "previous": "Anterior · {{seq}}",
+      "this": "Esta entrada · {{seq}}",
+      "next": "Seguinte · {{seq}}",
+      "newest": "Entrada mais recente",
+      "nextUnread": "Próxima por ler",
+      "chainHint": "Cada entrada contém o hash da anterior. Altere uma e todos os hashes seguintes deixam de coincidir.",
+      "signedEntry": "A entrada assinada"
+    }
+  },
+  "verbs": {
+    "create": "Criação: {{what}}",
+    "update": "Atualização: {{what}}",
+    "delete": "Eliminação: {{what}}"
+  },
+  "toolApproval": {
+    "allow": "Chamada de ferramenta permitida",
+    "ask": "Chamada de ferramenta a aguardar aprovação",
+    "deny": "Chamada de ferramenta negada"
+  }
+}

@@ -45,7 +45,7 @@ test('palette opens known sessions, installed tools and settings at both widths'
   await page.locator('#setup-email').fill('palette@example.com')
   await page.locator('#setup-password').fill('palette-first-hour-1273-password')
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
   // Recording begins after credential entry; authenticated state stays in memory.
   recording = await page
     .context()
@@ -152,7 +152,7 @@ test('palette opens known sessions, installed tools and settings at both widths'
               ? new RegExp(title!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
               : object === 'tool'
                 ? /^Codex AI tools$/
-                : /Sign-in and security/,
+                : /^Sign-in/,
         })
         await expect(result).toBeVisible()
         await page.screenshot({
@@ -174,7 +174,7 @@ test('palette opens known sessions, installed tools and settings at both widths'
           await expect(page).toHaveURL(/\/settings\?section=signIn$/)
           await expect(
             page.getByRole('heading', {
-              name: 'Sign-in and security',
+              name: 'Sign-in',
               exact: true,
             }),
           ).toBeVisible()
@@ -263,7 +263,7 @@ test('palette opens known sessions, installed tools and settings at both widths'
     const palette = reader.getByRole('dialog')
     await palette.getByRole('combobox').fill('Sign-in')
     await expect(
-      palette.getByRole('option', { name: /Sign-in and security/ }),
+      palette.getByRole('option', { name: /^Sign-in/ }),
     ).toBeVisible()
     await palette.getByRole('combobox').fill('Codex')
     await expect(palette.getByRole('option', { name: /Codex/ })).toHaveCount(0)

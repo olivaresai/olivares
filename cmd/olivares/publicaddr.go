@@ -40,8 +40,8 @@ import (
 // separately from value, and a caller passes the flag's Changed bit rather than
 // its emptiness.
 //
-// There is no stored schema and no hot reload: a change takes a restart, and the
-// flag's help says so.
+// The console can save an HTTPS address in deployment settings. It applies on
+// restart when neither a flag nor environment override was supplied.
 
 // publicURLEnv is the environment spelling of --public-url.
 const publicURLEnv = "OLIVARES_PUBLIC_URL"
@@ -58,6 +58,7 @@ const (
 	publicAddrFlag
 	// publicAddrEnv: OLIVARES_PUBLIC_URL supplied it.
 	publicAddrEnv
+	publicAddrStored
 )
 
 func (s publicAddrSource) String() string {
@@ -66,6 +67,8 @@ func (s publicAddrSource) String() string {
 		return "--public-url"
 	case publicAddrEnv:
 		return publicURLEnv
+	case publicAddrStored:
+		return "Sign-in settings"
 	default:
 		return "unset"
 	}

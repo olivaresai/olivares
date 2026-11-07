@@ -112,9 +112,9 @@ packager renders it with `scripts/render-package-systemd.sh`; regenerate the che
 package copy with `sh scripts/render-package-systemd.sh > packaging/systemd/olivares.service`.
 Packages retain `StateDirectory=olivares`, while the archive installer manages its selected
 data directory itself. The service-install test checks that both units otherwise agree.
-`systemd-0.2.service` and `systemd-26.10.service` are frozen upgrade-recognition templates, not
-sources for new units; unedited installs of those releases can upgrade and operator-edited units
-remain protected.
+`systemd-0.5.service`, `systemd-0.2.service` and `systemd-26.10.service` are frozen
+upgrade-recognition templates, not sources for new units; unedited installs of those releases can
+upgrade and operator-edited units remain protected.
 
 `--system` requires an already privileged process; neither stage invokes `sudo`.
 System mode creates a no-login service identity, a 0750 data directory, a create-only

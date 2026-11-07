@@ -37,7 +37,7 @@ func (g shipGate) Authorize(ctx context.Context, tenant model.TenantID, r gitpub
 	if err != nil {
 		return gitpublish.GateDecision{}, err
 	}
-	if policy == "" {
+	if policy == "" && !r.RequireApproval {
 		return gitpublish.GateDecision{State: gitpublish.GateGranted}, nil
 	}
 	ref, status, _, err := g.bridge.GateUnspentForSession(ctx, tenant, r.Action, r.SubjectKind, r.SubjectRef, r.PlanHash, r.Reason, r.RequestedBy, "")

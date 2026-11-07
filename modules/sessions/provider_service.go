@@ -45,8 +45,17 @@ func providerServiceBaseURL(kind, service, base string) (string, error) {
 	return row.BaseURL, nil
 }
 
-func (m *Module) probeProviderService(ctx context.Context, rec ProviderRecord, key string) (ProviderProbeResult, error) {
+func (m *Module) probeProviderService(ctx context.Context, rec ProviderRecord, key string, deep ...bool) (ProviderProbeResult, error) {
 	req := ProviderProbeRequest{Kind: rec.Kind, BaseURL: rec.BaseURL, APIKey: key}
+	if len(deep) > 0 && deep[0] {
+		if rec.Kind != ProviderKindOpenAICompatible || rec.Service != "" {
+			return ProviderProbeResult{}, badRequest("deep tests require a self-hosted openai_compatible provider without a vendor preset")
+		}
+		req.Deep = true
+		if rec.DefaultModel != nil {
+			req.Model = *rec.DefaultModel
+		}
+	}
 	if rec.Service == "" {
 		return m.rt.ProviderProbe.Probe(ctx, req)
 	}

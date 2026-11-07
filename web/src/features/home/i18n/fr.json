@@ -4,29 +4,18 @@
     "description": "Les cinq sessions les plus récentes observées par ce déploiement.",
     "openAll": "Toutes les sessions",
     "emptyTitle": "Aucune session pour l’instant",
-    "emptyDescription": "Chaque exécution d’un moteur connecté apparaît ici, avec ce qu’elle a fait, sa durée et son coût.",
+    "emptyDescription": "Chaque session que vous démarrez apparaît ici.",
+    "emptyAction": "Démarrer une session",
     "unavailableTitle": "Impossible de charger le travail récent",
     "unavailableDescription": "La lecture des sessions n’a pas répondu. Les chiffres ci-dessus ne sont pas affectés.",
     "untitled": "Session sans titre"
-  },
-  "live": {
-    "title": "En cours"
   },
   "empty": {
     "title": "Rien à afficher pour l’instant",
     "description": "Votre rôle n’accorde aucun accès en lecture à un module du parc. Demandez à un administrateur un octroi en lecture pour voir la vue d’ensemble."
   },
-  "start": {
-    "ready": "{{tool}} est prêt.",
-    "signIn": "Connectez {{tool}} pour démarrer une session.",
-    "signInAction": "Se connecter",
-    "install": "Installez Claude Code ou Codex pour démarrer une session.",
-    "installAction": "Configurer un outil",
-    "newSession": "Nouvelle session"
-  },
   "swimlane": {
     "title": "Dernière heure",
-    "subtitle": "De {{from}} à {{to}}. Chaque barre est une exécution, plus marquée là où elle a fait plus d’appels d’outils.",
     "lanes": "Sessions de la dernière heure",
     "now": "Maintenant {{at}}",
     "range": "{{from}} à {{to}}",
@@ -64,44 +53,25 @@
     "waiting": "Attend une approbation",
     "needsYou": "Vous attend",
     "idle": "Inactive",
-    "approvalsUnread": "Les approbations n’ont pas pu être lues : les attentes d’approbation ne sont pas dessinées."
+    "approvalsUnread": "Les approbations ne sont pas encore lues ou n’ont pas pu l’être : les attentes d’approbation ne sont pas dessinées.",
+    "approvalsPartial": "Seule une partie des approbations a été lue : certaines attentes d’approbation peuvent ne pas être dessinées.",
+    "step": {
+      "Bash": "Exécute {{what}}",
+      "Read": "Lit {{what}}",
+      "Edit": "Modifie {{what}}",
+      "Write": "Écrit {{what}}",
+      "Grep": "Cherche {{what}}",
+      "Glob": "Cherche des fichiers {{what}}",
+      "WebFetch": "Lit {{what}}",
+      "WebSearch": "Cherche sur le web {{what}}",
+      "Task": "Travaille avec un agent",
+      "Agent": "Travaille avec un agent"
+    }
   },
-  "summary": {
-    "heading": "Résumé",
-    "nothingRunning": "Rien ne tourne",
-    "running_one": "{{count}} session ouverte",
-    "running_many": "{{count}} sessions ouvertes",
-    "running_other": "{{count}} sessions ouvertes",
-    "runningFor_one": "{{count}} session ouverte pour {{people}}",
-    "runningFor_many": "{{count}} sessions ouvertes pour {{people}}",
-    "runningFor_other": "{{count}} sessions ouvertes pour {{people}}",
-    "runningMore": "{{n}}+ sessions ouvertes",
-    "people_one": "{{count}} personne",
-    "people_many": "{{count}} personnes",
-    "people_other": "{{count}} personnes",
-    "today": "{{amount}} aujourd’hui",
-    "todayFloor": "au moins {{amount}} aujourd’hui",
-    "needs_one": "{{count}} vous attend",
-    "needs_many": "{{count}} vous attendent",
-    "needs_other": "{{count}} vous attendent",
-    "needsMore": "{{n}}+ vous attendent",
-    "yesterday": "Hier {{amount}}",
-    "unpriced_one": "{{count}} sans coût déclaré",
-    "unpriced_many": "{{count}} sans coût déclaré",
-    "unpriced_other": "{{count}} sans coût déclaré",
-    "month": "{{spent}} sur {{limit}} ce mois-ci",
-    "monthFloor": "au moins {{spent}} sur {{limit}} ce mois-ci",
-    "monthLabel": "Dépenses du mois"
-  },
-  "state": {
-    "pendingIdle": "Requête non démarrée — ouvrez pour charger",
-    "pendingPaused": "Requête en pause — en attente de reprise"
-  },
-  "proof": {
-    "verified": "Chaîne vérifiée à {{time}}",
-    "entries_one": "{{n}} entrée",
-    "entries_many": "{{n}} entrées",
-    "entries_other": "{{n}} entrées",
-    "broken": "Chaîne rompue : ouvrir le Registre"
+  "overview": {
+    "running": "En cours",
+    "recent": "Récentes",
+    "wantsToRun": "{{session}} veut exécuter",
+    "approvals": "Approbations : {{approved}} sur {{required}}"
   }
 }

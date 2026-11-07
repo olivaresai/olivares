@@ -16,17 +16,17 @@
     "infrastructure": "Infraestructura"
   },
   "items": {
-    "estate": "Parque",
-    "home": "Inicio",
-    "onboarding": "Asistente de configuración",
+    "estate": "Recursos",
+    "home": "Resumen",
+    "onboarding": "Puesta en marcha",
     "inventory": "Inventario",
     "sessions": "Sesiones",
     "accessMap": "Mapa de acceso",
     "reach": "Alcance",
-    "health": "Salud y SLA",
-    "capabilities": "MCP y skills",
+    "health": "Salud",
+    "capabilities": "Extensiones",
     "protocolBindings": "Enlaces de protocolo",
-    "communications": "Comunicaciones",
+    "communications": "Canales",
     "communicationsInbox": "Bandeja de comunicaciones",
     "communicationsNew": "Nuevo canal",
     "communicationsAdministration": "Administración de canales",
@@ -34,11 +34,10 @@
     "console": "Administración",
     "sourceDiff": "Diferencia de origen",
     "permissions": "Permisos",
-    "identity": "Identidad y acceso",
+    "identity": "Identidad",
     "vault": "Caja fuerte",
     "claudePolicy": "Política gestionada",
     "routinePolicies": "Políticas de rutinas",
-    "deploy": "Despliegue",
     "gitPublication": "Publicación Git",
     "knowledge": "Conocimiento",
     "catalog": "Catálogo",
@@ -51,7 +50,6 @@
     "adoption": "Adopción",
     "evals": "Evals",
     "security": "Seguridad",
-    "recordings": "Grabaciones",
     "compliance": "Cumplimiento",
     "voice": "Voz",
     "sandbox": "Sandbox",
@@ -61,13 +59,12 @@
     "rateLimits": "Límites de uso",
     "attestation": "Cadena de suministro",
     "apiPlayground": "API Playground",
-    "audit": "Registro de auditoría",
+    "audit": "Libro mayor",
     "retention": "Retención",
     "workspaceDashboard": "Espacio de trabajo",
     "settings": "Ajustes",
-    "workspace-templates": "Plantillas de espacio de trabajo",
-    "eventing": "Webhooks y eventos",
-    "session-viewer": "Visor de sesiones",
+    "workspace-templates": "Plantillas",
+    "eventing": "Webhooks",
     "backups": "Copias de seguridad",
     "updates": "Actualizaciones",
     "logs": "Registros",
@@ -80,7 +77,8 @@
     "providerAccounts": "Cuentas de proveedor",
     "agent-tools": "Herramientas de IA",
     "storedBudgets": "Presupuestos",
-    "usage": "Uso"
+    "usage": "Uso",
+    "operations": "Operaciones"
   },
   "workspace": {
     "open": "Abrir {{workspace}}",
@@ -93,10 +91,10 @@
     "truncated": "La lista está incompleta — hay más espacios de trabajo de los cargados"
   },
   "descriptions": {
-    "estate": "Inspecciona los recursos configurados y sus relaciones, incluidas las dependencias de los elementos de trabajo.",
+    "estate": "Lo que has configurado y cómo dependen entre sí sus partes, incluidos los elementos de trabajo.",
     "home": "Visión general del estado y la salud del parque",
     "onboarding": "Configuración del despliegue paso a paso",
-    "inventory": "Descubre y cataloga los agentes, servidores MCP y modelos que los conectores observaron.",
+    "inventory": "Agentes, servidores MCP y modelos que han observado los conectores, y cuándo se vio cada uno por última vez.",
     "sessions": "Inicia sesiones y sigue lo que hace cada una, también las que encuentra Olivares",
     "accessMap": "Qué lee y escribe cada agente (R/RW)",
     "reach": "Mira a qué destinos puede llegar cada herramienta y cuáles esperan aprobación.",
@@ -113,7 +111,6 @@
     "identity": "SSO, SCIM y las identidades que usan tus agentes",
     "vault": "Tus contraseñas, notas y códigos de autenticación",
     "claudePolicy": "Política gestionada, hooks, MCP, sandbox y policy-as-code",
-    "deploy": "Aprovisiona y conecta agentes a la infraestructura",
     "gitPublication": "Publicar commits, abrir pull requests y fusionar mediante destinos Git aprobados",
     "knowledge": "Bases de conocimiento, RAG y linaje de datos",
     "catalog": "Agentes y capacidades aprobados y curados",
@@ -127,7 +124,6 @@
     "adoption": "Productividad, aceptación y mix de modelos",
     "evals": "Calidad, evals y regresión",
     "security": "Guardrails, forense y anomalías",
-    "recordings": "Grabación y replay de sesiones privilegiadas",
     "compliance": "Marcos, controles y evidencia",
     "voice": "Sesiones de voz y tiempo real",
     "sandbox": "Pruebas aisladas de agentes y replay",
@@ -161,7 +157,8 @@
     "sourceDiff": "Compara una revisión base y una revisión head de un repositorio Git conectado, archivo por archivo",
     "agent-tools": "Consulta las cuentas y claves de API con las que se ejecutan las sesiones; instalar las herramientas e iniciar su sesión es cosa de los administradores del despliegue",
     "storedBudgets": "Consumo frente a cada límite guardado. La capacidad reservada cuenta para el límite.",
-    "usage": "Los límites oficiales de 5 horas y semanales de cada cuenta, la más cercana primero, y los tokens y el coste de hoy."
+    "usage": "Los límites oficiales de 5 horas y semanales de cada cuenta, la más cercana primero, y los tokens y el coste de hoy.",
+    "operations": "El host, sus discos, las sesiones en vivo y su uso, durante 24 horas, 7 o 30 días."
   },
   "commandActions": {
     "eventing": {
@@ -186,13 +183,36 @@
     "agentcoreExport": "Exportación a AgentCore · AgentCore",
     "sessions": "Sesiones · Observar sesiones · Operar sesiones · Claude Code · agentops",
     "agentops": "Operar sesiones · Claude Code · agentops",
-    "console": "Consola de control · Administración del tenant"
+    "console": "Consola de control · Administración del tenant",
+    "estate": "Parque · Recursos configurados",
+    "inventory": "Recursos descubiertos",
+    "home": "Inicio",
+    "workspaceDashboard": "Archivos y espacios",
+    "work": "Trabajo y comunicaciones",
+    "knowledge": "Fuentes · Datos, conocimiento y contexto",
+    "permissions": "Reglas y aprobaciones · Aprobaciones y permisos",
+    "usage": "Uso y coste · Uso y coste, por cuenta",
+    "audit": "Actividad y auditoría · Registro de auditoría",
+    "identity": "Personas y grupos · Identidad y acceso",
+    "communications": "Comunicaciones",
+    "workspace-templates": "Plantillas de espacio de trabajo",
+    "capabilities": "MCP y skills",
+    "health": "Salud y SLA",
+    "eventing": "Webhooks y eventos · Webhooks y suscripciones de eventos",
+    "onboarding": "Asistente de configuración · Empezar",
+    "backups": "Copia de seguridad y restauración",
+    "platforms": "Plataformas y ciclo de vida",
+    "security": "Seguridad y forense",
+    "logs": "Visor de logs",
+    "modelOps": "Operaciones de modelos",
+    "agentArtifacts": "Artefactos de agente",
+    "apiPlayground": "API Playground"
   },
   "areas": {
     "infrastructure": {
       "label": "Infraestructura",
       "sections": {
-        "estate": "Inventario y espacios"
+        "estate": "Recursos y espacios de trabajo"
       }
     },
     "ai": {
@@ -298,6 +318,13 @@
     "draftSaveFailed": "No se ha podido guardar el borrador en esta pestaña. Mantén esta página abierta o copia tu mensaje antes de salir.",
     "sendBackgroundHint": "Ctrl+Entrar envía y deja el borrador listo para la siguiente frase.",
     "slashLabel": "Comandos y skills",
+    "mentionLabel": "Contexto",
+    "skillLabel": "Skills",
+    "mention": {
+      "loading": "Leyendo la carpeta de la sesión…",
+      "failed": "No se pudo leer la carpeta de la sesión.",
+      "nomatch": "Ningún archivo ni carpeta empieza por «{{query}}»."
+    },
     "slashOption": "{{name}}, {{i}} de {{n}}",
     "slashNoMatch": "Ningún comando coincide con «{{query}}».",
     "slash": {
@@ -315,7 +342,8 @@
     },
     "sessionKeeps": "Esta sesión sigue con {{value}}. Otra selección inicia una sesión nueva.",
     "startWithChoice": "Iniciar una sesión nueva con esta elección",
-    "askPlaceholder": "Pregunta lo que quieras, / para comandos y skills",
+    "newWithOtherAccess": "Sesión nueva con otro acceso…",
+    "askPlaceholder": "Pregunta lo que quieras, @ para contexto, / para comandos y skills",
     "modelPicker": "Modelo: {{value}}",
     "effortPicker": "Esfuerzo: {{value}}",
     "accessPicker": "Acceso: {{value}}",
@@ -346,6 +374,7 @@
     }
   },
   "shell": {
+    "more": "Más",
     "searchCommands": "Buscar y comandos",
     "search": "Buscar",
     "stopAll": "Detener todo",
@@ -416,8 +445,7 @@
       "usage": "Uso de {{tool}}",
       "fiveHour": "5 h",
       "week": "sem.",
-      "toolsUnreadable": "Herramientas de IA sin leer · Reintentar",
-      "version": "Versión"
+      "toolsUnreadable": "Herramientas de IA sin leer · Reintentar"
     },
     "account": {
       "version": "Versión {{version}}"
@@ -428,28 +456,28 @@
     "closeNavigation": "Cerrar la navegación"
   },
   "places": {
-    "now": "Inicio",
+    "now": "Resumen",
     "sessions": "Sesiones",
-    "files": "Archivos y espacios",
-    "work": "Trabajo y comunicaciones",
-    "ai-tools": "Herramientas de IA",
-    "models": "Modelos",
-    "mcp-skills": "MCP y skills",
-    "sources": "Fuentes",
-    "rules": "Reglas y aprobaciones",
-    "usage": "Uso y coste",
-    "activity": "Actividad y auditoría",
-    "access": "Mapa de acceso",
-    "people": "Personas y grupos",
+    "files": "Archivos",
+    "tools": "Herramientas",
+    "rules": "Reglas",
+    "usage": "Uso",
+    "activity": "Auditoría",
+    "people": "Personas",
     "security": "Seguridad",
     "operations": "Operaciones",
-    "license": "Licencia",
     "settings": "Ajustes"
   },
-  "groups": {
-    "work": "Trabajo",
-    "tools": "Herramientas",
-    "control": "Control",
-    "admin": "Administración"
+  "readOnlyNotice": "Puedes leer esta página, pero no cambiarla. Un administrador de la organización sí puede.",
+  "business": {
+    "sessions": "Grabaciones, automatizaciones y orquestación de sesiones",
+    "people": "Directorios, departamentos y administración delegada",
+    "rules": "Políticas, roles y concesiones personalizados",
+    "usage": "Coste por equipo y proyecto",
+    "securityCompliance": "Marcos de cumplimiento y evidencias",
+    "securityRedTeam": "Ejecuciones y puntuación de red team",
+    "operationsDeploy": "Desplegar agentes en otros hosts",
+    "operationsResidency": "Residencia de datos e inquilinos",
+    "retentionSchedules": "Los calendarios solo se aplican en Olivares Business: esta edición los conserva y no purga nada."
   }
 }

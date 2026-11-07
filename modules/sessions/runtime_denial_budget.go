@@ -236,7 +236,7 @@ func (m *Module) escalateDenials(lr *liveRun, b *denialBreach) {
 	defer rcancel()
 	err := m.runtimeData(rctx).Mutate(rctx, lr.tenant, func(sc store.Scope) error {
 		_, err := sc.Audit().Append(rctx, model.AuditDraft{
-			Actor: model.ActorSystem, ActorKind: model.ActorSystem, Action: denialBudgetAction, TargetKind: runKind,
+			Actor: model.ActorSystem, ActorKind: model.ActorSystem, Action: denialBudgetAction, TargetKind: runKind, TargetID: lr.runID,
 			Meta: map[string]any{
 				"run_ref": lr.runRef, "runtime_launch_id": lr.launchID.String(), "action": action, "trigger": b.trigger,
 				"consecutive": b.consecutive, "total": b.total,

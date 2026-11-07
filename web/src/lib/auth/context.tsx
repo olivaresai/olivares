@@ -4,6 +4,7 @@
 import { restoreTenant, tenantPreferenceHome } from './tenant-preference'
 import { savedViewsApi } from '@/features/saved-views/api'
 import {
+  CLIENT_SETTING_DEFAULTS,
   START_PAGE_IDS,
   useClientSettings,
 } from '@/features/settings/preferences'
@@ -23,9 +24,11 @@ import { authApi } from '@/lib/api/endpoints'
 import { notifyUnauthorized } from '@/lib/api/client'
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import { networkErrorText } from '@/lib/api/network-error-text'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/toaster'
+import { dismissAllNotices } from '@/lib/notify'
 import { useTranslation } from 'react-i18next'
 import { queryKeys } from '@/lib/api/query'
+import { moduleOn } from '@/stores/modules'
 import type {
   Grant,
   LoginRequest,
@@ -150,6 +153,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signedOut = !token
   useLayoutEffect(() => {
     if (!signedOut) return
+    // Notices belong to the person who was signed in: an error toast never expires and its
+    // description can carry the first person's data, so none outlives the session.
+    dismissAllNotices()
     restoredFor.current = null
     queryClient.removeQueries({ queryKey: queryKeys.whoami, exact: true })
   }, [signedOut, queryClient])
@@ -305,7 +311,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         restoredFor.current = principalKey(principal)
         // The login redirect reads this preference before the authenticated shell mounts.
         // Read it under the adopted credential, never from the previous user's store.
-        useClientSettings.setState({ startPage: 'home' })
+        useClientSettings.setState({
+          startPage: CLIENT_SETTING_DEFAULTS.startPage,
+        })
         const selected = useTenantStore.getState().activeTenant
         const tenant =
           selected &&
@@ -313,7 +321,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             principal.grants.some((g) => g.tenant === selected))
             ? selected
             : principal.grants[0]?.tenant
-        if (principal.kind === 'user' && tenant) {
+        if (principal.kind === 'user' && tenant && moduleOn('consoleviews')) {
           try {
             const state = await savedViewsApi.uiState({
               tenant,
@@ -333,10 +341,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               ? JSON.parse(raw)?.state?.startPage
               : undefined
             const startPage =
-              START_PAGE_IDS.find((id) => id === choice) ?? 'home'
+              START_PAGE_IDS.find((id) => id === choice) ??
+              CLIENT_SETTING_DEFAULTS.startPage
             useClientSettings.setState({ startPage })
           } catch {
-            // Unavailable personal settings do not prevent sign-in; Home is the default.
+            // Unavailable personal settings do not prevent sign-in; the default start page is.
           }
         }
         if (!isCurrent()) return
@@ -401,7 +410,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       )
         return
       setActiveTenantStore(tenant)
-      if (principal.kind !== 'user') return
+      // The choice is saved in consoleviews; with it off there is nothing to save, and no failure to report.
+      if (principal.kind !== 'user' || !moduleOn('consoleviews')) return
       const generation = useSessionStore.getState().credentialGeneration
       const guard = credentialGuard(generation)
       tenantSaves.current = tenantSaves.current

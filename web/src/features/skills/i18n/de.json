@@ -45,7 +45,12 @@
     "moved": "Zuweisung auf die neueste Revision verschoben",
     "approveTitle": "Skills genehmigen, die beim Laden wirken?",
     "approveDescription": "Die neueste Revision weist {{target}} Skills zu, auf die ihr Werkzeug ohne Rückfrage reagiert: {{skills}}. Genehmigen Sie sie erst nach der Prüfung.",
-    "approve": "Genehmigen und neueste verwenden"
+    "approve": "Genehmigen und neueste verwenden",
+    "disable": "Deaktivieren",
+    "disabled": "Skill deaktiviert",
+    "disableFor": "{{skill}} für {{target}} deaktivieren",
+    "disableTitle": "Diesen Skill deaktivieren?",
+    "disableDescription": "Neue Sitzungen von {{target}} erhalten {{skill}} nicht mehr aus dieser Zuweisung. Andere Skills bleiben zugewiesen. Gespeicherte Gespräche behalten ihren Stand."
   },
   "assign": {
     "title": "Zuweisen",
@@ -85,7 +90,15 @@
     "gitSubmit": "Aus Git installieren",
     "name": "Paketname",
     "nameHint": "Optional; standardmäßig der Repository-Name. Wählen Sie einen anderen Namen für ein weiteres Paket aus demselben Repository.",
-    "held": "Skill-Paket installiert. Es enthält Skills, die beim Laden wirken, daher wurde es nicht zugewiesen: Prüfen Sie es und weisen Sie es im Paketblatt zu."
+    "held": "Skill-Paket installiert. Es enthält Skills, die beim Laden wirken, daher wurde es nicht zugewiesen: Prüfen Sie es und weisen Sie es im Paketblatt zu.",
+    "local": "Ordner oder Archiv",
+    "archive": "Archiv",
+    "archiveHint": "ZIP oder tar.gz, bis zu 32 MiB. Archiv oder Ordner auswählen.",
+    "folder": "Ordner",
+    "uploadSubmit": "Auswahl installieren",
+    "selectedFiles": "Ausgewählte Dateien: {{count}}",
+    "uploadLimit": "Importgrenzen überschritten (32 MiB, 4096 Dateien, 8 MiB pro Datei).",
+    "uploadName": "Name des hochgeladenen Pakets"
   },
   "update": {
     "title": "Updates",
@@ -103,6 +116,42 @@
     "acts": "{{skill}} wirkt jetzt beim Laden: {{items}}. Die Zuweisung braucht Ihre Genehmigung.",
     "pinsKeep": "Bestehende Zuweisungen behalten ihre Revision, bis Sie jede mit „Neueste verwenden“ verschieben.",
     "apply": "Dieses Update anwenden",
-    "applied": "Update als Revision {{n}} veröffentlicht"
+    "applied": "Update als Revision {{n}} veröffentlicht",
+    "checked": "Geprüft",
+    "noDiff": "Kein Textvergleich verfügbar."
+  },
+  "catalog": {
+    "source": "Quelle",
+    "tool_folder": "Werkzeugordner",
+    "pack": "Paket",
+    "uploaded": "Hochgeladen",
+    "skills": "Skills",
+    "packs": "Pakete",
+    "name": "Name",
+    "description": "Beschreibung",
+    "kind": "Typ",
+    "search": "Namen und Beschreibungen durchsuchen",
+    "unassigned": "Nicht zugewiesen",
+    "loading": "Wird geladen…",
+    "incomplete": "Einige Revisionen fehlen; Zuweisungen können unvollständig sein.",
+    "skill": "Skill",
+    "agent": "Agent",
+    "command": "Befehl",
+    "rule": "Regel"
+  },
+  "selection": {
+    "loading": "Skills werden geprüft…",
+    "count_one": "Diese Sitzung erhält {{count}} Skill",
+    "count_other": "Diese Sitzung erhält {{count}} Skills",
+    "current_one": "Derzeit zugewiesen: {{count}} Skill",
+    "current_other": "Derzeit zugewiesen: {{count}} Skills",
+    "unavailable": "Die Skills dieser Abteilung konnten nicht ermittelt werden."
+  },
+  "remove": {
+    "action": "Paket entfernen",
+    "title": "Dieses Paket entfernen?",
+    "description": "Hebt die Zuweisungen zu allen sichtbaren Zielen auf und entfernt das Paket aus aktuellen Sitzungen. Revisionen und Prüfprotokoll bleiben erhalten. Der Vorgang stoppt, wenn eine Zuweisung nicht entfernt werden kann.",
+    "done": "Skill-Paket entfernt",
+    "incomplete": "Die Zuweisungsliste konnte nicht vollständig geladen werden. Aktualisieren Sie die Seite und versuchen Sie es erneut."
   }
 }

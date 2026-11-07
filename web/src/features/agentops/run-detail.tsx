@@ -485,8 +485,10 @@ export function RunInfo({ run }: { run: RunDTO }) {
       <KvRow label={t('info.permissionMode')} mono>
         {run.permission_mode}
       </KvRow>
-      <KvRow label={t('info.effort')} mono>
-        {run.effort || none}
+      <KvRow label={t('info.effort')}>
+        {run.effort
+          ? t(`effort.${run.effort}`, { defaultValue: run.effort })
+          : none}
       </KvRow>
       <KvRow label={t('info.model')} mono align="start">
         {run.model_ref || none}

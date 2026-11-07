@@ -152,7 +152,7 @@ func TestAuthenticationFreshnessMigrationPreservesPermanentGapAndHistoricalRende
 	for _, engine := range store.SupportedEngines() {
 		dia, _ := dialect.New(engine)
 		versions, err := CompiledCoreMigrationVersions(engine)
-		if err != nil || !slices.Equal(versions, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29}) {
+		if err != nil || !slices.Equal(versions, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30}) {
 			t.Fatalf("plan: %v, %v", versions, err)
 		}
 		// The descriptor used by historical migrations stays frozen at v27;

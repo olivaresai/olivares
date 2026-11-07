@@ -315,7 +315,7 @@ func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRe
 			return refused, ErrRuntimeInputRefused
 		}
 	case RuntimeInputRaw:
-		if request.Text != "" || len(request.Raw) == 0 || len(request.Raw) > maxWorkTextInputBytes || bytes.ContainsAny(request.Raw, "\r\n") {
+		if request.Text != "" || len(request.Raw) == 0 || len(request.Raw) > maxWorkTextInputBytes || bytes.ContainsAny(request.Raw, "\r\n") || controlFrame(request.Raw) {
 			return refused, ErrRuntimeInputRefused
 		}
 	default:
@@ -521,7 +521,7 @@ func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request Runtime
 			return refused, ErrRuntimeInputRefused
 		}
 	case RuntimeInputRaw:
-		if request.Text != "" || len(request.Raw) == 0 || len(request.Raw) > maxWorkTextInputBytes || bytes.ContainsAny(request.Raw, "\r\n") {
+		if request.Text != "" || len(request.Raw) == 0 || len(request.Raw) > maxWorkTextInputBytes || bytes.ContainsAny(request.Raw, "\r\n") || controlFrame(request.Raw) {
 			return refused, ErrRuntimeInputRefused
 		}
 	default:

@@ -112,3 +112,38 @@ func TestSessionListPutsPinnedFirstInPinOrder(t *testing.T) {
 		})
 	}
 }
+
+// A session Olivares only observes is pinned by the id `session ls --observed` prints
+// (live:<id>), on its own route; plain `session ls` lists the observed ones you pinned,
+// first, and --observed lists them all.
+func TestSessionPinTakesAnObservedSessionAndListShowsIt(t *testing.T) {
+	f := pinEngine(t)
+	f.live = []map[string]any{
+		{"live_ref": "lr-a", "project": "/srv/seen-a", "engine": "claude", "cc_state": "running", "pinned": true, "pinned_at": "2026-10-14T10:00:01Z"},
+		{"live_ref": "lr-b", "project": "/srv/seen-b", "engine": "claude", "cc_state": "running", "pinned": false},
+		{"live_ref": "lr-run", "run_ref": "r-new", "project": "/srv/run"},
+	}
+	creds := sessionCreds(f.URL)
+	out, _, err := execSessionCLI(t, nil, append([]string{"session", "pin", "live:lr-b"}, creds...)...)
+	if err != nil || out != "Pinned /srv/seen-b.\n" {
+		t.Fatalf("pin = %q, %v", out, err)
+	}
+	if !strings.Contains(strings.Join(f.hits, "\n"), "POST "+sessionLivePath+"/by-id/lr-b/pin") {
+		t.Fatalf("no pin on the live row; hits:\n%s", strings.Join(f.hits, "\n"))
+	}
+	list := func(extra ...string) string {
+		t.Helper()
+		text, _, err := execSessionCLI(t, nil, append(append([]string{"session", "ls"}, extra...), creds...)...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return text
+	}
+	if text := list(); !strings.Contains(text, "seen-a") || strings.Contains(text, "seen-b") ||
+		strings.Index(text, "seen-a") > strings.Index(text, "newest") {
+		t.Fatalf("plain ls must show the pinned observed session first and not the other:\n%s", text)
+	}
+	if text := list("--observed"); !strings.Contains(text, "seen-a") || !strings.Contains(text, "seen-b") {
+		t.Fatalf("--observed must list every observed session:\n%s", text)
+	}
+}

@@ -49,8 +49,8 @@ sits in the systemd env file — `olivares setup` writes those files for you.
 
 ## Jobs that need the tenant inventory
 
-Some background jobs must cover every tenant: the retention sweep, the audit checkpoints,
-continuous audit archival and the long-horizon legal hold. The application role reads one
+Some background jobs must cover every tenant: the retention sweep (Business; Community runs
+none), the audit checkpoints, continuous audit archival and the long-horizon legal hold. The application role reads one
 tenant at a time (row-level security), so these jobs need a way to list every tenant:
 
 - the **tenant inventory**: a closed, attested database routine owned by a `NOLOGIN` role. It
@@ -81,8 +81,8 @@ Without the inventory or the administration role, these jobs do not run, and the
 report a pass over tenants they did not see. The engine says so:
 
 - `GET /v1/server-info` lists them in `jobs_not_running` with the reason `no_tenant_inventory`;
-- the retention page in the console shows "Retention is not running: this database cannot list
-  every tenant.";
+- the retention page in the console of a Business engine shows "Retention is not running: this
+  database cannot list every tenant.";
 - `olivares doctor` reports them in its `background-jobs` check;
 - the engine log names each job at start.
 

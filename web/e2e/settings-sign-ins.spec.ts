@@ -46,14 +46,14 @@ test('two browsers list and end other sign-ins accessibly', async ({
     await firstPage
       .getByRole('button', { name: /create administrator/i })
       .click()
-    await firstPage.waitForURL('**/onboarding')
+    await firstPage.waitForURL('**/sessions')
 
     await secondPage.goto('/login')
     await capturePublic(secondPage, 'login')
     await signInFixture(secondPage, credentials)
     await secondPage.goto('/settings')
     await secondPage
-      .getByRole('button', { name: 'Sign-in and security', exact: true })
+      .getByRole('button', { name: 'Sign-in', exact: true })
       .click()
     await expect(secondPage.getByText('Your sign-ins')).toBeVisible()
     await expect(
@@ -124,9 +124,7 @@ test('two browsers list and end other sign-ins accessibly', async ({
         .click()
       await page.waitForURL((url) => url.pathname !== '/pair')
       await page.goto('/settings')
-      await page
-        .getByRole('button', { name: 'Sign-in and security', exact: true })
-        .click()
+      await page.getByRole('button', { name: 'Sign-in', exact: true }).click()
       const currentRow = page
         .getByRole('row')
         .filter({ hasText: 'This session' })
@@ -141,7 +139,7 @@ test('two browsers list and end other sign-ins accessibly', async ({
     }
     await secondPage.goto('/settings')
     await secondPage
-      .getByRole('button', { name: 'Sign-in and security', exact: true })
+      .getByRole('button', { name: 'Sign-in', exact: true })
       .click()
     await expect(
       secondPage.getByRole('row').filter({ hasText: 'Spare tablet' }),
@@ -223,12 +221,19 @@ test('two browsers list and end other sign-ins accessibly', async ({
     await secondPage.emulateMedia({ colorScheme: 'light' })
     await secondPage.setViewportSize({ width: 1280, height: 1000 })
     await secondPage.goto('/identity?tab=people')
+    await secondPage
+      .getByRole('button', {
+        name: 'Row actions for member@example.com',
+        exact: true,
+      })
+      .click()
     await expect(
-      secondPage.getByRole('button', {
+      secondPage.getByRole('menuitem', {
         name: 'End sign-ins for member@example.com?',
         exact: true,
       }),
     ).toBeVisible()
+    await secondPage.keyboard.press('Escape')
     expect(
       (await new AxeBuilder({ page: secondPage }).analyze()).violations,
     ).toEqual([])

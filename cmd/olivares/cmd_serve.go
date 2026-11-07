@@ -299,6 +299,11 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		return err
 	}
 	defer func() { _ = eng.Close() }()
+	// An install that already has its organization (a restart, an upgrade) gets the
+	// data directory owner's CLI credential now; a fresh one gets it when setup ends.
+	if err := ensureLocalOperatorToken(ctx, eng.authr, eng.store, eng.dataDir); err != nil {
+		log.Warn("the local operator's CLI credential was not left; the CLI signs in with `olivares login`", "err", err)
+	}
 	// Before any child starts: a previous engine's confined children are gone, and so is their need for the private
 	// TMPDIRs they left under <data>/tool-tmp.
 	if err := confine.SweepChildTemp(); errors.Is(err, confine.ErrChildTempHeld) {
@@ -520,6 +525,9 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// relying party. The announcement runs only once every listener is held, so a
 	// bind failure can no longer follow a freshly minted setup token. A token that
 	// may have been partly delivered is kept: the pending-setup banner is the recovery.
+	if eng.managedPublicAddr.Origin != "" {
+		consoleAddr = resolveConsoleAddress(eng.managedPublicAddr, opts.listen, opts.insecure)
+	}
 	resolved := consoleAddr.withPlan(eng.webAuthn)
 	if err := runAnnouncement(ctx, out, eng, resolved, announce); err != nil {
 		return withCloseErrors(err, owned.closeAll())
@@ -529,7 +537,15 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// `olivares first-boot` can repeat it later, from a second process in the same
 	// container, with no shell and no credential (consolestate.go). A failure here
 	// is logged and never fatal: the engine is up and the banner was delivered.
-	if err := writeConsoleState(eng.dataDir, newConsoleState(resolved, opts.listen, opts.grpcListen, opts.insecure)); err != nil {
+	state := newConsoleState(resolved, opts.listen, opts.grpcListen, opts.insecure)
+	publicURL := ""
+	if state.Declared {
+		publicURL = state.Browse
+	}
+	// Publish the node's own held listener facts before serving any API request.
+	// A failed console.json write must never make live reads report an older boot.
+	eng.exposureFacts = &api.ConsoleExposure{Listen: owned.listeners[0].Addr().String(), GRPCListen: owned.listeners[1].Addr().String(), PublicURL: publicURL, TLS: !opts.insecure, Addresses: state.Addresses}
+	if err := writeConsoleState(eng.dataDir, state); err != nil {
 		log.Warn("could not record the console address for `olivares first-boot`; the engine is unaffected", "err", err)
 	}
 	// A callback may cancel and still return nil. This is an observation before
@@ -965,6 +981,11 @@ func buildHITLReceiverServer(eng *engine, tlsCert, tlsKey string, insecure bool,
 	return srv, nil
 }
 
+// shutdownDrainBudget bounds the drain of the HTTP servers at stop. A container
+// runtime must give the engine more than this before it kills it: the sessions,
+// their credentials and the store are closed only after the drain.
+const shutdownDrainBudget = 20 * time.Second
+
 // waitAndShutdown blocks until a signal, a canceled context or a fatal listener
 // error, then drains the HTTP server(s) it was given and gracefully stops gRPC.
 // It owns transports only: closing the engine and its store belongs to its caller.
@@ -993,7 +1014,7 @@ func waitAndShutdown(ctx context.Context, httpSrv *http.Server, grpcSrv *grpc.Se
 		}
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownDrainBudget)
 	defer cancel()
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		log.Warn("http shutdown", "err", err)

@@ -256,9 +256,7 @@ func (p WriterProof) Stamp(ctx context.Context, sc store.Scope) (string, error) 
 // about to be created or updated.
 //
 // It takes the record so a caller cannot forget the second half. Returning only the nonce and
-// trusting each stamping site to assign it is exactly how one of them would
-// eventually not. (Six until the P1-1 fix put credential rotation under the fence; the number was
-// corrected in the PR and the lane status and left stale HERE, in the file most people read.)
+// trusting each stamping site to assign it risks leaving a governed write without its nonce.
 //
 // The PROOF is built earlier, outside the transaction (writerProof), and carried in. Splitting the
 // two halves is what makes the rule enforceable by shape: everything StampInto does is a write, so

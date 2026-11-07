@@ -331,6 +331,67 @@ func TestOpenCodeStatusRecoversImmediatelyAfterNativeFailure(t *testing.T) {
 	}
 }
 
+// A status past its lifetime is not waited for: the page that asks gets the last answer at
+// once and the tool is asked again behind it, so the first visit after a pause does not pay
+// the tool's start (#3931).
+func TestOpenCodeStatusPastItsLifetimeAnswersAtOnceAndRefreshesBehind(t *testing.T) {
+	var m *Module
+	_, home := newSignInServer(t, func(module *Module, _ string) { m = module })
+	tenant := model.TenantID(filepath.Base(home))
+	var starts atomic.Int32
+	release := make(chan struct{})
+	previous := toolCommand
+	toolCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		if starts.Add(1) == 2 {
+			<-release // the refresh behind the answer is slow
+		}
+		return exec.CommandContext(ctx, "/bin/sh", "-c", "printf 'OpenAI oauth\\n'")
+	}
+	t.Cleanup(func() { toolCommand = previous })
+	if _, signedIn, err := m.LoginStatus(t.Context(), tenant, "opencode"); err != nil || !signedIn {
+		t.Fatalf("first read = %v %v", signedIn, err)
+	}
+	m.mu.Lock()
+	for _, read := range m.statusReads {
+		read.expires = time.Now().Add(-time.Second)
+	}
+	m.mu.Unlock()
+	answered := make(chan bool, 1)
+	go func() {
+		_, signedIn, _ := m.LoginStatus(t.Context(), tenant, "opencode")
+		answered <- signedIn
+	}()
+	select {
+	case signedIn := <-answered:
+		if !signedIn {
+			t.Fatal("the last answer was not served")
+		}
+	case <-time.After(5 * time.Second):
+		close(release)
+		t.Fatal("a status past its lifetime waited for the tool")
+	}
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		m.mu.Lock()
+		fresh := false
+		for _, read := range m.statusReads {
+			fresh = fresh || time.Now().Before(read.expires)
+		}
+		m.mu.Unlock()
+		if fresh {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the refresh behind the answer never stored its result")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, _, err := m.LoginStatus(t.Context(), tenant, "opencode"); err != nil || starts.Load() != 2 {
+		t.Fatalf("native starts = %d, want 2 (one cold, one behind the answer)", starts.Load())
+	}
+}
+
 func TestOpenCodeStatusTracksNativeLoginAndProgramChanges(t *testing.T) {
 	var m *Module
 	var bin string
@@ -367,6 +428,10 @@ func TestOpenCodeStatusTracksNativeLoginAndProgramChanges(t *testing.T) {
 	if err := os.Remove(authFile); err != nil {
 		t.Fatal(err)
 	}
+	check(false, 2)
+	if err := os.WriteFile(authFile, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	check(false, 3)
 	// An atomic reinstall can keep both the path and timestamp unchanged.
 	program := filepath.Join(bin, "opencode")
@@ -384,4 +449,60 @@ func TestOpenCodeStatusTracksNativeLoginAndProgramChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(false, 4)
+}
+
+// A fresh home has no credentials; starting the runtime just to discover that
+// makes the first status depend on the tool's cold startup cost.
+func TestOpenCodeFreshStatusDoesNotStartRuntime(t *testing.T) {
+	var m *Module
+	call, home := newSignInServer(t, func(module *Module, _ string) { m = module })
+	auth := filepath.Join(home, "opencode", ".local", "share", "opencode", "auth.json")
+	if err := os.Remove(auth); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	var starts atomic.Int32
+	previous := toolCommand
+	toolCommand = func(ctx context.Context, program string, args ...string) *exec.Cmd {
+		starts.Add(1)
+		return exec.CommandContext(ctx, program, args...)
+	}
+	t.Cleanup(func() { toolCommand = previous })
+	check := func(want bool, count int32) {
+		t.Helper()
+		code, status := call("GET", "/v1/m/agenttools/sign-in?driver=opencode", nil)
+		if code != 200 || status["installed"] != true || status["signed_in"] != want {
+			t.Fatalf("status = %d %v", code, status)
+		}
+		if got := starts.Load(); got != count {
+			t.Fatalf("native starts = %d, want %d", got, count)
+		}
+	}
+	check(false, 0)
+	if err := os.MkdirAll(filepath.Dir(auth), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(auth, []byte(`{"openai":{"type":"oauth"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	check(true, 1)
+	// Workstation reads may omit XDG_DATA_HOME; the native default is under HOME.
+	tenant := model.TenantID(filepath.Base(home))
+	env, configDir, err := m.toolEnv(t.Context(), tenant, "opencode", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var defaults []string
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, "XDG_DATA_HOME=") {
+			defaults = append(defaults, entry)
+		}
+	}
+	status, err := m.readResolvedStatus(t.Context(), tenant, SignInStatus{Driver: "opencode", Installed: true}, m.program("opencode"), configDir, defaults)
+	if err != nil || !status.SignedIn {
+		t.Fatalf("default data home status = %v, %v", status, err)
+	}
+	if err := os.Remove(auth); err != nil {
+		t.Fatal(err)
+	}
+	check(false, 1)
 }

@@ -126,6 +126,38 @@ if [ -n "$UNVERIFIED" ]; then
   fail "a README installs a download it did not verify (above); verify the signed checksums and the file, or the image digest, first"
 fi
 
+# ---- A documented docker run starts sessions ---------------------------------
+# Docker's default seccomp profile refuses the user and network namespaces a session needs, and
+# so does its default AppArmor profile where AppArmor controls user namespaces (Debian 13 and
+# Ubuntu 24.04 measured), so an engine started without the shipped profiles fails every session
+# at launch. Every documented `docker run` that serves the engine carries the seccomp profile
+# Compose uses, read from the image, and the AppArmor selection ($apparmor) its block makes.
+# The loopback demo (--seed-demo) and an elided `docker run ...` are not installs.
+# The docs-site paths have no blanks, so the find output splits into one argument per page.
+DOCS_PAGES="$(find "$ROOT/docs-site/src/content/docs" -type f \( -name '*.md' -o -name '*.mdx' \))" || {
+  echo "docs-honesty: find could not list the docs-site pages; their docker run lines are UNVERIFIED" >&2
+  exit 2
+}
+# shellcheck disable=SC2086 # one argument per page, as above
+NO_SECCOMP="$(awk '
+  function done() {
+    if (cmd ~ / serve( |$)/ && cmd !~ /--seed-demo/ && cmd !~ /docker run \.\.\. / &&
+        (cmd !~ /--security-opt[ =]seccomp=olivares-sessions\.json/ || cmd !~ /\$apparmor/)) print start
+    cmd = ""
+  }
+  FNR == 1 { cmd = "" }
+  cmd == "" && /docker run / { start = FILENAME ":" FNR ": " $0; cmd = " " }
+  cmd != "" { cmd = cmd " " $0; if ($0 !~ /\\$/) done() }
+' "$ROOT"/README*.md "$ROOT/INSTALL.md" "$ROOT/docs/UPGRADE-AND-ROLLBACK.md" \
+    "$ROOT/packaging/docker/dockerhub-overview.md" $DOCS_PAGES)" || {
+  echo "docs-honesty: awk could not read the install docs; their docker run lines are UNVERIFIED" >&2
+  exit 2
+}
+if [ -n "$NO_SECCOMP" ]; then
+  printf '%s\n' "$NO_SECCOMP" >&2
+  fail "a documented docker run serves the engine without the session profiles (above); add --security-opt seccomp=olivares-sessions.json \$apparmor, read from the image as INSTALL.md, Docker shows"
+fi
+
 # ---- supply-chain wording honesty ------------------------------------
 LIVE_FILES="$(mktemp)"
 SLSA_HITS="$(mktemp)"

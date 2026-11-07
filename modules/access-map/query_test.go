@@ -162,6 +162,34 @@ func TestDiff_InventoryKindGoesToInventoryGrants(t *testing.T) {
 	}
 }
 
+// TestDiff_GrantsDeclared: a diff reports whether any grant exists at all, so a
+// consumer can tell "nothing to compare against" (no rules declared, every
+// observed access unexpected by construction) from a real violation (#3936).
+func TestDiff_GrantsDeclared(t *testing.T) {
+	st, tenant := newStore(t)
+	m := New()
+	m.UseData(api.NewModuleData(st))
+	ctx := context.Background()
+
+	mustIngest(t, m, tenant, obs("identity", "svc-a", "postgres.table", "appdb.public.t", sdkmodel.ModeRead, sdkmodel.SignalPGAudit, sdkmodel.ConfidenceAttributed))
+	diff, err := m.Diff(ctx, tenant, "user:a", model.ActorUser, model.Query{})
+	if err != nil {
+		t.Fatalf("diff: %v", err)
+	}
+	if len(diff.UnexpectedAccesses) != 1 || diff.GrantsDeclared {
+		t.Fatalf("no grants: unexpected=%d grantsDeclared=%v, want 1 and false", len(diff.UnexpectedAccesses), diff.GrantsDeclared)
+	}
+
+	mustIngest(t, m, tenant, obs("identity", "svc-a", "postgres.table", "appdb.public.t", sdkmodel.ModeReadWrite, sdkmodel.SignalPolicy, sdkmodel.ConfidenceAttributed))
+	diff, err = m.Diff(ctx, tenant, "user:a", model.ActorUser, model.Query{})
+	if err != nil {
+		t.Fatalf("diff: %v", err)
+	}
+	if !diff.GrantsDeclared {
+		t.Errorf("a grant exists (and covers the access) but grantsDeclared = false")
+	}
+}
+
 // TestDrainDrift_CrossesStoreCap proves the drift window is DRAINED past the
 // store's 1000-row cap: a flood of permitted-only grant edges occupying
 // the first page must not hide later rows. 1050 grants plus one violation are

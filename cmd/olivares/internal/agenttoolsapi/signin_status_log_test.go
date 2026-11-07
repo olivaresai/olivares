@@ -6,6 +6,7 @@ package agenttoolsapi
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -168,14 +169,14 @@ func TestAStatusReadCutOffByTheWaitDelayIsLoggedAsATimeout(t *testing.T) {
 	wantLines(t, logs, "opencode", "timeout", 0, "process", "read")
 }
 
-// Claude and Codex answer "not signed in" when their status is unreadable, and no error
-// says so: the log does.
-func TestAnUnreadableStatusAnswerIsLogged(t *testing.T) {
+// A status answer the reader cannot read is neither signed in nor signed out: the read
+// fails, and the log says the answer was unrecognized.
+func TestAnUnreadableStatusAnswerIsAnErrorAndIsLogged(t *testing.T) {
 	m, tenant := statusModule(t, "echo 'garbage, not json'; exit 1")
 	logs := captureLog(t)
 	installed, signedIn, err := m.LoginStatus(t.Context(), tenant, "claude")
-	if err != nil || !installed || signedIn {
-		t.Fatalf("status = %v %v %v, want installed and signed out without an error", installed, signedIn, err)
+	if !errors.Is(err, errSignInStatus) || signedIn {
+		t.Fatalf("status = %v %v %v, want the unreadable-status error, not signed out", installed, signedIn, err)
 	}
 	wantLines(t, logs, "claude", "unrecognized", 0, "process", "read")
 }

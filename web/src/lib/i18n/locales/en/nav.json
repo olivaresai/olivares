@@ -16,17 +16,17 @@
     "infrastructure": "Infrastructure"
   },
   "items": {
-    "estate": "Estate",
-    "home": "Now",
-    "onboarding": "Setup wizard",
+    "estate": "Resources",
+    "home": "Overview",
+    "onboarding": "Setup",
     "inventory": "Inventory",
     "sessions": "Sessions",
     "accessMap": "Access map",
     "reach": "Reach",
-    "health": "Health & SLA",
-    "capabilities": "MCP & skills",
+    "health": "Health",
+    "capabilities": "Extensions",
     "protocolBindings": "Protocol bindings",
-    "communications": "Communications",
+    "communications": "Channels",
     "communicationsInbox": "Communications inbox",
     "communicationsNew": "New channel",
     "communicationsAdministration": "Channel administration",
@@ -34,24 +34,22 @@
     "console": "Administration",
     "sourceDiff": "Source diff",
     "permissions": "Permissions",
-    "identity": "Identity & access",
+    "identity": "Identity",
     "vault": "Vault",
     "claudePolicy": "Managed policy",
     "routinePolicies": "Routine policies",
-    "deploy": "Deployment",
     "gitPublication": "Git publication",
     "knowledge": "Knowledge",
     "catalog": "Catalog",
     "killswitch": "Kill switch",
     "work": "Work",
     "agentops": "Operate sessions",
-    "agentArtifacts": "Agent Artifacts",
+    "agentArtifacts": "Agent artifacts",
     "models": "Models",
-    "modelOps": "Model Operations",
+    "modelOps": "Model operations",
     "adoption": "Adoption",
     "evals": "Evals",
     "security": "Security",
-    "recordings": "Recordings",
     "compliance": "Compliance",
     "voice": "Voice",
     "sandbox": "Sandbox",
@@ -60,14 +58,13 @@
     "platforms": "Platforms",
     "rateLimits": "Rate limits",
     "attestation": "Supply chain",
-    "apiPlayground": "API Playground",
-    "audit": "Audit ledger",
+    "apiPlayground": "API playground",
+    "audit": "Ledger",
     "retention": "Retention",
     "workspaceDashboard": "Workspace",
     "settings": "Settings",
-    "workspace-templates": "Workspace templates",
-    "eventing": "Webhooks & events",
-    "session-viewer": "Session viewer",
+    "workspace-templates": "Templates",
+    "eventing": "Webhooks",
     "backups": "Backups",
     "updates": "Updates",
     "logs": "Logs",
@@ -80,7 +77,8 @@
     "providerAccounts": "Provider accounts",
     "agent-tools": "AI tools",
     "storedBudgets": "Budgets",
-    "usage": "Usage"
+    "usage": "Usage",
+    "operations": "Operations"
   },
   "workspace": {
     "open": "Open {{workspace}}",
@@ -93,10 +91,10 @@
     "truncated": "The list is incomplete — more workspaces exist than are loaded"
   },
   "descriptions": {
-    "estate": "Inspect configured resources and their relationships, including work item dependencies.",
+    "estate": "What you have set up, and how its parts depend on each other, work items included.",
     "home": "Estate overview and health at a glance",
     "onboarding": "Step-by-step deployment configuration",
-    "inventory": "Discover and catalog the agents, MCP servers and models that connectors observed.",
+    "inventory": "Agents, MCP servers and models that connectors have observed, and when each was last seen.",
     "sessions": "Start sessions and follow what each one does, including the ones Olivares finds",
     "accessMap": "What each agent reads and writes (R/RW)",
     "reach": "See which destinations each tool can reach, and which are waiting for approval.",
@@ -113,7 +111,6 @@
     "identity": "SSO, SCIM and the identities your agents use",
     "vault": "Your passwords, notes and authenticator codes",
     "claudePolicy": "Managed policy, hooks, MCP, sandbox and policy-as-code",
-    "deploy": "Provision agents and connect them to infrastructure",
     "gitPublication": "Push commits, open pull requests and merge through approved Git targets",
     "knowledge": "Knowledge bases, RAG and data lineage",
     "catalog": "Curated, approved agents and capabilities",
@@ -128,7 +125,6 @@
     "adoption": "Productivity, acceptance & model mix",
     "evals": "Quality, evals and regression",
     "security": "Guardrails, forensics and anomalies",
-    "recordings": "Privileged session recording and replay",
     "compliance": "Frameworks, controls and evidence",
     "voice": "Voice and realtime sessions",
     "sandbox": "Isolated agent testing and replay",
@@ -161,7 +157,8 @@
     "logs": "The live engine log stream, with level and module filters, search and pause",
     "sourceDiff": "Compare a base and a head revision of a connected Git repository, file by file",
     "storedBudgets": "Consumption against each stored limit. Reserved capacity counts toward the limit.",
-    "usage": "Each account's official 5-hour and weekly limits, nearest first, and today's tokens and cost."
+    "usage": "Each account's official 5-hour and weekly limits, nearest first, and today's tokens and cost.",
+    "operations": "The host, its disks, the live sessions and their usage, over 24 hours, 7 or 30 days."
   },
   "commandActions": {
     "eventing": {
@@ -186,13 +183,36 @@
     "agentcoreExport": "AgentCore export · AgentCore",
     "sessions": "Sessions · Observe sessions · Operate sessions · Claude Code · agentops",
     "agentops": "Operate sessions · Claude Code · agentops · Claude Code operate portal",
-    "console": "Control console · Tenant administration"
+    "console": "Control console · Tenant administration",
+    "estate": "Estate · Configured resources",
+    "inventory": "Discovered resources",
+    "home": "Now",
+    "workspaceDashboard": "Files & workspaces",
+    "work": "Work & communications",
+    "knowledge": "Sources · Data, knowledge & context",
+    "permissions": "Rules & approvals · Approvals and permissions",
+    "usage": "Usage & cost · Usage and cost, by account",
+    "audit": "Activity & audit · Audit ledger",
+    "identity": "People & groups · Identity & access",
+    "communications": "Communications",
+    "workspace-templates": "Workspace templates",
+    "capabilities": "MCP & skills",
+    "health": "Health & SLA",
+    "eventing": "Webhooks & events · Webhooks & event subscriptions",
+    "onboarding": "Setup wizard · Get started",
+    "backups": "Backup & Restore",
+    "platforms": "Platforms & lifecycle",
+    "security": "Security & forensics",
+    "logs": "Log Viewer",
+    "modelOps": "Model Operations",
+    "agentArtifacts": "Agent Artifacts",
+    "apiPlayground": "API Playground"
   },
   "areas": {
     "infrastructure": {
       "label": "Infrastructure",
       "sections": {
-        "estate": "Inventory and workspaces"
+        "estate": "Resources and workspaces"
       }
     },
     "ai": {
@@ -298,6 +318,13 @@
     "draftSaveFailed": "Draft could not be saved in this tab. Keep this page open or copy your message before leaving.",
     "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence.",
     "slashLabel": "Commands and skills",
+    "mentionLabel": "Context",
+    "skillLabel": "Skills",
+    "mention": {
+      "loading": "Reading the session's folder…",
+      "failed": "The session's folder could not be read.",
+      "nomatch": "No file or folder starts with “{{query}}”."
+    },
     "slashOption": "{{name}}, {{i}} of {{n}}",
     "slashNoMatch": "No command matches “{{query}}”.",
     "slash": {
@@ -315,7 +342,8 @@
     },
     "sessionKeeps": "This session keeps {{value}}. A different choice starts a new session.",
     "startWithChoice": "Start a new session with this choice",
-    "askPlaceholder": "Ask anything, / for commands and skills",
+    "newWithOtherAccess": "New session with different access…",
+    "askPlaceholder": "Ask anything, @ for context, / for commands and skills",
     "modelPicker": "Model: {{value}}",
     "effortPicker": "Effort: {{value}}",
     "accessPicker": "Access: {{value}}",
@@ -346,6 +374,7 @@
     }
   },
   "shell": {
+    "more": "More",
     "searchCommands": "Search and commands",
     "search": "Search",
     "stopAll": "Stop all",
@@ -414,8 +443,7 @@
       "usage": "{{tool}} usage",
       "fiveHour": "5h",
       "week": "wk",
-      "toolsUnreadable": "AI tools not read · Retry",
-      "version": "Version"
+      "toolsUnreadable": "AI tools not read · Retry"
     },
     "account": {
       "version": "Version {{version}}"
@@ -426,28 +454,28 @@
     "closeNavigation": "Close navigation"
   },
   "places": {
-    "now": "Now",
+    "now": "Overview",
     "sessions": "Sessions",
-    "files": "Files & workspaces",
-    "work": "Work & communications",
-    "ai-tools": "AI tools",
-    "models": "Models",
-    "mcp-skills": "MCP & skills",
-    "sources": "Sources",
-    "rules": "Rules & approvals",
-    "usage": "Usage & cost",
-    "activity": "Activity & audit",
-    "access": "Access map",
-    "people": "People & groups",
+    "files": "Files",
+    "tools": "Tools",
+    "rules": "Rules",
+    "usage": "Usage",
+    "activity": "Audit",
+    "people": "People",
     "security": "Security",
     "operations": "Operations",
-    "license": "License",
     "settings": "Settings"
   },
-  "groups": {
-    "work": "Work",
-    "tools": "Tools",
-    "control": "Control",
-    "admin": "Admin"
+  "readOnlyNotice": "You can read this page but not change it. An organization admin can.",
+  "business": {
+    "sessions": "Recordings, automations and orchestration of sessions",
+    "people": "Directories, departments and delegated administration",
+    "rules": "Custom policies, roles and grants",
+    "usage": "Cost by team and project",
+    "securityCompliance": "Compliance frameworks and evidence",
+    "securityRedTeam": "Red team runs and scoring",
+    "operationsDeploy": "Deploy agents to other hosts",
+    "operationsResidency": "Data residency and tenants",
+    "retentionSchedules": "Schedules are applied only in Olivares Business: this edition keeps them and purges nothing."
   }
 }

@@ -206,10 +206,13 @@ func expiryExtended(old, updated string) bool {
 // This function may only ever ADD a gate relative to the pre classifier, never remove
 // one; posture_classify_test.go pins that as a property over the whole input space.
 func classifyUpdate(old, updated bindingDTO, otherEnabledAllows int) (bool, string) {
+	if isPolicySource(old.SourceType) {
+		return true, policyAssignmentChanged
+	}
 	oldEff, newEff := normalizeEffect(old.Effect), normalizeEffect(updated.Effect)
-	forbidExpiry := old.ExpiresAt != updated.ExpiresAt || (oldEff != newEff && updated.ExpiresAt != "")
-	if (oldEff == effectForbid || newEff == effectForbid) && forbidExpiry {
-		return true, "forbid expiry changed (a restriction lifts at a different time)"
+	restrictionExpiry := old.ExpiresAt != updated.ExpiresAt || (oldEff != newEff && updated.ExpiresAt != "")
+	if (restricts(oldEff) || restricts(newEff)) && restrictionExpiry {
+		return true, "restriction expiry changed (a forbid or a mandatory template lifts at a different time)"
 	}
 	if expiryExtended(old.ExpiresAt, updated.ExpiresAt) {
 		return true, "expiry extended (access remains available for longer)"
@@ -351,6 +354,9 @@ func classifyUpdate(old, updated bindingDTO, otherEnabledAllows int) (bool, stri
 //   - every FURTHER enabled allow on an ALREADY-CONFINED source ADDS a grant — a population
 //     that could not reach the source now can. Gated.
 func classifyCreate(created bindingDTO, otherEnabledAllows, assignmentRows int) (bool, string) {
+	if isPolicySource(created.SourceType) {
+		return true, policyAssignmentChanged
+	}
 	if isStandardsSource(created.SourceType) {
 		return classifyStandardsCreate(created)
 	}
@@ -538,10 +544,18 @@ func countOtherAssignments(ctx context.Context, sc store.Scope, connectorName, e
 	return other, duplicate, nil
 }
 
+// policyAssignmentChanged is why every write of an approval-policy or dlp-ruleset binding waits for
+// a second person: no direction of it is a tightening. Giving a department or group a policy takes
+// it from everyone else, and any change can swap a stricter policy for a weaker one.
+const policyAssignmentChanged = "an approval policy or DLP ruleset assignment changes (it decides how many approvals and which DLP rules a department or group gets)"
+
 // classifyDelete reports whether deleting a binding RELAXES enforcement: removing an
 // enabled forbid (a restriction), or removing the last enabled allow (the source becomes
 // global). Deleting an already-disabled binding changes no enforcement.
 func classifyDelete(deleted bindingDTO, otherEnabledAllows int) (bool, string) {
+	if isPolicySource(deleted.SourceType) {
+		return true, policyAssignmentChanged
+	}
 	if isStandardsSource(deleted.SourceType) {
 		return classifyStandardsDelete(deleted)
 	}
@@ -1031,6 +1045,9 @@ func (m *Module) applyPosture(ctx context.Context, sc store.Scope, mc api.Module
 		return nil, err
 	}
 	storedReason := rec.String(colPRReason)
+	if err := mayAssignPolicy(ctx, mc, rec.String(colPRSourceType)); err != nil {
+		return nil, err
+	}
 	// A proposal a Business install queued to assign or change an assignment is not applied
 	// by a Community one. Deleting one and disabling the scoping of its source only relax.
 	if op := rec.String(colPROp); op == postureOpCreate || op == postureOpUpdate || op == postureOpAccessRequest {

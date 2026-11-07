@@ -23,7 +23,7 @@ func currentCoreDescriptors() []model.EntityDescriptor {
 	ds := coreDescriptors()
 	for i, d := range ds {
 		if d.Kind == authSessionDescriptor.Kind {
-			ds[i] = authSessionDescriptorV28
+			ds[i] = authSessionDescriptorV30
 		}
 		if d.Kind == apiTokenDescriptor.Kind {
 			ds[i] = apiTokenDescriptorV29

@@ -114,6 +114,16 @@ type Binding struct {
 // means a session adapter exists, not that it is registered on this node.
 type Facts struct {
 	Key, Name, Program string
+	// Vendor is the company behind the tool, in the provider kind's word where the
+	// vendor has a kind (anthropic, openai, xai, gemini, ollama): a provider record of
+	// that kind wears the vendor's color.
+	Vendor string
+	// Monogram (one or two capitals) and Color (#RRGGBB) are the tool's one mark in
+	// the console and the CLI: white letters on the color, the name always beside it.
+	// The console draws the vendor's own mark instead where it has one
+	// (web/src/components/ui/vendor-marks.ts), in this color unless the mark is black.
+	// A test holds every color to 3:1 on both console themes.
+	Monogram, Color string
 	// Alias is the word generated account names start from (`gemini`,
 	// `gemini-b`). Empty means the Key, as for every tool whose key is its name.
 	Alias                                   string
@@ -127,9 +137,16 @@ type Facts struct {
 	// LoginMethods are the official login methods the engine can relay, when a tool
 	// offers more than one. LoginArgs stays the default: a start without a method id
 	// runs it, so a tool that lists none is signed in exactly as before.
-	LoginMethods                           []LoginMethod
+	LoginMethods []LoginMethod
+	// LoginHosts are the hosts the tool's own login names in the link it prints
+	// (and the page that issues an API key): a client shows a sign-in link only
+	// on one of them. Host names only, lower case, matched whole by LoginHost.
+	LoginHosts                             []string
 	OwnKind, KeyPhrase, BindingDescription string
 	Bindings                               []Binding
+	// ResponsesOnly: the tool talks to its endpoint in the OpenAI Responses API and in
+	// no other (Codex). A preset whose vendor does not serve it cannot be bound to it.
+	ResponsesOnly bool
 	// EnvPrefixes are the tool's own credential and routing variable families. A
 	// session child gets them only from that tool's governed launch values: never
 	// inherited from the engine, never from a launch gate.
@@ -154,11 +171,15 @@ const openCodeKeyPrompt = "Enter your API key"
 var rows = []Facts{
 	{
 		Key: "claude", Name: "Claude Code", Program: "claude", Session: true,
+		Vendor: "anthropic", Monogram: "CC", Color: "#CA7152",
 		SkillsDir:   ".claude/skills",
 		EnvPrefixes: []string{"ANTHROPIC_", "CLAUDE_CODE_"},
 		ConfigDir:   ".claude", ConfigHomeEnv: ClaudeConfigHomeEnv, RuntimeBinEnv: ClaudeRuntimeBinEnv,
 		Installer: InstallManifest, SignIn: SignInPaste,
 		LoginArgs: []string{"auth", "login", "--claudeai"}, StatusArgs: []string{"auth", "status", "--json"},
+		// claude.com: https://claude.com/cai/oauth/authorize, printed by Claude Code
+		// 2.1.316. claude.ai is Anthropic's too, kept for a tool installed before.
+		LoginHosts:   []string{"claude.com", "claude.ai"},
 		AuthFailures: []string{"not logged in", "please run /login", "invalid api key", "oauth token has expired", "authentication_error"},
 		OwnKind:      "anthropic", KeyPhrase: "an Anthropic key",
 		BindingDescription: "Claude Code runs only on an Anthropic key",
@@ -167,24 +188,32 @@ var rows = []Facts{
 	},
 	{
 		Key: "codex", Name: "Codex", Program: "codex", Session: true,
+		Vendor: "openai", Monogram: "CX", Color: "#129C6E",
 		SkillsDir:   ".agents/skills",
 		EnvPrefixes: []string{"CODEX_", "OPENAI_"},
 		ConfigDir:   ".codex", ConfigHomeEnv: CodexConfigHomeEnv, RuntimeBinEnv: CodexRuntimeBinEnv,
 		Installer: InstallRelease, SignIn: SignInDevice,
 		LoginArgs: []string{"login", "--device-auth"}, StatusArgs: []string{"login", "status"},
+		// https://auth.openai.com/codex/device, printed by Codex 0.166.0.
+		LoginHosts:   []string{"auth.openai.com"},
 		AuthFailures: []string{"not logged in", "codex login", "please log in", "unauthorized"},
 		OwnKind:      "openai", KeyPhrase: "an OpenAI key",
 		BindingDescription: "Codex runs only on an OpenAI key, an OpenAI-compatible endpoint or a local model (Ollama)",
 		Bindings:           []Binding{{"openai", EgressConfigured}, {"openai_compatible", EgressConfigured}, {"ollama", EgressConfigured}},
+		ResponsesOnly:      true,
 		EgressMeasured:     true,
 	},
 	{
 		Key: "grok", Name: "Grok Build", Program: "grok", Session: true,
+		Vendor: "xai", Monogram: "GB", Color: "#888892",
 		SkillsDir:   ".agents/skills",
 		EnvPrefixes: []string{"GROK_", "XAI_"},
 		ConfigDir:   ".grok", ConfigHomeEnv: GrokConfigHomeEnv, RuntimeBinEnv: GrokRuntimeBinEnv,
 		Installer: InstallPackage, SignIn: SignInDevice,
-		LoginArgs:    []string{"login", "--device-auth"},
+		LoginArgs: []string{"login", "--device-auth"},
+		// https://accounts.x.ai/device, as Grok Build 1.0.46 printed it (the recorded
+		// prompt the engine's tests read); not re-measured on a newer release.
+		LoginHosts:   []string{"accounts.x.ai"},
 		AuthFailures: []string{"not logged in", "grok login", "unauthenticated", "unauthorized"},
 		OwnKind:      "xai", KeyPhrase: "an xAI key",
 		BindingDescription: "Grok Build runs only on an xAI key",
@@ -192,6 +221,7 @@ var rows = []Facts{
 	},
 	{
 		Key: "opencode", Name: "OpenCode", Program: "opencode", Session: true,
+		Vendor: "opencode", Monogram: "OC", Color: "#8679F1",
 		// Its own configuration folder: sessions turn the .agents/.claude scans off (#2997).
 		SkillsDir:   ".opencode/skills",
 		EnvPrefixes: []string{"OPENCODE_"},
@@ -214,10 +244,13 @@ var rows = []Facts{
 				KeyPrompt: openCodeKeyPrompt, KeyURL: "https://opencode.ai/console"},
 			{ID: "chatgpt-headless", Label: "ChatGPT Pro/Plus (headless)", Args: openCodeHeadlessLogin},
 		},
+		// opencode.ai: the two key pages above. auth.openai.com: the ChatGPT headless
+		// method relays OpenAI's own device login, the page Codex prints.
+		LoginHosts:         []string{"opencode.ai", "auth.openai.com"},
 		StatusArgs:         []string{"auth", "list"},
 		AuthFailures:       []string{"no provider", "api key", "unauthorized", "not authenticated"},
 		KeyPhrase:          "a key or a local model (Ollama)",
-		BindingDescription: "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama, or an OpenAI-compatible server at a local address)",
+		BindingDescription: "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, an OpenRouter, DeepSeek, Mistral, Moonshot or Z.ai key at its documented address, or on a local model (Ollama, or an OpenAI-compatible server at a local address)",
 		Bindings:           []Binding{{"anthropic", EgressVendor}, {"openai", EgressVendor}, {"xai", EgressVendor}, {"ollama", EgressConfigured}, {"openai_compatible", EgressLocal}},
 		// Record-bound turns reach only their provider's host: inventoried on 1.18.34
 		// with an egress probe (modules/sessions/driver_opencode.go). The own sign-in
@@ -228,10 +261,13 @@ var rows = []Facts{
 	// GEMINI_CLI_HOME names the home that holds .gemini, not .gemini itself.
 	{
 		Key: "gemini-cli", Alias: "gemini", Name: "Gemini CLI", Program: "gemini", Session: true,
+		Vendor: "gemini", Monogram: "GC", Color: "#5087E8",
 		SkillsDir:   ".agents/skills",
 		EnvPrefixes: []string{"GEMINI_CLI_"},
 		ConfigDir:   ".gemini", ConfigHomeEnv: GeminiConfigHomeEnv, RuntimeBinEnv: GeminiRuntimeBinEnv,
 		Installer: InstallRelease, SignIn: SignInPaste, LoginArgs: []string{"--acp"},
+		// Google's OAuth page, the one host the engine accepts for this tool's link.
+		LoginHosts:   []string{"accounts.google.com"},
 		AuthFailures: []string{"api key is missing", "authentication required", "invalid api key", "unauthenticated"},
 		OwnKind:      "gemini", KeyPhrase: "a Gemini API key",
 		BindingDescription: "Gemini CLI runs on a Gemini API key at Google's own address",
@@ -248,17 +284,20 @@ var rows = []Facts{
 	// Upgrade trigger: the first account run, which may name another host.
 	{
 		Key: "cursor", Name: "Cursor CLI", Program: "agent", Session: true,
+		Vendor: "cursor", Monogram: "CU", Color: "#A3845D",
 		// No SkillsDir: Cursor documents ~/.agents/skills for its skills, not that the CLI
 		// reads it, and delivering skills replaces HOME, which holds this tool's login.
 		EnvPrefixes: []string{"CURSOR_"},
 		ConfigDir:   ".cursor", ConfigHomeEnv: CursorConfigHomeEnv, RuntimeBinEnv: CursorRuntimeBinEnv,
 		Installer: InstallOriginTarball, SignIn: SignInLink,
 		LoginArgs: []string{"login"}, StatusArgs: []string{"status", "--format", "json"},
+		// https://cursor.com/loginDeepControl, measured on 2026.10.22-27dcf5f.
+		LoginHosts:     []string{"cursor.com"},
 		AuthFailures:   []string{"authentication required", "not logged in", "agent login", "unauthenticated"},
 		EgressMeasured: true, NoPATHFallback: true,
 	},
 	// Ollama is the local model service used by session drivers.
-	{Key: "ollama", Name: "Ollama", Program: "ollama", Installer: InstallRelease},
+	{Key: "ollama", Name: "Ollama", Program: "ollama", Installer: InstallRelease, Vendor: "ollama", Monogram: "OL", Color: "#6B8F97"},
 }
 
 // CanBind preserves the closed set of provider kinds and endpoint restrictions.
@@ -271,6 +310,12 @@ func (f Facts) CanBind(kind, baseURL string) bool {
 		}
 	}
 	return false
+}
+
+// LoginHost reports whether host is one the tool's own login names: the whole
+// host, so a lookalike (auth.openai.com.example, a trailing dot) is not.
+func (f Facts) LoginHost(host string) bool {
+	return slices.Contains(f.LoginHosts, strings.ToLower(host))
 }
 
 // NameStem is the word a generated account name starts from: the Alias when the
@@ -415,6 +460,7 @@ func clone(f Facts) Facts {
 	for i := range f.LoginMethods {
 		f.LoginMethods[i].Args = slices.Clone(f.LoginMethods[i].Args)
 	}
+	f.LoginHosts = slices.Clone(f.LoginHosts)
 	f.StatusArgs = slices.Clone(f.StatusArgs)
 	f.AuthFailures = slices.Clone(f.AuthFailures)
 	f.Bindings = slices.Clone(f.Bindings)

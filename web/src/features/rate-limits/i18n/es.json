@@ -4,7 +4,7 @@
     "hint": "El resumen de límites sólo se buscó entre los hallazgos cargados. Un resumen ausente puede estar más allá de esta página."
   },
   "title": "Límites de tasa",
-  "description": "Inventario de solo lectura de los límites de tasa de organización y de espacio de trabajo que una pasarela o proxy debe mantener sincronizados. Procede de la API de límites de tasa de Anthropic (solo lectura); esta vista nunca modifica un límite.",
+  "description": "Límites de frecuencia de su organización y sus espacios de trabajo. Solo lectura.",
   "caveats": {
     "keepInSync": "Las pasarelas y proxies deben mantenerse sincronizados: estos límites son el inventario que una pasarela o proxy ascendente debe replicar. No se aplican aquí, y su modificación se realiza en el proveedor, no en esta consola.",
     "managedAgents": "Los agentes gestionados NO están cubiertos por la API de límites de tasa. Sus límites son una laguna documentada, no un valor de cero: no se muestra ninguna fila de agentes gestionados porque la API no informa de ninguna."

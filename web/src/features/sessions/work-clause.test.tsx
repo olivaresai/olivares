@@ -49,6 +49,11 @@ vi.mock('@tanstack/react-router', () => ({
   },
 }))
 
+// WorkRow resolves catalog names through the authenticated profile plane.
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ activeTenant: 'demo', can: () => true }),
+}))
+
 const SHAPE = /^[a-z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*){1,5}$/
 
 /** Dotted text outside code or pre: the shape an untranslated key has. Links are NOT skipped. */

@@ -6,7 +6,13 @@
 // saved default and the models its last test found, and sends a model only when the user
 // picks one; the engine resolves the default itself.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, renderHook, screen, waitFor } from '@testing-library/react'
+import {
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,7 +55,7 @@ import type { ProviderRecordDTO } from '@/features/providers/types'
 import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
 import { StartSessionForm } from './first-hour'
-import { readinessOf } from './readiness.fixture'
+import { readinessOf, chooseTool } from './readiness.fixture'
 import { useClientSettings } from '@/features/settings/preferences'
 
 function wrap(
@@ -95,7 +101,7 @@ function given(
 }
 
 async function chooseCodex(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('radio', { name: 'Codex' }))
+  await chooseTool(user, 'Codex')
 }
 
 beforeEach(() => {
@@ -116,6 +122,7 @@ describe('the model in the New session dialog', () => {
         tool: 'codex',
         account: '',
         model: 'gpt-a',
+        effort: '',
         folder: '',
       },
     })
@@ -186,7 +193,7 @@ describe('the model in the New session dialog', () => {
         ],
       })
       wrap(<StartSessionForm />)
-      await user.click(await screen.findByRole('radio', { name: tool }))
+      await chooseTool(user, tool)
       await user.click(await screen.findByLabelText(label))
       await user.click(screen.getByRole('option', { name: option }))
       expect(
@@ -207,13 +214,15 @@ describe('the model in the New session dialog', () => {
     await chooseCodex(user)
     const model = await screen.findByRole('combobox', { name: 'Model' })
     expect(model).toHaveTextContent('Default (gpt-b)')
+    // The model runs on the chosen tool: its mark stands beside it, as beside the account.
+    expect(within(model).getByTestId('tool-mark')).toHaveTextContent('CX')
     expect(
       screen.getByText("Models that passed this key's last connection test."),
     ).toBeInTheDocument()
     await user.click(model)
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual(['Default (gpt-b)', 'gpt-a', 'gpt-b'])
+    ).toEqual(['CXDefault (gpt-b)', 'CXgpt-a', 'CXgpt-b'])
     await user.click(screen.getByRole('option', { name: 'gpt-a' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -250,7 +259,7 @@ describe('the model in the New session dialog', () => {
     await user.click(model)
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual(['gpt-a', 'gpt-b'])
+    ).toEqual(['CXgpt-a', 'CXgpt-b'])
     await user.click(screen.getByRole('option', { name: 'gpt-b' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -321,7 +330,7 @@ describe('the model in the New session dialog', () => {
     await chooseCodex(user)
     await user.click(await screen.findByRole('combobox', { name: 'Model' }))
     await user.click(await screen.findByRole('option', { name: 'gpt-a' }))
-    await user.click(screen.getByRole('radio', { name: 'Claude Code' }))
+    await chooseTool(user, 'Claude Code')
     await chooseCodex(user)
     const model = await screen.findByRole('combobox', { name: 'Model' })
     expect(model).not.toHaveTextContent('gpt-a')
@@ -352,10 +361,33 @@ describe('the model in the New session dialog', () => {
     expect(launch.launchSession).not.toHaveBeenCalled()
   })
 
+  // review on 102dac51: the composer's Start waited for the key with nothing on screen.
+  it('the composer says why Start waits for a key with no tested model, and the way to Providers', async () => {
+    const user = userEvent.setup()
+    given(key({ default_model: null, models: [] }), { model_required: true })
+    wrap(<StartSessionForm composer />)
+    await user.click(
+      await screen.findByRole('button', { name: /^Tool and account: / }),
+    )
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: 'Codex' }),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Start' }),
+      ).toHaveAccessibleDescription(
+        'No model of this key has passed its connection test yet: test the key in Providers. Open Providers',
+      ),
+    )
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Open Providers' }))
+    expect(navigate).toHaveBeenCalledWith({ to: '/providers' })
+  })
+
   it("offers no key model list on the tool's own login: its models are the tool's own catalog", async () => {
     given(key())
     wrap(<StartSessionForm />)
-    await screen.findByRole('radio', { name: 'Claude Code' })
+    await screen.findByRole('combobox', { name: 'Tool' })
     expect(screen.queryByRole('combobox', { name: 'Model' })).toBeNull()
     expect(await screen.findByRole('button', { name: 'Model' })).toBeVisible()
   })
@@ -399,14 +431,19 @@ describe('the model in the New session dialog', () => {
       ],
     })
     wrap(<StartSessionForm />)
-    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    await chooseTool(user, 'Claude Code')
     expect(
       screen.getByRole('button', { name: 'More options' }),
     ).toHaveAttribute('aria-expanded', 'false')
-    await user.click(await screen.findByRole('button', { name: 'Model' }))
+    const modelButton = await screen.findByRole('button', { name: 'Model' })
+    expect(within(modelButton).getByTestId('tool-mark')).toHaveAttribute(
+      'data-vendor',
+      'claude',
+    )
+    await user.click(modelButton)
     await user.click(await screen.findByText('Claude Haiku 5.5'))
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(await screen.findByRole('option', { name: 'High' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
@@ -454,11 +491,11 @@ describe('the model in the New session dialog', () => {
     })
     const onAdvanced = vi.fn()
     wrap(<StartSessionForm onAdvanced={onAdvanced} />)
-    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    await chooseTool(user, 'Claude Code')
     await user.click(await screen.findByRole('button', { name: 'Model' }))
     await user.click(await screen.findByText('Claude Haiku 5.5'))
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(await screen.findByRole('option', { name: 'High' }))
     await user.click(screen.getByRole('button', { name: 'More options' }))
     await user.click(
       await screen.findByRole('button', { name: 'Advanced launch options' }),
@@ -564,7 +601,7 @@ describe('the model in the New session dialog', () => {
       models: [{ id: 'opus-5-5', is_default: true }],
     })
     wrap(<StartSessionForm />)
-    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    await chooseTool(user, 'Claude Code')
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     const quick = launch.launchSession.mock.calls[0][0].quick
@@ -578,7 +615,7 @@ describe('the model in the New session dialog', () => {
     const preview = vi.spyOn(agentOpsApi, 'previewProfile')
     const models = vi.spyOn(agentOpsApi, 'profileModels')
     wrap(<StartSessionForm />)
-    await screen.findByRole('radio', { name: 'Claude Code' })
+    await screen.findByRole('combobox', { name: 'Tool' })
     expect(await screen.findByRole('button', { name: 'Model' })).toBeVisible()
     expect(preview).not.toHaveBeenCalled()
     expect(models).not.toHaveBeenCalled()
@@ -592,7 +629,7 @@ describe('the model in the New session dialog', () => {
     await user.click(await screen.findByRole('combobox', { name: 'Model' }))
     await user.click(await screen.findByRole('option', { name: 'gpt-a' }))
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(await screen.findByRole('option', { name: 'High' }))
     await user.click(screen.getByRole('combobox', { name: 'Model' }))
     await user.click(
       await screen.findByRole('option', { name: 'Codex default' }),
@@ -640,7 +677,7 @@ describe('the model in the New session dialog', () => {
     await chooseCodex(user)
     await user.click(await screen.findByRole('combobox', { name: 'Model' }))
     await user.click(await screen.findByRole('option', { name: 'gpt-a' }))
-    await user.click(screen.getByRole('radio', { name: 'Claude Code' }))
+    await chooseTool(user, 'Claude Code')
     await chooseCodex(user)
     expect(
       await screen.findByRole('combobox', { name: 'Model' }),
@@ -684,7 +721,7 @@ describe('Start for a tool that cannot start yet', () => {
       }),
     )
     wrap(<StartSessionForm />)
-    await user.click(await screen.findByRole('radio', { name: 'OpenCode' }))
+    await chooseTool(user, 'OpenCode')
     // Read Start again on each try: it remounts once the folder settles.
     await waitFor(() =>
       expect(

@@ -113,12 +113,20 @@ interface PreferencesState {
   /** Nav group ids the operator collapsed in the expanded sidebar. Retired hub ids;
    * kept so an existing persisted preference keeps its shape. Not read by the N1 sidebar. */
   collapsedNavGroups: string[]
-  /** The left navigation folded to its icons (0.5). */
-  navCollapsed: boolean
+  /** The left navigation folded to its icons (0.5), as the person chose it; null until
+   * they choose, when the sidebar names its places as the drawer does. */
+  navCollapsed: boolean | null
+  /** Every place in the left navigation, not only the first ones. A new person starts
+   * without it; a person who had preferences before the fold keeps what they saw. */
+  navAll: boolean
   /** The style the console asks the engine for when it titles a session. */
   titleStyle: TitleStyle
+  /** The Sessions list's Working section folded by the person; open by default. */
+  workingFolded: boolean
+  setWorkingFolded: (workingFolded: boolean) => void
   setTitleStyle: (titleStyle: TitleStyle) => void
   setNavCollapsed: (navCollapsed: boolean) => void
+  setNavAll: (navAll: boolean) => void
   setDensity: (density: Density) => void
   setReduceMotion: (reduceMotion: boolean) => void
   toggleNavGroup: (group: string) => void
@@ -130,10 +138,14 @@ export const usePreferencesStore = create<PreferencesState>()(
       density: 'comfortable',
       reduceMotion: false,
       collapsedNavGroups: [],
-      navCollapsed: false,
+      navCollapsed: null,
+      navAll: false,
       titleStyle: 'sentence',
+      workingFolded: false,
+      setWorkingFolded: (workingFolded) => set({ workingFolded }),
       setTitleStyle: (titleStyle) => set({ titleStyle }),
       setNavCollapsed: (navCollapsed) => set({ navCollapsed }),
+      setNavAll: (navAll) => set({ navAll }),
       setDensity: (density) => set({ density }),
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       toggleNavGroup: (group) =>
@@ -161,8 +173,10 @@ export const usePreferencesStore = create<PreferencesState>()(
         const {
           navAreas: _areas,
           navCollapsed,
+          navAll,
           reduceMotion,
           titleStyle,
+          workingFolded,
           sidebarCollapsed: _collapsed,
           sidebarChoices: _choices,
           sidebarUnsent: _unsent,
@@ -174,8 +188,13 @@ export const usePreferencesStore = create<PreferencesState>()(
           // A blob saved before the setting existed (or holding anything but `true`)
           // keeps full motion; the system preference still applies on its own.
           reduceMotion: reduceMotion === true,
-          // Anything but `true` keeps the navigation open.
-          navCollapsed: navCollapsed === true,
+          // A stored boolean is the person's choice; anything else is no choice yet.
+          navCollapsed: typeof navCollapsed === 'boolean' ? navCollapsed : null,
+          // Stored preferences from before the fold keep every place; no stored
+          // preferences at all is a new person, who starts with the first ones.
+          navAll: persisted ? navAll !== false : current.navAll,
+          // Anything but `true` keeps the Working sessions open.
+          workingFolded: workingFolded === true,
           // Anything but one of the engine's styles takes the default.
           titleStyle: TITLE_STYLES.find((s) => s === titleStyle) ?? 'sentence',
         }

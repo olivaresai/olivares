@@ -141,15 +141,15 @@ export function SessionTerminal({ workspaceRef }: { workspaceRef: string }) {
         data-testid="session-terminal"
         className="flex flex-col items-start gap-2"
       >
-        <p className="text-caption text-muted-foreground">
-          {t('terminal.hint')}
-        </p>
+        {/* AN EMPTY TAB IS ITS ONE ACTION. What the shell is (its limits, that each line
+            is recorded) is the action's hover, not a paragraph in front of it. */}
         {session.problem ? (
           <p role="alert" className="text-caption text-warning">
             {t(`terminal.problem.${session.problem.kind}`)}
           </p>
         ) : null}
         <Button
+          title={t('terminal.hint')}
           onClick={() => {
             session.dismiss()
             setMode('open')
@@ -176,9 +176,9 @@ export function SessionTerminal({ workspaceRef }: { workspaceRef: string }) {
   return (
     <section
       data-testid="session-terminal"
-      className="flex min-w-0 flex-col gap-2"
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-2"
     >
-      <div className="flex min-w-0 items-center gap-1">
+      <div className="flex min-w-0 shrink-0 items-center gap-1">
         <p
           role="status"
           className="min-w-0 flex-1 truncate text-caption text-muted-foreground"
@@ -219,7 +219,8 @@ export function SessionTerminal({ workspaceRef }: { workspaceRef: string }) {
         role="group"
         aria-label={t('terminal.label')}
         data-testid="terminal-screen"
-        className="h-[min(28rem,60dvh)] min-w-0 overflow-hidden rounded-md border border-border bg-background p-1"
+        // The screen takes every line the pane has, never less than it used to hold.
+        className="min-h-[min(28rem,60dvh)] min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-background p-1"
       />
       <div
         data-testid="terminal-keys"

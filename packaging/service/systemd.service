@@ -5,6 +5,11 @@ Description=Olivares AI — self-hosted engine for enterprise AI
 Documentation=https://github.com/olivaresai/olivares
 After=network-online.target
 Wants=network-online.target
+# A start that keeps failing within seconds stops after five tries in two minutes instead
+# of looping every RestartSec forever (a slower retry, waiting for a database, goes on);
+# after the cause is fixed, `systemctl reset-failed olivares` clears the count.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -21,9 +26,19 @@ EnvironmentFile=-@CONFIG@
 # environment file to "--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444" — the
 # later flag on the command line wins — or edit this line with a drop-in override.
 ExecStart=@BINARY@ serve --data-dir=@DATA_DIR@ --listen=:8443 --grpc-listen=:8444 --checkpoint-interval=1h $OLIVARES_EXTRA_ARGS
+# A rollback that lost power mid-restore leaves the data volume half-restored and its marker in the snapshot directory.
+# The marker blocks the start, and exit 1 skips the unit without failing it; the rollback run again finishes the
+# restore and removes the marker. The + runs the test as root: that directory is root-only.
+ExecCondition=+/usr/bin/test ! -e /var/lib/olivares-snapshots/rollback-in-progress
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s
+# Exit 15 (`olivares help exit-codes`): the engine refused a configuration or a store
+# that only an operator can change, so a restart would fail the same way.
+RestartPreventExitStatus=15
+# A stop or restart signals the engine alone. It stops its sessions itself, recording
+# the engine stop its next start resumes them from; systemd then ends what is left.
+KillMode=mixed
 NoNewPrivileges=true
 # Keep OS configuration read-only while allowing chosen folders. Session and
 # MCP children get the product's per-folder Landlock policy, not a unit-wide
@@ -56,9 +71,10 @@ SystemCallFilter=~@privileged @resources
 # keeps no host capability (CapabilityBoundingSet= below).
 SystemCallFilter=capset
 # The session helper's read-only bind mounts of a workspace's git hooks and
-# configuration happen inside its own mount namespace, where it holds only
-# namespace-local capability. The engine keeps no host capability, so a mount
-# outside that namespace still fails.
+# configuration, and the empty filesystem it puts over the runtime directory of this
+# user (where its user manager keeps its bus and private socket), happen inside its own mount namespace,
+# where it holds only namespace-local capability. The engine keeps no host capability,
+# so a mount outside that namespace still fails.
 SystemCallFilter=mount
 # The session helper raises each tool's nice value (+10) before it executes the
 # tool. setpriority is in @resources; raising one's own nice value needs no

@@ -38,6 +38,16 @@ vi.mock('@/features/identity/assurance', () => ({
   RequireAssurance: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
+const operations = vi.hoisted(() => ({ may: true }))
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ can: () => operations.may }),
+}))
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to }: { children: ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
+}))
+
 import { SystemHealthTab } from './system-health-tab'
 
 const baseSummary = {
@@ -103,6 +113,26 @@ beforeEach(() => {
       revokeObjectURL: vi.fn(),
     }),
   )
+})
+
+describe('SystemHealthTab Operations link', () => {
+  it('links the host, its disks and the usage to Operations, for a person who may open it', async () => {
+    api.healthSummary.mockResolvedValue(baseSummary)
+    operations.may = true
+    wrap(<SystemHealthTab />)
+    expect(
+      await screen.findByRole('link', { name: 'Operations' }),
+    ).toHaveAttribute('href', '/operations')
+  })
+
+  it('offers no link to a person who may not', async () => {
+    api.healthSummary.mockResolvedValue(baseSummary)
+    operations.may = false
+    wrap(<SystemHealthTab />)
+    await screen.findByText(baseSummary.version)
+    expect(screen.queryByRole('link', { name: 'Operations' })).toBeNull()
+    operations.may = true
+  })
 })
 
 describe('SystemHealthTab audit spool', () => {

@@ -118,6 +118,11 @@ olivares provider bind prv_01J8ABCDEF --profile ppf_01J8ZZZZZZ
 
 对于 `anthropic`、`openai` 和 `xai`，OpenCode 只接受提供商自己的端点：请将 `base_url` 留空。`openai_compatible` 网关请使用 `codex`；`ollama`，以及 `base_url` 为回环或私有地址上的普通 `http`（例如 `http://127.0.0.1:8080/v1`，vLLM、llama.cpp）的本地 `openai_compatible` 服务器，请使用 `codex` 或 `opencode`。`base_url` 包含 `/v1`。
 
+Gemini CLI 使用 `gemini` 提供商密钥，连接 Google 自身的 API 地址；它不接受自定义端点。
+请在 **AI 工具** 下安装，或使用 `olivares tool install gemini`。官方便携包需要引擎主机上的 Node.js 20 或更高版本。
+先使用 API 密钥。自 2026 年 6 月 18 日起，Gemini CLI 可用付费 Gemini API 密钥，或 Gemini Code Assist Standard 或 Enterprise 账户；免费的个人 Google 账户、Google AI Pro 和 Google AI Ultra 不再可用。
+对于 Code Assist Google 账户，请创建一个 Gemini 配置档案，并使用 `olivares tool login gemini --account <name>`；每个配置档案都有其自身的原生 `.gemini` 认证主目录。API 密钥配置档案会拒绝与原生 Google、Vertex 或网关设置相冲突的配置，而不是改选另一个身份。
+
 ## 4. 启动第一次会话
 
 ```sh
@@ -152,6 +157,18 @@ olivares provider rm prv_01J8ABCDEF --yes               # 不可撤销
 不再指向任何东西的配置档案，读起来就像没人配置过一样。这里的吊销不会在提供商那一侧吊销
 密钥；那要在他们自己的控制台中操作。
 
+## Olivares Server 上的本地模型运行时
+
+在 Olivares Server（appliance，SELinux 强制模式）上，绑定到回环地址的会话只能访问策略为本地模型运行时标记的端口：11434（Ollama）、1234（LM Studio）、8000（vLLM）和 8080（llama.cpp 的 `llama-server`）。对于其他端口上的运行时，请以 root 身份执行一次以下命令进行标记：
+
+```bash
+semanage port -a -t olivares_model_runtime_port_t -p tcp 11435
+# If the base policy already labels that port (semanage port -l | grep -w 11435), modify it instead:
+semanage port -m -t olivares_model_runtime_port_t -p tcp 11435
+```
+
+在此之前会话不会启动，其错误会指出该命令。
+
 ## 引擎拒绝什么，以及为什么
 
 | 你看到 | 含义 |
@@ -173,6 +190,7 @@ olivares provider rm prv_01J8ABCDEF --yes               # 不可撤销
 
 ## 相关
 
+- [提供商与工具](/reference/providers-and-tools/)
 - [运行提供商会话](/zh/how-to/operate-provider-sessions/)
 - [你的第一个小时](/zh/how-to/first-hour/)
 - [CLI 参考](/zh/reference/cli/)

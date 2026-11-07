@@ -415,14 +415,14 @@ minimal-data：它携带 source 的 ACL 与来源（绝不含个人邮箱；模�
 | Kind | 摄取内容 |
 |---|---|
 | `gdrive` | Google Drive 文档（Docs/Sheets/Slides/文件） |
-| `confluence` | Atlassian Confluence 空间与页面 |
+| `confluence` | Atlassian Confluence 空间与页面 (Business) |
 | `notion` | Notion 工作区、数据库与页面 |
 | `sharepoint` | Microsoft SharePoint / OneDrive 站点与文档 (Business) |
 | `s3content` | 对象存储内容（S3 / R2 / GCS 对象） |
 | `sap_odata` | SAP OData service entity，作为 governed document (Business) |
 | `salesforce` | Salesforce object/record，作为 governed document (Business) |
-| `snowflake` | Snowflake table/row，作为 governed document（不同于 `snowflake-audit` R/RW observer） |
-| `azure_ai_search` | Azure AI Search index document |
+| `snowflake` | Snowflake table/row，作为 governed document（不同于 `snowflake-audit` R/RW observer） (Business) |
+| `azure_ai_search` | Azure AI Search index document (Business) |
 | `postgres` | PostgreSQL row，作为 governed document——构造上只读、声明 per-row ACL、per-column classification（不同于 `pgaudit` R/RW observer；不是 NL-to-SQL）。见[将 Postgres 用作受治理上下文源](/zh/how-to/govern-postgres-content/)。 |
 | `filesystem` | 文件服务器内容（local / NFS / SMB）——构造上将读取限制在 root，POSIX owner/group/ACL 映射为 Document ACL，使用 xattr classification（不同于 `filelog` log sink）。见[治理文件服务器](/zh/how-to/govern-your-file-server/)。 |
 
@@ -430,8 +430,8 @@ minimal-data：它携带 source 的 ACL 与来源（绝不含个人邮箱；模�
 // OLIVARES_SOURCES_CONFIG —— 文档 source 位于 "documents" 之下，绝不在 "sources"
 {
   "documents": [
-    { "name": "eng-wiki", "kind": "confluence",
-      "config": { "export_path": "/var/lib/olivares/confluence" } }
+    { "name": "eng-wiki", "kind": "notion",
+      "config": { "export_path": "/var/lib/olivares/notion" } }
   ]
 }
 ```

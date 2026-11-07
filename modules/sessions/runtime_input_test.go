@@ -475,7 +475,7 @@ func TestRuntimeInputTextUsesOwnedDriverAndRefusesRaw(t *testing.T) {
 			f := newManagedStopFixture(t, be.config(t))
 			dto, _ := f.launch("input-text-owned-driver")
 			target := runtimeInputTargetForTest(t, f, dto.RunRef)
-			request := RuntimeInputRequest{Target: target, Authority: runtimeInputAuthorityForTest(t, f, target), Mode: RuntimeInputRaw, Raw: []byte(`{"jsonrpc":"2.0","method":"arbitrary"}`)}
+			request := RuntimeInputRequest{Target: target, Authority: runtimeInputAuthorityForTest(t, f, target), Mode: RuntimeInputRaw, Raw: []byte(`{"type":"user"}`)}
 			recordPath := filepath.Join(f.profile.ConfigHome, codexFixtureRecordFile)
 			beforePeer := readFixtureRecord(t, recordPath)
 			beforeVersion := runtimeInputClaimVersionForTest(t, f, target)

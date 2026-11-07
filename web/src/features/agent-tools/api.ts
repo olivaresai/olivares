@@ -62,6 +62,22 @@ export interface OllamaStatus {
   message?: string
   endpoint?: string
   models: string[]
+  /** Bytes each model in `models` takes on disk, as Ollama reports it. */
+  model_sizes?: Record<string, number>
+  /** Present when Ollama's model list could not be read; `models` is not an authoritative empty list. */
+  models_error?: string
+}
+/** A local model server the engine runs beside Ollama: llama.cpp (`llama-cpp`) or vLLM (`vllm`). */
+export interface ModelServerStatus {
+  kind: string
+  name: string
+  installed: boolean
+  state: 'stopped' | 'starting' | 'running' | 'failed'
+  /** While failed or starting: the server's own last line. */
+  message?: string
+  endpoint?: string
+  model?: string
+  models: string[]
 }
 /** One model download, with Ollama's own progress. */
 export interface OllamaPull {
@@ -184,10 +200,37 @@ export const agentToolsApi = {
       opts,
     ),
   ollamaStop: () => http.post<OllamaStatus>(`${ROOT}/ollama/stop`, undefined),
+  modelServers: (signal?: AbortSignal) =>
+    http.get<{ servers: ModelServerStatus[] }>(`${ROOT}/model-servers`, {
+      signal,
+    }),
+  /** `tenantId` is the organization whose Providers get the server's endpoint and key. */
+  modelServerStart: (
+    kind: string,
+    model: string,
+    tenantId: string,
+    opts?: Options,
+  ) =>
+    http.post<ModelServerStatus>(
+      `${ROOT}/model-servers/${encodeURIComponent(kind)}/start`,
+      { model, tenant_id: tenantId },
+      opts,
+    ),
+  modelServerStop: (kind: string) =>
+    http.post<ModelServerStatus>(
+      `${ROOT}/model-servers/${encodeURIComponent(kind)}/stop`,
+      undefined,
+    ),
   ollamaPull: (model: string, opts?: Options) =>
     http.post<OllamaPull>(`${ROOT}/ollama/pulls`, { model }, opts),
   ollamaPullStatus: (id: string, signal?: AbortSignal) =>
     http.get<OllamaPull>(`${ROOT}/ollama/pulls/${encodeURIComponent(id)}`, {
       signal,
     }),
+  /** Ends a running download; one that already ended comes back unchanged. */
+  ollamaPullCancel: (id: string) =>
+    http.delete<OllamaPull>(`${ROOT}/ollama/pulls/${encodeURIComponent(id)}`),
+  /** Deletes a model from the Ollama this engine runs. */
+  ollamaRemove: (model: string, opts?: Options) =>
+    http.delete<OllamaStatus>(`${ROOT}/ollama/models`, { model }, opts),
 }

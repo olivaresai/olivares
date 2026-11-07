@@ -14,6 +14,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 )
@@ -55,6 +56,12 @@ const (
 	permBreakGlassRead  auth.Permission = "governance:breakglass:read"
 	permBreakGlassUse   auth.Permission = "governance:breakglass:write"
 	permBreakGlassAdmin auth.Permission = "governance:breakglass:admin"
+	// Shared vaults (Business): the routes that make a vault and share it with users and
+	// groups. Read lists vaults and their shares; write makes a vault and changes its shares
+	// (share and revoke are mutations). Who may share one is also the grant at the vault
+	// itself, which the handler asks.
+	permVaultRead  auth.Permission = "governance:vault:read"
+	permVaultWrite auth.Permission = "governance:vault:write"
 	// the Claude Code managed-policy authoring tiers (the RBAC verbs the
 	// console mirrors). read gates view/dry-run/validate/versions (and, the
 	// signed-artifact pull + the distribution truth view); admin gates publish.
@@ -182,6 +189,8 @@ func WithAgentAutonomySource(s AgentAutonomySource) Option {
 // Module is module VI — identity, permissions and governance. See doc.go for the
 // five subsystems and the honest composition-root caveat.
 type Module struct {
+	policyResolver   store.PolicyResolver
+	policyKinds      map[string]PolicyKindAuthoring
 	approvalCapacity func(context.Context, model.TenantID) (int64, error)
 	log              *slog.Logger
 	data             api.ModuleData
@@ -241,6 +250,9 @@ type Module struct {
 	// checkRefused is the last refusal a status check recorded for each approval (the
 	// sentence), so a gate that polls does not write one ledger entry per poll.
 	checkRefused sync.Map // model.ID -> string
+	// changeRecordOutages tracks a tenant destination that is down and when it may be
+	// read again (approval_changerecord.go). Cleared by the first answer.
+	changeRecordOutages sync.Map // changeRecordEndpoint -> changeRecordOutage
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the engine-side
@@ -423,6 +435,7 @@ func (m *Module) Permissions() []auth.Permission {
 		permPolicyRead, permPolicyAdmin,
 		permApprovalRead, permApprovalWrite, permApprovalAdmin,
 		permBreakGlassRead, permBreakGlassUse, permBreakGlassAdmin,
+		permVaultRead, permVaultWrite,
 		permNHIRead, permNHIWrite, permNHIAdmin,
 		permKillSwitchRead, permKillSwitchAdmin,
 		permGuardianRead, permGuardianAdmin,
@@ -512,6 +525,11 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// Subsystem E — break-glass emergency access: audited, notified,
 	// time-boxed, forced post-review. Business implementation; Community keeps the published 501 routes.
 	m.registerBreakGlassRoutes(reg)
+
+	// Shared vaults: make a vault and share it with users and groups. Business
+	// implementation; Community keeps the published 501 routes and keeps enforcing the
+	// grants already stored (core/api vault_shared.go).
+	m.registerVaultRoutes(reg)
 
 	// Subsystem F — NHI lifecycle: rotation, expiry/staleness enforcement
 	// and governed offboarding on top of the roster (nhilifecycle.go).
@@ -628,4 +646,10 @@ func (m *Module) warnf(msg string, args ...any) {
 	if m.log != nil {
 		m.log.Warn(msg, args...)
 	}
+}
+
+// WithPolicyResolver supplies person-specific policy selection. Without it,
+// the module uses the existing tenant-wide policies.
+func WithPolicyResolver(r store.PolicyResolver) Option {
+	return func(m *Module) { m.policyResolver = r }
 }

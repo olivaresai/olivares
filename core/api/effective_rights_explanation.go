@@ -62,6 +62,39 @@ func effectiveRightsAttribution(tenant model.TenantID, explanation auth.Decision
 	return grants, removals
 }
 
+// DirectoryDataAgeSource is the OPTIONAL capability of a module that holds a person's
+// directory data and knows when its directory last answered for them. A build with a live
+// directory implements it so the effective-rights read can show the age of the data it
+// explains; a module that does not says nothing, and the read keeps the age of the stored
+// group and membership rows.
+type DirectoryDataAgeSource interface {
+	// DirectoryDataAsOf is when the directory last answered for user in tenant. False when
+	// the module does not hold this person or its directory has not answered yet.
+	DirectoryDataAsOf(ctx context.Context, tenant model.TenantID, user model.ID) (time.Time, bool, error)
+}
+
+// directoryDataAsOf asks the modules that hold directory data how old it is for the
+// subject. A module that cannot answer fails the read: a different age would be a false one.
+func (s *Server) directoryDataAsOf(ctx context.Context, subject auth.Principal, tenant model.TenantID) (string, bool, error) {
+	if subject.Kind != auth.KindUser {
+		return "", false, nil
+	}
+	for _, m := range s.modules {
+		source, ok := m.(DirectoryDataAgeSource)
+		if !ok {
+			continue
+		}
+		at, held, err := source.DirectoryDataAsOf(ctx, tenant, subject.UserID)
+		if err != nil {
+			return "", false, fmt.Errorf("effective-rights: directory data age: %w", err)
+		}
+		if held {
+			return at.UTC().Format(time.RFC3339Nano), true, nil
+		}
+	}
+	return "", false, nil
+}
+
 type effectiveRightsDirectory struct {
 	groups map[model.ID]model.UserGroup
 	cache  map[model.ID]*model.UserGroup

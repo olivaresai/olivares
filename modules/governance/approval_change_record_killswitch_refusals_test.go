@@ -52,6 +52,8 @@ func TestKillSwitchReenableWithTheChangeSystemDownKeepsTheStopAndTheGrant(t *tes
 		t.Fatal("the refusal is not in the ledger")
 	}
 
+	// The dead system is not read again until its first retry window (30 seconds) passes.
+	f.h.clk.advance(30 * time.Second)
 	f.system.set(scheduled(), nil)
 	if r := reenable(f.h, f.admin, f.tenant, f.stopID); r.code != http.StatusOK || r.body["status"] != "reenabled" {
 		t.Fatalf("re-enable after the system recovered = %d %s, want the same grant to work", r.code, r.raw)

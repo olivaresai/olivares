@@ -42,8 +42,10 @@ import (
 // LaunchSpec.Binds. The root filesystem is read-only, no capability is kept and no
 // privilege can be gained. A bound session has no external network: an engine-side
 // proxy and an in-container loopback relay enforce the same provider and credential
-// policy as the native runner. Unbound sessions use the runtime's default network,
-// or host networking when they need an engine loopback endpoint.
+// policy as the native runner. Unbound sessions use the runtime's default network; the
+// engine's loopback endpoints (tool-call hook, MCP server, inference gateway) reach them
+// through the same Unix-socket relay, never the host's network. An SELinux host still
+// shares the host network for those endpoints.
 //
 // ⛔ A SECRET NEVER TRAVELS IN ARGV. Argv is readable by every user on the host; a
 // process's environment is readable only by its own user, which is where a native
@@ -266,6 +268,12 @@ func (cr *containerRunner) Launch(ctx context.Context, spec LaunchSpec) (Process
 	if err := validateExplicitEnv(spec.Env); err != nil {
 		return nil, err
 	}
+	if spec.NetworkPolicy == nil && !cr.rt.SELinux {
+		// ponytail: SELinux hosts keep host networking, because the policy has no domain for a
+		// tool on the runtime's own network with the relay beside it; add one, then drop the
+		// !cr.rt.SELinux test and the host branch in runArgs.
+		spec.NetworkPolicy = engineLoopbackPolicy(spec)
+	}
 	releaseNetwork := func() {}
 	originalProgram := spec.Program
 	var waitReady func() error
@@ -324,11 +332,11 @@ func (cr *containerRunner) Launch(ctx context.Context, spec LaunchSpec) (Process
 	if spec.WaitDelay > 0 {
 		cmd.WaitDelay = spec.WaitDelay
 	}
-	p, err := cr.native.launchPipes(cmd, spec.WaitDelay, spec.StripImageData, func() {
+	p, err := cr.native.launchPipes(cmd, spec.WaitDelay, spec.StripImageData, withGoBuildCacheBound(func() {
 		cr.remove(name)
 		forgetPasswd()
 		releaseNetwork()
-	}, false)
+	}, spec.Env), false)
 	if err != nil {
 		forgetPasswd()
 		return nil, err
@@ -361,7 +369,7 @@ func (cr *containerRunner) engineUserBinds() ([]ContainerBind, func(), error) {
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("sessions: the session's passwd directory: %w", err)
 	}
-	forget := func() { _ = os.RemoveAll(dir) }
+	forget := func() { confine.RemoveChildTemp(dir) }
 	path := filepath.Join(dir, "passwd")
 	if err := os.WriteFile(path, passwdEntries(uid, gid), 0o644); err != nil {
 		forget()
@@ -409,12 +417,15 @@ func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []strin
 		args = append(args, "--user", fmt.Sprintf("%d:%d", uid, gid))
 	}
 	args = append(args, envArgs...)
-	if spec.NetworkPolicy != nil {
+	switch {
+	case spec.NetworkPolicy != nil && spec.NetworkPolicy.OwnNetwork:
+		// The runtime's own network; the engine's loopback endpoints arrive through the relay.
+	case spec.NetworkPolicy != nil:
 		args = append(args, "--network=none")
-	} else if reachesEngineLoopback(spec) {
-		// The tool-call hooks, the session's MCP server and the inference gateway are
-		// endpoints on the engine's loopback. A container with a network of its own
-		// cannot reach them, so it shares the host's: the network a native session has.
+	case reachesEngineLoopback(spec):
+		// An SELinux host (Launch): the tool-call hooks, the session's MCP server and the
+		// inference gateway are endpoints on the engine's loopback, which a container with
+		// a network of its own cannot reach, so it shares the host's.
 		args = append(args, "--network=host")
 	}
 	if filepath.IsAbs(spec.Dir) {
@@ -479,28 +490,61 @@ func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []strin
 	return append(args, spec.Args...), nil
 }
 
-// reachesEngineLoopback reports a launch that names the engine on a loopback address: the
+// engineEndpoint is an engine endpoint on loopback that a launch names; control is true
+// for a tool-call hook or the session's MCP server, false for the inference gateway.
+type engineEndpoint struct {
+	url     string
+	control bool
+}
+
+// engineLoopbackEndpoints are the launch's engine endpoints on a loopback address: the
 // engine's own variables (OLIVARES_*: the hook endpoint), its inference gateway
-// (ANTHROPIC_BASE_URL) and the session's MCP server. Nothing else counts, so a value a
-// person or a vault supplies cannot turn host networking on.
-func reachesEngineLoopback(spec LaunchSpec) bool {
-	endpoints := []string{spec.SessionMCPURL}
+// (ANTHROPIC_BASE_URL) and the session's MCP server (SessionMCPURL, EngineControls).
+// Nothing else counts, so a value a person or a vault supplies cannot add one.
+func engineLoopbackEndpoints(spec LaunchSpec) []engineEndpoint {
+	candidates := []engineEndpoint{{spec.SessionMCPURL, true}}
+	for _, u := range spec.EngineControls {
+		candidates = append(candidates, engineEndpoint{u, true})
+	}
 	for _, e := range spec.Env {
 		if strings.HasPrefix(e.Name, "OLIVARES_") || e.Name == "ANTHROPIC_BASE_URL" {
-			endpoints = append(endpoints, e.Value)
+			candidates = append(candidates, engineEndpoint{e.Value, e.Name != "ANTHROPIC_BASE_URL"})
 		}
 	}
-	for _, endpoint := range endpoints {
-		u, err := url.Parse(endpoint)
+	var loopback []engineEndpoint
+	for _, c := range candidates {
+		u, err := url.Parse(c.url)
 		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			continue
 		}
 		host := u.Hostname()
 		if ip := net.ParseIP(host); host == "localhost" || (ip != nil && ip.IsLoopback()) {
-			return true
+			loopback = append(loopback, c)
 		}
 	}
-	return false
+	return loopback
+}
+
+func reachesEngineLoopback(spec LaunchSpec) bool { return len(engineLoopbackEndpoints(spec)) > 0 }
+
+// engineLoopbackPolicy is the relay a container with its own network needs to reach the
+// engine on loopback: nil when the launch names no such endpoint. The engine proxy admits
+// only these endpoints (the hook and MCP paths, the gateway) over a Unix socket the runner
+// mounts, and the container keeps the runtime's network without the host's loopback.
+func engineLoopbackPolicy(spec LaunchSpec) *egress.Policy {
+	endpoints := engineLoopbackEndpoints(spec)
+	if len(endpoints) == 0 {
+		return nil
+	}
+	p := &egress.Policy{OwnNetwork: true}
+	for _, e := range endpoints {
+		if e.control {
+			p.Controls = append(p.Controls, e.url)
+		} else {
+			p.Providers = append(p.Providers, e.url)
+		}
+	}
+	return p
 }
 
 // containerBinds is the program, the workspace and the module's other binds, in the

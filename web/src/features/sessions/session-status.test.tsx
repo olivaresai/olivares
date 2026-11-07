@@ -134,16 +134,18 @@ describe('SessionStatusMark', () => {
     expect(new Set(shapes).size).toBe(5)
   })
 
-  it('paints a colour only on Needs you and Failed', () => {
-    const colored = WORDS.filter(([status, word]) => {
+  // A colour per status (#4019): blue Working, amber Needs you, green Done, red Failed;
+  // Idle is the one at rest, in grey.
+  it('paints each status its own colour, Idle grey', () => {
+    const colours = WORDS.map(([status, word]) => {
       const { unmount } = render(<SessionStatusMark status={status} />)
-      const painted = /(text|bg)-(warning|danger|success|accent)/.test(
+      const painted = /(text|bg)-(info|warning|success|danger)\b/.exec(
         screen.getByRole('img', { name: word }).getAttribute('class') ?? '',
       )
       unmount()
-      return painted
-    }).map(([status]) => status)
-    expect(colored).toEqual(['needs-you', 'failed'])
+      return painted?.[2] ?? null
+    })
+    expect(colours).toEqual(['info', 'warning', 'success', 'danger', null])
   })
 
   it('stays out of the accessibility tree beside a word that already names it', () => {

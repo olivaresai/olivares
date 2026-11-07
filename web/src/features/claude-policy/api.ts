@@ -19,8 +19,8 @@
 import { http } from '@/lib/api'
 import { ApiError } from '@/lib/api/errors'
 import type { ListResponse } from '@/lib/api/types'
-import type { PolicySurface } from './schema'
 import type {
+  AuthoringSurface,
   DryRunResult,
   PdpActivePolicy,
   PdpDecision,
@@ -87,21 +87,21 @@ export const claudePolicyApi = {
 
   // --- DECLARED: managed-* authoring -----------------------------------------
   /** Preview the resolved precedence/effect of a change WITHOUT publishing. */
-  dryRun: (surface: PolicySurface, content: string) =>
+  dryRun: (surface: AuthoringSurface, content: string) =>
     http.post<DryRunResult>(`${BASE}/${surface}/dry-run`, { content }),
   /** Publish = privileged + audited: backend distributes + runs drift verification.
    *  The UI never writes host files. */
-  publish: (surface: PolicySurface, content: string) =>
+  publish: (surface: AuthoringSurface, content: string) =>
     http.post<PublishResult>(`${BASE}/${surface}/publish`, { content }),
   // Sin techo A PROPÓSITO: el handler drena todas las páginas y devuelve el historial completo
   // (`modules/governance/revision.go`, `listRevisions`). No hay recorte que declarar.
-  listVersions: (surface: PolicySurface) =>
+  listVersions: (surface: AuthoringSurface) =>
     http.get<ListResponse<PolicyVersion>>(`${BASE}/${surface}/versions`),
-  getVersion: (surface: PolicySurface, revision: number) =>
+  getVersion: (surface: AuthoringSurface, revision: number) =>
     http.get<PolicyVersion>(`${BASE}/${surface}/versions/${revision}`),
   /** truth view: published vs signed-for-distribution vs what every scope's
    *  attested check-in reports. Real state only; absences are named in notes. */
-  getDistribution: (surface: PolicySurface) =>
+  getDistribution: (surface: AuthoringSurface) =>
     http.get<PolicyDistributionView>(`${BASE}/${surface}/distribution`),
 
   // --- DECLARED: Cedar/OPA policy-as-code (PDP) --------------------------
@@ -191,9 +191,9 @@ export const claudePolicyKeys = {
       : (['claude-policy', t, 'drift', params] as const),
   finding: (t: string | null, id: string) =>
     ['claude-policy', t, 'finding', id] as const,
-  versions: (t: string | null, surface: PolicySurface) =>
+  versions: (t: string | null, surface: AuthoringSurface) =>
     ['claude-policy', t, 'versions', surface] as const,
-  distribution: (t: string | null, surface: PolicySurface) =>
+  distribution: (t: string | null, surface: AuthoringSurface) =>
     ['claude-policy', t, 'distribution', surface] as const,
   /** Prefix for every Cedar/OPA PDP read — a publish/activation invalidates the
    *  whole lifecycle at once (versions, active, per-revision gate). */

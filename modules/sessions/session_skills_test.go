@@ -6,8 +6,10 @@ package sessions
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -129,10 +131,10 @@ func TestRuntimeSkillsDeliveryIsNativeIsolatedAndAudited(t *testing.T) {
 	}
 }
 
-func TestRuntimeSkillsNoAssignmentPreservesHomeAndErrorsRefuseSpawn(t *testing.T) {
+func TestRuntimeSkillsNoAssignmentReservesDiscoveryAndErrorsRefuseSpawn(t *testing.T) {
 	for _, cause := range []error{nil, errors.New("catalog unavailable")} {
 		runner := &fakeRunner{initSID: "no-skills"}
-		m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
+		m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, true))
 		ref := ensureRuntimeTestProfileRef(t, m, tenant)
 		if err := m.UseSessionSkills(sessionSkillsFixture{err: cause}, t.TempDir()); err != nil {
 			t.Fatal(err)
@@ -147,18 +149,116 @@ func TestRuntimeSkillsNoAssignmentPreservesHomeAndErrorsRefuseSpawn(t *testing.T
 		if err != nil {
 			t.Fatal(err)
 		}
-		if slices.Contains(runner.lastSpec().Args, "--plugin-dir") {
-			t.Fatal("unassigned launch received skills")
+		if !slices.Contains(runner.lastSpec().Args, "--plugin-dir") {
+			t.Fatal("unassigned launch did not reserve native discovery")
 		}
 		profile, err := m.GetProfile(t.Context(), tenant, ref)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, env := range runner.lastSpec().Env {
-			if env.Name == "HOME" && env.Value != profile.UserHome {
-				t.Fatal("unassigned HOME changed")
+			if env.Name == "HOME" && env.Value == profile.UserHome {
+				t.Fatal("unassigned HOME was not isolated")
 			}
 		}
+	}
+}
+
+// An account skills directory is child-writable. Its symlink target must never
+// become a new named confinement grant, even if the engine can read it.
+func TestRuntimeSkillsAccountSymlinkDoesNotExpandConfinement(t *testing.T) {
+	runner := &fakeRunner{initSID: "account-skills-symlink"}
+	protected := t.TempDir()
+	target := filepath.Join(protected, "files")
+	if err := os.Mkdir(target, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "private.txt"), []byte("private"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	account := t.TempDir()
+	original := filepath.Join(account, ".claude", "skills")
+	if err := os.MkdirAll(filepath.Dir(original), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, original); err != nil {
+		t.Fatal(err)
+	}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{protected}, true))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverClaude, ConfigHome: filepath.Dir(original), UserHome: account, DisplayName: "skills", AuthSource: AuthSourceAccountHome})
+	if err := m.UseSessionSkills(sessionSkillsFixture{}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref, Actor: "user:u1", ActorKind: model.ActorUser}); err != nil {
+		t.Fatal(err)
+	}
+	spec := runner.lastSpec()
+	for _, env := range spec.Env {
+		if env.Name == envUserHome {
+			entries, err := os.ReadDir(filepath.Join(env.Value, ".claude", "skills"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, entry := range entries {
+				if entry.Name() == "private.txt" {
+					t.Fatal("account skills symlink leaked a protected filename")
+				}
+			}
+		}
+	}
+	if !slices.Contains(spec.Confinement.ReadWrite, account) {
+		t.Fatal("account home lost its existing grant")
+	}
+	for _, grant := range append(slices.Clone(spec.Confinement.ReadOnly), spec.Confinement.ReadWrite...) {
+		real, err := filepath.EvalSymlinks(grant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pathWithin(real, protected) {
+			t.Fatalf("account skills symlink expanded confinement: %s -> %s", grant, real)
+		}
+	}
+}
+
+func TestRuntimeSkillsAccountSymlinkEntryRemainsDiscoverable(t *testing.T) {
+	runner := &fakeRunner{initSID: "account-skill-entry"}
+	account := t.TempDir()
+	source := filepath.Join(account, "pack", "research")
+	if err := os.MkdirAll(source, 0700); err != nil {
+		t.Fatal(err)
+	}
+	original := filepath.Join(account, ".claude", "skills", "research")
+	if err := os.MkdirAll(filepath.Dir(original), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(source, original); err != nil {
+		t.Fatal(err)
+	}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, true))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverClaude, ConfigHome: t.TempDir(), UserHome: account, DisplayName: "skills", AuthSource: AuthSourceAccountHome})
+	if err := m.UseSessionSkills(sessionSkillsFixture{}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref, Actor: "user:u1", ActorKind: model.ActorUser}); err != nil {
+		t.Fatal(err)
+	}
+	home := ""
+	for _, env := range runner.lastSpec().Env {
+		if env.Name == envUserHome {
+			home = env.Value
+		}
+	}
+	if home == "" || home == account {
+		t.Fatal("unassigned launch did not reserve discovery HOME")
+	}
+	if got, err := os.Readlink(filepath.Join(home, ".claude", "skills", "research")); err != nil || got != original {
+		t.Fatalf("symlinked account skill missing from discovery: %q %v", got, err)
 	}
 }
 
@@ -520,5 +620,244 @@ func TestRuntimeComponentsRefuseASkillAndCommandWithOneNativeAlias(t *testing.T)
 	entries, err := os.ReadDir(root)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("ambiguous delivery wrote files: %v %v", entries, err)
+	}
+}
+
+func TestDetectedSkillsReadNativeHomesWithoutRegistration(t *testing.T) {
+	m, _, tenant, _ := newRuntimeHarness(t)
+	m.ServerLoginOpen = func(context.Context, model.TenantID) bool { return true }
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	body := []byte("---\nname: research\ndescription: Review sources.\n---\nRead only.\n")
+	for _, dir := range []string{".claude/skills/research", ".claude/plugins/cache/example/one/skills/research", ".agents/skills/research"} {
+		dir = filepath.Join(home, dir)
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+	if err != nil || len(got) != 5 {
+		t.Fatalf("detected: %+v, err=%v; want Claude folder, plugin and three .agents drivers", got, err)
+	}
+	hash := fmt.Sprintf("%x", sha256.Sum256(body))
+	for _, skill := range got {
+		if skill.Name != "research" || skill.Description != "Review sources." || skill.Hash != hash || skill.Path == "" {
+			t.Fatalf("metadata: %+v", skill)
+		}
+	}
+
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	dir := filepath.Join(profile.ConfigHome, "skills", "research")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err = m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+	if err != nil || len(got) != 6 {
+		t.Fatalf("profile scan: %+v %v", got, err)
+	}
+	if !slices.ContainsFunc(got, func(s skills.DetectedSkill) bool { return s.ProfileRef == profile.Ref && s.Hash == hash }) {
+		t.Fatal("active profile's native skill missing")
+	}
+	if err := os.Remove(filepath.Join(home, ".claude/skills/research/SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	got, err = m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+	if err != nil || len(got) != 5 {
+		t.Fatalf("rescan: %+v %v", got, err)
+	}
+}
+
+func TestDetectedSkillsReadLinkedPackEntries(t *testing.T) {
+	for _, scope := range []string{"engine", "profile", "plugin"} {
+		t.Run(scope, func(t *testing.T) {
+			m, _, tenant, _ := newRuntimeHarness(t)
+			m.UseExecutionEnvironmentRef(testEnvRef)
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			m.ServerLoginOpen = func(context.Context, model.TenantID) bool { return scope != "profile" }
+			folder := filepath.Join(home, ".claude", "skills")
+			if scope == "profile" {
+				profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+				home = profile.ConfigHome
+				folder = filepath.Join(home, "skills")
+			} else if scope == "plugin" {
+				folder = filepath.Join(home, ".claude", "plugins", "cache", "pack", "skills")
+			}
+			target := filepath.Join(home, ".local", "share", "agent-skill-packs", "pack", "skills", "research")
+			body := []byte("---\nname: research\ndescription: Linked pack instructions.\n---\nRead.\n")
+			if err := os.MkdirAll(target, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(target, "SKILL.md"), body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(folder, 0700); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(folder, "research")
+			for _, absolute := range []bool{true, false} {
+				destination := target
+				if !absolute {
+					var err error
+					destination, err = filepath.Rel(folder, target)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.Symlink(destination, link); err != nil {
+					t.Fatal(err)
+				}
+				got, err := m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+				if err != nil || len(got) != 1 {
+					t.Fatalf("absolute=%v: detected %+v, %v; want linked pack skill", absolute, got, err)
+				}
+				if got[0].Path != filepath.Join(link, "SKILL.md") || got[0].Hash != fmt.Sprintf("%x", sha256.Sum256(body)) {
+					t.Fatalf("linked metadata: %+v", got[0])
+				}
+				if err := os.Remove(link); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// An in-home target must not redirect through another link.
+			alias := filepath.Join(home, "alias")
+			if err := os.Symlink(target, alias); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(alias, link); err != nil {
+				t.Fatal(err)
+			}
+			got, err := m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+			if err != nil || len(got) != 0 {
+				t.Fatalf("indirect link: %+v, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestDetectedSkillsRefuseLinkedPaths(t *testing.T) {
+	for _, location := range []string{"config", "tool", "entry", "file", "plugin"} {
+		t.Run(location, func(t *testing.T) {
+			m, _, tenant, _ := newRuntimeHarness(t)
+			m.UseExecutionEnvironmentRef(testEnvRef)
+			t.Setenv("HOME", t.TempDir())
+			profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+			protected := t.TempDir()
+			target := filepath.Join(protected, "skills", "private", "SKILL.md")
+			if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(target, []byte("---\nname: private\ndescription: Private instructions.\n---\nSecret metadata.\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var link string
+			switch location {
+			case "config":
+				link, target = filepath.Join(profile.ConfigHome, "skills"), filepath.Join(protected, "skills")
+			case "tool":
+				link, target = filepath.Join(profile.UserHome, ".claude"), protected
+			case "entry":
+				link, target = filepath.Join(profile.ConfigHome, "skills", "private"), filepath.Dir(target)
+			case "file":
+				link = filepath.Join(profile.ConfigHome, "skills", "private", "SKILL.md")
+			case "plugin":
+				link, target = filepath.Join(profile.ConfigHome, "plugins", "pack"), protected
+			}
+			if err := os.MkdirAll(filepath.Dir(link), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, link); err != nil {
+				t.Fatal(err)
+			}
+			got, err := m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+			if err != nil || len(got) != 0 {
+				t.Fatalf("linked %s exposed metadata: %+v, %v", location, got, err)
+			}
+		})
+	}
+}
+
+func TestDetectedSkillsScopeEngineHome(t *testing.T) {
+	m, _, tenant, _ := newRuntimeHarness(t)
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".claude", "skills", "operator")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: operator\ndescription: Operator instructions.\n---\nPrivate.\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// A missing or closed policy must never expose the engine user's home.
+	for _, open := range []bool{false, true, false} {
+		m.ServerLoginOpen = func(_ context.Context, caller model.TenantID) bool { return open && caller == tenant }
+		got, err := m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+		want := 0
+		if open {
+			want = 1
+		}
+		if err != nil || len(got) != want {
+			t.Fatalf("open=%v: got %+v, %v", open, got, err)
+		}
+	}
+	m.ServerLoginOpen = func(_ context.Context, caller model.TenantID) bool { return caller == tenant }
+	got, err := m.DetectSkills(t.Context(), api.ModuleContext{Tenant: model.TenantID("other-tenant")})
+	if err != nil || len(got) != 0 {
+		t.Fatalf("other tenant: %+v, %v", got, err)
+	}
+	m.ServerLoginOpen = nil
+	got, err = m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+	if err != nil || len(got) != 0 {
+		t.Fatalf("no policy: %+v, %v", got, err)
+	}
+}
+
+func TestDetectedSkillsBoundScanAndSkipBadEntries(t *testing.T) {
+	m, _, tenant, _ := newRuntimeHarness(t)
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	t.Setenv("HOME", t.TempDir())
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	root := filepath.Join(profile.ConfigHome, "skills")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("broken", filepath.Join(root, "broken")); err != nil {
+		t.Fatal(err)
+	}
+	good := filepath.Join(profile.UserHome, ".claude", "skills", "good")
+	if err := os.MkdirAll(good, 0700); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("---\nname: good\ndescription: Good instructions.\n---\nRead.\n")
+	if err := os.WriteFile(filepath.Join(good, "SKILL.md"), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+	if err != nil || len(got) != 1 {
+		t.Errorf("bad entry denied healthy metadata: %+v, %v", got, err)
+	}
+	if err := os.Remove(filepath.Join(root, "broken")); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i <= skills.MaxFiles; i++ {
+		name := fmt.Sprintf("skill-%d", i)
+		dir := filepath.Join(root, name)
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: "+name+"\ndescription: Instructions.\n---\nRead.\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err = m.DetectSkills(t.Context(), api.ModuleContext{Tenant: tenant})
+	if err != nil || len(got) > skills.MaxFiles {
+		t.Fatalf("unbounded scan: rows=%d, %v", len(got), err)
 	}
 }

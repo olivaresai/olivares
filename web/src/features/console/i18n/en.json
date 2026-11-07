@@ -2,15 +2,15 @@
   "title": "Administration",
   "subtitle": "The agents, workspaces, source bindings, secrets and connectors of this organization. People, sign-in and roles are in People & groups.",
   "tabs": {
-    "people": "Users & groups",
+    "people": "People",
     "agents": "Agents",
-    "sso": "SSO / IdP",
+    "sso": "Identity provider",
     "scopes": "Workspaces",
-    "roles": "Roles & delegation",
+    "roles": "Roles",
     "secrets": "Secrets",
     "connectors": "Connectors",
     "apiKeys": "API keys",
-    "license": "Edition & license",
+    "license": "Edition",
     "bindings": "Source bindings",
     "wsConnectors": "Workspace connectors"
   },
@@ -56,12 +56,11 @@
     "truncatedHint": "There are more API tokens than shown; this page takes rows by id — assigned at creation — so later rows are missing. These are LIVE credentials: a token you cannot see here still authenticates, and you cannot revoke it from this screen. A key not listed does not demonstrate that it does not exist."
   },
   "license": {
-    "title": "Edition & license",
+    "title": "License",
     "caption": "Current edition, license status and actions for this installation.",
     "helpSummary": "License apply versus this build",
     "helpBody": "Replacing the license applies on this process without a restart. That is not a binary swap or a data upgrade: those are separate operations with their own procedures. On Community, applying a verified license displays its details here; it does not change this build.",
-    "superadminOnly": "Only a superadmin can view or change the license.",
-    "install": "Install / update",
+    "install": "Install license",
     "remove": "Remove license",
     "edition": "Edition",
     "editions": {
@@ -200,7 +199,7 @@
     "mode": "How they sign in",
     "modePassword": "Set an initial password",
     "modeInvite": "Send an email invitation",
-    "inviteUnavailable": "This server cannot mail invitations (see OLIVARES_INVITE_MAIL_DESTINATION in the configuration reference), so set an initial password.",
+    "inviteUnavailable": "This server cannot mail invitations, so set an initial password.",
     "password": "Initial password",
     "passwordHint": "At least 8 characters. The user can change it later.",
     "submit": "Onboard",
@@ -216,7 +215,6 @@
   "sso": {
     "title": "Single sign-on",
     "caption": "Connect your identity provider (OIDC or SAML). Secrets are encrypted at rest and never shown again. Configuring SSO is a deployment-wide, superadmin-only action.",
-    "superadminOnly": "SSO is a deployment-wide setting; only a superadmin can view or change it.",
     "builderUnavailable": "This build can store SSO configuration but cannot activate it: no OIDC/SAML provider is available in this engine.",
     "statusConfigured": "Configured",
     "statusNotConfigured": "Not configured",
@@ -285,7 +283,6 @@
   "secrets": {
     "title": "Secret store",
     "caption": "Named secrets in the deployment-wide sealed store. Reference one from a connector config as store:<name>; the value is resolved at connection time, so you reconfigure without restarting. The value is never shown — only a short fingerprint confirms a secret is set or changed.",
-    "superadminOnly": "The secret store is a deployment-wide setting; only a superadmin can view or change it.",
     "sealerUnavailable": "This build can list secrets but has no sealer set up, so values cannot be stored. Configure a sealer backend to enable the store.",
     "create": "New secret",
     "colName": "Name",
@@ -345,7 +342,6 @@
   "connectors": {
     "title": "Connectors",
     "caption": "Add and configure the connectors the engine ingests from, with their credentials sealed at rest. A change is applied to the running engine without a restart. Deployment-wide and superadmin-only.",
-    "superadminOnly": "Connectors are a deployment-wide setting; only a superadmin can view or change them.",
     "unavailable": "This build does not include connector onboarding; connectors are configured from the boot file instead.",
     "sourcesUnavailable": "This build does not serve the source roster; the connectors it runs cannot be listed here.",
     "catalogForbidden": "Not authorized to view the connector catalog",
@@ -365,7 +361,8 @@
       "failed": "Failed",
       "stopped": "Stopped",
       "disabled": "Disabled",
-      "not_wired": "Not set up"
+      "not_wired": "Not set up",
+      "credential_missing": "Credential missing"
     },
     "edit": "Edit",
     "delete": "Delete",
@@ -477,7 +474,24 @@
       "unknownHint": "This connector declares no endpoint, so where it runs was not determined. It does NOT mean vendor-hosted.",
       "vendor_hosted": "Vendor cloud",
       "vendor_hostedHint": "A provider-operated API — the connector’s declared endpoint defaults to the vendor’s URL."
-    }
+    },
+    "import": "Import definition",
+    "export": "Export definition",
+    "imported": "Source imported.",
+    "importInvalid": "That file is not an exported source definition.",
+    "previewTitle": "Preview",
+    "previewEmpty": "The source lists no documents.",
+    "previewDocument": "Document",
+    "previewAcl": "Access (ACL)",
+    "previewSkipped": "Skipped: not ingestable",
+    "previewUnreadable": "Could not be read",
+    "previewNoAcl": "No ACL: denied unless the source is public",
+    "scheduleTitle": "Schedule",
+    "kb": "Knowledge base",
+    "kbHint": "Synced on save and then every poll interval. Without one, the source is only pulled by an explicit ingest or sync.",
+    "kbNone": "None (manual ingest)",
+    "maxDelete": "Deletion safeguard (%)",
+    "maxDeleteHint": "If one sync would delete a larger share of the source's documents, it deletes none and says why. 0 turns it off."
   },
   "workspaces": {
     "title": "Workspaces",
@@ -500,7 +514,12 @@
     "renamed": "Workspace renamed.",
     "none": "No workspaces yet.",
     "noneHint": "A workspace scopes agents, sessions and grants inside this organization. Create one to start.",
-    "ownerOnly": "Only the organization owner can create workspaces."
+    "ownerOnly": "Only the organization owner can create workspaces.",
+    "template": "Start from a template",
+    "templateNone": "No template",
+    "templateHint": "The department's default session template: a launch that names none starts from it.",
+    "templateMandatory": "Mandatory: a launch may not name another template",
+    "templateNotAssigned": "Workspace created, but its template was not assigned: {{reason}}"
   },
   "agents": {
     "readOnlyNotice": "You need agent read access to view agents.",
@@ -609,7 +628,9 @@
       "groupScope": "Agent-group: {{ref}}",
       "classLabel": "limited to {{class}}",
       "loadError": "Could not load your delegation authority. Try again.",
-      "folderScope": "Folder: {{ref}}"
+      "folderScope": "Folder: {{ref}}",
+      "levelCount": "{{level}}: {{count}}",
+      "exactPermissions": "Exact permissions"
     },
     "grants": {
       "title": "Scoped grants",
@@ -748,7 +769,7 @@
     "groupSubjects": {
       "managedBy": "Managed by {{provisioner}} · read-only",
       "title": "Group subjects & hierarchy",
-      "caption": "Grant roles to provisioned user groups and shape the group hierarchy. A child group's members inherit the parent's grants.",
+      "caption": "Grant roles to provisioned user groups. A child group's members inherit the parent's grants.",
       "noGroups": "No groups yet. Groups come from your identity provider.",
       "noGroupsHint": "The console does not create groups. Add a group in your identity provider and it appears here.",
       "colName": "Group",
@@ -756,16 +777,7 @@
       "colMembers": "Members",
       "colRole": "Mapped role",
       "noParent": "None (root)",
-      "setParent": "Set parent",
-      "clearParent": "Remove parent",
-      "setParentTitle": "Set group parent",
-      "setParentBody": "Members of {{child}} will inherit the grants of {{parent}}. The engine re-evaluates on the next request.",
-      "clearParentTitle": "Remove group parent",
-      "clearParentBody": "{{child}} will no longer inherit its parent's grants.",
-      "parentSet": "Group parent updated.",
-      "selectParent": "Select parent group…",
       "selectGroup": "Select group…",
-      "cycleError": "Cannot set parent: it would create a cycle.",
       "mapRole": "Map role",
       "changeRole": "Change role",
       "role": "Tenant role",
@@ -954,6 +966,7 @@
     "familyEnabled": "{{family}} is on.",
     "familyDisabled": "{{family}} is off.",
     "familyChangeFailed": "Could not change {{family}}.",
+    "familyNotCovered": "This license does not include {{family}}.",
     "familyWaiting_one": "{{count}} needs your input",
     "familyWaiting_other": "{{count}} need your input"
   },
@@ -971,7 +984,9 @@
       "knowledge": "Knowledge",
       "data": "Data",
       "profile": "Provider profile",
-      "tool": "AI tool"
+      "tool": "AI tool",
+      "instructions": "Department instructions",
+      "template": "Default session template"
     },
     "sourceRef": "Source reference",
     "sourceRefHint": "Use the exact source ref. There is no single catalog for every source kind.",
@@ -1023,7 +1038,9 @@
     "folderSelectedId": "Selected Resource id: {{id}}",
     "effects": {
       "allow": "Allow",
-      "forbid": "Forbid"
+      "forbid": "Forbid",
+      "require": "Require",
+      "decline": "Opt out"
     },
     "credName": "Credential name",
     "credentialHint": "Optional. If any credential field is set, name, kind and locator are required.",
@@ -1164,7 +1181,7 @@
   },
   "mcpGateway": {
     "title": "MCP gateway",
-    "caption": "Manage upstream servers and the session tools for this tenant. Connection tests discover tools; execution requires an explicit policy.",
+    "caption": "Manage upstream servers and the session tools for this organization. Connection tests discover tools; execution requires an explicit policy.",
     "add": "Add server",
     "configure": "Configure",
     "test": "Test connection",
@@ -1177,18 +1194,16 @@
     "empty": "No upstream servers",
     "emptyHint": "Add a Streamable HTTP server, test its connection, then configure trust and tool permissions before enabling it.",
     "source": {
-      "file": "Operator file",
-      "store": "Tenant configuration"
+      "file": "Operator file"
     },
     "fileOwned": "The operator file governs MCP on its configured listener. This view is read-only. Stored configuration stays inactive; nothing is merged or overridden.",
-    "storeOwned": "Tenant configuration governs MCP on this installation’s HTTP listener. No configuration file is required.",
     "sessionTitle": "Session tools",
     "sessionHint": "Sessions can message each other and use their assigned work. It gives sessions no new permissions.",
     "tools": "Tools ({{count}})",
     "observationHint": "Discovery grants no authority. Allow each tool with an explicit scope and classify whether it needs destructive-action approval.",
     "destructive": "Destructive approval required",
     "credentials": "Manage credentials",
-    "credentialCaption": "Tenant MCP secrets only (mcp/ names). Store the full upstream Authorization header value here, such as Bearer followed by its token. Values stay sealed and are never returned.",
+    "credentialCaption": "Organization MCP secrets only (mcp/ names). Store the full upstream Authorization header value here, such as Bearer followed by its token. Values stay sealed and are never returned.",
     "noCredential": "No sign-in",
     "name": "Name",
     "url": "Server address",
@@ -1213,7 +1228,7 @@
     "formHint": "A new server starts off. Save it, test the connection, review its tools and enable it.",
     "saveDisabled": "Save",
     "removeTitle": "Remove MCP server",
-    "removeHint": "Remove {{name}} from this tenant’s gateway? New requests will be refused; its sealed credential is kept in the secret manager.",
+    "removeHint": "Remove {{name}} from this organization’s gateway? New requests will be refused; its sealed credential is kept in the secret manager.",
     "conflict": "Configuration changed. Refresh and review the current version before submitting again.",
     "enableHint": "Enabling requires a successful current test, matching resource and issuer trust, and explicit scopes for observed tools.",
     "governance": "Applied governance",
@@ -1244,8 +1259,8 @@
       "network_confinement": "Network confinement"
     },
     "governanceValues": {
-      "tenant_store": "Tenant store",
-      "tenant_sealed_reference": "Own tenant sealed references",
+      "tenant_store": "Organization settings",
+      "tenant_sealed_reference": "Own organization sealed references",
       "control_plane_http_listener": "Installation HTTP listener",
       "declared_inventory_and_consent": "Declared templates and consent gates",
       "not_configured": "Not configured",
@@ -1319,8 +1334,8 @@
       "notAllowed": "not allowed (change it in Configure)",
       "confirm": "Turn on"
     },
-    "sessionOn": "On: turn it off to stop it.",
-    "sessionOff": "Off: sessions cannot message each other or use their assigned work.",
+    "sessionOn": "On",
+    "sessionOff": "Off",
     "startersTitle": "Starter servers",
     "startersHint": "Curated servers, each with its confinement and network limits. Add fills in the form; the server is saved off and runs nothing until you test and enable it.",
     "starterAdd": "Add {{name}}",

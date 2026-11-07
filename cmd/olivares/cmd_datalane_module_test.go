@@ -103,7 +103,25 @@ func TestSourcescopeAssignmentRefusalIsTheEditionAnswer(t *testing.T) {
 	if got := exitcode.From(datalaneHTTPError("knowledge", http.StatusNotImplemented, body)); got == exitcode.Edition {
 		t.Fatalf("another data-lane family changed its exit code for a 501: %d", got)
 	}
-	if got := exitcode.From(datalaneHTTPError("sourcescope", http.StatusNotImplemented, []byte(`{"error":{"code":"connector_unavailable","message":"x"}}`))); got == exitcode.Edition {
+	if got := exitcode.From(datalaneHTTPError("sourcescope", http.StatusNotImplemented, []byte(`{"error":{"code":"not_implemented","message":"x"}}`))); got == exitcode.Edition {
 		t.Fatalf("a 501 that does not name Business became the edition answer: %d", got)
+	}
+}
+
+// A Business connector this build does not construct answers 501 connector_unavailable, and the
+// CLI gives the edition exit code (9) for it in every data-lane family: `knowledge kbs ingest
+// --source workspace:<a confluence connector>` exits 9 like every Business command in Community.
+func TestConnectorUnavailableIsTheEditionAnswer(t *testing.T) {
+	body := []byte(`{"error":{"code":"connector_unavailable","message":"connector unavailable in this edition: the \"confluence\" connector is a Business capability; run the Business edition or remove it from the configuration","remedy":"Run Olivares Business."}}`)
+	err := datalaneHTTPError("knowledge", http.StatusNotImplemented, body)
+	if got := exitcode.From(err); got != exitcode.Edition || !strings.Contains(err.Error(), "Business") {
+		t.Fatalf("exit = %d (%v), want the edition answer %d naming Business", got, err, exitcode.Edition)
+	}
+	// -o json keeps the engine's status, code and remedy for it, as for every other refusal.
+	line := string(cliErrorJSON(err.Error(), err))
+	for _, want := range []string{`"status":501`, `"code":"connector_unavailable"`, `"remedy":"Run Olivares Business."`} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("-o json = %s; want %s", line, want)
+		}
 	}
 }

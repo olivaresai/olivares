@@ -63,7 +63,8 @@ var ErrCoreSchemaVersionAhead = errors.New("sqlstore: the database records a cor
 // v27 adds the optional workspace place of a user group.
 // v28 adds nullable session last-used and client-kind metadata without backfill.
 // v29 adds issue-time API-token role provenance and a roster-based backfill for legacy rows.
-const coreSupportedMigrationVersion = coreGroupDerivedTokenRoleVersion
+// v30 adds the nullable identity provider session a back-channel logout names.
+const coreSupportedMigrationVersion = coreAuthSessionIdPSessionVersion
 
 // ErrCoreSchemaVersionUnrecognized is returned before any boot DDL when the database
 // records a version at or below the supported ceiling that this binary's compiled plan

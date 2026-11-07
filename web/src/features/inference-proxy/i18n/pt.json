@@ -1,0 +1,117 @@
+{
+  "title": "Proxy de inferência",
+  "description": "O proxy por tenant que impõe políticas à frente de cada chamada a um modelo: controlos de pedido/resposta, regras de DLP de saída e aprovações de autorização de dispositivos.",
+  "config": {
+    "title": "Controlos e limites",
+    "intro": "Cada controlo é imposto no caminho do pedido antes da chamada ao modelo. Desligar um deixa de impor essa verificação; a alteração é registada no registo de auditoria.",
+    "failOpen": "Falhar em aberto",
+    "failOpenHint": "Quando o proxy não consegue chegar a uma decisão de política, permite a chamada em vez de a bloquear. Desligado = falhar em fechado.",
+    "recordMandatory": "Exigir gravação",
+    "recordMandatoryHint": "Recusar uma chamada que não possa ser gravada no registo da sessão.",
+    "gates": {
+      "gate_model_access": "Acesso a modelos",
+      "gate_budget": "Orçamento",
+      "gate_residency": "Residência",
+      "gate_context_window": "Janela de contexto",
+      "gate_dlp_request": "DLP de pedidos",
+      "gate_dlp_response": "DLP de respostas"
+    },
+    "gatesHint": {
+      "gate_model_access": "Impor que modelos cada identidade pode chamar.",
+      "gate_budget": "Impor os limites de orçamento antes de a chamada acumular custo.",
+      "gate_residency": "Impor a região de residência de dados do tenant.",
+      "gate_context_window": "Impor o limite da janela de contexto por superfície.",
+      "gate_dlp_request": "Analisar o pedido de saída à procura de classificações não permitidas.",
+      "gate_dlp_response": "Analisar a resposta do modelo de acordo com o modo de DLP de respostas."
+    },
+    "responseDlpMode": "Modo de DLP de respostas",
+    "responseDlpModeHint": "Como o DLP de respostas trata uma correspondência: desligado (sem análise), sinalizar (anotar) ou reter (manter para análise antes de devolver).",
+    "dlpModes": {
+      "off": "Desligado",
+      "flag": "Sinalizar",
+      "buffer": "Reter"
+    },
+    "ceilingsEnforce": "Impor limites",
+    "ceilingsEnforceHint": "Limitar os tokens, as utilizações de ferramentas e o orçamento de tarefa por chamada. Desligado = sem limite por chamada.",
+    "ceilingMaxTokens": "Máx. de tokens",
+    "ceilingMaxToolUses": "Máx. de utilizações de ferramentas",
+    "ceilingTaskBudget": "Orçamento da tarefa (tokens)",
+    "ceilingTaskBudgetHint": "0 = não definido, caso contrário pelo menos {{min}}.",
+    "ceilingTaskBudgetError": "Tem de ser 0 ou pelo menos {{min}}.",
+    "reset": "Repor",
+    "save": "Guardar configuração",
+    "saved": "Configuração do proxy guardada"
+  },
+  "dlp": {
+    "title": "Regras de DLP de saída",
+    "intro": "Associe uma classificação de conteúdo a permitir ou negar na saída. A classificação é feita no servidor, na chamada ao modelo; estas regras decidem o que uma correspondência faz.",
+    "truncated": "Carregadas {{n}} regras de DLP; há mais",
+    "truncatedHint": "Há mais regras de DLP do que as mostradas; esta página obtém linhas por ID. Uma regra ausente desta lista não prova que não existe — a saída pode ser governada por regras que não pode ver aqui.",
+    "add": "Adicionar regra",
+    "noRead": "Não tem permissão para ver as regras de DLP.",
+    "noReadHint": "As regras de DLP inspecionam prompts e respostas à procura de dados que não quer que saiam. Peça a um administrador a permissão de leitura de DLP.",
+    "empty": "Nenhuma regra de DLP",
+    "emptyHint": "Os segredos em prompts são negados por defeito enquanto o DLP de pedidos estiver ativo. Adicione uma regra para permitir ou negar uma classificação na saída.",
+    "colClass": "Classificação",
+    "colAction": "Ação",
+    "colNote": "Nota",
+    "colActions": "Ações",
+    "actions": {
+      "allow": "Permitir",
+      "deny": "Negar"
+    },
+    "editAction": "Editar regra de {{class}}",
+    "deleteAction": "Eliminar regra de {{class}}",
+    "created": "Regra de DLP criada",
+    "updated": "Regra de DLP atualizada",
+    "deleted": "Regra de DLP eliminada",
+    "deleteDialog": {
+      "title": "Eliminar regra de DLP?",
+      "description": "Isto remove a regra de saída para «{{class}}». O conteúdo correspondente passará ao tratamento por defeito.",
+      "confirm": "Eliminar regra"
+    },
+    "dialog": {
+      "title": "Adicionar regra de DLP",
+      "editTitle": "Editar regra de DLP",
+      "subtitle": "Uma classificação é permitida ou negada na saída. A regra é identificada pela sua classificação.",
+      "class": "Classificação",
+      "classHint": "A classificação de conteúdo a que esta regra se aplica (p. ex. pii, secret).",
+      "action": "Ação",
+      "note": "Nota",
+      "create": "Adicionar regra",
+      "save": "Guardar regra"
+    }
+  },
+  "device": {
+    "title": "Autorização de dispositivos",
+    "intro": "Aprove ou negue um pedido de autorização de dispositivo através do seu código de utilizador (o código mostrado no ecrã de emparelhamento do dispositivo).",
+    "userCode": "Código de utilizador",
+    "userCodePlaceholder": "p. ex. WDJB-MJHT",
+    "approve": "Aprovar",
+    "deny": "Negar",
+    "approved": "Código de dispositivo {{code}} aprovado",
+    "denied": "Código de dispositivo {{code}} negado",
+    "notFound": "Não há nenhum pedido pendente para esse código de utilizador.",
+    "expired": "Esse pedido expirou ou já foi utilizado."
+  },
+  "firewall": {
+    "title": "Inspetor de mensagens",
+    "intro": "Se este processo do plano de controlo foi iniciado com o inspetor de conteúdo associado ao proxy de mensagens.",
+    "refresh": "Verificar novamente",
+    "limit": "Isto é o que o processo que respondeu registou ao iniciar. Não indica se o proxy está acessível agora, que política está carregada, nem se algum pedido individual foi inspecionado.",
+    "states": {
+      "unobserved": "Não reportado",
+      "pep_not_composed": "Proxy não iniciado",
+      "inspector_absent": "Inspetor não associado",
+      "inspector_attached": "Inspetor associado",
+      "unreadable": "Não foi possível ler"
+    },
+    "statesHint": {
+      "unobserved": "Este processo não registou um estado de associação. Não se afirma nada em nenhum dos sentidos.",
+      "pep_not_composed": "O proxy de mensagens não foi iniciado neste processo, pelo que nenhum inspetor se pôde associar a ele.",
+      "inspector_absent": "O proxy iniciou sem um inspetor de conteúdo associado.",
+      "inspector_attached": "Foi associado um inspetor no arranque. Pode ser o inspetor restritivo de recurso, instalado quando a configuração não pode ser lida, pelo que isto não significa que o conteúdo esteja a ser inspecionado conforme configurado.",
+      "unreadable": "A resposta não correspondeu a um estado que esta consola reconheça. Não se afirma nada sobre o inspetor."
+    }
+  }
+}

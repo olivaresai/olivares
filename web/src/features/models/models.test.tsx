@@ -17,6 +17,7 @@ import {
   governedModelsFixture,
   keyRefsFixture,
 } from './fixtures'
+import type { GovernedModel } from './types'
 import './i18n'
 
 describe('CapabilityMatrix', () => {
@@ -65,6 +66,28 @@ describe('ModelsTable', () => {
     expect(screen.getByText('llama-3.3-70b-local')).toBeInTheDocument()
     // the un-enriched local model is flagged, not faked with a price
     expect(screen.getByText(/No declared family/i)).toBeInTheDocument()
+  })
+
+  it('renders a model the engine sent without capabilities, family or context window', () => {
+    // modules/models/dto.go governedModelDTO marks these `omitempty`: an un-enriched
+    // model (glm-5.3[1m], provider claude) arrives with none of them.
+    const unenriched: GovernedModel = {
+      id: 'mdl-glm',
+      name: 'glm-5.3[1m]',
+      provider: 'claude',
+      input_cost_micro_usd: 0,
+      output_cost_micro_usd: 0,
+      status: 'active',
+      enriched: false,
+    }
+    renderIntel(<ModelsTable models={[unenriched]} />)
+    const row = screen.getByText('glm-5.3[1m]').closest('tr')
+    expect(row).not.toBeNull()
+    // family, context window and capabilities are all unknown: a dash each, never a
+    // crash and never a fake count of 0
+    expect(
+      within(row as HTMLElement).getAllByText('—').length,
+    ).toBeGreaterThanOrEqual(3)
   })
 })
 

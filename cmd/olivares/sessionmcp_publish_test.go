@@ -572,4 +572,71 @@ func TestSessionPublishProposalWaitsForAPersonThenPublishesAsTheLauncher(t *test
 	}
 	decide(own, "reject")
 	<-answer
+
+	// An edition that names the run's identity (a Business agent role): the person sees it, the
+	// pull request ends with its lines whatever the agent wrote, and the effect is pinned to it.
+	saved := thisEdition.publicationIdentity
+	t.Cleanup(func() { thisEdition.publicationIdentity = saved })
+	thisEdition.publicationIdentity = func(_ context.Context, _ *engine, tn model.TenantID, r string) (publicationIdentity, error) {
+		if tn != tenant || r != run {
+			return publicationIdentity{}, errors.New("asked about another run")
+		}
+		return publicationIdentity{CredentialBinding: "forge-writer", Trailer: "Agent-Role: writer\nAccountable: user:fixture"}, nil
+	}
+	answer = call(publishPullRequestTool, map[string]any{"target_id": target, "head_ref": "olivares/role", "base": "main", "commit": commit, "title": "Role change", "body": "Fixes #12\n"})
+	approval = pending("gitpublish.pull_request")
+	if !strings.Contains(approval.Review.Text, "as forge identity: forge-writer") || !strings.Contains(approval.Review.Text, "Fixes #12\n\nAgent-Role: writer\nAccountable: user:fixture") {
+		t.Fatalf("role review = %q", approval.Review.Text)
+	}
+	decide(approval.ID, "approve")
+	if got = <-answer; got["http_status"] != float64(http.StatusOK) {
+		t.Fatalf("approved role pull request = %v", got)
+	}
+	module.mu.Lock()
+	pr := module.prs[len(module.prs)-1]
+	module.mu.Unlock()
+	if pr.Body != "Fixes #12\n\nAgent-Role: writer\nAccountable: user:fixture" || pr.Proposal.CredentialBinding != "forge-writer" {
+		t.Fatalf("role pull request input = %+v", pr)
+	}
+	// The edition refuses the run: the agent hears why and nothing is proposed.
+	thisEdition.publicationIdentity = func(context.Context, *engine, model.TenantID, string) (publicationIdentity, error) {
+		return publicationIdentity{}, &publicationRefusal{Code: "role_not_writer", Message: "A reviewer does not publish."}
+	}
+	got = <-call(publishPullRequestTool, map[string]any{"target_id": target, "head_ref": "olivares/role", "base": "main", "commit": commit, "title": "Role change"})
+	body, _ = got["body"].(map[string]any)
+	refusal, _ = body["error"].(map[string]any)
+	if got["http_status"] != float64(http.StatusForbidden) || refusal["code"] != "role_not_writer" {
+		t.Fatalf("refused role = %v", got)
+	}
+	if items, _, _ := eng.engineApprovals.List(ctx, tenant, "gitpublish.pull_request", "pending", ""); len(items) != 0 {
+		t.Fatalf("a refused role left a request pending: %+v", items)
+	}
+	// The run's identity changes while the person decides (its role re-bound):
+	// nothing publishes under the identity the person approved, and the
+	// approval stays unspent.
+	reads := 0
+	thisEdition.publicationIdentity = func(context.Context, *engine, model.TenantID, string) (publicationIdentity, error) {
+		if reads++; reads == 1 {
+			return publicationIdentity{CredentialBinding: "forge-writer"}, nil
+		}
+		return publicationIdentity{CredentialBinding: "forge-rebound"}, nil
+	}
+	module.mu.Lock()
+	before := len(module.prs)
+	module.mu.Unlock()
+	answer = call(publishPullRequestTool, map[string]any{"target_id": target, "head_ref": "olivares/rebound", "base": "main", "commit": commit, "title": "Rebound"})
+	approval = pending("gitpublish.pull_request")
+	decide(approval.ID, "approve")
+	got = <-answer
+	body, _ = got["body"].(map[string]any)
+	refusal, _ = body["error"].(map[string]any)
+	module.mu.Lock()
+	published := len(module.prs) - before
+	module.mu.Unlock()
+	if got["http_status"] != float64(http.StatusForbidden) || refusal["code"] != "session_access_ended" || published != 0 {
+		t.Fatalf("identity changed during the wait = %v, published %d", got, published)
+	}
+	if spent, err := eng.engineApprovals.Consume(ctx, tenant, approval.ID, newSingleUseConsumerID(), ""); err != nil || !spent.Granted {
+		t.Fatalf("a changed identity spent the approval: %+v %v", spent, err)
+	}
 }

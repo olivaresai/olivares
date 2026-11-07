@@ -179,11 +179,26 @@ export function fakeRouterModule() {
     Link: ({
       children,
       to,
+      search,
+      hash,
       ...rest
-    }: { children?: ReactNode; to?: string } & Record<string, unknown>) => (
-      <a href={to} {...rest}>
-        {children}
-      </a>
-    ),
+    }: {
+      children?: ReactNode
+      to?: string
+      search?: Record<string, unknown>
+      hash?: string
+    } & Record<string, unknown>) => {
+      const query = new URLSearchParams(
+        Object.entries(search ?? {}).map(([k, v]) => [k, String(v)]),
+      ).toString()
+      return (
+        <a
+          href={`${to ?? ''}${query ? `?${query}` : ''}${hash ? `#${hash}` : ''}`}
+          {...rest}
+        >
+          {children}
+        </a>
+      )
+    },
   }
 }

@@ -619,7 +619,7 @@ describe('SandboxView — las tres acciones y sus dos niveles de permiso', () =>
       await screen.findByRole('button', { name: /Replay a session/i }),
     )
     expect(
-      await screen.findByText(/timeline that could not be rebuilt/i),
+      await screen.findByText(/its timeline could not be rebuilt/i),
     ).toBeInTheDocument()
   })
 })

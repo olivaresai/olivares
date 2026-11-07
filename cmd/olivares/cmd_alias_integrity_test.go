@@ -155,11 +155,10 @@ func TestTheBritishSpellingOfCostCentresStillResolves(t *testing.T) {
 // getting an error. The three now carry `ls`, and `list` keeps working — an alias is added,
 // nothing is renamed, so no script breaks.
 //
-// A SECOND ASYMMETRY IS REPORTED AND NOT ASSERTED, following this file's habit of writing down
-// what it declines to enforce: some `ls`-named commands carry no `list` alias. That direction is
-// weaker — the canonical spelling already resolves there — and enforcing it would edit dozens of
-// commands outside this test's subject. The counts are logged by the test below so the next reader
-// sees today's number instead of this comment's.
+// THE OTHER DIRECTION IS ASSERTED TOO. Twenty-three `ls`-named commands carried no
+// `list` alias, so `olivares modules list` answered `unknown command` while `olivares session list`
+// worked. They are not edited one by one: enforceSubcommandContract adds the alias to every `ls`
+// that lacks it, so a new `ls` command is covered without its author knowing the rule.
 func TestEveryListCommandAlsoAnswersToLs(t *testing.T) {
 	root := newRootCmd()
 	namedList, namedLs, lsAlsoAnswersList := 0, 0, 0
@@ -175,6 +174,9 @@ func TestEveryListCommandAlsoAnswersToLs(t *testing.T) {
 			namedLs++
 			if slices.Contains(c.Aliases, "list") {
 				lsAlsoAnswersList++
+			} else if !hasChildAnsweringTo(c.Parent(), "list") {
+				t.Errorf("%q is named `ls` and does not answer to `list`: an operator who learned `list` from `session list` gets `unknown command` here",
+					c.CommandPath())
 			}
 		}
 	})
@@ -210,4 +212,45 @@ func TestWorkLsResolvesToWorkList(t *testing.T) {
 	if c, _, err := root.Find([]string{"work", "lsz"}); err == nil && c.Name() == "list" {
 		t.Fatal("an unregistered spelling also resolved to `work list`, so Find is not discriminating and the assertion above proves nothing")
 	}
+}
+
+func hasChildAnsweringTo(parent *cobra.Command, name string) bool {
+	if parent == nil {
+		return false
+	}
+	for _, child := range parent.Commands() {
+		if child.Name() == name || slices.Contains(child.Aliases, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestShowAndStatusVerbsResolve pins the invocations a 0.6 client answered with `unknown command`
+// on a 0.6 client: each must reach a command of its own, not its parent with a stray word.
+func TestShowAndStatusVerbsResolve(t *testing.T) {
+	root := newRootCmd()
+	for _, args := range [][]string{
+		{"license", "show"},
+		{"account", "show"},
+		{"governance", "killswitch", "status"},
+		{"capabilities", "ls"},
+		{"capabilities", "list"},
+	} {
+		got, rest, err := root.Find(args)
+		if err != nil || len(rest) != 0 {
+			t.Errorf("`olivares %s` does not resolve to a command: got %q, leftover %v, err %v", strings.Join(args, " "), got.CommandPath(), rest, err)
+		}
+	}
+}
+
+// Every `get` also answers to `show`, so one verb reads one object in every group
+// (`license show` and `models show` work as `models get` does). A sibling that already
+// answers to `show` keeps it.
+func TestEveryGetCommandAlsoAnswersToShow(t *testing.T) {
+	walkCommands(newRootCmd(), func(c *cobra.Command) {
+		if c.Name() == "get" && c.HasParent() && !hasChildAnsweringTo(c.Parent(), "show") {
+			t.Errorf("%q is named `get` and its group has no `show`", c.CommandPath())
+		}
+	})
 }

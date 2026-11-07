@@ -289,36 +289,42 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     await page.locator('#setup-password').fill(PASSWORD)
     await page.getByRole('button', { name: /create administrator/i }).click()
 
-    // Setup signs the new administrator in and opens the setup wizard (pages/setup.tsx).
-    await page.waitForURL('**/onboarding')
+    // Setup signs the new administrator in and opens the work surface (pages/setup.tsx).
+    await page.waitForURL('**/sessions')
     await expect(
       page
         .getByRole('navigation', { name: 'Main navigation', exact: true })
-        .getByRole('link', { name: 'Now', exact: true }),
+        .getByRole('link', { name: 'Settings', exact: true }),
     ).toBeVisible()
   })
 
   // Compliance is a Business page (docs/editions.md): a Community build answers its address with
-  // the Business notice, so the module-off notice is read on Alerting there. Retention schedules
-  // are Community: its own page, /retention, carries that leg on both editions.
+  // the Business notice, so the module-off notice is read on Alerting there. Reading retention
+  // schedules is Community: its own page, /retention, carries that leg on both editions, and
+  // authoring one and the sweep are Business, so only a Business build offers the sweep.
   const communityBuild =
     (await authenticatedFetch<{ edition?: string }>(page, '/v1/server-info'))
       .body.edition === 'community'
-  await test.step('turn on the surface modules through Edition & modules', async () => {
+  await test.step('turn on the surface modules through Settings › Modules', async () => {
     await page.goto(communityBuild ? '/alerting' : '/compliance')
     const off = page.locator('[data-slot="module-not-enabled"]')
     await expect(off).toBeVisible()
     // The page's one action (modules-settings.tsx TurnOnPage): "Turn on" when the module needs no
-    // other, else the link to Edition & modules. Six modules are chosen together, so they are set
-    // where the console keeps that choice: Edition & modules, reached from Main navigation.
+    // other, else the link to Modules. Six modules are chosen together, so they are set
+    // where the console keeps that choice: Settings › Modules, reached from Main navigation.
     await expect(
       off
         .getByRole('button', { name: 'Turn on', exact: true })
-        .or(off.getByRole('link', { name: 'Open Edition & modules' })),
+        .or(off.getByRole('link', { name: 'Open Modules' })),
     ).toBeVisible()
+    // Modules is a section of Settings (0.7): the Settings link, then Modules in its list.
     await page
       .getByRole('navigation', { name: 'Main navigation', exact: true })
-      .getByRole('link', { name: 'License', exact: true })
+      .getByRole('link', { name: 'Settings', exact: true })
+      .click()
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('button', { name: 'Modules', exact: true })
       .click()
     const settings = page.locator('[data-slot="modules-settings"]')
     await expect(settings).toBeVisible()
@@ -417,6 +423,14 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
         /A schedule is a document until a human approves its purge/i,
       ),
     ).toBeVisible()
+
+    // The sweep is Business: a Community build shows the schedules and offers no sweep.
+    if (communityBuild) {
+      await expect(
+        panel.getByRole('button', { name: /run sweep/i }),
+      ).toHaveCount(0)
+      return
+    }
 
     // THE DESTRUCTIVE VERB, OPENED BUT NOT CONFIRMED. On a pristine engine nothing is
     // armed, and the dialog has to SAY that rather than offer a bare confirm — the

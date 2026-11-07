@@ -286,219 +286,343 @@
   "root_package": "github.com/olivaresai/olivares/cmd/olivares",
   "root_step_ceiling_minutes": 80,
   "root_go_timeout_minutes": 70,
-  "root_shards_why": "Root test names are assigned across these shards by SHA-256 of the root package and full test name. Adding a test needs no list edit and moves no existing test. Shard clocks and parallelism remain declared here. Historical measurements can justify changing the shard count, not a hand-written assignment. RE-MEASURED 2026-10-31 (hosted 4 vCPU, race-full of the 0.5 candidate export): root-o was cut at the 70 min -timeout and root-b and root-y took 66-69 min; the 26 shards totaled 1166 min of Go time for 4060 tests, and the measured per-test costs predict every shard within 0.3 min. Hash assignment leaves the slowest shard well above the mean, so 53 shards are needed to keep every predicted job, including 3.4 min of measured start-up, at or under 45 min (slowest 44.6).",
+  "root_shards_why": "Root test names are assigned across these shards by SHA-256 of the root package and full test name. Adding a test needs no list edit and moves no existing test. Shard clocks and parallelism remain declared here. Historical measurements justify changing the shard count, not a hand-written assignment. RE-MEASURED 2026-11-01 (hosted 4 vCPU, race-full 41335478990): root-i completed only 33 of 70 tests before the 80-minute step ceiling. The timing artifacts are no longer available; retained job-log completion timestamps cover 4080 tests across all 53 root shards, with the retry supplying root-i's missing tests. Replay charges consecutive top-level completion gaps (including compilation in the first gap), keeps the slower observation across attempts, and reserves another 17 minutes for a cold build on every new runner. 84 is the first shard count whose replay estimates stay below 60 minutes (slowest 58.9), leaving over 20 minutes below the unchanged 80-minute step ceiling. These are conservative replay estimates, not measured durations of the new shards; verify them on the next hosted sweep.",
   "root_shards": [
     {
       "name": "root-a",
-      "minutes_est": 26.8
+      "minutes_est": 36.4
     },
     {
       "name": "root-b",
-      "minutes_est": 34.4
+      "minutes_est": 43.0
     },
     {
       "name": "root-c",
-      "minutes_est": 22.6
+      "minutes_est": 28.2
     },
     {
       "name": "root-d",
-      "minutes_est": 23.0
-    },
-    {
-      "name": "root-e-communication",
-      "minutes_est": 23.4
-    },
-    {
-      "name": "root-e-rest",
-      "minutes_est": 27.0
-    },
-    {
-      "name": "root-f",
-      "minutes_est": 25.6
-    },
-    {
-      "name": "root-g",
-      "minutes_est": 26.9
-    },
-    {
-      "name": "root-h",
-      "minutes_est": 25.4
-    },
-    {
-      "name": "root-i",
-      "minutes_est": 32.0
-    },
-    {
-      "name": "root-j",
-      "minutes_est": 34.7
-    },
-    {
-      "name": "root-k",
-      "minutes_est": 30.7
-    },
-    {
-      "name": "root-l",
-      "minutes_est": 24.4
-    },
-    {
-      "name": "root-m",
-      "minutes_est": 24.3
-    },
-    {
-      "name": "root-n",
-      "minutes_est": 39.6
-    },
-    {
-      "name": "root-o",
-      "minutes_est": 20.5
-    },
-    {
-      "name": "root-p",
-      "minutes_est": 18.2
-    },
-    {
-      "name": "root-q",
-      "minutes_est": 26.0
-    },
-    {
-      "name": "root-r",
-      "minutes_est": 23.1
-    },
-    {
-      "name": "root-s",
-      "minutes_est": 22.2
-    },
-    {
-      "name": "root-t",
-      "minutes_est": 40.4
-    },
-    {
-      "name": "root-u",
-      "minutes_est": 16.2
-    },
-    {
-      "name": "root-v",
-      "minutes_est": 25.0
-    },
-    {
-      "name": "root-w",
-      "minutes_est": 21.8
-    },
-    {
-      "name": "root-x",
-      "minutes_est": 21.4
-    },
-    {
-      "name": "root-y",
-      "minutes_est": 30.8
-    },
-    {
-      "name": "root-z",
-      "minutes_est": 22.9
-    },
-    {
-      "name": "root-aa",
-      "minutes_est": 13.5
-    },
-    {
-      "name": "root-ab",
-      "minutes_est": 23.6
-    },
-    {
-      "name": "root-ac",
-      "minutes_est": 23.1
-    },
-    {
-      "name": "root-ad",
-      "minutes_est": 31.9
-    },
-    {
-      "name": "root-ae",
-      "minutes_est": 19.7
-    },
-    {
-      "name": "root-af",
-      "minutes_est": 43.7
-    },
-    {
-      "name": "root-ag",
-      "minutes_est": 18.5
-    },
-    {
-      "name": "root-ah",
-      "minutes_est": 29.6
-    },
-    {
-      "name": "root-ai",
-      "minutes_est": 23.3
-    },
-    {
-      "name": "root-aj",
-      "minutes_est": 18.2
-    },
-    {
-      "name": "root-ak",
-      "minutes_est": 28.8
-    },
-    {
-      "name": "root-al",
-      "minutes_est": 19.7
-    },
-    {
-      "name": "root-am",
-      "minutes_est": 31.1
-    },
-    {
-      "name": "root-an",
-      "minutes_est": 44.6
-    },
-    {
-      "name": "root-ao",
-      "minutes_est": 23.7
-    },
-    {
-      "name": "root-ap",
-      "minutes_est": 16.3
-    },
-    {
-      "name": "root-aq",
       "minutes_est": 25.8
     },
     {
+      "name": "root-e-communication",
+      "minutes_est": 39.7
+    },
+    {
+      "name": "root-e-rest",
+      "minutes_est": 41.0
+    },
+    {
+      "name": "root-f",
+      "minutes_est": 22.4
+    },
+    {
+      "name": "root-g",
+      "minutes_est": 36.8
+    },
+    {
+      "name": "root-h",
+      "minutes_est": 26.3
+    },
+    {
+      "name": "root-i",
+      "minutes_est": 32.4
+    },
+    {
+      "name": "root-j",
+      "minutes_est": 37.1
+    },
+    {
+      "name": "root-k",
+      "minutes_est": 27.3
+    },
+    {
+      "name": "root-l",
+      "minutes_est": 29.5
+    },
+    {
+      "name": "root-m",
+      "minutes_est": 43.5
+    },
+    {
+      "name": "root-n",
+      "minutes_est": 48.3
+    },
+    {
+      "name": "root-o",
+      "minutes_est": 27.2
+    },
+    {
+      "name": "root-p",
+      "minutes_est": 33.5
+    },
+    {
+      "name": "root-q",
+      "minutes_est": 39.2
+    },
+    {
+      "name": "root-r",
+      "minutes_est": 38.2
+    },
+    {
+      "name": "root-s",
+      "minutes_est": 34.8
+    },
+    {
+      "name": "root-t",
+      "minutes_est": 36.0
+    },
+    {
+      "name": "root-u",
+      "minutes_est": 35.4
+    },
+    {
+      "name": "root-v",
+      "minutes_est": 38.7
+    },
+    {
+      "name": "root-w",
+      "minutes_est": 29.5
+    },
+    {
+      "name": "root-x",
+      "minutes_est": 27.4
+    },
+    {
+      "name": "root-y",
+      "minutes_est": 47.0
+    },
+    {
+      "name": "root-z",
+      "minutes_est": 32.6
+    },
+    {
+      "name": "root-aa",
+      "minutes_est": 30.0
+    },
+    {
+      "name": "root-ab",
+      "minutes_est": 35.6
+    },
+    {
+      "name": "root-ac",
+      "minutes_est": 38.3
+    },
+    {
+      "name": "root-ad",
+      "minutes_est": 32.0
+    },
+    {
+      "name": "root-ae",
+      "minutes_est": 23.2
+    },
+    {
+      "name": "root-af",
+      "minutes_est": 24.3
+    },
+    {
+      "name": "root-ag",
+      "minutes_est": 41.6
+    },
+    {
+      "name": "root-ah",
+      "minutes_est": 31.9
+    },
+    {
+      "name": "root-ai",
+      "minutes_est": 24.3
+    },
+    {
+      "name": "root-aj",
+      "minutes_est": 36.0
+    },
+    {
+      "name": "root-ak",
+      "minutes_est": 41.3
+    },
+    {
+      "name": "root-al",
+      "minutes_est": 26.8
+    },
+    {
+      "name": "root-am",
+      "minutes_est": 35.7
+    },
+    {
+      "name": "root-an",
+      "minutes_est": 38.9
+    },
+    {
+      "name": "root-ao",
+      "minutes_est": 22.9
+    },
+    {
+      "name": "root-ap",
+      "minutes_est": 26.4
+    },
+    {
+      "name": "root-aq",
+      "minutes_est": 29.8
+    },
+    {
       "name": "root-ar",
-      "minutes_est": 20.5
+      "minutes_est": 34.2
     },
     {
       "name": "root-as",
-      "minutes_est": 19.8
+      "minutes_est": 34.9
     },
     {
       "name": "root-at",
-      "minutes_est": 33.7
+      "minutes_est": 27.5
     },
     {
       "name": "root-au",
-      "minutes_est": 24.2
+      "minutes_est": 41.5
     },
     {
       "name": "root-av",
-      "minutes_est": 24.8
+      "minutes_est": 38.7
     },
     {
       "name": "root-aw",
-      "minutes_est": 23.8
+      "minutes_est": 24.7
     },
     {
       "name": "root-ax",
-      "minutes_est": 12.8
+      "minutes_est": 35.7
     },
     {
       "name": "root-ay",
-      "minutes_est": 21.5
+      "minutes_est": 58.9
     },
     {
       "name": "root-az",
-      "minutes_est": 20.4
+      "minutes_est": 58.0
+    },
+    {
+      "name": "root-ba",
+      "minutes_est": 34.4
+    },
+    {
+      "name": "root-bb",
+      "minutes_est": 21.2
+    },
+    {
+      "name": "root-bc",
+      "minutes_est": 34.3
+    },
+    {
+      "name": "root-bd",
+      "minutes_est": 22.2
+    },
+    {
+      "name": "root-be",
+      "minutes_est": 38.6
+    },
+    {
+      "name": "root-bf",
+      "minutes_est": 35.9
+    },
+    {
+      "name": "root-bg",
+      "minutes_est": 40.4
+    },
+    {
+      "name": "root-bh",
+      "minutes_est": 22.7
+    },
+    {
+      "name": "root-bi",
+      "minutes_est": 35.3
+    },
+    {
+      "name": "root-bj",
+      "minutes_est": 48.6
+    },
+    {
+      "name": "root-bk",
+      "minutes_est": 35.9
+    },
+    {
+      "name": "root-bl",
+      "minutes_est": 31.2
+    },
+    {
+      "name": "root-bm",
+      "minutes_est": 30.2
+    },
+    {
+      "name": "root-bn",
+      "minutes_est": 26.3
+    },
+    {
+      "name": "root-bo",
+      "minutes_est": 39.2
+    },
+    {
+      "name": "root-bp",
+      "minutes_est": 29.1
+    },
+    {
+      "name": "root-bq",
+      "minutes_est": 30.1
+    },
+    {
+      "name": "root-br",
+      "minutes_est": 28.3
+    },
+    {
+      "name": "root-bs",
+      "minutes_est": 33.3
+    },
+    {
+      "name": "root-bt",
+      "minutes_est": 33.6
+    },
+    {
+      "name": "root-bu",
+      "minutes_est": 31.7
+    },
+    {
+      "name": "root-bv",
+      "minutes_est": 24.3
+    },
+    {
+      "name": "root-bw",
+      "minutes_est": 40.0
+    },
+    {
+      "name": "root-bx",
+      "minutes_est": 28.6
+    },
+    {
+      "name": "root-by",
+      "minutes_est": 48.3
+    },
+    {
+      "name": "root-bz",
+      "minutes_est": 32.9
+    },
+    {
+      "name": "root-ca",
+      "minutes_est": 29.6
+    },
+    {
+      "name": "root-cb",
+      "minutes_est": 39.4
+    },
+    {
+      "name": "root-cc",
+      "minutes_est": 28.0
+    },
+    {
+      "name": "root-cd",
+      "minutes_est": 30.4
+    },
+    {
+      "name": "root-ce",
+      "minutes_est": 33.0
     }
   ],
   "max_shard_share": 0.3,

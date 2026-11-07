@@ -75,8 +75,9 @@ func (m *Module) PullRequestChanges(ctx context.Context, c Caller, workspace mod
 // change on the host and, for a push, the commit the host holds for the branch
 // ("" when it holds none or hides it).
 type publicationRead struct {
-	paths []string
-	tip   string
+	paths   []string
+	secrets []string
+	tip     string
 }
 
 // admitted loads the stored target and asks A1 the effect's question as the
@@ -150,6 +151,10 @@ func (m *Module) read(ctx context.Context, c Caller, workspace model.ID, s spec)
 	rel := &releaser{host: host, tok: tok}
 	defer rel.release(ctx) // a panic still releases; release runs once
 	out := publicationRead{}
+	out.secrets, err = m.secretPaths(actx, rb.LocalPath, s.req.Commit)
+	if err != nil {
+		return publicationRead{}, err
+	}
 	var rerr error
 	out.paths, rerr = m.readChangedPaths(actx, host, tok, tg, rb, s)
 	if rerr == nil && s.effect == effectPush {
@@ -205,6 +210,18 @@ func (m *Module) readChangedPaths(ctx context.Context, host gp.Host, tok gp.Toke
 		return nil, refuse("content_mismatch", http.StatusUnprocessableEntity)
 	case err != nil:
 		return nil, refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	}
+	return paths, nil
+}
+
+// secretPaths refuses an unavailable scan, never substituting a clean result.
+func (m *Module) secretPaths(ctx context.Context, repo, commit string) ([]string, error) {
+	if m.opts.ScanSecrets == nil {
+		return nil, refuse("secret_scan_unavailable", http.StatusServiceUnavailable)
+	}
+	paths, err := m.opts.ScanSecrets(ctx, repo, commit)
+	if err != nil {
+		return nil, refuse("secret_scan_unavailable", http.StatusServiceUnavailable)
 	}
 	return paths, nil
 }

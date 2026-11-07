@@ -24,7 +24,8 @@ vi.mock('@/features/sessions/api', async (importOriginal) => {
   return { ...actual, sessionsApi: { ...actual.sessionsApi, ...live } }
 })
 
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   //useUrlState follows the location, so the mock has to answer it.
   useRouterState: () => '',
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
@@ -157,6 +158,15 @@ describe('InventoryView', () => {
     expect(within(summary).getByText('4')).toBeInTheDocument()
     expect(within(summary).getByText('3')).toBeInTheDocument()
     expect(within(summary).getByText('1')).toBeInTheDocument()
+  })
+
+  it('sends a person looking for their MCP servers to MCP & skills', async () => {
+    renderView()
+    expect(
+      await screen.findByRole('link', {
+        name: 'Add and govern MCP servers in MCP & skills',
+      }),
+    ).toHaveAttribute('href', '/capabilities')
   })
 
   it('paints each catalog name as one line and keeps the ref off the cell text', async () => {

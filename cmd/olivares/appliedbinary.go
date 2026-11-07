@@ -299,7 +299,9 @@ func handOverIfApplied() {
 // must end with: 0 to carry on as the image binary (which also covers every ignored release).
 // The engine must not start as something else than the release the operator applied, so a verified
 // release that cannot be started stops `serve` (1); any other command still runs, so `upgrade` or
-// removing ota/ can repair the volume.
+// removing ota/ can repair the volume. A data directory whose engine record this user cannot read
+// (root in the container, the engine's user owns it) stops every command (1): the image binary would
+// answer about another release and report no engine.
 func handOver(args []string, self string, pub ed25519.PublicKey, stderr io.Writer, exec func(path string) error) int {
 	if len(args) == 0 {
 		return 0
@@ -310,6 +312,11 @@ func handOver(args []string, self string, pub ed25519.PublicKey, stderr io.Write
 	}
 	if abs, err := filepath.Abs(dataDir); err == nil {
 		dataDir = abs
+	}
+	if _, err := readConsoleState(dataDir); errors.Is(err, fs.ErrPermission) {
+		fmt.Fprintf(stderr, "olivares: %s cannot be read by uid %d: it belongs to another user. "+
+			"Run the command as that user: docker exec -it olivares olivares <command> (without -u root)\n", dataDir, os.Getuid())
+		return 1
 	}
 	serve := len(args) > 1 && args[1] == "serve"
 	notice := io.Discard

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, waitFor } from '@testing-library/react'
 import {
   createTestQueryClient,
   renderIntel,
@@ -12,11 +13,17 @@ import {
 import { agentOpsApi } from '@/features/agentops/api'
 import { consoleApi } from '@/features/console/api'
 import { http } from '@/lib/api/client'
-import { ApiError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
 import { skillsApi } from './api'
 import { SkillsView } from './skills-view'
 import { PackSheet } from './pack-sheet'
 import type { SkillAssignment, SkillPack, SkillPackDetail } from './types'
+
+import { fakeRouter } from '@/test/fake-router'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 const auth = vi.hoisted(() => ({
   can: (_permission: string): boolean => true,
@@ -105,6 +112,10 @@ beforeEach(() => {
     ]),
   )
   vi.spyOn(skillsApi, 'packs').mockResolvedValue(list([pack]))
+  vi.spyOn(skillsApi, 'detected').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
   vi.spyOn(skillsApi, 'pack').mockResolvedValue(detail)
   vi.spyOn(skillsApi, 'packAssignments').mockResolvedValue(
     list([groupPin, orphanPin]),
@@ -126,12 +137,192 @@ async function chooseWorkspace() {
 }
 
 async function openPack() {
+  fakeRouter.reset('/capabilities?tab=skills&catalog=packs')
   renderIntel(<SkillsView />)
   await userEvent.click(await screen.findByText('ecc'))
   return screen.findByRole('dialog')
 }
 
 describe('SkillsView', () => {
+  it('disables only the selected skill on one profile and removes its last-member pin', async () => {
+    const profileA: SkillAssignment = {
+      ...groupPin,
+      id: 'profile-a-pin',
+      target_kind: 'profile',
+      target_id: 'profile-a',
+      members: null,
+    }
+    const profileB: SkillAssignment = {
+      ...profileA,
+      id: 'profile-b-pin',
+      target_id: 'profile-b',
+      members: ['keep'],
+    }
+    let pins = [profileA, profileB]
+    vi.mocked(skillsApi.pack).mockResolvedValue({
+      ...detail,
+      revisions: [
+        detail.revisions[0],
+        {
+          ...detail.revisions[1],
+          members: [
+            { name: 'code-review', directory: 'code-review', description: '' },
+            { name: 'keep', directory: 'keep', description: '' },
+          ],
+        },
+      ],
+    })
+    vi.mocked(skillsApi.packAssignments).mockImplementation(async () =>
+      list(pins),
+    )
+    const put = vi.spyOn(http, 'put').mockImplementation(async (_url, body) => {
+      const assignment = {
+        ...profileA,
+        members: (body as { members: string[] }).members,
+        version: 5,
+      }
+      pins = [assignment, profileB]
+      return { state: 'pinned', assignment } as never
+    })
+    const remove = vi.spyOn(http, 'delete').mockImplementation(async () => {
+      pins = [profileB]
+      return { state: 'unassigned' } as never
+    })
+    const view = renderIntel(
+      <PackSheet pack={pack} skill="code-review" onOpenChange={vi.fn()} />,
+    )
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Disable code-review for profile-a',
+      }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Disable' }))
+    await screen.findByText('Not assigned')
+    expect(put).toHaveBeenCalledWith(
+      '/v1/m/skills/assignments/profile-a-pin',
+      {
+        target_kind: 'profile',
+        target_id: 'profile-a',
+        pack_revision_id: 'rev-1',
+        members: ['keep'],
+      },
+      expect.objectContaining({
+        tenant: 'tenant-1',
+        headers: { 'If-Match': '4' },
+      }),
+    )
+    expect(remove).not.toHaveBeenCalled()
+    expect(profileB.members).toEqual(['keep'])
+    view.rerender(<PackSheet pack={pack} skill="keep" onOpenChange={vi.fn()} />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Disable keep for profile-a' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Disable' }))
+    await waitFor(() =>
+      expect(remove).toHaveBeenCalledWith(
+        '/v1/m/skills/assignments/profile-a-pin',
+        undefined,
+        expect.objectContaining({
+          tenant: 'tenant-1',
+          headers: { 'If-Match': '5' },
+        }),
+      ),
+    )
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Disable keep for profile-a' }),
+      ).toBeNull(),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Disable keep for profile-b' }),
+    ).toBeInTheDocument()
+  })
+
+  it('removes a pack after unpinning every target and refreshes the catalog', async () => {
+    const calls: string[] = []
+    vi.spyOn(skillsApi, 'unassign').mockImplementation(async (pin) => {
+      calls.push(pin.id)
+      return { state: 'unassigned' }
+    })
+    const remove = vi.spyOn(http, 'delete').mockImplementation(async (path) => {
+      calls.push(String(path))
+      vi.mocked(skillsApi.packs).mockResolvedValue(
+        list([{ ...pack, state: 'retired' }]),
+      )
+      return { state: 'catalog_retired', pack: { ...pack, state: 'retired' } }
+    })
+    await openPack()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Remove pack' }),
+    )
+    const confirm = await screen.findByRole('dialog', {
+      name: 'Remove this pack?',
+    })
+    expect(calls).toEqual([])
+    await userEvent.click(
+      within(confirm).getByRole('button', { name: 'Remove pack' }),
+    )
+    await waitFor(() =>
+      expect(remove).toHaveBeenCalledWith(
+        '/v1/m/skills/packs/pack-1',
+        undefined,
+        expect.objectContaining({
+          tenant: 'tenant-1',
+          headers: { 'If-Match': '3' },
+        }),
+      ),
+    )
+    expect(calls).toEqual(['as-1', 'as-2', '/v1/m/skills/packs/pack-1'])
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Remove this pack?' }),
+      ).toBeNull(),
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Remove pack' })).toBeNull(),
+    )
+    expect(screen.getAllByText('Retired').length).toBeGreaterThan(0)
+  })
+  it('hides pack removal from editors without catalog admin permission', async () => {
+    auth.can = (p) =>
+      p === 'skills:catalog:read' ||
+      p === 'skills:catalog:write' ||
+      p === 'skills:assignment:write' ||
+      p === 'agent:read'
+    const sheet = await openPack()
+    await within(sheet).findByText('Reviewers')
+    expect(
+      within(sheet).queryByRole('button', { name: 'Remove pack' }),
+    ).toBeNull()
+  })
+  it('keeps the selected skill in the URL across remount and Back', async () => {
+    fakeRouter.reset('/capabilities?tab=skills')
+    const view = renderIntel(<SkillsView />)
+    await userEvent.click(await screen.findByText('code-review'))
+    const search = () => new URLSearchParams(fakeRouter.searchStr())
+    expect(search().get('skill')).toBe('code-review')
+    expect(search().get('tab')).toBe('skills')
+    expect(
+      await screen.findByRole('dialog', { name: 'code-review' }),
+    ).toBeInTheDocument()
+    view.unmount()
+    renderIntel(<SkillsView />)
+    expect(
+      await screen.findByRole('dialog', { name: 'code-review' }),
+    ).toBeInTheDocument()
+    act(() => fakeRouter.back())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+  it('lists skill descriptions before opening a pack', async () => {
+    renderIntel(<SkillsView />)
+    expect(await screen.findByText('Review a diff')).toBeInTheDocument()
+  })
+  it('offers Retry when the pack list fails to load', async () => {
+    vi.mocked(skillsApi.packs).mockRejectedValueOnce(new Error('Packs offline'))
+    renderIntel(<SkillsView />)
+    await userEvent.click(await screen.findByRole('button', { name: /retry/i }))
+    expect(await screen.findByText('Review a diff')).toBeInTheDocument()
+  })
   it('refreshes cached pins when installation assigns an existing pack', async () => {
     const queryClient = createTestQueryClient()
     queryClient.setDefaultOptions({
@@ -428,6 +619,48 @@ describe('SkillsView', () => {
     ).toBeInTheDocument()
   })
 
+  it('reads back a workspace pin whose assignment response was lost', async () => {
+    const installed = { ...pack, id: 'installed-1', name: 'ecc-security' }
+    const revision = detail.revisions[0]
+    vi.spyOn(skillsApi, 'packs')
+      .mockResolvedValueOnce(list([pack]))
+      .mockResolvedValue(list([pack, installed]))
+    vi.spyOn(http, 'post').mockResolvedValue({
+      state: 'catalog_published',
+      pack: installed,
+      revision,
+    })
+    vi.spyOn(http, 'get').mockImplementation(async (path) =>
+      path === '/v1/m/skills/assignments'
+        ? list([
+            {
+              ...groupPin,
+              target_kind: 'workspace',
+              target_id: 'ws-1',
+              pack_id: installed.id,
+              pack_revision_id: revision.id,
+              members: revision.members.map((member) => member.name),
+            },
+          ])
+        : list([{ id: 'ecc-security' }]),
+    )
+    vi.spyOn(skillsApi, 'assign').mockRejectedValue(
+      new NetworkError(
+        'The control plane is unreachable.',
+        new TypeError('Failed to fetch'),
+      ),
+    )
+    renderIntel(<SkillsView />)
+    await chooseWorkspace()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Install ecc-security' }),
+    )
+    await screen.findByText('Skill pack installed and assigned')
+    expect(
+      screen.queryByText(/workspace assignment failed/),
+    ).not.toBeInTheDocument()
+  })
+
   it('recognizes a pin after its successful response was lost', async () => {
     vi.spyOn(http, 'post').mockResolvedValue({
       state: 'catalog_published',
@@ -505,7 +738,7 @@ describe('SkillsView', () => {
   })
 
   it('opens the pack a ?pack= link names (AI tools > Installed here)', async () => {
-    window.history.pushState({}, '', '/capabilities?tab=skills&pack=pack-1')
+    fakeRouter.reset('/capabilities?tab=skills&pack=pack-1')
     try {
       renderIntel(<SkillsView />)
       const sheet = await screen.findByRole('dialog')
@@ -513,7 +746,7 @@ describe('SkillsView', () => {
         await within(sheet).findByText('code-review', { selector: 'span' }),
       ).toBeInTheDocument()
     } finally {
-      window.history.pushState({}, '', '/')
+      fakeRouter.reset('/')
     }
   })
 
@@ -678,6 +911,106 @@ describe('SkillsView', () => {
     )
   })
 
+  it('shows the resolved selection when choosing an assignment target', async () => {
+    const selection = vi.spyOn(skillsApi, 'selection').mockResolvedValue({
+      digest: 'resolved',
+      members: [
+        {
+          name: 'folder-review',
+          directory: 'folder-review',
+          pack_id: 'other-pack',
+          pack_revision_id: 'other-revision',
+        },
+      ],
+    })
+    const sheet = await openPack()
+    await userEvent.selectOptions(
+      within(sheet).getByLabelText('Target'),
+      'ws-1',
+    )
+    expect(
+      await within(sheet).findByText('Currently assigned: 1 skill'),
+    ).toBeInTheDocument()
+    expect(within(sheet).getByText('folder-review')).toBeInTheDocument()
+    expect(selection).toHaveBeenCalledWith(
+      'workspace',
+      'ws-1',
+      expect.any(AbortSignal),
+      undefined,
+      undefined,
+    )
+  })
+
+  it('keeps source failures beside the update action and drops the old check time', async () => {
+    const gitDetail = structuredClone(detail)
+    gitDetail.revisions[0].source = {
+      kind: 'git',
+      origin: 'https://example.com/skills',
+    }
+    vi.spyOn(skillsApi, 'pack').mockResolvedValue(gitDetail)
+    vi.spyOn(skillsApi, 'updateCheck')
+      .mockResolvedValueOnce({
+        state: 'current',
+        pack,
+        current: { revision_id: 'rev-2', number: 2 },
+      })
+      .mockRejectedValue(
+        new ApiError(
+          503,
+          'source_unavailable',
+          'The skills source could not be read. No revision was published.',
+        ),
+      )
+    const sheet = await openPack()
+    const check = await within(sheet).findByRole('button', {
+      name: 'Check for update',
+    })
+    await userEvent.click(check)
+    expect(await within(sheet).findByText('Checked')).toBeInTheDocument()
+    await userEvent.click(check)
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent(
+      'https://example.com/skills: The skills source could not be read. No revision was published.',
+    )
+    expect(within(sheet).queryByText('Checked')).not.toBeInTheDocument()
+  })
+
+  it('names the source when the reviewed update can no longer be applied', async () => {
+    const gitDetail = structuredClone(detail)
+    gitDetail.revisions[0].source = {
+      kind: 'git',
+      origin: 'https://example.com/skills',
+    }
+    vi.spyOn(skillsApi, 'pack').mockResolvedValue(gitDetail)
+    vi.spyOn(skillsApi, 'updateCheck').mockResolvedValue({
+      state: 'available',
+      pack,
+      current: { revision_id: 'rev-2', number: 2 },
+      candidate: { manifest_digest: 'd'.repeat(64) },
+      diff: { members: [], files: [] },
+    })
+    vi.spyOn(skillsApi, 'updateApply').mockRejectedValue(
+      new ApiError(
+        409,
+        'source_changed',
+        'The source changed after you reviewed it. Check again.',
+      ),
+    )
+    const sheet = await openPack()
+    await userEvent.click(
+      await within(sheet).findByRole('button', { name: 'Check for update' }),
+    )
+    await userEvent.click(
+      await within(sheet).findByRole('button', { name: 'Apply this update' }),
+    )
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent(
+      'https://example.com/skills: The source changed after you reviewed it. Check again.',
+    )
+    expect(
+      within(sheet).queryByRole('button', { name: 'Apply this update' }),
+    ).not.toBeInTheDocument()
+    expect(within(sheet).queryByText('Checked')).not.toBeInTheDocument()
+  })
+
   it('checks the recorded source, shows what changed and applies the reviewed digest', async () => {
     const digest = 'd'.repeat(64)
     vi.spyOn(skillsApi, 'updateCheck').mockResolvedValue({
@@ -689,7 +1022,9 @@ describe('SkillsView', () => {
         members: [
           { name: 'plan', change: 'added', new_active_content: ['hooks'] },
         ],
-        files: [{ path: 'plan/SKILL.md', change: 'added' }],
+        files: [
+          { path: 'plan/SKILL.md', change: 'added', diff: '+Review carefully' },
+        ],
       },
     })
     const apply = vi.spyOn(skillsApi, 'updateApply').mockResolvedValue({
@@ -704,6 +1039,7 @@ describe('SkillsView', () => {
     expect(
       await within(sheet).findByText('An update is available over revision 2.'),
     ).toBeInTheDocument()
+    expect(within(sheet).getByText('+Review carefully')).toBeInTheDocument()
     expect(
       within(sheet).getByText(
         'plan now acts when loaded: hooks. Assigning it needs your approval.',
@@ -731,6 +1067,8 @@ describe('SkillsView', () => {
     expect(
       await within(sheet).findByText('Up to date at revision 2.'),
     ).toBeInTheDocument()
+    expect(within(sheet).getByText('Checked')).toBeInTheDocument()
+    expect(sheet.querySelector('time[datetime]')).toBeInTheDocument()
     expect(
       within(sheet).queryByRole('button', { name: 'Apply this update' }),
     ).not.toBeInTheDocument()
@@ -1000,4 +1338,42 @@ it('does not load provider targets without the native read permission', async ()
   )
   expect(agentOpsApi.listProfiles).not.toHaveBeenCalled()
   expect(within(sheet).getByRole('button', { name: 'Assign' })).toBeDisabled()
+})
+
+it('uploads a local archive through the existing import and assignment flow', async () => {
+  const post = vi.spyOn(http, 'post').mockResolvedValue({
+    state: 'catalog_published',
+    pack,
+    revision: detail.revisions[0],
+  })
+  const assign = vi.spyOn(skillsApi, 'assign').mockResolvedValue({
+    state: 'pinned',
+    assignment: groupPin,
+  })
+  renderIntel(<SkillsView />)
+  await chooseWorkspace()
+  await userEvent.click(screen.getByText('Folder or archive'))
+  await userEvent.upload(
+    screen.getByLabelText('Archive'),
+    new File(['archive'], 'ecc.zip', { type: 'application/zip' }),
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Install upload' }))
+  await screen.findByText('Skill pack installed and assigned')
+  expect(post).toHaveBeenCalledWith(
+    '/v1/m/skills/packs',
+    undefined,
+    expect.objectContaining({
+      tenant: 'tenant-1',
+      rawBody: expect.any(FormData),
+      headers: { 'Idempotency-Key': expect.any(String) },
+    }),
+  )
+  const upload = post.mock.calls[0][2]?.rawBody as FormData
+  expect(upload.get('name')).toBe('ecc')
+  expect(upload.get('format')).toBe('zip')
+  expect(upload.get('archive')).toBeInstanceOf(File)
+  expect(assign).toHaveBeenCalledWith(
+    expect.objectContaining({ pack_revision_id: 'rev-2', target_id: 'ws-1' }),
+    expect.objectContaining({ tenant: 'tenant-1' }),
+  )
 })

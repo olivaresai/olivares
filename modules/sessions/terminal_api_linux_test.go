@@ -202,7 +202,7 @@ func TestTerminalAPIRevokedFolderRightEndsShell(t *testing.T) {
 				m, tenant, _, folder := terminalHarness(t)
 				principal := auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), CredID: model.NewID(), AAL: 3}
 				revoked := false
-				mc := api.ModuleContext{Tenant: tenant, Principal: principal, Resource: auth.ResourceAttrs{Kind: "resource", ID: folder.resourceID.String()}, Admission: func(_ context.Context, q auth.Request) bool {
+				mc := api.ModuleContext{Tenant: tenant, Principal: principal, Resource: auth.ResourceAttrs{Kind: "resource", ID: folder.ResourceID.String()}, Admission: func(_ context.Context, q auth.Request) bool {
 					canonical, _ := right.Question(principal, tenant, q.Resource)
 					return !revoked || q.Route.CedarAction != string(canonical.Permission)
 				}}

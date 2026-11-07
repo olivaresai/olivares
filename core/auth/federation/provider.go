@@ -107,6 +107,23 @@ func (p *Provider) ValidateAssertion(ctx context.Context, a auth.Assertion) (aut
 	return p.saml.validate(ctx, a)
 }
 
+// ValidateLogoutToken verifies an OIDC back-channel logout token for this provider.
+// replayScope names the tenant and provider the jti is remembered under. A non-OIDC
+// provider has no back-channel logout and returns ErrNotConfigured.
+func (p *Provider) ValidateLogoutToken(ctx context.Context, raw, replayScope string) (auth.LogoutToken, error) {
+	if p.oidc == nil {
+		return auth.LogoutToken{}, fmt.Errorf("%w: back-channel logout requested but the active provider is not OIDC", ErrNotConfigured)
+	}
+	return p.oidc.validateLogoutToken(ctx, raw, replayScope)
+}
+
+// ReleaseLogoutToken forgets the jti of a validated logout token whose sessions could
+// not be ended, so the provider's retry of the same token is applied, not refused as
+// replayed.
+func (p *Provider) ReleaseLogoutToken(replayScope string, tok auth.LogoutToken) {
+	logoutReplay.forget(logoutReplayKey(replayScope, tok.Issuer, tok.JTI))
+}
+
 // SAMLMetadata returns the SP's SAML metadata document (XML) for one-click IdP
 // onboarding, or an error for a non-SAML provider. The Community HTTP handler
 // exposes it through the optional metadata interface of the active provider.

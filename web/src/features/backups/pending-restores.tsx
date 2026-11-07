@@ -70,6 +70,7 @@ export function PendingRestores() {
                   </span>
                 </div>
                 <Button
+                  data-trust-chrome=""
                   variant="primary"
                   size="sm"
                   onClick={() => setApprove(p)}
@@ -119,7 +120,7 @@ function ApproveDialog({
   return (
     <>
       <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-lg">
+        <DialogContent trust className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('pending.dialogTitle')}</DialogTitle>
             <DialogDescription>
@@ -131,6 +132,21 @@ function ApproveDialog({
             </DialogDescription>
           </DialogHeader>
 
+          {pending.postgres && (
+            <div className="text-body">
+              <p>{t('restore.postgres.description')}</p>
+              <dl>
+                {Object.entries(pending.postgres)
+                  .filter(([, value]) => value)
+                  .map(([key, value]) => (
+                    <div key={key}>
+                      <dt>{t(`restore.postgres.${key}`)}</dt>
+                      <dd className="break-all font-mono">{value}</dd>
+                    </div>
+                  ))}
+              </dl>
+            </div>
+          )}
           {jobId ? (
             <JobProgress jobId={jobId} />
           ) : (
@@ -171,7 +187,11 @@ function ApproveDialog({
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={t('pending.confirmTitle')}
-        description={t('pending.confirmDescription')}
+        description={t(
+          pending.postgres
+            ? 'restore.postgres.confirm'
+            : 'pending.confirmDescription',
+        )}
         tone="danger"
         confirmPhrase={t('restore.confirmPhrase')}
         confirmLabel={t('pending.confirmLabel')}

@@ -856,7 +856,8 @@ func (b *Bridge) createApproval(ctx context.Context, cred ServiceCred, action, s
 	if len(sessionRef) > 0 {
 		sessionID = sessionRef[0]
 	}
-	if b.localDefault && b.LocalProposer != nil {
+	// Session proposals use the engine port: a service token cannot attest to a session.
+	if (b.localDefault || sessionID != "") && b.LocalProposer != nil {
 		out, err := b.LocalProposer.Request(ctx, cred.Tenant, auth.Principal{SessionIdentity: sessionID}, governance.ApprovalRequest{SessionRef: sessionID, Action: action, SubjectKind: subjectKind, SubjectRef: encodedSubjectRef, Reason: reason, ExpiresInSeconds: cred.ExpiresIn, EscalateInSeconds: cred.EscalateIn, LaunchedBy: launchedBy})
 		return out.ID, out.Status, err
 	}

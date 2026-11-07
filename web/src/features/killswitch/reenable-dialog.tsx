@@ -51,7 +51,7 @@ export function ReenableDialog({
 }: ReenableDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent trust className="max-w-lg">
         {open && (
           <ReenableBody stop={stop} onClose={() => onOpenChange(false)} />
         )}

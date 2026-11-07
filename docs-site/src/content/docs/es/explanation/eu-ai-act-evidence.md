@@ -95,8 +95,9 @@ nombra sus propias fronteras.
 
 ### No hardcodees las fechas — sírvelas
 
-Los calendarios de aplicación de alto riesgo están **sujetos a cambios** (el acuerdo provisional del
-Digital Omnibus de 2026-05-07 movió varios). Copiar fechas a un fichero estático es cómo los
+Las fechas de aplicación de alto riesgo ya cambiaron una vez: el Reglamento (UE) 2026/1744
+(Digital Omnibus sobre IA, publicado el 2026-07-24) fija las obligaciones del anexo III desde
+2027-12-02 y las del anexo I desde 2028-08-02. Copiar fechas a un fichero estático es cómo los
 documentos de cumplimiento se quedan obsoletos y erróneos. El control plane sirve el
 calendario regulatorio **como datos** — cada entrada con su fuente y `verified_on`:
 

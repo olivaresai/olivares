@@ -1309,9 +1309,7 @@ describe('ChannelAdminSheet — a transient gap in the observation keeps the dra
     await gap(sheet, rerender, 'denied')
     expect(sheet.querySelector('[data-slot="admin-etag"]')).toBeNull()
     // The one case that may be shown as a refusal, and the one that ends the draft.
-    expect(
-      within(sheet).getByText(/refused this for the current principal/),
-    ).toBeInTheDocument()
+    expect(within(sheet).getByText(/refused this for you/)).toBeInTheDocument()
     await readmit(sheet, rerender)
     expect(nameField(sheet)).toHaveValue('Ops')
     expect(api.updateChannel).not.toHaveBeenCalled()

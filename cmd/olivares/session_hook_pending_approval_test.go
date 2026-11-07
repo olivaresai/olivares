@@ -85,9 +85,24 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 				service := h.set.gov.EngineApprovals()
 				h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 				h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-				d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, ApprovalWait: m.BeginApprovalWait, Store: h.st, Clock: time.Now, Log: discardLog()})
-				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+				// The run's wait lasts until the earlier of the call's deadline and the queued
+				// expiry; record it to compare the Claude hook with the shared approval wait.
+				waitUntil := make(chan time.Time, 1)
+				recordWait := func(ctx context.Context, p auth.Principal, ref string, until time.Time) (func(), error) {
+					select {
+					case waitUntil <- until:
+					default:
+					}
+					return m.BeginApprovalWait(ctx, p, ref, until)
+				}
+				d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, ApprovalWait: recordWait, Store: h.st, Clock: time.Now, Log: discardLog()})
+				// The call itself has no deadline of its own, as under Claude Code; the
+				// guard only bounds this test.
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
+				guard, stopGuard := context.WithTimeout(t.Context(), 5*time.Second)
+				defer stopGuard()
+				queuedAfter := time.Now()
 				req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"printf pending-projection","description":"Check the pending projection"}}`)).WithContext(ctx)
 				req.Header.Set("Authorization", "Bearer "+token)
 				rec := httptest.NewRecorder()
@@ -153,7 +168,7 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 					select {
 					case <-done:
 						t.Fatalf("hook ended without review: %s", rec.Body.String())
-					case <-ctx.Done():
+					case <-guard.Done():
 						t.Fatal("review was not queued")
 					case <-time.After(10 * time.Millisecond):
 					}
@@ -168,12 +183,24 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 					select {
 					case <-done:
 						t.Fatalf("wait was not projected: %s", rec.Body.String())
-					case <-ctx.Done():
+					case <-guard.Done():
 						t.Fatal("pending ref was not projected")
 					case <-time.After(10 * time.Millisecond):
 					}
 				}
 				assertViews(ref)
+				if family == "claude" {
+					// One approval wait for every driver: the Claude hook waits as long as the
+					// owned drivers before it refuses.
+					select {
+					case until := <-waitUntil:
+						if until.Before(queuedAfter.Add(sessions.ApprovalWait)) {
+							t.Fatalf("Claude tool call waits %s for a person, want %s", until.Sub(queuedAfter).Round(time.Second), sessions.ApprovalWait)
+						}
+					default:
+						t.Fatal("the Claude review registered no wait")
+					}
+				}
 				if family == "claude" && outcome == "approve" {
 					approval, err := service.Read(t.Context(), tenant, ref)
 					if err != nil || approval.Reason != "Check the pending projection" {

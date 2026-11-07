@@ -124,4 +124,70 @@ describe('one-click install', () => {
     expect(tools.install).toHaveBeenCalledTimes(2)
     vi.useRealTimers()
   })
+
+  // The browser logs every non-2xx response to its console, so a second
+  // install that is started while the first runs must not be sent at all.
+  describe('two installs started from this console', () => {
+    // Stands in for the engine: one job at a time, a second POST gets 409.
+    function engineWithOneInstallAtATime() {
+      let running = false
+      const rejected = { busy: 0 }
+      tools.plan.mockImplementation(async (driver: string) => ({
+        digest: `plan-${driver}`,
+      }))
+      tools.install.mockImplementation(async (req: { request_id: string }) => {
+        if (running) {
+          rejected.busy++
+          throw new ApiError(409, 'install_busy', 'Another install runs.')
+        }
+        running = true
+        return { id: req.request_id, state: 'running' }
+      })
+      tools.job.mockImplementation(async (id: string) => {
+        running = false
+        return { id, state: 'succeeded' }
+      })
+      return rejected
+    }
+
+    it('sends the second install after the first one ended', async () => {
+      vi.useFakeTimers()
+      try {
+        const rejected = engineWithOneInstallAtATime()
+        const both = Promise.all([
+          installLatest('claude'),
+          installLatest('opencode'),
+        ])
+        await vi.runAllTimersAsync()
+        expect((await both).map((job) => job.state)).toEqual([
+          'succeeded',
+          'succeeded',
+        ])
+        expect(tools.install).toHaveBeenCalledTimes(2)
+        expect(rejected.busy).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('still installs the second tool when the first one fails', async () => {
+      vi.useFakeTimers()
+      try {
+        engineWithOneInstallAtATime()
+        tools.plan.mockImplementationOnce(async () => {
+          throw new ApiError(502, 'transport', 'Release unreachable.')
+        })
+        const first = installLatest('claude')
+        const firstFailed = expect(first).rejects.toThrow(
+          'Release unreachable.',
+        )
+        const second = installLatest('opencode')
+        await vi.runAllTimersAsync()
+        await firstFailed
+        expect((await second).state).toBe('succeeded')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
 })

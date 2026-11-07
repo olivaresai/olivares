@@ -325,3 +325,113 @@ func TestRunMarksWorkForAWorkspaceConfinedMember(t *testing.T) {
 		t.Fatalf("confined list = %d %s, want only run-a, done", r.code, r.raw)
 	}
 }
+
+// setRunActivity gives a seeded run the moment of its last activity.
+func setRunActivity(t *testing.T, st store.Store, tenant model.TenantID, ref string, at time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findRunRec(ctx, repo, ref)
+		if err != nil {
+			return err
+		}
+		rec[colLastActivityAt] = model.NewTimestamp(at).String()
+		_, err = repo.Update(ctx, rec)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRunUnreadIsTheCallersOwn marks a run read and unread over HTTP and proves the
+// state follows the person: a run is unread once its last activity is after the
+// moment the caller last saw it, Mark unread makes it unread whatever it did, a
+// colleague's reads never change, and both directions are idempotent.
+func TestRunUnreadIsTheCallersOwn(t *testing.T) {
+	m := New()
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "marks-unread")
+	viewer := h.viewerToken(admin, tenant, "v@marks.io")
+	colleague := h.viewerToken(admin, tenant, "w@marks.io")
+	seedRunRows(t, h.st, tenant, stateRunning, "run-1", "run-2", "run-3")
+	past := time.Now().Add(-time.Hour)
+	for _, ref := range []string{"run-1", "run-2", "run-3"} {
+		setRunActivity(t, h.st, tenant, ref, past)
+	}
+	unreadOf := func(who, tok, ref string) bool {
+		t.Helper()
+		r := h.do("GET", "/v1/m/sessions/runs", tok, tenantHdr(tenant))
+		if r.code != http.StatusOK {
+			t.Fatalf("%s list = %d %s", who, r.code, r.raw)
+		}
+		listed, ok := runItemsOf(t, r)[ref]["unread"].(bool)
+		if !ok {
+			t.Fatalf("%s list omits unread on %s: %s", who, ref, r.raw)
+		}
+		if r = h.do("GET", "/v1/m/sessions/runs/"+ref, tok, tenantHdr(tenant)); r.code != http.StatusOK || r.body["unread"] != listed {
+			t.Fatalf("%s get of %s says %v, the list says %v: %d %s", who, ref, r.body["unread"], listed, r.code, r.raw)
+		}
+		return listed
+	}
+
+	// A run nobody opened or marked has no baseline: it reads as read.
+	if unreadOf("viewer", viewer, "run-1") {
+		t.Fatal("a run with no read state reads as unread")
+	}
+	// Opening it sets the moment seen; later activity is what makes it unread.
+	if r := h.do("DELETE", "/v1/m/sessions/runs/run-1/unread", viewer, tenantHdr(tenant)); r.code != http.StatusOK || r.body["unread"] != false {
+		t.Fatalf("mark read = %d %s", r.code, r.raw)
+	}
+	if unreadOf("viewer", viewer, "run-1") {
+		t.Fatal("a run seen after its last activity reads as unread")
+	}
+	setRunActivity(t, h.st, tenant, "run-1", time.Now().Add(time.Minute))
+	if !unreadOf("viewer", viewer, "run-1") {
+		t.Fatal("activity after the person saw the run does not make it unread")
+	}
+	if unreadOf("colleague", colleague, "run-1") {
+		t.Fatal("the viewer's seen moment changed a colleague's read state")
+	}
+
+	// Mark unread wins over a run that has done nothing since the person saw it, and
+	// answers what the reads then say.
+	for range 2 {
+		r := h.do("POST", "/v1/m/sessions/runs/run-2/unread", viewer, tenantHdr(tenant))
+		if r.code != http.StatusOK || r.body["run_ref"] != "run-2" || r.body["unread"] != true {
+			t.Fatalf("mark unread = %d %s", r.code, r.raw)
+		}
+	}
+	if !unreadOf("viewer", viewer, "run-2") || unreadOf("colleague", colleague, "run-2") {
+		t.Fatal("Mark unread is not the caller's alone")
+	}
+	for range 2 {
+		if r := h.do("DELETE", "/v1/m/sessions/runs/run-2/unread", viewer, tenantHdr(tenant)); r.code != http.StatusOK || r.body["unread"] != false {
+			t.Fatalf("mark read = %d %s", r.code, r.raw)
+		}
+	}
+	if unreadOf("viewer", viewer, "run-2") {
+		t.Fatal("Mark read left the run unread")
+	}
+	if n := countRunMarks(t, h.st, tenant); n != 2 {
+		t.Fatalf("%d mark rows for two runs the viewer read, want 2", n)
+	}
+
+	// The read state sits beside the other marks on the same row and leaves them alone.
+	if r := h.do("POST", "/v1/m/sessions/runs/run-3/done", viewer, tenantHdr(tenant)); r.code != http.StatusOK {
+		t.Fatalf("done = %d %s", r.code, r.raw)
+	}
+	if r := h.do("POST", "/v1/m/sessions/runs/run-3/unread", viewer, tenantHdr(tenant)); r.code != http.StatusOK || r.body["done"] != true || r.body["unread"] != true {
+		t.Fatalf("mark unread over done = %d %s", r.code, r.raw)
+	}
+	if r := h.do("DELETE", "/v1/m/sessions/runs/run-3/done", viewer, tenantHdr(tenant)); r.code != http.StatusOK || r.body["unread"] != true {
+		t.Fatalf("undone dropped the unread mark = %d %s", r.code, r.raw)
+	}
+	if n := countRunMarks(t, h.st, tenant); n != 3 {
+		t.Fatalf("%d mark rows for three runs, want 3", n)
+	}
+}

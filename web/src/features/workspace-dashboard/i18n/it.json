@@ -1,14 +1,9 @@
 {
-  "truncation": {
-    "label": "Caricate {{n}} righe; ce ne sono altre",
-    "hint": "L'anteprima di questo workspace è limitata. Usa Vedi tutto per esaminare l'inventario più ampio.",
-    "hintCapped": "L'anteprima di questo workspace è limitata."
-  },
   "title": "Panoramica del workspace",
   "selectTitle": "Nessun workspace selezionato",
   "selectPrompt": "Seleziona un workspace nella barra di navigazione per aprire questa panoramica, oppure vai all'inventario dell'intero tenant.",
   "selectPromptWorkspaceOnly": "Seleziona un workspace nella barra di navigazione per aprire questa panoramica.",
-  "viewInventory": "Apri l'inventario",
+  "viewInventory": "Apri le risorse rilevate",
   "agents": "Agenti",
   "sessions": "Sessioni",
   "resources": "Risorse",
@@ -43,8 +38,29 @@
     "empty": "Ancora nessuna cartella di sessione. Una cartella compare qui quando una sessione parte al suo interno.",
     "loading": "Lettura delle cartelle delle sessioni…",
     "unavailable": "Le cartelle delle sessioni non sono disponibili.",
-    "truncationHint": "Apri Sessioni per vedere tutte le cartelle.",
     "filter": "Trova una cartella",
-    "noMatch": "Nessuna cartella corrisponde a «{{query}}»."
-  }
+    "noMatch": "Nessuna cartella corrisponde a «{{query}}».",
+    "cut": "Non tutte le cartelle sono mostrate."
+  },
+  "connect": {
+    "title": "Copia file con SFTP o SCP",
+    "intro": "Ottieni una chiave valida per pochi minuti, poi usa un qualsiasi client sftp o scp. Raggiunge solo questa cartella.",
+    "button": "Connetti",
+    "connecting": "Connessione in corso…",
+    "privateKey": "Chiave privata",
+    "copyKey": "Copia la chiave privata",
+    "copied": "Chiave privata copiata",
+    "copyFailed": "Copia non riuscita. Seleziona la chiave e copiala a mano.",
+    "keyHint": "Mostrata una sola volta. Salvala come {{file}}, poi esegui chmod 600 {{file}}.",
+    "sftp": "Sfoglia e copia con sftp",
+    "scp": "Copia un file con scp",
+    "hostKey": "Chiave dell'host da confrontare quando il client la chiede:",
+    "expires": "Connettiti prima di {{time}}. Dopo, la chiave non apre nuove connessioni.",
+    "readOnly": "Questa chiave può solo leggere i file: la cartella è montata in sola lettura.",
+    "stepUp": "Completa il passaggio di accesso richiesto da questo server e riprova.",
+    "failed": "Impossibile ottenere una chiave. Riprova.",
+    "statusFailed": "Impossibile verificare se questa cartella è disponibile via SFTP."
+  },
+  "showMore": "Mostra altro",
+  "agentsCut": "Non tutti gli agenti sono mostrati."
 }

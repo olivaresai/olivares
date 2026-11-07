@@ -212,7 +212,7 @@ class StartupWait(unittest.TestCase):
         """Start a fake engine that answers after `answers_after` seconds of fake time (never if None)."""
         clock = [0.0]
 
-        def call(method, path, body=None, expected=None):
+        def call(method, path, body=None, expected=None, credential=True):
             if answers_after is None or clock[0] < answers_after:
                 raise urllib.error.URLError('not listening yet')
             return 200, {}
@@ -251,6 +251,38 @@ class StartupWait(unittest.TestCase):
         self.assertEqual(error, 'published: startup timeout')
         self.assertGreaterEqual(elapsed, 300.0)
         self.assertLess(elapsed, 300.5)
+
+    def test_the_readiness_probe_presents_no_session(self) -> None:
+        # Every route authenticates a presented bearer and records that session's use, so a probe that
+        # carried the previous stage's session changed its stored last_used_at on the next binary.
+        seen = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                seen.append((self.path, self.headers.get('Authorization')))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{}')
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        binary = Path(os.path.realpath('/proc/self/exe'))
+        process = Mock(pid=os.getpid())
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory() as directory, HTTPServer(('127.0.0.1', 0), Handler) as server:
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            fixture = Upgrade(SimpleNamespace(output=Path(directory) / 'upgrade', database='sqlite',
+                                              published=binary, candidate=binary))
+            fixture.origin = 'http://127.0.0.1:' + str(server.server_port)
+            fixture.token = 'previous-stage-session'
+            try:
+                with patch('upgrade.subprocess.Popen', return_value=process):
+                    fixture.start(binary, 'candidate')
+            finally:
+                fixture.process = None  # never signal the test's own process group
+                server.shutdown()
+        self.assertEqual(seen, [('/v1/server-info', None)])
 
 
 class StoredData(unittest.TestCase):
@@ -378,6 +410,20 @@ class StoredData(unittest.TestCase):
         before = snapshot_rows([('preferences', ['id'], [{'id': 1, 'value': 'dark', 'updated_at': 'old', 'version': 1}])])
         after = snapshot_rows([('preferences', ['id'], [{'id': 1, 'value': 'dark', 'updated_at': 'new', 'version': 2}])])
         self.assertEqual(row_diff(before, after), [])
+
+    def test_observed_use_bookkeeping_is_not_stored_data(self):
+        # Authenticated reads after the upgrade stamp these columns on a timing-dependent write.
+        def diff(table, before, after):
+            keys = ['id']
+            return row_diff(snapshot_rows([(table, keys, [before])]), snapshot_rows([(table, keys, [after])]))
+
+        session = {'id': 1, 'name': 'laptop', 'last_used_at': None, 'client_kind': None}
+        used = dict(session, last_used_at='2026-11-01T10:00:00Z', client_kind='browser')
+        self.assertEqual(diff('auth_sessions', session, used), [])
+        self.assertTrue(diff('auth_sessions', session, dict(used, name='renamed')))
+        token = {'id': 1, 'name': 'ci', 'revoked': False, 'last_used_at': None}
+        self.assertEqual(diff('api_tokens', token, dict(token, last_used_at='2026-11-01T10:00:00Z')), [])
+        self.assertTrue(diff('api_tokens', token, dict(token, revoked=True)))
 
     def test_empty_published_table_is_not_silently_removed(self):
         self.assertEqual(row_diff(snapshot_rows([('records', [], [])]), {}), ['records: table removed'])

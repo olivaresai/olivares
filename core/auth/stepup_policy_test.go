@@ -211,3 +211,41 @@ func TestSetAdminStepUpCannotLockTheCallerOut(t *testing.T) {
 		t.Fatalf("refused lowerings left %d auth.stepup.failed audit events, want 2", refused)
 	}
 }
+
+func TestManagedExposureRequiresAndRetainsStepUp(t *testing.T) {
+	f := newTOTPFixture(t)
+	// Existing TOTP policy rows historically leave AdminStepUp empty, meaning none.
+	if err := f.st.AuthMutate(f.ctx, func(as store.AuthScope) error {
+		_, err := as.AuthPolicy().Create(f.ctx, model.AuthPolicy{RequireTOTPAdmins: false})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := f.loginAs(f.admin.Email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := f.a.Authenticate(f.ctx, res.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor.AAL = auth.AAL3
+	if err := f.a.SetConsolePublicURL(f.ctx, actor, "https://console.example.test"); !errors.Is(err, auth.ErrExposureNeedsStepUp) {
+		t.Fatalf("public exposure with none: %v", err)
+	}
+	setStepUpPolicy(t, f.ctx, f.st, auth.StepUpPasskey)
+	f.a.ReloadStepUp()
+	if err := f.a.SetConsolePublicURL(f.ctx, actor, "https://console.example.test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.a.SetAdminStepUp(f.ctx, actor, auth.StepUpNone); !errors.Is(err, auth.ErrExposureNeedsStepUp) {
+		t.Fatalf("removing step-up with exposure enabled: %v", err)
+	}
+	if err := f.a.SetConsolePublicURL(f.ctx, actor, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.a.SetAdminStepUp(f.ctx, actor, auth.StepUpNone); !errors.Is(err, auth.ErrExposureNeedsStepUp) {
+		t.Fatalf("removing step-up while a previous managed URL can still be applied: %v", err)
+	}
+}

@@ -2,15 +2,15 @@
   "title": "Verwaltung",
   "subtitle": "Die Agenten, Arbeitsbereiche, Quellenbindungen, Secrets und Connectors dieser Organisation. Personen, Anmeldung und Rollen finden Sie unter Personen & Gruppen.",
   "tabs": {
-    "people": "Benutzer & Gruppen",
+    "people": "Personen",
     "agents": "Agenten",
-    "sso": "SSO / IdP",
+    "sso": "Identitätsanbieter",
     "scopes": "Arbeitsbereiche",
-    "roles": "Rollen & Delegation",
+    "roles": "Rollen",
     "secrets": "Secrets",
     "connectors": "Connectors",
     "apiKeys": "API-Schlüssel",
-    "license": "Edition & Lizenz",
+    "license": "Edition",
     "bindings": "Quellenbindungen",
     "wsConnectors": "Arbeitsbereich-Connectors"
   },
@@ -56,12 +56,11 @@
     "truncatedHint": "Es gibt mehr API-Tokens als angezeigt; diese Seite nimmt Zeilen nach ID — bei der Erstellung vergeben —, spätere fehlen. Das sind LEBENDE Zugangsdaten: ein hier nicht sichtbares Token authentifiziert weiterhin und lässt sich von diesem Bildschirm aus nicht widerrufen. Ein fehlender Schlüssel belegt nicht, dass es ihn nicht gibt."
   },
   "license": {
-    "title": "Edition & Lizenz",
+    "title": "Lizenz",
     "caption": "Aktuelle Edition, Lizenzstatus und Aktionen dieser Installation.",
     "helpSummary": "Lizenzanwendung gegenüber diesem Build",
     "helpBody": "Das Ersetzen der Lizenz gilt in diesem Prozess ohne Neustart. Das ist kein Binäraustausch und kein Daten-Upgrade: das sind getrennte Vorgänge mit eigenen Verfahren. In der Community-Edition zeigt das Anwenden einer verifizierten Lizenz deren Angaben hier; es ändert diesen Build nicht.",
-    "superadminOnly": "Nur ein Superadministrator kann die Lizenz einsehen oder ändern.",
-    "install": "Installieren / aktualisieren",
+    "install": "Lizenz installieren",
     "remove": "Lizenz entfernen",
     "edition": "Edition",
     "editions": {
@@ -200,7 +199,7 @@
     "mode": "Wie sie sich anmelden",
     "modePassword": "Ein anfängliches Passwort festlegen",
     "modeInvite": "Eine E-Mail-Einladung senden",
-    "inviteUnavailable": "Dieser Server kann keine Einladungen per E-Mail senden (siehe OLIVARES_INVITE_MAIL_DESTINATION in der Konfigurationsreferenz). Legen Sie daher ein Anfangspasswort fest.",
+    "inviteUnavailable": "Dieser Server kann keine Einladungen per E-Mail senden. Legen Sie daher ein Anfangspasswort fest.",
     "password": "Anfängliches Passwort",
     "passwordHint": "Mindestens 8 Zeichen. Der Benutzer kann es später ändern.",
     "submit": "Aufnehmen",
@@ -216,7 +215,6 @@
   "sso": {
     "title": "Single Sign-on",
     "caption": "Binden Sie Ihren Identitätsanbieter (OIDC oder SAML) an. Geheimnisse werden im Ruhezustand verschlüsselt und niemals erneut angezeigt. Die Konfiguration von SSO ist eine bereitstellungsweite, ausschließlich Superadministratoren vorbehaltene Aktion.",
-    "superadminOnly": "SSO ist eine bereitstellungsweite Einstellung; nur ein Superadministrator kann sie einsehen oder ändern.",
     "builderUnavailable": "Dieser Build kann die SSO-Konfiguration speichern, sie jedoch nicht aktivieren: In dieser Engine ist kein OIDC/SAML-Anbieter verfügbar.",
     "statusConfigured": "Konfiguriert",
     "statusNotConfigured": "Nicht konfiguriert",
@@ -285,7 +283,6 @@
   "secrets": {
     "title": "Secret-Speicher",
     "caption": "Benannte Secrets im versiegelten, deploymentweiten Speicher. Referenzieren Sie eines in einer Connector-Konfiguration als store:<name>; der Wert wird zur Verbindungszeit aufgelöst, sodass Sie ohne Neustart neu konfigurieren. Der Wert wird nie angezeigt — nur ein kurzer Fingerabdruck bestätigt, dass ein Secret gesetzt oder geändert wurde.",
-    "superadminOnly": "Der Secret-Speicher ist eine deploymentweite Einstellung; nur ein Superadmin kann ihn ansehen oder ändern.",
     "sealerUnavailable": "Dieser Build kann Secrets auflisten, hat aber keinen Sealer angebunden, daher können keine Werte gespeichert werden. Konfigurieren Sie ein Sealer-Backend, um den Speicher zu aktivieren.",
     "create": "Neues Secret",
     "colName": "Name",
@@ -345,7 +342,6 @@
   "connectors": {
     "title": "Connectors",
     "caption": "Fügen Sie die Connectors hinzu und konfigurieren Sie sie, aus denen die Engine ihre Daten bezieht, wobei ihre Anmeldedaten im Ruhezustand versiegelt werden. Eine Änderung wird ohne Neustart auf die laufende Engine angewendet. Deploymentweit und ausschließlich Superadministratoren vorbehalten.",
-    "superadminOnly": "Connectors sind eine deploymentweite Einstellung; nur ein Superadmin kann sie ansehen oder ändern.",
     "unavailable": "Dieser Build hat das Connector-Onboarding nicht angebunden; Connectors werden stattdessen über die Boot-Datei konfiguriert.",
     "sourcesUnavailable": "Dieser Build liefert keine Quellenliste; die laufenden Connectors können hier nicht aufgelistet werden.",
     "catalogForbidden": "Keine Berechtigung, den Connector-Katalog anzuzeigen",
@@ -362,7 +358,8 @@
       "failed": "Fehlgeschlagen",
       "stopped": "Gestoppt",
       "disabled": "Deaktiviert",
-      "not_wired": "Nicht angebunden"
+      "not_wired": "Nicht angebunden",
+      "credential_missing": "Zugangsdaten fehlen"
     },
     "edit": "Bearbeiten",
     "delete": "Löschen",
@@ -477,7 +474,24 @@
       "unknownHint": "Dieser Konnektor deklariert keinen Endpunkt, daher wurde nicht ermittelt, wo er läuft. Das bedeutet NICHT „Anbieter-Cloud“.",
       "vendor_hosted": "Anbieter-Cloud",
       "vendor_hostedHint": "Eine vom Anbieter betriebene API — der deklarierte Endpunkt verweist standardmäßig auf dessen URL."
-    }
+    },
+    "import": "Definition importieren",
+    "export": "Definition exportieren",
+    "imported": "Quelle importiert.",
+    "importInvalid": "Diese Datei ist keine exportierte Quellendefinition.",
+    "previewTitle": "Vorschau",
+    "previewEmpty": "Die Quelle listet keine Dokumente.",
+    "previewDocument": "Dokument",
+    "previewAcl": "Zugriff (ACL)",
+    "previewSkipped": "Übersprungen: nicht aufnehmbar",
+    "previewUnreadable": "Konnte nicht gelesen werden",
+    "previewNoAcl": "Keine ACL: verweigert, außer die Quelle ist öffentlich",
+    "scheduleTitle": "Zeitplan",
+    "kb": "Wissensbasis",
+    "kbHint": "Wird beim Speichern und danach in jedem Abfrageintervall synchronisiert. Ohne sie wird die Quelle nur durch eine ausdrückliche Aufnahme oder Synchronisierung gelesen.",
+    "kbNone": "Keine (manuelle Aufnahme)",
+    "maxDelete": "Löschschutz (%)",
+    "maxDeleteHint": "Würde eine Synchronisierung einen größeren Anteil der Dokumente der Quelle löschen, löscht sie keines und nennt den Grund. 0 schaltet ihn ab."
   },
   "workspaces": {
     "title": "Arbeitsbereiche",
@@ -500,7 +514,12 @@
     "renamed": "Arbeitsbereich umbenannt.",
     "none": "Noch keine Arbeitsbereiche.",
     "noneHint": "Ein Arbeitsbereich begrenzt Agenten, Sitzungen und Zuweisungen innerhalb dieser Organisation. Legen Sie einen an, um zu beginnen.",
-    "ownerOnly": "Nur der Eigentümer der Organisation kann Arbeitsbereiche erstellen."
+    "ownerOnly": "Nur der Eigentümer der Organisation kann Arbeitsbereiche erstellen.",
+    "template": "Von einer Vorlage ausgehen",
+    "templateNone": "Keine Vorlage",
+    "templateHint": "Die Standard-Sitzungsvorlage der Abteilung: Ein Start ohne Vorlage geht von ihr aus.",
+    "templateMandatory": "Verpflichtend: Ein Start darf keine andere Vorlage nennen",
+    "templateNotAssigned": "Arbeitsbereich erstellt, aber die Vorlage wurde nicht zugewiesen: {{reason}}"
   },
   "agents": {
     "readOnlyNotice": "Zum Anzeigen von Agenten benötigen Sie Leserechte für Agenten.",
@@ -609,7 +628,9 @@
       "groupScope": "Agent-Gruppe: {{ref}}",
       "classLabel": "beschränkt auf {{class}}",
       "loadError": "Ihre Delegationsbefugnis konnte nicht geladen werden. Bitte erneut versuchen.",
-      "folderScope": "Ordner: {{ref}}"
+      "folderScope": "Ordner: {{ref}}",
+      "levelCount": "{{level}}: {{count}}",
+      "exactPermissions": "Genaue Berechtigungen"
     },
     "grants": {
       "title": "Geltungsbereichsbezogene Gewährungen",
@@ -748,7 +769,7 @@
     "groupSubjects": {
       "managedBy": "Verwaltet von {{provisioner}} · schreibgeschützt",
       "title": "Gruppensubjekte & Hierarchie",
-      "caption": "Weisen Sie bereitgestellten Benutzergruppen Rollen zu und gestalten Sie die Gruppenhierarchie. Mitglieder einer Kindgruppe erben die Gewährungen des Elternteils.",
+      "caption": "Weisen Sie bereitgestellten Benutzergruppen Rollen zu. Mitglieder einer Kindgruppe erben die Gewährungen des Elternteils.",
       "noGroups": "Noch keine Gruppen. Gruppen kommen von Ihrem Identitätsanbieter.",
       "noGroupsHint": "Die Konsole erstellt keine Gruppen. Legen Sie eine Gruppe bei Ihrem Identitätsanbieter an, dann erscheint sie hier.",
       "colName": "Gruppe",
@@ -756,16 +777,7 @@
       "colMembers": "Mitglieder",
       "colRole": "Zugewiesene Rolle",
       "noParent": "Keins (Wurzel)",
-      "setParent": "Elternteil festlegen",
-      "clearParent": "Elternteil entfernen",
-      "setParentTitle": "Übergeordnete Gruppe festlegen",
-      "setParentBody": "Mitglieder von {{child}} erben die Gewährungen von {{parent}}. Die Engine wertet beim nächsten Anfrage neu aus.",
-      "clearParentTitle": "Übergeordnete Gruppe entfernen",
-      "clearParentBody": "{{child}} erbt nicht mehr die Gewährungen seines Elternteils.",
-      "parentSet": "Übergeordnete Gruppe aktualisiert.",
-      "selectParent": "Übergeordnete Gruppe auswählen…",
       "selectGroup": "Gruppe auswählen…",
-      "cycleError": "Elternteil kann nicht festgelegt werden: Es würde einen Zyklus erzeugen.",
       "mapRole": "Rolle zuordnen",
       "changeRole": "Rolle ändern",
       "role": "Mandantenrolle",
@@ -954,6 +966,7 @@
     "familyEnabled": "{{family}} ist an.",
     "familyDisabled": "{{family}} ist aus.",
     "familyChangeFailed": "{{family}} konnte nicht geändert werden.",
+    "familyNotCovered": "Diese Lizenz umfasst {{family}} nicht.",
     "familyWaiting_one": "{{count}} braucht Ihre Eingabe",
     "familyWaiting_other": "{{count}} brauchen Ihre Eingabe"
   },
@@ -971,7 +984,9 @@
       "knowledge": "Wissen",
       "data": "Daten",
       "profile": "Anbieterprofil",
-      "tool": "KI-Werkzeug"
+      "tool": "KI-Werkzeug",
+      "instructions": "Abteilungsanweisungen",
+      "template": "Standard-Sitzungsvorlage"
     },
     "sourceRef": "Quellenreferenz",
     "sourceRefHint": "Verwenden Sie die exakte Quellenreferenz. Es gibt keinen einzelnen Katalog für jede Quellenart.",
@@ -1023,7 +1038,9 @@
     "folderSelectedId": "Ausgewählte Resource-ID: {{id}}",
     "effects": {
       "allow": "Zulassen",
-      "forbid": "Verbieten"
+      "forbid": "Verbieten",
+      "require": "Verlangen",
+      "decline": "Ausnehmen"
     },
     "credName": "Name der Anmeldedaten",
     "credentialHint": "Optional. Wenn ein Anmeldedaten-Feld gesetzt ist, sind Name, Art und Locator erforderlich.",
@@ -1164,7 +1181,7 @@
   },
   "mcpGateway": {
     "title": "MCP-Gateway",
-    "caption": "Verwalten Sie MCP-Server und Sitzungstools dieses Mandanten. Tests entdecken Werkzeuge; ihre Ausführung benötigt eine explizite Richtlinie.",
+    "caption": "Verwalten Sie MCP-Server und Sitzungstools dieser Organisation. Tests entdecken Werkzeuge; ihre Ausführung benötigt eine explizite Richtlinie.",
     "add": "Server hinzufügen",
     "configure": "Konfigurieren",
     "test": "Verbindung testen",
@@ -1177,18 +1194,16 @@
     "empty": "Keine MCP-Server",
     "emptyHint": "Fügen Sie einen Streamable-HTTP-Server hinzu, testen Sie die Verbindung und konfigurieren Sie Vertrauen und Berechtigungen vor der Aktivierung.",
     "source": {
-      "file": "Betreiberdatei",
-      "store": "Mandantenkonfiguration"
+      "file": "Betreiberdatei"
     },
     "fileOwned": "Die Betreiberdatei steuert MCP auf ihrem konfigurierten Listener. Diese Ansicht ist schreibgeschützt. Gespeicherte Konfiguration bleibt inaktiv und wird weder zusammengeführt noch ersetzt.",
-    "storeOwned": "Die Mandantenkonfiguration steuert MCP auf dem HTTP-Listener dieser Installation. Eine Konfigurationsdatei ist nicht erforderlich.",
     "sessionTitle": "Sitzungstools",
     "sessionHint": "Sitzungen können einander Nachrichten senden und ihre zugewiesene Arbeit nutzen. Sitzungen erhalten dadurch keine neuen Berechtigungen.",
     "tools": "Werkzeuge ({{count}})",
     "observationHint": "Die Erkennung gewährt keine Rechte. Erlauben Sie jedes Werkzeug mit einem expliziten Scope und legen Sie fest, ob destruktive Aktionen genehmigt werden müssen.",
     "destructive": "Genehmigung destruktiver Aktionen erforderlich",
     "credentials": "Zugangsdaten verwalten",
-    "credentialCaption": "Nur MCP-Geheimnisse dieses Mandanten (Namen mcp/). Speichern Sie den vollständigen Authorization-Wert des Servers, etwa Bearer gefolgt vom Token. Werte werden versiegelt und niemals zurückgegeben.",
+    "credentialCaption": "Nur MCP-Geheimnisse dieser Organisation (Namen mcp/). Speichern Sie den vollständigen Authorization-Wert des Servers, etwa Bearer gefolgt vom Token. Werte werden versiegelt und niemals zurückgegeben.",
     "noCredential": "Keine Anmeldung",
     "name": "Name",
     "url": "Serveradresse",
@@ -1213,7 +1228,7 @@
     "formHint": "Ein neuer Server ist zunächst aus. Speichern Sie ihn, testen Sie die Verbindung, prüfen Sie seine Werkzeuge und aktivieren Sie ihn.",
     "saveDisabled": "Speichern",
     "removeTitle": "MCP-Server entfernen",
-    "removeHint": "{{name}} aus dem Gateway dieses Mandanten entfernen? Neue Anfragen werden verweigert; seine versiegelten Zugangsdaten bleiben im Geheimnisspeicher.",
+    "removeHint": "{{name}} aus dem Gateway dieser Organisation entfernen? Neue Anfragen werden verweigert; seine versiegelten Zugangsdaten bleiben im Geheimnisspeicher.",
     "conflict": "Die Konfiguration hat sich geändert. Aktualisieren und prüfen Sie die aktuelle Version vor einem erneuten Senden.",
     "enableHint": "Die Aktivierung benötigt einen aktuellen erfolgreichen Test, passende Ressourcen- und Aussteller-Vertrauensdaten sowie explizite Scopes für beobachtete Werkzeuge.",
     "governance": "Angewandte Governance",
@@ -1244,8 +1259,8 @@
       "network_confinement": "Netzwerkabschottung"
     },
     "governanceValues": {
-      "tenant_store": "Mandantenspeicher",
-      "tenant_sealed_reference": "Versiegelte Referenzen des eigenen Mandanten",
+      "tenant_store": "Organisationseinstellungen",
+      "tenant_sealed_reference": "Versiegelte Referenzen der eigenen Organisation",
       "control_plane_http_listener": "HTTP-Listener der Installation",
       "declared_inventory_and_consent": "Deklarierte Vorlagen und Einwilligung",
       "not_configured": "Nicht konfiguriert",
@@ -1319,8 +1334,8 @@
       "notAllowed": "nicht erlaubt (in Konfigurieren ändern)",
       "confirm": "Einschalten"
     },
-    "sessionOn": "Ein: zum Beenden ausschalten.",
-    "sessionOff": "Aus: Sitzungen können einander keine Nachrichten senden und ihre zugewiesene Arbeit nicht nutzen.",
+    "sessionOn": "Ein",
+    "sessionOff": "Aus",
     "startersTitle": "Startserver",
     "startersHint": "Ausgewählte Server, jeder mit seiner Abschottung und seinen Netzwerkgrenzen. Hinzufügen füllt das Formular aus; der Server wird ausgeschaltet gespeichert und führt nichts aus, bis Sie ihn testen und aktivieren.",
     "starterAdd": "{{name}} hinzufügen",

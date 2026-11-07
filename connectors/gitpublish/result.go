@@ -192,6 +192,19 @@ type BranchInfo struct {
 	Protected bool
 }
 
+// ReviewRule is what the host's active rules on one branch require of a change
+// before it merges, as the token's own identity reads them.
+type ReviewRule struct {
+	// Approvals is the most approvals a rule this identity cannot bypass
+	// requires. The host never counts the author's own approval. 0: none.
+	Approvals int
+	// Bypassable counts the rules requiring an approval this identity may bypass.
+	Bypassable int
+	// Bypassers counts the actors the binding rules let bypass them, or is -1
+	// when the host does not show that list to this identity.
+	Bypassers int
+}
+
 // RefObservation is one ref read.
 type RefObservation struct {
 	State RefState

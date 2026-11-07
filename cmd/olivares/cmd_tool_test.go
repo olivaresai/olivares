@@ -52,6 +52,16 @@ type fakeToolEngine struct {
 	presence map[string]any
 	// signInFailure, when set, is the message of a Codex sign-in the tool ended.
 	signInFailure string
+	// signInLink and signInText, when set, replace the link and the message a
+	// waiting Codex sign-in answers with.
+	signInLink, signInText string
+	// startRefusal, when set, is the sentence the engine refuses to start a login with.
+	startRefusal string
+	// notSystem makes the engine refuse every agenttools route as it does a caller who is
+	// an organization admin and not the superadmin; accounts and keys are then what that
+	// caller may still read, from the sessions routes.
+	notSystem      bool
+	accounts, keys []map[string]any
 }
 
 func newFakeToolEngine(t *testing.T) *fakeToolEngine {
@@ -78,6 +88,12 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	p := strings.TrimPrefix(r.URL.Path, agentToolsPath)
 	switch {
+	case f.notSystem && strings.HasPrefix(r.URL.Path, agentToolsPath):
+		reply(403, map[string]any{"error": map[string]any{"code": "forbidden", "message": "This needs the \"system:admin\" permission across the whole server, which only a superadmin holds."}})
+	case f.notSystem && r.URL.Path == providerAccountsPath:
+		reply(200, map[string]any{"items": f.accounts})
+	case f.notSystem && r.URL.Path == providersPath:
+		reply(200, map[string]any{"items": f.keys})
 	case r.URL.Path == profilesPath+"/readiness" && r.Method == "GET":
 		answer := fakeReadiness(f.ready)
 		if f.refused {
@@ -157,6 +173,10 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 			reply(400, map[string]any{"error": map[string]any{"code": "bad_request", "message": "Name the organization the login is for (tenant_id)."}})
 			return
 		}
+		if f.startRefusal != "" {
+			reply(409, map[string]any{"error": map[string]any{"code": "conflict", "message": f.startRefusal}})
+			return
+		}
 		if body["driver"] == "opencode" && f.pending {
 			reply(202, map[string]any{"id": "s3", "driver": "opencode", "state": "starting"})
 			return
@@ -169,7 +189,17 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 			reply(202, map[string]any{"id": "s2", "driver": "codex", "state": "failed", "message": f.signInFailure})
 			return
 		}
-		reply(202, map[string]any{"id": "s2", "driver": "codex", "state": "waiting", "url": "https://auth.openai.com/codex/device", "user_code": "ABCD-1234"})
+		link := "https://auth.openai.com/codex/device"
+		if body["driver"] == "grok" {
+			link = "https://accounts.x.ai/device"
+		}
+		if body["driver"] == "gemini-cli" {
+			link = "https://accounts.google.com/o/oauth2/v2/auth?state=fixture"
+		}
+		if f.signInLink != "" {
+			link = f.signInLink
+		}
+		reply(202, map[string]any{"id": "s2", "driver": "codex", "state": "waiting", "url": link, "user_code": "ABCD-1234", "message": f.signInText})
 	case p == "/sign-in/s1/code":
 		f.code, _ = body["code"].(string)
 		if f.code != "good-code" {
@@ -220,6 +250,25 @@ func TestToolListShowsVersionAndSignIn(t *testing.T) {
 	}
 	if !strings.Contains(out, "next: olivares tool login claude") {
 		t.Fatalf("tool ls must name the next step:\n%s", out)
+	}
+}
+
+// An organization admin cannot read the engine's tool inventory (a system administrator
+// installs the tools), but the console shows them the accounts and keys sessions run as.
+// tool ls shows the same, says who installs the tools, and does not refuse.
+func TestToolListShowsAnOrganizationAdminTheAccountsAndKeys(t *testing.T) {
+	f := newFakeToolEngine(t)
+	f.notSystem = true
+	f.accounts = []map[string]any{{"name": "claude-a", "driver": "claude", "state": "active"}}
+	f.keys = []map[string]any{{"display_name": "Team Anthropic", "kind": "anthropic", "probe_state": "ok"}}
+	out, errb, err := execSessionCLI(t, nil, append([]string{"tool", "ls"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("tool ls refused an organization admin: %v\n%s", err, errb)
+	}
+	for _, want := range []string{"claude-a", "Team Anthropic", "A system administrator installs the tools and signs them in."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("tool ls lacks %q:\n%s", want, out)
+		}
 	}
 }
 
@@ -339,6 +388,31 @@ func TestToolLoginClaudeTakesThePastedCode(t *testing.T) {
 	}
 }
 
+// Gemini CLI no longer serves free personal Google accounts, Google AI Pro or
+// Ultra (#2990): the login says which accounts work and names the API key first.
+func TestToolLoginGeminiNamesTheAccountsThatWork(t *testing.T) {
+	f := newFakeToolEngine(t)
+	out, errb, err := execSessionCLI(t, strings.NewReader("good-code\n"),
+		append([]string{"tool", "login", "gemini"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("tool login gemini: %v\n%s", err, errb)
+	}
+	want := "Gemini CLI works with a paid Gemini API key or a Gemini Code Assist Standard or Enterprise account. " +
+		"Free personal Google accounts, Google AI Pro and Google AI Ultra stopped working on 18 June 2026.\n" +
+		"For an API key, run: olivares provider add --kind gemini\n"
+	if !strings.Contains(out, want) {
+		t.Fatalf("missing %q in\n%s", want, out)
+	}
+	if strings.Index(out, want) > strings.Index(out, "Open this link and sign in") {
+		t.Fatalf("the accounts must come before the Google link:\n%s", out)
+	}
+	for _, text := range []string{"https://accounts.google.com/o/oauth2/v2/auth?state=fixture", "Gemini CLI is signed in."} {
+		if !strings.Contains(out, text) {
+			t.Fatalf("missing %q in\n%s", text, out)
+		}
+	}
+}
+
 // A native tool can still be starting when the POST returns after ten
 // seconds. That live flow later supplies its device link, or a terminal refusal.
 func TestToolLoginWaitsForTheNativeDeviceFlowToStart(t *testing.T) {
@@ -426,6 +500,46 @@ func TestToolLoginCodexShowsTheDeviceCodeAndWaits(t *testing.T) {
 	}
 }
 
+// The link and the text beside it are the engine's, and a person opens what they
+// name. `tool login` refuses what the AI tools screen refuses: an address off the
+// hosts the tool's own login names, in the link or in the message, and ends the
+// login on the engine. Codex's own host, in the message too, is shown as before.
+func TestToolLoginRefusesAddressesOffTheToolsHosts(t *testing.T) {
+	for name, tc := range map[string]struct {
+		link, text string
+		refused    bool
+	}{
+		"a link on another host":              {link: "https://evil.example/codex/device", refused: true},
+		"a lookalike host":                    {link: "https://auth.openai.com.evil.example/codex/device", refused: true},
+		"another tool's host":                 {link: "https://claude.com/cai/oauth/authorize", refused: true},
+		"a host in the message":               {text: "Open claude-login.example to continue.", refused: true},
+		"a host an invisible character hides": {text: "Open claude-login​.example/auth to continue.", refused: true},
+		"the tool's own host in the message":  {text: "Open auth.openai.com/codex/device to continue."},
+		"the tool's own link and plain text":  {text: "Waiting for you to finish on the page."},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFakeToolEngine(t)
+			f.signInLink, f.signInText = tc.link, tc.text
+			out, errb, err := execSessionCLI(t, nil, append([]string{"tool", "login", "codex"}, sessionCreds(f.URL)...)...)
+			if !tc.refused {
+				if err != nil || !strings.Contains(out, "Codex is signed in.") {
+					t.Fatalf("tool login codex = %v\n%s%s, want it signed in", err, out, errb)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "not shown") {
+				t.Fatalf("tool login codex = %v, want the sentence that says the link or text is not shown", err)
+			}
+			if strings.Contains(out+errb, "evil.example") || strings.Contains(out+errb, "claude-login") || strings.Contains(out+errb, "claude.com") {
+				t.Errorf("the command drew an address off Codex's hosts:\n%s%s", out, errb)
+			}
+			if !strings.Contains(f.allHits(), "DELETE "+agentToolsPath+"/sign-in/s2") {
+				t.Errorf("the refused login stayed open on the engine:\n%s", f.allHits())
+			}
+		})
+	}
+}
+
 // #470: a failed sign-in shows the tool's own reason and the engine's one next
 // step, not a second "Try again" after it.
 func TestToolLoginFailureShowsTheToolsReasonAndOneNextStep(t *testing.T) {
@@ -435,6 +549,36 @@ func TestToolLoginFailureShowsTheToolsReasonAndOneNextStep(t *testing.T) {
 	want := "Codex is not signed in. " + f.signInFailure
 	if exitcode.From(err) != exitcode.Err || err == nil || err.Error() != want {
 		t.Fatalf("err = %v (exit %d)\nwant  %s", err, exitcode.From(err), want)
+	}
+}
+
+// A failed login keeps the tool's own reason. An address in it that is not on the
+// tool's hosts is hidden, in the command and on the screen alike; the tool's own
+// hosts and a name that is only a file are shown as before.
+func TestToolSignInFailureHidesAddressesOffTheToolsHosts(t *testing.T) {
+	for name, tc := range map[string]struct{ in, want string }{
+		"the tool's own host":      {"error sending request for url (https://auth.openai.com). Fix that.", "error sending request for url (https://auth.openai.com). Fix that."},
+		"another host":             {"Go to https://evil.example/fix or evil.example:8443/x. Fix that.", "Go to [address] or [address]. Fix that."},
+		"another tool's host":      {"Open https://claude.com/cai/oauth/authorize now.", "Open [address] now."},
+		"a file is not an address": {"could not write auth.json. Fix that.", "could not write auth.json. Fix that."},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := toolSignInFailed("codex", toolSignIn{State: "failed", Message: tc.in})
+			if want := "Codex is not signed in. " + tc.want; err == nil || err.Error() != want {
+				t.Errorf("err = %v\nwant  %s", err, want)
+			}
+		})
+	}
+}
+
+// The sentence the engine refuses a start with is shown as it wrote it, except for
+// an address off the tool's hosts.
+func TestToolLoginHidesAddressesOffTheToolsHostsInARefusedStart(t *testing.T) {
+	f := newFakeToolEngine(t)
+	f.startRefusal = "A Codex sign-in is already open. Finish it at https://evil.example/fix or end it first."
+	_, _, err := execSessionCLI(t, nil, append([]string{"tool", "login", "codex"}, sessionCreds(f.URL)...)...)
+	if err == nil || strings.Contains(err.Error(), "evil.example") || !strings.Contains(err.Error(), "Finish it at [address] or end it first.") {
+		t.Fatalf("err = %v, want the engine's sentence with the address hidden", err)
 	}
 }
 

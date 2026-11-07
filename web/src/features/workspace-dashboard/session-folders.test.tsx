@@ -210,13 +210,24 @@ describe('session folders on the Workspace page', () => {
     expect(await screen.findByText(/No session folders yet/)).toBeVisible()
   })
 
-  it('says when the list is cut short', async () => {
+  it('ends a list cut short with Show more', async () => {
     useWorkspaceStore.getState().setActiveWorkspace('w1')
     folders([folder('ws_1', 'a', '/srv/a')], true)
     show()
     expect(
-      await screen.findByText(/Loaded 1 rows; there are more/),
-    ).toBeVisible()
+      await screen.findByRole('link', { name: 'Show more' }),
+    ).toHaveAttribute('href', '/agentops?tab=workspaces')
+  })
+
+  it('says a list cut short is not whole where Show more has nowhere to go', async () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    granted.delete('sessions:run:read')
+    folders([folder('ws_1', 'a', '/srv/a')], true)
+    show()
+    expect(
+      await screen.findByText('Not every folder is shown.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Show more' })).toBeNull()
   })
 
   it('says it is reading them, not that there are none', async () => {

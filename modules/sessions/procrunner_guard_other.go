@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"time"
 )
 
 // The session guard is Linux's: it needs a subreaper, which other systems do not
@@ -25,6 +26,8 @@ func watchEngine(_ *exec.Cmd, killTreeOnExit bool) (*engineWatch, error) {
 }
 
 func (*engineWatch) started() {}
+
+const treeKillBound time.Duration = 0
 
 func (*engineWatch) guardOutcome() *os.File { return nil }
 

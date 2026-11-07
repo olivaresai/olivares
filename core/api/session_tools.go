@@ -18,8 +18,10 @@ import (
 // ServeSession serves r through the engine's own handler chain as p, a principal
 // the session MCP edge already resolved from a session credential: one tenant,
 // never superadmin, at most its launcher's role and assurance at launch, and no
-// credential reference. The general authenticator still never admits a session
-// bearer, and this entry admits nothing but such a principal. Every route then
+// credential reference; or a principal Ask Olivares calls one tool under
+// (auth.Authenticator.AskPrincipal), which is the same shape. The general
+// authenticator still never admits a session bearer, and this entry admits nothing
+// but such a principal. Every route then
 // authorizes, confines, rate-limits, audits and refuses p exactly as it does any
 // caller holding the same rights; a governed route stays undecided for it, since
 // there is no credential to reconstruct.

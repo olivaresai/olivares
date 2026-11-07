@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -55,10 +56,7 @@ func TestLDAPGroupRoleMappingHTTP(t *testing.T) {
 		if mapped.code != http.StatusOK || mapped.body["mapped_role"] != auth.RoleAdmin {
 			t.Fatalf("tenant admin maps LDAP group = %d %s, want 200/admin", mapped.code, mapped.raw)
 		}
-		current, err := h.authr.SCIMGetGroup(ctx, tenant, group.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		current := authtest.Read(t, h.authr, tenant, group.ID)
 		if current.Group.ProvisionedBy != group.ProvisionedBy || current.Group.ExternalID != group.ExternalID ||
 			current.Group.DisplayName != group.DisplayName || current.Group.TargetTenantID != group.TargetTenantID ||
 			current.Group.ParentGroupID != group.ParentGroupID || len(current.Members) != 1 || current.Members[0].ID != memberID {
@@ -146,9 +144,9 @@ func TestDirectoryGroupRoleMappingPreservesAuthorizationHTTP(t *testing.T) {
 						}
 					})
 				}
-				current, err := h.authr.SCIMGetGroup(ctx, tenant, group.ID)
-				if err != nil || current.Group.Version != group.Version || current.Group.MappedRole != "" {
-					t.Fatalf("refused role writes changed group = %+v, %v", current, err)
+				current := authtest.Read(t, h.authr, tenant, group.ID)
+				if current.Group.Version != group.Version || current.Group.MappedRole != "" {
+					t.Fatalf("refused role writes changed group = %+v", current)
 				}
 				res := h.do(http.MethodPut, path, adminToken, map[string]any{"role": auth.RoleEditor}, tenantHdr(tenant))
 				if res.code != http.StatusOK || res.body["mapped_role"] != auth.RoleEditor {
@@ -162,10 +160,10 @@ func TestDirectoryGroupRoleMappingPreservesAuthorizationHTTP(t *testing.T) {
 					if res.code != http.StatusForbidden {
 						t.Fatalf("directory hierarchy write = %d %s, want 403", res.code, res.raw)
 					}
-					current, err = h.authr.SCIMGetGroup(ctx, tenant, group.ID)
-					if err != nil || current.Group.MappedRole != auth.RoleEditor || current.Group.ProvisionedBy != origin ||
+					current = authtest.Read(t, h.authr, tenant, group.ID)
+					if current.Group.MappedRole != auth.RoleEditor || current.Group.ProvisionedBy != origin ||
 						current.Group.ExternalID != group.ExternalID || current.Group.DisplayName != group.DisplayName {
-						t.Fatalf("refused provisioner writes changed mapping/identity = %+v, %v", current, err)
+						t.Fatalf("refused provisioner writes changed mapping/identity = %+v", current)
 					}
 				}
 				if res = h.do(http.MethodPut, path, superToken, map[string]any{"role": auth.RoleOwner}, tenantHdr(tenant)); res.code != http.StatusOK {

@@ -1,5 +1,5 @@
 {
-  "title": "Daten, Wissen & Kontext",
+  "title": "Wissen",
   "subtitle": "Governance-konforme Wissensdatenbanken, Abruf-Herkunft, das Prompt-Register, Agent-Speicher und Kontextrichtlinien.",
   "tabs": {
     "kbs": "Wissensdatenbanken",
@@ -20,11 +20,11 @@
     "status": "Status",
     "agentRef": "Agent",
     "acl": "ACL",
-    "aclHint": "Berechtigungsreferenzen (Gruppen-/Rollen-/Prinzipal-Kennungen) — niemals Anmeldedaten.",
+    "aclHint": "Berechtigungsverweise (Gruppe, Rolle, Person oder Werkzeug) — niemals Zugangsdaten.",
     "aclNone": "Keine ACL",
     "addRef": "Referenz hinzufügen",
     "removeRef": "Entfernen",
-    "credentialWarning": "Das sieht nach einem Anmeldedaten-Wert aus. Geben Sie eine Berechtigungsreferenz (eine Gruppen-/Rollen-/Prinzipal-Kennung) ein, niemals ein Geheimnis.",
+    "credentialWarning": "Das sieht nach einem Zugangsdatenwert aus. Geben Sie einen Berechtigungsverweis (Gruppe, Rolle, Person oder Werkzeug) ein, niemals ein Geheimnis.",
     "localHashLabel": "Lexikalisch — nicht semantisch",
     "localHashHint": "Dieser Index verwendet einen lokalen lexikalischen (Hash-)Einbettungsmechanismus, NICHT ein semantisches Vektormodell. Treffer sind schlüsselwortbasiert, nicht bedeutungsbasiert.",
     "egressNo": "Kein Egress",
@@ -94,12 +94,12 @@
   "kbEditor": {
     "createTitle": "Neue Wissensdatenbank",
     "editTitle": "Governance bearbeiten",
-    "createBody": "Deklariert eine Wissensdatenbank und erfasst den konfigurierten Einbettungsmechanismus. local_only verbietet jeglichen Egress; model_backed erfordert einen semantischen Einbettungsmechanismus. Im Audit-Hauptbuch unter Ihrer Identität erfasst.",
+    "createBody": "Deklariert eine Wissensdatenbank und erfasst den konfigurierten Einbettungsmechanismus. „Nur lokal“ sendet nichts nach außen; „Modellgestützt“ erfordert einen semantischen Einbettungsmechanismus. Im Audit-Hauptbuch unter Ihrer Identität erfasst.",
     "editBody": "Aktualisiert die Governance für „{{name}}“. Eine Änderung von Klassifizierung, Datenstandort oder ACL ändert, was jede Identität abrufen kann. embed_model und Dimension bleiben wie bei der Erstellung erfasst. Auditiert unter Ihrer Identität.",
     "name": "Name",
     "classificationHint": "Bestimmt, welche Identitäten aus dieser KB abrufen dürfen.",
     "residencyHint": "Legt fest, wo die Daten dieser KB verarbeitet werden dürfen.",
-    "embedPolicyHint": "local_only = lexikalischer Zero-Egress-Index. model_backed = semantischer Vektorindex über den Governance-konformen Anbieter. auto = Auswahl anhand des konfigurierten Einbettungsmechanismus. Das Backend lehnt eine ungültige Richtlinien-/Einbettungskombination ab (400).",
+    "embedPolicyHint": "Nur lokal: lexikalischer Index, der diesen Rechner nie verlässt. Modellgestützt: semantischer Index über den Governance-konformen Anbieter. Automatisch: Auswahl anhand des konfigurierten Einbettungsmechanismus. Eine unpassende Kombination wird abgelehnt.",
     "create": "Wissensdatenbank erstellen",
     "save": "Änderungen speichern",
     "created": "Wissensdatenbank erstellt",
@@ -114,7 +114,7 @@
   },
   "ingest": {
     "title": "Inhalt aufnehmen",
-    "body": "Nimmt Inhalt in „{{name}}“ auf. Geheimnisse / PII werden vor der Indizierung geschwärzt. Bei einer model_backed-KB wird Chunk-Text über den Governance-konformen Anbieter eingebettet (Egress wird in der Herkunft erfasst).",
+    "body": "Nimmt Inhalt in „{{name}}“ auf. Geheimnisse / PII werden vor der Indizierung geschwärzt. Bei einer „Modellgestützt“-KB wird Chunk-Text über den Governance-konformen Anbieter eingebettet (Egress wird in der Herkunft erfasst).",
     "modeConnector": "Registrierter Konnektor",
     "modeInline": "Direkt eingefügte Dokumente",
     "source": "Konnektorname",
@@ -291,14 +291,14 @@
     "maxTokens": "Max. Tokens",
     "strategy": "Strategie",
     "redaction": "Schwärzung erforderlich",
-    "newPolicy": "Richtlinie einfügen/aktualisieren",
+    "newPolicy": "Richtlinie hinzufügen",
     "caption": "Kontext-/Verdichtungsrichtlinien. Werden zum Zeitpunkt des Modellaufrufs angewendet — diese Ansicht steuert nur die Daten.",
     "empty": "Keine Kontextrichtlinien",
-    "emptyHint": "Fügen Sie eine Richtlinie ein oder aktualisieren Sie sie, um zu steuern, wie der Kontext eines Geltungsbereichs zusammengesetzt und verdichtet wird.",
+    "emptyHint": "Fügen Sie eine Richtlinie hinzu, um zu steuern, wie der Kontext eines Geltungsbereichs zusammengesetzt und verdichtet wird.",
     "scopeKinds": {
       "agent": "Agent",
       "kb": "Wissensdatenbank",
-      "tenant": "Mandant"
+      "tenant": "Organisation"
     },
     "strategies": {
       "truncate": "Kürzen",
@@ -307,7 +307,7 @@
     }
   },
   "contextEditor": {
-    "title": "Kontextrichtlinie einfügen/aktualisieren",
+    "title": "Kontextrichtlinie",
     "body": "Legt die Kontextrichtlinie für {{scopeKind}}:{{scopeRef}} fest. Diese steuert, wie der Kontext dieses Geltungsbereichs zusammengesetzt / verdichtet wird und ob eine Schwärzung erforderlich ist. Auditiert unter Ihrer Identität.",
     "scopeKind": "Geltungsbereichsart",
     "scopeRef": "Geltungsbereich-Referenz",
@@ -435,7 +435,7 @@
   "empty": {
     "context": {
       "title": "Noch keine Kontextrichtlinien",
-      "description": "Speichern Sie eine Richtlinie für Kontextgröße, Verdichtungsstrategie und Schwärzung bei einem Agenten, einer Wissensdatenbank oder einem Mandanten."
+      "description": "Fügen Sie eine Richtlinie für Kontextgröße, Verdichtungsstrategie und Schwärzung bei einem Agenten, einer Wissensdatenbank oder der Organisation hinzu."
     },
     "dataProduct": {
       "title": "Noch keine Datenprodukte definiert",
@@ -456,20 +456,20 @@
   },
   "dlp": {
     "enabled": "DLP ist aktiv: eine gekennzeichnete Klasse ohne exakte Regel fällt auf die «*»-Regel; ohne «*»-Regel wird sie VERWEIGERT.",
-    "inert": "DLP ist NICHT konfiguriert — das Tor ist inaktiv und es wird nichts blockiert. Das ist nicht «alles verweigert».",
+    "inert": "DLP ist NICHT konfiguriert — es wird nichts blockiert. Das ist nicht «alles verweigert».",
     "unscannedDenied": "Nicht gescannter Inhalt wird VERWEIGERT: ohne Kennzeichnung lässt sich seine Sensibilität nicht belegen.",
     "unscannedAllowed": "Nicht gescannter Inhalt ist durch eine ausdrückliche Regel ERLAUBT. Inhalt, den niemand klassifiziert hat, darf hinaus.",
     "unscannedUndetermined": "Anhand dieser Seite lässt sich dies nicht feststellen — die Regelliste ist abgeschnitten, sodass sich dahinter möglicherweise eine Regel befindet, die nicht gescannte Inhalte zulässt.",
     "empty": "Keine DLP-Regeln",
-    "emptyHint": "Ohne Regeln setzt das Tor nichts durch. Eine Regel zu schreiben aktiviert DLP für diesen Mandanten.",
+    "emptyHint": "Ohne Regeln setzt das Tor nichts durch. Eine Regel zu schreiben aktiviert DLP für diese Organisation.",
     "anyScope": "trifft jede GEKENNZEICHNETE Klasse — deckt nicht gescannten Inhalt NICHT ab",
     "newRule": "New DLP rule",
     "newRuleHint": "Eine Regel bindet eine Inhaltsklasse beim Ausgang an Erlauben oder Verweigern.",
     "class": "Class",
     "action": "Action",
     "deleteRule": "Die Regel für {{class}} löschen",
-    "willReplace": "⛔ Für „{{class}}“ gibt es bereits eine Regel. Speichern ERSETZT sie — das ist ein Upsert nach Klasse, keine Ergänzung. Das Ersetzen einer Verweigerung durch eine Erlaubnis öffnet den Ausgang für diese Klasse sofort.",
-    "mayReplace": "Die Regelliste ist gekürzt: Außerhalb dieser Seite existiert möglicherweise bereits eine Regel für „{{class}}“. Wenn sie existiert, wird sie beim Speichern ERSETZT, da nach Klasse per Upsert gespeichert wird.",
+    "willReplace": "⛔ Für „{{class}}“ gibt es bereits eine Regel. Speichern ERSETZT sie — es wird keine zweite ergänzt. Das Ersetzen einer Verweigerung durch eine Erlaubnis öffnet den Ausgang für diese Klasse sofort.",
+    "mayReplace": "Die Regelliste ist gekürzt: Außerhalb dieser Seite existiert möglicherweise bereits eine Regel für „{{class}}“. Wenn sie existiert, wird sie beim Speichern ERSETZT, da es pro Klasse nur eine Regel gibt.",
     "truncated": "{{n}} DLP-Regeln geladen; es gibt weitere",
     "truncatedHint": "Diese Liste zeigt die erste geladene Seite; es gibt weitere DLP-Regeln."
   },

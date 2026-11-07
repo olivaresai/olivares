@@ -16,6 +16,7 @@ export interface SkillPack {
 }
 
 export interface SkillMember {
+  skill_digest?: string
   /** Absent for portable skills; other names are qualified by kind. */
   kind?: 'agent' | 'command' | 'rule'
   name: string
@@ -148,4 +149,30 @@ export interface SkillUpdateCheck {
   }
   candidate?: { manifest_digest: string; resolved_commit?: string }
   diff?: SkillPackDiff
+}
+
+/** A pin holds a skill when it pins every member (`members` null) or names it,
+ * and the revision it pins contains that member. The catalog row and the pack
+ * sheet share this one rule. */
+export function pinHolds(
+  pin: SkillAssignment,
+  revisions: SkillRevision[],
+  name: string,
+): boolean {
+  return (
+    (!pin.members || pin.members.includes(name)) &&
+    !!revisions
+      .find((r) => r.id === pin.pack_revision_id)
+      ?.members.some((m) => m.name === name)
+  )
+}
+
+export interface DetectedSkill {
+  name: string
+  description: string
+  source: 'tool_folder' | 'pack'
+  path: string
+  sha256: string
+  driver: string
+  profile_ref?: string
 }

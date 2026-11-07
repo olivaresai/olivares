@@ -631,7 +631,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 			continue
 		}
 		rep, perr := probeFn(probeCtx, c.Resolved, scratch, "")
-		_ = os.RemoveAll(scratch)
+		confine.RemoveChildTemp(scratch)
 		c.Probe = &rep
 		if perr != nil {
 			c.ProbeError = perr.Error()

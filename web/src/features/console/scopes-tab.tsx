@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -13,7 +14,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -38,16 +39,21 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { toast } from '@/components/ui/toaster'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { useOfferedPanels } from '@/features/panels'
+import { templatesApi, templatesKeys } from '@/features/workspace-templates/api'
 import { ListTruncationBadge } from '@/features/_intel'
+import { ApiError } from '@/lib/api/errors'
 import type { AgentDTO } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { useWorkspaceFilter } from '@/lib/hooks/use-workspace-filter'
 import { slugify } from '@/lib/utils'
+import { useModuleOn } from '@/stores/modules'
 import {
   consoleApi,
   consoleKeys,
@@ -251,7 +257,9 @@ export function ScopesTab() {
       </section>
 
       {extensionCards.map((p) => (
-        <p.Component key={p.id} />
+        <PanelSlot key={p.id}>
+          <p.Component />
+        </PanelSlot>
       ))}
 
       <section className="flex flex-col gap-3">
@@ -543,12 +551,55 @@ function WorkspaceForm({ onClose }: { onClose: () => void }) {
   const [slug, setSlug] = useState('')
   const [slugEdited, setSlugEdited] = useState(false)
   const effectiveSlug = slugEdited ? slug : slugify(name)
+  // A department starts from a session template: the one a launch of it runs under when it
+  // names none, or must run under when the template is mandatory.
+  const [templateId, setTemplateId] = useState(WORKSPACE_NONE)
+  const [mandatory, setMandatory] = useState(false)
+  // The workspace this dialog made, and why its template is not assigned yet (null: it is, or none
+  // was asked for). Both outlive a step-up that retries the mutation.
+  const createdRef = useRef<WorkspaceDTO | null>(null)
+  const unassignedRef = useRef<string | null>(null)
+  // A template is a sourcescope binding: the picker is offered only while that module runs.
+  const sourcescopeOn = useModuleOn('sourcescope')
+  const templates = useQuery({
+    queryKey: templatesKeys.list(activeTenant),
+    queryFn: () => templatesApi.list(),
+  })
+  const notAssigned = (reason: string) =>
+    toast.error(t('console:workspaces.templateNotAssigned', { reason }))
   const mutation = usePrivilegedMutation<void, WorkspaceDTO>({
-    mutationFn: () =>
-      consoleApi.createWorkspace({
-        name: name.trim(),
-        slug: effectiveSlug.trim(),
-      }),
+    mutationFn: async () => {
+      // A step-up on the binding retries this whole function: the workspace made by the
+      // first attempt is kept, whatever is typed since, so the retry only assigns the template.
+      const created =
+        createdRef.current ??
+        (createdRef.current = await consoleApi.createWorkspace({
+          name: name.trim(),
+          slug: effectiveSlug.trim(),
+        }))
+      if (templateId !== WORKSPACE_NONE) {
+        try {
+          await consoleApi.createBinding({
+            source_type: 'template',
+            source_ref: templateId,
+            scope_tree: 'workspace',
+            scope_ref: created.slug,
+            effect: mandatory ? 'require' : 'allow',
+            enabled: true,
+          })
+          unassignedRef.current = null
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : String(e)
+          if (e instanceof ApiError && e.isStepUpRequired) {
+            unassignedRef.current = reason
+            throw e
+          }
+          // The workspace exists: say so, and why its template is missing.
+          notAssigned(reason)
+        }
+      }
+      return created
+    },
     invalidateKeys: () => [consoleKeys.workspaces(activeTenant)],
     successMessage: t('console:workspaces.created'),
     onDone: onClose,
@@ -585,11 +636,53 @@ function WorkspaceForm({ onClose }: { onClose: () => void }) {
             mono
           />
         </Field>
+        {sourcescopeOn && (
+          <Field
+            label={t('console:workspaces.template')}
+            htmlFor="ws-template"
+            description={t('console:workspaces.templateHint')}
+          >
+            <Select value={templateId} onValueChange={setTemplateId}>
+              <SelectTrigger id="ws-template">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={WORKSPACE_NONE}>
+                  {t('console:workspaces.templateNone')}
+                </SelectItem>
+                {(templates.data?.items ?? [])
+                  .filter((tpl) => !tpl.archived_at)
+                  .map((tpl) => (
+                    <SelectItem key={tpl.id} value={tpl.id}>
+                      {tpl.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+        {templateId !== WORKSPACE_NONE && (
+          <Field
+            label={t('console:workspaces.templateMandatory')}
+            htmlFor="ws-template-mandatory"
+          >
+            <Switch
+              id="ws-template-mandatory"
+              checked={mandatory}
+              onCheckedChange={setMandatory}
+            />
+          </Field>
+        )}
       </div>
       <DialogFooter>
         <Button
           variant="secondary"
-          onClick={onClose}
+          onClick={() => {
+            // Closing after a refused step-up leaves the workspace made without its template.
+            if (createdRef.current && unassignedRef.current !== null)
+              notAssigned(unassignedRef.current)
+            onClose()
+          }}
           disabled={mutation.isPending}
         >
           {t('common:actions.cancel')}

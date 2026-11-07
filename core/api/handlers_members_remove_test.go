@@ -5,7 +5,6 @@
 package api_test
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -71,9 +70,7 @@ func TestRemoveMemberTakesTheAccountOutOfTheTenant(t *testing.T) {
 // or was suspended by the deployment.
 func TestRemoveMemberWritesNoGlobalStatusAndCutsNoOtherTenant(t *testing.T) {
 	onEachEngine(t, nil, func(t *testing.T, h *harness) {
-		ctx := context.Background()
 		admin := h.adminLogin()
-		super := h.principalOf(admin)
 		tT := h.createOrg(admin, "remove-t")
 		tB := h.createOrg(admin, "remove-b")
 		remove := func(t *testing.T, v model.ID) {
@@ -117,17 +114,14 @@ func TestRemoveMemberWritesNoGlobalStatusAndCutsNoOtherTenant(t *testing.T) {
 		})
 
 		t.Run("member the deployment suspended", func(t *testing.T) {
-			u, created, err := h.authr.SCIMProvisionUser(ctx, super, tT, auth.SCIMUserInput{UserName: "suspended@remove.example", Active: true})
-			if err != nil || !created {
-				t.Fatalf("provision = %v created=%v", err, created)
-			}
-			h.mutateUser(u.ID, func(u *model.User) { u.Status = model.StatusInactive })
-			before := h.userByID(u.ID)
-			remove(t, u.ID)
-			if h.memberOf(u.ID, tT) {
+			id := h.onboardPassword(admin, tT, "suspended@remove.example", auth.RoleViewer, "suspended-remove-1")
+			h.mutateUser(id, func(u *model.User) { u.Status = model.StatusInactive })
+			before := h.userByID(id)
+			remove(t, id)
+			if h.memberOf(id, tT) {
 				t.Errorf("the removal left the suspended member in the tenant")
 			}
-			if after := h.userByID(u.ID); after.DisplayName != before.DisplayName || after.Status != model.StatusInactive {
+			if after := h.userByID(id); after.DisplayName != before.DisplayName || after.Status != model.StatusInactive {
 				t.Errorf("the removal wrote the account's global record: %+v", after)
 			}
 		})

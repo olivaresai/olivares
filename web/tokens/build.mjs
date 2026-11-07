@@ -156,6 +156,18 @@ const PALETTE_TOOLS = [
   'tool-opencode',
   'tool-gemini',
 ]
+// The nine account accent colors: the server's closed list, in the order the console offers it.
+const PALETTE_ACCOUNTS = [
+  'account-orange',
+  'account-green',
+  'account-amber',
+  'account-red',
+  'account-blue',
+  'account-purple',
+  'account-pink',
+  'account-teal',
+  'account-slate',
+]
 // Depth: two neutral shadows for what floats, none for a panel. Plain variables, not
 // Tailwind colors. No glow, blur or halo token.
 const PALETTE_DEPTH = ['shadow-raised', 'shadow-pop', 'shadow-card']
@@ -292,6 +304,7 @@ const PALETTE = [
   { comment: 'Palette — the brand orange, by role', names: PALETTE_ACCENT },
   { comment: 'Palette — status and diff', names: PALETTE_STATUS },
   { comment: 'Palette — tool data colours', names: PALETTE_TOOLS },
+  { comment: 'Palette — account accent colours', names: PALETTE_ACCOUNTS },
   { comment: 'Palette — depth', names: PALETTE_DEPTH },
 ]
 const ROLES = [
@@ -328,6 +341,28 @@ const darkBlock = block('.dark', dark, [
 const blackBlock = block('.dark.black', black, [
   ...PALETTE.map((s) => ({ ...s, comment: `${s.comment} — BLACK` })),
   ...ROLES,
+])
+
+// TRUST CHROME (#3140). The approval card, the consent and step-up dialogs, the
+// provenance chips and the edition badges carry a decision, so a brand accent or a pack
+// variable set on :root or <html> must not reach them. Each of these blocks declares the
+// SAME plan at the surface itself (a declaration on the element always beats an inherited
+// one), so inside `[data-trust-chrome]` every colour is the host's, per theme. They are
+// emitted from the sources above: a token changed once changes here too, and the three
+// selectors mirror the three theme blocks.
+const trustSections = (suffix) => [
+  ...PALETTE.map((s) => ({ ...s, comment: `${s.comment} — ${suffix}` })),
+  ...ROLES,
+]
+const trustLightBlock = block('[data-trust-chrome]', light, [
+  ...trustSections('TRUST CHROME, LIGHT'),
+  { comment: 'Status hairlines', names: DERIVED },
+])
+const trustDarkBlock = block('.dark [data-trust-chrome]', dark, [
+  ...trustSections('TRUST CHROME, DARK'),
+])
+const trustBlackBlock = block('.dark.black [data-trust-chrome]', black, [
+  ...trustSections('TRUST CHROME, BLACK'),
 ])
 
 const comfortableBlock = block(
@@ -368,6 +403,7 @@ const themeColorNames = [
   ...PALETTE_ACCENT,
   ...PALETTE_STATUS,
   ...PALETTE_TOOLS,
+  ...PALETTE_ACCOUNTS,
   ...SURFACES,
   ...ACCENT,
   ...SEMANTIC,
@@ -449,8 +485,8 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
  * @theme inline mapping, density (comfortable by default, compact by attribute) and
  * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
  * Each theme holds the palette — four neutrals, three text tones, the single brand
- * orange #f08000 by role, status colors with soft fills, four tool data colours and two
- * neutral shadows — and the role names the components use, each resolved from the
+ * orange #f08000 by role, status colors with soft fills, four tool data colours, nine
+ * account accent colours and two neutral shadows — and the role names the components use, each resolved from the
  * palette. scripts/check-brand-parity.mjs pins the subset the website shares to this
  * file. Every text token is at least 4.5:1 and
  * every control boundary, focus ring and selection border at least 3:1 on every surface
@@ -461,6 +497,7 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
 writeFileSync(
   OUT,
   `${header}\n${rootBlock}\n\n${darkBlock}\n\n${blackBlock}\n\n${themeLines.join('\n')}\n\n` +
+    `${trustLightBlock}\n\n${trustDarkBlock}\n\n${trustBlackBlock}\n\n` +
     `${comfortableBlock}\n\n${compactBlock}\n\n${motionBlock}\n\n` +
     `@media (prefers-reduced-motion: reduce) {\n${reducedMediaBlock}\n}\n\n${reducedBlock}\n`,
 )

@@ -59,7 +59,8 @@ import http.server, json, os, subprocess, sys, threading, uuid
 UNICO = {"/v1/m/health/checks": "subject_ref",
          "/v1/m/governance/killswitch": "scope_ref",
          "/v1/m/redteam/targets": "agent_ref"}
-almacen = {}
+# The demo dataset creates Billing before the volume seeder binds sources to it.
+almacen = {"/v1/workspaces": [{"slug": "billing", "name": "Billing"}]}
 # argv[3]: lista "CODIGO:/ruta" separada por comas, para forzar conductas del servidor que el
 # guion tiene que saber distinguir: un 500 al listar (ceguera, nunca «cero filas») y un 409
 # permanente (el servidor rechaza duplicados y el guion no puede quedarse callado).
@@ -101,6 +102,12 @@ class H(http.server.BaseHTTPRequestHandler):
         if forzado.get(r) == 409:
             self.send_response(409); self.end_headers()
             self.wfile.write(b'{"error":{"message":"forced duplicate"}}'); return
+        # Like the engine, require workspace bindings to name an existing workspace slug.
+        if r == "/v1/m/sourcescope/bindings" and fila.get("scope_tree") == "workspace":
+            slugs = {w.get("slug") for w in almacen.get("/v1/workspaces", [])}
+            if fila.get("scope_ref") not in slugs:
+                msg = json.dumps({"error": {"code": "module_error", "message": "no workspace with slug " + str(fila.get("scope_ref"))}})
+                self.send_response(400); self.end_headers(); self.wfile.write(msg.encode()); return
         campo = UNICO.get(r)
         if campo and any(f.get(campo) == fila.get(campo) for f in almacen.get(r, [])):
             self.send_response(409); self.end_headers()

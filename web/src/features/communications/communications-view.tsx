@@ -45,7 +45,7 @@ import type { Me } from './subject-picker'
 import type { Channel, ChannelAccess, ChannelCatalogItem } from './types'
 import './i18n'
 
-/** Which door opened this view. The four routes mount ONE room; the entrance only
+/** Which door opened this view. The five routes mount ONE room; the entrance only
  * decides the page title and the tab that opens first. Each tab is offered on its
  * own permission, and every act inside checks its own tier where it acts. */
 export type CommunicationsEntrance =
@@ -402,6 +402,9 @@ function Inner({
                     canDeliveryWrite={canDeliveryWrite}
                     me={me}
                     onOpenDelivery={openDelivery}
+                    onShowChannels={
+                      canChannelRead ? () => setTab('channels') : undefined
+                    }
                   />
                 </TabsContent>
               ) : null}

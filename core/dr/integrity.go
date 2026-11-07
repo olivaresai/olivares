@@ -84,8 +84,11 @@ func VerifyBundleIntegrity(work string, m *Manifest, _ KDFParams, cipher *KeyCip
 		}
 		// An unsigned manifest proves nothing about itself, so it cannot claim the
 		// sealed format: nothing below would open the snapshot it names.
-		if m.Format != ManifestFormatV1 || m.Store.sealed() {
+		if m.Format != ManifestFormatV1 || m.Store.sealed() || m.Store.Compression != "" {
 			return fmt.Errorf("DR manifest is unsigned but claims format %q with snapshot encryption %q; --allow-legacy-unsigned only accepts a pre-v2 bundle", m.Format, m.Store.Encryption)
+		}
+		if len(m.Trees) > 0 || len(m.NotIncluded) > 0 {
+			return fmt.Errorf("DR manifest is unsigned but lists folder files; they travel only in an authenticated bundle")
 		}
 		return nil
 	}
@@ -98,6 +101,9 @@ func VerifyBundleIntegrity(work string, m *Manifest, _ KDFParams, cipher *KeyCip
 	}
 	if subtle.ConstantTimeCompare([]byte(want), []byte(m.Authentication.Value)) != 1 {
 		return fmt.Errorf("DR manifest authentication mismatch (wrong KEK or altered manifest)")
+	}
+	if m.Store.Compression != "" && (m.Store.Compression != "gzip" || !m.Store.sealed() || m.Store.Method == MethodPITR || m.Store.SizeBytes < 0) {
+		return fmt.Errorf("dr: unsupported snapshot compression %q for this snapshot", m.Store.Compression)
 	}
 	// The format and the snapshot encryption must agree: a v2 manifest names a sealed
 	// snapshot and a v1 manifest a plaintext one. Only a producer holding the KEK can
@@ -117,6 +123,12 @@ func VerifyBundleIntegrity(work string, m *Manifest, _ KDFParams, cipher *KeyCip
 	}
 	for _, ref := range m.Keys {
 		expected[ref.File] = true
+	}
+	if err := validateTrees(m.Trees); err != nil {
+		return err
+	}
+	for _, t := range m.Trees {
+		expected[t.Member] = true
 	}
 	if len(m.Files) != len(expected) {
 		return fmt.Errorf("DR manifest file inventory has %d entries, want %d", len(m.Files), len(expected))
@@ -139,6 +151,12 @@ func VerifyBundleIntegrity(work string, m *Manifest, _ KDFParams, cipher *KeyCip
 			return fmt.Errorf("DR payload digest mismatch for %s (corrupt or altered export)", declared.Path)
 		}
 	}
+	// Every chunk of every tree authenticates here, before a restore writes a file.
+	for _, t := range m.Trees {
+		if err := verifyTreeMember(cipher, work, t); err != nil {
+			return err
+		}
+	}
 	if m.Store.Method == MethodPITR || !m.Store.sealed() {
 		return nil
 	}
@@ -159,7 +177,7 @@ func openBundleSnapshot(work string, m *Manifest, cipher *KeyCipher) error {
 	if err != nil {
 		return err
 	}
-	size, sum, err := openSnapshotFile(cipher, sealedPath, plainPath)
+	size, sum, err := openSnapshotFile(cipher, sealedPath, plainPath, m.Store)
 	if err != nil {
 		return err
 	}
@@ -223,6 +241,16 @@ func bundleFileDigests(in BundleInput) ([]FileDigest, error) {
 		files = append(files, member)
 	} else if in.SnapshotPath != "" {
 		return nil, fmt.Errorf("dr: PITR companion must not carry snapshot bytes")
+	}
+	if len(in.Manifest.Trees) != len(in.Trees) {
+		return nil, fmt.Errorf("dr: manifest lists %d trees but %d were packed", len(in.Manifest.Trees), len(in.Trees))
+	}
+	for _, p := range in.Trees {
+		sum, size, err := FileSHA256(p.sealed)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, FileDigest{Path: p.Tree.Member, SizeBytes: size, SHA256: sum})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil

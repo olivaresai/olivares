@@ -134,7 +134,7 @@ const start = () => screen.getByRole('button', { name: 'Start' })
 async function choose(name: RegExp) {
   const user = userEvent.setup()
   await openAdvanced(user)
-  await user.click(await screen.findByLabelText('Provider profile'))
+  await user.click(await screen.findByLabelText('Account'))
   await user.click(await screen.findByRole('option', { name }))
   return user
 }
@@ -234,7 +234,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
       )
     wrap()
     const user = await choose(/Home A/)
-    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(screen.getByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home B/ }))
     expect(await screen.findByText('Missing configuration')).toBeInTheDocument()
     releaseA(
@@ -297,9 +297,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     expect(
       screen.getByText('credential source is not wired'),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-      'Home A',
-    )
+    expect(screen.getByLabelText('Account')).toHaveTextContent('Home A')
   })
 
   it('blocks the request while a ready observation is refetching', async () => {
@@ -467,7 +465,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     expect(
       await screen.findByRole('button', { name: 'Request access' }),
     ).toBeInTheDocument()
-    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByLabelText('Account'))
     await user.click(await screen.findByRole('option', { name: /Home B/ }))
     expect(seen.at(-1)).toEqual({
       sourceType: 'profile',

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE MESSAGE NAVIGATOR (#2129): find and reach any point of a session. A rail of marks
-// beside the conversation, one per message the person sent; a hover or focus shows its time
-// and first line and a click scrolls to it. Beside the rail, a panel: every message in a
+// THE MESSAGE NAVIGATOR (#2129): find and reach any point of a session. A thin rail of marks
+// at the conversation's left edge, one per message the person sent; a hover or focus shows its
+// time and first line, as words without Markdown markers, and a click scrolls to it. Beside the rail, a panel: every message in a
 // list, a search over the whole session, and a date and time to go to. The index, the
 // search and the time anchor are the engine's (GET /runs/{ref}/messages, read from the
 // tool's own transcript, in pages), so a session of thousands of messages is never loaded
@@ -19,6 +19,7 @@ import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuth } from '@/lib/auth/context'
 import { formatDateTime, formatInt, formatShortDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { parseMarkdown, plainText } from './markdown'
 import { instantOf } from './message-rows'
 import type { MessageNavigator } from './use-message-navigator'
 import './i18n'
@@ -27,6 +28,9 @@ const RESULT_PAGE = 50
 const SEARCH_DELAY_MS = 250
 
 const clock = (at: string | undefined) => formatShortDateTime(at)
+/** A first line as it reads: `**Next:** run` is "Next: run". */
+const words = (line: string) =>
+  plainText(parseMarkdown(line), ' ').trim() || line
 
 /** The rail: one mark per message sent, beside the conversation. */
 export function MessageRail({ nav }: { nav: MessageNavigator }) {
@@ -37,9 +41,11 @@ export function MessageRail({ nav }: { nav: MessageNavigator }) {
     <nav
       aria-label={t('messages.rail')}
       data-testid="message-rail"
-      className="absolute inset-y-2 right-4 z-10 flex w-6 flex-col overflow-y-auto"
+      // No overflow: at most 24 marks fit, and a scrolling rail would also clip each
+      // mark's preview, which is wider than the rail.
+      className="absolute inset-y-2 left-0 z-10 flex w-4 flex-col"
     >
-      <ul className="m-0 flex min-h-full list-none flex-col justify-between p-0">
+      <ul className="m-0 flex min-h-full list-none flex-col justify-center gap-1 p-0">
         {nav.marks.map((m) => (
           <li key={m.id} className="relative">
             <button
@@ -48,28 +54,28 @@ export function MessageRail({ nav }: { nav: MessageNavigator }) {
               aria-label={t('messages.mark', {
                 n: formatInt(m.id),
                 time: clock(m.at),
-                line: m.first_line,
+                line: words(m.first_line),
               })}
               onClick={() => void nav.jump(m)}
               onMouseEnter={() => setShown(m.id)}
               onMouseLeave={() => setShown(null)}
               onFocus={() => setShown(m.id)}
               onBlur={() => setShown(null)}
-              className="group flex h-6 w-6 items-center justify-end rounded-ctl pr-1 outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              className="group flex h-5 w-4 items-center rounded-ctl ps-1 outline-none focus-visible:ring-2 focus-visible:ring-focus"
             >
               <span
                 aria-hidden
-                className="h-0.5 w-3 rounded-full bg-text-3 group-hover:bg-text group-focus-visible:bg-text"
+                className="h-px w-2 rounded-full bg-line-strong transition-[width] group-hover:w-3 group-hover:bg-text group-focus-visible:w-3 group-focus-visible:bg-text"
               />
             </button>
             {shown === m.id ? (
               <span
                 aria-hidden
                 data-testid="message-preview"
-                className="pointer-events-none absolute right-7 top-1/2 z-20 flex w-64 -translate-y-1/2 flex-col rounded-ctl border border-line bg-canvas px-2 py-1 text-caption text-text"
+                className="pointer-events-none absolute left-5 top-1/2 z-20 flex w-64 -translate-y-1/2 flex-col rounded-ctl border border-line bg-canvas px-2 py-1 text-caption text-text shadow-sm"
               >
                 <span className="tabular-nums text-text-3">{clock(m.at)}</span>
-                <span className="truncate">{m.first_line}</span>
+                <span className="truncate">{words(m.first_line)}</span>
               </span>
             ) : null}
           </li>
@@ -79,8 +85,13 @@ export function MessageRail({ nav }: { nav: MessageNavigator }) {
   )
 }
 
-/** The toggle above the conversation, the panel it opens, and a message too far back for
- * the conversation this view holds. */
+// The thread's own column (session-conversation.tsx) and the composer's: the bar and its
+// notices read inside it, not across the whole pane.
+const COLUMN = 'mx-auto w-full max-w-[760px]'
+
+/** The toggle at the conversation's top corner, the panel it opens, and a message too far
+ * back for the conversation this view holds. The toggle shows while the conversation is
+ * hovered or holds focus, or its panel is open: nothing floats over the transcript. */
 export function MessageBar({ nav }: { nav: MessageNavigator }) {
   const { t } = useTranslation('sessions')
   const panelId = useId()
@@ -89,14 +100,24 @@ export function MessageBar({ nav }: { nav: MessageNavigator }) {
       <p
         role="status"
         data-testid="message-problem"
-        className="px-4 text-right text-caption text-text-3"
+        className={cn(COLUMN, 'px-4 text-right text-caption text-text-3')}
       >
         {t(`messages.${nav.problem}`)}
       </p>
     ) : null
   return (
-    <div data-testid="message-bar" className="flex flex-col gap-2">
-      <div className="flex items-center justify-end px-2">
+    <div
+      data-testid="message-bar"
+      className={cn(COLUMN, 'flex flex-col gap-2')}
+    >
+      <div
+        className={cn(
+          'absolute end-2 top-0 z-20 rounded-ctl bg-canvas transition-opacity',
+          nav.open
+            ? 'opacity-100'
+            : 'opacity-0 group-hover/conv:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100',
+        )}
+      >
         <Button
           type="button"
           size="sm"
@@ -133,7 +154,7 @@ export function MessageBar({ nav }: { nav: MessageNavigator }) {
         <section
           aria-label={t('messages.farTitle')}
           data-testid="message-far"
-          className="mx-2 flex flex-col gap-1 rounded-ctl border border-line px-3 py-2"
+          className="mx-4 flex flex-col gap-1 rounded-ctl border border-line px-3 py-2"
         >
           <div className="flex items-center justify-between gap-2">
             <p className="text-caption text-text-3">
@@ -241,7 +262,7 @@ function MessagePanel({ nav, id }: { nav: MessageNavigator; id: string }) {
       id={id}
       aria-label={t('messages.title')}
       data-testid="message-panel"
-      className="mx-2 flex max-h-72 flex-col gap-2 overflow-hidden rounded-ctl border border-line p-3"
+      className="mx-4 flex max-h-72 flex-col gap-2 overflow-hidden rounded-ctl border border-line p-3"
     >
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex min-w-48 flex-1 flex-col gap-1">

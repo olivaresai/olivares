@@ -25,6 +25,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { EditionBadge } from '@/features/console/edition-badge'
 import { resolveLocation } from '@/features/navigation/model'
 import { useAuth } from '@/lib/auth/context'
@@ -108,21 +113,27 @@ export function UserMenu() {
   return (
     <>
       <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full"
-            // The name starts with what the button shows (WCAG 2.5.3): a voice user
-            // says the initials they see.
-            aria-label={`${initials}, ${t('auth:account.title')}`}
-            title={t('auth:account.title')}
-          >
-            <Avatar size="base">
-              <AvatarFallback>{initials}</AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
+        {/* The console's tooltip, not a native title: it stays inside the window at its
+            right edge, where a native one was cut. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
+                // The name starts with what the button shows (WCAG 2.5.3): a voice user
+                // says the initials they see.
+                aria-label={`${initials}, ${t('auth:account.title')}`}
+              >
+                <Avatar size="base">
+                  <AvatarFallback>{initials}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{t('auth:account.title')}</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="end" className="min-w-56">
           <div className="flex flex-col gap-1 px-2 py-1.5">
             {principal?.display_name && (

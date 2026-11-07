@@ -29,7 +29,8 @@ vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: auth.activeTenant, can: () => true }),
 }))
 
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useRouterState: () => '',
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
@@ -246,12 +247,10 @@ describe('Inventory reads tenant-wide: scope of the query', () => {
     expect(cacheKeys(qc).some((k) => k.includes('"t2"'))).toBe(true)
   })
 
-  it('REPRODUCES A DEFECT: the view says the workspace selector does not filter it', async () => {
+  it('REPRODUCES A DEFECT: the view says it covers every workspace', async () => {
     renderView()
     expect(
-      await screen.findByText(
-        'Tenant-wide inventory. The workspace selector does not filter this view.',
-      ),
+      await screen.findByText('Covers every workspace.'),
     ).toBeInTheDocument()
   })
 })

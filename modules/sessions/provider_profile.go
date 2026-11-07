@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/auth"
@@ -137,6 +138,7 @@ var (
 type ProviderProfile struct {
 	MaxDataClass   string
 	ID             model.ID
+	Tenant         model.TenantID
 	Ref            string
 	Driver         string
 	EnvironmentRef string
@@ -427,11 +429,10 @@ func standardConfigDir(driver string) (string, bool) {
 // tool's standard configuration directory inside it. The console's sign-in writes
 // the login there and reads its status there; an own-login profile runs on it.
 //
-// Root on first-hour check (EU, refresh 08): this was the ENGINE USER's own home (~/.claude,
-// ~/.codex, ~/.grok), so a fresh install reported, and would have launched on, a
-// vendor login nobody gave the product. Nothing here reads the engine's HOME or
-// inherits CLAUDE_CONFIG_DIR, CODEX_HOME or the like from its environment. It is
-// per tenant: a subscription one organization signs in never serves another.
+// Nothing here reads the engine's HOME or inherits CLAUDE_CONFIG_DIR, CODEX_HOME or
+// the like from its environment. It is per tenant: a subscription one organization
+// signs in never serves another. The login the tool already has for the engine's user
+// is a separate answer, for the node's only person (serverLoginUsable).
 func ToolLoginHome(root string, tenant model.TenantID, driver string) (home, configDir string, ok bool) {
 	rel, known := standardConfigDir(driver)
 	root = strings.TrimSpace(root)
@@ -511,6 +512,29 @@ func (m *Module) usesOwnToolLogin(tenant model.TenantID, driver, authSource, con
 	real, err := filepath.EvalSymlinks(want)
 	return err == nil && have == real
 }
+
+// serverLoginUsable reports a profile that may run on the login the tool already has for
+// the engine's user: Claude Code or Codex, whose login is all in the configuration home,
+// so the child's HOME is the one the product made for this profile; and the node's only
+// person, in its only organization (ServerLoginOpen). Anyone else on the node could read
+// that person's login from a session, as a session reads its own. It is asked at every
+// launch and resume: a second person closes it. A policy that cannot answer closes it.
+func (m *Module) serverLoginUsable(tenant model.TenantID, prof ProviderProfile) bool {
+	if m.ServerLoginOpen == nil || m.profileHomesRoot == "" || (prof.Driver != providerDriverClaude && prof.Driver != providerDriverCodex) {
+		return false
+	}
+	own, err := filepath.EvalSymlinks(filepath.Join(m.profileHomesRoot, prof.Ref))
+	if err != nil || own != prof.UserHome {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), serverLoginPolicyTimeout)
+	defer cancel()
+	return m.ServerLoginOpen(ctx, tenant)
+}
+
+// serverLoginPolicyTimeout bounds the policy's store read: a launch and a profile list
+// have no request context here.
+const serverLoginPolicyTimeout = 5 * time.Second
 
 // serverUserLoginSentence refuses a profile that runs on this server's user login.
 const serverUserLoginSentence = "This profile uses this server's user login; sign in again to use a product login."
@@ -709,6 +733,7 @@ func profileFromRecord(rec model.Record) ProviderProfile {
 	programs, registries, egressHosts, packagesOK := decodeProfilePackages(rec)
 	return ProviderProfile{
 		ID:                    model.ID(rec.String(model.ColID)),
+		Tenant:                model.TenantID(rec.String(model.ColTenantID)),
 		Ref:                   rec.String(colPPRef),
 		Driver:                rec.String(colPPDriver),
 		EnvironmentRef:        rec.String(colPPEnvRef),
@@ -781,8 +806,8 @@ func validateRecordBinding(ctx context.Context, sc store.Scope, driver, ref stri
 	if !modelprovider.NativeService(rec.String("service")) {
 		return errServiceProviderNative
 	}
-	if !recordServesDriver(rec.String(colPRKind), rec.String(colPRBaseURL), driver) {
-		return &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, rec.String(colPRDisplayName), rec.String(colPRKind))}
+	if !recordServesDriver(rec.String(colPRKind), rec.String(colPRBaseURL), rec.String("service"), driver) {
+		return &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, rec.String(colPRDisplayName), rec.String(colPRKind), rec.String("service"))}
 	}
 	return nil
 }
@@ -1285,9 +1310,9 @@ func (m *Module) snapshotForLaunch(tenant model.TenantID, prof ProviderProfile, 
 		return ProviderHomeSnapshot{}, err
 	}
 	// first-hour check, here because launch, resume and a queued launch all come through this
-	// snapshot (SR2 on 65d841a1): a profile on this server's user login is not used,
-	// and a tool login belongs to the organization that signed it in.
-	if usesServerUserLogin(prof.Driver, prof.AuthSource, prof.ConfigHome, prof.UserHome) {
+	// snapshot (SR2 on 65d841a1): a profile on this server's user login is used only as
+	// serverLoginUsable allows, and a tool login belongs to the organization that signed it in.
+	if usesServerUserLogin(prof.Driver, prof.AuthSource, prof.ConfigHome, prof.UserHome) && !m.serverLoginUsable(tenant, prof) {
 		return ProviderHomeSnapshot{}, &runErr{http.StatusConflict, serverUserLoginSentence}
 	}
 	if err := m.refuseForeignToolLogin(tenant, prof.Driver, prof.ConfigHome, prof.UserHome); err != nil {

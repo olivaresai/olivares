@@ -1215,7 +1215,7 @@ func TestGrokTheArrivalCancellationFactOutlivesTheTurnItNames(t *testing.T) {
 	}
 	id := json.RawMessage(`"srv-outlives"`)
 	sess.resolveServerRequest(
-		&acpServerRequest{id: id, method: acpReqRequestPermission},
+		newACPServerRequest(id, acpReqRequestPermission),
 		string(id), raw, "sess-outlives", turn, true,
 	)
 
@@ -1387,7 +1387,7 @@ func TestGrokAPermissionAlreadyAnsweredByTheCancellationIsNeverAdmitted(t *testi
 		t.Fatal("the turn was already cancelling; this row needs a live one")
 	}
 	id := json.RawMessage(`"srv-answered"`)
-	req := &acpServerRequest{id: id, method: acpReqRequestPermission}
+	req := newACPServerRequest(id, acpReqRequestPermission)
 	sess.mu.Lock()
 	sess.pending[string(id)] = req
 	sess.mu.Unlock()
@@ -1524,7 +1524,7 @@ func TestGrokTheTurnAfterAnAnsweredRefusalIsAuthorizedNormally(t *testing.T) {
 	turn := peer.session.ActiveTurn()
 
 	id := json.RawMessage(`"srv-first"`)
-	req := &acpServerRequest{id: id, method: acpReqRequestPermission}
+	req := newACPServerRequest(id, acpReqRequestPermission)
 	sess.mu.Lock()
 	sess.pending[string(id)] = req
 	sess.mu.Unlock()
@@ -1613,7 +1613,7 @@ func TestGrokTheCancellationsClaimIsRecordedBeforeItsReplyIsWritten(t *testing.T
 	turn := peer.session.ActiveTurn()
 
 	id := json.RawMessage(`"srv-blocked"`)
-	req := &acpServerRequest{id: id, method: acpReqRequestPermission}
+	req := newACPServerRequest(id, acpReqRequestPermission)
 	sess.mu.Lock()
 	sess.pending[string(id)] = req
 	sess.mu.Unlock()

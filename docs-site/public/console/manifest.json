@@ -1,12 +1,12 @@
 {
-  "taken_at": "2026-10-30T15:31:13Z",
-  "commit": "eac0532b2fee711184b79b52c92727a94fe24857",
-  "release_image": null,
-  "binary_sha256": "57b8aa04848f75a5aecbb8c07f10ef82f102e350a6532a7a10f17a706e571315",
+  "taken_at": "2026-11-04T11:52:13Z",
+  "commit": null,
+  "release_image": "olivaresai/olivares@sha256:0fc7aaf32b636a9ed993cb5aacd5ac7c71aa058cb0e12ec629c08951934c0578",
+  "binary_sha256": "735200ef40c12cb74cb0868738de4d6cc2736012d6264696ef3c6986f47744bc",
   "edition": "community",
   "tree_dirty": false,
-  "views": 37,
-  "captures": 74,
+  "views": 44,
+  "captures": 88,
   "unpaired": [],
   "skipped": {
     "communications-protocol-bindings": "Excluded by DOCS_CAPTURE_SKIP",
@@ -19,20 +19,13 @@
     "voice": "Excluded by DOCS_CAPTURE_SKIP",
     "sandbox": "Excluded by DOCS_CAPTURE_SKIP",
     "console-bindings": "Excluded by DOCS_CAPTURE_SKIP",
-    "attestation": "Excluded by DOCS_CAPTURE_SKIP",
-    "logs": "Excluded by DOCS_CAPTURE_SKIP",
-    "api-playground": "Excluded by DOCS_CAPTURE_SKIP",
-    "communications-new": "Excluded by DOCS_CAPTURE_SKIP",
-    "rate-limits": "Excluded by DOCS_CAPTURE_SKIP",
-    "settings": "Excluded by DOCS_CAPTURE_SKIP",
     "sourceDiff": "Excluded by DOCS_CAPTURE_SKIP",
+    "models": "Excluded by DOCS_CAPTURE_SKIP",
+    "rate-limits": "Excluded by DOCS_CAPTURE_SKIP",
     "dashboards": "Excluded by DOCS_CAPTURE_SKIP",
-    "work-apply-refused": "Excluded by DOCS_CAPTURE_SKIP",
     "session-viewer": "Excluded by DOCS_CAPTURE_SKIP",
     "permissions": "Excluded by DOCS_CAPTURE_SKIP",
-    "status-page": "Excluded by DOCS_CAPTURE_SKIP",
     "setup": "Excluded by DOCS_CAPTURE_SKIP",
-    "templates-readonly": "Excluded by DOCS_CAPTURE_SKIP",
     "sessions": "Excluded by DOCS_CAPTURE_SKIP",
     "agentops": "Excluded by DOCS_CAPTURE_SKIP",
     "workspace": "Excluded by DOCS_CAPTURE_SKIP",
@@ -50,29 +43,34 @@
     "adoption": "Excluded by DOCS_CAPTURE_SKIP",
     "adoption-overview": "Excluded by DOCS_CAPTURE_SKIP",
     "killswitch": "Excluded by DOCS_CAPTURE_SKIP",
-    "models": "Excluded by DOCS_CAPTURE_SKIP",
     "access-map": "Excluded by DOCS_CAPTURE_SKIP",
     "access-map-drift": "Excluded by DOCS_CAPTURE_SKIP",
     "video-05-edge-honesty": "Excluded by DOCS_CAPTURE_SKIP",
+    "guias-config-step-up": "Excluded by DOCS_CAPTURE_SKIP",
+    "recordings": "Excluded by DOCS_CAPTURE_SKIP",
     "automations": "Business capability on a Community build",
     "deploy": "Business capability on a Community build",
     "orchestration": "Business capability on a Community build",
-    "recordings": "Business capability on a Community build",
     "workflow-runs-error": "Business capability on a Community build"
   },
   "empty_panels": [
     {
       "id": "identity",
       "paneles_vacios": 1,
-      "texto_main": 1650
+      "texto_main": 1740
     },
     {
       "id": "list-truncated",
       "paneles_vacios": 1,
-      "texto_main": 1680
+      "texto_main": 1770
     },
     {
       "id": "providers",
+      "paneles_vacios": 1,
+      "texto_main": 2344
+    },
+    {
+      "id": "provider-profiles",
       "paneles_vacios": 1,
       "texto_main": 2344
     },
@@ -83,11 +81,6 @@
     },
     {
       "id": "provider-accounts",
-      "paneles_vacios": 1,
-      "texto_main": 2347
-    },
-    {
-      "id": "provider-profiles",
       "paneles_vacios": 1,
       "texto_main": 2347
     }
@@ -115,7 +108,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "8eca042f32ea8453bbcb5553b2c2fff0095d87311d56362fead42b134f1612c2"
+      "sha256": "080815dcb3e557203779b77ddc1c9e3ca559e5b9684985eaa478ec2f189f4141"
     },
     {
       "id": "agent-artifacts",
@@ -130,7 +123,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "9672c92492b65a88465b9f20768d816966ac56742316cfe8dd544ad10d4c5fea"
+      "sha256": "27223526abe4f3afcd251420b98ea3cea1eebb49077b053389126a5af4046676"
     },
     {
       "id": "agent-tools",
@@ -193,6 +186,66 @@
       "sha256": "07ea382400139a4c8b79e4ffca943be9a05f6b44fa68d43ac781c91ffc35964f"
     },
     {
+      "id": "api-playground",
+      "theme": "dark",
+      "route": "/api-playground",
+      "h1": "API Playground",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 282,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "0ff6dc73e01f71cd2eff09429b8cdcf891d4f541134312ea78caea8ebeab28ac"
+    },
+    {
+      "id": "api-playground",
+      "theme": "light",
+      "route": "/api-playground",
+      "h1": "API Playground",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 282,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "061e8692ea7a345101af8c473add96229c345dafce35c4222fd5e9e4853eb1d9"
+    },
+    {
+      "id": "attestation",
+      "theme": "dark",
+      "route": "/attestation",
+      "h1": "Supply-chain attestation",
+      "vacios": 0,
+      "filas": 7,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 4547,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "e1101a178d385a8388c834eeef2df74a7c17ef16c6ea6a40aea0913712d03111"
+    },
+    {
+      "id": "attestation",
+      "theme": "light",
+      "route": "/attestation",
+      "h1": "Supply-chain attestation",
+      "vacios": 0,
+      "filas": 7,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 4547,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "7cdfdd8751b873c6adc28cc5121dbbe7ce048de1e56bda9fd140134f39062096"
+    },
+    {
       "id": "audit",
       "theme": "dark",
       "route": "/audit",
@@ -201,11 +254,11 @@
       "filas": 0,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 3292,
+      "texto_main": 2972,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "c73575e6a644d863b02bf7b747781efdf51e5a4f16e592e4e0810756180c5137"
+      "sha256": "0bd713de3330783b203c9d543308b7b134c7503aee21714474a1c2b4275b4a8d"
     },
     {
       "id": "audit",
@@ -216,11 +269,11 @@
       "filas": 0,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 3292,
+      "texto_main": 2972,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "4973f4e9447a607aa1d9f303a57e00df82ba020880d351e5e50d3a04e84e6224"
+      "sha256": "a244b77f564a582a321c47c06006d89bbe6283e0e7fa1d21eda7eef1e8644b9e"
     },
     {
       "id": "catalog",
@@ -253,6 +306,36 @@
       "sha256": "577eaa2e7c8b5c20f6bec78ed96a14a130feb03f4cb9093180e3813b568d1189"
     },
     {
+      "id": "communications-new",
+      "theme": "dark",
+      "route": "/communications/new",
+      "h1": "New channel",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 2024,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "1576ec9ba41166fd2bfe3a252270a34b3769f72491f7e33b0ac3b778df8b4f00"
+    },
+    {
+      "id": "communications-new",
+      "theme": "light",
+      "route": "/communications/new",
+      "h1": "New channel",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 2009,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "f62c5a67637f7626cd1748c5de2fb015a4a1e63d9f47bf649ee6ffc51ce53a01"
+    },
+    {
       "id": "console",
       "theme": "dark",
       "route": "/console",
@@ -321,7 +404,7 @@
       "filas": 0,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2043,
+      "texto_main": 2026,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
@@ -336,43 +419,13 @@
       "filas": 0,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2043,
+      "texto_main": 2026,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
       "sha256": "a8503dae0b84287e68fb373c402efee5b96307a62f02bca1839b75ebe39dca95"
     },
     {
-      "id": "guias-config-step-up",
-      "theme": "dark",
-      "route": "/console?tab=connectors",
-      "h1": "Step-up authentication required",
-      "vacios": 0,
-      "filas": 3,
-      "tablas_vacias": 0,
-      "hay_main": true,
-      "texto_main": 33154,
-      "claves_crudas": 0,
-      "claves_crudas_vistas": [],
-      "recorte_declarado": null,
-      "sha256": "6651ac89bb4f4d09e801567de2e66d6e45a3f940872d53212aee3a998e7e7b57"
-    },
-    {
-      "id": "guias-config-step-up",
-      "theme": "light",
-      "route": "/console?tab=connectors",
-      "h1": "Step-up authentication required",
-      "vacios": 0,
-      "filas": 3,
-      "tablas_vacias": 0,
-      "hay_main": true,
-      "texto_main": 33154,
-      "claves_crudas": 0,
-      "claves_crudas_vistas": [],
-      "recorte_declarado": null,
-      "sha256": "e1b35761ffb4ffb573c747b8696dcc838158026b7e9e1fc4530d407864def986"
-    },
-    {
       "id": "guias-connectors",
       "theme": "dark",
       "route": "/console?tab=connectors",
@@ -381,11 +434,11 @@
       "filas": 3,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 33154,
+      "texto_main": 33151,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "4d4fad641ddf88cc0dd97e840b39d4837765e04431c1b6923e56606610757181"
+      "sha256": "f10e9dc7f1b1dfbd84a273e36b117b007fc4b3cab9fe210ea141f0b243beb05c"
     },
     {
       "id": "guias-connectors",
@@ -396,11 +449,11 @@
       "filas": 3,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 33154,
+      "texto_main": 33151,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "3eae9bc63bf27dd4df40749870efe5449032090432555fb06371e2b9a66fc244"
+      "sha256": "fd97ba4e49fe6f42f503f7966e68eb8b73f767c08668dd631bf44b5b9e4670f1"
     },
     {
       "id": "health",
@@ -415,7 +468,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "fed95b8b02c44e18d7858e6a2ae67a4b0b7a338fb4cb5d656e7434af53a3a511"
+      "sha256": "3c46d05001eed05fd68dc07cf2e3ee25fd84f8f3eeb0718f9a1c2d8ea0cfcb73"
     },
     {
       "id": "health",
@@ -430,7 +483,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "c11eb7b14b23529bacf36129f064e1a890337ca8b56fec610e94df6a63a0fa88"
+      "sha256": "c7ba60220c1551676a76940fab1af0c67eacaafac90c03f88d8475800ce30ac3"
     },
     {
       "id": "home",
@@ -441,11 +494,11 @@
       "filas": 7,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2837,
+      "texto_main": 2801,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "e249f6e6d2abf4997f84af94d7e36711e9d88e50b642daa5d52f319cda7c3466"
+      "sha256": "b4a0e56789fb1a613bd5e942a4b0c3530ab83556d6e171adb2e5b18c1c0b99b1"
     },
     {
       "id": "home",
@@ -456,11 +509,11 @@
       "filas": 7,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2837,
+      "texto_main": 2801,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "0aec8c7989b098ce4b508b456e0ec658107a9ec3a054a8bad6d7647944ac0d91"
+      "sha256": "fd90573ebe6f9221a67b8cdf191739be9fe07a2531614b478df0547b3152e185"
     },
     {
       "id": "identity",
@@ -468,14 +521,14 @@
       "route": "/identity",
       "h1": "Identity & access",
       "vacios": 1,
-      "filas": 8,
+      "filas": 9,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 1650,
+      "texto_main": 1740,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "59c83bec126106741d8fc3bd96969c5f945faa4e15722f2b102d521260be201c"
+      "sha256": "1b9c17554dfeb89b10821c30a5949b17683b7b8518a0a8933e799007aed31533"
     },
     {
       "id": "identity",
@@ -483,14 +536,14 @@
       "route": "/identity",
       "h1": "Identity & access",
       "vacios": 1,
-      "filas": 8,
+      "filas": 9,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 1650,
+      "texto_main": 1740,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "a9ac11ef38347875c9bff307a09e77d26486773928052b6c794156488e962920"
+      "sha256": "09d2511159630474b2fa09db067cd39c045695ac9e061210cf7ae845fbf1d737"
     },
     {
       "id": "inference-proxy",
@@ -528,14 +581,14 @@
       "route": "/inventory",
       "h1": "Inventory",
       "vacios": 0,
-      "filas": 4,
+      "filas": 13,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 573,
+      "texto_main": 1215,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "6b8b55b9dadee2b9c82b280ba15d0028ed52142fb9a5a1d1ab9fd7fa65d15538"
+      "sha256": "c399dfc58b2010afef698b4eec29e174840b2270c061c71cf852f2d981463dba"
     },
     {
       "id": "inventory",
@@ -543,14 +596,14 @@
       "route": "/inventory",
       "h1": "Inventory",
       "vacios": 0,
-      "filas": 4,
+      "filas": 13,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 573,
+      "texto_main": 1215,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "74d73538aff10034f25eb604cb890b395ef0d3a7d9ab8ef9a23fc4bb1e68386c"
+      "sha256": "83e7f9130327cfadc42b04fe6a4a0f142961f3e2c41d492f5ab90a760279b08a"
     },
     {
       "id": "knowledge",
@@ -588,14 +641,14 @@
       "route": "/identity?tab=people",
       "h1": "Identity & access",
       "vacios": 1,
-      "filas": 8,
+      "filas": 9,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 1680,
+      "texto_main": 1770,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "e986c7d7c59cd08774ec18ca3261acf12c65ce2ced124bb67682af9baec953d3"
+      "sha256": "89e3bdb0dc7bafd60f957742bbcfacef305dfca31ede7564d2f85c5abc5b8995"
     },
     {
       "id": "list-truncated",
@@ -603,14 +656,14 @@
       "route": "/identity?tab=people",
       "h1": "Identity & access",
       "vacios": 1,
-      "filas": 8,
+      "filas": 9,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 1680,
+      "texto_main": 1770,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "3901ab8fe6cbd0db6af6f1f7d1b0dd6009a45337746933b875b605204c52d749"
+      "sha256": "55ee02f0c264fcf2de31796e342aa4b953ad916792d9f71cc10b8b31e307b246"
     },
     {
       "id": "login",
@@ -643,19 +696,49 @@
       "sha256": "73f553f0c7ca252d9a1ea7381588f0e4095d7220547f6a7d7027368dba90117d"
     },
     {
+      "id": "logs",
+      "theme": "dark",
+      "route": "/logs",
+      "h1": "Log Viewer",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 77782,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "29450bb486169ad75a57a6ee56a527935ead0608a9063db07650745732e2de85"
+    },
+    {
+      "id": "logs",
+      "theme": "light",
+      "route": "/logs",
+      "h1": "Log Viewer",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 77782,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "d31c5f442e942709212d2b04d438ef03add83d9395c66086bbd34e57115c4d43"
+    },
+    {
       "id": "observability",
       "theme": "dark",
       "route": "/observability",
       "h1": "Observability & interop",
       "vacios": 0,
-      "filas": 11,
+      "filas": 12,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2208,
+      "texto_main": 2257,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "a4b1f00065ee92c910417ea4b0fb3e6106faa3abddf3c0dbb3ab161ea0292428"
+      "sha256": "1ff451cd7381ef1be43284b3ea932a22bacdcfa582a3bc45c55e04700cce803e"
     },
     {
       "id": "observability",
@@ -663,14 +746,14 @@
       "route": "/observability",
       "h1": "Observability & interop",
       "vacios": 0,
-      "filas": 11,
+      "filas": 12,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2208,
+      "texto_main": 2257,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "1902d893bc50806c0a9a72f13cf9a93f124b2be5a7db0d5f945b76217cb40caf"
+      "sha256": "790b0cf2e6582467c875ad999ea81d46f7ed9e6a70f38f8df0aae47a99f82b87"
     },
     {
       "id": "observability-counters",
@@ -678,19 +761,19 @@
       "route": "/observability",
       "h1": "Observability & interop",
       "vacios": 0,
-      "filas": 11,
+      "filas": 12,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2208,
+      "texto_main": 2257,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": {
         "x": 0,
-        "y": 521,
+        "y": 485,
         "width": 1440,
-        "height": 310
+        "height": 346
       },
-      "sha256": "6a70cc37e791050f14612870af32860aeaac465b1755e73bf0b23cb02c95d240"
+      "sha256": "9677f7e3105a82b39c8dc712ce9a5172f16619aa2b168d2adbbd9c43b9a0794f"
     },
     {
       "id": "observability-counters",
@@ -698,19 +781,19 @@
       "route": "/observability",
       "h1": "Observability & interop",
       "vacios": 0,
-      "filas": 11,
+      "filas": 12,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2208,
+      "texto_main": 2257,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": {
         "x": 0,
-        "y": 521,
+        "y": 485,
         "width": 1440,
-        "height": 310
+        "height": 346
       },
-      "sha256": "e7cd9415f83ccad32f77d2a726ceb808cb404b42c1de79e7c5c0b5039ff7bcdb"
+      "sha256": "a9549a0569e9adbdec09d3a45e32e9b410e0307e5df335fb3858db2e0cbbbda3"
     },
     {
       "id": "onboarding",
@@ -721,7 +804,7 @@
       "filas": 0,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 1285,
+      "texto_main": 1268,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
@@ -736,7 +819,7 @@
       "filas": 0,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 1285,
+      "texto_main": 1268,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
@@ -826,11 +909,11 @@
       "filas": 2,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 2347,
+      "texto_main": 2344,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "c6f2dca0b91de88256cd7710b63896ef6f73d369341dde03067c3dcee535c4fb"
+      "sha256": "953ada4841c2dd9bb7b3796eb3b5047a3ec14f3cecda228ae5b383dd571556de"
     },
     {
       "id": "providers",
@@ -935,7 +1018,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "a5d49ff9530aeb24951270030e7dc30b417a7b849663fec96137a2dcc62ad11e"
+      "sha256": "f945878539d935267f6bed80d1a279422b77b929400a97ac58becbe302be2163"
     },
     {
       "id": "security",
@@ -950,7 +1033,111 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "f2345f359c78b0396409be030163ff4e1a86135526d11bb6b73f694bd307cb64"
+      "sha256": "88ab4fb628331b397e5152c7d5004fdd675ad65cb9b870f7d48d2360bef457ba"
+    },
+    {
+      "id": "settings",
+      "theme": "dark",
+      "route": "/settings",
+      "h1": "General",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 1273,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "647e9e92b54e3ebc92317fb1b68cbb7bdff0319492618b68baa523253b1c7780"
+    },
+    {
+      "id": "settings",
+      "theme": "light",
+      "route": "/settings",
+      "h1": "General",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 1273,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "12aebe1078cc221ee42aea8aa4bb7d94a4d4d9ad770c7cdd4447b5a1b992a827"
+    },
+    {
+      "id": "status-page",
+      "theme": "dark",
+      "route": "/status-page",
+      "h1": "Olivares AI — Status",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 264,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "f9626e653c0b6387b396344c902980cfae2d265b16c3932ac57dde169c5c7260"
+    },
+    {
+      "id": "status-page",
+      "theme": "light",
+      "route": "/status-page",
+      "h1": "Olivares AI — Status",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 264,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "82fe599c49bd9dd2ab38815658fcafe57b319b1240f86fd6c38909da1d9686fa"
+    },
+    {
+      "id": "templates-readonly",
+      "theme": "dark",
+      "route": "/workspace-templates",
+      "h1": "Workspace Templates",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 1610,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "actor": {
+        "kind": "tenant-member",
+        "role": "viewer",
+        "tenant": "01a1a65f-74d5-7a1a-8b6a-65129a574668",
+        "user_id": "01a1a662-4d85-72de-beb5-56f160f157d6",
+        "basis": "provisioned atomically through POST /v1/users with the demo superadmin login, then signed in through the normal login form"
+      },
+      "sha256": "bf465722d8660327851636a39123f8d7d121f645d5c372764a91cb1014d5627d"
+    },
+    {
+      "id": "templates-readonly",
+      "theme": "light",
+      "route": "/workspace-templates",
+      "h1": "Workspace Templates",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 1610,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "actor": {
+        "kind": "tenant-member",
+        "role": "viewer",
+        "tenant": "01a1a65f-74d5-7a1a-8b6a-65129a574668",
+        "user_id": "01a1a662-4d85-72de-beb5-56f160f157d6",
+        "basis": "provisioned atomically through POST /v1/users with the demo superadmin login, then signed in through the normal login form"
+      },
+      "sha256": "cd039f76e945407c84017c572eb9df1b475f87d6403851e4d07fe0fe8d6d0a3c"
     },
     {
       "id": "updates",
@@ -961,11 +1148,11 @@
       "filas": 0,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 430,
+      "texto_main": 354,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "c5b023a08bf7ae453b9c2843599f57f3e3eba9f1e1713fcb0adb6ff0a35e5751"
+      "sha256": "e8efde2a68c0b17a721458a3af0323928f7b4ef15b9f2b047f7a720f8a9afa90"
     },
     {
       "id": "updates",
@@ -976,11 +1163,11 @@
       "filas": 0,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 430,
+      "texto_main": 354,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "3e1a51af9d22db5784c468a059534dd259e8512f6c6675689cbc82a1fe273159"
+      "sha256": "fe3cc2584e1d29bf8f8dd0f68c21975c616e5a8ea5ba57dc347d8160c9210646"
     },
     {
       "id": "usage",
@@ -1025,7 +1212,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "62b4bab6867dad47a6de68f1903ab9f8f8e3eb4f36ae6c8a77df888157e1a92b"
+      "sha256": "178178a10e98de9a3b47922680f83b4d9d646ee9b3659eaf319b42deab545e78"
     },
     {
       "id": "video-07-live",
@@ -1040,7 +1227,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "820a598507fbf5948598bfd27663fd923124860375a2ded8eacc3eb4fe8bcb67"
+      "sha256": "967846e6622f43772575d557c80dfff9c788200f66dc711ef6c6ec13f7fb85fb"
     },
     {
       "id": "video-08-governance",
@@ -1055,7 +1242,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "f41e178b6f5476a65ed09157b47fcc073d12af50c99e6c1e4e3fe00a91af3a19"
+      "sha256": "a4beed82651dd5ced5b74a15892f4a6a11e589ab985640a5e827dc82f2a85a7c"
     },
     {
       "id": "video-08-governance",
@@ -1070,7 +1257,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "35b198c173966fac0619f3546ebe6e986583823333b63faaa71105e3a8181189"
+      "sha256": "852664ec473841fb8e128972cea7a281dae49cad1a5eee5cf1b46e1316a38de2"
     },
     {
       "id": "video-10-workspace-browser",
@@ -1081,11 +1268,11 @@
       "filas": 5,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 765,
+      "texto_main": 680,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "4c327ba627c4eaab1c44b2fe406d4ea12d3c7879dcf414c6f90f5ebdcae689ba"
+      "sha256": "f555ff2fdd97aa2737cac5c642e6bb926b13c06a5b286363babd95760a32b96b"
     },
     {
       "id": "video-10-workspace-browser",
@@ -1096,11 +1283,11 @@
       "filas": 5,
       "tablas_vacias": 0,
       "hay_main": true,
-      "texto_main": 765,
+      "texto_main": 680,
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "ac44689f044478d71d0441b30c261e9047b50d3453cb0a3d4d009b7aa880e367"
+      "sha256": "1276b5e0bf1180045074eac3c072774200f21f75f92ad368ae49ca6eadc67d58"
     },
     {
       "id": "work",
@@ -1133,6 +1320,36 @@
       "sha256": "0c04f438131b7324d486b7a00f1951d3664f304d24fa32e05c820e63c9ba7ee3"
     },
     {
+      "id": "work-apply-refused",
+      "theme": "dark",
+      "route": "/work",
+      "h1": "Mark 'Why does the nightly eval suite drift on weekends?' ready",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 904,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "bd7f3423a109192731ceb33dc35b53f051409cc09e7a9cf87a615f3bb52b6ade"
+    },
+    {
+      "id": "work-apply-refused",
+      "theme": "light",
+      "route": "/work",
+      "h1": "Mark 'Why does the nightly eval suite drift on weekends?' ready",
+      "vacios": 0,
+      "filas": 0,
+      "tablas_vacias": 0,
+      "hay_main": true,
+      "texto_main": 904,
+      "claves_crudas": 0,
+      "claves_crudas_vistas": [],
+      "recorte_declarado": null,
+      "sha256": "fa6240a5943373c40b670af116354664d6d2aa7e61d54353443aa32fcffb1654"
+    },
+    {
       "id": "work-decisions",
       "theme": "dark",
       "route": "/work",
@@ -1145,7 +1362,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "54bacec77618cd1a4e6ac4eb9238b30fba1076abdc9a88e208b1432a1d6e317e"
+      "sha256": "255462afaa168c5a407a762fb563150cf0e9be542f77cc24f6640033f1f0e286"
     },
     {
       "id": "work-decisions",
@@ -1160,7 +1377,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "5218d9d83078e00ee152bc4ab8e74e3c69ab125561bfcaddb4100fd4e6c24a28"
+      "sha256": "c917175806ed54a5937f8176fbb9734244df05fe92ac85e0050f705f7c28159e"
     },
     {
       "id": "work-decisions-paginated",
@@ -1175,7 +1392,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "8ce7436f9eb1689df1ce38868042a9cb2734d0ff0cf66cb77af88798ca28a917"
+      "sha256": "800e1f2338a568442401a387bf660f27def204c55899c4764bd666f77e92d5a0"
     },
     {
       "id": "work-decisions-paginated",
@@ -1190,7 +1407,7 @@
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
       "recorte_declarado": null,
-      "sha256": "52c2dd9dbcc590db6d2764cda226b17d9863ac0d72d09a35d2a1feead3ca9bdc"
+      "sha256": "f23c98f44a7bbd3d848cab6bec21e8b17435432fc70a02c5ab61568877d8eabf"
     },
     {
       "id": "workspace-templates",

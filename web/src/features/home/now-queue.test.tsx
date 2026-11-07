@@ -17,11 +17,16 @@ import {
 import { governanceApi } from '@/features/governance/api'
 import type { ApprovalDTO } from '@/features/governance/types'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
+import { AccountMarksContext } from '@/features/agent-tools/account-marks'
 import type { LiveDTO } from '@/features/sessions/types'
+import type { RunDTO } from '@/features/agentops/types'
 import { sessionsApi } from '@/features/sessions/api'
+import { agentOpsApi } from '@/features/agentops/api'
 import * as communications from '@/features/communications/api'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { FLAG_ARM_MS, NowQueue, useFlaggedRequest } from './now-queue'
+import { FLAG_ARM_MS } from '@/features/governance/approval-preview'
+import { NowQueue, useFlaggedRequest, useNeedsYouRows } from './now-queue'
+import type { TileState } from './view-state'
 import './i18n'
 
 const auth = vi.hoisted(() => ({
@@ -78,9 +83,27 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 /** Estate's own wiring: the page holds the flagged request and hands it to the queue. */
-function Queue(props: Omit<ComponentProps<typeof NowQueue>, 'flag'>) {
+// The page's own wiring: Overview reads the rows once and hands them to the queue.
+function Queue({
+  sessions,
+  runs,
+  ...props
+}: Omit<ComponentProps<typeof NowQueue>, 'flag' | 'needs'> & {
+  sessions?: LiveDTO[]
+  sessionsReadable?: boolean
+  state: TileState
+  runs?: readonly RunDTO[]
+}) {
   const flag = useFlaggedRequest(props.approvals)
-  return <NowQueue {...props} flag={flag} />
+  const needs = useNeedsYouRows(
+    sessions,
+    props.sessionsReadable,
+    runs,
+    props.approvals,
+    props.state,
+    props.approvalsState,
+  )
+  return <NowQueue {...props} needs={needs} flag={flag} />
 }
 
 function live(over: Partial<LiveDTO> = {}): LiveDTO {
@@ -160,6 +183,33 @@ describe('NowQueue — what needs a person', () => {
     // It reads no sessions of its own: the page comes from Now.
     expect(spy).not.toHaveBeenCalled()
     expectNoRawI18nKeys(document.body)
+  })
+
+  it('wears the account a waiting session runs under, as a dot and a short label', () => {
+    renderIntel(
+      <AccountMarksContext.Provider
+        value={
+          new Map([['ppf_research', { label: 'Research', accent: 'red' }]])
+        }
+      >
+        <Queue
+          state="ready"
+          sessions={[
+            live({
+              session_ref: 's-silent',
+              live_ref: 'l2',
+              attribution: 'observed',
+              provider_profile_ref: 'ppf_research',
+              cc_state: 'silent_evasion',
+              goal: 'gone quiet',
+            }),
+          ]}
+        />
+      </AccountMarksContext.Provider>,
+    )
+    const badge = screen.getByTestId('account-badge')
+    expect(badge).toHaveTextContent('Research')
+    expect(badge.querySelector('[data-provider-accent="red"]')).not.toBeNull()
   })
 
   it('says so when nothing waits, instead of drawing an empty list', () => {
@@ -257,6 +307,102 @@ describe('NowQueue — what needs a person', () => {
     expect(row).toHaveTextContent('1 of 2')
     // An approval alone is something waiting: never "Nothing waits for you."
     expect(screen.queryByText('Nothing waits for you.')).toBeNull()
+    expectNoRawI18nKeys(document.body)
+  })
+
+  it('leads the card with the request’s own words, never its action name made readable', () => {
+    const reason =
+      'The staging invoice schema needs the ledger reference column.'
+    renderIntel(
+      <Queue
+        state="ready"
+        sessions={[]}
+        approvals={[
+          {
+            id: 'ap-migrate-words',
+            action: 'db.migrate',
+            reason,
+            requested_by: 'user:ada',
+            status: 'pending',
+            required_approvals: 1,
+            approve_count: 0,
+            reject_count: 0,
+            escalated: false,
+          },
+        ]}
+      />,
+    )
+    const card = screen.getByRole('article', { name: reason })
+    expect(card).not.toHaveTextContent('Db migrate')
+    expect(within(card).getAllByText(reason)).toHaveLength(1)
+  })
+
+  it('says each other request in one line: who wants to run what, and a count only with its noun when more than one person decides', async () => {
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [
+        {
+          run_ref: 'run-pr',
+          tenant_id: 'demo',
+          state: 'waiting_approval',
+          approval_ref: 'ap-command',
+          name: 'Open the dependency upgrade pull request',
+          created_at: '2026-11-06T08:00:00Z',
+        },
+      ],
+      has_more: false,
+    } as never)
+    const base = {
+      requested_by: 'user:ada',
+      status: 'pending',
+      reject_count: 0,
+      escalated: false,
+    } as const
+    renderIntel(
+      <Queue
+        state="ready"
+        sessions={[]}
+        approvals={[
+          {
+            ...base,
+            id: 'ap-first',
+            action: 'deploy.promote',
+            required_approvals: 1,
+            approve_count: 0,
+          },
+          {
+            ...base,
+            id: 'ap-command',
+            action: 'sessions.provider.approval',
+            subject_kind: 'session_run',
+            session_ref: 'run-pr',
+            review: {
+              tool: 'Command',
+              text: 'gh pr create --fill --base main',
+            },
+            required_approvals: 1,
+            approve_count: 0,
+          },
+          {
+            ...base,
+            id: 'ap-two',
+            action: 'github.write',
+            reason: 'The checkout refactor is ready to open a pull request.',
+            required_approvals: 2,
+            approve_count: 1,
+          },
+        ]}
+      />,
+    )
+    const [command, two] = screen.getAllByTestId('now-approval-row')
+    expect(
+      await within(command!).findByText(
+        'Open the dependency upgrade pull request wants to run',
+      ),
+    ).toBeInTheDocument()
+    expect(command).toHaveTextContent('gh pr create --fill --base main')
+    expect(command).not.toHaveTextContent('Command ·')
+    expect(command).not.toHaveTextContent('0 of 1')
+    expect(two).toHaveTextContent('Approvals: 1 of 2')
     expectNoRawI18nKeys(document.body)
   })
 
@@ -401,6 +547,10 @@ describe('NowQueue — what needs a person', () => {
       <Queue state="ready" sessions={[]} approvals={[MIGRATION, NETWORK]} />,
     )
     const flagged = screen.getByTestId('now-flagged-request')
+    // Approve once is an accent button: the card is a trust surface.
+    expect(flagged.closest('[data-trust-chrome]')).not.toBeNull()
+    // The card carries no coloured side border; the Approve button is the accent.
+    expect(flagged).not.toHaveClass('border-accent')
     expect(flagged).toHaveTextContent('pnpm db:migrate --env payments-staging')
     expect(
       await within(flagged).findByText(

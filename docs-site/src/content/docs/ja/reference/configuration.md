@@ -324,7 +324,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_REPORTING_SCHEDULE_INTERVAL` | No | — | How often scheduled reports are generated, as a Go duration. |
 | `OLIVARES_REPORT_CACHE_DIR` | No | — | Directory where generated report artifacts are cached. |
 | `OLIVARES_RETENTION_GOVERNOR_CONFIG` | No | — | 規制上の保持期間下限ガバナーの JSON 設定へのパス。`enterprise` と `addon_reg` のビルドタグ付きでコンパイルされたビルドだけが、エンジンの起動時に読み取ります。未設定の場合、保持期間の下限は強制しません。ファイルを読み取れない場合や解析できない場合は、ファイルを修正してエンジンを再起動するまで、すべての保持クラスの下限を 100 年にします。 |
-| `OLIVARES_RETENTION_SWEEP_INTERVAL` | No | — | How often the retention sweep deletes data past its retention window, as a Go duration. |
+| `OLIVARES_RETENTION_SWEEP_INTERVAL` | No | — | How often the retention sweep deletes data past its retention window, as a Go duration. Read only by the Business edition; Community runs no sweep and ignores it. |
 | `OLIVARES_RTBF_DEPTH_CONFIG` | No | — | RTBF のクリプトシュレッド・コーディネーターの JSON 設定へのパス。`enterprise` と `addon_reg` のビルドタグ付きでコンパイルされたビルドだけが、エンジンの起動時に読み取ります。未設定の場合、オープンコアのクリプトシュレッディングは変わりません。ファイルを読み取れない場合や解析できない場合は、ファイルを修正してエンジンを再起動するまで、すべてのシュレッドをブロックします。 |
 | `OLIVARES_SAML_ACS_URL` | Yes | — | Assertion consumer service URL of this service provider, where the identity provider posts the assertion. |
 | `OLIVARES_SAML_EMAIL_ATTRIBUTE` | No | — | Assertion attribute carrying the user's email. Unset tries the common attribute names. |

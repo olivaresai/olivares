@@ -1,0 +1,42 @@
+{
+  "title": "Registos",
+  "controls": {
+    "pause": "Pausar",
+    "resume": "Retomar",
+    "pauseAria": "Pausar o deslocamento automático",
+    "resumeAria": "Retomar o deslocamento automático",
+    "clear": "Limpar",
+    "clearAria": "Limpar as entradas de registo",
+    "entryCount": "{{value}} entradas"
+  },
+  "filters": {
+    "levelAria": "Filtrar registos {{level}}",
+    "modulePlaceholder": "Módulo...",
+    "moduleAria": "Filtrar por módulo",
+    "searchPlaceholder": "Pesquisar...",
+    "searchAria": "Pesquisar nas mensagens de registo",
+    "clearAria": "Limpar filtros"
+  },
+  "capture": {
+    "debugUnavailable": "As entradas de depuração não são registadas no nível de registo atual."
+  },
+  "stream": {
+    "empty": "Nenhuma entrada de registo para apresentar.",
+    "emptyHint": "As linhas de registo do motor aparecem aqui à medida que são escritas. Alargue o filtro, ou baixe o nível, para ver mais.",
+    "ariaLabel": "Fluxo de registos",
+    "attrsAriaLabel": "Atributos estruturados do registo"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  },
+  "subtitle": "Acompanhamento em direto do fluxo de registos do motor, combinado com o buffer que este mantém."
+}

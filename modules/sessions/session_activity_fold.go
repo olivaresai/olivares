@@ -131,6 +131,22 @@ type activityFold struct {
 type activityCall struct {
 	name  string
 	input activityInput
+	raw   json.RawMessage // the input as written, for an edit whose result has no structure
+}
+
+// activityEditInput is what an edit tool's call names: the file and the text it
+// replaced and wrote (Edit, MultiEdit, Write, NotebookEdit).
+type activityEditInput struct {
+	FilePath     string `json:"file_path"`
+	NotebookPath string `json:"notebook_path"`
+	OldString    string `json:"old_string"`
+	NewString    string `json:"new_string"`
+	Content      string `json:"content"`
+	NewSource    string `json:"new_source"`
+	Edits        []struct {
+		OldString string `json:"old_string"`
+		NewString string `json:"new_string"`
+	} `json:"edits"`
 }
 
 func newActivityFold(sidechain bool, redact *secretRedactor) *activityFold {
@@ -265,7 +281,7 @@ func (f *activityFold) toolUse(b activityBlock, at string) {
 		// An input of a shape this reader does not know names nothing, and says so.
 		f.dto.Unreadable++
 	}
-	f.calls[b.ID] = activityCall{name: b.Name, input: in}
+	f.calls[b.ID] = activityCall{name: b.Name, input: in, raw: b.Input}
 	switch b.Name {
 	case "Agent", "Task":
 		if _, seen := f.agents[b.ID]; seen {
@@ -419,6 +435,12 @@ func (f *activityFold) toolResult(b activityBlock, raw json.RawMessage, at strin
 	case "TaskCreate", "TaskUpdate":
 		f.todo(call, res)
 	case "Edit", "MultiEdit", "Write", "NotebookEdit":
+		if len(bytes.TrimSpace(raw)) == 0 {
+			// Claude Code 2.1.316 writes a subagent's results without their structure:
+			// its call names the file and the text.
+			f.fileFromCall(call, at)
+			return
+		}
 		f.file(res, at)
 	}
 }
@@ -480,15 +502,7 @@ func (f *activityFold) file(res activityResult, at string) {
 	if res.FilePath == "" {
 		return
 	}
-	i, ok := f.files[res.FilePath]
-	if !ok {
-		i = len(f.dto.Files)
-		f.files[res.FilePath] = i
-		f.dto.Files = append(f.dto.Files, activityFile{Path: res.FilePath})
-	}
-	file := &f.dto.Files[i]
-	file.Edits++
-	file.LastAt = at
+	file := f.edited(res.FilePath, at)
 	lines := 0
 	for _, hunk := range res.StructuredPatch {
 		for _, l := range hunk.Lines {
@@ -505,10 +519,54 @@ func (f *activityFold) file(res activityResult, at string) {
 		file.Created = true
 		// A new file is reported with its content, not a patch.
 		var content string
-		if lines == 0 && json.Unmarshal(res.Content, &content) == nil && content != "" {
-			file.Added += strings.Count(strings.TrimSuffix(content, "\n"), "\n") + 1
+		if lines == 0 && json.Unmarshal(res.Content, &content) == nil {
+			file.Added += lineCount(content)
 		}
 	}
+}
+
+// fileFromCall counts a successful edit from its call: the lines it replaced are
+// removed and the lines it wrote are added. Whether a Write created the file is not
+// recorded there, so it is not claimed.
+func (f *activityFold) fileFromCall(call activityCall, at string) {
+	var in activityEditInput
+	if json.Unmarshal(call.raw, &in) != nil {
+		f.dto.Unreadable++
+		return
+	}
+	path := cmpOr(in.FilePath, in.NotebookPath)
+	if path == "" {
+		return
+	}
+	file := f.edited(path, at)
+	file.Removed += lineCount(in.OldString)
+	file.Added += lineCount(in.NewString) + lineCount(in.Content) + lineCount(in.NewSource)
+	for _, e := range in.Edits {
+		file.Removed += lineCount(e.OldString)
+		file.Added += lineCount(e.NewString)
+	}
+}
+
+// edited is the session's entry for path, counting one more edit at the time given.
+func (f *activityFold) edited(path, at string) *activityFile {
+	i, ok := f.files[path]
+	if !ok {
+		i = len(f.dto.Files)
+		f.files[path] = i
+		f.dto.Files = append(f.dto.Files, activityFile{Path: path})
+	}
+	file := &f.dto.Files[i]
+	file.Edits++
+	file.LastAt = at
+	return file
+}
+
+// lineCount is the number of lines in text; a final newline ends a line, not starts one.
+func lineCount(text string) int {
+	if text == "" {
+		return 0
+	}
+	return strings.Count(strings.TrimSuffix(text, "\n"), "\n") + 1
 }
 
 // mergeFiles adds the files a subagent changed to the session's.

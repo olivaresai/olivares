@@ -262,7 +262,7 @@ func TestInputForWorkExactFenceAndStaleFenceDirections(t *testing.T) {
 	fx := newRuntimeWorkControlFixture(t)
 	ctx := context.Background()
 
-	if err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence+1, []byte(`{"type":"stale"}`)); workErrorCode(err) != "stale_fence" {
+	if err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence+1, []byte(`{"type":"user"}`)); workErrorCode(err) != "stale_fence" {
 		t.Fatalf("stale input = %v, want stale_fence", err)
 	}
 	if got := fx.proc.sentCount(); got != 0 {
@@ -272,7 +272,7 @@ func TestInputForWorkExactFenceAndStaleFenceDirections(t *testing.T) {
 		t.Fatalf("stale input settled %d accepted event(s)", got)
 	}
 
-	if err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"valid"}`)); err != nil {
+	if err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`)); err != nil {
 		t.Fatalf("exact-fence input: %v", err)
 	}
 	if got := fx.proc.sentCount(); got != 1 {
@@ -295,7 +295,7 @@ func TestInputForWorkRejectsReleasedRuntimeClaim(t *testing.T) {
 		t.Fatalf("release runtime claim: %v", err)
 	}
 	err := fx.m.InputForWork(
-		ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"released-claim"}`),
+		ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`),
 	)
 	if workErrorCode(err) != "stale_fence" {
 		t.Fatalf("input under released runtime claim = %v, want stale_fence", err)
@@ -333,7 +333,7 @@ func TestInputForWorkPreEffectFailuresDoNotRecordAmbiguity(t *testing.T) {
 			t.Fatalf("put run in pre-effect stopped state: %v", err)
 		}
 		err := fx.m.InputForWork(
-			context.Background(), fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"state"}`),
+			context.Background(), fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`),
 		)
 		if !isRunConflict(err) || asWorkError(err) != nil {
 			t.Fatalf("non-running input = %v, want direct runtime conflict", err)
@@ -353,7 +353,7 @@ func TestInputForWorkPreEffectFailuresDoNotRecordAmbiguity(t *testing.T) {
 		}
 		fx.m.UseData(drop)
 		err := fx.m.InputForWork(
-			context.Background(), fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"no-live"}`),
+			context.Background(), fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`),
 		)
 		if !drop.fired() {
 			t.Fatal("test did not remove the live handle between durable check and Send")
@@ -378,7 +378,7 @@ func TestInputForWorkWriteThenErrorRecordsAmbiguity(t *testing.T) {
 	fx.proc.setSendErrorAfterWrite(errors.New("test: process wrote before returning an error"))
 
 	err := fx.m.InputForWork(
-		context.Background(), fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"write-error"}`),
+		context.Background(), fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`),
 	)
 	if we := asWorkError(err); we == nil || we.verdict != VerdictUnknown || we.code != workInputAmbiguous {
 		t.Fatalf("write-then-error input = %v, want UNKNOWN/%s", err, workInputAmbiguous)
@@ -423,7 +423,7 @@ func TestLegacyInputWriteErrorKeepsBadRequestTaxonomy(t *testing.T) {
 		}
 	})
 	proc.setSendErrorAfterWrite(errors.New("test: legacy process write error"))
-	err = m.sendInput(ctx, tenant, run.RunRef, []byte(`{"type":"legacy"}`))
+	err = m.sendInput(ctx, tenant, run.RunRef, []byte(`{"type":"user"}`))
 	var re *runErr
 	if !errors.As(err, &re) || re.status != http.StatusBadRequest || asWorkError(err) != nil {
 		t.Fatalf("legacy write error = %v, want unchanged runtime 400 taxonomy", err)
@@ -448,7 +448,7 @@ func TestInputForWorkFenceMoveAfterEffectRecordsAmbiguity(t *testing.T) {
 		})
 	})
 
-	err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"raced"}`))
+	err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`))
 	if hookErr != nil {
 		t.Fatalf("move fence from process hook: %v", hookErr)
 	}
@@ -866,7 +866,7 @@ func TestRunOutlivesItsWorkLeaseGenerationAndRequiresTheActiveFence(t *testing.T
 		fx := newRuntimeWorkControlFixture(t)
 		ctx := context.Background()
 		var re *runErr
-		if err := fx.m.sendInput(ctx, fx.tenant, fx.runRef, []byte(`{"type":"legacy"}`)); !errors.As(err, &re) ||
+		if err := fx.m.sendInput(ctx, fx.tenant, fx.runRef, []byte(`{"type":"user"}`)); !errors.As(err, &re) ||
 			re.status != http.StatusConflict {
 			t.Fatalf("legacy input under a live generation = %v, want 409", err)
 		}
@@ -940,11 +940,11 @@ func TestRunOutlivesItsWorkLeaseGenerationAndRequiresTheActiveFence(t *testing.T
 		}
 		// And the new generation governs again: the legacy path closes.
 		var re *runErr
-		if err := fx.m.sendInput(ctx, fx.tenant, fx.runRef, []byte(`{"type":"legacy"}`)); !errors.As(err, &re) ||
+		if err := fx.m.sendInput(ctx, fx.tenant, fx.runRef, []byte(`{"type":"user"}`)); !errors.As(err, &re) ||
 			re.status != http.StatusConflict {
 			t.Fatalf("legacy input under the re-acquired generation = %v, want 409", err)
 		}
-		if err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, lease.Fence, []byte(`{"type":"fenced"}`)); err != nil {
+		if err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, lease.Fence, []byte(`{"type":"user"}`)); err != nil {
 			t.Fatalf("fenced input under the re-acquired generation: %v", err)
 		}
 	})
@@ -969,7 +969,7 @@ func TestReleaseDuringInputStillRecordsTheAmbiguity(t *testing.T) {
 	var hookErr error
 	fx.proc.setAfterSend(func() { hookErr = releaseWorkLeaseErr(ctx, fx) })
 
-	err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"raced"}`))
+	err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`))
 	if hookErr != nil {
 		t.Fatalf("release from the process hook: %v", hookErr)
 	}

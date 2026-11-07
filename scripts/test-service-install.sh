@@ -976,7 +976,7 @@ expect_rc 1 "mutant: one archive without service templates is red" \
   env OLIVARES_ROOT="$mutant" bash "$root/scripts/check-service-install.sh"
 
 mutant="$(make_mutant doctor-rc)"
-sed -i 's/code = exitcode.Usage \/\/ DIST-24-04/code = exitcode.OK \/\/ DIST-24-04/' \
+sed -i 's/return exitcode.Usage \/\/ DIST-24-04/return exitcode.OK \/\/ DIST-24-04/' \
   "$mutant/cmd/olivares/cmd_doctor.go"
 expect_rc 1 "mutant: doctor unmeasurable-to-green inversion is red" \
   env OLIVARES_ROOT="$mutant" bash "$root/scripts/check-service-install.sh"

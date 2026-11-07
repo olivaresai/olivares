@@ -387,8 +387,9 @@ function ClassScheduleRow({
         {/* §7. The number a tenant may DISCLOSE is not the schedule: the provider
             keeps model I/O for its own floor, so "gone after N days" is a promise
             only max(schedule, floor) supports. An ABSENT value means the floor is
-            unknown — which is not zero, and must not read as one. */}
-        {policy && entry.model_io ? (
+            unknown — which is not zero, and must not read as one. A schedule that
+            is not applied promises nothing. */}
+        {policy?.enabled && entry.model_io ? (
           <p className="text-caption text-muted-foreground">
             {policy.effective_disclosure_days
               ? t('retention.disclosure', {

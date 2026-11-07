@@ -34,7 +34,6 @@ import {
   IntelPage,
   ListTruncationBadge,
   SectionCard,
-  SeamBadge,
 } from '@/features/_intel'
 import { sandboxApi, sandboxKeys } from './api'
 import {
@@ -276,7 +275,6 @@ export function SandboxView() {
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <AccionesSandbox tenant={activeTenant} confined={confined} />
-          <SeamBadge label={t('seam.synthetic')} />
         </div>
       }
     >

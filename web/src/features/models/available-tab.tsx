@@ -23,6 +23,7 @@ import { agentToolsApi, OLLAMA_AVAILABLE_KEY } from '@/features/agent-tools/api'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { toolName } from '@/features/agentops/engine-tools'
+import { ToolMark } from '@/features/agentops/tool-mark'
 import {
   PROVIDER_PAGE,
   providersApi,
@@ -518,6 +519,19 @@ function ModelRow({
       : row.source === 'ollama'
         ? 'Ollama'
         : row.owner
+  // A tool's or Ollama's row wears that tool's mark; a provider's row names it alone.
+  const ownerTool =
+    row.source === 'tool' || row.source === 'session'
+      ? row.owner
+      : row.source === 'ollama'
+        ? 'ollama'
+        : null
+  const ownerCell = (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      {ownerTool ? <ToolMark driver={ownerTool} /> : null}
+      {owner}
+    </span>
+  )
   // A tool that lists no models has one row with no model name: say that instead.
   const modelName = row.label || row.model || t('available.ownDefault')
   return (
@@ -527,10 +541,12 @@ function ModelRow({
           <ModelCell row={row} />
           {/* On a phone the tool or provider sits under the model, so the sessions stay in view. */}
           <span className="mt-0.5 block text-caption text-muted-foreground sm:hidden">
-            {owner}
+            {ownerCell}
           </span>
         </td>
-        <td className="hidden text-muted-foreground sm:table-cell">{owner}</td>
+        <td className="hidden text-muted-foreground sm:table-cell">
+          {ownerCell}
+        </td>
         <td>
           <StateCell row={row} />
         </td>

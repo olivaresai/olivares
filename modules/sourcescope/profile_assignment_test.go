@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/license"
@@ -511,5 +512,115 @@ func TestProfileAndToolAssignmentsNameWhatTheGateAsksAbout(t *testing.T) {
 				t.Fatalf("stored tool = %v, want claude", r.body["source_ref"])
 			}
 		})
+	}
+}
+
+func TestPolicyBindingsInheritAndRemainBusinessGated(t *testing.T) {
+	for _, typ := range []string{"approval-policy", "dlp-ruleset"} {
+		t.Run(typ, func(t *testing.T) {
+			h := newHarness(t)
+			admin := h.adminLogin()
+			tenant := h.createOrg(admin, "policy-bindings")
+			parent := h.createWorkspace(tenant, "parent")
+			child := h.createWorkspaceUnder(tenant, "child", parent)
+			bot := h.createAgent(tenant, "child-bot", child)
+			person := h.principalFor(admin, tenant, "reader@example.org", "")
+			body := map[string]any{"source_type": typ, "source_ref": "policy-one", "scope_tree": "workspace", "scope_ref": "parent", "enabled": true}
+			if r := h.createBinding(admin, tenant, body); r.code != http.StatusNotImplemented {
+				t.Fatalf("Community assignment = %d %s, want 501", r.code, r.raw)
+			}
+			sourcescope.WithProfileAssignment(func() error { return license.AddonRequired("federation", "assign-profiles") })(h.ss)
+			if r := h.createBinding(admin, tenant, body); r.code != http.StatusForbidden {
+				t.Fatalf("unlicensed assignment = %d %s", r.code, r.raw)
+			}
+			sourcescope.WithProfileAssignment(licensed)(h.ss)
+			approver := h.tokenFor(admin, tenant, "approver@example.org", auth.RoleAdmin)
+			h.createBindingApproved(admin, approver, tenant, body)
+			if d := h.resolveAgent(tenant, person, bot.ExternalID, typ, "policy-one"); !d.Allowed || !d.Bound {
+				t.Fatalf("inherited policy = %+v", d)
+			}
+			owner := h.principalFor(admin, tenant, "owner@example.org", auth.RoleAdmin)
+			filter := h.do("POST", "/v1/m/governance/rbac/inheritance-filters", admin,
+				map[string]any{"scope_tree": "workspace", "scope_ref": "parent", "scope_class": "resource"}, tenantHdr(tenant))
+			if filter.code != http.StatusCreated {
+				t.Fatalf("filter = %d %s", filter.code, filter.raw)
+			}
+			if d := h.resolveHuman(tenant, owner, typ, "policy-one"); d.Allowed {
+				t.Fatalf("filtered policy = %+v", d)
+			}
+			if r := h.do("DELETE", "/v1/m/governance/rbac/inheritance-filters/"+filter.body["id"].(string), admin, nil, tenantHdr(tenant)); r.code != http.StatusNoContent {
+				t.Fatalf("delete filter = %d %s", r.code, r.raw)
+			}
+			body["scope_ref"], body["effect"] = "child", "forbid"
+			h.createBindingApproved(admin, approver, tenant, body)
+			if d := h.resolveAgent(tenant, person, bot.ExternalID, typ, "policy-one"); d.Allowed {
+				t.Fatalf("forbidden policy = %+v", d)
+			}
+		})
+	}
+}
+
+// A policy stands where it is assigned nearest, read inside the caller's own transaction (a
+// second one would wait forever on the single SQLite connection): a group over the department,
+// the department over the one above it, and the binding that put it there is named.
+func TestPolicyAssignedInStandsNearestInCallerTransaction(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "policy-standing")
+	parent := h.createWorkspace(tenant, "company")
+	h.createWorkspaceUnder(tenant, "finance", parent)
+	group := "6f1c2a52-8f1e-4c55-9d43-3c1f0f0a7b11"
+	approver := h.tokenFor(admin, tenant, "approver@example.org", auth.RoleAdmin)
+	for _, at := range [][3]string{{"pol-company", "workspace", "company"}, {"pol-finance", "workspace", "finance"}, {"pol-group", "user_group", group}} {
+		h.createBindingApproved(admin, approver, tenant, map[string]any{"source_type": "approval-policy", "source_ref": at[0], "scope_tree": at[1], "scope_ref": at[2], "enabled": true})
+	}
+	for _, c := range []struct {
+		groups []string
+		want   sourcescope.Standing
+	}{
+		{nil, sourcescope.Standing{Ref: "pol-finance", ScopeTree: "workspace", ScopeRef: "finance"}},
+		{[]string{group}, sourcescope.Standing{Ref: "pol-group", ScopeTree: "user_group", ScopeRef: group}},
+	} {
+		if err := h.st.View(t.Context(), tenant, func(sc store.Scope) error {
+			got, named, err := sourcescope.PolicyAssignedIn(t.Context(), sc, time.Now(), []string{"finance"}, c.groups, "approval-policy")
+			if err != nil {
+				return err
+			}
+			if len(got) == 0 || got[len(got)-1] != c.want || !named["pol-company"] || !named["pol-group"] {
+				t.Errorf("groups %v: standings %+v named %v, want last %+v", c.groups, got, named, c.want)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// Which approval policy or DLP ruleset reaches a department or group decides how many approvals a
+// launch needs and which DLP rules apply, so choosing it needs the permission that authors them
+// and a second person, and only a department or a directory group can be given one: an editor
+// cannot pick a weaker policy for its own group nor drop the department's, and a policy given to
+// any other tree would only take it from everyone.
+func TestOnlyAPolicyAdministratorAssignsPoliciesWithASecondPerson(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "policy-authority")
+	h.createWorkspace(tenant, "finance")
+	editor := h.tokenFor(admin, tenant, "editor@policy.example.invalid", auth.RoleEditor)
+	approver := h.tokenFor(admin, tenant, "approver@policy.example.invalid", auth.RoleAdmin)
+	group := "6f1c2a52-8f1e-4c55-9d43-3c1f0f0a7b11"
+	for _, typ := range []string{"approval-policy", "dlp-ruleset"} {
+		weaker := map[string]any{"source_type": typ, "source_ref": "weaker", "scope_tree": "user_group", "scope_ref": group, "enabled": true}
+		if r := h.createBinding(editor, tenant, weaker); r.code != http.StatusForbidden {
+			t.Errorf("%s: an editor picking its own group's policy = %d %s, want 403", typ, r.code, r.raw)
+		}
+		everyone := map[string]any{"source_type": typ, "source_ref": "strict", "scope_tree": "role", "scope_ref": "viewer", "enabled": true}
+		if r := h.createBinding(admin, tenant, everyone); r.code != http.StatusBadRequest {
+			t.Errorf("%s: a policy given to a role = %d %s, want 400", typ, r.code, r.raw)
+		}
+		id := h.createBindingApproved(admin, approver, tenant, map[string]any{"source_type": typ, "source_ref": "strict", "scope_tree": "workspace", "scope_ref": "finance", "enabled": true})
+		if r := h.do("DELETE", "/v1/m/sourcescope/bindings/"+id, editor, nil, tenantHdr(tenant)); r.code != http.StatusForbidden {
+			t.Errorf("%s: an editor dropping the department's policy = %d %s, want 403", typ, r.code, r.raw)
+		}
 	}
 }

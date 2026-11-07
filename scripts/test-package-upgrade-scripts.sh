@@ -30,6 +30,8 @@
 # of the upgrade contract.
 set -euo pipefail
 
+# Fixture parents must be closed to group writes, regardless of the lab login umask.
+umask 022
 LC_ALL=C
 export LC_ALL
 me=test-package-upgrade-scripts
@@ -92,8 +94,9 @@ text = open(src, encoding="utf-8").read()
 prefixes = [
     "/usr/lib/olivares", "/usr/lib/systemd/system", "/usr/libexec/olivares",
     "/usr/bin/olivares", "/usr/share/olivares", "/etc/init.d/olivares",
-    "/etc/olivares", "/var/lib/olivares", "/var/log/olivares", "/run/olivares",
+    "/etc/subuid", "/etc/subgid", "/etc/olivares", "/var/lib/olivares", "/var/log/olivares", "/run/olivares",
     "/etc/systemd/system", "/etc/apparmor.d", "/sys/kernel/security/apparmor", "/boot", "/proc",
+    "/run/install", "/run/initramfs",
 ]
 restriction = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
 prefixes.insert(0, restriction)
@@ -137,6 +140,7 @@ case "$verb" in
   daemon-reload) exit 0 ;;
   is-enabled) echo "$en"; case "$en" in enabled|enabled-runtime|linked|static|indirect) exit 0 ;; esac; exit 1 ;;
   is-active) echo "$ac"; [ "$ac" = active ] || exit 3 ;;
+  is-system-running) [ ! -f "$S/systemd-not-running" ] ;;
   disable)
     # A host where systemctl cannot stop the unit (no systemd as PID 1: a container, WSL).
     [ ! -f "$S/stop-fails" ] || { echo "Removed /etc/systemd/system/multi-user.target.wants/olivares.service." >&2; echo "System has not been booted with systemd as init system (PID 1). Can't operate." >&2; exit 1; }
@@ -258,6 +262,12 @@ STUB
 	for tool in getent groupadd useradd addgroup adduser update-initramfs dracut; do
 		printf '#!/bin/sh\nprintf "%%s %%s\\n" %s "$*" >>"$OLIVARES_TEST_BOX/calls"\nexit 0\n' "$tool" >"$box/bin/$tool"
 	done
+	cat >"$box/bin/usermod" <<'STUB'
+#!/bin/sh
+printf 'usermod %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
+case "$1" in --add-subuids) f=subuid ;; --add-subgids) f=subgid ;; *) exit 1 ;; esac
+printf 'olivares:%s:65536\n' "${2%-*}" >>"$OLIVARES_TEST_BOX/etc/$f"
+STUB
 	# The service account resolves to the unprivileged test user.
 	printf '#!/bin/sh\ncase "$1" in -u) exec /usr/bin/id -u ;; -g) exec /usr/bin/id -g ;; -nG) printf "olivares docker users\\n" ;; esac\nexit 1\n' >"$box/bin/id"
 	# Observing shadows (r3b): rm, mv, chown, chmod and stat log each call and then run the
@@ -458,6 +468,14 @@ run new postinstall.sh configure
 if [[ "$last_rc" -ne 0 || -e "$box/etc/apparmor.d/usr.bin.olivares" ]] || grep -q '^apparmor_parser ' "$box/calls"; then
 	not_ok 'AppArmor Debian: no restriction switch must leave policy unchanged'
 else ok 'AppArmor Debian: policy unchanged'; fi
+# A container sees the host kernel's switch but mounts no AppArmor filesystem:
+# the host's policy governs it, and the package configures without loading one.
+apparmor_box apparmor-container
+rm -r "$box/sys/kernel/security/apparmor"
+run new postinstall.sh configure
+if [[ "$last_rc" -ne 0 || -e "$box/etc/apparmor.d/usr.bin.olivares" ]] || grep -q '^apparmor_parser ' "$box/calls"; then
+	not_ok "AppArmor container: no AppArmor filesystem must leave policy unchanged (rc=$last_rc: $(tr '\n' ' ' <"$last_out.stderr"))"
+else ok 'AppArmor container: policy unchanged'; fi
 apparmor_box apparmor-remove
 run new postinstall.sh configure
 run new postremove.sh upgrade 1.1
@@ -594,6 +612,32 @@ if seed_install deb new; then
 	elif [[ ! -s "$box/var/lib/olivares-package/upgrade-snapshot" ]]; then not_ok "$case_id: the request is gone"
 	else ok "$case_id: rc=0, the relabel named on stderr, the request kept"; fi
 fi
+# The transaction owner holds the lock on the root-only snapshot directory through DNF; a request it
+# left behind is not this transaction's once the lock is free (a later plain rpm or dnf upgrade). A
+# lock on the world-readable package state directory, which any local user can take, is not the owner's.
+for owner in held free other; do
+	case_id="upgrade with the transaction lock $owner and a completed data snapshot request"
+	new_box "pretransaction-request-$owner"
+	seed_install rpm new || continue
+	digest=0123456789abcdef0123456789abcdef
+	mkdir -p "$box/var/lib/olivares-snapshots/$digest" "$box/var/lib/olivares-package"
+	printf 'upgrade-snapshot.%s\n' "$digest" >"$box/var/lib/olivares-package/upgrade-snapshot"
+	set_state enabled active
+	case "$owner" in
+	held) exec 9<"$box/var/lib/olivares-snapshots" ;;
+	other) exec 9<"$box/var/lib/olivares-package" ;;
+	esac
+	[[ "$owner" == free ]] || flock -n 9 || could_not_look "could not hold the $owner lock"
+	run new postinstall.sh 2
+	[[ "$owner" == free ]] || exec 9<&-
+	request=$(cat "$box/var/lib/olivares-package/upgrade-snapshot" 2>/dev/null || true)
+	if [[ "$last_rc" != 0 ]]; then not_ok "$case_id: rc=$last_rc"
+	elif [[ "$owner" == held && "$request" != "upgrade-snapshot.$digest" ]]; then
+		not_ok "$case_id: the package replaced the request of the data snapshot"
+	elif [[ "$owner" != held && ( "$request" == "upgrade-snapshot.$digest" || "$request" != upgrade-snapshot.* ) ]]; then
+		not_ok "$case_id: the package kept a request no owner transaction holds ('$request'); its migration gets no snapshot"
+	else ok "$case_id: request '$request'"; fi
+done
 # A failed request or restart must be visible, with no start past a failed request.
 for failure in request request-sync directory-sync parent-sync restart; do
 	case_id="upgrade $failure failure"
@@ -896,6 +940,38 @@ admit 'deb prerm remove in-favour' deb preremove.sh remove in-favour other 1.0
 admit 'deb prerm failed-upgrade' deb preremove.sh failed-upgrade 1.0.0 2.0.0
 admit 'apk .pre-upgrade NEW OLD' apk apk-preupgrade.sh 2.0.0-r0 1.0.0-r0
 admit 'deb postrm abort-install' deb postremove.sh abort-install
+
+new_box installroot
+ship deb
+rm -f "$box/usr/lib/olivares/package-init" "$box/usr/lib/systemd/system/olivares.service" \
+  "$box/usr/share/olivares/migrate-agentops-dropin.sh"
+mkdir -p "$box/run/install"
+run new postinstall.sh 1
+if [[ "$last_rc" -ne 0 ]]; then
+	not_ok "installroot admits no identity files: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+else
+	ok "installroot admits no identity files"
+fi
+new_box running-host-no-identity
+ship deb
+rm -f "$box/usr/lib/olivares/package-init" "$box/usr/lib/systemd/system/olivares.service"
+mkdir -p "$box/run/initramfs"
+run new postinstall.sh 1
+if [[ "$last_rc" -eq 0 ]] || ! grep -Fq 'package-init-unknown' "$last_out.stderr"; then
+	not_ok "a real running host with no identity refuses: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+else
+	ok "a real running host with no identity refuses"
+fi
+new_box running-host-missing-helper
+ship deb
+rm -f "$box/usr/share/olivares/migrate-agentops-dropin.sh"
+mkdir -p "$box/run/initramfs"
+run new postinstall.sh 1
+if [[ "$last_rc" -eq 0 ]] || ! grep -Fq 'migration helper is missing' "$last_out.stderr"; then
+	not_ok "a real running host with no migration helper refuses: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+else
+	ok "a real running host with no migration helper refuses"
+fi
 
 refuse() { # CASE INIT SCRIPT WANT ARGS...
 	local id=$1 init=$2 script=$3 want=$4

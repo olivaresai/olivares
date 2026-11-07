@@ -6,12 +6,14 @@ package knowledge
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -157,6 +159,7 @@ func TestDLPDisabledByDefault(t *testing.T) {
 
 func TestDLPBlocksDeniedClassAtRetrieval(t *testing.T) {
 	h := newDiscoveryHarness(t)
+	WithPolicyResolver(&personDLPResolver{fallback: true})(h.mod)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	adminTok := h.roleToken(admin, tenant, "adm@acme.com", "admin")
@@ -491,5 +494,32 @@ func TestReingestWithoutClassifierDeletesStaleLabel(t *testing.T) {
 	}
 	if texts := resultTexts(h.queryKB(editor, tenant, kbID, "content")); len(texts) != 0 {
 		t.Fatalf("unscanned content must be denied at retrieval (deny-closed), got %d chunk(s)", len(texts))
+	}
+}
+
+type personDLPResolver struct {
+	fallback bool
+	user     string
+	err      error
+}
+
+func (r *personDLPResolver) ApprovalPolicies(context.Context, store.Scope, string) ([]model.Policy, bool, error) {
+	panic("unexpected approval resolution")
+}
+func (r *personDLPResolver) DLPRules(_ context.Context, _ store.Scope, user string) ([]model.Record, bool, error) {
+	r.user = user
+	return []model.Record{{"class": "pii", "action": "deny"}}, !r.fallback, r.err
+}
+func TestDLPPersonPolicyResolver(t *testing.T) {
+	resolver := &personDLPResolver{}
+	m := New(WithPolicyResolver(resolver))
+	policy, err := m.loadDLPPolicy(t.Context(), nil, "requester")
+	if err != nil || len(policy.decide([]string{"pii"})) != 1 || resolver.user != "requester" {
+		t.Fatalf("policy = %+v, err=%v, user=%s", policy, err, resolver.user)
+	}
+	sentinel := errors.New("directory unavailable")
+	resolver.err = sentinel
+	if _, err := m.loadDLPPolicy(t.Context(), nil, "requester"); !errors.Is(err, sentinel) {
+		t.Fatalf("resolver failure must propagate: %v", err)
 	}
 }

@@ -324,7 +324,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_REPORTING_SCHEDULE_INTERVAL` | No | — | How often scheduled reports are generated, as a Go duration. |
 | `OLIVARES_REPORT_CACHE_DIR` | No | — | Directory where generated report artifacts are cached. |
 | `OLIVARES_RETENTION_GOVERNOR_CONFIG` | No | — | 监管保留期下限治理器的 JSON 配置路径。仅由使用 `enterprise` 和 `addon_reg` 构建标签编译的构建在引擎启动时读取。未设置时不强制任何保留期下限；文件无法读取或解析时，会将每个保留类别的下限设为 100 年，直到修复该文件并重启引擎为止。 |
-| `OLIVARES_RETENTION_SWEEP_INTERVAL` | No | — | How often the retention sweep deletes data past its retention window, as a Go duration. |
+| `OLIVARES_RETENTION_SWEEP_INTERVAL` | No | — | How often the retention sweep deletes data past its retention window, as a Go duration. Read only by the Business edition; Community runs no sweep and ignores it. |
 | `OLIVARES_RTBF_DEPTH_CONFIG` | No | — | RTBF 加密粉碎（crypto-shred）协调器的 JSON 配置路径。仅由使用 `enterprise` 和 `addon_reg` 构建标签编译的构建在引擎启动时读取。未设置时开放核心的加密粉碎保持不变；文件无法读取或解析时，会阻止每一次粉碎，直到修复该文件并重启引擎为止。 |
 | `OLIVARES_SAML_ACS_URL` | Yes | — | Assertion consumer service URL of this service provider, where the identity provider posts the assertion. |
 | `OLIVARES_SAML_EMAIL_ATTRIBUTE` | No | — | Assertion attribute carrying the user's email. Unset tries the common attribute names. |

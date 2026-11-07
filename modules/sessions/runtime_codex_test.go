@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -924,11 +925,12 @@ func TestCodexRuntimePassesAProviderAdvertisedEffortThroughUntouched(t *testing.
 }
 
 // Readiness is revocable. When the provider says it lost its model-provider
-// authentication, a launch-time "ready" stops being the answer — on the row and
-// for the next turn.
+// authentication, a launch-time "ready" stops being the answer on the row. The
+// next message still reaches the provider and is judged by its own result: the
+// person may have signed in again.
 func TestCodexRuntimeLaterAuthFailureInvalidatesReadiness(t *testing.T) {
 	m, _, tenant, prof := codexHarness(t, AuthSourceAccountHome)
-	setCodexFixture(t, prof, codexFixture{
+	record := setCodexFixture(t, prof, codexFixture{
 		ThreadID: "thread-authloss", Account: "apikey",
 		AuthRecovery: codexNotifyAuthRecoveryStarted,
 	})
@@ -948,9 +950,12 @@ func TestCodexRuntimeLaterAuthFailureInvalidatesReadiness(t *testing.T) {
 		d, _ := m.getRun(ctx, tenant, dto.RunRef)
 		return d.ProviderAuthState == AuthStateRequired
 	})
-	if err := m.sendTextInput(ctx, tenant, dto.RunRef, "again"); err == nil {
-		t.Fatal("a turn must be refused once readiness has been invalidated")
+	if err := m.sendTextInput(ctx, tenant, dto.RunRef, "again"); err != nil {
+		t.Fatalf("a message after a later auth failure was refused: %v", err)
 	}
+	waitFor(t, "the next message reached the provider", func() bool {
+		return slices.Equal(readFixtureRecord(t, record).Inputs, []string{"go", "again"})
+	})
 	// The process is untouched: losing authentication is not losing the child.
 	if !processRunning(int(*dto.PID)) {
 		t.Fatal("an authentication failure must not end the owned process")

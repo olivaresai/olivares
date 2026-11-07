@@ -1,6 +1,7 @@
 {
   "title": "Kill switch",
   "subtitle": "Parada de emergencia para todos los agentes de IA de este servidor, o para uno. Parar requiere un clic; volver a arrancar necesita la aprobación de dos cuentas de usuario distintas y una revisión posterior.",
+  "subtitleNoStop": "Parada de emergencia para todos los agentes de IA de este servidor, o para uno. Parar requiere el rol de administrador.",
   "banner": {
     "estateTitle": "TODOS LOS AGENTES PARADOS",
     "estateBody": "Los agentes no pueden actuar hasta que dos cuentas de usuario aprueben volver a arrancar: las sesiones terminan y se rechazan las llamadas a herramientas, MCP, programaciones, voz, llamadas a modelos, despliegues y entrega de eventos.",

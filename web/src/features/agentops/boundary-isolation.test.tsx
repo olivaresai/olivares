@@ -669,24 +669,22 @@ describe('C3 — the launch profile picker under a moved boundary', () => {
         .mockReturnValueOnce(b.promise)
       const user = userEvent.setup()
       const { qc, rerender } = wrap(launch)
-      await user.click(await screen.findByLabelText('Provider profile'))
+      await user.click(await screen.findByLabelText('Account'))
       await user.click(
         await screen.findByRole('option', { name: /principal A/ }),
       )
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        'principal A',
-      )
+      expect(screen.getByLabelText('Account')).toHaveTextContent('principal A')
       act(() => {
         move()
       })
       rerender()
       await waitFor(() => expect(api.listProfiles).toHaveBeenCalledTimes(2))
       // The choice made under the previous boundary is gone with its list…
-      expect(screen.getByLabelText('Provider profile')).toHaveTextContent(
-        'Select a profile',
+      expect(screen.getByLabelText('Account')).toHaveTextContent(
+        'Select an account',
       )
       expect(screen.queryByText(/ppf_A/)).not.toBeInTheDocument()
-      await user.click(screen.getByLabelText('Provider profile'))
+      await user.click(screen.getByLabelText('Account'))
       expect(
         screen.queryByRole('option', { name: /principal A/ }),
       ).not.toBeInTheDocument()
@@ -700,7 +698,7 @@ describe('C3 — the launch profile picker under a moved boundary', () => {
       ).toBe(false)
       // …and the current boundary's own answer is what gets offered.
       b.resolve({ items: [ownedBy('B')], has_more: false })
-      await user.click(screen.getByLabelText('Provider profile'))
+      await user.click(screen.getByLabelText('Account'))
       expect(
         await screen.findByRole('option', { name: /principal B/ }),
       ).toBeInTheDocument()
@@ -729,7 +727,7 @@ describe('C3 — the launch profile picker under a moved boundary', () => {
       await act(async () => {
         a.resolve({ items: [ownedBy('A')], has_more: false })
       })
-      await user.click(screen.getByLabelText('Provider profile'))
+      await user.click(screen.getByLabelText('Account'))
       expect(
         screen.queryByRole('option', { name: /principal A/ }),
       ).not.toBeInTheDocument()
@@ -742,7 +740,7 @@ describe('C3 — the launch profile picker under a moved boundary', () => {
           .some((d) => d.includes('principal A')),
       ).toBe(false)
       b.resolve({ items: [ownedBy('B')], has_more: false })
-      await user.click(screen.getByLabelText('Provider profile'))
+      await user.click(screen.getByLabelText('Account'))
       expect(
         await screen.findByRole('option', { name: /principal B/ }),
       ).toBeInTheDocument()

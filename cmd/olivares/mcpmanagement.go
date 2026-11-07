@@ -409,9 +409,9 @@ func (m *mcpManagement) TestServer(ctx context.Context, p auth.Principal, tenant
 					return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayUnavailable
 				}
 				defer reader.Close()
-				init, initErr := reader.Initialize(ctx)
+				init, initErr := reader.Connect(ctx)
 				err = initErr
-				if err == nil && init.ProtocolVersion != "2025-11-25" {
+				if err == nil && init.ProtocolVersion != mcpc.LatestRevision && init.ProtocolVersion != mcpc.LegacyRevision {
 					err = errManagedMCPInvalidResponse
 				}
 				var tools []mcpc.Tool
@@ -509,7 +509,7 @@ func (m *mcpManagement) buildServer(tenant model.TenantID, row auth.MCPGatewaySe
 	upstream := &mcpgateway.UpstreamForwarder{URL: row.URL, Client: client, CredProv: tenantMCPCredentialProvider{store: m.secrets, tenant: tenant, ref: row.CredentialRef, target: row.URL}}
 	mcpgateway.EnableManagedForwarding(upstream)
 	cfg := &mcpgateway.MCPConfig{Resource: row.Trust.Resource, Issuer: row.Trust.Issuer, IssuerJWKS: row.Trust.JWKS, JWKSURL: row.Trust.JWKSURL,
-		AuthorizationServers: []string{row.Trust.Issuer}, Tenant: tenant.String(), UpstreamURL: row.URL, UpstreamRevision: "2025-11-25", RevisionMode: "legacy",
+		AuthorizationServers: []string{row.Trust.Issuer}, Tenant: tenant.String(), UpstreamURL: row.URL, UpstreamRevision: mcpc.LegacyRevision, RevisionMode: "legacy",
 		ManagedUpstream: upstream, ManagedUpstreamDescriptor: "managed-https:" + row.URL + "|server:" + row.ID + "|credential-ref:" + row.CredentialRef}
 	for _, policy := range row.AllowedTools {
 		cfg.Tools = append(cfg.Tools, mcpc.ToolPolicy{Name: policy.Name, RequiredScope: policy.RequiredScope, Destructive: policy.Destructive})

@@ -11,9 +11,11 @@
 // `pinned_at` on `RunDTO`), so this file only turns those fields into the set the rail
 // sorts by.
 //
-// ⛔ A PIN NAMES A RUN. A session the plane only observes (no run launched through
-//    Olivares) has no run to hang a pin on, so it is not offered one (`isPinnable`) —
-//    a control that silently does nothing is worse than one that is not there.
+// ⛔ A PIN NAMES A RUN, OR AN OBSERVED ROW. A launched session is pinned on its run. A
+//    session the plane only observes (no run launched through Olivares) is pinned on its
+//    live row (`observedLiveRef`, #2176) and reads the same `pinned` / `pinned_at` on
+//    `LiveDTO`: one section, one order, one ceiling. A session with neither is not offered
+//    a pin (`isPinnable`) — a control that silently does nothing is worse than none.
 //
 // ⛔ ONE SESSION, TWO NAMES. A launched session is `run:<ref>` until the plane proves its
 //    managed live row and `live:<ref>` after (`provenance.ts`). The engine keeps the pin
@@ -21,8 +23,8 @@
 //    whichever name it has now: a pin never goes missing across that change.
 //
 // ⛔ PINS KEPT IN THIS BROWSER BEFORE THE ENGINE KEPT THEM ARE STORED DATA. They are read
-//    here (`decodePins`) only so `use-session-pins.ts` can move them to the engine once;
-//    nothing writes that key any more. Only session addresses are read back, each
+//    here (`decodePins`) only so `use-session-pins.ts` can move them to the engine once,
+//    runs and observed sessions alike; nothing writes that key any more. Only session addresses are read back, each
 //    re-validated (`isSessionAddress`), and the list has the engine's ceiling.
 import type { Whoami } from '@/lib/api/types'
 import type { UnifiedSession } from './provenance'
@@ -99,10 +101,29 @@ export function encodePins(pins: readonly string[]): string {
   return JSON.stringify({ version: BROWSER_PINS_VERSION, pins })
 }
 
-/** Whether a pin can be kept for this session: the engine keeps it against a run, and a
- * released run is out of every list for good. */
-export function isPinnable(session: Pick<UnifiedSession, 'runs'>): boolean {
-  return session.runs.some((run) => run.state !== 'cleaned')
+/**
+ * The live row to pin when the plane only observes this session: it has a live row, that
+ * row belongs to no run, and no run (released or not) joined it. A session with a run is
+ * pinned on the run, and a released one stays out of every pinned group.
+ */
+export function observedLiveRef(
+  session: Pick<UnifiedSession, 'runs' | 'live'>,
+): string | undefined {
+  const live = session.live
+  if (session.runs.length > 0 || !live || live.run_ref) return undefined
+  return live.live_ref || undefined
+}
+
+/** Whether a pin can be kept for this session: the engine keeps it against a run that is
+ * not released (a released run is out of every list for good), or against the live row of
+ * a session it only observes. */
+export function isPinnable(
+  session: Pick<UnifiedSession, 'runs' | 'live'>,
+): boolean {
+  return (
+    session.runs.some((run) => run.state !== 'cleaned') ||
+    observedLiveRef(session) !== undefined
+  )
 }
 
 /**
@@ -112,26 +133,31 @@ export function isPinnable(session: Pick<UnifiedSession, 'runs'>): boolean {
  */
 export function isPinned(
   pinned: ReadonlySet<string>,
-  session: Pick<UnifiedSession, 'key' | 'runs'>,
+  session: Pick<UnifiedSession, 'key' | 'runs' | 'live'>,
 ): boolean {
   return (
-    pinned.has(session.key) || session.runs.some((run) => run.pinned === true)
+    pinned.has(session.key) ||
+    session.runs.some((run) => run.pinned === true) ||
+    session.live?.pinned === true
   )
 }
 
 /**
  * The keys of the sessions this person has pinned, in the order they pinned them (oldest
  * pin first), which is the order the pinned section lists them in. A session with several
- * runs is pinned when any run is, from the earliest of those pins.
+ * runs is pinned when any run is, from the earliest of those pins; an observed one from
+ * its live row's own.
  */
 export function pinnedKeys(
-  sessions: readonly Pick<UnifiedSession, 'key' | 'runs'>[],
+  sessions: readonly Pick<UnifiedSession, 'key' | 'runs' | 'live'>[],
 ): ReadonlySet<string> {
   const pins: { key: string; at: string }[] = []
   for (const session of sessions) {
-    const stamps = session.runs
-      .filter((run) => run.pinned === true)
-      .map((run) => run.pinned_at ?? '')
+    const stamps = [
+      ...session.runs.filter((run) => run.pinned === true),
+      ...(session.live?.pinned === true ? [session.live] : []),
+    ]
+      .map((row) => row.pinned_at ?? '')
       .sort()
     if (stamps.length > 0) pins.push({ key: session.key, at: stamps[0] })
   }

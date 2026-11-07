@@ -177,6 +177,33 @@ describe('BindingsTab', () => {
     )
   })
 
+  it('offers Require, a mandatory template, only for a template', async () => {
+    const user = userEvent.setup()
+    wrap(<BindingsTab />)
+    await user.type(screen.getByLabelText(/source reference/i), 'tpl-1')
+    await screen.findByText(/no bindings for this source/i)
+
+    await user.click(screen.getByRole('button', { name: /new binding/i }))
+    let dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).queryByRole('button', { name: /^require$/i }),
+    ).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }))
+
+    await user.click(screen.getByRole('combobox', { name: /source type/i }))
+    await user.click(
+      await screen.findByRole('option', { name: /default session template/i }),
+    )
+    await user.click(screen.getByRole('button', { name: /new binding/i }))
+    dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByRole('button', { name: /^require$/i }),
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: /^opt out$/i }),
+    ).toBeInTheDocument()
+  })
+
   it('shows the dual-control queued state on a relaxing update', async () => {
     api.listBindings.mockResolvedValue({
       items: [

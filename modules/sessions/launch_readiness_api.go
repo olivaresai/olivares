@@ -78,7 +78,7 @@ func parseLaunchReadinessQuery(raw string) (launchReadinessQuery, error) {
 // field to every module error at once; this route needs one code, so it declares
 // one code.
 func readinessErrorBody(code, msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"code": code, "message": msg}}
+	return api.ErrorBody(code, msg)
 }
 
 // writeReadinessErr serializes this route's errors. A coded one carries its

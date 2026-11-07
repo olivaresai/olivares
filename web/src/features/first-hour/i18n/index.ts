@@ -7,10 +7,24 @@ import es from './es.json'
 import fr from './fr.json'
 import it from './it.json'
 import ko from './ko.json'
+import uk from './uk.json'
+import pt from './pt.json'
 import de from './de.json'
 import zh from './zh.json'
 import ja from './ja.json'
 import ru from './ru.json'
-registerTranslations('firstHour', { en, es, zh, ja, de, ru, fr, it, ko })
+registerTranslations('firstHour', {
+  en,
+  es,
+  zh,
+  ja,
+  de,
+  ru,
+  fr,
+  it,
+  ko,
+  uk,
+  pt,
+})
 
-export { en, es, zh, ja, de, ru, fr, it, ko }
+export { en, es, zh, ja, de, ru, fr, it, ko, uk, pt }

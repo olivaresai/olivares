@@ -80,7 +80,7 @@ export function StepUpHost() {
       }}
     >
       {request !== null && (
-        <DialogContent className="max-w-md">
+        <DialogContent trust className="max-w-md">
           <DialogHeader>
             <DialogTitle>{t('privileged.stepUp.title')}</DialogTitle>
             <DialogDescription>

@@ -4,29 +4,18 @@
     "description": "此部署观测到的最近五个会话。",
     "openAll": "全部会话",
     "emptyTitle": "还没有会话",
-    "emptyDescription": "已接入引擎的每次运行都会出现在这里：做了什么、用了多久、花了多少。",
+    "emptyDescription": "您启动的每个会话都会显示在这里。",
+    "emptyAction": "启动会话",
     "unavailableTitle": "无法加载近期工作",
     "unavailableDescription": "会话读取没有响应。上方的数字不受影响。",
     "untitled": "未命名会话"
-  },
-  "live": {
-    "title": "进行中"
   },
   "empty": {
     "title": "暂无可显示内容",
     "description": "您的角色未被授予对任何资产域模块的读取权限。请向管理员申请读取授权以查看概览。"
   },
-  "start": {
-    "ready": "{{tool}} 已就绪。",
-    "signIn": "登录 {{tool}} 以开始会话。",
-    "signInAction": "登录",
-    "install": "安装 Claude Code 或 Codex 以开始会话。",
-    "installAction": "设置工具",
-    "newSession": "新建会话"
-  },
   "swimlane": {
     "title": "最近一小时",
-    "subtitle": "{{from}} 至 {{to}}。每条横条是一次运行，工具调用越多颜色越重。",
     "lanes": "最近一小时的会话",
     "now": "现在 {{at}}",
     "range": "{{from}} 至 {{to}}",
@@ -60,32 +49,25 @@
     "waiting": "等待审批",
     "needsYou": "等你处理",
     "idle": "空闲",
-    "approvalsUnread": "无法读取审批，因此不显示等待审批的时段。"
+    "approvalsUnread": "审批尚未读取或无法读取，因此不显示等待审批的时段。",
+    "approvalsPartial": "只读取了部分审批，因此部分等待审批的时段可能不会显示。",
+    "step": {
+      "Bash": "正在运行 {{what}}",
+      "Read": "正在读取 {{what}}",
+      "Edit": "正在编辑 {{what}}",
+      "Write": "正在写入 {{what}}",
+      "Grep": "正在搜索 {{what}}",
+      "Glob": "正在查找文件 {{what}}",
+      "WebFetch": "正在读取 {{what}}",
+      "WebSearch": "正在网上搜索 {{what}}",
+      "Task": "正在与智能体协作",
+      "Agent": "正在与智能体协作"
+    }
   },
-  "summary": {
-    "heading": "摘要",
-    "nothingRunning": "没有正在运行的内容",
-    "running_other": "{{count}} 个未结束的会话",
-    "runningFor_other": "{{count}} 个未结束的会话，属于 {{people}}",
-    "runningMore": "{{n}}+ 个未结束的会话",
-    "people_other": "{{count}} 人",
-    "today": "今日 {{amount}}",
-    "todayFloor": "今日至少 {{amount}}",
-    "needs_other": "{{count}} 项需要你处理",
-    "needsMore": "{{n}}+ 项需要你处理",
-    "yesterday": "昨日 {{amount}}",
-    "unpriced_other": "{{count}} 个未报告成本",
-    "month": "本月 {{spent}} / {{limit}}",
-    "monthFloor": "本月至少 {{spent}} / {{limit}}",
-    "monthLabel": "本月支出"
-  },
-  "state": {
-    "pendingIdle": "查询未开始——打开以加载",
-    "pendingPaused": "查询已暂停——等待恢复"
-  },
-  "proof": {
-    "verified": "链已于 {{time}} 验证",
-    "entries_other": "{{n}} 条记录",
-    "broken": "链已断裂：打开账本"
+  "overview": {
+    "running": "运行中",
+    "recent": "近期",
+    "wantsToRun": "{{session}} 想要运行",
+    "approvals": "批准：{{required}} 个中的 {{approved}} 个"
   }
 }

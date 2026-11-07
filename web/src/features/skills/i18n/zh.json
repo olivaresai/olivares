@@ -45,7 +45,12 @@
     "moved": "分配已移至最新修订",
     "approveTitle": "批准加载时即生效的技能？",
     "approveDescription": "最新修订会为 {{target}} 分配其工具无需询问就会执行的技能：{{skills}}。请在审阅后再批准。",
-    "approve": "批准并使用最新版"
+    "approve": "批准并使用最新版",
+    "disable": "禁用",
+    "disabled": "技能已禁用",
+    "disableFor": "为 {{target}} 禁用 {{skill}}",
+    "disableTitle": "禁用此技能？",
+    "disableDescription": "{{target}} 的新会话将不再从此分配中接收 {{skill}}。其他技能仍保持分配。已记录的对话保留其快照。"
   },
   "assign": {
     "title": "分配",
@@ -85,7 +90,15 @@
     "gitSubmit": "从 Git 安装",
     "name": "技能包名称",
     "nameHint": "可选，默认为仓库名称。从同一仓库安装其他技能包时请选择不同名称。",
-    "held": "技能包已安装。其中含有加载时即生效的技能，因此未自动分配：请审阅后在该技能包的面板中分配。"
+    "held": "技能包已安装。其中含有加载时即生效的技能，因此未自动分配：请审阅后在该技能包的面板中分配。",
+    "local": "文件夹或压缩包",
+    "archive": "压缩包",
+    "archiveHint": "ZIP 或 tar.gz，最大 32 MiB。请选择压缩包或文件夹。",
+    "folder": "文件夹",
+    "uploadSubmit": "安装所选内容",
+    "selectedFiles": "已选文件：{{count}}",
+    "uploadLimit": "超过导入限制（32 MiB、4096 个文件、每个文件 8 MiB）。",
+    "uploadName": "上传的包名称"
   },
   "update": {
     "title": "更新",
@@ -103,6 +116,40 @@
     "acts": "{{skill}} 现在会在加载时生效：{{items}}。分配它需要你的批准。",
     "pinsKeep": "现有分配会保留其修订，直到你用“使用最新版”逐个移动。",
     "apply": "应用此更新",
-    "applied": "更新已发布为修订 {{n}}"
+    "applied": "更新已发布为修订 {{n}}",
+    "checked": "检查时间",
+    "noDiff": "没有可用的文本差异。"
+  },
+  "catalog": {
+    "source": "来源",
+    "tool_folder": "工具文件夹",
+    "pack": "技能包",
+    "uploaded": "已上传",
+    "skills": "技能",
+    "packs": "包",
+    "name": "名称",
+    "description": "描述",
+    "kind": "类型",
+    "search": "搜索名称和描述",
+    "unassigned": "未分配",
+    "loading": "加载中…",
+    "incomplete": "部分修订未加载，分配列表可能不完整。",
+    "skill": "技能",
+    "agent": "智能体",
+    "command": "命令",
+    "rule": "规则"
+  },
+  "selection": {
+    "loading": "正在检查技能…",
+    "count_other": "此会话将获得 {{count}} 项技能",
+    "current_other": "当前分配：{{count}} 项技能",
+    "unavailable": "无法解析此部门的技能。"
+  },
+  "remove": {
+    "action": "移除技能包",
+    "title": "移除此技能包？",
+    "description": "取消此技能包在所有可见目标上的分配，并将其从当前会话中移除。修订版本和审计历史将保留。如果某项分配无法移除，操作将停止。",
+    "done": "技能包已移除",
+    "incomplete": "无法获取完整的分配列表。请刷新后重试。"
   }
 }

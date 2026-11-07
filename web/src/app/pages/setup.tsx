@@ -80,7 +80,7 @@ export function SetupPage() {
       if (created?.organization?.tenant_id)
         setActiveTenant(created.organization.tenant_id)
       // Sign the new administrator in with what they just typed (it stays in
-      // memory only) and open the setup wizard. Anything short of a session —
+      // memory only) and open the work surface. Anything short of a session —
       // a second-factor demand, a refusal, a network error — falls back to the
       // ordinary sign-in page with the same message as before. Navigate BEFORE
       // refreshing the server info: a refreshed "setup done" re-renders this
@@ -98,10 +98,10 @@ export function SetupPage() {
         // fall through to the sign-in page
       }
       if (signedIn) {
-        navigate({ to: '/onboarding' as '/' })
+        navigate({ to: '/sessions' as '/' })
       } else {
         toast.success(t('setup.done'))
-        navigate({ to: '/login' })
+        navigate({ to: '/login', search: { returnTo: '/sessions' } })
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
     },

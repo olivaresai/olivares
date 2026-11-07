@@ -73,11 +73,11 @@
     "bypassPermissions": "bypassPermissions"
   },
   "effort": {
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-    "max": "max"
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "xhigh": "非常に高い",
+    "max": "最大"
   },
   "summary": {
     "total": "合計",
@@ -91,7 +91,7 @@
     "state": "状態",
     "workspace": "ワークスペース",
     "model": "モデル",
-    "effort": "Effort",
+    "effort": "推論レベル",
     "mode": "モード",
     "transport": "トランスポート",
     "identity": "アイデンティティ",
@@ -140,11 +140,11 @@
     "namePlaceholder": "表示用ラベル（任意）",
     "transport": "トランスポート",
     "permissionMode": "権限モード",
-    "effort": "Effort",
+    "effort": "推論レベル",
     "effortDefault": "モデルのデフォルト",
     "model": "モデル",
     "workspace": "フォルダー",
-    "workspaceNone": "このセッションの一時フォルダー",
+    "workspaceNone": "既定（マイファイル）",
     "worktree": "新しい git worktree で作業する",
     "worktreeHint": "専用の worktree に新しいブランチを作成し、同じリポジトリのセッション同士でファイルを共有しません。フォルダはリポジトリの最上位フォルダである必要があります。",
     "worktreeFrom": "開始位置",
@@ -166,8 +166,8 @@
     "templateHint": "テンプレートのルールはここで選んだ対応する項目を置き換え、セッション全体に適用されます。",
     "templateUnenforceable": "このテンプレートには、この起動では強制できない条件が含まれています。条件なしで起動せず、起動を拒否します:",
     "templateOverrides_other": "テンプレートが指定内容のうち {{count}} 件を上書きします:",
-    "profile": "プロバイダープロファイル",
-    "profileNone": "プロファイルを選択",
+    "profile": "アカウント",
+    "profileNone": "アカウントを選択",
     "profileNotOperable": "この環境では有効ではありません",
     "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME、GROK_HOME はプロファイルが所有します。いずれかを転送する起動はここで拒否されます。その他の名前は引き続きサーバー側の検証を受けます。",
     "identity": {
@@ -207,8 +207,9 @@
     "use": "「{{model}}」を使用",
     "defaultNamed": "既定（{{model}}）",
     "defaultUnnamed": "{{tool}} の既定",
+    "toolDefault": "既定（推奨）",
     "effortDefaultNamed": "モデルのデフォルト（{{effort}}）",
-    "effortNeedsModel": "先にモデルを選んでください。Effort はモデルのレベルです。"
+    "effortNeedsModel": "先にモデルを選んでください。推論レベルはモデルのレベルです。"
   },
   "detail": {
     "live": "ライブ",
@@ -228,7 +229,7 @@
     "transport": "トランスポート",
     "isolation": "分離",
     "permissionMode": "権限モード",
-    "effort": "Effort",
+    "effort": "推論レベル",
     "model": "モデル",
     "workspace": "ワークスペース",
     "workspaceDirectory": "作業ディレクトリ",
@@ -330,6 +331,8 @@
     "title": "ワークスペース",
     "subtitle": "セッションが作業するホストディレクトリ。マウントされ、ジェイル化され、DLP で分類されます。",
     "register": "ワークスペースを登録",
+    "personalFolders": "各ユーザーに個人フォルダー（マイファイル）を用意する",
+    "personalFoldersSaved": "個人フォルダーの設定を保存しました。",
     "cols": {
       "name": "ワークスペース",
       "rootPath": "ルートパス",
@@ -403,6 +406,20 @@
     }
   },
   "browser": {
+    "notes": {
+      "title": "メモ",
+      "add": "メモを追加",
+      "select": "まずファイルの一部を選択してから、メモを追加してください。",
+      "note": "メモ",
+      "keep": "追加",
+      "cancel": "キャンセル",
+      "sendTo": "メモの送信先",
+      "send": "送信",
+      "sent": "メモをセッションに送信しました。",
+      "failed": "メモを送信できませんでした。しばらくしてからもう一度お試しください。",
+      "noSession": "このワークスペースに送信先となる実行中のセッションがありません。",
+      "count_other": "メモ {{count}} 件"
+    },
     "title": "ファイル",
     "root": "ルート",
     "upDir": "上へ",
@@ -445,7 +462,20 @@
     "deletedFile": "削除済み",
     "sizeLabel": "サイズ",
     "modifiedLabel": "更新日時",
-    "create": "作成"
+    "create": "作成",
+    "upload": "アップロード",
+    "uploadLimit": "1 ファイルあたり最大 {{size}}",
+    "uploadReadOnly": "このフォルダーは読み取り専用のため、ファイルを追加できません。",
+    "uploadNoAccess": "このフォルダーへの書き込み権限がありません。",
+    "uploaded": "アップロード済み: {{n}}",
+    "uploadTooLarge": "{{name}} は上限 {{size}} を超えているため、アップロードされませんでした。",
+    "uploadExists": "{{name}} は既に存在するため、置き換えられませんでした。",
+    "uploadFailed": "アップロードに失敗しました",
+    "downloadSelected": "選択をダウンロード ({{n}})",
+    "downloadFolder": "フォルダーをダウンロード",
+    "downloadFailed": "ダウンロードに失敗しました",
+    "labeled": "DLPラベル: {{classes}}",
+    "select": "{{name}} を選択"
   },
   "empty": {
     "title": "Claude Code セッションはありません",
@@ -838,6 +868,10 @@
         "amber": "琥珀",
         "red": "赤",
         "blue": "青",
+        "purple": "紫",
+        "pink": "ピンク",
+        "teal": "ティール",
+        "slate": "スレート",
         "unknown": "不明な保存済みの色"
       }
     }
@@ -1040,15 +1074,19 @@
   "usage": {
     "fiveHour": "5時間",
     "week": "週間",
+    "weekModel": "{{model}} のみ",
     "percent": "{{window}} {{percent}}%",
+    "shareOfWeek": "週の{{percent}}%",
+    "shareOfFiveHours": "5時間の{{percent}}%",
+    "resets": "{{when}}にリセット",
     "unknown": "使用量は不明",
     "limit": {
       "fiveHour": "5時間の上限に達しました",
       "fiveHourResets": "5時間の上限に達しました。リセット: {{time}}",
       "week": "週間の上限に達しました",
       "weekResets": "週間の上限に達しました。リセット: {{time}}",
-      "other": "{{label}}の上限に達しました",
-      "otherResets": "{{label}}の上限に達しました。リセット: {{time}}"
+      "other": "上限に達しました",
+      "otherResets": "上限に達しました。リセット: {{time}}"
     }
   }
 }

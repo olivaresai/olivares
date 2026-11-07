@@ -8,7 +8,12 @@
 // These are PRESENTATION primitives — they render the modules' data, they do not
 // compute it. The A2A communication graph (orchestration) uses React Flow, not this
 // kit; this is for quantitative density (trends, breakdowns, gauges, scorecards).
-import type { ComponentProps, ReactElement, ReactNode } from 'react'
+import type {
+  ComponentProps,
+  KeyboardEvent,
+  ReactElement,
+  ReactNode,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Area,
@@ -306,6 +311,47 @@ export function TrendChart({
 
 // --- category bars -----------------------------------------------------------
 
+interface BandCursorProps {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  /** The index of the bar the cursor sits on — recharts' active tooltip index,
+   *  carried by the cursor props it clones onto this element. */
+  payloadIndex?: number
+  fill?: string
+  fillOpacity?: number
+}
+
+/** The active-bar band highlight, stamped with `data-cursor-index` so the Enter
+ *  handler can map the cursor back to the datum it sits on. recharts' keyboard
+ *  layer moves this cursor: focusing the chart surface places it on bar 0 and the
+ *  arrow keys walk it (that is also what keeps the tooltip reachable without a
+ *  pointer). recharts clones this element with the cursor props, so x/y/width/
+ *  height and payloadIndex arrive as props. */
+function BandCursor({
+  x,
+  y,
+  width,
+  height,
+  payloadIndex,
+  fill,
+  fillOpacity,
+}: BandCursorProps) {
+  return (
+    <rect
+      className="recharts-tooltip-cursor"
+      data-cursor-index={payloadIndex}
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      fill={fill}
+      fillOpacity={fillOpacity}
+    />
+  )
+}
+
 export interface CategoryBarChartProps {
   data: Record<string, unknown>[]
   categoryKey: string
@@ -320,6 +366,8 @@ export interface CategoryBarChartProps {
   categoryFormatter?: (value: string) => string
   className?: string
   emptyLabel?: string
+  /** Called with the focused bar's category when Enter is pressed on it. */
+  onSelectCategory?: (category: string) => void
 }
 
 /** Ranked breakdown bars — spend by model/provider/agent, failures by family. */
@@ -335,9 +383,33 @@ export function CategoryBarChart({
   categoryFormatter,
   className,
   emptyLabel,
+  onSelectCategory,
 }: CategoryBarChartProps) {
   const theme = useChartTheme()
   const horizontal = layout === 'horizontal'
+  // Enter inside the chart filters by the bar under the cursor, so a
+  // chart is reachable by keyboard and not just by pointer. recharts owns the
+  // keyboard walk (its accessibility layer focuses the SVG surface, places the
+  // BandCursor on bar 0 at focus and moves it with the arrows); the cursor carries
+  // the active index, and this CAPTURE-phase handler (it runs before recharts' own
+  // Enter pin-toggle) maps it back to the datum. Enter without an active index is
+  // left alone, so recharts' pin keeps working.
+  const handleBarsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter') return
+    const wrap = event.currentTarget
+    const focused = document.activeElement
+    if (!(focused instanceof Element) || !wrap.contains(focused)) return
+    const cursor = wrap.querySelector('[data-cursor-index]')
+    const index = cursor
+      ? Number(cursor.getAttribute('data-cursor-index'))
+      : NaN
+    if (!Number.isInteger(index) || index < 0) return
+    const category = data[index]?.[categoryKey]
+    if (typeof category !== 'string') return
+    event.preventDefault()
+    event.stopPropagation()
+    onSelectCategory?.(category)
+  }
   return (
     <ChartFrame
       height={height}
@@ -345,83 +417,88 @@ export function CategoryBarChart({
       emptyLabel={emptyLabel}
       className={className}
     >
-      <BarChart
-        data={data}
-        layout={horizontal ? 'vertical' : 'horizontal'}
-        margin={{ top: 4, right: 16, bottom: 0, left: 8 }}
+      <div
+        data-slot="category-bars"
+        onKeyDownCapture={onSelectCategory ? handleBarsKeyDown : undefined}
       >
-        <CartesianGrid
-          stroke={theme.grid}
-          strokeDasharray="2 4"
-          horizontal={!horizontal}
-          vertical={horizontal}
-        />
-        {horizontal ? (
-          <>
-            <XAxis
-              type="number"
-              tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
-              tickFormatter={(v: number) => valueFormatter(v)}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey={categoryKey}
-              tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
-              tickFormatter={categoryFormatter}
-              tickLine={false}
-              axisLine={false}
-              width={120}
-            />
-          </>
-        ) : (
-          <>
-            <XAxis
-              type="category"
-              dataKey={categoryKey}
-              tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
-              tickFormatter={categoryFormatter}
-              tickLine={false}
-              axisLine={{ stroke: theme.grid }}
-              minTickGap={8}
-            />
-            <YAxis
-              type="number"
-              tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
-              tickFormatter={(v: number) => valueFormatter(v)}
-              tickLine={false}
-              axisLine={false}
-              width={56}
-            />
-          </>
-        )}
-        <Tooltip
-          content={
-            makeTooltip(
-              theme,
-              valueFormatter,
-              categoryFormatter,
-            ) as unknown as TooltipContent
-          }
-          cursor={{ fill: theme.grid, fillOpacity: 0.3 }}
-        />
-        <Bar
-          dataKey={valueKey}
-          radius={horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]}
+        <BarChart
+          data={data}
+          layout={horizontal ? 'vertical' : 'horizontal'}
+          margin={{ top: 4, right: 16, bottom: 0, left: 8 }}
         >
-          {data.map((_, i) => (
-            <Cell
-              key={i}
-              fill={
-                colorByCategory
-                  ? theme.series[i % theme.series.length]
-                  : (color ?? theme.accent)
-              }
-            />
-          ))}
-        </Bar>
-      </BarChart>
+          <CartesianGrid
+            stroke={theme.grid}
+            strokeDasharray="2 4"
+            horizontal={!horizontal}
+            vertical={horizontal}
+          />
+          {horizontal ? (
+            <>
+              <XAxis
+                type="number"
+                tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
+                tickFormatter={(v: number) => valueFormatter(v)}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey={categoryKey}
+                tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
+                tickFormatter={categoryFormatter}
+                tickLine={false}
+                axisLine={false}
+                width={120}
+              />
+            </>
+          ) : (
+            <>
+              <XAxis
+                type="category"
+                dataKey={categoryKey}
+                tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
+                tickFormatter={categoryFormatter}
+                tickLine={false}
+                axisLine={{ stroke: theme.grid }}
+                minTickGap={8}
+              />
+              <YAxis
+                type="number"
+                tick={{ fill: theme.mutedText, fontSize: AXIS_FONT }}
+                tickFormatter={(v: number) => valueFormatter(v)}
+                tickLine={false}
+                axisLine={false}
+                width={56}
+              />
+            </>
+          )}
+          <Tooltip
+            content={
+              makeTooltip(
+                theme,
+                valueFormatter,
+                categoryFormatter,
+              ) as unknown as TooltipContent
+            }
+            cursor={<BandCursor fill={theme.grid} fillOpacity={0.3} />}
+          />
+          <Bar
+            dataKey={valueKey}
+            radius={horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]}
+          >
+            {data.map((_, i) => (
+              <Cell
+                key={i}
+                fill={
+                  colorByCategory
+                    ? theme.series[i % theme.series.length]
+                    : (color ?? theme.accent)
+                }
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      </div>
     </ChartFrame>
   )
 }

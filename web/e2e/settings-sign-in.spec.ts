@@ -16,13 +16,15 @@ test('fresh installation exposes sign-in settings and preserves passkey policy a
   await page.locator('#setup-email').fill('settings@example.com')
   await page.locator('#setup-password').fill('fixture-password-settings-42')
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
   await page.goto('/settings')
-  await page
-    .getByRole('button', { name: 'Sign-in and security', exact: true })
-    .click()
+  await page.getByRole('button', { name: 'Sign-in', exact: true }).click()
   await expect(page.getByText('12 hours', { exact: true })).toBeVisible()
-  await expect(page.getByText('Password', { exact: true })).toBeVisible()
+  await expect(
+    page
+      .getByRole('region', { name: 'Sign-in methods' })
+      .getByText('Password', { exact: true }),
+  ).toBeVisible()
   await expect(
     page.getByText(
       'No single sign-on provider is available on the sign-in page.',

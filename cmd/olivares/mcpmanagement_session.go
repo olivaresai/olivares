@@ -235,7 +235,7 @@ func (m *mcpManagement) cachedSessionServer(ctx context.Context, tenant model.Te
 			SessionIdentity: &mcpc.SessionToolIdentity{Subject: p.SessionIdentity, ClientID: companion.LaunchID.String(), Scopes: []string{"tools:call"}},
 		}
 		mcpgateway.EnableManagedForwarding(up)
-		if _, err := up.Forward(setup, mcpc.UpstreamRequest{Method: "initialize", Params: []byte(`{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"olivares-session","version":"1"}}`)}); err != nil {
+		if _, err := up.Forward(setup, mcpc.UpstreamRequest{Method: "initialize", Params: []byte(`{"protocolVersion":"` + mcpc.LegacyRevision + `","capabilities":{},"clientInfo":{"name":"olivares-session","version":"1"}}`)}); err != nil {
 			return nil, err
 		}
 		if _, err := up.Forward(setup, mcpc.UpstreamRequest{Method: "notifications/initialized", Params: []byte(`{}`)}); err != nil {

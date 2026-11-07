@@ -24,6 +24,8 @@ const ALLOWED: Record<string, string> = {
     'the playground sends the operator request verbatim',
   'features/api-playground/api-playground-view.tsx':
     'loads the OpenAPI document the playground shows',
+  'features/dictation/whisper.worker.ts':
+    'loads the speech runtime WebAssembly, a static asset of this origin, in a worker with no session',
 }
 
 const FETCH_CALL = /(^|[^\w.$])fetch\(/

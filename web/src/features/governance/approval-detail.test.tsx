@@ -8,6 +8,9 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ApprovalDTO } from './types'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: 't1',
@@ -190,9 +193,10 @@ describe('ApprovalDetailPanel — the requester of an estate re-enable', () => {
     expect(
       await screen.findByText(/Two other admin accounts must approve this/),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: 'Open Identity & access' }),
-    ).toHaveAttribute('href', '/identity')
+    expect(screen.getByRole('link', { name: 'Open Identity' })).toHaveAttribute(
+      'href',
+      '/identity',
+    )
     // The command reads as a command (the inline chip), never between backticks.
     const line = document.querySelector('[data-slot="reenable-needs-admins"]')!
     expect(line.textContent).not.toContain('`')

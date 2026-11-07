@@ -138,3 +138,35 @@ func (stage *consoleRestoreStage) rollback(dataDir string, promotedKeys int) err
 	}
 	return errors.Join(errs...)
 }
+
+// A PostgreSQL restore leaves the serving estate available: only the separate
+// target and its new recovery directory are changed.
+func (s *Server) runApprovedRestore(ctx context.Context, jobID, bundlePath, passphrase, actor string, target *DRPostgresRestoreTarget) {
+	if target == nil {
+		s.runRestore(ctx, jobID, bundlePath, passphrase, actor)
+		return
+	}
+	svc := s.drSvc
+	svc.jobs.update(jobID, func(j *drJob) { j.Status = drJobRunning; j.Phase = "verifying_bundle"; j.Progress = 10 })
+	var notes string
+	var err error
+	if svc.cfg.PostgresRestore == nil {
+		err = fmt.Errorf("engine PostgreSQL restore is unavailable; use olivares dr restore")
+	} else {
+		notes, err = svc.cfg.PostgresRestore(ctx, bundlePath, passphrase, *target)
+	}
+	svc.jobs.update(jobID, func(j *drJob) {
+		j.DoneAt = time.Now().UTC().Format(time.RFC3339)
+		j.restartSafe = true
+		if err != nil {
+			j.Status = drJobFailed
+			j.Error = err.Error()
+			return
+		}
+		j.Status = drJobCompleted
+		j.Phase = "restart_required"
+		j.Progress = 100
+		j.Notes = notes
+	})
+	s.log.Info("dr: PostgreSQL restore finished", "job", jobID, "actor", actor, "ok", err == nil)
+}

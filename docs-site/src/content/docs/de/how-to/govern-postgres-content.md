@@ -11,7 +11,7 @@ einbetten → indexieren → über MCP bereitstellen — mit ACLs pro Dokument u
 Klassifizierung pro Spalte.
 
 Er ist das Gegenstück für operative Datenbanken zu den
-SaaS-/Warehouse-Inhaltsquellen (gdrive, confluence, s3content, snowflake …).
+SaaS-/Warehouse-Inhaltsquellen (gdrive, s3content …).
 Zwei Dinge ist er **nicht**:
 
 - **Nicht `pgaudit`.** `pgaudit` beobachtet R/RW-*Zugriffskanten* für die

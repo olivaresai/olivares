@@ -24,7 +24,7 @@ import type { Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 
-export type CodeLanguage = 'json' | 'cedar' | 'rego' | 'text'
+export type CodeLanguage = 'json' | 'cedar' | 'rego' | 'markdown' | 'text'
 
 // --- Cedar (AWS policy language embedded PDP) -------------------------------
 // Cedar is a deny-only forbid-overlay in our PDP: a `permit` an operator
@@ -117,6 +117,33 @@ const regoLanguage = StreamLanguage.define({
   languageData: { commentTokens: { line: '#' } },
 })
 
+// Markdown as a source file reads it: headings, fenced and inline code, quotes, list
+// markers, links and bold, in the token colours the editor already has.
+const markdownLanguage = StreamLanguage.define<{ fence: boolean }>({
+  name: 'markdown',
+  startState: () => ({ fence: false }),
+  token(stream, state) {
+    if (stream.sol() && stream.match(/^\s*(```|~~~)/)) {
+      state.fence = !state.fence
+      stream.skipToEnd()
+      return 'string'
+    }
+    if (state.fence) {
+      stream.skipToEnd()
+      return 'string'
+    }
+    if (stream.sol() && stream.match(/^#{1,6}\s.*/)) return 'keyword'
+    if (stream.sol() && stream.match(/^\s*>.*/)) return 'comment'
+    if (stream.sol() && stream.match(/^\s*(?:[-*+]|\d+[.)])(?=\s)/))
+      return 'operator'
+    if (stream.match(/^`[^`]*`/)) return 'string'
+    if (stream.match(/^\[[^\]]*\]\([^)]*\)/)) return 'variableName'
+    if (stream.match(/^(\*\*|__)[^*_]+\1/)) return 'atom'
+    if (!stream.eatWhile(/[^`[*_]/)) stream.next()
+    return null
+  },
+})
+
 /** Resolve the CodeMirror language support for a governance editor language. */
 export function languageExtension(language: CodeLanguage): Extension {
   switch (language) {
@@ -126,9 +153,11 @@ export function languageExtension(language: CodeLanguage): Extension {
       return new LanguageSupport(cedarLanguage)
     case 'rego':
       return new LanguageSupport(regoLanguage)
+    case 'markdown':
+      return new LanguageSupport(markdownLanguage)
     case 'text':
       // Plain text — no language grammar (the workspace editor views/edits
-      // arbitrary files; only JSON is highlighted, everything else is plain text).
+      // arbitrary files; JSON and Markdown are highlighted, everything else is plain text).
       return []
   }
 }

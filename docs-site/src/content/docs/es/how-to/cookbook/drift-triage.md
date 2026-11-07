@@ -16,7 +16,7 @@ cadencia, hasta que el diff esté en silencio.
 ## 1. Extrae el drift
 
 En una instalación nueva, `accessmap` está desactivado. Como administrador, activa
-`accessmap` en **Settings > Edition & modules**, manteniendo los demás módulos
+`accessmap` en **Settings > Modules**, manteniendo los demás módulos
 seleccionados activos. Para la CLI, inicia sesión primero como administrador
 en este motor con `olivares login` y después ejecuta `olivares modules on accessmap`. Espera a
 que termine cada reinicio del motor antes de continuar; las sesiones activas

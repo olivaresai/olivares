@@ -1,0 +1,191 @@
+{
+  "title": "Cópias de segurança",
+  "description": "Gira os instantâneos de recuperação de desastres da Olivares AI.",
+  "tabs": {
+    "backups": "Cópias de segurança",
+    "schedule": "Agenda"
+  },
+  "actions": {
+    "restore": "Restaurar",
+    "createBackup": "Criar cópia de segurança",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "upload": "Carregar",
+    "delete": "Eliminar"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "Cópias de segurança",
+    "searchPlaceholder": "Pesquisar cópias de segurança...",
+    "deleted": "Cópia de segurança eliminada",
+    "deleteTitle": "Eliminar cópia de segurança",
+    "deleteDescription": "Eliminar «{{filename}}» de forma permanente? Esta ação não pode ser anulada.",
+    "columns": {
+      "date": "Data",
+      "filename": "Nome do ficheiro",
+      "size": "Tamanho",
+      "duration": "Duração",
+      "engine": "Motor",
+      "tenants": "Tenants",
+      "notes": "Notas"
+    },
+    "actions": {
+      "download": "Transferir",
+      "inspect": "Inspecionar",
+      "downloadAria": "Transferir {{filename}}",
+      "inspectAria": "Inspecionar {{filename}}",
+      "deleteAria": "Eliminar {{filename}}",
+      "downloadFailed": "A transferência falhou: {{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "Agenda de cópias de segurança atualizada",
+    "loading": "A carregar a agenda...",
+    "title": "Agenda de cópias de segurança automáticas",
+    "description": "Configure cópias de segurança recorrentes. O motor executa a agenda; a frase-passe é derivada do segredo da instância.",
+    "enableAria": "Ativar cópias de segurança automáticas",
+    "enabled": "Ativada",
+    "disabled": "Desativada",
+    "cronLabel": "Expressão cron",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "Diariamente à meia-noite",
+      "daily0200": "Diariamente às 02:00",
+      "daily0300": "Diariamente às 03:00",
+      "weeklySundayMidnight": "Semanalmente ao domingo à meia-noite",
+      "weeklyMondayMidnight": "Semanalmente à segunda-feira à meia-noite",
+      "monthlyFirstMidnight": "Mensalmente no dia 1 à meia-noite",
+      "dailyAt": "Diariamente às {{time}}"
+    },
+    "retentionLabel": "Retenção (dias)",
+    "retentionDescription": "As cópias de segurança mais antigas do que isto são eliminadas automaticamente.",
+    "dualControlAria": "Exigir controlo duplo para restaurar",
+    "dualControlLabel": "Exigir controlo duplo para restaurar",
+    "dualControlDescription": "Quando ativado, um restauro iniciado DESTA CONSOLA tem de ser aprovado por um segundo administrador, distinto, antes de ser executado. Desativá-lo fica registado e só produz efeito uma hora depois — a barreira não pode ser removida ao mesmo tempo que o restauro que protege; reativá-lo cancela uma remoção pendente. Não abrange `olivares dr restore` no anfitrião, que substitui um parque fora desta barreira e regista, em vez disso, um operador declarado (os parques Postgres só se restauram assim). Deixe desativado para um operador individual.",
+    "dualControlDisarmPending": "Remoção pedida — registada, e produz efeito {{when}}. Até lá, um restauro continua a precisar de um segundo administrador. Reative para cancelar.",
+    "dualControlDisarmRequestedBy": "Pedido por {{who}}.",
+    "save": "Guardar agenda",
+    "verifyCron": "Agenda de verificação (cron UTC)",
+    "rpoHours": "Objetivo de ponto de recuperação (horas)",
+    "endpoint": "Endpoint externo",
+    "bucket": "Bucket externo",
+    "region": "Região externa",
+    "prefix": "Prefixo externo",
+    "credential_ref": "Referência da credencial",
+    "daily": "Cópias diárias",
+    "weekly": "Cópias semanais",
+    "monthly": "Cópias mensais",
+    "yearly": "Cópias anuais",
+    "keep_last": "Mínimo de cópias",
+    "lastBackup": "Última cópia de segurança",
+    "lastVerify": "Última verificação",
+    "freeSpace": "Espaço livre no destino",
+    "notAvailable": "Não disponível",
+    "overdue": "Objetivo de ponto de recuperação excedido",
+    "rtoMinutes": "Objetivo de tempo de restauro (minutos)",
+    "rtoExceeded": "O último teste de restauro demorou mais do que o objetivo de tempo de restauro de {{minutes}} minutos",
+    "restoreTook": "O teste de restauro demorou {{seconds}} s",
+    "age": "Com {{hours}} horas",
+    "offsiteLockMissing": "O bucket {{bucket}} não bloqueia novas cópias em modo `COMPLIANCE`, pelo que a credencial deste servidor as poderia eliminar. Ative o S3 Object Lock com uma retenção predefinida `COMPLIANCE` e elimine com uma credencial separada.",
+    "offsiteLockUnknown": "Não foi possível ler o Object Lock do bucket {{bucket}}, pelo que estas cópias podem não estar protegidas contra eliminação."
+  },
+  "trigger": {
+    "started": "Cópia de segurança iniciada",
+    "title": "Criar cópia de segurança",
+    "description": "Crie um instantâneo cifrado da Olivares AI.",
+    "notes": "Notas",
+    "notesPlaceholder": "Descrição opcional desta cópia de segurança",
+    "passphrase": "Frase-passe",
+    "passphraseDescription": "Usada para cifrar o pacote da cópia de segurança.",
+    "start": "Iniciar cópia de segurança"
+  },
+  "job": {
+    "initializing": "A inicializar",
+    "status": {
+      "running": "Em curso",
+      "completed": "Concluída",
+      "failed": "Falhou"
+    },
+    "progressAria": "{{phase}} {{progress}}%",
+    "complete": "{{progress}}% concluído"
+  },
+  "pending": {
+    "title": "Restauros a aguardar aprovação (controlo duplo)",
+    "requestedByPrefix": "Pedido por",
+    "approveRestore": "Aprovar e restaurar",
+    "approved": "Restauro aprovado",
+    "dialogTitle": "Aprovar restauro",
+    "dialogDescription": "Está a aprovar um restauro pedido por {{initiator}}. Tem de ser um administrador diferente de quem fez o pedido.",
+    "passphrase": "Frase-passe",
+    "passphraseDescription": "Introduza a frase-passe com que a cópia de segurança foi criada.",
+    "confirmTitle": "Confirmar restauro",
+    "confirmDescription": "Isto substituirá todos os dados atuais pelo conteúdo da cópia de segurança depois de verificado. Esta operação não pode ser anulada.",
+    "confirmLabel": "Aprovar e restaurar agora"
+  },
+  "restore": {
+    "postgres": {
+      "description": "Use um destino db init separado e vazio e referências file: ou env: do servidor. Um segundo administrador deve aprovar.",
+      "dsn_ref": "Referência de conexão da aplicação",
+      "owner_dsn_ref": "Referência do proprietário (opcional)",
+      "admin_dsn_ref": "Referência do administrador de backups",
+      "scratch_dsn_ref": "Referência de manutenção temporária",
+      "confirm": "Restaure apenas o destino vazio aprovado. Após verificar, configure o mecanismo com o diretório recuperado e as conexões de destino e reinicie-o."
+    },
+    "notAuthorized": "Não autorizado",
+    "uploadFailed": "O carregamento falhou",
+    "started": "Restauro iniciado",
+    "title": "Restaurar a partir de uma cópia de segurança",
+    "description": "Carregue um ficheiro .drbundle para restaurar o estado da Olivares AI.",
+    "apply": "Aplicar restauro",
+    "confirmTitle": "Confirmar restauro",
+    "confirmDescription": "Isto substituirá todos os dados atuais pelo conteúdo da cópia de segurança. Esta operação não pode ser anulada.",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "Restaurar agora",
+    "confirmSummaryPrefix": "A restaurar a partir de",
+    "confirmSummarySuffix_one": "com {{count}} tenant.",
+    "confirmSummarySuffix_many": "com {{count}} de tenants.",
+    "confirmSummarySuffix_other": "com {{count}} tenants.",
+    "awaitingTitle": "A aguardar um segundo aprovador",
+    "awaitingDescription": "O controlo duplo está ativado. Este restauro não será executado até um administrador diferente o aprovar e fornecer a frase-passe no separador Cópias de segurança.",
+    "requestId": "ID do pedido",
+    "selectFile": "Selecione um ficheiro .drbundle",
+    "chooseFile": "Escolher ficheiro",
+    "passphrase": "Frase-passe",
+    "passphraseDescription": "Introduza a frase-passe usada quando esta cópia de segurança foi criada.",
+    "manifestTitle": "Manifesto do pacote",
+    "manifest": {
+      "file": "Ficheiro",
+      "engine": "Motor",
+      "created": "Criado",
+      "tenants": "Tenants",
+      "keys": "Chaves"
+    }
+  },
+  "inspect": {
+    "title": "Detalhe da cópia de segurança",
+    "description": "Manifesto descodificado do pacote selado — exatamente o que um restauro traria de volta.",
+    "filename": "Nome do ficheiro",
+    "size": "Tamanho",
+    "engine": "Motor",
+    "createdAt": "Criado",
+    "tenants": "Tenants",
+    "keys": "Chaves seladas",
+    "empty": "Nenhuma",
+    "notIncluded": "Não incluído nesta cópia de segurança",
+    "notIncludedHint": "Estes caminhos não são copiados. Faça a cópia de segurança destes por conta própria.",
+    "loadFailed": "Falha ao carregar o detalhe da cópia de segurança."
+  },
+  "empty": {
+    "backup": {
+      "title": "Ainda não foram criados instantâneos de cópia de segurança",
+      "description": "Crie uma cópia de segurança cifrada a partir desta consola."
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "title": "Observabilidad e interoperabilidad",
-  "description": "Salud de ingesta basada en estándares y desglose de trazas correlacionadas con el libro mayor. Las cifras son de todo el motor (globales del proceso), no por inquilino; los estándares se fijan a las versiones y madureces que declaran los organismos correspondientes.",
+  "description": "Estado de la recepción de telemetría y trazas.",
   "tabs": {
     "ingestion": "Salud de ingesta",
     "traces": "Desglose de trazas"
@@ -76,7 +76,7 @@
     "listTitle": "Trazas recientes",
     "listDescription": "Selecciona una traza para abrir su vista de tramos derivada del libro mayor.",
     "empty": "Sin trazas",
-    "emptyHint": "Ningún evento del libro mayor en la ventana de recorrido (últimos 20.000 eventos) lleva un identificador de traza W3C: los llamantes no propagan traceparent, o la ventana ya los dejó atrás.",
+    "emptyHint": "Las trazas aparecen aquí cuando las herramientas envían un ID de traza con sus solicitudes.",
     "noResults": "Ninguna traza coincide con la búsqueda.",
     "filterNoResults": "Ninguna traza coincide con los filtros activos.",
     "searchPlaceholder": "Buscar por ID de traza…",

@@ -44,7 +44,7 @@ func governanceRequestBody(method, pattern string) (map[string]any, bool) {
 	), true
 }
 
-// governanceRequestBodyDeclarationFor classifies all 54 mutations registered
+// governanceRequestBodyDeclarationFor classifies all 57 mutations registered
 // by the governance module. The sibling claude-policy and claude-agents modules
 // have different namespaces and are intentionally outside this catalog.
 func governanceRequestBodyDeclarationFor(method, pattern string) (governanceRequestBodyDeclaration, bool) {
@@ -110,6 +110,12 @@ func governanceRequestBodyDeclarationFor(method, pattern string) (governanceRequ
 		return governanceBodyDeclaration(governanceScopedGrantSchema()), true
 	case http.MethodPost + " /rbac/inheritance-filters":
 		return governanceBodyDeclaration(governanceInheritanceFilterSchema()), true
+	case http.MethodPost + " /vaults":
+		return governanceBodyDeclaration(governanceVaultSchema()), true
+	case http.MethodPut + " /vaults/{id}/shares":
+		return governanceBodyDeclaration(governanceVaultShareSchema(true)), true
+	case http.MethodDelete + " /vaults/{id}/shares":
+		return governanceBodyDeclaration(governanceVaultShareSchema(false)), true
 	case http.MethodPost + " /agent-risk-profiles/classify":
 		return governanceBodyDeclaration(governanceAgentRiskClassifySchema()), true
 	case http.MethodPut + " /agent-risk-profiles/{id}/tier":
@@ -165,6 +171,30 @@ func governanceClosedObject(properties map[string]any, required ...string) map[s
 	return schema
 }
 
+// governanceVaultSchema is the body of POST /vaults: the vault's name and, optionally, who
+// may share it (the owners alone by default).
+func governanceVaultSchema() map[string]any {
+	return governanceClosedObject(oas.Obj(
+		"name", oas.Obj("type", "string", "minLength", 1, "maxLength", 64),
+		"share_by", oas.Obj("type", "string", "enum", oas.Enum("owner", "editor")),
+	), "name")
+}
+
+// governanceVaultShareSchema is the body of the share (role required) and the revoke of a
+// vault: the user or directory group and, when sharing, the role it receives.
+func governanceVaultShareSchema(withRole bool) map[string]any {
+	properties := oas.Obj(
+		"subject_kind", oas.Obj("type", "string", "enum", oas.Enum("user", "group")),
+		"subject_ref", oas.Obj("type", "string", "minLength", 1),
+	)
+	required := []string{"subject_kind", "subject_ref"}
+	if withRole {
+		properties["role"] = oas.Obj("type", "string", "enum", oas.Enum("viewer", "editor", "owner"))
+		required = append(required, "role")
+	}
+	return governanceClosedObject(properties, required...)
+}
+
 func governanceIdentityBindingSchema() map[string]any {
 	schema := governanceClosedObject(oas.Obj(
 		"identity_id", oas.Obj("type", "string"),
@@ -194,7 +224,7 @@ func governanceIdentityBindingSchema() map[string]any {
 func governancePolicySchema() map[string]any {
 	schema := governanceClosedObject(oas.Obj(
 		"name", oas.Obj("type", "string", "minLength", 1),
-		"kind", oas.Obj("type", "string", "enum", oas.Enum("abac", "approval", "grant_expiry")),
+		"kind", oas.Obj("type", "string", "enum", oas.Enum(builtinPolicyKinds...)),
 		"enabled", oas.Obj("type", "boolean"),
 		"spec", oas.Obj("description", "Kind-specific policy specification."),
 	), "name", "kind")
@@ -385,7 +415,7 @@ func governanceAgentRegistrationSchema() map[string]any {
 
 // OperationDocumentation publishes the request body each mutation's handler decodes.
 // A route this module has not classified stays unclassified.
-func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
+func (m *Module) OperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
 	decl, ok := governanceRequestBodyDeclarationFor(method, pattern)
 	if !ok {
 		return api.ModuleOperationDocumentation{}, false
@@ -395,6 +425,9 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 	case governanceBodyful:
 		doc.BodyKind = api.ModuleOperationJSONBody
 		doc.RequestBody, _ = governanceRequestBody(method, pattern)
+		if (method == http.MethodPost && pattern == "/policies") || (method == http.MethodPut && pattern == "/policies/{id}") {
+			doc.RequestBody = oas.Obj("required", decl.required, "content", oas.Obj("application/json", oas.Obj("schema", m.policySchema())))
+		}
 	case governanceBodyless:
 		doc.BodyKind = api.ModuleOperationBodyless
 	case governanceBodyNoDerivable, governanceBodyPending:

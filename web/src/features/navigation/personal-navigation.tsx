@@ -50,6 +50,16 @@ function usePersonalSession(
   const { principal, activeTenant, status } = useAuth()
   const generation = useSessionStore((s) => s.credentialGeneration)
   const owner = identity(principal)
+  // The lifetime follows the identity the partition belongs to, not the whoami object:
+  // a step-up publishes a new whoami for the same person (a higher AAL), and replacing
+  // the lifetime then remounted every screen under PreferencesSync, dropping the action
+  // the step-up was resuming. Other principals have no stable identity and keep the object.
+  const kind = principal?.kind
+  const storageKey = favoriteStorageKey(
+    window.location.origin,
+    principal,
+    activeTenant,
+  )
   // AuthProvider can still expose cached whoami while a newly installed credential
   // is being resolved. Do not read a persistent partition from that interim identity.
   // Re-use the existing whoami endpoint for a local identity check; never cancel,
@@ -69,7 +79,7 @@ function usePersonalSession(
       status === 'authenticated' &&
       generation === useSessionStore.getState().credentialGeneration &&
       activeTenant === useTenantStore.getState().activeTenant &&
-      principal === client.getQueryData<Whoami>(queryKeys.whoami)
+      owner === identity(client.getQueryData<Whoami>(queryKeys.whoami) ?? null)
     const current = () => !controller.signal.aborted && matches()
     const invalidate = () => {
       if (current()) return
@@ -126,15 +136,7 @@ function usePersonalSession(
       credentialOff()
       queryOff()
     }
-  }, [
-    client,
-    generation,
-    owner,
-    principal,
-    activeTenant,
-    status,
-    verificationMovement,
-  ])
+  }, [client, generation, owner, activeTenant, status, verificationMovement])
   const access = useViewAccess()
   // Subscribe to source transitions, not just React commits: a batched A→B→A must
   // revoke the old lifetime too. No token, actor, display name or session ID is read.
@@ -142,23 +144,18 @@ function usePersonalSession(
   const session = useMemo(
     () =>
       createPersonalNavigationSession({
-        key: favoriteStorageKey(
-          window.location.origin,
-          principal,
-          activeTenant,
-        ),
+        key: storageKey,
         current: () =>
           status === 'authenticated' &&
           verified?.generation === generation &&
           !verified.failed &&
           verified.current() &&
-          verified.kind === principal?.kind &&
+          verified.kind === kind &&
           verified.user === (typeof owner === 'string' ? owner : null) &&
           generation === useSessionStore.getState().credentialGeneration &&
           activeTenant === useTenantStore.getState().activeTenant &&
           owner ===
-            identity(client.getQueryData<Whoami>(queryKeys.whoami) ?? null) &&
-          principal === client.getQueryData<Whoami>(queryKeys.whoami),
+            identity(client.getQueryData<Whoami>(queryKeys.whoami) ?? null),
         // Favorites follow the user: the engine keeps them per user and organization.
         remote: engineFavorites?.(activeTenant),
         onSaveError: () => toast.error(i18n.t('nav:personal.saveFailed')),
@@ -168,7 +165,8 @@ function usePersonalSession(
     [
       client,
       owner,
-      principal,
+      kind,
+      storageKey,
       activeTenant,
       status,
       generation,
@@ -297,15 +295,10 @@ function usePersonalSession(
       (!('navigation' in target) || access.navigable(target))
     )
   }
-  const key = favoriteStorageKey(
-    window.location.origin,
-    principal,
-    activeTenant,
-  )
   return {
     scope: {
       generation,
-      key,
+      key: storageKey,
       pending:
         status === 'authenticated' &&
         typeof owner === 'string' &&

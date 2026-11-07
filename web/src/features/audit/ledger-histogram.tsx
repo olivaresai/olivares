@@ -3,17 +3,17 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE HISTOGRAM STRIP under the Ledger query: 48 px, one neutral bar per hour (per day or
-// week over a longer window), the bucket holding now in full ink. A bar is a button: it
+// week over a longer window), every bar in the same quiet tone and at most 12 px wide: the
+// bucket holding now is named in its label and by the axis's "Now", and one busy hour reads
+// as a bar, never as a solid block. A bar is a button the width of its bucket: it
 // filters the ledger to its bucket. One tab stop for the strip; the arrow keys move along
 // it. Every bar names its bucket and count, so no value is pointer-only.
 //
-// ⛔ IT COUNTS THE ENTRIES LOADED, AND SAYS SO. The ledger API has no count per bucket;
-//    the strip counts what the list holds, and the caption says how many that is and
-//    whether more can be loaded, rather than drawing a total it does not have.
+// ⛔ IT COUNTS THE ENTRIES LOADED. The ledger API has no count per bucket; the strip counts
+//    what the list holds, and the list ends with its Load more row while more exist.
 import { useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuditEventDTO } from '@/lib/api/types'
-import { cn } from '@/lib/utils'
 import { bucketsOf, type Bucket } from './ledger'
 
 export function LedgerHistogram({
@@ -21,7 +21,6 @@ export function LedgerHistogram({
   from,
   to,
   now,
-  caption,
   onPick,
 }: {
   entries: readonly AuditEventDTO[]
@@ -29,8 +28,6 @@ export function LedgerHistogram({
   to: Date
   /** The moment the bucket drawn in full ink holds. */
   now: Date
-  /** What the counts are: how many entries are loaded, and whether there are more. */
-  caption: string
   onPick: (bucket: Bucket) => void
 }) {
   const { t, i18n } = useTranslation('audit')
@@ -64,14 +61,13 @@ export function LedgerHistogram({
 
   return (
     <figure className="flex flex-col gap-1">
-      <figcaption className="flex items-baseline gap-2 text-caption text-text-2">
-        <span className="font-medium text-text">{title}</span>
-        <span role="status">{caption}</span>
+      <figcaption className="text-caption font-medium text-text">
+        {title}
       </figcaption>
       <div className="flex h-12 flex-col">
         <div
           role="group"
-          aria-label={`${title}, ${caption}`}
+          aria-label={title}
           onKeyDown={onKeyDown}
           className="flex h-9 items-end gap-px border-b border-line"
         >
@@ -95,16 +91,13 @@ export function LedgerHistogram({
                 onFocus={() => setFocus(i)}
                 aria-label={label}
                 title={label}
-                className="flex h-full min-w-0 flex-1 items-end outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus"
+                className="flex h-full min-w-0 flex-1 items-end justify-center outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus"
               >
                 {b.count > 0 ? (
                   <span
                     aria-hidden
                     style={{ height: `${Math.max(8, (b.count / max) * 100)}%` }}
-                    className={cn(
-                      'block w-full rounded-t-[2px]',
-                      isCurrent ? 'bg-text' : 'bg-ctl-border',
-                    )}
+                    className="block w-full max-w-3 rounded-t-[2px] bg-ctl-border"
                   />
                 ) : null}
               </button>

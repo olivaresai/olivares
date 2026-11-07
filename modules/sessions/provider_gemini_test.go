@@ -92,10 +92,10 @@ func TestGeminiProviderKeyBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !recordServesDriver(kind, "", "gemini-cli") {
+	if !recordServesDriver(kind, "", "", "gemini-cli") {
 		t.Fatal("a Gemini key cannot bind to its own CLI")
 	}
-	if recordServesDriver(kind, "https://another.example", "gemini-cli") {
+	if recordServesDriver(kind, "https://another.example", "", "gemini-cli") {
 		t.Fatal("Gemini must not silently ignore a bound endpoint")
 	}
 	want := []EnvVar{{Name: "GEMINI_API_KEY", Value: "fixture-key"}}

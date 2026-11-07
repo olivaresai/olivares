@@ -252,3 +252,22 @@ export const navLeader = {
     return navLeaderUntil >= now
   },
 }
+
+/**
+ * True when the event target is inside a list surface the shell will not move.
+ *
+ * The shell's bare `j`/`k` row movement applies OUTSIDE such a surface.
+ * A grid answers those letters itself; a listbox, tree or tablist is included
+ * deliberately because a dead letter beats stolen focus — re-dispatching an arrow
+ * into a surface whose own handling does not expect it can yank the operator's
+ * position or open the wrong thing. It lives beside the resolver for the same
+ * reason `isTypingTarget` does: every keyboard surface needs one answer.
+ */
+export function isInsideList(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return (
+    target.closest(
+      '[role="grid"], [role="listbox"], [role="tree"], [role="tablist"], [data-list-keys]',
+    ) !== null
+  )
+}

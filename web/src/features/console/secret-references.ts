@@ -9,14 +9,24 @@
 // records (modules/sessions/session_secret_env.go).
 
 import type { RunDTO } from '@/features/agentops/types'
-import { SECRET_SCHEMES } from '@/features/deploy/types'
 import { looksLikeCredential } from '@/lib/credentials'
 import type { SourceRosterEntry } from './api'
 import type { MCPServer } from './mcp-gateway-api'
 
 /** The schemes the engine resolves (core/secret/resolver.go knownSchemes): the
  * store, its `db` alias, and the external backends. */
-const SCHEMES = new Set<string>(['store', 'db', ...SECRET_SCHEMES])
+const SCHEMES = new Set<string>([
+  'store',
+  'db',
+  'vault',
+  'infisical',
+  'aws-secretsmanager',
+  'gcp-secretmanager',
+  'azure-keyvault',
+  'k8s-secret',
+  'env',
+  'file',
+])
 
 export interface SecretReference {
   /** Lower-cased, `db` folded to `store`. */

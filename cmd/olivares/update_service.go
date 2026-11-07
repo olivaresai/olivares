@@ -51,12 +51,22 @@ type updateService struct {
 	log         *slog.Logger
 }
 
-// upgradeRunLimit bounds one `olivares upgrade` run: the command's own network timeout
-// is 5 minutes, and an install adds the download, the probes and the swap.
-const upgradeRunLimit = 10 * time.Minute
+// statusReadLimit bounds a whole status check, the connect refresh included: the page waits on
+// it, and a check that gets no answer must say so and end its child rather than hang. The status
+// reply writes nothing until the check ends, so it must arrive before a reverse proxy gives up on
+// a silent upstream. nginx's default proxy_read_timeout is 60s
+// (https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_read_timeout), and the nginx
+// block the deployment guide gives leaves that default. Three quarters of it leaves the rest for
+// starting the check and writing the reply. The connect refresh's own 60s total
+// (connectTimeout) is longer. On this page the proxy's bound wins on purpose: an answer after
+// 60s would reach the administrator as the proxy's 504 instead of this reason.
+const statusReadLimit = nginxProxyReadTimeout * 3 / 4
 
-// checkTimeout bounds the network part of a status check (`upgrade --timeout`).
-const checkTimeout = "30s"
+// nginxProxyReadTimeout is nginx's default proxy_read_timeout (see statusReadLimit).
+const nginxProxyReadTimeout = 60 * time.Second
+
+// errStatusReadLimit is the reason a check over statusReadLimit shows on the page.
+var errStatusReadLimit = fmt.Errorf("the update check did not answer within %s: the release channel or the licensing service is not responding", statusReadLimit)
 
 const updateApplyAction = "deployment.update.apply"
 
@@ -142,7 +152,7 @@ func (s updateService) args(apply bool) ([]string, error) {
 		return append(a, "--yes"), nil
 	}
 	// A status read must answer in the time an administrator waits for a page.
-	return append(a, "--check", "--timeout", checkTimeout), nil
+	return append(a, "--check"), nil
 }
 
 // editionReplaced says a Community engine's file now holds the licensed build: a switch whose
@@ -233,7 +243,7 @@ func (s updateService) ApplyUpdate(ctx context.Context, actor auth.Principal) (a
 	ctx = context.WithoutCancel(ctx)
 	doc, err := s.upgrade(ctx, true)
 	if err != nil {
-		// A run can fail after the swap (killed at the time limit, unreadable output).
+		// A run can fail after the swap (a request that stalls after it, unreadable output).
 		// If the binary on disk is no longer the running one, the install happened.
 		check, cerr := s.upgrade(ctx, false)
 		if cerr != nil || !s.replaced(check) {
@@ -276,8 +286,17 @@ func (s updateService) upgrade(ctx context.Context, apply bool) (upgradeResult, 
 	if err != nil {
 		return upgradeResult{}, err
 	}
+	if !apply {
+		// An install may take as long as its download keeps arriving; a status read may not.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeoutCause(ctx, statusReadLimit, errStatusReadLimit)
+		defer cancel()
+	}
 	out, err := s.run(ctx, args)
 	if err != nil {
+		if cause := context.Cause(ctx); errors.Is(cause, errStatusReadLimit) {
+			return upgradeResult{}, cause
+		}
 		return upgradeResult{}, err
 	}
 	var doc upgradeResult
@@ -308,8 +327,8 @@ func runSelfUpgrade(ctx context.Context, args []string) ([]byte, error) {
 		return nil, err
 	}
 	exe = strings.TrimSuffix(exe, " (deleted)")
-	ctx, cancel := context.WithTimeout(ctx, upgradeRunLimit)
-	defer cancel()
+	// No total deadline: the command gives up on its own when a transfer stalls
+	// (`upgrade --timeout`), and a slow download that keeps arriving completes.
 	cmd := exec.CommandContext(ctx, exe, args...) // #nosec G204 -- the engine's own binary and a fixed argv
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

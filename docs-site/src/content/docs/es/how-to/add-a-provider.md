@@ -129,6 +129,9 @@ vez al lanzar; no una sesión que falla a mitad de un handshake.
 
 Para `anthropic`, `openai` y `xai`, OpenCode solo acepta el endpoint del propio proveedor: deja `base_url` vacía. Usa `codex` para una pasarela `openai_compatible`; usa `codex` u `opencode` para `ollama` y para un servidor local `openai_compatible` cuya `base_url` sea `http` simple en una dirección de loopback o privada, como `http://127.0.0.1:8080/v1` (vLLM, llama.cpp). La `base_url` incluye `/v1`.
 
+Empieza con una clave de API. Desde el 18 de junio de 2026, Gemini CLI funciona con una clave de API de Gemini de pago o con una cuenta Gemini Code Assist Standard o Enterprise; las cuentas personales gratuitas de Google, Google AI Pro y Google AI Ultra ya no funcionan.
+Para una cuenta de Google de Code Assist, crea un perfil de Gemini y usa `olivares tool login gemini --account <name>`.
+
 ## 4. Lanza la primera sesión
 
 ```sh
@@ -169,6 +172,18 @@ lanzamientos futuros. El registro y los vínculos se conservan a propósito: un 
 que dejara de nombrar nada en silencio se leería como un perfil que nadie configuró.
 Revocar aquí no revoca la clave en el proveedor; eso se hace en su propia consola.
 
+## Un runtime de modelos local en el Olivares Server
+
+En el Olivares Server (el appliance, con SELinux en modo enforcing), una sesión vinculada a un proveedor en una dirección de loopback solo puede alcanzarlo en un puerto que la política etiqueta para runtimes de modelos locales: 11434 (Ollama), 1234 (LM Studio), 8000 (vLLM) y 8080 (`llama-server` de llama.cpp). Para un runtime en otro puerto, etiquétalo una vez, como root:
+
+```bash
+semanage port -a -t olivares_model_runtime_port_t -p tcp 11435
+# If the base policy already labels that port (semanage port -l | grep -w 11435), modify it instead:
+semanage port -m -t olivares_model_runtime_port_t -p tcp 11435
+```
+
+Hasta entonces la sesión no arranca, y su error nombra este comando.
+
 ## Qué rechaza el motor, y por qué
 
 | Ves | Significa |
@@ -191,6 +206,7 @@ herramienta y no necesita ninguna de las dos variables.
 
 ## Relacionado
 
+- [Proveedores y herramientas](/reference/providers-and-tools/)
 - [Operar una sesión de proveedor](/es/how-to/operate-provider-sessions/)
 - [Tu primera hora](/es/how-to/first-hour/)
 - [Referencia del CLI](/es/reference/cli/)

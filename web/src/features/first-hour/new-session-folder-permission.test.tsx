@@ -120,13 +120,12 @@ describe("a folder's default permission in the New session form", () => {
   it("lets the person's own pick win over the folder default", async () => {
     const user = userEvent.setup()
     renderForm({ default_permission: 'supervised' })
-    await user.click(
-      await screen.findByRole('button', { name: 'More options' }),
-    )
-    expect(
-      await screen.findByRole('radio', { name: 'Supervised' }),
-    ).toBeChecked()
-    await user.click(screen.getByRole('radio', { name: 'Read only' }))
+    const access = await screen.findByRole('combobox', {
+      name: 'What the agent may do',
+    })
+    expect(access).toHaveTextContent('Supervised')
+    await user.click(access)
+    await user.click(await screen.findByRole('option', { name: 'Read only' }))
     expect(await started()).toMatchObject({ permission: 'readOnly' })
   })
 
@@ -155,22 +154,44 @@ describe("a folder's default permission in the New session form", () => {
   })
 })
 
+describe('the first view of the New session form', () => {
+  it('shows tool, folder and access as one dropdown each, with Start across the form', async () => {
+    renderForm({})
+    // The tool is a dropdown, not a segmented control that wraps onto a second row.
+    expect(
+      await screen.findByRole('combobox', { name: 'Tool' }),
+    ).toHaveTextContent('Claude Code')
+    expect(screen.queryByRole('radiogroup', { name: 'Tool' })).toBeNull()
+    // The folder is the same dropdown in every state: no text with a Change folder link.
+    expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveTextContent(
+      '/srv/work/repo',
+    )
+    expect(screen.queryByRole('button', { name: 'Change folder' })).toBeNull()
+    // Access is on the first view with its current value, not behind More options.
+    expect(
+      screen.getByRole('combobox', { name: 'What the agent may do' }),
+    ).toHaveTextContent('Edit files and run commands')
+    expect(screen.getByRole('button', { name: 'Start' })).toHaveClass('w-full')
+  })
+})
+
 describe('the permissions in the New session picker', () => {
   const openPicker = async () => {
     const user = userEvent.setup()
     await user.click(
-      await screen.findByRole('button', { name: 'More options' }),
+      await screen.findByRole('combobox', { name: 'What the agent may do' }),
     )
-    return screen.findByRole('radiogroup', { name: 'What the agent may do' })
+    return { user, list: await screen.findByRole('listbox') }
   }
 
-  it('lists the six permissions from the least to the most, each with what it does', async () => {
+  it('lists the six permissions from the least to the most, and says what the chosen one does', async () => {
     renderForm({})
-    const group = await openPicker()
-    const names = within(group)
-      .getAllByRole('radio')
-      .map((r) => r.closest('label')?.textContent)
-    expect(names).toEqual([
+    const { user, list } = await openPicker()
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual([
       'Read only',
       'Supervised',
       'Auto-accept edits',
@@ -179,15 +200,18 @@ describe('the permissions in the New session picker', () => {
       'Full',
     ])
     expect(
-      within(group).getByRole('radio', { name: 'Supervised' }),
+      within(list).getByRole('option', { name: 'Edit files and run commands' }),
+    ).toHaveAttribute('aria-selected', 'true')
+    // Full is shown plainly, in the warning style.
+    expect(within(list).getByRole('option', { name: 'Full' })).toHaveClass(
+      'text-warning',
+    )
+    await user.click(within(list).getByRole('option', { name: 'Supervised' }))
+    expect(
+      screen.getByRole('combobox', { name: 'What the agent may do' }),
     ).toHaveAccessibleDescription(
       'Asks before every action that is not a read.',
     )
-    expect(
-      within(group).getByRole('radio', { name: 'Edit files and run commands' }),
-    ).toBeChecked()
-    // Full is shown plainly, in the warning style.
-    expect(within(group).getByText('Full')).toHaveClass('text-warning')
   })
 
   it('offers Full and Auto only to someone who may run them', async () => {
@@ -195,21 +219,20 @@ describe('the permissions in the New session picker', () => {
     // them to anyone who does not run sessions as an administrator.
     auth.runAdmin = false
     renderForm({})
-    const group = await openPicker()
-    expect(within(group).queryByRole('radio', { name: 'Full' })).toBeNull()
-    expect(within(group).queryByRole('radio', { name: 'Auto' })).toBeNull()
-    expect(within(group).getAllByRole('radio')).toHaveLength(4)
+    const { list } = await openPicker()
+    expect(within(list).queryByRole('option', { name: 'Full' })).toBeNull()
+    expect(within(list).queryByRole('option', { name: 'Auto' })).toBeNull()
+    expect(within(list).getAllByRole('option')).toHaveLength(4)
   })
 
   it('says a tool without an automatic mode will ask, in its own name', async () => {
     vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
       readinessOf({ codex: 'own_login' }),
     )
-    const user = userEvent.setup()
     renderForm({})
-    const group = await openPicker()
+    const { user, list } = await openPicker()
     expect(screen.queryByText(/has no automatic mode/)).toBeNull()
-    await user.click(within(group).getByRole('radio', { name: 'Auto' }))
+    await user.click(within(list).getByRole('option', { name: 'Auto' }))
     expect(
       await screen.findByText(
         'Codex has no automatic mode: it will ask before each action.',
@@ -222,10 +245,9 @@ describe('the permissions in the New session picker', () => {
   })
 
   it('says nothing of the kind for Claude Code, which has one', async () => {
-    const user = userEvent.setup()
     renderForm({})
-    const group = await openPicker()
-    await user.click(within(group).getByRole('radio', { name: 'Auto' }))
+    const { user, list } = await openPicker()
+    await user.click(within(list).getByRole('option', { name: 'Auto' }))
     expect(screen.queryByText(/has no automatic mode/)).toBeNull()
     expect(await started()).toMatchObject({
       driver: 'claude',

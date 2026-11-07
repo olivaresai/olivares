@@ -23,7 +23,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// B1 acceptance rows 2, 3, 4 and 5 (runtime half): the profiled launch path.
+// The profiled launch path uses the selected provider profile at runtime.
 
 // profiledHarness is newRuntimeHarness with a local execution environment and two
 // active Claude profiles on two real homes.

@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -430,15 +431,30 @@ func (m *Module) cancelPendingApprovals(ctx context.Context, sc store.Scope, now
 		if !matches(rec) || effectiveStatus(rec, now) != statusPending {
 			continue
 		}
-		rec[colStatus] = statusCanceled
-		rec[colDecidedAt] = now.String()
-		if _, uerr := repo.Update(ctx, rec); uerr != nil {
-			if tolerateDecisionRace && isConflict(uerr) {
-				continue // raced with a decision; no longer pending — the gates still deny
+		for attempt := 0; ; attempt++ {
+			rec[colStatus] = statusCanceled
+			rec[colDecidedAt] = now.String()
+			if _, uerr := repo.Update(ctx, rec); uerr != nil {
+				if !tolerateDecisionRace || !isConflict(uerr) {
+					return nil, uerr
+				}
+				// A metadata update can conflict without deciding the request.
+				// Only a fresh read can establish that cancellation is unnecessary.
+				rec, err = repo.Get(ctx, model.ID(rec.String(model.ColID)))
+				if err != nil {
+					return nil, err
+				}
+				if effectiveStatus(rec, now) != statusPending {
+					break
+				}
+				if attempt == 2 {
+					return nil, fmt.Errorf("pending approval %s cancellation requires reconciliation after repeated conflicts: %w", rec.String(model.ColID), uerr)
+				}
+				continue
 			}
-			return nil, uerr
+			canceled = append(canceled, rec.String(model.ColID))
+			break
 		}
-		canceled = append(canceled, rec.String(model.ColID))
 	}
 	return canceled, nil
 }
@@ -518,9 +534,9 @@ func (m *Module) handleEngageKillSwitch(w http.ResponseWriter, r *http.Request, 
 	})
 	if err != nil {
 		if isConflict(err) {
-			// The (tenant_id, active_guard) unique index lost a concurrent-engage
-			// race: same outcome as the friendly check — the scope is stopped.
-			writeJSON(w, http.StatusConflict, errorBody("an active stop for this scope already exists (concurrent engage)"))
+			// Conflicts can also come from pending-approval reconciliation;
+			// do not claim the transaction committed a stop.
+			writeJSON(w, http.StatusConflict, errorBody("kill-switch engagement conflicted; reload the stop and pending approvals before retrying"))
 			return
 		}
 		writeStoreError(w, err)
@@ -781,7 +797,7 @@ func (m *Module) handleReenableKillSwitch(w http.ResponseWriter, r *http.Request
 		if appr != nil {
 			switch effectiveStatus(appr, now) {
 			case statusPending:
-				pols, perr := loadApprovalPolicies(r.Context(), sc)
+				pols, perr := m.approvalPolicies(r.Context(), sc, approvalPolicySubject(appr))
 				if perr != nil {
 					return perr
 				}

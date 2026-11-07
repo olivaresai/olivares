@@ -3,19 +3,19 @@
     "label": "Loaded {{n}} templates; there are more",
     "hint": "Only the loaded templates are available in this catalog. A template not shown here may exist beyond this page."
   },
-  "title": "Workspace Templates",
+  "title": "Templates",
   "subtitle": "Reusable snapshots of hooks, settings, connectors, and policies for workspace sessions.",
   "catalog": {
     "builtin": "Built-in",
     "version": "v{{version}}",
     "author": "By {{author}}",
     "archived": "Archived",
-    "noTemplates": "No templates found.",
-    "noTemplatesHint": "Create your first template to reuse workspace configurations.",
-    "filterAll": "All",
-    "filterBuiltin": "Built-in",
-    "filterCustom": "Custom",
     "showArchived": "Show archived"
+  },
+  "groups": {
+    "yours": "Your templates",
+    "builtin": "Built-in templates ({{n}})",
+    "yoursEmpty": "None yet. A template is a reusable starting point for new sessions."
   },
   "editor": {
     "nameLabel": "Name",
@@ -25,12 +25,27 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "Commands run before/after tools and sessions.",
-      "settings": "Agent Settings",
+      "settings": "Agent settings",
       "settingsHint": "Permission mode, effort level, model, and custom instructions.",
       "connectors": "Connectors",
       "connectorsHint": "Connector IDs to attach when this template is applied.",
-      "policies": "Governance Policies",
-      "policiesHint": "DLP mode, session duration limits, allowed tools, and I/O recording."
+      "policies": "Governance policies",
+      "policiesHint": "DLP mode, session duration limits, allowed tools, and I/O recording.",
+      "secrets": "Secrets",
+      "secretsHint": "Vault secrets that sessions from this template receive as environment variables.",
+      "summary": {
+        "hooks_one": "{{count}} hook",
+        "hooks_other": "{{count}} hooks",
+        "secrets_one": "{{count}} variable",
+        "secrets_other": "{{count}} variables",
+        "connectors_one": "{{count}} connector",
+        "connectors_other": "{{count}} connectors",
+        "set_one": "{{count}} set",
+        "set_other": "{{count}} set",
+        "model": "Model: {{model}}",
+        "none": "None",
+        "defaults": "Defaults"
+      }
     },
     "hooks": {
       "preTool": "Pre-tool",

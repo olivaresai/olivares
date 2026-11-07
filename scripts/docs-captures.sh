@@ -63,9 +63,17 @@ demo_dir() {
 }
 # The trap is installed before the first directory exists: a later demo_dir that fails must not leak the earlier ones.
 DATA="" WS_PARENT="" DATASET_ROOT=""
+FRESH_PIDS=() FRESH_DIRS=()
 cleanup() {
-  [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null || true
-  for d in "$DATA" "$WS_PARENT" "$DATASET_ROOT" ${EXEC_TMP:+"$EXEC_TMP"}; do
+  # MAIN_PID is the main engine while PID names a fresh one: an exit there must stop both.
+  for p in "${PID:-}" "${MAIN_PID:-}" "${FRESH_PIDS[@]}"; do
+    [ -z "$p" ] || kill "$p" 2>/dev/null || true
+  done
+  # An engine still writing its data directory would leave files behind the rm below.
+  for p in "${PID:-}" "${MAIN_PID:-}" "${FRESH_PIDS[@]}"; do
+    [ -z "$p" ] || wait "$p" 2>/dev/null || true
+  done
+  for d in "$DATA" "$WS_PARENT" "$DATASET_ROOT" "${FRESH_DIRS[@]}" ${EXEC_TMP:+"$EXEC_TMP"}; do
     [ -z "$d" ] || rm -rf "$d"
   done
 }
@@ -85,12 +93,15 @@ DATASET_ROOT="$(demo_dir)"
 # builds so a renamed demo session fails at its source rather than much later as a missing tab.
 bash "$ROOT/scripts/test-demo-agent.sh"
 
+# The capture spec runs playwright from web/ on every path, so the web deps install before the branch below;
+# a failed install stops the run here with pnpm's own message (it was skipped with a supplied binary, and its error was discarded).
+pnpm --dir "$ROOT/web" install --frozen-lockfile
+
 if [ -n "${OLIVARES_BIN:-}" ]; then
   [ -x "$BIN" ] || { echo 'ERROR: OLIVARES_BIN must name an executable release candidate' >&2; exit 1; }
   echo '==> Using the supplied release candidate'
 else
   echo "==> Building web bundle + olivares binary"
-  pnpm --dir "$ROOT/web" install --frozen-lockfile >/dev/null 2>&1 || true
   pnpm --dir "$ROOT/web" run build
   # Build connector plugins before the engine binary; go:embed requires their artifacts.
   bash "$ROOT/scripts/build-connectors.sh"
@@ -221,7 +232,8 @@ fi
 # --seed-demo is deliberately NOT used: it also writes ten synthetic observed sessions into the same
 # tenant, and the home then counts them beside the canonical sixteen. The banner prints
 # the one-time token once; it is read here and never echoed. The setup reply is the user and its
-# organization, with no secret in it.
+# organization, with no secret in it. PORT and DATA name the engine (the review set's fresh installs set them).
+primer_arranque() {
 SETUP_TOKEN="$(awk '/^=== FIRST-BOOT SETUP ===$/ { inside = 1; next }
                     inside && /^  Token: / { print $2; exit }' "$DATA/engine.log")"
 if [ -z "$SETUP_TOKEN" ]; then
@@ -244,6 +256,8 @@ case "$SETUP_HTTP" in
 esac
 unset SETUP_TOKEN SETUP_BODY
 echo "==> First-boot setup created the Northwind organization and the demo administrator"
+}
+primer_arranque
 
 # Select the console modules while the first engine is up. The ceremony below stops it anyway, so the engine
 # that serves the captures starts with them selected. A module switched on in a running engine is not wired to
@@ -292,6 +306,7 @@ fi
 
 echo "==> Reopening the same store, so readiness observes the enforced writer"
 arranca_motor
+espera_motor() {
 ARRIBA=0
 for _ in $(seq 1 480); do
   kill -0 "$PID" 2>/dev/null || break
@@ -302,16 +317,19 @@ for _ in $(seq 1 480); do
   sleep 0.5
 done
 if [ "$ARRIBA" -ne 1 ]; then
-  echo "docs-captures: ⛔ the reopened engine did not accept connections in 240 s, or it died. Tail of its log:" >&2
+  echo "docs-captures: ⛔ the engine on 127.0.0.1:$PORT did not accept connections in 240 s, or it died. Tail of its log:" >&2
   log_tail "$DATA/engine.log" 20
   exit 2
 fi
+}
+espera_motor
 # The executable that really serves the captures, read from the running process and not from the path that was asked for.
 DOCS_CAPTURE_BINARY_SHA256="$(sha256sum "/proc/$PID/exe" 2>/dev/null | cut -d' ' -f1)" || true
 [[ "$DOCS_CAPTURE_BINARY_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "docs-captures: cannot read the sha256 of the running engine" >&2; exit 2; }
 export DOCS_CAPTURE_BINARY_SHA256
 echo "==> Engine executable sha256 $DOCS_CAPTURE_BINARY_SHA256"
 
+entra_demo() {
 TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl --noproxy '*' -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   -H 'Content-Type: application/json' \
   --data-binary @- \
@@ -323,6 +341,8 @@ if [ -z "$TENANT" ]; then
   redact_log "$DATA/engine.log" <"$DATA/engine.log" >&2
   exit 1
 fi
+}
+entra_demo
 
 # Preliminary routing probe only. A 4xx can precede the module's readiness check and therefore
 # does not prove effective K3 readiness. Each captured handoffs view must independently obtain
@@ -529,7 +549,8 @@ PATH=/usr/local/bin:/usr/bin:/bin HOME="$SETUP_DATA/home" \
 SETUP_PID=$!
 # Check that the owned engine remains alive so another service cannot satisfy readiness.
 SETUP_UP=0
-for _ in $(seq 1 40); do
+# Same bound as the seeded engine (240 s): a fresh store bootstraps slowly on a loaded host (20 s was too short).
+for _ in $(seq 1 480); do
   kill -0 "$SETUP_PID" 2>/dev/null || break
   if curl --noproxy '*' -sf --connect-timeout 2 --max-time 5 "http://127.0.0.1:$SETUP_PORT/healthz" >/dev/null 2>&1; then
     SETUP_UP=1
@@ -555,20 +576,97 @@ else
   redact_log "$SETUP_DATA/engine.log" <"$SETUP_DATA/engine.log" >&2 || true
 fi
 
-# Resolve the recording-session ID from the API and omit its viewer when none exists.
-DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
-  -H @- -H "X-Olivares-Tenant: $TENANT" \
-  | python3 -I -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
-if [ -n "$DEMO_SESSION_ID" ]; then
-  echo "==> Demo recording session: $DEMO_SESSION_ID"
-  export DEMO_SESSION_ID
-else
-  echo "==> ⚠ the seeded estate exposes no recording sessions — skipping /session-viewer capture" >&2
+# The review set (`--grep @review`) starts on a fresh install: one engine where no AI tool is signed in, one
+# where the demo tools are signed in and nothing has run yet, and one whose only sessions ended their turn (idle).
+# Each boots like the main engine and gets the demo administrator through first-boot setup; a run that does not
+# ask for the review set does not pay for them.
+case " $* " in
+*" @review "*)
+  MAIN_PID="$PID" MAIN_TOKEN="$TOKEN" MAIN_TENANT="$TENANT"
+  for fresh in empty ready idle; do
+    fd="$(demo_dir)"
+    FRESH_DIRS+=("$fd")
+    mkdir -p "$fd/home"
+    case "$fresh" in empty) fp=$((PORT + 40)) ;; ready) fp=$((PORT + 50)) ;; idle) fp=$((PORT + 60)) ;; esac
+    echo "==> Booting a fresh engine ($fresh) on 127.0.0.1:$fp for the review set"
+    if [ "$fresh" = empty ]; then
+      # As a person installs it: no AI tool on the engine's path and no inference token, so nothing is ready.
+      PATH=/usr/local/bin:/usr/bin:/bin HOME="$fd/home" TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
+        "$BIN" serve --insecure --listen "127.0.0.1:$fp" --grpc-listen "127.0.0.1:$((fp + 1))" \
+        --data-dir "$fd" >>"$fd/engine.log" 2>&1 &
+      PID=$!
+    else
+      cp "$DATA/demo-inference-token" "$fd/demo-inference-token"
+      PORT=$fp GRPC_PORT=$((fp + 1)) DATA=$fd arranca_motor
+    fi
+    FRESH_PIDS+=("$PID")
+    PORT=$fp DATA=$fd espera_motor
+    PORT=$fp DATA=$fd primer_arranque
+    if [ "$fresh" = empty ]; then
+      export FRESH_BASE_URL="http://localhost:$fp"
+      continue
+    fi
+    PORT=$fp DATA=$fd entra_demo
+    fw="$(demo_dir)"
+    FRESH_DIRS+=("$fw")
+    if [ "$fresh" = ready ]; then
+      OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-dataset.py" "http://127.0.0.1:$fp" - "$TENANT" "$fw" \
+        --steps edition,estate,providers,people,profiles || {
+        echo "docs-captures: ⛔ could not sign the demo tools in on the fresh engine; the review set needs it" >&2
+        exit 1
+      }
+      export READY_BASE_URL="http://localhost:$fp"
+      continue
+    fi
+    # The estate's two sessions that end their turn and wait for the next input: idle, none working.
+    OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-dataset.py" "http://127.0.0.1:$fp" - "$TENANT" "$fw" \
+      --steps edition,estate,providers,people,profiles,workspaces,sessions \
+      --sessions 'Reconcile invoice export with billing ledger,Fix flaky checkout e2e test' || {
+      echo "docs-captures: ⛔ could not leave two idle sessions on the fresh engine; the review set needs them" >&2
+      exit 1
+    }
+    export IDLE_BASE_URL="http://localhost:$fp"
+  done
+  PID="$MAIN_PID" TOKEN="$MAIN_TOKEN" TENANT="$MAIN_TENANT"
+  # A session waiting for a person: a fixture whose held turn asks once to run a command. It starts after the
+  # estate's canonical checks, whose approval queue holds only the people's requests. The wait lasts as long as
+  # the engine gives a person to answer (sessions.ApprovalWait), so the screens that show it run first.
+  OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-dataset.py" "http://127.0.0.1:$PORT" - "$TENANT" "$DATASET_ROOT" \
+    --steps providers,profiles,workspaces,sessions --sessions 'Open the dependency upgrade pull request' || {
+    echo "docs-captures: ⛔ no session of the estate waits for a person; the review set needs one" >&2
+    exit 1
+  }
+  # A session that changed two files: the demo tools replay recorded text and write nothing, so the harness makes
+  # the checkout refactor's two edits in its folder after the run started (Changes lists what changed since then).
+  STOREFRONT="$DATASET_ROOT/repos/storefront-web"
+  [ -f "$STOREFRONT/src/checkout/Checkout.tsx" ] || { echo "docs-captures: ⛔ no storefront-web folder in the estate" >&2; exit 1; }
+  printf '%s\n' 'import { cartTotals } from "./totals"' '' 'export function Checkout({ cart }) {' \
+    '  const { subtotal, tax, total } = cartTotals(cart)' '  return { subtotal, tax, total }' '}' \
+    >"$STOREFRONT/src/checkout/Checkout.tsx"
+  printf '%s\n' '// Places an order and expects the confirmation page with the cart total.' \
+    'test("checkout shows the total", async ({ page }) => {' '  await page.goto("/checkout")' \
+    '  await expect(page.getByText("Total")).toBeVisible()' '})' >"$STOREFRONT/e2e/checkout.spec.ts"
+  ;;
+esac
+
+# Recording is a Business capability: only a Business build has a recording session to open in
+# the viewer, so a Community build asks for none and the spec skips /session-viewer.
+if [ "$BUILD_EDITION" != community ]; then
+  # Resolve the recording-session ID from the API and omit its viewer when none exists.
+  DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
+    -H @- -H "X-Olivares-Tenant: $TENANT" \
+    | python3 -I -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
+  if [ -n "$DEMO_SESSION_ID" ]; then
+    echo "==> Demo recording session: $DEMO_SESSION_ID"
+    export DEMO_SESSION_ID
+  else
+    echo "==> ⚠ the seeded estate exposes no recording sessions — skipping /session-viewer capture" >&2
+  fi
 fi
 
 # Clear the output directory so filtered runs cannot publish captures left by an earlier
 # run.
-rm -rf "$ROOT/web/playwright-report/docs"
+rm -rf "$ROOT/web/playwright-report/docs" "$ROOT/web/playwright-report/review"
 mkdir -p "$ROOT/web/playwright-report/docs"
 
 echo "==> Running the docs-captures Playwright spec against live seeded data"

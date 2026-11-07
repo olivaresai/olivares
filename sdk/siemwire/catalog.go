@@ -1,13 +1,23 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: Apache-2.0
 
+// Package siemwire names the SIEM wire formats and the subset each Olivares
+// surface accepts, and encodes security findings as SARIF. The SIEM encoders
+// (CEF, LEEF, syslog, OTLP, OCSF) are part of the Business build; a Community
+// build validates the names and refuses the export (docs/editions.md).
 package siemwire
 
 import "strings"
 
+// OCSFVersion is the OCSF schema version the Business OCSF encoder emits. The pin
+// lives here, beside the format names, so the observability standards table and
+// scripts/check-ocsf-claims.sh read one value in every edition. It is not native
+// Amazon Security Lake ingest: a custom source there caps at OCSF 1.3 in Parquet.
+const OCSFVersion = "1.8.0"
+
 // This file is the format-token CATALOG: the one ordered source of the selection
 // tokens every Olivares surface uses to name a wire format, and of which subset
-// each surface accepts. It exists for the same reason the encoders above it do —
+// each surface accepts. It exists for the same reason the encoders do —
 // before it, the token vocabulary lived in at least six independent literal
 // copies (the ledger registry in core/audit, the eventing sink validator, four
 // notification connectors' private const blocks, a hand-mirrored web array and

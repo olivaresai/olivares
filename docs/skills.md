@@ -51,13 +51,22 @@ lists that folder's names, not its files, to the model.
 The delivered tree and its discovery directory are read-only. Cache directories
 remain writable. Assigned delivery requires a native session and filesystem
 confinement with truncation protection; unsupported hosts or launch forms refuse
-the launch with an explicit error. Sessions with no assignments keep their
-ordinary HOME and launch behavior. Turning the Skills module off disables delivery.
+the launch with an explicit error. Supported native sessions reserve a discovery HOME
+even before their first assignment. Account-owned skills remain visible within the
+account home's existing confinement grants; discovery links never add filesystem access.
+Account discovery never opens entry targets, lists at most 4096 entries, and
+never traverses beyond the driver's fixed skills directory. Invalid account discovery
+is skipped with a warning so assigned delivery can continue. Discovery from the
+server user's own HOME is available only while the node's single-person login policy
+permits it.
+Turning the Skills module off disables delivery.
 
-Inherited assignments are pinned for the conversation and retained on resume.
-New session-specific assignments join that snapshot on the next launch. Removing an
-assignment changes future inheritance; recorded conversations retain their pins and
-prevent retirement of the referenced pack.
+Pinning, updating or removing an assignment refreshes matching live sessions without
+restarting their tools. Each changed delivery appends `sessions.skills.delivered` to
+the audit ledger and invalidates the session command catalog cache. Resume resolves
+the current assignments as well. Historical deliveries remain audit evidence and
+do not prevent retiring a pack after its assignments have been removed. Publishing
+a new pack revision still requires explicitly updating its assignment pin.
 
 ## Precedence
 
@@ -67,8 +76,8 @@ different content under one skill name, the narrower target's skill replaces the
 broader one's, so a project overrides a generic pack by installing its own skill of that
 name and pinning it to its folder, without editing the generic pack. Two targets of the
 same kind (two agent groups, or two packs on one target) that disagree still refuse
-delivery with `skill_name_conflict`. A resumed conversation keeps a narrower pin over a
-broader target that appears later.
+delivery with `skill_name_conflict`. A resumed conversation applies the same
+precedence to its current assignments.
 
 ## Skills that act when loaded
 
@@ -121,9 +130,8 @@ olivares skills disable tdd-workflow --profile <profile-ref>
 
 Built-in archives are checked against their pinned SHA-256 digest. Git refs are
 resolved to a commit, and the validated source, selected subdirectory and manifest
-digests are recorded in the revision. An update publishes another revision; existing
-assignments keep their pins until explicitly changed. Installation never executes pack
-code.
+digests are recorded in the revision. Applying an update publishes another revision and moves eligible pins on the previous
+latest revision. Older pins stay put. Installation never executes pack code.
 `GET /v1/m/skills/builtins` lists the built-in pins before any pack is installed;
 reading this catalog requires `skills:catalog:read`.
 
@@ -144,7 +152,11 @@ olivares skills pin <pack-id> [--revision <rev>] [--dry-run]
 
 Applying publishes only the digest that was reviewed, so a source that moved in between
 is refused with `source_changed`. `skills update ... --ref v2` moves a Git pack to that
-tag, and later updates follow it. The diff compares verified artifacts: members added,
+tag, and later updates follow it. Apply preserves approval for unchanged active members.
+A pin with changed active content, missing selected members or an unavailable target stays
+on its revision; the apply response lists it in `pins_not_moved` with the next action.
+For changed active content, review the published revision and pin it with explicit approval.
+The diff compares verified artifacts: members added,
 changed or removed, files with their hashes and sizes, and a bounded unified text diff.
 `skills pin` moves every pin of a pack that you can write to one revision, keeping each
 pin's selected skills; with an older `--revision` it is the rollback. A pin whose skills
@@ -166,6 +178,8 @@ comes from a broader target stays there: disable it on that target, or pin your 
 skill of the same name on the narrower one. `selection` resolves the tree you name with
 the launch's own rules, so it shows what a new session there gets and from which target.
 The same read is `GET /v1/m/skills/selection?target=workspace:<id>&target=folder:<ref>`.
+The console shows it too: New session says "This session gets N skills" and lists them
+before you start, and a pack's Assign form lists what the chosen target gets today.
 
 ## Agents, commands and rules
 

@@ -24,8 +24,9 @@
     "e2e": "pnpm run typecheck:e2e && playwright test",
     "e2e:install": "playwright install --with-deps chromium",
     "at": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all dark && node --experimental-strip-types e2e-visual/at-run.ts light all light",
-    "at:gate": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all dark --gate && node --experimental-strip-types e2e-visual/at-run.ts light all light --gate",
+    "at:gate": "pnpm build && pnpm at:trust && node --experimental-strip-types e2e-visual/at-run.ts dark all dark --gate && node --experimental-strip-types e2e-visual/at-run.ts light all light --gate",
     "capture": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all capture-dark --qa && node --experimental-strip-types e2e-visual/at-run.ts light all capture-light --qa",
+    "at:trust": "rm -f e2e-visual/__at__/at-trust-trust-dark.json e2e-visual/__at__/at-trust-trust-light.json && AT_HOSTILE_ACCENT=trust node --experimental-strip-types e2e-visual/at-run.ts dark trust trust-dark --gate && AT_HOSTILE_ACCENT=trust node --experimental-strip-types e2e-visual/at-run.ts light trust trust-light --gate && test -s e2e-visual/__at__/at-trust-trust-dark.json && test -s e2e-visual/__at__/at-trust-trust-light.json",
     "capture:gate": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all capture-dark --gate --qa && node --experimental-strip-types e2e-visual/at-run.ts light all capture-light --gate --qa",
     "capture:selftest": "node --experimental-strip-types e2e-visual/console-qa/selftest.ts"
   },
@@ -65,6 +66,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "@xyflow/react": "^12.12.0",
+    "@zip.js/zip.js": "2.24.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

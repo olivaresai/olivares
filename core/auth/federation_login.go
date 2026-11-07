@@ -82,6 +82,13 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
+	// The IdP session is qualified by the verified issuer, like the subject, so a
+	// logout from another provider can never name it. An unkeyable sid is not kept.
+	if id.SessionID != "" {
+		if key, err := QualifiedSubjectKey(id.Issuer, id.SessionID); err == nil {
+			attempt.idpSession = string(key)
+		}
+	}
 	// D4 — a SCIM-authoritative IdP makes SCIM the sole authority: SSO never
 	// JIT-creates and never reconciles groups at login. The flag is the RESOLVED IdP's,
 	// so it is the policy of the config that actually authenticated the user.

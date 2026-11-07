@@ -25,6 +25,7 @@ import type { RailStatus } from './session-rail'
 import { attentionSnapshots, type AttentionSnapshot } from './session-attention'
 import {
   RAIL_ROWS_PER_GROUP,
+  activeSessions,
   aliveSessions,
   openSessions,
   railGroups,
@@ -79,12 +80,14 @@ export interface SessionRailData {
   groups: RailGroup[]
   attention: AttentionSnapshot[]
   attentionReady: boolean
-  /** live: Needs you and Working; running: every session Stop all would end, idle and
-   * archived ones too; open: those the list shows that have not ended (the Sessions badge
-   * and the status bar's "N sessions open"). */
+  /** live: Needs you and Working; active: every session that works or waits for a person,
+   * folded away or not (while one does, Stop all is offered); running: every session Stop
+   * all would end, idle and archived ones too; open: those the list shows that have not
+   * ended (the Sessions badge and the status bar's "N sessions open"). */
   sessionCounts: {
     live: number
     needsYou: number
+    active: number
     running: number
     open: number
   }
@@ -220,6 +223,7 @@ export function useSessionRail(background = false): SessionRailData {
         .filter((g) => g.id === 'needsYou' || g.id === 'working')
         .reduce((n, g) => n + g.sessionTotal, 0),
       needsYou: groups.find((g) => g.id === 'needsYou')?.sessionTotal ?? 0,
+      active: activeSessions(sources),
       running: aliveSessions(sources),
       open: openSessions(sources),
     },

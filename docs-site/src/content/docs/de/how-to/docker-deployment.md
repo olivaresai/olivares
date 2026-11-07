@@ -23,8 +23,8 @@ ein einmaliges Setup-Token und TLS standardmäßig aktiv. Der Host-Port wird auf
 Schnittstellen veröffentlicht, denn dies ist ein Server — beschränken Sie ihn bewusst, wie unten.
 
 <!-- release -->
-:::note[Olivares 0.6]
-Das nächste Release ist `0.6`; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in `docs/releases/0.6-install-surfaces.json`.
+:::note[Olivares 0.7]
+Das nächste Release ist `0.7`; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in `docs/releases/0.7-install-surfaces.json`.
 :::
 <!-- /release -->
 
@@ -39,7 +39,7 @@ Der primäre Container-Pull ist **Docker Hub**:
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.6
+docker pull docker.io/olivaresai/olivares:0.7
 ```
 <!-- /release -->
 
@@ -48,7 +48,7 @@ Digest, verwendet als Backup und als Build-Registry. Docker Hub begrenzt die Rat
 Pulls; ghcr.io begrenzt anonyme Pulls öffentlicher Images nicht — `docker login` oder die
 ghcr.io-Koordinate ist daher der Ausweg, wenn ein CI-Knoten oder eine große Flotte an die
 Grenze stößt. Tags tragen **kein führendes `v`**: <!-- release -->
-`:0.6`<!-- /release --> pinnt ein Release, `:latest` floatet, und <!-- release -->`:0.6-fips`<!-- /release --> / <!-- release -->`:0.6-stig`<!-- /release --> sind
+`:0.7`<!-- /release --> pinnt ein Release, `:latest` floatet, und <!-- release -->`:0.7-fips`<!-- /release --> / <!-- release -->`:0.7-stig`<!-- /release --> sind
 die gehärteten Varianten. Die Basis- und `:latest`-Tags sind multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` sind ausschließlich `amd64`.
 
@@ -60,7 +60,7 @@ identisch gegen beide Registries — die Signaturen und Attestierungen werden pe
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.6")"
+DIGEST="$(crane digest "$IMAGE:0.7")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -87,17 +87,28 @@ als Non-Root, read-only und mit gedroppten Capabilities aus:
 <!-- release -->
 ```bash
 docker volume create olivares-data
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
 
 docker run -d --name olivares \
+  --hostname olivares \
   --user 65532:65532 \
   --read-only \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
+  --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.6 \
+  docker.io/olivaresai/olivares:0.7 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -113,6 +124,7 @@ docker run -d --name olivares \
 | `--tmpfs /tmp` | ein beschreibbares Scratch-tmpfs, erforderlich, weil das Rootfs read-only ist |
 | `--cap-drop ALL` | die Engine benötigt keine Linux-Capabilities |
 | `--security-opt no-new-privileges` | blockiert Privilege-Eskalation über setuid-Binaries |
+| `--security-opt seccomp=olivares-sessions.json $apparmor` | das Seccomp-Sitzungsprofil, vom ersten Befehl aus dem Image gelesen: Dockers Standard plus die Benutzer-, Netzwerk- und Mount-Namensräume, in denen eine Sitzung ihr Tool einschließt (wo AppArmor User-Namespaces kontrolliert, wie unter Debian 13 und Ubuntu 24.04 und neuer, wählt `$apparmor` zusätzlich das AppArmor-Sitzungsprofil, das der Block lädt) |
 | `-v olivares-data:/var/lib/olivares` | persistiert das Datenverzeichnis (siehe [§5](#5-betriebshinweise)) |
 | `-p 8443:8443` | veröffentlicht HTTPS (REST + Web-UI) **auf allen Host-Schnittstellen** |
 | `-p 8444:8444` | veröffentlicht gRPC (Ingest / ControlPlane-API) auf allen Host-Schnittstellen |
@@ -327,7 +339,7 @@ Image erneut, bevor Sie es neu erstellen.
 
 ## 8. Für die Produktion per Digest pinnen
 
-Veränderbare Tags (<!-- release -->`:0.6`<!-- /release -->, `:latest`) sind für die Evaluierung. In Produktion pinnen Sie den
+Veränderbare Tags (<!-- release -->`:0.7`<!-- /release -->, `:latest`) sind für die Evaluierung. In Produktion pinnen Sie den
 **Digest**, den Sie verifiziert haben — ein Digest ist unveränderlich und ist genau das, was Sie abgesegnet haben:
 
 ```bash

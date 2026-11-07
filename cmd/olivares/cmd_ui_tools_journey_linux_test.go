@@ -67,11 +67,14 @@ func startUIJourney(t *testing.T, e *uiEngine) (*uiJourney, func() int) {
 }
 
 // startUIJourneyAt is startUIJourney against any engine: the fake one, or a real
-// one the test booted.
-func startUIJourneyAt(t *testing.T, serverURL, token, tenant string) (*uiJourney, func() int) {
+// one the test booted. extra are more environment entries, after the engine's
+// own (a data dir the Verify now screen reads, for instance).
+func startUIJourneyAt(t *testing.T, serverURL, token, tenant string, extra ...string) (*uiJourney, func() int) {
 	t.Helper()
 	master, slave := openPTY(t, tui.MinWidth, tui.MinHeight)
-	env := cliProcessEnv(t, "OLIVARES_SERVER_URL="+serverURL, "OLIVARES_TOKEN="+token, "OLIVARES_TENANT="+tenant, "NO_COLOR=1")
+	env := cliProcessEnv(t, append([]string{
+		"OLIVARES_SERVER_URL=" + serverURL, "OLIVARES_TOKEN=" + token, "OLIVARES_TENANT=" + tenant, "NO_COLOR=1",
+	}, extra...)...)
 	home := ""
 	for _, kv := range env {
 		if v, ok := strings.CutPrefix(kv, "HOME="); ok {
@@ -847,12 +850,17 @@ func TestToolsScreensSayAKeyWasAddedWhenTheListItCameFromIsGone(t *testing.T) {
 	j.see("Enter open  / search  ? help  Esc back")
 	j.press(keyEscBytes) // the list: back at the main menu
 	j.see("· version")
+	refresh := e.hold("GET", agentToolsPath+"/inventory")
+	t.Cleanup(refresh.open)
 	gate.open()
-	deadline := time.Now().Add(ptyWait)
-	for len(e.ledger()) < 2 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	// The loop keeps the notice before starting this refresh; the ledger only
+	// proves the engine answered. The notice itself is printed after exit.
+	select {
+	case <-refresh.arrived:
+	case <-time.After(ptyWait):
+		t.Fatal("the UI never refreshed after keeping the added-key notice")
 	}
-	j.press("\x1b[B") // a key after the answer: the loop has taken the answer before it
+	refresh.open()
 	j.press(keyCtrlDBytes)
 	if code := j.finish(wait); code != 0 {
 		t.Fatalf("exited %d, want 0", code)

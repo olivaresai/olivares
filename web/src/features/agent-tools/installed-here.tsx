@@ -10,7 +10,10 @@
 // selection (GET /v1/m/skills/selection), the MCP servers from the tenant gateway
 // snapshot the launch configures from. Each item links to the page that manages it.
 import { useQueries, useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { ChevronRight } from 'lucide-react'
+import { AppLink } from '@/components/ui/app-link'
+import { Button } from '@/components/ui/button'
+import type { ComponentProps, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { agentOpsApi } from '@/features/agentops/api'
 import { profileName } from '@/features/agentops/types'
@@ -109,10 +112,13 @@ export function InstalledHere({
   // Only the first answer is waited for, as useReadyTools does: a refetch keeps the shown
   // answer instead of switching every preview off and fetching it again.
   const readinessWaiting = readiness.isPending && !readiness.isFetched
-  const answered = (driver: string) => {
+  const refusedCode = (driver: string) => {
     const tool = readiness.data?.tools.find((t) => t.driver === driver)
-    return !!tool && !tool.ready && REFUSED.has(tool.code ?? '')
+    return tool && !tool.ready && REFUSED.has(tool.code ?? '')
+      ? tool.code
+      : undefined
   }
+  const answered = (driver: string) => !!refusedCode(driver)
   const previews = useQueries({
     queries: drivers.map((driver) => ({
       queryKey: [...scope, 'installed-profile', activeTenant, driver],
@@ -190,9 +196,14 @@ export function InstalledHere({
   const refused = (err: unknown) =>
     err instanceof ApiError && REFUSED.has(err.code)
   const previewFailed = previews.find((q) => q.isError && !refused(q.error))
-  const refusedTools = drivers
-    .filter((driver, i) => answered(driver) || refused(previews[i]?.error))
-    .map(toolName)
+  // A tool no session can start on yet: its own row with the one action that fixes it.
+  const refusedTools = drivers.flatMap((driver, i) => {
+    const error = previews[i]?.error
+    const code =
+      refusedCode(driver) ??
+      (error instanceof ApiError && refused(error) ? error.code : undefined)
+    return code ? [{ driver, install: code === 'tool_not_installed' }] : []
+  })
   const profiles = drivers.flatMap((driver, i) => {
     const profile = previews[i]?.data?.profile
     return profile ? [{ driver, profile }] : []
@@ -231,7 +242,7 @@ export function InstalledHere({
   const selections =
     drivers.length > 0
       ? drivers.flatMap((driver, i) =>
-          answered(driver) || refused(previews[i]?.error)
+          refusedTools.some((tool) => tool.driver === driver)
             ? []
             : [
                 {
@@ -255,7 +266,7 @@ export function InstalledHere({
         skillItems.set(key, {
           key,
           label: member.name,
-          href: `/capabilities?tab=skills&pack=${encodeURIComponent(member.pack_id)}`,
+          href: `/capabilities?tab=skills&pack=${encodeURIComponent(member.pack_id)}&skill=${encodeURIComponent(member.name)}`,
           detail: tool,
         })
       }
@@ -297,42 +308,40 @@ export function InstalledHere({
         <Row
           label={t('installed.tools')}
           items={tools}
+          line={tools
+            .map((tool) => [tool.label, tool.detail].filter(Boolean).join(' '))
+            .join(' · ')}
           hint={tools.length > 0 ? t('installed.toolsHint') : undefined}
         />
-        <Row
-          label={t('installed.packages')}
-          items={packages}
-          state={
-            !profilesReadable
-              ? t('installed.profilesNotReadable')
-              : previewFailed
-                ? t('installed.readFailed', {
-                    message: message(previewFailed.error),
-                  })
-                : previewPending
-                  ? t('installed.reading')
-                  : undefined
-          }
-          hint={[
-            profiles.length > 0
-              ? t('installed.packagesHint', {
-                  profiles: profiles
-                    .map(
-                      ({ driver, profile }) =>
-                        `${toolName(driver)}: ${profileName(profile) ?? profile.profile_ref}`,
-                    )
-                    .join(', '),
-                })
-              : t('installed.packagesNoProfile'),
-            ...(refusedTools.length > 0
-              ? [
-                  t('installed.packagesRefused', {
-                    tools: refusedTools.join(', '),
-                  }),
-                ]
-              : []),
-          ].join(' ')}
-        />
+        {/* Shown when a launch profile declares something, or when the read cannot say. */}
+        {(packages.length > 0 ||
+          profiles.length > 0 ||
+          previewFailed ||
+          (!profilesReadable && drivers.length > 0)) && (
+          <Row
+            label={t('installed.packages')}
+            items={packages}
+            state={
+              !profilesReadable
+                ? t('installed.profilesNotReadable')
+                : previewFailed
+                  ? t('installed.readFailed', {
+                      message: message(previewFailed.error),
+                    })
+                  : previewPending
+                    ? t('installed.reading')
+                    : undefined
+            }
+            hint={t('installed.packagesHint', {
+              profiles: profiles
+                .map(
+                  ({ driver, profile }) =>
+                    `${toolName(driver)}: ${profileName(profile) ?? profile.profile_ref}`,
+                )
+                .join(', '),
+            })}
+          />
+        )}
         {egressHosts.length > 0 && (
           <Row label={t('installed.egressHosts')} items={egressHosts} />
         )}
@@ -381,66 +390,128 @@ export function InstalledHere({
               : undefined
           }
         />
+        {refusedTools.map(({ driver, install }) => {
+          const href = boxOf(driver)
+          const action = install
+            ? t('installTool', { name: toolName(driver) })
+            : t('profiles.signIn')
+          return (
+            <li key={driver} className="flex items-center gap-4 px-4 py-3">
+              <h3 className="min-w-0 flex-1 text-body font-medium text-text">
+                {toolName(driver)}
+              </h3>
+              {href ? (
+                <Button asChild size="sm">
+                  <a href={href}>{action}</a>
+                </Button>
+              ) : (
+                <span className="text-body text-text-2">{action}</span>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </section>
   )
 }
 
-/** One kind of resource: its label, then each item as a link to its own page. */
+/** An item's link: a page of the console moves by the router, a `#tool-…` box is on this page. */
+function ItemLink({
+  href,
+  ...props
+}: { href: string } & Omit<ComponentProps<'a'>, 'href'>) {
+  return href.startsWith('/') ? (
+    <AppLink href={href} {...props} />
+  ) : (
+    <a href={href} {...props} />
+  )
+}
+
+/** One kind of resource on one line: its label and what it holds. The chevron opens its
+ * detail: each item as a link to its own page, and what decides the row. */
 function Row({
   label,
   items,
+  line,
   state,
   hint,
 }: {
   label: string
   items: { key: string; label: string; detail?: string; href?: string }[]
+  /** The row's one line when it is not the item names. */
+  line?: string
   /** A read still running or failed: said instead of the items. */
   state?: string
   hint?: ReactNode
 }) {
   const { t } = useTranslation('agentTools')
+  const listed = !state && items.length > 0
+  const head = (
+    <>
+      <h3 className="w-32 shrink-0 text-body font-medium text-text">{label}</h3>
+      {state ? (
+        <span
+          role="status"
+          className="min-w-0 flex-1 break-words text-caption text-text-2"
+        >
+          {state}
+        </span>
+      ) : (
+        <span
+          className={
+            listed
+              ? 'min-w-0 flex-1 truncate text-body text-text-2'
+              : 'min-w-0 flex-1 text-body text-text-3'
+          }
+        >
+          {listed
+            ? (line ?? items.map((item) => item.label).join(' · '))
+            : t('installed.none')}
+        </span>
+      )}
+    </>
+  )
+  if (!listed && !hint)
+    return <li className="flex items-center gap-4 px-4 py-3">{head}</li>
   return (
-    <li className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:gap-4">
-      <h3 className="shrink-0 text-body font-medium text-text sm:w-32">
-        {label}
-      </h3>
-      <div className="flex min-w-0 flex-col gap-1">
-        {state ? (
-          <p role="status" className="break-words text-caption text-text-2">
-            {state}
-          </p>
-        ) : items.length === 0 ? (
-          <p className="text-caption text-text-3">{t('installed.none')}</p>
-        ) : (
-          <ul className="flex flex-wrap gap-x-4 gap-y-1">
-            {items.map((item) => (
-              <li key={item.key} className="min-w-0">
-                {item.href ? (
-                  <a
-                    href={item.href}
-                    className="break-words text-body text-accent-text underline underline-offset-4"
-                  >
-                    {item.label}
-                  </a>
-                ) : (
-                  <span className="break-words text-body text-text">
-                    {item.label}
-                  </span>
-                )}
-                {item.detail ? (
-                  <span className="ms-1.5 text-overline text-text-3">
-                    {item.detail}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-        {hint && !state ? (
-          <p className="text-caption text-text-3">{hint}</p>
-        ) : null}
-      </div>
+    <li>
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-3 hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+          {head}
+          <ChevronRight
+            aria-hidden
+            className="size-4 shrink-0 text-text-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          />
+        </summary>
+        <div className="flex flex-col gap-2 px-4 pb-3 sm:ps-40">
+          {listed ? (
+            <ul className="flex flex-wrap gap-x-4 gap-y-1">
+              {items.map((item) => (
+                <li key={item.key} className="min-w-0">
+                  {item.href ? (
+                    <ItemLink
+                      href={item.href}
+                      className="break-words text-body text-accent-text underline underline-offset-4"
+                    >
+                      {item.label}
+                    </ItemLink>
+                  ) : (
+                    <span className="break-words text-body text-text">
+                      {item.label}
+                    </span>
+                  )}
+                  {item.detail ? (
+                    <span className="ms-1.5 text-overline text-text-3">
+                      {item.detail}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {hint ? <p className="text-caption text-text-3">{hint}</p> : null}
+        </div>
+      </details>
     </li>
   )
 }

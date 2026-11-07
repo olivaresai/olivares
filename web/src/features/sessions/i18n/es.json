@@ -1,4 +1,23 @@
 {
+  "pathChip": {
+    "open": "Abrir en {{editor}}",
+    "copyRelative": "Copiar ruta relativa",
+    "copyFull": "Copiar ruta completa"
+  },
+  "race": {
+    "cleanupFailed": "La rama elegida ya se ha fusionado. Quedan otros árboles de trabajo; vuelve a intentarlo para terminar de descartarlos.",
+    "title": "Comparar sesiones",
+    "hint": "Revisa cada rama y su coste. Confirma los cambios que quieras conservar antes de elegir.",
+    "keep": "Conservar esta",
+    "confirm": "¿Detener todas las sesiones, fusionar {{name}} en el repositorio y descartar permanentemente los otros árboles de trabajo y sus cambios sin fusionar?",
+    "confirmKeep": "Fusionar y descartar las demás",
+    "kept": "La rama elegida se ha fusionado. Se han descartado los otros árboles de trabajo.",
+    "invalid": "Elige sesiones distintas con árboles de trabajo del mismo repositorio.",
+    "loadError": "No se pudieron leer todas las sesiones. Comprueba el acceso y vuelve a intentarlo.",
+    "notStopped": "Una sesión no se detuvo. No se fusionó ni descartó ninguna rama.",
+    "failed": "No se pudo conservar esta sesión.",
+    "uncommitted": "Cambios sin confirmar y Git"
+  },
   "compact": {
     "context": "Contexto",
     "now": "Compactar ahora",
@@ -9,6 +28,8 @@
     "failed": "No se confirmó la compactación. No se envió el mensaje."
   },
   "git": {
+    "init": "Inicializar Git",
+    "noRepository": "Esta carpeta no es un repositorio Git.",
     "title": "Git",
     "branch": "Rama",
     "newBranch": "Nueva rama",
@@ -95,7 +116,7 @@
     "lastSeen": "Último evento",
     "minimalData": "Solo se muestran metadatos. Por diseño el motor nunca transporta aquí SQL, payloads ni secretos (mínimo dato).",
     "viewAccess": "Mapa de acceso",
-    "viewInventory": "Inventario"
+    "viewInventory": "Recursos descubiertos"
   },
   "timeline": {
     "title": "Cronología",
@@ -311,7 +332,18 @@
     "unsnooze": "Dejar de posponer",
     "markDone": "Marcar como hecha",
     "markNotDone": "Marcar como no hecha",
+    "markUnread": "Marcar como no leída",
+    "markRead": "Marcar como leída",
+    "unreadMark": "No leída",
     "markFailed": "No se ha podido cambiar la marca."
+  },
+  "undo": {
+    "archived": "«{{name}}» archivada",
+    "snoozed": "«{{name}}» pospuesta",
+    "done": "«{{name}}» marcada como hecha",
+    "unpinned": "«{{name}}» sin fijar",
+    "changed": "Esta sesión ha cambiado; no se ha deshecho nada.",
+    "failed": "No se ha podido deshacer el cambio."
   },
   "surface": {
     "openBeside": "Abrir al lado",
@@ -360,11 +392,6 @@
     "costUnknown": "coste no informado",
     "costPartial": "{{cost}} (parcial)",
     "viewCosts": "Ver costes",
-    "planLabel": "Ventanas de uso del plan del inicio de sesión de esta sesión",
-    "planNotRead": "ventana del plan no leída",
-    "resets": "Se restablece {{when}} ({{at}})",
-    "stale": "último conocido",
-    "readAt": "Leído {{at}}",
     "permission": "{{name}}: {{what}}",
     "full": "Acceso total: se ejecuta sin preguntar, limitado por la <policy>política de Olivares</policy>"
   },
@@ -424,7 +451,6 @@
     "identifiersHint": "Referencias para copiar. No son los nombres de la línea de ámbito.",
     "wireTitle": "Línea seleccionada",
     "wireHint": "La línea seleccionada tal como la envió la herramienta. La conversación es la vista por defecto.",
-    "wireEmpty": "Selecciona una línea de la conversación para verla tal como la envió la herramienta.",
     "thisNode": "Este nodo",
     "workTitle": "Autoridad de trabajo de la sesión",
     "workHint": "Registrada para el último lanzamiento. Cada acción comprueba la autorización actual.",
@@ -447,7 +473,6 @@
       "worker": "Trabajador",
       "orchestrator": "Orquestador"
     },
-    "details": "Referencias",
     "echoes": "También registrada como",
     "folder": "Carpeta",
     "temporaryFolder": "Carpeta temporal de esta sesión",
@@ -472,12 +497,25 @@
       "cost": "Coste"
     },
     "usage": {
-      "title": "Uso de la cuenta",
-      "fiveHour": "{{percent}} % de 5 horas",
-      "week": "{{percent}} % de la semana"
-    }
+      "title": "Uso de la cuenta"
+    },
+    "fork": "Crear sesión desde aquí",
+    "readFailed": "No se pudo leer el contexto completo. Carga los mensajes anteriores o elige un turno más breve e inténtalo de nuevo."
+  },
+  "details": {
+    "technical": "Detalles técnicos",
+    "unknownFrames_one": "Marco desconocido: {{count}}",
+    "unknownFrames_many": "Marcos desconocidos: {{count}}",
+    "unknownFrames_other": "Marcos desconocidos: {{count}}"
+  },
+  "backgroundTasks": {
+    "label": "Tareas en segundo plano",
+    "stop": "Detener {{name}}",
+    "stopFailed": "No se pudo detener la tarea."
   },
   "conversation": {
+    "showAll": "Mostrar todo",
+    "showLess": "Mostrar menos",
     "log": "Conversación",
     "waiting": "Esperando a la sesión…",
     "empty": "Todavía no hay mensajes.",
@@ -488,8 +526,7 @@
     "lag_many": "{{count}} marcos perdidos — la salida de abajo continúa después del hueco.",
     "lag_other": "{{count}} marcos perdidos — la salida de abajo continúa después del hueco.",
     "tool": "Herramienta",
-    "result": "Resultado",
-    "unknown": "Marco no reconocido",
+    "answered": "Respondió",
     "inspect": "Mostrar en el inspector",
     "args": "Argumentos",
     "toolResult": "Resultado",
@@ -515,12 +552,14 @@
     "waitingApproval": "Se enviará cuando la sesión esté lista.",
     "workingFolder": "Carpeta de trabajo: <path />",
     "temporaryFolder": "Carpeta de trabajo: carpeta temporal de esta sesión",
-    "workedFor": "Trabajó {{duration}}",
+    "turnLine": "<work/> · {{duration}}",
+    "jumpToLatest": "Ir a lo más reciente",
     "modelChanged": "Cambio de modelo: {{from}} → {{to}}",
     "modelChangedAt": "Cambio de modelo a las {{time}}: {{from}} → {{to}}",
     "sentPending": "Enviado. Esperando a que la herramienta lo tome.",
     "sentNotTaken": "La sesión terminó antes de que la herramienta lo tomara.",
     "finishedIn": "Terminó en {{duration}}",
+    "interrupted": "Interrumpido por ti",
     "escToInterrupt": "Esc para interrumpir",
     "background": "En segundo plano",
     "agentWorking": "Trabajando",
@@ -605,6 +644,29 @@
     "fileTruncated": "Se muestran los primeros 256 KB.",
     "truncated": "Se muestran los {{count}} ficheros más recientes."
   },
+  "checkpoints": {
+    "title": "Turnos",
+    "hint": "Lo que cambió cada mensaje de esta sesión en su carpeta. Rebobinar devuelve los archivos a como estaban antes de un turno.",
+    "turn": "Turno {{n}}",
+    "filesChanged": "Archivos cambiados: {{n}}",
+    "showFiles": "Archivos",
+    "status": {
+      "added": "añadido",
+      "modified": "modificado",
+      "deleted": "eliminado"
+    },
+    "rewind": "Rebobinar",
+    "undo": "Deshacer el rebobinado",
+    "noWords": "(sin texto)",
+    "rewound": "Carpeta rebobinada ({{n}} archivos restaurados o eliminados). Tu mensaje está en el cuadro de mensaje.",
+    "undone": "Rebobinado deshecho ({{n}} archivos restaurados o eliminados).",
+    "confirm": {
+      "title": "¿Rebobinar a antes del turno {{n}}?",
+      "description": "Archivos afectados: {{n}}. Vuelven a como estaban antes de este turno; los archivos que el agente creó desde entonces se eliminan.",
+      "action": "Rebobinar",
+      "conversation": "Solo cambian los archivos. La herramienta conserva su conversación. El mensaje de este turno se pone en el cuadro de mensaje para que puedas editarlo y enviarlo de nuevo."
+    }
+  },
   "preview": {
     "title": "Vista previa",
     "hint": "La aplicación que esta sesión sirve en un puerto local. Se ejecuta en tu navegador, aislada de la consola y fuera de los límites de red de la sesión.",
@@ -619,7 +681,9 @@
     "reload": "Recargar",
     "newTab": "Abrir en una pestaña nueva",
     "openError": "No se pudo abrir la vista previa. Puede que el puerto se haya cerrado.",
-    "frameTitle": "Vista previa del puerto {{port}}"
+    "frameTitle": "Vista previa del puerto {{port}}",
+    "annotate": "Anotar",
+    "annotating": "Haz clic en un elemento de la página para dejar una nota sobre él."
   },
   "branchChanges": {
     "title": "Cambios de la rama",
@@ -683,9 +747,10 @@
     "back": "Volver a las sesiones",
     "showTable": "Ver como tabla",
     "filter": "Filtrar sesiones…",
-    "recent": "Se muestran las {{n}} más recientes",
+    "recent": "Las {{n}} más recientes",
     "loadMore": "Cargar más",
-    "noMatch": "Ninguna sesión coincide."
+    "noMatch": "Ninguna sesión coincide.",
+    "unnamedFolder": "Carpeta sin nombre"
   },
   "thread": {
     "copyReference": "Copiar referencia",
@@ -809,7 +874,6 @@
     "cancel": "Cancelar",
     "archive": "Archivar",
     "unarchive": "Desarchivar",
-    "archived": "Archivada. Está en Archivadas, al final de la lista.",
     "unarchived": "De vuelta en la lista.",
     "copyLink": "Copiar enlace",
     "copyId": "Copiar id de sesión",
@@ -870,5 +934,18 @@
       "down": "Abajo"
     },
     "closeLabel": "Cerrar terminal"
+  },
+  "strip": {
+    "needYou_one": "{{count}} te necesita",
+    "needYou_many": "{{count}} te necesitan",
+    "needYou_other": "{{count}} te necesitan",
+    "running_one": "{{count}} en marcha",
+    "running_many": "{{count}} en marcha",
+    "running_other": "{{count}} en marcha",
+    "failedToday_one": "{{count}} falló hoy",
+    "failedToday_many": "{{count}} fallaron hoy",
+    "failedToday_other": "{{count}} fallaron hoy",
+    "costToday": "{{amount}} hoy",
+    "label": "Sesiones de un vistazo"
   }
 }

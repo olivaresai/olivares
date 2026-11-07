@@ -44,6 +44,8 @@ type uiEngine struct {
 	// refuse a key, echoing it as a careless engine would; inventoryDown and
 	// providersDown make those routes answer 500.
 	jobFails, rejectKey, inventoryDown, providersDown bool
+	// inventoryForbidden makes the inventory answer 403, as it does an organization admin.
+	inventoryForbidden bool
 	// sealThenFail registers a key and then answers 502, as a proxy that drops the
 	// answer does; jobHangs keeps the install job running; deleteFails makes the
 	// engine refuse to end a sign-in.
@@ -171,6 +173,9 @@ func (e *uiEngine) serve(w http.ResponseWriter, r *http.Request) {
 		reply(500, map[string]any{"error": map[string]any{"code": "internal", "message": "The readiness check is down."}})
 	case r.URL.Path == profilesPath+"/readiness":
 		reply(200, e.readiness())
+	case r.Method == http.MethodGet && r.URL.Path == sessionLivePath:
+		// This estate has no observed sessions; the plain list still reads them.
+		reply(200, map[string]any{"items": []map[string]any{}})
 	case r.URL.Path == sessionRunsPath:
 		reply(200, map[string]any{"items": append([]map[string]any{}, e.runs...)})
 	case r.URL.Path == providerAccountsPath:
@@ -203,6 +208,8 @@ func (e *uiEngine) serve(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == providersPath+"/prv_01/test":
 		e.providers[0]["probe_state"] = "ok"
 		reply(200, e.providers[0])
+	case p == "/inventory" && e.inventoryForbidden:
+		reply(403, map[string]any{"error": map[string]any{"code": "forbidden", "message": "This needs the \"system:admin\" permission across the whole server, which only a superadmin holds."}})
 	case p == "/inventory" && e.inventoryDown:
 		reply(500, map[string]any{"error": map[string]any{"code": "internal", "message": "The inventory is down."}})
 	case p == "/inventory":

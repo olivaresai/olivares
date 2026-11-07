@@ -16,17 +16,17 @@
     "infrastructure": "インフラストラクチャ"
   },
   "items": {
-    "estate": "エステート",
-    "home": "ホーム",
-    "onboarding": "セットアップウィザード",
+    "estate": "リソース",
+    "home": "概要",
+    "onboarding": "セットアップ",
     "inventory": "インベントリ",
     "sessions": "セッション",
     "accessMap": "アクセスマップ",
     "reach": "リーチ",
-    "health": "正常性とSLA",
-    "capabilities": "MCPとスキル",
+    "health": "正常性",
+    "capabilities": "拡張機能",
     "protocolBindings": "プロトコルバインディング",
-    "communications": "コミュニケーション",
+    "communications": "チャネル",
     "communicationsInbox": "コミュニケーション受信箱",
     "communicationsNew": "新しいチャネル",
     "communicationsAdministration": "チャネル管理",
@@ -34,11 +34,10 @@
     "console": "管理",
     "sourceDiff": "ソースの差分",
     "permissions": "権限",
-    "identity": "アイデンティティとアクセス",
+    "identity": "アイデンティティ",
     "vault": "ボールト",
     "claudePolicy": "管理ポリシー",
     "routinePolicies": "ルーチンポリシー",
-    "deploy": "デプロイ",
     "gitPublication": "Git 公開",
     "knowledge": "ナレッジ",
     "catalog": "カタログ",
@@ -51,7 +50,6 @@
     "adoption": "導入状況",
     "evals": "評価",
     "security": "セキュリティ",
-    "recordings": "記録",
     "compliance": "コンプライアンス",
     "voice": "音声",
     "sandbox": "サンドボックス",
@@ -61,13 +59,12 @@
     "rateLimits": "レート制限",
     "attestation": "サプライチェーン",
     "apiPlayground": "API Playground",
-    "audit": "監査台帳",
+    "audit": "台帳",
     "retention": "保持期間",
     "workspaceDashboard": "ワークスペース",
     "settings": "設定",
-    "workspace-templates": "ワークスペーステンプレート",
-    "eventing": "Webhookとイベント",
-    "session-viewer": "セッションビューア",
+    "workspace-templates": "テンプレート",
+    "eventing": "Webhook",
     "backups": "バックアップ",
     "updates": "アップデート",
     "logs": "ログ",
@@ -80,7 +77,8 @@
     "providerAccounts": "プロバイダーアカウント",
     "agent-tools": "AI ツール",
     "storedBudgets": "予算",
-    "usage": "使用量"
+    "usage": "使用量",
+    "operations": "運用"
   },
   "workspace": {
     "open": "{{workspace}}を開く",
@@ -93,10 +91,10 @@
     "truncated": "一覧は不完全です——読み込み済みより多くのワークスペースがあります"
   },
   "descriptions": {
-    "estate": "設定済みリソースとその関係を確認し、作業項目の依存関係を調べます。",
+    "estate": "設定した内容と、作業項目を含む各要素の依存関係。",
     "home": "エステートの概要と正常性を一目で把握",
     "onboarding": "ステップバイステップのデプロイメント設定",
-    "inventory": "コネクタが観察したエージェント、MCP サーバー、モデルを検出してカタログ化",
+    "inventory": "コネクターが観測したエージェント・MCPサーバー・モデルと、それぞれを最後に確認した時刻。",
     "sessions": "セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います",
     "accessMap": "各エージェントが読み書きする対象（R/RW）",
     "reach": "各ツールが到達できる接続先と、承認待ちの接続先を確認できます。",
@@ -113,7 +111,6 @@
     "identity": "SSO、SCIM、エージェントが使うアイデンティティ",
     "vault": "パスワード、メモ、認証コード",
     "claudePolicy": "管理対象ポリシー、フック、MCP、サンドボックス、ポリシーアズコード",
-    "deploy": "エージェントをプロビジョニングしインフラに接続",
     "gitPublication": "承認済みの Git ターゲットを通じてコミットのプッシュ、プルリクエストの作成、マージを行う",
     "knowledge": "ナレッジベース、RAG、データリネージ",
     "catalog": "キュレーションされ承認されたエージェントとケーパビリティ",
@@ -127,7 +124,6 @@
     "adoption": "生産性、採用率、モデル構成",
     "evals": "品質、評価、回帰",
     "security": "ガードレール、フォレンジック、異常",
-    "recordings": "特権セッションの記録と再生",
     "compliance": "フレームワーク、統制、証拠",
     "voice": "音声およびリアルタイムセッション",
     "sandbox": "分離されたエージェントのテストと再生",
@@ -161,7 +157,8 @@
     "sourceDiff": "接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します",
     "agent-tools": "セッションが使うアカウントと APIキーを確認します。ツールのインストールとサインインはデプロイ管理者のみです",
     "storedBudgets": "保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。",
-    "usage": "各アカウントの公式の 5 時間と週の上限（上限に近い順）と、今日のトークンとコスト。"
+    "usage": "各アカウントの公式の 5 時間と週の上限（上限に近い順）と、今日のトークンとコスト。",
+    "operations": "ホスト、そのディスク、稼働中のセッションとその使用量を、24 時間、7 日間、30 日間で表示します。"
   },
   "commandActions": {
     "eventing": {
@@ -181,18 +178,41 @@
     }
   },
   "aliases": {
-    "claudePolicy": "Claude Codeガバナンス · Claude Code",
+    "claudePolicy": "Claude Codeガバナンス · Claude Code · Claude Code ガバナンス",
     "adoption": "Claude Code の導入状況 · Claude Code",
     "agentcoreExport": "AgentCore エクスポート · AgentCore",
     "sessions": "セッション · セッションを観測 · セッションを運用 · Claude Code · agentops",
     "agentops": "セッションを運用 · Claude Code · agentops",
-    "console": "統制コンソール · テナント管理"
+    "console": "統制コンソール · テナント管理",
+    "estate": "エステート · 環境 · 設定済みリソース",
+    "inventory": "検出されたリソース",
+    "home": "ホーム",
+    "workspaceDashboard": "ファイルとワークスペース",
+    "work": "作業とコミュニケーション",
+    "knowledge": "ソース · データ・ナレッジ・コンテキスト",
+    "permissions": "ルールと承認 · 承認と権限",
+    "usage": "使用量とコスト · アカウント別の使用量とコスト",
+    "audit": "アクティビティと監査 · 監査台帳",
+    "identity": "ユーザーとグループ · アイデンティティとアクセス",
+    "communications": "コミュニケーション",
+    "workspace-templates": "ワークスペーステンプレート",
+    "capabilities": "MCPとスキル · MCP & スキル",
+    "health": "正常性とSLA · ヘルス＆SLA",
+    "eventing": "Webhookとイベント · Webhook とイベントサブスクリプション",
+    "onboarding": "セットアップウィザード · はじめに",
+    "backups": "バックアップと復元",
+    "platforms": "プラットフォームとライフサイクル",
+    "security": "セキュリティとフォレンジック",
+    "logs": "ログビューア",
+    "modelOps": "モデルオペレーション",
+    "agentArtifacts": "エージェントアーティファクト",
+    "apiPlayground": "API プレイグラウンド"
   },
   "areas": {
     "infrastructure": {
       "label": "インフラ",
       "sections": {
-        "estate": "インベントリとワークスペース"
+        "estate": "リソースとワークスペース"
       }
     },
     "ai": {
@@ -298,6 +318,13 @@
     "draftSaveFailed": "このタブに下書きを保存できませんでした。このページを開いたままにするか、離れる前にメッセージをコピーしてください。",
     "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。",
     "slashLabel": "コマンドとスキル",
+    "mentionLabel": "コンテキスト",
+    "skillLabel": "スキル",
+    "mention": {
+      "loading": "セッションのフォルダーを読み込んでいます…",
+      "failed": "セッションのフォルダーを読み込めませんでした。",
+      "nomatch": "「{{query}}」で始まるファイルやフォルダーはありません。"
+    },
     "slashOption": "{{name}}、{{n}}件中{{i}}件目",
     "slashNoMatch": "「{{query}}」に一致するコマンドはありません。",
     "slash": {
@@ -315,7 +342,8 @@
     },
     "sessionKeeps": "このセッションは {{value}} のままです。別の設定を使うには新しいセッションを開始します。",
     "startWithChoice": "この選択で新しいセッションを開始",
-    "askPlaceholder": "何でも質問できます。/ でコマンドとスキル",
+    "newWithOtherAccess": "別のアクセスで新しいセッション…",
+    "askPlaceholder": "何でも質問できます。@ でコンテキスト、/ でコマンドとスキル",
     "modelPicker": "モデル: {{value}}",
     "effortPicker": "推論レベル: {{value}}",
     "accessPicker": "アクセス: {{value}}",
@@ -346,6 +374,7 @@
     }
   },
   "shell": {
+    "more": "その他",
     "searchCommands": "検索とコマンド",
     "search": "検索",
     "stopAll": "すべて停止",
@@ -412,8 +441,7 @@
       "usage": "{{tool}} の使用量",
       "fiveHour": "5時間",
       "week": "週",
-      "toolsUnreadable": "AI ツールを読み込めません · 再試行",
-      "version": "バージョン"
+      "toolsUnreadable": "AI ツールを読み込めません · 再試行"
     },
     "account": {
       "version": "バージョン {{version}}"
@@ -424,28 +452,28 @@
     "closeNavigation": "ナビゲーションを閉じる"
   },
   "places": {
-    "now": "ホーム",
+    "now": "概要",
     "sessions": "セッション",
-    "files": "ファイルとワークスペース",
-    "work": "作業とコミュニケーション",
-    "ai-tools": "AI ツール",
-    "models": "モデル",
-    "mcp-skills": "MCPとスキル",
-    "sources": "ソース",
-    "rules": "ルールと承認",
-    "usage": "使用量とコスト",
-    "activity": "アクティビティと監査",
-    "access": "アクセスマップ",
-    "people": "ユーザーとグループ",
+    "files": "ファイル",
+    "tools": "ツール",
+    "rules": "ルール",
+    "usage": "使用量",
+    "activity": "監査",
+    "people": "ユーザー",
     "security": "セキュリティ",
     "operations": "運用",
-    "license": "ライセンス",
     "settings": "設定"
   },
-  "groups": {
-    "work": "作業",
-    "tools": "ツール",
-    "control": "コントロール",
-    "admin": "管理"
+  "readOnlyNotice": "このページは閲覧できますが、変更はできません。変更できるのは組織の管理者です。",
+  "business": {
+    "sessions": "セッションの記録、自動化、オーケストレーション",
+    "people": "ディレクトリ、部門、委任管理",
+    "rules": "カスタムのポリシー、ロール、付与",
+    "usage": "チームとプロジェクト別のコスト",
+    "securityCompliance": "コンプライアンスのフレームワークと証跡",
+    "securityRedTeam": "レッドチームの実行と採点",
+    "operationsDeploy": "エージェントを他のホストへデプロイ",
+    "operationsResidency": "データレジデンシーとテナント",
+    "retentionSchedules": "保持スケジュールは Olivares Business でのみ適用されます。このエディションは保存するだけで、何もパージしません。"
   }
 }

@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -49,6 +50,7 @@ import {
 import { useSessionNames } from '@/features/shared'
 import { formatDateTime } from '@/lib/format'
 import { CaseActions, CaseLinksPanel, NewCaseButton } from './case-ops'
+import { SecurityPostureOverview } from './posture-overview'
 import { securityApi, securityKeys } from './api'
 import {
   AnomalyList,
@@ -84,8 +86,18 @@ const SEVERITIES = ['low', 'medium', 'high', 'critical']
 // DECLARA el recorte; nunca se pagina desde estas pantallas.
 const SECURITY_PAGE = 1000
 
+const SECURITY_TABS = [
+  'overview',
+  'findings',
+  'safety',
+  'guardrails',
+  'anomalies',
+  'forensics',
+] as const
+
 export function SecurityView() {
   const { t } = useTranslation('security')
+  const [tab, setTab] = useTabParam(SECURITY_TABS)
   const { can } = useAuth()
 
   const canTriage = can('security:finding:write')
@@ -96,16 +108,23 @@ export function SecurityView() {
     <IntelPage
       icon={ShieldAlert}
       title={t('title')}
+      // The top bar already says Security; the place's lead page does not say it twice.
+      titleHidden
       description={t('description')}
     >
-      <Tabs defaultValue="findings">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
+          <TabsTrigger value="overview">{t('tabs.overview')}</TabsTrigger>
           <TabsTrigger value="findings">{t('tabs.findings')}</TabsTrigger>
           <TabsTrigger value="safety">{t('tabs.safety')}</TabsTrigger>
           <TabsTrigger value="guardrails">{t('tabs.guardrails')}</TabsTrigger>
           <TabsTrigger value="anomalies">{t('tabs.anomalies')}</TabsTrigger>
           <TabsTrigger value="forensics">{t('tabs.forensics')}</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview" className="flex flex-col gap-4">
+          <SecurityPostureOverview />
+        </TabsContent>
 
         <TabsContent value="findings" className="flex flex-col gap-4">
           <FindingsTab canTriage={canTriage} />

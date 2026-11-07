@@ -1,6 +1,6 @@
 {
   "title": "Protocol bindings",
-  "subtitle": "Compose, inspect, and reconcile governed A2A and MCP bindings without treating unavailable evidence as success.",
+  "subtitle": "Compose, inspect and reconcile A2A and MCP bindings.",
   "actions": {
     "newDraft": "New draft",
     "refresh": "Refresh",

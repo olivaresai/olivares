@@ -5,6 +5,7 @@
 package sourcescope
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -39,16 +40,37 @@ import (
 
 // errProfileAssignmentBusiness is the sentinel the update closure returns so its handler
 // can answer the Community refusal outside the transaction.
-var errProfileAssignmentBusiness = errors.New("sourcescope: assigning profiles, tools, instructions and templates requires Business")
+var errProfileAssignmentBusiness = errors.New("sourcescope: assigning profiles, tools, instructions, templates and policies requires Business")
 
 func isProfileSource(sourceType string) bool {
 	return sourceType == sourceProfile || sourceType == sourceTool
 }
 
 // isAssignedSource reports the source types that are assigned rather than confined: a
-// provider profile, an AI tool, and the instructions and default template of a department.
+// provider profile, an AI tool, the instructions and default template of a department, and approval and DLP policies.
 func isAssignedSource(sourceType string) bool {
-	return isProfileSource(sourceType) || isStandardsSource(sourceType)
+	return isProfileSource(sourceType) || isStandardsSource(sourceType) || isPolicySource(sourceType)
+}
+
+func isPolicySource(sourceType string) bool {
+	return sourceType == sourceApprovalPolicy || sourceType == sourceDLPRuleset
+}
+
+// policyAdminPermission authors approval policies and DLP rulesets (modules/governance
+// permPolicyAdmin; a module cannot import another, so the strings must stay equal). Which of them
+// reaches a department or group decides how many approvals a person needs and which DLP rules
+// apply, so creating, changing, removing or approving such an assignment needs it too.
+const policyAdminPermission = auth.Permission("governance:policy:admin")
+
+const errPolicyAssignmentAdmin forbiddenError = "assigning an approval policy or a DLP ruleset needs governance:policy:admin, the permission that authors them"
+
+// mayAssignPolicy refuses a principal without policyAdminPermission a write of an approval-policy
+// or dlp-ruleset binding. Other source types pass.
+func mayAssignPolicy(ctx context.Context, mc api.ModuleContext, sourceType string) error {
+	if isPolicySource(sourceType) && !mc.Admits(ctx, policyAdminPermission, auth.ResourceFor(policyAdminPermission)) {
+		return errPolicyAssignmentAdmin
+	}
+	return nil
 }
 
 // mayWriteSource answers nil when this build may create or change a binding of sourceType
@@ -66,7 +88,7 @@ func (m *Module) mayWriteSource(sourceType string) error {
 
 func writeProfileAssignmentBusiness(w http.ResponseWriter) {
 	writeJSON(w, http.StatusNotImplemented, api.ErrorBody("business_required",
-		"Assigning provider profiles, AI tools, instructions and session templates to departments and groups requires Olivares Business."))
+		"Assigning provider profiles, AI tools, instructions, session templates and policies to departments and groups requires Olivares Business."))
 }
 
 // profileAdminPermission is the tenant-wide term for a profile or tool: the role that

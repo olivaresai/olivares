@@ -131,7 +131,7 @@ scan_tree() {
 
 run_gate() { # run_gate <root> [quiet]
   root="$1"; quiet="${2:-}"
-  pin_file="$root/sdk/siemwire/ocsf.go"
+  pin_file="$root/sdk/siemwire/catalog.go"
   [ -f "$pin_file" ] || unverified "no OCSF pin at $pin_file; the emitted version is unknown, so no claim about it can be judged"
   pin="$(sed -n 's/^const[ \t]\+OCSFVersion[ \t]*=[ \t]*"\([^"]*\)".*/\1/p' "$pin_file" | head -1)"
   [ -n "$pin" ] || unverified "could not read 'const OCSFVersion' from $pin_file — the pin is the whole premise of this gate"
@@ -163,7 +163,7 @@ selftest() {
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/ocsf-claims-selftest.XXXXXX")"
   trap 'rm -rf "$tmp"' EXIT HUP INT TERM
   mkdir -p "$tmp/sdk/siemwire" "$tmp/core/audit"
-  printf 'package siemwire\n\nconst OCSFVersion = "1.8.0"\n' > "$tmp/sdk/siemwire/ocsf.go"
+  printf 'package siemwire\n\nconst OCSFVersion = "1.8.0"\n' > "$tmp/sdk/siemwire/catalog.go"
   rc=0
 
   # (1) RED: the exact defect, split across a newline the way three of the five
@@ -205,13 +205,13 @@ GREEN
   fi
 
   # (3) The pin gate, both failure modes.
-  printf 'package siemwire\n\nconst OCSFVersion = "1.3.0"\n' > "$tmp/sdk/siemwire/ocsf.go"
+  printf 'package siemwire\n\nconst OCSFVersion = "1.3.0"\n' > "$tmp/sdk/siemwire/catalog.go"
   if "$0" --root "$tmp" >/dev/null 2>&1; then
     echo "selftest: FAIL — a pin of 1.3.0 did not trigger the stale-comment refusal" >&2; rc=1
   else
     echo "selftest: pin  OK — dropping the pin to 1.3.0 refuses, not passes"
   fi
-  printf 'package siemwire\n\n// no pin here\n' > "$tmp/sdk/siemwire/ocsf.go"
+  printf 'package siemwire\n\n// no pin here\n' > "$tmp/sdk/siemwire/catalog.go"
   set +e; "$0" --root "$tmp" >/dev/null 2>&1; st=$?; set -e
   [ "$st" -eq 2 ] && echo "selftest: unv  OK — an unreadable pin exits 2 (UNVERIFIED), not 0" \
     || { echo "selftest: FAIL — unreadable pin exited $st, expected 2" >&2; rc=1; }

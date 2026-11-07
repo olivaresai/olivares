@@ -74,10 +74,6 @@ import type {
   AgentCorePlannedChange,
 } from './types'
 
-/** The env var that wires the exporter. NOT a secret — it is the name of the
- *  switch, and printing it is what makes a 501 actionable instead of dead. */
-const CONFIG_ENV = 'OLIVARES_AGENTCORE_EXPORT_CONFIG'
-
 /** The plan the operator is looking at, pinned together with the mode that
  *  produced it. Apply reads BOTH from here and never from the live controls:
  *  the engine re-plans with the mode in the apply body, so sending the selector's
@@ -275,17 +271,7 @@ export function AgentCoreExportView() {
       <EmptyState
         icon={<PlugZap />}
         title={t('agentcoreExport.notWiredTitle')}
-        description={
-          <span className="flex flex-col gap-2">
-            <span>{t('agentcoreExport.notWiredBody')}</span>
-            <code className="mx-auto rounded bg-muted px-2 py-1 font-mono text-caption">
-              {CONFIG_ENV}
-            </code>
-            <span className="text-caption">
-              {t('agentcoreExport.notWiredCredentials')}
-            </span>
-          </span>
-        }
+        description={t('agentcoreExport.notWiredBody')}
       />
     )
   }

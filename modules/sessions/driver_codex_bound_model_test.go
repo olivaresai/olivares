@@ -89,9 +89,6 @@ func TestCodexBoundResumeKeepsTheStoredModelWithoutASelection(t *testing.T) {
 
 func TestCodexProfileModelReplyWithholdsSavedValuesAndNativeErrors(t *testing.T) {
 	session := codexDriver{}.OpenSession(DriverSessionConfig{Send: func(context.Context, []byte) error { return nil }}).(*codexSession)
-	if err := session.send(t.Context(), []byte(`{"id":3,"method":"config/read","params":{"includeLayers":false}}`)); err != nil {
-		t.Fatal(err)
-	}
 	for _, reply := range []string{
 		`{"id":3,"result":{"config":{"model_providers":{"saved":{"experimental_bearer_token":"synthetic-saved-secret"`,
 		`{"id":3,"result":{"config":{"model":"profile-model","model_providers":{"saved":{"experimental_bearer_token":"synthetic-saved-secret"}}},"origins":{"secret":"synthetic-saved-secret"}}}`,
@@ -99,6 +96,9 @@ func TestCodexProfileModelReplyWithholdsSavedValuesAndNativeErrors(t *testing.T)
 		`{"id":3,"error":{"code":"malformed","message":{"secret":"synthetic-saved-secret"}}}`,
 		`{"id":3,"result":{"config":{"model":{"secret":"synthetic-saved-secret"}}}}`,
 	} {
+		if err := session.send(t.Context(), []byte(`{"id":3,"method":"config/read","params":{"includeLayers":false}}`)); err != nil {
+			t.Fatal(err)
+		}
 		projected := session.projectProfileModelResponse([]byte(reply))
 		if !json.Valid(projected) || strings.Contains(string(projected), "synthetic-saved-secret") {
 			t.Fatal("config/read response exposed a saved value or broke the protocol envelope")
@@ -107,9 +107,34 @@ func TestCodexProfileModelReplyWithholdsSavedValuesAndNativeErrors(t *testing.T)
 			t.Fatal("model-only projection lost the model or retained other config fields")
 		}
 	}
+	if err := session.send(t.Context(), []byte(`{"id":3,"method":"config/read","params":{"includeLayers":false}}`)); err != nil {
+		t.Fatal(err)
+	}
 	for _, unrelated := range []string{`{"id":4,"result":{"value":"keep"}}`, `{"id":3,"method":"server/request","params":{"value":"keep"}}`} {
 		if string(session.projectProfileModelResponse([]byte(unrelated))) != unrelated {
 			t.Fatal("config model projection changed an unrelated protocol frame")
+		}
+	}
+}
+
+// The projection covers the one config/read reply. A non-JSON line while it is
+// pending may be that reply's unterminated prefix and stays withheld; once the
+// reply itself has passed, later stdout lines reach the stream unchanged.
+func TestCodexProfileModelProjectionEndsWithItsReply(t *testing.T) {
+	session := codexDriver{}.OpenSession(DriverSessionConfig{Send: func(context.Context, []byte) error { return nil }}).(*codexSession)
+	if err := session.send(t.Context(), []byte(`{"id":3,"method":"config/read","params":{"includeLayers":false}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if projected := session.projectProfileModelResponse([]byte(`{"id":3,"result":{"config":{"model_providers":`)); strings.Contains(string(projected), "model_providers") {
+		t.Fatal("a non-JSON line while config/read was pending reached the stream")
+	}
+	reply := `{"id":3,"result":{"config":{"model":"profile-model","model_providers":{"saved":{"experimental_bearer_token":"synthetic-saved-secret"}}}}}`
+	if projected := string(session.projectProfileModelResponse([]byte(reply))); projected != `{"id":3,"result":{"config":{"model":"profile-model"}}}` {
+		t.Fatalf("config/read reply after a pending non-JSON line = %s", projected)
+	}
+	for _, later := range []string{"codex: a plain stdout line", `{"id":3,"result":{"value":"keep"}}`} {
+		if projected := string(session.projectProfileModelResponse([]byte(later))); projected != later {
+			t.Fatalf("stdout after the config/read reply was rewritten: %q -> %s", later, projected)
 		}
 	}
 }

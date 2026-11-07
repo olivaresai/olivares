@@ -9,7 +9,7 @@ import "github.com/olivaresai/olivares/core/model"
 // workspaceDTO is the API shape of one registered workspace. It carries no file
 // content and no secret — only the operator-chosen configuration and references.
 type workspaceDTO struct {
-	resourceID         model.ID                // Stored Resource anchor; not a caller-supplied selector.
+	ResourceID         model.ID                `json:"resource_id"` // Stored Resource anchor, reported so a grant or filter can name the folder; never read from a request.
 	Backup             bool                    `json:"backup"`
 	SetupCommand       string                  `json:"setup_command"`
 	SetupCommandSHA256 string                  `json:"setup_command_sha256"`
@@ -24,6 +24,7 @@ type workspaceDTO struct {
 	ReadOnlyFolders    []string                `json:"read_only_folders"`
 	MaxReadBytes       int64                   `json:"max_read_bytes"`
 	DataClass          string                  `json:"data_class"`
+	RetentionDays      int64                   `json:"retention_days"`
 	DLPMode            string                  `json:"dlp_mode"`
 	DefaultPermission  string                  `json:"default_permission,omitempty"`
 	State              string                  `json:"state"`
@@ -42,7 +43,7 @@ func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
 	}
 	command, approval := rec.String(colWsSetupCommand), storedSetupApproval(rec)
 	return workspaceDTO{
-		resourceID:         model.ID(rec.String(model.ColID)),
+		ResourceID:         model.ID(rec.String(model.ColID)),
 		Backup:             rec.IsNull(colWsBackup) || rec.Bool(colWsBackup),
 		SetupCommand:       command,
 		SetupCommandSHA256: sha256Hex([]byte(command)),
@@ -57,6 +58,7 @@ func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
 		ReadOnlyFolders:    folders,
 		MaxReadBytes:       workspaceMaxRead(rec),
 		DataClass:          rec.String(colWsDataClass),
+		RetentionDays:      rec.Int(colWsRetentionDays),
 		DLPMode:            rec.String(colWsDLPMode),
 		DefaultPermission:  rec.String(colWsDefaultPermission),
 		State:              rec.String(colWsState),
@@ -78,6 +80,7 @@ func workspaceMaxRead(rec model.Record) int64 {
 
 // createWorkspaceRequest is the POST /workspaces body.
 type createWorkspaceRequest struct {
+	WorkspaceID     string   `json:"workspace_id"`
 	Backup          *bool    `json:"backup"`
 	Name            string   `json:"name"`
 	RootPath        string   `json:"root_path"`
@@ -88,6 +91,9 @@ type createWorkspaceRequest struct {
 	MaxReadBytes    int64    `json:"max_read_bytes"`
 	DataClass       string   `json:"data_class"`
 	DLPMode         string   `json:"dlp_mode"`
+	// Owner is the id of the person the folder belongs to, as a personal folder does: its
+	// content is theirs alone. Empty registers an ordinary folder.
+	Owner string `json:"owner"`
 }
 
 // moveRequest is the POST /workspaces/{ref}/files/move body.
@@ -118,9 +124,11 @@ type fileReadResponse struct {
 }
 
 // writeResponse confirms a write (the content is anchored by hash, never echoed).
+// Sensitivity carries the DLP labels a read of the same bytes would show, never the matched values.
 type writeResponse struct {
-	Path    string `json:"path"`
-	Size    int64  `json:"size"`
-	SHA256  string `json:"sha256"`
-	Created bool   `json:"created"`
+	Path        string           `json:"path"`
+	Size        int64            `json:"size"`
+	SHA256      string           `json:"sha256"`
+	Created     bool             `json:"created"`
+	Sensitivity []SensitivityHit `json:"sensitivity,omitempty"`
 }

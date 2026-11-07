@@ -13,6 +13,7 @@ func sessionsModelCatalogSchema() map[string]any {
 	entry := oas.Obj("type", "object", "required", []string{"id"}, "properties", oas.Obj(
 		"id", text, "display_name", text, "effort_levels", strings, "default_effort", text,
 		"is_default", boolean, "is_new", boolean, "is_legacy", boolean, "supports_fast_mode", boolean, "service_tiers", strings,
+		"launch_model", oas.Obj("type", "string", "description", "The exact model id a Claude Code selector launches on and a session records. Present only for a Claude Code selector on the tool's own sign-in."),
 	))
 	return oas.Obj("type", "object", "required", []string{"profile_ref", "driver", "state", "models", "default_model", "free_text", "checked_at", "refresh_interval_seconds"}, "properties", oas.Obj(
 		"profile_ref", text, "driver", text, "state", oas.Obj("type", "string", "enum", oas.Enum("fresh", "unsupported", "failed")),

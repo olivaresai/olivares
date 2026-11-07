@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plug, Plus, RefreshCw } from 'lucide-react'
@@ -33,14 +34,7 @@ import { MCPGatewayTab } from '@/features/console/mcp-gateway-tab'
 import { SkillsView } from '@/features/skills/skills-view'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
-
-/** The tab an address names (`?tab=`), read once like the other views' tabs: the Tools
- * fold lands /mcp-servers on Servers and /skills on Skills (#3388). */
-function tabFromURL(offered: readonly string[]): string {
-  if (typeof window === 'undefined') return 'servers'
-  const want = new URLSearchParams(window.location.search).get('tab')
-  return want && offered.includes(want) ? want : 'servers'
-}
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 
 export default function CapabilitiesView() {
   const { t } = useTranslation(['capabilities', 'common', 'intel'])
@@ -53,16 +47,16 @@ export default function CapabilitiesView() {
   // module's switch, as its own page did.
   const skillsOn = useModuleOn('skills')
 
-  const [tab, setTab] = useState(() =>
-    tabFromURL([
-      'servers',
-      'tools',
-      'skills',
-      'wiring',
-      ...(canReadConfig ? ['configs'] : []),
-      ...extensionTabs.map((p) => p.id),
-    ]),
-  )
+  // The tab lives in `?tab=`: the Tools fold lands /mcp-servers on Servers and /skills on
+  // Skills, and reload, Back and a pasted link keep it.
+  const [tab, setTab] = useTabParam([
+    'servers',
+    'tools',
+    'skills',
+    'wiring',
+    ...(canReadConfig ? ['configs'] : []),
+    ...extensionTabs.map((p) => p.id),
+  ])
   const [selectedServer, setSelectedServer] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -170,6 +164,9 @@ export default function CapabilitiesView() {
     },
   ]
 
+  // The catalog lists what MCP servers offer. A session also reports the built-in
+  // tools of the AI tool itself (Bash, Read…) by bare name: no server, kind or schema.
+  const catalogTools = (tools.data?.items ?? []).filter((x) => x.mcp_server_id)
   const toolColumns: TableColumn<ToolDTO, unknown>[] = [
     {
       accessorKey: 'name',
@@ -180,23 +177,31 @@ export default function CapabilitiesView() {
         </span>
       ),
     },
-    { accessorKey: 'kind', header: t('tools.kind') },
-    {
-      id: 'annotations',
-      header: t('tools.annotations'),
-      cell: ({ row }) => <ToolAnnotations tool={row.original} />,
-    },
-    {
-      accessorKey: 'schema_hash',
-      header: t('tools.schemaHash'),
-      cell: ({ row }) => (
-        <span className="font-mono text-caption text-muted-foreground">
-          {row.original.schema_hash
-            ? row.original.schema_hash.slice(0, 12)
-            : '—'}
-        </span>
-      ),
-    },
+    ...(catalogTools.some((x) => x.kind)
+      ? [{ accessorKey: 'kind', header: t('tools.kind') }]
+      : []),
+    ...(catalogTools.some((x) => x.read_only_hint || x.destructive_hint)
+      ? [
+          {
+            id: 'annotations',
+            header: t('tools.annotations'),
+            cell: ({ row }) => <ToolAnnotations tool={row.original} />,
+          } satisfies TableColumn<ToolDTO, unknown>,
+        ]
+      : []),
+    ...(catalogTools.some((x) => x.schema_hash)
+      ? [
+          {
+            accessorKey: 'schema_hash',
+            header: t('tools.schemaHash'),
+            cell: ({ row }) => (
+              <span className="font-mono text-caption text-muted-foreground">
+                {row.original.schema_hash?.slice(0, 12) ?? '—'}
+              </span>
+            ),
+          } satisfies TableColumn<ToolDTO, unknown>,
+        ]
+      : []),
   ]
 
   const skillColumns: TableColumn<SkillDTO, unknown>[] = [
@@ -321,6 +326,9 @@ export default function CapabilitiesView() {
               here (the tenant gateway, a tenant administrator's), above the servers the
               inventory discovered. */}
           {can('tenant:admin') ? <MCPGatewayTab titled={false} /> : null}
+          <p className="text-body text-muted-foreground">
+            {t('servers.caption')}
+          </p>
           <ListTruncationBadge
             query={servers}
             // ⛔ CLAVE PROPIA, NO LA COMPARTIDA. La compartida dice «Loaded {{n}} rows» y esta
@@ -376,7 +384,7 @@ export default function CapabilitiesView() {
           />
           <DataTable
             columns={toolColumns}
-            data={tools.data?.items ?? []}
+            data={catalogTools}
             isLoading={tools.isLoading}
             error={tools.error}
             onRetry={() => tools.refetch()}
@@ -394,7 +402,9 @@ export default function CapabilitiesView() {
 
         {extensionTabs.map((p) => (
           <TabsContent key={p.id} value={p.id}>
-            <p.Component />
+            <PanelSlot>
+              <p.Component />
+            </PanelSlot>
           </TabsContent>
         ))}
 
@@ -412,7 +422,7 @@ export default function CapabilitiesView() {
             hint={t('truncatedHint')}
           />
           <p className="mb-3 text-caption text-muted-foreground">
-            {t('skills.caption')}
+            {t('empty.skill.description')}
           </p>
           <ListTruncationBadge
             query={skills}

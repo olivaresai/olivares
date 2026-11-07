@@ -210,7 +210,7 @@ func (m *Module) handleKillSwitchEvidence(w http.ResponseWriter, r *http.Request
 				return aerr
 			}
 			if appr, gerr := apprRepo.Get(r.Context(), model.ID(approvalID)); gerr == nil {
-				pols, perr := loadApprovalPolicies(r.Context(), sc)
+				pols, perr := m.approvalPolicies(r.Context(), sc, approvalPolicySubject(appr))
 				if perr != nil {
 					return perr
 				}

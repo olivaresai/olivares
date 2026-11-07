@@ -31,6 +31,8 @@ export interface AccessFiltersProps {
   /** Number of unexpected accesses (drives the overlay button's danger badge). */
   unexpectedCount?: number
   canDrift: boolean
+  /** The list's filters: the search and the access mode only. */
+  compact?: boolean
 }
 
 export function AccessFilters({
@@ -41,6 +43,7 @@ export function AccessFilters({
   onOverlayChange,
   unexpectedCount = 0,
   canDrift,
+  compact = false,
 }: AccessFiltersProps) {
   const { t } = useTranslation('accessMap')
 
@@ -102,24 +105,26 @@ export function AccessFilters({
       </div>
 
       {/* Confidence: only firmly attributed */}
-      <Button
-        variant={filter.confidence === 'attributed' ? 'primary' : 'outline'}
-        size="sm"
-        aria-pressed={filter.confidence === 'attributed'}
-        onClick={() =>
-          onChange({
-            ...filter,
-            confidence:
-              filter.confidence === 'attributed' ? 'all' : 'attributed',
-          })
-        }
-        title={t('filters.attributedHint')}
-      >
-        {t('filters.attributedOnly')}
-      </Button>
+      {!compact && (
+        <Button
+          variant={filter.confidence === 'attributed' ? 'primary' : 'outline'}
+          size="sm"
+          aria-pressed={filter.confidence === 'attributed'}
+          onClick={() =>
+            onChange({
+              ...filter,
+              confidence:
+                filter.confidence === 'attributed' ? 'all' : 'attributed',
+            })
+          }
+          title={t('filters.attributedHint')}
+        >
+          {t('filters.attributedOnly')}
+        </Button>
+      )}
 
       {/* Signal source */}
-      {signalSources.length > 0 && (
+      {!compact && signalSources.length > 0 && (
         <Select
           value={filter.signalSource ?? ALL}
           onValueChange={(v) =>
@@ -160,30 +165,32 @@ export function AccessFilters({
         </Button>
       )}
 
-      <div className="ml-auto">
-        <Button
-          variant={overlay ? 'destructive-solid' : 'secondary'}
-          size="sm"
-          aria-pressed={overlay}
-          disabled={!canDrift}
-          onClick={() => onOverlayChange(!overlay)}
-          title={
-            canDrift ? t('filters.driftHint') : t('filters.driftForbidden')
-          }
-        >
-          <ShieldAlert className="size-3.5" />
-          {t('filters.drift')}
-          {overlay && unexpectedCount > 0 && (
-            <Badge
-              variant="neutral"
-              // eslint-disable-next-line olivares/no-raw-palette -- a 20% shade of the danger button it sits on, in every theme
-              className="ml-1 border-0 bg-black/20 text-current tabular-nums"
-            >
-              {unexpectedCount}
-            </Badge>
-          )}
-        </Button>
-      </div>
+      {!compact && (
+        <div className="ml-auto">
+          <Button
+            variant={overlay ? 'destructive-solid' : 'secondary'}
+            size="sm"
+            aria-pressed={overlay}
+            disabled={!canDrift}
+            onClick={() => onOverlayChange(!overlay)}
+            title={
+              canDrift ? t('filters.driftHint') : t('filters.driftForbidden')
+            }
+          >
+            <ShieldAlert className="size-3.5" />
+            {t('filters.drift')}
+            {overlay && unexpectedCount > 0 && (
+              <Badge
+                variant="neutral"
+                // eslint-disable-next-line olivares/no-raw-palette -- a 20% shade of the danger button it sits on, in every theme
+                className="ml-1 border-0 bg-black/20 text-current tabular-nums"
+              >
+                {unexpectedCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

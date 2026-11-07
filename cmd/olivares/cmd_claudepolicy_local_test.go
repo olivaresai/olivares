@@ -102,6 +102,13 @@ func TestCheckinToolsUsesLocalXDGHome(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "opencode"), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
+	// OpenCode lists its login only when its credential file exists.
+	if err := os.MkdirAll(filepath.Join(dataHome, "opencode"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataHome, "opencode", "auth.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	srv := newCheckinToolsEngine(t, checkinToolsInventory, true)
 	if _, _, err := execRoot(t, lot3Args(srv.URL, "claude-policy", "checkin", "managed-settings", "--scope", "xdg-host", "--tools")...); err != nil {
 		t.Fatal(err)

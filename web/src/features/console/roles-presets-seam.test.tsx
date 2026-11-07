@@ -5,7 +5,7 @@
 // The roles page has one place for the edition's role presets: after the custom roles and before
 // the groups. The Community console registers none, so its page is unchanged.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
@@ -57,6 +57,10 @@ vi.mock('@/features/extensions', async (importOriginal) => ({
 
 import type { AuthorizationForms } from '../panels'
 import { RolesTab } from './roles-tab'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 const emptyList = { items: [], has_more: false }
 
@@ -155,6 +159,31 @@ describe('RolesTab — the edition role presets', () => {
     renderRoles()
     await screen.findByRole('heading', { name: 'Custom roles' })
     expect(screen.queryByRole('region', { name: 'Role presets' })).toBeNull()
+  })
+
+  it('tells a delegate what they may give in words, not as raw permission ids', async () => {
+    authState.isSuperadmin = false
+    api.delegationAuthority.mockResolvedValue({
+      superadmin: false,
+      domains: [
+        {
+          scope_tree: 'workspace',
+          scope_ref: 'default',
+          permissions: [
+            'accessgraph:read',
+            'accessmap:drift:read',
+            'catalog:instance:admin',
+          ],
+        },
+      ],
+    })
+    renderRoles()
+    expect(await screen.findByText('read access: 2')).toBeInTheDocument()
+    expect(screen.getByText('admin access: 1')).toBeInTheDocument()
+    // The exact ids stay one click away, closed by default, so the ceiling loses nothing.
+    const details = screen.getByText('Exact permissions').closest('details')!
+    expect(details).not.toHaveAttribute('open')
+    expect(within(details).getByText('accessgraph:read')).toBeInTheDocument()
   })
 
   it('draws nothing for a reader who is not a tenant admin', async () => {

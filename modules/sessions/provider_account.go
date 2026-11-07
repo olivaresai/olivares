@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -260,14 +261,25 @@ type ProviderAccountMetadataPatch struct {
 	Accent      *string
 }
 
+// providerAccentNames is the closed, display-only palette an account may carry, in the order
+// the console offers it. The first five are published (0.3) and keep working; the console's
+// palette (web/src/features/agentops/provider-accent-palette.ts) and its theme tokens carry
+// the same nine, and provider-accent.test.tsx holds them to the OpenAPI snapshot.
+var providerAccentNames = []string{"orange", "green", "amber", "red", "blue", "purple", "pink", "teal", "slate"}
+
+// ProviderAccentChoices names the accents as a sentence ("orange, green, ... or slate"):
+// the validator's refusal and the CLI's --accent help say the same list.
+func ProviderAccentChoices() string {
+	last := len(providerAccentNames) - 1
+	return strings.Join(providerAccentNames[:last], ", ") + " or " + providerAccentNames[last]
+}
+
 func normalizeAccountAccent(value string) (string, error) {
 	value = strings.TrimSpace(value)
-	switch value {
-	case "", "orange", "green", "amber", "red", "blue":
+	if value == "" || slices.Contains(providerAccentNames, value) {
 		return value, nil
-	default:
-		return "", badRequest("accent must be empty, orange, green, amber, red or blue")
 	}
+	return "", badRequest("accent must be empty, " + ProviderAccentChoices())
 }
 
 // PatchProviderAccountMetadata updates only the supplied fields of a named

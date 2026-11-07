@@ -1,6 +1,6 @@
 {
   "title": "Enlaces de protocolo",
-  "subtitle": "Compón, inspecciona y reconcilia enlaces gobernados A2A y MCP sin confundir evidencia no disponible con éxito.",
+  "subtitle": "Componga, inspeccione y concilie los enlaces A2A y MCP.",
   "actions": {
     "newDraft": "Nuevo borrador",
     "refresh": "Actualizar",

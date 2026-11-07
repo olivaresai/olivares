@@ -8,14 +8,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -139,8 +144,8 @@ func TestNotifyDestinationPutSealsTheURLStoresAReferenceAndOpensIt(t *testing.T)
 	if strings.Contains(string(listJSON), "SYNTHETICSECRET") || !strings.Contains(string(listJSON), `"webhook_host":"hooks.slack.com"`) {
 		t.Fatalf("list = %s", listJSON)
 	}
-	if !list.SealerAvailable || len(list.Kinds) != 2 {
-		t.Fatalf("list = %+v, want the sealer available and two kinds", list)
+	if !list.SealerAvailable || len(list.Kinds) != len(notifyConsoleKinds) {
+		t.Fatalf("list = %+v, want the sealer available and every kind that can be added", list)
 	}
 }
 
@@ -390,6 +395,7 @@ func TestNotifyDestinationTestFailureNeverEchoesTheURL(t *testing.T) {
 // connector replaces the old one atomically, and a connector that cannot open leaves
 // the old one serving.
 func TestConnectorDispatcherApplyStoredReplacesAndRemoves(t *testing.T) {
+	t.Setenv("OLIVARES_EVENTING_ALLOW_LOOPBACK", "1") // the receivers below are on loopback
 	_, eng, _ := consoleDestinations(t)
 	var hitsA, hitsB int
 	var mu sync.Mutex
@@ -511,10 +517,10 @@ func TestNotifyDestinationDeleteOfAShadowedDefinitionLeavesTheFilesDestination(t
 	d := newConnectorDispatcher([]notifyDestinationSpec{{Name: "ops", Kind: "webhook", Config: map[string]string{"url": srv.URL}}}, nil, quietLog())
 	d.openAll(ctx, eng.secretResolver, quietLog())
 	svc := serviceOver(eng, settings, d)
-	if err := settings.saveNotifyDestination(ctx, actor, storedNotifyDestination{Name: "ops", Kind: "slack", Config: map[string]string{notifyWebhookField: notifySecretRef("ops")}}); err != nil {
+	if err := settings.saveNotifyDestination(ctx, actor, storedNotifyDestination{Name: "ops", Kind: "slack", Config: map[string]string{notifyWebhookField: notifySecretRef("ops", notifyWebhookField)}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := eng.secretStore.Put(ctx, actor, auth.GlobalSecretScope, notifySecretName("ops"), syntheticSlackURL, "test"); err != nil {
+	if _, err := eng.secretStore.Put(ctx, actor, auth.GlobalSecretScope, notifySecretName("ops", notifyWebhookField), syntheticSlackURL, "test"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -524,7 +530,7 @@ func TestNotifyDestinationDeleteOfAShadowedDefinitionLeavesTheFilesDestination(t
 	if stored, _ := settings.NotifyDestinations(ctx); len(stored) != 0 {
 		t.Fatalf("stored = %+v", stored)
 	}
-	if _, found, _ := eng.secretStore.Get(ctx, auth.GlobalSecretScope, notifySecretName("ops")); found {
+	if _, found, _ := eng.secretStore.Get(ctx, auth.GlobalSecretScope, notifySecretName("ops", notifyWebhookField)); found {
 		t.Fatal("the shadowed definition's sealed URL survived")
 	}
 	if err := d.Deliver(ctx, model.NewTenantID(), "ops", sdk.Notification{Title: "t"}); err != nil || hits() != 1 {
@@ -537,11 +543,11 @@ func TestNotifyDestinationDeleteOfAShadowedDefinitionLeavesTheFilesDestination(t
 func TestNotifyDestinationDoesNotTakeAFileNameWhenTheFilesDoesNotOpen(t *testing.T) {
 	_, eng, _ := consoleDestinations(t)
 	ctx, actor := context.Background(), operator(t)
-	if _, err := eng.secretStore.Put(ctx, actor, auth.GlobalSecretScope, notifySecretName("oncall"), syntheticSlackURL, "test"); err != nil {
+	if _, err := eng.secretStore.Put(ctx, actor, auth.GlobalSecretScope, notifySecretName("oncall", notifyWebhookField), syntheticSlackURL, "test"); err != nil {
 		t.Fatal(err)
 	}
 	d := newConnectorDispatcher([]notifyDestinationSpec{{Name: "oncall", Kind: "no-such-kind"}}, nil, quietLog())
-	d.setStored([]notifyDestinationSpec{{Name: "oncall", Kind: "slack", Config: map[string]string{notifyWebhookField: notifySecretRef("oncall")}}}, quietLog())
+	d.setStored([]notifyDestinationSpec{{Name: "oncall", Kind: "slack", Config: map[string]string{notifyWebhookField: notifySecretRef("oncall", notifyWebhookField)}}}, quietLog())
 	d.openAll(ctx, eng.secretResolver, quietLog())
 	if got := d.Destinations(); len(got) != 0 {
 		t.Fatalf("destinations = %v, want none: the console took the file's name", got)
@@ -590,7 +596,7 @@ func TestNotifyDestinationClosesWhenTheStoredURLCannotBeResolved(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Someone removes the sealed value on the Secrets page; the definition stays.
-	if err := eng.secretStore.Delete(ctx, actor, auth.GlobalSecretScope, notifySecretName("oncall")); err != nil {
+	if err := eng.secretStore.Delete(ctx, actor, auth.GlobalSecretScope, notifySecretName("oncall", notifyWebhookField)); err != nil {
 		t.Fatal(err)
 	}
 	got, err := svc.Put(ctx, actor, api.NotifyDestinationInput{Name: "oncall", Kind: "slack"})
@@ -627,8 +633,42 @@ func TestNotifyDestinationRefusedWriteKeepsTheExistingSecret(t *testing.T) {
 	if _, err := svc.Put(ctx, actor, api.NotifyDestinationInput{Name: "kept", Kind: "slack", WebhookURL: syntheticSlackURL}); !errors.Is(err, api.ErrNotifyDestinationInvalid) {
 		t.Fatalf("kind change = %v, want ErrNotifyDestinationInvalid", err)
 	}
-	if value, _ := eng.secretStore.Resolve(ctx, auth.GlobalSecretScope, notifySecretName("kept")); string(value) != syntheticTeamsURL {
+	if value, _ := eng.secretStore.Resolve(ctx, auth.GlobalSecretScope, notifySecretName("kept", notifyWebhookField)); string(value) != syntheticTeamsURL {
 		t.Fatalf("the refused write replaced the sealed URL with %q", value)
+	}
+}
+
+// A stored credential belongs to the server it was typed for: a test or an update that
+// moves the destination to another host, with the secrets left blank, must not carry
+// the sealed SMTP login there.
+func TestNotifyDestinationStoredSecretStaysWithItsAddress(t *testing.T) {
+	svc, eng, settings := consoleDestinations(t)
+	ctx, actor := context.Background(), operator(t)
+	mail := map[string]string{"smtp_host": "1.1.1.1", "from": "olivares@example.com", "to": "oncall@example.com",
+		"smtp_username": "SYNTHETICUSER", "smtp_password": "SYNTHETICPASSWORD"}
+	if _, err := svc.Put(ctx, actor, api.NotifyDestinationInput{Name: "ops-mail", Kind: "email", Settings: mail}); err != nil {
+		t.Fatal(err)
+	}
+	moved := map[string]string{"smtp_host": "8.8.8.8", "from": "olivares@example.com", "to": "oncall@example.com"}
+
+	rec := &recordingConnector{}
+	svc.connect = func(string) (sdk.OutputConnector, error) { return rec, nil }
+	_ = svc.Test(ctx, actor, api.NotifyDestinationInput{Name: "ops-mail", Settings: moved})
+	if got := rec.opened.Settings; got["smtp_username"] != "" || got["smtp_password"] != "" {
+		t.Fatalf("a test to a new host was opened with the stored credential: %v", got)
+	}
+
+	// An update that moves it is refused until the secrets are given again: neither
+	// carried to the new host nor dropped in silence (the destination would then send
+	// unauthenticated, or a webhook unsigned). The stored destination is left as it was.
+	if _, err := svc.Put(ctx, actor, api.NotifyDestinationInput{Name: "ops-mail", Kind: "email", Settings: moved}); !errors.Is(err, api.ErrNotifyDestinationInvalid) {
+		t.Fatalf("put to a new host without the secrets = %v, want ErrNotifyDestinationInvalid", err)
+	}
+	if record := settingsJSON(t, settings); !strings.Contains(record, `"smtp_host":"1.1.1.1"`) {
+		t.Fatalf("the refused move changed the stored destination: %s", record)
+	}
+	if value, _ := eng.secretStore.Resolve(ctx, auth.GlobalSecretScope, notifySecretName("ops-mail", "smtp_password")); string(value) != "SYNTHETICPASSWORD" {
+		t.Fatalf("the refused move touched the sealed password: %q", value)
 	}
 }
 
@@ -755,5 +795,78 @@ func TestNotifyConsoleDestinationsThroughTheRealHandler(t *testing.T) {
 	}
 	if names := secretNames(); strings.Contains(names, "notify/oncall") {
 		t.Fatalf("the sealed URL survived the delete: %s", names)
+	}
+}
+
+// A signed webhook added through the real handler: before, only Slack and Teams could
+// be created (400); now it opens without a restart, its test message reaches the
+// receiver signed, a private address is refused with the remedy, and removing it
+// deletes its sealed signing secret.
+func TestNotifyWebhookDestinationThroughTheRealHandler(t *testing.T) {
+	t.Setenv("OLIVARES_EVENTING_ALLOW_LOOPBACK", "1") // the receiver below is on loopback
+	var mu sync.Mutex
+	var signatures []string
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		mu.Lock()
+		signatures = append(signatures, r.Header.Get("X-Olivares-Signature"))
+		mu.Unlock()
+	}))
+	t.Cleanup(receiver.Close)
+	_, call, _ := mcpRealHandler(t)
+
+	saved := call("PUT", "/v1/console/notify-destinations", map[string]any{"name": "ops-hook", "kind": "webhook",
+		"settings": map[string]string{"url": receiver.URL + "/hook", "signing_secret": "SYNTHETICSIGNINGKEY"}}, http.StatusOK)
+	if saved["live"] != true || saved["webhook_host"] != "127.0.0.1" {
+		t.Fatalf("put = %v", saved)
+	}
+	call("POST", "/v1/console/notify-destinations/test", map[string]any{"name": "ops-hook"}, http.StatusOK)
+	mu.Lock()
+	got := slices.Clone(signatures)
+	mu.Unlock()
+	if len(got) != 1 || got[0] == "" {
+		t.Fatalf("the receiver got %d requests with signatures %q; want one signed test message", len(got), got)
+	}
+
+	private := call("PUT", "/v1/console/notify-destinations", map[string]any{"name": "internal", "kind": "webhook",
+		"settings": map[string]string{"url": "https://10.0.0.7/hook"}}, http.StatusBadRequest)
+	if raw, _ := json.Marshal(private); !strings.Contains(string(raw), "private or reserved") || !strings.Contains(string(raw), "OLIVARES_NOTIFY_CONFIG") {
+		t.Fatalf("the private address refusal lacks its reason or remedy: %s", raw)
+	}
+	if listed, _ := json.Marshal(call("GET", "/v1/console/notify-destinations", nil, http.StatusOK)); strings.Contains(string(listed), "SYNTHETICSIGNINGKEY") {
+		t.Fatalf("the list shows the signing secret: %s", listed)
+	}
+
+	call("DELETE", "/v1/console/notify-destinations", map[string]any{"name": "ops-hook"}, http.StatusOK)
+	if raw, _ := json.Marshal(call("GET", "/v1/console/secrets", nil, http.StatusOK)["secrets"]); strings.Contains(string(raw), "notify/ops-hook") {
+		t.Fatalf("the sealed signing secret survived the delete: %s", raw)
+	}
+}
+
+// A secret setting given on the command line is refused before any request: argv is
+// readable in /proc and the shell history. Without --kind, a key secret in any kind is.
+func TestNotifyDestinationCLIRefusesASecretInArgv(t *testing.T) {
+	for _, c := range []struct{ kind, set string }{
+		{"email", "smtp_password=SYNTHETICPASSWORD"},
+		{"webhook", "signing_secret=SYNTHETICKEY"},
+		{"", "auth_token=SYNTHETICTOKEN"},
+	} {
+		_, err := notifyDestinationSettings(&cobra.Command{}, c.kind, []string{c.set}, nil)
+		if exitcode.From(err) != exitcode.Usage || strings.Contains(fmt.Sprint(err), "SYNTHETIC") {
+			t.Fatalf("--set %s (kind %q) = %v; want a usage error that does not repeat the value", c.set, c.kind, err)
+		}
+	}
+	if got, err := notifyDestinationSettings(&cobra.Command{}, "email", []string{"from=olivares@example.com"}, nil); err != nil || got["from"] != "olivares@example.com" {
+		t.Fatalf("--set of a plain setting = %v, %v", got, err)
+	}
+}
+
+// A typed setting with a line break would add mail headers (from_name) or split a
+// request line: control characters are refused at the API.
+func TestNotifyDestinationSettingRefusesControlCharacters(t *testing.T) {
+	kind := notifyConsoleKinds["email"]
+	in := api.NotifyDestinationInput{Settings: map[string]string{"from_name": "Ops\r\nBcc: x@example.com"}}
+	if _, err := typedSettings("email", notifyKindFields("email", kind), in); !errors.Is(err, api.ErrNotifyDestinationInvalid) {
+		t.Fatalf("from_name with CR/LF = %v, want ErrNotifyDestinationInvalid", err)
 	}
 }

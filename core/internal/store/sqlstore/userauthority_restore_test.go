@@ -180,6 +180,16 @@ func TestPostgresRestoreUserAuthorityClosure(t *testing.T) {
 				if snapshot() != before {
 					t.Fatal("wrong-database refusal changed ACL")
 				}
+				// The refusal must end the application witness transaction it
+				// opened on the other database: a session left open there holds
+				// that database until DROP DATABASE terminates it.
+				var open int
+				if err := super.QueryRowContext(ctx, `SELECT count(*) FROM pg_catalog.pg_stat_activity WHERE datname=$1 AND xact_start IS NOT NULL`, other.Database).Scan(&open); err != nil {
+					t.Fatal(err)
+				}
+				if open != 0 {
+					t.Fatalf("wrong-database refusal left %d open transaction(s) on the other database", open)
+				}
 			})
 			t.Run("privileged_role_is_not_waived", func(t *testing.T) {
 				stripped()

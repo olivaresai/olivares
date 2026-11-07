@@ -247,3 +247,97 @@ func TestForeignSteeringComparesAccounts(t *testing.T) {
 		}
 	}
 }
+
+// Stopping or interrupting another person's session stays allowed, and the audit ledger
+// names whose session it was: the launcher's account sits beside the actor (a login or
+// another account's API token), so no join to the launch entry is needed (a token launch's
+// actor is the token, not the account). The launcher's own stop names nobody.
+func TestForeignStopAndInterruptNameTheLauncherInTheAudit(t *testing.T) {
+	f := newSteeringFixture(t)
+	foreign, own, byToken := f.launch(f.owner), f.launch(f.owner), f.launch(f.owner)
+	issued := f.h.doJSON("POST", "/v1/tokens", f.admin, map[string]any{"name": "ops", "tenant": f.tenant.String(), "role": auth.RoleEditor}, nil)
+	token, _ := issued.body["token"].(string)
+	if issued.code != http.StatusCreated || token == "" {
+		t.Fatalf("token = %d %s", issued.code, issued.raw)
+	}
+	rec, err := f.m.loadRun(t.Context(), f.tenant, foreign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher := rec.String(colRunLauncherUserID)
+	if launcher == "" {
+		t.Fatal("the launch stamped no launcher account")
+	}
+	// Meta is nil on every audit read path, so it is observed as appended.
+	var drafts []model.AuditDraft
+	original := f.m.Data
+	f.m.Data = idlePolicyAuditFaultData{ModuleData: original, seen: &drafts}
+	t.Cleanup(func() { f.m.Data = original })
+	// The interrupting entry is written before the turn is touched, whatever the answer.
+	f.do(f.colleague, foreign, steeringCall{"interrupt", "POST", "/interrupt", nil})
+	for who, ref := range map[string]string{f.colleague: foreign, f.owner: own, token: byToken} {
+		if got := f.do(who, ref, steeringCall{"stop", "POST", "/stop", nil}); got.code != http.StatusOK {
+			t.Fatalf("stop = %d %s", got.code, got.raw)
+		}
+	}
+	foreignID := model.ID(storedRunIDForTest(t, f.h.st, f.tenant, foreign))
+	ownID := model.ID(storedRunIDForTest(t, f.h.st, f.tenant, own))
+	byTokenID := model.ID(storedRunIDForTest(t, f.h.st, f.tenant, byToken))
+	for _, c := range []struct {
+		action string
+		target model.ID
+		want   any
+	}{
+		{"sessions.run.interrupting", foreignID, launcher},
+		{"sessions.run.stopping", foreignID, launcher},
+		{"sessions.run.stopping", ownID, nil},
+		{"sessions.run.stopping", byTokenID, launcher}, // the launcher of all three runs
+	} {
+		n := 0
+		for _, d := range drafts {
+			if d.Action != c.action || d.TargetID != c.target {
+				continue
+			}
+			n++
+			if got := d.Meta["launcher_user_id"]; got != c.want {
+				t.Errorf("%s by %s: launcher_user_id = %v, want %v", c.action, d.Actor, got, c.want)
+			}
+		}
+		if n == 0 {
+			t.Errorf("no %s entry on %s", c.action, c.target)
+		}
+	}
+}
+
+// A run with no live process (a launch still waiting for approval) is stopped straight to
+// stopped, without a stopping entry; a colleague's stop of it names the launcher too.
+func TestForeignStopOfAWaitingLaunchNamesTheLauncherInTheAudit(t *testing.T) {
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{}), WithCredentialSource(staticCred()), WithLaunchGate(&controlledLaunchApproval{}))
+	run, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationNative,
+		Actor: "user:launcher", ActorKind: model.ActorUser,
+	})
+	if err != nil || run.State != stateWaitingApproval {
+		t.Fatalf("parked launch = %q, err %v, want waiting_approval", run.State, err)
+	}
+	var drafts []model.AuditDraft
+	original := m.Data
+	m.Data = idlePolicyAuditFaultData{ModuleData: original, seen: &drafts}
+	t.Cleanup(func() { m.Data = original })
+	if _, err := m.stopRun(t.Context(), tenant, run.RunRef, "user:colleague", model.ActorUser); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, d := range drafts {
+		if d.Action != "sessions.run.stopped" {
+			continue
+		}
+		n++
+		if got := d.Meta["launcher_user_id"]; got != "launcher" {
+			t.Errorf("stopped by %s: launcher_user_id = %v, want launcher", d.Actor, got)
+		}
+	}
+	if n == 0 {
+		t.Error("no sessions.run.stopped entry")
+	}
+}

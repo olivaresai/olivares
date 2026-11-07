@@ -95,23 +95,27 @@ func TestWorkspaceKnowledgeSourceChangesRefuseIngest(t *testing.T) {
 					srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						once.Do(mutate)
 						w.Header().Set("Content-Type", "application/json")
-						if strings.Contains(r.URL.Path, "/spaces/") {
+						switch {
+						case r.URL.Path == "/files":
 							if change == "session-revoked-embedding" {
-								_, _ = w.Write([]byte(`{"results":[{"id":"page-1","title":"Calibration"},{"id":"page-2","title":"Second calibration"}]}`))
+								_, _ = w.Write([]byte(`{"files":[{"id":"page-1","name":"Calibration","mimeType":"text/plain"},{"id":"page-2","name":"Second calibration","mimeType":"text/plain"}]}`))
 							} else {
-								_, _ = w.Write([]byte(`{"results":[{"id":"page-1","title":"Calibration"}]}`))
+								_, _ = w.Write([]byte(`{"files":[{"id":"page-1","name":"Calibration","mimeType":"text/plain"}]}`))
 							}
-						} else {
+						case r.URL.Query().Get("alt") == "media":
 							fetched.Add(1)
+							w.Header().Set("Content-Type", "text/plain")
+							_, _ = w.Write([]byte("Workspace A only"))
+						default:
 							pageID := "page-1"
 							if strings.Contains(r.URL.Path, "page-2") {
 								pageID = "page-2"
 							}
-							_, _ = w.Write([]byte(`{"id":"` + pageID + `","title":"Calibration","body":{"storage":{"value":"<p>Workspace A only</p>"}},"space":{"key":"ENG"}}`))
+							_, _ = w.Write([]byte(`{"id":"` + pageID + `","name":"Calibration","mimeType":"text/plain"}`))
 						}
 					}))
 					t.Cleanup(srv.Close)
-					connectorBody := map[string]any{"name": "docs", "kind": "confluence", "workspace_ref": "default", "enabled": true, "config": map[string]string{"mode": "live", "base_url": srv.URL, "space_key": "ENG"}}
+					connectorBody := map[string]any{"name": "docs", "kind": "gdrive", "workspace_ref": "default", "enabled": true, "config": map[string]string{"mode": "live", "api_base": srv.URL}}
 					connector := request("POST", "/v1/m/sourcescope/workspace-connectors", connectorBody, http.StatusCreated)
 					if change == "session-expired" {
 						changeSession(false)

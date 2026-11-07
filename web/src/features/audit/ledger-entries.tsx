@@ -3,10 +3,11 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE LEDGER'S ENTRIES, AS SENTENCES. "Session started by Marc Vidal", grouped by the
-// session they belong to (an entry on a `sessions.run`) with the entries of no session in
+// session they belong to (an entry on a `sessions.run`, or a tool call the session itself
+// made) with the entries of no session in
 // their own group, and the requests that still need a person first, under their own
-// heading, with the one orange edge however many there are. The edge belongs to the
-// requests, never to the selection: selection is the tone step.
+// heading, marked by their "Needs you" label, never by a coloured edge. Selection is
+// the tone step.
 //
 // Every value under a sentence (who acted, what it acted on) is a button that adds itself to the
 // query, so a person narrows the ledger by pointing at it.
@@ -18,7 +19,7 @@ import { cn } from '@/lib/utils'
 import {
   groupEntries,
   needsPerson,
-  SESSION_KIND,
+  sessionFilter,
   tokenText,
   type EntryNames,
 } from './ledger'
@@ -45,14 +46,14 @@ export function LedgerEntries({
   onAdd: (filters: QueryParams) => void
 }) {
   const { t } = useTranslation('audit')
-  const groups = groupEntries(entries, pending, bySession, (key, e) =>
+  const groups = groupEntries(entries, pending, bySession, (key, session) =>
     key === 'needs'
       ? t('ledger.needsYou')
       : key === 'other'
         ? t('ledger.outside')
         : key === 'all'
           ? ''
-          : (names.target(e) ?? ''),
+          : names.session(session ?? ''),
   )
   // The button names the token it adds; its tooltip keeps the ledger's own reference.
   const add = (label: string, filters: QueryParams, reference: string) => (
@@ -69,17 +70,19 @@ export function LedgerEntries({
 
   return (
     <ul aria-label={t('ledger.entries')} className="flex flex-col gap-4">
-      {groups.map((g) => (
+      {groups.map(({ session, ...g }) => (
         <li key={g.key} className="flex flex-col gap-1">
           {g.heading ? (
             <h2 className="flex items-baseline gap-2 px-3 text-heading text-text">
-              {g.session ? (
+              {session ? (
                 <button
                   type="button"
-                  onClick={() =>
-                    onAdd({ target_kind: SESSION_KIND, target_id: g.session })
-                  }
-                  title={t('ledger.add', { token: `target:${g.session}` })}
+                  onClick={() => onAdd(sessionFilter(session))}
+                  title={t('ledger.add', {
+                    token: sessionFilter(session).actor
+                      ? `person:${g.heading}`
+                      : `target:${session}`,
+                  })}
                   className="rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   {g.heading}
@@ -92,13 +95,7 @@ export function LedgerEntries({
               </span>
             </h2>
           ) : null}
-          <ul
-            className={cn(
-              'relative flex flex-col',
-              g.key === 'needs' &&
-                'before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-accent',
-            )}
-          >
+          <ul className="flex flex-col">
             {g.entries.map((e) => {
               const flagged = needsPerson(e, pending)
               const selected = e.id === selectedId

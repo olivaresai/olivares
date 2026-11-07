@@ -179,13 +179,7 @@ func introspectStateless(ctx context.Context, spec serverSpec) (catalog, error) 
 	// Map the discover result onto the catalog's server view so every consumer
 	// (surface, posture, capability gating, edges) works unchanged in both modes.
 	cat := catalog{
-		server: InitializeResult{
-			ProtocolVersion: revision20260728,
-			ServerInfo:      disc.serverIdentity(),
-			Capabilities:    disc.Capabilities,
-			Instructions:    disc.Instructions,
-			Meta:            disc.Meta,
-		},
+		server:            disc.initializeResult(),
 		nextRevision:      true,
 		supportedVersions: disc.SupportedVersions,
 	}

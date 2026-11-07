@@ -7,6 +7,7 @@ package sessions
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -147,6 +148,25 @@ func (m *Module) resumeTenantEngineStoppedRuns(ctx context.Context, tenant model
 		m.warnf("sessions: runs the engine stopped cannot resume by themselves and stay stopped until a person resumes them or deletes them; debug logging names each",
 			"tenant", tenant.String(), "runs", waiting)
 	}
+}
+
+// ceilingLeft is the session time a run had left when it was stopped: the ceiling its last
+// start armed (colTemplateCeiling) less the time from that start to the stop. The engine's
+// own resume arms it instead of the template's full time, so a restart never grants the
+// time again; the downtime of a clean stop is not the session's (a run a crashed engine left
+// behind counts until the recovery that stopped it). ok is false when the row does not say:
+// no ceiling, or a run that predates the columns.
+func ceilingLeft(rec model.Record) (time.Duration, bool) {
+	secs := rec.Int(colTemplateCeiling)
+	started, err := model.ParseTimestamp(rec.String(colStartedAt))
+	if secs <= 0 || err != nil {
+		return 0, false
+	}
+	stopped, err := model.ParseTimestamp(rec.String(colStoppedAt))
+	if err != nil {
+		return 0, false
+	}
+	return time.Duration(secs)*time.Second - stopped.Time().Sub(started.Time()), true
 }
 
 // stillAwaitsEngineResume reports whether the run is still stopped with the engine's reason,

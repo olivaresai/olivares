@@ -1,14 +1,15 @@
 {
-  "title": "Claude Code governance",
+  "title": "Managed policy",
   "subtitle": "Author managed policy, hooks, MCP and sandbox controls, and Cedar/OPA policy-as-code — and review the policy-vs-observed drift the engine reports.",
   "tabs": {
-    "drift": "Drift & posture",
+    "drift": "Drift",
     "managedSettings": "Managed settings",
     "hooks": "Hooks",
-    "managedMcp": "MCP & plugins",
-    "sandbox": "Sandbox & egress",
+    "managedMcp": "MCP",
+    "sandbox": "Sandbox",
     "policyAsCode": "Policy-as-code",
-    "hitl": "Managed-agent HITL"
+    "hitl": "Managed-agent HITL",
+    "departmentInstructions": "Department instructions"
   },
   "seam": {
     "badge": "Backend pending",
@@ -75,7 +76,7 @@
   },
   "drift": {
     "title": "Policy drift & posture",
-    "subtitle": "PERMITTED policy vs OBSERVED host configuration, as reported by the read-only connectors.",
+    "subtitle": "Where each host's settings differ from the policy.",
     "listLabel": "Drift findings",
     "subject": "subject",
     "fingerprint": "fingerprint",
@@ -294,5 +295,19 @@
     "contentUnknown": "content UNKNOWN (attestation only)",
     "openFindings_one": "{{count}} open finding",
     "openFindings_other": "{{count}} open findings"
+  },
+  "department": {
+    "title": "Department instructions file",
+    "hint": "The instructions file of a department, rendered from what the department carries: the same text its sessions are given. Preview it, then publish it for the department's workstations. A department with no instructions left retracts its published file.",
+    "select": "Department",
+    "selectPlaceholder": "Choose a department",
+    "preview": "Preview",
+    "publish": "Publish",
+    "published": "Instructions file published.",
+    "previewFailed": "Could not preview the department's file",
+    "fileLabel": "Department instructions file",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_one": "{{count}} published revision",
+    "revisions_other": "{{count}} published revisions"
   }
 }

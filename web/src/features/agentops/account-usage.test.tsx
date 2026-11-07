@@ -2,14 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// What an account's usage says where the console shows the account: the 5-hour and
-// weekly windows the tool reported, nothing at all (never 0 %) when it reported none,
-// and a window at 100 % marked with when it resets.
-import { render, screen } from '@testing-library/react'
+// What an account's usage says where the console shows the account: its share of the week
+// and of five hours, nothing at all (never 0 %) when the tool reported none, and a window at
+// 100 % marked with when it resets. Every window by name lives in the Usage detail.
+import { render, renderHook, screen, within } from '@testing-library/react'
 import axe from 'axe-core'
 import { describe, expect, it } from 'vitest'
 import { findRawI18nKeys } from '@/test/i18n-keys'
-import { AccountUsage, AtLimit, limitReached } from './account-usage'
+import {
+  AccountUsage,
+  AtLimit,
+  limitReached,
+  UsageWindows,
+  useWindowName,
+} from './account-usage'
 import type { ProviderAccountUsage } from './types'
 
 const win = (
@@ -25,19 +31,19 @@ const win = (
 })
 
 describe('AccountUsage', () => {
-  it('names the 5-hour and the weekly window with their percent, rounded', () => {
+  it('says the share of the week, then of five hours, rounded', () => {
     const { container } = render(
-      <AccountUsage usage={[win('seven_day', 17.4), win('five_hour', 41.6)]} />,
+      <AccountUsage usage={[win('five_hour', 41.6), win('seven_day', 17.4)]} />,
     )
-    // The 5-hour window comes first whatever order the engine sent.
-    expect(container.textContent).toBe('5-hour 42% · Weekly 17%')
+    // The week comes first whatever order the engine sent.
+    expect(container.textContent).toBe('17% of the week · 42% of 5 hours')
     expect(findRawI18nKeys(container)).toEqual([])
   })
 
   it('leaves out a window the tool did not report; it is unknown, not 0 %', () => {
     const { container } = render(<AccountUsage usage={[win('five_hour', 9)]} />)
-    expect(container.textContent).toBe('5-hour 9%')
-    expect(container.textContent).not.toContain('Weekly')
+    expect(container.textContent).toBe('9% of 5 hours')
+    expect(container.textContent).not.toContain('week')
   })
 
   it('says nothing for an account that reported nothing, unless the row asks for the word', () => {
@@ -54,18 +60,36 @@ describe('AccountUsage', () => {
     const { container } = render(
       <AccountUsage usage={[win('five_hour', 99.6), win('seven_day', 100)]} />,
     )
-    expect(container.textContent).toBe('5-hour 99% · Weekly 100%')
+    expect(container.textContent).toBe('100% of the week · 99% of 5 hours')
   })
 
-  it('shows additional windows with their provider label', () => {
-    const { container } = render(
-      <AccountUsage usage={[win('seven_day:opus', 55), win('five_hour', 3)]} />,
+  it("leaves a model's weekly cap out of the share line; the Usage detail names it", () => {
+    const usage = [
+      win('seven_day', 75, { resets_at: '2030-01-03T10:00:00Z' }),
+      win('seven_day:fable', 0, { label: 'Weekly (Fable)' }),
+    ]
+    expect(render(<AccountUsage usage={usage} />).container.textContent).toBe(
+      '75% of the week',
     )
-    expect(container.textContent).toBe('5-hour 3% · seven_day:opus 55%')
+    const detail = render(<UsageWindows usage={usage} />).container
+    const [week, fable] = within(detail).getAllByRole('listitem')
+    expect(week).toHaveTextContent('Weekly 75%')
+    expect(within(week!).getByText(/^Resets /)).toBeInTheDocument()
+    // In the console's words, never the engine's English label.
+    expect(fable).toHaveTextContent('Fable only 0%')
+    expect(detail).not.toHaveTextContent('Weekly (Fable)')
+    expect(findRawI18nKeys(detail)).toEqual([])
+    // The provider snapshot carries the engine's label alone: the same words.
+    const name = renderHook(() => useWindowName()).result.current
+    expect(name({ label: '5-hour' })).toBe('5-hour')
+    expect(name({ label: 'Weekly' })).toBe('Weekly')
+    expect(name({ label: 'Weekly (Fable)' })).toBe('Fable only')
+    expect(name({ label: 'Monthly spend' })).toBe('Monthly spend')
   })
-  it('shows a monthly cap and credit balance without inventing a percent', () => {
+
+  it('details a monthly cap and credit balance without inventing a percent', () => {
     const { container } = render(
-      <AccountUsage
+      <UsageWindows
         usage={[
           win('monthly_extra_usage', 85, { label: 'Monthly extra usage' }),
           {
@@ -77,9 +101,11 @@ describe('AccountUsage', () => {
         ]}
       />,
     )
-    expect(container.textContent).toBe(
-      'Monthly extra usage 85% · Credits 12.50',
-    )
+    expect(
+      within(container)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['Monthly extra usage 85%', 'Credits 12.50'])
   })
   it('keeps zero, unlimited and unknown credits distinct', () => {
     const row = {
@@ -88,7 +114,7 @@ describe('AccountUsage', () => {
       observed_at: '2026-10-29T10:00:00Z',
     }
     const { container, rerender } = render(
-      <AccountUsage
+      <UsageWindows
         usage={[{ ...row, credit: { balance: '0', unlimited: false } }]}
       />,
     )
@@ -96,7 +122,7 @@ describe('AccountUsage', () => {
     expect(
       limitReached([{ ...row, credit: { balance: '0', unlimited: false } }]),
     ).toBeUndefined()
-    rerender(<AccountUsage usage={[{ ...row, credit: { unlimited: true } }]} />)
+    rerender(<UsageWindows usage={[{ ...row, credit: { unlimited: true } }]} />)
     expect(container.textContent).toBe('Credits ∞')
     rerender(
       <AccountUsage
@@ -110,7 +136,9 @@ describe('AccountUsage', () => {
     const { container } = render(
       <AccountUsage usage={[win('five_hour', 80)]} />,
     )
-    expect(container.querySelector('.text-warning')).toHaveTextContent('80%')
+    expect(container.querySelector('.text-warning')).toHaveTextContent(
+      '80% of 5 hours',
+    )
     expect(limitReached([win('five_hour', 80)])).toBeUndefined()
   })
 })
@@ -123,7 +151,7 @@ describe('a window whose reset time has passed', () => {
     const { container } = render(
       <AccountUsage usage={[stale, win('seven_day', 20)]} />,
     )
-    expect(container.textContent).toBe('Weekly 20%')
+    expect(container.textContent).toBe('20% of the week')
     expect(render(<AtLimit usage={[stale]} />).container).toBeEmptyDOMElement()
   })
 })
@@ -159,15 +187,13 @@ describe('AtLimit', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent('resets')
   })
 
-  it('names a per-model window by the label the tool gave it', () => {
+  it("says another window's limit is reached without the provider's window name", () => {
     render(
       <AtLimit
-        usage={[win('seven_day:opus', 100, { label: 'Opus weekly' })]}
+        usage={[win('seven_day:opus', 100, { label: 'Weekly (Opus)' })]}
       />,
     )
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Opus weekly limit reached',
-    )
+    expect(screen.getByRole('status')).toHaveTextContent(/^Limit reached$/)
   })
 
   it('renders nothing below the limit', () => {

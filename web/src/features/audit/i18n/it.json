@@ -3,9 +3,6 @@
   "subtitle": "Consulta il registro firmato delle attività di IA.",
   "subtitleSystem": "La catena del tenant di sistema delle operazioni amministrative tra tenant (sola lettura).",
   "searchLoaded": "Filtra solo le righe caricate (lato client)…",
-  "scan": {
-    "incomplete": "Scansione fino al seq {{seq}}: non è l'intero registro; Carica altri prosegue la scansione."
-  },
   "scope": {
     "label": "Ambito del registro",
     "tenant": "Registro del tenant",
@@ -75,6 +72,9 @@
     "actorMember": "Un membro"
   },
   "empty": {
+    "filteredTitle": "Nessuna evidenza corrispondente",
+    "searching": "Nessuna corrispondenza negli eventi cercati finora. Carica altro continua la ricerca.",
+    "noMatches": "Nessun evento corrisponde a questi filtri. Prova a modificare o rimuovere un filtro.",
     "title": "Ancora nessuna evidenza",
     "description": "Il registro è vuoto per questo ambito. Le operazioni governate aggiungono eventi a prova di manomissione man mano che avvengono."
   },
@@ -104,26 +104,27 @@
     "membership_offboard": "Persona rimossa",
     "token_issue": "Token API creato",
     "token_revoke": "Token API revocato",
-    "secret_delete": "Secret eliminato"
+    "secret_delete": "Secret eliminato",
+    "governance_killswitch_engage": "Kill switch attivato",
+    "sessions_run_created": "Sessione creata"
   },
   "targets": {
     "core_policy": "Policy"
   },
   "internal": {
-    "hidden": "Record interni nascosti: {{count}}",
     "show": "Mostra i record interni",
     "hide": "Nascondi i record interni",
     "allHidden": "Tutto ciò che è stato caricato finora è un record interno."
   },
   "ledger": {
     "query": "Query del registro",
-    "placeholder": "person:  action:  since:7d  o parole",
+    "placeholder": "Cerca",
     "addFilter": "Aggiungi un filtro",
     "remove": "Rimuovi {{token}}",
     "add": "Aggiungi {{token}} alla query",
     "commands": "Cerca e comandi",
     "problem": {
-      "key": "{{token}} non è un filtro del registro. Usa person:, action:, kind:, target:, since:, until: o parole.",
+      "key": "{{token}} non è un filtro del registro. Usa person:, action:, kind:, target:, tool:, folder:, since:, until: o parole.",
       "time": "{{token}} non è un tempo. Usa 90m, 24h, 7d, 2w o una data come 2026-10-20.",
       "person": "Nessuno corrisponde a {{token}}. Usa un nome, un'email o user:<id>.",
       "several": "{{token}} corrisponde a più persone. Usa il nome completo, un'email o user:<id>.",
@@ -150,16 +151,6 @@
       "bar_one": "{{at}}, {{count}} voce",
       "bar_many": "{{at}}, {{count}} voci",
       "bar_other": "{{at}}, {{count}} voci",
-      "loaded_one": "{{count}} voce caricata",
-      "loaded_many": "{{count}} voci caricate",
-      "loaded_other": "{{count}} voci caricate",
-      "sessions_one": "{{count}} sessione",
-      "sessions_many": "{{count}} sessioni",
-      "sessions_other": "{{count}} sessioni",
-      "people_one": "{{count}} persona",
-      "people_many": "{{count}} persone",
-      "people_other": "{{count}} persone",
-      "more": "altre da caricare",
       "now": "Ora"
     },
     "entry": {
@@ -173,5 +164,15 @@
       "chainHint": "Ogni voce porta l'hash della precedente. Cambiarne una rompe ogni hash successivo.",
       "signedEntry": "La voce firmata"
     }
+  },
+  "verbs": {
+    "create": "Creazione: {{what}}",
+    "update": "Aggiornamento: {{what}}",
+    "delete": "Eliminazione: {{what}}"
+  },
+  "toolApproval": {
+    "allow": "Chiamata al tool consentita",
+    "ask": "Chiamata al tool in attesa di approvazione",
+    "deny": "Chiamata al tool negata"
   }
 }

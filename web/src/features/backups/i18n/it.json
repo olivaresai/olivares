@@ -1,5 +1,5 @@
 {
-  "title": "Backup e ripristino",
+  "title": "Backup",
   "description": "Gestisci gli snapshot di disaster recovery di Olivares AI.",
   "tabs": {
     "backups": "Backup",
@@ -30,6 +30,7 @@
       "date": "Data",
       "filename": "Nome file",
       "size": "Dimensione",
+      "duration": "Durata",
       "engine": "Engine",
       "tenants": "Tenant",
       "notes": "Note"
@@ -88,6 +89,9 @@
     "freeSpace": "Spazio libero nella destinazione",
     "notAvailable": "Non disponibile",
     "overdue": "Obiettivo di ripristino superato",
+    "rtoMinutes": "Obiettivo di tempo di ripristino (minuti)",
+    "rtoExceeded": "L’ultimo test di ripristino ha richiesto più dell’obiettivo di {{minutes}} minuti",
+    "restoreTook": "Il test di ripristino ha richiesto {{seconds}} s",
     "age": "{{hours}} ore fa",
     "offsiteLockMissing": "Il bucket {{bucket}} non blocca le nuove copie in modalità `COMPLIANCE`, quindi le credenziali di questo server potrebbero eliminarle. Attiva S3 Object Lock con una conservazione `COMPLIANCE` predefinita ed esegui la pulizia con credenziali separate.",
     "offsiteLockUnknown": "Impossibile leggere l'Object Lock del bucket {{bucket}}, quindi queste copie potrebbero non essere protette dall'eliminazione."
@@ -126,6 +130,14 @@
     "confirmLabel": "Approva e ripristina ora"
   },
   "restore": {
+    "postgres": {
+      "description": "Usa una destinazione db init separata e vuota e riferimenti file: o env: del server. Un secondo amministratore deve approvare.",
+      "dsn_ref": "Riferimento di connessione dell’applicazione",
+      "owner_dsn_ref": "Riferimento del proprietario (facoltativo)",
+      "admin_dsn_ref": "Riferimento dell’amministratore dei backup",
+      "scratch_dsn_ref": "Riferimento di manutenzione temporanea",
+      "confirm": "Ripristina solo la destinazione vuota approvata. Dopo la verifica, configura il motore con la directory recuperata e le connessioni di destinazione e riavvialo."
+    },
     "notAuthorized": "Non autorizzato",
     "uploadFailed": "Caricamento non riuscito",
     "started": "Ripristino avviato",
@@ -166,6 +178,8 @@
     "tenants": "Tenant",
     "keys": "Chiavi sigillate",
     "empty": "Nessuno",
+    "notIncluded": "Non incluso in questo backup",
+    "notIncludedHint": "Questi percorsi non vengono copiati. Salvali tu stesso.",
     "loadFailed": "Impossibile caricare il dettaglio del backup."
   },
   "empty": {

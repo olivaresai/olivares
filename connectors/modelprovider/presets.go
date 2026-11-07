@@ -32,6 +32,11 @@ const (
 type Preset struct {
 	Ref   string `json:"ref"`
 	Title string `json:"title"`
+	// Monogram (one or two capitals) and Color (#RRGGBB) are the vendor's one mark:
+	// every row of a vendor carries the same pair, and OpenCode's rows carry the
+	// OpenCode tool's (core/driverfacts).
+	Monogram string `json:"monogram"`
+	Color    string `json:"color"`
 	// Kind is the record kind the row registers as: anthropic (what Claude Code
 	// speaks) or openai_compatible.
 	Kind    string `json:"kind"`
@@ -44,6 +49,13 @@ type Preset struct {
 	Models    PresetModels `json:"models"`
 	DocsURL   string       `json:"docs_url"`
 	KeyURL    string       `json:"key_url,omitempty"`
+	// Responses: the vendor's OpenAI-compatible base also serves the Responses API
+	// (POST <base>/responses), the only API Codex speaks. It is set from the vendor's
+	// own API reference, never assumed, and is engine policy: it is not published.
+	Responses bool `json:"-"`
+	// Governed rows register the governed inference service, which no tool
+	// session uses (NativeService); a picker of tool providers leaves them out.
+	Governed bool `json:"governed,omitempty"`
 	// KeyCheckURL verifies the key when model discovery is public. It is probe
 	// policy, not a user-configurable credential endpoint.
 	KeyCheckURL string `json:"-"`
@@ -68,69 +80,72 @@ type PresetModels struct {
 // that page sets (ANTHROPIC_AUTH_TOKEN is bearer, ANTHROPIC_API_KEY x-api-key);
 // where it names none, the value is the Anthropic API's own (x-api-key).
 //
+// Responses is true where that reference lists the Responses API (Moonshot, OpenRouter,
+// Mistral). DeepSeek and Z.ai document Chat Completions alone, so Codex is not bound to them.
+//
 // Role mappings use the vendor setup; Fable and subagents use its small role
 // unless the vendor documents a separate choice.
 var presets = []Preset{
 	{
-		Ref: ServiceDeepSeek, Title: "DeepSeek", Kind: KindOpenAICompatible, BaseURL: DeepSeekBaseURL, Auth: AuthBearer,
+		Ref: ServiceDeepSeek, Title: "DeepSeek", Monogram: "DS", Color: "#6780F6", Kind: KindOpenAICompatible, BaseURL: DeepSeekBaseURL, Auth: AuthBearer, Governed: true,
 		DocsURL: "https://api-docs.deepseek.com/",
 		KeyURL:  "https://platform.deepseek.com/api_keys",
 	},
 	{
-		Ref: "deepseek-anthropic", Title: "DeepSeek (Claude Code)", Kind: KindAnthropic, BaseURL: DeepSeekBaseURL + "/anthropic",
+		Ref: "deepseek-anthropic", Title: "DeepSeek (Claude Code)", Monogram: "DS", Color: "#6780F6", Kind: KindAnthropic, BaseURL: DeepSeekBaseURL + "/anthropic",
 		ModelsURL: DeepSeekModelsURL, Auth: AuthBearer, Models: PresetModels{Default: "deepseek-flash", Opus: "deepseek-flash[1m]", Sonnet: "deepseek-flash[1m]", Haiku: "deepseek-flash", Fable: "deepseek-flash", Subagent: "deepseek-flash"},
 		DocsURL: "https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code",
 		KeyURL:  "https://platform.deepseek.com/api_keys",
 	},
 	{
-		Ref: "zai", Title: "Z.ai", Kind: KindOpenAICompatible, BaseURL: "https://api.z.ai/api/paas/v4", Auth: AuthBearer,
+		Ref: "zai", Title: "Z.ai", Monogram: "Z", Color: "#329797", Kind: KindOpenAICompatible, BaseURL: "https://api.z.ai/api/paas/v4", Auth: AuthBearer,
 		DocsURL: "https://docs.z.ai/",
 		KeyURL:  "https://z.ai/manage-apikey/apikey-list",
 	},
 	{
-		Ref: "zai-anthropic", Title: "Z.ai (Claude Code)", Kind: KindAnthropic, BaseURL: "https://api.z.ai/api/anthropic",
+		Ref: "zai-anthropic", Title: "Z.ai (Claude Code)", Monogram: "Z", Color: "#329797", Kind: KindAnthropic, BaseURL: "https://api.z.ai/api/anthropic",
 		Auth: AuthBearer, Models: PresetModels{Default: "glm-5.3", Opus: "glm-5.3[1m]", Sonnet: "glm-5.3[1m]", Haiku: "glm-5.3-flash[1m]", Fable: "glm-5.3-flash[1m]", Subagent: "glm-5.3-flash[1m]"},
 		DocsURL: "https://docs.z.ai/devpack/tool/claude",
 		KeyURL:  "https://z.ai/manage-apikey/apikey-list",
 	},
 	{
-		Ref: "kimi-code", Title: "Kimi Code", Kind: KindAnthropic, BaseURL: "https://api.kimi.ai/coding", Auth: AuthAnthropicKey,
+		Ref: "kimi-code", Title: "Kimi Code", Monogram: "KI", Color: "#D46395", Kind: KindAnthropic, BaseURL: "https://api.kimi.ai/coding", Auth: AuthAnthropicKey,
 		DocsURL: "https://www.kimi.com/code/docs/en/",
 	},
 	{
-		Ref: "moonshot", Title: "Moonshot", Kind: KindOpenAICompatible, BaseURL: "https://api.moonshot.ai/v1", Auth: AuthBearer,
+		Ref: "moonshot", Title: "Moonshot", Monogram: "MO", Color: "#A672D6", Kind: KindOpenAICompatible, BaseURL: "https://api.moonshot.ai/v1", Auth: AuthBearer, Responses: true,
 		DocsURL: "https://platform.kimi.ai/docs/guide/agent-support",
 	},
 	{
-		Ref: "moonshot-anthropic", Title: "Moonshot (Claude Code)", Kind: KindAnthropic, BaseURL: "https://api.moonshot.ai/anthropic",
+		Ref: "moonshot-anthropic", Title: "Moonshot (Claude Code)", Monogram: "MO", Color: "#A672D6", Kind: KindAnthropic, BaseURL: "https://api.moonshot.ai/anthropic",
 		ModelsURL: "https://api.moonshot.ai/v1/models", Auth: AuthBearer,
 		DocsURL: "https://platform.kimi.ai/docs/guide/claude-code-kimi",
 	},
 	// OpenRouter lists models publicly, including when a wrong key is supplied.
 	// Its key endpoint must accept the credential before discovery can report success.
 	{
-		Ref: "openrouter", Title: "OpenRouter", Kind: KindOpenAICompatible, BaseURL: "https://openrouter.ai/api/v1", Auth: AuthBearer, KeyCheckURL: "https://openrouter.ai/api/v1/key",
+		Ref: "openrouter", Title: "OpenRouter", Monogram: "OR", Color: "#768BA3", Kind: KindOpenAICompatible, BaseURL: "https://openrouter.ai/api/v1", Auth: AuthBearer, KeyCheckURL: "https://openrouter.ai/api/v1/key", Responses: true,
 		DocsURL: "https://openrouter.ai/docs/quickstart",
 		KeyURL:  "https://openrouter.ai/settings/keys",
 	},
 	{
-		Ref: "openrouter-anthropic", Title: "OpenRouter (Claude Code)", Kind: KindAnthropic, BaseURL: "https://openrouter.ai/api",
+		Ref: "openrouter-anthropic", Title: "OpenRouter (Claude Code)", Monogram: "OR", Color: "#768BA3", Kind: KindAnthropic, BaseURL: "https://openrouter.ai/api",
 		ModelsURL: "https://openrouter.ai/api/v1/models", Auth: AuthBearer, KeyCheckURL: "https://openrouter.ai/api/v1/key",
 		DocsURL: "https://openrouter.ai/docs/guides/guides/claude-code-integration",
 		KeyURL:  "https://openrouter.ai/settings/keys",
 	},
 	{
-		Ref: "mistral", Title: "Mistral", Kind: KindOpenAICompatible, BaseURL: "https://api.mistral.ai/v1", Auth: AuthBearer,
+		Ref: "mistral", Title: "Mistral", Monogram: "MI", Color: "#E46027", Kind: KindOpenAICompatible, BaseURL: "https://api.mistral.ai/v1", Auth: AuthBearer, Responses: true,
 		DocsURL: "https://docs.mistral.ai/",
 		KeyURL:  "https://console.mistral.ai/api-keys",
 	},
 	{
-		Ref: "opencode-zen", Title: "OpenCode Zen (Claude Code)", Kind: KindAnthropic, BaseURL: "https://opencode.ai/inference/anthropic",
+		Ref: "opencode-zen", Title: "OpenCode Zen (Claude Code)", Monogram: "OC", Color: "#8679F1", Kind: KindAnthropic, BaseURL: "https://opencode.ai/inference/anthropic",
 		ModelsURL: "https://opencode.ai/inference/v1/models", Auth: AuthBearer, Models: PresetModels{Default: "claude-sonnet-5-5"},
 		DocsURL: "https://opencode.ai/v2/docs/console/harnesses/claude-code/",
 	},
 	{
-		Ref: "opencode-go", Title: "OpenCode Go (Claude Code)", Kind: KindAnthropic, BaseURL: "https://opencode.ai/inference/go/anthropic",
+		Ref: "opencode-go", Title: "OpenCode Go (Claude Code)", Monogram: "OC", Color: "#8679F1", Kind: KindAnthropic, BaseURL: "https://opencode.ai/inference/go/anthropic",
 		ModelsURL: "https://opencode.ai/inference/v1/models", Auth: AuthBearer, Models: PresetModels{Default: "claude-haiku-5-5"},
 		DocsURL: "https://opencode.ai/v2/docs/console/harnesses/claude-code/",
 	},
@@ -159,13 +174,30 @@ func LookupPreset(ref string) (Preset, bool) {
 	return presets[i], true
 }
 
+// LookupPresetByEndpoint returns the row of this kind whose documented base URL is
+// baseURL, trimmed of a trailing slash the way a record's own base_url is
+// (provider_record.go recordEndpoint). It tells a vendor's own preset address (a BYO
+// key record at exactly that address) from any other address of the same kind — a
+// local model server, a private gateway — which names no row here.
+func LookupPresetByEndpoint(kind, baseURL string) (Preset, bool) {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return Preset{}, false
+	}
+	i := slices.IndexFunc(presets, func(p Preset) bool { return p.Kind == kind && p.BaseURL == baseURL })
+	if i < 0 {
+		return Preset{}, false
+	}
+	return presets[i], true
+}
+
 // NativeService reports whether a record with this service may serve a tool
-// session: no service (an ordinary record), or a row that is not governed. The
-// governed deepseek service, and a ref the table does not know, fail closed.
+// session: no service (an ordinary record), or a row that is not governed. A
+// governed row, and a ref the table does not know, fail closed.
 func NativeService(ref string) bool {
 	if ref == "" {
 		return true
 	}
 	row, ok := LookupPreset(ref)
-	return ok && row.Ref != ServiceDeepSeek
+	return ok && !row.Governed
 }

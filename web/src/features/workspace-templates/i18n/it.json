@@ -3,19 +3,19 @@
     "label": "Caricati {{n}} template; ce ne sono altri",
     "hint": "In questo catalogo sono disponibili solo i template caricati. Un template non mostrato qui potrebbe esistere oltre questa pagina."
   },
-  "title": "Template di workspace",
+  "title": "Template",
   "subtitle": "Snapshot riutilizzabili di hook, impostazioni, connettori e policy per le sessioni del workspace.",
   "catalog": {
     "builtin": "Integrato",
     "version": "v{{version}}",
     "author": "Di {{author}}",
     "archived": "Archiviato",
-    "noTemplates": "Nessun template trovato.",
-    "noTemplatesHint": "Crea il tuo primo template per riutilizzare le configurazioni del workspace.",
-    "filterAll": "Tutti",
-    "filterBuiltin": "Integrati",
-    "filterCustom": "Personalizzati",
     "showArchived": "Mostra archiviati"
+  },
+  "groups": {
+    "yours": "I tuoi template",
+    "builtin": "Template integrati ({{n}})",
+    "yoursEmpty": "Ancora nessuno. Un template è un punto di partenza riutilizzabile per le nuove sessioni."
   },
   "editor": {
     "nameLabel": "Nome",
@@ -30,7 +30,26 @@
       "connectors": "Connettori",
       "connectorsHint": "ID dei connettori da collegare quando questo template viene applicato.",
       "policies": "Policy di governance",
-      "policiesHint": "Modalità DLP, limiti di durata della sessione, tool consentiti e registrazione dell'I/O."
+      "policiesHint": "Modalità DLP, limiti di durata della sessione, tool consentiti e registrazione dell'I/O.",
+      "secrets": "Segreti",
+      "secretsHint": "Segreti del vault che le sessioni di questo template ricevono come variabili d’ambiente.",
+      "summary": {
+        "hooks_one": "{{count}} hook",
+        "hooks_many": "{{count}} hook",
+        "hooks_other": "{{count}} hook",
+        "secrets_one": "{{count}} variabile",
+        "secrets_many": "{{count}} variabili",
+        "secrets_other": "{{count}} variabili",
+        "connectors_one": "{{count}} connettore",
+        "connectors_many": "{{count}} connettori",
+        "connectors_other": "{{count}} connettori",
+        "set_one": "{{count}} impostato",
+        "set_many": "{{count}} impostati",
+        "set_other": "{{count}} impostati",
+        "model": "Modello: {{model}}",
+        "none": "Nessuno",
+        "defaults": "Predefinite"
+      }
     },
     "hooks": {
       "preTool": "Prima del tool",

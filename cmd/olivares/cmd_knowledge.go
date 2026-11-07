@@ -401,7 +401,7 @@ func newKnowledgeKBsIngestCmd(client datalaneClient) *cobra.Command {
 		Long: "Ingest into a knowledge base, either by pulling a registered content source or\n" +
 			"by supplying documents inline. Content is chunked, REDACTED and only then\n" +
 			"embedded and indexed. Supply exactly one of --source or --documents/--documents-file.",
-		Example: `  olivares knowledge kbs ingest kb_123 --source confluence
+		Example: `  olivares knowledge kbs ingest kb_123 --source eng-wiki
   olivares knowledge kbs ingest kb_123 --documents-file ./docs.json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -470,7 +470,7 @@ func newKnowledgeKBsSyncCmd(client datalaneClient) *cobra.Command {
 		Long: "Run a delta synchronization against a registered content source: new and changed\n" +
 			"documents are ingested, removed ones are deleted and ACLs are refreshed. The\n" +
 			"response reports what was synced, deleted, skipped and held.",
-		Example: "  olivares knowledge kbs sync kb_123 --source confluence",
+		Example: "  olivares knowledge kbs sync kb_123 --source eng-wiki",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if source == "" {
@@ -1702,7 +1702,7 @@ func newKnowledgeSourcesCmd(client datalaneClient) *cobra.Command {
 		Use:         "sources",
 		Short:       "Run discovery over a registered content source",
 		Long:        "Scan a registered document source for personal data WITHOUT ingesting it.",
-		Example:     "  olivares knowledge sources scan confluence",
+		Example:     "  olivares knowledge sources scan eng-wiki",
 		Args:        cobra.NoArgs,
 	}
 	cmd.AddCommand(&cobra.Command{
@@ -1713,7 +1713,7 @@ func newKnowledgeSourcesCmd(client datalaneClient) *cobra.Command {
 			"inventory feeds are refused: they are not knowledge, and labeling them as source\n" +
 			"documents would be wrong. With no classifier wired the engine refuses\n" +
 			"(409) instead of reporting a clean source it never read.",
-		Example: "  olivares knowledge sources scan confluence",
+		Example: "  olivares knowledge sources scan eng-wiki",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("sources", args[0], "scan")

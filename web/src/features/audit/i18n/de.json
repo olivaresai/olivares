@@ -3,9 +3,6 @@
   "subtitle": "Lesen Sie das signierte Protokoll der KI-Aktivitäten.",
   "subtitleSystem": "Die Kette des System-Mandanten mit den mandantenübergreifenden Verwaltungsvorgängen (schreibgeschützt).",
   "searchLoaded": "Nur geladene Zeilen filtern (clientseitig)…",
-  "scan": {
-    "incomplete": "Durchsucht bis seq {{seq}} — nicht das gesamte Hauptbuch; „Mehr laden“ setzt den Scan fort."
-  },
   "scope": {
     "label": "Hauptbuch-Bereich",
     "tenant": "Mandanten-Hauptbuch",
@@ -75,6 +72,9 @@
     "actorMember": "Ein Mitglied"
   },
   "empty": {
+    "filteredTitle": "Keine passenden Nachweise",
+    "searching": "In den bisher durchsuchten Ereignissen gab es keine Treffer. Mit „Mehr laden“ geht die Suche weiter.",
+    "noMatches": "Keine Ereignisse passen zu diesen Filtern. Ändern oder entfernen Sie einen Filter.",
     "title": "Noch keine Nachweise",
     "description": "Das Hauptbuch ist für diesen Bereich leer. Geregelte Vorgänge hängen manipulationssichere Ereignisse an, sobald sie auftreten."
   },
@@ -104,26 +104,27 @@
     "membership_offboard": "Person entfernt",
     "token_issue": "API-Token erstellt",
     "token_revoke": "API-Token widerrufen",
-    "secret_delete": "Geheimnis gelöscht"
+    "secret_delete": "Geheimnis gelöscht",
+    "governance_killswitch_engage": "Not-Aus ausgelöst",
+    "sessions_run_created": "Sitzung erstellt"
   },
   "targets": {
     "core_policy": "Richtlinie"
   },
   "internal": {
-    "hidden": "Ausgeblendete interne Datensätze: {{count}}",
     "show": "Interne Datensätze anzeigen",
     "hide": "Interne Datensätze ausblenden",
     "allHidden": "Alles bisher Geladene sind interne Datensätze."
   },
   "ledger": {
     "query": "Hauptbuch-Abfrage",
-    "placeholder": "person:  action:  since:7d  oder Wörter",
+    "placeholder": "Suche",
     "addFilter": "Filter hinzufügen",
     "remove": "{{token}} entfernen",
     "add": "{{token}} zur Abfrage hinzufügen",
     "commands": "Suche und Befehle",
     "problem": {
-      "key": "{{token}} ist kein Hauptbuch-Filter. Verwenden Sie person:, action:, kind:, target:, since:, until: oder Wörter.",
+      "key": "{{token}} ist kein Hauptbuch-Filter. Verwenden Sie person:, action:, kind:, target:, tool:, folder:, since:, until: oder Wörter.",
       "time": "{{token}} ist keine Zeitangabe. Verwenden Sie 90m, 24h, 7d, 2w oder ein Datum wie 2026-10-20.",
       "person": "Niemand passt zu {{token}}. Verwenden Sie einen Namen, eine E-Mail oder user:<id>.",
       "several": "{{token}} passt zu mehreren Personen. Verwenden Sie den vollständigen Namen, eine E-Mail oder user:<id>.",
@@ -148,13 +149,6 @@
       "week": "Einträge pro Woche",
       "bar_one": "{{at}}, {{count}} Eintrag",
       "bar_other": "{{at}}, {{count}} Einträge",
-      "loaded_one": "{{count}} Eintrag geladen",
-      "loaded_other": "{{count}} Einträge geladen",
-      "sessions_one": "{{count}} Sitzung",
-      "sessions_other": "{{count}} Sitzungen",
-      "people_one": "{{count}} Person",
-      "people_other": "{{count}} Personen",
-      "more": "weitere ladbar",
       "now": "Jetzt"
     },
     "entry": {
@@ -168,5 +162,15 @@
       "chainHint": "Jeder Eintrag trägt den Hash des vorherigen. Ändert man einen, bricht jeder spätere Hash.",
       "signedEntry": "Der signierte Eintrag"
     }
+  },
+  "verbs": {
+    "create": "{{what}} erstellt",
+    "update": "{{what}} aktualisiert",
+    "delete": "{{what}} gelöscht"
+  },
+  "toolApproval": {
+    "allow": "Werkzeugaufruf erlaubt",
+    "ask": "Werkzeugaufruf wartet auf Genehmigung",
+    "deny": "Werkzeugaufruf abgelehnt"
   }
 }

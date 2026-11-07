@@ -39,7 +39,7 @@ only a label, so a workflow author can never forge a first-party event such as
 ## 1. Declare the workflow
 
 On a fresh install, `orchestration` is off. As an administrator, turn it on in
-**Settings > Edition & modules**, keeping the other selected modules on.
+**Settings > Modules**, keeping the other selected modules on.
 For the CLI, sign in to this engine as an administrator with `olivares login`,
 then run `olivares modules on orchestration`. Wait for each engine restart before continuing;
 running sessions stop and can be resumed. Otherwise these API calls return

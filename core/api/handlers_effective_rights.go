@@ -180,6 +180,16 @@ func (s *Server) handleEffectiveRights(w http.ResponseWriter, r *http.Request, m
 		s.writeError(w, r, err)
 		return
 	}
+	// A module that holds the subject's directory data knows better than the stored rows how
+	// old it is: the rows only change when something in them does.
+	asOf, held, err := s.directoryDataAsOf(r.Context(), subject, mc.Tenant)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	if held {
+		membershipAsOf = asOf
+	}
 	subjectKind, subjectRef := authzenSubjectRef(subject)
 	writeJSON(w, http.StatusOK, effectiveRightsResponse{
 		Subject:        effectiveRightsRef{Kind: subjectKind, ID: subjectRef},

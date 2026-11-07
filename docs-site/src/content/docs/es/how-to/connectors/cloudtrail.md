@@ -72,7 +72,7 @@ nivel limpio; las lecturas y escrituras se colorean a partir del flag `readOnly`
 El panel de drift las cruza contra los grants declarados exactamente igual que
 con cualquier otra fuente.
 
-En **Inventory**, los principals a los que CloudTrail atribuye las llamadas
+En **Recursos descubiertos**, los principals a los que CloudTrail atribuye las llamadas
 aparecen como identidades, listos para vincularse a agentes — ese vínculo es lo
 que convierte un `approximate` de rol compartido en un `attributed` por agente.
 

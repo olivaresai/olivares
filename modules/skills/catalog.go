@@ -57,6 +57,7 @@ type SkillLoadTracer interface {
 }
 
 type Options struct {
+	Detect       func(context.Context, api.ModuleContext) ([]DetectedSkill, error)
 	ArtifactRoot string
 	Git          *GitImporter
 	Targets      TargetAuthority
@@ -65,12 +66,13 @@ type Options struct {
 	// per selected member of a saved assignment (issue #429).
 	Tracer SkillLoadTracer
 	// RefuseReferencedPack is supplied with native target integration. It must
-	// fence recorded conversation pins and live uses through this transaction.
+	// fence live deliveries through this transaction.
 	// Catalog-only installations have no native pins; connecting Targets without
 	// this check refuses retirement even after assignments are removed.
 	RefuseReferencedPack func(context.Context, store.Scope, model.ID) error
 }
 type Module struct {
+	refreshLive          func(context.Context, model.TenantID) error
 	opts                 Options
 	data                 api.ModuleData
 	assignmentTargetRefs map[string]api.EntityRef
@@ -101,11 +103,25 @@ func (m *Module) UseTargets(targets TargetAuthority, refuseReferenced func(conte
 		m.assignmentTargetRefs = authority.AssignmentTargetRefs()
 	}
 }
+
+// UseLiveDelivery binds the engine-owned refresh after committed changes.
+func (m *Module) UseLiveDelivery(refresh func(context.Context, model.TenantID) error) {
+	m.refreshLive = refresh
+}
+
+func (m *Module) refreshDelivery(ctx context.Context, tenant model.TenantID) error {
+	if m.refreshLive == nil {
+		return nil
+	}
+	return m.refreshLive(ctx, tenant)
+}
+
 func (m *Module) APINamespace() string { return Namespace }
 func (m *Module) Permissions() []auth.Permission {
 	return []auth.Permission{permRead, permWrite, permAdmin, permAssign}
 }
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
+	reg.Handle("GET", "/detected", permRead, m.listDetected)
 	reg.Handle("GET", "/builtins", permRead, m.listBuiltins)
 	reg.Handle("GET", "/packs", permRead, m.listPacks)
 	reg.Handle("POST", "/packs", permWrite, m.installPack)
@@ -183,10 +199,25 @@ type Revision struct {
 	CreatedBy   string `json:"created_by"`
 	CreatedAt   string `json:"created_at"`
 }
+
+// PinNotMoved identifies a pin retained on its approved revision after an update.
+// The reason tells the operator whether to select members, restore target access,
+// or review and pin the published revision with explicit active-content approval.
+type PinNotMoved struct {
+	AssignmentID string `json:"assignment_id"`
+	Reason       string `json:"reason"`
+}
+
+type importReceiptSnapshot struct {
+	Pack
+	PinsNotMoved []PinNotMoved `json:"pins_not_moved,omitempty"`
+}
+
 type InstallResult struct {
-	State    string   `json:"state"`
-	Pack     Pack     `json:"pack"`
-	Revision Revision `json:"revision"`
+	PinsNotMoved []PinNotMoved `json:"pins_not_moved,omitempty"`
+	State        string        `json:"state"`
+	Pack         Pack          `json:"pack"`
+	Revision     Revision      `json:"revision"`
 }
 type PackDetail struct {
 	Pack      Pack       `json:"pack"`
@@ -371,7 +402,7 @@ func OperationErrorStatus(err error) int { status, _, _ := operationError(err); 
 
 func respondError(w http.ResponseWriter, err error) {
 	status, code, message := operationError(err)
-	respond(w, status, map[string]any{"error": map[string]string{"code": code, "message": api.RequestBodyErrorMessage(err, message)}})
+	respond(w, status, api.ErrorBody(code, api.RequestBodyErrorMessage(err, message)))
 }
 
 // ownerRefusalCodes names the client refusals an owner outside this module (the
@@ -464,6 +495,10 @@ func (m *Module) retirePack(w http.ResponseWriter, r *http.Request, mc api.Modul
 		return catalogAudit(r.Context(), sc, mc, "skills.catalog.retire", PackKind, id, map[string]any{"pack_version": result.Version})
 	})
 	if err != nil {
+		respondError(w, err)
+		return
+	}
+	if err := m.refreshDelivery(r.Context(), mc.Tenant); err != nil {
 		respondError(w, err)
 		return
 	}
@@ -701,6 +736,11 @@ func (m *Module) publishImportWithActor(ctx context.Context, mc api.ModuleContex
 			_ = remove()
 		}
 	}()
+	ctx, movePins, release, err := m.prepareUpdatePins(ctx, mc, packID.String(), plan.expectLatest)
+	defer release()
+	if err != nil {
+		return result, false, err
+	}
 	err = mc.Data.Mutate(ctx, func(sc store.Scope) error {
 		var err error
 		result, replay, err = findReceipt(ctx, sc, keyHash, requestDigest)
@@ -753,8 +793,12 @@ func (m *Module) publishImportWithActor(ctx context.Context, mc api.ModuleContex
 		if err != nil {
 			return err
 		}
-		result = InstallResult{State: "catalog_published", Pack: packDTO(row), Revision: rev}
-		snapshot, err := json.Marshal(result.Pack)
+		pinsNotMoved, err := movePins(sc, rev)
+		if err != nil {
+			return err
+		}
+		result = InstallResult{State: "catalog_published", Pack: packDTO(row), Revision: rev, PinsNotMoved: pinsNotMoved}
+		snapshot, err := json.Marshal(importReceiptSnapshot{result.Pack, result.PinsNotMoved})
 		if err != nil {
 			return err
 		}
@@ -791,9 +835,11 @@ func findReceipt(ctx context.Context, sc store.Scope, keyHash, requestDigest str
 	if row.String("request_digest") != requestDigest {
 		return result, false, store.ErrConflict
 	}
-	if err := json.Unmarshal([]byte(row.String("pack_snapshot")), &result.Pack); err != nil {
+	var snapshot importReceiptSnapshot
+	if err := json.Unmarshal([]byte(row.String("pack_snapshot")), &snapshot); err != nil {
 		return result, false, store.ErrStoreUnavailable
 	}
+	result.Pack, result.PinsNotMoved = snapshot.Pack, snapshot.PinsNotMoved
 	revisions, err := sc.Ext(RevisionKind)
 	if err != nil {
 		return result, false, err

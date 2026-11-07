@@ -6,9 +6,14 @@ package api
 
 // ErrorBody constructs the documented REST error envelope. The message must
 // already be safe for the client; this function does not sanitize internal errors.
+// It adds error.remedy, the code's fixed next step in errorRemedy, when it has one.
 // Callers may attach operation-specific fields without discarding this envelope.
 func ErrorBody(code, message string) map[string]any {
-	return map[string]any{"error": map[string]string{"code": code, "message": message}}
+	e := map[string]string{"code": code, "message": message}
+	if remedy := errorRemedy[code]; remedy != "" {
+		e["remedy"] = remedy
+	}
+	return map[string]any{"error": e}
 }
 
 // ModuleErrorBody preserves a beta handler's existing message when it has no

@@ -1,0 +1,88 @@
+{
+  "title": "Servidor",
+  "subtitle": "O host, os seus discos, as sessões ativas e o que consumiram.",
+  "range": {
+    "label": "Intervalo",
+    "24h": "24 horas",
+    "7d": "7 dias",
+    "30d": "30 dias"
+  },
+  "host": {
+    "heading": "Host",
+    "keeps24": "O host guarda 24 horas de histórico, por isso os seus gráficos mostram as últimas 24 horas.",
+    "unavailable": "As métricas do host não estão disponíveis neste host. Só o Linux as reporta.",
+    "noHistory": "O host ainda não registou nenhuma amostra.",
+    "noFilesystems": "Nenhum sistema de ficheiros reportou o seu tamanho.",
+    "noFolders": "Não há pastas de sessão.",
+    "facts": {
+      "load": "Carga {{load}}",
+      "cpu": "CPU {{cpu}}",
+      "memory": "Memória {{used}} de {{total}}",
+      "swap": "Swap {{used}} de {{total}}"
+    },
+    "cpu": {
+      "title": "CPU",
+      "summary": "Utilização da CPU nas últimas 24 horas: agora {{now}}, pico {{peak}}, média {{average}}."
+    },
+    "memory": {
+      "title": "Memória",
+      "total": "Total",
+      "summary": "Memória em uso nas últimas 24 horas: agora {{used}} de {{total}}, pico {{peak}}."
+    },
+    "disks": {
+      "title": "Sistemas de ficheiros",
+      "summary_one": "Um sistema de ficheiros, {{mount}}, {{pct}} usado.",
+      "summary_many": "{{count}} sistemas de ficheiros; o mais cheio é {{mount}}, {{pct}} usado.",
+      "summary_other": "{{count}} sistemas de ficheiros; o mais cheio é {{mount}}, {{pct}} usado."
+    },
+    "folders": {
+      "title": "Pastas de sessão",
+      "summary_one": "Uma pasta de sessão, {{largest}}, {{size}}.",
+      "summary_many": "{{count}} pastas de sessão ocupam {{total}}; a maior é {{largest}} com {{size}}.",
+      "summary_other": "{{count}} pastas de sessão ocupam {{total}}; a maior é {{largest}} com {{size}}.",
+      "floor": "A medição parou no seu limite, por isso os tamanhos são um mínimo."
+    },
+    "columns": {
+      "time": "Hora",
+      "cpu": "Utilização da CPU",
+      "memory": "Memória em uso",
+      "swap": "Swap em uso",
+      "mount": "Ponto de montagem",
+      "device": "Dispositivo",
+      "type": "Tipo",
+      "used": "Usado",
+      "size": "Tamanho",
+      "usedPercent": "Usado %",
+      "folder": "Pasta"
+    }
+  },
+  "live": {
+    "heading": "Sessões ativas",
+    "loading": "A ler as sessões ativas…",
+    "error": "Não foi possível ler as sessões ativas.",
+    "none": "Não há sessões ativas.",
+    "more": "A lista foi cortada: há mais sessões abertas do que as contadas aqui, por isso as contagens são um mínimo.",
+    "automation": "Automação",
+    "unknown": "Não registado",
+    "columns": {
+      "tool": "Ferramenta",
+      "person": "Pessoa",
+      "sessions": "Sessões"
+    },
+    "byTool": {
+      "title": "Sessões ativas por ferramenta",
+      "summary_one": "{{count}} sessão ativa por ferramenta: {{list}}.",
+      "summary_many": "{{count}} sessões ativas por ferramenta: {{list}}.",
+      "summary_other": "{{count}} sessões ativas por ferramenta: {{list}}."
+    },
+    "byPerson": {
+      "title": "Sessões ativas por pessoa",
+      "summary_one": "{{count}} sessão ativa por pessoa: {{list}}.",
+      "summary_many": "{{count}} sessões ativas por pessoa: {{list}}.",
+      "summary_other": "{{count}} sessões ativas por pessoa: {{list}}."
+    }
+  },
+  "usage": {
+    "heading": "Utilização"
+  }
+}

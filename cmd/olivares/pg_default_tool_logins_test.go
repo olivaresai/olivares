@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -114,16 +115,50 @@ func TestToolLoginHomeAndLocalOllamaServeTheCallersTenant(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// The engine user's own tool login serves the node's only person, and nobody once a
+			// second account exists, with a membership or without one.
+			only := func(t2 model.TenantID) bool {
+				t.Helper()
+				got, err := isOnlyPersonsTenant(context.Background(), eng.store, t2)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return got
+			}
+			if !only(model.TenantID(tenant)) || only(model.NewTenantID()) {
+				t.Fatalf("only person: own tenant %v, another tenant %v, want true and false", only(model.TenantID(tenant)), only(model.NewTenantID()))
+			}
+			do("POST", "/v1/users", map[string]any{"email": "second@olivares.ai", "password": "fixture-password-2026!"}, http.StatusCreated)
+			if only(model.TenantID(tenant)) {
+				t.Fatal("a second account left the server's own login open")
+			}
 			register := registerLocalOllama(eng.sessionsMod, eng.store)
-			if err := register(context.Background(), p, model.TenantID(tenant), "http://127.0.0.1:11434"); err != nil {
+			// Boot wires a real connection probe; serve its model list instead of
+			// depending on an Ollama daemon installed on the test host.
+			ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/api/tags":
+					_, _ = w.Write([]byte(`{"models":[{"name":"qwen3:8b"}]}`))
+				case r.Method == http.MethodPost && r.URL.Path == "/api/show":
+					_, _ = w.Write([]byte(`{"capabilities":["completion"]}`))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer ollama.Close()
+			if err := register(context.Background(), p, model.TenantID(tenant), ollama.URL); err != nil {
 				t.Fatalf("register Ollama in the caller's tenant: %v", err)
 			}
 			records, _, err := eng.sessionsMod.ListProviderRecords(context.Background(), model.TenantID(tenant), "active", sessions.ProviderKindOllama, model.Query{Limit: 10})
 			if err != nil || len(records) != 1 || records[0].DisplayName != localOllamaName {
 				t.Fatalf("Ollama records in the caller's tenant = %+v (%v), want one %q", records, err, localOllamaName)
 			}
+			if rec := records[0]; rec.BaseURL != ollama.URL || rec.ProbeState != sessions.ProbeOK || len(rec.Models) != 1 || rec.Models[0] != "qwen3:8b" {
+				t.Fatalf("Ollama record = %+v, want the fixture endpoint with a successful probe and its model", rec)
+			}
 			for _, other := range []model.TenantID{model.TenantID(unserved), model.SystemTenantID} {
-				if err := register(context.Background(), p, other, "http://127.0.0.1:11434"); err == nil ||
+				if err := register(context.Background(), p, other, ollama.URL); err == nil ||
 					!strings.Contains(err.Error(), "add its endpoint in Providers") {
 					t.Fatalf("register Ollama in %s = %v, want the refusal", other, err)
 				}

@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 )
 
 // Fleet-wide Claude Code managed settings (publish, revision history, signed pull,
@@ -26,6 +27,10 @@ func fleetManagedSettingsRequireBusiness(w http.ResponseWriter, _ *http.Request,
 func fleetInventoryRequireBusiness(w http.ResponseWriter, _ *http.Request, _ api.ModuleContext) {
 	writeJSON(w, http.StatusNotImplemented, errorBody("The workstation tool inventory (installed AI tools, versions and sign-in state per workstation) requires Business."))
 }
+
+// checkinAlsoRequires lists the permissions the check-in needs besides the one it is
+// registered with. Community's check-in answers 501 before it reads anything, so it needs none.
+var checkinAlsoRequires []auth.Permission
 
 func (c *PolicyConsole) registerFleetRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/{surface}/publish", permClaudePolicyAdmin, fleetManagedSettingsRequireBusiness)

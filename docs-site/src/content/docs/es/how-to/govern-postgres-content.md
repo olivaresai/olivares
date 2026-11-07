@@ -10,7 +10,7 @@ expurgar → clasificar → chunk → embed → indexar → servir por MCP — c
 clasificación por columna.
 
 Es el equivalente, para bases de datos operacionales, de las fuentes de contenido SaaS/almacén
-(gdrive, confluence, s3content, snowflake…). Dos cosas que **no** es:
+(gdrive, s3content…). Dos cosas que **no** es:
 
 - **No es `pgaudit`.** `pgaudit` observa *aristas de acceso* R/RW para el mapa de accesos;
   nunca lee el contenido de las filas. `pg-content` materializa *filas como documentos*. Son

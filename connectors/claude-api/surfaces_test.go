@@ -4,6 +4,7 @@
 package claudeapi
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/sdk/model"
@@ -116,5 +117,17 @@ func TestSurfaceModelID(t *testing.T) {
 	}
 	if id, st := SurfaceModelID(model.GatewayDirect, "claude-opus-4-8"); id != "claude-opus-4-8" || st != statusConfirmed {
 		t.Errorf("direct id = %q/%q, want bare/confirmed", id, st)
+	}
+}
+
+// TestSurfaceTextCitesNoSpecificationID proves the notes and residency the platforms screen
+// shows read as prose: a specification id such as ANT2-01 means nothing to the person reading it.
+func TestSurfaceTextCitesNoSpecificationID(t *testing.T) {
+	for _, s := range AllSurfaces() {
+		for name, text := range map[string]string{"Notes": s.Notes, "Residency": s.Residency} {
+			if strings.Contains(text, "ANT2-") {
+				t.Errorf("%s %s cites a specification id: %q", s.Gateway, name, text)
+			}
+		}
 	}
 }

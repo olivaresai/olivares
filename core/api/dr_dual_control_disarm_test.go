@@ -5,9 +5,12 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -610,4 +613,93 @@ func TestDRScheduleEditDoesNotDisarmByOmission(t *testing.T) {
 	if r.body["require_dual_control_restore"] != true {
 		t.Fatalf("a phantom disarm fired later: %s", r.raw)
 	}
+}
+
+func TestPostgresConsoleRestoreRequiresDistinctApproval(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "backups"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "backups", "test.drbundle"), []byte("upload"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	called := make(chan api.DRPostgresRestoreTarget, 1)
+	h := newHarnessOpts(t, func(o *api.Options) {
+		o.DR = &api.DRConfig{DataDir: dir, EngineKind: "postgres", PostgresRestore: func(_ context.Context, _ string, _ string, target api.DRPostgresRestoreTarget) (string, error) {
+			called <- target
+			return "target ledger verified", nil
+		}}
+	})
+	admin := h.adminLogin()
+	r := h.do("POST", "/v1/console/dr/restore/test.drbundle/apply", admin, map[string]any{"postgres": map[string]any{"dsn_ref": "env:RESTORE_APP", "owner_dsn_ref": "env:RESTORE_OWNER", "admin_dsn_ref": "env:RESTORE_ADMIN", "scratch_dsn_ref": "env:RESTORE_SCRATCH"}}, nil)
+	if r.code != http.StatusAccepted {
+		t.Fatalf("PostgreSQL console restore intent: %d %s", r.code, r.raw)
+	}
+	var applied struct {
+		AwaitingApproval bool   `json:"awaiting_approval"`
+		RequestID        string `json:"request_id"`
+		JobID            string `json:"job_id"`
+	}
+	if err := json.Unmarshal([]byte(r.raw), &applied); err != nil {
+		t.Fatal(err)
+	}
+	if !applied.AwaitingApproval || applied.RequestID == "" || applied.JobID != "" {
+		t.Fatalf("PostgreSQL restore bypassed approval: %s", r.raw)
+	}
+	r = h.do("POST", "/v1/console/dr/restore/test.drbundle/approve", admin, map[string]any{"request_id": applied.RequestID, "passphrase": "restore passphrase"}, nil)
+	if r.code != http.StatusForbidden {
+		t.Fatalf("self approval: %d %s", r.code, r.raw)
+	}
+	r = h.do("POST", "/v1/users", admin, map[string]any{"email": "second@restore.test", "password": "supersecret2", "superadmin": true}, nil)
+	if r.code != 201 {
+		t.Fatalf("create approver: %d %s", r.code, r.raw)
+	}
+	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": "second@restore.test", "password": "supersecret2"}, nil)
+	if r.code != 200 {
+		t.Fatalf("login approver: %d %s", r.code, r.raw)
+	}
+	second, _ := r.body["token"].(string)
+	r = h.do("GET", "/v1/console/dr/restore/pending", second, nil, nil)
+	if r.code != 200 || !strings.Contains(r.raw, "env:RESTORE_APP") {
+		t.Fatalf("target absent from approval preview: %d %s", r.code, r.raw)
+	}
+	r = h.do("POST", "/v1/console/dr/restore/test.drbundle/approve", second, map[string]any{"request_id": applied.RequestID, "passphrase": "restore passphrase"}, nil)
+	if r.code != 202 {
+		t.Fatalf("distinct approval: %d %s", r.code, r.raw)
+	}
+	select {
+	case target := <-called:
+		if target.DSNRef != "env:RESTORE_APP" || target.ScratchDSNRef != "env:RESTORE_SCRATCH" {
+			t.Fatalf("target changed on approval: %+v", target)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("approved restore did not reach native callback")
+	}
+	jobID, _ := r.body["job_id"].(string)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		r = h.do("GET", "/v1/console/dr/jobs", second, nil, nil)
+		if r.code != 200 {
+			t.Fatalf("job receipt: %d %s", r.code, r.raw)
+		}
+		completed := false
+		for _, item := range r.body["items"].([]any) {
+			job := item.(map[string]any)
+			if job["id"] == jobID && job["phase"] == "restart_required" && job["status"] == "completed" {
+				completed = true
+			}
+		}
+		if completed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no restart outcome: %s", r.raw)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	r = h.do("POST", "/v1/console/dr/restore/test.drbundle/apply", admin, map[string]any{"postgres": map[string]any{"dsn_ref": "postgres://inline.invalid/db", "admin_dsn_ref": "env:RESTORE_ADMIN", "scratch_dsn_ref": "env:RESTORE_SCRATCH"}}, nil)
+	if r.code != 400 {
+		t.Fatalf("inline credential accepted: %d %s", r.code, r.raw)
+	}
+
 }

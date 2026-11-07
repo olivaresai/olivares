@@ -149,6 +149,15 @@ func buildOpenAPI() map[string]any {
 	auditExcludeActionParam := obj("name", "exclude_action", "in", "query", "required", false,
 		"description", "Omit events whose action starts with this prefix. Repeatable: give it once per action family to leave out. It uses the SAME prefix rule as `action`, and it filters only what is RETURNED — the ledger still records every event, and a request without this parameter still returns them all. Its use is a caller that must not be shown its own footprint: the console's notification bell passes `exclude_action=audit.read` so that reading the ledger does not itself become the newest activity in it.",
 		"schema", obj("type", "array", "items", obj("type", "string")))
+	// tool and folder are not columns of an entry: they are facts of the session an
+	// entry is about, resolved by the store (#2750). Tenant ledger only: the system
+	// ledger records no sessions.
+	auditToolParam := obj("name", "tool", "in", "query", "required", false,
+		"description", "Only entries about sessions run with this AI tool (its provider driver, for example `codex` or `claude`): an entry on such a session, and the approval that session names now. It is matched exactly, given once, and read from each session's current record, so these entries are not matched: those of a session that was deleted, those that name their session only in their metadata (reads of its attach, activity, messages and preview, and denial-budget notices), and those of an approval the session no longer names. It pages by `from` and `next_from` like every other filter. The system ledger refuses it (400). A deployment without the sessions module answers 501 `audit_filter_unavailable`.",
+		"schema", obj("type", "string"))
+	auditFolderParam := obj("name", "folder", "in", "query", "required", false,
+		"description", "Only entries about sessions that work in this folder (the exact working-directory path, not a prefix: a trailing slash is another path), and the approval each session names now, with the same limits as `tool`. Combine it with `tool` to narrow both. It is given once. The system ledger refuses it (400). A deployment without the sessions module answers 501 `audit_filter_unavailable`.",
+		"schema", obj("type", "string"))
 
 	errResponses := func() map[string]any {
 		return obj(
@@ -449,7 +458,7 @@ func buildOpenAPI() map[string]any {
 		// ── Audit ──────────────────────────────────────────────────────
 		"/v1/audit", obj("get", op("listAuditEvents", "Read the tenant evidence ledger", tagAudit, true,
 			jsonResp("OK", auditListOf(ref("AuditEvent"))),
-			nil, tenantParam, auditFromParam, limitParam, auditExcludeActionParam)),
+			nil, tenantParam, auditFromParam, limitParam, auditExcludeActionParam, auditToolParam, auditFolderParam)),
 		// The system route runs the SAME handler, so it has always accepted ?from and ?limit
 		// and the console has always sent them (web/src/features/audit/audit-view.tsx).
 		// Declaring them is a correction, not a widening: publishing no parameters made the
@@ -567,7 +576,9 @@ func buildOpenAPI() map[string]any {
 			body(ref("GrantMembershipInput"))))),
 		"/v1/members", obj("get", op("listMembers", "List the resolved tenant's member roster (role, workspace scoping, groups)", tagSystem, true,
 			jsonResp("OK", listOf(ref("RosterMember"))),
-			nil, tenantParam)),
+			nil, tenantParam, limitParam, cursorParam,
+			obj("name", "include_second_factors", "in", "query", "required", false,
+				"description", "Include accepted second-factor enrollment and enable cursor pagination (default 50, maximum 1000). Without this option the legacy complete roster is returned.", "schema", obj("type", "boolean", "default", false)))),
 		"/v1/members/{id}", obj("delete", op204("removeMember",
 			"Remove a member from the resolved tenant: a scoped offboard that leaves the account and its other organizations alone (404 when the id is not a member; 409 when the caller removes itself or the last active owner; 403 when the member outranks the caller or the caller is confined to a workspace; a signed-in person also needs the administrative step-up)",
 			tagSystem, true, idParam, tenantParam)),
@@ -700,6 +711,9 @@ func buildOpenAPI() map[string]any {
 				jsonResp("OK", ref("TracingStatus")), nil),
 			"put", op("saveTracingSettings", "Save and apply tracing settings (superadmin, configured step-up)", tagSystem, true,
 				jsonResp("OK", ref("TracingStatus")), body(ref("TracingSettings")))),
+		"/v1/system/host", obj(
+			"get", op("getHostStatus", "Read the host's CPU, memory, load, filesystems and session-folder disk use (superadmin)", tagSystem, true,
+				jsonResp("OK", ref("HostStatus")), nil)),
 		"/v1/system/residency", obj(
 			"get", op("getResidencyRegistry", "Get the configured data-residency registry (superadmin)", tagSystem, true,
 				jsonResp("OK", ref("ResidencyRegistry")), nil)),
@@ -734,6 +748,9 @@ func buildOpenAPI() map[string]any {
 			jsonResp("OK", ref("KeyCustody")), nil)),
 		"/v1/console/bus", obj("get", op("getBusSnapshot", "Event-bus subscriber, saturation, loss, and optional bridge snapshot", tagConsole, true,
 			jsonResp("OK", ref("BusSnapshot")), nil)),
+		"/v1/console/exposure", obj(
+			"get", op("getConsoleExposure", "Console exposure from local node facts; external reachability is not verified", tagConsole, true, jsonResp("OK", ref("ConsoleExposure")), nil),
+			"put", op("setConsoleExposure", "Set the managed public HTTPS console origin; requires configured administrative step-up and a restart", tagConsole, true, jsonResp("OK", ref("ConsoleExposureUpdate")), body(ref("ConsoleExposureInput")))),
 		"/v1/console/config/effective", obj("get", op("getEffectiveConfig", "Live effective configuration with secret-bearing values redacted", tagConsole, true,
 			jsonResp("OK", ref("EffectiveConfigResponse")), nil)),
 		"/v1/console/support-bundle", obj("post", rawOp("createSupportBundle", "Build and download a redacted support bundle (AAL3 step-up)", tagConsole, true,
@@ -747,10 +764,10 @@ func buildOpenAPI() map[string]any {
 				jsonResp("OK", obj("type", "object", "properties", obj("name", obj("type", "string"), "action", obj("type", "string")))),
 				body(ref("SecretInput"))),
 			"delete", op204("deleteSecret", "Delete a sealed secret", tagConsole, true)),
-		"/v1/console/secrets/reveal", obj("post", op("revealSecret", "Reveal one item of the caller's own personal vault (step-up, audited, rate limited)", tagConsole, true,
+		"/v1/console/secrets/reveal", obj("post", op("revealSecret", "Reveal one vault item the caller owns or may read in a shared vault (step-up, audited, rate limited)", tagConsole, true,
 			jsonResp("OK", obj("type", "object", "properties", obj("name", obj("type", "string"), "value", obj("type", "string")))),
 			body(ref("SecretInput")))),
-		"/v1/console/secrets/totp", obj("post", op("getVaultCode", "Current authenticator code of one of the caller's own vault items (step-up, audited, rate limited; never the seed)", tagConsole, true,
+		"/v1/console/secrets/totp", obj("post", op("getVaultCode", "Current authenticator code of a vault item the caller owns or may read in a shared vault (step-up, audited, rate limited; never the seed)", tagConsole, true,
 			jsonResp("OK", ref("VaultCode")),
 			body(ref("SecretInput")))),
 		"/v1/console/secrets/generate", obj("post", op("generatePassword", "Generate a random password for the signed-in member; nothing is stored", tagConsole, true,
@@ -785,20 +802,28 @@ func buildOpenAPI() map[string]any {
 				jsonResp("OK", obj("type", "object", "properties", obj(
 					"success", obj("type", "boolean"),
 					"message", obj("type", "string"),
+					"ok", obj("type", "boolean"),
+					"preview", obj("type", "array", "description", "For a document source: its first ten documents with the ACL each would be stored with. Nothing is stored.",
+						"items", obj("type", "object", "required", arr("id", "acl"), "properties", obj(
+							"id", obj("type", "string"),
+							"title", obj("type", "string"),
+							"acl", obj("type", "array", "items", obj("type", "string")),
+							"note", obj("type", "string", "enum", arr("skipped", "unreadable")),
+						))),
 				))),
 				body(ref("ConnectorOnboardInput")))),
 		"/v1/console/notify-destinations", obj(
-			"get", op("listNotifyDestinations", "List notification destinations and the kinds the console can create", tagConsole, true,
+			"get", op("listNotifyDestinations", "List notification destinations and the kinds that can be added, with their settings", tagConsole, true,
 				jsonResp("OK", ref("NotifyDestinationList")), nil),
-			"put", op("putNotifyDestination", "Create or update a Slack or Teams notification destination", tagConsole, true,
+			"put", op("putNotifyDestination", "Create or update a Slack, Teams, signed webhook, email or Twilio notification destination; it applies without restart", tagConsole, true,
 				jsonResp("OK", ref("NotifyDestination")),
 				body(ref("NotifyDestinationInput"))),
-			"delete", op("deleteNotifyDestination", "Remove a console notification destination", tagConsole, true,
+			"delete", op("deleteNotifyDestination", "Remove an added notification destination and its sealed settings; delivery to it stops at once", tagConsole, true,
 				jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")))),
 				body(obj("type", "object", "properties", obj("name", obj("type", "string")), "required", arr("name"))))),
 		// SUBPATH, not the parent: chi registers POST on /console/notify-destinations/test.
 		"/v1/console/notify-destinations/test", obj(
-			"post", op("testNotifyDestination", "Send a test message through a candidate notification destination", tagConsole, true,
+			"post", op("testNotifyDestination", "Send a test message through a candidate or stored notification destination without saving it", tagConsole, true,
 				jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")))),
 				body(ref("NotifyDestinationInput")))),
 		"/v1/console/sources", obj(
@@ -943,13 +968,14 @@ func buildOpenAPI() map[string]any {
 			return o
 		}()),
 		"/v1/console/dr/restore/{id}/apply", obj("post", op202("applyRestore",
-			"Apply an uploaded bundle: with the dual-control gate armed this records an intent for a second administrator to approve (request_id); otherwise it starts the restore job (job_id)",
+			"Apply an uploaded bundle: with the dual-control gate armed this records an intent for a second administrator to approve (request_id); otherwise it starts the restore job (job_id). PostgreSQL always requires a second account and a separate empty target",
 			tagConsole, true,
 			jsonResp("Accepted", ref("DRRestoreApply")),
 			body(obj("type", "object", "additionalProperties", false,
 				"required", arr("passphrase"),
 				"properties", obj("passphrase", obj("type", "string", "writeOnly", true,
-					"description", "Passphrase decrypting the backup keys (the single-actor path).")))),
+					"description", "Passphrase decrypting the backup keys (the single-actor path)."),
+					"postgres", ref("DRPostgresRestoreTarget")))),
 			drIDParam("id", "The id returned by the upload."))),
 		"/v1/console/dr/restore/{id}/approve", obj("post", op202("approveRestore",
 			"Approve a dual-control restore as a DISTINCT administrator account (403 when the requester self-approves)",
@@ -1037,6 +1063,16 @@ func buildOpenAPI() map[string]any {
 				"Install the newest release as the olivares upgrade command does and restart the engine on it (AAL3 step-up)",
 				tagConsole, true,
 				jsonResp("OK", ref("EngineUpdate")), nil)),
+		// ── Console render-error reports (engine log only with telemetry on) ──
+		"/v1/console/errors", obj("post", func() map[string]any {
+			o := op("reportConsoleError",
+				"Report a console render error from a person's browser session; the engine logs it, shortened to its limits, only when telemetry is enabled",
+				tagConsole, true, jsonResp("OK", obj("type", "object")), body(ref("ConsoleErrorReport")))
+			responses := o["responses"].(map[string]any)
+			delete(responses, "200")
+			responses["204"] = obj("description", "No content")
+			return o
+		}()),
 		// ── Engine log viewer: SSE stream + ring-buffer snapshot ──
 		"/v1/console/logs/stream", obj("get", func() map[string]any {
 			o := rawOp("streamLogs",
@@ -1065,6 +1101,7 @@ func buildOpenAPI() map[string]any {
 		operation = paths["/v1/system/session-idle"].(map[string]any)[method].(map[string]any)
 		operation["responses"].(map[string]any)["503"] = jsonResp("Session idle settings unavailable", ref("Error"))
 	}
+	paths["/v1/system/host"].(map[string]any)["get"].(map[string]any)["responses"].(map[string]any)["501"] = jsonResp("Host metrics are not available on this platform", ref("Error"))
 	applyStability(paths)
 
 	schemas := obj(
@@ -1083,6 +1120,13 @@ func buildOpenAPI() map[string]any {
 			"settings", ref("TracingSettings"), "effective", ref("TracingSettings"),
 			"overrides", obj("type", "array", "items", obj("type", "string"), "description", "Names of environment overrides; never their credential values."),
 		), "required", arr("settings", "effective", "overrides")),
+		"HostStatus", hostStatusSchema(obj, arr),
+		"ConsoleErrorReport", obj("type", "object", "additionalProperties", false,
+			"required", arr("error_id", "error"), "properties", obj(
+				"error_id", obj("type", "string", "minLength", 8, "maxLength", 64, "pattern", "^[A-Za-z0-9-]+$"),
+				"error", obj("type", "string", "minLength", 1, "description", "Logged up to its first 16 KiB."),
+				"component_stack", obj("type", arr("string", "null"), "description", "Logged up to its first 64 KiB."),
+				"route_path", obj("type", arr("string", "null"), "description", "Logged up to its first 2 KiB."))),
 		// ── Error envelope ──────────────────────────────────────────
 		"Error", apiErrorSchema(),
 
@@ -1122,6 +1166,7 @@ func buildOpenAPI() map[string]any {
 			"status", obj("type", "string", "enum", arr("active", "inactive", "error")),
 			"external_id", obj("type", "string"),
 			"sso_only", obj("type", "boolean"),
+			"second_factor_enrolled", obj("type", "boolean", "description", "True when a confirmed TOTP factor or registered passkey is enrolled; contains no credential material."),
 			"role", obj("type", "string", "enum", arr("viewer", "editor", "admin", "owner")),
 			"workspace_ids", obj("type", "array", "items", obj("type", "string", "format", "uuid")),
 			"groups", obj("type", "array", "items", obj("type", "string")),
@@ -1346,6 +1391,7 @@ func buildOpenAPI() map[string]any {
 			"kind", obj("type", "string", "enum", arr("browser", "token", "unknown", "pairing"),
 				"description", "Display-only transport of the latest observed use, or pairing for a pending link. Unknown is possible for a legacy row."),
 			"name", obj("type", "string", "description", "Owner-chosen paired device label; empty for ordinary sign-ins."),
+			"created_ip", obj("type", "string", "description", "Client address when the sign-in was issued; absent for a legacy row."),
 			"current", obj("type", "boolean"),
 			"expires_at", obj("type", "string", "format", "date-time"),
 		), "required", arr("id", "created_at", "last_used_at", "kind", "name", "current", "expires_at")),
@@ -1670,6 +1716,10 @@ func buildOpenAPI() map[string]any {
 			"error", obj("type", "string"),
 		), "required", arr("enabled", "available", "up_to_date", "channel", "current_version")),
 
+		"ConsoleExposure", obj("type", "object", "properties", obj(
+			"listen", obj("type", "string"), "grpc_listen", obj("type", "string"), "public_url", obj("type", "string"), "saved_public_url", obj("type", "string"), "tls", obj("type", "boolean"), "admin_step_up", obj("type", "string"), "external_reachability", obj("type", "string"), "addresses", obj("type", "array", "items", obj("type", "string")), "managed_public", obj("type", "boolean"))),
+		"ConsoleExposureInput", obj("type", "object", "required", []string{"public_url"}, "properties", obj("public_url", obj("type", "string"))),
+		"ConsoleExposureUpdate", obj("type", "object", "properties", obj("public_url", obj("type", "string"), "restart_required", obj("type", "boolean"))),
 		"EffectiveConfigResponse", obj("type", "object", "properties", obj(
 			"entries", obj("type", "array", "items", ref("EffectiveConfigEntry")),
 			"strict_violations", obj("type", "array", "items", obj("type", "string")),
@@ -1750,6 +1800,7 @@ func buildOpenAPI() map[string]any {
 			"description", obj("type", "string"),
 			"transport", obj("type", "string"),
 			"fields_known", obj("type", "boolean"),
+			"class", obj("type", "string", "enum", arr("document"), "description", "document for a knowledge document source; absent for an observation source."),
 			"hosting", obj("type", "string", "enum", arr("self_hosted", "vendor_hosted", "unknown"),
 				"description", "Where the observed system runs, DERIVED from the connector's own declared endpoint defaults: self_hosted (its default endpoint is on the loopback host — the operator runs it), vendor_hosted (a routable vendor URL), or unknown (it declares no endpoint, or it is an out-of-process plugin the host cannot introspect). unknown is a real third answer and is never a synonym for vendor_hosted."),
 			"fields", obj("type", "array", "items", obj("type", "object", "properties", obj(
@@ -1783,17 +1834,20 @@ func buildOpenAPI() map[string]any {
 		// ── Console: notification destinations ──────────────────────
 		"NotifyDestinationInput", obj("type", "object", "properties", obj(
 			"name", obj("type", "string"),
-			"kind", obj("type", "string", "enum", arr("slack", "teams")),
+			"kind", obj("type", "string", "enum", arr("slack", "teams", "webhook", "email", "twilio"),
+				"description", "Required to save. On a test, blank means the stored destination's kind."),
 			"webhook_url", obj("type", "string", "format", "password",
-				"description", "The vendor's incoming-webhook URL. Sealed on save and never returned. Blank keeps the stored value."),
-		), "required", arr("name", "kind")),
+				"description", "The Slack or Teams incoming-webhook URL (the webhook_url setting). Sealed on save and never returned. Blank keeps the stored value."),
+			"settings", obj("type", "object", "additionalProperties", obj("type", "string"),
+				"description", "The kind's settings, as listed in kinds[].fields. Values are typed, never secret references. A secret setting is sealed on save and never returned; left blank it keeps the stored value, and when the destination's address (url, smtp_host) changes every stored secret must be given again. Any other setting left out is cleared."),
+		), "required", arr("name")),
 
 		"NotifyDestination", obj("type", "object", "properties", obj(
 			"name", obj("type", "string"),
 			"kind", obj("type", "string"),
 			"source", obj("type", "string", "enum", arr("console", "file")),
 			"live", obj("type", "boolean"),
-			"webhook_host", obj("type", "string"),
+			"webhook_host", obj("type", "string", "description", "The non-secret host the destination sends to: the webhook host or the SMTP server."),
 		), "required", arr("name", "kind", "source", "live")),
 
 		"NotifyDestinationList", obj("type", "object", "properties", obj(
@@ -1801,7 +1855,13 @@ func buildOpenAPI() map[string]any {
 			"kinds", obj("type", "array", "items", obj("type", "object", "properties", obj(
 				"kind", obj("type", "string"),
 				"title", obj("type", "string"),
-			), "required", arr("kind", "title"))),
+				"fields", obj("type", "array", "description", "The settings of this kind.", "items", obj("type", "object", "properties", obj(
+					"key", obj("type", "string"),
+					"secret", obj("type", "boolean", "description", "Sealed on save and never returned."),
+					"required", obj("type", "boolean"),
+					"description", obj("type", "string"),
+				), "required", arr("key", "secret", "required"))),
+			), "required", arr("kind", "title", "fields"))),
 			"sealer_available", obj("type", "boolean"),
 		), "required", arr("destinations", "kinds", "sealer_available")),
 
@@ -1867,6 +1927,7 @@ func buildOpenAPI() map[string]any {
 			"protocol", obj("type", "string", "enum", arr("oidc", "saml")),
 			"status", obj("type", "string"),
 			"redirect_uri", obj("type", "string", "format", "uri"),
+			"backchannel_logout_uri", obj("type", "string", "format", "uri"),
 			"target_tenant", obj("type", "string"),
 			"alias", obj("type", "string"),
 			"oidc_issuer", obj("type", "string", "format", "uri"),
@@ -1931,7 +1992,7 @@ func buildOpenAPI() map[string]any {
 			"subject", ref("EffectiveRightsRef"),
 			"node", ref("EffectiveRightsRef"),
 			"assurance", obj("type", "integer", "description", "The authenticator assurance level the subject was evaluated at."),
-			"membership_as_of", obj("type", "string", "format", "date-time", "description", "The oldest update timestamp of the directory group and membership rows used for this subject; absent without directory groups."),
+			"membership_as_of", obj("type", "string", "format", "date-time", "description", "How old the directory data of the subject is: when the directory last answered for the subject where a directory module holds it, otherwise the oldest update timestamp of the directory group and membership rows used for this subject; absent without directory data."),
 			"path", obj("type", "array", "items", ref("EffectiveRightsStep"),
 				"description", "The node's container lineage, outermost first."),
 			"rights", obj("type", "array", "items", obj("type", "object", "properties", obj(
@@ -2141,6 +2202,7 @@ func buildOpenAPI() map[string]any {
 			"engine_version", obj("type", "string"),
 			"tenant_count", obj("type", "integer"),
 			"notes", obj("type", "string"),
+			"duration_ms", obj("type", "integer", "format", "int64", "description", "How long the backup took to prepare, in milliseconds. Absent for a bundle taken before the manifest recorded it."),
 		), "required", arr("id", "filename", "size_bytes", "created_at", "engine", "tenant_count")),
 		"DRBackupDetail", obj("type", "object", "properties", obj(
 			"id", obj("type", "string"),
@@ -2154,6 +2216,14 @@ func buildOpenAPI() map[string]any {
 			"engine", obj("type", "string", "enum", arr("sqlite", "postgres")),
 			"engine_version", obj("type", "string", "description", "The engine binary version that produced the bundle."),
 		), "required", arr("format", "created_at", "engine")),
+		"DRPostgresRestoreTarget", obj("type", "object", "additionalProperties", false,
+			"description", "A separate empty db init target. Every connection is a file: or env: reference resolved on the server. PostgreSQL console restore always requires two distinct administrator accounts.",
+			"required", arr("dsn_ref", "admin_dsn_ref", "scratch_dsn_ref"),
+			"properties", obj(
+				"dsn_ref", obj("type", "string", "pattern", "^(file:|env:).+"),
+				"owner_dsn_ref", obj("type", "string", "pattern", "^(file:|env:).+", "description", "Optional for a single-role target."),
+				"admin_dsn_ref", obj("type", "string", "pattern", "^(file:|env:).+"),
+				"scratch_dsn_ref", obj("type", "string", "pattern", "^(file:|env:).+", "description", "Maintenance connection allowed to create and drop scratch databases and roles."))),
 		"DRRestoreUpload", obj("type", "object", "properties", obj(
 			"upload_id", obj("type", "string"),
 			"manifest", ref("DRManifest"),
@@ -2168,6 +2238,7 @@ func buildOpenAPI() map[string]any {
 				"initiator", obj("type", "string"),
 			)),
 		"DRPendingRestore", obj("type", "object", "properties", obj(
+			"postgres", ref("DRPostgresRestoreTarget"),
 			"request_id", obj("type", "string"),
 			"upload_id", obj("type", "string"),
 			"initiator", obj("type", "string"),
@@ -2190,13 +2261,16 @@ func buildOpenAPI() map[string]any {
 			"local_target", obj("type", "string", "description", "Managed local backup disk mountpoint; absent uses the original backup directory."),
 			"verify_cron", obj("type", "string", "description", "Independent scratch-restore verification cadence in UTC; empty disables verification."),
 			"rpo_hours", obj("type", "integer", "minimum", 1, "maximum", 8760),
+			"rto_minutes", obj("type", "integer", "minimum", 1, "maximum", 10080, "description", "The restore time the operator commits to; the scheduled restore test is measured against it. Absent sets no target."),
 			"offsite", ref("DROffsite"),
 			"last_verify", obj("type", "string", "format", "date-time"),
 			"last_verify_status", obj("type", "string", "enum", arr("running", "completed", "failed")),
 			"last_verify_error", obj("type", "string"),
+			"last_verify_rto_ms", obj("type", "integer", "minimum", 0, "description", "How long the last completed scheduled restore test took, from extracting the bundle to the ledger re-verified."),
 			"last_backup", obj("type", "string", "format", "date-time", "description", "Start of the last successfully written scheduled backup, including when its later offsite copy failed."),
 			"backup_age_seconds", obj("type", "integer", "minimum", 0),
 			"rpo_exceeded", obj("type", "boolean"),
+			"rto_exceeded", obj("type", "boolean", "description", "The last completed restore test took longer than rto_minutes. Absent without a target or a completed test."),
 			"target_free_bytes", obj("type", "integer", "minimum", 0, "description", "Linux target filesystem space available to the service; absent when unavailable."),
 			"enabled", obj("type", "boolean"),
 			"cron", obj("type", "string"),
@@ -2219,6 +2293,7 @@ func buildOpenAPI() map[string]any {
 				"local_target", obj("type", "string", "description", "Managed writable ext4 backup mountpoint under /mnt/olivares-backups/<filesystem-uuid>; omitted preserves it, empty restores the default directory."),
 				"verify_cron", obj("type", "string", "description", "UTC cron for scratch verification; omitted preserves it, empty disables it."),
 				"rpo_hours", obj("type", "integer", "minimum", 1, "maximum", 8760),
+				"rto_minutes", obj("type", "integer", "minimum", 0, "maximum", 10080, "description", "The restore time the operator commits to; 0 clears the target, omitted preserves it."),
 				"offsite", ref("DROffsite"),
 				"enabled", obj("type", "boolean"),
 				"cron", obj("type", "string", "description", "The runner's cron grammar; validated on write."),
@@ -2407,6 +2482,7 @@ func apiErrorSchema() map[string]any {
 			"code", oas.Obj("type", "string"),
 			"message", oas.Obj("type", "string"),
 			"module", oas.Obj("type", "string", "description", "With code module_not_enabled: the namespace of the module this node does not run."),
+			"remedy", oas.Obj("type", "string", "description", "When a person can act on the failure: the one next step, fixed text chosen by the code."),
 		), "required", []any{"code", "message"}),
 	), "required", []any{"error"})
 }

@@ -3,19 +3,19 @@
     "label": "{{n}} Vorlagen geladen; es gibt weitere",
     "hint": "In diesem Katalog sind nur geladene Vorlagen verfügbar. Eine fehlende Vorlage kann auf einer späteren Seite liegen."
   },
-  "title": "Arbeitsbereich-Vorlagen",
+  "title": "Vorlagen",
   "subtitle": "Wiederverwendbare Snapshots von Hooks, Einstellungen, Konnektoren und Richtlinien für Arbeitsbereichssitzungen.",
   "catalog": {
     "builtin": "Integriert",
     "version": "v{{version}}",
     "author": "Von {{author}}",
     "archived": "Archiviert",
-    "noTemplates": "Keine Vorlagen gefunden.",
-    "noTemplatesHint": "Erstellen Sie Ihre erste Vorlage, um Arbeitsbereichskonfigurationen wiederzuverwenden.",
-    "filterAll": "Alle",
-    "filterBuiltin": "Integriert",
-    "filterCustom": "Benutzerdefiniert",
     "showArchived": "Archivierte anzeigen"
+  },
+  "groups": {
+    "yours": "Ihre Vorlagen",
+    "builtin": "Integrierte Vorlagen ({{n}})",
+    "yoursEmpty": "Noch keine. Eine Vorlage ist ein wiederverwendbarer Ausgangspunkt für neue Sitzungen."
   },
   "editor": {
     "nameLabel": "Name",
@@ -30,7 +30,22 @@
       "connectors": "Konnektoren",
       "connectorsHint": "Konnektor-IDs, die beim Anwenden dieser Vorlage angehängt werden.",
       "policies": "Governance-Richtlinien",
-      "policiesHint": "DLP-Modus, Sitzungsdauerlimits, erlaubte Werkzeuge und Ein-/Ausgabeaufzeichnung."
+      "policiesHint": "DLP-Modus, Sitzungsdauerlimits, erlaubte Werkzeuge und Ein-/Ausgabeaufzeichnung.",
+      "secrets": "Geheimnisse",
+      "secretsHint": "Tresor-Geheimnisse, die Sitzungen aus dieser Vorlage als Umgebungsvariablen erhalten.",
+      "summary": {
+        "hooks_one": "{{count}} Hook",
+        "hooks_other": "{{count}} Hooks",
+        "secrets_one": "{{count}} Variable",
+        "secrets_other": "{{count}} Variablen",
+        "connectors_one": "{{count}} Konnektor",
+        "connectors_other": "{{count}} Konnektoren",
+        "set_one": "{{count}} festgelegt",
+        "set_other": "{{count}} festgelegt",
+        "model": "Modell: {{model}}",
+        "none": "Keine",
+        "defaults": "Standard"
+      }
     },
     "hooks": {
       "preTool": "Vor Werkzeug",

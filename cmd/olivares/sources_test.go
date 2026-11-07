@@ -436,21 +436,18 @@ func TestBuildInProcSourceRRWGraph(t *testing.T) {
 }
 
 // TestBuildContentSourceKnowledgeDocs pins the document-source registry: the
-// gdrive/confluence/notion/s3content/snowflake/azure_ai_search connectors resolve to a
+// gdrive/notion/s3content/postgres/filesystem connectors resolve to a
 // contentsource.Source whose Kind() is ClassDocument (the boundary — a content
 // source is never confused with an audit/inventory feed). They are NOT
 // sdk.SourceConnector and are never registered with the runtime; the knowledge module
 // drives them on ingest.
 func TestBuildContentSourceKnowledgeDocs(t *testing.T) {
 	cases := map[string]string{
-		"gdrive":          "olivares.gdrive-content",
-		"confluence":      "olivares.confluence-content",
-		"notion":          "olivares.notion-content",
-		"s3content":       "olivares.s3-content",
-		"snowflake":       "olivares.snowflake-content",
-		"azure_ai_search": "olivares.azureaisearch-content",
-		"postgres":        "olivares.pg-content", //
-		"filesystem":      "olivares.fs-content", //
+		"gdrive":     "olivares.gdrive-content",
+		"notion":     "olivares.notion-content",
+		"s3content":  "olivares.s3-content",
+		"postgres":   "olivares.pg-content", //
+		"filesystem": "olivares.fs-content", //
 	}
 	for kind, wantName := range cases {
 		src, ok := buildContentSource(kind, nil)
@@ -601,13 +598,13 @@ func TestKnowledgeContentOptions(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cfg := sourcesConfig{Documents: []documentSpec{
 		{Name: "corp-drive", Kind: "gdrive"},
-		{Name: "eng-wiki", Kind: "confluence", Config: map[string]string{"mode": "live"}},
+		{Name: "eng-wiki", Kind: "notion", Config: map[string]string{"mode": "live"}},
 		{Name: "bogus", Kind: "not-a-real-kind"}, // unknown: warn, do not wire
 		{Name: "", Kind: "notion"},               // nameless: warn, do not wire
 	}}
 	pending := knowledgeContentSources(cfg, log)
 	if len(pending) != 2 {
-		t.Fatalf("knowledgeContentSources collected %d sources, want 2 (gdrive+confluence; unknown+nameless skipped)", len(pending))
+		t.Fatalf("knowledgeContentSources collected %d sources, want 2 (gdrive+notion; unknown+nameless skipped)", len(pending))
 	}
 	for _, p := range pending {
 		mode, ok := p.src.(contentSourceMode)

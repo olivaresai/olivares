@@ -73,11 +73,11 @@
     "bypassPermissions": "bypassPermissions"
   },
   "effort": {
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-    "max": "max"
+    "low": "Faible",
+    "medium": "Moyen",
+    "high": "Élevé",
+    "xhigh": "Très élevé",
+    "max": "Maximal"
   },
   "summary": {
     "total": "Total",
@@ -144,7 +144,7 @@
     "effortDefault": "Valeur par défaut du modèle",
     "model": "Modèle",
     "workspace": "Dossier",
-    "workspaceNone": "Dossier temporaire de cette session",
+    "workspaceNone": "Par défaut (Mes fichiers)",
     "worktree": "Travailler dans un nouveau worktree git",
     "worktreeHint": "Crée une nouvelle branche dans un worktree dédié, pour que les sessions d'un même dépôt ne partagent pas de fichiers. Le dossier doit être la racine du dépôt.",
     "worktreeFrom": "Part de",
@@ -168,8 +168,8 @@
     "templateOverrides_one": "Le modèle remplace {{count}} de vos choix :",
     "templateOverrides_many": "Le modèle remplace {{count}} de vos choix :",
     "templateOverrides_other": "Le modèle remplace {{count}} de vos choix :",
-    "profile": "Profil de fournisseur",
-    "profileNone": "Sélectionner un profil",
+    "profile": "Compte",
+    "profileNone": "Sélectionner un compte",
     "profileNotOperable": "non activé dans cet environnement",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME et GROK_HOME appartiennent au profil : un lancement qui transmet l’une d’elles est refusé ici. Les autres noms restent soumis à la validation du serveur.",
     "identity": {
@@ -209,6 +209,7 @@
     "use": "Utiliser « {{model}} »",
     "defaultNamed": "Par défaut ({{model}})",
     "defaultUnnamed": "Valeur par défaut de {{tool}}",
+    "toolDefault": "Par défaut (recommandé)",
     "effortDefaultNamed": "Valeur par défaut du modèle ({{effort}})",
     "effortNeedsModel": "Choisissez d'abord un modèle : un effort est un niveau d'un modèle."
   },
@@ -334,6 +335,8 @@
     "title": "Espaces de travail",
     "subtitle": "Répertoires de l’hôte dans lesquels une session travaille — montés, cloisonnés et classés par DLP.",
     "register": "Enregistrer un espace de travail",
+    "personalFolders": "Donner à chaque personne un dossier personnel (Mes fichiers)",
+    "personalFoldersSaved": "Réglage des dossiers personnels enregistré.",
     "cols": {
       "name": "Espace de travail",
       "rootPath": "Chemin racine",
@@ -407,6 +410,22 @@
     }
   },
   "browser": {
+    "notes": {
+      "title": "Notes",
+      "add": "Ajouter une note",
+      "select": "Sélectionnez d’abord un passage du fichier, puis ajoutez une note.",
+      "note": "Note",
+      "keep": "Ajouter",
+      "cancel": "Annuler",
+      "sendTo": "Envoyer les notes à",
+      "send": "Envoyer",
+      "sent": "Notes envoyées à la session.",
+      "failed": "Les notes n’ont pas pu être envoyées. Réessayez dans un instant.",
+      "noSession": "Aucune session active dans cet espace à qui les envoyer.",
+      "count_one": "{{count}} note",
+      "count_many": "{{count}} notes",
+      "count_other": "{{count}} notes"
+    },
     "title": "Fichiers",
     "root": "racine",
     "upDir": "Remonter",
@@ -449,7 +468,20 @@
     "deletedFile": "Supprimé",
     "sizeLabel": "Taille",
     "modifiedLabel": "Modifié",
-    "create": "Créer"
+    "create": "Créer",
+    "upload": "Téléverser",
+    "uploadLimit": "Jusqu'à {{size}} par fichier",
+    "uploadReadOnly": "Ce dossier est en lecture seule : aucun fichier ne peut y être ajouté.",
+    "uploadNoAccess": "Vous n'avez pas d'accès en écriture à ce dossier.",
+    "uploaded": "Téléversés : {{n}}",
+    "uploadTooLarge": "{{name}} dépasse la limite de {{size}} et n'a pas été téléversé.",
+    "uploadExists": "{{name}} existe déjà et n'a pas été remplacé.",
+    "uploadFailed": "Échec du téléversement",
+    "downloadSelected": "Télécharger la sélection ({{n}})",
+    "downloadFolder": "Télécharger le dossier",
+    "downloadFailed": "Échec du téléchargement",
+    "labeled": "Étiquettes DLP : {{classes}}",
+    "select": "Sélectionner {{name}}"
   },
   "empty": {
     "title": "Aucune session Claude Code",
@@ -842,6 +874,10 @@
         "amber": "Ambre",
         "red": "Rouge",
         "blue": "Bleu",
+        "purple": "Violet",
+        "pink": "Rose",
+        "teal": "Sarcelle",
+        "slate": "Ardoise",
         "unknown": "Couleur enregistrée inconnue"
       }
     }
@@ -1044,15 +1080,19 @@
   "usage": {
     "fiveHour": "5 heures",
     "week": "Hebdo",
+    "weekModel": "{{model}} uniquement",
     "percent": "{{window}} {{percent}} %",
+    "shareOfWeek": "{{percent}} % de la semaine",
+    "shareOfFiveHours": "{{percent}} % de 5 heures",
+    "resets": "Réinitialisation {{when}}",
     "unknown": "Utilisation inconnue",
     "limit": {
       "fiveHour": "Limite de 5 heures atteinte",
       "fiveHourResets": "Limite de 5 heures atteinte, réinitialisation {{time}}",
       "week": "Limite hebdomadaire atteinte",
       "weekResets": "Limite hebdomadaire atteinte, réinitialisation {{time}}",
-      "other": "Limite {{label}} atteinte",
-      "otherResets": "Limite {{label}} atteinte, réinitialisation {{time}}"
+      "other": "Limite atteinte",
+      "otherResets": "Limite atteinte, réinitialisation {{time}}"
     }
   }
 }

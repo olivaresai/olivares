@@ -22,7 +22,12 @@ import { stripComments, walk } from '@/test/empty-state-census'
 const HOME = resolve(__dirname)
 
 /** Files of Now that may set text in the machine face, each with the reason. */
-const ALLOWED: ReadonlyArray<{ file: string; why: string }> = []
+const ALLOWED: ReadonlyArray<{ file: string; why: string }> = [
+  {
+    file: 'now-queue.tsx',
+    why: 'a request row says the command a session wants to run',
+  },
+]
 
 /** The utilities that set the machine face or its two sizes. */
 const MONO = /(?<![\w-])(?:font-mono|text-mono(?:-s)?)(?![\w-])/g

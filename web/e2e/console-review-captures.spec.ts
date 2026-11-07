@@ -2,104 +2,90 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE OWNER'S REVIEW SET. Nine console surfaces, photographed against a live
-// `--seed-demo` engine at four framings, so a reader can judge the console the way an
-// operator meets it: at a desk, on a phone, and on a tablet.
+// THE OWNER'S REVIEW SET: the console 0.7 capture list. Twenty-six screens, each a route or a state of
+// one (a pill that is open, a sheet, a menu), photographed against live engines at 1280 px light (L),
+// 1280 px dark (D) and, where the layout changes, 390 px light (M). The owner judges the console on
+// these, so nothing here hides what a person would see: no version mark is masked, no date frozen.
 //
-// It is DELIBERATELY NOT `docs-captures.spec.ts`. That spec photographs ROUTES — one
-// path, one picture, at one desk-sized framing — and it is the public documentation's
-// source. This one photographs the surfaces this cycle built, several of which are
-// STATES rather than routes (a palette that is open, a field that holds focus, a filter
-// that matches nothing) and none of which the route list reaches:
+// It is NOT `docs-captures.spec.ts`, which photographs routes for the public documentation. Run it
+// through that harness, which seeds the estate and boots the fresh installs this set needs:
 //
-//   · a palette is a state of the shell, not a path;
-//   · a visible focus ring exists only after a real Tab in a real browser;
-//   · an empty state that a filter produced is the only honest one — an unseeded estate
-//     would photograph a missing fixture and call it a design;
-//   · a phone framing is where a three-pane surface has to prove it folds.
+//   OLIVARES_BIN=<candidate> scripts/docs-captures.sh e2e/console-review-captures.spec.ts --grep @review
 //
-// ⛔ THE DEMO GUARD, for the reason every live spec in this directory carries it.
-//    `scripts/web-e2e.sh` puts every spec that does not fill `#token` on ONE shared
-//    engine that nothing seeds, so a spec signing in as `demo@olivares.local` finds no
-//    password box, signs nobody in, and then grades the LOGIN PAGE while reporting each
-//    surface green. `DEMO_TENANT` turns that silent pass into a visible skip.
-//
-// ⛔ EVERY TEST IS TAGGED `@review`, and that is load-bearing rather than tidy. This
-//    spec runs on the estate `scripts/docs-captures.sh` seeds — five governed sessions,
-//    a provider profile, work items, connectors — so it is invoked THROUGH that script
-//    with `--grep @review`, which selects these tests and none of the 142 route takes.
-//    Re-seeding a second estate beside it would photograph a poorer console and call the
-//    difference a finding.
-//
-// Output: web/playwright-report/review/<nn>-<slug>-<width>-<theme>.png
+// Engines: the seeded Northwind estate (PLAYWRIGHT_BASE_URL, DEMO_TENANT); a fresh install with no AI
+// tool signed in (FRESH_BASE_URL); a fresh install whose demo tools are signed in and that has run
+// nothing (READY_BASE_URL); a fresh install whose only sessions ended their turn (IDLE_BASE_URL); an
+// engine still waiting for first-boot setup (SETUP_BASE_URL).
+// Output: web/playwright-report/review/<id>-<slug>[-<part>]-<width>-<theme>.png, and captures.txt
+// beside them: one line per picture with the sha256 of the executable the harness runs, which every
+// engine of the set runs.
 import { expect, test, type Page } from '@playwright/test'
-import { mkdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { appendFileSync, mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { openWorkingFold } from './open-working-fold'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
+const estateOrigin = process.env.PLAYWRIGHT_BASE_URL ?? ''
+const binarySha = process.env.DOCS_CAPTURE_BINARY_SHA256 ?? ''
+const ENGINES = {
+  estate: '',
+  fresh: process.env.FRESH_BASE_URL ?? '',
+  ready: process.env.READY_BASE_URL ?? '',
+  idle: process.env.IDLE_BASE_URL ?? '',
+  setup: process.env.SETUP_BASE_URL ?? '',
+}
+type Engine = keyof typeof ENGINES
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
-
 const OUT = resolve(
   process.env.REVIEW_CAPTURE_DIR ?? 'playwright-report/review',
 )
 
-/** The four framings the owner asked to see, and what each one is FOR. */
-const FRAMINGS = [
-  // The desk. Both themes, because a console is read in both and a token that only
-  // works in one is a defect the light picture cannot show.
-  { width: 1440, height: 900, theme: 'light' as const },
-  { width: 1440, height: 900, theme: 'dark' as const },
-  // The phone. Where a three-pane surface has to become one pane and a rail has to
-  // get out of the way.
-  { width: 390, height: 844, theme: 'light' as const },
-  // The tablet: below `xl`, so the work surface folds here too, but with a rail.
-  { width: 1024, height: 768, theme: 'light' as const },
-]
+const SIZES = {
+  L: { width: 1280, height: 800, theme: 'light' },
+  D: { width: 1280, height: 800, theme: 'dark' },
+  M: { width: 390, height: 844, theme: 'light' },
+} as const
+type Size = keyof typeof SIZES
 
-/** A framing's file-name suffix. */
-function suffix(f: (typeof FRAMINGS)[number]) {
-  return `${f.width}-${f.theme}`
+/** One review screen. `shot(part)` takes a picture; a screen with two states takes two parts. */
+type Ctx = {
+  page: Page
+  size: Size
+  go: (engine: Engine, path: string) => Promise<void>
+  shot: (part?: string) => Promise<void>
+}
+type Screen = {
+  id: string
+  sizes: string
+  slug: string
+  engines: Engine[]
+  run: (c: Ctx) => Promise<void>
 }
 
 /**
- * Set the persisted preferences BEFORE the first document of this origin. The theme
- * store reads `olivares.theme` RAW (no JSON) before first paint, and the language store
- * reads its own key as a RAW language code.
- *
- * ⛔ AND IT USED TO WRITE THAT KEY AS JSON, WHICH PINNED NOTHING. `olivares.lang` is
- *    `detection.lookupLocalStorage` for i18next's browser detector (`lib/i18n/index.ts`),
- *    and that detector stores a bare code: it read `{"state":{"lang":"en"},…}` as an
- *    unsupported language, fell through to `navigator`, and painted the console in
- *    whatever locale the container happens to have. Measured on this box, 2026-09-18:
- *    every screen came back in Spanish with the JSON pin in place, and in English with
- *    `'en'`. A review set whose language depends on the machine cannot be compared with
- *    the set it is supposed to be compared with.
+ * Language and theme before the first document of every origin. The estate's organization is pinned on
+ * the estate's origin only: the fresh installs have one organization of their own.
  */
-async function prefer(page: Page, theme: 'light' | 'dark', tenant: string) {
+async function prefer(page: Page, theme: string) {
   await page.addInitScript(
-    ([t, tn]) => {
-      try {
-        window.localStorage.setItem('olivares.theme', t)
-        window.localStorage.setItem('olivares.lang', 'en')
+    ([t, tn, origin]) => {
+      window.localStorage.setItem('olivares.theme', t)
+      // The language detector reads a bare code (lib/i18n/index.ts).
+      window.localStorage.setItem('olivares.lang', 'en')
+      if (tn && new URL(origin).origin === window.location.origin)
         window.localStorage.setItem(
           'olivares.tenant',
           JSON.stringify({ state: { activeTenant: tn }, version: 0 }),
         )
-      } catch {
-        /* private mode: the run then photographs the defaults, and the report says so */
-      }
     },
-    [theme, tenant],
+    [theme, demoTenant, estateOrigin],
   )
 }
 
-async function signIn(page: Page) {
-  await page.goto('/login')
-  await expect(
-    page.locator('input[type=password]'),
-    'the login form must be present — without it nothing below photographs a console',
-  ).toHaveCount(1)
+async function signIn(page: Page, base: string) {
+  await page.goto(`${base}/login`)
+  await expect(page.locator('input[type=password]')).toHaveCount(1)
   await page.locator('input[type=email]').first().fill(EMAIL)
   await page.locator('input[type=password]').first().fill(PASSWORD)
   await page.locator('button[type=submit]').first().click()
@@ -108,262 +94,476 @@ async function signIn(page: Page) {
   })
 }
 
-/**
- * Take the picture.
- *
- * ⛔ THE POINTER GOES BACK TO THE CORNER FIRST. Playwright leaves the cursor wherever
- *    the last click landed, and a painted `:hover` is a state the reader cannot
- *    reproduce — the same correction `docs-captures.spec.ts` carries.
- *
- * ⛔ AND THE PICTURE IS VIEWPORT-SIZED, NOT FULL-PAGE. The question the owner asked is
- *    "what does an operator SEE", and a full-page capture answers a different one: it
- *    stretches the viewport, so a fold that is real at 844 px disappears, and every
- *    judgement about dead space below the fold becomes meaningless.
- */
-async function shoot(page: Page, name: string) {
-  await page.mouse.move(0, 0)
-  const path = `${OUT}/${name}.png`
-  mkdirSync(dirname(path), { recursive: true })
-  await page.screenshot({ path })
+const heading = (page: Page, name: string | RegExp) =>
+  page.getByRole('heading', { name, level: 1 }).first()
+
+/** At 390 px the sidebar is a drawer behind "Open navigation". */
+async function openNavigation(c: Ctx) {
+  if (c.size === 'M') {
+    await c.page.getByRole('button', { name: 'Open navigation' }).click()
+    return c.page.locator('[data-slot="navigation-drawer"]')
+  }
+  return c.page.locator('[data-slot="sidebar"]')
 }
 
-/** The console shell has painted its navigation. */
-async function shellReady(page: Page) {
-  // ⛔ THE SCOPE LINE IS NOT A SHELL FACT ANY MORE (C1 §3.1.4). This used to wait for
-  //    `shell-scope-line`, which was true when the launcher was docked to the bottom of
-  //    every authenticated viewport. The launcher is gone from the shell — it cost about
-  //    90 px of all 77 routes to serve the ~17 that can start a run — so the two things
-  //    that ARE on every authenticated route are the rail and the header, and those are
-  //    what "the shell is up" now means.
-  await page.getByRole('navigation').first().waitFor({ timeout: 30_000 })
-  await page.locator('[data-slot="topbar"]').waitFor({ timeout: 30_000 })
+/** The new-session start, with the estate's sessions listed beside it. */
+async function openStart(c: Ctx) {
+  await c.go('estate', '/sessions')
+  const start = c.page.getByTestId('work-start')
+  if (!(await start.isVisible())) {
+    await c.page
+      .locator('#work-pane-rail')
+      .getByRole('button', { name: 'New session' })
+      .click()
+  }
+  await start.waitFor({ timeout: 30_000 })
+  return start
 }
 
-/**
- * Wait until the work composer has DECIDED what it is. It renders the scope line and
- * nothing else while the provider-profile plane is still answering — deliberately, so a
- * deployment with no profile never paints a field it is about to remove. A capture taken
- * inside that window photographs a control that is about to vanish.
- *
- * ⛔ AND IT IS ONLY MOUNTED WHERE STARTING WORK IS THE WORK (C1 §3.1.4): home and the
- *    session work surface. Calling this on any other route would wait 30 s for a control
- *    the product no longer puts there, which is a spec asking for a screen that does not
- *    exist — the same defect the pane-switcher correction fixed in the other direction.
- */
-async function composerSettled(page: Page) {
-  await page.getByTestId('work-composer').waitFor({ timeout: 30_000 })
-  await page
-    .locator(
-      '[data-testid="launcher-input"], [data-testid="launcher-add-provider"], [data-testid="launcher-blocked"]',
-    )
-    .first()
-    .waitFor({ timeout: 30_000 })
+async function openSession(c: Ctx, name: string) {
+  await c.go('estate', '/sessions')
+  await openWorkingFold(c.page)
+  const row = c.page.getByTestId('rail-row').filter({ hasText: name }).first()
+  const address = await row.getAttribute('data-address', { timeout: 30_000 })
+  expect(address, `the rail row of "${name}" carries its address`).toBeTruthy()
+  await c.go('estate', `/sessions?session=${address}`)
+  await c.page.getByTestId('session-narrative').waitFor({ timeout: 30_000 })
+  return address
 }
 
-/** Below `xl` the rail is behind a control; open it so a phone shot shows the shell. */
-async function openRailIfFolded(page: Page) {
-  const nav = page.getByRole('navigation').first()
-  if (await nav.isVisible()) return
-  const opener = page
-    .getByRole('button', { name: /menu|navigation|sidebar/i })
-    .first()
-  if ((await opener.count()) > 0) await opener.click()
+async function openPage(c: Ctx, path: string, name: string | RegExp) {
+  await c.go('estate', path)
+  await heading(c.page, name).waitFor({ timeout: 30_000 })
 }
+
+const SCREENS: Screen[] = [
+  {
+    id: 'C01',
+    sizes: 'LDM',
+    slug: 'home-fresh-no-tool',
+    engines: ['fresh'],
+    run: async (c) => {
+      await c.go('fresh', '/')
+      await c.page.locator('#work-start-tools').waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C02',
+    sizes: 'LD',
+    slug: 'home-fresh-tool-ready',
+    engines: ['ready'],
+    run: async (c) => {
+      await c.go('ready', '/')
+      await c.page.getByTestId('work-start').waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C03',
+    sizes: 'LDM',
+    slug: 'sessions',
+    engines: ['estate'],
+    run: async (c) => {
+      await c.go('estate', '/sessions')
+      // The strip is drawn once per layout; the visible one is the screen's.
+      await c.page
+        .getByTestId('sessions-strip')
+        .filter({ visible: true })
+        .first()
+        .waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C04',
+    sizes: 'LDM',
+    slug: 'session-changed-files',
+    engines: ['estate'],
+    run: async (c) => {
+      const address = await openSession(c, 'Refactor cart totals in checkout')
+      if (c.size !== 'M') return c.shot()
+      await c.shot('conversation')
+      await c.go('estate', `/sessions?session=${address}&pane=context`)
+      await c.page
+        .getByRole('dialog', { name: 'Session details' })
+        .waitFor({ timeout: 30_000 })
+      await c.shot('details')
+      // What the Changes tab holds, whichever tab the sheet opened on: the review needs both.
+      await c.page.getByRole('radio', { name: 'Changes' }).click()
+      await c.shot('changes')
+    },
+  },
+  {
+    id: 'C05',
+    sizes: 'LDM',
+    slug: 'composer-tool-pill',
+    engines: ['estate'],
+    run: async (c) => {
+      await openStart(c)
+      await c.page.getByRole('button', { name: /^Tool and account: / }).click()
+      // The open menu hides the rest of the page from the accessibility tree, the pill included.
+      await c.page.getByRole('menu').first().waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C06',
+    sizes: 'L',
+    slug: 'more-options',
+    engines: ['estate'],
+    run: async (c) => {
+      const start = await openStart(c)
+      await start
+        .getByRole('textbox')
+        .first()
+        .fill('Fix the flaky checkout test')
+      await c.page.getByRole('button', { name: /^Folder: / }).click()
+      await c.page.getByRole('menuitem', { name: 'More options' }).click()
+      await c.page
+        .getByRole('dialog', { name: /^New (.+ )?session$/ })
+        .waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C07',
+    sizes: 'LDM',
+    slug: 'sidebar-more',
+    engines: ['estate'],
+    run: async (c) => {
+      await c.go('estate', '/sessions')
+      const nav = await openNavigation(c)
+      const more = nav.getByRole('button', { name: 'More', exact: true })
+      // A click before the shell finishes drawing can be lost; click until the section is open.
+      await expect(async () => {
+        if ((await more.getAttribute('aria-expanded')) !== 'true')
+          await more.click()
+        await expect(more).toHaveAttribute('aria-expanded', 'true', {
+          timeout: 2_000,
+        })
+      }).toPass({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C08',
+    sizes: 'LD',
+    slug: 'bell',
+    engines: ['estate'],
+    run: async (c) => {
+      await c.go('estate', '/sessions')
+      await c.page.getByRole('button', { name: /^Recent activity/ }).click()
+      await c.page
+        .getByRole('heading', { name: 'Needs you' })
+        .waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C09',
+    sizes: 'LD',
+    slug: 'overview',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/now', 'Overview')
+      await c.shot()
+    },
+  },
+  {
+    id: 'C10',
+    sizes: 'LD',
+    slug: 'templates',
+    engines: ['estate'],
+    run: async (c) => {
+      await c.go('estate', '/workspace-templates')
+      await c.page
+        .getByRole('button', { name: 'New template' })
+        .waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C11',
+    sizes: 'L',
+    slug: 'new-template',
+    engines: ['estate'],
+    run: async (c) => {
+      await c.go('estate', '/workspace-templates')
+      await c.page.getByRole('button', { name: 'New template' }).click()
+      await c.page
+        .getByRole('dialog', { name: 'New template' })
+        .waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C12',
+    sizes: 'LD',
+    slug: 'ai-tools',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/agent-tools', 'AI tools')
+      await c.shot()
+    },
+  },
+  {
+    id: 'C13',
+    sizes: 'L',
+    slug: 'models-more',
+    engines: ['estate'],
+    run: async (c) => {
+      await c.go('estate', '/models')
+      const row = c.page.locator('[data-slot="destination-sections"]').first()
+      await row.getByRole('button', { name: 'More' }).click()
+      await c.page.getByRole('menu').first().waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C14',
+    sizes: 'LD',
+    slug: 'extensions',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/capabilities', 'Extensions')
+      await c.shot()
+    },
+  },
+  {
+    id: 'C15',
+    sizes: 'LD',
+    slug: 'permissions',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/permissions', 'Permissions')
+      await c.shot()
+    },
+  },
+  {
+    id: 'C16',
+    sizes: 'LD',
+    slug: 'usage',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/usage', 'Usage')
+      await c.shot('accounts')
+      await openPage(c, '/usage?tab=timeline', 'Usage')
+      await c.shot('timeline')
+    },
+  },
+  {
+    id: 'C17',
+    sizes: 'LD',
+    slug: 'audit',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/audit', 'Audit ledger')
+      await c.shot()
+    },
+  },
+  {
+    id: 'C18',
+    sizes: 'LDM',
+    slug: 'access-map',
+    engines: ['estate'],
+    run: async (c) => {
+      await c.go('estate', '/access-map')
+      // The list's search, at every size: at 390 px "Show as a graph" moves into the page menu.
+      await c.page
+        .getByPlaceholder(/^Search origin/)
+        .waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C19',
+    sizes: 'LD',
+    slug: 'identity',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/identity', 'Identity')
+      await c.shot()
+    },
+  },
+  {
+    id: 'C20',
+    sizes: 'L',
+    slug: 'security-operations',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/security', 'Security')
+      await c.shot('security')
+      await openPage(c, '/operations', /./)
+      await c.shot('operations')
+    },
+  },
+  {
+    id: 'C21',
+    sizes: 'LD',
+    slug: 'settings',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/settings?section=edition', /./)
+      await c.shot('edition')
+      await c.go('estate', '/settings?section=modules')
+      await c.page
+        .locator('[data-slot="modules-settings"]')
+        .waitFor({ timeout: 30_000 })
+      await c.shot('modules')
+    },
+  },
+  {
+    id: 'C22',
+    sizes: 'LM',
+    slug: 'login-setup',
+    engines: ['fresh', 'setup'],
+    run: async (c) => {
+      await c.page.goto(`${ENGINES.fresh}/login`)
+      await expect(c.page.locator('input[type=password]')).toHaveCount(1)
+      await c.shot('login')
+      await c.page.goto(`${ENGINES.setup}/setup`)
+      expect(
+        new URL(c.page.url()).pathname,
+        'the setup engine still waits for first-boot setup',
+      ).toBe('/setup')
+      await heading(c.page, 'First-boot setup').waitFor({ timeout: 30_000 })
+      await c.shot('setup')
+    },
+  },
+  {
+    id: 'C23',
+    sizes: 'L',
+    slug: 'deploy-community',
+    engines: ['estate'],
+    run: async (c) => {
+      await openPage(c, '/deploy', 'Part of Business')
+      await c.shot()
+    },
+  },
+  {
+    id: 'C24',
+    sizes: 'L',
+    slug: 'health-module-off',
+    engines: ['fresh'],
+    run: async (c) => {
+      await c.go('fresh', '/health')
+      await c.page
+        .locator('[data-slot="module-not-enabled"]')
+        .waitFor({ timeout: 30_000 })
+      await c.shot()
+    },
+  },
+  {
+    id: 'C25',
+    sizes: 'L',
+    slug: 'status-bar',
+    engines: ['idle', 'estate'],
+    run: async (c) => {
+      // Idle first (the fresh install's two sessions ended their turn), then the estate, where sessions work.
+      await c.go('idle', '/sessions')
+      await c.page
+        .locator('[data-slot="status-bar"]')
+        .waitFor({ timeout: 30_000 })
+      await c.shot('idle')
+      await c.go('estate', '/sessions')
+      await c.page
+        .getByRole('button', { name: 'Stop all' })
+        .waitFor({ timeout: 30_000 })
+      await c.shot('working')
+    },
+  },
+  {
+    id: 'C26',
+    sizes: 'L',
+    slug: 'workspace-switcher',
+    engines: ['estate', 'ready'],
+    run: async (c) => {
+      // Two workspaces in the estate (Default and Billing), then the fresh install's one. On Overview: the
+      // Sessions page folds the sidebar to icons, and the switcher with it.
+      await c.go('estate', '/now')
+      await c.page
+        .locator('[data-slot="scope-switcher"]')
+        .waitFor({ timeout: 30_000 })
+      await c.shot('two')
+      await c.go('ready', '/now')
+      await c.page.locator('[data-slot="sidebar"]').waitFor({ timeout: 30_000 })
+      await c.shot('one')
+    },
+  },
+]
 
 test.describe('console review captures', () => {
-  // Signing in, loading a shell, resolving a session and settling a launcher is three
-  // application loads in one case on a loaded box. Raising the budget is the honest fix;
-  // weakening the waits would photograph a skeleton and call it a screen.
+  // Up to two engines, a sign-in each and two states per case on a loaded host.
   test.setTimeout(180_000)
 
-  test.beforeEach(() => {
-    test.skip(
-      !demoTenant,
-      'DEMO_TENANT not set — run this through scripts/docs-captures.sh',
-    )
-  })
-
-  for (const framing of FRAMINGS) {
-    const sfx = suffix(framing)
-
-    test.describe(() => {
-      test.use({
-        viewport: { width: framing.width, height: framing.height },
-        // 2× renders at twice the pixels and downsamples into the slot, which is what
-        // keeps the small type in tables and badges legible when the owner zooms. It is
-        // the same criterion the documentation set uses.
-        deviceScaleFactor: 2,
-      })
-
-      test(`@review 01 the sign-in screen — ${sfx}`, async ({ page }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await page.goto('/login')
-        await expect(page.locator('input[type=password]')).toHaveCount(1)
-        // The deployment footer only paints once the server answers; without it the
-        // picture shows the screen mid-flight rather than the screen.
-        await page
-          .getByTestId('deployment-identity')
-          .waitFor({ timeout: 30_000 })
-          .catch(() => {
-            /* an older shell has no footer; the rest of the screen is still the screen */
-          })
-        await shoot(page, `01-login-${sfx}`)
-      })
-
-      test(`@review 02 the first screen after signing in — ${sfx}`, async ({
-        page,
-      }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await signIn(page)
-        await page.goto('/')
-        await shellReady(page)
-        await composerSettled(page)
-        // The next-action row and the recent-work list are two separate reads; the
-        // heading alone would photograph the page before either answered.
-        await page.waitForLoadState('networkidle').catch(() => {})
-        await shoot(page, `02-home-${sfx}`)
-      })
-
-      test(`@review 03 the sessions list — ${sfx}`, async ({ page }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await signIn(page)
-        await page.goto('/sessions')
-        await shellReady(page)
-        // The table remains reachable through the list's menu.
-        await page.getByTestId('sessions-list-menu').click()
-        await page.getByRole('menuitem', { name: 'Show as table' }).click()
-        await page
-          .locator('[data-slot="data-table"] table tbody tr')
-          .first()
-          .waitFor({ timeout: 30_000 })
-          .catch(() => {
-            /* an estate with no rows photographs its empty state, which is also true */
-          })
-        await shoot(page, `03-sessions-list-${sfx}`)
-      })
-
-      test(`@review 04 a session's work surface — ${sfx}`, async ({ page }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await signIn(page)
-        await page.goto('/sessions')
-        await shellReady(page)
-        await page.getByTestId('work-surface').waitFor({ timeout: 30_000 })
-        const row = page.getByTestId('rail-row').first()
-        await row.waitFor({ timeout: 30_000 })
-        const address = await row.getAttribute('data-address')
-        expect(
-          address,
-          'every rail row carries the address it opens — without one there is no surface to photograph',
-        ).toBeTruthy()
-        await row.click()
-        // Choosing the row opens the thread at every viewport size.
-        const narrative = page.getByTestId('session-narrative')
-        await narrative.waitFor({ timeout: 30_000 })
-        await page
-          .getByTestId('narrative-loading')
-          .waitFor({ state: 'detached', timeout: 30_000 })
-          .catch(() => {})
-        await composerSettled(page)
-        // The launcher, OPEN: `/` is the declared chord that hands it focus, and the
-        // focus ring is what "open" looks like on a field that is always present.
-        const field = page.getByTestId('launcher-input')
-        if ((await field.count()) > 0) {
-          await page.keyboard.press('/')
-          await expect(field).toBeFocused()
-        }
-        await shoot(page, `04-work-surface-${sfx}`)
-      })
-
-      test(`@review 05 the command palette, open — ${sfx}`, async ({
-        page,
-      }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await signIn(page)
-        await page.goto('/')
-        await shellReady(page)
-        await composerSettled(page)
-        // `Mod+k` is the declared row (`lib/keybindings/table.ts`), resolved by the
-        // shell's one keyboard authority. Pressing the real chord is the point: a
-        // store call would photograph a dialog the keyboard cannot open.
-        await page.keyboard.press('ControlOrMeta+k')
-        const dialog = page.getByRole('dialog').first()
-        await dialog.waitFor({ timeout: 30_000 })
-        // Type enough to make it a RESULT list rather than an empty box: the federated
-        // search needs two characters before it fires.
-        await page.keyboard.type('sess', { delay: 30 })
-        await page.waitForTimeout(900)
-        await shoot(page, `05-command-palette-${sfx}`)
-      })
-
-      test(`@review 06 a keyboard focus ring on a primary control — ${sfx}`, async ({
-        page,
-      }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await signIn(page)
-        await page.goto('/')
-        await shellReady(page)
-        await composerSettled(page)
-        // ARRIVING FROM THE ADDRESS BAR is exactly a fresh document with focus on the
-        // body: the first Tab reaches the skip link, the second the first real control.
-        // Nothing is clicked, so `:focus-visible` is the keyboard ring and not a
-        // pointer's.
-        await page.keyboard.press('Tab')
-        const first = await page.evaluate(() => ({
-          tag: document.activeElement?.tagName ?? '',
-          text: (document.activeElement?.textContent ?? '').slice(0, 60),
-        }))
-        expect(
-          first.tag,
-          'a Tab from a fresh document must land on a control, not on the body',
-        ).not.toBe('BODY')
-        await shoot(page, `06-focus-ring-${sfx}`)
-      })
-
-      test(`@review 07 an empty state a filter produced — ${sfx}`, async ({
-        page,
-      }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await signIn(page)
-        await page.goto('/sessions')
-        await shellReady(page)
-        await page.getByTestId('sessions-list-menu').click()
-        await page.getByRole('menuitem', { name: 'Show as table' }).click()
-        const search = page
-          .locator('[data-slot="data-table"] input[placeholder]')
-          .first()
-        await search.waitFor({ timeout: 30_000 })
-        // A string no reference can contain. The table distinguishes "no data" from
-        // "rows hidden by a filter", and this is the second one — the honest empty
-        // state, on an estate that DOES have rows.
-        await search.fill('zzzz-no-such-session-zzzz')
-        await expect(page.getByRole('status').first()).toBeVisible({
-          timeout: 30_000,
+  for (const screen of SCREENS) {
+    for (const size of screen.sizes.split('') as Size[]) {
+      const f = SIZES[size]
+      test.describe(() => {
+        test.use({
+          viewport: { width: f.width, height: f.height },
+          deviceScaleFactor: 2,
         })
-        await page.mouse.move(0, 0)
-        await shoot(page, `07-empty-state-${sfx}`)
-      })
 
-      test(`@review 08 settings — ${sfx}`, async ({ page }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await signIn(page)
-        await page.goto('/settings')
-        await page.getByRole('heading').first().waitFor({ timeout: 30_000 })
-        await openRailIfFolded(page)
-        await page.waitForLoadState('networkidle').catch(() => {})
-        await shoot(page, `08-settings-${sfx}`)
+        test(`@review ${screen.id} ${screen.slug} — ${f.width}-${f.theme}`, async ({
+          page,
+        }) => {
+          test.skip(
+            !demoTenant,
+            'DEMO_TENANT not set — run this through scripts/docs-captures.sh',
+          )
+          for (const e of screen.engines)
+            expect(
+              e === 'estate' || ENGINES[e],
+              `${e} engine: run this through scripts/docs-captures.sh`,
+            ).toBeTruthy()
+          expect(
+            binarySha,
+            'every capture is listed with the engine it came from',
+          ).toMatch(/^[0-9a-f]{64}$/)
+          await prefer(page, f.theme)
+          const signed = new Set<Engine>()
+          await screen.run({
+            page,
+            size,
+            go: async (engine, path) => {
+              const base = ENGINES[engine]
+              if (!signed.has(engine)) {
+                await signIn(page, base)
+                signed.add(engine)
+              }
+              await page.goto(`${base}${path}`)
+              await page
+                .locator('[data-slot="topbar"]')
+                .waitFor({ timeout: 30_000 })
+              // Bounded: the console holds live streams open, so the network may never go idle.
+              await page
+                .waitForLoadState('networkidle', { timeout: 5_000 })
+                .catch(() => {
+                  /* a live stream keeps the network busy; the waits above decided the screen */
+                })
+            },
+            shot: async (part) => {
+              await page.mouse.move(0, 0)
+              const name = [
+                screen.id,
+                screen.slug,
+                part,
+                `${f.width}-${f.theme}`,
+              ]
+                .filter(Boolean)
+                .join('-')
+              mkdirSync(OUT, { recursive: true })
+              await page.screenshot({ path: `${OUT}/${name}.png` })
+              appendFileSync(
+                `${OUT}/captures.txt`,
+                `${name}.png ${binarySha}\n`,
+              )
+            },
+          })
+        })
       })
-
-      test(`@review 09 the provider profiles screen — ${sfx}`, async ({
-        page,
-      }) => {
-        await prefer(page, framing.theme, demoTenant)
-        await signIn(page)
-        await page.goto('/provider-profiles')
-        await shellReady(page)
-        await page.getByRole('heading').first().waitFor({ timeout: 30_000 })
-        await page.waitForLoadState('networkidle').catch(() => {})
-        await shoot(page, `09-provider-profiles-${sfx}`)
-      })
-    })
+    }
   }
 })

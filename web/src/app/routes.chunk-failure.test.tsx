@@ -11,6 +11,10 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
 
+vi.mock('@/lib/api/client', () => ({
+  http: { post: vi.fn().mockResolvedValue(undefined) },
+}))
+
 const transport = vi.hoisted(
   (): { unavailable: boolean; attempts: number; error: unknown } => ({
     unavailable: true,

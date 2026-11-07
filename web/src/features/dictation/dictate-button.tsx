@@ -186,7 +186,15 @@ export function DictateButton({
         aria-label={t('dictate')}
         aria-pressed={listening}
         aria-busy={busy}
-        title={phase === 'error' ? t('failed') : t('hint')}
+        title={
+          disabled && !listening
+            ? t('unavailable')
+            : phase === 'error'
+              ? t('failed')
+              : spoken
+                ? t(spoken)
+                : t('hint')
+        }
         disabled={disabled && !listening}
         onClick={() => {
           if (listening) void stop()

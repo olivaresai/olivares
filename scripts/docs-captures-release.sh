@@ -20,6 +20,9 @@
 # A capture whose visible text shows a path of this host fails the run; pass a TMPDIR outside /workspace and /home
 # when a view needs one. The run boots an engine and a browser: on a shared host start it under that host's job
 # wrapper so that two heavy runs do not overlap.
+# The Settings view prints the language names in their own scripts: the host needs a font that covers Chinese, Japanese
+# and Korean (Debian: fonts-noto-cjk). Without one the run stops on that view, because a capture of missing-glyph boxes
+# is not published.
 # DOCS_CAPTURE_ALLOW_PAID_CAPABILITIES=1 photographs the other views of a Community binary that serves the paid
 # access graph or identity inventory (the harness refuses such a binary otherwise).
 # scripts/docs-captures-held.txt lists the views every run leaves out (id, the open issue that owns the retake, why), so
@@ -122,7 +125,9 @@ VERSION="$(cd "$WORK" && env -i PATH=/usr/bin:/bin HOME="$WORK" "$BIN" version)"
 [[ "$VERSION" == "olivares $TAG "* ]] || { echo "the extracted binary is not release $TAG: $VERSION" >&2; exit 1; }
 echo "==> $VERSION"
 
-OLIVARES_BIN="$BIN" DOCS_CAPTURE_IMAGE="$REPO:$TAG@$IMAGE_DIGEST" PUBLICAR=1 bash "$ROOT/scripts/docs-captures.sh"
+# The record names the image by digest alone: JSON takes no release mark, so a tag there would
+# be a version token the release census refuses once it equals the canon.
+OLIVARES_BIN="$BIN" DOCS_CAPTURE_IMAGE="$REPO@$IMAGE_DIGEST" PUBLICAR=1 bash "$ROOT/scripts/docs-captures.sh"
 # The engine that served the captures must be the binary taken out of the image.
 [ "$(jq -r .binary_sha256 "$ROOT/docs-site/public/console/manifest.json")" = "$(sha "$BIN")" ] ||
   { echo "the engine that served the captures is not the binary extracted from $REPO:$TAG" >&2; exit 1; }

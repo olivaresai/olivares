@@ -732,6 +732,58 @@ describe('buildAvailableRows', () => {
     })
   })
 
+  it('counts a session on the Claude selector row whose launch_model it recorded, not on a second row of the raw id', () => {
+    // The engine launches a Claude selector on its exact id and a session records that id.
+    const rows = buildAvailableRows({
+      catalogs: [
+        {
+          driver: 'claude',
+          catalog: catalog('fresh', [
+            {
+              id: 'default',
+              display_name: 'Default (recommended)',
+              is_default: true,
+              launch_model: 'claude-opus-5-5',
+            },
+            {
+              id: 'sonnet',
+              display_name: 'Sonnet 5.5',
+              launch_model: 'claude-sonnet-5-5',
+            },
+            {
+              id: 'opus',
+              display_name: 'Opus 5.5',
+              launch_model: 'claude-opus-5-5',
+            },
+          ]),
+        },
+      ],
+      availability: [],
+      runs: [
+        run({
+          run_ref: 's1',
+          provider_driver: 'claude',
+          model_ref: 'claude-sonnet-5-5',
+        }),
+        run({
+          run_ref: 's2',
+          provider_driver: 'claude',
+          model_ref: 'claude-sonnet-5-5',
+        }),
+        run({
+          run_ref: 'o1',
+          provider_driver: 'claude',
+          model_ref: 'claude-opus-5-5',
+        }),
+      ],
+    })
+    expect(rows.map((r) => [r.key, r.sessions.length])).toEqual([
+      ['tool:claude:default', 0],
+      ['tool:claude:sonnet', 2],
+      ['tool:claude:opus', 1],
+    ])
+  })
+
   it('matches a legacy run with no driver only when one tool row has that model', () => {
     const rows = buildAvailableRows({
       catalogs: [

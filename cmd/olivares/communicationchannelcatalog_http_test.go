@@ -365,7 +365,7 @@ func TestCommunicationChannelCatalogFreshHTTP(t *testing.T) {
 
 	t.Run("exchanged agent reader", func(t *testing.T) {
 		sponsorRef := "human:k3-catalog-owner:" + owner.id.String()
-		setDirectoryUser(t, eng, owner.token, tenant, owner.id, auth.SCIMUserInput{
+		setDirectoryUser(t, eng, owner.token, tenant, owner.id, directoryAttrs{
 			UserName: "owner@k3-catalog.test", DisplayName: "K3 catalog owner", ExternalID: sponsorRef, Active: true,
 		})
 		if err := eng.store.Mutate(context.Background(), tenant, func(sc store.Scope) error {

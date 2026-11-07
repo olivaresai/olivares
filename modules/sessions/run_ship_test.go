@@ -5,8 +5,10 @@
 package sessions
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/connectors/gitpublish"
@@ -102,4 +104,145 @@ func TestCommitRunCommitsTheWorktreeAndNamesWhatToPublish(t *testing.T) {
 			t.Fatalf("no message: err = %v, want ErrLocalInput", err)
 		}
 	})
+}
+
+func TestSessionGitAIAttribution(t *testing.T) {
+	if confine.Probe().Mode != confine.ModeLandlock {
+		t.Fatal("Landlock required for attribution proof")
+	}
+	repo := gitRepoFixture(t)
+	m := New(WithConfinement([]string{t.TempDir()}, true))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "attribution-git")
+	workspace, _ := launchTargetWorkspaces(t, m, tenant)
+	wsRef := registerTestWorkspace(t, m, tenant, repo)
+	seedLaunchTargetRun(t, m, tenant, workspace, "attribution-run", nil, func(rec model.Record) {
+		rec[colRunWorkspacePath] = repo
+		rec[colWorkspaceRef] = wsRef
+		rec[colState] = stateStopped
+		rec[colRunProfileDriver] = "claude"
+		rec[colRunModelRef] = "claude-sonnet-4-5"
+	})
+	m.GitAttribution = func(ctx context.Context, tenant model.TenantID, templateID string) (string, error) {
+		var mode string
+		err := h.st.View(ctx, tenant, func(sc store.Scope) error {
+			var err error
+			mode, err = ReadGitAttribution(ctx, sc, templateID)
+			return err
+		})
+		return mode, err
+	}
+	user := auth.Principal{Kind: auth.KindUser, DisplayName: "Human Author", Email: "human@example.invalid"}
+	defaults := h.do("GET", "/v1/m/sessions/git-attribution-settings", admin, tenantHdr(tenant))
+	if defaults.code != 200 || defaults.body["ai_attribution"] != "off" {
+		t.Fatalf("default attribution: %d %s", defaults.code, defaults.raw)
+	}
+	catalog := h.do("GET", "/v1/m/sessions/templates?builtin=true", admin, tenantHdr(tenant))
+	if catalog.code != 200 {
+		t.Fatalf("templates: %d %s", catalog.code, catalog.raw)
+	}
+	university := ""
+	for _, item := range catalog.body["items"].([]any) {
+		row := item.(map[string]any)
+		if row["name"] == "University" || row["name"] == "Studio" {
+			settings := row["body"].(map[string]any)["settings"].(map[string]any)
+			if settings["ai_attribution"] != "assisted-by" {
+				t.Fatalf("template attribution: %v", row)
+			}
+			if row["name"] == "University" {
+				university = row["id"].(string)
+			}
+		}
+	}
+	if university == "" {
+		t.Fatal("University template missing")
+	}
+	rec, err := m.loadRun(t.Context(), tenant, "attribution-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec[colTemplateID] = university
+	if err := m.Data.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		_, err = repo.Update(t.Context(), rec)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fixtureWrite(t, repo, "README", "template change")
+	if _, err := m.CommitRun(t.Context(), user, tenant, workspace, "attribution-run", "Template change"); err != nil {
+		t.Fatal(err)
+	}
+	if got := worktreeGitOut(t, repo, "log", "-1", "--format=%B"); !strings.Contains(got, "Assisted-by: claude (claude-sonnet-4-5)") {
+		t.Fatalf("template commit: %q", got)
+	}
+	for i, mode := range []string{"assisted-by", "co-authored-by", "off"} {
+		setting := h.doJSON("PUT", "/v1/m/sessions/git-attribution-settings", admin, map[string]any{"ai_attribution": mode}, tenantHdr(tenant))
+		if setting.code != 200 {
+			t.Fatalf("save attribution %s: %d %s", mode, setting.code, setting.raw)
+		}
+		fixtureWrite(t, repo, "README", mode)
+		if i == 1 {
+			g, _, release, err := m.openRunGit(t.Context(), tenant, "attribution-run")
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = g.stage(t.Context(), []string{"README"}, false)
+			if err == nil {
+				err = g.commit(t.Context(), "Session change", user)
+			}
+			release()
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else if _, err := m.CommitRun(t.Context(), user, tenant, workspace, "attribution-run", "Session change"); err != nil {
+			t.Fatal(err)
+		}
+		message := worktreeGitOut(t, repo, "log", "-1", "--format=%B")
+		want := ""
+		if mode == "assisted-by" {
+			want = "Assisted-by: claude (claude-sonnet-4-5)"
+		}
+		if mode == "co-authored-by" {
+			want = "Co-authored-by: claude (claude-sonnet-4-5)"
+		}
+		if want != "" && strings.Count(message, want) != 1 {
+			t.Fatalf("mode %s: message %q lacks one %q", mode, message, want)
+		}
+		if strings.Contains(strings.ToLower(message), "signed-off-by:") || (mode == "off" && (strings.Contains(message, "Assisted-by:") || strings.Contains(message, "Co-authored-by:"))) {
+			t.Fatalf("unexpected trailer: %q", message)
+		}
+		if got := worktreeGitOut(t, repo, "log", "-1", "--format=%an <%ae>"); got != "Human Author <human@example.invalid>" {
+			t.Fatal(got)
+		}
+	}
+	fixtureWrite(t, repo, "README", "scoped commit")
+	g, _, release, err := m.openRunGit(t.Context(), tenant, "attribution-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.stage(t.Context(), []string{"README"}, false); err != nil {
+		release()
+		t.Fatal(err)
+	}
+	original := m.Data
+	m.Data = confinedLaunchTargetData{inner: original, ws: workspace}
+	err = g.commit(t.Context(), "Scoped user's commit\n\nCo-authored-by: Collaborator <collaborator@example.invalid>", user)
+	m.Data = original
+	release()
+	if err != nil {
+		t.Fatalf("workspace-scoped commit: %v", err)
+	}
+	if got := worktreeGitOut(t, repo, "log", "-1", "--format=%B"); !strings.Contains(got, "Co-authored-by: Collaborator <collaborator@example.invalid>") {
+		t.Fatalf("human coauthor lost: %q", got)
+	}
+
+	fixtureWrite(t, repo, "README", "no agent signoff")
+	if _, err := m.CommitRun(t.Context(), user, tenant, workspace, "attribution-run", "Change\n\nSigned-off-by: Agent <agent@example.invalid>"); err == nil {
+		t.Fatal("session accepted an agent signoff")
+	}
 }

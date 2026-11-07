@@ -34,6 +34,7 @@ type managedStdio struct {
 	network  *sessionegress.Policy // the launch's network, as the runner received it
 	patterns []string
 	sequence int64 // protected by permit
+	latest   bool  // set by Initialize: the server speaks mcpc.LatestRevision
 	once     sync.Once
 	drained  chan struct{}
 	failure  error // written before drained closes; contains only a safe sentence
@@ -143,6 +144,13 @@ func (s *managedStdio) Forward(ctx context.Context, req mcpc.UpstreamRequest) (m
 	if ctx.Err() != nil || s.context.Err() != nil {
 		return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, s.unavailable()
 	}
+	if s.latest {
+		params, err := mcpc.LatestParams(req.Params)
+		if err != nil {
+			return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, err
+		}
+		req.Params = params
+	}
 	s.sequence++
 	id := s.sequence
 	raw, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": req.Method, "params": json.RawMessage(req.Params)})
@@ -201,15 +209,31 @@ func (s *managedStdio) guard(raw []byte) error {
 	return err
 }
 
+// Initialize opens the server with the mcpc.LegacyRevision handshake, or at
+// mcpc.LatestRevision through server/discover when the server answers the
+// handshake with a refusal: it dropped that era. On stdio the handshake goes
+// first because an older server can end on any other request sent before it.
 func (s *managedStdio) Initialize(ctx context.Context) error {
-	result, err := s.Forward(ctx, mcpc.UpstreamRequest{Method: "initialize", Params: []byte(`{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"olivares-managed-mcp","version":"26.10"}}`)})
+	result, err := s.Forward(ctx, mcpc.UpstreamRequest{Method: "initialize", Params: []byte(`{"protocolVersion":"` + mcpc.LegacyRevision + `","capabilities":{},"clientInfo":{"name":"olivares-managed-mcp","version":"26.10"}}`)})
 	if err != nil {
+		if result.State != mcpc.DispatchCompleted {
+			return err
+		}
+		params, perr := mcpc.LatestParams(nil)
+		if perr != nil {
+			return perr
+		}
+		discovered, derr := s.Forward(ctx, mcpc.UpstreamRequest{Method: "server/discover", Params: params})
+		if _, ok := mcpc.InitializeFromDiscover(discovered.Result); derr == nil && ok {
+			s.latest = true
+			return nil
+		}
 		return err
 	}
 	var init struct {
 		ProtocolVersion string `json:"protocolVersion"`
 	}
-	if json.Unmarshal(result.Result, &init) != nil || init.ProtocolVersion != "2025-11-25" {
+	if json.Unmarshal(result.Result, &init) != nil || init.ProtocolVersion != mcpc.LegacyRevision {
 		return errManagedMCPInvalidResponse
 	}
 	if err := s.process.Send(ctx, []byte(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)); err != nil {

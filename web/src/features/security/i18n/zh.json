@@ -1,12 +1,55 @@
 {
-  "title": "安全与取证",
-  "description": "护栏发现项、强制执行态势、异常队列以及防篡改的事件取证。该平面默认仅作探测——它进行记录，除非已启用并受治理的强制执行，否则不会自行阻断。",
+  "title": "安全",
+  "description": "查看护栏标记的内容，选择哪些规则进行阻断，并调查事件。在你启用规则之前，不会阻断任何内容。",
   "tabs": {
+    "overview": "概览",
     "safety": "安全态势",
     "findings": "发现项",
     "guardrails": "护栏",
     "anomalies": "异常",
     "forensics": "取证"
+  },
+  "posture": {
+    "title": "当前暴露面",
+    "description": "实时读取目前需要关注的人员、凭据和控制项。",
+    "review": "查看",
+    "notAvailable": "不可用",
+    "partialHint": "加号表示读取结果在此页之外还有更多行，因此计数只是下限。",
+    "secondFactor": {
+      "label": "未设置第二因素的人员",
+      "description": "没有已确认的身份验证器代码或已注册通行密钥的活跃成员。"
+    },
+    "administrators": {
+      "label": "管理员",
+      "description": "此组织中活跃的所有者和管理员。"
+    },
+    "apiKeys": {
+      "label": "无过期时间或未使用的 API 密钥",
+      "description": "已注册但没有过期时间或没有使用记录的密钥。已撤销的密钥不计入。",
+      "value": "{{noExpiry}} 个无过期时间 · {{unused}} 个未使用"
+    },
+    "approvals": {
+      "label": "待审批",
+      "description": "等待人员批准或拒绝的请求。"
+    },
+    "killSwitch": {
+      "label": "紧急停止开关",
+      "description": "整个资产和各个智能体的当前停止状态。",
+      "estateStopped": "资产已停止",
+      "agentStops_other": "{{count}} 个智能体已停止",
+      "notEngaged": "未启用"
+    },
+    "providers": {
+      "label": "配置了密钥的提供商",
+      "description": "活跃的提供商凭据注册。绝不读取秘密值。"
+    },
+    "policy": {
+      "label": "策略模式",
+      "description": "签名模型准入是未配置、观察还是强制执行。",
+      "unconfigured": "未配置",
+      "observe": "观察",
+      "enforce": "强制"
+    }
   },
   "findings": {
     "title": "发现项",
@@ -59,10 +102,10 @@
   },
   "safetyPosture": {
     "title": "提供商安全态势",
-    "description": "以只读方式从各提供商自带的控制（OpenAI Moderation、AWS Bedrock Guardrails、Azure Responsible AI）采集的 AI 安全态势。该平面只读取并记录，拦截仍由提供商执行。",
+    "description": "以只读方式从各提供商自带的控制（OpenAI Moderation、AWS Bedrock Guardrails、Azure Responsible AI）采集的 AI 安全态势。Olivares 只读取并记录，拦截仍由提供商执行。",
     "empty": "暂无安全态势发现",
     "emptyHint": "启用并连接 OpenAI、AWS 或 Azure 连接器的安全读取，即可填充此视图。",
-    "countsPartial": "这是部分汇总——该租户的安全态势发现数量超过了汇总扫描的覆盖范围。",
+    "countsPartial": "这是部分汇总——该组织的安全态势发现数量超过了汇总扫描的覆盖范围。",
     "columns": {
       "open": "未处理"
     }
@@ -72,13 +115,13 @@
     "description": "在某个面上运行护栏检查服务。文本经哈希脱敏处理且从不存储——结果是一份裁定，外加最小化、已脱敏的证据。",
     "verdictTitle": "裁定",
     "clean": "未检测到问题——干净。",
-    "detectiveNote": "该裁定来自探测平面：触发已被检测并记录，而非被阻断。只有在已启用并受治理的强制执行下，才可能发生阻断。",
+    "detectiveNote": "该裁定仅记录了触发：已被检测，但未被阻断。只有在已启用并受治理的强制执行下，才可能发生阻断。",
     "wouldBlock": "将会阻断（强制执行）",
     "detectOnly": "仅检测",
     "findingsRecorded": "已记录 {{count}} 项发现项",
     "findingsRecorded_other": "已记录 {{count}} 项发现项",
     "enforcement": {
-      "detective": "探测",
+      "detective": "仅记录",
       "enforced": "强制执行"
     },
     "class": {
@@ -107,10 +150,10 @@
   },
   "enforcement": {
     "title": "强制执行态势",
-    "description": "唯一触及生产环境的操作。每个护栏类别默认仅作探测；启用内联强制执行属于管理员操作，并在已配置网关处受治理。",
-    "defaultDetectiveNote": "默认平面为探测：类别仅在此处显式启用并受治理时才会阻断。",
-    "fullyDetective": "未启用任何强制执行——该平面完全处于探测状态，即安全默认值。任何项都不会自行阻断。",
-    "detective": "探测",
+    "description": "唯一触及生产环境的操作。每个护栏类别默认仅作记录；启用内联强制执行属于管理员操作，并在已配置网关处受治理。",
+    "defaultDetectiveNote": "默认不阻断任何内容：类别仅在此处显式启用并受治理时才会阻断。",
+    "fullyDetective": "未启用任何强制执行——仅作记录，在你启用规则之前不会阻断任何内容。",
+    "detective": "仅记录",
     "enforced": "强制执行",
     "governed": "受治理",
     "ungoverned": "已启用但无人工治理",
@@ -126,7 +169,7 @@
     },
     "dialog": {
       "title": "更改强制执行",
-      "description": "禁用（恢复为探测）始终被允许。启用内联强制执行在已配置网关处受治理——治理拒绝会作为原因显示。",
+      "description": "禁用（恢复为仅记录）始终被允许。启用内联强制执行在已配置网关处受治理——治理拒绝会作为原因显示。",
       "enabledLabel": "启用内联强制执行",
       "minSeverity": "最低严重程度",
       "reason": "原因",
@@ -202,7 +245,7 @@
   "empty": {
     "enforcement": {
       "title": "尚未配置强制执行类别",
-      "description": "仅在设置护栏类别态势后才会显示相应行；在此之前，每个类别均保持探测状态，内联路径不会阻断任何内容。"
+      "description": "仅在设置护栏类别态势后才会显示相应行；在此之前，每个类别均仅作记录，内联路径不会阻断任何内容。"
     },
     "findings": {
       "title": "尚无安全发现项记录",

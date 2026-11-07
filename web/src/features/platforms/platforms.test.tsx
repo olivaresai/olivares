@@ -46,7 +46,8 @@ vi.mock('@/lib/auth/context', () => ({
 // EffectiveStateLinks is the only thing on this page that needs a router, and its TARGET is
 // not under test — stub the anchor rather than stand up a route tree (same choice as
 // rate-limits.test.tsx and _intel/effective-state.test.tsx).
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   Link: ({ to, children }: { to: string; children: ReactNode }) => (
     <a href={to}>{children}</a>
   ),
@@ -177,7 +178,7 @@ describe('ParamDeprecationCard', () => {
     )
     expect(screen.getByText(/Informational/i)).toBeInTheDocument()
     expect(
-      screen.getByText(/Anthropic's deprecation .*not a product bug/i),
+      screen.getByText(/Anthropic's deprecation.*not a product bug/i),
     ).toBeInTheDocument()
     // The affected generations come verbatim from the backend reference.
     expect(screen.getByText(/Opus 4\.7\+, Fable\/Mythos 5/)).toBeInTheDocument()

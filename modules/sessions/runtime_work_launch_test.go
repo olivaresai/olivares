@@ -287,6 +287,40 @@ func TestLaunchForWorkReservesAndBindsBeforeSpawnWithCanonicalWorkspace(t *testi
 	}
 }
 
+func TestWorkLaunchCoreSessionNamesItsOwningAgent(t *testing.T) {
+	m, st, tenant, _ := newRuntimeHarness(t,
+		WithRunner(&fakeRunner{}), WithCredentialSource(staticCred()),
+		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
+	)
+	itemID, _, agentRef := readyWorkLaunchItem(t, m, st, tenant)
+	managed, err := m.LaunchForWork(t.Context(), tenant, workLaunchSpec(t, m, tenant, itemID, agentRef))
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := m.loadRun(t.Context(), tenant, managed.RunRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.View(t.Context(), tenant, func(sc store.Scope) error {
+		core, err := sc.Sessions().Get(t.Context(), model.ID(run.String(colRunCoreSessionID)))
+		if err != nil {
+			return err
+		}
+		agents, _, err := sc.Agents().List(t.Context(), model.Query{Filters: []model.Filter{{
+			Column: "external_id", Op: model.OpEq, Value: agentRef,
+		}}, Limit: 1})
+		if err != nil || len(agents) != 1 {
+			return fmt.Errorf("owning agent lookup: %d rows, %v", len(agents), err)
+		}
+		if core.AgentID != agents[0].ID {
+			return fmt.Errorf("core Session.AgentID = %s, want agent %s (identity %s)", core.AgentID, agents[0].ID, agents[0].IdentityID)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLaunchForWorkUserAuditUsesDurableAgentExecutorAndReplays(t *testing.T) {
 	t.Parallel()
 

@@ -25,6 +25,13 @@ export const VIEWS = [
     helpHref: '/reference/modules/gitpublish',
     icon: GitBranchPlus,
     permission: 'gitpublish:target:read',
+    changes: [
+      { permission: 'gitpublish:issue_comment:write' },
+      { permission: 'gitpublish:pull_request:write' },
+      { permission: 'gitpublish:push:write' },
+      { permission: 'gitpublish:merge:admin' },
+      { permission: 'gitpublish:target:admin' },
+    ],
     element: lazyView(GitPublicationView),
   },
 ] satisfies ViewEntry[]

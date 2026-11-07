@@ -139,6 +139,19 @@
       "$description": "Gemini CLI, as a data series."
     }
   },
+  "accounts": {
+    "$type": "color",
+    "$description": "The nine accent colors an account may carry (orange, green, amber, red, blue, purple, pink, teal, slate; the first five are published, the server's closed list in modules/sessions/provider_account.go). A dot beside the account's label, never the only identity: each holds 3:1 on every surface of its theme, selected and hovered rows included, and the closest pair is 0.086 apart in OKLab (src/styles/tokens.test.ts measures both). Color carries no state, health or authority.",
+    "account-orange": { "$value": "#a63f00" },
+    "account-green": { "$value": "#227702" },
+    "account-amber": { "$value": "#7e5f00" },
+    "account-red": { "$value": "#ba022f" },
+    "account-blue": { "$value": "#0060c1" },
+    "account-purple": { "$value": "#7c3eb3" },
+    "account-pink": { "$value": "#a82571" },
+    "account-teal": { "$value": "#00776b" },
+    "account-slate": { "$value": "#5a6472" }
+  },
   "depth": {
     "$description": "Depth: two neutral shadows, for what floats. No glow, blur or halo: depth is tone steps, one hairline and these two shadows.",
     "shadow-pop": {

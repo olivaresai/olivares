@@ -347,17 +347,11 @@ extra = sorted(set(actual) - set(want))
 if wrong or extra:
     problems.append("approval queue: " + "; ".join(
         wrong + ["unexpected %s %s" % key for key in extra]))
-# A waiting request names the session that asked by its provider id; the home can only follow that
-# name when the id belongs to a managed live row of one of these sixteen runs.
-managed_sids = {r.get("session_ref"): r for r in live_rows if r.get("attribution") == "managed"}
+# These waiting requests are filed with people's tokens, outside an engine session.
 for a in approvals:
-    if approval_state(a) != "pending":
-        continue
-    sid = a.get("session_ref")
-    row = managed_sids.get(sid)
-    if not sid or row is None or row.get("run_ref") not in run_refs:
-        problems.append("pending %s %s names session %r, which is not a managed live row of the "
-                        "canonical estate" % (a.get("action"), a.get("subject_ref"), sid))
+    if approval_state(a) == "pending" and a.get("session_ref"):
+        problems.append("pending %s %s impersonates a session instead of its human requester"
+                        % (a.get("action"), a.get("subject_ref")))
 if problems:
     for p in problems:
         print("PROBLEM " + p, file=sys.stderr)

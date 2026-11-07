@@ -86,8 +86,8 @@ describe('the navigation fold and the persisted blob (0.5)', () => {
     expect(merged.density).toBe('compact')
     expect(merged.reduceMotion).toBe(true)
     expect(merged.collapsedNavGroups).toEqual(['operate'])
-    // Anything but `true` keeps the navigation open.
-    expect(merged.navCollapsed).toBe(false)
+    // Anything but a boolean is no choice yet: the page decides (Sessions folds).
+    expect(merged.navCollapsed).toBeNull()
     for (const retired of [
       'sidebarCollapsed',
       'sidebarChoices',

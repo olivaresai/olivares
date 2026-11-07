@@ -1192,7 +1192,7 @@ func deterministicPrincipalAuthoritySealFixture(t *testing.T) Principal {
 
 func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *testing.T) {
 	baseline := deterministicPrincipalAuthoritySealFixture(t)
-	const wantGolden = "94918e60c2221fdb900c3ef372db0f573e3e6ac6ddda58a5e0264ebfbd34f254"
+	const wantGolden = "ad423749c2cabe7351374c26b2cb8294ae0164acadefa808f06976476ef65277"
 	if got := hex.EncodeToString(baseline.evidence.seal[:]); got != wantGolden {
 		t.Fatalf("authority seal golden = %s, want %s", got, wantGolden)
 	}
@@ -1232,6 +1232,7 @@ func TestPrincipalAuthoritySealGoldenCanonicalOrderAndValidShapeMutations(t *tes
 			p.groups[tenant] = []string{otherGroup, p.groups[tenant][1]}
 		}},
 		{name: "confinement", mutate: func(p *Principal) { p.confined[tenant] = otherWorkspace }},
+		{name: "Ask origin", mutate: func(p *Principal) { p.askOrigin = true }},
 		{name: "credential version", mutate: func(p *Principal) {
 			p.credentialRef.version++
 			p.evidence.ref.version++
@@ -1283,7 +1284,7 @@ func TestPrincipalAuthoritySealCoversStandingValues(t *testing.T) {
 		t.Fatalf("compute the standing authority seal: %v", err)
 	}
 	standing.evidence.seal = seal
-	const wantGolden = "c52fbe255552e7402f3bdf38ee563ba5388b7158dbcf33949e55d5928236508f"
+	const wantGolden = "56577cad7fcd32cd8235cc64532024e023e9d69b0b616bcea79f66eb5b4fda22"
 	if got := hex.EncodeToString(seal[:]); got != wantGolden {
 		t.Fatalf("standing authority seal golden = %s, want %s", got, wantGolden)
 	}
@@ -1314,13 +1315,15 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 	wantPrincipalFields := []string{
 		"Kind", "UserID", "CredID", "Superadmin", "DisplayName", "Email", "AAL", "AMR",
 		"AgentIdentity", "SessionIdentity", "SessionWorkspaceID", "SessionRunRef", "SessionFence",
-		"grants", "groups", "audiences", "actAs", "confined", "restricted",
+		"grants", "groups", "audiences", "actAs", "confined", "restricted", "askOrigin",
 		"localVia", "localSubject", "localMeta", "localSystem", "credentialRef", "sessionOrigin", "evidence",
-		"excluded", "sessionScope", "floors",
+		// rightsStale is a per-request freshness mark (freshness.go), deliberately
+		// outside the seal preimage: it is derived each request, not standing authority.
+		"rightsStale", "excluded", "sessionScope", "floors",
 	}
 	principalType := reflect.TypeOf(Principal{})
 	if principalType.NumField() != len(wantPrincipalFields) {
-		t.Fatalf("Principal field count = %d, want sealed v4 inventory %d; review and version the seal",
+		t.Fatalf("Principal field count = %d, want sealed v5 inventory %d; review and version the seal",
 			principalType.NumField(), len(wantPrincipalFields))
 	}
 	for i, want := range wantPrincipalFields {
@@ -1403,7 +1406,7 @@ func TestPrincipalAuthoritySealRejectsUnsealedEmail(t *testing.T) {
 	principal := deterministicPrincipalAuthoritySealFixture(t)
 	principal.Email = "unsealed@example.test"
 	if validPrincipalAuthorityShape(principal) {
-		t.Fatal("the closed evidence shape accepted an email absent from its v4 preimage")
+		t.Fatal("the closed evidence shape accepted an email absent from its v5 preimage")
 	}
 	if validPrincipalAuthoritySeal(principal) {
 		t.Fatal("an unsealed email retained a valid authority seal")

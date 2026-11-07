@@ -78,8 +78,7 @@ import (
 //
 // One test below is deliberately NOT in that table: TestTheSingleConnectionStoreLeavesNoArmingRace
 // pins an ENGINE property, and the mutation that would exercise it — raising SQLite's connection cap
-// — lives in core/internal/store/sqlstore, which is another lane's exclusive directory this wave. It
-// is labeled as a property pin rather than presented as a mutation-tested guarantee.
+// — belongs to core/internal/store/sqlstore. This is a property check, not a mutation-tested guarantee.
 
 // sqlExec is the little of database/sql the raw helpers need, so the same call works on a *sql.DB
 // and inside a *sql.Tx.
@@ -885,8 +884,7 @@ func TestAnUpgradeReopenWithoutTheSystemWitnessIsRefusedOnSQLite(t *testing.T) {
 // which read as the stronger claim.
 //
 // It is a property pin, not a mutation-tested guarantee of this unit: the mutation that would
-// exercise it lives in another lane's exclusive directory this wave, and pretending otherwise would
-// be exactly the overclaim this campaign keeps finding.
+// exercise it belongs to the store package and is not performed by this test.
 func TestOneStoresWritesAndItsArmingCannotOverlap(t *testing.T) {
 	dsn := filepath.Join(t.TempDir(), "race.db")
 	ctx := context.Background()

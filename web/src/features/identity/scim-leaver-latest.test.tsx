@@ -26,6 +26,7 @@ const { api, authState } = vi.hoisted(() => ({
     scimServiceProviderConfig: vi.fn(),
     scimUsers: vi.fn(),
     audit: vi.fn(),
+    auditHead: vi.fn(),
   },
   authState: {
     activeTenant: 't1' as string | null,
@@ -71,6 +72,7 @@ function ledgerOf(leavers: number) {
         }
       : { id: `ev_${i + 1}`, seq: i + 1, action: 'session.login' },
   )
+  api.auditHead.mockResolvedValue(chain.length)
   return async ({ action = '', from = 1, limit = 100 }: AuditParams) => {
     const size = limit >= 1 && limit <= ENGINE_PAGE_MAX ? limit : 100
     const matches = chain.filter(
@@ -101,6 +103,7 @@ function listedLeavers() {
 }
 
 beforeEach(() => {
+  api.auditHead.mockResolvedValue(0)
   api.ssoStatus.mockRejectedValue(new Error('not under test'))
   api.scimServiceProviderConfig.mockRejectedValue(new Error('not under test'))
   api.scimUsers.mockRejectedValue(new Error('not under test'))
@@ -207,6 +210,7 @@ describe('SCIM leaver evidence shows the newest events', () => {
     mount(<FederationTab />)
     await screen.findByText('No deprovision events')
     expect(screen.queryByText(/older ones/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/reads only the latest/i)).not.toBeInTheDocument()
   })
 
   it.each([
@@ -275,5 +279,35 @@ describe('SCIM leaver evidence declares a cut-short list', () => {
     await waitFor(() =>
       expect(screen.queryByText(/older ones/i)).not.toBeInTheDocument(),
     )
+  })
+})
+
+describe('SCIM leaver evidence stays bounded on a large ledger', () => {
+  it('reads only the tail of a 128,000-entry ledger and says it did', async () => {
+    // The filtered walk scans every entry from `from`, so a read from entry 1 costs the
+    // whole ledger (12 s measured on 128,000 entries). The card starts near the head.
+    const head = 128_000
+    const leaver = {
+      id: 'ev_tail',
+      seq: head - 5,
+      action: LEAVER_ACTION,
+      target_id: 'usr_tail',
+      occurred_at: '2026-06-07T00:00:00Z',
+    }
+    api.auditHead.mockResolvedValue(head)
+    api.audit.mockImplementation(async ({ from = 1 }: AuditParams) => ({
+      items: from <= leaver.seq ? [leaver] : [],
+      has_more: false,
+      next_from: head + 1,
+      head_seq: head,
+    }))
+    mount(<FederationTab />)
+    await screen.findByText('usr_tail')
+    for (const [params] of api.audit.mock.calls as [AuditParams][]) {
+      expect(params.from).toBeGreaterThan(head - 20_000)
+    }
+    expect(
+      screen.getByText(/reads only the latest 10000 ledger entries/i),
+    ).toBeVisible()
   })
 })
