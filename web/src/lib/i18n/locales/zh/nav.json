@@ -347,7 +347,7 @@
     "modelPicker": "模型：{{value}}",
     "effortPicker": "推理强度：{{value}}",
     "accessPicker": "访问权限：{{value}}",
-    "accessKeeps": "此会话保持其访问权限。更改访问权限将启动新会话。",
+    "accessKeeps": "访问权限将在此对话的下一轮生效。",
     "queue": {
       "title": "排队的消息",
       "hold": {

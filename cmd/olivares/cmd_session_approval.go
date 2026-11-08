@@ -148,7 +148,7 @@ func (c *agentClientConfig) pollToolApprovals(ctx context.Context, cmd *cobra.Co
 		if shown {
 			offered = id
 		}
-		if err == nil || ctx.Err() != nil || (!shown && unread == id) {
+		if err == nil || (ctx.Err() != nil && errors.Is(err, context.Canceled)) || (!shown && unread == id) {
 			continue
 		}
 		if !shown {
@@ -197,7 +197,9 @@ func (c *agentClientConfig) askToolApproval(ctx context.Context, cmd *cobra.Comm
 	if answer := strings.ToLower(strings.TrimSpace(line)); answer == "y" || answer == "yes" {
 		decision, done = "approve", "Allowed"
 	}
-	_, after, err := c.decideToolApproval(ctx, id, decision, "")
+	// The tool can finish its turn before this response arrives; only the command
+	// ending (or the HTTP timeout), not the turn ending, may cancel this answer.
+	_, after, err := c.decideToolApproval(cmd.Context(), id, decision, "")
 	if errors.Is(err, errAnswerUnread) {
 		return true, err
 	}

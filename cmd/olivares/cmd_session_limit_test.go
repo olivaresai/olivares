@@ -8,57 +8,58 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
 // A session whose tool ended a turn on a limit says so in one sentence in `session
 // show`, and `-o json` and `ls -o json` carry the engine's limit object as it is.
 func TestSessionShowSaysWhenTheToolRanOutOfQuota(t *testing.T) {
-	at := time.Now().Add(90 * time.Minute).UTC().Truncate(time.Second)
-	limit := map[string]any{"kind": "usage", "resets_at": at.Format(time.RFC3339), "account_ref": "ppf_a"}
-	f := newFakeSessionEngine(t)
-	f.runs = []map[string]any{
-		{"run_ref": "r1", "name": "alpha", "state": "running", "provider_driver": "claude", "limit": limit},
-		{"run_ref": "r2", "name": "quiet", "state": "running", "provider_driver": "claude"},
-	}
-	run := func(args ...string) string {
-		t.Helper()
-		out, errb, err := execSessionCLI(t, nil, append(append([]string{"session"}, args...), sessionCreds(f.URL)...)...)
-		if err != nil {
-			t.Fatalf("session %v: %v\n%s", args, err, errb)
+	// Freeze the CLI clock at midnight UTC, independent of the host clock and zone.
+	synctest.Test(t, func(t *testing.T) {
+		at := time.Now().Add(90 * time.Minute).UTC().Truncate(time.Second)
+		limit := map[string]any{"kind": "usage", "resets_at": at.Format(time.RFC3339), "account_ref": "ppf_a"}
+		f := newFakeSessionEngine(t)
+		f.runs = []map[string]any{
+			{"run_ref": "r1", "name": "alpha", "state": "running", "provider_driver": "claude", "limit": limit},
+			{"run_ref": "r2", "name": "quiet", "state": "running", "provider_driver": "claude"},
 		}
-		return out
-	}
-
-	want := "Out of quota until " + at.Local().Format("15:04")
-	if !strings.Contains(at.Local().Format("2006-01-02"), time.Now().Format("2006-01-02")) {
-		want = "Out of quota until " + at.Local().Format("2006-01-02 15:04")
-	}
-	if out := run("show", "alpha"); !strings.Contains(out, want) {
-		t.Fatalf("show alpha lacks %q:\n%s", want, out)
-	}
-	if out := run("show", "quiet"); strings.Contains(out, "LIMIT") {
-		t.Fatalf("a session with no limit shows a limit row:\n%s", out)
-	}
-
-	var shown struct {
-		Limit map[string]string `json:"limit"`
-	}
-	if err := json.Unmarshal([]byte(run("show", "alpha", "-o", "json")), &shown); err != nil || shown.Limit["kind"] != "usage" || shown.Limit["resets_at"] != at.Format(time.RFC3339) {
-		t.Fatalf("show -o json limit = %v (%v)", shown.Limit, err)
-	}
-	var listed []struct {
-		Name  string            `json:"name"`
-		Limit map[string]string `json:"limit"`
-	}
-	if err := json.Unmarshal([]byte(run("ls", "-o", "json")), &listed); err != nil || len(listed) != 2 {
-		t.Fatalf("ls -o json = %v (%v)", listed, err)
-	}
-	for _, r := range listed {
-		if (r.Name == "alpha") != (r.Limit["kind"] == "usage") {
-			t.Fatalf("ls -o json row %s carries limit %v", r.Name, r.Limit)
+		run := func(args ...string) string {
+			t.Helper()
+			out, errb, err := execSessionCLI(t, nil, append(append([]string{"session"}, args...), sessionCreds(f.URL)...)...)
+			if err != nil {
+				t.Fatalf("session %v: %v\n%s", args, err, errb)
+			}
+			return out
 		}
-	}
+
+		want := "Out of quota until 01:30 UTC"
+		if out := run("show", "alpha"); !strings.Contains(out, want) {
+			t.Fatalf("show alpha lacks %q:\n%s", want, out)
+		}
+		if out := run("show", "quiet"); strings.Contains(out, "LIMIT") {
+			t.Fatalf("a session with no limit shows a limit row:\n%s", out)
+		}
+
+		var shown struct {
+			Limit map[string]string `json:"limit"`
+		}
+		if err := json.Unmarshal([]byte(run("show", "alpha", "-o", "json")), &shown); err != nil || shown.Limit["kind"] != "usage" || shown.Limit["resets_at"] != at.Format(time.RFC3339) {
+			t.Fatalf("show -o json limit = %v (%v)", shown.Limit, err)
+		}
+		var listed []struct {
+			Name  string            `json:"name"`
+			Limit map[string]string `json:"limit"`
+		}
+		if err := json.Unmarshal([]byte(run("ls", "-o", "json")), &listed); err != nil || len(listed) != 2 {
+			t.Fatalf("ls -o json = %v (%v)", listed, err)
+		}
+		for _, r := range listed {
+			if (r.Name == "alpha") != (r.Limit["kind"] == "usage") {
+				t.Fatalf("ls -o json row %s carries limit %v", r.Name, r.Limit)
+			}
+		}
+	})
 }
 
 func TestLimitSentence(t *testing.T) {

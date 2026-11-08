@@ -1,4 +1,12 @@
 {
+  "import": {
+    "title": "Import",
+    "hint": "Continue an existing Claude Code conversation from a managed account.",
+    "folder": "Folder",
+    "loading": "Reading conversations…",
+    "empty": "No existing conversations were found in your managed accounts.",
+    "failed": "Could not import the conversation."
+  },
   "pathChip": {
     "open": "Open in {{editor}}",
     "copyRelative": "Copy relative path",

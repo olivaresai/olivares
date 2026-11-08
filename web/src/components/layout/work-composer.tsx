@@ -8,7 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { ArrowUp, ChevronDown, Lock } from 'lucide-react'
+import { ArrowUp, ChevronDown } from 'lucide-react'
 import {
   useEffect,
   useId,
@@ -30,11 +30,19 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
+import {
+  PERMISSION_CHOICES,
+  PERMISSION_MODE,
+  PERMISSION_NAME,
+  mayChoosePermission,
+} from '@/features/agentops/session-launch'
+import { usePermissionRestriction } from '@/features/agentops/permission-restriction'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { AttachButton, AttachmentTray } from '@/features/agentops/attachment-ui'
 import { imagesIn, useImageDraft } from '@/features/agentops/attachments'
 import { modelName } from '@/features/agentops/model-name'
 import { SessionMode, useAccessWords } from '@/features/sessions/session-meter'
+import { sessionsKeys } from '@/features/sessions/api'
 import { ContextControls } from '@/features/sessions/context-controls'
 import { compactSession } from '@/features/sessions/compact-session'
 import { toolName } from '@/features/agentops/engine-tools'
@@ -286,6 +294,9 @@ export function WorkComposer({
     principal,
     attached.run.run_ref,
   )
+  useEffect(() => {
+    if (inputId === COMPOSER_INPUT_ID) document.getElementById(inputId)?.focus()
+  }, [inputId])
   // Scope all local composer state at once, including an in-flight send's callbacks.
   return (
     <SessionComposer
@@ -378,6 +389,8 @@ function SessionComposer({
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, MAX_FIELD_PX)}px`
   }, [turn])
+  const [accessChoice, setAccessChoice] = useState<string | null>(null)
+  const accessRestriction = usePermissionRestriction()
   const [wire, setWire] = useState('')
   // The images of the message being written; they are stored with the session as they
   // are attached and go with the message by id.
@@ -410,7 +423,17 @@ function SessionComposer({
       /** Where the session's conversation stood when it was sent. */
       place?: Pick<SentTurn, 'after' | 'shown'>
     }) => {
-      const run = attached.run
+      let run = attached.run
+      if (accessChoice) {
+        run = await agentOpsApi.resume(run.run_ref, accessChoice)
+        setAccessChoice(null)
+        void queryClient.invalidateQueries({
+          queryKey: agentOpsKeys.all(activeTenant),
+        })
+        void queryClient.invalidateQueries({
+          queryKey: sessionsKeys.all(activeTenant),
+        })
+      }
       const signal = compactionAbort.current.signal
       if (payload.compactOnly || payload.compactFirst) {
         await compactSession(run, signal, t('sessions:compact.failed'))
@@ -812,7 +835,7 @@ function SessionComposer({
         place: sentPlace(attached.run.run_ref, value),
       })
     // Images go with a direct send, as does a session no queue serves.
-    if (!queueBound || images.ids.length > 0) return sendNow()
+    if (accessChoice || !queueBound || images.ids.length > 0) return sendNow()
     // The run's state on screen may be seconds old (a turn begun a moment ago still reads
     // idle), so the engine is asked, not the card: a turn that just ended is not queued
     // behind and one that just began is not sent into. A session with nothing running or
@@ -955,7 +978,11 @@ function SessionComposer({
       speedModel?.supports_fast_mode !== true) ||
     (!!chosenSpeed.serviceTier &&
       !speedModel?.service_tiers?.includes(chosenSpeed.serviceTier))
-  const accessText = useAccessWords(attached.run)
+  const accessText = useAccessWords(
+    accessChoice
+      ? { ...attached.run, permission_mode: accessChoice, tool_mode: '' }
+      : attached.run,
+  )
   // Read-only operators still see the scope declared by the run.
   if (!canWrite) {
     return <ScopeLine {...attachedScope} className="px-3 py-2" />
@@ -1126,6 +1153,7 @@ function SessionComposer({
             <button
               type="button"
               data-testid="composer-tool-model"
+              data-session-picker="model"
               aria-label={t('nav:launcher.modelPicker', { value: modelText })}
               title={chipTitle}
               className={PICKER}
@@ -1266,21 +1294,20 @@ function SessionComposer({
             <ChevronDown aria-hidden className="size-3 shrink-0" />
           </button>
         ) : null}
-        {/* THE ACCESS THE SESSION RUNS WITH. The tool cannot change it inside a running
-            session either, so it is a label with a lock, not a picker: it says what this
-            one keeps and offers a new session for another. */}
+        {/* Access is applied at process start before the next turn. */}
         <Popover>
           {accessText ? (
             <PopoverTrigger asChild>
               <button
                 type="button"
                 data-testid="composer-access"
+                data-session-picker="access"
                 aria-label={t('nav:launcher.accessPicker', {
                   value: accessText,
                 })}
                 className={PICKER}
               >
-                <Lock aria-hidden className="size-3 shrink-0" />
+                <ChevronDown aria-hidden className="size-3 shrink-0" />
                 <span className="truncate">{accessText}</span>
               </button>
             </PopoverTrigger>
@@ -1295,6 +1322,31 @@ function SessionComposer({
               className="flex flex-col items-start gap-2"
             >
               <SessionMode run={attached.run} />
+              {PERMISSION_CHOICES.filter((p) =>
+                mayChoosePermission(p, can('sessions:run:admin')),
+              ).map((p) => (
+                <Button
+                  key={p}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-pressed={
+                    (accessChoice ?? attached.run.permission_mode) ===
+                    (PERMISSION_MODE[p] || 'dontAsk')
+                  }
+                  disabled={
+                    sending ||
+                    isWorkBound(attached.run) ||
+                    !accessRestriction.allows(PERMISSION_NAME[p])
+                  }
+                  title={accessRestriction.reason}
+                  onClick={() =>
+                    setAccessChoice(PERMISSION_MODE[p] || 'dontAsk')
+                  }
+                >
+                  {t(`firstHour:permission.${p}`)}
+                </Button>
+              ))}
               <p className="text-caption text-muted-foreground">
                 {t('nav:launcher.accessKeeps')}
               </p>

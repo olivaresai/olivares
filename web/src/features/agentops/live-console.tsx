@@ -102,7 +102,7 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
   const { status, ended, ioUnavailable, retry } = useRunAttach({
     runRef: run.run_ref,
     enabled: !isRemote,
-    sessionKey: `${run.state}:${run.transport}`,
+    sessionKey: [run.state, run.transport, run.started_at].join(':'),
     onFrame,
     onLag,
   })

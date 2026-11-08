@@ -89,13 +89,14 @@ const source = (record: ProviderRecordDTO) => ({
 function given(
   record: ProviderRecordDTO,
   preview: { model_required?: boolean } = {},
+  driver: 'codex' | 'grok' = 'codex',
 ) {
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
     readinessOf({
       claude: 'own_login',
       grok: 'own_login',
       opencode: 'own_login',
-      codex: { provider: source(record), ...preview },
+      [driver]: { provider: source(record), ...preview },
     }),
   )
 }
@@ -304,9 +305,13 @@ describe('the model in the New session dialog', () => {
 
   it('says beside the disabled Start that no model of the key passed its test', async () => {
     const user = userEvent.setup()
-    given(key({ default_model: null, models: [] }), { model_required: true })
+    given(
+      key({ default_model: null, models: [] }),
+      { model_required: true },
+      'grok',
+    )
     wrap(<StartSessionForm />)
-    await chooseCodex(user)
+    await chooseTool(user, 'Grok Build')
     await screen.findByRole('combobox', { name: 'Model' })
     expect(
       screen.getByRole('button', { name: 'Start' }),
@@ -362,9 +367,13 @@ describe('the model in the New session dialog', () => {
   // could only fail. Start waits, and the way to test the key is offered.
   it('sends to Providers to test a key that needs a model and has none tested', async () => {
     const user = userEvent.setup()
-    given(key({ default_model: null, models: [] }), { model_required: true })
+    given(
+      key({ default_model: null, models: [] }),
+      { model_required: true },
+      'grok',
+    )
     wrap(<StartSessionForm />)
-    await chooseCodex(user)
+    await chooseTool(user, 'Grok Build')
     expect(
       await screen.findByRole('combobox', { name: 'Model' }),
     ).toBeDisabled()
@@ -374,16 +383,72 @@ describe('the model in the New session dialog', () => {
     expect(launch.launchSession).not.toHaveBeenCalled()
   })
 
-  // review on 102dac51: the composer's Start waited for the key with nothing on screen.
-  it('the composer says why Start waits for a key with no tested model, and the way to Providers', async () => {
+  it('the key composer offers documented models and efforts before a connection test', async () => {
     const user = userEvent.setup()
-    given(key({ default_model: null, models: [] }), { model_required: true })
+    given(key({ default_model: 'saved-model', models: [] }))
+    useClientSettings.setState({
+      sessionDefaults: {
+        tool: 'codex',
+        account: '',
+        model: '',
+        effort: 'high',
+        folder: '',
+      },
+    })
+    const models = vi.spyOn(agentOpsApi, 'profileModels')
     wrap(<StartSessionForm composer />)
     await user.click(
       await screen.findByRole('button', { name: /^Tool and account: / }),
     )
     await user.click(
       await screen.findByRole('menuitemradio', { name: 'Codex' }),
+    )
+    const effort = screen.getByRole('button', { name: /^Effort:/ })
+    expect(effort).toBeEnabled()
+    expect(effort).toHaveAccessibleName('Effort: High')
+    await user.click(screen.getByRole('button', { name: /^Model:/ }))
+    expect(
+      await screen.findByRole('menuitemradio', {
+        name: 'Default (saved-model)',
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('menuitemradio', { name: 'saved-model' }),
+    ).toBeVisible()
+    for (const model of [
+      'gpt-6-astra',
+      'gpt-6.1-sol',
+      'gpt-6.1-terra',
+      'gpt-6-luna',
+    ]) {
+      expect(screen.getByRole('menuitemradio', { name: model })).toBeVisible()
+    }
+    await user.click(screen.getByRole('menuitemradio', { name: 'gpt-6.1-sol' }))
+    await user.click(screen.getByRole('button', { name: /^Effort:/ }))
+    await user.click(screen.getByRole('menuitemradio', { name: 'High' }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
+    expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
+      driver: 'codex',
+      model: 'gpt-6.1-sol',
+      effort: 'high',
+    })
+    expect(models).not.toHaveBeenCalled()
+  })
+
+  it('the composer says why Start waits for a key with no tested model, and the way to Providers', async () => {
+    const user = userEvent.setup()
+    given(
+      key({ default_model: null, models: [] }),
+      { model_required: true },
+      'grok',
+    )
+    wrap(<StartSessionForm composer />)
+    await user.click(
+      await screen.findByRole('button', { name: /^Tool and account: / }),
+    )
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: 'Grok Build' }),
     )
     await waitFor(() =>
       expect(
@@ -673,9 +738,13 @@ describe('the model in the New session dialog', () => {
   it('offers the model choice without Providers access, but not the way to Providers', async () => {
     const user = userEvent.setup()
     auth.providers = false
-    given(key({ default_model: null, models: [] }), { model_required: true })
+    given(
+      key({ default_model: null, models: [] }),
+      { model_required: true },
+      'grok',
+    )
     wrap(<StartSessionForm />)
-    await chooseCodex(user)
+    await chooseTool(user, 'Grok Build')
     expect(
       await screen.findByRole('combobox', { name: 'Model' }),
     ).toBeDisabled()

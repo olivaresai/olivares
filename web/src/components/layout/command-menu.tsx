@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import '@/features/sessions/i18n'
 import { EditionBadge } from '@/features/console/edition-badge'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
@@ -568,6 +569,12 @@ function PaletteBody() {
    * cannot default, so a one-keystroke launch would either be impossible or would
    * have to invent the one field that must be chosen.
    */
+  const importSessionLabel = t('sessions:import.title')
+  const showImportSession = shows(`${importSessionLabel} Claude Code`)
+  const importBlocked =
+    refusal('sessions:run:write') ||
+    refusal('sessions:account:read') ||
+    refusal('sessions:output:read')
   const startSessionLabel = t('common:commandPalette.startSession')
   const showStartSession = shows(startSessionLabel)
   const startBlocked = refusal('sessions:run:write')
@@ -599,6 +606,7 @@ function PaletteBody() {
     (besideSessions.length > 0 ||
       actionItems.length > 0 ||
       showStartSession ||
+      showImportSession ||
       showAsk ||
       showLight ||
       showDark ||
@@ -709,6 +717,22 @@ function PaletteBody() {
 
         {anyAction ? (
           <CommandGroup heading={t('common:commandPalette.actions')}>
+            {showImportSession ? (
+              <CommandItem
+                value={`session:import ${importSessionLabel} Claude Code`}
+                disabled={importBlocked !== null || !sessionsPath}
+                onSelect={() => {
+                  if (!importBlocked && sessionsPath)
+                    go(`${sessionsPath}?import=1`)
+                }}
+              >
+                <Play />
+                <span>{importSessionLabel}</span>
+                <span className="text-caption text-muted-foreground">
+                  Claude Code
+                </span>
+              </CommandItem>
+            ) : null}
             {showStartSession ? (
               <CommandItem
                 value={`session:start ${startSessionLabel}`}

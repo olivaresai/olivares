@@ -20,7 +20,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { useMinWidth } from '@/lib/hooks/use-min-width'
-import { isTypingTarget, resolveBinding } from '@/lib/keybindings/model'
+import {
+  isTypingTarget,
+  modalIsOpen,
+  resolveBinding,
+} from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import type { ConversationItem } from './conversation-frames'
@@ -278,9 +282,8 @@ export function WorkSurface({
       if (isTypingTarget(e.target)) return
       // An open dialog or menu owns this Escape: it closes that, not the pane.
       if (
-        document.querySelector(
-          '[role="dialog"][data-state="open"], [role="menu"][data-state="open"]',
-        )
+        modalIsOpen() ||
+        document.querySelector('[role="menu"][data-state="open"]')
       )
         return
       // A pane closed by Escape is not a choice to remember: the stored state stays.
@@ -351,9 +354,8 @@ export function WorkSurface({
     const onKey = (e: KeyboardEvent) => {
       if (
         e.defaultPrevented ||
-        document.querySelector(
-          '[role="dialog"][data-state="open"], [role="menu"][data-state="open"]',
-        )
+        modalIsOpen() ||
+        document.querySelector('[role="menu"][data-state="open"]')
       )
         return
       const command = resolveBinding(KEYBINDINGS, e, { workSurface: true })
@@ -415,6 +417,78 @@ export function WorkSurface({
     selected,
     sessions,
   ])
+
+  // Capture session chords, leaving terminal input to the shell except its toggle.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing || !resolution.target) return
+      if (
+        modalIsOpen() ||
+        document.querySelector('[role="menu"][data-state="open"]')
+      )
+        return
+      const command = resolveBinding(KEYBINDINGS, e, { workSurface: true })
+      if (
+        e.target instanceof Element &&
+        e.target.closest('.xterm') &&
+        command !== 'surface.terminal'
+      )
+        return
+      const panel =
+        command === 'surface.terminal'
+          ? 'terminal'
+          : command === 'surface.changes'
+            ? 'changes'
+            : command === 'surface.preview'
+              ? 'preview'
+              : null
+      if (
+        panel &&
+        onPanel &&
+        run &&
+        (panel === 'preview' || run.workspace_ref) &&
+        (panel !== 'terminal' || can('sessions:workspace:write'))
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (e.repeat) return
+        if ((detailsBeside || sheetOpen) && address.panel === panel) {
+          setContextOpen(false)
+          closeSheet()
+        } else {
+          onPanel(panel)
+          setContextOpen(true)
+          if (!besideFits) openSheet(document.activeElement)
+        }
+        return
+      }
+      const picker =
+        command === 'surface.model' || command === 'surface.effort'
+          ? 'model'
+          : command === 'surface.access'
+            ? 'access'
+            : null
+      if (!picker) return
+      const column =
+        split &&
+        (besideColumn.current?.contains(e.target as Node) ||
+          (!primaryColumn.current?.contains(e.target as Node) &&
+            address.pane === 'beside'))
+          ? besideColumn.current
+          : primaryColumn.current
+      const button = column?.querySelector<HTMLButtonElement>(
+        `[data-session-picker="${picker}"]`,
+      )
+      if (!button || button.disabled) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.repeat) return
+      button.focus()
+      button.click()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  })
 
   // THE FILTER FIELD appears when the list is long enough to need it, and narrows what the
   // rows show: by name, tool or folder, in this browser, with no request.

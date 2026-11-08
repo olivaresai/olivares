@@ -188,3 +188,128 @@ func TestCodexRunRecordsTheModeCodexAnswers(t *testing.T) {
 		})
 	}
 }
+
+func TestAccessChangeResumesTheSameConversation(t *testing.T) {
+	h, runner, admin, tenant := attachHTTPHarness(t)
+	runner.initSID = "conversation-access"
+	templates := h.do(http.MethodGet, "/v1/m/sessions/templates", admin, tenantHdr(tenant))
+	if templates.code != http.StatusOK {
+		t.Fatalf("templates=%d %s", templates.code, templates.raw)
+	}
+	var templateID string
+	for _, item := range templates.body["items"].([]any) {
+		tpl := item.(map[string]any)
+		if tpl["name"] == EditsAndCommandsTemplate {
+			templateID, _ = tpl["id"].(string)
+		}
+	}
+	if templateID == "" {
+		t.Fatal("missing built-in access preset")
+	}
+	templateBefore, err := h.m.loadTemplate(t.Context(), tenant, templateID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := launchHTTPRun(t, h, admin, tenant, map[string]any{"transport": "stream-json", "permission_mode": "dontAsk", "template_id": templateID})
+	waitFor(t, "conversation id", func() bool {
+		d, _ := h.m.getRun(t.Context(), tenant, ref)
+		return d.ClaudeSessionID == "conversation-access"
+	})
+	runner.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(`{"type":"system","subtype":"status","status":null,"permissionMode":"dontAsk"}`)}
+	waitFor(t, "the previous process reported its mode", func() bool { d, _ := h.m.getRun(t.Context(), tenant, ref); return d.ToolMode == "dontAsk" })
+	runner.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(`{"type":"result","subtype":"success","result":"ready"}`)}
+	waitFor(t, "idle turn", func() bool { rec, _ := h.m.loadRun(t.Context(), tenant, ref); return h.m.queueHold(rec) == "" })
+	r := h.doJSON(http.MethodPost, "/v1/m/sessions/runs/"+ref+"/resume", admin, map[string]any{"permission_mode": "plan"}, tenantHdr(tenant))
+	if r.code != http.StatusOK {
+		t.Fatalf("change access=%d %s", r.code, r.raw)
+	}
+	d, err := h.m.getRun(t.Context(), tenant, ref)
+	if err != nil || d.PermissionMode != "plan" || d.ToolMode != "" || d.ClaudeSessionID != "conversation-access" {
+		t.Fatalf("changed run=%+v err=%v", d, err)
+	}
+	spec := runner.lastSpec()
+	if mode, _ := argvValue(spec.Args, "--permission-mode"); mode != "plan" {
+		t.Fatalf("new process mode=%q", mode)
+	}
+	if sid, _ := argvValue(spec.Args, "--resume"); sid != "conversation-access" {
+		t.Fatalf("resumed conversation=%q", sid)
+	}
+	r = h.doJSON(http.MethodPost, "/v1/m/sessions/runs/"+ref+"/input", admin, map[string]any{"line": `{"type":"user","message":{"role":"user","content":"continue"}}`}, tenantHdr(tenant))
+	if r.code != http.StatusAccepted {
+		t.Fatalf("next turn=%d %s", r.code, r.raw)
+	}
+	if runner.lastProc().sentCount() != 1 {
+		t.Fatal("next turn did not reach the replacement process")
+	}
+
+	// Returning to the built-in preset must not rewrite its policy revision.
+	runner.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(`{"type":"result","subtype":"success","result":"ready"}`)}
+	waitFor(t, "the next turn ended", func() bool { rec, _ := h.m.loadRun(t.Context(), tenant, ref); return h.m.queueHold(rec) == "" })
+	r = h.doJSON(http.MethodPost, "/v1/m/sessions/runs/"+ref+"/resume", admin, map[string]any{"permission_mode": "dontAsk"}, tenantHdr(tenant))
+	if r.code != http.StatusOK {
+		t.Fatalf("restore access=%d %s", r.code, r.raw)
+	}
+	d, err = h.m.getRun(t.Context(), tenant, ref)
+	if err != nil || d.PermissionMode != "dontAsk" || d.ClaudeSessionID != "conversation-access" {
+		t.Fatalf("restored run=%+v %v", d, err)
+	}
+	templateAfter, err := h.m.loadTemplate(t.Context(), tenant, templateID)
+	if err != nil || templateAfter.Version != templateBefore.Version {
+		t.Fatalf("access choice rewrote the template: before=%d after=%d err=%v", templateBefore.Version, templateAfter.Version, err)
+	}
+
+}
+
+func TestAccessWideningWithoutLaunchPermissionIsRefused(t *testing.T) {
+	h, runner, admin, tenant := attachHTTPHarness(t)
+	runner.initSID = "conversation-access-denied"
+	// This measures launch authorization independently of the colleague-steering edition gate.
+	h.m.rt.SteerOthers = steerOthersLicensed
+	ref := launchHTTPRun(t, h, admin, tenant, map[string]any{"transport": "stream-json"})
+	editor := h.userToken(admin, tenant, "access-editor@example.test", "editor")
+	before := runner.lastProc()
+	r := h.doJSON(http.MethodPost, "/v1/m/sessions/runs/"+ref+"/resume", editor, map[string]any{"permission_mode": "bypassPermissions"}, tenantHdr(tenant))
+	if r.code != http.StatusForbidden {
+		t.Fatalf("widen access=%d %s, want 403", r.code, r.raw)
+	}
+	d, err := h.m.getRun(t.Context(), tenant, ref)
+	if err != nil || d.PermissionMode != "default" || runner.lastProc() != before {
+		t.Fatalf("refused widening changed the run: %+v %v", d, err)
+	}
+}
+
+func TestAccessChangeCannotDropRequiredBuiltinTemplate(t *testing.T) {
+	h, runner, admin, tenant := attachHTTPHarness(t)
+	runner.initSID = "conversation-required-access"
+	templates := h.do(http.MethodGet, "/v1/m/sessions/templates", admin, tenantHdr(tenant))
+	if templates.code != http.StatusOK {
+		t.Fatalf("templates=%d %s", templates.code, templates.raw)
+	}
+	var templateID string
+	for _, item := range templates.body["items"].([]any) {
+		tpl := item.(map[string]any)
+		if tpl["name"] == EditsAndCommandsTemplate {
+			templateID, _ = tpl["id"].(string)
+		}
+	}
+	if templateID == "" {
+		t.Fatal("missing built-in access preset")
+	}
+	h.m.rt.Standards = inDepartment("eng").withRequired("eng", templateID)
+	ref := launchHTTPRun(t, h, admin, tenant, map[string]any{"transport": "stream-json", "permission_mode": "dontAsk"})
+	waitFor(t, "conversation id", func() bool {
+		d, _ := h.m.getRun(t.Context(), tenant, ref)
+		return d.ClaudeSessionID == "conversation-required-access"
+	})
+	runner.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(`{"type":"result","subtype":"success","result":"ready"}`)}
+	waitFor(t, "idle turn", func() bool { rec, _ := h.m.loadRun(t.Context(), tenant, ref); return h.m.queueHold(rec) == "" })
+	before := runner.lastProc()
+	r := h.doJSON(http.MethodPost, "/v1/m/sessions/runs/"+ref+"/resume", admin, map[string]any{"permission_mode": "bypassPermissions"}, tenantHdr(tenant))
+	if r.code != http.StatusForbidden {
+		t.Fatalf("change required access=%d %s, want 403", r.code, r.raw)
+	}
+	d, err := h.m.getRun(t.Context(), tenant, ref)
+	if err != nil || d.PermissionMode != "dontAsk" || d.TemplateID != templateID || d.ProcessState != stateRunning || runner.lastProc() != before {
+		t.Fatalf("refused access changed the process or required template: %+v %v", d, err)
+	}
+}

@@ -1,4 +1,12 @@
 {
+  "import": {
+    "title": "导入",
+    "hint": "继续托管账户中已有的 Claude Code 对话。",
+    "folder": "文件夹",
+    "loading": "正在读取对话…",
+    "empty": "在你的托管账户中未找到已有对话。",
+    "failed": "无法导入对话。"
+  },
   "pathChip": {
     "open": "在 {{editor}} 中打开",
     "copyRelative": "复制相对路径",

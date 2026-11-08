@@ -347,7 +347,7 @@
     "modelPicker": "Modelo: {{value}}",
     "effortPicker": "Esforço: {{value}}",
     "accessPicker": "Acesso: {{value}}",
-    "accessKeeps": "Esta sessão mantém o seu acesso. Um acesso diferente inicia uma nova sessão.",
+    "accessKeeps": "O acesso muda no próximo turno desta conversa.",
     "queue": {
       "title": "Mensagens em fila",
       "hold": {

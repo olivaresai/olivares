@@ -35,6 +35,13 @@ Closes #
 - [ ] **No secrets, credentials, or personal data** added to the repo, tests, or fixtures.
 - [ ] This PR is **not** a security fix being disclosed early — security issues follow `SECURITY.md` (private), and the public advisory/CHANGELOG entry comes after a coordinated fix.
 
+## Cross-edition packaging
+
+<!-- Required when changing Dockerfile.release, appliance/** or .goreleaser.yaml. Otherwise write not applicable. -->
+
+- [ ] Business mirror: link the Enterprise PR that updates the affected recipes or packaging inputs, or explain why no mirror is needed.
+- [ ] The Enterprise pin PR passes the early cross-edition packaging checks before its long check pass (shared runtime and composed image package map).
+
 ## Notes for the reviewer
 
 <!-- Keep this proportional to the change. Connect the decision to the relevant code and

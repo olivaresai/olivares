@@ -331,7 +331,13 @@
         "focusBeside": "Fokus zwischen Sitzungen wechseln",
         "nextPane": "Nächster Bereich",
         "previousPane": "Vorheriger Bereich",
-        "approve": "Die Anfrage im Gespräch einmal genehmigen"
+        "approve": "Die Anfrage im Gespräch einmal genehmigen",
+        "terminal": "Terminal",
+        "changes": "Änderungen",
+        "preview": "Vorschau",
+        "model": "Modell",
+        "effort": "Aufwand",
+        "access": "Berechtigungsmodus"
       },
       "rail": {
         "next": "Nächste Sitzung",

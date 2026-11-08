@@ -8493,6 +8493,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/conversation-candidates — Reads existing native conversations without starting tools or writing their stores.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsConversationCandidates(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/conversation-candidates", "/v1/m/sessions/conversation-candidates", undefined, opts);
+  }
+
+  /**
    * POST /v1/m/sessions/decision-requests/{id}/responses — Resolves or dismisses a decision request with current authority.
    * Stability: beta.
    */

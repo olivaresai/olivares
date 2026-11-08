@@ -19,6 +19,8 @@ import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkSurface } from './work-surface'
+import { KEYBINDINGS } from '@/lib/keybindings/table'
+import i18n from '@/lib/i18n'
 import './i18n'
 import '@/features/agentops/i18n'
 
@@ -1105,4 +1107,89 @@ describe('WorkSurface — the row menu and the Archived section', () => {
     renderSurface({ sessions: mergeSessions([], [RUN]) })
     expect(screen.queryByRole('button', { name: /^Archived/ })).toBeNull()
   })
+})
+
+it('opens session panels and composer pickers with the documented shortcuts', async () => {
+  stubViewportWidth(1440)
+  const user = userEvent.setup()
+  const run = {
+    ...RUN,
+    workspace_ref: 'ws-main',
+    model_ref: 'claude-sonnet-4-6',
+    effort: 'high',
+  }
+  const managed = live({ attribution: 'managed' })
+  const session = mergeSessions([managed], [run])[0]
+  const onPanel = vi.fn()
+  renderSurface({
+    address: { address: session.key, pane: 'narrative', evidence: 'checks' },
+    resolution: { ...resolution, session, live: managed, runs: [run] },
+    onPanel,
+  })
+  const field = await screen.findByTestId('launcher-input')
+  field.focus()
+  for (const [key, shiftKey, panel] of [
+    ['j', false, 'terminal'],
+    ['d', false, 'changes'],
+    ['j', true, 'preview'],
+  ] as const) {
+    fireEvent.keyDown(field, { key, ctrlKey: true, shiftKey })
+    expect(onPanel).toHaveBeenLastCalledWith(panel)
+  }
+  const terminal = document.createElement('div')
+  terminal.className = 'xterm'
+  const terminalInput = document.createElement('textarea')
+  terminal.append(terminalInput)
+  document.body.append(terminal)
+  try {
+    terminalInput.focus()
+    onPanel.mockClear()
+    const eof = new KeyboardEvent('keydown', {
+      key: 'd',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    terminalInput.dispatchEvent(eof)
+    expect(onPanel).not.toHaveBeenCalled()
+    expect(eof.defaultPrevented).toBe(false)
+    fireEvent.keyDown(terminalInput, { key: 'j', ctrlKey: true })
+    expect(onPanel).toHaveBeenLastCalledWith('terminal')
+  } finally {
+    terminal.remove()
+  }
+  for (const [key, picker] of [
+    ['m', 'model'],
+    ['e', 'effort'],
+    ['a', 'access'],
+  ] as const) {
+    field.focus()
+    fireEvent.keyDown(field, {
+      key: key.toUpperCase(),
+      ctrlKey: true,
+      shiftKey: true,
+    })
+    expect(await screen.findByRole('dialog')).toBeVisible()
+    if (picker === 'access')
+      expect(screen.getByTestId('composer-access-panel')).toBeVisible()
+    else
+      expect(screen.getByTestId('composer-tool-model')).toHaveAttribute(
+        'data-state',
+        'open',
+      )
+    await user.keyboard('{Escape}')
+  }
+  for (const command of [
+    'surface.terminal',
+    'surface.changes',
+    'surface.preview',
+    'surface.model',
+    'surface.effort',
+    'surface.access',
+  ]) {
+    expect(KEYBINDINGS.find((rule) => rule.command === command)).toBeDefined()
+    expect(i18n.t(`keys.command.${command}`)).not.toBe(
+      `keys.command.${command}`,
+    )
+  }
 })

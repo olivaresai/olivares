@@ -756,6 +756,8 @@ type CreateRunParams struct {
 	ResumeOf            string   // a run_ref to resume (optional; reserved for future use)
 	Actor               string
 	ActorKind           string
+	// ImportConversationID resumes a native conversation after its managed home is validated.
+	ImportConversationID string `json:"import_conversation_id,omitempty"`
 	// AgentRef is the AUTHENTICATED agent identity driving this launch
 	// (auth.Principal.AgentIdentity), and it is a SEPARATE fact from the audit
 	// actor on purpose. An agent-OBO token authenticates as kind "token" with
@@ -1168,6 +1170,16 @@ func (m *Module) createRunInternal(
 		return runDTO{}, err
 	}
 	p.askCallerQuestions()
+	if p.ImportConversationID != "" {
+		release, err := m.rt.lockRunContext(ctx, "import:"+tenant.String()+":"+p.ProviderProfileRef+":"+p.ImportConversationID)
+		if err != nil {
+			return runDTO{}, err
+		}
+		defer release()
+		if err := m.validateConversationImport(ctx, tenant, p); err != nil {
+			return runDTO{}, err
+		}
+	}
 	// Judged on the EFFECTIVE mode, after the template and the profile's policy.
 	if err := refuseUnrestrictedFor(p.PermissionMode, p.MayRunUnrestricted); err != nil {
 		return runDTO{}, err
@@ -1482,6 +1494,7 @@ func (m *Module) createRunInternal(
 		cred: cred, work: runtimeCreds.work, communication: runtimeCreds.communication,
 		ws: ws, gateEnv: pr.injectEnv, providerEnv: providerEnv,
 		setupRun: p.Worktree && !p.NoSetup,
+		resumeID: p.ImportConversationID,
 	}
 	// A start with a setup command to run may have to hand that setup to the session when
 	// the request has waited long enough: it prepares the child here and starts the setup
@@ -1591,7 +1604,7 @@ func (m *Module) createRunInternal(
 	m.startRuntimeCredentialHeartbeat(lr)
 	// The owned protocol session exists BEFORE the pump does, so no frame can
 	// arrive with nobody to correlate it. A no-op on the Claude path.
-	m.attachDriverSession(lr, p, spec, "")
+	m.attachDriverSession(lr, p, spec, p.ImportConversationID)
 	// The window opens BEFORE the bridge starts: opened after, frames arriving in
 	// between would be applied directly and race the reservation's CAS, the race it
 	// closes. It is ALWAYS flushed on the way out, committed or failed: left queued,
@@ -1713,6 +1726,11 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		return runDTO{}, err
 	}
 	defer release()
+	return m.resumeRunLocked(ctx, tenant, runRef, actor, actorKind, agentIdentity, queued, asks, "")
+}
+
+// resumeRunLocked holds the run operation lock through process replacement.
+func (m *Module) resumeRunLocked(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind, agentIdentity string, queued bool, asks callerAsks, mode string) (runDTO, error) {
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
 		return runDTO{}, err
@@ -1877,8 +1895,8 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		TemplateID: rec.String(colTemplateID),
 		// The standards it was launched with, not those of whoever resumes it.
 		standardsRefs: standardsRefs,
-		// The stored mode IS the session's preset, chosen at its first launch: the
-		// profile as it reads today does not replace it on a resume.
+		// The stored mode is the session's preset unless this request changes it;
+		// today's profile defaults do not replace it on resume.
 		permissionModeNamed: true,
 		resuming:            true,
 		// A queued launch's questions are the restored launcher's CURRENT run and
@@ -1886,9 +1904,16 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		// either, and with no launcher to restore there is none.
 		asks: asks,
 	}
-	// The vault secrets are the ones the run row names: a resume carries no body,
-	// and the current template below can neither add one nor rebind a variable to
-	// another secret. The template merges into a COPY; the stored
+	if mode != "" {
+		p.PermissionMode = mode
+		p.TemplateID, err = m.accessTemplate(ctx, tenant, p.TemplateID, mode, asks)
+		if err != nil {
+			return runDTO{}, err
+		}
+	}
+	// The vault secrets are the ones the run row names. An access change carries
+	// no secret bindings, and the current template can neither add one nor rebind
+	// a variable to another secret. The template merges into a COPY; the stored
 	// binding, untouched, is restored after it and validated again.
 	if raw := rec.String(colRunDeadline); raw != "" {
 		deadline, err := time.Parse(time.RFC3339Nano, raw)
@@ -1926,6 +1951,12 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	tpl, tplConflicts, err := m.prepareLaunchTerms(ctx, tenant, &p, storedPolicy)
 	if err != nil {
 		return runDTO{}, err
+	}
+	if mode != "" && p.PermissionMode != mode {
+		if permissionRank(mode) > permissionRank(p.PermissionMode) {
+			return runDTO{}, forbiddenErr("the session template forbids this access")
+		}
+		p.PermissionMode = mode
 	}
 	if err := p.checkTemplateWorkspace(ws); err != nil {
 		return runDTO{}, err
@@ -2268,10 +2299,14 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		return runDTO{}, errors.Join(herr, teardownErr)
 	}
 
+	accessDetail := ""
+	if mode != "" {
+		accessDetail = "access changed from " + rec.String(colPermissionMode) + " to " + mode
+	}
 	gf := govFactsFor(intent, pr)
 	updated, err := m.transition(wctx, tenant, runRef, transitionInput{
 		event: "resumed", toState: stateRunning,
-		detail: joinDetail(engineResumeNote(ctx), templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
+		detail: joinDetail(engineResumeNote(ctx), accessDetail, templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
 			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.credentialDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
 		actor: actor, actorKind: actorKind, lease: lease, guard: guardRuntimeLaunch(launchID),
 		confinement: reportedConfinement(proc),
@@ -2289,6 +2324,14 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 			// describe a configuration this process is not running under — and would feed
 			// the NEXT resume a stale baseline.
 			rec[colPermissionMode] = p.PermissionMode
+			if mode != "" {
+				// The new process must report its own mode.
+				rec[colRunToolMode] = nil
+				setOrNull(rec, colTemplateID, p.TemplateID)
+				if p.TemplateID == "" {
+					rec[colTemplateVersion] = nil
+				}
+			}
 			setOrNull(rec, colEffort, p.Effort)
 			if p.FastMode != nil {
 				rec[colRunFastMode] = *p.FastMode
@@ -3516,6 +3559,7 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 			colLastEventSeq:   int64(0),
 		}
 		setIf(row, colRunName, p.Name)
+		setIf(row, colClaudeSessionID, p.ImportConversationID)
 		if launcher := p.queuedCredential.UserID; !launcher.IsZero() {
 			row[colRunLauncherUserID] = launcher.String()
 		}

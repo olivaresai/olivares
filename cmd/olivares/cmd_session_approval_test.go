@@ -5,7 +5,9 @@
 package main
 
 import (
+	"context"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -348,4 +350,44 @@ func TestSessionApproveAndDenyAnswerExactlyTheNamedRequest(t *testing.T) {
 			t.Fatalf("approve output:\n%s", out)
 		}
 	})
+}
+
+// A decision can resume the tool and finish its turn before the decision response arrives.
+func TestToolApprovalConfirmationSurvivesTurnEnd(t *testing.T) {
+	f := supervisedTurn(t, writeApproval())
+	atTerminal(t)
+	received, release := make(chan struct{}), make(chan struct{})
+	handler := f.Config.Handler
+	f.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == toolDecisions {
+			close(received)
+			<-release
+		}
+		handler.ServeHTTP(w, r)
+	})
+	cmd := newSessionCmd()
+	cmd.SetContext(context.Background())
+	var out strings.Builder
+	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader("y\n"))
+	cfg := agentClientConfig{server: f.URL, token: "test-token", tenant: "tenant-a", timeout: time.Second, resolved: cliResolvedConfig{Server: f.URL}}
+	ctx, endTurn := context.WithCancel(context.Background())
+	defer endTurn()
+	stop := cfg.watchToolApproval(ctx, cmd, f.runs[0])
+	select {
+	case <-received:
+	case <-time.After(5 * time.Second):
+		close(release)
+		stop()
+		t.Fatalf("no approval decision reached the engine:\n%s", out.String())
+	}
+	endTurn()
+	close(release)
+	stop()
+	if want := "Allowed apr-tool. The request is approved."; !strings.Contains(out.String(), want) {
+		t.Fatalf("missing %q after turn ended:\n%s", want, out.String())
+	}
+	if got := f.postsTo(toolDecisions); len(got) != 1 || got[0]["decision"] != "approve" {
+		t.Fatalf("decisions = %v, want one approve", got)
+	}
 }

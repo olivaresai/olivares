@@ -1,4 +1,12 @@
 {
+  "import": {
+    "title": "Importer",
+    "hint": "Continuez une conversation Claude Code d’un compte géré.",
+    "folder": "Dossier",
+    "loading": "Lecture des conversations…",
+    "empty": "Aucune conversation trouvée dans vos comptes gérés.",
+    "failed": "Impossible d’importer la conversation."
+  },
   "pathChip": {
     "open": "Ouvrir dans {{editor}}",
     "copyRelative": "Copier le chemin relatif",

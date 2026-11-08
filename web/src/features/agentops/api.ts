@@ -479,7 +479,11 @@ export const agentOpsApi = {
     ),
   mergeWorktree: (r: string, options?: RequestOptions) =>
     http.post<void>(`${RUNS}/${ref(r)}/git/merge`, {}, options),
-  resume: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`),
+  resume: (r: string, permissionMode?: string) =>
+    http.post<RunDTO>(
+      `${RUNS}/${ref(r)}/resume`,
+      permissionMode ? { permission_mode: permissionMode } : undefined,
+    ),
   resumeAtReset: (r: string) =>
     http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`, { at_reset: true }),
   cancelResumeAtReset: (r: string) =>

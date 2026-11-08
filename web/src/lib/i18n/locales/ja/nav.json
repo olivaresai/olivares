@@ -347,7 +347,7 @@
     "modelPicker": "モデル: {{value}}",
     "effortPicker": "推論レベル: {{value}}",
     "accessPicker": "アクセス: {{value}}",
-    "accessKeeps": "このセッションはアクセスを変更しません。別のアクセスでは新しいセッションを開始します。",
+    "accessKeeps": "この会話の次のターンからアクセスが変わります。",
     "queue": {
       "title": "待機中のメッセージ",
       "hold": {

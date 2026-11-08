@@ -60,7 +60,7 @@ export function useModelChoices({
   model: string
   enabled: boolean
   fallbackModel?: string
-  /** Release catalog for an own-login launch that has no profile yet. */
+  /** Release catalog for a launch that has no profile or tested key models yet. */
   beforeFirstProfile?: boolean
 }): ModelChoices {
   const { activeTenant, can } = useAuth()
@@ -100,9 +100,10 @@ export function useModelChoices({
       ? answer
       : undefined
   const start = startModel(catalog, model || fallbackModel)
-  const efforts = shipped
-    ? (start?.effort_levels ?? null)
-    : effortChoices(driver, start)
+  const efforts =
+    shipped && findModel(catalog, start?.id ?? '')
+      ? (start?.effort_levels ?? null)
+      : effortChoices(driver, start)
   return { status, catalog, start, efforts }
 }
 
