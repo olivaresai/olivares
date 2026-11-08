@@ -53,10 +53,12 @@ jobs:
           go-version-file: go.work
           cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
           cache-dependency-path: go.work.sum
-      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
-        with:
-          version: v2.17.0
-          install-only: true
+      - name: goreleaser v2.17.0, pinned by digest
+        run: |
+          # goreleaser-action downloads only from github.com, which answered 504 on 2026-11-08;
+          # ensure-goreleaser.sh checks the pinned digests and has the release API as its second source.
+          bin="$(bash scripts/ensure-goreleaser.sh --dest "$RUNNER_TEMP/goreleaser-2.17.0")"
+          dirname -- "$bin" >> "$GITHUB_PATH"
       - name: Install the locked browser harness
         run: |
           set -euo pipefail

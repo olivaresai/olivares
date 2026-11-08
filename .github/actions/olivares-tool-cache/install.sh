@@ -49,17 +49,16 @@ esac
 
 case "$tool" in
   task)
-    archive="task_linux_amd64.tar.gz"
-    url="https://github.com/go-task/task/releases/download/v${version}/${archive}"
+    repo="go-task/task"; archive="task_linux_amd64.tar.gz"
     binary="task"; version_flag="--version"
     ;;
   gitleaks)
-    archive="gitleaks_${version}_linux_x64.tar.gz"
-    url="https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}"
+    repo="gitleaks/gitleaks"; archive="gitleaks_${version}_linux_x64.tar.gz"
     binary="gitleaks"; version_flag="version"
     ;;
   *) echo "::error::olivares-tool-cache: unknown tool '${tool}' (task|gitleaks)"; exit 1 ;;
 esac
+url="https://github.com/${repo}/releases/download/v${version}/${archive}"
 
 scratch="${RUNNER_TEMP:-/tmp}"
 cache_root="${RUNNER_TOOL_CACHE:-${scratch}/tool-cache}/olivares"
@@ -84,11 +83,18 @@ else
   # Staging lives under the cache root so the final publish is a same-filesystem rename.
   staging="$(mktemp -d "${cache_root}/.staging.XXXXXX")"
   trap 'rm -rf "$staging"' EXIT
+  fetch() { curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 120 "$@" 2>>"$fail_log"; }
   log "olivares-tool-cache: downloading ${url}"
-  if ! curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
-        --max-time 120 --output "${staging}/${archive}" "$url" 2>>"$fail_log"; then
-    echo "::error::olivares-tool-cache: download of ${tool} ${version} failed (see ${fail_log})"
-    exit 1
+  if ! fetch --output "${staging}/${archive}" "$url"; then
+    # github.com's release-download front answered 504 for hours on 2026-11-08 while the release API served
+    # the same asset. Only the source changes: the pinned sha256 below still decides what is trusted.
+    api="https://api.github.com/repos/${repo}/releases/tags/v${version}"
+    log "olivares-tool-cache: ${url} failed; fetching the same asset through ${api}"
+    if ! asset="$(fetch "$api" | jq -er --arg name "$archive" '.assets[] | select(.name == $name) | .url')" \
+       || ! fetch --header 'Accept: application/octet-stream' --output "${staging}/${archive}" "$asset"; then
+      echo "::error::olivares-tool-cache: download of ${tool} ${version} failed (see ${fail_log})"
+      exit 1
+    fi
   fi
   actual_sha="$(sha256sum "${staging}/${archive}" | cut -c1-64)"
   if [[ "$actual_sha" != "$expected_sha" ]]; then
