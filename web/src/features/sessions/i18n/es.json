@@ -1,4 +1,12 @@
 {
+  "import": {
+    "title": "Importar",
+    "hint": "Continúa una conversación de Claude Code de una cuenta gestionada.",
+    "folder": "Carpeta",
+    "loading": "Leyendo conversaciones…",
+    "empty": "No se encontraron conversaciones en tus cuentas gestionadas.",
+    "failed": "No se pudo importar la conversación."
+  },
   "pathChip": {
     "open": "Abrir en {{editor}}",
     "copyRelative": "Copiar ruta relativa",

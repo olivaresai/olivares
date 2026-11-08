@@ -96071,6 +96071,144 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/conversation-candidates": {
+      "get": {
+        "description": "Reads existing native conversations without starting tools or writing their stores.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "conversation_id": {
+                            "type": "string"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "modified": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "provider_profile_ref": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "provider_profile_ref",
+                          "conversation_id",
+                          "folder",
+                          "title",
+                          "modified"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Existing conversations in the caller's managed tool accounts"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Reads existing native conversations without starting tools or writing their stores.",
+        "x-required-permission": "sessions:output:read",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/decision-requests/{id}/responses": {
       "post": {
         "description": "Resolves or dismisses a decision request with current authority.",
@@ -110000,6 +110138,17 @@
                           }
                         ]
                       },
+                      "import_conversation_id": {
+                        "anyOf": [
+                          {
+                            "description": "Resume an existing native conversation from the named managed account in the chosen allowed folder.",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "isolation": {
                         "anyOf": [
                           {
@@ -117443,6 +117592,18 @@
                   },
                   "cancel_reset": {
                     "type": "boolean"
+                  },
+                  "permission_mode": {
+                    "description": "Restart an idle process under this access for its next turn, retaining the conversation. Cannot be combined with scheduling. Launch authorization and policy apply.",
+                    "enum": [
+                      "default",
+                      "acceptEdits",
+                      "plan",
+                      "auto",
+                      "dontAsk",
+                      "bypassPermissions"
+                    ],
+                    "type": "string"
                   }
                 },
                 "type": "object"

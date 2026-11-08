@@ -40,7 +40,8 @@ import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
 import { useIsPhone } from '@/lib/hooks/use-is-phone'
-import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
+import { ImportConversations } from './import-conversations'
+import { useUrlState, useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import { useMinuteClock } from '@/components/layout/use-session-rail'
 import { dayCost, dayIsFloorOf } from '@/features/home/now-sessions'
 import { useViewAccess } from '@/features/navigation/authorization'
@@ -520,6 +521,7 @@ function Inner({
     setDetailOpen(false)
   }
 
+  const [importState, setImportState] = useUrlState(['import'])
   const queryClient = useQueryClient()
 
   /**
@@ -1886,7 +1888,36 @@ function Inner({
     profiles: t('tabs.profiles'),
   }
   // The New session of a view that is not the list: the list carries its own in its head.
-  const viewNewSession = emptyActionVisible ? undefined : newSession
+  const canImport =
+    canRunWrite && can('sessions:output:read') && can('sessions:account:read')
+  const viewNewSession = (
+    <div className="flex gap-2">
+      {canImport ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setImportState({ import: '1' })}
+        >
+          {t('import.title')}
+        </Button>
+      ) : null}
+      {emptyActionVisible ? undefined : newSession}
+    </div>
+  )
+  const importDialog =
+    canImport && importState.import === '1' ? (
+      <ImportConversations
+        key={boundary.key}
+        onClose={() => setImportState({ import: undefined })}
+        onImported={(run) => {
+          setImportState({ import: undefined })
+          patchAddress({
+            [SESSION_PARAM]: `run:${run.run_ref}`,
+            [PANE_PARAM]: 'narrative',
+          })
+        }}
+      />
+    ) : null
   const subview = (view: SessionsView, children: React.ReactNode) => (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4 sm:px-6">
       <SessionsViewHeader
@@ -1910,6 +1941,7 @@ function Inner({
        no padding here: the list and the thread are regions of the sheet and own theirs,
        and a frame that padded them would take space from the work on every side. */
     <TooltipProvider delayDuration={300}>
+      {importDialog}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Tabs
           value={tab}
@@ -1965,6 +1997,11 @@ function Inner({
                     count={counts.total}
                     countLabel={countText}
                     onNew={canRunWrite ? openNewSession : undefined}
+                    onImport={
+                      canImport
+                        ? () => setImportState({ import: '1' })
+                        : undefined
+                    }
                     views={listViews}
                     onView={setTab}
                     streamFailed={canLiveRead && streamStatus === 'error'}

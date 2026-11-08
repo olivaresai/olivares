@@ -55,7 +55,7 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 	case http.MethodPost + " /decision-requests/{id}/responses":
 		return sessionsClosureBodyDeclaration(true, sessionsDecisionRequestResponseSchema()), true
 	case http.MethodPost + " /runs/{ref}/resume":
-		return sessionsClosureBodyDeclaration(false, sessionsClosureClosedObject(oas.Obj("at_reset", oas.Obj("type", "boolean"), "cancel_reset", oas.Obj("type", "boolean")))), true
+		return sessionsClosureBodyDeclaration(false, sessionsClosureClosedObject(oas.Obj("at_reset", oas.Obj("type", "boolean"), "cancel_reset", oas.Obj("type", "boolean"), "permission_mode", oas.Obj("type", "string", "enum", oas.Enum("default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"), "description", "Restart an idle process under this access for its next turn, retaining the conversation. Cannot be combined with scheduling. Launch authorization and policy apply.")))), true
 	case http.MethodPut + " /limit-resume-settings":
 		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj("automatic", oas.Obj("type", "boolean")), "automatic")), true
 	case http.MethodPut + " /git-attribution-settings":
@@ -301,6 +301,7 @@ func sessionsCreateRunSchema() map[string]any {
 		"secret_env", sessionsSecretEnvSchema(),
 		"git_read", sessionsClosureOptionalString("When non-empty, one approved Git-host repository binding (<binding id>:<owner>/<name>) the session gets a short-lived GitHub read credential for: an installation token with contents:read for that repository, served to git by a credential helper (never in the environment) and revoked when the session ends. Needs tenant administration. A GitLab binding is refused (422)."),
 		"credentials", sessionsClosureNullable(oas.Obj("type", "array", "maxItems", CredentialMaxNames, "uniqueItems", true, "items", oas.Obj("type", "string", "pattern", "^[a-z0-9][a-z0-9._-]{0,63}$"), "description", "Business. Names of managed credentials (an SSH key or certificate, a database login, an API account) the session gets a way to use: an SSH agent socket, a database proxy or a local reverse proxy that the engine holds, never the secret itself. Needs tenant administration. A Community engine answers 501 business_required.")),
+		"import_conversation_id", sessionsClosureOptionalString("Resume an existing native conversation from the named managed account in the chosen allowed folder."),
 		"provider_profile_ref", sessionsClosureOptionalString("When non-empty, names the provider profile the session launches under; the server resolves its homes and refuses a disabled, retired, foreign-environment or non-operable profile, and one whose driver requires an authorized authentication source it does not have. Only the reference is accepted: no home, environment, driver, binding, session id or authentication source."),
 	)))
 }

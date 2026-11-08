@@ -54,6 +54,7 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	}
 	reg.Handle("POST", "/runs", permRunWrite, m.handleCreateRun)
 	reg.Handle("GET", "/runs", permRunRead, m.handleListRuns)
+	reg.Handle("GET", "/conversation-candidates", permRunOutput, m.handleConversationCandidates)
 	reg.Handle("GET", "/limit-resume-settings", permRunRead, m.handleLimitResumeSettings)
 	reg.Handle("PUT", "/limit-resume-settings", permRunWrite, m.handleLimitResumeSettings)
 	// The tools a run can name, from the engine's one table (tools_api.go).
@@ -180,6 +181,10 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		writeRunErr(w, err)
 		return
 	}
+	if body.ImportConversationID != "" && !m.mayImportConversations(r.Context(), mc) {
+		writeRunErr(w, forbiddenErr("reading tool accounts and session output is required to import conversations"))
+		return
+	}
 	if body.RunOn != "" {
 		if _, err := m.checkRunPlacement(r.Context(), mc.Tenant, body.RunOn, mc.Principal); err != nil {
 			writeRunErr(w, err)
@@ -219,9 +224,10 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 	}
 	credential, _ := auth.QueuedCredentialFrom(mc.Principal)
 	dto, err := m.createRun(r.Context(), mc.Tenant, CreateRunParams{
-		queuedCredential: credential,
-		Name:             body.Name,
-		RepositoryURL:    body.RepositoryURL, RepositoryRef: body.RepositoryRef, CostCapMicroUSD: body.CostCapMicroUSD, TimeoutSeconds: body.TimeoutSeconds,
+		queuedCredential:     credential,
+		Name:                 body.Name,
+		ImportConversationID: body.ImportConversationID,
+		RepositoryURL:        body.RepositoryURL, RepositoryRef: body.RepositoryRef, CostCapMicroUSD: body.CostCapMicroUSD, TimeoutSeconds: body.TimeoutSeconds,
 		Transport:      Transport(body.Transport),
 		PermissionMode: body.PermissionMode,
 		Effort:         body.Effort,
@@ -818,10 +824,24 @@ func (m *Module) handleResumeRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 	var body struct {
-		AtReset     bool `json:"at_reset"`
-		CancelReset bool `json:"cancel_reset"`
+		PermissionMode string `json:"permission_mode"`
+		AtReset        bool   `json:"at_reset"`
+		CancelReset    bool   `json:"cancel_reset"`
 	}
 	if !decodeOptionalJSONBody(w, r, &body) {
+		return
+	}
+	if body.PermissionMode != "" {
+		if body.AtReset || body.CancelReset {
+			writeJSON(w, http.StatusBadRequest, errorBody("access cannot be combined with scheduling"))
+			return
+		}
+		dto, err := m.changeRunAccess(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind(), mc.Principal.AgentIdentity, body.PermissionMode, m.callerQuestions(r.Context(), mc))
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, dto)
 		return
 	}
 	if body.AtReset && body.CancelReset {

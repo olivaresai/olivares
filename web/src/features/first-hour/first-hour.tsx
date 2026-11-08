@@ -1165,23 +1165,34 @@ function StartSessionChoices({
     pick.scope === scope ? (pick.model ?? defaultModel) : defaultModel
   // The catalog of the profile the session runs under: the chosen one, else the profile
   // the engine's own rule would reuse (read only, nothing is created). A key has no
-  // profile before its first launch: its tested models are its list (below).
+  // profile before its first launch: prefer its tested list, then release choices.
   const canReadProfiles = can('sessions:profile:read')
   const reuse = useReuseProfile(
     tool,
     toolReady && !profileRef && !key && canReadProfiles,
   )
-  const catalogProfile = profileRef || reuse.data?.profile?.profile_ref || ''
+  const catalogProfile =
+    profileRef || (!key && reuse.data?.profile?.profile_ref) || ''
   const modelChoices = useModelChoices({
     profileRef: catalogProfile,
     driver: tool ?? '',
     model: requestedModel,
     enabled: toolReady,
     fallbackModel: saved,
-    beforeFirstProfile: !key && reuse.data?.reason === 'own_login',
+    beforeFirstProfile: key
+      ? tested.length === 0
+      : reuse.data?.reason === 'own_login',
   })
-  const offeredModels = key
+  const keyModels = tested.length
     ? tested
+    : [
+        ...new Set([
+          ...(modelChoices.catalog?.models.map((m) => m.id) ?? []),
+          ...(saved ? [saved] : []),
+        ]),
+      ]
+  const offeredModels = key
+    ? keyModels
     : modelChoices.catalog?.models.map((m) => m.id)
   const usingDefaultModel = pick.scope !== scope || pick.model === null
   // The remembered effort holds while the remembered model does, and only as a level that
@@ -1256,9 +1267,8 @@ function StartSessionChoices({
     (speed?.fastMode === true && speedModel?.supports_fast_mode !== true) ||
     (!!speed?.serviceTier &&
       !speedModel?.service_tiers?.includes(speed.serviceTier))
-  // A key with no tested model, for a tool that needs one, can start nothing yet: its remedy
-  // is a connection test in Providers.
-  const untested = noDefault && tested.length === 0
+  // An unknown driver still needs a connection test when it has no model choices.
+  const untested = noDefault && keyModels.length === 0
   const canReadProviders = can('sessions:provider:read')
   const openProviders = () => {
     onStarted?.()
@@ -1608,7 +1618,9 @@ function StartSessionChoices({
                         ),
                   })
                 }
-                {...(key ? { tested, keyDefault: saved, noDefault } : {})}
+                {...(key
+                  ? { tested: keyModels, keyDefault: saved, noDefault }
+                  : {})}
               />
               <EffortPill
                 efforts={modelChoices.efforts}
@@ -1824,7 +1836,7 @@ function StartSessionChoices({
                     : t('start.nativeDefault', { tool: toolName(tool) })}
                 </SelectItem>
               )}
-              {tested.map((m) => (
+              {keyModels.map((m) => (
                 <SelectItem key={m} value={m}>
                   <ToolMark driver={tool} className="me-1.5 align-middle" />
                   {m}

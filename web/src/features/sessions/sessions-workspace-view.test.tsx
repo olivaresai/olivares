@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ComponentProps } from 'react'
+import { http } from '@/lib/api'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   act,
@@ -129,7 +130,13 @@ vi.mock('./api', async (importOriginal) => ({
 
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
-  agentOpsApi: { listRuns: vi.fn(), getRun: vi.fn(), listProfiles: vi.fn() },
+  agentOpsApi: {
+    listRuns: vi.fn(),
+    getRun: vi.fn(),
+    listProfiles: vi.fn(),
+    listWorkspaces: vi.fn(),
+    createRun: vi.fn(),
+  },
 }))
 
 import { agentOpsApi } from '@/features/agentops/api'
@@ -1597,4 +1604,73 @@ describe('SessionsWorkspaceView — the strip says what today cost', () => {
     })
     expect(strip).toHaveTextContent('2 working · $1.61 today')
   })
+})
+
+it('imports a managed account conversation into its folder', async () => {
+  perms.add('sessions:run:write')
+  perms.add('sessions:output:read')
+  perms.add('sessions:account:read')
+  const user = userEvent.setup()
+  const original = http.get.bind(http)
+  const get = vi.spyOn(http, 'get').mockImplementation((path, options) => {
+    if (path === '/v1/m/sessions/conversation-candidates')
+      return Promise.resolve({
+        items: [
+          {
+            provider_profile_ref: 'ppf-account',
+            conversation_id: 'existing-conversation',
+            title: 'Remember the orchard',
+            folder: '/work/orchard',
+            modified: '2026-11-07T00:00:00Z',
+          },
+        ],
+      })
+    return original(path, options)
+  })
+  const folders = vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
+    items: [
+      {
+        workspace_ref: 'ws-orchard',
+        root_path: '/work/orchard',
+        state: 'active',
+        mount_mode: 'rw',
+        max_read_bytes: 0,
+        dlp_mode: 'off',
+      },
+    ],
+    has_more: false,
+  })
+  const create = vi
+    .spyOn(agentOpsApi, 'createRun')
+    .mockResolvedValue({ ...launchedRun, run_ref: 'run-imported' })
+  try {
+    renderView()
+    await user.click(await screen.findByRole('button', { name: 'Import' }))
+    await user.click(
+      await screen.findByRole('button', { name: /Remember the orchard/ }),
+    )
+    expect(screen.getByLabelText('Folder')).toHaveValue('/work/orchard')
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Import',
+      }),
+    )
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider_profile_ref: 'ppf-account',
+          import_conversation_id: 'existing-conversation',
+          workspace_ref: 'ws-orchard',
+        }),
+        expect.anything(),
+      ),
+    )
+    await waitFor(() =>
+      expect(fakeRouter.searchStr()).toContain('run%3Arun-imported'),
+    )
+  } finally {
+    get.mockRestore()
+    folders.mockRestore()
+    create.mockRestore()
+  }
 })

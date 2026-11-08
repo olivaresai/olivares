@@ -338,7 +338,10 @@ func (p *commitOutcomeProxy) forward() {
 	}
 	p.forwardWithheldTerminate(held)
 	if err := held.upstream.SetWriteDeadline(time.Time{}); err != nil {
-		p.t.Fatalf("COULD_NOT_LOOK: clear the held COMMIT write deadline: %v", err)
+		// A delivered Terminate can make the server relay close this socket first.
+		if !held.withheld || !errors.Is(err, net.ErrClosed) {
+			p.t.Fatalf("COULD_NOT_LOOK: clear the held COMMIT write deadline: %v", err)
+		}
 	}
 }
 

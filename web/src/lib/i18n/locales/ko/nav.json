@@ -347,7 +347,7 @@
     "modelPicker": "모델: {{value}}",
     "effortPicker": "노력 수준: {{value}}",
     "accessPicker": "접근 권한: {{value}}",
-    "accessKeeps": "이 세션은 접근 권한을 유지합니다. 다른 접근 권한은 새 세션을 시작합니다.",
+    "accessKeeps": "이 대화의 다음 차례부터 접근 권한이 변경됩니다.",
     "queue": {
       "title": "대기 중인 메시지",
       "hold": {

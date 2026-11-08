@@ -331,7 +331,13 @@
         "focusBeside": "세션 간 포커스 이동",
         "nextPane": "다음 창",
         "previousPane": "이전 창",
-        "approve": "대화의 요청을 한 번 승인"
+        "approve": "대화의 요청을 한 번 승인",
+        "terminal": "터미널",
+        "changes": "변경",
+        "preview": "미리보기",
+        "model": "모델",
+        "effort": "노력",
+        "access": "권한 모드"
       },
       "rail": {
         "next": "다음 세션",

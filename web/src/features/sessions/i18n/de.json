@@ -1,4 +1,12 @@
 {
+  "import": {
+    "title": "Importieren",
+    "hint": "Setzen Sie eine Claude-Code-Unterhaltung aus einem verwalteten Konto fort.",
+    "folder": "Ordner",
+    "loading": "Unterhaltungen werden gelesen…",
+    "empty": "Keine Unterhaltungen in Ihren verwalteten Konten gefunden.",
+    "failed": "Die Unterhaltung konnte nicht importiert werden."
+  },
   "pathChip": {
     "open": "In {{editor}} öffnen",
     "copyRelative": "Relativen Pfad kopieren",

@@ -1,4 +1,12 @@
 {
+  "import": {
+    "title": "インポート",
+    "hint": "管理対象アカウントの既存の Claude Code の会話を続けます。",
+    "folder": "フォルダー",
+    "loading": "会話を読み込み中…",
+    "empty": "管理対象アカウントに既存の会話が見つかりませんでした。",
+    "failed": "会話をインポートできませんでした。"
+  },
   "pathChip": {
     "open": "{{editor}} で開く",
     "copyRelative": "相対パスをコピー",

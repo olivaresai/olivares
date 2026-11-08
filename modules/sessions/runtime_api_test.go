@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -427,4 +429,75 @@ func TestRuntimeAPIApprovalWaitRechecksRevokedCredential(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("revoked credential was not refused: %s", response.raw)
+}
+
+func TestImportManagedClaudeConversation(t *testing.T) {
+	fr := &fakeRunner{initSID: "existing-conversation"}
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	m.ProfileLogin = func(context.Context, model.TenantID, string, string) (bool, bool, error) { return true, true, nil }
+	acctHomeRoot(t, m)
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "import")
+	hdr := tenantHdr(tenant)
+	account := h.doJSON("POST", "/v1/m/sessions/provider-accounts", admin, map[string]any{"driver": "claude"}, hdr)
+	if account.code != 201 {
+		t.Fatalf("account: %d %s", account.code, account.raw)
+	}
+	profile := account.body["account_ref"].(string)
+	prof, err := m.GetProfile(context.Background(), tenant, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := t.TempDir()
+	writeFile(t, filepath.Join(prof.ConfigHome, "projects", "-project", "existing-conversation.jsonl"),
+		`{"type":"user","sessionId":"existing-conversation","cwd":"`+folder+`","message":{"role":"user","content":"Remember the orchard"}}`+"\n")
+	candidates := h.do("GET", "/v1/m/sessions/conversation-candidates", admin, hdr)
+	if candidates.code != 200 || !strings.Contains(candidates.raw, "existing-conversation") {
+		t.Fatalf("import list: %d %s", candidates.code, candidates.raw)
+	}
+	workspace := registerTestWorkspace(t, m, tenant, folder)
+	imported := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{
+		"provider_profile_ref": profile, "import_conversation_id": "existing-conversation", "workspace_ref": workspace,
+		"transport": "stream-json", "isolation": "native",
+	}, hdr)
+	if imported.code != 201 {
+		t.Fatalf("import: %d %s", imported.code, imported.raw)
+	}
+	spec := fr.lastSpec()
+	if i := slices.Index(spec.Args, "--resume"); i < 0 || spec.Args[i+1] != "existing-conversation" {
+		t.Fatalf("import did not resume: %v", spec.Args)
+	}
+	ref := imported.body["run_ref"].(string)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		alias, found, err := m.LookupScopedAlias(context.Background(), tenant, profile, providerDriverClaude, "existing-conversation")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if found {
+			if alias.SID != imported.body["canonical_sid"] || alias.RunRef != ref {
+				t.Fatalf("import lost account-scoped identity: %+v", alias)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("import did not bind its native id in the account scope")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	messages := h.do("GET", "/v1/m/sessions/runs/"+ref+"/messages?text=1", admin, hdr)
+	if messages.code != 200 || !strings.Contains(messages.raw, "Remember the orchard") {
+		t.Fatalf("history: %d %s", messages.code, messages.raw)
+	}
+	candidates = h.do("GET", "/v1/m/sessions/conversation-candidates", admin, hdr)
+	if candidates.code != 200 || strings.Contains(candidates.raw, "existing-conversation") {
+		t.Fatalf("already imported conversation offered again: %d %s", candidates.code, candidates.raw)
+	}
+	input := h.doJSON("POST", "/v1/m/sessions/runs/"+ref+"/input", admin, map[string]any{"text": "Continue"}, hdr)
+	if input.code != http.StatusAccepted {
+		t.Fatalf("next message: %d %s", input.code, input.raw)
+	}
 }

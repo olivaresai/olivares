@@ -73710,6 +73710,111 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/m/sessions/conversation-candidates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Reads existing native conversations without starting tools or writing their stores.
+     * @description Reads existing native conversations without starting tools or writing their stores.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description Existing conversations in the caller's managed tool accounts */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              items: {
+                conversation_id: string
+                folder: string
+                /** Format: date-time */
+                modified: string
+                provider_profile_ref: string
+                title: string
+              }[]
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/m/sessions/decision-requests/{id}/responses': {
     parameters: {
       query?: never
@@ -82543,6 +82648,7 @@ export interface paths {
             env_allow?: string[] | null
             fast_mode?: boolean | null
             git_read?: string | null
+            import_conversation_id?: string | null
             isolation?: ('' | 'native' | 'container' | 'sandbox') | null
             model?: string | null
             name?: string | null
@@ -87941,6 +88047,17 @@ export interface paths {
           'application/json': {
             at_reset?: boolean
             cancel_reset?: boolean
+            /**
+             * @description Restart an idle process under this access for its next turn, retaining the conversation. Cannot be combined with scheduling. Launch authorization and policy apply.
+             * @enum {string}
+             */
+            permission_mode?:
+              | 'default'
+              | 'acceptEdits'
+              | 'plan'
+              | 'auto'
+              | 'dontAsk'
+              | 'bypassPermissions'
           }
         }
       }

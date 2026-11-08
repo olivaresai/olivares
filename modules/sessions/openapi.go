@@ -150,6 +150,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 	if responses, ok := sessionsProjectConfigResponses(method, pattern); ok {
 		return responses, true
 	}
+	if responses, ok := sessionsConversationCandidatesResponses(method, pattern); ok {
+		return responses, true
+	}
 	if responses, ok := sessionsFolderCandidatesResponses(method, pattern); ok {
 		return responses, true
 	}

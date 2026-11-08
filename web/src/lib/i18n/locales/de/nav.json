@@ -347,7 +347,7 @@
     "modelPicker": "Modell: {{value}}",
     "effortPicker": "Aufwand: {{value}}",
     "accessPicker": "Zugriff: {{value}}",
-    "accessKeeps": "Diese Sitzung behält ihren Zugriff. Ein anderer Zugriff startet eine neue Sitzung.",
+    "accessKeeps": "Der Zugriff ändert sich beim nächsten Beitrag in dieser Unterhaltung.",
     "queue": {
       "title": "Nachrichten in der Warteschlange",
       "hold": {

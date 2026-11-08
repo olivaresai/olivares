@@ -57,6 +57,7 @@ export function SessionsListHeader({
   count,
   countLabel,
   onNew,
+  onImport,
   views,
   onView,
   streamFailed,
@@ -74,6 +75,7 @@ export function SessionsListHeader({
   countLabel: string
   /** Starts a session; absent when this person may not (or the empty list says it). */
   onNew?: (event: { currentTarget: HTMLElement }) => void
+  onImport?: () => void
   /** The views of this page this person may open. */
   views: readonly SessionsView[]
   onView: (view: SessionsView) => void
@@ -135,7 +137,7 @@ export function SessionsListHeader({
               </Button>
             </IconTip>
           ) : null}
-          {views.length > 0 ? (
+          {views.length > 0 || onImport ? (
             <DropdownMenu>
               <IconTip label={t('sessions:list.more')}>
                 <DropdownMenuTrigger asChild>
@@ -151,6 +153,11 @@ export function SessionsListHeader({
                 </DropdownMenuTrigger>
               </IconTip>
               <DropdownMenuContent align="end">
+                {onImport ? (
+                  <DropdownMenuItem onSelect={onImport}>
+                    {t('sessions:import.title')}
+                  </DropdownMenuItem>
+                ) : null}
                 {views.map((view) => (
                   <DropdownMenuItem key={view} onSelect={() => onView(view)}>
                     {view === 'table'

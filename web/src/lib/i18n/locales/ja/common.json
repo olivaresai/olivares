@@ -331,7 +331,13 @@
         "focusBeside": "セッション間でフォーカスを移動",
         "nextPane": "次のペイン",
         "previousPane": "前のペイン",
-        "approve": "会話内のリクエストを一度だけ承認"
+        "approve": "会話内のリクエストを一度だけ承認",
+        "terminal": "ターミナル",
+        "changes": "変更",
+        "preview": "プレビュー",
+        "model": "モデル",
+        "effort": "推論レベル",
+        "access": "権限モード"
       },
       "rail": {
         "next": "次のセッション",

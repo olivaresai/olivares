@@ -143,7 +143,7 @@ apiVersion: ops.olivares.ai/v1alpha1
 kind: ControlPlane
 metadata: { name: cp }
 spec:
-  image: docker.io/olivaresai/olivares:0.8   # MUST serve /pod-readyz
+  image: docker.io/olivaresai/olivares:0.9   # MUST serve /pod-readyz
   engine: postgres
   replicas: 3
   haRouting: LeaderRouting

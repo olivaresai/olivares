@@ -1,4 +1,12 @@
 {
+  "import": {
+    "title": "가져오기",
+    "hint": "관리 계정의 기존 Claude Code 대화를 계속합니다.",
+    "folder": "폴더",
+    "loading": "대화를 읽는 중…",
+    "empty": "관리 계정에서 기존 대화를 찾지 못했습니다.",
+    "failed": "대화를 가져올 수 없습니다."
+  },
   "pathChip": {
     "open": "{{editor}}에서 열기",
     "copyRelative": "상대 경로 복사",

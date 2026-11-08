@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -728,4 +730,65 @@ func commitOutcomeRelayAssertNoPayload(t *testing.T, proxy *commitOutcomeProxy) 
 			t.Fatalf("the proxy log recorded frame bytes (%q); the relay records reasons only", line)
 		}
 	}
+}
+
+// The child process lets the control assert the fixture's Fatalf diagnostic.
+func TestCommunicationCommitOutcomeProxyForwardDeadline(t *testing.T) {
+	if scenario := os.Getenv("OLIVARES_TEST_FORWARD_DEADLINE"); scenario != "" {
+		conn := &commitOutcomeForwardDeadlineConn{scenario: scenario}
+		proxy := &commitOutcomeProxy{t: t, held: &commitOutcomeProxyHold{
+			mode: commitOutcomeProxyHoldCommit, upstream: conn,
+			commit:   commitOutcomeFrame('Q', []byte("COMMIT\x00")),
+			withheld: scenario != "closed_without_terminate",
+		}}
+		proxy.forward()
+		if !conn.commitWritten || !conn.cleared || (scenario != "closed_without_terminate" && !conn.terminated) {
+			t.Fatal("forward did not deliver COMMIT, Terminate and clear the deadline")
+		}
+		return
+	}
+	for _, scenario := range []string{"terminate_closed", "clear_failed", "closed_without_terminate"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), commitOutcomeProxyHoldLimit)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCommunicationCommitOutcomeProxyForwardDeadline$", "-test.v")
+			cmd.Env = append(os.Environ(), "OLIVARES_TEST_FORWARD_DEADLINE="+scenario)
+			out, err := cmd.CombinedOutput()
+			if scenario == "terminate_closed" {
+				if err != nil {
+					t.Fatalf("successful Terminate teardown must not fail deadline reset: %v\n%s", err, out)
+				}
+			} else if err == nil || !bytes.Contains(out, []byte("COULD_NOT_LOOK: clear the held COMMIT write deadline:")) {
+				t.Fatalf("unexpected deadline reset failure must remain COULD_NOT_LOOK: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+// Reproduce the relay closing the upstream immediately after Terminate is sent.
+// Other reset failures remain distinguishable from that expected teardown.
+type commitOutcomeForwardDeadlineConn struct {
+	net.Conn
+	scenario                           string
+	commitWritten, terminated, cleared bool
+}
+
+func (c *commitOutcomeForwardDeadlineConn) Write(frame []byte) (int, error) {
+	if bytes.Equal(frame, commitOutcomeTerminate()) {
+		c.terminated = true
+	} else {
+		c.commitWritten = true
+	}
+	return len(frame), nil
+}
+
+func (c *commitOutcomeForwardDeadlineConn) SetWriteDeadline(deadline time.Time) error {
+	if !deadline.IsZero() {
+		return nil
+	}
+	c.cleared = true
+	if c.scenario == "clear_failed" {
+		return errors.New("injected deadline reset failure")
+	}
+	return &net.OpError{Op: "set", Net: "tcp", Err: net.ErrClosed}
 }

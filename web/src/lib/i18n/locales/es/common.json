@@ -331,7 +331,13 @@
         "focusBeside": "Mover el foco entre sesiones",
         "nextPane": "Panel siguiente",
         "previousPane": "Panel anterior",
-        "approve": "Aprobar una vez la solicitud de la conversación"
+        "approve": "Aprobar una vez la solicitud de la conversación",
+        "terminal": "Terminal",
+        "changes": "Cambios",
+        "preview": "Vista previa",
+        "model": "Modelo",
+        "effort": "Esfuerzo",
+        "access": "Modo de permisos"
       },
       "rail": {
         "next": "Sesión siguiente",

@@ -401,6 +401,9 @@ func toRunEventDTO(rec model.Record) runEventDTO {
 // a caller who could post an allowlist could post an empty one, and the body is
 // exactly the surface the whole pack exists to stop being authoritative.
 type createRunRequest struct {
+	// ImportConversationID is checked against the selected managed account before launch.
+	ImportConversationID string `json:"import_conversation_id"`
+
 	RepositoryURL   string   `json:"repository_url"`
 	RepositoryRef   string   `json:"repository_ref"`
 	CostCapMicroUSD int64    `json:"cost_cap_micro_usd"`

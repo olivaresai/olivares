@@ -29,6 +29,7 @@ const api = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   input: vi.fn(),
   inputText: vi.fn(),
+  resume: vi.fn(),
   getRun: vi.fn(),
   profileModels: vi.fn(),
   activity: vi.fn(),
@@ -841,6 +842,59 @@ describe('WorkComposer layout and disclosure', () => {
 })
 
 describe('WorkComposer — attached session input', () => {
+  it('focuses an opened session so typing and Enter send without clicking', async () => {
+    const user = userEvent.setup()
+    const composers = (run = RUNNING) => (
+      <>
+        <WorkComposer key={run.run_ref} attached={{ run, group: 'active' }} />
+        <WorkComposer
+          inputId={`${COMPOSER_INPUT_ID}-beside`}
+          attached={{
+            run: { ...RUNNING, run_ref: 'run_beside' },
+            group: 'active',
+          }}
+        />
+      </>
+    )
+    const view = renderIntel(composers())
+    const field = () => document.getElementById(COMPOSER_INPUT_ID)!
+    expect(field()).toHaveFocus()
+    await user.keyboard('First turn{Enter}')
+    await waitFor(() =>
+      expect(api.input).toHaveBeenCalledWith(
+        RUNNING.run_ref,
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'First turn' },
+        }),
+        undefined,
+      ),
+    )
+    const beside = document.getElementById(`${COMPOSER_INPUT_ID}-beside`)!
+    await user.type(beside, 'Beside draft')
+    view.rerender(composers({ ...RUNNING, pending_approval_ref: 'apr_focus' }))
+    expect(beside).toHaveFocus()
+    await user.keyboard(' while approval waits')
+    expect(beside).toHaveValue('Beside draft while approval waits')
+    view.rerender(composers())
+    expect(beside).toHaveFocus()
+    await user.keyboard(' and clears')
+    expect(beside).toHaveValue('Beside draft while approval waits and clears')
+    view.rerender(composers({ ...RUNNING, run_ref: 'run_second' }))
+    expect(field()).toHaveFocus()
+    await user.keyboard('Second turn{Enter}')
+    await waitFor(() =>
+      expect(api.input).toHaveBeenCalledWith(
+        'run_second',
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'Second turn' },
+        }),
+        undefined,
+      ),
+    )
+  })
+
   it('keeps two composers and their submitted turns separate', async () => {
     const user = userEvent.setup()
     renderIntel(
@@ -1682,7 +1736,9 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
       await user.click(screen.getByTestId('composer-access'))
       expect(
         await screen.findByTestId('composer-access-panel'),
-      ).toHaveTextContent('A different access starts a new session')
+      ).toHaveTextContent(
+        'Access changes on your next turn in this conversation.',
+      )
       await user.keyboard('{Escape}')
     }
     rerender(<WorkComposer attached={attached} />)
@@ -1763,32 +1819,31 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
     )
   })
 
-  //: the access cannot change inside a running session, so the chip is a label with
-  // a lock, not a picker with a chevron, and its button does not claim a choice was made.
-  it("shows the session's access as a locked label, kept until a new session", async () => {
+  it('applies access to the next turn in the same session', async () => {
     const user = userEvent.setup()
+    api.resume.mockResolvedValue({ ...RUNNING, permission_mode: 'plan' })
     renderIntel(<WorkComposer attached={attached} />)
-    const chip = await screen.findByTestId('composer-access')
-    expect(chip.querySelector('.lucide-chevron-down')).toBeNull()
-    expect(chip.querySelector('.lucide-lock')).not.toBeNull()
-    await user.click(chip)
-    const panel = await screen.findByTestId('composer-access-panel')
-    expect(panel).toHaveTextContent(/A different access starts a new session/)
-    expect(
-      within(panel).queryByRole('button', {
-        name: /with this choice/i,
-      }),
-    ).toBeNull()
+    await user.click(await screen.findByTestId('composer-access'))
     await user.click(
-      within(panel).getByRole('button', {
-        name: 'New session with different access…',
-      }),
+      within(await screen.findByTestId('composer-access-panel')).getByRole(
+        'button',
+        { name: 'Read only' },
+      ),
     )
-    const { useNewSessionDialog } =
-      await import('@/features/first-hour/new-session-store')
-    expect(useNewSessionDialog.getState().advanced).toMatchObject({
-      open: true,
-    })
+    await user.type(
+      screen.getByRole('textbox', { name: 'Session turn' }),
+      'Continue here',
+    )
+    await user.keyboard('{Enter}')
+    await waitFor(() =>
+      expect(api.resume).toHaveBeenCalledWith(RUNNING.run_ref, 'plan'),
+    )
+    expect(api.input).toHaveBeenCalledWith(
+      RUNNING.run_ref,
+      expect.stringContaining('Continue here'),
+      undefined,
+    )
+    expect(api.listRuns).not.toHaveBeenCalled()
   })
 
   //: a new session with different access keeps the current session's folder, not My files.

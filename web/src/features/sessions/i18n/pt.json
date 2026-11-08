@@ -1,4 +1,12 @@
 {
+  "import": {
+    "title": "Importar",
+    "hint": "Continue uma conversa do Claude Code de uma conta gerida.",
+    "folder": "Pasta",
+    "loading": "A ler conversas…",
+    "empty": "Não foram encontradas conversas nas suas contas geridas.",
+    "failed": "Não foi possível importar a conversa."
+  },
   "pathChip": {
     "open": "Abrir em {{editor}}",
     "copyRelative": "Copiar caminho relativo",

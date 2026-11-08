@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.8`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.9`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.8`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.9`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.8<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.9<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,21 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.9] - 2026-11-08
+
+### Fixed
+
+- Sessions using an API key offer documented models and effort choices before the first message, including saved models that have not been tested yet.
+- Changing session access applies to the next turn without starting a new conversation, preserves department-required access settings, and refreshes the displayed access after replacing a process.
+- Keyboard shortcuts open session panels and the session picker while preserving terminal control keys such as Ctrl+D.
+- Opening a session focuses its composer; approval updates no longer move focus away while you are typing.
+- Conversation import finds managed Claude Code conversations and excludes conversations already attached to a session.
+
+### Known issues
+
+- The first message of a brand-new session is occasionally not sent and the session stays on "Waiting for the session…". Send the message again; later messages in the session are delivered. A fix is in progress.
+- Native skills found in a tool's home are detected and listed, but the session's / menu does not offer them yet. Skills installed from a pack work.
 
 ## [0.8] - 2026-11-07
 

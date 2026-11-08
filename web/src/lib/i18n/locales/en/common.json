@@ -331,7 +331,13 @@
         "focusBeside": "Move focus between sessions",
         "nextPane": "Next pane",
         "previousPane": "Previous pane",
-        "approve": "Approve the request in the conversation once"
+        "approve": "Approve the request in the conversation once",
+        "terminal": "Terminal",
+        "changes": "Changes",
+        "preview": "Preview",
+        "model": "Model",
+        "effort": "Effort",
+        "access": "Permission mode"
       },
       "rail": {
         "next": "Next session",

@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "1fc3ac35fecbd09df2f940cb9023f7cee38ee296124ebe3c56d416f97def3fe0"
+SPEC_HASH = "a855622fc791662fa87bd870bf01787355fcb78e030669f911bb43980592f3b3"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -6670,6 +6670,13 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("POST", "/v1/m/sessions/connections/{name}/test", "/v1/m/sessions/connections/" + quote(str(name), safe="") + "/test", query=query, headers=headers, tenant=tenant)
+
+    def get_v1_m_sessions_conversation_candidates(self, *, tenant=None, headers=None, **query):
+        """GET /v1/m/sessions/conversation-candidates — Reads existing native conversations without starting tools or writing their stores.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/conversation-candidates", "/v1/m/sessions/conversation-candidates", query=query, headers=headers, tenant=tenant)
 
     def post_v1_m_sessions_decision_requests_by_id_responses(self, id: str, body: SessionsCommunicationDecisionRequestResponseBody, *, if_match: str, idempotency_key: str, tenant: str | None = None) -> SessionsCommunicationDecisionRequestResponseResult:
         """POST /v1/m/sessions/decision-requests/{id}/responses — typed published communication contract."""

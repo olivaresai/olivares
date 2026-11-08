@@ -851,6 +851,7 @@ export interface RunEventDTO {
 /** POST /runs body. `env_allow` is the operator's allowlist of host env var NAMES to
  * forward to the child (values are never sent — only names). */
 export interface CreateRunRequest {
+  import_conversation_id?: string
   name: string
   transport: Transport
   permission_mode: PermissionMode | string

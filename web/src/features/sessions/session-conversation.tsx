@@ -228,7 +228,7 @@ function ConversationBody({
   const { status, ended } = useRunAttach({
     runRef: run.run_ref,
     enabled: !isRemote,
-    sessionKey: `${run.state}:${run.transport}`,
+    sessionKey: [run.state, run.transport, run.started_at].join(':'),
     onFrame,
     onHistory: setHistory,
     onLag,

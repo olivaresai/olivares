@@ -141,7 +141,9 @@ func TestDRFirstStartDefaultKeepsEarlierBundles(t *testing.T) {
 	if err := os.MkdirAll(backupDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
+	// A fixed Wednesday: the default weekly restore test (Sunday 03:00 UTC, due for
+	// 24 hours) must not run here, because this harness keeps no audit-role key.
+	now := time.Date(2026, 10, 28, 2, 1, 0, 0, time.UTC)
 	old := filepath.Join(backupDir, "olivares-operator-old.drbundle")
 	f, err := os.Create(old)
 	if err != nil {
