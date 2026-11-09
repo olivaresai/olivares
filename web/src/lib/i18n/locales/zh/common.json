@@ -113,14 +113,6 @@
     "peopleHint": "请输入姓名。",
     "ask": "询问 Olivares…"
   },
-  "hintBar": {
-    "move": "移动",
-    "open": "打开",
-    "approve": "批准",
-    "deny": "拒绝",
-    "launcher": "启动栏",
-    "command": "命令"
-  },
   "permissionWords": {
     "read": "读取权限",
     "write": "写入权限",

@@ -642,6 +642,11 @@
     }
   },
   "changes": {
+    "scope": "Ambito delle modifiche",
+    "session": "Dall’inizio della sessione",
+    "latest": "Ultimo turno",
+    "before": "Prima",
+    "after": "Dopo",
     "title": "Modifiche in {{folder}}",
     "titleNoFolder": "Modifiche",
     "hint": "File che l'agente ha modificato nella sua cartella da quando è iniziata questa sessione.",

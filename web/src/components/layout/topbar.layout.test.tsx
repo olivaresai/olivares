@@ -181,6 +181,9 @@ describe('the top bar holds the title and four controls, nothing else (0.5)', ()
     // No places: the left navigation is the only one.
     expect(within(header).queryByRole('navigation')).toBeNull()
     expect(within(header).queryAllByRole('link')).toEqual([])
+    // No shortcut legend: the keys live in the command palette and the `?` keymap.
+    expect(header.querySelector('[data-testid="hint-bar"]')).toBeNull()
+    expect(header).not.toHaveTextContent(/approve|deny|launcher/)
     expect(
       header.querySelector('[data-slot="topbar-title"]'),
     ).toHaveTextContent('People')

@@ -37,6 +37,7 @@ import (
 // the live handles keyed by tenant|run_ref).
 type runtimeState struct {
 	DocumentConverter func(context.Context, string, []byte) ([]byte, error)
+	DocumentOCR       func() bool
 	limitResumeCancel context.CancelFunc
 	limitResumeWG     sync.WaitGroup
 	// toolMu holds launch selection through live registration against release removal.
@@ -866,9 +867,12 @@ type CreateRunParams struct {
 	profilePrograms    []string
 	profileRegistries  []SessionRegistry
 	profileEgressHosts []string
-	registryTokens     []EnvVar
-	registryDetail     string
-	egressDetail       string
+	// profileAutoCompactWindow is the profile's declared Claude Code auto-compact window
+	// (tokens, 0 = none), re-read on every launch and resume; it is not persisted.
+	profileAutoCompactWindow int
+	registryTokens           []EnvVar
+	registryDetail           string
+	egressDetail             string
 
 	// --- The provider-profile plane (provider_profile.go). ---
 	//

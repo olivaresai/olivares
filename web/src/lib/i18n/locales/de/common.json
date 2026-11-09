@@ -113,14 +113,6 @@
     "peopleHint": "Geben Sie einen Namen ein.",
     "ask": "Olivares fragen …"
   },
-  "hintBar": {
-    "move": "bewegen",
-    "open": "öffnen",
-    "approve": "genehmigen",
-    "deny": "ablehnen",
-    "launcher": "Starter",
-    "command": "Befehle"
-  },
   "permissionWords": {
     "read": "Lesezugriff",
     "write": "Schreibzugriff",

@@ -14,6 +14,20 @@
     "console_entries": []
   },
   {
+    "namespace": "ocr",
+    "name": "olivares.ocr",
+    "package": "documents",
+    "constructor": "documents.NewOCR()",
+    "edition": "community",
+    "kind": "catalog",
+    "standard": false,
+    "requires": ["documents"],
+    "selectable": true,
+    "published_26100": false,
+    "config_defaults": {},
+    "console_entries": []
+  },
+  {
     "namespace": "accessmap",
     "name": "olivares.access-map",
     "package": "access-map",

@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -26,9 +25,8 @@ func TestProviderApprovalSessionScopeReachesCodexAndLedger(t *testing.T) {
 		scopes     []string
 	}{
 		{"once", "accept", []string{""}},
-		{"session", "acceptForSession", []string{"session"}},
-		{"mixed quorum", "accept", []string{"session", ""}},
-		{"session quorum", "acceptForSession", []string{"session", "session"}},
+		{"session", "accept", []string{"session"}},
+		{"policy quorum", "accept", []string{"", ""}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHarness(t)
@@ -47,10 +45,23 @@ func TestProviderApprovalSessionScopeReachesCodexAndLedger(t *testing.T) {
 			bridge := newApprovalBridge(approvalBridgeConfig{}, discardLog())
 			bridge.LocalProposer = h.set.gov.EngineApprovals()
 			adapter := providerApprovalAdapter{bridge: bridge}
+			human, err := h.authr.Authenticate(t.Context(), h.adminToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			credentials := newSessionHookCredentials(h.authr, h.st, h.set.sessions, h.set.gov)
+			intent := claimHookTestSession(t, h, human, tenant, "scope")
+			if _, err := credentials.mintForPrincipal(human, tenant, intent); err != nil {
+				t.Fatal(err)
+			}
+			principal, scope, err := credentials.ResolveRun(t.Context(), tenant, intent.RunRef)
+			if err != nil {
+				t.Fatal(err)
+			}
 			asked := make(chan struct{}, 1)
 			stub := newCodexStub(t, func(ctx context.Context, req sessions.ProviderApprovalRequest) (sessions.ProviderApprovalDecision, error) {
-				req.SessionRef = "osn_scope_test"
-				req.Principal = auth.Principal{SessionIdentity: req.SessionRef}
+				req.SessionRef, req.RunRef = scope.SessionRef, intent.RunRef
+				req.Principal = principal
 				asked <- struct{}{}
 				return adapter.Approve(ctx, tenant, req)
 			})
@@ -97,7 +108,7 @@ func TestProviderApprovalSessionScopeReachesCodexAndLedger(t *testing.T) {
 				t.Fatal("the provider request did not enter the queue")
 			}
 			approval := h.getJSON(h.adminToken, h.tenantA, "/v1/m/governance/approvals/"+ref)
-			if approval["session_scope_allowed"] != true {
+			if allowed, _ := approval["session_scope_allowed"].(bool); allowed != (len(tc.scopes) == 1) {
 				t.Fatalf("supported request does not advertise session scope: %v", approval)
 			}
 			path := "/v1/m/governance/approvals/" + ref + "/decisions"

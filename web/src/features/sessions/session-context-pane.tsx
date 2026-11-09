@@ -20,6 +20,7 @@
 //    `posture` is the WEAKEST value the engine saw across the producing connectors,
 //    `pep_provisioned` and `record_io` are stored on the run. A blank badge tells the
 //    truth where "enforced" by default would not (features/sessions/types.ts).
+import { SessionAllowances } from './conversation-approval'
 import { PanelSlot } from '@/components/ui/trust-chrome'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -200,11 +201,16 @@ export function SessionContextPane({
       ? 'activity'
       : 'context'
   const options = [
+    ...(run &&
+    (run.workspace_ref ||
+      run.workspace_path ||
+      run.worktree_branch ||
+      changes.data?.files.length ||
+      panel === 'changes')
+      ? [{ value: 'changes', label: t('context.tabChanges') }]
+      : []),
     ...(run?.workspace_ref
-      ? [
-          { value: 'changes', label: t('context.tabChanges') },
-          { value: 'files', label: t('context.tabFiles') },
-        ]
+      ? [{ value: 'files', label: t('context.tabFiles') }]
       : []),
     // A shell in the folder. It writes to the folder, so it needs the right to.
     ...(run?.workspace_ref && can('sessions:workspace:write')
@@ -276,6 +282,10 @@ export function SessionContextPane({
           showMode={false}
         />
       ) : null}
+      <SessionAllowances
+        sessionRef={run?.canonical_sid ?? live?.canonical_sid}
+        active={!!run && ['running', 'idle', 'starting'].includes(run.state)}
+      />
       {/* TECHNICAL DETAILS, last and closed: the references, the frames the conversation does
           not read and the selected line as the tool sent it. A line a person inspects opens it. */}
       <details
@@ -588,7 +598,7 @@ export function SessionContextPane({
       {/* What the session changed comes first: it is what a person reviews beside the
           conversation. The scope it ran under stays one click away. */}
       {run ? <SessionGit run={run} /> : null}
-      {run ? <SessionChanges run={run} /> : null}
+      {run ? <SessionChanges key={`changes:${run.run_ref}`} run={run} /> : null}
       {/* Then what a person does with them: publish the session's commit, when its
           workspace has a publication target. */}
       {/* Keyed by run: another session is another decision, never this one's open dialog. */}

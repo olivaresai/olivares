@@ -60,9 +60,9 @@ describe('MonoMark', () => {
     expect(claude).not.toHaveTextContent('CC')
     expect(claude.querySelector('svg path')).toHaveAttribute(
       'd',
-      expect.stringMatching(/^m4\.7144 15\.9555 /),
+      expect.stringMatching(/^M4\.709 15\.955/),
     )
-    // Simple Icons has no OpenAI mark: Codex keeps its letters on its color.
+    // Codex and Grok Build are drawn too (lobe-icons); only a vendor no set draws keeps letters.
     render(
       <MonoMark
         name="Codex"
@@ -73,9 +73,20 @@ describe('MonoMark', () => {
       />,
     )
     const codex = screen.getByRole('img', { name: 'Codex' })
-    expect(codex).not.toHaveAttribute('data-vendor')
-    expect(codex).toHaveTextContent('CX')
-    expect(codex.querySelector('svg')).toBeNull()
+    expect(codex).toHaveAttribute('data-vendor', 'openai')
+    expect(codex).not.toHaveTextContent('CX')
+    render(<MonoMark name="Grok Build" letters="GB" vendor="xai" labelled />)
+    expect(screen.getByRole('img', { name: 'Grok Build' })).toHaveAttribute(
+      'data-vendor',
+      'grok',
+    )
+    render(
+      <MonoMark name="Telescope" letters="TS" vendor="telescope" labelled />,
+    )
+    const letters = screen.getByRole('img', { name: 'Telescope' })
+    expect(letters).not.toHaveAttribute('data-vendor')
+    expect(letters).toHaveTextContent('TS')
+    expect(letters.querySelector('svg')).toBeNull()
   })
 
   it('carries the account hue as a dot that never stands alone', () => {

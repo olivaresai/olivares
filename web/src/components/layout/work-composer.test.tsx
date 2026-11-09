@@ -334,10 +334,10 @@ describe('WorkComposer tab drafts', () => {
     view.rerender(composer({ ...RUNNING, run_ref: 'run_other' }))
     view.rerender(composer())
     // The remounted field must not offer the pending message as a new draft.
-    expect(field()).toBeDisabled()
+    expect(field()).toHaveAttribute('readonly')
     expect(screen.getByTestId('composer-send')).toBeDisabled()
     await act(async () => finish({ accepted: true }))
-    await waitFor(() => expect(field()).toBeEnabled())
+    await waitFor(() => expect(field()).not.toHaveAttribute('readonly'))
     expect(api.input).toHaveBeenCalledOnce()
     expect(field()).toHaveValue('')
   })
@@ -483,7 +483,7 @@ describe('WorkComposer tab drafts', () => {
       )
     })
     await act(async () => finish({ accepted: true }))
-    await waitFor(() => expect(field()).toBeEnabled())
+    await waitFor(() => expect(field()).not.toHaveAttribute('readonly'))
     expect(field()).toHaveValue('Dictated afterwards')
   })
 
@@ -893,6 +893,75 @@ describe('WorkComposer — attached session input', () => {
         undefined,
       ),
     )
+  })
+
+  it('keeps focus in the field while a message is sent, so the next keystrokes land', async () => {
+    let finish!: (value: { accepted: boolean }) => void
+    api.input.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const field = document.getElementById(COMPOSER_INPUT_ID)!
+    expect(field).toHaveFocus()
+    await user.keyboard('First turn{Enter}')
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    // The pending message stays in the field, locked but not disabled.
+    expect(field).toHaveFocus()
+    expect(field).toHaveAttribute('readonly')
+    expect(field).toBeEnabled()
+    await act(async () => finish({ accepted: true }))
+    await waitFor(() => expect(field).toHaveValue(''))
+    expect(field).not.toHaveAttribute('readonly')
+    await user.keyboard('Next turn')
+    expect(field).toHaveValue('Next turn')
+  })
+
+  it('keeps focus in the field when an approval card arrives while the person types', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(
+      <WorkComposer attached={{ run: RUNNING, group: 'active' }} />,
+    )
+    expect(document.getElementById(COMPOSER_INPUT_ID)).toHaveFocus()
+    await user.keyboard('borra')
+    view.rerender(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, pending_approval_ref: 'apr_typing' },
+          group: 'active',
+        }}
+      />,
+    )
+    const field = document.getElementById(COMPOSER_INPUT_ID)!
+    expect(field).toHaveFocus()
+    await user.keyboard('dor')
+    expect(field).toHaveValue('borrador')
+  })
+
+  it('does not take focus from another control when an approval card arrives', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(
+      <>
+        <button type="button">Elsewhere</button>
+        <WorkComposer attached={{ run: RUNNING, group: 'active' }} />
+      </>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Elsewhere' }))
+    view.rerender(
+      <>
+        <button type="button">Elsewhere</button>
+        <WorkComposer
+          attached={{
+            run: { ...RUNNING, pending_approval_ref: 'apr_elsewhere' },
+            group: 'active',
+          }}
+        />
+      </>,
+    )
+    expect(screen.getByRole('button', { name: 'Elsewhere' })).toHaveFocus()
   })
 
   it('keeps two composers and their submitted turns separate', async () => {

@@ -376,6 +376,7 @@ func applySessionPolicy(p *CreateRunParams, driver string, policy sessionPolicy)
 		return err
 	}
 	p.profilePrograms, p.profileRegistries, p.profileEgressHosts = policy.programs, policy.registries, policy.egressHosts
+	p.profileAutoCompactWindow = policy.autoCompact
 	if err := refuseNonNativePackages(*p); err != nil {
 		return err
 	}

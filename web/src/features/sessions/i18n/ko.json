@@ -606,6 +606,11 @@
     }
   },
   "changes": {
+    "scope": "변경 범위",
+    "session": "세션 시작 이후",
+    "latest": "최근 턴",
+    "before": "이전",
+    "after": "이후",
     "title": "{{folder}}의 변경",
     "titleNoFolder": "변경",
     "hint": "이 세션이 시작된 이후 에이전트가 폴더에서 변경한 파일입니다.",

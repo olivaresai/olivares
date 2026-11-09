@@ -606,6 +606,11 @@
     }
   },
   "changes": {
+    "scope": "更改范围",
+    "session": "自会话开始",
+    "latest": "最新轮次",
+    "before": "更改前",
+    "after": "更改后",
     "title": "{{folder}} 中的更改",
     "titleNoFolder": "更改",
     "hint": "自本次会话开始以来，智能体在其文件夹中更改的文件。",

@@ -113,14 +113,6 @@
     "peopleHint": "Введіть ім’я.",
     "ask": "Запитати Olivares…"
   },
-  "hintBar": {
-    "move": "переміщення",
-    "open": "відкрити",
-    "approve": "затвердити",
-    "deny": "відхилити",
-    "launcher": "запуск",
-    "command": "команда"
-  },
   "permissionWords": {
     "read": "доступ на читання",
     "write": "доступ на запис",

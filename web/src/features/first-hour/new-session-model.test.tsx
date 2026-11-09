@@ -229,14 +229,17 @@ describe('the model in the New session dialog', () => {
     const model = await screen.findByRole('combobox', { name: 'Model' })
     expect(model).toHaveTextContent('Default (gpt-b)')
     // The model runs on the chosen tool: its mark stands beside it, as beside the account.
-    expect(within(model).getByTestId('tool-mark')).toHaveTextContent('CX')
+    expect(within(model).getByTestId('tool-mark')).toHaveAttribute(
+      'data-vendor',
+      'openai',
+    )
     expect(
       screen.getByText("Models that passed this key's last connection test."),
     ).toBeInTheDocument()
     await user.click(model)
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual(['CXDefault (gpt-b)', 'CXgpt-a', 'CXgpt-b'])
+    ).toEqual(['Default (gpt-b)', 'gpt-a', 'gpt-b'])
     await user.click(screen.getByRole('option', { name: 'gpt-a' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -273,7 +276,7 @@ describe('the model in the New session dialog', () => {
     await user.click(model)
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual(['CXgpt-a', 'CXgpt-b'])
+    ).toEqual(['gpt-a', 'gpt-b'])
     await user.click(screen.getByRole('option', { name: 'gpt-b' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))

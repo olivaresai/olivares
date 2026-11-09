@@ -20,8 +20,8 @@ SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 
 以及默认启用的 TLS。主机端口默认发布在所有网络接口上，因为这是一台服务器——请按下文有意识地加以限制。
 
 <!-- release -->
-:::note[Olivares 0.9]
-下一个版本是 `0.9`，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 `docs/releases/0.9-install-surfaces.json`。
+:::note[Olivares 0.10]
+下一个版本是 `0.10`，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 `docs/releases/0.10-install-surfaces.json`。
 :::
 <!-- /release -->
 
@@ -36,7 +36,7 @@ SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.9
+docker pull docker.io/olivaresai/olivares:0.10
 ```
 <!-- /release -->
 
@@ -44,7 +44,7 @@ docker pull docker.io/olivaresai/olivares:0.9
 用作备份和构建 registry。Docker Hub 对**匿名**拉取施加速率限制；ghcr.io 不对公共镜像的匿名拉取
 限速——因此当 CI 节点或大规模集群触及上限时，可以先 `docker login`，或改用 ghcr.io 坐标。
 Tag **不带前导 `v`**： <!-- release -->
-`:0.9`<!-- /release --> 固定一个版本，`:latest` 浮动，而 <!-- release -->`:0.9-fips`<!-- /release --> / <!-- release -->`:0.9-stig`<!-- /release -->
+`:0.10`<!-- /release --> 固定一个版本，`:latest` 浮动，而 <!-- release -->`:0.10-fips`<!-- /release --> / <!-- release -->`:0.10-stig`<!-- /release -->
 是加固变体。基础 tag 和 `:latest` 是多架构的
 （`linux/amd64`、`linux/arm64`）；`fips`/`stig` 仅有 `amd64`。
 
@@ -56,7 +56,7 @@ control plane 是一款安全产品，所以运行前先验证。签名是
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.9")"
+DIGEST="$(crane digest "$IMAGE:0.10")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -84,11 +84,11 @@ capabilities 的方式运行：
 <!-- release -->
 ```bash
 docker volume create olivares-data
-docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.9 \
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.10 \
   /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
 apparmor=
 if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
-  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.9 /usr/share/olivares/olivares-sessions.conf |
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.10 /usr/share/olivares/olivares-sessions.conf |
     sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
   sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
   apparmor=--security-opt=apparmor=olivares-sessions
@@ -105,7 +105,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.9 \
+  docker.io/olivaresai/olivares:0.10 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -329,7 +329,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 生产环境按 digest 固定
 
-可变 tag（<!-- release -->`:0.9`<!-- /release -->、`:latest`）用于评估。在生产环境中，请固定你所验证的
+可变 tag（<!-- release -->`:0.10`<!-- /release -->、`:latest`）用于评估。在生产环境中，请固定你所验证的
 **digest**——digest 不可变，且正是你签字确认过的东西：
 
 ```bash

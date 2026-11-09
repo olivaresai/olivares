@@ -113,14 +113,6 @@
     "peopleHint": "Escribe un nombre.",
     "ask": "Preguntar a Olivares…"
   },
-  "hintBar": {
-    "move": "mover",
-    "open": "abrir",
-    "approve": "aprobar",
-    "deny": "denegar",
-    "launcher": "lanzador",
-    "command": "comandos"
-  },
   "permissionWords": {
     "read": "acceso de lectura",
     "write": "acceso de escritura",

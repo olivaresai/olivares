@@ -80209,6 +80209,7 @@ export interface paths {
           'application/json': {
             auth_source?:
               ('' | 'provider_account_home' | 'managed_injection') | null
+            auto_compact_window?: number | null
             display_name?: string | null
             max_data_class?:
               | (

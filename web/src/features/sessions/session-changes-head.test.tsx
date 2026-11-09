@@ -5,7 +5,7 @@
 // The Session changes pane against git HEAD: a changed file opens as its
 // current text, with a Changes view of what differs from HEAD when HEAD has the file.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   File,
@@ -22,7 +22,11 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 vi.mock('@/features/agentops/api', async (orig) => ({
   ...(await orig<typeof import('@/features/agentops/api')>()),
-  agentOpsApi: { changes: vi.fn(), changedFile: vi.fn() },
+  agentOpsApi: {
+    changes: vi.fn(),
+    changedFile: vi.fn(),
+    runCheckpoints: vi.fn(),
+  },
 }))
 vi.mock('@/components/ui/code-diff', () => ({
   CodeDiff: ({
@@ -70,6 +74,10 @@ function notFound() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(agentOpsApi.runCheckpoints).mockResolvedValue({
+    available: false,
+    turns: [],
+  })
   vi.mocked(agentOpsApi.changes).mockResolvedValue({
     folder: 'repo',
     files: [
@@ -94,13 +102,7 @@ describe('SessionChanges — against git HEAD', () => {
     expect(
       screen.getByRole('button', { name: 'Copy README.md' }),
     ).toBeInTheDocument()
-    expect(await screen.findByTestId('changes-file')).toHaveTextContent(
-      'changed by the agent',
-    )
-
-    await user.click(
-      await screen.findByRole('button', { name: 'Changes since HEAD' }),
-    )
+    await screen.findByTestId('diff-original')
     expect(screen.getByTestId('diff-original')).toHaveTextContent(/^# Title$/)
     expect(screen.getByTestId('diff-modified')).toHaveTextContent(
       'changed by the agent',
@@ -152,7 +154,9 @@ describe('SessionChanges — against git HEAD', () => {
     await user.click(await screen.findByText('README.md'))
     await settled(qc)
     expect(
-      await screen.findByText('Could not compare with HEAD.'),
+      await screen.findByText(
+        'The changes could not be read. Try again in a moment.',
+      ),
     ).toBeInTheDocument()
     expect(screen.getByTestId('changes-file')).toHaveTextContent('current')
     expect(
@@ -187,7 +191,7 @@ describe('SessionChanges — against git HEAD', () => {
     )
   })
 
-  it('opens the next file on its plain view, not on the Changes view of the last', async () => {
+  it('opens each file directly on its diff', async () => {
     vi.mocked(agentOpsApi.changedFile).mockImplementation(
       async (_run, path, opts) =>
         file(path, opts?.rev === 'HEAD' ? 'before\n' : 'after\n'),
@@ -195,20 +199,10 @@ describe('SessionChanges — against git HEAD', () => {
     const user = userEvent.setup()
     show()
     await user.click(await screen.findByText('README.md'))
-    await user.click(
-      await screen.findByRole('button', { name: 'Changes since HEAD' }),
-    )
-    expect(screen.getByTestId('code-diff')).toBeInTheDocument()
+    expect(await screen.findByTestId('code-diff')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'All changes' }))
     await user.click(await screen.findByText('new.txt'))
-    expect(
-      await screen.findByRole('button', { name: 'Changes since HEAD' }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'File' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    expect(screen.queryByTestId('code-diff')).toBeNull()
+    expect(await screen.findByTestId('code-diff')).toBeInTheDocument()
   })
 
   it('offers no diff against a truncated side, which would compare cut texts', async () => {
@@ -266,4 +260,70 @@ describe('SessionChanges — file kinds', () => {
     expect(await drawn('.env')).toBe(shapes(FileCog))
     expect(await drawn('.gitignore')).toBe(shapes(FileCog))
   })
+})
+
+it('opens a file diff and scopes two edits to the latest or a chosen turn', async () => {
+  vi.mocked(agentOpsApi.runCheckpoints).mockResolvedValue({
+    available: true,
+    turns: [1, 2].map((seq) => ({
+      seq,
+      prompt: `Edit ${seq}`,
+      clipped: false,
+      at: '2026-11-07T10:00:00Z',
+      open: seq === 2,
+      truncated: false,
+      files: [{ path: 'README.md', status: 'modified' as const }],
+    })),
+  })
+  vi.mocked(agentOpsApi.changedFile).mockImplementation(
+    async (_run, path, opts) => {
+      const query = opts as { turn?: number; side?: string; rev?: string }
+      return file(
+        path,
+        query.turn === 1 && query.side === 'start'
+          ? 'initial\n'
+          : (query.turn === 1 && query.side === 'end') ||
+              (query.turn === 2 && query.side === 'start')
+            ? 'first edit\n'
+            : 'second edit\n',
+      )
+    },
+  )
+  const user = userEvent.setup()
+  show()
+  await user.click(
+    await within(await screen.findByTestId('changes-list')).findByText(
+      'README.md',
+    ),
+  )
+  expect(await screen.findByTestId('diff-original')).toHaveTextContent(
+    'initial',
+  )
+  expect(screen.getByTestId('diff-modified')).toHaveTextContent('second edit')
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Changes scope' }),
+    'latest',
+  )
+  await user.click(
+    await within(await screen.findByTestId('changes-list')).findByText(
+      'README.md',
+    ),
+  )
+  expect(await screen.findByTestId('diff-original')).toHaveTextContent(
+    'first edit',
+  )
+  expect(screen.getByTestId('diff-modified')).toHaveTextContent('second edit')
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Changes scope' }),
+    '1',
+  )
+  await user.click(
+    await within(await screen.findByTestId('changes-list')).findByText(
+      'README.md',
+    ),
+  )
+  expect(await screen.findByTestId('diff-original')).toHaveTextContent(
+    'initial',
+  )
+  expect(screen.getByTestId('diff-modified')).toHaveTextContent('first edit')
 })

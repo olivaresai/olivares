@@ -76,6 +76,7 @@ type Dependencies struct {
 	LimitResets                      LimitResetSource
 	SessionFacts                     SessionFactsSource
 	AccountUsage                     AccountUsageSource
+	AccountPlan                      AccountPlanSource
 	WorkSessionCreds                 WorkSessionCredentialSource
 	CommunicationSessionCreds        CommunicationSessionCredentialSource
 	// The enabled bit distinguishes an intentional K3 OFF posture from a lost
@@ -246,6 +247,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"ListPricer", d.ListPricer, "token-only usage pricing", true},
 		{"LimitResets", d.LimitResets, "reset times of a usage limit the tool did not name", false},
 		{"AccountUsage", d.AccountUsage, "usage windows of a provider account", false},
+		{"AccountPlan", d.AccountPlan, "plan of a provider account", false},
 		{"WorkSessionCreds", d.WorkSessionCreds, "session work credentials", true},
 		{"CommunicationSessionCreds", d.CommunicationSessionCreds, "communication session credentials", true},
 		{"RecoveryWorkSessionCreds", d.RecoveryWorkSessionCreds, "work credential withdrawal during recovery", true},

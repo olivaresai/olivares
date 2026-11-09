@@ -20,6 +20,8 @@ WORKDIR /src
 RUN npm install -g corepack@0.34.6 && corepack enable pnpm
 # Copy only what the web build needs first, for layer caching.
 COPY web/package.json web/pnpm-lock.yaml ./web/
+# pnpm applies web/package.json patchedDependencies during install, so their files come in with it.
+COPY web/patches/ ./web/patches/
 RUN cd web && pnpm install --frozen-lockfile
 COPY web/ ./web/
 COPY docs/editions.md ./docs/editions.md

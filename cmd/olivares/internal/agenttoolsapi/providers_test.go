@@ -780,6 +780,35 @@ func TestAccountUsageIsReadFromTheAccountsOwnHome(t *testing.T) {
 	}
 }
 
+// An account's plan is what its own tool reports from its own home, raw: the same probe and
+// cache as its usage, and none for a login that names no plan or a tool that reports none.
+func TestAccountPlanIsReadFromTheAccountsOwnHome(t *testing.T) {
+	_, m, home := newProvidersServer(t)
+	ctx := context.Background()
+	tenant := model.TenantID(filepath.Base(home))
+	signIn := func(driver, ref, file string) {
+		dir := filepath.Join(home, driver, ref, map[string]string{"claude": ".claude", "codex": ".codex"}[driver])
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, file), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	signIn("claude", "ppf_a", ".credentials.json")
+	signIn("codex", "ppf_c", "auth.json")
+	for _, c := range []struct{ driver, ref, want string }{
+		{"claude", "ppf_a", "max"},
+		{"codex", "ppf_c", "promax"},
+		{"claude", "ppf_other", ""},
+		{"grok", "ppf_g", ""},
+	} {
+		if got := m.AccountPlan(ctx, tenant, c.driver, c.ref, true); got != c.want {
+			t.Fatalf("plan of %s %s = %q, want %q", c.driver, c.ref, got, c.want)
+		}
+	}
+}
+
 // Without wait a cold account answers nothing now, never a made-up value, and the probe it
 // started serves the next read.
 func TestAccountUsageColdReadAnswersNothingThenTheProbeResult(t *testing.T) {

@@ -90,6 +90,13 @@ precedence = "override"
 SPDX-FileCopyrightText = "Simple Icons contributors"
 SPDX-License-Identifier = "CC0-1.0"
 
+# lobe-icons path data the console draws as AI tool and provider marks, and its license text.
+[[annotations]]
+path = ["web/public/licenses/lobe-icons/LICENSE.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2023 LobeHub"
+SPDX-License-Identifier = "MIT"
+
 # Fonts shipped with the console, vendored verbatim. NOTICE credits them and their
 # license texts ship under web/public/licenses/fonts/.
 [[annotations]]
@@ -292,6 +299,14 @@ precedence = "override"
 SPDX-FileCopyrightText = "2026 Olivares.AI"
 SPDX-License-Identifier = "LicenseRef-Olivares-Internal"
 
+# pnpm patch of a third-party dev dependency (web/package.json pnpm.patchedDependencies): a diff of MIT
+# code that pnpm applies byte for byte, so it carries no inline header.
+[[annotations]]
+path = ["web/patches/*.patch"]
+precedence = "override"
+SPDX-FileCopyrightText = "2012 James Halliday, Josh Duff, and other contributors (deepmerge)"
+SPDX-License-Identifier = "MIT"
+
 # The EPEL 10 public signing key the image builder verifies EPEL packages with. Published by the Fedora Project, kept
 # byte for byte and pinned by sha256 in the recipe's lock; it is not Olivares code.
 [[annotations]]
@@ -314,6 +329,13 @@ path = [
   "appliance/images/kiwi/almalinux10-server-amd64/etc/olivares-appliance/image",
   "appliance/images/kiwi/almalinux10-desktop-amd64/etc/olivares-appliance/image",
 ]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+# The Docker daemon switch the base package ships: JSON has no comment syntax.
+[[annotations]]
+path = ["appliance/layer/base/almalinux/docker-daemon.json"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Olivares.AI"
 SPDX-License-Identifier = "AGPL-3.0-only"

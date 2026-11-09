@@ -727,9 +727,16 @@ function PaletteBody() {
                 }}
               >
                 <Play />
-                <span>{importSessionLabel}</span>
-                <span className="text-caption text-muted-foreground">
-                  Claude Code
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate" data-slot="palette-name">
+                    {markMatch(importSessionLabel, matchQuery)}
+                  </span>
+                  <span
+                    className="truncate text-caption leading-4 text-muted-foreground"
+                    data-slot="palette-context"
+                  >
+                    Claude Code
+                  </span>
                 </span>
               </CommandItem>
             ) : null}

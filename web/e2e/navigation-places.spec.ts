@@ -6,7 +6,8 @@
 // 0.5, its 0.7 places), on the seeded demo engine scripts/web-e2e-demo.sh boots. What jsdom
 // cannot measure is measured here: the Overview header keeps its height while the page loads,
 // the search hint names this platform's key, the left navigation shows Sessions, Files and Tools
-// then More, cuts no label and folds from the keyboard, the narrow drawer holds the same
+// then Settings with the administrative places one level under it, cuts no label and folds
+// from the keyboard, the narrow drawer holds the same
 // places, and a retired area directory keeps its query and hash.
 //
 // With CAPTURE_DIR set it also photographs the navigation at 1440 px and its drawer at 390 px
@@ -134,7 +135,7 @@ test.describe('the navigation and the Overview header @nav3121', () => {
     await expect(search).toHaveAttribute('title', 'Search and commands')
   })
 
-  test('the left navigation shows Sessions, Files and Tools, then More with the rest below it, and wraps no word', async ({
+  test('the left navigation shows Sessions, Files and Tools, then Settings with the administrative places one level under it, and wraps no word', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
@@ -146,7 +147,7 @@ test.describe('the navigation and the Overview header @nav3121', () => {
     // The places and the More button, in the order they are drawn.
     const drawn = () =>
       nav
-        .locator('a[data-place], button:has-text("More")')
+        .locator('a[data-place], button[aria-label="More"]')
         .evaluateAll((items) =>
           items.map((e) => e.getAttribute('data-place') ?? 'more'),
         )
@@ -154,18 +155,24 @@ test.describe('the navigation and the Overview header @nav3121', () => {
     const more = nav.getByRole('button', { name: 'More', exact: true })
     if ((await more.getAttribute('aria-expanded')) === 'true')
       await more.click()
-    // A new person sees the first places and More; More opens the rest below it. Folded,
-    // only a place with something waiting shows under More (Rules, when the seed has a
-    // pending approval).
+    // A new person sees the first places and Settings with its More button; More opens the
+    // administrative places one level under Settings. Folded, only a place with something
+    // waiting shows there (Rules, when the seed has a pending approval).
     const folded = await drawn()
-    expect(folded.slice(0, 4)).toEqual(['sessions', 'files', 'tools', 'more'])
-    expect(folded.at(-1)).toBe('settings')
-    expect(folded.slice(4, -1).filter((p) => p !== 'rules')).toEqual([])
+    expect(folded.slice(0, 5)).toEqual([
+      'sessions',
+      'files',
+      'tools',
+      'settings',
+      'more',
+    ])
+    expect(folded.slice(5).filter((p) => p !== 'rules')).toEqual([])
     await more.click()
     expect(await drawn()).toEqual([
       'sessions',
       'files',
       'tools',
+      'settings',
       'more',
       'now',
       'rules',
@@ -174,7 +181,6 @@ test.describe('the navigation and the Overview header @nav3121', () => {
       'people',
       'security',
       'operations',
-      'settings',
     ])
     // One noun per place, and no group header above any of them.
     await expect(nav.locator('section, h2')).toHaveCount(0)
@@ -185,6 +191,7 @@ test.describe('the navigation and the Overview header @nav3121', () => {
       'Sessions',
       'Files',
       'Tools',
+      'Settings',
       'Overview',
       'Rules',
       'Usage',
@@ -192,7 +199,6 @@ test.describe('the navigation and the Overview header @nav3121', () => {
       'People',
       'Security',
       'Operations',
-      'Settings',
     ])
     // No second navigation: no places in the top bar, no All areas, no phone bar.
     await expect(page.locator('[data-slot="topbar"] nav')).toHaveCount(0)

@@ -642,6 +642,11 @@
     }
   },
   "changes": {
+    "scope": "Portée des modifications",
+    "session": "Depuis le début de la session",
+    "latest": "Dernier tour",
+    "before": "Avant",
+    "after": "Après",
     "title": "Modifications dans {{folder}}",
     "titleNoFolder": "Modifications",
     "hint": "Fichiers que l’agent a modifiés dans son dossier depuis le début de cette session.",

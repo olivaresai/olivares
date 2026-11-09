@@ -158,7 +158,11 @@
     "default": "Connexion par défaut",
     "readFailed": "Les profils n'ont pas pu être lus.",
     "truncated": "Certains profils ne sont pas affichés.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "turnOff": "Désactiver {{name}}",
+    "turnOn": "Activer {{name}}",
+    "switchedOn": "{{name}} est activé",
+    "switchedOff": "{{name}} est désactivé"
   },
   "tool": {
     "menu": "Options pour {{name}}",
@@ -260,5 +264,30 @@
     "accounts": "Comptes",
     "allAccounts": "Tous les comptes : détails, libellés et liaisons",
     "noAccess": "Votre rôle ne peut pas lire les comptes ni les clés d’API de cette organisation."
+  },
+  "runtime": {
+    "title": "Exécution",
+    "autoCompact": "Compactage automatique après",
+    "autoCompactHint": "Compacte après 100 000 à 1 000 000 de jetons. Laissez vide pour utiliser la valeur par défaut de Claude.",
+    "autoCompactPlaceholder": "p. ex. 300000",
+    "autoCompactInvalid": "Saisissez un entier de 100000 à 1000000, ou laissez vide.",
+    "saved": "Exécution enregistrée. Les nouvelles sessions l'utilisent."
+  },
+  "models": {
+    "title": "Modèles",
+    "note": "Vous seul voyez cette liste. Un modèle masqué disparaît des sélecteurs ; le modèle par défaut de l'outil et un modèle saisi fonctionnent toujours.",
+    "filter": "Filtrer les modèles",
+    "disableAll": "Tout masquer",
+    "enableAll": "Tout afficher",
+    "addCustom": "Ajouter un modèle personnalisé",
+    "customPlaceholder": "ID du modèle, p. ex. claude-opus-5-5",
+    "customInvalid": "Un ID de modèle ne contient pas d'espace et compte au plus 200 caractères.",
+    "add": "Ajouter",
+    "fast": "Mode rapide",
+    "up": "Monter {{name}}",
+    "down": "Descendre {{name}}",
+    "use": "Afficher {{name}}",
+    "removeCustom": "Retirer {{name}}",
+    "empty": "Cet outil ne signale aucun modèle. Ajoutez ceux que vous utilisez."
   }
 }

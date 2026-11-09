@@ -624,6 +624,11 @@
     }
   },
   "changes": {
+    "scope": "Änderungsumfang",
+    "session": "Seit Sitzungsbeginn",
+    "latest": "Letzter Schritt",
+    "before": "Vorher",
+    "after": "Nachher",
     "title": "Änderungen in {{folder}}",
     "titleNoFolder": "Änderungen",
     "hint": "Dateien, die der Agent seit Beginn dieser Sitzung in seinem Ordner geändert hat.",

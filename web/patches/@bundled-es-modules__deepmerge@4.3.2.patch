@@ -1,0 +1,19 @@
+diff --git a/index.js b/index.js
+--- a/index.js
++++ b/index.js
+@@ -83,11 +83,14 @@
+       var destination = {};
+       if (options.isMergeableObject(target)) {
+         getKeys(target).forEach(function(key) {
++          if (key === "__proto__") {
++            return;
++          }
+           destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
+         });
+       }
+       getKeys(source).forEach(function(key) {
+-        if (propertyIsUnsafe(target, key)) {
++        if (key === "__proto__" || propertyIsUnsafe(target, key)) {
+           return;
+         }
+         if (propertyIsOnObject(target, key) && options.isMergeableObject(source[key])) {

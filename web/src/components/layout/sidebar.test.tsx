@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ONE LEFT NAVIGATION AS A PERSON USES IT: Sessions, Files and Tools, then More with the
-// other places below it, no group headers, Settings at the foot; one current place, counts read
-// from current state, a fold that works from the mouse and the keyboard, and the same items in
-// the same order in the narrow drawer.
+// THE ONE LEFT NAVIGATION AS A PERSON USES IT: the person's own sessions under Sessions, then
+// Files and Tools, and Settings at the foot with the administrative places one level under it
+// (its More toggle), no group headers; one current place, counts read from current state, a
+// fold that works from the mouse and the keyboard, and the same items in the same order in
+// the narrow drawer.
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComponentProps } from 'react'
@@ -19,6 +20,7 @@ const state = vi.hoisted(() => ({
   running: 0,
   open: 0,
   approvals: undefined as { items: unknown[] } | undefined,
+  groups: [] as { id: string; rows: unknown[] }[],
 }))
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: ({
@@ -63,6 +65,7 @@ vi.mock('./use-session-rail', () => ({
       running: state.running,
       open: state.open,
     },
+    groups: state.groups,
   }),
 }))
 vi.mock('@/features/governance/use-pending-approvals', async (actual) => ({
@@ -81,6 +84,7 @@ afterEach(() => {
   state.running = 0
   state.open = 0
   state.approvals = undefined
+  state.groups = []
   can.mockReset()
   can.mockReturnValue(true)
   usePreferencesStore.setState({ navCollapsed: false })
@@ -90,6 +94,7 @@ const PLACES = [
   'Sessions',
   'Files',
   'Tools',
+  'Settings',
   'Overview',
   'Rules',
   'Usage',
@@ -97,7 +102,6 @@ const PLACES = [
   'People',
   'Security',
   'Operations',
-  'Settings',
 ]
 
 const column = () => screen.getByRole('navigation', { name: 'Main navigation' })
@@ -110,32 +114,33 @@ const names = (root: HTMLElement) =>
     .map((a) => a.textContent)
 
 describe('the left navigation', () => {
-  it('a new person sees Sessions, Files and Tools; More opens the rest below it, and what needs them stays', async () => {
+  it('a new person sees Sessions, Files, Tools and Settings; its More toggle opens the administrative places under Settings, and what needs them stays', async () => {
     const user = userEvent.setup()
     usePreferencesStore.setState({ navAll: false })
     state.pathname = '/workspace'
     state.approvals = { items: [{}] }
     const { unmount } = renderIntel(<Sidebar />)
-    // Rules waits for a decision, so it stays shown under More while folded.
+    // Rules waits for a decision, so it stays shown under Settings while folded.
     expect(names(column()).map((n) => n?.replace(/\s*,.*$|\d+$/, ''))).toEqual([
       'Sessions',
       'Files',
       'Tools',
-      'Rules',
       'Settings',
+      'Rules',
     ])
     const more = within(column()).getByRole('button', { name: 'More' })
     expect(more).toHaveAttribute('aria-expanded', 'false')
+    const settings = within(column()).getByRole('link', { name: 'Settings' })
     const rules = within(column()).getByRole('link', { name: /^Rules/ })
-    expect(isBefore(more, rules)).toBe(true)
+    expect(isBefore(settings, rules)).toBe(true)
     await user.click(more)
     expect(more).toHaveAttribute('aria-expanded', 'true')
     expect(usePreferencesStore.getState().navAll).toBe(true)
     const usage = within(column()).getByRole('link', { name: 'Usage' })
     expect(usage).toBeVisible()
-    expect(isBefore(more, usage)).toBe(true)
+    expect(isBefore(settings, usage)).toBe(true)
     expect(
-      isBefore(within(column()).getByRole('link', { name: 'Tools' }), more),
+      isBefore(within(column()).getByRole('link', { name: 'Tools' }), settings),
     ).toBe(true)
     unmount()
     // A place opened by its address is marked, not hidden.
@@ -148,7 +153,100 @@ describe('the left navigation', () => {
     ).toHaveTextContent('Audit')
   })
 
-  it('lists every place once, in order, with Settings last and no group headers', () => {
+  it("lists the person's sessions under Sessions, the ones that need them first, and opens each by its address", () => {
+    const row = (
+      key: string,
+      title: string | null,
+      status: string,
+      kind = 'session',
+    ) => ({
+      key,
+      kind,
+      status,
+      title,
+      reference: key,
+      to: '/sessions',
+      search: { session: key },
+    })
+    state.groups = [
+      { id: 'needsYou', rows: [row('s1', 'Fix login', 'needs-you')] },
+      {
+        id: 'working',
+        rows: [row('s2', 'Refactor billing', 'working')],
+      },
+      { id: 'earlier', rows: [row('s3', null, 'done')] },
+      // A handoff is Now's, a snoozed or archived session is out of the list.
+      { id: 'snoozed', rows: [row('s4', 'Snoozed one', 'idle')] },
+      { id: 'archived', rows: [row('s5', 'Archived one', 'done')] },
+    ]
+    state.groups[0].rows.push(
+      row('h1', 'Handoff from Ana', 'needs-you', 'handoff'),
+    )
+    renderIntel(<Sidebar />)
+    const nav = column()
+    const sessionsLink = within(nav).getByRole('link', { name: 'Sessions' })
+    const login = within(nav).getByRole('link', { name: /^Fix login/ })
+    expect(login).toHaveAttribute('href', '/sessions?session=s1')
+    const billing = within(nav).getByRole('link', { name: /^Refactor billing/ })
+    const untitled = within(nav).getByRole('link', { name: /^Session s3/ })
+    const files = within(nav).getByRole('link', { name: 'Files' })
+    expect(isBefore(sessionsLink, login)).toBe(true)
+    expect(isBefore(login, billing)).toBe(true)
+    expect(isBefore(billing, untitled)).toBe(true)
+    expect(isBefore(untitled, files)).toBe(true)
+    expect(within(nav).queryByText('Handoff from Ana')).toBeNull()
+    expect(within(nav).queryByText('Snoozed one')).toBeNull()
+    expect(within(nav).queryByText('Archived one')).toBeNull()
+  })
+
+  it('shows at most eight sessions, however many the rail holds', () => {
+    // The rail keeps up to eight rows in each of its groups; the sidebar is one short list.
+    const rows = (group: string) =>
+      Array.from({ length: 8 }, (_, i) => ({
+        key: `${group}-${i}`,
+        kind: 'session',
+        status: 'working',
+        title: `${group} ${i}`,
+        reference: `${group}-${i}`,
+        to: '/sessions',
+        search: { session: `${group}-${i}` },
+      }))
+    state.groups = ['needsYou', 'working', 'earlier'].map((id) => ({
+      id,
+      rows: rows(id),
+    }))
+    renderIntel(<Sidebar />)
+    const shown = within(column())
+      .getAllByRole('link')
+      .filter((a) => /^(needsYou|working|earlier) \d/.test(a.textContent ?? ''))
+    expect(shown).toHaveLength(8)
+    // The ones that need the person come first when the list is cut.
+    expect(shown.every((a) => a.textContent?.startsWith('needsYou'))).toBe(true)
+  })
+
+  it('draws no session rows when the navigation is folded to its icons', () => {
+    usePreferencesStore.setState({ navCollapsed: true })
+    state.groups = [
+      {
+        id: 'working',
+        rows: [
+          {
+            key: 's2',
+            kind: 'session',
+            status: 'working',
+            title: 'Refactor billing',
+            reference: 's2',
+            to: '/sessions',
+            search: { session: 's2' },
+          },
+        ],
+      },
+    ]
+    renderIntel(<Sidebar />)
+    expect(within(column()).queryByText('Refactor billing')).toBeNull()
+  })
+
+  it('lists every place once, in order, Settings before the administrative places and no group headers', () => {
     renderIntel(<Sidebar />)
     const nav = column()
     expect(within(nav).queryAllByRole('region')).toEqual([])

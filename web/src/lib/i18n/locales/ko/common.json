@@ -113,14 +113,6 @@
     "peopleHint": "이름을 입력하세요.",
     "ask": "Olivares에게 질문…"
   },
-  "hintBar": {
-    "move": "이동",
-    "open": "열기",
-    "approve": "승인",
-    "deny": "거부",
-    "launcher": "실행기",
-    "command": "명령"
-  },
   "permissionWords": {
     "read": "읽기 액세스",
     "write": "쓰기 액세스",

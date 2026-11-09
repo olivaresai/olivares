@@ -47,6 +47,7 @@ import {
 } from './model-choices'
 import { groupModels } from './model-catalog'
 import { useModelFavorites } from './model-favorites'
+import { applyPreferences, useModelPreferences } from './model-preferences'
 import { toolName } from './engine-tools'
 import { ToolMark } from './tool-mark'
 import type { ProfileModelDTO } from './types'
@@ -99,7 +100,11 @@ export function ModelList({
   const { t } = useTranslation('agentops')
   const { favorites, toggle } = useModelFavorites(driver)
   const [query, setQuery] = useState('')
-  const models = choices.catalog?.models ?? []
+  const { prefs } = useModelPreferences(choices.catalog?.profile_ref)
+  // What the tool lists, and what the person wants offered from it: the tool's default is
+  // named from the first, so a model hidden from the list is still the default it is.
+  const listed = choices.catalog?.models ?? []
+  const models = applyPreferences(listed, prefs)
   const groups = groupModels(
     matching(
       models.filter((m) => !isToolDefault(m)),
@@ -108,8 +113,8 @@ export function ModelList({
     favorites,
   )
   const defaultModel =
-    models.find((m) => m.id === choices.catalog?.default_model) ??
-    models.find((m) => m.is_default)
+    listed.find((m) => m.id === choices.catalog?.default_model) ??
+    listed.find((m) => m.is_default)
   const typed = query.trim()
   const offerTyped =
     typed !== '' &&

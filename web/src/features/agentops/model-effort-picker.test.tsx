@@ -27,9 +27,11 @@ vi.mock('./api', async (orig) => ({
   agentOpsApi: { profileModels: vi.fn() },
 }))
 
+import { preferenceStorageKey } from '@/features/sessions/session-pins'
 import { preferenceStorage } from '@/lib/preference-storage'
 import { agentOpsApi } from './api'
 import { ModelEffortFields } from './model-effort-picker'
+import { encodePreferences } from './model-preferences'
 import type { ProfileModelCatalogDTO, ProfileModelDTO } from './types'
 
 const model = (
@@ -276,6 +278,31 @@ describe('the model list', () => {
       }),
     ).toHaveAttribute('aria-pressed', 'false')
     expect(screen.queryByText('Favorites')).toBeNull()
+  })
+})
+
+describe("a person's own model list", () => {
+  it('leaves a hidden model out of the picker and offers one the person added', async () => {
+    const key = preferenceStorageKey(
+      'olivares.tools.model-preferences',
+      window.location.origin,
+      { kind: 'user', user_id: 'u1' } as never,
+      't1',
+    )!
+    preferenceStorage.setItem(
+      key,
+      encodePreferences(null, 'ppf_a', {
+        hidden: ['haiku-5-5'],
+        order: [],
+        custom: ['my-own-model'],
+      })!,
+    )
+    const user = userEvent.setup()
+    wrap()
+    const list = await openModels(user)
+    expect(await within(list).findByText('My Own Model')).toBeInTheDocument()
+    expect(within(list).getByText('Claude Opus 5.5')).toBeInTheDocument()
+    expect(within(list).queryByText('Claude Haiku 5.5')).toBeNull()
   })
 })
 

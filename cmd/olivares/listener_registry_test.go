@@ -65,11 +65,31 @@ func TestServeListenerCollisionAddresses(t *testing.T) {
 	}
 }
 
+// serveHealthzOn stands in for a concurrent job on the same host that runs the
+// product on addr and answers /healthz there. When another process already holds
+// addr, that process is the neighbor and nothing more is needed.
+func serveHealthzOn(t *testing.T, addr string) {
+	t.Helper()
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Logf("%s is already served by another process: %v", addr, err)
+		return
+	}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+}
+
 func TestServeListenerRegistryRefusesCollisionBeforeBinding(t *testing.T) {
+	serveHealthzOn(t, "127.0.0.1:18443")
 	for _, reuse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ordinary", true: "reuse-port"}[reuse], func(t *testing.T) {
 			dataDir := t.TempDir()
-			addr := "127.0.0.1:18443"
+			// The test owns its address: a held port no other process can bind or
+			// answer on, never the product's default that a neighbor may serve.
+			_, addr := bindAnnounceOccupy(t)
 			t.Setenv("OLIVARES_HITL_CONFIG", writeBindAnnounceHITLConfig(t, addr))
 			opts := bindAnnounceInsecureOpts(dataDir, addr, "127.0.0.1:0")
 			opts.reusePort = reuse

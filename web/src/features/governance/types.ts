@@ -250,7 +250,7 @@ export interface CreateApprovalRequest {
 /** One approval request — the APPROVAL QUEUE row. */
 export interface ApprovalDTO {
   id: string
-  /** The native provider method accepts a grant bounded to this session. */
+  /** The engine permits a session allowance for this exact action and target. */
   session_scope_allowed?: boolean
   /** The session the request belongs to (canonical id), when the engine names one. */
   session_ref?: string

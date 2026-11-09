@@ -326,7 +326,7 @@ jobs:
       - name: package the candidate for the native service journey
         timeout-minutes: 5
         run: bash scripts/package-service-candidate.sh
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         timeout-minutes: 3
         with:
           cosign-release: 'v2.6.4'
@@ -699,12 +699,12 @@ jobs:
         timeout-minutes: 55
         env:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
-        # Record sampled host resources after normal exit or TERM when the shell can run
-        # the trap and its log reaches GitHub. Shutdown-signal/143 observations on 2026-09-19
-        # did not identify their cause. These host samples are not process RSS; neither a
-        # missing report nor a low sampled peak proves or excludes OOM. SIGKILL, host loss
-        # or lost logs can prevent publication. Explicit unavailable-data paths in the
-        # witness print COULD NOT LOOK and return zero; the test command owns its verdict.
+        # Record the job's cgroup v2 figures (CPU used, memory peak, OOM events) after normal
+        # exit or TERM when the shell can run the trap and its log reaches GitHub. Shutdown-signal/143
+        # observations on 2026-09-19 did not identify their cause. The figures are the cgroup's,
+        # not per process; neither a missing report nor a low peak proves or excludes OOM.
+        # SIGKILL, host loss or lost logs can prevent publication. Explicit unavailable-data
+        # paths in the witness print COULD NOT LOOK and return zero; the test command owns its verdict.
         run: |
           set -euo pipefail
           WITNESS="$RUNNER_TEMP/resource-witness-${{ matrix.shard }}.txt"
@@ -931,7 +931,7 @@ jobs:
           pnpm --dir web exec playwright install "${deps[@]}" chromium
           echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
           echo "NODE_PATH=$PWD/web/node_modules" >> "$GITHUB_ENV"
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         timeout-minutes: 5
         with:
           cosign-release: v2.6.4

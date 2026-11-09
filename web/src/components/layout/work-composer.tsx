@@ -18,6 +18,7 @@ import {
   useState,
   useSyncExternalStore,
   type KeyboardEvent,
+  type MutableRefObject,
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -297,6 +298,9 @@ export function WorkComposer({
   useEffect(() => {
     if (inputId === COMPOSER_INPUT_ID) document.getElementById(inputId)?.focus()
   }, [inputId])
+  // The field of a composer that is replaced (below) leaves with its focus; the next
+  // one takes it only if the person was in the field, never from another control.
+  const fieldHadFocus = useRef(false)
   // Scope all local composer state at once, including an in-flight send's callbacks.
   return (
     <SessionComposer
@@ -310,6 +314,7 @@ export function WorkComposer({
       attached={attached}
       draftKey={draftKey}
       inputId={inputId}
+      fieldHadFocus={fieldHadFocus}
     />
   )
 }
@@ -319,11 +324,13 @@ function SessionComposer({
   attached,
   draftKey,
   inputId,
+  fieldHadFocus,
 }: {
   frame: ComposerFrame
   attached: ComposerAttached
   draftKey: string | null
   inputId: string
+  fieldHadFocus: MutableRefObject<boolean>
 }) {
   const { t } = useTranslation('nav')
   const sessionLaunch = {
@@ -382,6 +389,19 @@ function SessionComposer({
     turnRef.current = turn
   }, [turn])
   const fieldRef = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const field = fieldRef.current
+    if (fieldHadFocus.current && field) {
+      field.focus()
+      // The new field starts with its caret at the front; the person was at the end.
+      field.setSelectionRange(field.value.length, field.value.length)
+    }
+    fieldHadFocus.current = false
+    // React runs this before it removes the old field, so the focus is still readable.
+    return () => {
+      fieldHadFocus.current = document.activeElement === field
+    }
+  }, [fieldHadFocus])
   // The field grows with its text from 2 to 8 rows, then scrolls.
   useLayoutEffect(() => {
     const el = fieldRef.current
@@ -530,7 +550,7 @@ function SessionComposer({
     setSlashActive(0)
     if (menuKeyOf(next) !== slashDismissed) setSlashDismissed(null)
   }
-  // While a send is pending the field is disabled and the list would only be a target
+  // While a send is pending the field is locked and the list would only be a target
   // for a click that rewrites the draft under it.
   const menuOpen =
     canWrite &&
@@ -1133,7 +1153,10 @@ function SessionComposer({
             : undefined
         }
         data-testid="launcher-input"
-        disabled={(!runLive && !waitingApproval) || sending}
+        disabled={!runLive && !waitingApproval}
+        // A pending send locks the message in the field without taking focus from it: a
+        // disabled field is blurred by the browser and nothing would give focus back.
+        readOnly={sending}
         className="max-h-48 min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body-l text-text outline-none placeholder:text-text-3 disabled:cursor-not-allowed"
       />
       {/* The row wraps on a narrow screen: the buttons move below, the pickers keep their words. */}

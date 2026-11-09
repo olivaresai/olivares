@@ -419,14 +419,20 @@ export const agentOpsApi = {
       signal: opts?.signal,
     }),
   /** One changed file's current text (at most 256 KiB), or with `rev: 'HEAD'` the text
-   * git HEAD holds for it (404: no readable repository, or the file is not in HEAD). */
+   * git HEAD holds for it (404: no readable repository, or the file is not in HEAD).
+   * `turn` and `side` read its start, end, or current folder; an absent file is empty. */
   changedFile: (
     r: string,
     path: string,
-    opts?: { signal?: AbortSignal; rev?: 'HEAD' },
+    opts?: {
+      signal?: AbortSignal
+      rev?: 'HEAD'
+      turn?: number
+      side?: 'start' | 'end' | 'current'
+    },
   ) =>
     http.get<RunChangedFileDTO>(`${RUNS}/${ref(r)}/changes/file`, {
-      query: { path, rev: opts?.rev },
+      query: { path, rev: opts?.rev, turn: opts?.turn, side: opts?.side },
       signal: opts?.signal,
     }),
   /** What the session's worktree branch changed since it left the workspace's current

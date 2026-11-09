@@ -21,6 +21,13 @@ type ApprovalReview struct {
 	Text string `json:"text"`
 }
 
+// approvalReviewRecord retains the display and an engine-only allowance digest.
+// The digest is omitted from ApprovalReview and therefore from every public DTO.
+type approvalReviewRecord struct {
+	ApprovalReview
+	SessionAllowanceKey string `json:"session_allowance_key,omitempty"`
+}
+
 func normalizeApprovalReview(review *ApprovalReview, masks []redact.GeneratedMaskSpan) (*ApprovalReview, error) {
 	if review == nil {
 		if len(masks) != 0 {

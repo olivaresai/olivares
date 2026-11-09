@@ -49,6 +49,7 @@ import { ProfileRowView, useAccountRow, useDefaultRow } from './profile-row'
 import { ProfileSheet } from './profile-sheet'
 import { ProfileSignInDialog } from './profile-sign-in'
 import { ToolBox } from './tool-box'
+import { useProfileEnabled } from './use-profile-enabled'
 import { needsDefaultRow, useProfileList } from './use-profiles'
 import { toolName as nameOf } from '@/features/agentops/engine-tools'
 import { toolFacts } from './inventory'
@@ -319,9 +320,10 @@ function Tools({ epoch }: { epoch: number }) {
                     key={f.driver}
                     epoch={epoch}
                     driver={f.driver}
-                    accounts={(profiles.data?.accounts ?? []).filter(
-                      (a) => a.driver === f.driver,
-                    )}
+                    accounts={[
+                      ...(profiles.data?.accounts ?? []),
+                      ...(profiles.data?.disabled ?? []),
+                    ].filter((a) => a.driver === f.driver)}
                     taken={profiles.data?.taken}
                     named={profiles.data?.named ?? false}
                     version={f.version}
@@ -757,6 +759,7 @@ function AccountRow({
   toolName: string
 }) {
   const model = useAccountRow(account)
+  const enabled = useProfileEnabled(account)
   const { activeTenant } = useAuth()
   const [sheet, setSheet] = useState(false)
   const [signIn, setSignIn] = useState(false)
@@ -764,6 +767,7 @@ function AccountRow({
     <>
       <ProfileRowView
         model={model}
+        enabled={enabled}
         onOpen={() => setSheet(true)}
         onSignIn={() => setSignIn(true)}
       />

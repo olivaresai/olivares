@@ -506,6 +506,51 @@ describe('AI tools: one boxed list per installed tool', () => {
     )
   })
 
+  it("names an account's plan after its sign-in, only while it is signed in", async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
+      page([
+        account('ppf_b', 'claude-b', { plan: 'max' }),
+        account('ppf_e', 'claude-e', { plan: 'max' }),
+        account('ppf_f', 'claude-f'),
+      ]),
+    )
+    mount()
+    const claude = await screen.findByTestId('tool-claude')
+    expect(
+      await within(claude).findByTestId('profile-claude-e'),
+    ).toHaveTextContent('Account · signed in · Claude Max')
+    // ppf_b is signed out here: a plan the tool reported before is not shown.
+    expect(
+      await within(claude).findByTestId('profile-claude-b'),
+    ).not.toHaveTextContent('max')
+    expect(within(claude).getByTestId('profile-claude-f')).toHaveTextContent(
+      'Account · signed in',
+    )
+  })
+
+  it("names an account's plan as its vendor does, never the raw token", async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
+      page([
+        account('ppf_e', 'claude-e', { plan: 'max' }),
+        account('ppf_x', 'codex-x', { driver: 'codex', plan: 'pro' }),
+        account('ppf_y', 'codex-y', { driver: 'codex', plan: 'promax' }),
+      ]),
+    )
+    mount()
+    const claude = await screen.findByTestId('tool-claude')
+    expect(
+      await within(claude).findByTestId('profile-claude-e'),
+    ).toHaveTextContent('Account · signed in · Claude Max')
+    const codex = await screen.findByTestId('tool-codex')
+    expect(
+      await within(codex).findByTestId('profile-codex-x'),
+    ).toHaveTextContent('Account · signed in · ChatGPT Pro')
+    // A plan no table names keeps the vendor and capitalizes the tool's value.
+    expect(
+      await within(codex).findByTestId('profile-codex-y'),
+    ).toHaveTextContent('Account · signed in · ChatGPT Promax')
+  })
+
   it('tells the default login from the profile names the engine gives: the one without a name', async () => {
     // The profile without an account name is the default login, even when a named profile
     // sits on an adopted home: the shape of the account no longer decides.
@@ -624,7 +669,7 @@ describe('AI tools: one boxed list per installed tool', () => {
     expect(read.mock.calls.length).toBeLessThanOrEqual(25)
   })
 
-  it('lists active profiles only, the same set the New session dialog counts', async () => {
+  it('lists active and switched-off profiles, never a removed one', async () => {
     vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
       page([
         account('ppf_b', 'claude-b'),
@@ -634,7 +679,11 @@ describe('AI tools: one boxed list per installed tool', () => {
     )
     mount()
     expect(await screen.findByTestId('profile-claude-b')).toBeInTheDocument()
-    expect(screen.queryByTestId('profile-claude-d')).toBeNull()
+    // A switched-off profile stays on the page, so it can be switched back on.
+    const off = await screen.findByTestId('profile-claude-d')
+    expect(
+      within(off).getByRole('switch', { name: 'Turn on claude-d' }),
+    ).not.toBeChecked()
     expect(screen.queryByTestId('profile-claude-r')).toBeNull()
   })
 

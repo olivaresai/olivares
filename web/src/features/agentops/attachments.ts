@@ -37,9 +37,14 @@ export const ATTACH_TYPES = [
   ...Object.values(DOCUMENT_MEDIA_TYPES),
 ] as const
 
-/** MIME metadata can be empty or generic for an Office file on a person's OS. */
+/** An image keeps its own type; MIME metadata can be empty or generic for an Office file
+ * on a person's OS, and only then does the extension decide. */
 function attachmentMediaType(file: File): string {
-  if ((ATTACH_TYPES as readonly string[]).includes(file.type)) return file.type
+  if (
+    file.type.startsWith('image/') ||
+    (ATTACH_TYPES as readonly string[]).includes(file.type)
+  )
+    return file.type
   return (
     DOCUMENT_MEDIA_TYPES[file.name.toLowerCase().split('.').at(-1) ?? ''] ??
     file.type
@@ -89,11 +94,14 @@ export interface DraftImage {
   id?: string
 }
 
-/** Supported files in a clipboard or drop payload, in order. Other payloads
- * stay with the browser, including a pasted file path. */
+/** Images and supported documents in a clipboard or drop payload, in order. An image the
+ * engine does not take is kept, so it is said to be refused; other payloads stay with the
+ * browser, including a pasted file path. */
 export function imagesIn(data: DataTransfer | null): File[] {
-  return Array.from(data?.files ?? []).filter((f) =>
-    (ATTACH_TYPES as readonly string[]).includes(attachmentMediaType(f)),
+  return Array.from(data?.files ?? []).filter(
+    (f) =>
+      f.type.startsWith('image/') ||
+      (ATTACH_TYPES as readonly string[]).includes(attachmentMediaType(f)),
   )
 }
 

@@ -158,7 +158,11 @@
     "default": "Accesso predefinito",
     "readFailed": "Impossibile leggere i profili.",
     "truncated": "Alcuni profili non vengono mostrati.",
-    "retry": "Riprova"
+    "retry": "Riprova",
+    "turnOff": "Disattiva {{name}}",
+    "turnOn": "Attiva {{name}}",
+    "switchedOn": "{{name}} è attivo",
+    "switchedOff": "{{name}} è disattivato"
   },
   "tool": {
     "menu": "Opzioni per {{name}}",
@@ -260,5 +264,30 @@
     "accounts": "Account",
     "allAccounts": "Tutti gli account: dettagli, etichette e associazioni",
     "noAccess": "Il tuo ruolo non può leggere gli account né le chiavi API di questa organizzazione."
+  },
+  "runtime": {
+    "title": "Esecuzione",
+    "autoCompact": "Compatta automaticamente dopo",
+    "autoCompactHint": "Compatta dopo 100.000–1.000.000 di token. Lascia vuoto per usare il valore predefinito di Claude.",
+    "autoCompactPlaceholder": "es. 300000",
+    "autoCompactInvalid": "Inserisci un numero intero da 100000 a 1000000 oppure lascia vuoto.",
+    "saved": "Esecuzione salvata. Le nuove sessioni la usano."
+  },
+  "models": {
+    "title": "Modelli",
+    "note": "Solo tu vedi questo elenco. Un modello nascosto esce dai selettori; il predefinito dello strumento e un modello digitato funzionano comunque.",
+    "filter": "Filtra i modelli",
+    "disableAll": "Nascondi tutti",
+    "enableAll": "Mostra tutti",
+    "addCustom": "Aggiungi modello personalizzato",
+    "customPlaceholder": "ID modello, es. claude-opus-5-5",
+    "customInvalid": "Un ID modello non ha spazi e ha al massimo 200 caratteri.",
+    "add": "Aggiungi",
+    "fast": "Modalità veloce",
+    "up": "Sposta {{name}} su",
+    "down": "Sposta {{name}} giù",
+    "use": "Mostra {{name}}",
+    "removeCustom": "Rimuovi {{name}}",
+    "empty": "Questo strumento non segnala modelli. Aggiungi quelli che usi."
   }
 }

@@ -158,7 +158,11 @@
     "default": "Default sign-in",
     "readFailed": "The profiles could not be read.",
     "truncated": "Some profiles are not shown.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "turnOff": "Turn off {{name}}",
+    "turnOn": "Turn on {{name}}",
+    "switchedOn": "{{name}} is on",
+    "switchedOff": "{{name}} is off"
   },
   "tool": {
     "menu": "Options for {{name}}",
@@ -260,5 +264,30 @@
     "accounts": "Accounts",
     "allAccounts": "All accounts: details, labels and bindings",
     "noAccess": "Your role cannot read the accounts or API keys of this organization."
+  },
+  "runtime": {
+    "title": "Runtime",
+    "autoCompact": "Auto-compact after",
+    "autoCompactHint": "Compact after 100,000 to 1,000,000 tokens. Leave empty to use Claude's default.",
+    "autoCompactPlaceholder": "e.g. 300000",
+    "autoCompactInvalid": "Enter a whole number from 100000 to 1000000, or leave it empty.",
+    "saved": "Runtime saved. New sessions use it."
+  },
+  "models": {
+    "title": "Models",
+    "note": "Only you see this list. A hidden model leaves the pickers; the tool's default and a model you type still work.",
+    "filter": "Filter models",
+    "disableAll": "Hide all",
+    "enableAll": "Show all",
+    "addCustom": "Add custom model",
+    "customPlaceholder": "Model id, e.g. claude-opus-5-5",
+    "customInvalid": "A model id has no spaces and is at most 200 characters.",
+    "add": "Add",
+    "fast": "Fast mode",
+    "up": "Move {{name}} up",
+    "down": "Move {{name}} down",
+    "use": "Show {{name}}",
+    "removeCustom": "Remove {{name}}",
+    "empty": "This tool reports no models. Add the ones you use."
   }
 }

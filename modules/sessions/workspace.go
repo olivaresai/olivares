@@ -21,7 +21,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/core/model"
-	conversion "github.com/olivaresai/olivares/core/runtime/documents"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
@@ -566,7 +565,7 @@ func (m *Module) writeFile(ctx context.Context, tenant model.TenantID, ref, rel 
 // Binary uploads from My files request conversion. Text edits retain the
 // published raw-write behavior, including creating empty JSON or HTML files.
 func (m *Module) writeDocumentFile(ctx context.Context, tenant model.TenantID, ref, rel string, content []byte, actor, actorKind string) (writeResponse, error) {
-	if !conversion.Supports(rel) {
+	if !m.supportsDocument(rel) {
 		return m.writeWorkspaceFile(ctx, tenant, ref, rel, content, actor, actorKind, false)
 	}
 	// Resolve and authorize before giving bytes to a child.

@@ -198,6 +198,24 @@ type Queue interface {
 // itself, and a deadline never becomes a cancellation. A racing terminal decision
 // is retained either way.
 func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
+	if e.Request.SessionAllowanceKey != "" {
+		if grants, ok := queue.(interface {
+			ReuseSessionAllowance(context.Context, model.TenantID, auth.Principal, governance.ApprovalRequest, string) (string, error)
+		}); ok {
+			if e.Recheck != nil {
+				if err := e.Recheck(ctx); err != nil {
+					return Answer{Failed: Recheck}, err
+				}
+			}
+			ref, err := grants.ReuseSessionAllowance(ctx, e.Tenant, e.Principal, e.Request, e.Consumer)
+			if err != nil {
+				return Answer{Failed: Open}, err
+			}
+			if ref != "" {
+				return Answer{Outcome: Allowed, Ref: ref, Status: governance.GateStatusApproved}, nil
+			}
+		}
+	}
 	request, err := queue.Request(ctx, e.Tenant, e.Principal, e.Request)
 	if err != nil {
 		return Answer{Failed: Open}, withCause(ctx, err)

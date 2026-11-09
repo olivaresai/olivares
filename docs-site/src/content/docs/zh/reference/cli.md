@@ -159,7 +159,7 @@ push 时比较。command 名称、help description、flag、exit code 与 output
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 1009 command nodes — the root command and 1008 subcommands, of which 209 are groups that carry subcommands and 48 are hidden diagnostics — together with the 4051 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 1009 command nodes — the root command and 1008 subcommands, of which 209 are groups that carry subcommands and 48 are hidden diagnostics — together with the 4053 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -5732,6 +5732,8 @@ olivares files convert <path>
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--json` | `bool` | `false` | Print the Markdown path as JSON |
+| `--ocr-endpoint` | `string` | — | Local OCR base URL (loopback or this host) |
+| `--ocr-model` | `string` | — | Declared model alias Unlimited-OCR-2@sha256:&lt;digest&gt; (weights are not verified) |
 
 #### Command: olivares findings
 

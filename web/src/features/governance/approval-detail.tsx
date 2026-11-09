@@ -299,6 +299,13 @@ export function ApprovalDetailPanel({
                     : t('approvals.approveOnce')}
                 </Button>
               )}
+              {mayDecide &&
+              !detail?.session_scope_allowed &&
+              detail?.policy_ref ? (
+                <p className="text-caption text-text-2">
+                  {t('approvals.sessionPolicy')}
+                </p>
+              ) : null}
               {mayDecide && detail?.session_scope_allowed && (
                 <Button
                   variant="secondary"

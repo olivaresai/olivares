@@ -370,6 +370,9 @@ export interface ProviderProfileDTO {
   }[]
   /** The hosts a confined session may reach beside its provider. */
   session_egress_hosts?: string[]
+  /** Claude Code only: the token count its sessions compact at. Absent is the tool's
+   * own default. */
+  auto_compact_window?: number
   created_at?: string
   updated_at?: string
   retired_at?: string
@@ -561,6 +564,8 @@ export interface PatchProfileRequest {
   provider_record_ref?: string
   /** Omitted preserves the grant; explicit null revokes its session authority. */
   session_work_grant?: SessionWorkGrantRequest | null
+  /** Claude Code's auto-compact window in tokens (100000 to 1000000); 0 withdraws it. */
+  auto_compact_window?: number
 }
 
 /** One source→profile binding (GET /provider-source-bindings): ONE configured source,
@@ -623,9 +628,14 @@ export interface ProviderAccountDTO {
   identity: string
   identity_source: 'none' | (string & {})
   last_login_at?: string
+  /** The plan the account's tool last reported, raw (`max`, `promax`). Absent is unknown. */
+  plan?: string
   /** The windows the account's tool last reported (Claude Code and Codex): `five_hour`,
    * `seven_day`, `seven_day:<model>` or a name of the tool's own. Absent is unknown. */
   usage?: ProviderAccountUsage[]
+  /** Claude Code only: the token count its sessions compact at. Absent is the tool's
+   * own default. */
+  auto_compact_window?: number
   created_at: string
   updated_at: string
 }

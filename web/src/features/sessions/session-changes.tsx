@@ -15,7 +15,7 @@ import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { PathText } from '@/components/ui/path-text'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
-import { HeadDiff } from '@/features/shared/head-diff'
+import { CodeDiff } from '@/components/ui/code-diff'
 import { headUnavailable } from '@/features/shared/head-unavailable'
 import { OpenInEditor } from '@/features/shared/open-in-editor'
 import { RelTimeLabel } from '@/features/shared'
@@ -32,35 +32,77 @@ export function SessionChanges({ run }: { run: RunDTO }) {
   const { t } = useTranslation('sessions')
   const { activeTenant } = useAuth()
   const [open, setOpen] = useState<string | null>(null)
+  const [scope, setScope] = useState('session')
   const working = run.state === 'running' || run.state === 'idle'
   const changes = useQuery({
     queryKey: agentOpsKeys.runChanges(activeTenant, run.run_ref),
     queryFn: ({ signal }) => agentOpsApi.changes(run.run_ref, { signal }),
     refetchInterval: working ? WORKING_REFRESH_MS : false,
   })
+  const checkpoints = useQuery({
+    queryKey: agentOpsKeys.runCheckpoints(activeTenant, run.run_ref),
+    queryFn: ({ signal }) =>
+      agentOpsApi.runCheckpoints(run.run_ref, { signal }),
+    refetchInterval: working ? WORKING_REFRESH_MS : false,
+  })
+  const turns = checkpoints.data?.available ? checkpoints.data.turns : []
+  const turn =
+    scope === 'latest'
+      ? turns.at(-1)
+      : turns.find((t) => String(t.seq) === scope)
+  const baseline = scope === 'session' ? turns[0] : turn
+  const tip = scope === 'session' ? turns.at(-1) : turn
+  const scopedFiles = turn
+    ? turn.files
+    : scope === 'session' && turns.length
+      ? [
+          ...new Map(
+            turns.flatMap((t) => t.files).map((f) => [f.path, f]),
+          ).values(),
+        ]
+      : undefined
   const file = useQuery({
     queryKey: [
       ...agentOpsKeys.runChanges(activeTenant, run.run_ref),
       'file',
+      scope,
+      baseline?.seq,
+      tip?.seq,
       open,
     ],
     queryFn: ({ signal }) =>
-      agentOpsApi.changedFile(run.run_ref, open!, { signal }),
+      agentOpsApi.changedFile(run.run_ref, open!, {
+        signal,
+        ...(tip
+          ? {
+              turn: tip.seq,
+              side:
+                scope === 'session' ? ('current' as const) : ('end' as const),
+            }
+          : {}),
+      }),
     enabled: open !== null,
+    refetchInterval: working ? WORKING_REFRESH_MS : false,
   })
-  // What git HEAD holds for the open file. A 404 (no repository, a file the agent
-  // created) is an answer: the file shows without a Changes view. Any other failure is
-  // said so under the file. Nothing is asked for a binary or cut-off file, which cannot
-  // be compared, and a focus change does not ask again.
+  // Compare the selected snapshot range; older sessions without checkpoints use HEAD.
+  // Binary and cut-off files cannot be compared.
   const head = useQuery({
     queryKey: [
       ...agentOpsKeys.runChanges(activeTenant, run.run_ref),
       'file',
+      scope,
+      baseline?.seq,
+      tip?.seq,
       open,
       'head',
     ],
     queryFn: ({ signal }) =>
-      agentOpsApi.changedFile(run.run_ref, open!, { signal, rev: 'HEAD' }),
+      agentOpsApi.changedFile(run.run_ref, open!, {
+        signal,
+        ...(baseline
+          ? { turn: baseline.seq, side: 'start' as const }
+          : { rev: 'HEAD' as const }),
+      }),
     enabled:
       open !== null &&
       file.data !== undefined &&
@@ -69,8 +111,8 @@ export function SessionChanges({ run }: { run: RunDTO }) {
     refetchOnWindowFocus: false,
   })
   const data = changes.data
-  // What git HEAD holds for the open file, when it can be compared with the file: the
-  // Changes view and the editor link (which lands on the first changed line) read it.
+  const files = scopedFiles ?? data?.files ?? []
+  // The diff and editor link share the same baseline.
   const committed =
     file.data &&
     !file.data.truncated &&
@@ -97,7 +139,33 @@ export function SessionChanges({ run }: { run: RunDTO }) {
           {t('changes.hint')}
         </p>
       </div>
-      {open === null ? <TurnCheckpoints run={run} /> : null}
+      <select
+        aria-label={t('changes.scope')}
+        value={scope}
+        onChange={(event) => {
+          setScope(event.target.value)
+          setOpen(null)
+        }}
+        className="min-w-0 rounded-md border border-border bg-background p-1 text-caption"
+      >
+        <option value="session">{t('changes.session')}</option>
+        <option value="latest" disabled={!turns.length}>
+          {t('changes.latest')}
+        </option>
+        {[...turns].reverse().map((turn) => (
+          <option key={turn.seq} value={turn.seq}>
+            {t('checkpoints.turn', { n: turn.seq })}
+          </option>
+        ))}
+      </select>
+      {checkpoints.isError ? (
+        <p role="status" className="text-caption text-danger">
+          {t('changes.error')}
+        </p>
+      ) : null}
+      {open === null && scope === 'session' ? (
+        <TurnCheckpoints run={run} />
+      ) : null}
       {open !== null ? (
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-x-2">
@@ -120,25 +188,39 @@ export function SessionChanges({ run }: { run: RunDTO }) {
             </p>
           ) : file.isError ? (
             <p className="text-caption text-danger">{t('changes.error')}</p>
-          ) : file.data.binary ? (
+          ) : file.data.binary || head.data?.binary ? (
             <p className="text-caption text-muted-foreground">
-              {t('changes.binary', { size: formatBytes(file.data.size) })}
+              {tip
+                ? t('branchChanges.binary')
+                : t('changes.binary', { size: formatBytes(file.data.size) })}
             </p>
           ) : (
             <>
-              <HeadDiff
-                unavailable={headUnavailable(head.error)}
-                committed={committed}
-                current={file.data.text}
-              >
-                <pre
-                  data-testid="changes-file"
-                  className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 font-mono text-caption text-foreground"
-                >
-                  {file.data.text}
-                </pre>
-              </HeadDiff>
-              {file.data.truncated ? (
+              {committed !== undefined ? (
+                <CodeDiff
+                  original={committed}
+                  modified={file.data.text}
+                  language="text"
+                  originalLabel={baseline ? t('changes.before') : 'HEAD'}
+                  modifiedLabel={t('changes.after')}
+                  height="24rem"
+                />
+              ) : (
+                <>
+                  <pre
+                    data-testid="changes-file"
+                    className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted p-2 font-mono text-caption text-foreground"
+                  >
+                    {file.data.text}
+                  </pre>
+                  {(baseline ? head.isError : headUnavailable(head.error)) ? (
+                    <p role="status" className="text-caption text-danger">
+                      {t('changes.error')}
+                    </p>
+                  ) : null}
+                </>
+              )}
+              {file.data.truncated || head.data?.truncated ? (
                 <p className="text-caption text-muted-foreground">
                   {t('changes.fileTruncated')}
                 </p>
@@ -146,23 +228,23 @@ export function SessionChanges({ run }: { run: RunDTO }) {
             </>
           )}
         </div>
-      ) : changes.isPending ? (
+      ) : changes.isPending || checkpoints.isPending ? (
         <p className="text-caption text-muted-foreground">
           {t('changes.loading')}
         </p>
       ) : changes.isError ? (
         <p className="text-caption text-danger">{t('changes.error')}</p>
-      ) : !data!.folder ? (
+      ) : !data?.folder ? (
         <p className="text-caption text-muted-foreground">
           {t('changes.none')}
         </p>
-      ) : data!.files.length === 0 ? (
+      ) : files.length === 0 ? (
         <p className="text-caption text-muted-foreground">
           {t('changes.empty')}
         </p>
       ) : (
         <ul className="flex flex-col" data-testid="changes-list">
-          {data!.files.map((f) => (
+          {files.map((f) => (
             <li key={f.path}>
               <button
                 type="button"
@@ -174,16 +256,19 @@ export function SessionChanges({ run }: { run: RunDTO }) {
                   className="size-3.5 shrink-0 text-muted-foreground"
                 />
                 <PathText value={f.path} copy={false} className="flex-1" />
-                <RelTimeLabel
-                  ts={f.modified_at}
-                  className="shrink-0 text-caption text-muted-foreground"
-                />
+                {'modified_at' in f ? (
+                  <RelTimeLabel
+                    ts={f.modified_at}
+                    className="shrink-0 text-caption text-muted-foreground"
+                  />
+                ) : null}
               </button>
             </li>
           ))}
-          {data!.truncated ? (
+          {(turn?.truncated ??
+          (turns.some((t) => t.truncated) || data?.truncated)) ? (
             <li className="px-1.5 pt-1 text-caption text-muted-foreground">
-              {t('changes.truncated', { count: data!.files.length })}
+              {t('changes.truncated', { count: files.length })}
             </li>
           ) : null}
         </ul>

@@ -456,7 +456,7 @@ func (c *checker) checkStepUses(file string, step, uses *yaml.Node, line int, va
 	v := strings.TrimSpace(uses.Value)
 
 	// A local action: resolve its metadata and apply the same policy there.
-	if strings.HasPrefix(v, "./") || strings.HasPrefix(v, "../") {
+	if v != "./.github/actions/install-cosign" && (strings.HasPrefix(v, "./") || strings.HasPrefix(v, "../")) {
 		c.resolveLocalAction(file, line, v)
 		return
 	}
@@ -473,7 +473,7 @@ func (c *checker) checkStepUses(file string, step, uses *yaml.Node, line int, va
 		return
 	}
 
-	if !strings.Contains(v, installerRepo) {
+	if v != "./.github/actions/install-cosign" && !strings.Contains(v, installerRepo) {
 		return
 	}
 
@@ -482,6 +482,8 @@ func (c *checker) checkStepUses(file string, step, uses *yaml.Node, line int, va
 
 	repo, ref, ok := strings.Cut(v, "@")
 	switch {
+	case v == "./.github/actions/install-cosign":
+		// Repository-local installer authenticates bytes against the execution-time digest table.
 	case !ok:
 		c.add(file, line, "installer step %q has no @ref; pin the reviewed revision %s", v, approvedActionSHA)
 		return

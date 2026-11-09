@@ -113,14 +113,6 @@
     "peopleHint": "名前を入力してください。",
     "ask": "Olivaresに質問…"
   },
-  "hintBar": {
-    "move": "移動",
-    "open": "開く",
-    "approve": "承認",
-    "deny": "拒否",
-    "launcher": "ランチャー",
-    "command": "コマンド"
-  },
   "permissionWords": {
     "read": "読み取り権限",
     "write": "書き込み権限",

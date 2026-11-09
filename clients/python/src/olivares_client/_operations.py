@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "a855622fc791662fa87bd870bf01787355fcb78e030669f911bb43980592f3b3"
+SPEC_HASH = "da515d509e37d24df155cd65c9ec8c150162683d3c51ddc0cf071673aedea870"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):

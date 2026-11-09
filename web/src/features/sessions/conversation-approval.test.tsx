@@ -129,7 +129,7 @@ describe('ConversationApproval — the request, answered where it is read', () =
     const user = userEvent.setup()
     wrap(<ConversationApproval run={RUN} />)
     await user.click(
-      await screen.findByRole('button', { name: 'Approve for this session' }),
+      await screen.findByRole('button', { name: 'Allow for this session' }),
     )
     expect(api.decide).toHaveBeenCalledWith(APPROVAL.id, {
       decision: 'approve',

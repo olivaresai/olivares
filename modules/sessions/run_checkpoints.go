@@ -632,3 +632,58 @@ func placeCheckpointFile(root *os.Root, staged, rel string) error {
 	}
 	return dst.Close()
 }
+
+// readTurnFile reads a snapshot through the existing bounded blob reader. Only turn
+// numbers and sides are accepted, never a caller-supplied object id or repository.
+func (m *Module) readTurnFile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, run runDTO) {
+	seq, err := strconv.Atoi(r.URL.Query().Get("turn"))
+	side := r.URL.Query().Get("side")
+	file := r.URL.Query().Get("path")
+	if err != nil || seq < 1 || (side != "start" && side != "end" && side != "current") || !isRepoRelativePath(file) || r.URL.Query().Get("rev") != "" {
+		writeJSON(w, http.StatusBadRequest, errorBody("a positive turn, start, end or current side, and relative file path are required"))
+		return
+	}
+	ref := chi.URLParam(r, "ref")
+	dir, err := m.checkpointRunDir(mc.Tenant, ref)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorBody("turn checkpoints are unavailable"))
+		return
+	}
+	release, err := m.rt.lockRunContext(r.Context(), checkpointLockKey(mc.Tenant, ref))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	defer release()
+	turns, err := readCheckpointTurns(dir)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's turns"))
+		return
+	}
+	for _, turn := range turns {
+		if turn.Seq != seq {
+			continue
+		}
+		tree := turn.Start
+		repo := filepath.Join(dir, checkpointRepoDir)
+		if side != "start" {
+			tree = turn.End
+			if tree == "" || side == "current" {
+				tree, err = checkpointSnapshot(r.Context(), repo, run.WorkspacePath)
+			}
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's folder"))
+			return
+		}
+		text, _, binary, truncated, err := worktreeBlobAt(r.Context(), repo, tree, file, changesMaxFileSize)
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		// An absent side is empty: additions and deletions can still be compared.
+		writeJSON(w, http.StatusOK, runChangedFileDTO{Path: file, Size: int64(len(text)), Text: text, Binary: binary, Truncated: truncated})
+		return
+	}
+	writeJSON(w, http.StatusNotFound, errorBody("no such turn in this session"))
+}

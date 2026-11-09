@@ -78,6 +78,7 @@ vi.mock('@/components/layout/scope-switcher', () => ({
 vi.mock('@/components/layout/use-session-rail', () => ({
   useSessionRail: () => ({
     sessionCounts: { needsYou: 0, live: 0, running: 0, open: 0 },
+    groups: [],
   }),
 }))
 vi.mock('@/features/governance/use-pending-approvals', async (actual) => ({
@@ -172,6 +173,8 @@ describe('the first screen', () => {
       '/sessions',
       '/workspace',
       '/agent-tools',
+      // Settings, and one level under it the administrative places.
+      '/settings',
       '/now',
       '/permissions?tab=approvals',
       // Usage leads with the accounts and today, before Business's FinOps.
@@ -180,7 +183,6 @@ describe('the first screen', () => {
       '/identity',
       '/security',
       '/operations',
-      '/settings',
     ])
     // A tool, a key or a local model, a session, its approval, stop and resume, history.
     const offered = offeredFromFirstScreen()

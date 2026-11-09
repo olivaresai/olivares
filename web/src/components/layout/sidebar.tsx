@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ONE LEFT NAVIGATION (0.5, its 0.7 places): the places of features/navigation/places.ts,
-// Sessions, Files and Tools, then More with the other places below it, no group headers, and
-// Settings at the foot. From 761 px it is a 228 px column
+// THE ONE LEFT NAVIGATION (0.5, its 0.7 places): the places of features/navigation/places.ts.
+// Sessions leads with the person's own sessions under it, then Files and Tools; Settings is at
+// the foot with the administrative places one level under it (its More toggle), no group
+// headers. From 761 px it is a 228 px column
 // that folds to its 64 px icons and opens again; below that the same body opens as a drawer
 // from the top bar's menu button, with the same items in the same order. There is no other
 // navigation surface: no places in the top bar, no All areas sheet, no phone bar.
@@ -24,6 +25,10 @@ import {
 } from '@/features/governance/use-pending-approvals'
 import { useViewAccess } from '@/features/navigation/authorization'
 import {
+  SessionStatusMark,
+  useStatusWord,
+} from '@/features/sessions/session-status'
+import {
   FIRST_PLACES,
   currentPlace,
   settingsPlace,
@@ -35,7 +40,8 @@ import { cn } from '@/lib/utils'
 import { usePreferencesStore } from '@/stores/preferences'
 import { BrandMark } from './brand'
 import { ScopeSwitcher } from './scope-switcher'
-import { useSessionRail } from './use-session-rail'
+import { RAIL_ROWS_PER_GROUP, type RailRow } from './session-rail-model'
+import { useSessionRail, type SessionRailData } from './use-session-rail'
 
 const ITEM_CLASS = cn(
   'relative flex min-h-[34px] min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-body font-medium text-text-2 outline-none',
@@ -61,9 +67,11 @@ interface PlaceCount {
  * shows that has not ended, the status bar's "N sessions open" from the same read, so the two
  * never say two numbers; amber when one of them needs the person. Rules: the requests
  * waiting for a decision. Zero draws nothing. */
-function usePlaceCounts(): Partial<Record<PlaceId, PlaceCount>> {
+function usePlaceCounts(
+  sessionCounts: SessionRailData['sessionCounts'],
+): Partial<Record<PlaceId, PlaceCount>> {
   const rules = pendingCount(usePendingApprovals().query.data)
-  const { needsYou, open } = useSessionRail().sessionCounts
+  const { needsYou, open } = sessionCounts
   return {
     sessions: { count: open, needsYou: needsYou > 0 },
     ...(rules ? { rules: { count: rules, needsYou: true } } : {}),
@@ -123,6 +131,43 @@ function PlaceLink({
   )
 }
 
+/** The person's own sessions: the ones that need them first, then working, then earlier ones.
+ * They are the rail's rows, so this list, the palette and the status bar agree. A handoff is
+ * Now's, and a snoozed or archived session stays out until the person brings it back. */
+const SIDEBAR_SESSION_GROUPS = new Set(['needsYou', 'working', 'earlier'])
+
+function sidebarSessions(groups: SessionRailData['groups']): RailRow[] {
+  return groups
+    .filter((g) => SIDEBAR_SESSION_GROUPS.has(g.id))
+    .flatMap((g) => g.rows)
+    .filter((row) => row.kind === 'session')
+    .slice(0, RAIL_ROWS_PER_GROUP)
+}
+
+function SessionLink({
+  row,
+  onNavigate,
+}: {
+  row: RailRow
+  onNavigate?: () => void
+}) {
+  const { t } = useTranslation('nav')
+  const word = useStatusWord()
+  const title = row.title ?? `${t('shell.rail.session')} ${row.reference}`
+  return (
+    <Link
+      to={row.to as never}
+      search={row.search as never}
+      onClick={onNavigate}
+      className={cn(ITEM_CLASS, 'min-h-8 py-1 font-normal')}
+    >
+      <SessionStatusMark status={row.status} decorative />
+      <span className="min-w-0 flex-1 truncate">{title}</span>
+      <span className="sr-only">, {word(row.status)}</span>
+    </Link>
+  )
+}
+
 /** The navigation itself: brand, scope, the places and Settings. The column and the drawer
  * both render it, so the two cannot disagree about which places exist or which is current. */
 function SidebarBody({
@@ -137,7 +182,9 @@ function SidebarBody({
 }) {
   const { t } = useTranslation(['nav', 'common'])
   const { listed } = useViewAccess()
-  const counts = usePlaceCounts()
+  const rail = useSessionRail()
+  const counts = usePlaceCounts(rail.sessionCounts)
+  const sessions = folded ? [] : sidebarSessions(rail.groups)
   const showAll = usePreferencesStore((s) => s.navAll)
   const setShowAll = usePreferencesStore((s) => s.setNavAll)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
@@ -146,7 +193,7 @@ function SidebarBody({
   const first = places.filter((p) => FIRST_PLACES.has(p.id))
   const more = places.filter((p) => !FIRST_PLACES.has(p.id))
   // Folded away never means out of reach of what needs the person: the place they are on
-  // and a place with something waiting stay, below More.
+  // and a place with something waiting stay, under Settings.
   const moreShown = more.filter(
     (p) => showAll || p.id === here || counts[p.id]?.needsYou,
   )
@@ -161,6 +208,15 @@ function SidebarBody({
             folded={folded}
             onNavigate={onNavigate}
           />
+          {place.id === 'sessions' && sessions.length > 0 ? (
+            <ul className="mt-0.5 flex flex-col gap-0.5 pl-3">
+              {sessions.map((row) => (
+                <li key={row.key}>
+                  <SessionLink row={row} onNavigate={onNavigate} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -197,37 +253,42 @@ function SidebarBody({
 
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
         {first.length > 0 ? list(first) : null}
-        {more.length > 0 ? (
-          <button
-            type="button"
-            aria-expanded={showAll}
-            title={folded ? t('nav:shell.more') : undefined}
-            onClick={() => setShowAll(!showAll)}
-            className={cn(
-              ITEM_CLASS,
-              'w-full',
-              folded && 'justify-center px-0',
-            )}
-          >
-            <ChevronDown aria-hidden className={cn(showAll && 'rotate-180')} />
-            <span
-              className={cn('min-w-0 flex-1 text-left', folded && 'sr-only')}
-            >
-              {t('nav:shell.more')}
-            </span>
-          </button>
-        ) : null}
-        {/* The places under More, below it: indented in the column, as they belong to it. */}
-        {moreShown.length > 0 ? list(moreShown, cn(!folded && 'pl-3')) : null}
       </div>
 
-      <div className="shrink-0 border-t border-line p-2">
-        <PlaceLink
-          place={settingsPlace()}
-          current={here === 'settings'}
-          folded={folded}
-          onNavigate={onNavigate}
-        />
+      {/* Settings, and one level under it the administrative places: its More toggle opens
+          them, indented. Closed, the place the person is on and a place with something
+          waiting stay shown. */}
+      <div className="flex max-h-[60%] shrink-0 flex-col gap-0.5 overflow-y-auto border-t border-line p-2">
+        <div
+          className={cn('flex gap-0.5', folded ? 'flex-col' : 'items-center')}
+        >
+          <div className="min-w-0 flex-1">
+            <PlaceLink
+              place={settingsPlace()}
+              current={here === 'settings'}
+              folded={folded}
+              onNavigate={onNavigate}
+            />
+          </div>
+          {more.length > 0 ? (
+            <button
+              type="button"
+              aria-expanded={showAll}
+              aria-label={t('nav:shell.more')}
+              title={t('nav:shell.more')}
+              onClick={() => setShowAll(!showAll)}
+              className={
+                folded ? cn(ITEM_CLASS, 'justify-center px-0') : ICON_BUTTON
+              }
+            >
+              <ChevronDown
+                aria-hidden
+                className={cn('size-4', showAll && 'rotate-180')}
+              />
+            </button>
+          ) : null}
+        </div>
+        {moreShown.length > 0 ? list(moreShown, cn(!folded && 'pl-3')) : null}
       </div>
     </div>
   )

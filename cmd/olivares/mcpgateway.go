@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
+	a2a "github.com/olivaresai/olivares/connectors/a2a"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -120,16 +121,24 @@ func buildAgentGatewayServer(eng *engine, log *slog.Logger) (*http.Server, error
 			log.Info("agent-gateway: A2A push-notification receiver mounted", "audience", cfg.A2APush.Audience)
 		}
 	}
+	// The Agent Card path answers 404 unless the inbound server mounts and serves
+	// it, even when the MCP Resource Server holds the catch-all "/".
+	agentCard := http.NotFoundHandler()
 	if cfg.A2AInbound != nil {
 		inbound, err := buildA2AInboundServer(eng, cfg.A2AInbound)
 		if err != nil {
 			log.Error("agent-gateway: A2A inbound server PROVISIONED BUT NOT MOUNTED (deny-closed); fix a2a_inbound routing/trust configuration", "err", err)
 		} else {
 			mux.Handle("/a2a", inbound)
+			agentCard = inbound
 			mounted = true
 			log.Info("agent-gateway: authenticated A2A SendMessage endpoint mounted", "routes", len(cfg.A2AInbound.Routes))
+			if strings.TrimSpace(cfg.A2AInbound.PublicURL) == "" {
+				log.Warn("agent-gateway: no A2A Agent Card is published; set a2a_inbound.public_url so A2A clients can discover this endpoint")
+			}
 		}
 	}
+	mux.Handle(a2a.WellKnownCardPath, agentCard)
 	// Any provisioned (non-nil) block reaches the constructor: an empty/misspelled
 	// tenants map must hit the deny-closed PROVISIONED-BUT-NOT-MOUNTED error below,
 	// never a silent skip.

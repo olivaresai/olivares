@@ -9,7 +9,6 @@ import { chordHint } from '@/lib/keybindings/model'
 import { PALETTE_KEYS } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { topBarLabel } from './document-title'
-import { HintBar } from './hint-bar'
 import { NotificationBell } from './notification-bell'
 import { SidePanelToggle } from './side-panel'
 import { TopbarSearchSlot } from './topbar-search'
@@ -52,8 +51,6 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       >
         {label}
       </p>
-
-      <HintBar />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         {/* A place whose list is a query (the Ledger) puts its own field here. */}

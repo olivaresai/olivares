@@ -127,7 +127,13 @@
       "js-yaml": "4.3.2",
       "undici": "8.12.3",
       "onnxruntime-node": "-",
-      "sharp": "-"
+      "sharp": "-",
+      "minimatch@>=7.0.0 <11.0.1": "^11.0.1",
+      "@bundled-es-modules/glob>glob": "^14.0.4",
+      "@bundled-es-modules/deepmerge>deepmerge": "-"
+    },
+    "patchedDependencies": {
+      "@bundled-es-modules/deepmerge@4.3.2": "patches/@bundled-es-modules__deepmerge@4.3.2.patch"
     }
   }
 }

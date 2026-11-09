@@ -462,6 +462,11 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 		// so inject it explicitly here, where it actually reaches `claude`. It is Claude's
 		// own variable and is not invented for another provider's CLI.
 		env = append(env, EnvVar{Name: envDisableAutoupdater, Value: "1"})
+		if p.profileAutoCompactWindow > 0 {
+			// The profile's declared compaction point: Claude's own variable, set by the
+			// launch alone (a caller or a gate naming it is refused as a provider variable).
+			env = append(env, EnvVar{Name: envAutoCompactWindow, Value: strconv.Itoa(p.profileAutoCompactWindow)})
+		}
 		if d.cred.bound.Kind != "" {
 			env = append(env, claudeBoundProviderEnv...)
 		}

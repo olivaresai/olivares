@@ -624,6 +624,11 @@
     }
   },
   "changes": {
+    "scope": "Changes scope",
+    "session": "Since session started",
+    "latest": "Latest turn",
+    "before": "Before",
+    "after": "After",
     "title": "Changes in {{folder}}",
     "titleNoFolder": "Changes",
     "hint": "Files the agent changed in its folder since this session started.",

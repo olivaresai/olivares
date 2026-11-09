@@ -8,6 +8,7 @@
  * `console_entries`), in registration order. One row at most names a view. */
 export const CONSOLE_ENTRIES: Readonly<Record<string, readonly string[]>> = {
   documents: [],
+  ocr: [],
   accessmap: ['accessMap', 'reach'],
   capabilities: ['capabilities'],
   adoption: ['adoption'],

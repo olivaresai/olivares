@@ -547,6 +547,8 @@ func sessionsPatchProviderProfileSchema() map[string]any {
 		"session_programs", sessionsProfileProgramsSchema(),
 		"session_registries", sessionsProfileRegistriesSchema(),
 		"session_egress_hosts", sessionsProfileEgressHostsSchema(),
+		"auto_compact_window", sessionsClosureNullable(oas.Obj("type", "integer", "minimum", 0, "maximum", maxAutoCompactWindow,
+			"description", "Claude Code only: the token count its sessions compact at (CLAUDE_CODE_AUTO_COMPACT_WINDOW), 100000 to 1000000, or 0 to withdraw the declaration and use the tool's default. Re-read on every launch; a live session keeps the value it started with. Another tool's profile refuses a value with 422. Null or omission keeps it.")),
 	))
 }
 

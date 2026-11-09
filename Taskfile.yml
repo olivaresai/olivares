@@ -2418,6 +2418,14 @@ tasks:
     cmds:
       - bash scripts/test-ci-sibling-legs.sh
 
+  lint:ci-resource-witness:selftest:
+    desc: >-
+      Prove that the CI resource witness leaves nothing running beside the job it watches and
+      reports the job's own cgroup v2 figures (CPU used, memory peak, OOM events). On 2026-11-08
+      its /proc-walking loop held about 4.8 cores of the CI host while the battery ran.
+    cmds:
+      - bash scripts/test-ci-resource-witness.sh
+
   lint:ci-secrets-cap:
     desc: >-
       Prove that running out of time in the CI secrets sweep is a RED WITH A REASON and not the

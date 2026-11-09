@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE ONE NAVIGATION: the left sidebar's places, in order (Sessions, Files and Tools, then
-// the places under More, then Settings at the foot). Each place holds registry views; the sidebar links its
+// Settings at the foot with the places under More one level under it). Each place holds registry views; the sidebar links its
 // lead, and the row above a page moves between the pages of its place: at most five, the rest
 // under the row's More menu. A place is offered
 // when the principal may open any of its pages, through the same projection the route guard
@@ -174,7 +174,8 @@ export const PLACES: readonly Place[] = [
 ]
 
 /** What the navigation shows a new person: Sessions, Files and Tools. Every other place is
- * one click away under More and in the palette; none is removed or turned off by this. */
+ * one click away under Settings (its More button) and in the palette; none is removed or
+ * turned off by this. */
 export const FIRST_PLACES: ReadonlySet<PlaceId> = new Set<PlaceId>([
   'sessions',
   'files',

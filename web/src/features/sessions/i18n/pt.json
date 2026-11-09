@@ -642,6 +642,11 @@
     }
   },
   "changes": {
+    "scope": "Escopo das alterações",
+    "session": "Desde o início da sessão",
+    "latest": "Último turno",
+    "before": "Antes",
+    "after": "Depois",
     "title": "Alterações em {{folder}}",
     "titleNoFolder": "Alterações",
     "hint": "Ficheiros que o agente alterou na sua pasta desde que esta sessão começou.",

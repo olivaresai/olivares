@@ -31,7 +31,9 @@ import { useAuth } from '@/lib/auth/context'
 import { formatDateTime } from '@/lib/format'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { KeySelect } from './key-select'
+import { ProfileModels } from './profile-models'
 import { isProfileName } from './profile-names'
+import { ProfileRuntime } from './profile-runtime'
 import {
   StateChip,
   useProfileDetail,
@@ -289,6 +291,14 @@ export function ProfileSheet({
           ) : null}
           {editable && can('sessions:profile:write') ? (
             <SignsInWith account={account} />
+          ) : null}
+          {editable &&
+          account.driver === 'claude' &&
+          can('sessions:profile:write') ? (
+            <ProfileRuntime account={account} />
+          ) : null}
+          {editable && can('sessions:profile:read') ? (
+            <ProfileModels account={account} />
           ) : null}
           <div className="flex flex-col gap-1">
             <p className="text-body text-text">{detail}</p>

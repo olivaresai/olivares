@@ -3516,6 +3516,7 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	b.set.sessionDependencies.LimitResets = b.agentTools.LimitResetsAt
 	// An account shows the 5-hour and weekly usage its own tool reports.
 	b.set.sessionDependencies.AccountUsage = b.agentTools.AccountUsage
+	b.set.sessionDependencies.AccountPlan = b.agentTools.AccountPlan
 	b.set.sessionDependencies.ProviderApprovalPrincipal = func(c context.Context, tenant model.TenantID, runRef string) (auth.Principal, string, error) {
 		p, scope, err := b.sessionHooks.ResolveRun(c, tenant, runRef)
 		return p, scope.SessionRef, err

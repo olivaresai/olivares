@@ -25,11 +25,11 @@ describe('ToolMark', () => {
   it("draws Gemini CLI's vendor mark, not its letters", () => {
     render(<ToolMark driver="gemini-cli" labelled />)
     const mark = screen.getByRole('img', { name: 'Gemini CLI' })
-    expect(mark).toHaveAttribute('data-vendor', 'googlegemini')
+    expect(mark).toHaveAttribute('data-vendor', 'gemini')
     expect(mark).not.toHaveTextContent('GC')
     expect(mark.querySelector('svg path')).toHaveAttribute(
       'd',
-      expect.stringMatching(/^M11\.04 19\.32/),
+      expect.stringMatching(/^M20\.616 10\.835/),
     )
   })
 })

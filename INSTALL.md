@@ -7,7 +7,7 @@ short version, and the deployment tutorials (Compose, Kubernetes/Helm, air-gappe
 [`docs-site/`](docs-site/).
 
 > **Beta.** Releases are cut from this repository. The binaries,
-> images and packages below describe the **next release (Olivares <!-- release -->`0.9`<!-- /release -->), not yet published**;
+> images and packages below describe the **next release (Olivares <!-- release -->`0.10`<!-- /release -->), not yet published**;
 > [building from source](#from-source) remains supported. Everything is self-hosted: the engine
 > makes no mandatory outbound calls at boot and verifying a licence never calls us. The one
 > command that reaches us is `olivares upgrade`, which fetches from the update channel unless
@@ -138,7 +138,7 @@ removes it afterwards; pass `--install-cosign` to keep that verified copy next t
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
 ```
 
-To pin a release: <!-- release -->`curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 0.9`<!-- /release -->.
+To pin a release: <!-- release -->`curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 0.10`<!-- /release -->.
 
 Use `--bindir "$HOME/.local/bin"` to select an absolute install directory. Verification
 cannot be bypassed and privilege escalation is always an explicit operator step. The
@@ -150,7 +150,7 @@ present:
 <!-- release -->
 ```sh
 # systemd user service on Linux, LaunchAgent on macOS; review before starting
-ver=0.9   # the release tag
+ver=0.10   # the release tag
 sh "olivares-install-$ver.sh" --version "$ver" --user
 olivares doctor --mode user
 
@@ -195,7 +195,7 @@ acts happen, use the signed GitHub Release assets and the direct commands below;
 a package-manager source based on this proposal.
 
 On ARM servers, download the `arm64` asset instead of `amd64`. All assets are on the <!-- release -->
-[release page](https://github.com/olivaresai/olivares/releases/tag/0.9)<!-- /release -->.
+[release page](https://github.com/olivaresai/olivares/releases/tag/0.10)<!-- /release -->.
 
 Each package installs the binary to `/usr/bin/olivares`, an example env file, and a
 no-login `olivares` service user plus the data dir `/var/lib/olivares`. `.deb` and
@@ -215,17 +215,17 @@ elsewhere) and fish (`/usr/share/fish/vendor_completions.d/olivares.fish`). Bash
 <!-- release -->
 ```sh
 # Debian / Ubuntu
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.9/olivares_0.9_linux_amd64.deb
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.10/olivares_0.10_linux_amd64.deb
 # Verify the downloaded package before installing (see Verifying a release).
 sudo dpkg -i olivares_*_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.9/olivares_0.9_linux_amd64.rpm
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.10/olivares_0.10_linux_amd64.rpm
 # Verify the downloaded package before installing (see Verifying a release).
 sudo rpm -i olivares_*_linux_amd64.rpm
 
 # Alpine
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.9/olivares_0.9_linux_amd64.apk
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.10/olivares_0.10_linux_amd64.apk
 # Verify the downloaded package before installing (see Verifying a release).
 sudo apk add --allow-untrusted olivares_*_linux_amd64.apk
 
@@ -282,7 +282,7 @@ it by hand if you really mean to.
 
 <!-- release -->
 ```sh
-ver=0.9; os=linux; arch=amd64
+ver=0.10; os=linux; arch=amd64
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver}_${os}_${arch}.tar.gz
 curl -fsSLO $base/checksums.txt
@@ -309,7 +309,7 @@ persistent data volume:
 <!-- release -->
 ```sh
 set -e
-img=docker.io/olivaresai/olivares:0.9
+img=docker.io/olivaresai/olivares:0.10
 docker run --rm --entrypoint cat "$img" /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
 apparmor=
 if [ -r /sys/kernel/security/apparmor/features/namespaces/mask ] &&
@@ -362,7 +362,7 @@ host's network namespace (Linux):
 <!-- release -->
 ```sh
 docker run --rm --network host --tmpfs /data:uid=65532,gid=65532 \
-  docker.io/olivaresai/olivares:0.9 \
+  docker.io/olivaresai/olivares:0.10 \
   serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 --data-dir /data
 ```
 <!-- /release -->
@@ -381,16 +381,16 @@ is the **fallback**: the release pipeline builds and signs on ghcr.io and then c
 content to Docker Hub **by digest** (`cosign copy`), so both coordinates resolve to identical
 layers, signatures and attestations. Docker Hub applies a rate limit to **anonymous** pulls;
 ghcr.io does not rate-limit anonymous pulls of public images — `docker login` on Docker Hub, or
-switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: <!-- release -->`:0.9`<!-- /release -->
+switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: <!-- release -->`:0.10`<!-- /release -->
 (pin a release), `:latest`, the Business FIPS and STIG variants
 (STIG-profiled UBI base) — see [SCP-09](docs/SCP-09-FIPS-STIG.md). The base and `:latest` tags
 are multi-arch (amd64/arm64); Business FIPS/STIG images are amd64-only. **For production, pin by digest**
 (`docker.io/olivaresai/olivares@sha256:…`); the mutable tags above are for evaluation only. Verify
-the image: <!-- release -->`cosign verify docker.io/olivaresai/olivares:0.9 --certificate-identity-regexp
+the image: <!-- release -->`cosign verify docker.io/olivaresai/olivares:0.10 --certificate-identity-regexp
 '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$'
 --certificate-oidc-issuer
 https://token.actions.githubusercontent.com`<!-- /release --> (the same verification works identically against the <!-- release -->
-`ghcr.io/olivaresai/olivares:0.9`<!-- /release --> fallback — same digest, signatures and attestations).
+`ghcr.io/olivaresai/olivares:0.10`<!-- /release --> fallback — same digest, signatures and attestations).
 
 ### Docker Compose
 
@@ -473,7 +473,7 @@ and its packaging files come from the checkout, never from a branch:
 (
 set -eu
 cd "$(mktemp -d)"
-ver=0.9
+ver=0.10
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/checksums.txt
 curl -fsSLO $base/checksums.txt.sig
@@ -588,7 +588,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.
 
 <!-- release -->
 ```sh
-ver=0.9; arch=arm64   # or amd64 on Intel
+ver=0.10; arch=arm64   # or amd64 on Intel
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver}_darwin_${arch}.tar.gz
 # ...verify (see Verifying a release), then:
@@ -726,7 +726,7 @@ olivares uninstall --plan --data-dir /var/lib/olivares
 olivares uninstall --preserve --data-dir /var/lib/olivares
 olivares uninstall --purge --data-dir /var/lib/olivares --yes
 # Same contract through the verified installer:
-sh olivares-install-0.9.sh --uninstall --plan --data-dir /var/lib/olivares
+sh olivares-install-0.10.sh --uninstall --plan --data-dir /var/lib/olivares
 ```
 <!-- /release -->
 

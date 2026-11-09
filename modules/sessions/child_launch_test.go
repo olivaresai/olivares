@@ -95,6 +95,45 @@ fs required=false handles=0 truncate=false
 isolation  waitdelay 7s
 bound [] []
 `},
+		{name: "claude own login, profile auto-compact window", p: func() CreateRunParams {
+			p := grants(CreateRunParams{ProviderHome: home(providerDriverClaude, AuthSourceAccountHome)})
+			p.profileAutoCompactWindow = 300000
+			return p
+		}(), want: `
+program /opt/probe/claude
+arg "--input-format"
+arg "stream-json"
+arg "--output-format"
+arg "stream-json"
+arg "--verbose"
+arg "--print"
+arg "--replay-user-messages"
+arg "--permission-mode"
+arg "default"
+arg "--model"
+arg "probe-model"
+arg "--tools"
+arg "default"
+dir /srv/work
+env ANTHROPIC_BASE_URL=https://gateway.probe/v1
+env MY_SECRET=secret-value
+env OLIVARES_WORK_TOKEN=work-token
+env OLIVARES_WORK_SESSION_ID=ses_probe
+env OLIVARES_WORK_RUN_REF=run_probe
+env OLIVARES_COMMUNICATION_TOKEN=comm-token
+env HOME=/homes/p/user
+env CLAUDE_CONFIG_DIR=/homes/p/config
+env DISABLE_AUTOUPDATER=1
+env CLAUDE_CODE_AUTO_COMPACT_WINDOW=300000
+env OLIVARES_HOOK_PEP_URL=http://127.0.0.1:7/pep
+env OLIVARES_HOOK_PEP_TOKEN=pep-token
+allow [MY_FLAG]
+net host
+fs rw=[/srv/work,/homes/p/config,/homes/p/user] ro=[] protect=[/srv/olivares]
+fs required=false handles=0 truncate=false
+isolation  waitdelay 7s
+bound [] []
+`},
 		{name: "claude resume, historical bearer", p: grants(CreateRunParams{ProviderHome: home(providerDriverClaude, "")}), cred: Credential{Token: "cred-token"}, resumeID: "claude-session-1", want: `
 program /opt/probe/claude
 arg "--input-format"

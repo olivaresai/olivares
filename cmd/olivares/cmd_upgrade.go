@@ -187,7 +187,7 @@ var applianceRollbackUnit = "/usr/lib/systemd/system/olivares-appliance-rollback
 // startUnit starts a unit and waits for its job, as systemctl start does for a oneshot unit; the tool's own
 // messages go to standard error.
 var startUnit = func(ctx context.Context, unit string) error {
-	cmd := exec.CommandContext(ctx, "systemctl", "start", unit)
+	cmd := exec.CommandContext(ctx, "systemctl", "start", unit) // #nosec G204 -- fixed executable; sole production caller supplies the built-in rollback unit basename, never user input.
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 	return cmd.Run()
 }

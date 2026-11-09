@@ -75,7 +75,7 @@ describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
     api.decide.mockReturnValue(new Promise(() => {}))
     openPanel({ ...toolApproval, session_scope_allowed: true })
     await user.click(
-      await screen.findByRole('button', { name: 'Approve for this session' }),
+      await screen.findByRole('button', { name: 'Allow for this session' }),
     )
     expect(api.decide).toHaveBeenCalledWith(toolApproval.id, {
       decision: 'approve',
@@ -88,7 +88,7 @@ describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
     openPanel(toolApproval)
     await screen.findByRole('button', { name: 'Approve once' })
     expect(
-      screen.queryByRole('button', { name: 'Approve for this session' }),
+      screen.queryByRole('button', { name: 'Allow for this session' }),
     ).toBeNull()
   })
 

@@ -795,6 +795,10 @@ func (d *Decider) decide(ctx context.Context, in claude.HookDecisionInput, princ
 		disp = bashPathScan(rt.policy, in, "" /*root intentionally empty: unresolved traversal asks*/, disp)
 	}
 
+	// An authored or invariant review requirement cannot become a standing
+	// session grant merely because the launch preset also asks for review.
+	disp.perRequestReview = disp.decision == claude.DecisionAsk
+
 	// The person's launch preset can only restrict the tenant disposition. It is
 	// bound to the engine's credential, never supplied by the hook payload.
 	if authErr == nil && principal.SessionIdentity != "" {
@@ -1520,10 +1524,11 @@ func projectHookScopedRequest(p auth.Principal, tenant model.TenantID, in claude
 
 // hookDisposition is the policy verdict before HITL/PDP refinement.
 type hookDisposition struct {
-	decision string // allow | ask | deny
-	reason   string
-	rewrite  map[string]any
-	block    bool
+	perRequestReview bool
+	decision         string // allow | ask | deny
+	reason           string
+	rewrite          map[string]any
+	block            bool
 	// class is the deny/ask PROVENANCE: ClassPolicy for an AUTHORED business rule
 	// (shadowable in observe), ClassInvariant for a deny-closed fallback (unknown/malformed
 	// rule, empty default, unresolved path, Bash tokenization ambiguity). Its zero value is

@@ -606,6 +606,11 @@
     }
   },
   "changes": {
+    "scope": "変更の範囲",
+    "session": "セッション開始以降",
+    "latest": "最新のターン",
+    "before": "変更前",
+    "after": "変更後",
     "title": "{{folder}} の変更",
     "titleNoFolder": "変更",
     "hint": "このセッションの開始以降にエージェントがフォルダー内で変更したファイル。",
