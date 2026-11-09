@@ -7,11 +7,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -61,6 +64,7 @@ type githubReleaseMetadata struct {
 }
 
 type githubReleaseAsset struct {
+	ID     int64  `json:"id"`
 	Name   string `json:"name"`
 	Size   int64  `json:"size"`
 	Digest string `json:"digest"`
@@ -325,8 +329,59 @@ func (p *ReleaseArchive) FetchV2(ctx context.Context, plan *PlanV2, w io.Writer)
 	if err := plan.validate(); err != nil {
 		return FetchedObjectObserved{}, err
 	}
-	expected := plan.Selection.FetchedObject
-	return p.fetch.confine(plan.Selection.Source.Redirects, plan.Selection.Source.AllowedOrigins).exactSizeHash(ctx, plan.Selection.Source.Package.URL, expected.SHA256, expected.Size, expected.MaxSize, w)
+	expected, src := plan.Selection.FetchedObject, plan.Selection.Source
+	fetch := p.fetch.confine(src.Redirects, src.AllowedOrigins)
+	sent := &countingWriter{Writer: w}
+	got, err := fetch.exactSizeHash(ctx, src.Package.URL, expected.SHA256, expected.Size, expected.MaxSize, sent)
+	if err == nil || sent.n > 0 || KindOf(err) != KindTransport || ctx.Err() != nil {
+		return got, err
+	}
+	// github.com's download host stays down (after the backoff) or refuses the file
+	// before a byte arrives: the release API serves the same asset. The size and the
+	// SHA-256 the approved plan binds are checked on those bytes exactly as above.
+	viaAPI, apiErr := p.fetchFromReleaseAPI(ctx, fetch, plan, w)
+	if apiErr != nil {
+		return FetchedObjectObserved{}, fmt.Errorf("%w; release API asset: %v", err, apiErr)
+	}
+	return viaAPI, nil
+}
+
+// countingWriter counts the bytes written through it, so a fallback runs only when
+// the first source delivered nothing to the destination.
+type countingWriter struct {
+	io.Writer
+	n int64
+}
+
+func (c *countingWriter) Write(b []byte) (int, error) {
+	n, err := c.Writer.Write(b)
+	c.n += int64(n)
+	return n, err
+}
+
+// fetchFromReleaseAPI downloads the plan's package from the release-API asset of the
+// same tag (api.github.com/repos/<repo>/releases/assets/<id>, Accept:
+// application/octet-stream). The API origin and its redirect to the asset host are
+// already in the plan's approved origins.
+func (p *ReleaseArchive) fetchFromReleaseAPI(ctx context.Context, fetch fetcher, plan *PlanV2, w io.Writer) (FetchedObjectObserved, error) {
+	sel := plan.Selection
+	endpoint := "https://api.github.com/repos/" + releaseRepository(p.driver) + "/releases/"
+	tag := releaseTagPrefix(p.driver) + sel.Version
+	meta, _, err := p.metadata(ctx, endpoint+"tags/"+tag)
+	if err != nil {
+		return FetchedObjectObserved{}, err
+	}
+	if meta.Tag != tag {
+		return FetchedObjectObserved{}, refuse(KindPlanChanged, "official release tag changed while resolving")
+	}
+	name := path.Base(sel.Source.Package.URL)
+	for _, asset := range meta.Assets {
+		if asset.Name == name && asset.ID > 0 {
+			fetch.accept = "application/octet-stream"
+			return fetch.exactSizeHash(ctx, endpoint+"assets/"+strconv.FormatInt(asset.ID, 10), sel.FetchedObject.SHA256, sel.FetchedObject.Size, sel.FetchedObject.MaxSize, w)
+		}
+	}
+	return FetchedObjectObserved{}, refuse(KindManifestInvalid, "official release metadata lists no asset %s", name)
 }
 func (p *ReleaseArchive) PlaceV2(ctx context.Context, plan *PlanV2, root *os.Root, staging, fetched string) (*ObservedPayloadInventory, error) {
 	if err := plan.validate(); err != nil {

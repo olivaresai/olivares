@@ -399,8 +399,18 @@ jobs:
           baseline="$(jq -r '.tag_name // empty' "$proof/baseline.json")"
           if [[ -n "$baseline" ]]; then
             base="https://github.com/olivaresai/olivares/releases/download/$baseline"
+            # github.com's release-download front answered 504 for hours on 2026-11-08 and 2026-11-09 while the
+            # release API served the same asset. Only the source changes: the cosign verification and the
+            # sha256 check below still decide what is trusted.
+            fetch_asset() {
+              local api="https://api.github.com/repos/olivaresai/olivares/releases/tags/$baseline" url
+              curl -fSL --retry 3 --max-time 90 "$base/$1" -o "$proof/$1" && return
+              echo "pr-ci: $base/$1 failed; fetching the same asset through $api" >&2
+              url="$(curl -fsSL --retry 3 --max-time 90 "$api" | jq -er --arg name "$1" '.assets[] | select(.name == $name) | .url')" &&
+                curl -fSL --retry 3 --max-time 90 -H 'Accept: application/octet-stream' "$url" -o "$proof/$1"
+            }
             for asset in checksums.txt checksums.txt.sig checksums.txt.pem; do
-              curl -fSL --retry 2 --max-time 90 "$base/$asset" -o "$proof/$asset"
+              fetch_asset "$asset"
             done
             "$OLIVARES_COSIGN_BIN" verify-blob --certificate "$proof/checksums.txt.pem" \
               --signature "$proof/checksums.txt.sig" \
@@ -447,7 +457,7 @@ jobs:
               continue
             fi
             old="olivares_${baseline}_linux_amd64.$fmt"
-            curl -fSL --retry 2 --max-time 90 "$base/$old" -o "$proof/$old"
+            fetch_asset "$old"
             awk -v name="$old" '$2 == name {print; count++} END {if (count != 1) exit 1}' \
               "$proof/checksums.txt" > "$proof/old-checksum.txt"
             (cd "$proof" && sha256sum --check old-checksum.txt)

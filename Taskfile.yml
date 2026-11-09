@@ -2813,6 +2813,9 @@ tasks:
       - bash scripts/test-pre-push.sh
       - bash scripts/test-kept-checks.sh
       - python3 scripts/test-cosign-install-isolation.py
+      - python3 scripts/test-ensure-nfpm.py
+      - python3 scripts/test-compat-release-fallback.py
+      - python3 scripts/check-release-download-fallback.py
       - python3 -m unittest discover -s scripts/userspace -p test_package_setup.py -v
       - python3 -m unittest discover -s scripts/userspace -p test_browser_setup.py -v
       - python3 -m unittest discover -s scripts/userspace -p test_worktree_setup.py -v
