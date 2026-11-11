@@ -41,6 +41,7 @@ const ops = vi.hoisted(() => ({
   getProfile: vi.fn(),
   activity: vi.fn(),
   changes: vi.fn(),
+  gitStatus: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -719,14 +720,7 @@ describe('SessionContextPane — what the tool is doing comes first', () => {
       within(screen.getByRole('radiogroup', { name: 'Panels' }))
         .getAllByRole('radio')
         .map((r) => r.textContent),
-    ).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-      'Activity',
-    ])
+    ).toEqual(['Changes', 'Files', 'Preview', 'Details', 'Activity'])
     // And the arrow keys follow that order.
     changes.focus()
     await user.keyboard('{ArrowRight}')
@@ -803,6 +797,96 @@ describe('the session panes paint names, never raw identifiers', () => {
     expect(
       within(publish).getByRole('button', { name: 'Publish' }),
     ).toBeInTheDocument()
+  })
+
+  it('keeps only Ship below the diff once the Git panel pushes the folder’s HEAD', async () => {
+    vi.spyOn(gitpublishApi, 'targets').mockResolvedValue({
+      items: [
+        {
+          id: 'tg-1',
+          workspace_id: 'ws-authz',
+          push_prefix: 'olivares/',
+          merge_bases: ['main'],
+          version: 1,
+        },
+      ],
+    })
+    vi.spyOn(gitpublishApi, 'intents').mockResolvedValue({ items: [] })
+    ops.gitStatus.mockResolvedValue({
+      branch: 'main',
+      branches: ['main'],
+      files: [],
+      truncated: false,
+      writable: true,
+      head: { commit: 'a'.repeat(40), tree: 'b'.repeat(40) },
+    })
+    renderIntel(
+      <SessionContextPane
+        panel="changes"
+        resolution={resolution({
+          runs: [
+            run({
+              authz_workspace_id: 'ws-authz',
+              workspace_path: '/repo',
+              state: 'stopped',
+            }),
+          ],
+        })}
+      />,
+    )
+    // The Git panel pushes beside Commit; the block under the diff keeps the one-act Ship.
+    expect(
+      await screen.findByRole('button', { name: 'Push' }),
+    ).toBeInTheDocument()
+    const publish = await screen.findByTestId('session-publish')
+    expect(
+      within(publish).getByRole('button', { name: 'Ship' }),
+    ).toBeInTheDocument()
+    expect(
+      within(publish).queryByRole('button', { name: 'Publish' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps Publish below the diff while the folder’s HEAD has another shape', async () => {
+    vi.spyOn(gitpublishApi, 'targets').mockResolvedValue({
+      items: [
+        {
+          id: 'tg-1',
+          workspace_id: 'ws-authz',
+          push_prefix: 'olivares/',
+          merge_bases: ['main'],
+          version: 1,
+        },
+      ],
+    })
+    ops.gitStatus.mockResolvedValue({
+      branch: 'main',
+      branches: ['main'],
+      files: [],
+      truncated: false,
+      writable: true,
+      head: { commit: 'HEAD', tree: 'b'.repeat(40) },
+    })
+    renderIntel(
+      <SessionContextPane
+        panel="changes"
+        resolution={resolution({
+          runs: [
+            run({
+              authz_workspace_id: 'ws-authz',
+              workspace_path: '/repo',
+              state: 'stopped',
+            }),
+          ],
+        })}
+      />,
+    )
+    expect(await screen.findByLabelText('Branch')).toHaveValue('main')
+    const publish = await screen.findByTestId('session-publish')
+    expect(
+      within(publish).getByRole('button', { name: 'Publish' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Push' })).toBeNull()
   })
 
   it('leaves no full reference painted in the identifiers block', async () => {

@@ -2,29 +2,28 @@
   "doors": {
     "catalog": {
       "title": "Comunicazioni",
-      "description": "I canali del workspace selezionato che puoi leggere ora, gli avvisi diretti inviati tramite essi e la tua inbox. Il motore decide ogni lettura e ogni azione."
+      "description": "Messaggi tra persone e sessioni, e i canali che li portano."
     },
     "inbox": {
       "title": "Inbox delle comunicazioni",
-      "description": "I messaggi indirizzati a te nel workspace selezionato: aprili e conferma ciascuno."
+      "description": "Messaggi inviati a te: apri ciascuno e conferma la ricezione."
     },
     "new": {
       "title": "Nuovo canale",
-      "description": "Crea un canale e scegli chi può usarlo fin dall'inizio. Nessuno ottiene l'accesso per implicazione, e la ricevuta non è un elenco duraturo di chi potrà leggerlo in seguito."
+      "description": "Crea un canale e scegli chi può usarlo."
     },
     "administration": {
       "title": "Amministrazione dei canali",
-      "description": "I canali che puoi amministrare nel workspace selezionato: configurazione e storico delle concessioni. Ogni modifica si applica solo alla versione che hai letto. Amministrare un canale non richiede né conferisce il diritto di leggerne il contenuto."
+      "description": "Gestisci i canali e i loro accessi; questo non ti permette mai di leggerne i messaggi."
     },
     "handoffs": {
       "title": "Passaggi di consegne",
-      "description": "Offerte di lavoro indirizzate a te nel workspace selezionato. L'elenco non mostra il contenuto delle offerte; aprirne una ne legge il contesto, e il motore decide ogni accettazione o rifiuto."
+      "description": "Lavoro che altri ti offrono di prendere in carico: leggilo, poi accettalo o rifiutalo."
     }
   },
   "tabs": {
     "channels": "Canali",
     "inbox": "Inbox",
-    "create": "Nuovo canale",
     "administration": "Amministrazione",
     "handoffs": "Passaggi di consegne"
   },

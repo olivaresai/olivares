@@ -348,6 +348,8 @@
     "installModel": "Installa un modello",
     "addProvider": "Aggiungi un provider",
     "sourceFailed": "Impossibile leggere {{source}}. Le altre fonti restano visibili.",
+    "providerFailed": "{{source}} non ha elencato i suoi modelli: usa <0>Testa la connessione</0> in Provider.",
+    "providerFailedAlone": "{{source}} non ha elencato i suoi modelli.",
     "sources": {
       "tools": "Gli elenchi di modelli degli strumenti",
       "ollama": "Ollama",

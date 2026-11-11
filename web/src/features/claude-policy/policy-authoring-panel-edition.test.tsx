@@ -7,7 +7,7 @@
 // These cells pin that boundary on the panel itself.
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
@@ -16,6 +16,7 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  info: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
@@ -40,7 +41,8 @@ vi.mock('@/features/claude-policy/api', async (importOriginal) => {
 import { PolicyAuthoringPanel } from './policy-authoring-panel'
 import './i18n'
 
-const BUSINESS = 'Editing custom policies, roles and grants requires Business.'
+const BUSINESS =
+  'Editing custom policies, roles and grants requires Olivares AI Business.'
 const PENDING = /Backend pending/i
 
 function wrap(ui: ReactNode) {
@@ -133,5 +135,102 @@ describe('Community fleet policy routes', () => {
 
     expect(await screen.findByText(PENDING)).toBeInTheDocument()
     expect(screen.queryByText(BUSINESS)).not.toBeInTheDocument()
+  })
+})
+
+// AN ANSWER THAT NAMES THE EDITION is said by the one edition line, naming it whole; the
+// sentence above stays for a 501 that names none.
+describe('a fleet policy route refused by edition', () => {
+  it('a 501 business_required on publish shows the edition line', async () => {
+    api.publish.mockRejectedValue(
+      new ApiError(
+        501,
+        'business_required',
+        'Fleet-wide managed settings require Business.',
+      ),
+    )
+    wrap(panel())
+
+    await userEvent.click(screen.getByRole('button', { name: /^Publish$/i }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: /^Publish$/i }),
+    )
+
+    // The panel is wider than the publish route it refused: the line names neither.
+    expect(
+      await screen.findByText(/This is part of Olivares AI Business\./),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Managed policy is part of/)).toBeNull()
+    expect(screen.queryByText(BUSINESS)).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(
+      /business_required|\b501\b|claude-policy/,
+    )
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('a 403 edition_required on versions shows the edition line, never «not authorized»', async () => {
+    api.listVersions.mockRejectedValue(
+      new ApiError(
+        403,
+        'edition_required',
+        'Managed policy files is part of Olivares AI Engineer.',
+        undefined,
+        { edition: 'engineer', capability: 'claude-policy' },
+      ),
+    )
+    wrap(panel())
+
+    await userEvent.click(screen.getByRole('tab', { name: /Versions/i }))
+
+    expect(
+      await screen.findByText(
+        /Managed policy is part of Olivares AI Engineer\./,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Not authorized')).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(
+      /edition_required|\b403\b|claude-policy/,
+    )
+  })
+})
+
+// A DRY RUN THE ENGINE REFUSES BY EDITION is the calm edition line, never «Something went
+// wrong» in red; any other failure keeps that title and the engine's sentence.
+describe('a dry run that fails', () => {
+  it('refused by edition: the edition line, calm', async () => {
+    api.dryRun.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', undefined, {
+        edition: 'engineer',
+        capability: 'claude-policy',
+      }),
+    )
+    wrap(panel())
+
+    await userEvent.click(screen.getByRole('button', { name: /^Dry-run$/i }))
+
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent(
+      'Managed policy is part of Olivares AI Engineer.',
+    )
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('any other failure keeps its title and the engine’s sentence', async () => {
+    api.dryRun.mockRejectedValue(
+      new ApiError(400, 'invalid', 'document is not valid JSON'),
+    )
+    wrap(panel())
+
+    await userEvent.click(screen.getByRole('button', { name: /^Dry-run$/i }))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringMatching(/something went wrong/i),
+        { description: 'document is not valid JSON' },
+      ),
+    )
+    expect(toast.info).not.toHaveBeenCalled()
   })
 })

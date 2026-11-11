@@ -1,9 +1,26 @@
 {
   "edition": {
     "viewPolicy": "Richtlinie anzeigen",
-    "editingRequiresBusiness": "Das Bearbeiten eigener Richtlinien, Rollen und Berechtigungen erfordert Business.",
+    "editingRequiresBusiness": "Das Bearbeiten eigener Richtlinien, Rollen und Berechtigungen erfordert Olivares AI Business.",
     "disablePolicy": "Richtlinie deaktivieren",
-    "disablePolicyDescription": "Die verfasste Richtlinie wird nicht mehr angewendet. Ihr Verlauf und andere durchgesetzte Richtlinien bleiben erhalten."
+    "disablePolicyDescription": "Die verfasste Richtlinie wird nicht mehr angewendet. Ihr Verlauf und andere durchgesetzte Richtlinien bleiben erhalten.",
+    "note": {
+      "line": "{{capability}} ist Teil von {{edition}}. Fügen Sie unter <0>Einstellungen > Edition</0> eine Lizenz hinzu oder besuchen Sie <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "Dies ist Teil von {{edition}}. Fügen Sie unter <0>Einstellungen > Edition</0> eine Lizenz hinzu oder besuchen Sie <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} ist Teil von {{edition}}. Wenden Sie sich an einen Administrator.",
+      "lineUnnamedAsk": "Dies ist Teil von {{edition}}. Wenden Sie sich an einen Administrator.",
+      "readsBelow": "Was bereits gespeichert ist, bleibt lesbar und exportierbar.",
+      "tag": "Teil von {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skills",
+      "sso": "Single Sign-on",
+      "approvalTiers": "Das Ändern der Risikostufe oder der Anzahl der Genehmigungen einer Aktion",
+      "evals": "Bewertungen",
+      "eventing": "Webhooks",
+      "notify": "Benachrichtigungen",
+      "claude-policy": "Verwaltete Richtlinie"
+    }
   },
   "errors": {
     "generic": "Etwas ist schiefgelaufen"
@@ -101,25 +118,18 @@
     "noTargetReason": "Erfordert eine Organisation, in der es ausgeführt wird.",
     "noTargetHelp": "Wählen Sie eine Organisation und versuchen Sie es erneut.",
     "goTo": "Wechseln zu",
-    "recentSessions": "Letzte Sitzungen",
+    "recentSessions": "Sitzungen",
     "settingsGroup": "Einstellungen",
     "scope": "in {{name}}",
     "footerMove": "bewegen",
     "footerOpen": "öffnen",
+    "footerClose": "schließen",
     "footerCommands": "nur Befehle",
     "objectActions": "Für {{name}}",
     "footerPeople": "Personen",
     "footerSessions": "Sitzungen",
     "peopleHint": "Geben Sie einen Namen ein.",
     "ask": "Olivares fragen …"
-  },
-  "hintBar": {
-    "move": "bewegen",
-    "open": "öffnen",
-    "approve": "genehmigen",
-    "deny": "ablehnen",
-    "launcher": "Starter",
-    "command": "Befehle"
   },
   "permissionWords": {
     "read": "Lesezugriff",
@@ -218,6 +228,7 @@
   "notifications": {
     "title": "Letzte Aktivität",
     "empty": "Keine aktuelle Aktivität.",
+    "auditOnly": "Die letzte Aktivität wird Personen angezeigt, die das Audit-Ledger lesen dürfen.",
     "viewAll": "Alles im Audit-Ledger anzeigen",
     "events": {
       "auditCheckpoint": "Audit-Prüfpunkt erstellt",
@@ -275,6 +286,8 @@
       "policyUpdated_you": "Sie haben eine Richtlinie aktualisiert",
       "policyDeleted_you": "Sie haben eine Richtlinie gelöscht"
     },
+    "unread": "Ungelesen",
+    "markAllRead": "Alle als gelesen markieren",
     "actors": {
       "you": "Sie",
       "member": "Ein Mitglied",
@@ -302,6 +315,15 @@
     "showHelp": "Diese Hilfe anzeigen"
   },
   "keys": {
+    "refused": {
+      "unknownRow": "Für diesen Befehl lassen sich keine Tasten ändern.",
+      "notAChord": "Drücken Sie eine Taste, allein oder mit {{mod}}, Alt oder Shift.",
+      "needsModifier": "Halten Sie {{mod}} oder Alt dazu gedrückt: Hier könnte eine einzelne Taste beim Tippen auslösen oder über eine Anfrage entscheiden.",
+      "needsAltOrShift": "Halten Sie Alt oder {{mod}} und Shift dazu gedrückt: {{keys}} drückt man auch beim Tippen, und hier würde es über eine Anfrage entscheiden.",
+      "taken": "{{keys}} führt bereits {{command}} aus. Wählen Sie andere Tasten oder ändern Sie zuerst diesen Befehl.",
+      "leader": "{{keys}} gefolgt von einem Buchstaben öffnet eine Seite unter „Wechseln zu“. Wählen Sie andere Tasten.",
+      "tooLarge": "Ihre gespeicherten Einstellungen sind voll. Setzen Sie eine geänderte Taste zurück oder entfernen Sie ein hinzugefügtes Skript und versuchen Sie es erneut."
+    },
     "group": {
       "general": "Allgemein",
       "launcher": "Sitzung starten",
@@ -323,15 +345,19 @@
       "launcher": {
         "focus": "Zum Starter springen",
         "start": "Sitzung starten",
-        "startBackground": "Starten und hier bleiben"
+        "startBackground": "Starten und hier bleiben",
+        "stash": "Entwurf beiseitelegen oder zurückholen"
       },
       "surface": {
         "openBeside": "Daneben öffnen",
         "closeBeside": "Sitzung daneben schließen",
         "focusBeside": "Fokus zwischen Sitzungen wechseln",
+        "nextSession": "Nächste Sitzung öffnen",
+        "previousSession": "Vorherige Sitzung öffnen",
         "nextPane": "Nächster Bereich",
         "previousPane": "Vorheriger Bereich",
         "approve": "Die Anfrage im Gespräch einmal genehmigen",
+        "cite": "Die markierten Wörter im Eingabefeld zitieren",
         "terminal": "Terminal",
         "changes": "Änderungen",
         "preview": "Vorschau",
@@ -372,6 +398,20 @@
       },
       "ask": {
         "open": "Olivares fragen"
+      },
+      "shell.sidebar": "Seitenleiste umschalten",
+      "shell.panel": "Seitenpanel umschalten",
+      "terminal": {
+        "new": "Neues Terminal",
+        "close": "Terminal schließen",
+        "previous": "Vorheriges Terminal",
+        "next": "Nächstes Terminal",
+        "search": "Im Terminal suchen",
+        "links": "Link auf dem Bildschirm öffnen",
+        "copy": "Auswahl kopieren",
+        "selectAll": "Gesamte Ausgabe auswählen",
+        "scrollTop": "Zum Anfang scrollen",
+        "scrollBottom": "Zum Ende scrollen"
       }
     },
     "when": {
@@ -379,10 +419,13 @@
       "outsideList": "außerhalb einer Liste",
       "launcherFocused": "im Starterfeld",
       "workSurface": "auf dem Sitzungsbildschirm",
+      "sourceDiff": "im Quellvergleich",
       "sessionHistory": "wenn eine vorherige Sitzung verfügbar ist",
       "paletteRecent": "in den Palettenergebnissen bei leerer Suche",
       "approvalQueue": "in der Genehmigungsliste",
-      "accessMap": "auf der Zugriffskarte"
+      "accessMap": "auf der Zugriffskarte",
+      "terminalFocused": "in einem Terminal",
+      "replySelection": "wenn in einer Antwort Wörter markiert sind"
     },
     "precedence": "Teilen sich zwei Zeilen dieselben Tasten, gewinnt die letzte zutreffende.",
     "problems_one": "{{count}} Tastenkürzel konnte nicht gelesen werden und löst nicht aus: {{commands}}",
@@ -438,6 +481,7 @@
     "copy": {
       "message": "Nachricht kopieren",
       "code": "Code kopieren",
+      "detail": "Details kopieren",
       "copied": "Kopiert",
       "failed": "Kopieren nicht möglich. Markieren Sie den Text und kopieren Sie ihn.",
       "value": "{{value}} kopieren"

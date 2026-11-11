@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The accounts and API keys on Tools: each part under its own read tier. A reader of one
-// sees that part and asks the engine for nothing of the other. A profile or binding
-// reader with no account to open them through gets their own list, as their doors did.
+// The accounts on AI tools and the API keys on Providers: each part under its own read
+// tier. A reader of one sees that part and asks the engine for nothing of the other. A
+// profile or binding reader with no account to open them through gets their own list,
+// as their doors did.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -25,6 +26,7 @@ import type { ProviderAccountDTO } from '@/features/agentops/types'
 import { modelsApi } from '@/features/models/api'
 import { useModulesStore } from '@/stores/modules'
 import { providersApi } from '@/features/providers/api'
+import { ProvidersPage } from '@/features/providers/providers-page'
 import { AccountsAndKeys } from './accounts-and-keys'
 
 vi.mock('@tanstack/react-router', async () =>
@@ -57,6 +59,15 @@ function mount(folded = false) {
   )
 }
 
+function mountProviders() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={qc}>
+      <ProvidersPage />
+    </QueryClientProvider>,
+  )
+}
+
 beforeEach(() => {
   vi.restoreAllMocks()
   vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
@@ -77,7 +88,7 @@ beforeEach(() => {
   })
 })
 
-describe('accounts and API keys on Tools', () => {
+describe('accounts on AI tools', () => {
   it('an account-only reader gets the accounts and no key request', async () => {
     auth.perms = new Set(['sessions:account:read'])
     mount()
@@ -89,9 +100,19 @@ describe('accounts and API keys on Tools', () => {
     expect(providersApi.list).not.toHaveBeenCalled()
   })
 
-  it('a key-only reader gets the API keys and no account request', async () => {
-    auth.perms = new Set(['sessions:provider:read'])
+  it('leaves the API keys to Providers: an account and key reader gets the accounts and no key request', async () => {
+    auth.perms = new Set(['sessions:account:read', 'sessions:provider:read'])
     mount()
+    expect(
+      await screen.findByRole('heading', { name: 'Accounts' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'API keys' })).toBeNull()
+    expect(providersApi.list).not.toHaveBeenCalled()
+  })
+
+  it('a key-only reader gets the API keys on Providers and no account request', async () => {
+    auth.perms = new Set(['sessions:provider:read'])
+    mountProviders()
     expect(
       await screen.findByRole('heading', { name: 'API keys' }),
     ).toBeInTheDocument()
@@ -107,7 +128,11 @@ describe('accounts and API keys on Tools', () => {
     const summary = screen.getByText(
       'All accounts: details, labels and bindings',
     )
-    expect(screen.queryByRole('heading', { name: 'Accounts' })).toBeNull()
+    // The section is titled; its list is neither shown nor read until opened.
+    expect(
+      screen.getByRole('heading', { name: 'Accounts' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/^Tool accounts in this organization/)).toBeNull()
     expect(agentOpsApi.listAccounts).not.toHaveBeenCalled()
     await userEvent.setup().click(summary)
     expect(
@@ -121,21 +146,21 @@ describe('accounts and API keys on Tools', () => {
     ).toBeInTheDocument()
   })
 
-  // The list used to be a page of its own and reached the fold. On Tools it shares the
-  // screen with the API keys: one account row must not push them a screen down.
+  // The list used to be a page of its own and reached the fold. On AI tools it shares
+  // the screen with the tools: one account row must not push them a screen down.
   it.each([
     ['empty', []],
     ['with one account', [workClaude]],
   ])(
-    'the account list (%s) takes its own height beside the API keys, not the screen',
+    'the account list (%s) takes its own height, not the screen',
     async (_, items) => {
-      auth.perms = new Set(['sessions:account:read', 'sessions:provider:read'])
+      auth.perms = new Set(['sessions:account:read'])
       vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
         items,
         has_more: false,
       })
       const { container } = mount()
-      await screen.findByRole('heading', { name: 'API keys' })
+      await screen.findByRole('heading', { name: 'Accounts' })
       await (items.length
         ? screen.findByText('work-claude')
         : screen.findByText('No provider accounts', { exact: false }))
@@ -217,7 +242,7 @@ describe('accounts and API keys on Tools', () => {
     auth.perms = new Set(['sessions:run:read'])
     mount()
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Your role cannot read the accounts or API keys of this organization.',
+      'Your role cannot read the accounts of this organization.',
     )
     expect(screen.queryByRole('heading')).toBeNull()
     expect(agentOpsApi.listAccounts).not.toHaveBeenCalled()
@@ -227,13 +252,13 @@ describe('accounts and API keys on Tools', () => {
   })
 })
 
-describe('provider key references on AI tools', () => {
+describe('provider key references on Providers', () => {
   it('a key-reference reader finds them here, at their anchor', async () => {
     auth.perms = new Set(['sessions:provider:read', 'models:keys:read'])
     const keys = vi
       .spyOn(modelsApi, 'keys')
       .mockResolvedValue({ items: [], has_more: false })
-    mount()
+    mountProviders()
     const heading = await screen.findByRole('heading', {
       name: 'Provider key references',
     })
@@ -244,8 +269,8 @@ describe('provider key references on AI tools', () => {
   it('a reader without key-reference read gets no part and no request', async () => {
     auth.perms = new Set(['sessions:provider:read'])
     const keys = vi.spyOn(modelsApi, 'keys')
-    mount()
-    await screen.findByRole('heading', { name: 'Accounts and API keys' })
+    mountProviders()
+    await screen.findByRole('heading', { name: 'API keys' })
     expect(
       screen.queryByRole('heading', { name: 'Provider key references' }),
     ).not.toBeInTheDocument()
@@ -257,11 +282,70 @@ describe('provider key references on AI tools', () => {
     useModulesStore.setState({ off: new Set(['models']) })
     const keys = vi.spyOn(modelsApi, 'keys')
     try {
-      mount()
-      await screen.findByRole('heading', { name: 'Accounts and API keys' })
+      mountProviders()
+      await screen.findByRole('heading', { name: 'API keys' })
       expect(
         screen.queryByRole('heading', { name: 'Provider key references' }),
       ).not.toBeInTheDocument()
+      expect(keys).not.toHaveBeenCalled()
+    } finally {
+      useModulesStore.setState({ off: new Set<string>() })
+    }
+  })
+})
+
+// The references were on AI tools under the account tier; Providers needs the key tier.
+// Nobody who read them there loses them: a reader who cannot open Providers keeps them
+// on AI tools, and only there.
+describe('provider key references for a reader who cannot open Providers', () => {
+  it('stay on AI tools, at their anchor', async () => {
+    auth.perms = new Set(['sessions:account:read', 'models:keys:read'])
+    const keys = vi
+      .spyOn(modelsApi, 'keys')
+      .mockResolvedValue({ items: [], has_more: false })
+    mount()
+    const heading = await screen.findByRole('heading', {
+      name: 'Provider key references',
+    })
+    expect(heading.closest('#provider-key-references')).not.toBeNull()
+    expect(keys).toHaveBeenCalled()
+  })
+
+  it('are not shown twice to a reader who can open Providers: one line leads there, at their anchor', async () => {
+    auth.perms = new Set([
+      'sessions:account:read',
+      'sessions:provider:read',
+      'models:keys:read',
+    ])
+    const keys = vi.spyOn(modelsApi, 'keys')
+    mount()
+    await screen.findByRole('heading', { name: 'Accounts' })
+    expect(
+      screen.queryByRole('heading', { name: 'Provider key references' }),
+    ).not.toBeInTheDocument()
+    expect(keys).not.toHaveBeenCalled()
+    const line = screen.getByText(/API keys and their references are on/)
+    expect(line.closest('#provider-key-references')).not.toBeNull()
+    expect(
+      within(line).getByRole('link', { name: 'Providers' }),
+    ).toHaveAttribute('href', '/providers')
+  })
+
+  it('with the models module off: no references, no request, and the line names only the keys', async () => {
+    useModulesStore.setState({ off: new Set(['models']) })
+    const keys = vi.spyOn(modelsApi, 'keys')
+    try {
+      auth.perms = new Set(['sessions:account:read', 'models:keys:read'])
+      const { unmount } = mount()
+      await screen.findByRole('heading', { name: 'Accounts' })
+      expect(
+        screen.queryByRole('heading', { name: 'Provider key references' }),
+      ).not.toBeInTheDocument()
+      unmount()
+      auth.perms = new Set(['sessions:account:read', 'sessions:provider:read'])
+      mount()
+      expect(await screen.findByText(/^API keys are on/)).toBeInTheDocument()
+      expect(screen.queryByText(/their references/)).toBeNull()
       expect(keys).not.toHaveBeenCalled()
     } finally {
       useModulesStore.setState({ off: new Set<string>() })

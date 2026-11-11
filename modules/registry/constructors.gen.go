@@ -51,6 +51,8 @@ func newDefault(namespace string, built map[string]api.Module) (api.Module, erro
 	switch namespace {
 	case "documents":
 		return documents.New(), nil
+	case "ocr":
+		return documents.NewOCR(), nil
 	case "accessmap":
 		return accessmap.New(), nil
 	case "capabilities":

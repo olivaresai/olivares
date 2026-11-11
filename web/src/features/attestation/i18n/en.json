@@ -35,7 +35,7 @@
     "sumsAbsent": "no dependency sums recorded",
     "vcsAvailable": "VCS settings stamped by the Go toolchain",
     "vcsUnavailable": "No VCS stamp",
-    "selfHashHint": "The self-SHA256 is a stream hash of the running executable, computed once at first read. Compare it OFFLINE against a future signed checksums.txt — the browser never verifies signatures, and a hash alone proves identity, not provenance.",
+    "selfHashHint": "The self-SHA256 is a hash of the running executable, computed once at first read: it names these exact bytes and does not prove where they came from. To check a release, use Check it yourself below; if you installed from the archive it checks, sha256sum of the olivares file inside that archive gives this same value.",
     "published": "Published",
     "notPublished": "Not published",
     "verifierAvailable": "Native verifier compiled in (core/secure/modelsign)",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "Declared."
     }
+  },
+  "check": {
+    "title": "Check it yourself",
+    "description": "The same check from a terminal, without the console.",
+    "download": "From the <release>{{version}} release page</release>, download checksums.txt, checksums.txt.sig, checksums.txt.pem and the archive or package you installed. Then run this in their folder:",
+    "provenance": "With the archive, download multiple.intoto.jsonl from the <release>{{version}} release page</release>, then run this in their folder:",
+    "passes": "If it prints “Verified OK” and then OK beside each file, the files you downloaded are the ones the Olivares AI release workflow signed for {{version}}.",
+    "notRelease": "This build is not a signed release, so there is no release signature to check it against.",
+    "business": "Olivares AI Business is checked with the instructions of the Business channel."
   },
   "status": {
     "declared": "Declared",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "Release artifacts",
     "description": "What ships with a release and how each artifact's trust is established. Keyless (Fulcio/Rekor) and key-based (air-gap) signing are both first-class — neither is canonical.",
-    "identityNote": "Keyless signing identity (declared): OIDC issuer {{issuer}} · cosign certificate identity {{regexp}}",
+    "identityNote": "Keyless signing identity (declared): OIDC issuer {{issuer}} · cosign certificate identity <identity />",
     "columns": {
       "artifact": "Artifact",
       "producedBy": "Produced by",

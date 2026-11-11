@@ -22,6 +22,9 @@
     "name": "Nome",
     "kind": "Tipo",
     "key": "Chave",
+    "usedBy": "Usada por",
+    "usedByUnread": "Não foi possível ler que perfis usam cada chave.",
+    "usedByPartial": "Alguns perfis não foram lidos: uma chave pode ser usada por mais perfis do que os mostrados.",
     "state": "Estado",
     "connection": "Ligação",
     "actions": "Ações"

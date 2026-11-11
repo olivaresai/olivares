@@ -10,3 +10,9 @@ description: 使用 MarkItDown 在本地转换为 Markdown；保留原始文件�
 `olivares files convert report.pdf` 输出 `report.pdf.md` 的路径；`--json` 返回 `{"path":"..."}`。退出码：0 表示成功，1 表示转换失败，2 表示参数无效。已有的 Markdown 文件不会被替换。
 
 转换器不能访问网络、插件或提供商凭据。它仅通过 stdin 接收文档字节，需要 Linux Landlock ABI 3 或更新版本。限制为输入和输出各 32 MiB、总运行时间 30 秒、CPU 时间 25 秒、虚拟内存 768 MiB。附件仍受 3.75 MiB 的限制。服务器 ISO 和 Docker 镜像包含使用哈希锁定的依赖项，转换期间不会安装软件包。
+
+## Scanned pages and OCR
+
+OCR 是可选功能，默认关闭。在设置 > 模块中启用 Scanned documents (OCR)，并在 `OLIVARES_SOURCES_CONFIG` 中配置 `document_ocr`。仅无文本层的页面会发送到本地端点。关闭时无文本层的 PDF 转换失败并显示错误 `this page has no text layer; OCR is off (Settings > Modules)`。启用后图片以 Markdown 形式传递。模型权重必须预先部署并通过 SHA-256 固定；会话启动时不会下载。
+
+[Configuration and endpoint privacy rules](/reference/modules/documents/#scanned-pages-and-ocr).

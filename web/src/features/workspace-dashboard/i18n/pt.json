@@ -18,6 +18,8 @@
   "noAgentsHint": "Os agentes aparecem aqui à medida que são detetados neste espaço de trabalho.",
   "noGroups": "Ainda não há grupos de agentes neste espaço de trabalho.",
   "noGroupsHint": "Os grupos de agentes aparecem aqui depois de definidos para este espaço de trabalho.",
+  "agentsFailed": "Não foi possível ler os agentes deste espaço de trabalho.",
+  "groupsFailed": "Não foi possível ler os grupos de agentes deste espaço de trabalho.",
   "viewAll": "Ver tudo",
   "defaultBadge": "Predefinido",
   "created": "Criado",
@@ -62,5 +64,25 @@
     "statusFailed": "Não foi possível verificar se esta pasta está disponível por SFTP."
   },
   "showMore": "Mostrar mais",
-  "agentsCut": "Nem todos os agentes são mostrados."
+  "agentsCut": "Nem todos os agentes são mostrados.",
+  "files": {
+    "title": "Espaço de trabalho",
+    "folders": "Pastas",
+    "overview": "Visão geral",
+    "backToFiles": "Ficheiros",
+    "addFolder": "Adicionar pasta",
+    "emptyTitle": "Ainda não há pastas",
+    "emptyDescription": "Adicione uma pasta e as sessões trabalham dentro dela, respeitando os seus limites.",
+    "noAccessTitle": "Não pode abrir esta pasta",
+    "noAccessDescription": "Foi removida ou a sua função não a inclui. Peça acesso a um administrador.",
+    "showFolders": "Ver as minhas pastas",
+    "loading": "A ler as pastas…",
+    "loadFailed": "Não foi possível carregar as pastas.",
+    "details": "Wiki e transferência de ficheiros",
+    "worktreeCount": "Worktrees: {{n}}",
+    "worktreeHint": "Registe esta worktree como pasta para a explorar.",
+    "gitCut": "Nem todos os ficheiros alterados estão marcados: o Git listou só parte das alterações.",
+    "clean": "Sem alterações por confirmar",
+    "changes": "Alterações por confirmar: {{n}}"
+  }
 }

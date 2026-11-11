@@ -6,6 +6,7 @@
 // login, start a session in a folder — and the one New session form every entry
 // point opens. Every error says in one sentence what to do and offers the
 // button that does it.
+import { BrandMark } from '@/components/layout/brand'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { usePermissionRestriction } from '@/features/agentops/permission-restriction'
 import {
@@ -18,6 +19,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { AppLink } from '@/components/ui/app-link'
 import { ArrowUp, Check, ExternalLink, Loader2 } from 'lucide-react'
 import {
+  Fragment,
   useEffect,
   useId,
   useRef,
@@ -28,25 +30,33 @@ import {
   type RefObject,
   type SetStateAction,
 } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { agentToolsKeys } from '@/features/agent-tools/api'
 import { SessionSkillsPreview } from '@/features/skills/selection-preview'
 import { useProfileList } from '@/features/agent-tools/use-profiles'
 import { listaRecortada } from '@/features/_intel/notices'
 import { Badge } from '@/components/ui/badge'
+import { BoxedList, BoxedListRow } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
+  DialogClose,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
 import { DisabledReason } from '@/components/ui/disabled-reason'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Meter } from '@/components/ui/meter'
 import { PathText } from '@/components/ui/path-text'
 import { Spinner } from '@/components/ui/spinner'
+import { StateBlock } from '@/components/ui/state-block'
+import { StatusDot, type StatusTone } from '@/components/ui/status-chip'
+import { StatusGlyph } from '@/components/ui/status-glyph'
 import {
   Select,
   SelectContent,
@@ -57,6 +67,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Kbd } from '@/components/ui/kbd'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { PANEL_EXTENSIONS, RUN_ON_EXTENSION } from '@/features/extensions'
 import type { ToolReadinessDTO, WorkspaceDTO } from '@/features/agentops/types'
@@ -78,10 +89,13 @@ import type { ProviderKind } from '@/features/providers/types'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import type { RequestOptions } from '@/lib/api/client'
+import { chordHint, resolveBinding } from '@/lib/keybindings/model'
+import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import { useTenantStore } from '@/stores/tenant'
 import { cn } from '@/lib/utils'
 import { BringFoldersStep } from './bring-folders'
+import { registeredFoldersQuery } from './folders-query'
 import {
   useNewSessionDialog,
   type AdvancedLaunch,
@@ -90,6 +104,7 @@ import {
 import { stoppedAtStartReason } from '@/features/agentops/launch-readiness'
 import {
   DEFAULT_PERMISSION,
+  ensureFolder,
   launchSession,
   mayChoosePermission,
   needsApproval,
@@ -118,6 +133,7 @@ import {
 import { SessionCredentials } from './session-credentials'
 import { SessionSecrets } from './session-secrets'
 import { useReuseProfile, useSessionProfiles } from './session-profiles'
+import { PasskeyOffer } from './passkey-offer'
 import {
   KeyInstead,
   useKeyBeingStored,
@@ -125,6 +141,7 @@ import {
   useKeyTriggerFocus,
 } from './key-instead'
 import {
+  AccessPill,
   DEFAULT_MODEL,
   DEFAULT_PROFILE,
   EffortPill,
@@ -134,6 +151,18 @@ import {
   ModelPill,
   ToolPill,
 } from './start-pills'
+import {
+  WorktreeChoice,
+  WorktreePill,
+  type StartWorktree,
+} from './start-worktree'
+import {
+  documentLimit,
+  documentsMessage,
+  saveDocuments,
+  StartDocuments,
+  type StartDocument,
+} from './start-documents'
 import './i18n'
 import {
   useClientSettings,
@@ -153,6 +182,9 @@ function errorText(err: unknown): string {
 /** How long the readiness answer is reused without asking (each read asks every tool's
  * own program for its sign-in). */
 const READINESS_STALE_MS = 10_000
+
+/** The setup checklist's steps: install, sign in, start. */
+const STEP_COUNT = 3
 
 /** The engine's code for a tool whose only key was refused at its last test. */
 const KEY_REFUSED = 'key_refused'
@@ -257,10 +289,14 @@ function StatusLine({ ok, children }: { ok: boolean; children: ReactNode }) {
 export function ToolCard({
   driver,
   part = 'all',
+  primary = false,
 }: {
   /** Grok Build is installed from AI tools' own review, so it shows `part="signIn"`. */
   driver: SignInTool
   part?: 'all' | 'install' | 'signIn'
+  /** This card's action is the screen's one next step (WorkStart): the filled button.
+   * Cards listed side by side keep it secondary. */
+  primary?: boolean
 }) {
   const { t } = useTranslation('firstHour')
   const qc = useQueryClient()
@@ -293,97 +329,95 @@ export function ToolCard({
       ? install.data
       : undefined
   return (
-    <div
-      className="flex flex-col gap-3 rounded-[10px] border border-line p-4"
-      data-testid={`tool-${driver}`}
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <ToolMark driver={driver} />
-        <span className="text-body font-semibold text-text">
-          {t(`tools.${driver}`)}
-        </span>
-        {status.isLoading ? (
-          <Loader2 aria-hidden className="size-4 animate-spin text-text-3" />
-        ) : (
-          <>
-            {part !== 'signIn' ? (
-              <StatusLine ok={installed}>
-                {installed ? t('status.installed') : t('status.notInstalled')}
-              </StatusLine>
-            ) : null}
-            {installed &&
-            part !== 'install' &&
-            !ready &&
-            status.data?.reason ? (
-              <span className="text-body text-text-2">
-                {status.data.reason}
-              </span>
-            ) : installed && part !== 'install' ? (
-              <StatusLine ok={ready}>
-                {signedIn
-                  ? status.data?.account
-                    ? t('status.signedInAs', { account: status.data.account })
-                    : t('status.signedIn')
-                  : key
-                    ? t(
-                        keyRefused
-                          ? 'status.keyRefused'
-                          : // A local model server has no key (EU on RC10: "Uses your
-                            // API key: EU local Ollama").
-                            key.kind === 'ollama'
-                            ? 'status.usesLocal'
-                            : 'status.usesKey',
-                        { name: key.display_name || key.kind },
-                      )
-                    : t('status.notSignedIn')}
-              </StatusLine>
-            ) : null}
-          </>
-        )}
-      </div>
-      {status.isError ? (
-        <p className="text-body text-danger" role="alert">
-          {t('errors.status')}{' '}
-          <Button variant="link" onClick={() => status.refetch()}>
-            {t('actions.retry')}
-          </Button>
-        </p>
-      ) : null}
-      {!status.isLoading && !installed && part !== 'signIn' ? (
-        <div className="flex flex-col gap-2">
-          {/* Secondary on purpose: several tool rows offer Install at once, and
-              one orange control per first screen is the rule. The
-              wizard's one next step — Start — keeps the orange. */}
-          <Button
-            variant="secondary"
-            className="self-start"
-            onClick={() => install.mutate()}
-            disabled={install.isPending}
-          >
-            {install.isPending ? (
-              <>
-                <Loader2 aria-hidden className="animate-spin" />
-                {t('actions.installing')}
-              </>
-            ) : (
-              t('actions.install')
-            )}
-          </Button>
-          {install.isError || failedJob ? (
-            <p className="text-body text-danger" role="alert">
-              {t('errors.install', {
-                error: install.error
-                  ? errorText(install.error)
-                  : (failedJob?.error ?? failedJob?.state),
-              })}
-            </p>
-          ) : null}
+    <Card data-testid={`tool-${driver}`}>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <ToolMark driver={driver} />
+          <span className="text-body font-semibold text-text">
+            {t(`tools.${driver}`)}
+          </span>
+          {status.isLoading ? (
+            <Spinner />
+          ) : (
+            <>
+              {part !== 'signIn' ? (
+                <StatusLine ok={installed}>
+                  {installed ? t('status.installed') : t('status.notInstalled')}
+                </StatusLine>
+              ) : null}
+              {installed &&
+              part !== 'install' &&
+              !ready &&
+              status.data?.reason ? (
+                <span className="text-body text-text-2">
+                  {status.data.reason}
+                </span>
+              ) : installed && part !== 'install' ? (
+                <StatusLine ok={ready}>
+                  {signedIn
+                    ? status.data?.account
+                      ? t('status.signedInAs', { account: status.data.account })
+                      : t('status.signedIn')
+                    : key
+                      ? t(
+                          keyRefused
+                            ? 'status.keyRefused'
+                            : // A local model server has no key (EU on RC10: "Uses your
+                              // API key: EU local Ollama").
+                              key.kind === 'ollama'
+                              ? 'status.usesLocal'
+                              : 'status.usesKey',
+                          { name: key.display_name || key.kind },
+                        )
+                      : t('status.notSignedIn')}
+                </StatusLine>
+              ) : null}
+            </>
+          )}
         </div>
-      ) : null}
-      {installed && !ready && part !== 'install' ? (
-        <SignIn driver={driver} variant="secondary" />
-      ) : null}
-    </div>
+        {status.isError ? (
+          <p className="text-body text-danger" role="alert">
+            {t('errors.status')}{' '}
+            <Button variant="link" onClick={() => status.refetch()}>
+              {t('actions.retry')}
+            </Button>
+          </p>
+        ) : null}
+        {!status.isLoading && !installed && part !== 'signIn' ? (
+          <div className="flex flex-col gap-2">
+            {/* Secondary on purpose: several tool rows offer Install at once.
+                Only the first screen's one card fills its Install. */}
+            <Button
+              variant={primary ? 'primary' : 'secondary'}
+              className="self-start"
+              onClick={() => install.mutate()}
+              disabled={install.isPending}
+            >
+              {install.isPending ? (
+                <>
+                  <Loader2 aria-hidden className="animate-spin" />
+                  {t('actions.installing')}
+                </>
+              ) : (
+                t('actions.install')
+              )}
+            </Button>
+            {install.isError || failedJob ? (
+              <p className="text-body text-danger" role="alert">
+                {t('errors.install', {
+                  error: install.error
+                    ? errorText(install.error)
+                    : (failedJob?.error ?? failedJob?.state),
+                })}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        {installed && !ready && part !== 'install' ? (
+          <SignIn driver={driver} variant={primary ? 'primary' : 'secondary'} />
+        ) : null}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -854,10 +888,6 @@ function FolderLabel({
  * the New session form for the last folder. */
 const STARTED_WINDOW = 20
 
-/** How many registered folders, newest first, the New session form matches the last
- * folder against; one beyond them gives a new folder instead. */
-const FOLDER_WINDOW = 200
-
 /** How many folders, newest first, the composer's folder pill lists before Another folder…. */
 const RECENT_FOLDERS = 8
 
@@ -871,8 +901,11 @@ export function StartSessionForm({
   onStarted,
   onAdvanced,
   initialDraft,
+  dialog = false,
   composer = false,
   toolChoice,
+  toolStepId,
+  startVariant = 'primary',
 }: {
   initialDraft?: SessionDraft
   onStarted?: () => void
@@ -880,9 +913,16 @@ export function StartSessionForm({
    * It opens on the sign-in, model and effort this form shows; `opener` takes the focus
    * back when it closes. */
   onAdvanced?: (launch?: AdvancedLaunch, opener?: HTMLElement | null) => void
+  /** In the New session dialog: the answers go on the dialog's own band. */
+  dialog?: boolean
   composer?: boolean
   /** The tool the person picked, held by a parent that shows something for it. */
   toolChoice?: ToolChoice
+  /** The id of the parent's sentence for the step that gets the picked tool ready: the
+   * form does not say it a second time, and its disabled Start points at that sentence. */
+  toolStepId?: string
+  /** Settings carry no orange: the setup guide's Start is secondary. */
+  startVariant?: 'primary' | 'secondary'
 }) {
   const { t } = useTranslation('firstHour')
   const formId = useId()
@@ -893,6 +933,8 @@ export function StartSessionForm({
   useEffect(() => {
     if (composer && composeRequest) field.current?.focus()
   }, [composer, composeRequest])
+  // The key that starts is the person's choice (Settings › General).
+  const sendKey = useClientSettings((s) => s.sendKey)
   const message = (
     <Textarea
       ref={field}
@@ -900,9 +942,18 @@ export function StartSessionForm({
       form={formId}
       value={prompt}
       onChange={(e) => setPrompt(e.target.value)}
-      // As in a session's composer: Enter sends, Shift+Enter starts a new line.
+      // As in a session's composer, through its bindings: the chosen key starts (Enter,
+      // or Ctrl+Enter with Enter breaking the line), Ctrl+Enter always does, and
+      // Shift+Enter starts a new line.
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+        if (e.nativeEvent.isComposing) return
+        const command = resolveBinding(KEYBINDINGS, e, {
+          launcherFocused: true,
+        })
+        if (
+          command === 'launcher.startBackground' ||
+          (command === 'launcher.start' && sendKey === 'enter')
+        ) {
           e.preventDefault()
           e.currentTarget.form?.requestSubmit()
         }
@@ -929,9 +980,12 @@ export function StartSessionForm({
         prompt={prompt}
         onStarted={onStarted}
         onAdvanced={onAdvanced}
+        dialog={dialog}
         composer={composer}
         field={field}
         toolChoice={toolChoice}
+        toolStepId={toolStepId}
+        startVariant={startVariant}
       />
     </div>
   )
@@ -949,18 +1003,24 @@ function StartSessionChoices({
   prompt,
   onStarted,
   onAdvanced,
+  dialog,
   composer,
   field,
   toolChoice,
+  toolStepId,
+  startVariant,
 }: {
   initialDraft?: SessionDraft
   formId: string
   prompt: string
   onStarted?: () => void
   onAdvanced?: (launch?: AdvancedLaunch, opener?: HTMLElement | null) => void
+  dialog: boolean
   composer: boolean
   field: RefObject<HTMLTextAreaElement | null>
   toolChoice?: ToolChoice
+  toolStepId?: string
+  startVariant: 'primary' | 'secondary'
 }) {
   const { t } = useTranslation('firstHour')
   const navigate = useNavigate()
@@ -970,6 +1030,7 @@ function StartSessionChoices({
   const boundary = useAuthBoundary()
   const { epoch } = boundary
   const defaults = useClientSettings((s) => s.sessionDefaults)
+  const sendKey = useClientSettings((s) => s.sendKey)
   const profileList = useProfileList()
   const ownChoice = useState<SessionTool | null>(
     sessionTools().find((d) => d === initialDraft?.tool) ?? null,
@@ -1024,20 +1085,7 @@ function StartSessionChoices({
     enabled: !!boundary.tenant,
     staleTime: 0,
   })
-  const registered = useQuery({
-    queryKey: [
-      ...agentOpsKeys.boundaryScope(boundary.tenant, epoch),
-      'workspaces',
-      { state: 'active', limit: FOLDER_WINDOW },
-    ],
-    queryFn: ({ signal }) =>
-      agentOpsApi.listWorkspaces(
-        { state: 'active', limit: FOLDER_WINDOW },
-        { tenant: boundary.tenant, signal },
-      ),
-    enabled: !!boundary.tenant,
-    staleTime: 0,
-  })
+  const registered = useQuery(registeredFoldersQuery(boundary.tenant, epoch))
   // A sole named account still supplies its reference. Readiness belongs to the
   // selected profile; the default login cannot qualify another home.
   const profiles = useSessionProfiles(
@@ -1118,6 +1166,50 @@ function StartSessionChoices({
     !!current && !current.workspace_ref && !folder.trim() && !current.selected
   // The folders sessions already use, to pick from; a path is typed only as the fallback.
   const [runOn, setRunOn] = useState('')
+  // The folder's current checkout, or a worktree of the session's own (needs a registered folder).
+  const [worktree, setWorktree] = useState<StartWorktree>({
+    on: false,
+    from: '',
+  })
+  // Documents attached to the work, saved in its folder at Start.
+  const [documents, setDocuments] = useState<StartDocument[]>([])
+  const [savingDocument, setSavingDocument] = useState('')
+  // They are saved before the session starts, so only into a folder that exists and
+  // takes writes: a new folder of its own has none yet, a worktree of its own does not
+  // see the folder's files, and a read-only folder refuses every write. Elsewhere the
+  // control is not offered, and documents attached before wait.
+  const place = pickable.find((w) =>
+    current?.workspace_ref
+      ? w.workspace_ref === current.workspace_ref
+      : !!current?.typing && w.root_path === folder.trim(),
+  )
+  const documentFolder = current?.workspace_ref
+    ? !worktree.on
+    : !!current?.typing && !!folder.trim()
+  const documentsRefusal = !documentFolder
+    ? t('start.documentsNeedFolder')
+    : place?.mount_mode === 'ro'
+      ? t('start.documentsReadOnly')
+      : ''
+  // Start holds while documents wait, and asks for the person's own words with them:
+  // the session is named after its first message, never after the documents line.
+  const documentsHold =
+    documents.length === 0
+      ? ''
+      : documentsRefusal
+        ? t('start.documentsWaiting')
+        : !prompt.trim()
+          ? t('start.documentsNeedWords')
+          : ''
+  // A new worktree of the session's own, as Start sends it and More options opens on it:
+  // only with a registered folder, from the branch or commit the person named.
+  const newWorktree =
+    worktree.on && current?.workspace_ref
+      ? {
+          worktree: true,
+          ...(worktree.from ? { worktreeFrom: worktree.from } : {}),
+        }
+      : {}
   const [more, setMore] = useState(false)
   // The person's own pick; until there is one, the permission the folder stores, else the
   // usual default. A stored Full is offered only to someone who may run it: the engine
@@ -1144,6 +1236,14 @@ function StartSessionChoices({
         ) ?? preferred))
   const permissionBlocked = !restriction.allows(PERMISSION_NAME[permission])
   const setPermission = setPicked
+  // What More options opens on: what Start would send from here (the words, the folder,
+  // what the agent may do and the working copy), so nothing the person chose is lost.
+  const handoff: AdvancedLaunch = {
+    message: prompt,
+    ...(current?.workspace_ref ? { workspaceRef: current.workspace_ref } : {}),
+    permission,
+    ...newWorktree,
+  }
   const [secretEnv, setSecretEnv] = useState<SecretEnvChoice[]>([])
   const [credentials, setCredentials] = useState<string[]>([])
   // The model, for a tool that runs on a key: its saved default unless the user picks one.
@@ -1270,6 +1370,22 @@ function StartSessionChoices({
   // An unknown driver still needs a connection test when it has no model choices.
   const untested = noDefault && keyModels.length === 0
   const canReadProviders = can('sessions:provider:read')
+  // A new typed path is registered by the engine (POST workspaces asks
+  // sessions:workspace:admin); without it a typed path reaches only a folder
+  // already registered, and the hint says so. The AI tools place opens on
+  // sessions:account:read; without it the note says who readies a tool.
+  const mayRegisterFolders = can('sessions:workspace:admin')
+  const canOpenTools = can('sessions:account:read')
+  // Attached documents are written into the folder (PUT files asks this).
+  const mayAttach = can('sessions:workspace:write')
+  // More options cannot take attached documents, nor a folder path typed in (the launch
+  // lists registered folders only): it is held, and says how to keep them.
+  const moreHeld =
+    documents.length > 0
+      ? t('start.moreHeldDocuments')
+      : current?.typing && folder.trim()
+        ? t('start.moreHeldFolder')
+        : ''
   const openProviders = () => {
     onStarted?.()
     navigate({ to: '/providers' as '/' })
@@ -1283,7 +1399,7 @@ function StartSessionChoices({
   // under, checked at every dispatch, as the New session dialog's.
   const captureOwner = useStepUpOwner()
   const start = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       tenant,
       attempt,
     }: {
@@ -1298,17 +1414,53 @@ function StartSessionChoices({
       chosen: SessionDefaults
       /** The folder was a typed path: the engine's folder for it is the one kept. */
       typed: boolean
-    }) =>
-      launchSession(
+    }) => {
+      const authority = {
+        tenant,
+        signal: attempt.signal,
+        dispatchGuard: attempt.dispatchGuard,
+      }
+      // Attached documents are saved in the folder first: a typed path is registered for
+      // that, as the launch would, and the session then starts in that folder.
+      const typedFolder =
+        documents.length > 0 && !current?.workspace_ref
+          ? await ensureFolder(folder.trim(), authority)
+          : undefined
+      const workspaceRef = typedFolder?.workspace_ref ?? current?.workspace_ref
+      const known =
+        typedFolder ?? pickable.find((w) => w.workspace_ref === workspaceRef)
+      // A typed path can name a folder registered read-only: say so before any write.
+      if (documents.length > 0 && known?.mount_mode === 'ro')
+        throw new Error(t('start.documentsReadOnly'))
+      const paths =
+        documents.length > 0 && workspaceRef
+          ? await saveDocuments({
+              documents,
+              wref: workspaceRef,
+              maxBytes: documentLimit(known),
+              authority,
+              onSaving: setSavingDocument,
+              onSaved: (file, path) =>
+                setDocuments((all) =>
+                  all.map((d) =>
+                    d.file === file
+                      ? { ...d, saved: { ...d.saved, [workspaceRef]: path } }
+                      : d,
+                  ),
+                ),
+            })
+          : []
+      return launchSession(
         {
           quick: {
             driver: tool!,
             folder,
-            workspace_ref: current?.workspace_ref,
+            workspace_ref: workspaceRef,
             permission,
             secretEnv,
             ...(credentials.length ? { credentials } : {}),
             ...(runOn ? { runOn } : {}),
+            ...newWorktree,
             ...(model ? { model } : {}),
             ...(effort ? { effort } : {}),
             ...(speed?.fastMode !== undefined
@@ -1317,14 +1469,11 @@ function StartSessionChoices({
             ...(speed?.serviceTier ? { serviceTier: speed.serviceTier } : {}),
             ...(profileRef ? { profileRef } : {}),
           },
-          message: prompt,
+          message: documentsMessage(prompt, paths),
         },
-        {
-          tenant,
-          signal: attempt.signal,
-          dispatchGuard: attempt.dispatchGuard,
-        },
-      ),
+        authority,
+      )
+    },
     onSuccess: (run, { attempt, chosen, typed }) => {
       if (!attempt.current()) return
       useClientSettings
@@ -1351,9 +1500,7 @@ function StartSessionChoices({
     start.variables?.access.sourceRef ?? (profileRef || tool)
   const accessWorkspaceRef =
     start.variables?.access.workspaceRef ?? current?.workspace_ref ?? ''
-  if (isLoading) {
-    return <Loader2 aria-hidden className="size-5 animate-spin text-text-3" />
-  }
+  if (isLoading) return <StateBlock state="loading" rows={composer ? 1 : 3} />
   if (!tool) {
     return <p className="text-body text-text-2">{t('start.needTool')}</p>
   }
@@ -1368,6 +1515,7 @@ function StartSessionChoices({
       !toolReady ||
       speedUnavailable ||
       permissionBlocked ||
+      !!documentsHold ||
       (noDefault && !model)
     )
       return
@@ -1425,7 +1573,7 @@ function StartSessionChoices({
     </p>
   ) : null
   const notReadyNote =
-    tool && !toolReady ? (
+    tool && !toolReady && !toolStepId ? (
       <p
         id={notReadyId}
         className="text-caption text-text-2"
@@ -1436,16 +1584,20 @@ function StartSessionChoices({
           ? `${selectedProfile.label} · ${t(selectedProfile.missing === 'key' ? 'start.profileNeedsKey' : 'start.profileNotSignedIn')}`
           : (refusal(tool) ??
             t('start.notReady', { tool: toolName(tool) }))}{' '}
-        <Button
-          type="button"
-          variant="link"
-          onClick={() => {
-            onStarted?.()
-            navigate({ to: '/agent-tools' as '/' })
-          }}
-        >
-          {t('start.openTools')}
-        </Button>
+        {canOpenTools ? (
+          <Button
+            type="button"
+            variant="link"
+            onClick={() => {
+              onStarted?.()
+              navigate({ to: '/agent-tools' as '/' })
+            }}
+          >
+            {t('start.openTools')}
+          </Button>
+        ) : (
+          t('start.askAdmin')
+        )}
       </p>
     ) : null
   const typedFolderField = current?.typing ? (
@@ -1470,7 +1622,9 @@ function StartSessionChoices({
           // folders is not told of a list they were never to see.
           registered.isError && can('sessions:workspace:read')
             ? t('start.foldersUnreadable')
-            : t('start.folderHint')
+            : mayRegisterFolders
+              ? t('start.folderHint')
+              : t('start.folderHintGiven')
         }
       </p>
     </>
@@ -1643,18 +1797,16 @@ function StartSessionChoices({
               folders={folders}
               onPick={pickFolder}
               onCloseAutoFocus={focusTypedOnClose}
+              moreHeld={moreHeld}
               onMore={
                 onAdvanced
                   ? () =>
                       onAdvanced(
                         {
-                          message: prompt,
+                          ...handoff,
                           driver: tool,
                           ...(catalogProfile
                             ? { profileRef: catalogProfile, model, effort }
-                            : {}),
-                          ...(current.workspace_ref
-                            ? { workspaceRef: current.workspace_ref }
                             : {}),
                         },
                         field.current,
@@ -1663,8 +1815,20 @@ function StartSessionChoices({
               }
             />
           ) : (
-            <Loader2 aria-hidden className="size-4 animate-spin text-text-3" />
+            <Spinner />
           )}
+          {current?.workspace_ref ? (
+            <WorktreePill value={worktree} onChange={setWorktree} />
+          ) : null}
+          <AccessPill
+            value={permission}
+            choices={PERMISSION_CHOICES.filter((p) =>
+              mayChoosePermission(p, can('sessions:run:admin')),
+            )}
+            allows={(p) => restriction.allows(PERMISSION_NAME[p])}
+            reason={restriction.reason}
+            onChange={setPermission}
+          />
           <DisabledReason
             className="ms-auto max-w-full"
             mode="native"
@@ -1700,7 +1864,7 @@ function StartSessionChoices({
               }
               aria-describedby={
                 tool && !toolReady
-                  ? notReadyId
+                  ? (toolStepId ?? notReadyId)
                   : needsKeyModel
                     ? keyModelId
                     : undefined
@@ -1745,6 +1909,10 @@ function StartSessionChoices({
       </form>
     )
   }
+  // In the New session dialog the answers sit on its own band (the key that starts,
+  // Cancel and Start); elsewhere Start goes across the form.
+  const Answers = dialog ? DialogFooter : 'div'
+  const startKey = sendKey === 'modEnter' ? chordHint('Mod+Enter') : 'Enter'
   return (
     <form id={formId} className="flex min-w-0 flex-col gap-4" onSubmit={submit}>
       {/* Every tool the engine drives; the chosen one, when it cannot start yet,
@@ -1966,10 +2134,27 @@ function StartSessionChoices({
             </Select>
           </Field>
           {typedFolderField}
+          {mayAttach ? (
+            <StartDocuments
+              documents={documents}
+              onChange={setDocuments}
+              saving={savingDocument}
+              maxBytes={documentLimit(place)}
+              refusal={documentsRefusal}
+            />
+          ) : null}
         </>
       ) : (
-        <Loader2 aria-hidden className="size-4 animate-spin text-text-3" />
+        <Spinner />
       )}
+      {current?.workspace_ref ? (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="text-body font-medium text-foreground">
+            {t('start.worktreeLegend')}
+          </legend>
+          <WorktreeChoice value={worktree} onChange={setWorktree} />
+        </fieldset>
+      ) : null}
       {/* The same presets for every tool (N1); a launch a tool cannot honour is refused
           by the engine with one sentence, shown below. The current one is always on
           screen, with what it does. */}
@@ -2011,7 +2196,7 @@ function StartSessionChoices({
             </SelectContent>
           </Select>
         </Field>
-        <p id={accessId} className="text-caption text-text-3">
+        <p id={accessId} className="text-caption text-text-2">
           {t(`permissionSummary.${permission}`)}
         </p>
       </div>
@@ -2041,49 +2226,82 @@ function StartSessionChoices({
         <SessionCredentials value={credentials} onChange={setCredentials} />
       ) : null}
       {more && onAdvanced ? (
-        <Button
-          type="button"
-          variant="link"
+        <DisabledReason
           className="self-start"
-          // The tool always goes with it, so the dialog reads its default profile for this
-          // tool and no other. A tool on a key has no profile before its first launch, and
-          // a model tested for the key is no model of a profile: only the tool is handed
-          // over then, and while the reuse profile is still being read.
-          onClick={() =>
-            onAdvanced(
-              catalogProfile
-                ? {
-                    driver: tool,
-                    profileRef: catalogProfile,
-                    model,
-                    effort,
-                    ...(runOn ? { runOn } : {}),
-                    ...(speed?.fastMode !== undefined
-                      ? { fastMode: speed.fastMode }
-                      : {}),
-                    ...(speed?.serviceTier
-                      ? { serviceTier: speed.serviceTier }
-                      : {}),
-                  }
-                : { driver: tool, ...(runOn ? { runOn } : {}) },
-            )
-          }
+          disabled={!!moreHeld}
+          reason={moreHeld || t('start.advanced')}
         >
-          {t('start.advanced')}
-        </Button>
+          <Button
+            type="button"
+            variant="link"
+            className="self-start"
+            // The tool always goes with it, so the dialog reads its default profile for this
+            // tool and no other. A tool on a key has no profile before its first launch, and
+            // a model tested for the key is no model of a profile: only the tool is handed
+            // over then, and while the reuse profile is still being read.
+            onClick={() =>
+              onAdvanced(
+                catalogProfile
+                  ? {
+                      driver: tool,
+                      profileRef: catalogProfile,
+                      model,
+                      effort,
+                      ...(runOn ? { runOn } : {}),
+                      ...(speed?.fastMode !== undefined
+                        ? { fastMode: speed.fastMode }
+                        : {}),
+                      ...(speed?.serviceTier
+                        ? { serviceTier: speed.serviceTier }
+                        : {}),
+                      ...handoff,
+                    }
+                  : {
+                      driver: tool,
+                      ...(runOn ? { runOn } : {}),
+                      ...handoff,
+                    },
+              )
+            }
+          >
+            {t('start.advanced')}
+          </Button>
+        </DisabledReason>
       ) : null}
       {startNotes}
-      <div>
+      <Answers className={dialog ? 'sm:flex-wrap' : undefined}>
         {/* A tool that cannot start says why under the tool choice; a key that needs a
             model says it here, under Start. */}
+        {dialog ? (
+          <>
+            <p className="me-auto self-center text-caption text-text-2">
+              <Trans
+                t={t}
+                i18nKey="start.keyToStart"
+                components={{ key: <Kbd>{startKey}</Kbd> }}
+              />
+            </p>
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">
+                {t('common:actions.cancel')}
+              </Button>
+            </DialogClose>
+          </>
+        ) : null}
         <DisabledReason
-          className="w-full"
+          // Start stays beside Cancel; a reason takes a line of its own.
+          className={
+            dialog
+              ? 'contents [&>[data-slot=disabled-reason-text]]:basis-full [&>[data-slot=disabled-reason-text]]:justify-end'
+              : 'w-full'
+          }
           disabled={
             permissionBlocked ||
             !current ||
             needsFolder ||
             defaultsLoading ||
             speedUnavailable ||
+            !!documentsHold ||
             needsKeyModel
           }
           reason={
@@ -2097,16 +2315,18 @@ function StartSessionChoices({
                     ? t('start.readingFolder')
                     : needsFolder
                       ? t('start.folderChoose')
-                      : keyModelReason
+                      : documentsHold || keyModelReason
           }
           mode="native"
         >
           <Button
             type="submit"
-            variant="primary"
+            variant={startVariant}
             size="lg"
-            className="w-full"
-            aria-describedby={tool && !toolReady ? notReadyId : undefined}
+            className={dialog ? undefined : 'w-full'}
+            aria-describedby={
+              tool && !toolReady ? (toolStepId ?? notReadyId) : undefined
+            }
             disabled={
               !current ||
               needsFolder ||
@@ -2115,16 +2335,21 @@ function StartSessionChoices({
               start.isPending ||
               !toolReady ||
               speedUnavailable ||
+              !!documentsHold ||
               (noDefault && !model)
             }
           >
             {start.isPending ? (
               <Loader2 aria-hidden className="animate-spin" />
             ) : null}
-            {start.isPending ? t('start.starting') : t('start.start')}
+            {start.isPending
+              ? t('start.starting')
+              : dialog
+                ? t('start.startSession')
+                : t('start.start')}
           </Button>
         </DisabledReason>
-      </div>
+      </Answers>
     </form>
   )
 }
@@ -2158,6 +2383,7 @@ export function NewSessionDialog({
           <DialogDescription>{t('start.dialogDescription')}</DialogDescription>
         </DialogHeader>
         <SessionReady
+          dialog
           initialDraft={initialDraft}
           onStarted={() => onOpenChange(false)}
           onAdvanced={onAdvanced}
@@ -2186,10 +2412,17 @@ function ToolCards() {
   return FIRST_HOUR_TOOLS.map((d) => <ToolCard key={d} driver={d} />)
 }
 
-/** The work surface before any session: the composer is always there, and until a tool
- * can start one, the card that gets the composer's tool ready is the one step above it. */
+/** The work surface before any session, drawn as an empty state: the brand mark over one
+ * heading and one sentence, then one action. With a tool ready the action is the composer;
+ * until then it is the card that gets the composer's tool ready (install, then sign in),
+ * and the composer waits under it, its Start described by the sentence. Only a system
+ * administrator installs or signs in a tool: anyone else gets no card, and the composer's
+ * own note says who gets the tool ready. Folders the person's tools already worked in are
+ * offered in one line under the composer once a session can start. */
 export function WorkStart() {
   const { t } = useTranslation('firstHour')
+  const { isSuperadmin } = useAuth()
+  const sentenceId = useId()
   const canStart = useCanStart()
   const openAdvanced = useNewSessionDialog((s) => s.openAdvanced)
   const stopComposing = useNewSessionDialog((s) => s.stopComposing)
@@ -2198,40 +2431,41 @@ export function WorkStart() {
   // picked another (StartSessionChoices). A tool the first hour installs gets its card here;
   // any other says its step under the composer, with the way to AI tools.
   const cardTool =
-    canStart === false
+    canStart === false && isSuperadmin
       ? FIRST_HOUR_TOOLS.find((d) => d === (toolChoice[0] ?? sessionTools()[0]))
       : undefined
+  const cardStatus = useToolStatus(cardTool ?? FIRST_HOUR_TOOLS[0], !!cardTool)
+  const sentence = !cardTool
+    ? t('steps.start.body')
+    : cardStatus.data?.installed
+      ? t('steps.signIn.body')
+      : t('steps.install.body')
   return (
     <div
       data-testid="work-start"
-      className="mx-auto flex w-full max-w-[640px] flex-col gap-5 p-4 sm:p-6"
+      className="mx-auto flex w-full max-w-2xl flex-col gap-5 p-4 sm:p-6"
     >
-      <h2 className="text-title font-semibold text-text">
-        {t('steps.start.title')}
-      </h2>
-      {cardTool ? (
-        <section
-          className="flex flex-col gap-3"
-          aria-labelledby="work-start-tools"
-        >
-          <div>
-            <h3
-              id="work-start-tools"
-              className="text-body-l font-semibold text-text"
-            >
-              {t('steps.signIn.title')}
-            </h3>
-            <p className="text-body text-text-2">{t('steps.signIn.body')}</p>
-          </div>
-          <ToolCard driver={cardTool} />
-        </section>
-      ) : null}
+      <div className="flex flex-col items-center gap-3 text-center">
+        <BrandMark className="size-12 text-text" />
+        <div>
+          <h2 className="text-title font-semibold text-text">
+            {t('steps.start.title')}
+          </h2>
+          <p id={sentenceId} className="text-body text-text-2">
+            {sentence}
+          </p>
+        </div>
+      </div>
+      <PasskeyOffer />
+      {cardTool ? <ToolCard driver={cardTool} primary /> : null}
       <StartSessionForm
         composer
         onAdvanced={openAdvanced}
         onStarted={stopComposing}
         toolChoice={toolChoice}
+        toolStepId={cardTool ? sentenceId : undefined}
       />
+      {canStart ? <BringFoldersStep /> : null}
     </div>
   )
 }
@@ -2240,21 +2474,27 @@ export function SessionReady({
   onStarted,
   onAdvanced,
   initialDraft,
+  dialog,
 }: {
   initialDraft?: SessionDraft
   onStarted?: () => void
   onAdvanced?: (launch?: AdvancedLaunch) => void
+  /** Shown in the New session dialog, whose band takes the form's answers. */
+  dialog?: boolean
 }) {
   const { t } = useTranslation('firstHour')
+  const { isSuperadmin } = useAuth()
   const canStart = useCanStart()
-  if (canStart === undefined)
-    return <Loader2 aria-hidden className="size-5 animate-spin text-text-3" />
-  if (canStart)
+  if (canStart === undefined) return <StateBlock state="loading" rows={3} />
+  // Only a system administrator installs or signs in a tool: anyone else gets the form,
+  // whose note under the tool says who gets it ready.
+  if (canStart || !isSuperadmin)
     return (
       <StartSessionForm
         initialDraft={initialDraft}
         onStarted={onStarted}
         onAdvanced={onAdvanced}
+        dialog={dialog}
       />
     )
   // No tool ready: the cards that get one ready, and the advanced dialog as the only link.
@@ -2274,46 +2514,58 @@ export function SessionReady({
   )
 }
 
+type StepState = 'done' | 'current' | 'later'
+
+const STEP_TONE: Record<StepState, StatusTone> = {
+  done: 'ok',
+  current: 'warn',
+  later: 'neutral',
+}
+
+/** One row of the checklist: a done row says what it did, with its check; the current row
+ * is marked and holds its one action; a later row only says what comes. */
 function Step({
-  n,
   title,
   body,
-  done,
+  state,
   children,
 }: {
-  n: number
   title: string
-  body: string
-  done: boolean
-  children: ReactNode
+  body: ReactNode
+  state: StepState
+  /** The step's action, while it has one. */
+  children?: ReactNode
 }) {
   return (
-    <section
-      className="flex gap-4 rounded-[12px] border border-line p-5"
+    <BoxedListRow
+      role="region"
       aria-label={title}
+      aria-current={state === 'current' ? 'step' : undefined}
+      className="flex-col items-stretch"
     >
-      <div
-        className={
-          done
-            ? 'flex size-8 shrink-0 items-center justify-center rounded-full bg-success-soft text-success'
-            : 'flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-text-2'
-        }
-        aria-hidden
-      >
-        {done ? <Check className="size-4" /> : n}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div>
-          <h2 className="text-body-l font-semibold text-text">{title}</h2>
-          <p className="text-body text-text-2">{body}</p>
+      <div className="flex items-center gap-3">
+        <StatusDot tone={STEP_TONE[state]} />
+        <div className="min-w-0 flex-1">
+          <h2
+            className={cn(
+              'text-body font-medium',
+              state === 'later' ? 'text-text-2' : 'text-text',
+            )}
+          >
+            {title}
+          </h2>
+          <p className="text-caption text-text-2">{body}</p>
         </div>
-        {children}
+        {state === 'done' ? (
+          <StatusGlyph status="done" showLabel={false} />
+        ) : null}
       </div>
-    </section>
+      {children}
+    </BoxedListRow>
   )
 }
 
-/** The three steps of the setup wizard. */
+/** The three steps of the setup wizard, as a checklist under a meter. */
 export function FirstHourSteps() {
   const { t } = useTranslation('firstHour')
   const status = {
@@ -2338,6 +2590,9 @@ export function FirstHourSteps() {
       installedTools.includes(driver) ||
       readyTools.ready.includes(driver),
   )
+  const readySignInTools = signInTools.filter((driver) =>
+    readyTools.ready.includes(driver),
+  )
   const signedIn = readyTools.ready.length > 0
   // Installation is known even while a tool's provider is being checked or is refused.
   // A ready tool also proves installation when its status could not be read.
@@ -2360,81 +2615,123 @@ export function FirstHourSteps() {
   // A session that failed did not start (Root 19:15Z): the step is done when one ran.
   const started = (runs.data?.items ?? []).some((r) => r.state !== 'failed')
   const done = [installed, signedIn, started].filter(Boolean).length
+  const state = (isDone: boolean, isCurrent: boolean): StepState =>
+    isDone ? 'done' : isCurrent ? 'current' : 'later'
+  // What a ready tool runs on, in the words of its card: its own login, or a key or a
+  // local model from Providers.
+  const runsOn = (driver: SignInTool) => {
+    const data = status[driver].data
+    if (data?.signed_in)
+      return data.account
+        ? t('status.signedInAs', { account: data.account })
+        : t('status.signedIn')
+    const key = readyTools.boundKey(driver)?.record
+    if (!key) return ''
+    return t(key.kind === 'ollama' ? 'status.usesLocal' : 'status.usesKey', {
+      name: key.display_name || key.kind,
+    })
+  }
+  const installedList = [...new Set([...installedTools, ...readySignInTools])]
+  const installedNames = installedList.map((d) => t(`tools.${d}`)).join(', ')
+  const readyNames = readySignInTools.map((driver, i) => {
+    const on = runsOn(driver)
+    return (
+      <Fragment key={driver}>
+        {i > 0 ? ', ' : null}
+        {t(`tools.${driver}`)}
+        {on ? ' · ' : null}
+        {on ? <span>{on}</span> : null}
+      </Fragment>
+    )
+  })
+  // A key or a local model needs no install first, and stays offered until a tool can
+  // start a session. A page link to the Providers form, which brings the person back here
+  // (keyHref).
+  const orUse =
+    signedIn || deciding ? null : (
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body text-text-2">
+        {t('steps.install.orUse')}
+        <AppLink
+          href={keyHref('anthropic')}
+          className="text-foreground underline underline-offset-2"
+        >
+          {t('steps.install.addKey')}
+        </AppLink>
+        <AppLink
+          href={keyHref('ollama')}
+          className="text-foreground underline underline-offset-2"
+        >
+          {t('steps.install.addLocal')}
+        </AppLink>
+      </p>
+    )
   return (
     <div className="flex flex-col gap-4">
       {deciding ? (
         <Spinner className="size-4" />
       ) : (
-        <p className="text-caption text-text-2" role="status">
-          {t('steps.progress', { done })}
-        </p>
-      )}
-      <Step
-        n={1}
-        title={t('steps.install.title')}
-        body={t('steps.install.body')}
-        done={installed}
-      >
-        <div className="grid gap-3 md:grid-cols-2">
-          {tools.map((d) => (
-            <ToolCard key={d} driver={d} part="install" />
-          ))}
-        </div>
-        {signedIn || deciding ? null : (
-          // A key or a local model needs no install first, and stays offered until a tool
-          // can start a session. A page link to the Providers form, which brings the
-          // person back here (keyHref).
-          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body text-text-2">
-            {t('steps.install.orUse')}
-            <AppLink
-              href={keyHref('anthropic')}
-              className="text-accent-text underline underline-offset-2"
-            >
-              {t('steps.install.addKey')}
-            </AppLink>
-            <AppLink
-              href={keyHref('ollama')}
-              className="text-accent-text underline underline-offset-2"
-            >
-              {t('steps.install.addLocal')}
-            </AppLink>
+        <div className="flex flex-col gap-2">
+          <p className="text-caption text-text-2" role="status">
+            {t('steps.progress', { done })}
           </p>
-        )}
-      </Step>
-      <Step
-        n={2}
-        title={t('steps.signIn.title')}
-        body={t('steps.signIn.body')}
-        done={signedIn}
-      >
-        {installed ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {tools
-              .filter(
-                (d) =>
-                  readyTools.ready.includes(d) || installedTools.includes(d),
-              )
-              .map((d) => (
-                <ToolCard key={d} driver={d} part="signIn" />
-              ))}
-          </div>
-        ) : (
-          <p className="text-body text-text-2">{t('steps.signIn.waiting')}</p>
-        )}
-      </Step>
-      <Step
-        n={3}
-        title={t('steps.start.title')}
-        body={t('steps.start.body')}
-        done={started}
-      >
-        {signedIn ? <BringFoldersStep /> : null}
-        {signedIn ? (
-          <StartSessionForm />
-        ) : deciding ? null : (
-          <p className="text-body text-text-2">{t('start.needTool')}</p>
-        )}
-      </Step>
+          <Meter
+            value={(done / STEP_COUNT) * 100}
+            label={t('steps.progress', { done })}
+            className="w-full max-w-xs"
+          />
+        </div>
+      )}
+      <BoxedList>
+        <Step
+          title={t('steps.install.title')}
+          body={installedNames || t('steps.install.body')}
+          state={state(installed, true)}
+        >
+          {installed ? null : (
+            <>
+              <div className="grid gap-3 md:grid-cols-2">
+                {tools.map((d) => (
+                  <ToolCard key={d} driver={d} part="install" />
+                ))}
+              </div>
+              {orUse}
+            </>
+          )}
+        </Step>
+        <Step
+          title={t('steps.signIn.title')}
+          body={
+            signedIn && readySignInTools.length > 0
+              ? readyNames
+              : t('steps.signIn.body')
+          }
+          state={state(signedIn, installed)}
+        >
+          {installed && !signedIn ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2">
+                {installedTools.map((d) => (
+                  <ToolCard key={d} driver={d} part="signIn" />
+                ))}
+              </div>
+              {orUse}
+            </>
+          ) : null}
+        </Step>
+        {/* The last step keeps its Start: the next session starts here too. */}
+        <Step
+          title={t('steps.start.title')}
+          body={t('steps.start.body')}
+          state={state(started, signedIn)}
+        >
+          {signedIn ? (
+            <>
+              <BringFoldersStep />
+              <StartSessionForm startVariant="secondary" />
+            </>
+          ) : null}
+        </Step>
+      </BoxedList>
     </div>
   )
 }

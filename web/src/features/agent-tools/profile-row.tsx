@@ -7,6 +7,7 @@
 import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { StatusChip } from '@/components/ui/status-chip'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { ProviderAccent } from '@/features/agentops/provider-accent'
 import { useProfileProviders } from '@/features/agentops/profile-authentication'
@@ -24,6 +25,8 @@ import {
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { accountLabel } from './account-marks'
+import { planName } from './plan-name'
+import type { ProfileEnabled } from './use-profile-enabled'
 
 /** What a row says about a profile, in the words the page prints. */
 export type ProfileState =
@@ -34,6 +37,10 @@ export type ProfileState =
       signingIn?: boolean
       failed?: boolean
       error?: string
+      /** The plan its tool reports, as its vendor names it ("Claude Max"). */
+      plan?: string
+      /** The account the tool says is signed in (its own status read). */
+      who?: string
     }
   | { kind: 'key'; name?: string; hint?: string }
 
@@ -75,7 +82,7 @@ export function StateChip({
   )
 }
 
-/** "Account · signed in", "API key · Local stub (sk-…7f2a)". */
+/** "Account · signed in · Claude Max", "API key · Local stub · sk-…7f2a". */
 export function useProfileDetail(state: ProfileState): string {
   const { t } = useTranslation('agentTools')
   if (state.kind === 'key') {
@@ -87,22 +94,30 @@ export function useProfileDetail(state: ProfileState): string {
   if (state.failed) return t('profiles.accountUnreadable')
   if (state.signingIn) return t('profiles.accountSigningIn')
   if (state.signedIn === undefined) return t('profiles.accountChecking')
-  return t(
+  const text = t(
     state.signedIn ? 'profiles.accountSignedIn' : 'profiles.accountNotSignedIn',
   )
+  if (!state.signedIn) return text
+  return [text, state.plan, state.who].filter(Boolean).join(' · ')
 }
 
 export function ProfileRowView({
   model,
   onOpen,
   onSignIn,
+  enabled,
 }: {
   model: ProfileRowModel
   onOpen: () => void
   onSignIn: () => void
+  /** The profile's on/off switch; absent for the default login and for a role that
+   * cannot change profiles. */
+  enabled?: ProfileEnabled
 }) {
   const { t } = useTranslation('agentTools')
   const detail = useProfileDetail(model.state)
+  // The account name ends the line and a phone width cuts it first: the title keeps it.
+  const line = model.handle ? `${model.handle} · ${detail}` : detail
   const needsSignIn =
     model.state.kind === 'account' && model.state.signedIn === false
   const signingIn = model.state.kind === 'account' && !!model.state.signingIn
@@ -110,14 +125,14 @@ export function ProfileRowView({
   // Sign in button above it, comes before the arrow, which ends the row.
   return (
     <li
-      className="relative flex min-h-14 items-center gap-3 px-4 py-2 hover:bg-hover"
+      className="relative grid min-h-14 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 px-4 py-2 hover:bg-hover sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
       data-testid={`profile-${model.id}`}
     >
       <button
         type="button"
         onClick={onOpen}
         className={cn(
-          'flex min-w-0 flex-1 flex-col rounded-ctl py-1 text-left outline-none',
+          'col-start-1 row-start-1 flex min-w-0 flex-col rounded-ctl py-1 text-left outline-none',
           'after:absolute after:inset-0 after:content-[""]',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         )}
@@ -126,10 +141,9 @@ export function ProfileRowView({
           <ProviderAccent accent={model.accent} />
           <span className="truncate">{model.name}</span>
         </span>
-        <span className="truncate text-caption text-text-2">
-          {model.handle ? `${model.handle} · ${detail}` : detail}
+        <span className="truncate text-caption text-text-2" title={line}>
+          {line}
         </span>
-        <AccountUsage usage={model.usage} className="truncate" />
         {model.state.kind === 'account' &&
         model.state.failed &&
         model.state.error ? (
@@ -138,7 +152,13 @@ export function ProfileRowView({
           </span>
         ) : null}
       </button>
-      <span className="relative z-10 flex shrink-0 items-center">
+      {/* The limit sits beside the state at the right (A2); a phone keeps it under the
+          name. One element: the grid places it. */}
+      <AccountUsage
+        usage={model.usage}
+        className="col-start-1 row-start-2 truncate pb-1 sm:col-start-2 sm:row-start-1 sm:pb-0"
+      />
+      <span className="relative z-10 col-start-2 row-span-2 row-start-1 flex shrink-0 items-center sm:col-start-3 sm:row-span-1">
         {needsSignIn && signingIn ? (
           // The tool confirms the login, not this page: until then nothing new starts.
           <Button variant="secondary" size="sm" disabled>
@@ -157,11 +177,22 @@ export function ProfileRowView({
         ) : (
           <StateChip tone="wait">{t('profiles.needsKey')}</StateChip>
         )}
+        {enabled?.set ? (
+          <Switch
+            className="ml-3"
+            checked={enabled.on}
+            disabled={enabled.pending}
+            onCheckedChange={enabled.set}
+            aria-label={t(enabled.on ? 'profiles.turnOff' : 'profiles.turnOn', {
+              name: model.name,
+            })}
+          />
+        ) : null}
       </span>
       <ChevronRight
         aria-hidden
         data-slot="row-arrow"
-        className="size-4 shrink-0 text-text-3"
+        className="col-start-3 row-span-2 row-start-1 size-4 shrink-0 text-text-3 sm:col-start-4 sm:row-span-1"
       />
     </li>
   )
@@ -220,6 +251,8 @@ export function useAccountRow(account: ProviderAccountDTO): ProfileRowModel {
       signingIn: signedIn === false && isSigningIn(status.data),
       failed: status.isError,
       error: status.error instanceof Error ? status.error.message : undefined,
+      plan: planName(account.driver, account.plan),
+      who: signedIn ? status.data?.account : undefined,
     },
     ready: !off && signedIn === true,
     off,
@@ -274,6 +307,7 @@ export function useDefaultRow(driver: string): {
           failed: status.isError,
           error:
             status.error instanceof Error ? status.error.message : undefined,
+          who: signedIn ? status.data?.account : undefined,
         },
         ready: signedIn === true,
       }

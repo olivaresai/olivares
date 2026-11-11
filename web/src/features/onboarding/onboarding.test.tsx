@@ -79,6 +79,8 @@ vi.mock('@/features/first-hour/api', async (orig) => {
 })
 
 import { agentOpsApi } from '@/features/agentops/api'
+import { setEngineTools } from '@/features/agentops/engine-tools'
+import engineTools from '@/features/agentops/engine-tools.fixture.json'
 import type { ResolveProviderSource } from '@/features/agentops/types'
 import { signInApi, type SessionTool } from '@/features/first-hour/api'
 import {
@@ -157,8 +159,8 @@ describe('the setup wizard', () => {
 
   /**
    * ONE ORANGE PER FIRST SCREEN (the regression's console rule 2026-10-17): the
-   * tool rows install in the secondary style, and the wizard's one next step —
-   * Start — is the control that keeps the orange.
+   * tool rows install in the secondary style. The setup guide is a settings page, and
+   * settings carry no orange: its Start is secondary too.
    */
   it('installs every offered tool in the secondary style', async () => {
     wrap(<OnboardingView />)
@@ -169,16 +171,39 @@ describe('the setup wizard', () => {
     }
   })
 
-  it('keeps the orange on the one next step, Start, once a tool is signed in', async () => {
+  it('has one secondary action on the current step, and closes the done ones', async () => {
     status.claude = { driver: 'claude', installed: true, signed_in: true }
     wrap(<OnboardingView />)
+    const start = await screen.findByRole('button', { name: 'Start' })
+    expect(start.className).not.toContain('bg-accent')
     expect(
-      (await screen.findByRole('button', { name: 'Start' })).className,
-    ).toContain('bg-accent')
-    // The tool still to install offers its Install in the secondary style.
+      screen.getByRole('region', { name: 'Start a session' }),
+    ).toHaveAttribute('aria-current', 'step')
+    // The done steps say what they did, with no action left in them.
+    const install = screen.getByRole('region', {
+      name: 'Install an agent tool',
+    })
+    expect(install).not.toHaveAttribute('aria-current')
+    expect(within(install).getByText('Claude Code')).toBeVisible()
+    expect(within(install).getByRole('img', { name: 'Done' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Sign in/ })).toBeNull()
+  })
+
+  it('shows the progress as a meter, the current step open and the later ones closed', async () => {
+    wrap(<OnboardingView />)
     expect(
-      (await screen.findByRole('button', { name: 'Install' })).className,
-    ).not.toContain('bg-accent')
+      await screen.findByRole('meter', { name: '0 of 3 done' }),
+    ).toHaveAttribute('aria-valuenow', '0')
+    expect(
+      screen.getByRole('region', { name: 'Install an agent tool' }),
+    ).toHaveAttribute('aria-current', 'step')
+    for (const name of ['Sign it in', 'Start a session']) {
+      const later = screen.getByRole('region', { name })
+      expect(later).not.toHaveAttribute('aria-current')
+      expect(within(later).queryByRole('button')).toBeNull()
+      expect(within(later).queryByRole('textbox')).toBeNull()
+    }
   })
 
   // The 26.10.0 wizard showed seven steps, three of them behind a passkey, for a
@@ -381,6 +406,38 @@ describe('the setup wizard', () => {
     expect(screen.queryByRole('link', { name: 'Add a local model' })).toBeNull()
   })
 
+  // A session tool the engine lists beyond the ones whose sign-in the guide
+  // relays makes the install step done with no tool to name: the step says its
+  // own sentence then, never an empty line.
+  it('says its own sentence when the tool that can start has no card here', async () => {
+    setEngineTools([
+      ...engineTools.tools,
+      {
+        key: 'later-tool',
+        name: 'Later Tool',
+        name_stem: 'later',
+        vendor: 'later',
+        monogram: 'LT',
+        color: '#5B6B7B',
+        session: true,
+        bindings: [],
+      },
+    ])
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
+      readinessOf({ 'later-tool': 'own_login' }),
+    )
+    wrap(<OnboardingView />)
+    expect(await screen.findByText('2 of 3 done')).toBeInTheDocument()
+    const install = screen.getByRole('region', {
+      name: 'Install an agent tool',
+    })
+    expect(
+      within(install).getByText(
+        'Olivares runs the official Claude Code or Codex on this server. One is enough.',
+      ),
+    ).toBeVisible()
+  })
+
   it.each([
     ['opencode', 'ok'],
     ['grok', 'ok'],
@@ -417,8 +474,12 @@ describe('the setup wizard', () => {
       const install = screen.getByRole('region', {
         name: 'Install an agent tool',
       })
-      const card = await within(install).findByTestId(`tool-${driver}`)
-      expect(await within(card).findByText('Installed')).toBeInTheDocument()
+      // The install step is done: it names the tool it found.
+      expect(
+        await within(install).findByText(
+          driver === 'grok' ? 'Grok Build' : 'OpenCode',
+        ),
+      ).toBeInTheDocument()
       expect(screen.queryByText('Install a tool first.')).toBeNull()
       expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
       finishCheck()
@@ -427,7 +488,6 @@ describe('the setup wizard', () => {
         await screen.findByText(`${ready ? 2 : 1} of 3 done`),
       ).toBeInTheDocument()
       const signIn = screen.getByRole('region', { name: 'Sign it in' })
-      expect(within(signIn).getByTestId(`tool-${driver}`)).toBeInTheDocument()
       if (ready) {
         expect(
           within(signIn).getByText('Uses the local model server: Local model'),
@@ -436,6 +496,8 @@ describe('the setup wizard', () => {
           screen.getByRole('button', { name: 'Start' }),
         ).toBeInTheDocument()
       } else {
+        // The sign-in step is still the current one: its card says why.
+        expect(within(signIn).getByTestId(`tool-${driver}`)).toBeInTheDocument()
         expect(
           within(signIn).getByText(/Local model was refused/),
         ).toBeInTheDocument()
@@ -456,16 +518,24 @@ describe('the setup wizard', () => {
   })
 
   it('starts a session once a tool is signed in', async () => {
+    const user = userEvent.setup()
     status.codex = { driver: 'codex', installed: true, signed_in: true }
     wrap(<OnboardingView />)
     expect(
       await screen.findByRole('button', { name: 'Start' }),
     ).toBeInTheDocument()
-    // The folder is filled in, not typed (a fresh install: a new folder of its own).
-    expect(
-      await screen.findByRole('combobox', { name: 'Folder' }),
-    ).toHaveTextContent('A new folder for this session')
+    // The folder is chosen, not typed or defaulted: Start waits for the choice.
+    const folder = await screen.findByRole('combobox', { name: 'Folder' })
+    expect(folder).toHaveTextContent('Choose a folder')
     expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    await user.click(folder)
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
     expect(
       screen.getByLabelText('First message (optional)'),
     ).toBeInTheDocument()
@@ -512,7 +582,7 @@ describe('the New session dialog', () => {
     const before = preview.mock.calls.length
     wrap(<NewSessionDialog open onOpenChange={() => {}} />)
     expect(
-      await screen.findByRole('button', { name: 'Start' }),
+      await screen.findByRole('button', { name: 'Start session' }),
     ).toBeInTheDocument()
     await new Promise((r) => setTimeout(r, 300))
     const asked = preview.mock.calls.length - before
@@ -520,7 +590,9 @@ describe('the New session dialog', () => {
     expect(preview.mock.calls.length - before).toBe(asked)
     // One read answers every tool the engine drives: at most the first and one refetch.
     expect(asked).toBeLessThanOrEqual(2)
-    expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Start session' }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -557,7 +629,7 @@ describe('the New session dialog: tool and preset', () => {
     expect(
       screen.getByRole('button', { name: 'Open AI tools' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start session' })).toBeDisabled()
   })
 
   it('has one expander: Advanced launch options is inside More options', async () => {
@@ -567,7 +639,7 @@ describe('the New session dialog: tool and preset', () => {
     wrap(
       <NewSessionDialog open onOpenChange={() => {}} onAdvanced={onAdvanced} />,
     )
-    await screen.findByRole('button', { name: 'Start' })
+    await screen.findByRole('button', { name: 'Start session' })
     expect(
       screen.queryByRole('button', { name: 'Advanced launch options' }),
     ).toBeNull()
@@ -590,7 +662,13 @@ describe('the New session dialog: tool and preset', () => {
       screen.getByRole('combobox', { name: 'What the agent may do' }),
     )
     await user.click(await screen.findByRole('option', { name: 'Read only' }))
-    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await user.click(screen.getByRole('combobox', { name: 'Folder' }))
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
     expect(launch.launchSession).toHaveBeenCalledWith(
       expect.objectContaining({
         quick: expect.objectContaining({
@@ -633,12 +711,12 @@ describe('a tool with nothing to run on yet', () => {
     const before = readiness.mock.calls.length
     const first = mount()
     expect(
-      await screen.findByRole('button', { name: 'Start' }),
+      await screen.findByRole('button', { name: 'Start session' }),
     ).toBeInTheDocument()
     first.unmount()
     mount()
     expect(
-      await screen.findByRole('button', { name: 'Start' }),
+      await screen.findByRole('button', { name: 'Start session' }),
     ).toBeInTheDocument()
     expect(readiness.mock.calls.length - before).toBeLessThanOrEqual(2)
   })

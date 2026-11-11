@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -221,24 +222,16 @@ func TestTerminalResizeReachesTheShell(t *testing.T) {
 }
 
 func TestTerminalReconnectKeepsTheSameShell(t *testing.T) {
-	old := terminalReconnectWindow
-	terminalReconnectWindow = 5 * time.Second // far wider than the pause below, even on a loaded host
-	t.Cleanup(func() { terminalReconnectWindow = old })
 	m, tenant, _, folder := terminalHarness(t)
 	term := startTestTerminal(t, m, tenant, folder.WorkspaceRef)
-	detach := term.attach()
 	if err := term.send(context.Background(), "echo first-$((6*7))\r"); err != nil {
 		t.Fatal(err)
 	}
 	readUntil(t, term, "first-42")
-	detach()
-	time.Sleep(100 * time.Millisecond) // inside the window
 	again, err := m.terminalOf(tenant, folder.WorkspaceRef, term.id, terminalWho1)
 	if err != nil || again != term {
 		t.Fatalf("reconnect = %v, %v; want the same terminal", again, err)
 	}
-	detach = again.attach()
-	defer detach()
 	// The same shell: its earlier output replays from the start.
 	readUntil(t, again, "first-42")
 	if err := again.send(context.Background(), "echo second-$((6*7))\r"); err != nil {
@@ -247,41 +240,34 @@ func TestTerminalReconnectKeepsTheSameShell(t *testing.T) {
 	readUntil(t, again, "second-42")
 }
 
-func TestTerminalEndsWhenNobodyReconnects(t *testing.T) {
-	old := terminalReconnectWindow
-	terminalReconnectWindow = 150 * time.Millisecond
-	t.Cleanup(func() { terminalReconnectWindow = old })
-	m, tenant, st, folder := terminalHarness(t)
-	term := startTestTerminal(t, m, tenant, folder.WorkspaceRef)
-	term.attach()()
-	select {
-	case <-term.done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("a terminal nobody reconnected to kept running")
+// A terminal is the person's until they close it: leaving it for longer than a reconnect
+// window (the limit was 60 seconds) finds the same shell, its process and its output.
+// Real time on purpose: no limit is named here, so the test holds for any value of one.
+func TestTerminalSurvivesBeingLeft(t *testing.T) {
+	if testing.Short() {
+		t.Skip("waits 70 seconds")
 	}
-	if _, err := m.terminalOf(tenant, folder.WorkspaceRef, term.id, terminalWho1); err == nil {
-		t.Fatal("an ended terminal can still be reached")
-	}
-	if len(auditActions(t, st, tenant)["sessions.terminal.close"]) != 1 {
-		t.Fatal("the close is not in the ledger")
-	}
-}
-
-func TestTerminalEndsWhenIdle(t *testing.T) {
-	old := terminalIdleTimeout
-	terminalIdleTimeout = 150 * time.Millisecond
-	t.Cleanup(func() { terminalIdleTimeout = old })
 	m, tenant, _, folder := terminalHarness(t)
 	term := startTestTerminal(t, m, tenant, folder.WorkspaceRef)
-	defer term.attach()() // attached, so only the idle limit can end it
+	if err := term.send(context.Background(), "sleep 300 & echo job-$((6*7))\r"); err != nil {
+		t.Fatal(err)
+	}
+	readUntil(t, term, "job-42")
+	time.Sleep(70 * time.Second) // nobody is reading
 	select {
 	case <-term.done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("an idle terminal kept running")
+		t.Fatalf("the terminal ended while it was left alone (reason %q)", term.closeReason())
+	default:
 	}
-	if got := term.closeReason(); got != "idle" {
-		t.Fatalf("close reason = %q, want idle", got)
+	again, err := m.terminalOf(tenant, folder.WorkspaceRef, term.id, terminalWho1)
+	if err != nil || again != term {
+		t.Fatalf("coming back = %v, %v; want the same terminal", again, err)
 	}
+	readUntil(t, again, "job-42") // its earlier output is still there
+	if err := again.send(context.Background(), "jobs | grep -c sleep\r"); err != nil {
+		t.Fatal(err)
+	}
+	readUntil(t, again, "\r1\r\n") // the process it started is still running: one job named sleep
 }
 
 func TestTerminalBelongsToItsPerson(t *testing.T) {
@@ -306,6 +292,93 @@ func TestTerminalLimitPerPerson(t *testing.T) {
 	if !errors.As(err, &re) || re.status != http.StatusTooManyRequests {
 		t.Fatalf("one terminal too many = %v, want 429", err)
 	}
+}
+
+// The refusal counts across folders while the list is per folder, so it says where they are.
+func TestTerminalLimitNamesTheFoldersHoldingThem(t *testing.T) {
+	m, tenant, _, folder := terminalHarness(t)
+	other := mkWorkspace(t, m, tenant, CreateWorkspaceParams{})
+	startTestTerminal(t, m, tenant, other.WorkspaceRef)
+	for range terminalMaxPerPerson - 1 {
+		startTestTerminal(t, m, tenant, folder.WorkspaceRef)
+	}
+	_, err := m.startTerminal(context.Background(), tenant, folder.WorkspaceRef, terminalWho1, 24, 80)
+	names := []string{folder.WorkspaceRef, other.WorkspaceRef}
+	slices.Sort(names)
+	want := "you have 4 terminals open in " + names[0] + ", " + names[1] + "; close one first"
+	var re *runErr
+	if !errors.As(err, &re) || re.status != http.StatusTooManyRequests || re.Error() != want {
+		t.Fatalf("one terminal too many = %v, want 429 %q", err, want)
+	}
+}
+
+// History is kept at the reference's limits, 8 MiB and 5,000 lines, whichever is smaller. The
+// numbers are written out: a change to the constants must be a decision, seen here.
+func TestTerminalHistoryLimits(t *testing.T) {
+	t.Run("a fresh read from 0 returns line 1 of 5000", func(t *testing.T) {
+		m, tenant, _, folder := terminalHarness(t)
+		term := startTestTerminal(t, m, tenant, folder.WorkspaceRef)
+		// Padded to 100 digits: the plain output of seq 1 5000 (24 KiB) fit the old tail too.
+		if err := term.send(context.Background(), "seq -f '%0100g' 1 5000; echo done-$((6*7))\r"); err != nil {
+			t.Fatal(err)
+		}
+		readUntil(t, term, "done-42")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		chunk, err := term.read(ctx, 0)
+		lineOne := strings.Repeat("0", 99) + "1\r\n"
+		if err != nil || chunk.Offset != 0 || !bytes.Contains(chunk.Data, []byte(lineOne)) {
+			t.Fatalf("read from 0: offset %d, err %v, line 1 present %v", chunk.Offset, err, bytes.Contains(chunk.Data, []byte(lineOne)))
+		}
+	})
+
+	t.Run("the line limit keeps the last 5000 whole lines", func(t *testing.T) {
+		term := &terminal{changed: make(chan struct{})}
+		for i := range 20000 {
+			term.append([]byte("line-" + strconv.Itoa(i) + "\n"))
+		}
+		if n := bytes.Count(term.buf, []byte("\n")); n < 5000 || n > 6000 {
+			t.Fatalf("kept %d lines, want 5000 plus at most the slack", n)
+		}
+		if !bytes.HasPrefix(term.buf, []byte("line-")) || !bytes.HasSuffix(term.buf, []byte("line-19999\n")) {
+			t.Fatalf("kept output starts %q and ends %q", term.buf[:12], term.buf[len(term.buf)-12:])
+		}
+		chunk, err := term.read(context.Background(), 0)
+		if err != nil || chunk.Offset != term.base || term.base == 0 {
+			t.Fatalf("read from 0 = offset %d, err %v; base %d", chunk.Offset, err, term.base)
+		}
+	})
+
+	t.Run("the byte limit trims past a slack and cuts after a newline", func(t *testing.T) {
+		const lineLen = 4 << 10 // long lines, so 8 MiB is reached before 5,000 lines
+		line := append(bytes.Repeat([]byte("x"), lineLen-1), '\n')
+		term := &terminal{changed: make(chan struct{})}
+		for range (8<<20)/lineLen + 25 { // 100 KiB over the limit
+			term.append(line)
+		}
+		if term.base != 0 {
+			t.Fatalf("trimmed at %d bytes, inside the slack: base %d", len(term.buf), term.base)
+		}
+		for range 1000 { // 4 MiB more, past any slack
+			term.append(line)
+		}
+		if term.base == 0 || term.base%lineLen != 0 {
+			t.Fatalf("base %d: not trimmed, or cut inside a line", term.base)
+		}
+		if n := len(term.buf); n < 8<<20-terminalChunkBytes || n > 10<<20 {
+			t.Fatalf("kept %d bytes, want 8 MiB plus at most the slack", n)
+		}
+	})
+
+	t.Run("output without a newline still honors the byte limit", func(t *testing.T) {
+		term := &terminal{changed: make(chan struct{})}
+		for range 11 {
+			term.append(bytes.Repeat([]byte("x"), 1<<20))
+		}
+		if n := len(term.buf); n < 8<<20 || n > 10<<20 {
+			t.Fatalf("kept %d bytes, want 8 MiB plus at most the slack", n)
+		}
+	})
 }
 
 func TestTerminalRefusesWithoutConfinement(t *testing.T) {

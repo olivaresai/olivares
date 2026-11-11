@@ -43,6 +43,10 @@ export const KEY_CONTEXTS = [
   'approvalQueue',
   /** The access map is on screen, outside a field, a menu and a modal. */
   'accessMap',
+  /** The keyboard is in a terminal of the drawer. */
+  'terminalFocused',
+  /** Words are selected inside one of the tool's replies in the conversation. */
+  'replySelection',
 ] as const
 
 export type KeyContextName = (typeof KEY_CONTEXTS)[number]
@@ -58,10 +62,18 @@ export const PALETTE_RECENT_COMMANDS: readonly string[] = [
 // Named, not inline after `keys:`: the secret scanner's generic-api-key rule joins the
 // field name `keys` to a long chord and reads it as a credential.
 const PREVIOUS_SESSION_CHORD = 'Mod+Shift+Enter'
+const PREVIOUS_TERMINAL_CHORD = 'Alt+Shift+ArrowLeft'
+const NEXT_TERMINAL_CHORD = 'Alt+Shift+ArrowRight'
+const SCROLL_TOP_CHORD = 'Mod+Shift+Home'
+const SCROLL_END_CHORD = 'Mod+Shift+End'
+const NEXT_IN_LIST_CHORD = 'Alt+Shift+ArrowDown'
+const PREVIOUS_IN_LIST_CHORD = 'Alt+Shift+ArrowUp'
 
 /** A command's group, for the one page that documents the table. */
 export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'palette.open': 'general',
+  'shell.sidebar': 'general',
+  'shell.panel': 'general',
   'ask.open': 'general',
   'session.new': 'general',
   'session.previous': 'general',
@@ -74,6 +86,7 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'launcher.focus': 'launcher',
   'launcher.start': 'launcher',
   'launcher.startBackground': 'launcher',
+  'launcher.stash': 'launcher',
   'surface.terminal': 'surface',
   'surface.changes': 'surface',
   'surface.preview': 'surface',
@@ -84,8 +97,21 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'surface.previousPane': 'surface',
   'surface.openBeside': 'surface',
   'surface.closeBeside': 'surface',
+  'terminal.new': 'surface',
+  'terminal.close': 'surface',
+  'terminal.previous': 'surface',
+  'terminal.next': 'surface',
+  'terminal.search': 'surface',
+  'terminal.links': 'surface',
+  'terminal.copy': 'surface',
+  'terminal.selectAll': 'surface',
+  'terminal.scrollTop': 'surface',
+  'terminal.scrollBottom': 'surface',
   'surface.focusBeside': 'surface',
+  'surface.nextSession': 'surface',
+  'surface.previousSession': 'surface',
   'surface.approve': 'surface',
+  'surface.cite': 'surface',
   'rail.next': 'surface',
   'rail.previous': 'surface',
   'rail.first': 'surface',
@@ -106,6 +132,8 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
 export const KEYBINDINGS: readonly KeyRule[] = [
   // ── shell-wide ────────────────────────────────────────────────────────────
   { command: 'palette.open', keys: 'Mod+k' },
+  { command: 'shell.sidebar', keys: 'Mod+b' },
+  { command: 'shell.panel', keys: 'Mod+Alt+b' },
   // Ask Olivares: outside a field only, so the chord can never be typed into one; the
   // palette's "Ask Olivares…" opens it from anywhere.
   { command: 'ask.open', keys: 'Alt+Shift+a', when: 'outsideField' },
@@ -138,6 +166,9 @@ export const KEYBINDINGS: readonly KeyRule[] = [
     keys: 'Mod+Enter',
     when: 'launcherFocused',
   },
+  // Sets the draft aside (the browser's Save is never wanted in a field), or brings back
+  // the one set aside when the field is empty.
+  { command: 'launcher.stash', keys: 'Mod+s', when: 'launcherFocused' },
 
   // ── the work surface ──────────────────────────────────────────────────────
   { command: 'surface.terminal', keys: 'Mod+j', when: 'workSurface' },
@@ -155,8 +186,53 @@ export const KEYBINDINGS: readonly KeyRule[] = [
     keys: 'Alt+Shift+ArrowRight',
     when: 'workSurface',
   },
+  // The session next to the open one in the list, from anywhere but a field.
+  {
+    command: 'surface.nextSession',
+    keys: NEXT_IN_LIST_CHORD,
+    when: 'workSurface',
+  },
+  {
+    command: 'surface.previousSession',
+    keys: PREVIOUS_IN_LIST_CHORD,
+    when: 'workSurface',
+  },
   // The request in the open conversation, only while all of it is in view.
   { command: 'surface.approve', keys: 'Alt+a', when: 'workSurface' },
+  // The words selected in a reply go to the composer as a quote, as their button does.
+  { command: 'surface.cite', keys: 'Alt+q', when: 'replySelection' },
+
+  // ── a terminal of the drawer, only while it has the keyboard ──────────────
+  { command: 'terminal.new', keys: 'Alt+Shift+n', when: 'terminalFocused' },
+  { command: 'terminal.close', keys: 'Alt+Shift+w', when: 'terminalFocused' },
+  {
+    command: 'terminal.previous',
+    keys: PREVIOUS_TERMINAL_CHORD,
+    when: 'terminalFocused',
+  },
+  {
+    command: 'terminal.next',
+    keys: NEXT_TERMINAL_CHORD,
+    when: 'terminalFocused',
+  },
+  { command: 'terminal.search', keys: 'Mod+Shift+f', when: 'terminalFocused' },
+  { command: 'terminal.links', keys: 'Alt+Shift+l', when: 'terminalFocused' },
+  { command: 'terminal.copy', keys: 'Mod+Shift+c', when: 'terminalFocused' },
+  {
+    command: 'terminal.selectAll',
+    keys: 'Mod+Shift+a',
+    when: 'terminalFocused',
+  },
+  {
+    command: 'terminal.scrollTop',
+    keys: SCROLL_TOP_CHORD,
+    when: 'terminalFocused',
+  },
+  {
+    command: 'terminal.scrollBottom',
+    keys: SCROLL_END_CHORD,
+    when: 'terminalFocused',
+  },
 
   // ── the rail, only while it has focus ─────────────────────────────────────
   { command: 'rail.next', keys: 'ArrowDown', when: 'railFocused' },
@@ -205,6 +281,11 @@ export const KEYBINDINGS: readonly KeyRule[] = [
 /** The palette's chord, as the table declares it (Mod+k): no rule, no hint. */
 export const PALETTE_KEYS = KEYBINDINGS.find(
   (rule) => rule.command === 'palette.open',
+)?.keys
+
+/** Citing the words selected in a reply, as the table declares it (Alt+q). */
+export const CITE_KEYS = KEYBINDINGS.find(
+  (rule) => rule.command === 'surface.cite',
 )?.keys
 
 /** The key that arms a navigation sequence, and how long it stays armed. */

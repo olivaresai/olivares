@@ -1,9 +1,55 @@
 {
   "title": "Utilizzo",
-  "subtitle": "I limiti ufficiali di 5 ore e settimanali accanto ai token e al costo di oggi.",
+  "subtitle": "Cosa hanno usato e quanto sono costate le sessioni nei giorni scelti, accanto ai limiti di 5 ore e settimanali di ogni account.",
+  "subtitleNoCost": "Cosa hanno usato le sessioni nei giorni scelti, accanto ai limiti di 5 ore e settimanali di ogni account.",
   "tabs": {
     "accounts": "Account",
     "timeline": "Cronologia"
+  },
+  "spend": {
+    "heading": "Spesa",
+    "headingNoCost": "Esecuzioni e token",
+    "range": {
+      "label": "Periodo",
+      "d7": "7 giorni",
+      "d14": "14 giorni",
+      "d30": "30 giorni",
+      "custom": "Personalizzato",
+      "from": "Primo giorno",
+      "to": "Ultimo giorno",
+      "invalid": "Il primo giorno deve essere uguale o precedente all'ultimo. Un intervallo comprende al massimo {{days}} giorni."
+    },
+    "tool": "Strumento",
+    "allTools": "Tutti gli strumenti",
+    "profile": "Profilo",
+    "allProfiles": "Tutti i profili",
+    "export": "Esporta",
+    "totals": "Totali",
+    "cost": "Spesa",
+    "runs": "Esecuzioni",
+    "input": "Token in ingresso",
+    "output": "Token in uscita",
+    "costUnreported": "Esecuzioni senza costo comunicato: {{runs}}",
+    "tokensUnreported": "Esecuzioni senza token comunicati: {{runs}}",
+    "empty": {
+      "title": "Nulla è stato eseguito in questi giorni",
+      "description": "Scegli più giorni o avvia una sessione: ciò che usa comparirà qui."
+    },
+    "chart": {
+      "cost": "Spesa giornaliera",
+      "tokens": "Token giornalieri",
+      "day": "Giorno",
+      "summary": "{{title}} dal {{from}} al {{to}}: {{total}} in tutto.",
+      "unpriced": "Le esecuzioni senza costo comunicato non sono nel grafico."
+    },
+    "profiles": {
+      "heading": "Per profilo",
+      "profile": "Profilo",
+      "input": "Ingresso",
+      "output": "Uscita",
+      "none": "Nessun profilo",
+      "unnamed": "Profilo senza nome"
+    }
   },
   "accounts": {
     "heading": "Account",
@@ -11,7 +57,8 @@
     "error": "Non è stato possibile leggere i limiti degli account.",
     "empty": "Nessun account ha ancora indicato i propri limiti.",
     "details": "Dettagli",
-    "detailsFor": "Dettagli di {{account}}"
+    "detailsFor": "Dettagli di {{account}}",
+    "emptyChosen": "Nessun account di questo strumento o profilo ha ancora comunicato i suoi limiti."
   },
   "today": {
     "heading": "Oggi",

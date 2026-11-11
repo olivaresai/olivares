@@ -9,6 +9,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { usePreferencesStore } from '@/stores/preferences'
 import { usePaneWidthsStore } from '@/stores/pane-widths'
 import {
   SidePanelContent,
@@ -57,6 +58,7 @@ function viewport(wide: boolean) {
 }
 
 describe('the side panel', () => {
+  beforeEach(() => usePreferencesStore.setState({ panelOpen: null }))
   afterEach(() => vi.unstubAllGlobals())
 
   it('is a layer over the work only while it covers it, below 1100 px', async () => {
@@ -91,6 +93,13 @@ describe('the side panel', () => {
     const toggle = screen.getByRole('button', { name: 'Hide Changes' })
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
     expect(toggle).toHaveAttribute('aria-controls', panel.id)
+    // 44 px on a phone, and the shared focus outline (a box-shadow ring vanishes in
+    // forced colors), on the toggle and on the panel's own close.
+    expect(toggle).toHaveClass('max-[760px]:size-11')
+    expect(toggle).not.toHaveClass('outline-none')
+    expect(
+      screen.getByRole('button', { name: 'Close the panel' }),
+    ).not.toHaveClass('outline-none')
   })
 
   it('hides with its toggle and closes with Escape from inside', async () => {

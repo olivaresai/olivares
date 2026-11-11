@@ -57,5 +57,17 @@
     "same": "Sin diferencias con HEAD.",
     "view": "Vista",
     "unavailable": "No se pudo comparar con HEAD."
+  },
+  "diff": {
+    "layout": "Vista de diferencias",
+    "unified": "Unificada",
+    "split": "Dividida",
+    "wrap": "Ajustar líneas",
+    "whitespace": "Ignorar espacios",
+    "maximize": "Maximizar",
+    "restore": "Restaurar tamaño",
+    "reviewed": "Revisado",
+    "working": "Árbol de trabajo",
+    "branch": "Rama"
   }
 }

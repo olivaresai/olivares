@@ -174,6 +174,7 @@ export function PromptDetailSheet({
                   />
                 ) : sorted.length === 0 ? (
                   <EmptyState
+                    size="panel"
                     description={t('prompts.revisionsEmptyHint')}
                     title={t('prompts.revisionsEmpty')}
                   />

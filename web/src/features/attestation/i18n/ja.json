@@ -35,7 +35,7 @@
     "sumsAbsent": "記録された依存関係サムはありません",
     "vcsAvailable": "Go ツールチェーンによってスタンプされた VCS 設定",
     "vcsUnavailable": "VCS スタンプなし",
-    "selfHashHint": "自己 SHA256 は実行中の実行ファイルのストリームハッシュであり、初回読み取り時に一度だけ計算されます。将来の署名付き checksums.txt とオフラインで照合してください — ブラウザは署名を検証せず、ハッシュ単体ではアイデンティティは証明できても来歴は証明できません。",
+    "selfHashHint": "自己 SHA256 は実行中の実行ファイルのハッシュで、初回読み取り時に一度だけ計算されます。このバイト列そのものを示しますが、その出所は証明しません。リリースを確認するには下の「自分で確認する」を使ってください。そこで確認するアーカイブからインストールした場合、そのアーカイブ内の olivares ファイルの sha256sum はこれと同じ値になります。",
     "published": "公開済み",
     "notPublished": "未公開",
     "verifierAvailable": "ネイティブ検証ツールがコンパイル済み（core/secure/modelsign）",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "宣言済み。"
     }
+  },
+  "check": {
+    "title": "自分で確認する",
+    "description": "コンソールを使わずに、ターミナルから同じ確認を行います。",
+    "download": "<release>{{version}} のリリースページ</release>から checksums.txt、checksums.txt.sig、checksums.txt.pem と、インストールに使ったアーカイブまたはパッケージをダウンロードし、それらのフォルダーで次を実行します。",
+    "provenance": "アーカイブと一緒に、<release>{{version}} のリリースページ</release>から multiple.intoto.jsonl をダウンロードし、それらのフォルダーで次を実行します。",
+    "passes": "「Verified OK」の後に各ファイルの横に OK と表示されれば、ダウンロードしたファイルは Olivares AI のリリースワークフローが {{version}} に署名したものです。",
+    "notRelease": "このビルドは署名済みのリリースではないため、照合するリリース署名がありません。",
+    "business": "Olivares AI Business は Business チャネルの手順で確認します。"
   },
   "status": {
     "declared": "宣言済み",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "リリースアーティファクト",
     "description": "リリースに同梱されるものと、各アーティファクトの信頼がどのように確立されるか。キーレス（Fulcio/Rekor）署名とキーベース（エアギャップ）署名はいずれも第一級であり、どちらが正規というわけではありません。",
-    "identityNote": "キーレス署名アイデンティティ（宣言済み）: OIDC 発行者 {{issuer}} · cosign 証明書アイデンティティ {{regexp}}",
+    "identityNote": "キーレス署名アイデンティティ（宣言済み）: OIDC 発行者 {{issuer}} · cosign 証明書アイデンティティ <identity />",
     "columns": {
       "artifact": "アーティファクト",
       "producedBy": "生成元",

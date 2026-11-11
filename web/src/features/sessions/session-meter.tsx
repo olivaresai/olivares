@@ -201,12 +201,23 @@ export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
   )
 }
 
+/** The Usage place's path where it opens for the person, otherwise null. The Sessions
+ * page tells money only where Usage opens: a member sees the tokens and no cost. */
+export function useUsagePath(): string | null {
+  const { navigable } = useViewAccess()
+  const usageView = viewById('usage')
+  return usageView && navigable(usageView) ? usageView.path : null
+}
+
 /** What the session has spent, in Details: the header names the session and its state,
- * and the status bar says each tool's plan windows. */
+ * and the status bar says each tool's plan windows. The cost, or that none was reported,
+ * is told only where Usage opens for the person: a member sees the tokens and no money. */
 export function SessionMeter({ usage }: { usage: SessionUsage | null }) {
   const { t, i18n } = useTranslation('sessions')
   const access = useViewAccess()
   const lang = i18n.language
+  const tellsCost = useUsagePath() !== null
+  const tokens = usage?.input != null && usage.output != null
   const amount =
     usage?.costMicroUsd != null
       ? formatMicroUsd(usage.costMicroUsd, { locale: lang })
@@ -224,7 +235,7 @@ export function SessionMeter({ usage }: { usage: SessionUsage | null }) {
   )
   return (
     <>
-      {usage ? (
+      {usage && (tokens || tellsCost) ? (
         <span
           className="shrink-0 text-overline font-normal tabular-nums text-text-3"
           aria-label={t('meter.usageLabel')}
@@ -236,10 +247,10 @@ export function SessionMeter({ usage }: { usage: SessionUsage | null }) {
                 input: formatTokens(usage.input, lang),
                 output: formatTokens(usage.output, lang),
               })}
-              {' · '}
+              {tellsCost ? ' · ' : null}
             </>
           ) : null}
-          {access.navigable(COST_VIEW) ? (
+          {!tellsCost ? null : access.navigable(COST_VIEW) ? (
             <AppLink
               href={COST_VIEW.path}
               aria-label={`${t('meter.viewCosts')}: ${costText}`}

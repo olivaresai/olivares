@@ -25,6 +25,12 @@ export const USAGE_REFRESH_MS = 30_000
 export interface ProfileList {
   /** Every active account: the set both AI tools and New session count. */
   accounts: ProviderAccountDTO[]
+  /** The accounts switched off: the AI tools page lists them so they can be switched back
+   * on; New session never offers them. */
+  disabled: ProviderAccountDTO[]
+  /** The accounts retired for good. A person's own one stays theirs: no other of that
+   * tool can be made for them (the home says so). */
+  retired: ProviderAccountDTO[]
   /** The references of accounts that are not active (disabled, removed). */
   inactive: ReadonlySet<string>
   /** Every name the engine has reserved, removed ones included (a name is unique). */
@@ -93,6 +99,8 @@ export function useProfileList(enabled = true) {
       )
       return {
         accounts: all.filter((a) => a.state === 'active'),
+        disabled: all.filter((a) => a.state === 'disabled'),
+        retired: all.filter((a) => a.state === 'retired'),
         inactive: new Set(
           all.filter((a) => a.state !== 'active').map((a) => a.account_ref),
         ),

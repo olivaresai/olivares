@@ -8,8 +8,8 @@
 //
 // ⛔ THE SHAPE DIFFERS PER STATUS AND THE WORD IS ALWAYS THERE, so colour never carries a
 //    state alone. Each status has its colour: blue Working, amber Needs you,
-//    green Done, red Failed; Idle, the one at rest, is grey.
-import { CircleCheck, CircleX, Pause } from 'lucide-react'
+//    green Done, red Failed; Paused (a provider limit) and Idle, at rest, are grey.
+import { CircleCheck, CirclePause, CircleX, Pause } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import type { SessionStatus } from './session-display-state'
@@ -23,6 +23,7 @@ const WORD_KEY: Record<SessionStatus, string> = {
   'needs-you': 'sessions:list.group.attention',
   done: 'agentops:state.done',
   failed: 'agentops:state.failed',
+  paused: 'agentops:state.paused',
   idle: 'agentops:state.idle',
 }
 
@@ -70,9 +71,21 @@ export function SessionStatusMark({
       />
     )
   const Icon =
-    status === 'done' ? CircleCheck : status === 'failed' ? CircleX : Pause
+    status === 'done'
+      ? CircleCheck
+      : status === 'failed'
+        ? CircleX
+        : status === 'paused'
+          ? CirclePause
+          : Pause
   const shape =
-    status === 'done' ? 'check' : status === 'failed' ? 'cross' : 'pause'
+    status === 'done'
+      ? 'check'
+      : status === 'failed'
+        ? 'cross'
+        : status === 'paused'
+          ? 'circled-pause'
+          : 'pause'
   return (
     <Icon
       {...common}

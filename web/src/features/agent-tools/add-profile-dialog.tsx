@@ -171,11 +171,6 @@ export function AddProfileDialog({
             autoStart
             onSignedIn={() => onOpenChange(false)}
           />
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              {t('add.notNow')}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     )
@@ -303,7 +298,11 @@ export function AddProfileDialog({
                 variant="primary"
                 disabled={!!missing || create.isPending}
               >
-                {create.isPending ? t('add.creating') : t('add.create')}
+                {create.isPending
+                  ? t('add.creating')
+                  : method === 'account'
+                    ? t('add.createAndSignIn')
+                    : t('add.create')}
               </Button>
             </DialogFooter>
           </form>

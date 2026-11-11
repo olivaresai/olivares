@@ -32,6 +32,11 @@ func governancePDPEngineSourceSchema(publish bool) map[string]any {
 	if publish {
 		properties["source"] = governanceNonBlankString("Must compile for the selected engine and is capped at 262144 bytes.")
 		required = append(required, "source")
+		properties["tests"] = oas.Obj("type", "array", "maxItems", 200, "items", governanceClosedObject(oas.Obj(
+			"name", governanceNonBlankString("Unique name a refusal quotes."),
+			"request", governancePDPExampleSchema(),
+			"expect", oas.Obj("type", "string", "enum", []string{"allow", "deny"}),
+		), "name", "request", "expect"), "description", "Cedar only. Replaces the stored tests; omit it to keep them. A publish that breaks a test is refused with its name.")
 	}
 	return governanceClosedObject(properties, required...)
 }
@@ -43,10 +48,11 @@ func governancePDPStringMapSchema() map[string]any {
 	))
 }
 
-func governancePDPCandidateSchema() map[string]any {
+func governancePDPExampleSchema() map[string]any {
 	principal := governanceClosedObject(oas.Obj(
 		"kind", governanceOptionalString("After trimming, user remains user; every other value is evaluated as token."),
 		"id", governanceOptionalString("Optional credential identifier for the example principal."),
+		"person", governanceOptionalString("A person's user id or email: evaluates as that person with their stored role and groups in this tenant. Requires policy administration."),
 	))
 	resource := governanceClosedObject(oas.Obj(
 		"kind", governanceOptionalString("Example resource kind."),
@@ -54,16 +60,19 @@ func governancePDPCandidateSchema() map[string]any {
 		"sensitivity", governanceOptionalString("Example sensitivity attribute."),
 		"extra", governancePDPStringMapSchema(),
 	))
-	example := governanceClosedObject(oas.Obj(
+	return governanceClosedObject(oas.Obj(
 		"principal", governanceNullable(principal),
 		"permission", governanceOptionalString("Whitespace is trimmed before evaluation."),
 		"tenant", governanceOptionalString("A valid non-zero tenant overrides the authenticated tenant; invalid input falls back to it."),
 		"resource", governanceNullable(resource),
 	))
+}
+
+func governancePDPCandidateSchema() map[string]any {
 	return governanceClosedObject(oas.Obj(
 		"engine", governancePDPEngineSchema(),
 		"source", governanceOptionalString("Cedar must compile; OPA candidates are not evaluated in-process."),
-		"request", governanceNullable(example),
+		"request", governanceNullable(governancePDPExampleSchema()),
 	), "engine")
 }
 

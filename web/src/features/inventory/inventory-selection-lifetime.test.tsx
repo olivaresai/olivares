@@ -439,8 +439,7 @@ describe('Inventory selection: tenant lifetime', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 
     // Controls set under T1: a kind facet and the topology tab, then a card.
-    await user.click(screen.getByRole('combobox', { name: 'All kinds' }))
-    await user.click(await screen.findByRole('option', { name: 'Agent' }))
+    await user.click(await screen.findByRole('button', { name: /^Agent/ }))
     await user.click(screen.getByRole('tab', { name: 'Topology' }))
     expect(await screen.findByText('Who acts')).toBeInTheDocument()
     sheet = await openSheet(user, 'idle-agent')
@@ -454,10 +453,15 @@ describe('Inventory selection: tenant lifetime', () => {
       'aria-selected',
       'true',
     )
-    expect(
-      screen.getByRole('combobox', { name: 'All kinds' }),
-    ).toHaveTextContent('Agent')
     expect(await screen.findByText('Entities')).toBeInTheDocument()
+
+    // The kind chip belongs to the catalog tab and survives the switch with it.
+    await user.click(screen.getByRole('tab', { name: 'Catalog' }))
+    expect(
+      await screen.findByRole('button', { name: /^Agent/ }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByRole('tab', { name: 'Topology' }))
+    await screen.findByText('Who acts')
 
     // And a T2 selection from the topology is T2's card with T2's projection.
     sheet = await openSheet(user, 'billing-bot')

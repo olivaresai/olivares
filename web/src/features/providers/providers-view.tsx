@@ -8,6 +8,7 @@ import {
   type SignInTool,
 } from '@/features/first-hour/api'
 import { agentToolsKeys } from '@/features/agent-tools/api'
+import { useProfileList } from '@/features/agent-tools/use-profiles'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { toolName, vendorColor } from '@/features/agentops/engine-tools'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
@@ -26,6 +27,7 @@ import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Badge } from '@/components/ui/badge'
+import { Tag } from '@/components/ui/tag'
 import { MonoMark } from '@/components/ui/mono-mark'
 import { Button } from '@/components/ui/button'
 import { withInlineCommands } from '@/components/ui/inline-commands'
@@ -68,9 +70,8 @@ import type { ProbeState, ProviderKind, ProviderRecordDTO } from './types'
 import './i18n'
 
 /**
- * ApiKeys — the API keys on Tools: where a new operator lands when they ask
- * "where do I put my API key". It was a page of its own (`/providers`), which is now a
- * door into Tools.
+ * ApiKeys — the API keys on the Providers page (`/providers`, beside AI tools): where a
+ * new operator lands when they ask "where do I put my API key".
  *
  * Before it there was no answer: the console had provider PROFILES (which home
  * directory an official CLI runs under) and the server had environment variables, and
@@ -258,6 +259,24 @@ function Inner({
     queryFn: ({ signal }) => providersApi.list(undefined, { signal }),
     enabled: canRead,
   })
+  // Which profiles run on each key: the profile list AI tools reads, for whoever
+  // may read the accounts (without that tier there is no column). A dash says only
+  // "no profile": while the read is out, or when it failed or was cut, a cell claims
+  // nothing and a line under the table says why.
+  const accountsRead = canRead && can('sessions:account:read')
+  const profiles = useProfileList(accountsRead)
+  const fullAnswer = profiles.isSuccess && !profiles.data.truncated
+  const usersOf = (ref: string) =>
+    [...(profiles.data?.accounts ?? []), ...(profiles.data?.disabled ?? [])]
+      .filter((a) => a.provider_record_ref === ref)
+      .map((a) => a.name)
+  const usersLine = (ref: string) =>
+    usersOf(ref).join(', ') || (fullAnswer ? '—' : '')
+  const usersNote = profiles.isError
+    ? 'columns.usedByUnread'
+    : profiles.data?.truncated
+      ? 'columns.usedByPartial'
+      : null
 
   const test = usePrivilegedMutation<string, ProviderRecordDTO>({
     mutationFn: (ref) => providersApi.test(ref),
@@ -362,6 +381,24 @@ function Inner({
     test.isPending || prepare.isPending || !!prepare.stepUpRequest
   const rows = listQ.data?.items ?? []
 
+  const usedBy: TableColumn<ProviderRecordDTO> = {
+    id: 'usedBy',
+    header: t('columns.usedBy'),
+    accessorFn: (r) => usersOf(r.provider_ref).join(' '),
+    cell: ({ row }) => {
+      const names = usersOf(row.original.provider_ref)
+      if (!names.length) return fullAnswer ? '—' : null
+      return (
+        <span className="flex flex-wrap gap-1">
+          {names.map((name) => (
+            <Tag key={name} mono>
+              {name}
+            </Tag>
+          ))}
+        </span>
+      )
+    },
+  }
   const columns: TableColumn<ProviderRecordDTO>[] = [
     {
       id: 'name',
@@ -406,6 +443,7 @@ function Inner({
         </span>
       ),
     },
+    ...(accountsRead ? [usedBy] : []),
     {
       id: 'state',
       header: t('columns.state'),
@@ -579,9 +617,9 @@ function Inner({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <h3 id={headingId} className="text-body-l font-semibold text-text">
+          <h2 id={headingId} className="text-body-l font-semibold text-text">
             {t('section.title')}
-          </h3>
+          </h2>
           <p className="text-caption text-text-2">{t('subtitle')}</p>
         </div>
         {/* The page that owns the verb (AI tools: its header) offers it once; a list on its
@@ -678,9 +716,9 @@ function Inner({
                 <div className="flex min-w-0 items-start gap-2">
                   <ProviderMark record={record} />
                   <div className="min-w-0">
-                    <h2 className="break-words text-sm font-medium">
+                    <h3 className="break-words text-sm font-medium">
                       {record.display_name}
-                    </h2>
+                    </h3>
                     <p className="break-all font-mono text-xs text-muted-foreground">
                       {record.provider_ref}
                     </p>
@@ -721,6 +759,16 @@ function Inner({
                     </dt>
                     <dd className="font-mono">{record.key_hint ?? '—'}</dd>
                   </div>
+                  {accountsRead ? (
+                    <div className="col-span-2 min-w-0">
+                      <dt className="mb-1 text-muted-foreground">
+                        {t('columns.usedBy')}
+                      </dt>
+                      <dd className="break-all font-mono">
+                        {usersLine(record.provider_ref)}
+                      </dd>
+                    </div>
+                  ) : null}
                   <div className="col-span-2 min-w-0">
                     <dt className="mb-1 text-muted-foreground">
                       {t('defaultModel.title')}
@@ -774,6 +822,11 @@ function Inner({
           }
         />
       )}
+      {accountsRead && usersNote ? (
+        <p role="status" className="text-caption text-text-2">
+          {t(usersNote)}
+        </p>
+      ) : null}
 
       {canWrite && (
         <ProviderCreateDialog

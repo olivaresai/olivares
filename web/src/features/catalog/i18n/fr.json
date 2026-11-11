@@ -18,8 +18,6 @@
     "search": "Rechercher des entrées…",
     "name": "Nom",
     "kind": "Type",
-    "slug": "Slug",
-    "version": "Version",
     "status": "Statut",
     "owner": "Propriétaire",
     "signing": "Signature",

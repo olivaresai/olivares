@@ -16,6 +16,7 @@ import { ShieldCheck } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Button } from '@/components/ui/button'
 import {
@@ -105,6 +106,8 @@ export function AdmissionPanel({ entry }: { entry: EntryDTO }) {
         />
       ) : query.error instanceof ApiError && query.error.isForbidden ? (
         <ForbiddenState />
+      ) : query.error ? (
+        <QueryErrorState error={query.error} retry={() => query.refetch()} />
       ) : verdict ? (
         <VerdictBody verdict={verdict} />
       ) : (

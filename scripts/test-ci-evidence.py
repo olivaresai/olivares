@@ -27,7 +27,8 @@ REQUIRED = {
 }
 REQUIRED_NAMES = {'cli-development-verification',
                   'appliance-release-publication-${{ github.run_id }}-${{ github.run_attempt }}',
-                  'appliance-image-artifacts-${{ github.run_id }}-${{ github.run_attempt }}'}
+                  'appliance-image-artifacts-${{ github.run_id }}-${{ github.run_attempt }}',
+                  'community-tree-${{ github.run_id }}-${{ github.run_attempt }}'}
 
 
 class EvidenceWorkflowTests(unittest.TestCase):

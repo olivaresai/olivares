@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { formatDateTime, formatShortDateTime } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import { StatusBadge } from '@/components/data/badges'
+import { StatusChip } from '@/components/ui/status-chip'
 import { cn } from '@/lib/utils'
 import { RelTimeLabel } from '@/features/shared'
 import {
@@ -131,21 +132,41 @@ function QueueRow({
       )}
     >
       {flagged ? <span className="sr-only">{t('queue.needsYou')}</span> : null}
-      <span className="flex min-w-0 items-baseline gap-2 text-caption text-text-2">
+      <span className="flex min-w-0 flex-wrap items-baseline gap-2 text-caption text-text-2">
         <span className="min-w-0 truncate font-medium text-foreground">
           <AskedByName approval={approval} />
         </span>
-        <span className="ml-auto shrink-0 font-mono tabular-nums">
-          {t('approvals.progressOf', {
-            approved: approval.approve_count,
-            required: approval.required_approvals,
-          })}
+        <span className="ml-auto flex shrink-0 items-baseline gap-2">
+          <RiskTag tier={approval.risk_tier} />
+          {approval.created_at ? (
+            <RelTimeLabel ts={approval.created_at} />
+          ) : null}
+          <span className="font-mono tabular-nums">
+            {t('approvals.progressOf', {
+              approved: approval.approve_count,
+              required: approval.required_approvals,
+            })}
+          </span>
         </span>
       </span>
       <ApprovalRequestCell approval={approval} className="w-full max-w-full" />
       <ApprovalWhy approval={approval} reaches={session.reaches} />
       <RowState approval={approval} />
     </button>
+  )
+}
+
+/** The risk tier the engine derived for the request, in words; critical and high carry
+ * their tone. */
+function RiskTag({ tier }: { tier?: string }) {
+  const { t } = useTranslation('governance')
+  if (!tier) return null
+  const variant =
+    tier === 'critical' ? 'danger' : tier === 'high' ? 'warning' : 'neutral'
+  return (
+    <Badge variant={variant}>
+      {t(`agentRisk.tier.${tier}`, { defaultValue: tier })}
+    </Badge>
   )
 }
 
@@ -159,7 +180,7 @@ function RowState({ approval }: { approval: ApprovalDTO }) {
   if (pending && !approval.escalated && !approval.expires_at) return null
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-caption text-text-2">
-      {pending ? null : <StatusBadge status={approval.status} />}
+      {pending ? null : <ApprovalStatusWord approval={approval} />}
       {approval.reject_count > 0 ? (
         <span className="text-danger">
           {t('approvals.rejectedCount', { count: approval.reject_count })}
@@ -182,5 +203,20 @@ function RowState({ approval }: { approval: ApprovalDTO }) {
         </span>
       ) : null}
     </span>
+  )
+}
+
+/** The state of a request, as the engine reads it. An approved one also says whether its
+ * grant was spent (`consumed`): that is all the console knows of its use. */
+export function ApprovalStatusWord({ approval }: { approval: ApprovalDTO }) {
+  const { t } = useTranslation('governance')
+  if (approval.status !== 'approved')
+    return <StatusBadge status={approval.status} />
+  return (
+    <StatusChip tone="ok">
+      {approval.consumed
+        ? t('status.approvedUsed')
+        : t('status.approvedNotUsed')}
+    </StatusChip>
   )
 }

@@ -20,7 +20,7 @@ import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { useCopy } from '@/components/ui/use-copy'
 import { useClientSettings } from '@/features/settings/preferences'
 import { EDITORS, editorLink, sshTarget } from '@/lib/editor-links'
-import { pathRef } from './markdown'
+import { pathInFolder, pathRef } from './markdown'
 import './i18n'
 
 const RootContext = createContext<string | null>(null)
@@ -59,16 +59,9 @@ function PathChip({
   const editorSsh = useClientSettings((s) => s.editorSsh)
   const { copy } = useCopy()
   const [open, setOpen] = useState(false)
-  const base = root.replace(/\/+$/, '')
   const folder = path.endsWith('/')
-  const bare = path.replace(/\/+$/, '')
-  const full = bare.startsWith('/')
-    ? bare
-    : `${base}/${bare.replace(/^\.\//, '')}`
-  const relative = full.startsWith(`${base}/`)
-    ? full.slice(base.length + 1)
-    : full
-  const href = full.startsWith(`${base}/`)
+  const { base, bare, full, relative, inside } = pathInFolder(root, path)
+  const href = inside
     ? editorLink(
         editor,
         { root: base, file: relative, line },

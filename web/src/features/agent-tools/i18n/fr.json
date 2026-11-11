@@ -1,7 +1,7 @@
 {
   "title": "Outils d’IA",
   "description": "Installez sur ce serveur les outils d'IA qu'exécutent les sessions, et connectez-les.",
-  "descriptionMember": "Les sessions s’exécutent avec ces comptes et clés d’API. Un administrateur système installe les outils et les connecte.",
+  "descriptionMember": "Les sessions s’exécutent avec ces comptes ; les clés d’API sont dans Fournisseurs. Un administrateur système installe les outils et les connecte.",
   "refresh": "Actualiser",
   "readOnly": "Ce serveur est en lecture seule. L’installation est désactivée.",
   "notInstalled": "Aucune installation gérée",
@@ -95,7 +95,7 @@
     "failed": "Arrêté : il s’est interrompu.",
     "start": "Démarrer",
     "stop": "Arrêter",
-    "notInstalled": "{{name}} n’est pas installé. Olivares cherche {{program}} dans le PATH de ce serveur.",
+    "lookedFor": "Olivares cherche {{program}} dans le PATH de ce serveur.",
     "hint": "Son point d’accès est dans les Fournisseurs de l’organisation pour laquelle il a été démarré, pour que les sessions OpenCode de celle-ci utilisent ses modèles.",
     "model": "Modèle",
     "modelHintLlamaCpp": "Un chemin absolu vers un fichier .gguf, ou un modèle Hugging Face sous la forme utilisateur/dépôt[:quantification].",
@@ -134,7 +134,7 @@
     "accountChecking": "Compte · vérification…",
     "accountSigningIn": "Compte · connexion en cours…",
     "accountUnreadable": "Compte · illisible",
-    "keyDetail": "Clé d’API · {{name}} ({{hint}})",
+    "keyDetail": "Clé d’API · {{name}} · {{hint}}",
     "keyName": "Clé d’API · {{name}}",
     "keyNone": "Clé d’API · aucune choisie",
     "lastSignIn": "Dernière connexion {{when}}",
@@ -158,7 +158,11 @@
     "default": "Connexion par défaut",
     "readFailed": "Les profils n'ont pas pu être lus.",
     "truncated": "Certains profils ne sont pas affichés.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "turnOff": "Désactiver {{name}}",
+    "turnOn": "Activer {{name}}",
+    "switchedOn": "{{name}} est activé",
+    "switchedOff": "{{name}} est désactivé"
   },
   "tool": {
     "menu": "Options pour {{name}}",
@@ -196,12 +200,12 @@
     "chooseKey": "Choisir une clé",
     "addKey": "Ajouter une clé…",
     "create": "Créer",
+    "createAndSignIn": "Créer et se connecter",
     "creating": "Création…",
     "created": "Profil {{name}} créé",
     "failed": "Le profil n'a pas été créé.",
     "bindFailed": "La clé n'a pas pu être définie.",
     "keyNotSet": "Le profil a été créé, mais sa clé n'a pas été définie : {{error}} Ouvrez le profil pour choisir une clé.",
-    "notNow": "Plus tard",
     "close": "Fermer",
     "keyNeedsAccess": "Choisir une clé demande l'autorisation de modifier les profils."
   },
@@ -256,9 +260,35 @@
     "packagesHint": "Déclarés par le profil de fournisseur qu'utilise la nouvelle session de chaque outil ({{profiles}}). Un outil sans profil en reçoit un nouveau qui n'en déclare aucun."
   },
   "place": {
-    "title": "Comptes et clés d’API",
     "accounts": "Comptes",
     "allAccounts": "Tous les comptes : détails, libellés et liaisons",
-    "noAccess": "Votre rôle ne peut pas lire les comptes ni les clés d’API de cette organisation."
+    "noAccess": "Votre rôle ne peut pas lire les comptes de cette organisation.",
+    "keysOnProviders": "Les clés d’API sont dans <0>Fournisseurs</0>.",
+    "keysAndReferencesOnProviders": "Les clés d’API et leurs références sont dans <0>Fournisseurs</0>."
+  },
+  "runtime": {
+    "title": "Exécution",
+    "autoCompact": "Compactage automatique après",
+    "autoCompactHint": "Compacte après 100 000 à 1 000 000 de jetons. Laissez vide pour utiliser la valeur par défaut de Claude.",
+    "autoCompactPlaceholder": "p. ex. 300000",
+    "autoCompactInvalid": "Saisissez un entier de 100000 à 1000000, ou laissez vide.",
+    "saved": "Exécution enregistrée. Les nouvelles sessions l'utilisent."
+  },
+  "models": {
+    "title": "Modèles",
+    "note": "Vous seul voyez cette liste. Un modèle masqué disparaît des sélecteurs ; le modèle par défaut de l'outil et un modèle saisi fonctionnent toujours.",
+    "filter": "Filtrer les modèles",
+    "disableAll": "Tout masquer",
+    "enableAll": "Tout afficher",
+    "addCustom": "Ajouter un modèle personnalisé",
+    "customPlaceholder": "ID du modèle, p. ex. claude-opus-5-5",
+    "customInvalid": "Un ID de modèle ne contient pas d'espace et compte au plus 200 caractères.",
+    "add": "Ajouter",
+    "fast": "Mode rapide",
+    "up": "Monter {{name}}",
+    "down": "Descendre {{name}}",
+    "use": "Afficher {{name}}",
+    "removeCustom": "Retirer {{name}}",
+    "empty": "Cet outil ne signale aucun modèle. Ajoutez ceux que vous utilisez."
   }
 }

@@ -159,7 +159,7 @@ push 时比较。command 名称、help description、flag、exit code 与 output
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 1009 command nodes — the root command and 1008 subcommands, of which 209 are groups that carry subcommands and 48 are hidden diagnostics — together with the 4051 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 1009 command nodes — the root command and 1008 subcommands, of which 209 are groups that carry subcommands and 47 are hidden diagnostics — together with the 4053 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -283,7 +283,7 @@ All 1009 commands, in alphabetical order.
 | [`olivares audit tree checkpoint`](#command-olivares-audit-tree-checkpoint) | Print the signed C2SP checkpoint of a tenant's Merkle tree |
 | [`olivares audit tree prove`](#command-olivares-audit-tree-prove) | Prove one event is inside a saved checkpoint (JSON proof on standard output) _(hidden)_ |
 | [`olivares audit tree verify`](#command-olivares-audit-tree-verify) | Verify a saved checkpoint, offline, against the ledger or an inclusion proof _(hidden)_ |
-| [`olivares audit verify`](#command-olivares-audit-verify) | Verify a tenant's chain and its signed checkpoints _(hidden)_ |
+| [`olivares audit verify`](#command-olivares-audit-verify) | Verify a tenant's chain and its signed checkpoints |
 | [`olivares auth`](#command-olivares-auth) | Sign-in details: status, saved contexts, first-boot setup |
 | [`olivares auth bootstrap`](#command-olivares-auth-bootstrap) | Redeem the one-time first-boot token: create the first organization and superadmin |
 | [`olivares auth login`](#command-olivares-auth-login) | Sign in to an engine and keep the sign-in for the next commands |
@@ -2665,8 +2665,6 @@ olivares audit tree verify
 | `--tenant` | `string` | — | tenant id |
 
 #### Command: olivares audit verify
-
-Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
 
 Verify a tenant's chain and its signed checkpoints
 
@@ -5732,6 +5730,8 @@ olivares files convert <path>
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--json` | `bool` | `false` | Print the Markdown path as JSON |
+| `--ocr-endpoint` | `string` | — | Local OCR base URL (loopback or this host) |
+| `--ocr-model` | `string` | — | Declared model alias Unlimited-OCR-2@sha256:&lt;digest&gt; (weights are not verified) |
 
 #### Command: olivares findings
 
@@ -15445,7 +15445,7 @@ olivares upgrade
 | `--current-version` | `string` | — | declare the version installed at --target when it cannot be probed (cross-arch staging, a noexec mount, or a build from source); keeps anti-rollback and min_version armed instead of guessing |
 | `--data-dir` | `string` | — | data directory (license + install-id) (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--download-protocol` | `string` | `release-v1` | gated download protocol for --enterprise: release-v1 (default; resolves one consistent {version,set,manifest,signature} tuple) or legacy (the existing per-request /download route, for a custom or older gateway). A 404 from the new route is a compatibility diagnostic, not an automatic downgrade |
-| `--edition` | `string` | — | install or update the licensed build of this edition: business (or its alias enterprise); the same route as --enterprise, and the one a Community build with a Business license takes |
+| `--edition` | `string` | — | install or update the licensed build of this edition: engineer or business (or its alias enterprise), one build; the same route as --enterprise, and the one a Community build with an Engineer or Business license takes |
 | `--endpoint` | `string` | — | update channel source: a GitHub repository (https://github.com/&lt;owner&gt;/&lt;repo&gt;), one of its releases (…/releases/tag/&lt;tag&gt;), or a static mirror base (&lt;base&gt;/&lt;channel&gt;/manifest.json). Default: the public repository's releases; the license worker with --enterprise |
 | `--enterprise` | `bool` | `false` | upgrade the licensed Business edition (gated download; needs a live license) |
 | `--force-rollback` | `bool` | `false` | allow installing an OLDER version than the running one (records an audit entry) |

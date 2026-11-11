@@ -10,6 +10,37 @@
     "unavailableDescription": "La lettura delle sessioni non ha risposto. Le cifre del parco qui sopra non sono influenzate.",
     "untitled": "Sessione senza titolo"
   },
+  "accounts": {
+    "title": "I tuoi account",
+    "loading": "Lettura dei tuoi account…",
+    "none": "Non hai ancora un account tuo per {{tool}}. Le sessioni che avvii lavorano con il tuo account, e nessun altro può usarlo.",
+    "create": "Crea il mio account",
+    "createFailed": "Non è stato possibile creare il tuo account.",
+    "createExists": "Hai già un account tuo per {{tool}}, quindi non se ne può creare un altro. Chiedi a un amministratore se non puoi usarlo.",
+    "createForbidden": "Il tuo ruolo non ti permette di creare un account tuo. Chiedi a un amministratore.",
+    "createNotAssigned": "{{tool}} non ti è assegnato, quindi non si può creare un account tuo per questo strumento. Chiedi a un amministratore del reparto.",
+    "createUnavailable": "Gli account personali non sono disponibili su questo server.",
+    "signInWaits": "Accesso non effettuato. L’accesso al tuo account non è ancora disponibile su questo server.",
+    "signedIn": "Accesso effettuato come {{identity}}",
+    "disabled": "Disattivato da un amministratore.",
+    "retired": "Ritirato. Chiedi a un amministratore un account che puoi usare: un nuovo account tuo non si può ancora creare.",
+    "limit": "{{label}}: {{percent}}% usato",
+    "unavailableTitle": "Non è stato possibile leggere i tuoi account",
+    "unavailableDescription": "Non si sa se hai un account tuo finché non vengono letti."
+  },
+  "folders": {
+    "title": "Le tue cartelle",
+    "start": "Inizia",
+    "startIn": "Inizia in {{folder}}",
+    "canWork": "Puoi lavorare",
+    "readOnly": "Sola lettura",
+    "showAll": "Mostra tutte le cartelle ({{total}})",
+    "loading": "Caricamento delle tue cartelle",
+    "emptyTitle": "Non hai ancora cartelle",
+    "emptyDescription": "Quando il tuo amministratore ti darà accesso a una cartella, comparirà qui.",
+    "unavailableTitle": "Impossibile caricare le tue cartelle",
+    "unavailableDescription": "Le tue sessioni qui sotto non sono interessate."
+  },
   "empty": {
     "title": "Ancora niente da mostrare",
     "description": "Il tuo ruolo non concede l'accesso in lettura a nessun modulo del parco. Chiedi a un amministratore un permesso di lettura per vedere il riepilogo."

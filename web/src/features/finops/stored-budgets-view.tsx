@@ -62,7 +62,10 @@ function TenantStoredBudgets() {
       setDeleting(null)
     },
     onError: (e: unknown) => {
-      if (e instanceof ApiError && (e.isForbidden || e.isStepUpRequired))
+      if (
+        e instanceof ApiError &&
+        (e.isForbiddenOrEdition || e.isStepUpRequired)
+      )
         setDeleting(null)
       report(e)
     },

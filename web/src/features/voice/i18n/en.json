@@ -1,6 +1,6 @@
 {
   "title": "Voice & realtime",
-  "description": "Governed voice and realtime sessions across the estate. The console shows references and aggregates only — never audio, transcription text, prompts or PII.",
+  "description": "Voice sessions and the policies that allow them to open.",
   "tabs": {
     "sessions": "Sessions",
     "policies": "Policies",

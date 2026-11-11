@@ -23,21 +23,24 @@ import (
 // supportedInterfaces[]); URL/ProtocolVersion are kept here ONLY as a lenient-parse
 // fallback for pre-1.0 cards and are never emitted.
 type AgentCard struct {
-	Name                string                    `json:"name"`
-	Description         string                    `json:"description"`
-	Version             string                    `json:"version"`
-	SupportedInterfaces []AgentInterface          `json:"supportedInterfaces"`
-	Provider            *agentProvider            `json:"provider"`
-	Capabilities        *AgentCapabilities        `json:"capabilities"`
-	SecuritySchemes     map[string]securityScheme `json:"securitySchemes"`
-	Skills              []agentSkill              `json:"skills"`
-	Signatures          []AgentCardSignature      `json:"signatures"`
+	Name                 string                    `json:"name"`
+	Description          string                    `json:"description"`
+	Version              string                    `json:"version"`
+	SupportedInterfaces  []AgentInterface          `json:"supportedInterfaces"`
+	Provider             *agentProvider            `json:"provider,omitempty"`
+	Capabilities         *AgentCapabilities        `json:"capabilities"`
+	SecuritySchemes      map[string]securityScheme `json:"securitySchemes,omitempty"`
+	SecurityRequirements []securityRequirement     `json:"securityRequirements,omitempty"`
+	DefaultInputModes    []string                  `json:"defaultInputModes"`
+	DefaultOutputModes   []string                  `json:"defaultOutputModes"`
+	Skills               []AgentSkill              `json:"skills"`
+	Signatures           []AgentCardSignature      `json:"signatures,omitempty"`
 
 	// URL / ProtocolVersion are the REMOVED v0.x top-level fields, read only as a
 	// fallback for a peer still serving a pre-1.0 card (lenient parse, §5.7 spirit).
 	// A v1.0 card resolves its endpoint via SupportedInterfaces (jsonrpcInterface).
-	URL             string `json:"url"`
-	ProtocolVersion string `json:"protocolVersion"`
+	URL             string `json:"url,omitempty"`
+	ProtocolVersion string `json:"protocolVersion,omitempty"`
 }
 
 // AgentInterface is one A2A v1.0 supported interface (spec §4.4.6): the URL where a
@@ -49,7 +52,7 @@ type AgentCard struct {
 type AgentInterface struct {
 	URL             string `json:"url"`
 	ProtocolBinding string `json:"protocolBinding"`
-	Tenant          string `json:"tenant"`
+	Tenant          string `json:"tenant,omitempty"`
 	ProtocolVersion string `json:"protocolVersion"`
 }
 
@@ -93,7 +96,7 @@ type AgentCapabilities struct {
 	Streaming         bool             `json:"streaming"`
 	PushNotifications bool             `json:"pushNotifications"`
 	ExtendedAgentCard bool             `json:"extendedAgentCard"`
-	Extensions        []agentExtension `json:"extensions"`
+	Extensions        []agentExtension `json:"extensions,omitempty"`
 }
 
 // agentExtension is one declared A2A protocol extension (its URI + whether the agent
@@ -193,14 +196,25 @@ type agentProvider struct {
 // WHICH schemes a peer requires and their OAuth hygiene posture (flows declared,
 // PKCE), never credentials.
 type securityScheme struct {
-	APIKey        *apiKeyScheme        `json:"apiKeySecurityScheme"`
-	HTTPAuth      *httpAuthScheme      `json:"httpAuthSecurityScheme"`
-	OAuth2        *oauth2Scheme        `json:"oauth2SecurityScheme"`
-	OpenIDConnect *openIDConnectScheme `json:"openIdConnectSecurityScheme"`
-	MutualTLS     *mtlsScheme          `json:"mtlsSecurityScheme"`
+	APIKey        *apiKeyScheme        `json:"apiKeySecurityScheme,omitempty"`
+	HTTPAuth      *httpAuthScheme      `json:"httpAuthSecurityScheme,omitempty"`
+	OAuth2        *oauth2Scheme        `json:"oauth2SecurityScheme,omitempty"`
+	OpenIDConnect *openIDConnectScheme `json:"openIdConnectSecurityScheme,omitempty"`
+	MutualTLS     *mtlsScheme          `json:"mtlsSecurityScheme,omitempty"`
 
 	// Type is the REMOVED v0.x OpenAPI-style discriminator (lenient-parse fallback).
-	Type string `json:"type"`
+	Type string `json:"type,omitempty"`
+}
+
+// securityRequirement is one v1.0 SecurityRequirement: the scheme names (keys of
+// securitySchemes) a caller must satisfy together, each with its required scopes.
+type securityRequirement struct {
+	Schemes map[string]stringList `json:"schemes"`
+}
+
+// stringList is the v1.0 StringList wrapper (a2a.proto) around a repeated string.
+type stringList struct {
+	List []string `json:"list,omitempty"`
 }
 
 // kindLabel returns the canonical scheme-kind label for inventory findings: the v1.0
@@ -222,15 +236,23 @@ func (s securityScheme) kindLabel() string {
 	}
 }
 
-// apiKeyScheme / httpAuthScheme / openIDConnectScheme / mtlsScheme carry no fields
-// the connector needs beyond presence (the oneof member IS the kind); they exist as
-// distinct types so a future field read stays typed.
+// apiKeyScheme / openIDConnectScheme / mtlsScheme carry no fields the connector
+// needs beyond presence (the oneof member IS the kind); they exist as distinct types
+// so a future field read stays typed.
 type (
 	apiKeyScheme        struct{}
-	httpAuthScheme      struct{}
 	openIDConnectScheme struct{}
 	mtlsScheme          struct{}
 )
+
+// httpAuthScheme is the v1.0 HTTPAuthSecurityScheme (RFC 9110 scheme name, e.g.
+// "Bearer", plus an optional token format hint), the shape a card emits for a
+// bearer-token endpoint.
+type httpAuthScheme struct {
+	Scheme       string `json:"scheme"`
+	BearerFormat string `json:"bearerFormat,omitempty"`
+	Description  string `json:"description,omitempty"`
+}
 
 // oauth2Scheme is the v1.0 OAuth2SecurityScheme: the declared flows (a proto oneof,
 // discriminated by member presence) plus the RFC 8414 metadata URL. Read for the
@@ -256,11 +278,14 @@ type authorizationCodeFlow struct {
 	PKCERequired bool `json:"pkceRequired"`
 }
 
-// agentSkill is one skill an agent exposes (id/name only; descriptions are not
-// inventoried as edges — minimal data).
-type agentSkill struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+// AgentSkill is one skill an agent exposes. Discovery inventories id/name only
+// (descriptions are not edges — minimal data); description and tags are the v1.0
+// REQUIRED fields a card this connector emits must carry.
+type AgentSkill struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
 }
 
 // AgentCardSignature is one JWS signature over the card (RFC 7515), in the A2A
@@ -271,7 +296,7 @@ type agentSkill struct {
 type AgentCardSignature struct {
 	Protected string         `json:"protected"`
 	Signature string         `json:"signature"`
-	Header    map[string]any `json:"header"`
+	Header    map[string]any `json:"header,omitempty"`
 }
 
 // securitySchemeTypes is the set of canonical scheme-kind labels (the five v1.0

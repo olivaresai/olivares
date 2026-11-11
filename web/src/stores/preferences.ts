@@ -65,18 +65,12 @@ export const DENSITY_ROW: Record<
     headClassName: 'h-[31px]',
     headPx: 31,
   },
-  // ⛔ 36 px, AND IT WAS 40. `--console-row-height: 2.25rem` is the
-  //    budget the design declares for a management table row, and `h-9` is that value
-  //    on this scale. The step down is one row of type, not a redesign: a single-line
-  //    row is still governed by this minimum (20 px of text plus `py-1`'s 8 px is 28),
-  //    it is still well above the 24 px WCAG 2.5.8 pointer target, and it still leaves
-  //    room for the inset focus ring. Over the 60-row page `/audit` loads it is 240 px
-  //    of viewport returned — four more rows on a 900 px screen.
+  // Comfortable tables use a 44 px row; the compact preference stays 32 px.
   comfortable: {
-    className: 'h-9 py-1',
-    px: 36,
-    headClassName: 'h-[35px]',
-    headPx: 35,
+    className: 'h-11 py-1',
+    px: 44,
+    headClassName: 'h-[43px]',
+    headPx: 43,
   },
 }
 
@@ -106,7 +100,33 @@ export function applyAppearance(p: {
   else root.removeAttribute('data-motion')
 }
 
+export interface DiffDisplay {
+  layout: 'unified' | 'split'
+  wrap: boolean
+  whitespace: boolean
+}
+
+/** How many reviewed marks are kept; the oldest goes first. 500 ids of at most
+ * seven characters stay well below the server's 16 KiB limit for this
+ * preference, which the server would refuse whole. */
+export const REVIEWED_MAX = 500
+
+/** One reviewed mark: a short FNV-1a hash of where the file is reviewed and what it
+ * held, so no path or text is stored and a file that changes is no longer marked. */
+export function reviewedId(key: string, revision: string): string {
+  let hash = 0x811c9dc5
+  for (const text of [key, '\0', revision])
+    for (let i = 0; i < text.length; i++)
+      hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193)
+  return (hash >>> 0).toString(36)
+}
+
 interface PreferencesState {
+  diffDisplay: DiffDisplay
+  setDiffDisplay: (patch: Partial<DiffDisplay>) => void
+  /** Files marked reviewed in a diff, as `reviewedId`s, oldest first. */
+  reviewed: string[]
+  setReviewed: (id: string, on: boolean) => void
   density: Density
   /** The console's own Reduce motion setting; the system preference applies regardless. */
   reduceMotion: boolean
@@ -115,6 +135,8 @@ interface PreferencesState {
   collapsedNavGroups: string[]
   /** The left navigation folded to its icons (0.5), as the person chose it; null until
    * they choose, when the sidebar names its places as the drawer does. */
+  panelOpen: boolean | null
+  setPanelOpen: (panelOpen: boolean) => void
   navCollapsed: boolean | null
   /** Every place in the left navigation, not only the first ones. A new person starts
    * without it; a person who had preferences before the fold keeps what they saw. */
@@ -124,6 +146,9 @@ interface PreferencesState {
   /** The Sessions list's Working section folded by the person; open by default. */
   workingFolded: boolean
   setWorkingFolded: (workingFolded: boolean) => void
+  /** The folder the Sessions list is narrowed to; null shows every folder. */
+  sessionsFolder: string | null
+  setSessionsFolder: (sessionsFolder: string | null) => void
   setTitleStyle: (titleStyle: TitleStyle) => void
   setNavCollapsed: (navCollapsed: boolean) => void
   setNavAll: (navAll: boolean) => void
@@ -135,14 +160,27 @@ interface PreferencesState {
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
+      diffDisplay: { layout: 'split', wrap: true, whitespace: false },
+      setDiffDisplay: (patch) =>
+        set((s) => ({ diffDisplay: { ...s.diffDisplay, ...patch } })),
+      reviewed: [],
+      setReviewed: (id, on) =>
+        set((s) => {
+          const rest = s.reviewed.filter((r) => r !== id)
+          return { reviewed: on ? [...rest, id].slice(-REVIEWED_MAX) : rest }
+        }),
       density: 'comfortable',
       reduceMotion: false,
       collapsedNavGroups: [],
       navCollapsed: null,
+      panelOpen: null,
+      setPanelOpen: (panelOpen) => set({ panelOpen }),
       navAll: false,
       titleStyle: 'sentence',
       workingFolded: false,
       setWorkingFolded: (workingFolded) => set({ workingFolded }),
+      sessionsFolder: null,
+      setSessionsFolder: (sessionsFolder) => set({ sessionsFolder }),
       setTitleStyle: (titleStyle) => set({ titleStyle }),
       setNavCollapsed: (navCollapsed) => set({ navCollapsed }),
       setNavAll: (navAll) => set({ navAll }),
@@ -173,10 +211,14 @@ export const usePreferencesStore = create<PreferencesState>()(
         const {
           navAreas: _areas,
           navCollapsed,
+          panelOpen,
           navAll,
           reduceMotion,
           titleStyle,
           workingFolded,
+          diffDisplay,
+          reviewed,
+          sessionsFolder,
           sidebarCollapsed: _collapsed,
           sidebarChoices: _choices,
           sidebarUnsent: _unsent,
@@ -187,14 +229,34 @@ export const usePreferencesStore = create<PreferencesState>()(
           ...rest,
           // A blob saved before the setting existed (or holding anything but `true`)
           // keeps full motion; the system preference still applies on its own.
+          diffDisplay: {
+            layout:
+              (diffDisplay as Partial<DiffDisplay> | undefined)?.layout ===
+              'unified'
+                ? 'unified'
+                : 'split',
+            wrap:
+              (diffDisplay as Partial<DiffDisplay> | undefined)?.wrap !== false,
+            whitespace:
+              (diffDisplay as Partial<DiffDisplay> | undefined)?.whitespace ===
+              true,
+          },
+          reviewed: Array.isArray(reviewed)
+            ? reviewed
+                .filter((r): r is string => typeof r === 'string')
+                .slice(-REVIEWED_MAX)
+            : [],
           reduceMotion: reduceMotion === true,
           // A stored boolean is the person's choice; anything else is no choice yet.
+          panelOpen: typeof panelOpen === 'boolean' ? panelOpen : null,
           navCollapsed: typeof navCollapsed === 'boolean' ? navCollapsed : null,
           // Stored preferences from before the fold keep every place; no stored
           // preferences at all is a new person, who starts with the first ones.
           navAll: persisted ? navAll !== false : current.navAll,
           // Anything but `true` keeps the Working sessions open.
           workingFolded: workingFolded === true,
+          sessionsFolder:
+            typeof sessionsFolder === 'string' ? sessionsFolder : null,
           // Anything but one of the engine's styles takes the default.
           titleStyle: TITLE_STYLES.find((s) => s === titleStyle) ?? 'sentence',
         }
@@ -202,6 +264,17 @@ export const usePreferencesStore = create<PreferencesState>()(
     },
   ),
 )
+
+/** Whether the file at `key` with this content is marked reviewed, and its setter. */
+export function useReviewed(
+  key: string,
+  revision: string,
+): [boolean, (on: boolean) => void] {
+  const id = reviewedId(key, revision)
+  const marked = usePreferencesStore((s) => s.reviewed.includes(id))
+  const setReviewed = usePreferencesStore((s) => s.setReviewed)
+  return [marked, (on) => setReviewed(id, on)]
+}
 
 // The switches reach <html> once the stored preference is read, and on every change after.
 applyAppearance(usePreferencesStore.getState())

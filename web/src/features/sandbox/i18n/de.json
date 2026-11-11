@@ -4,7 +4,7 @@
     "hint": "Diese Sandbox-Liste ist begrenzt. Nur die geladenen Zeilen werden angezeigt."
   },
   "title": "Test-Sandbox",
-  "description": "Isolierte, kurzlebige Läufe gegen nachgebildete Ressourcen — Szenario-Simulationen, deterministische Wiedergaben und Vergleiche vor/nach der Bereitstellung. Ausgaben sind synthetisch; echter Zieltext wird niemals gespeichert.",
+  "description": "Szenarien gegen nachgebildete Werkzeuge abspielen und Läufe vor einer Bereitstellung vergleichen.",
   "tabs": {
     "runs": "Läufe",
     "comparisons": "Vergleiche",

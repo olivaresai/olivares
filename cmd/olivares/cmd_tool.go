@@ -120,9 +120,13 @@ type toolRow struct {
 	// Version is set only for a release Olivares installed.
 	Installed bool   `json:"installed"`
 	Version   string `json:"version,omitempty"`
-	SignedIn  *bool  `json:"signed_in,omitempty"`
-	Account   string `json:"account,omitempty"`
-	Reason    string `json:"reason,omitempty"`
+	// Compatibility and its sentence say whether this engine release supports Version
+	// (the inventory's own words); they inform only and never stop a session.
+	Compatibility     string `json:"compatibility,omitempty"`
+	CompatibilityNote string `json:"compatibility_note,omitempty"`
+	SignedIn          *bool  `json:"signed_in,omitempty"`
+	Account           string `json:"account,omitempty"`
+	Reason            string `json:"reason,omitempty"`
 	// probeFailed is set when the tool's own sign-in status could not be read; its
 	// installed and signed-in answers are then unknown, not no. Not in the JSON.
 	// unreadSignIn (cmd_ui_tools.go) infers a related case from SignedIn == nil
@@ -173,6 +177,7 @@ func newToolListCmd() *cobra.Command {
 			}
 			table := termrender.Table{Header: []string{"tool", "version", "status"}}
 			next := ""
+			var notes []string
 			for _, r := range rows {
 				status, role := "installed", termrender.RoleOK
 				version := r.Version
@@ -205,6 +210,9 @@ func newToolListCmd() *cobra.Command {
 						next += " --account " + r.AccountName
 					}
 				}
+				if r.CompatibilityNote != "" {
+					notes = append(notes, r.CompatibilityNote)
+				}
 				table.Rows = append(table.Rows, []string{label, version, status})
 				table.Marks = append(table.Marks, toolMark(r.Driver))
 				table.Roles = append(table.Roles, []termrender.Role{termrender.RoleNone, termrender.RoleNone, role})
@@ -222,6 +230,9 @@ func newToolListCmd() *cobra.Command {
 			return renderOut(cmd, func(w io.Writer) error {
 				rr := renderTo(w)
 				rr.Table(table)
+				for _, note := range notes {
+					rr.Line(note)
+				}
 				if refused != "" {
 					rr.Line(refused)
 				}
@@ -288,10 +299,12 @@ func (c *agentClientConfig) toolRows(ctx context.Context) ([]toolRow, error) {
 		} `json:"presence"`
 		Inventory struct {
 			Installed []struct {
-				Driver      string    `json:"driver"`
-				Version     string    `json:"version"`
-				State       string    `json:"state"`
-				InstalledAt time.Time `json:"installed_at"`
+				Driver            string    `json:"driver"`
+				Version           string    `json:"version"`
+				State             string    `json:"state"`
+				InstalledAt       time.Time `json:"installed_at"`
+				Compatibility     string    `json:"compatibility"`
+				CompatibilityNote string    `json:"compatibility_note"`
 			} `json:"installed"`
 		} `json:"inventory"`
 	}
@@ -313,6 +326,7 @@ func (c *agentClientConfig) toolRows(ctx context.Context) ([]toolRow, error) {
 		if it.InstalledAt.After(newest[it.Driver]) || rows[it.Driver].Version == "" {
 			newest[it.Driver] = it.InstalledAt
 			rows[it.Driver].Version = it.Version
+			rows[it.Driver].Compatibility, rows[it.Driver].CompatibilityNote = it.Compatibility, it.CompatibilityNote
 		}
 		rows[it.Driver].Installed = true
 	}

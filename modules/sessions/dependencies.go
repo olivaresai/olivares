@@ -63,6 +63,7 @@ type Dependencies struct {
 	SessionDecoys                    SessionDecoySource
 	GitRead                          SessionGitReadSource
 	GitReadDataDir                   string
+	ApprovedRemotes                  SessionApprovedRemotes
 	CredentialBroker                 SessionCredentialBroker
 	Creds                            CredentialSource
 	LaunchGate                       LaunchGate
@@ -76,6 +77,7 @@ type Dependencies struct {
 	LimitResets                      LimitResetSource
 	SessionFacts                     SessionFactsSource
 	AccountUsage                     AccountUsageSource
+	AccountPlan                      AccountPlanSource
 	WorkSessionCreds                 WorkSessionCredentialSource
 	CommunicationSessionCreds        CommunicationSessionCredentialSource
 	// The enabled bit distinguishes an intentional K3 OFF posture from a lost
@@ -236,6 +238,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"Runner", configuredDependency(d.Runner), "session process launches", false},
 		{"SessionMCP", d.SessionMCP, "session MCP configuration", true},
 		{"GitRead", d.GitRead, "session repository credentials", false},
+		{"ApprovedRemotes", d.ApprovedRemotes, "approved push remotes of a confined session", false},
 		{"CredentialBroker", d.CredentialBroker, "session managed credentials", false},
 		{"Creds", configuredDependency(d.Creds), "legacy inference credential minting", false},
 		{"LaunchGate", configuredDependency(d.LaunchGate), "governed session admission", true},
@@ -246,6 +249,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"ListPricer", d.ListPricer, "token-only usage pricing", true},
 		{"LimitResets", d.LimitResets, "reset times of a usage limit the tool did not name", false},
 		{"AccountUsage", d.AccountUsage, "usage windows of a provider account", false},
+		{"AccountPlan", d.AccountPlan, "plan of a provider account", false},
 		{"WorkSessionCreds", d.WorkSessionCreds, "session work credentials", true},
 		{"CommunicationSessionCreds", d.CommunicationSessionCreds, "communication session credentials", true},
 		{"RecoveryWorkSessionCreds", d.RecoveryWorkSessionCreds, "work credential withdrawal during recovery", true},

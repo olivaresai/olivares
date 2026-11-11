@@ -55,5 +55,17 @@
     "same": "No differences from HEAD.",
     "view": "View",
     "unavailable": "Could not compare with HEAD."
+  },
+  "diff": {
+    "layout": "Diff layout",
+    "unified": "Unified",
+    "split": "Split",
+    "wrap": "Wrap lines",
+    "whitespace": "Ignore whitespace",
+    "maximize": "Maximize",
+    "restore": "Restore size",
+    "reviewed": "Reviewed",
+    "working": "Working tree",
+    "branch": "Branch"
   }
 }

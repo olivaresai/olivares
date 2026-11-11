@@ -27,7 +27,7 @@ import (
 
 // Permission tiers for the OPERATE surface (verb-namespaced so roles grant by
 // tier). Listing and output are separate; stopping grants no input authority.
-// Admin covers destructive cleanup/delete.
+// Admin also permits cleanup/delete of sessions started by another person.
 const (
 	permRunRead   auth.Permission = "sessions:run:read"
 	permRunWrite  auth.Permission = "sessions:run:write"
@@ -43,6 +43,7 @@ func runtimePermissions() []auth.Permission {
 
 // runtimeRoutes mounts the operate endpoints under /v1/m/sessions/.
 func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
+	reg = ownedRunRoutes{RouteRegistrar: reg, m: m}
 	reg.Handle("GET", "/git-attribution-settings", permRunRead, m.handleGitAttributionSettings)
 	reg.Handle("PUT", "/git-attribution-settings", permRunAdmin, m.handleGitAttributionSettings)
 	// run_ref is a tenant-unique public reference, not the run row's primary ID.
@@ -156,8 +157,8 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("DELETE", "/runs/{ref}/archive", permRunWrite, runEntity, m.handleUnarchiveRun)
 	// A browser preview sends the person's requests into the session's app.
 	reg.HandleEntity("POST", "/runs/{ref}/preview", permRunWrite, runEntity, m.handleOpenRunPreview)
-	reg.HandleEntity("POST", "/runs/{ref}/cleanup", permRunAdmin, runEntity, m.handleCleanupRun)
-	reg.HandleEntity("DELETE", "/runs/{ref}", permRunAdmin, runEntity, m.handleDeleteRun)
+	reg.HandleEntity("POST", "/runs/{ref}/cleanup", permRunWrite, runEntity, m.handleCleanupRun)
+	reg.HandleEntity("DELETE", "/runs/{ref}", permRunWrite, runEntity, m.handleDeleteRun)
 }
 
 func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -951,7 +952,25 @@ func (m *Module) handleHandoffRun(w http.ResponseWriter, r *http.Request, mc api
 	writeJSON(w, http.StatusCreated, dto)
 }
 
+// loadRunForRemoval preserves administration of other runs while letting a person
+// remove their own. The route has already checked workspace access and profile ownership.
+func (m *Module) loadRunForRemoval(r *http.Request, mc api.ModuleContext) (model.Record, error) {
+	rec, err := m.loadRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	if err != nil {
+		return nil, err
+	}
+	if runLauncher(rec).Compare(auth.PersonRefOf(mc.Principal)) != auth.PersonSame &&
+		!mc.Admits(r.Context(), permRunAdmin, mc.Resource) {
+		return nil, forbiddenErr("only the session's owner or a session administrator may remove it")
+	}
+	return rec, nil
+}
+
 func (m *Module) handleCleanupRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if _, err := m.loadRunForRemoval(r, mc); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	// The body is optional and as forgiving as the endpoint always was: the route has
 	// taken any body and ignored it, so a body that does not parse, or carries other
 	// fields, is simply no confirmation. Only an explicit discard_worktree: true is one.
@@ -975,6 +994,19 @@ func (m *Module) handleCleanupRun(w http.ResponseWriter, r *http.Request, mc api
 }
 
 func (m *Module) handleDeleteRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	rec, err := m.loadRunForRemoval(r, mc)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	if rec.String(colState) != stateCleaned {
+		// Reuse cleanup's process, credential and worktree safeguards. Unfinished
+		// work still requires explicit discard confirmation through /cleanup.
+		if _, err := m.cleanupRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind()); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
 	if err := m.deleteRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind()); err != nil {
 		writeRunErr(w, err)
 		return
@@ -1106,6 +1138,7 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	ctx := r.Context()
+	var deltaVersion uint64
 	for {
 		wake := lr.ring.wait() // snapshot BEFORE reading (no lost wake-up)
 		rd := lr.ring.readFrom(cursor)
@@ -1141,6 +1174,12 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 			_ = writeSSE(rc, w, "page", attachPage{Type: "page", Earlier: rd.earlier})
 			return
 		}
+		if rd.delta != nil && rd.deltaVersion != deltaVersion {
+			if writeSSE(rc, w, "delta", rd.delta) != nil {
+				return
+			}
+		}
+		deltaVersion = rd.deltaVersion
 		cursor = rd.next
 		if rd.closed {
 			_ = writeSSE(rc, w, "end", map[string]any{"type": "end"})

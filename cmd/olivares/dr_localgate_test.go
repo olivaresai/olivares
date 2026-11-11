@@ -314,11 +314,19 @@ func TestTheBootGuardSpansKeyLoadingAndPublication(t *testing.T) {
 	var (
 		mu       sync.Mutex
 		sawHeld  bool
-		sawFree  bool
 		observed error
 	)
+	// The free sample is taken here, before boot exists, so it cannot collide with
+	// boot's own acquisition and does not depend on scheduling.
+	if lease, ok, aerr := opgate.TryAcquire(opgate.ModeExclusive, anchor); aerr != nil || !ok {
+		t.Fatalf("the installation was not free before boot: %v (ok=%t)", aerr, ok)
+	} else {
+		_ = lease.Release()
+	}
 	stop := make(chan struct{})
 	done := make(chan struct{})
+	sampled := make(chan struct{})
+	var sampledOnce sync.Once
 	go func() {
 		defer close(done)
 		for {
@@ -327,6 +335,14 @@ func TestTheBootGuardSpansKeyLoadingAndPublication(t *testing.T) {
 				return
 			default:
 			}
+			// Boot admits itself BEFORE it loads or mints a key, so once a signing
+			// key exists the installation is held. Until then an exclusive probe
+			// that wins would be the very lease boot needs, and boot would refuse.
+			if keys, _ := filepath.Glob(filepath.Join(dir, "*-signing.key")); len(keys) == 0 {
+				sampledOnce.Do(func() { close(sampled) })
+				time.Sleep(time.Millisecond)
+				continue
+			}
 			lease, ok, aerr := opgate.TryAcquire(opgate.ModeExclusive, anchor)
 			mu.Lock()
 			switch {
@@ -334,16 +350,24 @@ func TestTheBootGuardSpansKeyLoadingAndPublication(t *testing.T) {
 				sawHeld = true
 			case aerr != nil:
 				observed = aerr
-			case ok:
-				sawFree = true
-				_ = lease.Release()
 			}
 			mu.Unlock()
+			sampledOnce.Do(func() { close(sampled) })
+			if ok {
+				// A probe that wins the lease keeps it, as a competing operation
+				// would, until the case ends.
+				<-stop
+				_ = lease.Release()
+				return
+			}
 			time.Sleep(2 * time.Millisecond)
 		}
 	}()
 	eng, err := boot(context.Background(), bootConfig{
 		DataDir: dir, Engine: "sqlite", Version: "test", Logger: bootGateTestLogger(),
+		// The earliest point boot offers, just before it admits itself: the probe
+		// has sampled once by then, the worst interleaving the race allows.
+		dataDirReady: func(string) error { <-sampled; return nil },
 	})
 	close(stop)
 	<-done
@@ -359,9 +383,6 @@ func TestTheBootGuardSpansKeyLoadingAndPublication(t *testing.T) {
 	}
 	if !sawHeld {
 		t.Fatal("no observation during the boot found the installation held, so the guard is not spanning key loading and the publication decision")
-	}
-	if !sawFree {
-		t.Fatal("the observer never found the installation free, so this case never established that the samples are meaningful")
 	}
 	// And it is free once the boot has returned.
 	lease, ok, err := opgate.TryAcquire(opgate.ModeExclusive, anchor)

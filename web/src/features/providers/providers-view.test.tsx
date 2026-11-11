@@ -81,6 +81,8 @@ vi.mock('@/features/agentops/api', async (orig) => {
   }
 })
 
+import { agentOpsApi } from '@/features/agentops/api'
+import type { ProviderAccountDTO } from '@/features/agentops/types'
 import { firstHourKeys } from '@/features/first-hour/api'
 import { ApiKeys } from './providers-view'
 
@@ -105,6 +107,14 @@ beforeEach(() => {
   authState.can = () => true
   authState.phone = false
   providersApi.list.mockResolvedValue({ items: [] })
+  vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
+  vi.spyOn(agentOpsApi, 'listProfiles').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
   preparation.status.mockResolvedValue({ installed: true, signed_in: false })
   preparation.install.mockResolvedValue({ state: 'succeeded' })
   preparation.resolve.mockResolvedValue({
@@ -1018,4 +1028,81 @@ it('explains Add an API key while another provider connection is being tested', 
   const add = screen.getByRole('button', { name: 'Add an API key' })
   await waitFor(() => expect(add).toBeDisabled())
   expect(add).toHaveAccessibleDescription('Testing…')
+})
+
+describe('which profiles run on each key', () => {
+  const claudeC: ProviderAccountDTO = {
+    account_ref: 'ppf_c',
+    name: 'claude-c',
+    driver: 'claude',
+    environment_ref: 'xenv_1',
+    state: 'active',
+    home_mode: 'managed',
+    home_generation: 1,
+    home_relative: '',
+    isolation_level: 'shared',
+    auth_source: 'managed_injection',
+    provider_record_ref: 'prv_1',
+    identity: '',
+    identity_source: 'none',
+    created_at: '2026-10-01T10:00:00Z',
+    updated_at: '2026-10-01T10:00:00Z',
+  }
+
+  it('names them on the key, for a reader of the accounts', async () => {
+    providersApi.list.mockResolvedValue({ items: [registered] })
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [claudeC],
+      has_more: false,
+    })
+    wrap(<ApiKeys />)
+    expect(
+      await screen.findByRole('columnheader', { name: 'Used by' }),
+    ).toBeInTheDocument()
+    // The header stands while the table loads: wait for the row, then for its users.
+    const row = (await screen.findByText('Anthropic (prod)')).closest('tr')!
+    expect(await within(row).findByText('claude-c')).toBeInTheDocument()
+  })
+
+  it('keeps the column while the read is out, and says under the table when it failed', async () => {
+    providersApi.list.mockResolvedValue({ items: [registered] })
+    vi.mocked(agentOpsApi.listAccounts).mockRejectedValue(new Error('down'))
+    wrap(<ApiKeys />)
+    await screen.findByText('Anthropic (prod)')
+    expect(
+      screen.getByRole('columnheader', { name: 'Used by' }),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText('Which profiles use each key could not be read.'),
+    ).toBeInTheDocument()
+  })
+
+  it('says under the table when the profiles were cut, rather than a key nobody uses', async () => {
+    providersApi.list.mockResolvedValue({ items: [registered] })
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [],
+      has_more: true,
+      cursor: 'next',
+    })
+    wrap(<ApiKeys />)
+    expect(
+      await screen.findByText(
+        'Some profiles were not read: a key may be used by more than shown.',
+      ),
+    ).toBeInTheDocument()
+    const row = screen.getByText('Anthropic (prod)').closest('tr')!
+    const header = screen.getByRole('columnheader', { name: 'Used by' })
+    const at = screen.getAllByRole('columnheader').indexOf(header)
+    const usedBy = within(row).getAllByRole('gridcell')[at]!
+    expect(usedBy).not.toHaveTextContent('—')
+  })
+
+  it('leaves the column out, and reads no account, for a reader who cannot read them', async () => {
+    authState.can = (p: string) => p !== 'sessions:account:read'
+    providersApi.list.mockResolvedValue({ items: [registered] })
+    wrap(<ApiKeys />)
+    await screen.findByText('Anthropic (prod)')
+    expect(screen.queryByRole('columnheader', { name: 'Used by' })).toBeNull()
+    expect(agentOpsApi.listAccounts).not.toHaveBeenCalled()
+  })
 })

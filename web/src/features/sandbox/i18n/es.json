@@ -4,7 +4,7 @@
     "hint": "Esta lista de sandbox tiene un techo. Sólo se muestran las filas cargadas."
   },
   "title": "Sandbox de pruebas",
-  "description": "Ejecuciones aisladas y efímeras contra recursos simulados: simulaciones de escenarios, replays deterministas y comparaciones pre/post-despliegue. Las salidas son sintéticas; nunca se almacena texto real de un objetivo.",
+  "description": "Reproduce escenarios con herramientas simuladas y compara ejecuciones antes de desplegar.",
   "tabs": {
     "runs": "Ejecuciones",
     "comparisons": "Comparaciones",

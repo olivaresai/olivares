@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { MessagesSquare, Plus, RefreshCcw } from 'lucide-react'
+import { MessagesSquare, RefreshCcw } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
@@ -39,17 +39,13 @@ const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export function ChannelCatalog({
   scope,
   canChannelRead,
-  canChannelWrite,
   onOpenChannel,
   onOpenById,
-  onCreate,
 }: {
   scope: CommunicationsScope
   canChannelRead: boolean
-  canChannelWrite: boolean
   onOpenChannel: (item: ChannelCatalogItem) => void
   onOpenById: (id: string) => void
-  onCreate: () => void
 }) {
   const { t, i18n } = useTranslation('communications')
   const idp = useId()
@@ -182,12 +178,6 @@ export function ChannelCatalog({
             <RefreshCcw className="size-4" aria-hidden="true" />
             {t('actions.refresh')}
           </Button>
-          {canChannelWrite ? (
-            <Button size="sm" onClick={onCreate}>
-              <Plus className="size-4" aria-hidden="true" />
-              {t('actions.newChannel')}
-            </Button>
-          ) : null}
         </div>
       }
     >

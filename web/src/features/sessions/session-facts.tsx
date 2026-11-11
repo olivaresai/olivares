@@ -23,7 +23,7 @@ import type { RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
 import { formatMicroUsd } from '@/lib/format'
 import type { UnifiedSession } from './provenance'
-import { useAccessWords } from './session-meter'
+import { useAccessWords, useUsagePath } from './session-meter'
 import { StateWord } from './session-state-word'
 import './i18n'
 
@@ -54,7 +54,9 @@ export function SessionFacts({
   const effort = run?.effort
     ? t(`agentops:effort.${run.effort}`, { defaultValue: run.effort })
     : ''
-  const cost = live?.cost_micro_usd
+  // Money is told only where Usage opens for the person: a member sees none.
+  const tellsCost = useUsagePath() !== null
+  const cost = tellsCost ? live?.cost_micro_usd : undefined
   // ONE PLACE PER FACT: the header and the composer already say the tool, account, model
   // and access, and the status bar the account's use. Details shows what they do not
   // (state, workspace, cost); the rest waits one click away under "Session ›".

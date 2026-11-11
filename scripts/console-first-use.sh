@@ -9,7 +9,24 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ROOT/scripts/lib/exec-workdir.sh"
 . "$ROOT/scripts/lib/session-conversation-fixture.sh"
 BIN="${OLIVARES_BIN:-$ROOT/bin/olivares}"
-PORT="${E2E_PORT:-8596}"
+# A port per run, so two runs on one runner never share one: the kernel names a free
+# port (bind to port 0) and the engine's gRPC port, the next one, must bind too. Both
+# close before the engine binds them; if another process takes one in that window, the
+# boot helper reports "EXITED during boot" with the bind error, which is the right cause.
+PORT="${E2E_PORT:-$(python3 -c '
+import socket
+for _ in range(20):
+    http, grpc = socket.socket(), socket.socket()
+    http.bind(("127.0.0.1", 0))
+    try:
+        grpc.bind(("127.0.0.1", http.getsockname()[1] + 1))
+    except (OSError, OverflowError):
+        continue
+    print(http.getsockname()[1])
+    break
+else:
+    raise SystemExit("console-first-use: no free pair of ports on 127.0.0.1")
+')}"
 # The engine runs the tool stand-in from here, and /tmp is noexec on some hosts.
 DATA="$(olivares_pick_exec_workdir console-first-use)" || {
   echo "console-first-use: no executable scratch directory" >&2

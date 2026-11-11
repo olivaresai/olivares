@@ -1,19 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { http, type RequestOptions } from '@/lib/api'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { BoxedList } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
 import { DisabledReason } from '@/components/ui/disabled-reason'
 import { Input } from '@/components/ui/input'
-import { KvList, KvRow } from '@/components/ui/kv'
 import { Spinner } from '@/components/ui/spinner'
 import '@/features/identity/i18n'
+import { SettingsRow } from './settings-row'
 
 export interface ExposureStatus {
   listen: string
@@ -73,44 +74,72 @@ export function ConsoleExposure() {
       <QueryErrorState error={query.error} retry={() => void query.refetch()} />
     )
   const state = query.data
+  const fact = (text: ReactNode) => (
+    <span className="font-mono text-caption break-all text-text-2">{text}</span>
+  )
   return (
     <section
       className="flex max-w-xl flex-col gap-3"
       aria-labelledby="console-exposure-title"
     >
-      <h2 id="console-exposure-title" className="text-body font-semibold">
+      <h2
+        id="console-exposure-title"
+        className="text-body-l font-semibold text-text"
+      >
         {t('settings:exposure.title')}
       </h2>
-      <KvList>
-        <KvRow label={t('settings:exposure.listen')} mono>
-          {state.listen || t('settings:exposure.notSet')}
-        </KvRow>
-        <KvRow label={t('settings:exposure.url')} mono>
-          {state.public_url || t('settings:exposure.notSet')}
-        </KvRow>
-        <KvRow label={t('settings:exposure.grpc')} mono>
-          {state.grpc_listen || t('settings:exposure.notSet')}
-        </KvRow>
-        <KvRow label={t('settings:exposure.tls')}>
-          {t(
-            state.tls
-              ? 'settings:exposure.encrypted'
-              : 'settings:exposure.unencrypted',
+      <BoxedList>
+        <SettingsRow
+          name={t('settings:exposure.listen')}
+          description=""
+          control={fact(state.listen || t('settings:exposure.notSet'))}
+        />
+        <SettingsRow
+          name={t('settings:exposure.url')}
+          description=""
+          control={fact(state.public_url || t('settings:exposure.notSet'))}
+        />
+        <SettingsRow
+          name={t('settings:exposure.grpc')}
+          description=""
+          control={fact(state.grpc_listen || t('settings:exposure.notSet'))}
+        />
+        <SettingsRow
+          name={t('settings:exposure.tls')}
+          description=""
+          control={
+            <span className="text-body text-text-2">
+              {t(
+                state.tls
+                  ? 'settings:exposure.encrypted'
+                  : 'settings:exposure.unencrypted',
+              )}
+            </span>
+          }
+        />
+        <SettingsRow
+          name={t('settings:exposure.policy')}
+          description=""
+          control={
+            <span className="text-body text-text-2">
+              {t(`identity:stepUpPolicy.options.${state.admin_step_up}`)}
+            </span>
+          }
+        />
+        <SettingsRow
+          name={t('settings:exposure.addresses')}
+          description=""
+          control={fact(
+            state.addresses?.length
+              ? state.addresses.map((address) => (
+                  <span key={address} className="block">
+                    {address}
+                  </span>
+                ))
+              : t('settings:exposure.notSet'),
           )}
-        </KvRow>
-        <KvRow label={t('settings:exposure.policy')}>
-          {t(`identity:stepUpPolicy.options.${state.admin_step_up}`)}
-        </KvRow>
-        <KvRow label={t('settings:exposure.addresses')} mono>
-          {state.addresses?.length
-            ? state.addresses.map((address) => (
-                <div key={address} className="break-all">
-                  {address}
-                </div>
-              ))
-            : t('settings:exposure.notSet')}
-        </KvRow>
-      </KvList>
+        />
+      </BoxedList>
       <p className="text-body">{t('settings:exposure.unverified')}</p>
       <p className="text-caption text-text-2">{t('settings:exposure.hint')}</p>
       <p className="text-caption text-text-2">
@@ -130,19 +159,24 @@ export function ConsoleExposure() {
           save.mutate({ public_url: (draft ?? state.saved_public_url).trim() })
         }}
       >
-        <label htmlFor="console-public-url" className="text-body">
-          {t('settings:exposure.url')}
-        </label>
-        <Input
-          id="console-public-url"
-          type="url"
-          value={draft ?? state.saved_public_url}
-          onChange={(event) => setDraft(event.target.value)}
-          aria-describedby="console-public-url-hint"
-        />
-        <p id="console-public-url-hint" className="text-caption text-text-2">
-          {t('settings:exposure.urlHint')}
-        </p>
+        <BoxedList>
+          <SettingsRow
+            name={t('settings:exposure.url')}
+            description={t('settings:exposure.urlHint')}
+            descriptionId="console-public-url-hint"
+            control={
+              <Input
+                id="console-public-url"
+                type="url"
+                className="w-64"
+                aria-label={t('settings:exposure.url')}
+                value={draft ?? state.saved_public_url}
+                onChange={(event) => setDraft(event.target.value)}
+                aria-describedby="console-public-url-hint"
+              />
+            }
+          />
+        </BoxedList>
         <DisabledReason
           mode="native"
           disabled={save.isPending || draft === null}

@@ -11,9 +11,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -310,6 +313,75 @@ func (c *gitpublishCustody) MintSessionGitRead(ctx context.Context, tenant model
 		RepoURL: repoURL, Token: tok.Value().Reveal(), ExpiresAt: tok.ExpiresAt,
 		Release: func(ctx context.Context) error { return host.Release(ctx, tok) },
 	}, nil
+}
+
+// gitpublishSessionRemotes implements sessions.SessionApprovedRemotes: the push
+// endpoint of each target of the workspace whose repository binding custody
+// still approves there. No secret is read and nothing is minted.
+type gitpublishSessionRemotes struct {
+	targets interface {
+		WorkspaceTargets(context.Context, model.TenantID, model.ID) ([]gitpublish.Target, error)
+	}
+	custody *gitpublishCustody
+}
+
+var _ sessions.SessionApprovedRemotes = gitpublishSessionRemotes{}
+
+func (r gitpublishSessionRemotes) ApprovedRemotes(ctx context.Context, tenant model.TenantID, workspace model.ID) ([]string, error) {
+	targets, err := r.targets.WorkspaceTargets(ctx, tenant, workspace)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, tg := range targets {
+		remote, err := r.custody.pushEndpoint(ctx, tenant, workspace, tg.RepositoryBinding)
+		if errors.Is(err, gitpublish.ErrBindingNotApproved) {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		if !slices.Contains(out, remote) {
+			out = append(out, remote)
+		}
+	}
+	return out, nil
+}
+
+// pushEndpoint is the scheme://host:port/ an approved repository binding in
+// workspace pushes to: the web origin of a github or gitlab row, the remote of
+// a git row. The path, user and credential are left out.
+func (c *gitpublishCustody) pushEndpoint(ctx context.Context, tenant model.TenantID, workspace model.ID, id string) (string, error) {
+	source, path, ok := strings.Cut(id, ":")
+	if !ok {
+		return "", gitpublish.ErrBindingNotApproved
+	}
+	def, err := c.approvedIn(ctx, tenant, workspace, source)
+	if err != nil {
+		return "", err
+	}
+	if _, err := def.row.Repository(path); err != nil {
+		return "", gitpublish.ErrBindingNotApproved
+	}
+	raw := def.row.WebBase()
+	if raw == "" {
+		remote, err := gp.ParsePlainRemote(def.Config[gp.PublicationRemoteKey])
+		if err != nil {
+			return "", gitpublish.ErrBindingNotApproved
+		}
+		raw = remote.URL
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return "", gitpublish.ErrBindingNotApproved
+	}
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443", "ssh": "22"}[u.Scheme]
+	}
+	if port == "" {
+		return "", gitpublish.ErrBindingNotApproved
+	}
+	return u.Scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port) + "/", nil
 }
 
 // ReadSessionItem implements sessions.SessionItemSource: one issue or pull

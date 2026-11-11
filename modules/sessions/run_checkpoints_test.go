@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -78,19 +79,37 @@ func TestTurnCheckpointsListWhatEachTurnChangedAndRewindTheFolder(t *testing.T) 
 	}
 
 	// What the folder held before the session did anything.
-	write("a.txt", "v1")
+	write("a.txt", "x\nv1\n")
 	write("keep/b.txt", "b1")
 
 	say("first", 1)
 	if r := rewind("1", "start"); r.code != http.StatusConflict {
 		t.Fatalf("rewind while the turn runs = %d %s, want 409", r.code, r.raw)
 	}
-	write("a.txt", "v2")
-	write("new.txt", "n")
+	write("a.txt", "x\nv2\n")
+	write("new.txt", "n\n")
 	endTurn()
 
+	// One turn so far: it and the whole session count the same lines.
+	counts := func(list []any) map[string][2]any {
+		out := map[string][2]any{}
+		for _, f := range list {
+			f := f.(map[string]any)
+			out[f["path"].(string)] = [2]any{f["added"], f["removed"]}
+		}
+		return out
+	}
+	one := h.do("GET", base+"/checkpoints", admin, tenantHdr(tenant))
+	oneTurns, _ := one.body["turns"].([]any)
+	sessionFiles, _ := one.body["files"].([]any)
+	want := map[string][2]any{"a.txt": {1.0, 1.0}, "new.txt": {1.0, 0.0}}
+	if len(oneTurns) != 1 || !maps.Equal(counts(oneTurns[0].(map[string]any)["files"].([]any)), want) ||
+		!maps.Equal(counts(sessionFiles), want) || one.body["truncated"] != false {
+		t.Fatalf("checkpoints after one turn = %s, want a.txt +1 -1 and new.txt +1 in the turn and the session", one.raw)
+	}
+
 	say("second", 2)
-	write("a.txt", "v3")
+	write("a.txt", "x\nv3\n")
 	if err := os.Remove(filepath.Join(folder, "keep", "b.txt")); err != nil {
 		t.Fatal(err)
 	}
@@ -116,14 +135,14 @@ func TestTurnCheckpointsListWhatEachTurnChangedAndRewindTheFolder(t *testing.T) 
 	if r := rewind("1", "start"); r.code != http.StatusOK {
 		t.Fatalf("rewind to the first turn = %d %s", r.code, r.raw)
 	}
-	if got := []string{read("a.txt"), read("new.txt"), read("keep/b.txt")}; got[0] != "v1" || got[1] != "<missing>" || got[2] != "b1" {
+	if got := []string{read("a.txt"), read("new.txt"), read("keep/b.txt")}; got[0] != "x\nv1\n" || got[1] != "<missing>" || got[2] != "b1" {
 		t.Fatalf("after the rewind a.txt, new.txt, keep/b.txt = %q, want v1, missing, b1", got)
 	}
 	// Undo: the folder as the second turn left it.
 	if r := rewind("2", "end"); r.code != http.StatusOK {
 		t.Fatalf("undo = %d %s", r.code, r.raw)
 	}
-	if got := []string{read("a.txt"), read("new.txt"), read("keep/b.txt")}; got[0] != "v3" || got[1] != "n" || got[2] != "<missing>" {
+	if got := []string{read("a.txt"), read("new.txt"), read("keep/b.txt")}; got[0] != "x\nv3\n" || got[1] != "n\n" || got[2] != "<missing>" {
 		t.Fatalf("after the undo a.txt, new.txt, keep/b.txt = %q, want v3, n, missing", got)
 	}
 
@@ -142,5 +161,72 @@ func TestTurnCheckpointsListWhatEachTurnChangedAndRewindTheFolder(t *testing.T) 
 	}
 	if rewinds != 2 {
 		t.Fatalf("ledger holds %d rewinds, want 2", rewinds)
+	}
+}
+
+func TestLineTurnCheckpointsAndRewind(t *testing.T) {
+	h, fr, admin, tenant := attachHTTPHarness(t, WithCheckpointRoot(t.TempDir()))
+	fr.initSID = "line-checkpoint-session"
+	ref := launchHTTPRun(t, h, admin, tenant, map[string]any{"transport": "stream-json"})
+	proc := fr.lastProc()
+	base := "/v1/m/sessions/runs/" + ref
+	run := h.do("GET", base, admin, tenantHdr(tenant))
+	folder := run.body["workspace_path"].(string)
+	file := filepath.Join(folder, "note.txt")
+	write := func(text string) {
+		t.Helper()
+		if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	send := func(body map[string]any, sent int) {
+		t.Helper()
+		if r := h.doJSON("POST", base+"/input", admin, body, tenantHdr(tenant)); r.code != http.StatusAccepted {
+			t.Fatalf("input = %d %s", r.code, r.raw)
+		}
+		waitFor(t, "input reached the child", func() bool { return proc.sentCount() == sent })
+	}
+	line := func(text string) map[string]any {
+		return map[string]any{"line": `{"type":"user","message":{"role":"user","content":"` + text + `"}}`}
+	}
+	write("before")
+	sent := 0
+	for i, text := range []string{"first", "second", "third"} {
+		body := line(text)
+		// The text route also encodes a Claude user frame; it must keep only one checkpoint.
+		if i == 1 {
+			body = map[string]any{"text": text}
+		}
+		sent++
+		send(body, sent)
+		if i == 0 {
+			sent++
+			send(line("steer"), sent)
+		}
+		write(text)
+		if i == 0 {
+			proc.out <- OutputFrame{Stream: streamStdout, Data: []byte(turnResultFrame)}
+		}
+		proc.out <- OutputFrame{Stream: streamStdout, Data: []byte(turnResultFrame)}
+		waitFor(t, "turn ended", func() bool {
+			q := h.do("GET", base+"/queue", admin, tenantHdr(tenant))
+			return q.code == http.StatusOK && q.body["hold"] == nil
+		})
+	}
+	list := h.do("GET", base+"/checkpoints", admin, tenantHdr(tenant))
+	turns, _ := list.body["turns"].([]any)
+	if list.code != http.StatusOK || list.body["available"] != true || len(turns) != 3 {
+		t.Fatalf("checkpoints = %d %s, want 3 turns", list.code, list.raw)
+	}
+	for i, text := range []string{"first", "second", "third"} {
+		if turns[i].(map[string]any)["prompt"] != text {
+			t.Fatalf("turn %d prompt = %v, want %q", i+1, turns[i], text)
+		}
+	}
+	if r := h.doJSON("POST", base+"/checkpoints/1/rewind", admin, map[string]any{"to": "start"}, tenantHdr(tenant)); r.code != http.StatusOK {
+		t.Fatalf("rewind = %d %s", r.code, r.raw)
+	}
+	if got, err := os.ReadFile(file); err != nil || string(got) != "before" {
+		t.Fatalf("rewound file = %q, %v; want before", got, err)
 	}
 }

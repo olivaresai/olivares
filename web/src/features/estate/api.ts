@@ -8,6 +8,7 @@ import type { WorkspaceDTO as FolderDTO } from '@/features/agentops/types'
 import type { WorkspaceDTO, SourceRosterEntry } from '@/features/console/api'
 import { mcpGatewayApi } from '@/features/console/mcp-gateway-api'
 import type { PolicyDTO } from '@/features/governance/types'
+import { runLabel } from '@/features/sessions/provenance'
 import { listWorkItems } from '@/features/work/api'
 import type { EstateFamily, EstateNode, EstatePage } from './types'
 
@@ -65,7 +66,7 @@ export async function readEstateFamily(
       nodes = page.items.map((row) => ({
         kind,
         ref: row.run_ref,
-        label: row.name || row.run_ref,
+        label: runLabel(row),
         status: row.state,
         workspaceId: row.authz_workspace_id,
         folderRef: row.workspace_ref,

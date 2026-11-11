@@ -120,11 +120,14 @@ type Git interface {
 	Fetch(ctx context.Context, repo, source, commit string) error
 }
 
-// SessionFolders resolves the folder a session run worked in, confined to the
-// target's workspace; the composition root binds the sessions module. A run
-// that is absent, foreign or has no recorded folder is store.ErrNotFound.
+// SessionFolders resolves the folder a session run worked in and the account
+// that launched it, confined to the target's workspace; the composition root
+// binds the sessions module. A run that is absent or foreign, or has no
+// recorded folder for ReadRunWorkspacePath, is store.ErrNotFound. A run no
+// person launched has a zero launcher.
 type SessionFolders interface {
 	ReadRunWorkspacePath(ctx context.Context, tenant model.TenantID, workspace model.ID, run string) (string, error)
+	ReadRunLauncher(ctx context.Context, tenant model.TenantID, workspace model.ID, run string) (model.ID, error)
 }
 
 // PrincipalResolver rebuilds a principal from its exact credential
@@ -149,10 +152,11 @@ const (
 	GateDenied  = "denied"
 )
 
-// GateRequest is the push a ship is about to make, as a person reviews it: the
-// governed action and target, a plan hash that binds the exact ref, commit and
-// tree, and the person who asks. ConsumerID is the ship's operation id, so a
-// retry of one ship re-obtains its grant and a second one never spends it.
+// GateRequest is the publication about to be made, as a person reviews it: the
+// governed action ("gitpublish." and the effect) and target, a plan hash that
+// binds the exact request (for a push, the ref, commit and tree), and the
+// person who asks. ConsumerID is the operation id (a ship's own), so a retry of
+// one publication re-obtains its grant and a second one never spends it.
 type GateRequest struct {
 	Action, SubjectKind, SubjectRef, PlanHash string
 	Reason, RequestedBy, ConsumerID           string
@@ -165,7 +169,8 @@ type GateDecision struct {
 	Ref, State string
 }
 
-// ShipGate is the approval policy's door before a ship's push. With no policy
+// ShipGate is the approval policy's door before every publication: a ship's
+// push and each push, pull request, merge and issue comment. With no policy
 // asking for review it grants at once; otherwise it opens (or finds) the
 // approval for exactly this plan and grants only an approved one, spent once.
 // Any error is a refusal: nothing is pushed when the policy cannot be read.

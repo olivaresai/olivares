@@ -14,6 +14,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -72,7 +73,7 @@ func (d *configDTO) validate() string {
 	}
 	d.Endpoint = strings.TrimSpace(d.Endpoint)
 	if containsInlineCredential(d.Endpoint) {
-		return "endpoint must not contain inline credentials; reference the secret via secret_refs instead"
+		return "endpoint must not contain inline credentials; store the credential and add a secret reference in secret_refs instead"
 	}
 	if len(d.SecretRefs) > maxSecretRefs {
 		return "too many secret references"
@@ -102,8 +103,8 @@ func (d *configDTO) validate() string {
 }
 
 // containsInlineCredential is a defensive heuristic that rejects the obvious ways
-// a credential could end up persisted in a reference/endpoint field: basic-auth
-// userinfo in a URL, or a query/param that assigns a secret-like key. It is a
+// a credential could end up persisted in a reference/endpoint field: URL userinfo,
+// or a query/param that assigns a value to a credential name. It is a
 // guardrail, not a secret scanner — the real guarantee is structural (no value
 // column exists). It never inspects or stores the matched value.
 func containsInlineCredential(s string) bool {
@@ -125,7 +126,14 @@ func containsInlineCredential(s string) bool {
 			return true
 		}
 	}
-	return false
+	return secret.ContainsNamedCredential(s)
+}
+
+// redacted is the config as a read shows it: URL userinfo, query values and values
+// under a credential name in the endpoint read as secret.Redacted.
+func (d configDTO) redacted() configDTO {
+	d.Endpoint = secret.RedactValue(d.Endpoint)
+	return d
 }
 
 // sanitizeRefs re-marshals the secret references through the typed struct so only
@@ -202,7 +210,7 @@ func (m *Module) handleListConfigs(w http.ResponseWriter, r *http.Request, mc ap
 			return err
 		}
 		for _, rec := range recs {
-			out.Items = append(out.Items, toConfigDTO(rec))
+			out.Items = append(out.Items, toConfigDTO(rec).redacted())
 		}
 		out.Cursor, out.HasMore = page.Cursor, page.HasMore
 		return nil
@@ -234,7 +242,7 @@ func (m *Module) handleGetConfig(w http.ResponseWriter, r *http.Request, mc api.
 		if err != nil {
 			return err
 		}
-		found, out = true, toConfigDTO(rec)
+		found, out = true, toConfigDTO(rec).redacted()
 		return nil
 	})
 	if err != nil {
@@ -259,6 +267,10 @@ func (m *Module) handleCreateConfig(w http.ResponseWriter, r *http.Request, mc a
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
+	if _, ok := secret.KeepRedacted(in.Endpoint, "", ""); !ok {
+		writeJSON(w, http.StatusBadRequest, errorBody(redactedEndpointMessage))
+		return
+	}
 	var out configDTO
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(configKind)
@@ -280,7 +292,7 @@ func (m *Module) handleCreateConfig(w http.ResponseWriter, r *http.Request, mc a
 		if err != nil {
 			return err
 		}
-		out = toConfigDTO(rec)
+		out = toConfigDTO(rec).redacted()
 		if err := m.appendRevision(r.Context(), sc, in, next, mc.Principal.Actor(), "create"); err != nil {
 			return err
 		}
@@ -321,6 +333,13 @@ func (m *Module) handleUpdateConfig(w http.ResponseWriter, r *http.Request, mc a
 		if msg := in.validate(); msg != "" {
 			return validationError(msg)
 		}
+		// The read showed the endpoint redacted: sent back unchanged, it keeps the stored one.
+		stored := rec.String(colEndpointRef)
+		endpoint, ok := secret.KeepRedacted(in.Endpoint, stored, secret.RedactValue(stored))
+		if !ok {
+			return validationError(redactedEndpointMessage)
+		}
+		in.Endpoint = endpoint
 		next := rec.Int(colRevision) + 1
 		for k, v := range in.configFields() {
 			rec[k] = v
@@ -330,7 +349,7 @@ func (m *Module) handleUpdateConfig(w http.ResponseWriter, r *http.Request, mc a
 		if err != nil {
 			return err
 		}
-		out = toConfigDTO(rec)
+		out = toConfigDTO(rec).redacted()
 		if err := m.appendRevision(r.Context(), sc, in, next, mc.Principal.Actor(), "update"); err != nil {
 			return err
 		}
@@ -473,7 +492,7 @@ func (m *Module) handleListRevisions(w http.ResponseWriter, r *http.Request, mc 
 func toRevisionDTO(rec model.Record) revisionDTO {
 	return revisionDTO{
 		ServerRef: rec.String(colServerRef), Revision: rec.Int(colRevision),
-		Transport: rec.String(colTransport), Endpoint: rec.String(colEndpointRef),
+		Transport: rec.String(colTransport), Endpoint: secret.RedactValue(rec.String(colEndpointRef)),
 		Scope: rec.String(colScope), SecretRefs: parseRefs(rec.String(colSecretRefs)),
 		Enabled: rec.Bool(colEnabled), Note: rec.String(colNote),
 		ChangeActor: rec.String(colChangeActor), ChangeAction: rec.String(colChangeAction),
@@ -548,6 +567,10 @@ func auditConfig(ctx context.Context, sc store.Scope, mc api.ModuleContext, verb
 	})
 	return err
 }
+
+// redactedEndpointMessage refuses an endpoint that holds the redaction marker but
+// is not the redacted read of the stored one: the marker is never stored.
+const redactedEndpointMessage = "endpoint holds " + secret.Redacted + " but the stored endpoint does not read that way; send the endpoint itself"
 
 // validationError is a deferred validation failure raised from inside a Mutate
 // closure (where the request body is validated against the loaded record), mapped

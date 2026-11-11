@@ -62,6 +62,11 @@ beforeEach(() => {
         truncated: false,
       },
     ],
+    files: [
+      { path: 'README.md', status: 'added' },
+      { path: 'src/main.go', status: 'modified' },
+    ],
+    truncated: false,
   })
   vi.mocked(agentOpsApi.rewindRun).mockImplementation(
     async (_run, seq, to) => ({
@@ -117,6 +122,8 @@ describe('TurnCheckpoints', () => {
       available: false,
       reason: 'the session folder is gone',
       turns: [],
+      files: [],
+      truncated: false,
     })
     show()
     await vi.waitFor(() =>

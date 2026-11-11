@@ -1,6 +1,6 @@
 {
   "title": "Voce e realtime",
-  "description": "Sessioni vocali e realtime governate in tutto il parco. La console mostra solo riferimenti e aggregati, mai audio, testo di trascrizione, prompt o dati personali.",
+  "description": "Sessioni vocali e le policy che ne permettono l'apertura.",
   "tabs": {
     "sessions": "Sessioni",
     "policies": "Policy",

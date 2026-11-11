@@ -1169,12 +1169,13 @@ const A_MANO: {
         .waitFor({ timeout: 20_000 })
     },
   },
-  // The API key, profile, binding and account pages are doors into Tools.
+  // The API key page is Providers, beside AI tools; the profile, binding and account
+  // pages are doors into AI tools.
   {
     id: 'providers',
     path: '/providers',
     settle: 1000,
-    heading: /^AI tools$/,
+    heading: /^Providers$/,
   },
   {
     id: 'provider-profiles',

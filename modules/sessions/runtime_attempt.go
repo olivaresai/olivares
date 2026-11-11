@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -29,12 +30,32 @@ type RuntimeOutputEvent struct {
 	NextSeq int64  `json:"next_seq,omitempty"`
 }
 
-// InterruptRuntimeAttempt cancels a turn on the named current attempt. The owner
-// must authorize the human caller and the target before entering this port; an
-// actor string and a launch identity are not authorization. The run lock covers
-// both the identity check and native interruption, including its fenced audit.
+// InterruptRuntimeAttemptFor cancels a turn on the named current attempt for the
+// person principal. The owner must authorize the caller and the target before
+// entering this port; a launch identity is not authorization. A run on another
+// person's own login is refused (refuseAnotherPersonsRun), an administrator too.
+// The run lock covers the identity check and native interruption, including its
+// fenced audit.
+func (m *Module) InterruptRuntimeAttemptFor(ctx context.Context, target RuntimeInputTarget,
+	principal auth.Principal, reason string,
+) (RuntimeInputResult, error) {
+	if principal.UserID.IsZero() {
+		return RuntimeInputResult{Outcome: RuntimeInputRefused}, ErrRuntimeInputAuthority
+	}
+	return m.interruptRuntimeAttempt(ctx, target, principal, principal.Actor(), principal.ActorKind(), reason)
+}
+
+// InterruptRuntimeAttempt is InterruptRuntimeAttemptFor for a caller that names
+// only an actor string, which is not a person: a run on anyone's own login is
+// refused here, and every other run is interrupted as before.
 func (m *Module) InterruptRuntimeAttempt(ctx context.Context, target RuntimeInputTarget,
 	actor, actorKind, reason string,
+) (RuntimeInputResult, error) {
+	return m.interruptRuntimeAttempt(ctx, target, auth.Principal{}, actor, actorKind, reason)
+}
+
+func (m *Module) interruptRuntimeAttempt(ctx context.Context, target RuntimeInputTarget,
+	principal auth.Principal, actor, actorKind, reason string,
 ) (RuntimeInputResult, error) {
 	result := RuntimeInputResult{Outcome: RuntimeInputRefused}
 	if ctx == nil || !validAttemptReason(reason) || actor == "" || actorKind != model.ActorUser {
@@ -56,6 +77,9 @@ func (m *Module) InterruptRuntimeAttempt(ctx context.Context, target RuntimeInpu
 	}
 	rec, err := m.loadRun(ctx, target.Tenant, target.RunRef)
 	if err != nil {
+		return result, err
+	}
+	if err = m.refuseAnotherPersonsRun(ctx, target.Tenant, rec, principal); err != nil {
 		return result, err
 	}
 	if _, err = m.currentOutputAttempt(ctx, RuntimeLaunchIdentity{Tenant: target.Tenant, WorkspaceID: target.WorkspaceID, RunRef: target.RunRef, RuntimeLaunchID: target.ExpectedLaunch, SessionSID: target.ExpectedSID}); err != nil {

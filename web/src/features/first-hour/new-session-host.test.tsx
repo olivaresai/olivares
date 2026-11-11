@@ -25,11 +25,14 @@ vi.mock('@/features/agentops/run-create-dialog', async () => {
       onCloseAutoFocus,
       initialTemplateId,
       initialWorktreeFrom,
+      initialWorktree,
+      initialPermission,
       initialProfileRef,
       initialModel,
       initialEffort,
       initialFastMode,
       initialServiceTier,
+      initialFromCheckpoint,
     }: ComponentProps<
       typeof import('@/features/agentops/run-create-dialog').RunCreateDialog
     >) => {
@@ -49,7 +52,10 @@ vi.mock('@/features/agentops/run-create-dialog', async () => {
             <p>
               {`profile:${initialProfileRef ?? ''}|model:${initialModel ?? ''}|effort:${initialEffort ?? ''}`}
             </p>
+            <p>{`worktree:${String(initialWorktree)}`}</p>
+            <p>{`permission:${initialPermission ?? ''}`}</p>
             <p>{`fast:${String(initialFastMode)}|tier:${initialServiceTier ?? ''}`}</p>
+            <p>{`checkpoint:${JSON.stringify(initialFromCheckpoint) ?? ''}`}</p>
           </DialogContent>
         </Dialog>
       )
@@ -223,6 +229,29 @@ describe('the one New session host', () => {
     expect(mounts.advanced).toBe(3)
   })
 
+  it("opens the advanced launch on the form's new worktree", async () => {
+    shell('Door', () => undefined)
+    act(() =>
+      useNewSessionDialog.getState().openAdvanced({
+        workspaceRef: 'ws_1',
+        worktree: true,
+      }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Advanced launch' }),
+    ).toHaveTextContent('worktree:true')
+  })
+
+  it("opens the advanced launch on what the form's agent may do", async () => {
+    shell('Door', () => undefined)
+    act(() =>
+      useNewSessionDialog.getState().openAdvanced({ permission: 'readOnly' }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Advanced launch' }),
+    ).toHaveTextContent('permission:readOnly')
+  })
+
   it("the form's Advanced options never open on an earlier template or handoff, nor return focus to an earlier door", async () => {
     const user = userEvent.setup()
     render(
@@ -331,6 +360,30 @@ describe('the one New session host', () => {
     expect(
       await screen.findByRole('dialog', { name: 'Advanced launch' }),
     ).toHaveTextContent('profile:ppf_a|model:haiku|effort:high')
+    expect(mounts.advanced).toBe(2)
+  })
+
+  it('hands the files of a message to the launch dialog as they came, each its own draft', async () => {
+    shell('Door', () => undefined)
+    const launch = { message: 'the edited words', workspaceRef: 'ws_1' }
+    act(() =>
+      useNewSessionDialog.getState().openAdvanced({
+        ...launch,
+        fromCheckpoint: { run: 'run_1', turn: 2 },
+      }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Advanced launch' }),
+    ).toHaveTextContent('checkpoint:{"run":"run_1","turn":2}')
+    expect(mounts.advanced).toBe(1)
+    // The same words from the folder as it is now: another draft, asking for no files.
+    act(() => useNewSessionDialog.getState().closeAdvanced())
+    act(() => useNewSessionDialog.getState().openAdvanced(launch))
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Advanced launch',
+    })
+    expect(dialog).toHaveTextContent('checkpoint:')
+    expect(dialog).not.toHaveTextContent('run_1')
     expect(mounts.advanced).toBe(2)
   })
 

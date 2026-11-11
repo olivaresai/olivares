@@ -23,6 +23,7 @@ import { AsyncSection, SectionCard } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { profileLabel } from '@/features/agentops/types'
+import { useUsagePath } from '@/features/sessions/session-meter'
 import { useAuth } from '@/lib/auth/context'
 import {
   formatDayKey,
@@ -174,6 +175,8 @@ function UsageTable({
 }) {
   const { t, i18n } = useTranslation('models')
   const lang = i18n.language
+  // Cost only where Usage opens for the person; others see runs and tokens.
+  const money = useUsagePath() !== null
   // An unknown figure says nothing: the cell stays empty, never "not reported" or a zero. A
   // sum over only some runs (the engine skips runs that reported none) is not the row's
   // total, so it stays empty too.
@@ -193,7 +196,9 @@ function UsageTable({
               <th className="text-right">{t('usage.columns.runs')}</th>
               <th className="text-right">{t('usage.columns.input')}</th>
               <th className="text-right">{t('usage.columns.output')}</th>
-              <th className="text-right">{t('usage.columns.cost')}</th>
+              {money ? (
+                <th className="text-right">{t('usage.columns.cost')}</th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -211,11 +216,13 @@ function UsageTable({
                 <td className="text-right tabular-nums">
                   {tokens(r, r.output_tokens)}
                 </td>
-                <td className="text-right tabular-nums">
-                  {r.cost_micro_usd === null || r.runs_without_cost > 0
-                    ? null
-                    : formatMicroUsd(r.cost_micro_usd, { locale: lang })}
-                </td>
+                {money ? (
+                  <td className="text-right tabular-nums">
+                    {r.cost_micro_usd === null || r.runs_without_cost > 0
+                      ? null
+                      : formatMicroUsd(r.cost_micro_usd, { locale: lang })}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>

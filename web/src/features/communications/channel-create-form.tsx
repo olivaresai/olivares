@@ -94,6 +94,7 @@ export function ChannelCreateForm({
   canAgentRead,
   me,
   onCheckCatalog,
+  autoFocus,
 }: {
   scope: CommunicationsScope
   canChannelRead: boolean
@@ -103,6 +104,8 @@ export function ChannelCreateForm({
   me: Me
   /** Offered after an unknown outcome when the catalog may be read. */
   onCheckCatalog?: () => void
+  /** The first field takes the keyboard when the opening button is gone. */
+  autoFocus?: boolean
 }) {
   const { t } = useTranslation('communications')
   const queryClient = useQueryClient()
@@ -424,6 +427,7 @@ export function ChannelCreateForm({
         >
           <Input
             id={`${idp}-slug`}
+            autoFocus={autoFocus}
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
             autoComplete="off"

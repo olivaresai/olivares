@@ -22,8 +22,11 @@ import (
 )
 
 // UseDocumentConverter binds the selectable document module at composition time.
-func (m *Module) UseDocumentConverter(convert func(context.Context, string, []byte) ([]byte, error)) {
+func (m *Module) UseDocumentConverter(convert func(context.Context, string, []byte) ([]byte, error), ocr ...func() bool) {
 	m.rt.DocumentConverter = convert
+	if len(ocr) > 0 {
+		m.rt.DocumentOCR = ocr[0]
+	}
 }
 func (m *Module) documentMarkdown(ctx context.Context, name string, data []byte) ([]byte, error) {
 	if m.rt.DocumentConverter == nil {
@@ -65,6 +68,10 @@ func (m *Module) documentAttachments(_ context.Context, tenant model.TenantID, r
 		f, err := openRegularWithin(root, id+"."+ext+".md")
 		if err != nil {
 			_ = root.Close()
+			if conversion.IsImage("document."+ext) && errors.Is(err, os.ErrNotExist) {
+				images = append(images, id)
+				continue
+			}
 			return nil, "", badRequest("the document Markdown is unavailable")
 		}
 		md, err := io.ReadAll(io.LimitReader(f, conversion.MaxBytes+1))
@@ -125,6 +132,9 @@ func (m *Module) expandDocumentMentions(ctx context.Context, tenant model.Tenant
 		if name == "" {
 			name = match[2]
 		}
+		if !m.supportsDocument(name) {
+			continue
+		}
 		suffix, err := m.convertDocumentMention(ctx, tenant, rec, ws, folder, name, toolRequestMaxBytes-len(text))
 		if err == nil {
 			text += suffix
@@ -135,7 +145,7 @@ func (m *Module) expandDocumentMentions(ctx context.Context, tenant model.Tenant
 
 func binaryDocumentMention(name string) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
-	case ".pdf", ".docx", ".pptx", ".xlsx", ".epub", ".zip":
+	case ".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf", ".docx", ".pptx", ".xlsx", ".epub", ".zip":
 		return true
 	}
 	return false
@@ -240,4 +250,11 @@ func (m *Module) convertDocumentMention(ctx context.Context, tenant model.Tenant
 		return "", err
 	}
 	return suffix, nil
+}
+
+func (m *Module) supportsDocument(name string) bool {
+	if conversion.IsImage(name) {
+		return m.rt.DocumentOCR != nil && m.rt.DocumentOCR()
+	}
+	return conversion.Supports(name)
 }

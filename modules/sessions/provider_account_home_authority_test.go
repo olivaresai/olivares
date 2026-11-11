@@ -117,6 +117,12 @@ func TestProviderAccount_CreateAdmissionPrecedesFilesystem(t *testing.T) {
 					if denied.code != 403 {
 						t.Fatalf("confined create=%d %s", denied.code, denied.raw)
 					}
+					// Under flat RBAC the member holds the route's permission, so the refusal
+					// is the handler's: its own code, its message unchanged. (Under scoped
+					// grants the route refuses first, with forbidden.)
+					if e, _ := denied.body["error"].(map[string]any); !scoped && (e["code"] != "workspace_confined_account_writer" || e["message"] != "workspace confined account writer") {
+						t.Fatalf("confined create error = %s, want code workspace_confined_account_writer", denied.raw)
+					}
 					if !existing {
 						if _, err := os.Lstat(root); !os.IsNotExist(err) {
 							t.Fatalf("denied writer created root: %v", err)

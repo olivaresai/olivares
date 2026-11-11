@@ -212,6 +212,17 @@ function ArtifactRegistry() {
         ),
       },
       {
+        // The content hash, short: enough to tell two builds apart; the whole
+        // hash, with its copy, is in the artifact's detail.
+        accessorKey: 'content_hash',
+        header: t('registry.columns.fingerprint'),
+        cell: ({ row }) => (
+          <span className="font-mono text-caption text-muted-foreground">
+            {row.original.content_hash?.slice(0, 12) || t('values.none')}
+          </span>
+        ),
+      },
+      {
         accessorKey: 'provenance',
         header: t('registry.columns.provenance'),
         cell: ({ row }) => (

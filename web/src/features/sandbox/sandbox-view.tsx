@@ -27,7 +27,10 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
-import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  usePrivilegedMutation,
+} from '@/lib/hooks/use-privileged-mutation'
 import {
   AsyncSection,
   CaveatNotice,
@@ -101,7 +104,10 @@ function AccionesSandbox({
       setReplayOpen(false)
       refrescar()
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   const comparar = useMutation({
@@ -116,7 +122,10 @@ function AccionesSandbox({
       setCompareOpen(false)
       refrescar()
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   if (!puedeEjecutar && !puedeComparar) return null

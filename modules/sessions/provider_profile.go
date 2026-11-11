@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -71,6 +72,18 @@ const (
 	// authorization like auth_source — mutable, absent from the home slot, and not
 	// applied to a live child, which keeps the record its own launch resolved.
 	colPPProviderRecordRef = "provider_record_ref"
+	// colPPAutoCompactWindow is the token count a Claude Code session compacts at
+	// (its CLAUDE_CODE_AUTO_COMPACT_WINDOW). NULL means the tool's own default. It is a
+	// launch term re-read on every launch, like the session policy, and is not part of
+	// the home snapshot or its digest.
+	colPPAutoCompactWindow = "auto_compact_window"
+)
+
+// The range Claude Code accepts for its auto-compact window, in tokens
+// (code.claude.com/docs/en/env-vars, CLAUDE_CODE_AUTO_COMPACT_WINDOW).
+const (
+	minAutoCompactWindow = 100_000
+	maxAutoCompactWindow = 1_000_000
 )
 
 // Profile lifecycle states.
@@ -172,6 +185,12 @@ type ProviderProfile struct {
 	// SessionEgressHosts are the hosts an administrator declared a confined
 	// session may reach beside its bound provider; nil declares none.
 	SessionEgressHosts []string
+	// AutoCompactWindow is the declared Claude Code auto-compact window in tokens;
+	// 0 declares none and the tool compacts at its own default.
+	AutoCompactWindow int
+	// OwnerRef is the account id of the person whose own login this profile is; empty for a
+	// login nobody owns. Only that person starts or steers a session on it (ownerRefuses).
+	OwnerRef string
 	// packagesUnreadable: a stored declaration could not be read; a launch
 	// under this profile is refused (errUnreadablePackages).
 	packagesUnreadable bool
@@ -294,6 +313,9 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			{Name: colPPSessionPrograms, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionPrograms},
 			{Name: colPPSessionRegistries, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionRegistries},
 			{Name: colPPSessionEgressHosts, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionEgressHosts},
+			// NULL reads as "none declared", so a profile that predates the column keeps the
+			// tool's own default.
+			{Name: colPPAutoCompactWindow, Kind: model.KindInt, Nullable: true},
 			{Name: colPPSessionWorkGrant, Kind: model.KindText, Nullable: true, Principal: model.None("operator-delegated non-human session capability and workspace; re-read for mint and renewal: modules/sessions/orchestration_work.go:87, modules/sessions/orchestration_work.go:145")},
 			// Account metadata does not enter ProviderHomeSnapshot. A NULL name keeps
 			// every existing row an unnamed profile; account identity reuses its ref.
@@ -753,6 +775,8 @@ func profileFromRecord(rec model.Record) ProviderProfile {
 		SessionPrograms:       programs,
 		SessionRegistries:     registries,
 		SessionEgressHosts:    egressHosts,
+		AutoCompactWindow:     int(rec.Int(colPPAutoCompactWindow)),
+		OwnerRef:              rec.String(colPPOwnerRef),
 		packagesUnreadable:    !packagesOK,
 		Version:               rec.Int(model.ColVersion),
 		CreatedAt:             rec.String(model.ColCreatedAt),
@@ -1049,6 +1073,10 @@ type ProfilePatch struct {
 	SessionPrograms    *[]string
 	SessionRegistries  *[]SessionRegistry
 	SessionEgressHosts *[]string
+	// AutoCompactWindow declares the Claude Code auto-compact window in tokens
+	// (100000 to 1000000); 0 withdraws it. Like the policy above it does not reach a
+	// live child.
+	AutoCompactWindow *int
 	// MayUseSecretEnv: as CreateProfileInput's.
 	MayUseSecretEnv bool
 }
@@ -1099,6 +1127,12 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 	if p.SessionPermissionMode != nil {
 		if mode := strings.TrimSpace(*p.SessionPermissionMode); mode != "" && !validPermissionModes[mode] {
 			return ProviderProfile{}, badRequest("invalid permission_mode in the profile's session policy")
+		}
+	}
+	if p.AutoCompactWindow != nil {
+		if w := *p.AutoCompactWindow; w != 0 && (w < minAutoCompactWindow || w > maxAutoCompactWindow) {
+			return ProviderProfile{}, badRequest(fmt.Sprintf(
+				"auto_compact_window must be between %d and %d tokens, or 0 for the tool's default", minAutoCompactWindow, maxAutoCompactWindow))
 		}
 	}
 	if err := m.authorizeProfileWorkGrant(ctx, p.WorkGrantActor, tenant, p.SessionWorkGrant); err != nil {
@@ -1188,6 +1222,19 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 		}
 		if p.SessionPermissionMode != nil {
 			setOrNull(rec, colPPSessionPermissionMode, strings.TrimSpace(*p.SessionPermissionMode))
+		}
+		if p.AutoCompactWindow != nil {
+			// Only Claude Code has the variable; the driver is read from the row, as for the
+			// tool policy. A value stored for another tool would be shown and never applied.
+			if *p.AutoCompactWindow != 0 && rec.String(colPPDriver) != providerDriverClaude {
+				return &runErr{http.StatusUnprocessableEntity,
+					"auto_compact_window is Claude Code's setting; driver " + rec.String(colPPDriver) + " has no such variable, so it would never be applied"}
+			}
+			if *p.AutoCompactWindow == 0 {
+				rec[colPPAutoCompactWindow] = nil
+			} else {
+				rec[colPPAutoCompactWindow] = int64(*p.AutoCompactWindow)
+			}
 		}
 		if p.SessionPrograms != nil {
 			setOrNull(rec, colPPSessionPrograms, programs)
@@ -1284,6 +1331,7 @@ func profileSessionPolicy(prof ProviderProfile) sessionPolicy {
 		programs:       prof.SessionPrograms,
 		registries:     prof.SessionRegistries,
 		egressHosts:    prof.SessionEgressHosts,
+		autoCompact:    prof.AutoCompactWindow,
 		unreadable:     prof.packagesUnreadable,
 	}
 }

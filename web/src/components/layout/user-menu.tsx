@@ -3,14 +3,17 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import {
+  ChevronsUpDown,
   CircleHelp,
   KeyRound,
+  Keyboard,
   LogOut,
   Palette,
   Settings,
   SquareTerminal,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useCommandStore } from '@/stores/command'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -35,6 +38,7 @@ import { resolveLocation } from '@/features/navigation/model'
 import { useAuth } from '@/lib/auth/context'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { useThemeStore, type Theme } from '@/stores/theme'
+import { CommandKeys } from './command-keys'
 import { CommandLineDialog } from './command-line-dialog'
 import { ChangePasswordDialog } from './change-password-dialog'
 import { THEME_OPTIONS } from './theme-toggle'
@@ -90,11 +94,11 @@ function initialsOf(name: string): string {
 }
 
 /** The account menu: identity, role, the edition and version, Settings, the theme, help for
- * this page, the command line, and sign-out ( moved the version and the theme here from
+ * this page, the keyboard help, the command line, and sign-out ( moved the version and the theme here from
  * the top bar; the engine's state went to the status bar). The engine does not return the
  * principal's email to itself (minimum data), so we show the display name and the principal
  * id (`actor`). */
-export function UserMenu() {
+export function UserMenu({ expanded = false }: { expanded?: boolean }) {
   const { t } = useTranslation(['auth', 'nav', 'common'])
   const { principal, isSuperadmin, activeRole, logout } = useAuth()
   const navigate = useNavigate()
@@ -109,6 +113,7 @@ export function UserMenu() {
   // administrator.
   const [commandLine, setCommandLine] = useState(false)
   const [passwordChange, setPasswordChange] = useState(false)
+  const account = useRef<HTMLButtonElement>(null)
 
   return (
     <>
@@ -117,11 +122,15 @@ export function UserMenu() {
             right edge, where a native one was cut. */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild ref={account}>
               <Button
                 variant="ghost"
-                size="icon"
-                className="rounded-full"
+                size={expanded ? 'base' : 'icon'}
+                className={
+                  expanded
+                    ? 'h-12 w-full justify-start gap-2.5 px-2 active:bg-[var(--pressed)]'
+                    : 'rounded-full'
+                }
                 // The name starts with what the button shows (WCAG 2.5.3): a voice user
                 // says the initials they see.
                 aria-label={`${initials}, ${t('auth:account.title')}`}
@@ -129,6 +138,22 @@ export function UserMenu() {
                 <Avatar size="base">
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
+                {expanded && (
+                  <>
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block truncate text-caption font-bold">
+                        {name}
+                      </span>
+                      <span className="block text-[12px] text-text-3">
+                        {activeRole}
+                      </span>
+                    </span>
+                    <ChevronsUpDown
+                      aria-hidden
+                      className="size-3.5 shrink-0 text-text-3"
+                    />
+                  </>
+                )}
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
@@ -192,6 +217,15 @@ export function UserMenu() {
               <CircleHelp />
               {t('common:actions.help')}
             </a>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() =>
+              useCommandStore.getState().setHelpOpen(true, account.current)
+            }
+          >
+            <Keyboard />
+            {t('common:shortcuts.title')}
+            <CommandKeys command="help.toggle" />
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setCommandLine(true)}>
             <SquareTerminal />

@@ -197,7 +197,7 @@ func newServer(t *testing.T) *server {
 	host := newFakeHost()
 	g := &fakeGit{host: host, treeFor: map[string]string{shaCommit: shaTree, shaBase: shaTree}}
 	custody := &fakeCustody{host: host, cbVer: 1, rbVer: 1, owners: []string{"acme"}, approved: map[string]bool{"cb1": true, "rb1": true}}
-	m := New(Options{ScanSecrets: cleanPublicationScan, Custody: custody, Git: g})
+	m := New(Options{ScanSecrets: cleanPublicationScan, Custody: custody, Git: g, Gate: &fakeGate{}})
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, m.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)

@@ -34,6 +34,7 @@ type fakeSessions struct {
 	err       error
 	asked     int
 	tenant    model.TenantID
+	launcher  model.ID // the run's launcher; zero for a run no person launched
 }
 
 func (s *fakeSessions) ReadRunWorkspacePath(_ context.Context, tenant model.TenantID, workspace model.ID, run string) (string, error) {
@@ -46,6 +47,19 @@ func (s *fakeSessions) ReadRunWorkspacePath(_ context.Context, tenant model.Tena
 		return "", store.ErrNotFound
 	}
 	return s.dir, nil
+}
+
+// ReadRunLauncher answers the run's launcher through the same confined lookup.
+func (s *fakeSessions) ReadRunLauncher(_ context.Context, tenant model.TenantID, workspace model.ID, run string) (model.ID, error) {
+	s.asked++
+	s.tenant = tenant
+	if s.err != nil {
+		return "", s.err
+	}
+	if workspace != s.workspace || run != s.run {
+		return "", store.ErrNotFound
+	}
+	return s.launcher, nil
 }
 
 func sessionHarness(t *testing.T) (*harness, *fakeSessions) {

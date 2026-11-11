@@ -498,7 +498,7 @@ func newHarness(t *testing.T) *harness {
 	h := &harness{t: t, host: newFakeHost(), authz: &fakeAuthority{deny: map[model.ID]error{}}}
 	h.git = &fakeGit{host: h.host, treeFor: map[string]string{shaCommit: shaTree, shaBase: shaTree, shaOther: shaTree}}
 	h.custody = &fakeCustody{host: h.host, cbVer: 1, rbVer: 1, owners: []string{"acme"}, approved: map[string]bool{"cb1": true, "rb1": true, "rb2": true}}
-	h.m = New(Options{ScanSecrets: cleanPublicationScan, Custody: h.custody, Git: h.git, Authority: h.authz, DispatchTimeout: 2 * time.Second})
+	h.m = New(Options{ScanSecrets: cleanPublicationScan, Custody: h.custody, Git: h.git, Authority: h.authz, Gate: &fakeGate{}, DispatchTimeout: 2 * time.Second})
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, h.m.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)

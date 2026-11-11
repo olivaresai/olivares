@@ -10,6 +10,37 @@
     "unavailableDescription": "La lectura de sesiones no ha respondido. Las cifras de arriba no se ven afectadas.",
     "untitled": "Sesión sin título"
   },
+  "accounts": {
+    "title": "Tus cuentas",
+    "loading": "Leyendo tus cuentas…",
+    "none": "Todavía no tienes una cuenta propia de {{tool}}. Las sesiones que inicias trabajan con tu propia cuenta, y nadie más puede usarla.",
+    "create": "Crear mi cuenta",
+    "createFailed": "No se pudo crear tu cuenta.",
+    "createExists": "Ya tienes una cuenta propia de {{tool}}, así que no se puede crear otra. Pide ayuda a un administrador si no puedes usarla.",
+    "createForbidden": "Tu rol no te permite crear una cuenta propia. Pide ayuda a un administrador.",
+    "createNotAssigned": "{{tool}} no está asignado a ti, así que no se puede crear una cuenta propia para él. Pide ayuda a un administrador del departamento.",
+    "createUnavailable": "Las cuentas propias no están disponibles en este servidor.",
+    "signInWaits": "Sin iniciar sesión. Iniciar sesión en tu propia cuenta aún no está disponible en este servidor.",
+    "signedIn": "Sesión iniciada como {{identity}}",
+    "disabled": "Desactivada por un administrador.",
+    "retired": "Retirada. Pide a un administrador una cuenta que puedas usar: todavía no se puede crear otra cuenta propia.",
+    "limit": "{{label}}: {{percent}} % usado",
+    "unavailableTitle": "No se pudieron leer tus cuentas",
+    "unavailableDescription": "No se sabe si tienes una cuenta propia hasta que se lean."
+  },
+  "folders": {
+    "title": "Tus carpetas",
+    "start": "Empezar",
+    "startIn": "Empezar en {{folder}}",
+    "canWork": "Puedes trabajar",
+    "readOnly": "Solo lectura",
+    "showAll": "Ver todas las carpetas ({{total}})",
+    "loading": "Cargando tus carpetas",
+    "emptyTitle": "Aún no tienes carpetas",
+    "emptyDescription": "Cuando tu administrador te dé acceso a una carpeta, aparecerá aquí.",
+    "unavailableTitle": "No se han podido cargar tus carpetas",
+    "unavailableDescription": "Tus sesiones de abajo no se ven afectadas."
+  },
   "empty": {
     "title": "Aún no hay nada que mostrar",
     "description": "Tu rol no concede acceso de lectura a ningún módulo del patrimonio. Pide a un administrador un permiso de lectura para ver el resumen."

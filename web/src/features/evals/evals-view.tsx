@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ClipboardCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTabParam } from '@/lib/hooks/use-tab-param'
+import { reportEditionRefusal } from '@/lib/hooks/use-privileged-mutation'
 import { formatFraction } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -203,7 +204,8 @@ function CalibrationItemsPanel() {
     onError: (e: unknown) => {
       // Se clasifica por ESTADO: el 412 es el estado deny-closed de «no hay juez», no un fallo.
       if (e instanceof ApiError && e.status === 412) setSinJuez(true)
-      else toast.error(String((e as Error).message ?? e))
+      else if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
     },
   })
 
@@ -661,7 +663,10 @@ function OverrideGateDialog({
       toast.success(t('gate.overrideDone'))
       onOpenChange(false)
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   return (
@@ -839,7 +844,10 @@ function PinBaselineAction({ run }: { run: EvalRun }) {
       setAbierto(false)
       toast.success(t('baseline.pinned'))
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   // El permiso de la DECISIÓN, no el de lanzar ejecuciones.

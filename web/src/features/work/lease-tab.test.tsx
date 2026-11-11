@@ -40,6 +40,7 @@ vi.mock('./api', async (importOriginal) => {
 })
 
 const { LeaseTab } = await import('./item-detail')
+const { VIEWS } = await import('./views')
 
 function show() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -92,28 +93,31 @@ describe('LeaseTab', () => {
 
   /**
    * THE CONTROL: the three tiers the engine declares are three, not two. A role with
-   * `sessions:lease:write` operates the lease and does NOT get takeover/revoke/clock-rebase,
+   * `sessions:lease:write` does NOT get takeover/revoke/clock-rebase,
    * which the engine gates on `sessions:lease:admin` (`work_api.go:47-49`).
    *
    * THE MUTATION: gate the admin trio on `canWrite`. Then "Take over" is enabled and this
-   * fires. THE NON-FIRING DIRECTION is the next case: with admin, all six are enabled — so a
+   * fires. THE NON-FIRING DIRECTION is the next case: with admin, all three are enabled — so a
    * screen that disabled everything cannot satisfy both.
    */
-  it('gives write its three actions and withholds the admin three', async () => {
+  it('withholds the admin three from lease write', async () => {
     authState = {
       can: (p: string) =>
         p === 'sessions:lease:read' || p === 'sessions:lease:write',
     }
     getLeaseMock.mockResolvedValue({ lease: lease(), etag: '"v7"' })
     show()
-    expect(await screen.findByRole('button', { name: 'Renew' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Release' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Take over' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Revoke' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Rebase clock' })).toBeDisabled()
+    // Absent, not offered and refused; the line says who may.
+    expect(
+      await screen.findByText(
+        'Taking over, revoking and rebasing need lease admin.',
+      ),
+    ).toBeInTheDocument()
+    for (const name of ['Take over', 'Revoke', 'Rebase clock'])
+      expect(screen.queryByRole('button', { name })).toBeNull()
   })
 
-  it('gives admin all six', async () => {
+  it('gives admin its three', async () => {
     authState = { can: () => true }
     getLeaseMock.mockResolvedValue({ lease: lease(), etag: '"v7"' })
     show()
@@ -121,6 +125,94 @@ describe('LeaseTab', () => {
       await screen.findByRole('button', { name: 'Take over' }),
     ).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Revoke' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Rebase clock' })).toBeEnabled()
+  })
+
+  /**
+   * Lease write gates no control a person sees: the session takes, renews and
+   * releases the lease itself. A hint about it would stand beside an enabled
+   * Take over and say the opposite of what the screen offers.
+   */
+  it('says nothing about lease write beside the admin three', async () => {
+    authState = {
+      can: (p: string) =>
+        p === 'sessions:lease:read' || p === 'sessions:lease:admin',
+    }
+    getLeaseMock.mockResolvedValue({ lease: lease(), etag: '"v7"' })
+    show()
+    expect(
+      await screen.findByRole('button', { name: 'Take over' }),
+    ).toBeEnabled()
+    expect(screen.queryByText('Your role cannot change this lease.')).toBeNull()
+  })
+
+  /** With Acquire, Renew and Release the session's own, lease write lets a
+   *  person change nothing on /work: holding it alone, the page is read-only. */
+  it('lease write is not one of the permissions that change the Work page', () => {
+    const changes = VIEWS[0].changes.map((c) => c.permission)
+    expect(changes).toContain('sessions:lease:admin')
+    expect(changes).not.toContain('sessions:lease:write')
+  })
+
+  /**
+   * The engine takes Acquire, Renew and Release only from the session itself,
+   * under its own session credential, which a person's sign-in never carries:
+   * offered here, they were refused for every person. The page says who holds
+   * the item and that the session does those three itself.
+   */
+  it('offers a person no Acquire, Renew or Release, and says who holds it', async () => {
+    authState = { can: () => true }
+    getLeaseMock.mockResolvedValue({
+      lease: lease({ holder_sid: 's-holder-1', state: 'active', live: true }),
+      etag: '"v7"',
+    })
+    show()
+    const said = await screen.findByText(/^Session s-holder-1 holds this item;/)
+    expect(said).toHaveTextContent(
+      'takes, renews and releases the lease itself',
+    )
+    for (const name of ['Acquire', 'Renew', 'Release'])
+      expect(screen.queryByRole('button', { name })).toBeNull()
+  })
+
+  /** The sentence follows the liveness the same tab shows, not the stored state. */
+  it('says no session holds an item whose active lease is not live', async () => {
+    getLeaseMock.mockResolvedValue({
+      lease: lease({ holder_sid: 's-holder-1', state: 'active', live: false }),
+      etag: '"v7"',
+    })
+    show()
+    expect(
+      await screen.findByText(/^No session holds this item;/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/^Session s-holder-1 holds/)).toBeNull()
+  })
+
+  /** Could not look is its own answer: no sentence says a session holds it or not. */
+  it('says neither when the engine could not look', async () => {
+    getLeaseMock.mockResolvedValue({
+      lease: lease({
+        holder_sid: 's-holder-1',
+        state: 'active',
+        live: false,
+        liveness_verdict: 'NO_HE_PODIDO_MIRAR',
+      }),
+      etag: '"v7"',
+    })
+    show()
+    expect(await screen.findByText('Could not look')).toBeInTheDocument()
+    expect(screen.queryByText(/holds this item;/)).toBeNull()
+  })
+
+  it('says no session holds an item whose lease has ended', async () => {
+    getLeaseMock.mockResolvedValue({
+      lease: lease({ holder_sid: 's-holder-1', state: 'released' }),
+      etag: '"v7"',
+    })
+    show()
+    expect(
+      await screen.findByText(/^No session holds this item;/),
+    ).toBeInTheDocument()
   })
 
   /**
@@ -178,25 +270,18 @@ describe('LeaseTab', () => {
    * invalid_command.
    *
    * THE MUTATION: drop the `body`. The intent arrives with nothing and this fires.
-   * THE NON-FIRING DIRECTION, in the same case: `acquire` must NOT carry it. A vacant lease has
-   * no holder to inherit, and seeding it from the previous one would state something that does
-   * not hold — so a tab that seeded everything would fail here too.
    */
-  it('carries the holder it shows, except where there is none to inherit', async () => {
+  it('carries the holder it shows', async () => {
     authState = { can: () => true }
     getLeaseMock.mockResolvedValue({
       lease: lease({ holder_sid: 's-holder-1', state: 'held' }),
       etag: '"v7"',
     })
     show()
-    ;(await screen.findByRole('button', { name: 'Renew' })).click()
+    ;(await screen.findByRole('button', { name: 'Take over' })).click()
     expect(onIntent.mock.calls[0]?.[0]).toMatchObject({
-      command: 'lease.renew',
+      command: 'lease.takeover',
       body: { holder_sid: 's-holder-1' },
     })
-
-    onIntent.mockReset()
-    ;(await screen.findByRole('button', { name: 'Acquire' })).click()
-    expect(onIntent.mock.calls[0]?.[0]?.body).not.toHaveProperty('holder_sid')
   })
 })

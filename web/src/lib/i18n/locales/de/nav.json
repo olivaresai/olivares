@@ -33,6 +33,7 @@
     "communicationsHandoffs": "Übergaben",
     "console": "Verwaltung",
     "sourceDiff": "Quellvergleich",
+    "approvals": "Genehmigungen",
     "permissions": "Berechtigungen",
     "identity": "Identität",
     "vault": "Tresor",
@@ -155,7 +156,7 @@
     "updates": "Die Version, die diese Engine ausführt, das neueste signierte Release ihres Kanals und eine Aktion zum Installieren",
     "logs": "Der Live-Protokollstrom der Engine mit Filtern nach Stufe und Modul, Suche und Pause",
     "sourceDiff": "Vergleichen Sie eine Basis- und eine Head-Revision eines verbundenen Git-Repositorys, Datei für Datei",
-    "agent-tools": "Die Konten und API-Schlüssel sehen, mit denen Sitzungen laufen; Werkzeuge installieren und anmelden nur Bereitstellungsadministratoren",
+    "agent-tools": "Die Konten sehen, mit denen Sitzungen laufen; Werkzeuge installieren und anmelden nur Bereitstellungsadministratoren",
     "storedBudgets": "Verbrauch gegenüber jedem gespeicherten Limit. Reservierte Kapazität wird auf das Limit angerechnet.",
     "usage": "Die offiziellen 5-Stunden- und Wochenlimits jedes Kontos, das nächste zuerst, und die Tokens und Kosten von heute.",
     "operations": "Der Host, seine Laufwerke, die laufenden Sitzungen und ihre Nutzung, über 24 Stunden, 7 oder 30 Tage."
@@ -344,9 +345,13 @@
     "startWithChoice": "Neue Sitzung mit dieser Auswahl starten",
     "newWithOtherAccess": "Neue Sitzung mit anderem Zugriff…",
     "askPlaceholder": "Stellen Sie eine Frage, @ für Kontext, / für Befehle und Skills",
+    "messagePlaceholder": "Nachricht an {{title}}… @ Dateien · / Befehle",
     "modelPicker": "Modell: {{value}}",
-    "effortPicker": "Aufwand: {{value}}",
+    "modelEffortPicker": "Modell: {{model}}, Aufwand {{effort}}",
     "accessPicker": "Zugriff: {{value}}",
+    "moreActions": "Weitere Aktionen",
+    "moreActionsStashed": "Weitere Aktionen, mit einem beiseitegelegten Entwurf",
+    "contextAction": "Kontext und Komprimieren…",
     "accessKeeps": "Der Zugriff ändert sich beim nächsten Beitrag in dieser Unterhaltung.",
     "queue": {
       "title": "Nachrichten in der Warteschlange",
@@ -370,18 +375,32 @@
       "placeholder": "Eingabe stellt eine Nachricht für nach diesem Durchgang in die Warteschlange",
       "placeholderSteer": "Eingabe stellt sie für nach diesem Durchgang in die Warteschlange, Strg+Eingabe lenkt sie jetzt um",
       "discarded": "Die Sitzung wurde freigegeben, während diese Nachrichten noch in der Warteschlange standen:",
-      "copy": "Kopieren"
-    }
+      "copy": "Kopieren",
+      "placeholderQueueKey": "{{key}} stellt eine Nachricht für nach diesem Durchgang in die Warteschlange",
+      "placeholderSteerKey": "{{key}} lenkt sie jetzt um"
+    },
+    "stash": "Entwurf beiseitelegen",
+    "stashRestore": "Beiseitegelegten Entwurf zurückholen",
+    "stashGone": "Nicht mehr in dieser Sitzung gespeichert, daher nicht zurückgeholt: {{names}}",
+    "stashTooLarge": "Dieser Entwurf ist zu groß, um ihn beiseitezulegen: Die Grenze liegt bei {{limit}}. Er bleibt hier.",
+    "stashNotKept": "Dieser Entwurf konnte nicht beiseitegelegt werden: Dieser Browser behält nichts zwischen zwei Besuchen. Er bleibt nur in diesem Tab.",
+    "stashNoRoom": "Dieser Entwurf konnte nicht beiseitegelegt werden: Dieser Browser hat keinen Platz mehr dafür. Nichts wurde entfernt, und er bleibt hier.",
+    "stashDropped": "Beiseitegelegt. Um Platz zu schaffen, wurde das Älteste entfernt: {{words}}",
+    "stashTaken": "Der beiseitegelegte Entwurf ist nicht mehr da: Ein anderer Tab hat ihn zurückgeholt, oder ein Tag ist vergangen.",
+    "plan": "Plan",
+    "planHint": "Erst planen: Das Werkzeug liest und schlägt einen Plan vor, ändert aber nichts. Gilt ab der nächsten Nachricht."
   },
   "shell": {
     "more": "Mehr",
     "searchCommands": "Suche und Befehle",
     "search": "Suche",
+    "searchGo": "Suchen oder gehen zu…",
     "stopAll": "Alle stoppen",
     "workspaceCount": "Arbeitsbereiche: {{count}}",
     "rail": {
       "title": "Sitzungen",
-      "all": "Alle",
+      "seeAll_one": "{{count}} Sitzung ansehen",
+      "seeAll_other": "Alle {{count}} Sitzungen ansehen",
       "groups": {
         "needsYou": "Braucht Sie",
         "working": "Läuft",
@@ -431,15 +450,17 @@
     "killswitch": {
       "estateStopped": "ALLE AGENTEN GESTOPPT",
       "estateBody": "Agenten können nicht handeln, bis zwei Benutzerkonten den Neustart genehmigen.",
-      "agentStops": "{{count}} Agent-Stopp aktiv",
-      "agentStops_one": "{{count}} Agent-Stopp aktiv",
-      "agentStops_other": "{{count}} Agent-Stopps aktiv",
+      "agentStops": "{{count}} Agenten gestoppt",
+      "agentStops_one": "{{count}} Agent gestoppt",
+      "agentStops_other": "{{count}} Agenten gestoppt",
       "none": "Nichts ist gestoppt. Sitzungen und Agenten laufen normal."
     },
     "status": {
       "label": "Status",
       "running_one": "{{count}} Sitzung offen",
       "running_other": "{{count}} Sitzungen offen",
+      "needYou_one": "{{count}} braucht Sie",
+      "needYou_other": "{{count}} brauchen Sie",
       "usage": "Nutzung von {{tool}}",
       "fiveHour": "5 Std.",
       "week": "Wo.",
@@ -450,7 +471,6 @@
     },
     "collapse": "Navigation einklappen",
     "expand": "Navigation ausklappen",
-    "openNavigation": "Navigation öffnen",
     "closeNavigation": "Navigation schließen"
   },
   "places": {
@@ -469,13 +489,20 @@
   "readOnlyNotice": "Sie können diese Seite lesen, aber nicht ändern. Das kann ein Administrator der Organisation.",
   "business": {
     "sessions": "Aufzeichnungen, Automatisierungen und Orchestrierung von Sitzungen",
+    "providerAssignment": "Anbieter, die Personen und Abteilungen zugewiesen sind",
+    "limitAssignment": "Nutzungslimits für andere Personen und Abteilungen",
     "people": "Verzeichnisse, Abteilungen und delegierte Verwaltung",
     "rules": "Eigene Richtlinien, Rollen und Berechtigungen",
     "usage": "Kosten nach Team und Projekt",
+    "usageBudgets": "Budgets, die warnen, Sitzungen bremsen oder blockieren",
     "securityCompliance": "Compliance-Frameworks und Nachweise",
     "securityRedTeam": "Red-Team-Läufe und Bewertung",
     "operationsDeploy": "Agenten auf andere Hosts verteilen",
     "operationsResidency": "Datenresidenz und Mandanten",
-    "retentionSchedules": "Aufbewahrungspläne werden nur in Olivares Business angewendet: Diese Edition speichert sie und löscht nichts."
+    "retentionSchedules": "Aufbewahrungspläne werden nur in Olivares AI Business angewendet: Diese Edition speichert sie und löscht nichts."
+  },
+  "groups": {
+    "control": "Governance",
+    "admin": "Verwaltung"
   }
 }

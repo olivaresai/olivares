@@ -6,7 +6,7 @@
 // Settings, lands on the first line that differs from git HEAD, and takes the editor's SSH
 // form when the session's folder is on another machine.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -15,7 +15,11 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 vi.mock('@/features/agentops/api', async (orig) => ({
   ...(await orig<typeof import('@/features/agentops/api')>()),
-  agentOpsApi: { changes: vi.fn(), changedFile: vi.fn() },
+  agentOpsApi: {
+    changes: vi.fn(),
+    changedFile: vi.fn(),
+    runCheckpoints: vi.fn().mockResolvedValue({ available: false, turns: [] }),
+  },
 }))
 
 import { agentOpsApi } from '@/features/agentops/api'
@@ -48,7 +52,7 @@ async function openReadme(run: RunDTO) {
     </QueryClientProvider>,
   )
   await userEvent.setup().click(await screen.findByText('README.md'))
-  await screen.findByTestId('changes-file')
+  await waitFor(() => expect(qc.isFetching()).toBe(0))
 }
 
 beforeEach(() => {

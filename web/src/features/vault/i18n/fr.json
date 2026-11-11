@@ -36,7 +36,9 @@
     "menu": "Actions pour {{label}}",
     "copyPassword": "Copier le mot de passe de {{label}}",
     "copyNote": "Copier la note de {{label}}",
-    "copyCode": "Copier le code de {{label}}"
+    "copyCode": "Copier le code de {{label}}",
+    "changed": "Modifié",
+    "actions": "Actions"
   },
   "delete": {
     "title": "Supprimer {{label}} ?",

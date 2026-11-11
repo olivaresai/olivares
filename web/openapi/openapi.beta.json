@@ -45755,6 +45755,17 @@
                                         "type": "null"
                                       }
                                     ]
+                                  },
+                                  "person": {
+                                    "anyOf": [
+                                      {
+                                        "description": "A person's user id or email: evaluates as that person with their stored role and groups in this tenant. Requires policy administration.",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
                                   }
                                 },
                                 "type": "object"
@@ -46023,6 +46034,17 @@
                                         "type": "null"
                                       }
                                     ]
+                                  },
+                                  "person": {
+                                    "anyOf": [
+                                      {
+                                        "description": "A person's user id or email: evaluates as that person with their stored role and groups in this tenant. Requires policy administration.",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
                                   }
                                 },
                                 "type": "object"
@@ -46264,6 +46286,174 @@
                     "description": "Must compile for the selected engine and is capped at 262144 bytes.",
                     "pattern": ".*\\S.*",
                     "type": "string"
+                  },
+                  "tests": {
+                    "description": "Cedar only. Replaces the stored tests; omit it to keep them. A publish that breaks a test is refused with its name.",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "expect": {
+                          "enum": [
+                            "allow",
+                            "deny"
+                          ],
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Unique name a refusal quotes.",
+                          "pattern": ".*\\S.*",
+                          "type": "string"
+                        },
+                        "request": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "permission": {
+                              "anyOf": [
+                                {
+                                  "description": "Whitespace is trimmed before evaluation.",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "principal": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "anyOf": [
+                                        {
+                                          "description": "Optional credential identifier for the example principal.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "kind": {
+                                      "anyOf": [
+                                        {
+                                          "description": "After trimming, user remains user; every other value is evaluated as token.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "person": {
+                                      "anyOf": [
+                                        {
+                                          "description": "A person's user id or email: evaluates as that person with their stored role and groups in this tenant. Requires policy administration.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "resource": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "extra": {
+                                      "anyOf": [
+                                        {
+                                          "additionalProperties": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          },
+                                          "type": "object"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "id": {
+                                      "anyOf": [
+                                        {
+                                          "description": "Example resource identifier.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "kind": {
+                                      "anyOf": [
+                                        {
+                                          "description": "Example resource kind.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "sensitivity": {
+                                      "anyOf": [
+                                        {
+                                          "description": "Example sensitivity attribute.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "tenant": {
+                              "anyOf": [
+                                {
+                                  "description": "A valid non-zero tenant overrides the authenticated tenant; invalid input falls back to it.",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "request",
+                        "expect"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 200,
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -106580,6 +106770,19 @@
                       }
                     ]
                   },
+                  "auto_compact_window": {
+                    "anyOf": [
+                      {
+                        "description": "Claude Code only: the token count its sessions compact at (CLAUDE_CODE_AUTO_COMPACT_WINDOW), 100000 to 1000000, or 0 to withdraw the declaration and use the tool's default. Re-read on every launch; a live session keeps the value it started with. Another tool's profile refuses a value with 422. Null or omission keeps it.",
+                        "maximum": 1000000,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "display_name": {
                     "anyOf": [
                       {
@@ -110591,9 +110794,9 @@
             "browserSession": []
           }
         ],
-        "summary": "sessions module route (requires sessions:run:admin)",
+        "summary": "sessions module route (requires sessions:run:write)",
         "x-olivares-request-body-disposition": "bodyless",
-        "x-required-permission": "sessions:run:admin",
+        "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
       },
       "get": {
@@ -112147,9 +112350,50 @@
                       "description": "False when this session's folder cannot be checkpointed; reason says why.",
                       "type": "boolean"
                     },
+                    "files": {
+                      "description": "What the session's folder differs by now from the start of the first turn: the whole session's changes. Empty when there are no turns or the folder cannot be checkpointed.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "added": {
+                            "description": "Lines added between the two trees; absent for a binary file.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "path": {
+                            "description": "The file's path, relative to the session's folder.",
+                            "type": "string"
+                          },
+                          "removed": {
+                            "description": "Lines removed between the two trees; absent for a binary file.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "status": {
+                            "description": "What the turn did to the file.",
+                            "enum": [
+                              "added",
+                              "modified",
+                              "deleted"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "reason": {
                       "description": "Why the folder cannot be checkpointed. Absent when it can.",
                       "type": "string"
+                    },
+                    "truncated": {
+                      "description": "True when the session changed more files than are listed.",
+                      "type": "boolean"
                     },
                     "turns": {
                       "description": "The session's turns, oldest first.",
@@ -112170,9 +112414,19 @@
                             "items": {
                               "additionalProperties": false,
                               "properties": {
+                                "added": {
+                                  "description": "Lines added between the two trees; absent for a binary file.",
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
                                 "path": {
                                   "description": "The file's path, relative to the session's folder.",
                                   "type": "string"
+                                },
+                                "removed": {
+                                  "description": "Lines removed between the two trees; absent for a binary file.",
+                                  "minimum": 0,
+                                  "type": "integer"
                                 },
                                 "status": {
                                   "description": "What the turn did to the file.",
@@ -112226,7 +112480,9 @@
                   },
                   "required": [
                     "available",
-                    "turns"
+                    "turns",
+                    "files",
+                    "truncated"
                   ],
                   "type": "object"
                 }
@@ -112635,9 +112891,9 @@
             "browserSession": []
           }
         ],
-        "summary": "sessions module route (requires sessions:run:admin)",
+        "summary": "sessions module route (requires sessions:run:write)",
         "x-olivares-request-body-disposition": "schema-published",
-        "x-required-permission": "sessions:run:admin",
+        "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
       }
     },
@@ -128955,6 +129211,113 @@
       }
     },
     "/v1/m/sessions/workspaces/{ref}/terminals": {
+      "get": {
+        "description": "Lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them.",
+        "x-required-permission": "sessions:workspace:write",
+        "x-stability": "beta"
+      },
       "post": {
         "description": "Opens a shell in the folder, confined as a session in that folder is, and answers with the terminal's id.",
         "parameters": [

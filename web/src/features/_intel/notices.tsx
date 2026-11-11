@@ -139,12 +139,15 @@ export function ListTruncationBadge({
   if (filas !== undefined && filas <= 0) return null
   return (
     <div className={cn('px-3 pt-3', className)}>
-      <Badge
-        variant="warning"
+      {/* A fact about the list in one muted line, never a warning chip. A block, not
+          a paragraph: a rich hint below is the notice's paragraph, the sentence that
+          says what a row left out does not prove. */}
+      <div
         title={typeof hint === 'string' ? hint : undefined}
+        className="text-caption text-text-3"
       >
         {label}
-      </Badge>
+      </div>
       {hint != null && typeof hint !== 'string' && (
         <p className="mt-1 text-caption text-muted-foreground">{hint}</p>
       )}

@@ -1,9 +1,26 @@
 {
   "edition": {
     "viewPolicy": "Visualizza policy",
-    "editingRequiresBusiness": "Per modificare policy, ruoli e concessioni personalizzati serve Business.",
+    "editingRequiresBusiness": "Per modificare policy, ruoli e concessioni personalizzati serve Olivares AI Business.",
     "disablePolicy": "Disattiva policy",
-    "disablePolicyDescription": "La policy creata smette di applicarsi. La sua cronologia e le altre policy in vigore restano invariate."
+    "disablePolicyDescription": "La policy creata smette di applicarsi. La sua cronologia e le altre policy in vigore restano invariate.",
+    "note": {
+      "line": "{{capability}} fa parte di {{edition}}. Aggiungi una licenza in <0>Impostazioni > Edizione</0> oppure visita <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "Questo fa parte di {{edition}}. Aggiungi una licenza in <0>Impostazioni > Edizione</0> oppure visita <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} fa parte di {{edition}}. Chiedi a un amministratore.",
+      "lineUnnamedAsk": "Questo fa parte di {{edition}}. Chiedi a un amministratore.",
+      "readsBelow": "Ciò che è già archiviato resta leggibile ed esportabile.",
+      "tag": "Parte di {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skill",
+      "sso": "Single sign-on",
+      "approvalTiers": "Modificare il livello di rischio o il numero di approvazioni di un'azione",
+      "evals": "Eval",
+      "eventing": "Webhook",
+      "notify": "Avvisi",
+      "claude-policy": "Policy gestita"
+    }
   },
   "errors": {
     "generic": "Qualcosa è andato storto"
@@ -101,25 +118,18 @@
     "noTargetReason": "Serve un'organizzazione in cui eseguirla.",
     "noTargetHelp": "Seleziona un'organizzazione e riprova.",
     "goTo": "Vai a",
-    "recentSessions": "Sessioni recenti",
+    "recentSessions": "Sessioni",
     "settingsGroup": "Impostazioni",
     "scope": "in {{name}}",
     "footerMove": "sposta",
     "footerOpen": "apri",
+    "footerClose": "chiudi",
     "footerCommands": "solo comandi",
     "objectActions": "Per {{name}}",
     "footerPeople": "persone",
     "footerSessions": "sessioni",
     "peopleHint": "Digita un nome.",
     "ask": "Chiedi a Olivares…"
-  },
-  "hintBar": {
-    "move": "sposta",
-    "open": "apri",
-    "approve": "approva",
-    "deny": "rifiuta",
-    "launcher": "launcher",
-    "command": "comandi"
   },
   "permissionWords": {
     "read": "accesso in lettura",
@@ -218,6 +228,7 @@
   "notifications": {
     "title": "Attività recente",
     "empty": "Nessuna attività recente.",
+    "auditOnly": "L'attività recente è mostrata a chi può leggere il registro di audit.",
     "viewAll": "Vedi tutto nel registro di audit",
     "events": {
       "auditCheckpoint": "Checkpoint di audit creato",
@@ -275,6 +286,8 @@
       "policyUpdated_you": "Hai aggiornato una policy",
       "policyDeleted_you": "Hai eliminato una policy"
     },
+    "unread": "Non letto",
+    "markAllRead": "Segna tutto come letto",
     "actors": {
       "you": "Tu",
       "member": "Un membro",
@@ -302,6 +315,15 @@
     "showHelp": "Mostra questa guida"
   },
   "keys": {
+    "refused": {
+      "unknownRow": "Questo comando non ha tasti da cambiare.",
+      "notAChord": "Premi un tasto, da solo o con {{mod}}, Alt o Shift.",
+      "needsModifier": "Tieni premuto {{mod}} o Alt con il tasto: qui un solo tasto potrebbe agire mentre scrivi o decidere una richiesta.",
+      "needsAltOrShift": "Tieni premuto Alt, oppure {{mod}} e Shift, con il tasto: {{keys}} si preme anche mentre scrivi, e qui deciderebbe una richiesta.",
+      "taken": "{{keys}} esegue già {{command}}. Scegli altri tasti o cambia prima quel comando.",
+      "leader": "{{keys}} seguito da una lettera apre una pagina di Vai a. Scegli altri tasti.",
+      "tooLarge": "Le impostazioni salvate sono piene. Ripristina un tasto che hai cambiato o rimuovi uno script che hai aggiunto, poi riprova."
+    },
     "group": {
       "general": "Generali",
       "launcher": "Avvio di una sessione",
@@ -323,15 +345,19 @@
       "launcher": {
         "focus": "Vai al launcher",
         "start": "Avvia la sessione",
-        "startBackground": "Avviala e resta qui"
+        "startBackground": "Avviala e resta qui",
+        "stash": "Mettere da parte la bozza o ripristinarla"
       },
       "surface": {
         "openBeside": "Apri accanto",
         "closeBeside": "Chiudi la sessione accanto",
         "focusBeside": "Sposta il focus tra le sessioni",
+        "nextSession": "Apri la sessione successiva",
+        "previousSession": "Apri la sessione precedente",
         "nextPane": "Riquadro successivo",
         "previousPane": "Riquadro precedente",
         "approve": "Approva una volta la richiesta nella conversazione",
+        "cite": "Cita le parole selezionate nel campo messaggio",
         "terminal": "Terminale",
         "changes": "Modifiche",
         "preview": "Anteprima",
@@ -372,6 +398,20 @@
       },
       "ask": {
         "open": "Chiedi a Olivares"
+      },
+      "shell.sidebar": "Mostra o nascondi barra laterale",
+      "shell.panel": "Mostra o nascondi pannello laterale",
+      "terminal": {
+        "new": "Nuovo terminale",
+        "close": "Chiudi terminale",
+        "previous": "Terminale precedente",
+        "next": "Terminale successivo",
+        "search": "Cerca nel terminale",
+        "links": "Apri un link sullo schermo",
+        "copy": "Copia la selezione",
+        "selectAll": "Seleziona tutto l’output",
+        "scrollTop": "Vai all’inizio",
+        "scrollBottom": "Vai alla fine"
       }
     },
     "when": {
@@ -379,10 +419,13 @@
       "outsideList": "fuori da un elenco",
       "launcherFocused": "nel campo del launcher",
       "workSurface": "nella schermata delle sessioni",
+      "sourceDiff": "nel diff dei sorgenti",
       "sessionHistory": "quando è disponibile una sessione precedente",
       "paletteRecent": "nei risultati della palette con ricerca vuota",
       "approvalQueue": "nella coda delle approvazioni",
-      "accessMap": "sulla mappa degli accessi"
+      "accessMap": "sulla mappa degli accessi",
+      "terminalFocused": "in un terminale",
+      "replySelection": "con parole selezionate in una risposta"
     },
     "precedence": "Quando due righe condividono gli stessi tasti, vale l'ultima che si applica.",
     "problems_one": "{{count}} scorciatoia non è leggibile e non si attiva: {{commands}}",
@@ -440,6 +483,7 @@
     "copy": {
       "message": "Copia messaggio",
       "code": "Copia codice",
+      "detail": "Copia dettaglio",
       "copied": "Copiato",
       "failed": "Impossibile copiare. Seleziona il testo e copialo.",
       "value": "Copia {{value}}"

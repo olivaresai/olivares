@@ -142,7 +142,8 @@ export interface PdpValidateResult {
 /** An example authorization request to dry-run a policy against (mirrors
  *  auth.Request / ResourceAttrs). */
 export interface PdpExampleRequest {
-  principal: { kind: string; id?: string }
+  /** `person` (user id or email) tests as that person, with their stored role and groups. */
+  principal: { kind: string; id?: string; person?: string }
   permission: string
   tenant?: string
   resource: {
@@ -305,6 +306,13 @@ export interface PdpActiveSurface {
   sha256?: string
 }
 
+/** One expectation an administrator writes about the policy; a publish that breaks it is refused. */
+export interface PdpPolicyTest {
+  name: string
+  request: PdpExampleRequest
+  expect: 'allow' | 'deny'
+}
+
 /** What the STORE currently selects for an engine. For Cedar the ENFORCED policy
  *  is the UNION of authored ∪ managed ∪ adopted; publishing only ever replaces
  *  the authored surface. */
@@ -314,6 +322,8 @@ export interface PdpActivePolicy {
   managed: PdpActiveSurface
   adopted: PdpActiveSurface
   union_sha256?: string
+  /** The stored policy tests every Cedar publish must keep true. */
+  tests?: PdpPolicyTest[]
   /** Whether the process that served THIS READ is deciding requests with the
    *  revision above — measured by the engine, not remembered by the browser, so
    *  it survives a reload, a second operator and a different replica.

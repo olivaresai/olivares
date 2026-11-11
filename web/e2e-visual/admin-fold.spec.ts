@@ -107,8 +107,7 @@ test('Settings lists Edition among its sections, and no sidebar link opens a sec
     await expect(list.getByRole('button', { name, exact: true })).toHaveCount(0)
   await capture(page, 'settings')
 
-  // License left the sidebar: More holds no link to a Settings section.
-  await sidebar(page).getByRole('button', { name: 'More', exact: true }).click()
+  // License left the sidebar: no link there opens a Settings section.
   await expect(sidebar(page).locator('a[href*="section="]')).toHaveCount(0)
   await list.getByRole('button', { name: 'Edition', exact: true }).click()
   await expect(page).toHaveURL(/\/settings\?section=edition$/)
@@ -198,9 +197,7 @@ test('measures the two Admin and Settings tasks of the 0.5 table in clicks from 
 
   await page.goto('/now')
   clicks = 0
-  // A new person's navigation holds the first places; People is under More.
-  await sidebar(page).getByRole('button', { name: 'More', exact: true }).click()
-  clicks++
+  // Every place is listed in the navigation: People is one click away.
   await sidebar(page).getByRole('link', { name: 'People', exact: true }).click()
   clicks++
   await expect(page).toHaveURL(/\/identity/)

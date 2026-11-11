@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import type { SsoProvider } from '@/lib/api/types'
@@ -34,14 +35,17 @@ export function ssoStartHref(
   }
 }
 
-/** One button per sign-in provider the engine lists, then a quiet "or" above
- * the password form. No list (or an empty one) renders nothing. */
+/** Under the password form: a quiet "or", then the other ways in: what the
+ * page passes first (the passkey), then one button per sign-in provider the
+ * engine lists. With none of them it renders nothing. */
 export function SsoButtons({
   providers,
   returnTo,
+  children,
 }: {
   providers: SsoProvider[] | undefined
   returnTo: string | null
+  children?: ReactNode
 }) {
   const { t } = useTranslation('auth')
   const buttons = (providers ?? []).flatMap((p) => {
@@ -49,34 +53,33 @@ export function SsoButtons({
     const href = ssoStartHref(p?.start_url, returnTo, window.location.origin)
     return label && href ? [{ label, href }] : []
   })
-  if (buttons.length === 0) return null
+  if (buttons.length === 0 && !children) return null
   return (
-    <div className="mb-4 flex flex-col gap-4" data-slot="sso-sign-in">
-      <div className="flex flex-col gap-2">
-        {buttons.map((b) => (
-          <Button
-            key={b.href}
-            asChild
-            variant="secondary"
-            className="h-auto min-h-10 w-full whitespace-normal py-2"
-          >
-            <a href={b.href}>
-              {b.label === DEFAULT_LABEL
-                ? t('login.sso')
-                : t('login.ssoWith', { label: b.label })}
-            </a>
-          </Button>
-        ))}
-      </div>
+    <div className="flex flex-col gap-4.5" data-slot="sso-sign-in">
       <div
-        className="flex items-center gap-3 text-caption text-muted-foreground"
+        className="flex items-center gap-3 text-caption text-text-3"
         role="separator"
         aria-label={t('login.or')}
       >
-        <span className="h-px flex-1 bg-border" aria-hidden />
+        <span className="h-px flex-1 bg-line" aria-hidden />
         <span aria-hidden>{t('login.or')}</span>
-        <span className="h-px flex-1 bg-border" aria-hidden />
+        <span className="h-px flex-1 bg-line" aria-hidden />
       </div>
+      {children}
+      {buttons.map((b) => (
+        <Button
+          key={b.href}
+          asChild
+          variant="secondary"
+          className="h-auto min-h-10 w-full whitespace-normal py-2"
+        >
+          <a href={b.href}>
+            {b.label === DEFAULT_LABEL
+              ? t('login.sso')
+              : t('login.ssoWith', { label: b.label })}
+          </a>
+        </Button>
+      ))}
     </div>
   )
 }

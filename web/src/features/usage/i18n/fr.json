@@ -1,9 +1,55 @@
 {
   "title": "Usage",
-  "subtitle": "Les limites officielles sur 5 heures et à la semaine, à côté des jetons et du coût du jour.",
+  "subtitle": "Ce que les sessions ont utilisé et coûté sur les jours choisis, à côté des limites de 5 heures et hebdomadaires de chaque compte.",
+  "subtitleNoCost": "Ce que les sessions ont utilisé sur les jours choisis, à côté des limites de 5 heures et hebdomadaires de chaque compte.",
   "tabs": {
     "accounts": "Comptes",
     "timeline": "Chronologie"
+  },
+  "spend": {
+    "heading": "Dépenses",
+    "headingNoCost": "Exécutions et jetons",
+    "range": {
+      "label": "Période",
+      "d7": "7 jours",
+      "d14": "14 jours",
+      "d30": "30 jours",
+      "custom": "Personnalisée",
+      "from": "Premier jour",
+      "to": "Dernier jour",
+      "invalid": "Le premier jour doit précéder le dernier ou être le même. Une période compte au plus {{days}} jours."
+    },
+    "tool": "Outil",
+    "allTools": "Tous les outils",
+    "profile": "Profil",
+    "allProfiles": "Tous les profils",
+    "export": "Exporter",
+    "totals": "Totaux",
+    "cost": "Dépenses",
+    "runs": "Exécutions",
+    "input": "Jetons en entrée",
+    "output": "Jetons en sortie",
+    "costUnreported": "Exécutions sans coût indiqué : {{runs}}",
+    "tokensUnreported": "Exécutions sans jetons indiqués : {{runs}}",
+    "empty": {
+      "title": "Rien n'a tourné ces jours-là",
+      "description": "Choisissez plus de jours ou lancez une session : ce qu'elle utilise apparaîtra ici."
+    },
+    "chart": {
+      "cost": "Dépenses par jour",
+      "tokens": "Jetons par jour",
+      "day": "Jour",
+      "summary": "{{title}} du {{from}} au {{to}} : {{total}} au total.",
+      "unpriced": "Les exécutions sans coût indiqué ne figurent pas dans le graphique."
+    },
+    "profiles": {
+      "heading": "Par profil",
+      "profile": "Profil",
+      "input": "Entrée",
+      "output": "Sortie",
+      "none": "Sans profil",
+      "unnamed": "Profil sans nom"
+    }
   },
   "accounts": {
     "heading": "Comptes",
@@ -11,7 +57,8 @@
     "error": "Les limites des comptes n'ont pas pu être lues.",
     "empty": "Aucun compte n'a encore indiqué ses limites.",
     "details": "Détails",
-    "detailsFor": "Détails de {{account}}"
+    "detailsFor": "Détails de {{account}}",
+    "emptyChosen": "Aucun compte de cet outil ou de ce profil n'a encore indiqué ses limites."
   },
   "today": {
     "heading": "Aujourd'hui",

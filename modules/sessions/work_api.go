@@ -410,6 +410,12 @@ func (m *Module) dispatchWorkMutation(w http.ResponseWriter, r *http.Request, mc
 			return
 		}
 	}
+	// The lease takeover and revoke routes are mounted at sessions:lease:admin, the
+	// permission they publish: reaching one is the lease admin decision, with no second
+	// undeclared permission. An orchestration credential keeps its capability rule.
+	if (routeCommand == "lease.takeover" || routeCommand == "lease.revoke") && !mc.Principal.IsOrchestrationSessionCredential() {
+		principal.Admin = true
+	}
 
 	switch mode {
 	case ModeValidate, ModePlan:

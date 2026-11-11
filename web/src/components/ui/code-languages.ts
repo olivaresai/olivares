@@ -170,7 +170,7 @@ export const tokenHighlightStyle = HighlightStyle.define([
   { tag: t.keyword, color: 'var(--accent-text)', fontWeight: '600' },
   { tag: [t.atom, t.bool, t.null], color: 'var(--accent-text)' },
   { tag: [t.string, t.special(t.string)], color: 'var(--success)' },
-  { tag: t.number, color: 'var(--confidence-attributed)' },
+  { tag: t.number, color: 'var(--info)' },
   {
     tag: [t.propertyName, t.definition(t.propertyName)],
     color: 'var(--foreground)',

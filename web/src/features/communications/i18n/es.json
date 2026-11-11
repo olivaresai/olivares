@@ -2,29 +2,28 @@
   "doors": {
     "catalog": {
       "title": "Comunicaciones",
-      "description": "Los canales del espacio de trabajo seleccionado que puedes leer ahora, los avisos directos enviados por ellos y tu bandeja. El motor decide cada lectura y cada acción."
+      "description": "Mensajes entre personas y sesiones, y los canales que los llevan."
     },
     "inbox": {
       "title": "Bandeja de comunicaciones",
-      "description": "Mensajes dirigidos a ti en el espacio de trabajo seleccionado: ábrelos y acusa recibo de cada uno."
+      "description": "Mensajes enviados a ti: abre cada uno y acusa recibo."
     },
     "new": {
       "title": "Nuevo canal",
-      "description": "Crea un canal y elige desde el principio quién puede usarlo. Nadie obtiene acceso de forma implícita, y el recibo no es una lista duradera de quién podrá leerlo después."
+      "description": "Crea un canal y elige quién puede usarlo."
     },
     "administration": {
       "title": "Administración de canales",
-      "description": "Los canales que puedes administrar en el espacio de trabajo seleccionado: configuración e historial de concesiones. Cada cambio se aplica solo a la versión que leíste. Administrar un canal no exige ni concede el derecho a leer su contenido."
+      "description": "Administra canales y su acceso; esto nunca te permite leer sus mensajes."
     },
     "handoffs": {
       "title": "Traspasos",
-      "description": "Ofertas de trabajo dirigidas a ti en el espacio de trabajo seleccionado. La lista no muestra el contenido de la oferta; al abrir una se lee su contexto, y el motor decide cada aceptación o rechazo."
+      "description": "Trabajo que otros te ofrecen traspasar: léelo y después acéptalo o recházalo."
     }
   },
   "tabs": {
     "channels": "Canales",
     "inbox": "Bandeja",
-    "create": "Nuevo canal",
     "administration": "Administración",
     "handoffs": "Traspasos"
   },

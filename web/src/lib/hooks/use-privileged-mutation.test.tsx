@@ -3,20 +3,31 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api/errors'
 import { createStepUpOwner, useStepUpStore } from '@/stores/step-up'
 import { useTenantStore } from '@/stores/tenant'
-import { usePrivilegedMutation } from './use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  usePrivilegedMutation,
+} from './use-privileged-mutation'
 
 // Capture toast calls without rendering the real sonner surface.
 const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  info: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast }))
+
+// Whoever reads the toast: the edition line's second sentence follows the license tab's gate.
+const auth = vi.hoisted(() => ({ isSuperadmin: true }))
+vi.mock('@/lib/auth/context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/context')>()),
+  useAuth: () => ({ isSuperadmin: auth.isSuperadmin }),
+}))
 
 function makeWrapper(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
@@ -29,6 +40,7 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
     toast.success.mockClear()
     toast.error.mockClear()
     toast.warning.mockClear()
+    toast.info.mockClear()
     useStepUpStore.setState({ request: null })
     useTenantStore.setState({ activeTenant: null })
   })
@@ -535,5 +547,196 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
       // which is what makes the boundary non-delegable rather than merely defended.
       expect(claimsEverything).not.toHaveBeenCalled()
     }
+  })
+})
+
+// AN EDITION MATTER IS NOT A ROLE REFUSAL. A write to a capability above this edition is
+// told the one edition line, in the calm toast, with the edition's whole name: never «not
+// authorized» (which sends a person to ask for a role that would change nothing) and never
+// a red error, a status, a code or a capability key.
+describe('usePrivilegedMutation: a write refused by edition', () => {
+  const RAW =
+    /\b501\b|\b403\b|business_required|edition_required|addon_requires_license|raw:|\bsso\b/
+  const WAYS_ON =
+    'Add a license in Settings > Edition, or see olivares.ai/pricing.'
+
+  beforeEach(() => {
+    toast.success.mockClear()
+    toast.error.mockClear()
+    toast.warning.mockClear()
+    toast.info.mockClear()
+    useStepUpStore.setState({ request: null })
+    auth.isSuperadmin = true
+  })
+
+  function refusedWrite(
+    status: number,
+    code: string,
+    details: Record<string, unknown> = {},
+  ) {
+    const { result } = renderHook(
+      () =>
+        usePrivilegedMutation({
+          mutationFn: async () => {
+            throw new ApiError(
+              status,
+              code,
+              `raw: ${status} ${code}`,
+              'req-1',
+              details,
+            )
+          },
+          successMessage: 'unused',
+        }),
+      { wrapper: makeWrapper(new QueryClient()) },
+    )
+    result.current.mutate(undefined)
+  }
+
+  it.each([
+    [
+      '403 edition_required',
+      403,
+      'edition_required',
+      { edition: 'engineer', capability: 'skills' },
+      'Skills is part of Olivares AI Engineer.',
+    ],
+    [
+      '501 business_required naming no edition',
+      501,
+      'business_required',
+      {},
+      'This is part of Olivares AI Business.',
+    ],
+    [
+      '501 business_required naming its edition, as the engine answers now',
+      501,
+      'business_required',
+      { edition: 'business' },
+      'This is part of Olivares AI Business.',
+    ],
+    [
+      '403 addon_requires_license naming its edition',
+      403,
+      'addon_requires_license',
+      { edition: 'business' },
+      'This is part of Olivares AI Business.',
+    ],
+    [
+      '501 departments_unavailable, an older code that names its edition',
+      501,
+      'departments_unavailable',
+      { edition: 'business' },
+      'This is part of Olivares AI Business.',
+    ],
+  ])(
+    '%s: the one edition line, calm',
+    async (_, status, code, details, lead) => {
+      refusedWrite(status, code, details)
+      await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+      const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+      expect(container).toHaveTextContent(`${lead} ${WAYS_ON}`)
+      expect(container.textContent).not.toMatch(RAW)
+      expect(toast.warning).not.toHaveBeenCalled()
+      expect(toast.error).not.toHaveBeenCalled()
+      expect(useStepUpStore.getState().request).toBeNull()
+    },
+  )
+
+  // Whoever cannot add a license (the license tab's gate) is asked to ask an administrator.
+  it('a member is told to ask an administrator, never to add a license', async () => {
+    auth.isSuperadmin = false
+    refusedWrite(403, 'edition_required', {
+      edition: 'engineer',
+      capability: 'skills',
+    })
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent(
+      'Skills is part of Olivares AI Engineer. Ask an administrator.',
+    )
+    expect(container.textContent).not.toMatch(/Add a license|pricing/)
+    expect(container.querySelector('a')).toBeNull()
+  })
+
+  it('an add-on refusal naming no edition keeps the engine sentence, as today', async () => {
+    refusedWrite(403, 'addon_requires_license')
+    await waitFor(() =>
+      expect(toast.warning).toHaveBeenCalledWith(
+        'raw: 403 addon_requires_license',
+      ),
+    )
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('an ordinary 403 is still «not authorized», and no edition line', async () => {
+    refusedWrite(403, 'forbidden')
+    await waitFor(() =>
+      expect(toast.warning).toHaveBeenCalledWith(
+        "Not authorized — your role can't perform this action.",
+      ),
+    )
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('any other 501 is still the failure it was', async () => {
+    refusedWrite(501, 'not_implemented')
+    await waitFor(() => expect(toast.error).toHaveBeenCalledOnce())
+    expect(toast.info).not.toHaveBeenCalled()
+  })
+})
+
+// A WRITE OUTSIDE THE HELPER says an edition refusal as the helper does, and only that: the
+// function says whether it did, so every other failure keeps the words its view had.
+describe('reportEditionRefusal', () => {
+  beforeEach(() => {
+    toast.success.mockClear()
+    toast.error.mockClear()
+    toast.warning.mockClear()
+    toast.info.mockClear()
+    auth.isSuperadmin = true
+  })
+
+  it('says an edition refusal as the calm edition line, and that it did', () => {
+    const refused = new ApiError(403, 'edition_required', 'raw: 403', 'r', {
+      edition: 'engineer',
+      capability: 'skills',
+    })
+    expect(reportEditionRefusal(refused)).toBe(true)
+    expect(toast.info).toHaveBeenCalledOnce()
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent(
+      'Skills is part of Olivares AI Engineer.',
+    )
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('an add-on refusal that names no edition keeps the engine’s sentence, calm', () => {
+    const refused = new ApiError(
+      403,
+      'addon_requires_license',
+      'The add-on lapsed; reads and exports are unaffected.',
+    )
+    expect(reportEditionRefusal(refused)).toBe(true)
+    expect(toast.warning).toHaveBeenCalledWith(
+      'The add-on lapsed; reads and exports are unaffected.',
+    )
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('leaves every other failure to its caller and says nothing', () => {
+    for (const err of [
+      new ApiError(403, 'forbidden', 'policy p-7 refuses this'),
+      new ApiError(501, 'not_implemented', 'not in this build'),
+      new ApiError(500, 'internal', 'the store is down'),
+      new Error('offline'),
+    ])
+      expect(reportEditionRefusal(err)).toBe(false)
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })

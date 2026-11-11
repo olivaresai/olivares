@@ -143,6 +143,8 @@ export function WorkView() {
   /** One item.create intention: its key is minted once, when the form is complete. */
   const [createIntent, setCreateIntent] = useState<WorkIntent | null>(null)
   const createdItem = useRef<string | null>(null)
+  /** Clear filters removes its own button; the keyboard goes back here. */
+  const statusFilter = useRef<HTMLButtonElement>(null)
   /** Bumped once an item exists, so the next New item starts from an empty draft. */
   const [draftGeneration, setDraftGeneration] = useState(0)
   const qc = useQueryClient()
@@ -294,12 +296,18 @@ export function WorkView() {
           >
             {t('common.refresh')}
           </Button>
-          {canCreateItem ? (
-            <Button size="sm" onClick={() => setNewItemOpen(true)}>
-              {t('create.action')}
-            </Button>
-          ) : null}
         </div>
+      }
+      primaryAction={
+        canCreateItem ? (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setNewItemOpen(true)}
+          >
+            {t('create.action')}
+          </Button>
+        ) : null
       }
       notices={
         <>
@@ -363,6 +371,7 @@ export function WorkView() {
                   }
                 >
                   <SelectTrigger
+                    ref={statusFilter}
                     className="w-40"
                     aria-label={t('filters.status')}
                   >
@@ -462,19 +471,20 @@ export function WorkView() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() =>
+                          onClick={() => {
                             patchUrl({
                               status: undefined,
                               priority: undefined,
                               archived: undefined,
                             })
-                          }
+                            statusFilter.current?.focus()
+                          }}
                         >
                           {t('filters.clear')}
                         </Button>
                       ) : canCreateItem ? (
                         <Button
-                          variant="primary"
+                          variant="secondary"
                           size="sm"
                           onClick={() => setNewItemOpen(true)}
                         >

@@ -47,6 +47,7 @@
   "schedule": {
     "updated": "Backup-Zeitplan aktualisiert",
     "loading": "Zeitplan wird geladen...",
+    "loadFailed": "Der Backup-Zeitplan konnte nicht geladen werden.",
     "title": "Automatischer Backup-Zeitplan",
     "description": "Konfigurieren Sie wiederkehrende Backups. Die Engine führt den Zeitplan aus; die Passphrase wird aus dem Instanz-Secret abgeleitet.",
     "enableAria": "Automatische Backups aktivieren",
@@ -118,6 +119,7 @@
   },
   "pending": {
     "title": "Wiederherstellungen warten auf Genehmigung (Vier-Augen-Prinzip)",
+    "loadFailed": "Die Wiederherstellungen, die auf Genehmigung warten, konnten nicht geladen werden.",
     "requestedByPrefix": "Angefordert von",
     "approveRestore": "Genehmigen und wiederherstellen",
     "approved": "Wiederherstellung genehmigt",

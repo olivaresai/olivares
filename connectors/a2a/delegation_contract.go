@@ -431,6 +431,14 @@ type InboundServerConfig struct {
 
 	RequireClientAttestation bool
 	AttesterJWKS             []byte
+
+	// PublicURL is the address peers reach this JSON-RPC endpoint at. When set, the
+	// server publishes its public Agent Card at WellKnownCardPath, naming Skills and
+	// the agent Version; CardSigner, when set, signs it. Empty publishes no card.
+	PublicURL  string
+	Version    string
+	Skills     []AgentSkill
+	CardSigner CardSigner
 }
 
 type InboundServer struct {
@@ -439,6 +447,7 @@ type InboundServer struct {
 	router          InboundRouter
 	tasks           InboundTaskRouter
 	durableReplay   bool
+	card            []byte // public Agent Card JSON; nil serves none
 }
 
 type inboundPeerClaims struct {

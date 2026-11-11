@@ -32,8 +32,12 @@ test('the people list renders within five seconds on a fresh installation', asyn
   await expect(
     row.getByRole('link', { name: 'Setup', exact: true }),
   ).toBeVisible()
+  // Settings replaces the places with its sections: back to them, then People.
   const sidebar = page.locator('[data-slot="sidebar"]')
-  await sidebar.getByRole('button', { name: 'More', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Main navigation', exact: true })
+    .getByRole('link', { name: 'Settings', exact: true })
+    .click()
   await sidebar.getByRole('link', { name: 'People', exact: true }).click()
   await expect(
     row.getByRole('link', { name: 'Administration', exact: true }),

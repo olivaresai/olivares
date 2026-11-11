@@ -34,6 +34,7 @@
       "class": "クラス",
       "name": "名前",
       "version": "バージョン",
+      "fingerprint": "フィンガープリント",
       "provenance": "来歴",
       "posture": "記録されたスキャン結果",
       "issues": "問題",

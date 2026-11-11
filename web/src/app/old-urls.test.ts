@@ -15,7 +15,8 @@ const OLD_URLS: readonly {
   search?: Record<string, string>
   hash?: string
 }[] = [
-  // Provider keys left Models for AI tools, beside the API keys.
+  // Provider keys left Models for AI tools, which every reader of them may open: the
+  // references for one who cannot open Providers, else a line leading there.
   {
     from: '/models?tab=keys',
     path: '/agent-tools',

@@ -99,6 +99,7 @@ export function RevisionsSheet({
             />
           ) : revisions.length === 0 ? (
             <EmptyState
+              size="panel"
               description={t('revisions.emptyHint')}
               title={t('revisions.empty')}
             />

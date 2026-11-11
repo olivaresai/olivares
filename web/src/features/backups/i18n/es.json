@@ -47,6 +47,7 @@
   "schedule": {
     "updated": "Programación de copias actualizada",
     "loading": "Cargando programación...",
+    "loadFailed": "No se pudo cargar la programación de copias.",
     "title": "Programación automática de copias",
     "description": "Configura copias recurrentes. El motor ejecuta la programación; la frase de paso se deriva del secreto de la instancia.",
     "enableAria": "Activar copias automáticas",
@@ -118,6 +119,7 @@
   },
   "pending": {
     "title": "Restauraciones pendientes de aprobación (control dual)",
+    "loadFailed": "No se pudieron cargar las restauraciones pendientes de aprobación.",
     "requestedByPrefix": "Solicitada por",
     "approveRestore": "Aprobar y restaurar",
     "approved": "Restauración aprobada",

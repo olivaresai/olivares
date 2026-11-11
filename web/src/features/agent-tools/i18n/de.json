@@ -1,7 +1,7 @@
 {
   "title": "KI-Werkzeuge",
   "description": "Installieren Sie auf diesem Server die KI-Werkzeuge, die Sitzungen ausführen, und melden Sie sie an.",
-  "descriptionMember": "Sitzungen laufen mit diesen Konten und API-Schlüsseln. Ein Systemadministrator installiert die Werkzeuge und meldet sie an.",
+  "descriptionMember": "Sitzungen laufen mit diesen Konten; die API-Schlüssel sind unter Anbieter. Ein Systemadministrator installiert die Werkzeuge und meldet sie an.",
   "refresh": "Aktualisieren",
   "readOnly": "Dieser Server ist schreibgeschützt. Die Installation ist deaktiviert.",
   "notInstalled": "Keine verwaltete Installation",
@@ -95,7 +95,7 @@
     "failed": "Läuft nicht: Es wurde beendet.",
     "start": "Starten",
     "stop": "Beenden",
-    "notInstalled": "{{name}} ist nicht installiert. Olivares sucht {{program}} im PATH dieses Servers.",
+    "lookedFor": "Olivares sucht {{program}} im PATH dieses Servers.",
     "hint": "Sein Endpunkt steht unter Anbieter der Organisation, für die er gestartet wurde, damit OpenCode-Sitzungen dort seine Modelle nutzen können.",
     "model": "Modell",
     "modelHintLlamaCpp": "Ein absoluter Pfad zu einer .gguf-Datei oder ein Hugging-Face-Modell als Nutzer/Repo[:Quantisierung].",
@@ -134,7 +134,7 @@
     "accountChecking": "Konto · wird geprüft …",
     "accountSigningIn": "Konto · Anmeldung läuft …",
     "accountUnreadable": "Konto · nicht lesbar",
-    "keyDetail": "API-Schlüssel · {{name}} ({{hint}})",
+    "keyDetail": "API-Schlüssel · {{name}} · {{hint}}",
     "keyName": "API-Schlüssel · {{name}}",
     "keyNone": "API-Schlüssel · keiner gewählt",
     "lastSignIn": "Zuletzt angemeldet {{when}}",
@@ -158,7 +158,11 @@
     "default": "Standardanmeldung",
     "readFailed": "Die Profile konnten nicht gelesen werden.",
     "truncated": "Einige Profile werden nicht angezeigt.",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "turnOff": "{{name}} ausschalten",
+    "turnOn": "{{name}} einschalten",
+    "switchedOn": "{{name}} ist an",
+    "switchedOff": "{{name}} ist aus"
   },
   "tool": {
     "menu": "Optionen für {{name}}",
@@ -196,12 +200,12 @@
     "chooseKey": "Schlüssel wählen",
     "addKey": "Schlüssel hinzufügen …",
     "create": "Erstellen",
+    "createAndSignIn": "Erstellen und anmelden",
     "creating": "Wird erstellt …",
     "created": "Profil {{name}} erstellt",
     "failed": "Das Profil wurde nicht erstellt.",
     "bindFailed": "Der Schlüssel konnte nicht gesetzt werden.",
     "keyNotSet": "Das Profil wurde erstellt, aber der Schlüssel wurde nicht gesetzt: {{error}} Öffnen Sie das Profil, um einen Schlüssel zu wählen.",
-    "notNow": "Nicht jetzt",
     "close": "Schließen",
     "keyNeedsAccess": "Das Wählen eines Schlüssels erfordert die Berechtigung, Profile zu ändern."
   },
@@ -256,9 +260,35 @@
     "packagesHint": "Vom Anbieterprofil deklariert, das die neue Sitzung jedes Werkzeugs verwendet ({{profiles}}). Ein Werkzeug ohne Profil erhält ein neues, das keine deklariert."
   },
   "place": {
-    "title": "Konten und API-Schlüssel",
     "accounts": "Konten",
     "allAccounts": "Alle Konten: Details, Beschriftungen und Bindungen",
-    "noAccess": "Ihre Rolle kann die Konten und API-Schlüssel dieser Organisation nicht lesen."
+    "noAccess": "Ihre Rolle kann die Konten dieser Organisation nicht lesen.",
+    "keysOnProviders": "API-Schlüssel sind unter <0>Anbieter</0>.",
+    "keysAndReferencesOnProviders": "API-Schlüssel und ihre Referenzen sind unter <0>Anbieter</0>."
+  },
+  "runtime": {
+    "title": "Laufzeit",
+    "autoCompact": "Automatisch verdichten nach",
+    "autoCompactHint": "Verdichten nach 100.000 bis 1.000.000 Tokens. Leer lassen, um den Standard von Claude zu verwenden.",
+    "autoCompactPlaceholder": "z. B. 300000",
+    "autoCompactInvalid": "Geben Sie eine ganze Zahl von 100000 bis 1000000 ein oder lassen Sie das Feld leer.",
+    "saved": "Laufzeit gespeichert. Neue Sitzungen verwenden sie."
+  },
+  "models": {
+    "title": "Modelle",
+    "note": "Nur Sie sehen diese Liste. Ein ausgeblendetes Modell verschwindet aus den Auswahllisten; der Standard des Werkzeugs und ein eingetipptes Modell funktionieren weiterhin.",
+    "filter": "Modelle filtern",
+    "disableAll": "Alle ausblenden",
+    "enableAll": "Alle anzeigen",
+    "addCustom": "Eigenes Modell hinzufügen",
+    "customPlaceholder": "Modell-ID, z. B. claude-opus-5-5",
+    "customInvalid": "Eine Modell-ID enthält keine Leerzeichen und hat höchstens 200 Zeichen.",
+    "add": "Hinzufügen",
+    "fast": "Schnellmodus",
+    "up": "{{name}} nach oben",
+    "down": "{{name}} nach unten",
+    "use": "{{name}} anzeigen",
+    "removeCustom": "{{name}} entfernen",
+    "empty": "Dieses Werkzeug meldet keine Modelle. Fügen Sie die hinzu, die Sie verwenden."
   }
 }

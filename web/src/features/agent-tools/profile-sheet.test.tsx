@@ -434,6 +434,139 @@ describe('Profile sheet', () => {
     )
   })
 
+  it('switches a profile off and on from its row, and a switched-off profile stays listed', async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
+      page([
+        account('ppf_b', 'claude-b'),
+        account('ppf_d', 'claude-d', { state: 'disabled' }),
+      ]),
+    )
+    const user = userEvent.setup()
+    mount()
+    const claude = await screen.findByTestId('tool-claude')
+    const on = await within(claude).findByRole('switch', {
+      name: 'Turn off claude-b',
+    })
+    expect(on).toBeChecked()
+    await user.click(on)
+    await waitFor(() =>
+      expect(agentOpsApi.patchProfile).toHaveBeenCalledWith(
+        'ppf_b',
+        { state: 'disabled' },
+        expect.anything(),
+      ),
+    )
+    const off = within(claude).getByRole('switch', { name: 'Turn on claude-d' })
+    expect(off).not.toBeChecked()
+    await user.click(off)
+    await waitFor(() =>
+      expect(agentOpsApi.patchProfile).toHaveBeenCalledWith(
+        'ppf_d',
+        { state: 'active' },
+        expect.anything(),
+      ),
+    )
+  })
+
+  it("manages a profile's models: hide one, move one, add one the tool does not list", async () => {
+    // The list is the person's preference: it needs a user principal to be kept.
+    const principal = auth.principal
+    auth.principal = { kind: 'user', user_id: 'root', aal: 1 } as never
+    try {
+      vi.spyOn(agentOpsApi, 'profileModels').mockResolvedValue({
+        profile_ref: 'ppf_b',
+        driver: 'claude',
+        state: 'fresh',
+        models: [
+          {
+            id: 'claude-opus-5-5',
+            display_name: 'Claude Opus 5.5',
+            supports_fast_mode: true,
+          },
+          { id: 'claude-sonnet-5-5', display_name: 'Claude Sonnet 5.5' },
+        ],
+        default_model: '',
+        free_text: true,
+        checked_at: '2026-11-09T10:00:00Z',
+        refresh_interval_seconds: 120,
+      })
+      const user = userEvent.setup()
+      mount()
+      const sheet = await openSheet(user, 'claude-b')
+      const models = await within(sheet).findByRole('region', {
+        name: 'Models',
+      })
+      expect(within(models).getByText('Fast mode')).toBeInTheDocument()
+      const order = () =>
+        within(models)
+          .getAllByRole('switch')
+          .map((s) => s.getAttribute('aria-label'))
+
+      await user.click(
+        within(models).getByRole('switch', { name: 'Show Claude Sonnet 5.5' }),
+      )
+      expect(
+        within(models).getByRole('switch', { name: 'Show Claude Sonnet 5.5' }),
+      ).not.toBeChecked()
+
+      await user.click(
+        within(models).getByRole('button', {
+          name: 'Move Claude Sonnet 5.5 up',
+        }),
+      )
+      expect(order()).toEqual([
+        'Show Claude Sonnet 5.5',
+        'Show Claude Opus 5.5',
+      ])
+
+      await user.type(
+        within(models).getByRole('textbox', { name: 'Add custom model' }),
+        'my-model',
+      )
+      await user.click(within(models).getByRole('button', { name: 'Add' }))
+      expect(
+        within(models).getByRole('switch', { name: 'Show My Model' }),
+      ).toBeChecked()
+      await user.click(
+        within(models).getByRole('button', { name: 'Remove My Model' }),
+      )
+      expect(
+        within(models).queryByRole('switch', { name: 'Show My Model' }),
+      ).toBeNull()
+    } finally {
+      auth.principal = principal
+    }
+  })
+
+  it("sets a Claude profile's auto-compact window, refusing a value outside the tool's range", async () => {
+    const user = userEvent.setup()
+    mount()
+    const sheet = await openSheet(user, 'claude-b')
+    const runtime = await within(sheet).findByRole('region', {
+      name: 'Runtime',
+    })
+    const field = within(runtime).getByRole('textbox', {
+      name: 'Auto-compact after',
+    })
+    await user.type(field, '5000')
+    expect(
+      within(runtime).getByText(
+        'Enter a whole number from 100000 to 1000000, or leave it empty.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(runtime).getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.clear(field)
+    await user.type(field, '250000')
+    await user.click(within(runtime).getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(agentOpsApi.patchProfile).toHaveBeenCalledWith(
+        'ppf_b',
+        { auto_compact_window: 250000 },
+        expect.anything(),
+      ),
+    )
+  })
+
   it('removes a profile after a confirmation, through the retire route', async () => {
     const user = userEvent.setup()
     mount()

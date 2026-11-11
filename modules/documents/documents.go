@@ -22,11 +22,18 @@ import (
 type Module struct {
 	enabled atomic.Bool
 	log     *slog.Logger
+	ocr     func() conversion.OCRConfig
 }
 
-func New() *Module { return &Module{} }
+func New(ocr ...func() conversion.OCRConfig) *Module {
+	m := &Module{}
+	if len(ocr) > 0 {
+		m.ocr = ocr[0]
+	}
+	return m
+}
 func (*Module) Descriptor() sdk.Descriptor {
-	return sdk.Descriptor{Name: "olivares.documents", Version: "0.1.0", APIVersion: sdk.APIVersion, Type: sdk.TypeModule, Title: "Documents", Description: "Convert documents to Markdown locally with MarkItDown, without network access."}
+	return sdk.Descriptor{Name: "olivares.documents", Version: "0.1.0", APIVersion: sdk.APIVersion, Type: sdk.TypeModule, Title: "Documents", Description: "Convert documents to Markdown with an offline helper and optional local OCR."}
 }
 func (m *Module) Init(_ context.Context, host sdk.Host) error { m.log = host.Logger(); return nil }
 func (m *Module) Start(context.Context) error                 { m.enabled.Store(true); return nil }
@@ -39,7 +46,7 @@ func (m *Module) Markdown(ctx context.Context, name string, data []byte) ([]byte
 		return nil, errors.New("document conversion is disabled in Settings > Modules")
 	}
 	started := time.Now()
-	md, err := conversion.Markdown(ctx, name, data)
+	md, err := conversion.MarkdownWithOCR(ctx, name, data, m.ocrConfig())
 	if m.log != nil {
 		result := "converted"
 		if err != nil {
@@ -48,4 +55,14 @@ func (m *Module) Markdown(ctx context.Context, name string, data []byte) ([]byte
 		m.log.Info("document conversion", "format", filepath.Ext(name), "input_bytes", len(data), "output_bytes", len(md), "duration", time.Since(started), "result", result)
 	}
 	return md, err
+}
+
+// ImageOCR preserves native image delivery until OCR is configured and the module is running.
+func (m *Module) ImageOCR() bool { return m.enabled.Load() && m.ocrConfig().Endpoint != "" }
+
+func (m *Module) ocrConfig() conversion.OCRConfig {
+	if m.ocr == nil {
+		return conversion.OCRConfig{}
+	}
+	return m.ocr()
 }

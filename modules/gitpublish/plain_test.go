@@ -193,7 +193,7 @@ func plainGitModule(t *testing.T, defaultBranch, mergeBase string) plainFixture 
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(Options{ScanSecrets: cleanPublicationScan, Custody: plainCustody{host: adapter, local: server}, Git: x, Authority: &fakeAuthority{deny: map[model.ID]error{}}, DispatchTimeout: 20 * time.Second})
+	m := New(Options{ScanSecrets: cleanPublicationScan, Custody: plainCustody{host: adapter, local: server}, Git: x, Authority: &fakeAuthority{deny: map[model.ID]error{}}, Gate: &fakeGate{}, DispatchTimeout: 20 * time.Second})
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, m.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)

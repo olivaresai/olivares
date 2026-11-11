@@ -3,22 +3,28 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import * as SelectPrimitive from '@radix-ui/react-select'
 import { useFieldControl } from '@/components/ui/field'
+import { fieldWell } from '@/components/ui/input'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Select — Radix select dressed as a control-plane input. The trigger reads exactly
- * like an Input (h-8, on the canvas, the control boundary, the focus outline) with a
- * chevron affordance; the content is a raised, hairline-bordered popover with the popover
- * shadow. Items highlight on the hover fill and show an orange Check + accent-text label
- * when chosen. Rendered in
+ * Select — Radix select dressed as a control-plane field. The trigger is the same field well
+ * as an Input (the density token's height, 44 px on a phone) with a chevron in the second tone;
+ * inside a boxed row it is a combo row instead, its value and the chevron with no box, as a
+ * settings row draws it. The content is a raised, hairline-bordered popover with the popover
+ * shadow. Items highlight on the hover fill, show an orange Check + accent-text label when
+ * chosen, and are 44 px high on a phone. Rendered in
  * `popper` position so it never overflows its container. Re-exports the Radix
  * Root/Group/Value so callers compose a full, accessible listbox.
  */
 export const Select = SelectPrimitive.Root
 export const SelectGroup = SelectPrimitive.Group
 export const SelectValue = SelectPrimitive.Value
+
+/** A select inside a boxed row is a combo row: the value and a chevron, no box. */
+const IN_ROW =
+  '[[data-slot=boxed-list-row]_&]:justify-end [[data-slot=boxed-list-row]_&]:border-transparent [[data-slot=boxed-list-row]_&]:bg-transparent [[data-slot=boxed-list-row]_&]:shadow-none [[data-slot=boxed-list-row]_&]:font-medium [[data-slot=boxed-list-row]_&]:text-text-2 [[data-slot=boxed-list-row]_&]:hover:border-transparent [[data-slot=boxed-list-row]_&]:hover:bg-hover [[data-slot=boxed-list-row]_&]:hover:text-text'
 
 export function SelectTrigger({
   className,
@@ -51,13 +57,10 @@ export function SelectTrigger({
       data-slot="select-trigger"
       {...heredado}
       className={cn(
-        'flex h-8 w-full items-center justify-between gap-2 rounded-ctl border border-ctl-border bg-canvas px-3',
-        'text-body text-text transition-colors duration-100 ease-out outline-none',
+        fieldWell,
+        'flex h-[var(--density-control)] items-center justify-between gap-2 ps-[11px] pe-2 max-md:min-h-11',
         'data-[placeholder]:text-text-3',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-        'aria-[invalid=true]:border-bad aria-[invalid=true]:focus-visible:outline-bad',
-        'disabled:pointer-events-none disabled:border-dashed disabled:bg-surface disabled:text-text-3',
-        'aria-disabled:cursor-not-allowed aria-disabled:border-dashed aria-disabled:bg-surface aria-disabled:text-text-3',
+        IN_ROW,
         '[&>span]:line-clamp-1 [&_svg]:size-4 [&_svg]:shrink-0',
         className,
       )}
@@ -65,7 +68,7 @@ export function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="size-4 text-text-3" />
+        <ChevronDown className="size-4 text-text-2" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -137,7 +140,7 @@ export function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex w-full cursor-default rounded-[6px] py-1 pr-8 pl-2 text-body outline-none select-none',
+        'relative flex w-full cursor-default rounded-[6px] py-1 pr-8 pl-2 text-body outline-none select-none max-md:min-h-11',
         hint ? 'flex-col items-start' : 'h-8 items-center',
         'data-[highlighted]:bg-hover data-[highlighted]:text-text',
         'data-[state=checked]:font-medium data-[state=checked]:text-accent-text',

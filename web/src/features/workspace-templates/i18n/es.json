@@ -15,7 +15,8 @@
   "groups": {
     "yours": "Tus plantillas",
     "builtin": "Plantillas integradas ({{n}})",
-    "yoursEmpty": "Aún no tienes ninguna. Una plantilla es un punto de partida reutilizable para nuevas sesiones."
+    "emptyTitle": "Aún no tienes plantillas",
+    "emptyDescription": "Una plantilla es un punto de partida reutilizable para nuevas sesiones."
   },
   "editor": {
     "nameLabel": "Nombre",
@@ -25,11 +26,11 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "Comandos ejecutados antes/después de herramientas y sesiones.",
-      "settings": "Configuración del agente",
+      "settings": "Configuración",
       "settingsHint": "Modo de permiso, nivel de esfuerzo, modelo e instrucciones personalizadas.",
       "connectors": "Conectores",
       "connectorsHint": "IDs de conector que se adjuntarán al aplicar esta plantilla.",
-      "policies": "Políticas de gobernanza",
+      "policies": "Políticas",
       "policiesHint": "Modo DLP, límites de duración de sesión, herramientas permitidas y grabación de E/S.",
       "secrets": "Secretos",
       "secretsHint": "Secretos del almacén que las sesiones de esta plantilla reciben como variables de entorno.",
@@ -106,7 +107,7 @@
     "unenforceable": "Esta plantilla no se puede aplicar: {{reasons}}"
   },
   "errors": {
-    "loadFailed": "Error al cargar las plantillas.",
+    "loadFailed": "No se pudieron cargar las plantillas",
     "saveFailed": "Error al guardar la plantilla.",
     "applyFailed": "Error al aplicar la plantilla.",
     "archiveFailed": "Error al archivar la plantilla.",

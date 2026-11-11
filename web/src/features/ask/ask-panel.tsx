@@ -22,6 +22,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { useAskStore } from '@/stores/ask'
 import { useModuleOn } from '@/stores/modules'
+import { useTenantStore } from '@/stores/tenant'
 import { askApi, askKeys, type AskMessage, type AskProposal } from './ask'
 import './i18n'
 
@@ -66,8 +67,9 @@ function AskBody() {
   const { t } = useTranslation('ask')
   // Ask is the models module's: off there, its view is not read and the panel says so.
   const modelsOn = useModuleOn('models')
+  const activeTenant = useTenantStore((s) => s.activeTenant)
   const view = useQuery({
-    queryKey: askKeys.view,
+    queryKey: askKeys.view(activeTenant),
     queryFn: () => askApi.view(),
     enabled: modelsOn,
   })
@@ -306,8 +308,9 @@ function ProposalCard({ proposal }: { proposal: AskProposal }) {
   const queryClient = useQueryClient()
   const [state, setState] = useState<CardState>('open')
   const [failure, setFailure] = useState('')
+  const activeTenant = useTenantStore((s) => s.activeTenant)
   const approval = useQuery({
-    queryKey: askKeys.approval(proposal.approval_id),
+    queryKey: askKeys.approval(activeTenant, proposal.approval_id),
     queryFn: ({ signal }) => askApi.approval(proposal.approval_id, signal),
     enabled: state === 'open',
     refetchInterval: (q) =>
@@ -326,7 +329,7 @@ function ProposalCard({ proposal }: { proposal: AskProposal }) {
       setFailure(messageOf(e))
     }
     await queryClient.invalidateQueries({
-      queryKey: askKeys.approval(proposal.approval_id),
+      queryKey: askKeys.approval(activeTenant, proposal.approval_id),
     })
   }
 

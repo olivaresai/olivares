@@ -105,10 +105,14 @@ func (g sessionGit) initialize(ctx context.Context) error {
 	return err
 }
 
+// errFolderNotGit is 404 as it always was, with its own code: the console tells it from a
+// missing session.
+var errFolderNotGit = &codedRunErr{&runErr{http.StatusNotFound, "this session folder is not a Git repository"}, "not_a_git_repository"}
+
 func (g sessionGit) exec(ctx context.Context, args []string, input string, identity []string) (string, error) {
 	layout, ok := gitlayout.Read(g.dir)
 	if !ok {
-		return "", &runErr{http.StatusNotFound, "this session folder is not a Git repository"}
+		return "", errFolderNotGit
 	}
 	return g.run(ctx, []string{"--git-dir=" + layout.GitDir, "--work-tree=" + g.dir, "--literal-pathspecs"},
 		[]EnvVar{{"GIT_COMMON_DIR", layout.CommonDir}}, args, input, identity)
@@ -235,7 +239,7 @@ func (m *Module) openRunGit(ctx context.Context, tenant model.TenantID, runRef s
 	}
 	// A changed registration must never grant access to yesterday's folder.
 	if ws != nil && rec.String(colRunWorktreeBranch) == "" && resolvedPath(dir) != ws.rootReal {
-		return g, nil, nil, &runErr{http.StatusConflict, "this session folder no longer matches its workspace"}
+		return g, nil, nil, &codedRunErr{&runErr{http.StatusConflict, "this session folder no longer matches its workspace"}, "folder_mismatch"}
 	}
 	if ws != nil && rec.String(colRunWorktreeBranch) != "" {
 		linked, linkedOK := gitlayout.Read(dir)

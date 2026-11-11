@@ -165,3 +165,20 @@ export const VIEWS = [
     }),
   },
 ] satisfies ViewEntry[]
+
+/** The registered page of a route above; a wrong id fails as the module loads. */
+function pageOf(id: string): string {
+  const view = VIEWS.find((v) => v.id === id)
+  if (!view) throw new Error(`no communications route ${id}`)
+  return view.path
+}
+
+/** The page of each tab of the room, so that leaving /communications/new lands
+ * on the page whose title is the list it shows. */
+export const TAB_PAGES = {
+  channels: pageOf('communications'),
+  inbox: pageOf('communicationsInbox'),
+  handoffs: pageOf('communicationsHandoffs'),
+  create: pageOf('communicationsNew'),
+  administration: pageOf('communicationsAdministration'),
+}

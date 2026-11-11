@@ -38,7 +38,6 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 
 import { SETTINGS_UTILITY } from '@/features/navigation/model'
-import { placePages } from '@/features/navigation/places'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { SessionsListHeader } from '@/features/sessions/list-header'
 import { DestinationSections } from './destination-sections'
@@ -94,6 +93,17 @@ describe('the row above a page', () => {
     expect(hrefs(within(row).getAllByRole('link'))).toEqual(
       ['audit', 'accessMap', 'logs', 'evals'].map(pathOf),
     )
+    // Links, each its own page, drawn as 32 px pills two pixels apart: the current one is
+    // bold as well as filled, and the focus ring sits inside the pill.
+    expect(row).toHaveClass('gap-0.5')
+    const current = within(row).getByRole('link', { current: 'page' })
+    expect(current).toHaveClass(
+      'h-8',
+      'aria-[current=page]:bg-active',
+      'aria-[current=page]:font-bold',
+      'focus-visible:-outline-offset-2',
+    )
+    expect(current.className).toContain('active:bg-[var(--pressed)]')
     const more = within(row).getByRole('button', { name: 'More' })
     expect(more).toHaveAttribute('aria-haspopup', 'menu')
     const menu = await openWithKeyboard(more)
@@ -125,9 +135,8 @@ describe('the row above a page', () => {
   })
 })
 
-describe('the work surface, where no row is drawn', () => {
-  it('opens Work, Channels, Voice and Sandbox from the menu at the top of the sessions list', async () => {
-    const everything = () => true
+describe('the Sessions place in the shell header', () => {
+  it('keeps Sessions, Work and Channels in the row, with less-used pages under More', async () => {
     await at(
       '/sessions',
       <SessionsListHeader
@@ -136,27 +145,31 @@ describe('the work surface, where no row is drawn', () => {
         views={[]}
         onView={() => {}}
         streamFailed={false}
-        pages={placePages('sessions', everything)}
       />,
     )
-    expect(
-      document.querySelector('[data-slot="destination-sections"]'),
-    ).toBeNull()
-    const heading = screen.getByRole('heading', { level: 1, name: 'Sessions' })
-    const menu = await openWithKeyboard(within(heading).getByRole('button'))
-    const items = within(menu).getAllByRole('menuitem')
-    expect(items.map((i) => i.textContent)).toEqual([
-      'Sessions',
-      'Work',
-      'Channels',
-      'Voice',
-      'Sandbox',
-      'Git publication',
-      'Source diff',
-    ])
-    expect(items[0]).toHaveAttribute('aria-current', 'page')
-    expect(hrefs(items.slice(1, 5))).toEqual(
-      ['work', 'communications', 'voice', 'sandbox'].map(pathOf),
+    const row = document.querySelector(
+      '[data-slot="destination-sections"]',
+    ) as HTMLElement
+    expect(within(row).getByRole('link', { name: 'Sessions' })).toHaveAttribute(
+      'href',
+      '/sessions',
     )
+    expect(within(row).getByRole('link', { name: 'Work' })).toHaveAttribute(
+      'href',
+      '/work',
+    )
+    expect(within(row).getByRole('link', { name: 'Channels' })).toHaveAttribute(
+      'href',
+      '/communications',
+    )
+    const menu = await openWithKeyboard(
+      within(row).getByRole('button', { name: 'More' }),
+    )
+    expect(
+      within(menu).getByRole('menuitem', { name: 'Voice' }),
+    ).toHaveAttribute('href', '/voice')
+    expect(
+      within(menu).getByRole('menuitem', { name: 'Sandbox' }),
+    ).toHaveAttribute('href', '/sandbox')
   })
 })

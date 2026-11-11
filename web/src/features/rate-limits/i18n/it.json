@@ -5,6 +5,12 @@
   },
   "title": "Limiti di frequenza",
   "description": "Limiti di frequenza della tua organizzazione e dei workspace. Sola lettura.",
+  "profiles": {
+    "title": "Limiti di ogni profilo",
+    "description": "Cosa lo strumento di ogni profilo gli consente di usare e quando si azzera. Lo strumento li comunica; Olivares non li imposta.",
+    "none": "Nessuno strumento di un profilo segnala ora un limite in vigore.",
+    "truncated": "Alcuni profili non sono mostrati."
+  },
   "caveats": {
     "keepInSync": "Gateway e proxy devono restare sincronizzati: questi limiti sono l'inventario che un gateway o un proxy a monte deve rispecchiare. Qui non vengono imposti e si modificano presso il provider, non in questa console.",
     "managedAgents": "Managed Agents NON è coperto dall'API Rate Limits. I suoi limiti sono una lacuna documentata, non un valore pari a zero: non viene mostrata alcuna riga di Managed Agents perché l'API non ne riporta."

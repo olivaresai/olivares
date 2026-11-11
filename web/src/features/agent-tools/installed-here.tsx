@@ -491,7 +491,7 @@ function Row({
                   {item.href ? (
                     <ItemLink
                       href={item.href}
-                      className="break-words text-body text-accent-text underline underline-offset-4"
+                      className="break-words text-body text-foreground underline underline-offset-4"
                     >
                       {item.label}
                     </ItemLink>

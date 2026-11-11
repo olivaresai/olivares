@@ -197,6 +197,11 @@ type runDTO struct {
 	// after a later turn succeeds.
 	Limit *runLimit `json:"limit,omitempty"`
 
+	// TurnFailed says the last turn ended on a provider error that is not a limit, such
+	// as a refused request. Absent otherwise, and again after a later turn succeeds; the
+	// run stays open either way.
+	TurnFailed bool `json:"turn_failed,omitempty"`
+
 	// LiveRef (B2) is the opaque id of the plane's managed live row for this run,
 	// present only once the bridge proved the run owns its provider id. A console
 	// navigates from a profiled run to its session by THIS, never by the bare
@@ -287,6 +292,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		UsageModelRef:          rec.String(colRunUsageModelRef),
 		ToolMode:               rec.String(colRunToolMode),
 		Limit:                  storedRunLimit(rec),
+		TurnFailed:             rec.Bool(colRunTurnFailed),
 		ResumeAt:               rec.String(colRunResumeAt),
 		ResumeCancelled:        rec.Bool(colRunResumeCancelled),
 	}

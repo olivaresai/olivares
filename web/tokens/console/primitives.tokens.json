@@ -40,30 +40,30 @@
     "$type": "fontFamily",
     "$description": "Self-hosted faces (src/styles/fonts.css), the website's: Inter for text, Space Grotesk for titles and figures, JetBrains Mono 400 and 500 for code, commands, paths and identifiers. The files are the Latin subset and have no CJK glyphs, so the stacks fall back to the system faces for those scripts.",
     "font-sans": {
-      "$value": "'Inter', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC', 'PingFang SC',\n    'Microsoft YaHei', 'Yu Gothic', sans-serif"
+      "$value": "'Adwaita Sans', 'Inter', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', 'Yu Gothic', sans-serif"
     },
     "font-mono": {
-      "$value": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,\n    'Liberation Mono', monospace"
+      "$value": "'Adwaita Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"
     },
     "font-display": {
-      "$value": "'Space Grotesk', 'Inter', system-ui, sans-serif",
+      "$value": "'Adwaita Sans', 'Inter', system-ui, sans-serif",
       "$description": "Titles and figures: page titles, dialog titles and the one big number of a block."
     }
   },
   "radius": {
     "$type": "dimension",
-    "$description": "Radii: 7 px controls, 10 px cards, 14 px sheet, composer and panels. The design names (ctl, card, panel) and the step names the components use today (md, lg, xl) are the same values; sm stays for small inner marks.",
+    "$description": "Radii: 9 px controls, 12 px cards, 15 px sheet, composer and panels. The design names (ctl, card, panel) and the step names the components use today (md, lg, xl) are the same values; sm stays for small inner marks.",
     "radius-ctl": {
-      "$value": "0.4375rem"
+      "$value": "0.5625rem"
     },
     "radius-card": {
-      "$value": "0.625rem"
+      "$value": "0.75rem"
     },
     "radius-panel": {
-      "$value": "0.875rem"
+      "$value": "0.9375rem"
     },
     "radius-sm": {
-      "$value": "0.25rem"
+      "$value": "0.375rem"
     },
     "radius-md": {
       "$value": "{radius.radius-ctl}"
@@ -76,10 +76,10 @@
     }
   },
   "motion": {
-    "$description": "Motion: 120 ms hover and press, 180 ms panels, 240 ms sheets and the palette, one easing curve. Only transform and opacity animate. The durations live in the motion block and fall to 0 under reduced motion.",
+    "$description": "Motion: 160 ms hover and press, 200 ms panels, 250 ms sheets and the palette, one easing curve. Only transform and opacity animate. The durations live in the motion block and fall to 0 under reduced motion.",
     "ease-out": {
       "$type": "cubicBezier",
-      "$value": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+      "$value": "cubic-bezier(0.25, 0.46, 0.45, 0.94)"
     },
     "ease-in": {
       "$type": "cubicBezier",
@@ -97,7 +97,7 @@
   },
   "type": {
     "$type": "dimension",
-    "$description": "The type ladder. Tailwind reads `--text-<step>` with its `--line-height`, `--letter-spacing` and `--font-weight` sub-keys, so one utility carries all four decisions. Six sizes in all, the design's: figure 36 (hero, display-lg), title 26 (display, title), head 17 (heading), body 14 (body-l with a looser line, body), meta 13 (caption, mono) and micro 12 (overline, mono-s). Below them sit two metadata sizes, 11 (metadata) and 10 (metadata-s): they are for metadata, counters and key hints only, never for a sentence a person has to read, and src/styles/metadata-step.test.ts lists the files that may use them.",
+    "$description": "The type ladder. Tailwind reads `--text-<step>` with its `--line-height`, `--letter-spacing` and `--font-weight` sub-keys, so one utility carries all four decisions. Seven sizes in all, the design's: figure 36 (hero, display-lg), title 26 (display, title), head 17 (heading), body 15 (body-l, a looser line) and 14 (body), meta 13 (caption, mono) and micro 12 (overline, mono-s). Below them sit two metadata sizes, 11 (metadata) and 10 (metadata-s): they are for metadata, counters and key hints only, never for a sentence a person has to read, and src/styles/metadata-step.test.ts lists the files that may use them.",
     "text-hero": {
       "$value": "2.25rem"
     },
@@ -108,7 +108,7 @@
       "$value": "-0.03em"
     },
     "text-hero--font-weight": {
-      "$value": "600"
+      "$value": "800"
     },
     "text-display-lg": {
       "$value": "2.25rem"
@@ -120,31 +120,31 @@
       "$value": "-0.03em"
     },
     "text-display-lg--font-weight": {
-      "$value": "600"
+      "$value": "800"
     },
     "text-display": {
       "$value": "1.625rem"
     },
     "text-display--line-height": {
-      "$value": "1.875rem"
+      "$value": "2rem"
     },
     "text-display--letter-spacing": {
-      "$value": "-0.02em"
+      "$value": "-0.022em"
     },
     "text-display--font-weight": {
-      "$value": "600"
+      "$value": "800"
     },
     "text-title": {
       "$value": "1.625rem"
     },
     "text-title--line-height": {
-      "$value": "1.875rem"
+      "$value": "2rem"
     },
     "text-title--letter-spacing": {
-      "$value": "-0.02em"
+      "$value": "-0.022em"
     },
     "text-title--font-weight": {
-      "$value": "600"
+      "$value": "800"
     },
     "text-heading": {
       "$value": "1.0625rem"
@@ -156,13 +156,13 @@
       "$value": "-0.01em"
     },
     "text-heading--font-weight": {
-      "$value": "600"
+      "$value": "700"
     },
     "text-body-l": {
-      "$value": "0.875rem"
+      "$value": "0.9375rem"
     },
     "text-body-l--line-height": {
-      "$value": "1.375rem"
+      "$value": "1.5rem"
     },
     "text-body": {
       "$value": "0.875rem"
@@ -183,7 +183,7 @@
       "$value": "1rem"
     },
     "text-overline--font-weight": {
-      "$value": "500"
+      "$value": "700"
     },
     "text-mono": {
       "$value": "0.8125rem"
@@ -237,30 +237,30 @@
     "$description": "Density changes spacing only; type sizes do not change. Comfortable is the default; compact is the operator setting (html[data-density=\"compact\"]).",
     "comfortable": {
       "density-row-list": {
-        "$value": "3.25rem",
-        "$description": "List row, 52 px."
+        "$value": "3.5rem",
+        "$description": "List row, 56 px."
       },
       "density-row-table": {
         "$value": "2.75rem",
         "$description": "Table row, 44 px."
       },
       "density-control": {
-        "$value": "2rem",
-        "$description": "Control height, 32 px."
+        "$value": "2.125rem",
+        "$description": "Control height, 34 px."
       }
     },
     "compact": {
       "density-row-list": {
-        "$value": "2.5rem",
-        "$description": "List row, 40 px."
+        "$value": "2.75rem",
+        "$description": "List row, 44 px."
       },
       "density-row-table": {
         "$value": "2.25rem",
         "$description": "Table row, 36 px."
       },
       "density-control": {
-        "$value": "1.75rem",
-        "$description": "Control height, 28 px."
+        "$value": "1.875rem",
+        "$description": "Control height, 30 px."
       }
     }
   },
@@ -269,20 +269,20 @@
     "$description": "Motion durations and the entrance distance. Under prefers-reduced-motion or the Reduce motion setting (html[data-motion=\"reduce\"]) every one is 0, so movement stops.",
     "full": {
       "duration-fast": {
-        "$value": "120ms",
+        "$value": "160ms",
         "$description": "Hover and press."
       },
       "duration-panel": {
-        "$value": "180ms",
+        "$value": "200ms",
         "$description": "Panels."
       },
       "duration-sheet": {
-        "$value": "240ms",
+        "$value": "250ms",
         "$description": "Sheets and the command palette."
       },
       "motion-shift": {
         "$type": "dimension",
-        "$value": "0.375rem",
+        "$value": "0.5rem",
         "$description": "How far an entering element travels while it fades in."
       }
     },

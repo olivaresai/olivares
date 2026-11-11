@@ -5,9 +5,11 @@
 package health
 
 import (
+	"context"
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // statusDTO projects a check row as the health status of its subject (GET /status,
@@ -30,6 +32,29 @@ type statusDTO struct {
 	LastLatencyMS           int64  `json:"last_latency_ms"`
 	LastDetailHash          string `json:"last_detail_hash,omitempty"`
 	CreatedAt               string `json:"created_at,omitempty"`
+	// Failures7d is how many times the subject went down in the last seven days
+	// (withFailures7d). Set on the /status and /checks reads, absent on a live frame.
+	Failures7d *int64 `json:"failures_7d,omitempty"`
+}
+
+// failureWindow is the trailing window of failures_7d.
+const failureWindow = 7 * 24 * time.Hour
+
+// withFailures7d sets failures_7d: the transitions into down the subject's event
+// ledger holds since now-failureWindow (applyStateTx appends one per state change).
+// No latency percentile is derived: latency is kept only as last_latency_ms and on
+// those transitions, not per signal.
+func (m *Module) withFailures7d(ctx context.Context, evRepo store.GenericRepo, dto statusDTO) (statusDTO, error) {
+	since := model.NewTimestamp(m.clock.Now().Time().Add(-failureWindow)).String()
+	evs, err := listAll(ctx, evRepo,
+		eq(colEvSubjectKind, dto.SubjectKind), eq(colEvSubjectRef, dto.SubjectRef), eq(colEvState, stateDown),
+		model.Filter{Column: colEvOccurredAt, Op: model.OpGte, Value: since})
+	if err != nil {
+		return dto, err
+	}
+	n := int64(len(evs))
+	dto.Failures7d = &n
+	return dto, nil
 }
 
 // stateOr returns s, or "unknown" when the stored state is empty (a check that has

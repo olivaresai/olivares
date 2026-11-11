@@ -88,15 +88,15 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Ressources configurées | `/estate` | Ce que vous avez configuré et la façon dont ses éléments dépendent les uns des autres, éléments de travail compris. | `sessions:run:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Ressources configurées | `/estate` | Ce que vous avez configuré et la façon dont ses éléments dépendent les uns des autres, éléments de travail compris. | `tenant:admin` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Ressources découvertes | `/inventory` | Agents, serveurs MCP et modèles observés par les connecteurs, et quand chacun a été vu pour la dernière fois. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
-| Espace de travail | `/workspace` | Agents, sessions, ressources et activité limités à un espace de travail | `tenant:read` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
+| Espace de travail | `/workspace` | Agents, sessions, ressources et activité limités à un espace de travail | `sessions:workspace:read` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
 
 ### IA
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Outils des agents | `/agent-tools` | Voir les comptes et clés d’API avec lesquels les sessions s’exécutent ; installer et connecter les outils revient aux administrateurs du déploiement | `sessions:account:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
+| Outils des agents | `/agent-tools` | Voir les comptes avec lesquels les sessions s’exécutent ; installer et connecter les outils revient aux administrateurs du déploiement | `sessions:account:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
 | Opérer les sessions | `/agentops` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
 | Opérations sur les modèles | `/model-operations` | Modèles détenus, admission et déploiements | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
 | Modèles | `/models` | Modèles, routage et gouvernance | `models:catalog:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
@@ -106,7 +106,6 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Profils de fournisseur | `/provider-profiles` | Enregistrez et administrez les répertoires de fournisseur sous lesquels les sessions se lancent, et lisez leur configuration à la demande | `sessions:profile:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Fournisseurs | `/providers` | Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les | `sessions:provider:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
 | Limites de débit | `/rate-limits` | Inventaire des limites de débit Anthropic (lecture seule) | `models:ratelimits:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
-| Portée | `/reach` | Voyez quelles destinations chaque outil peut atteindre et lesquelles attendent une approbation. | `accessmap:graph:read` | [reference/modules/iii-access-map](/fr/reference/modules/iii-access-map/) |
 | Bac à sable | `/sandbox` | Test isolé des agents et relecture | `sandbox:run:read` | [reference/modules/xvii-sandbox](/fr/reference/modules/xvii-sandbox/) |
 | Sessions | `/sessions` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:live:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Voix | `/voice` | Sessions vocales et en temps réel | `voice:session:read` | [reference/modules/xvi-voice](/fr/reference/modules/xvi-voice/) |
@@ -147,13 +146,12 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Carte des accès | `/access-map` | Ce que chaque agent lit et écrit (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/fr/reference/modules/iii-access-map/) |
 | Export des politiques | `/agentcore-export` | Planifier, relire et appliquer la projection des règles de gouvernance de ce tenant sur AWS AgentCore sous forme de politiques Cedar ; la planification n’écrit rien | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Politique gérée | `/claude-policy` | Politique gérée, hooks, MCP, bac à sable et policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/fr/how-to/connectors/claude-code-hooks-pep/) |
-| Identité et accès | `/identity` | SSO, SCIM et les identités qu’utilisent vos agents | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
+| Identité et accès | `/identity` | SSO, SCIM et les identités qu’utilisent vos agents | `user:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Proxy d'inférence | `/inference-proxy` | Gates du proxy, règles DLP de sortie et approbations d'appareils | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/fr/reference/modules/inferenceproxy/) |
-| Coupe-circuit | `/killswitch` | Arrêt d'urgence, reprise en double contrôle et confinement par gardien | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/fr/how-to/cookbook/kill-switch-drill/) |
+| Coupe-circuit | `/killswitch` | Arrêt d'urgence, reprise en double contrôle et confinement par gardien | `governance:killswitch:admin` | [how-to/cookbook/kill-switch-drill](/fr/how-to/cookbook/kill-switch-drill/) |
 | Permissions | `/permissions` | Identité, rôles et approbations | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Politiques de routines | `/routine-policies` | Planchers de cadence, plafonds de concurrence, exigences d'approbation et listes d'autorisation cron pour les routines Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Sécurité | `/security` | Garde-fous, investigation et anomalies | `security:finding:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
-| Coffre-fort | `/vault` | Vos mots de passe, notes et codes d’authentification | `tenant:read` | [reference/console](/fr/reference/console/) |
 
 ### Livraison
 
@@ -168,14 +166,15 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Adoption | `/adoption` | Productivité, acceptation et répartition des modèles | `adoption:metrics:read` | [reference/modules/claudeadoption](/fr/reference/modules/claudeadoption/) |
 | Chaîne d'approvisionnement | `/attestation` | Attestation de version : SLSA, SBOM, VEX et Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/fr/how-to/verify-a-release/) |
 | Registre d'audit | `/audit` | Registre de preuves à altération détectable | `audit:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
-| Tableaux de bord | `/dashboards` | Indicateurs clés et reporting pour la direction | tout utilisateur connecté | [reference/modules/xxi-executive-dashboards](/fr/reference/modules/xxi-executive-dashboards/) |
+| Tableaux de bord | `/dashboards` | Indicateurs clés et reporting pour la direction | `tenant:admin` | [reference/modules/xxi-executive-dashboards](/fr/reference/modules/xxi-executive-dashboards/) |
 | Évaluations | `/evals` | Qualité, évaluations et régression | `evals:run:read` | [reference/modules/xii-evals](/fr/reference/modules/xii-evals/) |
 | Santé et SLA | `/health` | Disponibilité et SLA des agents et des MCP | `health:status:read` | [reference/modules/xxii-health](/fr/reference/modules/xxii-health/) |
 | Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
-| Exploitation | `/operations` | L'hôte, ses disques, les sessions en direct et leur utilisation, sur 24 heures, 7 ou 30 jours. | `sessions:run:read` | [reference/console](/fr/reference/console/) |
+| Exploitation | `/operations` | L'hôte, ses disques, les sessions en direct et leur utilisation, sur 24 heures, 7 ou 30 jours. | `health:status:read` | [reference/console](/fr/reference/console/) |
+| Portée | `/reach` | Voyez quelles destinations chaque outil peut atteindre et lesquelles attendent une approbation. | `accessmap:graph:read` | [reference/modules/iii-access-map](/fr/reference/modules/iii-access-map/) |
 | Conservation | `/retention` | Durée de conservation de chaque classe d’enregistrements, balayage qui l’applique et ses certificats scellés | `compliance:retention:read` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite. | `finops:budget:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
-| Usage | `/usage` | Les limites officielles sur 5 heures et à la semaine de chaque compte, la plus proche d'abord, et les jetons et le coût du jour. | `sessions:run:read` | [reference/console](/fr/reference/console/) |
+| Usage | `/usage` | Les limites officielles sur 5 heures et à la semaine de chaque compte, la plus proche d'abord, et les jetons et le coût du jour. | `sessions:account:read` | [reference/console](/fr/reference/console/) |
 
 ### Système & paramètres
 
@@ -188,6 +187,7 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Journaux | `/logs` | Flux en direct du journal du moteur, filtré par niveau et module, avec recherche et pause. | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
 | Assistant de configuration | `/onboarding` | Configuration du déploiement étape par étape | `system:admin` | [start/quickstart](/fr/start/quickstart/) |
 | Mises à jour | `/updates` | La version que ce moteur exécute, la version signée la plus récente de son canal et une action pour l'installer | `system:admin` | [how-to/upgrade-and-rollback](/fr/how-to/upgrade-and-rollback/) |
+| Coffre-fort | `/vault` | Vos mots de passe, notes et codes d’authentification | `tenant:read` | [reference/console](/fr/reference/console/) |
 
 ### Connexion, configuration et compte
 

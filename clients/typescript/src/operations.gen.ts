@@ -1877,6 +1877,42 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/groups — Create a group of the operator's own (provisioned_by "operator"), for people a directory does not know; the Business edition (501 departments_unavailable in Community; 409 when the name is in use)
+   *
+   * Stability: stable.
+   */
+  postV1Groups(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/groups", "/v1/groups", body, opts);
+  }
+
+  /**
+   * DELETE /v1/groups/{id} — Remove a group of the operator's own with its roster; its members keep their accounts and roles; a directory group is refused (403 group_origin_read_only); the Business edition (501 departments_unavailable in Community)
+   *
+   * Stability: stable.
+   */
+  deleteV1GroupsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/groups/{id}", `/v1/groups/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * PUT /v1/groups/{id}/members/{user_id} — Add a person of the tenant to a group of the operator's own; idempotent; the Business edition (501 departments_unavailable in Community)
+   *
+   * Stability: stable.
+   */
+  putV1GroupsByIdMembersByUserId(id: string, user_id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/groups/{id}/members/{user_id}", `/v1/groups/${encodeURIComponent(id)}/members/${encodeURIComponent(user_id)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/groups/{id}/members/{user_id} — Take a person out of a group of the operator's own; idempotent; the Business edition (501 departments_unavailable in Community)
+   *
+   * Stability: stable.
+   */
+  deleteV1GroupsByIdMembersByUserId(id: string, user_id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/groups/{id}/members/{user_id}", `/v1/groups/${encodeURIComponent(id)}/members/${encodeURIComponent(user_id)}`, undefined, opts);
+  }
+
+  /**
    * PUT /v1/groups/{id}/parent — Nest (or, with an empty parent_id, un-nest) a group under another group of the same tenant; a member of the child is then also a member of the parent for authorization (409 on a cycle)
    *
    * Stability: stable.
@@ -1931,7 +1967,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/invites/{id}/resend — Rotate a pending invitation's secret and mail the new link to the invitee (409 invite_delivery_unavailable without a mailer)
+   * POST /v1/invites/{id}/resend — Rotate a pending invitation's secret, voiding the old link, and mail the new link to the invitee or, with delivery=link, return its token once (409 invite_delivery_unavailable without a mailer and without delivery=link)
    *
    * Stability: stable.
    */
@@ -1958,6 +1994,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/members/{id}/reactivate — Reactivate a suspended member of the resolved tenant: access returns as it was; a signed-in person also needs the administrative step-up; the Business edition (501 departments_unavailable in Community)
+   *
+   * Stability: stable.
+   */
+  postV1MembersByIdReactivate(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/members/{id}/reactivate", `/v1/members/${encodeURIComponent(id)}/reactivate`, body, opts);
+  }
+
+  /**
+   * POST /v1/members/{id}/suspend — Suspend a member of the resolved tenant: their sessions and tokens stop at once, while the membership, role and group places stay; reversible with reactivate; a signed-in person also needs the administrative step-up; the Business edition (501 departments_unavailable in Community)
+   *
+   * Stability: stable.
+   */
+  postV1MembersByIdSuspend(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/members/{id}/suspend", `/v1/members/${encodeURIComponent(id)}/suspend`, body, opts);
+  }
+
+  /**
    * POST /v1/memberships — Grant a user a role in a tenant.
    *
    * Stability: stable.
@@ -1967,7 +2021,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/onboard — Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token)
+   * POST /v1/onboard — Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token, or returns it once with delivery link)
    *
    * Stability: stable.
    */
@@ -9189,7 +9243,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * DELETE /v1/m/sessions/runs/{ref} — sessions module route (requires sessions:run:admin)
+   * DELETE /v1/m/sessions/runs/{ref} — sessions module route (requires sessions:run:write)
    *
    * Stability: beta.
    */
@@ -9305,7 +9359,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/sessions/runs/{ref}/cleanup — sessions module route (requires sessions:run:admin)
+   * POST /v1/m/sessions/runs/{ref}/cleanup — sessions module route (requires sessions:run:write)
    *
    * Stability: beta.
    */
@@ -10183,6 +10237,15 @@ export class Client extends ClientCore {
    */
   postV1MSessionsWorkspacesByRefSftp(ref: string, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/m/sessions/workspaces/{ref}/sftp", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/sftp`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/workspaces/{ref}/terminals — Lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsWorkspacesByRefTerminals(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/workspaces/{ref}/terminals", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/terminals`, undefined, opts);
   }
 
   /**

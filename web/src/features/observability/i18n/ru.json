@@ -31,7 +31,7 @@
       "available": "Доступно",
       "opt_in_off": "Подключение отключено",
       "blocked": "Заблокировано",
-      "unavailable": "Требуется Business"
+      "unavailable": "Требуется Olivares AI Business"
     },
     "optInOff": "Соглашение в разработке — по умолчанию отключено; включите через шлюз коннектора.",
     "gate": "Шлюз",

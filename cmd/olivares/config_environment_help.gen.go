@@ -534,7 +534,7 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT\n" +
 	"    Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown. Default: 10s.\n" +
 	"  OLIVARES_SESSIONS_SFTP_LISTEN\n" +
-	"    Address (`host:port`) on which the engine accepts SFTP and SCP to a folder. Unset, nothing listens and the console shows no Connect card. It needs the operating system's `sftp-server` (the `openssh-sftp-server` package) and Landlock; without them it stays off and says why in the log.\n" +
+	"    Address (`host:port`) on which the engine accepts SFTP and SCP to a folder. Unset, nothing listens and the console shows no Connect card. It needs the operating system's `sftp-server` (the `openssh-sftp-server` package; on the rpm family the `openssh-server` package, which you install yourself and which the Olivares package does not pull in) and Landlock; without them it stays off and says why in the log.\n" +
 	"  OLIVARES_SESSION_BUDGET_AVAILABILITY\n" +
 	"    Whether session budget enforcement is required, and what happens when the budget service cannot answer.\n" +
 	"  OLIVARES_SESSION_CONTAINER_IMAGE\n" +

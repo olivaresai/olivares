@@ -229,14 +229,17 @@ describe('the model in the New session dialog', () => {
     const model = await screen.findByRole('combobox', { name: 'Model' })
     expect(model).toHaveTextContent('Default (gpt-b)')
     // The model runs on the chosen tool: its mark stands beside it, as beside the account.
-    expect(within(model).getByTestId('tool-mark')).toHaveTextContent('CX')
+    expect(within(model).getByTestId('tool-mark')).toHaveAttribute(
+      'data-vendor',
+      'openai',
+    )
     expect(
       screen.getByText("Models that passed this key's last connection test."),
     ).toBeInTheDocument()
     await user.click(model)
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual(['CXDefault (gpt-b)', 'CXgpt-a', 'CXgpt-b'])
+    ).toEqual(['Default (gpt-b)', 'gpt-a', 'gpt-b'])
     await user.click(screen.getByRole('option', { name: 'gpt-a' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -273,7 +276,7 @@ describe('the model in the New session dialog', () => {
     await user.click(model)
     expect(
       (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual(['CXgpt-a', 'CXgpt-b'])
+    ).toEqual(['gpt-a', 'gpt-b'])
     await user.click(screen.getByRole('option', { name: 'gpt-b' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
@@ -583,10 +586,14 @@ describe('the model in the New session dialog', () => {
       profileRef: 'ppf_claude',
       model: 'haiku-5-5',
       effort: 'high',
+      // What the form shows goes with it: its words, folder and permission.
+      message: '',
+      workspaceRef: 'ws_fixture',
+      permission: 'editsAndCommands',
     })
   })
 
-  it('hands the advanced launch only the tool for a tool on a key: it has no profile before its first launch', async () => {
+  it('hands the advanced launch no sign-in for a tool on a key: it has no profile before its first launch', async () => {
     const user = userEvent.setup()
     given(key())
     const onAdvanced = vi.fn()
@@ -596,11 +603,16 @@ describe('the model in the New session dialog', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Advanced launch options' }),
     )
-    expect(onAdvanced).toHaveBeenCalledWith({ driver: 'codex' })
+    expect(onAdvanced).toHaveBeenCalledWith({
+      driver: 'codex',
+      message: '',
+      workspaceRef: 'ws_fixture',
+      permission: 'editsAndCommands',
+    })
   })
 
   it.each(['key-backed', 'not-ready'] as const)(
-    'hands over only the driver despite a cached reuse profile for a %s tool',
+    'hands over no sign-in despite a cached reuse profile for a %s tool',
     async (state) => {
       const user = userEvent.setup()
       const qc = new QueryClient({
@@ -645,7 +657,12 @@ describe('the model in the New session dialog', () => {
       await user.click(
         await screen.findByRole('button', { name: 'Advanced launch options' }),
       )
-      expect(onAdvanced).toHaveBeenCalledExactlyOnceWith({ driver: 'codex' })
+      expect(onAdvanced).toHaveBeenCalledExactlyOnceWith({
+        driver: 'codex',
+        message: '',
+        workspaceRef: 'ws_fixture',
+        permission: 'editsAndCommands',
+      })
       expect(preview).not.toHaveBeenCalledWith('codex', expect.anything())
       expect(models).not.toHaveBeenCalled()
       expect(qc.getQueryData(reuseKey)).toMatchObject({

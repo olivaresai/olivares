@@ -137,24 +137,40 @@ afterEach(() => {
 })
 
 describe('the registry declares each verb with its own mutation permission', () => {
+  // The fourth cell is the tier the PAGE opens on. Every page but one opens
+  // on a read tier; the Kill switch page engages and releases stops, so it is
+  // the administrator's, like its verb. Its row says so: no row passes by
+  // accident.
   it.each([
-    ['eventing', 'createSubscription', 'eventing:subscription:write'],
-    ['alerting', 'createRoute', 'notify:route:write'],
+    ['eventing', 'createSubscription', 'eventing:subscription:write', 'read'],
+    ['alerting', 'createRoute', 'notify:route:write', 'read'],
     ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
-      ? [['orchestration', 'createSchedule', 'orchestration:schedule:write']]
+      ? [
+          [
+            'orchestration',
+            'createSchedule',
+            'orchestration:schedule:write',
+            'read',
+          ],
+        ]
       : []),
-    ['killswitch', 'engage', 'governance:killswitch:admin'],
-    ['identity', 'invite', 'membership:write'],
-  ])('%s/%s writes with %s', (featureId, actionId, permission) => {
+    ['killswitch', 'engage', 'governance:killswitch:admin', 'admin'],
+    ['identity', 'invite', 'membership:write', 'read'],
+  ])('%s/%s writes with %s', (featureId, actionId, permission, page) => {
     expect(commandActionOf(featureId, actionId)).toEqual({
       id: actionId,
       permission,
     })
+    // A verb writes: it is never gated on a read tier.
+    expect(permission).not.toMatch(/:read$/)
     const view = FEATURE_VIEWS.find((v) => v.id === featureId)
-    // AND IT IS NOT THE PAGE'S. The whole defect was the palette gating a write on the
-    // view's read permission; if these ever coincide the guard has stopped guarding.
-    expect(view?.permission).toBeDefined()
-    expect(view?.permission).not.toBe(permission)
+    expect(view?.permission).toMatch(new RegExp(`:${page}$`))
+    // AND A READ PAGE IS NOT THE VERB'S. The whole defect was the palette
+    // gating a write on the view's read permission; if these ever coincide the
+    // guard has stopped guarding. The administrator's page and its verb are
+    // one permission.
+    if (page === 'read') expect(view?.permission).not.toBe(permission)
+    else expect(view?.permission).toBe(permission)
   })
 
   // ⛔ THE KEY DID NOT MOVE, IN ANY OF THE NINE. The descriptor replaced a bare string,

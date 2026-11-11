@@ -42,12 +42,15 @@ export interface OnboardedUser {
   created_at: string
 }
 
-/** An invitation as its creator sees it: the link is mailed to the invitee only,
- * so no token or link ever reaches the console. */
+/** An invitation as its creator sees it. A mailed link goes to the invitee only; on a
+ * server with no mail the creator asks for delivery "link" and the engine hands its secret
+ * to this session once, for the link the console shows. */
 export interface InviteHandle {
   id: string
   expires_at: string
-  delivery: 'sent' | 'failed'
+  delivery: 'sent' | 'failed' | 'link'
+  /** Delivery "link" only: the single-use secret, never listed or kept. */
+  token?: string
 }
 
 export interface OnboardResult {
@@ -77,6 +80,17 @@ export interface OnboardInput {
   role: string
   mode: 'password' | 'invite'
   password?: string
+  /** "link": the invitation's secret comes back once instead of being mailed. */
+  delivery?: 'link'
+}
+
+/** POST /v1/memberships: a member's role in an organization. The route is an upsert
+ * that also rewrites the confinement of the row it updates, so the console sends it only
+ * for a tenant-wide member and never names a workspace. */
+export interface MemberRoleInput {
+  user_id: string
+  tenant: string
+  role: string
 }
 
 export interface InviteDTO {
@@ -92,7 +106,7 @@ export interface RosterMemberDTO {
   user_id: string
   email: string
   display_name?: string
-  status: 'active' | 'inactive' | 'error'
+  status: 'active' | 'inactive' | 'error' | 'suspended'
   external_id?: string
   sso_only: boolean
   second_factor_enrolled?: boolean
@@ -719,6 +733,8 @@ export interface GroupDTO {
    *  (organization-wide) or concealed from a workspace-confined caller. */
   workspace_id?: string
   members: number
+  /** The ids of the group's people; absent for a caller confined to a department. */
+  member_ids?: string[]
 }
 
 /** One (scope, grantable-perms) pair the actor may delegate within. */
@@ -1248,9 +1264,14 @@ export const consoleApi = {
     }),
   revokeInvite: (id: string) =>
     http.delete<void>(`/v1/invites/${encodeURIComponent(id)}`),
-  /** Mails a pending invitation again, with a new secret; the old link stops working. */
-  resendInvite: (id: string) =>
-    http.post<InviteHandle>(`/v1/invites/${encodeURIComponent(id)}/resend`),
+  /** Gives a pending invitation a new secret, so the old link stops working, and mails
+   * it, or with delivery "link" hands it to this session once. */
+  resendInvite: (id: string, delivery?: 'link') =>
+    http.post<InviteHandle>(
+      `/v1/invites/${encodeURIComponent(id)}/resend`,
+      undefined,
+      delivery ? { query: { delivery } } : undefined,
+    ),
   listMembers: (includeSecondFactors = false) =>
     http.get<ListResponse<RosterMemberDTO>>('/v1/members', {
       query: {
@@ -1280,6 +1301,16 @@ export const consoleApi = {
    * its other organizations stay). Every edition serves it. */
   removeMember: (userId: string) =>
     http.delete<void>(`/v1/members/${encodeURIComponent(userId)}`),
+  /** Change a member's role (membership:write; the engine refuses a role above the
+   * caller's). */
+  changeMemberRole: (input: MemberRoleInput) =>
+    http.post<MembershipRef>('/v1/memberships', input),
+  /** Business: suspend a member (sessions and tokens stop at once; membership, role and
+   * groups stay) or give the access back. */
+  setMemberSuspended: (userId: string, suspended: boolean) =>
+    http.post<void>(
+      `/v1/members/${encodeURIComponent(userId)}/${suspended ? 'suspend' : 'reactivate'}`,
+    ),
 
   // Internal-superadmin lifecycle (global, superadmin-gated; writes need an
   // AAL3 step-up). List the superadmin accounts (with active/inactive status) and
@@ -1670,6 +1701,19 @@ export const consoleApi = {
       `/v1/groups/${encodeURIComponent(id)}/role`,
       { role },
     ),
+
+  // Business: a group of the operator's own, and its people (provisioned_by "operator").
+  createGroup: (displayName: string) =>
+    http.post<{ id: string; display_name: string; provisioned_by: string }>(
+      '/v1/groups',
+      { display_name: displayName },
+    ),
+  deleteGroup: (id: string) =>
+    http.delete<void>(`/v1/groups/${encodeURIComponent(id)}`),
+  setGroupMember: (groupId: string, userId: string, member: boolean) => {
+    const path = `/v1/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`
+    return member ? http.put<void>(path) : http.delete<void>(path)
+  },
 
   // Agent-axis picker: read-only roster for binding authoring.
   listAgents: (

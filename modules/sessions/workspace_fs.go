@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 // workspace_fs.go is the SECURITY CORE of the governed file API: the jail that
@@ -106,6 +107,30 @@ func within(root, p string) bool {
 	return rel != ".." &&
 		!strings.HasPrefix(rel, ".."+string(filepath.Separator)) &&
 		!filepath.IsAbs(rel)
+}
+
+// openRegularForRead opens abs for a governed read. The open never blocks: a FIFO at the
+// name would otherwise wait for a writer forever and hold the request. The descriptor,
+// not the name, must be a regular file.
+func openRegularForRead(abs string) (*os.File, fs.FileInfo, error) {
+	f, err := os.OpenFile(abs, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, nil, mapFSErr(err)
+	}
+	info, err := f.Stat()
+	switch {
+	case err != nil:
+		err = mapFSErr(err)
+	case info.IsDir():
+		err = badRequest("path is a directory (use list)")
+	case !info.Mode().IsRegular():
+		err = badRequest("path is not a regular file (a pipe, device or socket) and cannot be read")
+	}
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, err
+	}
+	return f, info, nil
 }
 
 // deepestExistingAncestor walks up from abs's parent until an existing directory is

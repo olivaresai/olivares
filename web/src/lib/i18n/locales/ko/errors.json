@@ -5,9 +5,10 @@
   },
   "businessOnly": {
     "title": "Business에 포함됨",
-    "description": "이 페이지는 Olivares AI Business에 포함됩니다. 이 에디션에는 포함되지 않습니다.",
-    "link": "Business 정보",
-    "start": "시작 페이지로 이동"
+    "heading": "이 페이지는 Olivares AI Business에 포함됩니다",
+    "description": "이 설치본은 Olivares AI Community입니다. 데이터와 페이지는 그대로 유지됩니다.",
+    "editions": "에디션 보기",
+    "link": "Business 정보"
   },
   "forbidden": {
     "title": "권한 없음",

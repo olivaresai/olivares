@@ -33,6 +33,8 @@ func sessionsCheckpointFileSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
 		"path", oas.Obj("type", "string", "description", "The file's path, relative to the session's folder."),
 		"status", oas.Obj("type", "string", "enum", oas.Enum("added", "modified", "deleted"), "description", "What the turn did to the file."),
+		"added", oas.Obj("type", "integer", "minimum", 0, "description", "Lines added between the two trees; absent for a binary file."),
+		"removed", oas.Obj("type", "integer", "minimum", 0, "description", "Lines removed between the two trees; absent for a binary file."),
 	), "path", "status")
 }
 
@@ -50,7 +52,9 @@ func sessionsRunCheckpointsSchema() map[string]any {
 		"available", oas.Obj("type", "boolean", "description", "False when this session's folder cannot be checkpointed; reason says why."),
 		"reason", oas.Obj("type", "string", "description", "Why the folder cannot be checkpointed. Absent when it can."),
 		"turns", oas.Obj("type", "array", "items", turn, "description", "The session's turns, oldest first."),
-	), "available", "turns")
+		"files", oas.Obj("type", "array", "items", sessionsCheckpointFileSchema(), "description", "What the session's folder differs by now from the start of the first turn: the whole session's changes. Empty when there are no turns or the folder cannot be checkpointed."),
+		"truncated", oas.Obj("type", "boolean", "description", "True when the session changed more files than are listed."),
+	), "available", "turns", "files", "truncated")
 }
 
 func sessionsRunRewindSchema() map[string]any {

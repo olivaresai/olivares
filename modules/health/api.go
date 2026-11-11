@@ -89,8 +89,16 @@ func (m *Module) listChecksAs(w http.ResponseWriter, r *http.Request, mc api.Mod
 			return err
 		}
 		page = p
+		evRepo, err := sc.Ext(eventKind)
+		if err != nil {
+			return err
+		}
 		for _, rec := range recs {
-			out = append(out, toStatusDTO(rec))
+			dto, err := m.withFailures7d(r.Context(), evRepo, toStatusDTO(rec))
+			if err != nil {
+				return err
+			}
+			out = append(out, dto)
 		}
 		return nil
 	})

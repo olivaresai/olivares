@@ -5,6 +5,12 @@
   },
   "title": "Límites de tasa",
   "description": "Límites de frecuencia de su organización y sus espacios de trabajo. Solo lectura.",
+  "profiles": {
+    "title": "Límites de cada perfil",
+    "description": "Lo que la herramienta de cada perfil le permite usar y cuándo se restablece. La herramienta los informa; Olivares no los fija.",
+    "none": "Ninguna herramienta de un perfil informa ahora de un límite en vigor.",
+    "truncated": "Algunos perfiles no se muestran."
+  },
   "caveats": {
     "keepInSync": "Las pasarelas y proxies deben mantenerse sincronizados: estos límites son el inventario que una pasarela o proxy ascendente debe replicar. No se aplican aquí, y su modificación se realiza en el proveedor, no en esta consola.",
     "managedAgents": "Los agentes gestionados NO están cubiertos por la API de límites de tasa. Sus límites son una laguna documentada, no un valor de cero: no se muestra ninguna fila de agentes gestionados porque la API no informa de ninguna."

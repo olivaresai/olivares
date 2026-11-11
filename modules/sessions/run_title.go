@@ -261,6 +261,16 @@ func (m *Module) showTitle(ctx context.Context, mc api.ModuleContext, rec model.
 // titleReadable is the rule a run's title is shown and searched by: the caller may read
 // the conversation it was cut from, on that run in its own workspace.
 func titleReadable(ctx context.Context, mc api.ModuleContext, rec model.Record) bool {
-	res := auth.ResourceAttrs{Kind: permRunRead.Resource(), ID: rec.String(model.ColID), WorkspaceID: model.ID(rec.String(colRunAuthzWorkspaceID))}
-	return mc.Admits(ctx, permRunOutput, res)
+	return mc.Admits(ctx, permRunOutput, runResource(rec))
+}
+
+// runReadable is the question GET /runs/{ref} asks of its caller: sessions:run:read on
+// the run in its own workspace.
+func runReadable(ctx context.Context, mc api.ModuleContext, rec model.Record) bool {
+	return mc.Admits(ctx, permRunRead, runResource(rec))
+}
+
+// runResource is the stored run as the run routes authorize it: its row id and workspace.
+func runResource(rec model.Record) auth.ResourceAttrs {
+	return auth.ResourceAttrs{Kind: permRunRead.Resource(), ID: rec.String(model.ColID), WorkspaceID: model.ID(rec.String(colRunAuthzWorkspaceID))}
 }

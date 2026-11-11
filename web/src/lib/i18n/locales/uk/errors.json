@@ -5,9 +5,10 @@
   },
   "businessOnly": {
     "title": "Частина Business",
-    "description": "Ця сторінка є частиною Olivares AI Business. Це видання її не містить.",
-    "link": "Про Business",
-    "start": "Перейти на початкову сторінку"
+    "heading": "Ця сторінка є частиною Olivares AI Business",
+    "description": "Ця інсталяція працює на Olivares AI Community. Ваші дані та сторінки залишаються незмінними.",
+    "editions": "Переглянути видання",
+    "link": "Про Business"
   },
   "forbidden": {
     "title": "Доступ заборонено",

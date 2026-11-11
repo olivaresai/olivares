@@ -145,7 +145,7 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 		if err != nil {
 			return err
 		}
-		if err := p.asks.profileAccess(prof.Ref, prof.Driver); err != nil {
+		if err := p.asks.profileAccess(prof); err != nil {
 			return err
 		}
 	}
@@ -376,6 +376,7 @@ func applySessionPolicy(p *CreateRunParams, driver string, policy sessionPolicy)
 		return err
 	}
 	p.profilePrograms, p.profileRegistries, p.profileEgressHosts = policy.programs, policy.registries, policy.egressHosts
+	p.profileAutoCompactWindow = policy.autoCompact
 	if err := refuseNonNativePackages(*p); err != nil {
 		return err
 	}

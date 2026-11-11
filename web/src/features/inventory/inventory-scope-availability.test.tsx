@@ -378,42 +378,34 @@ describe('Inventory summary: truncation', () => {
 
   it('REPRODUCES A DEFECT: a truncated summary is flagged partial and keeps every kind selectable', async () => {
     vi.mocked(inventoryApi.summary).mockResolvedValue(truncated)
-    const user = userEvent.setup()
     renderView()
     expect(await screen.findByText('Partial data')).toBeInTheDocument()
     expect(within(tile('Entities')).getByText('1,000')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('combobox', { name: 'All kinds' }))
-    await screen.findByRole('option', { name: 'Agent' })
     // The base offered only "Agent": a class absent from the first 1,000 entries
-    // lost its option, i.e. the sample was read as the whole estate.
-    for (const name of ['Session', 'Model', 'Provider', 'Resource'])
-      expect(screen.getByRole('option', { name })).toBeInTheDocument()
+    // lost its chip, i.e. the sample was read as the whole estate. No count either:
+    // a floor printed on a chip reads as the total.
+    for (const name of ['Agent', 'Session', 'Model', 'Provider', 'Resource'])
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
   })
 
   it('REPRODUCES A DEFECT: a failed summary keeps every kind selectable rather than retiring options', async () => {
     vi.mocked(inventoryApi.summary).mockRejectedValue(unavailable())
-    const user = userEvent.setup()
     renderView()
     await screen.findByRole('alert')
-    await user.click(screen.getByRole('combobox', { name: 'All kinds' }))
-    expect(
-      await screen.findByRole('option', { name: 'Model' }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Session' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Model' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Session' })).toBeInTheDocument()
   })
 
   it('POSITIVE CONTROL: a complete summary is not flagged partial and narrows the kinds to those present', async () => {
-    const user = userEvent.setup()
     renderView()
     expect(await screen.findByText('Entities')).toBeInTheDocument()
     expect(screen.queryByText('Partial data')).toBeNull()
-    await user.click(screen.getByRole('combobox', { name: 'All kinds' }))
     expect(
-      await screen.findByRole('option', { name: 'Agent' }),
+      await screen.findByRole('button', { name: /^Agent/ }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Model' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Session' })).toBeNull()
+    expect(screen.getByRole('button', { name: /^Model/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Session/ })).toBeNull()
   })
 })
 
@@ -541,8 +533,7 @@ describe('Inventory catalog and topology: what stays', () => {
     renderView()
     await screen.findByText('prod-orchestrator')
 
-    await user.click(screen.getByRole('combobox', { name: 'All kinds' }))
-    await user.click(await screen.findByRole('option', { name: 'Model' }))
+    await user.click(await screen.findByRole('button', { name: /^Model/ }))
     await waitFor(() =>
       expect(vi.mocked(inventoryApi.entities)).toHaveBeenLastCalledWith(
         expect.objectContaining({ kind: 'model', limit: 50 }),

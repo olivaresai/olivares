@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.9`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.10`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.9`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.10`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.9<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.10<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,38 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.10] - 2026-11-09
+
+### Added
+
+- AI tools: a switch on each profile turns it off and on (a switched-off profile stays listed), the profile sheet sets a Claude Code profile's auto-compact window (`auto_compact_window` on the profile API) and lists the profile's models with a switch, an order and custom models for each person's pickers.
+- AI tools: a profile account shows the plan its tool reports, such as Claude Max, next to "signed in".
+- Sessions: an approval card offers **Allow for this session**. The same command or tool action on the same target is then allowed again in that session without a new card, and each reuse is recorded in the audit ledger. The session's Details pane lists these allowances with **Revoke**; stopping the session ends them. A different action, another session, or a rule that requires review still asks every time. **Approve once** and **Deny** are unchanged.
+- Documents: scanned PDF pages and images can be read by an optional OCR service that runs on the engine's own host. It is off by default (Settings > Modules) and Olivares sends pages only to a local address. With OCR off, a PDF page without a text layer returns an error that says so, and nothing is sent.
+
+### Changed
+
+- The console's top bar no longer shows the permanent shortcut legend. The keys stay: press `?` for the keymap, or open the command palette (Ctrl+K, ⌘K on a Mac).
+- The left navigation lists your own sessions under Sessions (the ones that need you first), and the administrative places (Rules, Usage, Activity, People, Security, Operations) now sit one level under Settings, behind its More button. Every page keeps its address.
+- AI tools and providers show their own logos in the console; Codex and Grok Build no longer appear as letters.
+- **Breaking:** the organization-wide governance and administration reads are now for administrators (admin and owner) only: the audit record (`audit:read`, so `GET /v1/audit` answers 403 to a viewer or editor token), rules and policy, security findings, spend, budgets and adoption, and the reads only administrator places use (the access map, the inference proxy's settings, evaluation runs, retention, attestation, webhook subscriptions and alert routes). Each person keeps their own sessions, usage and limits. A custom role can still grant these reads.
+
+### Fixed
+
+- The session composer keeps focus after you press Enter and when an approval card arrives, so your next keystrokes land in it without a click.
+- Changes opens a selected file directly as a diff, and you can review the whole session, the latest turn or an earlier turn.
+- The command palette's Claude Code import row uses the same two-line layout as the other rows.
+- Server appliance: the installer creates the appliance groups before it uses them; first boot no longer stops on an empty host name or a time zone chosen during installation; an installation from the installer gets the package repository, automatic security updates and Docker, as the disk images do; the password guard keeps PAM sign-in working; SELinux file contexts and the installed-policy check are corrected.
+
+### Security
+
+- The console's build tools no longer use a minimatch version affected by [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249), and deepmerge, affected by [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4), is removed from them.
+
+### Known issues
+
+- The first message of a brand-new session is occasionally not sent and the session stays on "Waiting for the session…". Send the message again; later messages in the session are delivered. A fix is in progress.
+- Native skills found in a tool's home are detected and listed, but the session's / menu does not offer them yet. Skills installed from a pack work.
 
 ## [0.9] - 2026-11-08
 

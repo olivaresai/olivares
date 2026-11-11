@@ -11,7 +11,7 @@ import type { RunDTO } from '@/features/agentops/types'
 export function useConversationTasks(run: RunDTO, tenant: string | null) {
   const key = agentOpsKeys.runActivity(tenant, run.run_ref)
   return useQuery({
-    queryKey: [...key, run.state],
+    queryKey: [...agentOpsKeys.runActivity(tenant, run.run_ref), run.state],
     queryFn: ({ signal }) => agentOpsApi.activity(run.run_ref, { signal }),
     placeholderData: (previous, previousQuery) =>
       key.every((part, i) => previousQuery?.queryKey[i] === part)

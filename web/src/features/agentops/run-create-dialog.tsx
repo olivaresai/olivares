@@ -53,7 +53,14 @@ import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { RUN_ON_EXTENSION } from '@/features/extensions'
-import { launchSession } from './session-launch'
+import {
+  DEFAULT_PERMISSION,
+  EDITS_AND_COMMANDS_TEMPLATE,
+  launchSession,
+  PERMISSION_MODE,
+  PERMISSION_NAME,
+  type PermissionChoice,
+} from './session-launch'
 import { profileOwnedEnvNames } from './provider-contract'
 import { sessionTools, toolName } from './engine-tools'
 import { useReadyTools } from '@/features/first-hour/first-hour'
@@ -84,6 +91,7 @@ import {
   type SessionLaunchReadiness,
 } from './launch-readiness'
 import {
+  BUILD_MODE,
   CRITICAL_PERMISSION_MODES,
   PERMISSION_MODES,
   type CreateRunRequest,
@@ -94,9 +102,23 @@ import {
 } from './types'
 import { ModelEffortFields } from './model-effort-picker'
 import { startModel } from './model-catalog'
+import '@/features/sessions/i18n'
 import './i18n'
 
 const NONE = '__none__'
+
+/** A turn of another of the person's sessions in the same folder: the new worktree starts
+ * with the files that session's folder held when the turn began (`from_checkpoint` of the
+ * create; `turn` is the checkpoint's `seq`). */
+export type FromCheckpoint = NonNullable<CreateRunRequest['from_checkpoint']>
+
+/** The engine's refusals of a start from a message's files that say what happened to those
+ * files, by code (sessions words). */
+const FORK_REFUSALS = new Map([
+  ['checkpoint_not_found', 'conversation.edit.refused.notFound'],
+  ['checkpoint_files_gone', 'conversation.edit.refused.filesGone'],
+  ['not_a_git_repository', 'conversation.edit.notGit'],
+])
 
 /**
  * RunCreateDialog — the full launch: the profile, a first message, the model and its
@@ -114,7 +136,10 @@ export function RunCreateDialog({
   initialMessage,
   initialWorkspaceRef,
   initialTemplateId,
+  initialWorktree,
+  initialPermission,
   initialWorktreeFrom,
+  initialFromCheckpoint,
   initialDriver,
   initialProfileRef,
   initialModel,
@@ -132,9 +157,18 @@ export function RunCreateDialog({
   /** Pre-select a workspace template (the templates catalog launches through here, so
    * "Apply to session" means the session actually comes up under the template). */
   initialTemplateId?: string
+  /** Open with a new worktree chosen: the New session form's choice, at the folder's
+   * current commit unless `initialWorktreeFrom` names a start. */
+  initialWorktree?: boolean
+  /** What the New session form lets the agent do: a plain mode opens as the launch's own,
+   * and Edit files and run commands as the built-in template, as Start sends it. */
+  initialPermission?: PermissionChoice
   /** Open with a new worktree chosen, starting at this commit id or branch (the work a
    * handoff names). The person still picks the workspace whose repository holds it. */
   initialWorktreeFrom?: string
+  /** Open on a new worktree that starts with the files of a message (Edit from here). The
+   * worktree stays on: the engine refuses those files without one. */
+  initialFromCheckpoint?: FromCheckpoint
   /** The tool the New session form had chosen: the default profile is the one the engine
    * would reuse for it. Without one, the first ready tool, as the form opens. */
   initialDriver?: string
@@ -151,6 +185,7 @@ export function RunCreateDialog({
   onCloseAutoFocus?: (event: Event) => void
 }) {
   const { t } = useTranslation('agentops')
+  const { t: tSession } = useTranslation('sessions')
   const navigate = useNavigate()
   const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
@@ -160,15 +195,28 @@ export function RunCreateDialog({
   const promptId = useId()
 
   const [prompt, setPrompt] = useState(initialMessage ?? '')
+  // A new worktree the opener asked for (the New session form's choice, a handoff's start
+  // or a message's files) is ticked and shown, never dropped for the folder's checkout.
+  const worktreeAsked =
+    !!initialWorktree || !!initialWorktreeFrom || !!initialFromCheckpoint
+  // What the agent may do, from the New session form: a plain mode as the launch's own,
+  // Edit files and run commands as the built-in template it is (chosen once listed).
+  const handedMode = initialPermission && PERMISSION_MODE[initialPermission]
+  const handsEdits =
+    initialPermission === 'editsAndCommands' && !initialTemplateId
+  // The form's default comes over closed, as before; any other choice opens what shows it.
+  const handsOther =
+    !!initialPermission && initialPermission !== DEFAULT_PERMISSION
   // Closed, so the first screen is the profile, the message and Start. A template opened
   // from the catalog opens it: that choice is the point of the launch.
   const [advanced, setAdvanced] = useState(
-    !!initialTemplateId || !!initialWorktreeFrom,
+    !!initialTemplateId || worktreeAsked || handsOther,
   )
   const [name, setName] = useState('')
   const [transport, setTransport] = useState<Transport>('stream-json')
-  const [permissionMode, setPermissionMode] =
-    useState<PermissionMode>('default')
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>(
+    (handedMode || 'default') as PermissionMode,
+  )
   // The model and effort belong to the profile they were chosen for: another profile (or
   // none) shows and sends none of them. Derived below, once the profile is known.
   const [modelPick, setModelPick] = useState({
@@ -196,7 +244,9 @@ export function RunCreateDialog({
     initialWorkspaceRef ?? NONE,
   )
   const [runOn, setRunOn] = useState(initialRunOn ?? '')
-  const [worktree, setWorktree] = useState(!!initialWorktreeFrom)
+  const [worktree, setWorktree] = useState(worktreeAsked)
+  // The files of a message, until the person starts from the folder as it is now instead.
+  const [fromCheckpoint, setFromCheckpoint] = useState(initialFromCheckpoint)
   // The page of a GitHub issue or pull request to start from; it needs a folder.
   const [sourceUrl, setSourceUrl] = useState('')
   const sourceUrlId = useId()
@@ -207,6 +257,8 @@ export function RunCreateDialog({
   const [templateId, setTemplateId] = useState<string>(
     initialTemplateId ?? NONE,
   )
+  // Until the template list names it, the built-in template the form's choice stands for.
+  const [editsHanded, setEditsHanded] = useState(handsEdits)
   // The profile the operator picked; NONE until they pick one (see profileRef below).
   const [chosenProfile, setChosenProfile] = useState<string>(
     initialProfileRef ?? NONE,
@@ -230,8 +282,12 @@ export function RunCreateDialog({
     setPreviousSelection({ open, initialTemplateId, initialWorktreeFrom })
     if (open) {
       setTemplateId(initialTemplateId ?? NONE)
-      if (initialWorktreeFrom) setWorktree(true)
-      if (initialTemplateId || initialWorktreeFrom) setAdvanced(true)
+      setEditsHanded(handsEdits)
+      setFromCheckpoint(initialFromCheckpoint)
+      // A message's files come only from its own folder, which stays locked.
+      if (initialFromCheckpoint) setWorkspaceRef(initialWorkspaceRef ?? NONE)
+      if (worktreeAsked) setWorktree(true)
+      if (initialTemplateId || worktreeAsked || handsOther) setAdvanced(true)
     }
   }
 
@@ -400,6 +456,21 @@ export function RunCreateDialog({
     () => (tplQuery.data?.items ?? []).filter((tpl) => !tpl.archived_at),
     [tplQuery.data],
   )
+  const editsTemplate = templates.find(
+    (tpl) => tpl.builtin && tpl.name === EDITS_AND_COMMANDS_TEMPLATE,
+  )
+  if (editsHanded && editsTemplate) {
+    setEditsHanded(false)
+    setTemplateId(editsTemplate.id)
+    // Under the template's own mode: a narrower named one with its allowlist is refused.
+    setPermissionMode(BUILD_MODE)
+  }
+  // Without the template list, or without the built-in template in it, Edit files and run
+  // commands cannot be asked for here: the launch stays narrower and says so.
+  const editsUnavailable =
+    handsEdits && !editsTemplate && (!canReadTemplates || tplQuery.isSuccess)
+  // A list that could not be read says so, with Retry; it blames no one's permission.
+  const editsUnread = handsEdits && !editsTemplate && tplQuery.isError
 
   // The merge PREVIEW, from the engine — never recomputed in the browser. The whole
   // point of the pack is that the server owns this merge; a second implementation here
@@ -449,14 +520,20 @@ export function RunCreateDialog({
   })
   const requestPermission = launchRequestPermission(currentReadiness)
 
-  // The warning has to describe the mode the session will actually run in. A template
-  // with a tool allow-list pins dontAsk — a CRITICAL launch that needs human approval and
-  // is recorded — and reading the raw form field here showed "default" with no warning at
-  // all for exactly that launch (Codex contrast, 2026-08-11).
+  // The warning describes the mode the session will run in (a template's pins it), as
+  // the engine judges it: dontAsk is privileged under a custom template or with no
+  // allowlist, and not under the engine's built-in template with its allowlist (Edit
+  // files and run commands), which runs those tools without asking and refuses the rest.
   const effectiveMode = (previewData?.merged?.permission_mode ??
     permissionMode) as PermissionMode
   const restriction = usePermissionRestriction(open)
-  const isCriticalMode = CRITICAL_PERMISSION_MODES.includes(effectiveMode)
+  const chosenTemplate = templates.find((tpl) => tpl.id === templateId)
+  const builtinBuild =
+    effectiveMode === BUILD_MODE &&
+    !!chosenTemplate?.builtin &&
+    !!chosenTemplate.body?.policies?.allowed_tools?.length
+  const isCriticalMode =
+    CRITICAL_PERMISSION_MODES.includes(effectiveMode) && !builtinBuild
   const isClassifiedRw =
     !!selectedWs &&
     selectedWs.dlp_mode !== 'off' &&
@@ -487,9 +564,26 @@ export function RunCreateDialog({
   // What keeps Start from acting, first missing piece first. It is said beside the
   // button (a disabled button that says nothing is a dead end), and it is
   // the ONLY gate: the button, Enter and the mutation all read this one answer.
-  const blocker = ((): { reason: string; action?: ReactNode } | null => {
+  const blocker = ((): {
+    reason: string
+    action?: ReactNode
+    /** Offers the folder as it is now beside the reason and its action (`keepNow`). */
+    keep?: boolean
+  } | null => {
     if (!canRunWrite) return { reason: t('readiness.noWrite') }
-    if (!restriction.allows(permissionNameForMode(effectiveMode)))
+    // The form's default waits for the list that names its built-in template: Start
+    // would otherwise go out narrower than chosen, unsaid.
+    if (editsHanded && canReadTemplates && tplQuery.isPending)
+      return { reason: t('common:states.loading') }
+    // The engine's launch check ranks dontAsk under any built-in template with its
+    // allowlist as edits and commands (the warning's own rule); otherwise dontAsk is Full.
+    if (
+      !restriction.allows(
+        builtinBuild
+          ? PERMISSION_NAME.editsAndCommands
+          : permissionNameForMode(effectiveMode),
+      )
+    )
       return {
         reason: restriction.reason ?? '',
         action: restriction.error ? (
@@ -554,6 +648,34 @@ export function RunCreateDialog({
           </Button>
         ),
       }
+    // A message's files come only from its own folder, with the folder and the worktree
+    // locked to it: until the list of folders answers, Start says it is being read.
+    if (fromCheckpoint && !selectedWs && canReadWs && wsQuery.isPending)
+      return { reason: tSession('conversation.edit.folderReading') }
+    // A list that could not be read says nothing of that folder: it says so, with Retry,
+    // and the folder as it is now, which needs no list.
+    if (fromCheckpoint && !selectedWs && canReadWs && wsQuery.isError)
+      return {
+        reason: tSession('conversation.edit.folderUnread'),
+        keep: true,
+        action: (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            onClick={() => void wsQuery.refetch()}
+          >
+            {t('common:actions.retry')}
+          </Button>
+        ),
+      }
+    // The list may not hold that folder: archived since, past the list's end, or out of
+    // the person's view.
+    if (fromCheckpoint && !selectedWs)
+      return {
+        reason: tSession('conversation.edit.folderUnlisted'),
+        keep: true,
+      }
     if ((worktree || sourceUrl.trim()) && !selectedWs)
       return { reason: t('create.blocked.worktreeFolder') }
     if (requiresAgent && agentRef === '')
@@ -575,9 +697,11 @@ export function RunCreateDialog({
         reason:
           err instanceof ApiError && err.status === 401
             ? t('readiness.unauthenticated')
-            : err instanceof ApiError && err.status === 403
+            : err instanceof ApiError && err.isForbidden
               ? t('readiness.forbidden')
-              : t('readiness.notFound'),
+              : err instanceof ApiError && err.isEditionRefusal
+                ? err.message
+                : t('readiness.notFound'),
       }
     if (readinessQuery.isFetching) return { reason: t('readiness.loading') }
     return { reason: t('create.blocked.readinessFailed'), action: reread }
@@ -603,10 +727,16 @@ export function RunCreateDialog({
   }
 
   const requestBody = (): CreateRunRequest => ({
-    // Without a name of its own, the launch names it by what it was asked first.
+    // Without a name of its own, the engine titles it from what it was asked first.
     name,
     transport,
-    permission_mode: permissionMode,
+    // The built-in Edits and commands template under its own mode is the quick form's Edit
+    // files and run commands: sent as the quick launch sends it, the mode unnamed, so the
+    // template's applies and both launches ask the engine the same.
+    permission_mode:
+      templateId === editsTemplate?.id && permissionMode === BUILD_MODE
+        ? ''
+        : permissionMode,
     effort,
     model,
     ...(speed?.fastMode !== undefined ? { fast_mode: speed.fastMode } : {}),
@@ -627,6 +757,8 @@ export function RunCreateDialog({
           ...(initialWorktreeFrom
             ? { worktree_from: initialWorktreeFrom }
             : {}),
+          // The files of a message, only for a fork that asked for them.
+          ...(fromCheckpoint ? { from_checkpoint: fromCheckpoint } : {}),
         }
       : {}),
     // The engine works in a worktree named after the item; the launch reads it first.
@@ -692,13 +824,45 @@ export function RunCreateDialog({
     },
   })
 
-  const failureReason = create.isError
-    ? launchFailureMessage(
-        create.error,
-        t('create.title'),
-        (reason) => reason || t('readiness.stoppedSilently'),
-      )
-    : ''
+  // The way out of a message's files: the folder as it is now, with the folder and
+  // the worktree free to choose again. Start offers it when it cannot use those
+  // files, and so does every refusal of them. It resets the launch, so it is declared
+  // after it; the blocker, which the launch reads, only asks for it.
+  const keepNow = () => {
+    setFromCheckpoint(undefined)
+    setWorktree(false)
+    create.reset()
+  }
+  const keepLink = (
+    <Button type="button" variant="link" size="sm" onClick={keepNow}>
+      {tSession('conversation.edit.keep')}
+    </Button>
+  )
+
+  // A start from a message's files: what the engine says happened to those files, in the
+  // person's words, by code; an engine before the field refuses it as unknown (400).
+  // Any other refusal is said as every launch says it.
+  // shortcut: reads the engine's message for an unknown field, until the engine gives
+  // unknown fields a code. Every 400 carries the same code and no field detail, so only
+  // the exact quoted name in its message tells an engine without the field apart.
+  const unknownField =
+    create.error instanceof ApiError &&
+    create.error.status === 400 &&
+    create.error.message.includes('"from_checkpoint"')
+  const forkRefusal =
+    fromCheckpoint && create.error instanceof ApiError
+      ? (FORK_REFUSALS.get(create.error.code) ??
+        (unknownField ? 'conversation.edit.refused.unsupported' : undefined))
+      : undefined
+  const failureReason = forkRefusal
+    ? tSession(forkRefusal)
+    : create.isError
+      ? launchFailureMessage(
+          create.error,
+          t('create.title'),
+          (reason) => reason || t('readiness.stoppedSilently'),
+        )
+      : ''
   const AccessRequestAction = PANEL_EXTENSIONS.accessRequestAction
   const failedRun = create.variables?.body
   const failedProfileRef = failedRun?.provider_profile_ref
@@ -957,9 +1121,18 @@ export function RunCreateDialog({
                   </Field>
                 </div>
 
-                <Field label={t('create.workspace')}>
+                <Field
+                  label={t('create.workspace')}
+                  description={
+                    fromCheckpoint
+                      ? tSession('conversation.edit.folderLocked')
+                      : undefined
+                  }
+                >
                   <Select
                     value={workspaceRef}
+                    // The files of a message come only from its own folder.
+                    disabled={!!fromCheckpoint}
                     onValueChange={(value) => {
                       setWorkspaceRef(value)
                       if (value === NONE) setSourceUrl('')
@@ -995,10 +1168,16 @@ export function RunCreateDialog({
                     <Checkbox
                       id="create-worktree"
                       checked={worktree}
+                      // The files of a message come only in a worktree.
+                      disabled={!!fromCheckpoint}
                       onCheckedChange={(checked) =>
                         setWorktree(checked === true)
                       }
-                      aria-describedby="create-worktree-hint"
+                      aria-describedby={
+                        fromCheckpoint
+                          ? 'create-worktree-hint create-worktree-locked'
+                          : 'create-worktree-hint'
+                      }
                     />
                     <div className="flex flex-col gap-1">
                       <label htmlFor="create-worktree" className="text-body">
@@ -1010,6 +1189,14 @@ export function RunCreateDialog({
                       >
                         {t('create.worktreeHint')}
                       </p>
+                      {fromCheckpoint ? (
+                        <p
+                          id="create-worktree-locked"
+                          className="text-caption text-muted-foreground"
+                        >
+                          {tSession('conversation.edit.locked')}
+                        </p>
+                      ) : null}
                       {initialWorktreeFrom && worktree ? (
                         <p
                           data-testid="create-worktree-from"
@@ -1230,6 +1417,17 @@ export function RunCreateDialog({
                         workspaceRef={requestWorkspaceRef}
                       />
                     )}
+                  {forkRefusal ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="mt-2"
+                      onClick={keepNow}
+                    >
+                      {tSession('conversation.edit.keep')}
+                    </Button>
+                  ) : null}
                   {isProfileChangedError(create.error) && (
                     <Button
                       type="button"
@@ -1246,6 +1444,16 @@ export function RunCreateDialog({
             )}
           </div>
 
+          {editsUnread ? (
+            <QueryErrorState
+              error={tplQuery.error}
+              retry={() => void tplQuery.refetch()}
+            />
+          ) : editsUnavailable ? (
+            <p className="text-caption text-text-2">
+              {t('create.editsUnavailable')}
+            </p>
+          ) : null}
           <DialogFooter className="sm:flex-wrap">
             <Button
               type="button"
@@ -1260,7 +1468,15 @@ export function RunCreateDialog({
             <DisabledReason
               disabled={!!blocker}
               reason={blocker?.reason ?? t('create.submit')}
-              action={blocker?.action}
+              action={
+                blocker?.keep ? (
+                  <>
+                    {blocker.action} {keepLink}
+                  </>
+                ) : (
+                  blocker?.action
+                )
+              }
               mode="native"
               // Start stays beside Cancel; the reason takes a line of its own.
               className="contents [&>[data-slot=disabled-reason-text]]:basis-full [&>[data-slot=disabled-reason-text]]:justify-end"

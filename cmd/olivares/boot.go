@@ -2602,6 +2602,11 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 			} else if b.set.sessions != nil {
 				b.set.sessionDependencies.GitRead, b.set.sessionDependencies.GitReadDataDir = custody, dir
 			}
+			// The same custody names the push remotes a confined session of a
+			// workspace may reach: its approved targets' hosts, never their credential.
+			if b.set.sessions != nil {
+				b.set.sessionDependencies.ApprovedRemotes = gitpublishSessionRemotes{targets: b.set.gitpublish, custody: custody}
+			}
 		}
 		// A push that names a session run fetches its commit from the folder the
 		// sessions module recorded for that run. Without sessions, such a push is
@@ -3167,8 +3172,9 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 		b.set.approvalBridge.UseLocalProposer(b.set.gov.EngineApprovals())
 		b.set.approvalBridge.UseHandler(b.apiSrv.Handler())
 		// A ship (commit, push and pull request of a worktree session in one action)
-		// commits through the sessions module and asks the tenant's approval policy
-		// before its push. Without either, the ship answers authority_unavailable.
+		// commits through the sessions module, and every publication asks the
+		// tenant's approval policy before it reaches the host. Without the policy's
+		// door, every publication answers authority_unavailable.
 		if b.set.gitpublish != nil && b.set.sessions != nil {
 			b.set.gitpublish.UseSessionWork(b.set.sessions)
 			b.set.gitpublish.UseShipGate(shipGate{policy: b.set.gov.EngineApprovals(), bridge: b.set.approvalBridge})
@@ -3516,6 +3522,7 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	b.set.sessionDependencies.LimitResets = b.agentTools.LimitResetsAt
 	// An account shows the 5-hour and weekly usage its own tool reports.
 	b.set.sessionDependencies.AccountUsage = b.agentTools.AccountUsage
+	b.set.sessionDependencies.AccountPlan = b.agentTools.AccountPlan
 	b.set.sessionDependencies.ProviderApprovalPrincipal = func(c context.Context, tenant model.TenantID, runRef string) (auth.Principal, string, error) {
 		p, scope, err := b.sessionHooks.ResolveRun(c, tenant, runRef)
 		return p, scope.SessionRef, err

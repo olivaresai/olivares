@@ -154,19 +154,73 @@ describe('session adoption credential ownership', () => {
     await startA()
     const draftA = 'olivares.draft.v1.["tenant-a","alice","run-a"]'
     const draftB = 'olivares.draft.v1.["tenant-b","bob","run-b"]'
+    const asideA = 'olivares.stash.v1.["tenant-a","alice","run-a"]'
     sessionStorage.setItem(draftA, 'Draft A')
     sessionStorage.setItem(draftB, 'Draft B')
     sessionStorage.setItem('other-setting', 'keep')
+    // Drafts set aside live in the storage the browser's tabs share.
+    localStorage.setItem(asideA, 'Draft set aside')
+    localStorage.setItem('shared-setting', 'keep')
     await act(async () => {
       await auth.logout()
     })
     expect(sessionStorage.getItem(draftA)).toBeNull()
     expect(sessionStorage.getItem(draftB)).toBeNull()
     expect(sessionStorage.getItem('other-setting')).toBe('keep')
+    expect(localStorage.getItem(asideA)).toBeNull()
+    expect(localStorage.getItem('shared-setting')).toBe('keep')
     await act(async () => {
       releaseA(new Response(JSON.stringify(identity('A'))))
       await adoption
     })
+  })
+
+  it('removes another person’s drafts, history and drafts set aside when a person signs in', async () => {
+    localStorage.clear()
+    const other = '["tenant-a","user","user:bob","bob","run-b"]'
+    const own = '["tenant-a","user","witness-user-A","witness-user-A","run-a"]'
+    sessionStorage.setItem(`olivares.draft.v1.${other}`, 'Bob draft')
+    sessionStorage.setItem(`olivares.history.v1.${other}`, '["Bob prompt"]')
+    localStorage.setItem(`olivares.stash.v1.${other}`, 'Bob set aside')
+    sessionStorage.setItem(`olivares.draft.v1.${own}`, 'A draft')
+    localStorage.setItem(`olivares.stash.v1.${own}`, 'A set aside')
+    localStorage.setItem('shared-setting', 'keep')
+    await startA()
+    await act(async () => {
+      releaseA(new Response(JSON.stringify(identity('A'))))
+      await adoption
+    })
+    await waitFor(() =>
+      expect(localStorage.getItem(`olivares.stash.v1.${other}`)).toBeNull(),
+    )
+    expect(sessionStorage.getItem(`olivares.draft.v1.${other}`)).toBeNull()
+    expect(sessionStorage.getItem(`olivares.history.v1.${other}`)).toBeNull()
+    expect(sessionStorage.getItem(`olivares.draft.v1.${own}`)).toBe('A draft')
+    expect(localStorage.getItem(`olivares.stash.v1.${own}`)).toBe('A set aside')
+    expect(localStorage.getItem('shared-setting')).toBe('keep')
+  })
+
+  it('forgets every person’s drafts set aside a day old when the console loads', () => {
+    localStorage.clear()
+    const aside = (who: string, id: string) =>
+      `olivares.stash.v1.["tenant-a","user","${who}","${who}","run","${id}"]`
+    const setAt = (at: number) =>
+      JSON.stringify({ text: 'Words', attachments: [], setAt: at, seq: 0 })
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000 - 1
+    localStorage.setItem(aside('alice', 'a1'), setAt(dayAgo))
+    localStorage.setItem(aside('bob', 'b1'), setAt(dayAgo))
+    localStorage.setItem(aside('alice', 'a2'), setAt(Date.now() - 60_000))
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    )
+    expect(localStorage.getItem(aside('alice', 'a1'))).toBeNull()
+    expect(localStorage.getItem(aside('bob', 'b1'))).toBeNull()
+    expect(localStorage.getItem(aside('alice', 'a2'))).not.toBeNull()
+    expect(calls).toEqual([])
   })
 
   it('keeps every tab draft when sign-out revocation fails', async () => {

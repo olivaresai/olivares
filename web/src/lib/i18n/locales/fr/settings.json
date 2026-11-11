@@ -37,7 +37,7 @@
     "workspaces": "Espaces de travail",
     "deploy": "Déploiement et mises à jour",
     "signIn": "Connexion",
-    "setup": "Installation",
+    "setup": "Configuration",
     "edition": "Édition",
     "modules": "Modules",
     "about": "À propos",
@@ -53,6 +53,13 @@
   "general": {
     "title": "Général",
     "scope": "Vos préférences. Elles vous suivent dans chaque espace de travail de cette installation.",
+    "groups": {
+      "appearance": "Apparence",
+      "language": "Langue et région",
+      "start": "À l’ouverture de la console",
+      "sessions": "Sessions",
+      "editor": "Éditeur de code"
+    },
     "theme": "Thème",
     "themeHint": "Suit le système, sauf si vous choisissez clair, sombre ou noir.",
     "density": "Densité",
@@ -65,14 +72,20 @@
     "clock12": "12 heures",
     "startPage": "Page de départ",
     "startPageHint": "Ce qui s’ouvre à la connexion. Valeur par défaut : Sessions.",
-    "confirmStop": "Confirmer avant d’arrêter une session",
-    "confirmStopHint": "Demander une fois avant qu’Arrêter ne termine une session encore au travail.",
+    "confirmStop": "Confirmer avant de terminer une session",
+    "confirmStopHint": "Demander une fois avant que « Terminer la session » ne ferme une session.",
     "editor": "Éditeur pour les liens de fichier",
     "editorHint": "L’éditeur que lancent les liens « Ouvrir dans » sur cet ordinateur. Par défaut : VS Code.",
     "editorSsh": "Hôte SSH de l’éditeur",
     "editorSshHint": "Comment l’éditeur atteint les dossiers de session d’une autre machine, sous la forme utilisateur@hôte ou utilisateur@hôte:port. Vide : l’adresse d’où cette console est servie ; sans SSH s’il s’agit de cet ordinateur.",
     "reduceMotion": "Réduire les animations",
-    "reduceMotionHint": "Remplace le mouvement par des fondus. Activé quand le système le demande."
+    "reduceMotionHint": "Remplace le mouvement par des fondus. Activé quand le système le demande.",
+    "sendKey": "Touche d'envoi",
+    "sendKeyHint": "La touche qui envoie le message dans une session. Avec le second choix, Entrée passe à la ligne.",
+    "sendWhileRunning": "Pendant que l'outil travaille",
+    "sendWhileRunningHint": "Ce que fait la touche d'envoi pendant un tour. Quand Entrée envoie, Ctrl+Entrée fait l'autre.",
+    "sendQueue": "Le mettre en file",
+    "sendSteer": "Rediriger le tour"
   },
   "sessionNotifications": {
     "title": "Notifications de session",
@@ -84,6 +97,12 @@
     "finished": "Le tour est terminé.",
     "ended": "La session est terminée.",
     "failed": "La session s’est arrêtée sur une erreur.",
+    "inApp": {
+      "needsYou": "{{name}} a besoin de vous",
+      "finished": "{{name}} a terminé son tour",
+      "failed": "{{name}} : arrêt sur une erreur"
+    },
+    "open": "Ouvrir",
     "pushOn": "Atteint aussi cet appareil lorsque l’onglet est fermé.",
     "pushUnavailable": "Seulement tant qu’un onglet est ouvert : cet appareil n’a pas pu être enregistré pour le push.",
     "installHint": "Les notifications demandent l’app sur l’écran d’accueil : touchez Partager, puis « Sur l’écran d’accueil »."
@@ -93,14 +112,14 @@
     "scope": "Les touches auxquelles cette installation répond. Elles sont les mêmes pour tout le monde."
   },
   "edition": {
-    "scope": "L'édition de ce build, sa licence et ce qu'ajoute Business.",
+    "scope": "L'édition de ce build, sa licence et ce qu'ajoute Olivares AI Business.",
     "label": "Édition",
     "unknown": "Non indiquée par ce moteur",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business ajoute",
+    "businessAdds": "Olivares AI Business ajoute",
     "summary": {
       "Session cockpit and fleet deployment.": "Cockpit des sessions et déploiement sur le parc.",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Partage de sessions en direct avec un accès invité nominatif et à durée limitée, et des propositions de messages approuvées par le propriétaire.",
@@ -111,11 +130,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise comprend tout ce que contient Business, ainsi que les conditions convenues dans un contrat et les fonctionnalités qui en dépendent."
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "Édition {{edition}}",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "Afficher le badge d’édition",
       "loadError": "Impossible de charger la préférence du badge.",
       "saveError": "Impossible d’enregistrer la préférence du badge. Réessayez."
@@ -138,9 +159,9 @@
     "email": "E-mail"
   },
   "stopConfirm": {
-    "title": "Arrêter cette session ?",
-    "description": "Arrêter termine une session qui travaille encore.",
-    "confirm": "Arrêter la session"
+    "title": "Terminer cette session ?",
+    "description": "La session se ferme, même si elle travaille encore.",
+    "confirm": "Terminer la session"
   },
   "modules": {
     "title": "Modules",
@@ -149,6 +170,9 @@
     "apply_many": "Appliquer {{count}} changements",
     "apply_other": "Appliquer {{count}} changements",
     "applied": "Sélection des modules enregistrée.",
+    "appliedNow": "Appliqué. Aucune session n'a été arrêtée.",
+    "savedForNextStart": "Enregistré. Le changement s'applique au prochain démarrage du moteur ; aucune session en cours n'a été arrêtée.",
+    "notSaved": "La sélection des modules n'a pas pu être enregistrée. Rien n'a changé.",
     "restarting": "Redémarrage du moteur…",
     "restartWarning": {
       "title": "Redémarrer le moteur ?",
@@ -305,6 +329,8 @@
   },
   "tracing": {
     "description": "Exportez les traces et métriques vers votre collecteur. Les changements sont appliqués sans redémarrage.",
+    "export": "Exportation",
+    "advanced": "Avancé",
     "enabled": "Activer les traces",
     "endpoint": "Adresse du collecteur",
     "protocol": "Protocole",
@@ -317,10 +343,16 @@
     "inactive": "Les traces sont désactivées.",
     "apply": "Appliquer",
     "saved": "Paramètres des traces enregistrés.",
-    "businessRequired": "L’envoi SIEM et l’export externe de télémétrie nécessitent Business. Les paramètres sont conservés ; Community n’envoie pas les données."
+    "businessRequired": "L’envoi SIEM et l’export externe de télémétrie nécessitent Olivares AI Business. Les paramètres sont conservés ; Olivares AI Community n’envoie pas les données."
   },
   "signIn": {
     "methods": "Méthodes de connexion",
+    "ssoName": "Authentification unique",
+    "available": "Disponible",
+    "required": "Obligatoire",
+    "blocked": "Bloqué",
+    "notSetUp": "Non configurée",
+    "sessionGroup": "Session",
     "password": "Mot de passe",
     "sso": "Authentification unique : {{providers}}",
     "noSso": "Aucun fournisseur d’authentification unique n’est disponible sur la page de connexion.",
@@ -340,7 +372,9 @@
     "minutes": "Arrêter après des minutes d’inactivité",
     "description": "Désactivé par défaut. Libère la mémoire en arrêtant les sessions terminées qui ne sont plus ouvertes. Reprendre conserve le dossier et la conversation.",
     "hint": "0 désactive, sinon 6 à 10080 minutes. L’inactivité commence après cinq minutes sans sortie. Les sessions avec des approbations, des processus enfants ou des sessions liées en cours, ou un nouveau message, restent actives.",
-    "saved": "Réglage de mémoire des sessions enregistré."
+    "saved": "Réglage de mémoire des sessions enregistré.",
+    "group": "Arrêt en cas d’inactivité",
+    "stop": "Arrêter les sessions inactives"
   },
   "updates": {
     "title": "Mises à jour",

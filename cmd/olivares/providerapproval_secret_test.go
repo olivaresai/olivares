@@ -165,11 +165,14 @@ func TestProviderApprovalRefusesWhenFinalMaskChangesReviewedScope(t *testing.T) 
 			}
 			b := newApprovalBridge(approvalBridgeConfig{}, discardLog())
 			b.LocalProposer = service
-			ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+			// The budget only bounds a regression that would wait for a human. The refusal
+			// itself reads the run's evidence from the store, so a short budget expired there
+			// on a loaded runner and the reason became the deadline, not the refusal.
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 			defer cancel()
 			answer, err := (providerApprovalAdapter{bridge: b, reviewFacts: g.reviewFacts, reviewReason: g.reviewReason}).Approve(ctx, tenant, req)
 			if err != nil || answer.Allow || answer.Reason != "permission scope is not reviewable" {
-				t.Errorf("altered final projection was not refused before review")
+				t.Errorf("altered final projection was not refused before review: allow=%v reason=%q err=%v", answer.Allow, answer.Reason, err)
 			}
 			items, _, err := service.List(t.Context(), tenant, "sessions.provider.approval", "pending", "")
 			if err != nil || len(items) != 0 {

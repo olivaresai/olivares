@@ -290,6 +290,11 @@ func (m *Module) StopManagedRun(
 	}
 	// Everything downstream attributes and digests the RECONSTRUCTED principal.
 	req.Principal = authority.principal
+	// A run on a person's own login is stopped by that person only, an administrator
+	// neither. Refused before replay and the token: no journal row, no effect.
+	if res, err := m.refuseAnotherPersonsStop(actx, tenant, req); res.Outcome != "" {
+		return res, err
+	}
 
 	semantic := managedStopSemanticDigest(tenant, q, req)
 
@@ -350,6 +355,22 @@ func (m *Module) StopManagedRun(
 
 	// ---- Phase F5 and G: the effect, then what was actually observed ---
 	return m.stopAndObserveManagedRun(actx, ports, tenant, req, authority, admission, lr, operationRef, semantic), nil
+}
+
+// refuseAnotherPersonsStop asks refuseAnotherPersonsRun of the reconstructed principal.
+func (m *Module) refuseAnotherPersonsStop(ctx context.Context, tenant model.TenantID, req ManagedStopRequest) (ManagedStopResult, error) {
+	rec, err := m.loadRun(ctx, tenant, req.RunRef)
+	if err == nil {
+		err = m.refuseAnotherPersonsRun(ctx, tenant, rec, req.Principal)
+	}
+	switch {
+	case err == nil:
+		return ManagedStopResult{}, nil
+	case errors.Is(err, ErrProfileNotAssigned):
+		return refuseManagedStop(ManagedStopForbidden, "the run is on another person's own login"), nil
+	default:
+		return refuseManagedStop(ManagedStopAuthorityUnavailable, "the run's login owner could not be read"), err
+	}
 }
 
 // ReconcileManagedStop is phases A, B and R ONLY. It settles nothing, takes no

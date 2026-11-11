@@ -346,6 +346,8 @@
     "installModel": "모델 설치",
     "addProvider": "프로바이더 추가",
     "sourceFailed": "{{source}}을(를) 읽을 수 없습니다. 다른 소스는 계속 표시됩니다.",
+    "providerFailed": "{{source}}에서 모델 목록을 받지 못했습니다. 프로바이더에서 <0>연결 테스트</0>를 실행하세요.",
+    "providerFailedAlone": "{{source}}에서 모델 목록을 받지 못했습니다.",
     "sources": {
       "tools": "도구의 모델 목록",
       "ollama": "Ollama",

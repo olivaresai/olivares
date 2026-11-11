@@ -53,5 +53,17 @@
     "same": "HEAD との差分はありません。",
     "view": "表示",
     "unavailable": "HEAD と比較できませんでした。"
+  },
+  "diff": {
+    "layout": "差分表示",
+    "unified": "統合",
+    "split": "左右比較",
+    "wrap": "行を折り返す",
+    "whitespace": "空白の変更を無視",
+    "maximize": "最大化",
+    "restore": "サイズを戻す",
+    "reviewed": "確認済み",
+    "working": "作業ツリー",
+    "branch": "ブランチ"
   }
 }

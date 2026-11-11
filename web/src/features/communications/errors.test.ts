@@ -76,3 +76,14 @@ describe('classifyFailure and the commit outcome', () => {
     expect(f.kind).toBe('unavailable')
   })
 })
+
+describe('classifyFailure and an edition refusal', () => {
+  // An edition 403 is not the role's refusal, but it is a refusal: the calm look of
+  // `forbidden`, never `other`, which paints the raw code as an alert.
+  it('reads a 403 refused by edition as forbidden', () => {
+    const refused = new ApiError(403, 'edition_required', 'raw: 403', 'r', {
+      edition: 'business',
+    })
+    expect(classifyFailure(refused).kind).toBe('forbidden')
+  })
+})

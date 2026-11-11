@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
+import { reportEditionRefusal } from '@/lib/hooks/use-privileged-mutation'
 
 export interface BulkAction {
   id: string
@@ -71,11 +72,21 @@ export function BulkActionBar({
     if (failures.length === 0) {
       toast.success(summary)
     } else if (
-      failures.every((error) => error instanceof ApiError && error.isForbidden)
+      failures.every(
+        (error) => error instanceof ApiError && error.isForbiddenOrEdition,
+      )
     ) {
-      toast.warning(t('common:privileged.notAuthorizedToast'), {
-        description: summary,
-      })
+      // Refused, every one: the edition line once for an edition refusal; a role refusal
+      // among them keeps the role's words, with the summary.
+      failures.some(reportEditionRefusal)
+      if (
+        !failures.every(
+          (error) => error instanceof ApiError && error.isEditionRefusal,
+        )
+      )
+        toast.warning(t('common:privileged.notAuthorizedToast'), {
+          description: summary,
+        })
     } else {
       toast.error(t('errors:generic'), { description: summary })
     }

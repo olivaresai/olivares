@@ -28,6 +28,10 @@ func (m *Module) handlePdpPublish(w http.ResponseWriter, r *http.Request, mc api
 		m.handleCedarPublish(w, r, mc, in)
 		return
 	}
+	if in.Tests != nil {
+		writeJSON(w, http.StatusBadRequest, errorBody("policy tests apply to Cedar; an OPA policy is tested with your own OPA tooling"))
+		return
+	}
 	if len(in.Source) > maxPolicyContentBytes {
 		writeJSON(w, http.StatusBadRequest, errorBody("policy source too large"))
 		return

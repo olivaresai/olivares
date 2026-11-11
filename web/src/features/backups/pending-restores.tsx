@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { UserCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
@@ -42,6 +43,14 @@ export function PendingRestores() {
 
   return (
     <>
+      {/* A failed read never hides a restore that waits for its approver. */}
+      {pendingQ.error && !pendingQ.data && (
+        <QueryErrorState
+          error={pendingQ.error}
+          retry={() => void pendingQ.refetch()}
+          title={t('pending.loadFailed')}
+        />
+      )}
       {items.length > 0 && (
         <div className="mb-5 rounded-lg border border-warning-line bg-warning-soft p-4">
           <div className="mb-3 flex items-center gap-2">

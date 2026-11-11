@@ -96,10 +96,14 @@ describe.each([
   it('asks first, and stops only on the confirmation', async () => {
     const user = userEvent.setup()
     show(compact)
-    await user.click(screen.getByRole('button', { name: 'Stop' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: 'End session',
+      }),
+    )
     expect(agentOpsApi.stop).not.toHaveBeenCalled()
     const dialog = within(await screen.findByRole('dialog'))
-    await user.click(dialog.getByRole('button', { name: 'Stop the session' }))
+    await user.click(dialog.getByRole('button', { name: 'End the session' }))
     await waitFor(() =>
       expect(agentOpsApi.stop).toHaveBeenCalledWith('run_1', undefined),
     )
@@ -117,7 +121,11 @@ describe.each([
       </QueryClientProvider>,
     )
     expect(screen.getByLabelText('Pending approvals')).toHaveTextContent('1')
-    await user.click(screen.getByRole('button', { name: 'Stop' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: 'End session',
+      }),
+    )
     await waitFor(() =>
       expect(screen.getByLabelText('Pending approvals')).toHaveTextContent('0'),
     )
@@ -127,7 +135,11 @@ describe.each([
     const user = userEvent.setup()
     useClientSettings.setState({ confirmStop: false })
     show(compact)
-    await user.click(screen.getByRole('button', { name: 'Stop' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: 'End session',
+      }),
+    )
     await waitFor(() =>
       expect(agentOpsApi.stop).toHaveBeenCalledWith('run_1', undefined),
     )
@@ -137,7 +149,11 @@ describe.each([
   it('drops a question whose session stopped meanwhile, so it does not come back', async () => {
     const user = userEvent.setup()
     const { rerender } = show(compact)
-    await user.click(screen.getByRole('button', { name: 'Stop' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: 'End session',
+      }),
+    )
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     const qc = new QueryClient()
     // The session ended elsewhere: Stop is no longer offered.
@@ -152,5 +168,31 @@ describe.each([
     )
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(agentOpsApi.stop).not.toHaveBeenCalled()
+  })
+})
+
+// THE SETTING NAMES THE BUTTON IT GUARDS, in that button's words, in every language: its
+// hint said Stop while Stop came to mean the turn and End session the session.
+describe('the setting that asks before ending a session', () => {
+  const sessions = import.meta.glob<{ card: { actions: { end: string } } }>(
+    './i18n/*.json',
+    { eager: true, import: 'default' },
+  )
+  const settings = import.meta.glob<{ general: { confirmStopHint: string } }>(
+    '@/lib/i18n/locales/*/settings.json',
+    { eager: true, import: 'default' },
+  )
+  const buttons = Object.entries(sessions).map(
+    ([path, bundle]): [string, string] => [
+      /(\w+)\.json$/.exec(path)![1],
+      bundle.card.actions.end,
+    ],
+  )
+
+  it.each(buttons)('names the End session button, in %s', (lng, end) => {
+    const [, bundle] = Object.entries(settings).find(([path]) =>
+      path.endsWith(`/${lng}/settings.json`),
+    )!
+    expect(bundle.general.confirmStopHint).toContain(end)
   })
 })

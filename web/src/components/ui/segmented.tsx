@@ -16,7 +16,8 @@ import { cn } from '@/lib/utils'
  * theme. It is a radio group: the group is one tab stop (the checked option), the arrow keys
  * move the choice and wrap, Home and End go to the ends, and a disabled option is skipped
  * and does not act. Every option says whether it is checked (`aria-checked`); the checked
- * one is raised on the group's surface.
+ * one is raised on the group's track with the card shadow and a bold label. The group is
+ * concentric: 9 px outside, 6 px inside, 3 px between; an option is 44 px high on a phone.
  *
  * ⛔ A DISABLED OPTION CARRIES ITS REASON. The type asks for `reason` beside `disabled`, the
  *    reason is visible text under the group, and the option points at it with
@@ -113,7 +114,7 @@ export function Segmented<V extends string = string>({
       role="radiogroup"
       data-slot="segmented"
       className={cn(
-        'inline-flex max-w-full gap-0.5 rounded-ctl bg-hover p-0.5',
+        'inline-flex max-w-full gap-0.5 rounded-ctl bg-hover p-[3px]',
         className,
       )}
       {...props}
@@ -138,13 +139,14 @@ export function Segmented<V extends string = string>({
             }}
             onKeyDown={(event) => onKeyDown(event, i)}
             className={cn(
-              'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[5px] font-medium whitespace-nowrap',
-              size === 'sm' ? 'h-7 px-2 text-caption' : 'h-7 px-3 text-body',
-              'text-text-2 transition-colors duration-100 ease-out outline-none',
-              'hover:text-text',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-              'data-[state=on]:bg-raised data-[state=on]:text-text data-[state=on]:shadow-[0_0_0_1px_var(--line-strong)]',
-              'aria-disabled:cursor-not-allowed aria-disabled:text-text-3 aria-disabled:hover:text-text-3',
+              'inline-flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-sm text-caption font-medium whitespace-nowrap max-md:min-h-11',
+              size === 'sm' ? 'px-2' : 'px-3',
+              'text-text-2 transition-[color,background-color,box-shadow] ease-out outline-none',
+              'hover:bg-hover hover:text-text active:bg-[var(--pressed)]',
+              'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+              'data-[state=on]:bg-surface data-[state=on]:font-bold data-[state=on]:text-text data-[state=on]:shadow-[var(--shadow-card)]',
+              'dark:data-[state=on]:bg-[color-mix(in_srgb,var(--text)_15%,transparent)]',
+              'aria-disabled:cursor-not-allowed aria-disabled:opacity-45 aria-disabled:hover:bg-transparent aria-disabled:hover:text-text-2',
               '[&_svg]:size-3.5 [&_svg]:shrink-0',
             )}
           >

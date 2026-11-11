@@ -64,7 +64,7 @@ export function EffectiveStateLinks({
           // The feature registry IS the route table, so these paths are always valid;
           // they are not in the statically-typed tree because the routes are generated.
           to={target.to as never}
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-accent-text outline-none transition-colors hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-foreground underline underline-offset-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5"
         >
           {target.label}
           <ArrowUpRight aria-hidden />

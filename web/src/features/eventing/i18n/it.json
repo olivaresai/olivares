@@ -37,6 +37,17 @@
     "rotateAuth": "Ruota l'autenticazione",
     "testSuccess": "Consegna di prova riuscita",
     "testFailed": "Consegna di prova non riuscita",
+    "testSent": "Inviato un evento di prova firmato (eventing.test) a {{name}}.",
+    "testAnswer": {
+      "http": "Ha risposto HTTP {{code}}.",
+      "timeout": "Non ha risposto in tempo.",
+      "network": "Non è raggiungibile."
+    },
+    "testNotSent": {
+      "endpoint_invalid": "Non è stato inviato nulla: l'indirizzo dell'endpoint di {{name}} non è valido.",
+      "egress": "Non è stato inviato nulla: la policy di uscita non lascia uscire eventi verso {{name}} ({{outcome}}).",
+      "other": "Non è stato inviato nulla a {{name}} ({{outcome}})."
+    },
     "deleted": "Sottoscrizione eliminata",
     "rotated": "Segreto ruotato",
     "authRotated": "Credenziale di autenticazione ruotata",
@@ -96,7 +107,7 @@
       "maxAttempts": "I tentativi massimi devono essere 0 oppure compresi tra 1 e 20.",
       "initialInterval": "L'intervallo iniziale deve essere 0 oppure compreso tra 5 e 3600 secondi."
     },
-    "businessRequired": "La consegna SIEM e l'esportazione della telemetria esterna richiedono Business. Le impostazioni salvate vengono conservate; Community non le invia."
+    "businessRequired": "La consegna SIEM e l'esportazione della telemetria esterna richiedono Olivares AI Business. Le impostazioni salvate vengono conservate; Olivares AI Community non le invia."
   },
   "secret": {
     "title": "Segreto della sottoscrizione",

@@ -22,7 +22,12 @@ import {
 import { firstHourKeys } from '@/features/first-hour/api'
 import { useTenantStore } from '@/stores/tenant'
 import { useReadyTools } from '@/features/first-hour/first-hour'
-import { ModelServers } from './model-servers'
+import {
+  ModelServers,
+  notInstalled,
+  PROGRAMS,
+  useModelServers,
+} from './model-servers'
 import { OllamaService } from './ollama-service'
 import '@/features/first-hour/i18n'
 import { QueryErrorState } from '@/components/layout/query-error-state'
@@ -49,6 +54,7 @@ import { ProfileRowView, useAccountRow, useDefaultRow } from './profile-row'
 import { ProfileSheet } from './profile-sheet'
 import { ProfileSignInDialog } from './profile-sign-in'
 import { ToolBox } from './tool-box'
+import { useProfileEnabled } from './use-profile-enabled'
 import { needsDefaultRow, useProfileList } from './use-profiles'
 import { toolName as nameOf } from '@/features/agentops/engine-tools'
 import { toolFacts } from './inventory'
@@ -65,13 +71,11 @@ export function AgentToolsView() {
 }
 
 function Tools({ epoch }: { epoch: number }) {
-  const { t } = useTranslation(['agentTools', 'providers'])
+  const { t } = useTranslation('agentTools')
   const { isSuperadmin, activeTenant, can } = useAuth()
   const qc = useQueryClient()
-  // The page's next step: whoever may add a provider key does it from the header.
-  const canAddKey =
-    can('sessions:provider:read') && can('sessions:provider:write')
-  const [addingKey, setAddingKey] = useState(false)
+  // The page's verb: a new profile for one of the installed tools.
+  const [addingTo, setAddingTo] = useState<string | null>(null)
   const tenant = useTenantStore((s) => s.activeTenant)
   const scope = [...agentToolsKeys.all, epoch]
   const inventoryKey = [...scope, 'inventory']
@@ -88,6 +92,7 @@ function Tools({ epoch }: { epoch: number }) {
   // Native provider probes share the host CPU with status and readiness. Let
   // the essential reads finish before starting these optional details.
   const readyTools = useReadyTools(isSuperadmin && inventory.isSuccess)
+  const servers = useModelServers(isSuperadmin && !inventory.isPending)
   const profiles = useProfileList(isSuperadmin)
   const criticalQueries = { queryKey: firstHourKeys.all(tenant) }
   const profileQueries = {
@@ -230,43 +235,73 @@ function Tools({ epoch }: { epoch: number }) {
       (f.snapshots.length > 0 ||
         (providers.isSuccess && !providers.data.refreshing)),
   )
+  // A model server that is not installed is named with the tools, not a card of its own.
+  const absentServers = (servers.data?.servers ?? []).filter(notInstalled)
+  const absentPrograms = absentServers.map((s) => PROGRAMS[s.kind] ?? s.kind)
+  // The tools a profile can be added to: installed, not a service, and only for whoever
+  // may add one (each tool's own "+ Add profile" row asks the same).
+  const profileTools = can('sessions:account:write')
+    ? facts.filter((f) => f.installed && !SERVICE_DRIVERS.includes(f.driver))
+    : []
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={t('title')}
         description={t(isSuperadmin ? 'description' : 'descriptionMember')}
         actions={
-          isSuperadmin || canAddKey ? (
-            <>
-              {isSuperadmin ? (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    void inventory.refetch()
-                    void providers.refetch()
-                    // The profile rows read each login from the tool itself.
-                    void qc.invalidateQueries({
-                      queryKey: firstHourKeys.all(tenant),
-                    })
-                  }}
-                  disabled={inventory.isFetching}
-                >
-                  {t('refresh')}
-                </Button>
-              ) : null}
-              {canAddKey ? (
-                <Button variant="primary" onClick={() => setAddingKey(true)}>
+          isSuperadmin ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                void inventory.refetch()
+                void providers.refetch()
+                // The profile rows read each login from the tool itself.
+                void qc.invalidateQueries({
+                  queryKey: firstHourKeys.all(tenant),
+                })
+              }}
+              disabled={inventory.isFetching}
+            >
+              {t('refresh')}
+            </Button>
+          ) : undefined
+        }
+        primaryAction={
+          profileTools.length === 1 ? (
+            <Button
+              variant="primary"
+              onClick={() => setAddingTo(profileTools[0]!.driver)}
+            >
+              <Plus aria-hidden />
+              {t('profiles.add')}
+            </Button>
+          ) : profileTools.length > 1 ? (
+            // Several tools: the verb asks which one first.
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="primary">
                   <Plus aria-hidden />
-                  {t('providers:section.add')}
+                  {t('profiles.add')}
+                  <ChevronDown aria-hidden />
                 </Button>
-              ) : null}
-            </>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {profileTools.map((f) => (
+                  <DropdownMenuItem
+                    key={f.driver}
+                    onSelect={() => setAddingTo(f.driver)}
+                  >
+                    {nameOf(f.driver)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : undefined
         }
       />
       {/* THE INSTALL SIDE is the deployment administrator's: the inventory, versions and
           login probes are deployment-wide reads. Everyone else signs in through the
-          accounts and keys below. */}
+          accounts below (the keys are Providers). */}
       {isSuperadmin ? (
         <>
           {/* ONE LIST PER INSTALLED TOOL, ONE ROW PER PROFILE. A profile is a way a tool signs
@@ -297,13 +332,6 @@ function Tools({ epoch }: { epoch: number }) {
                   retry={() => void providers.refetch()}
                 />
               )}
-              {inventory.data ? (
-                <InstalledHere
-                  scope={scope}
-                  inventory={inventory.data}
-                  facts={facts}
-                />
-              ) : null}
               <ProfilesNotice profiles={profiles} />
               {pins.isError && (
                 <QueryErrorState
@@ -319,9 +347,10 @@ function Tools({ epoch }: { epoch: number }) {
                     key={f.driver}
                     epoch={epoch}
                     driver={f.driver}
-                    accounts={(profiles.data?.accounts ?? []).filter(
-                      (a) => a.driver === f.driver,
-                    )}
+                    accounts={[
+                      ...(profiles.data?.accounts ?? []),
+                      ...(profiles.data?.disabled ?? []),
+                    ].filter((a) => a.driver === f.driver)}
                     taken={profiles.data?.taken}
                     named={profiles.data?.named ?? false}
                     version={f.version}
@@ -336,17 +365,32 @@ function Tools({ epoch }: { epoch: number }) {
                   />
                 ))}
               <ModelServers />
-              {missing.length > 0 && (
+              {missing.length + absentServers.length > 0 && (
                 <div
                   data-testid="not-installed"
                   className="flex flex-wrap items-center justify-between gap-3 px-1"
                 >
-                  <p className="text-caption text-text-2">
-                    {t('missing', {
-                      tools: missing.map((f) => nameOf(f.driver)).join(' · '),
-                    })}
-                  </p>
-                  {inventoryAvailable ? (
+                  <div className="flex min-w-0 flex-col">
+                    <p className="text-caption text-text-2">
+                      {t('missing', {
+                        tools: [
+                          ...missing.map((f) => nameOf(f.driver)),
+                          ...absentServers.map((server) => server.name),
+                        ].join(' · '),
+                      })}
+                    </p>
+                    {/* The engine finds a model server on its PATH: the line says
+                        which program, as its card used to. */}
+                    {absentServers.length > 0 ? (
+                      <p className="text-caption text-text-2">
+                        {t('modelServers.lookedFor', {
+                          program: absentPrograms.join(', '),
+                        })}
+                      </p>
+                    ) : null}
+                  </div>
+                  {/* A tool to install, or no menu: a model server is not installed from here. */}
+                  {inventoryAvailable && missing.length > 0 ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="secondary" size="sm">
@@ -378,6 +422,24 @@ function Tools({ epoch }: { epoch: number }) {
                   })}
                 </p>
               )}
+              {/* After the tools: what a new session receives from them. */}
+              {inventory.data ? (
+                <InstalledHere
+                  scope={scope}
+                  inventory={inventory.data}
+                  facts={facts}
+                />
+              ) : null}
+              {addingTo ? (
+                <AddProfileDialog
+                  driver={addingTo}
+                  toolName={nameOf(addingTo)}
+                  taken={profiles.data?.taken ?? new Set()}
+                  onOpenChange={(open) => {
+                    if (!open) setAddingTo(null)
+                  }}
+                />
+              ) : null}
             </>
           )}
           <details className="rounded-md border border-border p-4">
@@ -539,11 +601,7 @@ function Tools({ epoch }: { epoch: number }) {
           )}
         </>
       ) : null}
-      <AccountsAndKeys
-        folded={isSuperadmin}
-        adding={addingKey}
-        onAddingChange={setAddingKey}
-      />
+      <AccountsAndKeys folded={isSuperadmin} />
     </div>
   )
 }
@@ -757,6 +815,7 @@ function AccountRow({
   toolName: string
 }) {
   const model = useAccountRow(account)
+  const enabled = useProfileEnabled(account)
   const { activeTenant } = useAuth()
   const [sheet, setSheet] = useState(false)
   const [signIn, setSignIn] = useState(false)
@@ -764,6 +823,7 @@ function AccountRow({
     <>
       <ProfileRowView
         model={model}
+        enabled={enabled}
         onOpen={() => setSheet(true)}
         onSignIn={() => setSignIn(true)}
       />

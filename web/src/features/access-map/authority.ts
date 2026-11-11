@@ -301,7 +301,8 @@ export const NHI_ROSTER_TARGET: AuthorityTarget = {
   key: 'nhiRoster',
   to: '/identity',
   search: { tab: 'inventory' },
-  permission: 'governance:identity:read',
+  // The Identity page's own permission: a door the route would refuse is not offered.
+  permission: 'user:read',
 }
 
 /** Split the fused CSV of corroborating signals; fall back to the scalar last-writer. */

@@ -1,7 +1,7 @@
 {
   "title": "AI tools",
   "description": "Install the AI tools that sessions run on this server, and sign them in.",
-  "descriptionMember": "Sessions run as these accounts and API keys. A system administrator installs the tools and signs them in.",
+  "descriptionMember": "Sessions run as these accounts; the API keys are on Providers. A system administrator installs the tools and signs them in.",
   "refresh": "Refresh",
   "readOnly": "This server is read-only. Installation is disabled.",
   "notInstalled": "No managed installation",
@@ -95,7 +95,7 @@
     "failed": "Not running: it stopped.",
     "start": "Start",
     "stop": "Stop",
-    "notInstalled": "{{name}} is not installed. Olivares looks for {{program}} on this server's PATH.",
+    "lookedFor": "Olivares looks for {{program}} on this server's PATH.",
     "hint": "Its endpoint is in the Providers of the organization it was started for, so OpenCode sessions there can use its models.",
     "model": "Model",
     "modelHintLlamaCpp": "An absolute path to a .gguf file, or a Hugging Face model as user/repo[:quantization].",
@@ -134,7 +134,7 @@
     "accountChecking": "Account · checking…",
     "accountSigningIn": "Account · signing in…",
     "accountUnreadable": "Account · not readable",
-    "keyDetail": "API key · {{name}} ({{hint}})",
+    "keyDetail": "API key · {{name}} · {{hint}}",
     "keyName": "API key · {{name}}",
     "keyNone": "API key · none chosen",
     "lastSignIn": "Last signed in {{when}}",
@@ -158,7 +158,11 @@
     "default": "Default sign-in",
     "readFailed": "The profiles could not be read.",
     "truncated": "Some profiles are not shown.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "turnOff": "Turn off {{name}}",
+    "turnOn": "Turn on {{name}}",
+    "switchedOn": "{{name}} is on",
+    "switchedOff": "{{name}} is off"
   },
   "tool": {
     "menu": "Options for {{name}}",
@@ -196,12 +200,12 @@
     "chooseKey": "Choose a key",
     "addKey": "Add a key…",
     "create": "Create",
+    "createAndSignIn": "Create and sign in",
     "creating": "Creating…",
     "created": "Profile {{name}} created",
     "failed": "The profile was not created.",
     "bindFailed": "The key could not be set.",
     "keyNotSet": "The profile was created, but its key was not set: {{error}} Open the profile to choose a key.",
-    "notNow": "Not now",
     "close": "Close",
     "keyNeedsAccess": "Choosing a key needs permission to change profiles."
   },
@@ -256,9 +260,35 @@
     "packagesHint": "Declared by the provider profile each tool's new session uses ({{profiles}}). A tool without one gets a new profile that declares none."
   },
   "place": {
-    "title": "Accounts and API keys",
     "accounts": "Accounts",
     "allAccounts": "All accounts: details, labels and bindings",
-    "noAccess": "Your role cannot read the accounts or API keys of this organization."
+    "noAccess": "Your role cannot read the accounts of this organization.",
+    "keysOnProviders": "API keys are on <0>Providers</0>.",
+    "keysAndReferencesOnProviders": "API keys and their references are on <0>Providers</0>."
+  },
+  "runtime": {
+    "title": "Runtime",
+    "autoCompact": "Auto-compact after",
+    "autoCompactHint": "Compact after 100,000 to 1,000,000 tokens. Leave empty to use Claude's default.",
+    "autoCompactPlaceholder": "e.g. 300000",
+    "autoCompactInvalid": "Enter a whole number from 100000 to 1000000, or leave it empty.",
+    "saved": "Runtime saved. New sessions use it."
+  },
+  "models": {
+    "title": "Models",
+    "note": "Only you see this list. A hidden model leaves the pickers; the tool's default and a model you type still work.",
+    "filter": "Filter models",
+    "disableAll": "Hide all",
+    "enableAll": "Show all",
+    "addCustom": "Add custom model",
+    "customPlaceholder": "Model id, e.g. claude-opus-5-5",
+    "customInvalid": "A model id has no spaces and is at most 200 characters.",
+    "add": "Add",
+    "fast": "Fast mode",
+    "up": "Move {{name}} up",
+    "down": "Move {{name}} down",
+    "use": "Show {{name}}",
+    "removeCustom": "Remove {{name}}",
+    "empty": "This tool reports no models. Add the ones you use."
   }
 }

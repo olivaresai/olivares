@@ -1,7 +1,7 @@
 ---
 title: Catalogue des modules
 description: >-
-  Les 36 modules sélectionnables d'Olivares AI — organisés par les neuf domaines de
+  Les 37 modules sélectionnables d'Olivares AI — organisés par les neuf domaines de
   fonctionnalités, avec la maturité honnête de chaque module. Olivares AI
   intègre, gère et sécurise l'IA en entreprise, une seule ground truth : Claude Code au niveau le plus profond, Codex et Grok Build à ses côtés
   Claude Code ; ceci est la référence par module.
@@ -9,14 +9,14 @@ description: >-
 
 Olivares AI intègre, gère et sécurise l'IA en entreprise, une seule ground truth :
 Claude Code au niveau le plus profond, Codex et Grok Build à ses côtés. C'est une **plateforme modulaire** — un moteur, une
-console, et **36 modules sélectionnables** dans le catalogue — qui observe où
+console, et **37 modules sélectionnables** dans le catalogue — qui observe où
 s'exécutent les agents, gouverne ce qu'ils sont autorisés à faire, et (sur un
 sous-ensemble croissant) agit sur votre infrastructure réelle. Chaque module
 (a) consomme des événements/données normalisés du cœur (core), (b) déclare ses
 entités dans le modèle de données partagé, et (c) expose ses propres points de
 terminaison d'API et vues d'UI — sans toucher au cœur ni aux autres modules.
 
-Ces 36 modules sélectionnables sont implémentés par **32 packages de modules** ;
+Ces 37 modules sélectionnables sont implémentés par **33 packages de modules** ;
 le package governance fournit quatre modules sélectionnables séparément. Ils sont organisés par les **neuf domaines de fonctionnalités**
 ci-dessous. Lisez le statut de chaque module en **deux moitiés** :
 *Gouverner/Observer* (cataloguer, observer, contrôler, rapporter) est construit
@@ -37,10 +37,10 @@ de conception là où c'est indiqué (voir
 La **carte d'accès** (`iii-access-map`) — le graphe lecture/lecture-écriture de
 ce que chaque agent peut toucher et touche effectivement, avec la dérive de
 moindre privilège = `Permitted ≠ Observed` — est **l'une des fonctionnalités les
-plus utiles parmi les 36**, pas le produit tout entier. L'étendue est l'enjeu :
+plus utiles parmi les 37**, pas le produit tout entier. L'étendue est l'enjeu :
 neuf domaines, un moteur, une console.
 
-## Les 36 modules sélectionnables, par domaine de fonctionnalités
+## Les 37 modules sélectionnables, par domaine de fonctionnalités
 
 Chaque ligne renvoie à sa page de module (`/reference/modules/<slug>/`). La
 colonne **Actionner** correspond à l'état honnête de la moitié « agir » ; `—`
@@ -52,6 +52,7 @@ d'actionnement.
 | Module | Actionner | Objet |
 |---|---|---|
 | [Documents](/fr/reference/modules/documents/) | local | Conversion locale en Markdown avec MarkItDown ; originaux conservés, sans accès réseau. |
+| [Scanned documents (OCR)](/fr/reference/modules/ocr/) | on-demand | Optional Unlimited-OCR 2 backend; local endpoint, off by default. |
 | [Inventaire et découverte](/fr/reference/modules/i-inventory/) | — | Découvrir et cataloguer les agents, sessions, serveurs MCP, outils, modèles et identités que les connecteurs ont observés. |
 | [Opération en direct et sessions](/fr/reference/modules/ii-sessions/) | — | État en temps réel de chaque agent et session ; héberge aussi le runtime gouverné de session Claude Code. |
 | [Carte d'accès et de ressources (R/RW)](/fr/reference/modules/iii-access-map/) | — | Ce à quoi chaque agent accède, et s'il lit ou écrit ; dérive de moindre privilège = `Permitted ≠ Observed`. |
@@ -152,11 +153,11 @@ liste **Modules** de la console. `npm run test:modules` vérifie que
 chaque namespace sélectionnable dispose d’une page de référence liée et valide
 le nombre de modules.
 
-## Couture de disponibilité d'édition (non comptée parmi les 36 modules sélectionnables)
+## Couture de disponibilité d'édition (non comptée parmi les 37 modules sélectionnables)
 
-Le catalogue ci-dessus couvre les **36 modules sélectionnables** de la
+Le catalogue ci-dessus couvre les **37 modules sélectionnables** de la
 spécification commune. Séparément, Community enregistre un descripteur de
-disponibilité sous le namespace API `session-cockpit`. Il ne fait pas partie de ces 36.
+disponibilité sous le namespace API `session-cockpit`. Il ne fait pas partie de ces 37.
 
 - [Cockpit de sessions (disponibilité)](/fr/reference/modules/session-cockpit/) —
   zéro gestionnaire dans Community ; `/v1/m/session-cockpit` renvoie **404 par
@@ -166,11 +167,11 @@ disponibilité sous le namespace API `session-cockpit`. Il ne fait pas partie de
   [Exploitation en direct et sessions](/fr/reference/modules/ii-sessions/) et
   [Exécuter Claude Code avec Olivares](/fr/how-to/run-claude-code-with-olivares/).
 
-## Capacités plateforme et cœur (non comptées parmi les 36 modules sélectionnables)
+## Capacités plateforme et cœur (non comptées parmi les 37 modules sélectionnables)
 
 Ce sont des capacités réelles et livrées, mais ce sont des **capacités
 moteur/cœur/web**, pas des modules sélectionnables séparément — elles ne sont donc
-pas comptées dans les 36 :
+pas comptées dans les 37 :
 
 - [Propre API + manage-as-code](/fr/reference/modules/xix-api-manage-as-code/) —
   **Capacité moteur/cœur.** L'API REST/gRPC versionnée du moteur lui-même plus le
@@ -182,7 +183,7 @@ pas comptées dans les 36 :
 - [Tableaux de bord exécutifs](/fr/reference/modules/xxi-executive-dashboards/) —
   **Capacité web.** Vues de console pour les dirigeants aux côtés de l'UI
   technique. (Le backend de génération de rapports est le module
-  [reporting](/fr/reference/modules/reporting/), qui EST compté parmi les 36.)
+  [reporting](/fr/reference/modules/reporting/), qui EST compté parmi les 37.)
 - [Opérations des modèles (modèles propres)](/fr/reference/modules/xxiii-model-operations/) —
   **Capacité du module models** (comptée via la ligne du module X, pas une ligne
   à part) : le registre gouverné des modèles propres, l'admission des modèles
@@ -194,7 +195,7 @@ locale ([xxiii-fine-tuning](/fr/reference/modules/xxiii-fine-tuning/)) — la
 plateforme gouverne et enregistre ce travail aujourd'hui (voir les opérations des
 modèles ci-dessus) mais n'exécute pas l'entraînement et ne sert pas l'inférence
 elle-même ; la moitié exécutante est un travail **prévu** documenté, **non livré**
-et pas l'un des 36.
+et pas l'un des 37.
 
 ## Comment les modules apparaissent dans l'API et le bus
 
@@ -208,11 +209,11 @@ et pas l'un des 36.
 
 ## Couches
 
-Les 36 modules sélectionnables s'appuient sur des couches au-dessus du moteur, aux côtés des
+Les 37 modules sélectionnables s'appuient sur des couches au-dessus du moteur, aux côtés des
 capacités moteur/cœur et web ci-dessus :
 
 - **Moteur (couche 0)** — les capacités propre-API/manage-as-code et
-  multi-tenancy (cœur, non comptées dans les 36).
+  multi-tenancy (cœur, non comptées dans les 37).
 - **Cœur (couche 1)** — inventory, sessions, access-map, models, health,
   observability.
 - **Gestion (couche 2)** — capabilities, governance, identity, claude-policy, claude-agents,

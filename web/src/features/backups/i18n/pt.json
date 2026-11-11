@@ -47,6 +47,7 @@
   "schedule": {
     "updated": "Agenda de cópias de segurança atualizada",
     "loading": "A carregar a agenda...",
+    "loadFailed": "Falha ao carregar a agenda de cópias de segurança.",
     "title": "Agenda de cópias de segurança automáticas",
     "description": "Configure cópias de segurança recorrentes. O motor executa a agenda; a frase-passe é derivada do segredo da instância.",
     "enableAria": "Ativar cópias de segurança automáticas",
@@ -118,6 +119,7 @@
   },
   "pending": {
     "title": "Restauros a aguardar aprovação (controlo duplo)",
+    "loadFailed": "Falha ao carregar os restauros a aguardar aprovação.",
     "requestedByPrefix": "Pedido por",
     "approveRestore": "Aprovar e restaurar",
     "approved": "Restauro aprovado",

@@ -18,6 +18,8 @@
   "noAgentsHint": "Les agents apparaissent ici lorsqu'ils sont découverts dans cet espace de travail.",
   "noGroups": "Aucun groupe d'agents dans cet espace de travail pour le moment.",
   "noGroupsHint": "Les groupes d'agents apparaissent ici une fois définis pour cet espace de travail.",
+  "agentsFailed": "Les agents de cet espace de travail n'ont pas pu être lus.",
+  "groupsFailed": "Les groupes d'agents de cet espace de travail n'ont pas pu être lus.",
   "viewAll": "Voir tout",
   "defaultBadge": "Par défaut",
   "created": "Créé",
@@ -62,5 +64,25 @@
     "statusFailed": "Impossible de vérifier si ce dossier est disponible par SFTP."
   },
   "showMore": "Afficher plus",
-  "agentsCut": "Tous les agents ne sont pas affichés."
+  "agentsCut": "Tous les agents ne sont pas affichés.",
+  "files": {
+    "title": "Espace de travail",
+    "folders": "Dossiers",
+    "overview": "Vue d'ensemble",
+    "backToFiles": "Fichiers",
+    "addFolder": "Ajouter un dossier",
+    "emptyTitle": "Aucun dossier pour le moment",
+    "emptyDescription": "Ajoutez un dossier et les sessions y travailleront, dans ses limites.",
+    "noAccessTitle": "Vous ne pouvez pas ouvrir ce dossier",
+    "noAccessDescription": "Il a été supprimé ou votre rôle ne l'inclut pas. Demandez l'accès à un administrateur.",
+    "showFolders": "Afficher mes dossiers",
+    "loading": "Lecture des dossiers…",
+    "loadFailed": "Les dossiers n'ont pas pu être chargés.",
+    "details": "Wiki et transfert de fichiers",
+    "worktreeCount": "Worktrees : {{n}}",
+    "worktreeHint": "Enregistrez ce worktree comme dossier pour le parcourir.",
+    "gitCut": "Tous les fichiers modifiés ne sont pas marqués : Git n’a listé qu’une partie des modifications.",
+    "clean": "Aucune modification non validée",
+    "changes": "Modifications non validées : {{n}}"
+  }
 }

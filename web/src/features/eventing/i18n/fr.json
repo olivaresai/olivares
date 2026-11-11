@@ -37,6 +37,17 @@
     "rotateAuth": "Rotation de l'auth",
     "testSuccess": "Livraison de test réussie",
     "testFailed": "Livraison de test échouée",
+    "testSent": "Un événement de test signé (eventing.test) a été envoyé à {{name}}.",
+    "testAnswer": {
+      "http": "Le destinataire a répondu HTTP {{code}}.",
+      "timeout": "Le destinataire n'a pas répondu à temps.",
+      "network": "Le destinataire est injoignable."
+    },
+    "testNotSent": {
+      "endpoint_invalid": "Rien n'a été envoyé : l'adresse du point de terminaison de {{name}} n'est pas valide.",
+      "egress": "Rien n'a été envoyé : la politique de sortie empêche les événements de sortir vers {{name}} ({{outcome}}).",
+      "other": "Rien n'a été envoyé à {{name}} ({{outcome}})."
+    },
     "deleted": "Abonnement supprimé",
     "rotated": "Secret modifié",
     "authRotated": "Identifiants d'auth modifiés",
@@ -96,7 +107,7 @@
       "maxAttempts": "Le nombre maximal de tentatives doit être 0 ou compris entre 1 et 20.",
       "initialInterval": "L’intervalle initial doit être 0 ou compris entre 5 et 3600 secondes."
     },
-    "businessRequired": "L’envoi SIEM et l’export externe de télémétrie nécessitent Business. Les paramètres sont conservés ; Community n’envoie pas les données."
+    "businessRequired": "L’envoi SIEM et l’export externe de télémétrie nécessitent Olivares AI Business. Les paramètres sont conservés ; Olivares AI Community n’envoie pas les données."
   },
   "secret": {
     "title": "Secret de l'abonnement",

@@ -104,6 +104,7 @@ type AdoptionOutcome =
  *  applied: a network failure or a server error. */
 type AdoptFailure =
   | { kind: 'assurance' }
+  | { kind: 'edition' }
   | { kind: 'forbidden' }
   | { kind: 'refused'; reason: string }
   | { kind: 'unknown' }
@@ -113,6 +114,7 @@ function adoptFailure(err: unknown): AdoptFailure | null {
   if (err instanceof DOMException && err.name === 'AbortError') return null
   if (err instanceof ApiError) {
     if (err.isStepUpRequired) return { kind: 'assurance' }
+    if (err.isEditionRefusal) return { kind: 'edition' }
     if (err.isForbidden || err.isUnauthenticated) return { kind: 'forbidden' }
     if (err.isServerError) return { kind: 'unknown' }
     // 400, 404, 409, 422: the engine's own sentence names the reason (the name that is
@@ -217,9 +219,10 @@ function AccountsPanelInner() {
   const reportFailure = (profileRef: string, err: unknown) => {
     const failure = adoptFailure(err)
     if (!failure) return
-    if (failure.kind === 'assurance') {
+    if (failure.kind === 'assurance' || failure.kind === 'edition') {
       // Refused before any effect: nothing to reconcile. The draft stays open while the
-      // ceremony runs, and its resume is a new dispatch that reports on its own.
+      // ceremony runs, and its resume is a new dispatch that reports on its own; an
+      // edition refusal is the reporter's one line, with no failure beside it.
       setIntent(null)
       return
     }
@@ -286,7 +289,9 @@ function AccountsPanelInner() {
         toast.warning(t('profiles.authority.lost'))
         return true
       }
-      // The engine's answers were reported inside the mutation, beside the adoption.
+      // The engine's answers were reported inside the mutation, beside the adoption; an
+      // edition refusal is the reporter's one line.
+      if (err instanceof ApiError && err.isEditionRefusal) return false
       return err instanceof ApiError || err instanceof NetworkError
     },
   })

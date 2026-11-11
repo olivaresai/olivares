@@ -31,6 +31,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
+import { EditionRefusalNote } from '@/components/layout/query-error-state'
+import { editionRefusal } from '@/components/ui/edition-note'
 import { RelTimeLabel } from '@/features/shared'
 import { useOperationsPath } from '@/features/operations/use-operations-path'
 import {
@@ -808,7 +810,7 @@ function UpdateCard({
                     href={`https://osv.dev/vulnerability/${encodeURIComponent(advisory)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-mono text-caption text-accent-text hover:underline"
+                    className="inline-flex items-center gap-1 font-mono text-caption text-foreground underline underline-offset-2"
                   >
                     {advisory}
                     <ExternalLink className="size-3" aria-hidden />
@@ -905,6 +907,8 @@ function SupportBundleCard() {
     mutation.error instanceof ApiError &&
     mutation.error.isForbidden &&
     !mutation.error.isStepUpRequired
+  // The edition answers, not the role: its line, never the red failure below.
+  const refusal = editionRefusal(mutation.error)
 
   return (
     <Card className="p-5">
@@ -939,6 +943,8 @@ function SupportBundleCard() {
             <p role="alert" className="text-body text-warning">
               {t('common:privileged.notAuthorized')}
             </p>
+          ) : refusal ? (
+            <EditionRefusalNote refusal={refusal} />
           ) : mutation.error ? (
             <p role="alert" className="text-body text-danger">
               {mutation.error instanceof Error

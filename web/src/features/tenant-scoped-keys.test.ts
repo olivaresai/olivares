@@ -44,6 +44,10 @@ const GLOBALES: Record<string, string> = {
   'openapi-spec': 'el contrato del motor no depende del inquilino',
   // `/v1/server-info` es NO autenticado (`lib/hooks/use-server-info.ts`).
   'server-info': 'ruta sin autenticar, previa a cualquier inquilino',
+  // `POST /v1/invites/preview` goes `anonymous: true`: the client strips the
+  // session and `X-Olivares-Tenant` (`lib/api/client.ts`, `opts.anonymous`), so
+  // only the invitation token, never in the key, decides the answer.
+  'invite-preview': 'anonymous route, read before sign-in, before any tenant',
   // `/v1/console/activation*` — «global, superadmin-gated» (`console/api.ts`).
   'console|activation-preview':
     'la activación es del despliegue, no del inquilino',
@@ -257,6 +261,11 @@ const NO_SON_DE_INQUILINO: Record<string, string> = {
   'reporting.reports':
     '`handleListReports(w, _ *http.Request, _ api.ModuleContext)` — catálogo estático en código, ' +
     'ignora petición y contexto (modules/reporting/api.go)',
+  'providers.presets':
+    '`handleListProviderPresets(w, _ *http.Request, _ api.ModuleContext)` ignores request and ' +
+    'context and returns `modelprovider.Presets()`, a clone of the closed vendor table compiled ' +
+    'into the binary (modules/sessions/provider_record_api.go:126, ' +
+    'connectors/modelprovider/presets.go:88): the same rows for every tenant',
   'governance.emergingStandards':
     '`handleEmergingStandards(w, _, _)` — mismo patrón, registro «design-toward» en código ' +
     '(modules/governance/emerging.go)',

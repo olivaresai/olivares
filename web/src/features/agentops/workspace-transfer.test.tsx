@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeRouter } from '@/test/fake-router'
@@ -21,6 +27,7 @@ vi.mock('@/features/agentops/api', async (orig) => ({
     listFiles: vi.fn(),
     statFile: vi.fn(),
     writeFile: vi.fn(),
+    mkdir: vi.fn(),
     archiveFiles: vi.fn(),
     readFile: vi.fn(),
   },
@@ -114,6 +121,8 @@ describe('WorkspaceBrowser upload', () => {
         'ws_1',
         'docs/notes.txt',
         file,
+        // The file browser's upload carries no start authority.
+        undefined,
       ),
     )
     expect(toast.success).toHaveBeenCalledWith('Uploaded: 1')
@@ -147,17 +156,19 @@ describe('WorkspaceBrowser upload', () => {
     expect(await screen.findByText('Up to 64 MiB per file')).toBeInTheDocument()
   })
 
-  it('writes a file dropped on the list', async () => {
+  it('writes a file dropped on the tree', async () => {
     show()
-    const list = await screen.findByRole('list')
+    const tree = await screen.findByRole('tree')
     const file = new File(['hi'], 'dropped.txt')
-    fireEvent.drop(list, { dataTransfer: { files: [file] } })
+    fireEvent.drop(tree, { dataTransfer: { files: [file] } })
 
     await waitFor(() =>
       expect(agentOpsApi.writeFile).toHaveBeenCalledWith(
         'ws_1',
         'dropped.txt',
         file,
+        // The file browser's upload carries no start authority.
+        undefined,
       ),
     )
   })
@@ -208,7 +219,7 @@ describe('WorkspaceBrowser upload', () => {
     expect(button).toHaveAttribute('aria-disabled', 'true')
     await user.click(button)
 
-    fireEvent.drop(screen.getByRole('list'), {
+    fireEvent.drop(screen.getByRole('tree'), {
       dataTransfer: { files: [new File(['x'], 'x.txt')] },
     })
     expect(toast.error).toHaveBeenCalledWith(READ_ONLY_REASON)
@@ -222,6 +233,103 @@ describe('WorkspaceBrowser upload', () => {
     expect(
       screen.getByText('You do not have write access to this folder.'),
     ).toBeInTheDocument()
+  })
+})
+
+describe('WorkspaceBrowser New file and New folder', () => {
+  async function create(kind: 'New file' | 'New folder', name: string) {
+    const user = userEvent.setup()
+    show()
+    await user.click(await screen.findByRole('button', { name: kind }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox'), name)
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    return dialog
+  }
+
+  it('refuses a name the folder already holds, asked fresh, sending no write', async () => {
+    // Not in the listing the tree read: only the file system can say it exists.
+    vi.mocked(agentOpsApi.statFile).mockResolvedValue(entry('late.md'))
+    const dialog = await create('New file', 'late.md')
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'late.md already exists in this folder.',
+    )
+    const field = within(dialog).getByRole('textbox')
+    expect(field).toHaveFocus()
+    expect(field).toHaveAttribute('aria-invalid', 'true')
+    expect(field).toHaveAccessibleDescription(
+      'late.md already exists in this folder.',
+    )
+    expect(vi.mocked(agentOpsApi.statFile).mock.calls[0]![1]).toBe('late.md')
+    expect(agentOpsApi.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('creates a new name as before', async () => {
+    await create('New file', 'notes.md')
+
+    await waitFor(() => expect(agentOpsApi.writeFile).toHaveBeenCalledTimes(1))
+    const [, path, body, opts] = vi.mocked(agentOpsApi.writeFile).mock.calls[0]!
+    expect(path).toBe('notes.md')
+    expect(body).toBe('')
+    expect(opts?.create).toBe(true)
+  })
+
+  it('creates nothing when it cannot tell whether the name is free', async () => {
+    vi.mocked(agentOpsApi.statFile).mockRejectedValue(
+      new ApiError(500, 'internal', 'stat failed'),
+    )
+    await create('New file', 'notes.md')
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(agentOpsApi.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('refuses a folder over a name that exists, sending no mkdir', async () => {
+    vi.mocked(agentOpsApi.statFile).mockResolvedValue(entry('docs', 'dir'))
+    const dialog = await create('New folder', 'docs')
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'docs already exists in this folder.',
+    )
+    expect(agentOpsApi.mkdir).not.toHaveBeenCalled()
+  })
+
+  it('says the name is taken when the engine refuses the create', async () => {
+    // The name appeared after the check: the engine's create-only write refuses it.
+    vi.mocked(agentOpsApi.writeFile).mockRejectedValue(
+      new ApiError(409, 'conflict', 'A file with this name already exists.'),
+    )
+    const dialog = await create('New file', 'notes.md')
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'notes.md already exists in this folder.',
+    )
+    expect(within(dialog).getByRole('textbox')).toHaveFocus()
+  })
+
+  it('shows the engine remedy calmly if a write ever lacks its precondition', async () => {
+    vi.mocked(agentOpsApi.writeFile).mockRejectedValue(
+      new ApiError(428, 'precondition_required', 'Read the file first.'),
+    )
+    await create('New file', 'notes.md')
+
+    await waitFor(() =>
+      expect(toast.warning).toHaveBeenCalledWith(
+        'This file cannot be saved until it is opened again.',
+      ),
+    )
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('creates no folder when it cannot tell whether the name is free', async () => {
+    vi.mocked(agentOpsApi.statFile).mockRejectedValue(
+      new ApiError(500, 'internal', 'stat failed'),
+    )
+    await create('New folder', 'docs')
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(agentOpsApi.mkdir).not.toHaveBeenCalled()
   })
 })
 
@@ -299,7 +407,7 @@ describe('WorkspaceBrowser archive download', () => {
     show()
     await screen.findByText('README.md')
     await user.click(screen.getByRole('checkbox', { name: 'Select README.md' }))
-    await user.click(screen.getByRole('button', { name: 'docs' }))
+    await user.click(screen.getByText('docs'))
     await screen.findByText('a.md')
     await user.click(screen.getByRole('button', { name: 'root' }))
     await screen.findByText('README.md')

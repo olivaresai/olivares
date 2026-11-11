@@ -10,6 +10,7 @@ import axe from 'axe-core'
 import type { AnchorHTMLAttributes, ReactNode, Ref } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccountMarksContext } from '@/features/agent-tools/account-marks'
+import { ADMIN_READS } from '@/features/navigation/admin-reads.fixture'
 import { sessionsApi } from '@/features/sessions/api'
 import { mergeSessions } from '@/features/sessions/provenance'
 import { formatTimeOfDay } from '@/lib/format'
@@ -37,7 +38,11 @@ import {
   runs,
 } from './swimlane.fixture'
 
-vi.mock('@/lib/auth/context', () => ({ useAuth: () => DEFAULT_AUTH }))
+// Every permission, the administrator's reads among them, unless a case takes some out.
+const auth = vi.hoisted(() => ({ can: (_p: string): boolean => true }))
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ ...DEFAULT_AUTH, can: auth.can }),
+}))
 // A <Link> as a plain anchor whose href carries its search, so a test reads the address.
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
@@ -75,7 +80,10 @@ beforeEach(() => {
     }),
   )
 })
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  auth.can = () => true
+  vi.restoreAllMocks()
+})
 
 function show(onOpen = vi.fn()) {
   const view = renderIntel(
@@ -232,6 +240,34 @@ describe('the last-hour swimlane', () => {
     expect(
       screen.queryByRole('link', { name: 'Open in the Ledger' }),
     ).toBeNull()
+  })
+
+  it('offers an editor no Ledger: the marks are plain times and nothing selects a range', async () => {
+    auth.can = (p) => !ADMIN_READS.has(p)
+    show()
+    await lanes()
+    // The axis still says its times, as text.
+    const plot = screen.getByTestId('swimlane-plot')
+    expect(within(plot).getByText(clock('16:10'))).toBeInTheDocument()
+    expect(within(plot).queryByRole('button')).toBeNull()
+    plot.getBoundingClientRect = () =>
+      ({
+        left: 200,
+        right: 800,
+        width: 600,
+        top: 0,
+        bottom: 28,
+        height: 28,
+      }) as DOMRect
+    const area = screen.getByTestId('swimlane-area')
+    fireEvent.pointerDown(area, { button: 0, clientX: 430, pointerId: 1 })
+    fireEvent.pointerMove(area, { clientX: 585, pointerId: 1 })
+    fireEvent.pointerUp(area, { clientX: 585, pointerId: 1 })
+    expect(screen.queryByTestId('swimlane-range')).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: 'Open in the Ledger' }),
+    ).toBeNull()
+    expect(screen.queryByText(/see that range in the Ledger/)).toBeNull()
   })
 
   it('leads each row with its title: what every lane shares is not repeated on each row', async () => {

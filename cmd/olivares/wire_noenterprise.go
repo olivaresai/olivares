@@ -14,6 +14,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/eventbus/natsbus"
+	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/agentroles"
 	"github.com/olivaresai/olivares/modules/aiterms"
@@ -36,6 +37,11 @@ func editionPortsForBuild() editionPorts {
 		// Every MCP upstream uses the operator-configured credential.
 		upstreamCredentialProvider: func(staticAuth string) UpstreamCredentialProvider {
 			return &staticCredentialProvider{authHeader: staticAuth}
+		},
+		// A capability placed above Community (modules.json, core/api placedRoutes)
+		// answers 403 edition_required; its stored data stays readable.
+		routeGate: func(method, pattern string) error {
+			return api.EditionRouteRefusal(license.EditionCommunity, method, pattern)
 		},
 		durableBus:                 communityDurableBus,
 		moduleRegistrars:           communityModuleRegistrars,

@@ -7,6 +7,7 @@
 // raw line is one click away (inspect), never the row itself.
 import {
   memo,
+  type ClipboardEvent,
   useCallback,
   useEffect,
   useId,
@@ -15,7 +16,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { ArrowDown, Quote, GitFork } from 'lucide-react'
+import { ArrowDown, Quote, GitFork, Pencil } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useTranslation } from 'react-i18next'
@@ -25,11 +26,14 @@ import { readAttachPage, useRunAttach } from '@/features/agentops/attach'
 import { readsNativeRecord } from '@/features/agentops/provider-contract'
 import { useModelName } from '@/features/agentops/model-choices'
 import { useTurnInterrupt } from '@/features/agentops/turn-interrupt'
+import { EditFromHere } from './edit-from-here'
+import { selectionMarkdown } from './selection-markdown'
+import type { FromCheckpoint } from '@/features/agentops/run-create-dialog'
 import type { AttachFrame, RunDTO } from '@/features/agentops/types'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Button } from '@/components/ui/button'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
-import { forkContext } from './session-context'
+import { endsTurn, forkContext } from './session-context'
 import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
 import {
@@ -50,7 +54,11 @@ import {
   type ConversationItem,
 } from './conversation-frames'
 import { ConversationApproval } from './conversation-approval'
-import { ConversationCard, ConversationTaskList } from './conversation-cards'
+import {
+  ConversationCard,
+  ConversationTaskList,
+  useThreadSend,
+} from './conversation-cards'
 import { systemFailed, systemText } from './conversation-text'
 import {
   isRunning,
@@ -59,12 +67,14 @@ import {
   threadParts,
   type Part,
   TurnRow,
+  WorkingLine,
   WorkRow,
 } from './conversation-work'
 import { MarkdownText } from './markdown-text'
 import { samePlain } from './same-plain'
 import { parseMarkdown, plainText } from './markdown'
 import { MessageBar, MessageRail } from './message-navigator'
+import { useUsagePath } from './session-meter'
 import { useMessageNavigator } from './use-message-navigator'
 import { hostIsolationUnavailable, isLiveRun } from './provenance'
 import {
@@ -75,6 +85,7 @@ import {
   type SentTurn,
 } from './sent-turns'
 import { useConversationTasks } from './use-conversation-tasks'
+import { SelectionCite } from './selection-cite'
 import './i18n'
 
 /** Past this many frames read here, the oldest SETTLE_FRAMES join the folded base the stored conversation
@@ -106,6 +117,17 @@ export function SessionConversation(
   )
 }
 
+/** The session's own message box, as the work surface draws it for this conversation:
+ * the field a quote, the first message and a notice's Continue give the keyboard to. */
+function messageBox(
+  composerId: string | undefined,
+  draftKey: string | null,
+): HTMLTextAreaElement | null {
+  const field = composerId ? document.getElementById(composerId) : null
+  if (!(field instanceof HTMLTextAreaElement)) return null
+  return field.dataset.sessionDraftKey === draftKey ? field : null
+}
+
 function ConversationBody({
   run,
   selectedId,
@@ -129,6 +151,7 @@ function ConversationBody({
 }) {
   const { t } = useTranslation('sessions')
   const modelName = useModelName(run.provider_profile_ref)
+  const tellsCost = useUsagePath() !== null
   const { t: tShared } = useTranslation('shared')
   // The frames read here: the settled ones, folded once into the base, and the newest, folded on every frame.
   const [read, setRead] = useState<{
@@ -136,6 +159,7 @@ function ConversationBody({
     frames: AttachFrame[]
   }>({ settled: [], frames: [] })
   const { settled, frames } = read
+  const [delta, setDelta] = useState<AttachFrame | null>(null)
   // The stored conversation before the frames read here: every earlier turn, from the tool's own record.
   const [history, setHistory] = useState<string[]>([])
   const [dropped, setDropped] = useState(0)
@@ -147,41 +171,44 @@ function ConversationBody({
   const { activeTenant, principal, can } = useAuth()
   const draftKey = sessionDraftKey(activeTenant, principal, run.run_ref)
   const canQuote = can('sessions:run:write')
-  // One function while the composer, the draft and the identity stay: the rows are memoized, and a new function on
-  // every frame would paint them all again.
-  const quote = useMemo(
+  const putInDraft = useMemo(
     () =>
       composerId && draftKey && canQuote
-        ? (text: string) => {
+        ? (add: (draft: string) => string) => {
             if (
               useSessionStore.getState().credentialGeneration !== generation ||
               useTenantStore.getState().activeTenant !== tenant
             )
               return
-            const comment = readSessionDraft(draftKey)
-            const cited = text
-              .split(/\r?\n/)
-              .map((line) => `> ${line}`)
-              .join('\n')
-            writeSessionDraft(
-              draftKey,
-              `${comment ? `${comment}\n\n` : ''}${cited}\n\n`,
-            )
+            writeSessionDraft(draftKey, add(readSessionDraft(draftKey) ?? ''))
             // React paints the new draft before the caret moves. A different signed-in owner
             // or conversation must never receive this deferred focus.
             requestAnimationFrame(() => {
-              const field = document.getElementById(composerId)
-              if (
-                !(field instanceof HTMLTextAreaElement) ||
-                field.dataset.sessionDraftKey !== draftKey
-              )
-                return
+              const field = messageBox(composerId, draftKey)
+              if (!field) return
               field.focus()
               field.setSelectionRange(field.value.length, field.value.length)
             })
           }
         : undefined,
     [composerId, draftKey, canQuote, generation, tenant],
+  )
+  // One function while the composer, the draft and the identity stay: the rows are memoized, and a new function on
+  // every frame would paint them all again.
+  const quote = useMemo(
+    () =>
+      putInDraft
+        ? (text: string) => {
+            const cited = text
+              .split(/\r?\n/)
+              .map((line) => `> ${line}`)
+              .join('\n')
+            putInDraft(
+              (comment) => `${comment ? `${comment}\n\n` : ''}${cited}\n\n`,
+            )
+          }
+        : undefined,
+    [putInDraft],
   )
   const ownerKey = `${run.run_ref}\n${tenant ?? ''}\n${generation}`
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -230,6 +257,7 @@ function ConversationBody({
     enabled: !isRemote,
     sessionKey: [run.state, run.transport, run.started_at].join(':'),
     onFrame,
+    onDelta: setDelta,
     onHistory: setHistory,
     onLag,
     tail: PAGE_FRAMES,
@@ -256,41 +284,87 @@ function ConversationBody({
   const items = useMemo(
     () =>
       mapConversationFrames(
-        frames.map((f) => f.line),
+        [...frames.map((f) => f.line), ...(delta ? [delta.line] : [])],
         frames.map((f) => f.at),
         frames.map((f) => f.seq),
         restored,
       ).filter((item) => item.systemKind !== 'protocol' && !isQuiet(item)),
-    [frames, restored],
+    [frames, restored, delta],
   )
   const contextItems = useRef(items)
   useLayoutEffect(() => {
     contextItems.current = items
   }, [items])
+  // FORK FROM HERE, and EDIT FROM HERE, which forks at a sent message. The new session's
+  // first input is the turns through `end` (none before the first message), then the
+  // edited words (`next`) as they are; it throws where the conversation cannot carry them.
+  // `from` is the turn whose files the new session starts with, when the person chose them.
+  const forkMessage = useCallback(
+    (end: string | undefined, next?: string) => {
+      if (earlier || dropped) throw new Error('incomplete context')
+      const context = end
+        ? forkContext(run.run_ref, contextItems.current, end)
+        : undefined
+      return [context, next].filter(Boolean).join('\n\n')
+    },
+    [run.run_ref, earlier, dropped],
+  )
   const fork = useCallback(
-    (end: string) => {
+    (end: string | undefined, next?: string, from?: FromCheckpoint) => {
       if (
         useSessionStore.getState().credentialGeneration !== generation ||
         useTenantStore.getState().activeTenant !== tenant
       )
         return
       try {
-        if (earlier || dropped) throw new Error('incomplete context')
-        const message = forkContext(run.run_ref, contextItems.current, end)
         useNewSessionDialog.getState().openAdvanced({
-          message,
+          message: forkMessage(end, next),
           workspaceRef: run.workspace_ref,
           profileRef: run.provider_profile_ref,
           driver: run.provider_driver,
           model: run.model_ref,
           effort: run.effort,
           runOn: run.run_on,
+          fromCheckpoint: from,
         })
       } catch {
         toast.error(t('context.readFailed'))
       }
     },
-    [run, generation, tenant, earlier, dropped, t],
+    [run, generation, tenant, forkMessage, t],
+  )
+  // EDIT FROM HERE on a message the person sent: the dialog below, then the fork at it.
+  const [editing, setEditing] = useState<{
+    id: string
+    text: string
+    inputId?: string
+    end?: string
+  } | null>(null)
+  const forks = canQuote && can('sessions:run:output')
+  const edit = useMemo(
+    () =>
+      forks
+        ? (sent: ConversationItem) => {
+            const before = contextItems.current
+            const at = before.findIndex((i) => i.id === sent.id)
+            // The fork ends at the turn before the message; the first has none.
+            const end = before.slice(0, at).findLast(endsTurn)?.id
+            // Said before the person edits: a fork that cannot be made loses nothing.
+            try {
+              forkMessage(end)
+            } catch {
+              toast.error(t('context.readFailed'))
+              return
+            }
+            setEditing({
+              id: sent.id,
+              text: sent.text ?? '',
+              inputId: sent.input_id,
+              end,
+            })
+          }
+        : undefined,
+    [forks, forkMessage, t],
   )
   // The first message the console sent, until the tool shows it itself.
   const sent = useRunSentTurns(run.run_ref)
@@ -485,8 +559,42 @@ function ConversationBody({
     (part): part is Extract<Part, { kind: 'item' }> =>
       part.kind === 'item' && part.item.kind === 'assistant',
   )?.item.id
+  // A card or a notice is answered from the thread while the session takes a message,
+  // the person may write to it, and nothing they sent comes after it.
+  const answerable = (item: ConversationItem) =>
+    (run.state === 'running' || run.state === 'idle') &&
+    !ended &&
+    can('sessions:run:write') &&
+    pending.length === 0 &&
+    !run.pending_approval_ref &&
+    !items
+      .slice(items.indexOf(item) + 1)
+      .some((later) => later.kind === 'operator')
   const runningNow =
     live && last?.kind === 'work' ? last.items.filter(isRunning) : []
+  // NO TURN YET, on a session that takes one: the thread asks for the first message, and
+  // the session's own message box takes the keyboard once, unless the person has it
+  // somewhere (a row of the list they move through keeps it).
+  const firstMessage =
+    items.length === 0 &&
+    pending.length === 0 &&
+    !hostIsolationUnavailable(run) &&
+    status === 'open' &&
+    run.state === 'idle'
+  const askedFirst = useRef<string | null>(null)
+  useEffect(() => {
+    if (!firstMessage || askedFirst.current === run.run_ref) return
+    const field = messageBox(composerId, draftKey)
+    if (!field) return
+    askedFirst.current = run.run_ref
+    const held = document.activeElement
+    if (!held || held === document.body) field.focus()
+  }, [firstMessage, composerId, run.run_ref, draftKey])
+  // A notice's line went: its act is gone, and the keyboard goes to the message box.
+  const toMessageBox = useCallback(
+    () => messageBox(composerId, draftKey)?.focus(),
+    [composerId, draftKey],
+  )
   const turn = useTurnInterrupt(run)
   // The pane this conversation is in, with its composer; the session sheet is a dialog,
   // whose Escape closes it, so there is none there and Escape interrupts nothing.
@@ -494,8 +602,31 @@ function ConversationBody({
   const rootRef = useCallback((node: HTMLDivElement | null) => {
     setPane(node?.closest('section[data-focused]') ?? null)
   }, [])
+  // A TURN WITH NO CALL RUNNING (the model thinking or writing) still works: from the message
+  // that started it until its result. "running" alone is not enough: a run stays running
+  // for a while after its last turn ended.
+  const lastAsked = items.findLastIndex((item) => item.kind === 'operator')
+  const lastResult = items.findLastIndex((item) => item.kind === 'result')
+  // A sent message the tool never shows still ends at the result after it: any result for
+  // a launch's first message, one from a later frame for a message sent from the bar.
+  const resultSeq = items[lastResult]?.seq
+  const asking = pending.some(
+    (t) =>
+      lastResult < 0 ||
+      (t.after !== undefined &&
+        (resultSeq === undefined || resultSeq <= t.after)),
+  )
+  const working =
+    live &&
+    run.state === 'running' &&
+    runningNow.length === 0 &&
+    (asking || lastAsked > lastResult)
+  const workingSince = asking ? undefined : items[lastAsked]?.at
   const canInterrupt =
-    pane !== null && runningNow.length > 0 && turn.allowed && !turn.pending
+    pane !== null &&
+    (runningNow.length > 0 || working) &&
+    turn.allowed &&
+    !turn.pending
   // THE ROWS IN THE PAGE. Past VIRTUAL_FROM, only the rows near the screen render; a spacer stands for
   // the others, sized from the rows already measured, so the scroll height, following the end and the scrollbar
   // stay what the whole thread would give.
@@ -593,15 +724,22 @@ function ConversationBody({
   useEffect(() => {
     interruptRef.current = turn.interrupt
   })
-  // ESCAPE INTERRUPTS THE TURN while a call runs, from a field of this pane (its composer),
+  // ESCAPE TWICE INTERRUPTS THE TURN while it works, from a field of this pane (its composer),
   // where the pane's own Escape does nothing; anywhere else Escape keeps closing the side
-  // pane. A dialog, a menu or the composer's own menu takes its Escape first.
+  // pane. A dialog, a menu or the composer's own menu takes its Escape first. Twice, so a
+  // stray Escape cannot cut a long turn short.
   useEffect(() => {
     if (!canInterrupt || !pane) return
+    let armedAt = Number.NEGATIVE_INFINITY
     const onKey = (e: KeyboardEvent) => {
       if (!interrupts(e) || !isTypingTarget(e.target)) return
       if (!(e.target instanceof Node) || !pane.contains(e.target)) return
       if (document.querySelector(OPEN_LAYER)) return
+      if (e.timeStamp - armedAt > ESCAPE_TWICE_MS) {
+        armedAt = e.timeStamp
+        return
+      }
+      armedAt = Number.NEGATIVE_INFINITY
       e.preventDefault()
       interruptRef.current()
     }
@@ -615,6 +753,7 @@ function ConversationBody({
       className="group/conv relative flex min-h-0 flex-1 flex-col gap-2"
       data-testid="session-conversation"
     >
+      <SelectionCite root={scrollRef} onCite={quote} />
       {dropped > 0 ? (
         <p className="text-caption text-warning">
           {t('conversation.lag', { count: dropped })}
@@ -636,13 +775,13 @@ function ConversationBody({
             virtual && '[overflow-anchor:none]',
           )}
         >
-          {/* ONE CENTERED COLUMN, 760 px: the transcript is read, not scanned, and a line
+          {/* ONE CENTERED COLUMN, 780 px, the composer's: the transcript is read, not scanned, and a line
             longer than that is a line nobody follows. */}
           {/* The rail of marks sits in the column's left padding: the column keeps its width. */}
           <div
             ref={columnRef}
             data-slot="conversation-column"
-            className="mx-auto w-full max-w-[760px] px-4 py-4"
+            className="mx-auto w-full max-w-[780px] px-4 py-4"
           >
             {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
               already read stay on the page. Without it a stale transcript reads as a
@@ -680,7 +819,11 @@ function ConversationBody({
             status !== 'connecting' ? (
               <p className="py-2 text-caption text-muted-foreground">
                 {status === 'open'
-                  ? t('conversation.waiting')
+                  ? t(
+                      firstMessage
+                        ? 'conversation.writeFirst'
+                        : 'conversation.waiting',
+                    )
                   : t('conversation.empty')}
               </p>
             ) : (
@@ -695,16 +838,7 @@ function ConversationBody({
                       key={part.item.id}
                       card={part.item.toolCard!}
                       run={run}
-                      answerable={
-                        (run.state === 'running' || run.state === 'idle') &&
-                        !ended &&
-                        can('sessions:run:write') &&
-                        pending.length === 0 &&
-                        !run.pending_approval_ref &&
-                        !items
-                          .slice(items.indexOf(part.item) + 1)
-                          .some((later) => later.kind === 'operator')
-                      }
+                      answerable={answerable(part.item)}
                     />
                   ) : part.kind === 'turn' ? (
                     <TurnRow
@@ -721,6 +855,7 @@ function ConversationBody({
                           : undefined
                       }
                       modelName={modelName}
+                      tellsCost={tellsCost}
                       live={live}
                     />
                   ) : part.kind === 'work' ? (
@@ -741,6 +876,12 @@ function ConversationBody({
                       key={part.item.id}
                       item={part.item}
                       runRef={run.run_ref}
+                      continueRun={
+                        part.item.continueWith && answerable(part.item)
+                          ? run
+                          : undefined
+                      }
+                      onContinued={toMessageBox}
                       selected={selectedId === part.item.id}
                       onInspect={onInspect}
                       onFork={
@@ -749,6 +890,7 @@ function ConversationBody({
                           : undefined
                       }
                       onQuote={quote}
+                      onEdit={edit}
                       lastReply={part.item.id === lastReplyId}
                     />
                   )
@@ -769,6 +911,9 @@ function ConversationBody({
                 ))}
               </ol>
             )}
+            {working ? (
+              <WorkingLine since={workingSince} canInterrupt={canInterrupt} />
+            ) : null}
             <DiscardedNotice />
             <ConversationTaskList key={ownerKey} run={run} query={tasks} />
             {/* The request the session waits on, after what led to it, answered here. */}
@@ -792,6 +937,16 @@ function ConversationBody({
           {t('conversation.ended')}
         </p>
       ) : null}
+      {editing ? (
+        <EditFromHere
+          key={editing.id}
+          run={run}
+          text={editing.text}
+          inputId={editing.inputId}
+          onContinue={(edited, from) => fork(editing.end, edited, from)}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -799,6 +954,9 @@ function ConversationBody({
 /** A dialog or a menu that is open takes the Escape key. */
 const OPEN_LAYER =
   '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"]'
+
+/** How soon a second Escape must follow the first to interrupt the turn. */
+const ESCAPE_TWICE_MS = 1000
 
 /** An Escape of its own: not one a control took, not one that ends an input method's
  * composition, not a held key repeating. */
@@ -812,19 +970,28 @@ function ConversationRowView({
   modelName,
   item,
   runRef,
+  continueRun,
+  onContinued,
   selected,
   onInspect,
   onQuote,
   onFork,
+  onEdit,
   lastReply = false,
 }: {
   modelName: (id: string) => string
   item: ConversationItem
   runRef: string
+  /** Present where the notice's line may be sent now: the session it goes to. */
+  continueRun?: RunDTO
+  /** Once the notice's line went, where the keyboard goes. */
+  onContinued?: () => void
   selected: boolean
   onInspect?: (item: ConversationItem) => void
   onQuote?: (text: string) => void
   onFork?: (end: string) => void
+  /** Present where the person may edit what they sent and continue. */
+  onEdit?: (item: ConversationItem) => void
   /** The reply the thread ends on keeps its actions shown; earlier ones reveal them. */
   lastReply?: boolean
 }) {
@@ -841,6 +1008,23 @@ function ConversationRowView({
         ? selection.toString()
         : ''
     onQuote?.(selected.trim() ? selected : replyText())
+  }
+  // A selection of the reply goes to the clipboard as the Markdown it was.
+  const copyAsMarkdown = (event: ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection()
+    const box = contentRef.current
+    if (
+      !selection ||
+      selection.isCollapsed ||
+      selection.rangeCount === 0 ||
+      !box?.contains(selection.anchorNode) ||
+      !box.contains(selection.focusNode)
+    )
+      return
+    const markdown = selectionMarkdown(selection.getRangeAt(0).cloneContents())
+    if (!markdown) return
+    event.clipboardData.setData('text/plain', markdown)
+    event.preventDefault()
   }
   const inspect = () => onInspect?.(item)
   const openFromWords = openOnWords(inspect)
@@ -895,6 +1079,13 @@ function ConversationRowView({
             {systemText(t, item, undefined, modelName)}
           </span>
         </div>
+        {continueRun && item.continueWith ? (
+          <NoticeContinue
+            run={continueRun}
+            text={item.continueWith}
+            onSent={onContinued}
+          />
+        ) : null}
         <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
       </li>
     )
@@ -912,7 +1103,7 @@ function ConversationRowView({
           data-kind="operator"
           onClick={openFromWords}
           className={cn(
-            'w-full rounded-[12px] bg-muted px-4 py-3 text-left text-body-l text-text',
+            'ms-auto w-fit max-w-[min(640px,88%)] rounded-panel bg-surface px-4 py-2.5 text-left text-body-l text-text shadow-[var(--shadow-card)]',
             selected && 'ring-1 ring-line-strong',
           )}
         >
@@ -925,7 +1116,12 @@ function ConversationRowView({
           <MessageImages runRef={runRef} attachments={item.attachments} />
         ) : null}
         {item.text ? (
-          <MessageActions align="end" reveal text={() => item.text ?? ''} />
+          <MessageActions
+            align="end"
+            reveal
+            text={() => item.text ?? ''}
+            onEdit={onEdit ? () => onEdit(item) : undefined}
+          />
         ) : null}
       </li>
     )
@@ -940,6 +1136,7 @@ function ConversationRowView({
         data-kind={item.kind}
         ref={contentRef}
         onClick={openFromWords}
+        onCopy={copyAsMarkdown}
         className={cn(
           'w-full rounded-ctl text-left text-body-l text-text [overflow-wrap:anywhere]',
           selected && 'bg-active',
@@ -959,6 +1156,65 @@ function ConversationRowView({
         />
       ) : null}
     </li>
+  )
+}
+
+/**
+ * A NOTICE'S NEXT STEP, ONE ACT: Continue sends the line the engine put on the notice (a
+ * destination it approved: "try again") as the person's next message, through the send
+ * every conversation surface uses. The line is said beside the act and sent as text,
+ * exactly as it came, once: the act waits while it goes and is gone once it went.
+ */
+function NoticeContinue({
+  run,
+  text,
+  onSent,
+}: {
+  run: RunDTO
+  text: string
+  /** Gives the keyboard on once the act it was on is gone. */
+  onSent?: () => void
+}) {
+  const { t } = useTranslation('sessions')
+  const id = useId()
+  // The act pressed, until its send settles: a second press before the first one has
+  // disabled it sends nothing.
+  const pressed = useRef<HTMLElement | null>(null)
+  // The act goes once sent: the keyboard it held goes on, not to the page.
+  const sent = () => {
+    const held = document.activeElement
+    if (!held || held === document.body || held === pressed.current) onSent?.()
+  }
+  // Refused as the composer's message is: the reason in a toast, and the act again.
+  const { send, sendsInQueue } = useThreadSend(
+    run,
+    t('nav:launcher.turnFailed'),
+    sent,
+  )
+  if (send.isSuccess) return null
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2 pb-1">
+      <Button
+        variant="secondary"
+        size="sm"
+        aria-describedby={id}
+        disabled={send.isPending || sendsInQueue > 0}
+        onClick={(event) => {
+          if (pressed.current) return
+          pressed.current = event.currentTarget
+          send.mutate(text, {
+            onError: () => {
+              pressed.current = null
+            },
+          })
+        }}
+      >
+        {t('conversation.continue')}
+      </Button>
+      <span id={id} className="min-w-0 break-words text-caption text-text-2">
+        {text}
+      </span>
+    </div>
   )
 }
 
@@ -993,7 +1249,7 @@ function SentTurnRow({ turn, ended }: { turn: SentTurn; ended: boolean }) {
       className="group/msg my-2 flex flex-col gap-1"
       data-testid="conversation-sent"
     >
-      <p className="rounded-[12px] bg-muted px-4 py-3 text-body-l text-text">
+      <p className="ms-auto w-fit max-w-[min(640px,88%)] rounded-panel bg-surface px-4 py-2.5 text-body-l text-text shadow-[var(--shadow-card)]">
         <UserMessage text={turn.text} />
       </p>
       {turn.refused !== undefined ? (
@@ -1069,14 +1325,17 @@ function MessageActions({
   align,
   text,
   onQuote,
+  onEdit,
   reveal = false,
 }: {
   align: 'start' | 'end'
   text: () => string
   onQuote?: () => void
+  onEdit?: () => void
   reveal?: boolean
 }) {
   const { t } = useTranslation('common')
+  const { t: ts } = useTranslation('sessions')
   return (
     <div
       className={cn(
@@ -1092,6 +1351,18 @@ function MessageActions({
         copiedLabel={t('ui.copy.copied')}
         failedLabel={t('ui.copy.failed')}
       />
+      {onEdit ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={ts('conversation.edit.open')}
+          title={ts('conversation.edit.open')}
+          onClick={onEdit}
+        >
+          <Pencil aria-hidden="true" />
+        </Button>
+      ) : null}
       {onQuote ? (
         <Button
           type="button"
@@ -1114,10 +1385,13 @@ const ConversationRow = memo(
   ConversationRowView,
   (a, b) =>
     a.runRef === b.runRef &&
+    a.continueRun === b.continueRun &&
+    a.onContinued === b.onContinued &&
     a.selected === b.selected &&
     a.onInspect === b.onInspect &&
     a.onQuote === b.onQuote &&
     a.onFork === b.onFork &&
+    a.onEdit === b.onEdit &&
     a.lastReply === b.lastReply &&
     samePlain(a.item, b.item),
 )

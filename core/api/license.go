@@ -64,6 +64,9 @@ type LicenseDisplayInfo struct {
 	SupportTier string
 	// SupportProfile is the signed v3 product tier, distinct from support relationship.
 	SupportProfile string
+	// LicensedEdition is the edition the live license entitles (license.Verified.Edition):
+	// community without one, "" for a product this build does not know.
+	LicensedEdition string
 }
 
 // LicenseStatus is the rendered edition/license view returned to the console/CLI.
@@ -73,6 +76,10 @@ type LicenseStatus struct {
 	// superset). It is precisely what a restart-free hot-apply CANNOT change; only a
 	// binary swap does (the one reboot in the Grafana in-place model).
 	Edition string `json:"edition"`
+	// LicensedEdition is the edition the live license entitles: community | engineer | business |
+	// enterprise; absent for a product this build does not know. A Community build stays Community
+	// whatever it says.
+	LicensedEdition string `json:"licensed_edition,omitempty"`
 	// HotApply is true when this engine applies a license change without a restart
 	// (always true here — the holder is live). Display honesty for the upgrade UX.
 	HotApply bool `json:"hot_apply"`

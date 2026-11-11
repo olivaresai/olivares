@@ -10,10 +10,16 @@ import {
   type UseMutateFunction,
   type UseMutateAsyncFunction,
 } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef } from 'react'
+import { createElement, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  EditionLine,
+  editionRefusal,
+  type EditionRefusal,
+} from '@/components/ui/edition-note'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
+import { useAuth } from '@/lib/auth/context'
 import {
   useStepUpOwner,
   useStepUpStore,
@@ -22,6 +28,27 @@ import {
   type StepUpAttempt,
 } from '@/stores/step-up'
 import { useResumeGuard } from './use-resume-guard'
+
+/** The edition line in a toast, for whoever reads it: the license tab's own gate decides
+ * whether its second sentence offers a license or asks for an administrator. */
+function EditionToast({ refusal }: { refusal: EditionRefusal }) {
+  const { isSuperadmin } = useAuth()
+  return createElement(EditionLine, { refusal, canAddLicense: isSuperadmin })
+}
+
+/**
+ * Says a failed write's edition refusal as the reporter does: the one edition line, calm,
+ * naming the edition whole; an add-on refusal that names no edition keeps the engine's
+ * sentence, which names the add-on and says reads and exports are unaffected. Returns
+ * whether it was one, so a write outside the reporter keeps its own words for the rest.
+ */
+export function reportEditionRefusal(err: unknown): boolean {
+  const refusal = editionRefusal(err)
+  if (!refusal) return false
+  if (refusal.edition) toast.info(createElement(EditionToast, { refusal }))
+  else toast.warning(refusal.message)
+  return true
+}
 
 /** The message a failed request carries, or undefined when it carries none. */
 export function failureText(err: unknown): string | undefined {
@@ -68,16 +95,8 @@ export function useFailedActionReporter(
         })
         return
       }
-      // A lapsed add-on is not a role refusal: the server's sentence names the
-      // add-on and says reads and exports are unaffected.
-      if (
-        err instanceof ApiError &&
-        err.isForbidden &&
-        err.code === 'addon_requires_license'
-      ) {
-        toast.warning(err.message)
-        return
-      }
+      // An edition matter is not a role refusal.
+      if (reportEditionRefusal(err)) return
       if (err instanceof ApiError && err.isForbidden) {
         toast.warning(t('common:privileged.notAuthorizedToast'))
         return
@@ -199,12 +218,14 @@ export function usePrivilegedMutation<TVars = void, TData = unknown>(
         if (!execution.attempt.current()) return
         const { vars, context } = execution
         const isStepUp = err instanceof ApiError && err.isStepUpRequired
+        // Every 403 is the reporter's, an edition refusal as much as a role refusal:
+        // a feature's own words cannot replace either.
         if (
           !isStepUp &&
           err instanceof ApiError &&
-          (err.isForbidden || err.isUnauthenticated)
+          (err.isForbiddenOrEdition || err.isUnauthenticated)
         ) {
-          if (err.isForbidden) report(err, undefined, context.owner)
+          if (err.isForbiddenOrEdition) report(err, undefined, context.owner)
           else toast.warning(t('common:privileged.notAuthorizedToast'))
           return
         }

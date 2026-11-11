@@ -1011,9 +1011,10 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 		editionModules = append(editionModules, m) // the same instance governance and knowledge ask
 	}
 	editionModules = append(editionModules, managedSCIM...)
-	documentsMod := documents.New()
-	sm.UseDocumentConverter(documentsMod.Markdown)
-	all, err := registry.Build([]api.Module{documentsMod,
+	ocrMod := documents.NewOCR(srcCfg.DocumentOCR)
+	documentsMod := documents.New(ocrMod.Config)
+	sm.UseDocumentConverter(documentsMod.Markdown, documentsMod.ImageOCR)
+	all, err := registry.Build([]api.Module{documentsMod, ocrMod,
 		capabilities.New(capabilitiesOpts(pinVerifier)...), ss,
 		catalog.New(catalog.WithSigningKey(catalogSigner), catalog.WithActivation(catalogBridge.activate)),
 		skillsMod,

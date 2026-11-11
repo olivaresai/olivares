@@ -17,13 +17,27 @@ import { useAuth } from '@/lib/auth/context'
 import { useModuleOn } from '@/stores/modules'
 import { gitpublishApi, gitpublishKeys } from './api'
 import { IntentSheet } from './intent-sheet'
-import { actionAuthority, safePullRequestUrl } from './model'
+import {
+  actionAuthority,
+  safePullRequestUrl,
+  sessionTargets,
+  targetName,
+} from './model'
 import { PublishDialog, type Draft } from './publish-dialog'
 import { ShipDialog } from './ship-dialog'
 import type { PublicationEffect, PublicationTarget } from './types'
 import './i18n'
 
-export function SessionPublish({ run }: { run: RunDTO }) {
+export function SessionPublish({
+  run,
+  gitPanel = false,
+}: {
+  run: RunDTO
+  /** The session's Git panel pushes its commit to one target and opens the pull request
+   * there: that target's row then drops Publish and keeps the one-act Ship and its pull
+   * request links. Every other target keeps its whole row. */
+  gitPanel?: boolean
+}) {
   const { t } = useTranslation('gitpublish')
   const { activeTenant, can } = useAuth()
   const moduleOn = useModuleOn('gitpublish')
@@ -49,8 +63,8 @@ export function SessionPublish({ run }: { run: RunDTO }) {
   const [shipping, setShipping] = useState<PublicationTarget | null>(null)
 
   // The engine reads the run in the TARGET's workspace, so only those targets can take it.
-  const bound =
-    targets.data?.items.filter((tg) => tg.workspace_id === workspace) ?? []
+  const { bound, served } = sessionTargets(targets.data?.items, workspace)
+  const panelServes = gitPanel ? served?.id : undefined
   if (!enabled) return null
   // A read that failed is said, never shown as "no target here".
   if (targets.isError)
@@ -80,40 +94,45 @@ export function SessionPublish({ run }: { run: RunDTO }) {
             key={tg.id}
             className="flex flex-wrap items-center justify-between gap-2"
           >
-            <code className="font-mono text-caption">{tg.push_prefix}</code>
+            <span className="flex items-baseline gap-1 text-caption">
+              {tg.repository ? <span>{tg.repository}</span> : null}
+              <code className="font-mono">{tg.push_prefix}</code>
+            </span>
             <div className="flex items-center gap-1">
               <Button
                 size="sm"
                 variant="primary"
                 aria-label={
                   bound.length > 1
-                    ? t('ship.shipTo', { prefix: tg.push_prefix })
+                    ? t('ship.shipTo', { prefix: targetName(tg, t) })
                     : undefined
                 }
                 onClick={() => setShipping(tg)}
               >
                 {t('ship.button')}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                aria-label={
-                  bound.length > 1
-                    ? t('session.publishTo', { prefix: tg.push_prefix })
-                    : undefined
-                }
-                onClick={() =>
-                  setOpen({
-                    target: tg,
-                    effect: 'push',
-                    initial: {
-                      ref: startRef(tg.push_prefix, run.worktree_branch),
-                    },
-                  })
-                }
-              >
-                {t('session.publish')}
-              </Button>
+              {tg.id === panelServes ? null : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-label={
+                    bound.length > 1
+                      ? t('session.publishTo', { prefix: targetName(tg, t) })
+                      : undefined
+                  }
+                  onClick={() =>
+                    setOpen({
+                      target: tg,
+                      effect: 'push',
+                      initial: {
+                        ref: startRef(tg.push_prefix, run.worktree_branch),
+                      },
+                    })
+                  }
+                >
+                  {t('session.publish')}
+                </Button>
+              )}
             </div>
             <ShippedPullRequests
               target={tg}
@@ -147,7 +166,7 @@ export function SessionPublish({ run }: { run: RunDTO }) {
           key={shipping.id}
           target={shipping}
           sessionRun={run.run_ref}
-          initialTitle={run.name ?? ''}
+          initialTitle={run.name || run.title || ''}
           onClose={() => setShipping(null)}
           onOpenIntent={setIntentId}
         />

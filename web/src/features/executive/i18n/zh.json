@@ -1,7 +1,7 @@
 {
   "title": "高管概览",
-  "description": "一览成本、用量、风险与合规——深入操作视图可查看明细。",
-  "asOfNote": "风险、合规与可靠性反映当前状态；成本覆盖所选时间范围。",
+  "description": "一览用量、风险与合规——深入操作视图可查看明细。",
+  "asOfNote": "风险、合规与可靠性反映当前状态；时间范围适用于随时间变化的数据。",
   "range": {
     "label": "时间范围",
     "7d": "最近 7 天",
@@ -19,12 +19,12 @@
     "generatedLabel": "生成时间",
     "tenant": "组织",
     "allOrgs": "所有组织",
-    "range": "成本范围",
+    "range": "时间范围",
     "footer": "Olivares AI——仅含聚合 KPI；不含载荷或密钥。"
   },
   "empty": {
     "title": "暂无可用的高管 KPI",
-    "description": "您对该组织的成本、风险、合规或可靠性来源均无读取权限。"
+    "description": "您对该概览为该组织读取的任何来源均无读取权限。"
   },
   "restricted": {
     "label": "受限",

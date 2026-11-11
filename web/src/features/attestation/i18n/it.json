@@ -35,7 +35,7 @@
     "sumsAbsent": "nessuna somma di dipendenze registrata",
     "vcsAvailable": "Impostazioni VCS marcate dalla toolchain Go",
     "vcsUnavailable": "Nessuna marca VCS",
-    "selfHashHint": "Il self-SHA256 è un hash in streaming dell'eseguibile in esecuzione, calcolato una sola volta alla prima lettura. Confrontalo OFFLINE con un futuro checksums.txt firmato — il browser non verifica mai le firme, e un hash da solo prova l'identità, non la provenienza.",
+    "selfHashHint": "Il self-SHA256 è un hash dell'eseguibile in esecuzione, calcolato una sola volta alla prima lettura: identifica esattamente questi byte e non dimostra da dove provengono. Per verificare una release, usa «Verificalo tu stesso» più sotto; se hai installato dall'archivio che verifica, sha256sum del file olivares contenuto in quell'archivio dà lo stesso valore.",
     "published": "Pubblicata",
     "notPublished": "Non pubblicata",
     "verifierAvailable": "Verificatore nativo compilato (core/secure/modelsign)",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "Dichiarata."
     }
+  },
+  "check": {
+    "title": "Verificalo tu stesso",
+    "description": "La stessa verifica da un terminale, senza passare dalla console.",
+    "download": "Dalla <release>pagina della release {{version}}</release>, scarica checksums.txt, checksums.txt.sig, checksums.txt.pem e l’archivio o il pacchetto che hai installato. Poi esegui questo comando nella loro cartella:",
+    "provenance": "Insieme all’archivio, scarica multiple.intoto.jsonl dalla <release>pagina della release {{version}}</release>, poi esegui questo comando nella loro cartella:",
+    "passes": "Se stampa «Verified OK» e poi OK accanto a ogni file, i file scaricati sono quelli che il workflow di release di Olivares AI ha firmato per {{version}}.",
+    "notRelease": "Questa build non è una release firmata, quindi non c’è una firma di release con cui verificarla.",
+    "business": "Olivares AI Business si verifica con le istruzioni del canale Business."
   },
   "status": {
     "declared": "Dichiarato",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "Artefatti della release",
     "description": "Cosa viene distribuito con una release e come si stabilisce la fiducia in ogni artefatto. La firma senza chiavi (Fulcio/Rekor) e quella basata su chiavi (air-gap) sono entrambe di prima classe — nessuna delle due è canonica.",
-    "identityNote": "Identità di firma senza chiavi (dichiarata): emittente OIDC {{issuer}} · identità del certificato cosign {{regexp}}",
+    "identityNote": "Identità di firma senza chiavi (dichiarata): emittente OIDC {{issuer}} · identità del certificato cosign <identity />",
     "columns": {
       "artifact": "Artefatto",
       "producedBy": "Prodotto da",

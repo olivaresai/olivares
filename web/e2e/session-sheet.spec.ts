@@ -115,7 +115,7 @@ test.describe('the Estate sheet and the session page show the real conversation'
     const name = await head.getByRole('heading', { level: 2 }).boundingBox()
     const facts = await head.locator('[data-slot="thread-facts"]').boundingBox()
     const stop = await head
-      .getByRole('button', { name: 'Stop', exact: true })
+      .getByRole('button', { name: 'End session', exact: true })
       .boundingBox()
     const box = await sheet(page).boundingBox()
     expect(name && facts && stop && box).toBeTruthy()
@@ -161,7 +161,7 @@ test.describe('the Estate sheet and the session page show the real conversation'
     await prefer(page, 'dark')
     await signIn(page)
     const asks = async () => {
-      const dialog = page.getByRole('dialog', { name: 'Stop this session?' })
+      const dialog = page.getByRole('dialog', { name: 'End this session?' })
       await expect(dialog).toBeVisible()
       // Keep the fixture session running for the next view.
       await dialog.getByRole('button', { name: 'Cancel' }).click()
@@ -169,21 +169,25 @@ test.describe('the Estate sheet and the session page show the real conversation'
     }
 
     await page.goto(`/?session=run:${runRef}`)
-    await sheet(page).getByRole('button', { name: 'Stop', exact: true }).click()
+    await sheet(page)
+      .getByRole('button', { name: 'End session', exact: true })
+      .click()
     await asks()
     await page.keyboard.press('Escape')
     await expect(sheet(page)).toBeHidden()
 
     await page.goto(`/sessions?session=run:${runRef}&pane=narrative`)
     const header = page.locator('[data-slot="thread-header"]')
-    await header.getByRole('button', { name: 'Stop', exact: true }).click()
+    await header
+      .getByRole('button', { name: 'End session', exact: true })
+      .click()
     await asks()
 
     await page.getByTestId('narrative-menu').click()
     await page.getByTestId('narrative-open-detail').click()
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: 'Stop', exact: true })
+      .getByRole('button', { name: 'End session', exact: true })
       .click()
     await asks()
   })

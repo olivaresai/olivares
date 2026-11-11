@@ -125,6 +125,14 @@ type EditionConfig struct {
 	// default file in DataDir when none was given. Empty on PostgreSQL, whose URL carries
 	// credentials and names no file a private store could sit beside.
 	CoreDSN string
+	// PostgresDSN and PostgresOwnerDSN are the resolved URLs the PostgreSQL core store was
+	// opened with: the application role, and the owner role that runs DDL (the application
+	// role when no --owner-dsn was given). PostgresAdminDSN is --admin-dsn, the cross-tenant
+	// read role backups run as, or empty. An edition keeps its private tables in that same
+	// database, under the same roles and row-level security, so every engine node sharing the
+	// database shares them too. Empty on SQLite. They carry the database passwords: never log,
+	// persist or print them.
+	PostgresDSN, PostgresOwnerDSN, PostgresAdminDSN string
 }
 
 // coreStoreFile is the SQLite core file the data directory holds when --dsn names none.
@@ -157,10 +165,17 @@ func (c EditionConfig) CoreStoreInDataDir() bool {
 // pasar aquí otro directorio compilaría igual y pondría la base del cockpit donde no toca. Por eso
 // el testigo del hub es sobre esta función y no sobre la firma.
 func editionConfigFrom(cfg bootConfig, eng store.Engine, coreDSN string) EditionConfig {
-	if eng != store.EngineSQLite {
-		coreDSN = ""
+	out := EditionConfig{DataDir: cfg.DataDir, NoIngest: cfg.NoIngest}
+	switch eng {
+	case store.EngineSQLite:
+		out.CoreDSN = coreDSN
+	case store.EnginePostgres:
+		out.PostgresDSN, out.PostgresOwnerDSN, out.PostgresAdminDSN = coreDSN, cfg.OwnerDSN, cfg.AdminDSN
+		if out.PostgresOwnerDSN == "" {
+			out.PostgresOwnerDSN = coreDSN
+		}
 	}
-	return EditionConfig{DataDir: cfg.DataDir, CoreDSN: coreDSN, NoIngest: cfg.NoIngest}
+	return out
 }
 
 // EditionMutationAuthorizer exposes the existing request authorizer's mutation

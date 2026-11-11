@@ -6,6 +6,7 @@
 // module's DTOs in routes.go field for field. Three records of one intent are kept apart on
 // the wire and here: what was REQUESTED, what the host was last OBSERVED to hold, and
 // whether the host ACKNOWLEDGED our request. None of them implies the others.
+import type { ApprovalDTO } from '@/features/governance/types'
 
 /** GET /targets, GET /targets/{id}. The binding ids are present only for a caller who
  * holds target administration on the target; the list never carries them. */
@@ -17,6 +18,10 @@ export interface PublicationTarget {
   host?: 'github' | 'gitlab' | 'git'
   credential_binding_id?: string
   repository_binding_id?: string
+  /** Read-only name of the approved repository: owner/name on a forge, or the path of a
+   * plain Git remote. Absent when the binding is no longer approved, or an older engine
+   * does not name it. */
+  repository?: string
   push_prefix: string
   merge_bases: string[]
   version: number
@@ -115,7 +120,16 @@ export interface PublicationIntent {
   authorized_by?: string
   dispatch_deadline?: string
   release_failure?: string
+  /** The run of the session this publication came from. An engine that does not send it
+   * names the session only for an approved proposal, below. */
+  session_run?: string
+  /** The session's approved request this intent carries out, and that approval. */
+  proposal?: { session_run: string; approval_id: string }
 }
+
+/** An approval a publication waits on, as the approvals list returns it. `consumed` is the
+ * engine's: set once the approval's one use was spent, whether or not anything went out. */
+export type HeldApproval = ApprovalDTO & { consumed?: boolean }
 
 /** One appended host read, dispatcher outcome or refusal. */
 export interface PublicationObservation {

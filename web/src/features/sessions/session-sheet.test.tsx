@@ -215,13 +215,15 @@ describe('SessionSheet', () => {
     )
   })
 
-  it('asks before Stop, and stops on the confirmation', async () => {
+  it('asks before End session, and ends on the confirmation', async () => {
     const user = userEvent.setup()
     renderIntel(<SessionSheet address="run:run_1" onClose={vi.fn()} />)
-    await user.click(within(sheet()).getByRole('button', { name: 'Stop' }))
+    await user.click(
+      within(sheet()).getByRole('button', { name: 'End session' }),
+    )
     expect(stop).not.toHaveBeenCalled()
     await user.click(
-      await screen.findByRole('button', { name: 'Stop the session' }),
+      await screen.findByRole('button', { name: 'End the session' }),
     )
     await waitFor(() => expect(stop).toHaveBeenCalledWith('run_1', undefined))
   })
@@ -253,7 +255,9 @@ describe('SessionSheet', () => {
     }
     renderIntel(<SessionSheet address="run:run_1" onClose={vi.fn()} />)
     expect(within(sheet()).queryByRole('log')).toBeNull()
-    expect(within(sheet()).queryByRole('button', { name: 'Stop' })).toBeNull()
+    expect(
+      within(sheet()).queryByRole('button', { name: 'End session' }),
+    ).toBeNull()
     expect(
       within(sheet()).getByText('Sessions not authorized'),
     ).toBeInTheDocument()

@@ -18,8 +18,6 @@
     "search": "Einträge suchen…",
     "name": "Name",
     "kind": "Art",
-    "slug": "Slug",
-    "version": "Version",
     "status": "Status",
     "owner": "Inhaber",
     "signing": "Signierung",

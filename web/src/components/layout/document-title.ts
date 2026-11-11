@@ -7,8 +7,9 @@
 // the page's place instead (topBarLabel). A page is named by its registry label, except the
 // page a place of the left navigation opens for this person (the place you click is the
 // place you land on), which is named by the place; so is an address that is a place without
-// being a page of its own (License). The one writer of document.title: session
-// notifications put their count in front through setAttentionCount.
+// being a page of its own (License). A door (`doorTo`) shows its room's screen and is named
+// as the room. The one writer of document.title: session notifications put their count in
+// front through setAttentionCount.
 import { useRouterState } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
 import { useEffect, useReducer } from 'react'
@@ -23,6 +24,7 @@ import '@/features/identity/i18n'
 import {
   areaLabel,
   resolveLocation,
+  viewById,
   viewLabel,
   type ViewGate,
 } from '@/features/navigation/model'
@@ -99,7 +101,12 @@ export function pageLabel(
   if (location.kind === 'area') return areaLabel(t, location.area.id)
   // The page a sidebar place opens (the approval queue among them) is named by the place.
   const place = placeOpenedAt(pathname, search, gate)
-  return place ? t(`nav:places.${place}`) : viewLabel(t, location.view.id)
+  if (place) return t(`nav:places.${place}`)
+  // A door shows its room's screen (/provider-profiles is AI tools): named as the room.
+  const room = location.view.doorTo ? viewById(location.view.doorTo) : undefined
+  return room
+    ? pageLabel(t, room.path, search, gate)
+    : viewLabel(t, location.view.id)
 }
 
 /** The top bar's word: the place the page belongs to, whose heading names the page itself.

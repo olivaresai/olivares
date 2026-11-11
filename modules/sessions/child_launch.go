@@ -113,6 +113,11 @@ func (m *Module) prepareChild(ctx, runCtx context.Context, tenant model.TenantID
 	if err := d.ws.noDeleteIsolationRefusal(p.Isolation); err != nil {
 		return LaunchSpec{}, nil, "folder access mode", err
 	}
+	// Tell the tool the folder's effective access before argv, sandbox probes and
+	// the protocol handshake consume the launch parameters.
+	if d.ws != nil && d.ws.mountMode == mountRO {
+		p.PermissionMode = "plan"
+	}
 	if p.Isolation == IsolationContainer {
 		if err := m.containerRefusal(*p, d); err != nil {
 			return LaunchSpec{}, nil, "container isolation", err
@@ -462,6 +467,11 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 		// so inject it explicitly here, where it actually reaches `claude`. It is Claude's
 		// own variable and is not invented for another provider's CLI.
 		env = append(env, EnvVar{Name: envDisableAutoupdater, Value: "1"})
+		if p.profileAutoCompactWindow > 0 {
+			// The profile's declared compaction point: Claude's own variable, set by the
+			// launch alone (a caller or a gate naming it is refused as a provider variable).
+			env = append(env, EnvVar{Name: envAutoCompactWindow, Value: strconv.Itoa(p.profileAutoCompactWindow)})
+		}
 		if d.cred.bound.Kind != "" {
 			env = append(env, claudeBoundProviderEnv...)
 		}
@@ -474,6 +484,10 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 	env = append(env, d.gateEnv...)
 
 	preset := launchPreset(p)
+	// A tool's permission mode cannot widen the registered folder's access.
+	if d.ws != nil && d.ws.mountMode == mountRO {
+		preset = PresetReadOnly
+	}
 	var policy *confine.Policy
 	var confinementFiles []*os.File
 	var noDelete []string
@@ -595,6 +609,7 @@ func (m *Module) prepareSessionLaunch(ctx, runCtx context.Context, tenant model.
 	if err := m.configureProfilePackages(ctx, runCtx, tenant, runRef, p, spec); err != nil {
 		return "profile programs, package registries and egress hosts", err
 	}
+	m.configureApprovedRemotes(ctx, tenant, runRef, p, spec)
 	if err := m.prepareOpenCodeSearch(*p, spec); err != nil {
 		return "OpenCode's ripgrep", err
 	}

@@ -47,6 +47,7 @@
   "schedule": {
     "updated": "Backup schedule updated",
     "loading": "Loading schedule...",
+    "loadFailed": "Could not load the backup schedule.",
     "title": "Automated Backup Schedule",
     "description": "Configure recurring backups. The engine runs the schedule; passphrase is derived from the instance secret.",
     "enableAria": "Enable automated backups",
@@ -118,6 +119,7 @@
   },
   "pending": {
     "title": "Restores awaiting approval (dual-control)",
+    "loadFailed": "Could not load the restores awaiting approval.",
     "requestedByPrefix": "Requested by",
     "approveRestore": "Approve & Restore",
     "approved": "Restore approved",

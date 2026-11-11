@@ -17,7 +17,7 @@
   "openOwner": "Abrir {{resource}}",
   "sharedScope": "Las carpetas, conectores, servidores MCP y políticas pertenecen a la organización; no se infiere ninguna vinculación a un espacio.",
   "more": "Mostrando {{count}}. Hay más disponibles.",
-  "unavailable": "No se pudo cargar este tipo de recurso. Actualiza para reintentar.",
+  "unavailable": "No se pudo cargar este tipo de recurso.",
   "off": "Este módulo está desactivado.",
   "startSession": "Iniciar sesión",
   "workflows": "Abrir automatizaciones",
@@ -54,5 +54,18 @@
   },
   "nextPage": "Página siguiente",
   "firstPage": "Primera página",
-  "noDependencies": "No hay dependencias visibles."
+  "noDependencies": "No hay dependencias visibles.",
+  "groups": {
+    "workspace": "Espacios de trabajo",
+    "folder": "Carpetas",
+    "session": "Sesiones",
+    "work": "Trabajos",
+    "connector": "Conectores",
+    "mcp": "Servidores MCP",
+    "policy": "Políticas"
+  },
+  "noResources": {
+    "title": "Aún no hay recursos configurados",
+    "description": "Los espacios de trabajo, carpetas, sesiones, conectores, servidores MCP y políticas aparecen aquí cuando se configuran."
+  }
 }

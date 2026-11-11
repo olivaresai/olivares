@@ -14,28 +14,53 @@ import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as consoleLocales from './i18n'
 
-const { api, authState, serverInfo } = vi.hoisted(() => ({
+const { api, authState, serverInfo, edition } = vi.hoisted(() => ({
+  edition: { business: false },
   api: {
     onboard: vi.fn(),
     listInvites: vi.fn(),
     revokeInvite: vi.fn(),
+    resendInvite: vi.fn(),
     listMembers: vi.fn(),
     removeMember: vi.fn(),
     listSuperadmins: vi.fn(),
     setSuperadminActive: vi.fn(),
     endMemberSessions: vi.fn(),
+    setMemberSuspended: vi.fn(),
+    changeMemberRole: vi.fn(),
   },
   authState: {
     activeTenant: 't1' as string | null,
     activeRole: 'owner' as string | null,
     isSuperadmin: true,
     principal: { aal: 3 } as { aal?: number } | null,
+    confinedWorkspace: null as string | null,
     can: (_p: string, _opts?: unknown): boolean => true,
   },
   serverInfo: { data: {} as { invite_delivery_unavailable?: boolean } },
 }))
 
+const panels = vi.hoisted(() => ({
+  peopleActions: [] as import('@/features/panels').PanelExtension[],
+}))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: {
+      ...actual.PANEL_EXTENSIONS,
+      get peopleActions() {
+        return panels.peopleActions
+      },
+    },
+  }
+})
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
+vi.mock('@/features/business-build', () => ({
+  get BUSINESS_BUILD() {
+    return edition.business
+  },
+}))
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => serverInfo,
 }))
@@ -82,7 +107,12 @@ async function openRowActions(
 beforeEach(() => {
   vi.clearAllMocks()
   authState.can = (_p: string, _opts?: unknown) => true
+  authState.activeRole = 'owner'
+  authState.isSuperadmin = true
+  authState.confinedWorkspace = null
   serverInfo.data = {}
+  edition.business = false
+  panels.peopleActions = []
   api.listInvites.mockResolvedValue(emptyList)
   api.listMembers.mockResolvedValue(emptyList)
   api.listSuperadmins.mockResolvedValue(emptyList)
@@ -220,7 +250,7 @@ describe('PeopleTab members roster', () => {
     expect(screen.getByText('engineering')).toBeInTheDocument()
     expect(screen.getByText('platform')).toBeInTheDocument()
     expect(screen.getByText('Active')).toBeInTheDocument()
-    expect(screen.getByText('SSO only')).toBeInTheDocument()
+    expect(screen.getByText('Single sign-on')).toBeInTheDocument()
     // One control per row: three action buttons pushed the table past its card.
     const row = screen.getByText('ada@acme.io').closest('tr') as HTMLElement
     expect(within(row).getAllByRole('button')).toHaveLength(1)
@@ -313,6 +343,113 @@ describe('PeopleTab members roster', () => {
     authState.principal = { aal: 3 }
   })
 
+  // The engine keeps an organization an owner who runs it: active, and over the whole
+  // organization. Removal is offered exactly where another such owner remains.
+  describe('the last owner, as the engine counts it', () => {
+    const owner = {
+      ...member,
+      user_id: 'u-owner',
+      email: 'owner@acme.io',
+      role: 'owner' as const,
+      workspace_ids: [],
+    }
+
+    it('never offers to remove the only owner of the whole organization, and still removes a confined one', async () => {
+      const confined = {
+        ...owner,
+        user_id: 'u-o2',
+        email: 'o2@acme.io',
+        workspace_ids: ['ws1'],
+      }
+      api.listMembers.mockResolvedValue({
+        items: [owner, confined],
+        has_more: false,
+      })
+      const user = userEvent.setup()
+      wrap(<PeopleTab />)
+      await openRowActions(user, 'owner@acme.io')
+      expect(
+        screen.queryByRole('menuitem', { name: /remove owner@acme\.io/i }),
+      ).toBeNull()
+      await user.keyboard('{Escape}')
+      await openRowActions(user, 'o2@acme.io')
+      expect(
+        screen.getByRole('menuitem', { name: /remove o2@acme\.io/i }),
+      ).toBeInTheDocument()
+    })
+
+    it('removes a deactivated owner, and changes its role, while an active owner remains', async () => {
+      const away = {
+        ...owner,
+        user_id: 'u-o2',
+        email: 'o2@acme.io',
+        status: 'inactive',
+      }
+      api.listMembers.mockResolvedValue({
+        items: [owner, away],
+        has_more: false,
+      })
+      const user = userEvent.setup()
+      wrap(<PeopleTab />)
+      expect(
+        await screen.findByRole('combobox', { name: 'Role of o2@acme.io' }),
+      ).toBeInTheDocument()
+      await openRowActions(user, 'o2@acme.io')
+      expect(
+        screen.getByRole('menuitem', { name: /remove o2@acme\.io/i }),
+      ).toBeInTheDocument()
+    })
+  })
+
+  // Remove is absent where the engine refuses it: a role above the caller's own, and any
+  // row for a caller confined to a workspace (a removal is a tenant-wide act).
+  describe('Remove, where the engine accepts it', () => {
+    const ana = {
+      ...member,
+      user_id: 'u2',
+      email: 'ana@acme.io',
+      role: 'editor' as const,
+      workspace_ids: [],
+    }
+
+    it('offers no removal of a role above your own', async () => {
+      authState.activeRole = 'admin'
+      authState.isSuperadmin = false
+      const owner = {
+        ...ana,
+        user_id: 'u-owner',
+        email: 'owner@acme.io',
+        role: 'owner' as const,
+      }
+      api.listMembers.mockResolvedValue({
+        items: [owner, { ...owner, user_id: 'u-o2', email: 'o2@acme.io' }, ana],
+        has_more: false,
+      })
+      const user = userEvent.setup()
+      wrap(<PeopleTab />)
+      await openRowActions(user, 'owner@acme.io')
+      expect(
+        screen.queryByRole('menuitem', { name: /remove owner@acme\.io/i }),
+      ).toBeNull()
+      await user.keyboard('{Escape}')
+      await openRowActions(user, 'ana@acme.io')
+      expect(
+        screen.getByRole('menuitem', { name: /remove ana@acme\.io/i }),
+      ).toBeInTheDocument()
+    })
+
+    it('offers no removal to a caller who works within a workspace', async () => {
+      authState.confinedWorkspace = 'ws1'
+      api.listMembers.mockResolvedValue({ items: [ana], has_more: false })
+      const user = userEvent.setup()
+      wrap(<PeopleTab />)
+      await openRowActions(user, 'ana@acme.io')
+      expect(
+        screen.queryByRole('menuitem', { name: /remove ana@acme\.io/i }),
+      ).toBeNull()
+    })
+  })
+
   it('offers no enable for a member the deployment suspended, only its removal', async () => {
     api.listMembers.mockResolvedValue({
       items: [{ ...member, status: 'inactive' }],
@@ -342,12 +479,291 @@ describe('PeopleTab members roster', () => {
   })
 })
 
+// The table of CONCEPT §4.15: who is waiting comes first, each person reads as a name over
+// an address beside their mark, and how they sign in is a column. Directory groups are
+// Business data: a Community table without them has no Groups column.
+describe('PeopleTab — the people table', () => {
+  it('lists the pending invitations above the people', async () => {
+    api.listMembers.mockResolvedValue({ items: [member], has_more: false })
+    wrap(<PeopleTab />)
+    const pending = await screen.findByRole('heading', {
+      name: 'Pending invitations',
+    })
+    const people = screen.getByRole('heading', { name: 'Active members' })
+    expect(
+      pending.compareDocumentPosition(people) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('names how each person signs in', async () => {
+    api.listMembers.mockResolvedValue({
+      items: [
+        member,
+        { ...member, user_id: 'u2', email: 'bo@acme.io', sso_only: false },
+      ],
+      has_more: false,
+    })
+    wrap(<PeopleTab />)
+    const sso = (await screen.findByText('ada@acme.io')).closest('tr')
+    const local = screen.getByText('bo@acme.io').closest('tr')
+    expect(sso).toHaveTextContent('Single sign-on')
+    expect(local).toHaveTextContent('Password')
+    expect(local).not.toHaveTextContent('Single sign-on')
+    expect(
+      screen.getByRole('columnheader', { name: 'Sign-in' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the Groups column only where someone has directory groups', async () => {
+    api.listMembers.mockResolvedValue({
+      items: [{ ...member, groups: [] }],
+      has_more: false,
+    })
+    wrap(<PeopleTab />)
+    await screen.findByText('ada@acme.io')
+    expect(screen.queryByRole('columnheader', { name: 'Groups' })).toBeNull()
+    expect(screen.queryByText('No groups')).toBeNull()
+
+    cleanup()
+    api.listMembers.mockResolvedValue({ items: [member], has_more: false })
+    wrap(<PeopleTab />)
+    await screen.findByText('ada@acme.io')
+    expect(
+      screen.getByRole('columnheader', { name: 'Groups' }),
+    ).toBeInTheDocument()
+  })
+})
+
+// A role is changed where the person is listed, by whoever may write memberships, after a
+// confirmation that names the change, and never into a lock-out: your own role and the
+// organization's only owner are read with the reason beside them, never a control.
+describe('PeopleTab — a role changes from its row', () => {
+  // A tenant-wide member: the one whose role the route changes without touching where
+  // they work (the route rewrites the confinement of the row it updates).
+  const ana = {
+    ...member,
+    user_id: 'u2',
+    email: 'ana@acme.io',
+    display_name: 'Ana',
+    role: 'editor' as const,
+    workspace_ids: [],
+  }
+  const owner = {
+    ...ana,
+    user_id: 'u-owner',
+    email: 'owner@acme.io',
+    display_name: 'Olga',
+    role: 'owner' as const,
+  }
+
+  async function pick(
+    user: ReturnType<typeof userEvent.setup>,
+    email: string,
+    role: string,
+  ) {
+    await user.click(
+      await screen.findByRole('combobox', { name: `Role of ${email}` }),
+    )
+    await user.click(await screen.findByRole('option', { name: role }))
+  }
+
+  it('changes a role only once its confirmation names the change', async () => {
+    api.listMembers.mockResolvedValue({ items: [ana], has_more: false })
+    api.changeMemberRole.mockResolvedValue({})
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await pick(user, 'ana@acme.io', 'Admin')
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Change the role of Ana from Editor to Admin?',
+    })
+    expect(
+      within(dialog).getByText(/add and remove people/),
+    ).toBeInTheDocument()
+    expect(api.changeMemberRole).not.toHaveBeenCalled()
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Change role' }),
+    )
+    await waitFor(() => expect(api.changeMemberRole).toHaveBeenCalledTimes(1))
+    expect(api.changeMemberRole.mock.calls[0][0]).toEqual({
+      user_id: 'u2',
+      tenant: 't1',
+      role: 'admin',
+    })
+    expect(api.changeMemberRole.mock.calls[0][0]).not.toHaveProperty(
+      'workspace_id',
+    )
+    await waitFor(() => expect(api.listMembers).toHaveBeenCalledTimes(2))
+  })
+
+  it('cancel sends nothing, keeps the old role and returns to the control', async () => {
+    api.listMembers.mockResolvedValue({ items: [ana], has_more: false })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await pick(user, 'ana@acme.io', 'Viewer')
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Change the role of Ana from Editor to Viewer?',
+    })
+    expect(
+      within(dialog).getByText(/no longer start sessions/),
+    ).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    const control = screen.getByRole('combobox', {
+      name: 'Role of ana@acme.io',
+    })
+    expect(control).toHaveTextContent('Editor')
+    await waitFor(() => expect(control).toHaveFocus())
+    expect(api.changeMemberRole).not.toHaveBeenCalled()
+  })
+
+  it('reads your own role and the only owner with the reason, and no key changes them', async () => {
+    const self = {
+      ...ana,
+      user_id: 'u-self',
+      email: 'me@acme.io',
+      role: 'admin' as const,
+    }
+    api.listMembers.mockResolvedValue({ items: [owner, self], has_more: false })
+    authState.principal = {
+      aal: 3,
+      user_id: 'u-self',
+    } as typeof authState.principal
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await screen.findByText('me@acme.io')
+    const own = screen.getByText('me@acme.io').closest('tr') as HTMLElement
+    const only = screen.getByText('owner@acme.io').closest('tr') as HTMLElement
+    expect(within(own).queryByRole('combobox')).toBeNull()
+    expect(within(only).queryByRole('combobox')).toBeNull()
+    expect(own).toHaveTextContent(
+      'This is your own role. Another administrator or an owner can change it.',
+    )
+    expect(only).toHaveTextContent(
+      'The only owner of the whole organization keeps this role. Make someone else an owner first.',
+    )
+    await openRowActions(user, 'owner@acme.io')
+    await user.keyboard('{Escape}')
+    await user.keyboard('v')
+    expect(api.changeMemberRole).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    authState.principal = { aal: 3 }
+  })
+
+  it('counts only an owner of the whole organization as one who runs it', async () => {
+    const confined = {
+      ...owner,
+      user_id: 'u-o2',
+      email: 'o2@acme.io',
+      workspace_ids: ['ws1'],
+    }
+    api.listMembers.mockResolvedValue({
+      items: [owner, confined],
+      has_more: false,
+    })
+    wrap(<PeopleTab />)
+    const only = (await screen.findByText('owner@acme.io')).closest('tr')
+    const other = screen.getByText('o2@acme.io').closest('tr')
+    expect(
+      screen.queryByRole('combobox', { name: 'Role of owner@acme.io' }),
+    ).toBeNull()
+    expect(only).toHaveTextContent(
+      'The only owner of the whole organization keeps this role. Make someone else an owner first.',
+    )
+    expect(other).toHaveTextContent(
+      'This person works within a workspace, so their role cannot change here yet.',
+    )
+    expect(other).not.toHaveTextContent('The only owner')
+  })
+
+  it.each(['inactive', 'suspended'] as const)(
+    'counts no %s owner as one who runs the organization',
+    async (status) => {
+      api.listMembers.mockResolvedValue({
+        items: [
+          owner,
+          { ...owner, user_id: 'u-o2', email: 'o2@acme.io', status },
+        ],
+        has_more: false,
+      })
+      wrap(<PeopleTab />)
+      const only = (await screen.findByText('owner@acme.io')).closest('tr')
+      expect(
+        screen.queryByRole('combobox', { name: 'Role of owner@acme.io' }),
+      ).toBeNull()
+      expect(only).toHaveTextContent(
+        'The only owner of the whole organization keeps this role. Make someone else an owner first.',
+      )
+    },
+  )
+
+  it("says who changes an owner's own role", async () => {
+    api.listMembers.mockResolvedValue({
+      items: [owner, { ...owner, user_id: 'u-o2', email: 'o2@acme.io' }],
+      has_more: false,
+    })
+    authState.principal = {
+      aal: 3,
+      user_id: 'u-owner',
+    } as typeof authState.principal
+    wrap(<PeopleTab />)
+    const own = (await screen.findByText('owner@acme.io')).closest('tr')
+    expect(own).toHaveTextContent(
+      'This is your own role. Another owner can change it.',
+    )
+    authState.principal = { aal: 3 }
+  })
+
+  it('offers no control for a member who works within a workspace, and says why', async () => {
+    api.listMembers.mockResolvedValue({ items: [member], has_more: false })
+    wrap(<PeopleTab />)
+    const row = (await screen.findByText('ada@acme.io')).closest('tr')
+    expect(screen.queryByRole('combobox', { name: /^Role of / })).toBeNull()
+    expect(row).toHaveTextContent(
+      'This person works within a workspace, so their role cannot change here yet.',
+    )
+  })
+
+  it('offers no control to a caller who works within a workspace', async () => {
+    authState.confinedWorkspace = 'ws1'
+    api.listMembers.mockResolvedValue({ items: [ana], has_more: false })
+    wrap(<PeopleTab />)
+    expect(await screen.findByText('Editor')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /^Role of / })).toBeNull()
+  })
+
+  it('offers no role above your own, and leaves a higher role as it is', async () => {
+    authState.activeRole = 'admin'
+    authState.isSuperadmin = false
+    api.listMembers.mockResolvedValue({ items: [owner, ana], has_more: false })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await user.click(
+      await screen.findByRole('combobox', { name: 'Role of ana@acme.io' }),
+    )
+    const names = (await screen.findAllByRole('option')).map(
+      (o) => o.textContent,
+    )
+    expect(names).toEqual(['Viewer', 'Editor', 'Admin'])
+    expect(
+      screen.queryByRole('combobox', { name: 'Role of owner@acme.io' }),
+    ).toBeNull()
+  })
+
+  it('shows the role as read without the right to write memberships', async () => {
+    authState.can = (p: string) => p !== 'membership:write'
+    api.listMembers.mockResolvedValue({ items: [ana], has_more: false })
+    wrap(<PeopleTab />)
+    expect(await screen.findByText('Editor')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /^Role of / })).toBeNull()
+  })
+})
+
 /**
  * "INVITE SOMEONE TO ADD THE FIRST ONE" NAMED A CONTROL THIS PANEL DID NOT CARRY.
  *
- * The onboard control is at the top of the page, with the whole user table between it
- * and the invitations panel, so from here the sentence is an instruction about
- * somewhere else. The census counted this among the ten empty states with no action.
+ * Invite stands just above the invitations panel, yet an empty panel carries its own
+ * next step instead of pointing at another control. The census counted this among
+ * the ten empty states with no action.
  */
 describe('PeopleTab — the empty invitations panel', () => {
   it('opens the onboard dialog, under a name of its own', async () => {
@@ -357,9 +773,7 @@ describe('PeopleTab — the empty invitations panel', () => {
       name: 'Invite the first user',
     })
     // Two controls, one dialog, two names: a query for either finds exactly one.
-    expect(
-      screen.getAllByRole('button', { name: 'Onboard user' }),
-    ).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Invite' })).toHaveLength(1)
     await user.click(fromEmpty)
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
   })
@@ -381,9 +795,7 @@ describe('PeopleTab — onboarding checks the address', () => {
   async function openOnboard() {
     const user = userEvent.setup()
     wrap(<PeopleTab />)
-    await user.click(
-      (await screen.findAllByRole('button', { name: 'Onboard user' }))[0],
-    )
+    await user.click(await screen.findByRole('button', { name: 'Invite' }))
     const dialog = await screen.findByRole('dialog')
     return { user, dialog }
   }
@@ -391,15 +803,11 @@ describe('PeopleTab — onboarding checks the address', () => {
   it('an address the sign-in refuses is refused here too: "bad@" is not onboarded', async () => {
     const { user, dialog } = await openOnboard()
     await user.type(within(dialog).getByLabelText(/^Email/), 'bad@')
-    await user.type(
-      within(dialog).getByLabelText(/^Initial password/),
-      'long-enough-1',
-    )
     expect(
       within(dialog).getByText('Enter a valid email address.'),
     ).toBeInTheDocument()
     expect(
-      within(dialog).getByRole('button', { name: 'Onboard' }),
+      within(dialog).getByRole('button', { name: 'Create invitation' }),
     ).toBeDisabled()
     expect(api.onboard).not.toHaveBeenCalled()
   })
@@ -410,15 +818,11 @@ describe('PeopleTab — onboarding checks the address', () => {
       within(dialog).getByLabelText(/^Email/),
       'ops@corp.internal',
     )
-    await user.type(
-      within(dialog).getByLabelText(/^Initial password/),
-      'long-enough-1',
-    )
     expect(
       within(dialog).queryByText('Enter a valid email address.'),
     ).toBeNull()
     expect(
-      within(dialog).getByRole('button', { name: 'Onboard' }),
+      within(dialog).getByRole('button', { name: 'Create invitation' }),
     ).toBeEnabled()
   })
 
@@ -440,11 +844,9 @@ describe('PeopleTab — onboarding checks the address', () => {
       has_more: false,
     })
     await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
-    await user.type(
-      within(dialog).getByLabelText(/^Initial password/),
-      'long-enough-1',
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create invitation' }),
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Onboard' }))
     await waitFor(() => expect(api.listMembers).toHaveBeenCalledTimes(2))
     expect(await screen.findByText('ana@acme.io')).toBeInTheDocument()
   })
@@ -455,21 +857,41 @@ describe('PeopleTab — onboarding checks the address', () => {
     )
     const { user, dialog } = await openOnboard()
     await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
-    await user.type(
-      within(dialog).getByLabelText(/^Initial password/),
-      'long-enough-1',
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create invitation' }),
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Onboard' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'email address is not valid',
     )
   })
+
+  it('a password the administrator sets is still one choice away', async () => {
+    api.onboard.mockResolvedValue({ user: { id: 'u-new' } })
+    const { user, dialog } = await openOnboard()
+    await user.click(within(dialog).getByLabelText('How they sign in'))
+    await user.click(
+      await screen.findByRole('option', { name: 'Set an initial password' }),
+    )
+    await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
+    await user.type(
+      within(dialog).getByLabelText(/^Initial password/),
+      'long-enough-1',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Add person' }))
+    await waitFor(() => expect(api.onboard).toHaveBeenCalledTimes(1))
+    expect(api.onboard.mock.calls[0][0]).toMatchObject({
+      mode: 'password',
+      password: 'long-enough-1',
+    })
+    expect(api.onboard.mock.calls[0][0].delivery).toBeUndefined()
+  })
 })
 
-// #471: with no invitation mailer the engine answers invite mode 409, and the console
-// offered it anyway, ending in "Something went wrong.". server-info now says so.
+// #471: with no invitation mailer the engine answers a mailed invitation 409, and the
+// console offered it anyway, ending in "Something went wrong.". server-info says so, and
+// on such a server the invitation is a link the administrator sends themselves.
 describe('PeopleTab — email invitations follow the engine', () => {
-  const reason = /cannot mail invitations/i
+  const reason = /cannot send mail/i
   const invite = {
     id: 'i1',
     email: 'grace@acme.io',
@@ -482,9 +904,7 @@ describe('PeopleTab — email invitations follow the engine', () => {
   async function openModes() {
     const user = userEvent.setup()
     wrap(<PeopleTab />)
-    await user.click(
-      (await screen.findAllByRole('button', { name: 'Onboard user' }))[0],
-    )
+    await user.click(await screen.findByRole('button', { name: 'Invite' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByLabelText('How they sign in'))
     const option = await screen.findByRole('option', {
@@ -493,11 +913,21 @@ describe('PeopleTab — email invitations follow the engine', () => {
     return { user, dialog, option }
   }
 
-  it('without a mailer the invitation is disabled, with the reason', async () => {
+  it('without a mailer the invitation is a link, offered first, with the reason', async () => {
     serverInfo.data = { invite_delivery_unavailable: true }
-    const { dialog, option } = await openModes()
-    expect(option).toHaveAttribute('aria-disabled', 'true')
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await user.click(await screen.findByRole('button', { name: 'Invite' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByRole('combobox', { name: 'How they sign in' }),
+    ).toHaveTextContent('Create an invitation link')
+    expect(within(dialog).queryByLabelText(/^Initial password/)).toBeNull()
     expect(within(dialog).getByText(reason)).toBeInTheDocument()
+    await user.click(within(dialog).getByLabelText('How they sign in'))
+    expect(
+      screen.queryByRole('option', { name: 'Send an email invitation' }),
+    ).toBeNull()
   })
 
   it('with a mailer the invitation is offered and no reason shows', async () => {
@@ -512,23 +942,83 @@ describe('PeopleTab — email invitations follow the engine', () => {
     expect(within(dialog).queryByLabelText(/^Initial password/)).toBeNull()
   })
 
-  it('the palette request without a mailer onboards with a password', async () => {
+  it('the palette request without a mailer opens on the invitation link', async () => {
     serverInfo.data = { invite_delivery_unavailable: true }
-    api.onboard.mockResolvedValue({ user: { id: 'u-new' } })
-    const user = userEvent.setup()
     wrap(<PeopleTab inviteRequested />)
     const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByRole('combobox', { name: 'How they sign in' }),
+    ).toHaveTextContent('Create an invitation link')
+    expect(within(dialog).queryByLabelText(/^Initial password/)).toBeNull()
+  })
+
+  // Journey 2 on a server with no mail: the administrator invites in one step and sends
+  // the link themselves; the engine hands its secret to this session once.
+  it('without a mailer one step gives the link once, to copy', async () => {
+    serverInfo.data = { invite_delivery_unavailable: true }
+    api.onboard.mockResolvedValue({
+      user: { id: 'u-new', email: 'ana@acme.io' },
+      created: true,
+      membership: {},
+      invite: {
+        id: 'i9',
+        expires_at: '2030-01-08T00:00:00Z',
+        delivery: 'link',
+        token: 'olvi_sel_secret',
+      },
+    })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await user.click(await screen.findByRole('button', { name: 'Invite' }))
+    const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
-    await user.type(
-      within(dialog).getByLabelText(/^Initial password/),
-      'long-enough-1',
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create invitation' }),
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Onboard' }))
     await waitFor(() => expect(api.onboard).toHaveBeenCalledTimes(1))
     expect(api.onboard.mock.calls[0][0]).toMatchObject({
-      mode: 'password',
-      password: 'long-enough-1',
+      email: 'ana@acme.io',
+      mode: 'invite',
+      delivery: 'link',
     })
+    expect(api.onboard.mock.calls[0][0].password).toBeUndefined()
+
+    const link = `${window.location.origin}/accept-invite#token=olvi_sel_secret`
+    const field = await within(dialog).findByLabelText('Invitation link')
+    expect(field).toHaveValue(link)
+    expect(field).toHaveAttribute('readonly')
+    expect(within(dialog).getByText(/works only once/)).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Copy link' }))
+    expect(await navigator.clipboard.readText()).toBe(link)
+    expect(
+      await within(dialog).findByRole('button', { name: 'Copied' }),
+    ).toBeInTheDocument()
+  })
+
+  it('with a mailer the invitation is mailed and no link comes back', async () => {
+    api.onboard.mockResolvedValue({
+      user: { id: 'u-new', email: 'ana@acme.io' },
+      created: true,
+      membership: {},
+      invite: {
+        id: 'i9',
+        expires_at: '2030-01-08T00:00:00Z',
+        delivery: 'sent',
+      },
+    })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await user.click(await screen.findByRole('button', { name: 'Invite' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create invitation' }),
+    )
+    expect(
+      await within(dialog).findByText(/An invitation was sent to ana@acme.io/),
+    ).toBeInTheDocument()
+    expect(api.onboard.mock.calls[0][0].delivery).toBeUndefined()
+    expect(within(dialog).queryByLabelText('Invitation link')).toBeNull()
   })
 
   it("the engine's 409 reads in the form when server-info had not said so", async () => {
@@ -544,23 +1034,43 @@ describe('PeopleTab — email invitations follow the engine', () => {
       screen.getByRole('option', { name: 'Send an email invitation' }),
     )
     await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
-    await user.click(within(dialog).getByRole('button', { name: 'Onboard' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create invitation' }),
+    )
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'no invitation mailer is configured',
     )
   })
 
-  it('a pending invitation offers its resend only with a mailer', async () => {
+  it('a pending invitation is mailed again with a mailer, and gets a new link without one', async () => {
     api.listInvites.mockResolvedValue({ items: [invite], has_more: false })
     wrap(<PeopleTab />)
     await screen.findByText(invite.email)
     expect(screen.getByRole('button', { name: 'Resend' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'New link' })).toBeNull()
 
     cleanup()
     serverInfo.data = { invite_delivery_unavailable: true }
+    api.resendInvite.mockResolvedValue({
+      id: 'i1',
+      expires_at: '2030-01-08T00:00:00Z',
+      delivery: 'link',
+      token: 'olvi_sel_rotated',
+    })
+    const user = userEvent.setup()
     wrap(<PeopleTab />)
     await screen.findByText(invite.email)
-    expect(screen.getByRole('button', { name: 'Resend' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Resend' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'New link' }))
+    await waitFor(() => expect(api.resendInvite).toHaveBeenCalledTimes(1))
+    expect(api.resendInvite.mock.calls[0]).toEqual(['i1', 'link'])
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('Invitation link')).toHaveValue(
+      `${window.location.origin}/accept-invite#token=olvi_sel_rotated`,
+    )
+    expect(
+      within(dialog).getByText(/The link made before no longer works/),
+    ).toBeInTheDocument()
   })
 })
 
@@ -572,5 +1082,133 @@ describe('PeopleTab — the TOTP reset names what it shows', () => {
     expect(totpResetLabel.replace('{{email}}', 'ana@example.com')).toContain(
       totpReset,
     )
+  })
+})
+
+describe('PeopleTab — find people and suspend them (A4 rows 4.1, 4.7)', () => {
+  const bob = {
+    ...member,
+    user_id: 'u2',
+    email: 'bob@acme.io',
+    display_name: 'Bob',
+    status: 'suspended',
+    external_id: undefined,
+    sso_only: false,
+    role: 'editor',
+  }
+  const ada = { ...member, external_id: undefined, sso_only: false }
+
+  it('narrows the roster by search and by status', async () => {
+    edition.business = true
+    api.listMembers.mockResolvedValue({ items: [ada, bob], has_more: false })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await screen.findByText(ada.email)
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search people' }),
+      'bob',
+    )
+    expect(screen.queryByText(ada.email)).toBeNull()
+    expect(screen.getByText(bob.email)).toBeTruthy()
+    await user.clear(screen.getByRole('searchbox', { name: 'Search people' }))
+    await user.click(screen.getByRole('combobox', { name: 'Filter by status' }))
+    await user.click(await screen.findByRole('option', { name: 'Suspended' }))
+    expect(screen.queryByText(ada.email)).toBeNull()
+    expect(screen.getByText(bob.email)).toBeTruthy()
+  })
+
+  it('suspends an active person after confirmation and reactivates a suspended one', async () => {
+    edition.business = true
+    api.listMembers.mockResolvedValue({ items: [ada, bob], has_more: false })
+    api.setMemberSuspended.mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await screen.findByText(ada.email)
+    await openRowActions(user, ada.email)
+    await user.click(
+      await screen.findByRole('menuitem', { name: `Suspend ${ada.email}` }),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Suspend' }))
+    await waitFor(() =>
+      expect(api.setMemberSuspended).toHaveBeenCalledWith('u1', true),
+    )
+
+    await openRowActions(user, bob.email)
+    await user.click(
+      await screen.findByRole('menuitem', { name: `Reactivate ${bob.email}` }),
+    )
+    await waitFor(() =>
+      expect(api.setMemberSuspended).toHaveBeenCalledWith('u2', false),
+    )
+  })
+
+  it('never offers to suspend the only owner of the whole organization', async () => {
+    edition.business = true
+    const owner = {
+      ...ada,
+      user_id: 'u-owner',
+      email: 'owner@acme.io',
+      role: 'owner',
+      workspace_ids: [],
+    }
+    const confined = {
+      ...owner,
+      user_id: 'u-o2',
+      email: 'o2@acme.io',
+      workspace_ids: ['ws1'],
+    }
+    api.listMembers.mockResolvedValue({
+      items: [owner, confined],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await openRowActions(user, owner.email)
+    expect(
+      screen.queryByRole('menuitem', { name: `Suspend ${owner.email}` }),
+    ).toBeNull()
+    await user.keyboard('{Escape}')
+    await openRowActions(user, confined.email)
+    expect(
+      screen.getByRole('menuitem', { name: `Suspend ${confined.email}` }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers no suspension in Community', async () => {
+    api.listMembers.mockResolvedValue({ items: [ada], has_more: false })
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await screen.findByText(ada.email)
+    await openRowActions(user, ada.email)
+    expect(
+      screen.queryByRole('menuitem', { name: `Suspend ${ada.email}` }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select every person shown' }),
+    ).toBeNull()
+  })
+})
+
+describe('PeopleTab — an edition adds ways to add people (A4 row 4.2)', () => {
+  it('shows an added action beside Invite, only with its permission', async () => {
+    panels.peopleActions = [
+      {
+        id: 'import',
+        permission: 'membership:write',
+        Component: () => <button type="button">Import from a file</button>,
+      },
+    ]
+    wrap(<PeopleTab />)
+    expect(
+      await screen.findByRole('button', { name: 'Import from a file' }),
+    ).toBeTruthy()
+
+    cleanup()
+    authState.can = (p: string) => p !== 'membership:write'
+    wrap(<PeopleTab />)
+    await screen.findByText('No active members.')
+    expect(
+      screen.queryByRole('button', { name: 'Import from a file' }),
+    ).toBeNull()
   })
 })

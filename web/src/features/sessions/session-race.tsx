@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AppLink } from '@/components/ui/app-link'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { agentOpsApi } from '@/features/agentops/api'
@@ -21,6 +22,8 @@ import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import { SessionBranchChanges } from './session-branch-changes'
 import { SessionChanges } from './session-changes'
 import { SessionGit } from './session-git'
+import { runLabel } from './provenance'
+import { useUsagePath } from './session-meter'
 import './i18n'
 
 export function SessionRace({ refs }: { refs: string[] }) {
@@ -50,6 +53,8 @@ function RaceCache({ refs }: { refs: string[] }) {
 function RacePanel({ refs }: { refs: string[] }) {
   const { t } = useTranslation('sessions')
   const { activeTenant, can } = useAuth()
+  // A choice's cost, and the hint's word for it, are told only where Usage opens.
+  const tellsCost = useUsagePath() !== null
   const captureOwner = useStepUpOwner()
   const [selected, setSelected] = useState<RunDTO | null>(null)
   const [kept, setKept] = useState<string | null>(null)
@@ -137,7 +142,9 @@ function RacePanel({ refs }: { refs: string[] }) {
       className="flex min-w-0 flex-col gap-4 p-4"
     >
       <h1 className="text-title font-semibold">{t('race.title')}</h1>
-      <p className="text-body text-muted-foreground">{t('race.hint')}</p>
+      <p className="text-body text-muted-foreground">
+        {t(tellsCost ? 'race.hint' : 'race.hintNoCost')}
+      </p>
       {queries.some((query) => query.isError) ? (
         <p role="alert" className="text-danger">
           {t('race.loadError')}
@@ -159,21 +166,23 @@ function RacePanel({ refs }: { refs: string[] }) {
                 className="flex min-w-0 flex-col gap-3 rounded-lg border border-border p-3"
               >
                 <h2 className="break-words text-body font-semibold">
-                  <a
+                  <AppLink
                     className="underline underline-offset-2"
                     href={`/agentops?session=run:${encodeURIComponent(run.run_ref)}`}
                   >
-                    {run.name || run.provider_driver || run.run_ref}
-                  </a>
+                    {runLabel(run)}
+                  </AppLink>
                 </h2>
-                <p
-                  title={t('meter.costTitle')}
-                  className="text-caption text-muted-foreground"
-                >
-                  {run.cost_micro_usd == null
-                    ? t('meter.costUnknown')
-                    : formatMicroUsd(run.cost_micro_usd)}
-                </p>
+                {tellsCost ? (
+                  <p
+                    title={t('meter.costTitle')}
+                    className="text-caption text-muted-foreground"
+                  >
+                    {run.cost_micro_usd == null
+                      ? t('meter.costUnknown')
+                      : formatMicroUsd(run.cost_micro_usd)}
+                  </p>
+                ) : null}
                 <SessionBranchChanges run={run} />
                 <RaceEdits run={run} />
                 {mayKeep && !kept ? (
@@ -208,7 +217,7 @@ function RacePanel({ refs }: { refs: string[] }) {
         }}
         title={t('race.keep')}
         description={t('race.confirm', {
-          name: selected?.name || selected?.run_ref,
+          name: selected ? runLabel(selected) : '',
         })}
         confirmLabel={t('race.confirmKeep')}
         pending={keep.isPending}
@@ -240,7 +249,7 @@ function RaceEdits({ run }: { run: RunDTO }) {
       {open ? (
         <>
           <SessionChanges run={run} />
-          <SessionGit run={run} />
+          <SessionGit run={run} variant="lane" />
         </>
       ) : null}
     </details>

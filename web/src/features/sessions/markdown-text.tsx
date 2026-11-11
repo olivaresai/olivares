@@ -7,8 +7,6 @@
 // the model says can never become markup. A link says where it goes (its title) and opens
 // without the opener.
 import { Fragment, memo, type ReactNode } from 'react'
-import { useTranslation } from 'react-i18next'
-import { CopyButton } from '@/components/ui/copy-button'
 import {
   parseMarkdown,
   type Block,
@@ -16,6 +14,7 @@ import {
   type HrefResolver,
 } from './markdown'
 import { CodeOrPath } from './path-chip'
+import { ReplyCode } from './reply-code'
 
 interface MarkdownPresentation {
   renderLink?: (href: string, children: ReactNode) => ReactNode
@@ -136,18 +135,7 @@ function Blocks({
           }
           case 'code':
             // A code block copies its text exactly.
-            return (
-              <div key={i} className="relative">
-                <pre
-                  tabIndex={0}
-                  data-slot="reply-code"
-                  className="m-0 overflow-x-auto rounded-ctl bg-muted p-3 pe-10 font-mono text-mono-s text-text focus-visible:ring-2 focus-visible:ring-focus"
-                >
-                  <code>{block.text}</code>
-                </pre>
-                <CodeCopy text={block.text} />
-              </div>
-            )
+            return <ReplyCode key={i} text={block.text} lang={block.lang} />
           case 'quote':
             return (
               <blockquote
@@ -214,21 +202,6 @@ function Blocks({
         }
       })}
     </div>
-  )
-}
-
-/** The button sits on the block's corner; a failure is said under the block, where it
- * covers none of the code the person is told to select. */
-function CodeCopy({ text }: { text: string }) {
-  const { t } = useTranslation('common')
-  return (
-    <CopyButton
-      text={() => text}
-      label={t('ui.copy.code')}
-      copiedLabel={t('ui.copy.copied')}
-      failedLabel={t('ui.copy.failed')}
-      className="absolute end-1 top-1 bg-muted"
-    />
   )
 }
 

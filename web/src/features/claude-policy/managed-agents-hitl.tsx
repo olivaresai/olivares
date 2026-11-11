@@ -15,7 +15,10 @@
 // events) and the connector (/threads/:tid/events). Shown with a pending seam.
 import { ModuleGate } from '@/components/layout/query-error-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  useFailedActionReporter,
+} from '@/lib/hooks/use-privileged-mutation'
 import { Check, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -230,6 +233,10 @@ function HitlDetail({
       if (e instanceof ApiError && e.isStepUpRequired) {
         setConfirm(null)
         report(e)
+        return
+      }
+      if (reportEditionRefusal(e)) {
+        setConfirm(null)
         return
       }
       if (e instanceof ApiError && e.isForbidden) {

@@ -36,7 +36,7 @@ import { GovernancePanel } from '@/features/agentops/governance-panel'
 import { LiveConsole } from '@/features/agentops/live-console'
 import { EventsPanel, RunInfo } from '@/features/agentops/run-detail'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
-import { sessionNameLadder } from '@/features/home/work-line'
+import { useViewAccess } from '@/features/navigation/authorization'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { LiveDot, RelTimeLabel, humanDurationSeconds } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
@@ -51,6 +51,7 @@ import {
   isLiveRun,
   isScopedRow,
   primaryRun,
+  runName,
   sessionNaming,
   type Capability,
   type ControlLevel,
@@ -61,6 +62,7 @@ import type { SessionResolution } from './use-session-resolution'
 import { RunActions } from './run-actions'
 import { SessionTimeline } from './timeline'
 import { SessionFailure } from './session-failure'
+import { useUsagePath } from './session-meter'
 import type { Attribution, LiveDTO } from './types'
 import './i18n'
 import { ActionName } from './action-name'
@@ -171,6 +173,9 @@ function CardBody({
   // The one ladder, same call the rail makes — so the sheet and the row that opened it
   // can never tell the same session two different names.
   const naming = sessionNaming(session, t('untitled'))
+  // The access map is offered only where its page opens: its read is the administrator's.
+  const { navigable } = useViewAccess()
+  const accessMap = FEATURE_VIEWS.find((view) => view.id === 'accessMap')
 
   if (loading) {
     return (
@@ -371,9 +376,7 @@ function CardBody({
           Feature routes are generated from the registry, so their paths are not in the
           static route union — the shell uses the same `as never` escape hatch. */}
       <div className="flex flex-wrap gap-2">
-        {FEATURE_VIEWS.some(
-          (view) => view.id === 'accessMap' && !view.hideInNav,
-        ) && (
+        {accessMap && !accessMap.hideInNav && navigable(accessMap) && (
           <Button variant="secondary" size="sm" asChild>
             <Link to={'/access-map' as never}>
               <Network className="size-3.5" />
@@ -466,12 +469,6 @@ function ProvenanceBlock({
           {session.runs.map((r) => {
             const active = r.run_ref === activeRun
             const many = session.runs.length > 1
-            const naming = sessionNameLadder(
-              r.name,
-              null,
-              t('untitled'),
-              r.title,
-            )
             return (
               <li key={r.run_ref}>
                 <button
@@ -487,9 +484,9 @@ function ProvenanceBlock({
                 >
                   <NamedRef
                     className="text-foreground"
-                    name={naming.from === 'untitled' ? null : naming.text}
+                    name={runName(r)}
                     reference={r.run_ref}
-                    fallback={naming.text}
+                    fallback={t('untitled')}
                   />
                   <RunStateBadge run={r} />
                   <span className="text-muted-foreground">
@@ -621,6 +618,8 @@ function RelatedObservations({
   onNavigate?: (target: SessionTarget) => void
 }) {
   const { t } = useTranslation('sessions')
+  // Money is told only where Usage opens for the person: a member sees none.
+  const tellsCost = useUsagePath() !== null
   return (
     <section
       className="rounded-md border border-border bg-surface p-3"
@@ -648,9 +647,11 @@ function RelatedObservations({
               {formatTokens(r.input_tokens, lang)} /{' '}
               {formatTokens(r.output_tokens, lang)}
             </span>
-            <span className="font-mono tabular-nums text-foreground">
-              {formatMicroUsd(r.cost_micro_usd, { locale: lang })}
-            </span>
+            {tellsCost && (
+              <span className="font-mono tabular-nums text-foreground">
+                {formatMicroUsd(r.cost_micro_usd, { locale: lang })}
+              </span>
+            )}
             <RelTimeLabel
               ts={r.last_event_at}
               className="text-muted-foreground"
@@ -678,6 +679,7 @@ function Observed({ live, lang }: { live: LiveDTO; lang: string }) {
   // C2-DESIGN §3: an active session's elapsed figure ticks each second, extrapolated
   // from its last engine event; a session that is not active keeps the engine's figure.
   const tickedSeconds = tickLive(live, nowMs).duration_seconds
+  const tellsCost = useUsagePath() !== null
   return (
     <div className="flex flex-col gap-3">
       {live.cc_state === 'silent_evasion' && (
@@ -727,11 +729,13 @@ function Observed({ live, lang }: { live: LiveDTO; lang: string }) {
         <KvRow label={t('detail.outputTokens')} mono>
           {formatTokens(live.output_tokens, lang)}
         </KvRow>
-        <KvRow label={t('detail.cost')} mono>
-          <span data-cost>
-            {formatMicroUsd(live.cost_micro_usd, { locale: lang })}
-          </span>
-        </KvRow>
+        {tellsCost && (
+          <KvRow label={t('detail.cost')} mono>
+            <span data-cost>
+              {formatMicroUsd(live.cost_micro_usd, { locale: lang })}
+            </span>
+          </KvRow>
+        )}
         <KvRow label={t('detail.events')} mono>
           {formatInt(live.event_count, lang)}
         </KvRow>

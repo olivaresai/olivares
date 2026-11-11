@@ -18,6 +18,8 @@
   "noAgentsHint": "이 Workspace에서 발견되는 대로 에이전트가 여기에 표시됩니다.",
   "noGroups": "이 Workspace에는 아직 에이전트 그룹이 없습니다.",
   "noGroupsHint": "이 Workspace에 대해 에이전트 그룹이 정의되면 여기에 표시됩니다.",
+  "agentsFailed": "이 Workspace의 에이전트를 읽을 수 없습니다.",
+  "groupsFailed": "이 Workspace의 에이전트 그룹을 읽을 수 없습니다.",
   "viewAll": "모두 보기",
   "defaultBadge": "기본",
   "created": "생성됨",
@@ -62,5 +64,25 @@
     "statusFailed": "이 폴더를 SFTP로 사용할 수 있는지 확인하지 못했습니다."
   },
   "showMore": "더 보기",
-  "agentsCut": "일부 에이전트만 표시됩니다."
+  "agentsCut": "일부 에이전트만 표시됩니다.",
+  "files": {
+    "title": "워크스페이스",
+    "folders": "폴더",
+    "overview": "개요",
+    "backToFiles": "파일",
+    "addFolder": "폴더 추가",
+    "emptyTitle": "아직 폴더가 없습니다",
+    "emptyDescription": "폴더를 추가하면 세션이 그 범위 안에서 작업합니다.",
+    "noAccessTitle": "이 폴더를 열 수 없습니다",
+    "noAccessDescription": "삭제되었거나 내 역할에 포함되지 않습니다. 관리자에게 접근 권한을 요청하세요.",
+    "showFolders": "내 폴더 보기",
+    "loading": "폴더를 읽는 중…",
+    "loadFailed": "폴더를 불러올 수 없습니다.",
+    "details": "위키 및 파일 전송",
+    "worktreeCount": "워크트리: {{n}}",
+    "worktreeHint": "탐색하려면 이 워크트리를 폴더로 등록하세요.",
+    "gitCut": "변경된 파일이 모두 표시되지는 않습니다. Git이 변경 사항의 일부만 나열했습니다.",
+    "clean": "커밋되지 않은 변경 사항 없음",
+    "changes": "커밋되지 않은 변경 사항: {{n}}"
+  }
 }

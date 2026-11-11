@@ -176,8 +176,9 @@ describe('RunCreateDialog — start from a GitHub issue or pull request', () => 
     )
     expect(posted().source_url).toBe(PAGE)
     expect(posted().workspace_ref).toBe('folder-a')
-    // The session is listed by the item's title, not by the start of its body.
-    expect(posted().name).toBe('Crash on save')
+    // No name the person typed: the engine titles the session from the first line of
+    // its first message, the item's title.
+    expect(posted().name).toBe('')
     expect(
       vi.mocked(agentOpsApi.sourceItem).mock.invocationCallOrder[0],
     ).toBeLessThan(vi.mocked(agentOpsApi.createRun).mock.invocationCallOrder[0])

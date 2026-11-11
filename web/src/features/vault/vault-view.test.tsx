@@ -31,6 +31,8 @@ vi.mock('./api', async (importOriginal) => ({
   vaultApi: api,
 }))
 
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { VaultView } from './vault-view'
 
 const stamp = '2026-10-02T10:00:00Z'
@@ -108,6 +110,32 @@ describe('VaultView', () => {
     await user.clear(screen.getByRole('searchbox'))
     await user.type(screen.getByRole('searchbox'), 'zzz')
     expect(await screen.findByText('No item matches “zzz”')).toBeInTheDocument()
+  })
+
+  it('lists the items as a table: name, type and when each changed', async () => {
+    renderView()
+    const table = await screen.findByRole('table', { name: 'Vault' })
+    const heads = within(table)
+      .getAllByRole('columnheader')
+      .map((head) => head.textContent)
+    expect(heads).toStrictEqual(['Name', 'Type', 'Changed', 'Actions'])
+    const bank = within(table)
+      .getByRole('button', { name: 'Open bank' })
+      .closest('tr')!
+    expect(
+      within(bank).getByRole('cell', { name: 'Login · Code' }),
+    ).toBeVisible()
+    expect(within(bank).getByText('Main account')).toBeVisible()
+    // The list never holds a value: it is copied or revealed, both audited.
+    expect(within(table).queryByText('pw-bank-1')).toBeNull()
+    expect(api.reveal).not.toHaveBeenCalled()
+  })
+
+  it('offers Add item as a secondary action: the vault has no orange verb', async () => {
+    renderView()
+    await screen.findByText('bank')
+    const add = screen.getByRole('button', { name: 'Add item' })
+    expect(add.className).toBe(cn(buttonVariants({ variant: 'secondary' })))
   })
 
   it('copies a password in one click, through the audited reveal', async () => {

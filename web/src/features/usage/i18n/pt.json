@@ -1,9 +1,55 @@
 {
   "title": "Utilização",
-  "subtitle": "Limites oficiais de 5 horas e semanais ao lado dos tokens e do custo de hoje.",
+  "subtitle": "O que as sessões usaram e custaram nos dias que escolher, ao lado dos limites de 5 horas e semanais de cada conta.",
+  "subtitleNoCost": "O que as sessões usaram nos dias que escolher, ao lado dos limites de 5 horas e semanais de cada conta.",
   "tabs": {
     "accounts": "Contas",
     "timeline": "Cronologia"
+  },
+  "spend": {
+    "heading": "Gasto",
+    "headingNoCost": "Execuções e tokens",
+    "range": {
+      "label": "Período",
+      "d7": "7 dias",
+      "d14": "14 dias",
+      "d30": "30 dias",
+      "custom": "Personalizado",
+      "from": "Primeiro dia",
+      "to": "Último dia",
+      "invalid": "O primeiro dia deve ser igual ou anterior ao último. Um intervalo abrange no máximo {{days}} dias."
+    },
+    "tool": "Ferramenta",
+    "allTools": "Todas as ferramentas",
+    "profile": "Perfil",
+    "allProfiles": "Todos os perfis",
+    "export": "Exportar",
+    "totals": "Totais",
+    "cost": "Gasto",
+    "runs": "Execuções",
+    "input": "Tokens de entrada",
+    "output": "Tokens de saída",
+    "costUnreported": "Execuções sem custo informado: {{runs}}",
+    "tokensUnreported": "Execuções sem tokens informados: {{runs}}",
+    "empty": {
+      "title": "Nada foi executado nestes dias",
+      "description": "Escolha mais dias ou inicie uma sessão: o que ela usar aparecerá aqui."
+    },
+    "chart": {
+      "cost": "Gasto diário",
+      "tokens": "Tokens diários",
+      "day": "Dia",
+      "summary": "{{title}} de {{from}} a {{to}}: {{total}} no total.",
+      "unpriced": "As execuções sem custo informado não estão no gráfico."
+    },
+    "profiles": {
+      "heading": "Por perfil",
+      "profile": "Perfil",
+      "input": "Entrada",
+      "output": "Saída",
+      "none": "Sem perfil",
+      "unnamed": "Perfil sem nome"
+    }
   },
   "accounts": {
     "heading": "Contas",
@@ -11,7 +57,8 @@
     "error": "Não foi possível ler os limites das contas.",
     "empty": "Nenhuma conta comunicou ainda os seus limites.",
     "details": "Detalhes",
-    "detailsFor": "Detalhes de {{account}}"
+    "detailsFor": "Detalhes de {{account}}",
+    "emptyChosen": "Nenhuma conta desta ferramenta ou perfil informou ainda os seus limites."
   },
   "today": {
     "heading": "Hoje",

@@ -11,6 +11,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
 import { useSessionStore } from '@/stores/session'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -147,8 +148,11 @@ const CW = 'sessions:channel:write'
 const CA = 'sessions:channel:admin'
 const DR = 'sessions:delivery:read'
 const EXP = '2030-01-01T00:00:00Z'
+/** The base a relative request path is read against. */
+const WEB = 'http://console.test'
 
 beforeEach(() => {
+  fakeRouter.reset()
   useNewSessionDialog.setState({ open: false, opener: null, advanced: null })
   auth.perms = new Set()
   auth.tenant = 't1'
@@ -199,6 +203,75 @@ describe('CommunicationsView — three doors, each on its own permission', () =>
     expect(screen.queryByRole('tab', { name: 'Inbox' })).toBeNull()
     expect(screen.queryByRole('tab', { name: 'New channel' })).toBeNull()
     expect(api.listInbox).not.toHaveBeenCalled()
+  })
+
+  it('New channel is the one primary in the page header, and opens the form', async () => {
+    auth.perms = new Set([CR, CW])
+    renderWithQuery(() => <CommunicationsView entrance="catalog" />)
+    await screen.findByRole('heading', { name: 'Communications' })
+    expect(screen.queryByRole('tab', { name: 'New channel' })).toBeNull()
+    const primary = screen.getByRole('button', { name: 'New channel' })
+    // Drawn as the primary, not the default secondary button.
+    expect(primary).toHaveClass('bg-accent')
+    // The verb slot ends the header's row: the page's one primary action.
+    const row = document.querySelector(
+      '[data-slot="page-actions"]',
+    ) as HTMLElement
+    expect(within(row).getAllByRole('button').at(-1)).toBe(primary)
+    await userEvent.setup().click(primary)
+    expect(
+      await screen.findByRole('button', { name: 'Create channel' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'New channel' })).toBeNull()
+  })
+
+  it('New channel takes the keyboard into the form it opens', async () => {
+    // The pressed button leaves the header; focus must not fall to the page.
+    auth.perms = new Set([CR, CW])
+    renderWithQuery(() => <CommunicationsView entrance="catalog" />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'New channel' }))
+    expect(await screen.findByLabelText(/^Slug/)).toHaveFocus()
+  })
+
+  it('offers no New channel to a person who may only read channels', async () => {
+    auth.perms = new Set([CR])
+    renderWithQuery(() => <CommunicationsView entrance="catalog" />)
+    await screen.findByRole('heading', { name: 'Communications' })
+    expect(screen.queryByRole('button', { name: 'New channel' })).toBeNull()
+  })
+
+  it('the open form stands alone, and Cancel goes back to the channels', async () => {
+    auth.perms = new Set([CR, CW])
+    renderWithQuery(() => <CommunicationsView entrance="catalog" />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'New channel' }))
+    expect(screen.queryByRole('tablist')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(
+      screen.getByRole('tab', { name: 'Channels', selected: true }),
+    ).toBeInTheDocument()
+  })
+
+  it('Cancel on the New channel page goes to the channels page', async () => {
+    // The title and the line come from the page that was opened: Cancel must
+    // leave /communications/new, not draw the list under «New channel».
+    auth.perms = new Set([CR, CW])
+    fakeRouter.reset('/communications/new')
+    renderWithQuery(() => <CommunicationsView entrance="new" />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(fakeRouter.url()).toBe('/communications')
+  })
+
+  it('a person who may only create channels gets the form and no tab strip', async () => {
+    auth.perms = new Set([CW])
+    renderWithQuery(() => <CommunicationsView entrance="new" />)
+    expect(
+      await screen.findByRole('button', { name: 'Create channel' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 
   it('the inbox door with ONLY delivery:read reads the inbox and never the catalog', async () => {
@@ -282,6 +355,9 @@ describe('CommunicationsView — three doors, each on its own permission', () =>
     expect(api.listMembers).not.toHaveBeenCalled()
     expect(api.listAgents).not.toHaveBeenCalled()
     expect(api.getChannel).not.toHaveBeenCalled()
+    // Administering a channel never opens its messages.
+    expect(api.getMessage).not.toHaveBeenCalled()
+    expect(api.getDelivery).not.toHaveBeenCalled()
   })
 
   it('an administrable row opens the sheet through the GRANT HISTORY read, never through the read-tier channel read', async () => {
@@ -290,6 +366,10 @@ describe('CommunicationsView — three doors, each on its own permission', () =>
       items: [adminItemOf({ name: 'Ops', slug: 'ops' })],
       has_more: false,
     })
+    // Any request that leaves the page, not only the named reads above.
+    const fetched = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('no network in this test'))
     renderWithQuery(() => <CommunicationsView entrance="administration" />)
     const row = await screen.findByText('Ops')
     act(() => {
@@ -310,6 +390,19 @@ describe('CommunicationsView — three doors, each on its own permission', () =>
       ).toBe('"v2"'),
     )
     expect(api.getChannel).not.toHaveBeenCalled()
+    // The administrative sheet reads grants, never a message of the channel.
+    expect(api.getMessage).not.toHaveBeenCalled()
+    expect(api.getDelivery).not.toHaveBeenCalled()
+    expect(api.listInbox).not.toHaveBeenCalled()
+    const paths = fetched.mock.calls.map(
+      ([input]) =>
+        new URL(input instanceof Request ? input.url : String(input), WEB)
+          .pathname,
+    )
+    expect(
+      paths.filter((p) => !/\/channels\/administration$|\/grants$/.test(p)),
+    ).toEqual([])
+    fetched.mockRestore()
   })
 
   it('a deep link admin_channel=<id> opens the administrative sheet on mount on the EXACT grant-sheet operation, with the collection REFUSED and never fetched', async () => {

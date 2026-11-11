@@ -70,8 +70,7 @@
     },
     "signIn": {
       "title": "サインインする",
-      "body": "Claude または ChatGPT のサブスクリプションを使います。ログインはこのサーバー上の、ツールが保管する場所に残ります。",
-      "waiting": "まずツールをインストールしてください。"
+      "body": "Claude または ChatGPT のサブスクリプションを使います。ログインはこのサーバー上の、ツールが保管する場所に残ります。"
     },
     "start": {
       "title": "セッションを開始",
@@ -84,19 +83,39 @@
     "notReady": "{{tool}} はまだ開始できません。",
     "folder": "フォルダー",
     "folderHint": "このサーバー上のフォルダーです。",
+    "folderHintGiven": "このサーバーに登録済みのフォルダーのパスです。新しいフォルダーは管理者が登録します。",
     "folderChoose": "フォルダーを選択",
     "folderNew": "このセッション用の新しいフォルダー",
     "folderTyped": "別のフォルダー…",
     "readingFolder": "前回のセッションのフォルダーを読み込んでいます…",
     "prompt": "最初のメッセージ (任意)",
     "promptPlaceholder": "最初に何をしますか?",
+    "documents": "ドキュメント",
+    "attachDocument": "ドキュメントを添付",
+    "removeDocument": "{{name}} を外す",
+    "savingDocument": "{{name}} をフォルダーに保存中 ({{n}}/{{total}})…",
+    "documentFailed": "{{name}} をフォルダーに保存できませんでした ({{reason}})。",
+    "documentsNeedFolder": "ドキュメントは、自分のフォルダーの現在のチェックアウトで作業するときに添付できます。",
+    "documentsMessage": "添付したドキュメント (フォルダーに保存済み):",
+    "documentsAdded": "最初のメッセージに追加されます:",
+    "documentsKept": "フォルダーに保存済み: {{paths}}。",
+    "documentsReadOnly": "このフォルダーは読み取り専用です。ドキュメントは、セッションが書き込めるフォルダーで作業するときに添付できます。",
+    "documentsWaiting": "開始は添付ドキュメントを待っています。ドキュメントを保存できるフォルダーを選ぶか、ドキュメントを外してください。",
+    "documentWaiting": "{{size}} · 待機中",
+    "documentsNeedWords": "ドキュメントで何をするかを短く書いてください。セッション名は書いた内容から付けられます。",
+    "moreHeldDocuments": "添付したドキュメントを残すにはここで開始してください。その他のオプションを開くには、ドキュメントを削除してください。",
+    "moreHeldFolder": "入力したフォルダーを使うにはここで開始してください。その他のオプションを開くには、フォルダー一覧から選んでください。",
+    "documentTooLarge": "{{name}} はこのフォルダーの 1 ファイルあたりの上限 {{size}} を超えているため、添付されませんでした。",
+    "documentAttachedTwice": "{{name}} はすでに添付されています。",
     "more": "その他のオプション",
     "permission": "エージェントに許可すること",
     "start": "開始",
     "starting": "開始中…",
+    "startSession": "セッションを開始",
     "needTool": "まずツールをインストールしてサインインしてください。",
     "dialogTitle": "新しいセッション",
     "dialogDescription": "ツールを選び、やることを伝えます。",
+    "keyToStart": "<key/> で開始",
     "advanced": "詳細な起動オプション",
     "secrets": "環境変数としてのシークレット",
     "secretsHint": "セッションは、選んだ保管庫のシークレットを指定した変数から読み取ります。値が表示・記録されたり、フォルダーに書き込まれたりすることはありません。",
@@ -111,6 +130,7 @@
     "credentialsManage": "管理されたクレデンシャルを管理",
     "listUnavailable": "エンジンがシークレット一覧に応答しませんでした。今は何も選択できません。",
     "openTools": "AI ツールを開く",
+    "askAdmin": "管理者に準備を依頼してください。",
     "model": "モデル",
     "providerDefault": "既定 ({{model}})",
     "nativeDefault": "{{tool}} の既定",
@@ -123,14 +143,22 @@
     "profileNeedsKey": "キーが必要",
     "foldersUnreadable": "登録済みのフォルダーを読み込めませんでした。このサーバー上のフォルダーのパスを入力してください。",
     "folderPermission": "{{name}}で開始します（このフォルダーの既定）。",
-    "autoAsks": "{{tool}}には自動モードがないため、操作ごとに確認します。"
+    "autoAsks": "{{tool}}には自動モードがないため、操作ごとに確認します。",
+    "worktreeCheckout": "現在のチェックアウト",
+    "worktreeNew": "新しいワークツリー",
+    "worktreeFrom": "開始位置",
+    "worktreeFromHint": "ブランチまたはコミット（任意）",
+    "worktreeNewHint": "セッションは別フォルダー内の専用ブランチで作業します。現在のチェックアウトはそのままです。",
+    "worktreeLegend": "作業コピー"
   },
   "composer": {
     "toolPill": "ツールとアカウント: {{value}}",
     "modelPill": "モデル: {{value}}",
     "effortPill": "推論レベル: {{value}}",
     "folderPill": "フォルダー: {{value}}",
-    "moreOptions": "その他のオプション"
+    "moreOptions": "その他のオプション",
+    "accessPill": "エージェントに許可すること: {{value}}",
+    "worktreePill": "作業コピー: {{value}}"
   },
   "lists": {
     "foldersTruncated": "登録済みフォルダー：{{count}} 件読み込み済み。ほかにもあります。",
@@ -154,6 +182,14 @@
     "cli": "olivares コマンドラインを使う",
     "cliHint": "このサーバーには olivares コマンドがすでにインストールされています。別のコンピューターからは次のコマンドでインストールします:"
   },
+  "passkeyOffer": {
+    "body": "次回はパスキーでサインインできます。パスワードの代わりに指紋、顔、または画面ロックを使います。",
+    "add": "パスキーを追加",
+    "notNow": "後で",
+    "added": "パスキーを追加しました。次回はこれでサインインできます。",
+    "failed": "パスキーを追加できませんでした。もう一度試すか、後で設定から追加してください。",
+    "unknown": "パスキーを確認できませんでした。追加されている可能性があります。別のパスキーを追加する前に設定を確認してください。"
+  },
   "permissionSummary": {
     "readOnly": "読み取りと計画のみ。変更はすべて拒否されます。",
     "ask": "読み取り以外の操作の前に毎回確認します。",
@@ -165,6 +201,8 @@
   "bring": {
     "title": "フォルダーを取り込む",
     "body": "お使いのツールがすでに作業したフォルダーを、各ツール自身のプロジェクトパスと日付の記録から読み取ります。確認するまで何も登録されません。",
+    "offer_other": "ツールがすでに作業したフォルダーが {{count}} 件あります。",
+    "review": "確認",
     "error": "ツールのフォルダーを検索できませんでした。",
     "unreadable": "{{tool}} の記録を読み取れませんでした。代わりにフォルダーを手動で追加してください。",
     "cols": {

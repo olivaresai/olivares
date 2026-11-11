@@ -22,6 +22,9 @@
     "name": "Name",
     "kind": "Kind",
     "key": "Key",
+    "usedBy": "Used by",
+    "usedByUnread": "Which profiles use each key could not be read.",
+    "usedByPartial": "Some profiles were not read: a key may be used by more than shown.",
     "state": "State",
     "connection": "Connection",
     "actions": "Actions"

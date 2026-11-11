@@ -154,8 +154,9 @@ export function ConfirmDialog({
         )}
 
         <DialogFooter>
+          {/* Cancel is flat beside the one confirm (a dialog's answers, direction A2). */}
           <Button
-            variant="secondary"
+            variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={pending}
             aria-describedby={pending ? pendingId : undefined}

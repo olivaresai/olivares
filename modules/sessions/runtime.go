@@ -37,6 +37,7 @@ import (
 // the live handles keyed by tenant|run_ref).
 type runtimeState struct {
 	DocumentConverter func(context.Context, string, []byte) ([]byte, error)
+	DocumentOCR       func() bool
 	limitResumeCancel context.CancelFunc
 	limitResumeWG     sync.WaitGroup
 	// toolMu holds launch selection through live registration against release removal.
@@ -866,9 +867,12 @@ type CreateRunParams struct {
 	profilePrograms    []string
 	profileRegistries  []SessionRegistry
 	profileEgressHosts []string
-	registryTokens     []EnvVar
-	registryDetail     string
-	egressDetail       string
+	// profileAutoCompactWindow is the profile's declared Claude Code auto-compact window
+	// (tokens, 0 = none), re-read on every launch and resume; it is not persisted.
+	profileAutoCompactWindow int
+	registryTokens           []EnvVar
+	registryDetail           string
+	egressDetail             string
 
 	// --- The provider-profile plane (provider_profile.go). ---
 	//
@@ -2781,21 +2785,6 @@ func (m *Module) sendTextInputLoaded(
 	images []turnImage,
 	rec model.Record,
 ) (bool, error) {
-	// The folder as it is before the tool sees the message is the turn's checkpoint
-	// (run_checkpoints.go); the turn is kept once the tool took the message.
-	keep := m.beginCheckpoint(ctx, tenant, runRef, text, rec)
-	attempted, err := m.deliverTextInput(ctx, tenant, runRef, text, images, rec)
-	keep(attempted && err == nil)
-	return attempted, err
-}
-
-func (m *Module) deliverTextInput(
-	ctx context.Context,
-	tenant model.TenantID,
-	runRef, text string,
-	images []turnImage,
-	rec model.Record,
-) (bool, error) {
 	if _, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); !scheduled {
 		if err := m.cancelLimitResumeForInput(ctx, tenant, runRef); err != nil {
 			return false, err
@@ -2814,11 +2803,15 @@ func (m *Module) deliverTextInput(
 			return attempted, err
 		}
 	}
+	// Raw Claude turns take their checkpoint in sendInputAdmitted; drivers take it here.
+	keep := m.beginCheckpoint(ctx, tenant, runRef, text, rec)
 	lr, err := m.textInputLive(tenant, runRef, rec)
 	if err != nil {
 		return false, err
 	}
-	return m.driverInputImages(ctx, lr, text, images)
+	attempted, err := m.driverInputImages(ctx, lr, text, images)
+	keep(attempted && err == nil)
+	return attempted, err
 }
 
 // claudeTextTurn is text as the one user-message line a Claude Code stream-json
@@ -3109,7 +3102,7 @@ func (m *Module) sendInputLoaded(ctx context.Context, tenant model.TenantID, run
 	if err := m.assertRunAuthority(ctx, lr); err != nil {
 		return false, err
 	}
-	return m.sendInputAdmitted(ctx, lr, line, lr.launchID, lr.claim.SID)
+	return m.sendInputAdmitted(ctx, lr, line, lr.launchID, lr.claim.SID, rec)
 }
 
 func (m *Module) rawInputLive(tenant model.TenantID, runRef string, line []byte, rec model.Record) (*liveRun, error) {
@@ -3146,12 +3139,14 @@ func (m *Module) rawInputLive(tenant model.TenantID, runRef string, line []byte,
 
 // sendInputAdmitted is only the I/O half, after a known successful authority
 // transaction under the run lock. It neither authorizes nor opens a transaction.
-func (m *Module) sendInputAdmitted(ctx context.Context, lr *liveRun, line []byte, launch model.ID, sid string) (bool, error) {
+func (m *Module) sendInputAdmitted(ctx context.Context, lr *liveRun, line []byte, launch model.ID, sid string, rec model.Record) (bool, error) {
 	if err := m.runtimeInputLiveCurrent(ctx, lr, launch, sid); err != nil {
 		return false, err
 	}
 	delivered, attempted := false, false
 	if frame, ok := parseStreamJSON(line); ok && frame.Type == "user" {
+		keep := m.beginCheckpoint(ctx, lr.tenant, lr.runRef, inputLineText(line), rec)
+		defer func() { keep(delivered) }()
 		if err := lr.beginSessionTurn(ctx); err != nil {
 			return false, err
 		}

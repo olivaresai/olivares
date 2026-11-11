@@ -139,6 +139,7 @@
   },
   "query": {
     "title": "Governance-konformer Abruf",
+    "tryTitle": "Abfrage ausprobieren",
     "body": "Führt einen Governance-konformen Abruf gegen „{{name}}“ als der angegebene Agent aus. Die Ergebnisse werden nach der Freigabestufe, ACL und dem Datenstandort dieser Identität gefiltert, und diese Abfrage wird in der Herkunft erfasst (Ursprung → Antwort).",
     "queryLabel": "Abfrage",
     "queryHint": "Die Abrufabfrage — diese wird für die Herkunft gehasht, niemals als Text gespeichert.",

@@ -10,6 +10,7 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -214,5 +215,37 @@ func TestDeleteRun_TakesTheLiveRowsOfItsSessionAndNoOtherSession(t *testing.T) {
 	}
 	if want := []string{"ses_kept", "ses_observed_elsewhere", "ses_removed"}; !slices.Equal(timeline, want) {
 		t.Errorf("timeline rows after the delete = %v, want %v", timeline, want)
+	}
+}
+
+func TestDeleteRun_EditorDeletesOwnStoppedSession(t *testing.T) {
+	f := newSteeringFixture(t)
+	for _, cleanupFirst := range []bool{false, true} {
+		ref := f.launch(f.owner)
+		if got := f.do(f.owner, ref, steeringCall{"stop", "POST", "/stop", nil}); got.code != http.StatusOK {
+			t.Fatalf("stop = %d %s", got.code, got.raw)
+		}
+		for _, token := range []string{f.viewer, f.colleague} {
+			for _, call := range []steeringCall{{"cleanup", "POST", "/cleanup", nil}, {"delete", "DELETE", "", nil}} {
+				if got := f.do(token, ref, call); got.code != http.StatusForbidden {
+					t.Fatalf("non-owner %s = %d %s, want 403", call.name, got.code, got.raw)
+				}
+			}
+		}
+		if cleanupFirst {
+			if got := f.do(f.owner, ref, steeringCall{"cleanup", "POST", "/cleanup", nil}); got.code != http.StatusOK {
+				t.Fatalf("owner cleanup = %d %s, want 200", got.code, got.raw)
+			}
+		}
+		if got := f.do(f.owner, ref, steeringCall{"delete", "DELETE", "", nil}); got.code != http.StatusOK {
+			t.Fatalf("owner delete = %d %s, want 200", got.code, got.raw)
+		}
+		if got := f.do(f.owner, ref, steeringCall{"get", "GET", "", nil}); got.code != http.StatusNotFound {
+			t.Fatalf("deleted session = %d %s, want 404", got.code, got.raw)
+		}
+		listed := f.h.do("GET", "/v1/m/sessions/runs", f.owner, tenantHdr(f.tenant))
+		if listed.code != http.StatusOK || strings.Contains(listed.raw, ref) {
+			t.Fatalf("deleted session still listed: %d %s", listed.code, listed.raw)
+		}
 	}
 }

@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import { renderIntel, screen, waitFor } from '@/test/intel'
+import { renderIntel, screen, waitFor, within } from '@/test/intel'
 import { reportingApi, type ReportSigning } from '@/features/reporting/api'
 import { ApiError } from '@/lib/api/errors'
 import { toast } from '@/components/ui/toaster'
@@ -34,6 +34,24 @@ beforeEach(() => {
 afterEach(() => useModulesStore.getState().setOff([]))
 
 describe('Settings > Report signing (S seam)', () => {
+  it('states the signing in one card and the key as boxed rows under its title', async () => {
+    vi.spyOn(reportingApi, 'signing').mockResolvedValue(signing)
+    renderIntel(<ReportSigningSettings heading={false} />)
+    const key = await screen.findByRole('region', { name: 'Key' })
+    expect(within(key).getByText('Key ID')).toBeVisible()
+    expect(within(key).getByText('olv-report-2026-10')).toBeVisible()
+    expect(within(key).getByText('Public key (Ed25519)')).toBeVisible()
+    expect(within(key).getByText(signing.public_key!)).toBeVisible()
+    // The state, where the key comes from and the one action share the card.
+    const state = screen.getByText('Downloaded bundles are signed.')
+    expect(within(key).queryByText('Made by this installation')).toBeNull()
+    const card = state.closest('[data-slot="signing-card"]')
+    expect(card).not.toBeNull()
+    expect(card!.textContent).toContain('Made by this installation')
+    const off = screen.getByRole('button', { name: 'Turn off signing' })
+    expect(card!.contains(off)).toBe(true)
+  })
+
   it('says whether bundles are signed, where the key comes from, and the key', async () => {
     vi.spyOn(reportingApi, 'signing').mockResolvedValue(signing)
     renderIntel(<ReportSigningSettings />)

@@ -88,7 +88,7 @@ export function OnboardingView() {
     )
   }
   return (
-    <div className="mx-auto flex w-full max-w-[920px] flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       <PageHeader
         icon={Rocket}
         title={t('title')}
@@ -116,7 +116,7 @@ export function OnboardingView() {
             <li key={n.key}>
               <Link
                 to={n.to as '/'}
-                className="text-body text-accent-text underline underline-offset-2"
+                className="text-body text-foreground underline underline-offset-2"
               >
                 {n.key === 'budgets' && COST_VIEW.id === 'storedBudgets'
                   ? t('nav:items.storedBudgets')

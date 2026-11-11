@@ -38,6 +38,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { StatusBadge } from '@/components/data/badges'
 import { useAuth } from '@/lib/auth/context'
+import { reportEditionRefusal } from '@/lib/hooks/use-privileged-mutation'
 import { RelTimeLabel } from '@/features/shared'
 import {
   ClassificationBadge,
@@ -51,6 +52,7 @@ import { ContextEditorDialog } from './context-editor'
 import { DataProductList } from './data-product-list'
 import { KbDetailSheet } from './kb-detail'
 import { KbEditorDialog } from './kb-editor'
+import { QueryPanel } from './query-dialog'
 import { LineageDetailSheet } from './lineage-detail'
 import { MemoryEditorDialog } from './memory-editor'
 import { MemoryList, MemoryPurgeButton } from './memory-list'
@@ -115,7 +117,10 @@ function MemoryIntegrityPanel({ canAdmin }: { canAdmin: boolean }) {
   const verificar = useMutation({
     mutationFn: () => knowledgeApi.verifyMemory(),
     onSuccess: (r) => setInforme(r as never),
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   if (!canAdmin) return <ForbiddenState />
@@ -255,7 +260,10 @@ function ScansPanel({
       setFuente('')
       void qc.invalidateQueries({ queryKey: knowledgeKeys.scans(tenant) })
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   if (!canRead) return <ForbiddenState />
@@ -402,12 +410,20 @@ function DlpPanel({
       setClase('')
       refrescar(tenant)
     },
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   const borrar = useMutation({
     mutationFn: ({ id, tenant }: { id: string; tenant: string | null }) =>
       knowledgeApi.deleteDlpRule(id, { tenant }),
     onSuccess: (_data, { tenant }) => refrescar(tenant),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   if (!canRead) return <ForbiddenState />
@@ -609,6 +625,7 @@ export default function KnowledgeView() {
 
   const canReadKb = can('knowledge:kb:read')
   const canWriteKb = can('knowledge:kb:write')
+  const canRetrieve = can('knowledge:retrieval:read')
   const canReadLineage = can('knowledge:lineage:read')
   const canReadPrompt = can('knowledge:prompt:read')
   const canWritePrompt = can('knowledge:prompt:write')
@@ -945,60 +962,67 @@ export default function KnowledgeView() {
                   </Button>
                 </PagePrimaryAction>
               )}
-              {/* El motor sirve UNA pagina (defaultLimit=100, sqlstore/generic.go:28) y publica
-                  `has_more`. Sin este aviso, el numero de filas de la tabla se lee como un censo.
-                  La regla vive en `_intel/notices.tsx` y exige `has_more === true`. */}
-              <ListTruncationBadge
-                query={kbs}
-                label={t('kbs.truncated', {
-                  n: kbs.data?.items?.length ?? 0,
-                })}
-                hint={t('kbs.truncatedHint')}
-                className="px-0 pt-0 pb-3"
-              />
-              <DataTable
-                columns={kbColumns}
-                data={kbs.data?.items ?? []}
-                isLoading={kbs.isLoading}
-                error={kbs.error}
-                onRetry={() => kbs.refetch()}
-                searchable
-                searchPlaceholder={t('kbs.search')}
-                getRowId={(r) => r.id}
-                onRowClick={(r) => {
-                  setSelectedKb(r.id)
-                  setKbDetailOpen(true)
-                }}
-                toolbar={
-                  <div className="flex items-center gap-2">
-                    <Select value={kbStatus} onValueChange={setKbStatus}>
-                      <SelectTrigger
-                        aria-label={t('kbs.statusFilter')}
-                        className="w-[10rem]"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">
-                          {t('kbs.statusAll')}
-                        </SelectItem>
-                        <SelectItem value="active">
-                          {t('kbs.statusActive')}
-                        </SelectItem>
-                        <SelectItem value="archived">
-                          {t('kbs.statusArchived')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                }
-                empty={
-                  <EmptyState
-                    title={t('empty.kb.title')}
-                    description={t('empty.kb.description')}
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start">
+                <div className="min-w-0">
+                  {/* The engine serves ONE page (defaultLimit=100,
+                      sqlstore/generic.go:28) and publishes `has_more`. Without
+                      this notice, the table's row count reads as a census. The
+                      rule lives in `_intel/notices.tsx` and requires
+                      `has_more === true`. */}
+                  <ListTruncationBadge
+                    query={kbs}
+                    label={t('kbs.truncated', {
+                      n: kbs.data?.items?.length ?? 0,
+                    })}
+                    hint={t('kbs.truncatedHint')}
+                    className="px-0 pt-0 pb-3"
                   />
-                }
-              />
+                  <DataTable
+                    columns={kbColumns}
+                    data={kbs.data?.items ?? []}
+                    isLoading={kbs.isLoading}
+                    error={kbs.error}
+                    onRetry={() => kbs.refetch()}
+                    searchable
+                    searchPlaceholder={t('kbs.search')}
+                    getRowId={(r) => r.id}
+                    onRowClick={(r) => {
+                      setSelectedKb(r.id)
+                      setKbDetailOpen(true)
+                    }}
+                    toolbar={
+                      <div className="flex items-center gap-2">
+                        <Select value={kbStatus} onValueChange={setKbStatus}>
+                          <SelectTrigger
+                            aria-label={t('kbs.statusFilter')}
+                            className="w-[10rem]"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">
+                              {t('kbs.statusAll')}
+                            </SelectItem>
+                            <SelectItem value="active">
+                              {t('kbs.statusActive')}
+                            </SelectItem>
+                            <SelectItem value="archived">
+                              {t('kbs.statusArchived')}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    }
+                    empty={
+                      <EmptyState
+                        title={t('empty.kb.title')}
+                        description={t('empty.kb.description')}
+                      />
+                    }
+                  />
+                </div>
+                {canRetrieve && <QueryPanel kbs={kbs.data?.items ?? []} />}
+              </div>
             </>
           )}
         </TabsContent>
@@ -1382,13 +1406,19 @@ function PortabilityPanel({
       // Conservarlo byte por byte permite copiarlo y volverlo a importar.
       setPegado(r.raw)
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   const importar = useMutation({
     mutationFn: () => knowledgeApi.importMemory(pegado),
     onSuccess: (r) => setResultado(r as never),
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   const rechazadas = resultado?.rejected ?? []

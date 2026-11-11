@@ -13,7 +13,9 @@ import { cn } from '@/lib/utils'
  * type-ahead filter, aria-activedescendant) with our brandv4 skin. Flat,
  * hairline-divided, dense. The active row gets the copper soft fill plus a thin
  * left copper rule (a calm "you are here" marker, not a glow). `CommandDialog`
- * drops the same list into an xl-radius overlay panel for the global launcher;
+ * drops the same list into the palette as direction A2 draws it: the highest surface with
+ * the pop shadow and no outline, a 56 px search row, 12/700 group headings, 40 px rows with
+ * a press layer, and the chosen row shows the Enter key, so it says what Enter does;
  * result ids inside items should be set in `font-mono` by the consumer.
  */
 export function Command({
@@ -134,12 +136,11 @@ export function CommandItem({
         //    fold on every keystroke, and the palette is the console's fastest path.
         //    4 px of padding and a 16 px caption line box put the two-line row at 42.
         'relative flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2 py-0.5 text-body outline-none',
-        'border-l-2 border-transparent transition-colors duration-100 ease-out',
-        'data-[selected=true]:border-accent-text data-[selected=true]:bg-accent-soft',
-        'data-[selected=true]:text-accent-soft-foreground',
+        'transition-colors duration-100 ease-out',
+        'data-[selected=true]:bg-active data-[selected=true]:text-text',
         'data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
         '[&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',
-        'data-[selected=true]:[&_svg]:text-accent-soft-foreground',
+        'data-[selected=true]:[&_svg]:text-text',
         className,
       )}
       {...props}
@@ -197,7 +198,7 @@ export function CommandDialog({
         <Dialog.Overlay
           className={cn(
             'fixed inset-0 z-50 bg-overlay',
-            'transition-opacity duration-150 ease-out',
+            'transition-opacity duration-[var(--duration-panel)] ease-out',
             'data-[state=closed]:opacity-0 data-[state=open]:opacity-100',
           )}
         />
@@ -210,10 +211,21 @@ export function CommandDialog({
             // up the screen, because every 40 px of offset is one fewer result above
             // the fold on an 844 px phone.
             'fixed left-1/2 top-[6%] z-50 w-full max-w-xl -translate-x-1/2 sm:top-[15%]',
-            'overflow-hidden rounded-none border border-border-strong bg-elevated p-0 shadow-xl sm:rounded-xl',
-            'transition-all duration-150 ease-out',
+            'overflow-hidden rounded-none border-0 bg-raised p-0 shadow-[var(--shadow-pop),inset_0_0_0_1px_var(--line)] sm:rounded-panel',
+            'transition-[opacity,scale] duration-[var(--duration-panel)] ease-out',
             'data-[state=closed]:opacity-0 data-[state=closed]:scale-[0.98]',
             'data-[state=open]:opacity-100 data-[state=open]:scale-100',
+            // The search row: 56 px, the query at 16 px.
+            '[&_[cmdk-input-wrapper]]:gap-3 [&_[cmdk-input-wrapper]]:border-line [&_[cmdk-input-wrapper]]:px-[18px] [&_[cmdk-input]]:h-14 [&_[cmdk-input]]:text-[1rem]',
+            '[&_[cmdk-list]]:px-2 [&_[cmdk-list]]:pt-1.5 [&_[cmdk-list]]:pb-2',
+            '[&_[cmdk-group]_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group]_[cmdk-group-heading]]:pt-3 [&_[cmdk-group]_[cmdk-group-heading]]:pb-1.5 [&_[cmdk-group]_[cmdk-group-heading]]:text-overline [&_[cmdk-group]_[cmdk-group-heading]]:font-bold',
+            // Rows: 40 px (44 px on a phone) and a press layer.
+            '[&_[cmdk-item]]:min-h-10 [&_[cmdk-item]]:gap-3 [&_[cmdk-item]]:rounded-ctl [&_[cmdk-item]]:px-2.5 max-md:[&_[cmdk-item]]:min-h-11 [&_[cmdk-item]:active]:bg-[var(--pressed)]',
+            // The pressed row reads its context line and its keycaps in the primary ink.
+            '[&_[cmdk-item]:active_[data-slot=palette-context]]:text-text [&_[cmdk-item]:active_kbd]:text-text [&_[cmdk-item][data-selected=true]:active]:after:text-text',
+            // The chosen row says what Enter does: the Enter key, as a soft key at its end,
+            // drawn and never read (an empty text alternative keeps the option's name).
+            "[&_[cmdk-item][data-selected=true]]:font-medium [&_[cmdk-item][data-selected=true]]:after:ms-2.5 [&_[cmdk-item][data-selected=true]]:after:min-w-5 [&_[cmdk-item][data-selected=true]]:after:rounded-[5px] [&_[cmdk-item][data-selected=true]]:after:bg-text/8 [&_[cmdk-item][data-selected=true]]:after:text-center [&_[cmdk-item][data-selected=true]]:after:text-metadata/[18px] [&_[cmdk-item][data-selected=true]]:after:font-semibold [&_[cmdk-item][data-selected=true]]:after:text-text-2 [&_[cmdk-item][data-selected=true]]:after:shadow-[inset_0_-1.5px_0_var(--line-strong)] [&_[cmdk-item][data-selected=true]]:after:content-['↵'_/_'']",
             className,
           )}
         >

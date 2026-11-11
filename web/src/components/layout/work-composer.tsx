@@ -8,7 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { ArrowUp, ChevronDown } from 'lucide-react'
+import { ArrowUp, ChevronDown, MoreHorizontal, Shield } from 'lucide-react'
 import {
   useEffect,
   useId,
@@ -18,11 +18,20 @@ import {
   useState,
   useSyncExternalStore,
   type KeyboardEvent,
+  type MutableRefObject,
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Popover,
@@ -44,9 +53,12 @@ import { modelName } from '@/features/agentops/model-name'
 import { SessionMode, useAccessWords } from '@/features/sessions/session-meter'
 import { sessionsKeys } from '@/features/sessions/api'
 import { ContextControls } from '@/features/sessions/context-controls'
+import { ContextRing } from '@/features/sessions/context-ring'
 import { compactSession } from '@/features/sessions/compact-session'
 import { toolName } from '@/features/agentops/engine-tools'
+import { ToolMark } from '@/features/agentops/tool-mark'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import { useTurnInterrupt } from '@/features/agentops/turn-interrupt'
 import '@/features/agentops/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
 import { LaunchSpeedFields } from '@/features/agentops/launch-speed-fields'
@@ -65,7 +77,7 @@ import {
   useRunQueue,
 } from '@/features/agentops/run-queue'
 import { sendBlockedReason, sendTurn } from '@/features/agentops/session-turn'
-import type { RunDTO } from '@/features/agentops/types'
+import { BUILD_MODE, PLAN_MODE, type RunDTO } from '@/features/agentops/types'
 import { isWorkBound } from '@/features/agentops/work-fence'
 import { DictateButton } from '@/features/dictation/dictate-button'
 import { BackgroundTaskStrip } from '@/features/sessions/background-task-strip'
@@ -81,6 +93,7 @@ import {
   isResumableRun,
   startsAgain,
   runAwaitedApproval,
+  runLabel,
 } from '@/features/sessions/provenance'
 import {
   sentPlace,
@@ -89,22 +102,37 @@ import {
   type SentTurn,
 } from '@/features/sessions/sent-turns'
 import type { WorkGroupId } from '@/features/sessions/session-groups'
+import { useClientSettings } from '@/features/settings/preferences'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
+import { formatBytes } from '@/lib/format'
 import {
+  STASH_MAX_BYTES,
+  readPromptHistory,
   readSessionDraft,
+  rememberPrompt,
   sessionDraftKey,
   sessionDraftRefused,
   sessionDraftSnapshot,
+  stashDraft,
+  stashedDrafts,
   subscribeSessionDrafts,
+  unstashDraft,
   writeSessionDraft,
 } from '@/lib/session-drafts'
-import { resolveBinding } from '@/lib/keybindings/model'
+import { chordHint, resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
+import { useIsPhone } from '@/lib/hooks/use-is-phone'
 import { useTenantLabel } from './tenant-label'
 import { SlashMenu } from './slash-menu'
 import { WorkComposerQueue } from './work-composer-queue'
+import {
+  PICKER,
+  PlanToggle,
+  StashButton,
+  StopButton,
+} from './work-composer-controls'
 import {
   commandLabel,
   filterCommands,
@@ -129,9 +157,8 @@ import { COMPOSER_INPUT_ID } from './work-composer-id'
 
 const PAGE = 200
 
-/** A picker of the composer's footer: a quiet word and a chevron, its menu on click. */
-const PICKER =
-  'inline-flex min-w-0 max-w-48 shrink items-center gap-1 whitespace-nowrap rounded-[6px] px-1.5 py-0.5 text-overline font-normal text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus'
+/** A picker's chevron, which a phone does without. */
+const CHEVRON = 'size-3 shrink-0 max-[760px]:hidden'
 /** Eight rows of 24 px and the field's own padding. */
 const MAX_FIELD_PX = 8 * 24 + 16
 
@@ -297,6 +324,9 @@ export function WorkComposer({
   useEffect(() => {
     if (inputId === COMPOSER_INPUT_ID) document.getElementById(inputId)?.focus()
   }, [inputId])
+  // The field of a composer that is replaced (below) leaves with its focus; the next
+  // one takes it only if the person was in the field, never from another control.
+  const fieldHadFocus = useRef(false)
   // Scope all local composer state at once, including an in-flight send's callbacks.
   return (
     <SessionComposer
@@ -310,6 +340,7 @@ export function WorkComposer({
       attached={attached}
       draftKey={draftKey}
       inputId={inputId}
+      fieldHadFocus={fieldHadFocus}
     />
   )
 }
@@ -319,11 +350,13 @@ function SessionComposer({
   attached,
   draftKey,
   inputId,
+  fieldHadFocus,
 }: {
   frame: ComposerFrame
   attached: ComposerAttached
   draftKey: string | null
   inputId: string
+  fieldHadFocus: MutableRefObject<boolean>
 }) {
   const { t } = useTranslation('nav')
   const sessionLaunch = {
@@ -382,6 +415,19 @@ function SessionComposer({
     turnRef.current = turn
   }, [turn])
   const fieldRef = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const field = fieldRef.current
+    if (fieldHadFocus.current && field) {
+      field.focus()
+      // The new field starts with its caret at the front; the person was at the end.
+      field.setSelectionRange(field.value.length, field.value.length)
+    }
+    fieldHadFocus.current = false
+    // React runs this before it removes the old field, so the focus is still readable.
+    return () => {
+      fieldHadFocus.current = document.activeElement === field
+    }
+  }, [fieldHadFocus])
   // The field grows with its text from 2 to 8 rows, then scrolls.
   useLayoutEffect(() => {
     const el = fieldRef.current
@@ -466,6 +512,7 @@ function SessionComposer({
       })
       if (payload.asWire) setWire('')
       else {
+        rememberPrompt(draftKey, payload.value)
         // The conversation shows the message now; the tool shows it when it takes the
         // turn, and then only its own row stays.
         // A slash command is answered by the tool, not shown as a message.
@@ -506,6 +553,7 @@ function SessionComposer({
   const queueRead = useRunQueue(attached.run, queueBound)
   const queue = queueRead.data
   const queueTurn = useQueueTurn(attached.run, (text) => {
+    rememberPrompt(draftKey, text)
     if (turnRef.current.trim() === text) changeTurn('')
   })
   const deciding = useRef(false)
@@ -530,7 +578,7 @@ function SessionComposer({
     setSlashActive(0)
     if (menuKeyOf(next) !== slashDismissed) setSlashDismissed(null)
   }
-  // While a send is pending the field is disabled and the list would only be a target
+  // While a send is pending the field is locked and the list would only be a target
   // for a click that rewrites the draft under it.
   const menuOpen =
     canWrite &&
@@ -598,7 +646,7 @@ function SessionComposer({
   )
     .filter((r) => r.run_ref !== attached.run.run_ref)
     .flatMap((r) => {
-      const name = r.name || r.title || r.run_ref
+      const name = runLabel(r)
       const entries: MenuCommand[] = [
         {
           name,
@@ -862,6 +910,112 @@ function SessionComposer({
     sendMutation.mutate({ run: attached.run.run_ref, value, asWire: true })
   }
 
+  const sendKey = useClientSettings((s) => s.sendKey)
+  const sendWhileRunning = useClientSettings((s) => s.sendWhileRunning)
+  const turnInterrupt = useTurnInterrupt(attached.run)
+  const stashed = useSyncExternalStore(subscribeSessionDrafts, () =>
+    stashedDrafts(draftKey),
+  )
+  // ON A PHONE, ONE ROW IN EVERY STATE: Context and setting a draft aside share
+  // one menu. Its Context opens the panel, which then takes focus from the menu.
+  const phone = useIsPhone()
+  const contextChosen = useRef(false)
+  const moreRef = useRef<HTMLButtonElement>(null)
+
+  // ARROW UP in an empty field brings back the last prompt sent, again the one before;
+  // ARROW DOWN walks back toward empty. A recalled prompt of several lines keeps both
+  // keys for its caret, and an edited one is the person's own text again.
+  const recalled = useRef<number | null>(null)
+  function recall(key: 'ArrowUp' | 'ArrowDown'): boolean {
+    const history = readPromptHistory(draftKey)
+    const at = recalled.current
+    const showing = at !== null && history[at] === turn
+    if (key === 'ArrowUp') {
+      if (turn !== '' && (!showing || turn.includes('\n'))) return false
+      const next = showing ? at + 1 : 0
+      if (next >= history.length) return showing
+      recalled.current = next
+      changeTurn(history[next]!)
+      return true
+    }
+    if (!showing || turn.includes('\n')) return false
+    recalled.current = at === 0 ? null : at - 1
+    changeTurn(at === 0 ? '' : history[at - 1]!)
+    return true
+  }
+
+  // CTRL+S sets the draft aside, words and attachments together; in an empty field it
+  // brings the last one back. The files stay stored with the session: the draft keeps
+  // their ids, and a file the engine has let go since is named beside the words. What
+  // became of it is one sentence, said while the field holds what it held then.
+  const [stashNote, setStashNote] = useState<{
+    said: string
+    turn: string
+    alert?: boolean
+  } | null>(null)
+  const stashShown = stashNote?.turn === turn ? stashNote : null
+  function stashOrRestore() {
+    if (draftKey === null || sending) return
+    setStashNote(null)
+    if (turn.trim() || images.images.length > 0) {
+      if (images.uploading) return
+      const attachments = images.images.flatMap((i) =>
+        i.id ? [{ id: i.id, name: i.name }] : [],
+      )
+      const kept = stashDraft(draftKey, { text: turn, attachments })
+      // Not kept: the draft stays in the field, and the person is told why.
+      if (!kept.ok) {
+        const said = {
+          'too-large': t('nav:launcher.stashTooLarge', {
+            limit: formatBytes(STASH_MAX_BYTES),
+          }),
+          'no-storage': t('nav:launcher.stashNotKept'),
+          full: t('nav:launcher.stashNoRoom'),
+        }[kept.why]
+        setStashNote({ said, turn, alert: true })
+        return
+      }
+      changeTurn('')
+      images.discard(images.ids)
+      if (kept.dropped.length > 0)
+        setStashNote({
+          said: t('nav:launcher.stashDropped', {
+            words: kept.dropped.join(' · '),
+          }),
+          turn: '',
+        })
+      return
+    }
+    const back = unstashDraft(draftKey)
+    if (!back) {
+      // Said only where a draft was offered: another tab took it back, or it
+      // aged out, since this one counted it.
+      if (stashed > 0)
+        setStashNote({ said: t('nav:launcher.stashTaken'), turn })
+      return
+    }
+    changeTurn(back.text)
+    void images.restore(back.attachments).then((names) => {
+      // Said once the files are read, whatever was typed meanwhile.
+      if (names.length > 0)
+        setStashNote({
+          said: t('nav:launcher.stashGone', { names: names.join(', ') }),
+          turn: turnRef.current,
+        })
+    })
+  }
+
+  // PLAN FIRST is the session's plan permission mode, applied with the next message as
+  // the access picker applies any mode. Pressed again, it returns to the mode it left.
+  const buildBeforePlan = useRef<string | null>(null)
+  const effectiveMode = accessChoice ?? attached.run.permission_mode
+  const planning = effectiveMode === PLAN_MODE
+  function togglePlan() {
+    const left = planning ? (buildBeforePlan.current ?? BUILD_MODE) : PLAN_MODE
+    if (!planning) buildBeforePlan.current = effectiveMode || BUILD_MODE
+    setAccessChoice(left === attached.run.permission_mode ? null : left)
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter sends and Shift+Enter breaks a line (the binding table matches Enter alone);
     // a key that is choosing a character of an IME composition is not a send.
@@ -892,11 +1046,31 @@ function SessionComposer({
         return
       }
     }
+    if (
+      plain &&
+      (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+      recall(e.key)
+    ) {
+      e.preventDefault()
+      return
+    }
     const command = resolveBinding(KEYBINDINGS, e, { launcherFocused: true })
+    if (command === 'launcher.stash') {
+      e.preventDefault()
+      stashOrRestore()
+      return
+    }
     if (command !== 'launcher.start' && command !== 'launcher.startBackground')
       return
+    // The person's choice (Settings › General): which key sends, and what it does while
+    // the tool works. With Ctrl+Enter chosen, a plain Enter breaks the line.
+    const withMod = command === 'launcher.startBackground'
+    if (sendKey === 'modEnter' && !withMod) return
     e.preventDefault()
-    void sendSentence(command === 'launcher.startBackground')
+    const primarySteers = sendWhileRunning === 'steer'
+    void sendSentence(
+      sendKey === 'modEnter' ? primarySteers : withMod !== primarySteers,
+    )
   }
 
   const attachedWorkspace = workspaces.find(
@@ -1003,8 +1177,8 @@ function SessionComposer({
   )
   const chipText = toolModel || t('agentops:create.model')
   const chipTitle = sessionModel ? chipParts(sessionModel) : chipText
-  // THREE PICKERS: the model by its name, the effort
-  // in a word, the access in the words New session offers. The tool is the pane header's.
+  // TWO PICKERS: the model by the tool's mark and its name with its effort in a word,
+  // as one, and the access in the words New session offers.
   const modelText = sessionModel
     ? modelName(sessionModel, modelChoices.catalog?.models)
     : t('agentops:picker.defaultUnnamed', { tool: toolName(driver ?? '') })
@@ -1031,15 +1205,121 @@ function SessionComposer({
       : null)
   // The field teaches what can be typed: the pane header names the session.
   // While the tool works the field says what Enter does.
-  const placeholder =
-    blockedText ??
-    (queue?.hold === 'turn'
-      ? t(
+  // The keys it names are the person's choice (Settings › General).
+  const mod = chordHint('Mod+Enter')
+  const stashChord = chordHint(
+    KEYBINDINGS.find((rule) => rule.command === 'launcher.stash')?.keys ?? '',
+  )
+  const hasDraft = hasText || images.images.length > 0
+  const stashDisabled =
+    !runLive || sending || images.uploading || draftKey === null
+  const planDisabled =
+    !runLive ||
+    sending ||
+    isWorkBound(attached.run) ||
+    (planning
+      ? attached.run.permission_mode === PLAN_MODE &&
+        !accessRestriction.allows(PERMISSION_NAME.editsAndCommands)
+      : !accessRestriction.allows(PERMISSION_NAME.readOnly))
+  const primaryKey = sendKey === 'modEnter' ? mod : 'Enter'
+  const otherKey = sendKey === 'modEnter' ? null : mod
+  const queueKey = sendWhileRunning === 'steer' ? otherKey : primaryKey
+  const steerKey = sendWhileRunning === 'steer' ? primaryKey : otherKey
+  const customKeys = sendKey !== 'enter' || sendWhileRunning !== 'queue'
+  const whileWorking = !queue
+    ? ''
+    : customKeys
+      ? [
+          queueKey
+            ? t('nav:launcher.queue.placeholderQueueKey', { key: queueKey })
+            : '',
+          steerKey && queue.can_steer
+            ? t('nav:launcher.queue.placeholderSteerKey', { key: steerKey })
+            : '',
+        ]
+          .filter(Boolean)
+          .join('; ')
+      : t(
           queue.can_steer
             ? 'nav:launcher.queue.placeholderSteer'
             : 'nav:launcher.queue.placeholder',
         )
-      : t('nav:launcher.askPlaceholder'))
+  const placeholder =
+    blockedText ??
+    ((queue?.hold === 'turn' && whileWorking) ||
+      (attached.title
+        ? t('nav:launcher.messagePlaceholder', { title: attached.title })
+        : t('nav:launcher.askPlaceholder')))
+  // The phone's menu: the Context panel opens from it, it sets a draft aside, and
+  // Plan waits in it while it is off.
+  const moreActions = (openContext: () => void) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          ref={moreRef}
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="relative"
+          aria-label={
+            stashed > 0
+              ? t('nav:launcher.moreActionsStashed')
+              : t('nav:launcher.moreActions')
+          }
+          title={t('nav:launcher.moreActions')}
+        >
+          <MoreHorizontal aria-hidden />
+          {stashed > 0 ? (
+            <span
+              aria-hidden
+              data-testid="composer-more-dot"
+              className="absolute top-1 right-1 size-1.5 rounded-full bg-accent-text"
+            />
+          ) : null}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        onCloseAutoFocus={(event) => {
+          if (contextChosen.current) event.preventDefault()
+          contextChosen.current = false
+        }}
+      >
+        <DropdownMenuItem
+          inset
+          onSelect={() => {
+            contextChosen.current = true
+            openContext()
+          }}
+        >
+          {t('nav:launcher.contextAction')}
+          {/* How full the context is, as the Context button shows it from sm up. */}
+          <span className="ml-auto">
+            <ContextRing run={attached.run} />
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          inset
+          disabled={stashDisabled || (!hasDraft && stashed === 0)}
+          onSelect={stashOrRestore}
+        >
+          {/* Bring back only names a draft that is there. */}
+          {hasDraft || stashed === 0
+            ? t('nav:launcher.stash')
+            : t('nav:launcher.stashRestore')}
+          <DropdownMenuShortcut>{stashChord}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuCheckboxItem
+          checked={planning}
+          disabled={planDisabled}
+          title={accessRestriction.reason || t('nav:launcher.planHint')}
+          onCheckedChange={togglePlan}
+        >
+          {t('nav:launcher.plan')}
+        </DropdownMenuCheckboxItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
   const card = (
     <div
       data-testid="work-composer"
@@ -1058,10 +1338,11 @@ function SessionComposer({
         images.add(files)
       }}
       className={cn(
-        // THE COMPOSER IS A CARD: raised, 14 px radius, a 1 px line; its ring is the
-        // card's, so the field inside carries none of its own.
-        'relative flex flex-col rounded-[14px] border border-line bg-raised',
-        'focus-within:border-line-strong focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus',
+        // THE COMPOSER IS A CARD: raised, 14 px radius, a boundary anyone can see (the
+        // control border, 3:1); its focus ring is drawn on that boundary, so the field
+        // inside carries none of its own.
+        'relative flex flex-col rounded-panel border border-ctl-border bg-surface shadow-[var(--shadow-raised)] hover:border-text-2',
+        'focus-within:border-focus focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-focus',
       )}
     >
       {menuOpen ? (
@@ -1098,6 +1379,21 @@ function SessionComposer({
       {/* What the tool runs on its own, each with its Stop. */}
       <BackgroundTaskStrip run={attached.run} />
       <WorkComposerQueue run={attached.run} queue={queue} />
+      {/* What became of a draft set aside: a region there from the start, so the
+          sentence is said when it comes, and empty takes no room. A draft that
+          could not be set aside is refused aloud instead. */}
+      <p
+        role="status"
+        data-testid="stash-status"
+        className="px-4 pt-3 text-caption text-text-2 empty:p-0"
+      >
+        {stashShown?.alert ? null : stashShown?.said}
+      </p>
+      {stashShown?.alert ? (
+        <p role="alert" className="px-4 pt-3 text-caption text-text-2">
+          {stashShown.said}
+        </p>
+      ) : null}
       <AttachmentTray
         images={images.images}
         uploading={images.uploading}
@@ -1133,11 +1429,21 @@ function SessionComposer({
             : undefined
         }
         data-testid="launcher-input"
-        disabled={(!runLive && !waitingApproval) || sending}
-        className="max-h-48 min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body-l text-text outline-none placeholder:text-text-3 disabled:cursor-not-allowed"
+        disabled={!runLive && !waitingApproval}
+        // A pending send locks the message in the field without taking focus from it: a
+        // disabled field is blurred by the browser and nothing would give focus back.
+        readOnly={sending}
+        className="max-h-48 min-h-14 w-full resize-none bg-transparent px-4 pt-3.5 pb-1.5 text-body-l text-text outline-none placeholder:text-text-3 disabled:cursor-not-allowed"
       />
-      {/* The row wraps on a narrow screen: the buttons move below, the pickers keep their words. */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 pb-3">
+      {/* One row: on a phone the pickers shed their chevrons and the access its
+          words, and the model's words go whole where there is no room for them,
+          its mark staying. Context, setting a draft aside and Plan while it is off
+          share one menu. It wraps only when it cannot hold everything. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-0.5 px-2 pt-1 pb-2">
+        <AttachButton
+          disabled={!runLive || !!approvalId || sending}
+          onFiles={images.add}
+        />
         {/* The tool default keeps model choices and the next action scope reachable. */}
         <Popover
           open={modelOpen}
@@ -1154,12 +1460,36 @@ function SessionComposer({
               type="button"
               data-testid="composer-tool-model"
               data-session-picker="model"
-              aria-label={t('nav:launcher.modelPicker', { value: modelText })}
+              aria-label={
+                effortText
+                  ? t('nav:launcher.modelEffortPicker', {
+                      model: modelText,
+                      effort: effortText,
+                    })
+                  : t('nav:launcher.modelPicker', { value: modelText })
+              }
               title={chipTitle}
-              className={PICKER}
+              // As wide as its words, with no cap of its own; on a phone it takes the
+              // room the row leaves, never less than its mark.
+              className={cn(
+                PICKER,
+                'max-w-none',
+                'max-[760px]:min-w-11 max-[760px]:basis-0 max-[760px]:grow',
+              )}
             >
-              <span className="truncate">{modelText}</span>
-              <ChevronDown aria-hidden className="size-3 shrink-0" />
+              {/* THE WORDS SHOW WHOLE OR NOT AT ALL, never cut: one line as tall as
+                  the mark, where words the room cannot hold wrap below, out of
+                  sight, the effort first, and the mark stands alone. */}
+              <span className="flex h-5 min-w-0 flex-wrap content-start items-center gap-x-1 overflow-hidden">
+                <ToolMark driver={driver ?? null} />
+                <span className="whitespace-nowrap">{modelText}</span>
+                {effortText ? (
+                  <span className="whitespace-nowrap">
+                    {` · ${effortText}`}
+                  </span>
+                ) : null}
+              </span>
+              <ChevronDown aria-hidden className={CHEVRON} />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -1281,19 +1611,6 @@ function SessionComposer({
             </div>
           </PopoverContent>
         </Popover>
-        {effortText ? (
-          <button
-            type="button"
-            data-testid="composer-effort"
-            aria-label={t('nav:launcher.effortPicker', { value: effortText })}
-            onClick={() => setModelOpen(true)}
-            // One short word: the model and the access give way before it.
-            className={cn(PICKER, 'shrink-0')}
-          >
-            <span className="truncate">{effortText}</span>
-            <ChevronDown aria-hidden className="size-3 shrink-0" />
-          </button>
-        ) : null}
         {/* Access is applied at process start before the next turn. */}
         <Popover>
           {accessText ? (
@@ -1307,8 +1624,12 @@ function SessionComposer({
                 })}
                 className={PICKER}
               >
-                <ChevronDown aria-hidden className="size-3 shrink-0" />
-                <span className="truncate">{accessText}</span>
+                <Shield aria-hidden className="size-3.5 shrink-0" />
+                {/* A phone shows the shield alone; its name says the words. */}
+                <span className="truncate max-[760px]:hidden">
+                  {accessText}
+                </span>
+                <ChevronDown aria-hidden className={CHEVRON} />
               </button>
             </PopoverTrigger>
           ) : null}
@@ -1367,6 +1688,25 @@ function SessionComposer({
             </div>
           </PopoverContent>
         </Popover>
+        <DictateButton
+          disabled={!runLive || sending}
+          field={fieldRef}
+          onText={(text) => changeTurn(joinDictation(turnRef.current, text))}
+        />
+        {/* PLAN CHANGES WHAT SEND DOES, SO IT IS NEVER HIDDEN WHILE IT IS ON: on a
+            phone it waits in More actions while it is off, and shows here, pressed,
+            while it is on; pressed off, it leaves and focus goes to that menu. */}
+        {!phone || planning ? (
+          <PlanToggle
+            planning={planning}
+            disabled={planDisabled}
+            reason={accessRestriction.reason}
+            onToggle={() => {
+              if (phone) moreRef.current?.focus()
+              togglePlan()
+            }}
+          />
+        ) : null}
         {/* THE RAW LINE IS A DEVELOPER'S TOOL: one NDJSON line to the tool's stdin. A
             production console does not show it (the CLI and the API keep it), and it
             carries its own name, not "Advanced". */}
@@ -1411,11 +1751,11 @@ function SessionComposer({
             </div>
           </AdvancedDisclosure>
         ) : null}
-        {/* SEND IS A 32 px ROUND ICON: orange only while there is something to send (the
-            one primary action of the thread), a quiet ghost otherwise. It is never
-            dashed: a control that cannot act says so by being quiet, and why in its
-            name. */}
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        {/* SEND IS THE SHARED ICON BUTTON, ROUND: 34 px, 44 px on a phone. Orange only
+            while there is something to send (the one primary action of the thread), a
+            quiet ghost otherwise. It is never dashed: a control that cannot act says so
+            by being quiet, and why in its name. */}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <ContextControls
             run={attached.run}
             busy={sending}
@@ -1430,16 +1770,17 @@ function SessionComposer({
                 compactOnly: true,
               })
             }}
+            more={phone ? moreActions : undefined}
           />
-          <AttachButton
-            disabled={!runLive || !!approvalId || sending}
-            onFiles={images.add}
-          />
-          <DictateButton
-            disabled={!runLive || sending}
-            field={fieldRef}
-            onText={(text) => changeTurn(joinDictation(turnRef.current, text))}
-          />
+          {phone ? null : (
+            <StashButton
+              hasDraft={hasDraft}
+              stashed={stashed}
+              disabled={stashDisabled}
+              onClick={stashOrRestore}
+            />
+          )}
+          <StopButton turn={turnInterrupt} />
           <Button
             type="button"
             variant={
@@ -1461,7 +1802,7 @@ function SessionComposer({
             title={
               sendReason
                 ? t(`agentops:${sendReason}`)
-                : `${approvalId ? t('sessions:approval.declineSend') : t('nav:launcher.send')} ⏎`
+                : `${approvalId ? t('sessions:approval.declineSend') : t('nav:launcher.send')} ${sendKey === 'modEnter' ? mod : '⏎'}`
             }
             onClick={() => void sendSentence()}
             data-testid="composer-send"
@@ -1477,10 +1818,11 @@ function SessionComposer({
       </div>
     </div>
   )
-  // DOCKED: the card sits at the foot of the thread, in the transcript's own column.
+  // DOCKED: the card sits at the foot of the thread, in the transcript's own column,
+  // 780 px as the drawing has it.
   return frame === 'docked' ? (
     <div className="shrink-0 px-4 pt-2 pb-4">
-      <div className="mx-auto w-full max-w-[760px]">{card}</div>
+      <div className="mx-auto w-full max-w-[780px]">{card}</div>
     </div>
   ) : (
     card

@@ -22,12 +22,13 @@ const { api, auth, toast } = vi.hoisted(() => ({
     install: vi.fn(),
     job: vi.fn(),
     detect: vi.fn(),
+    modelServers: vi.fn(),
   },
   auth: {
     isSuperadmin: true,
     // These cases are about the install forms: the role reads no accounts or keys.
     can: (() => false) as (permission: string) => boolean,
-    activeTenant: null,
+    activeTenant: null as string | null,
     principal: { user_id: 'root' },
   },
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -52,6 +53,9 @@ vi.mock('@/features/first-hour/api', async (orig) => ({
   signInApi: signIn,
 }))
 import { agentOpsApi } from '@/features/agentops/api'
+import { consoleApi } from '@/features/console/api'
+import { mcpGatewayApi } from '@/features/console/mcp-gateway-api'
+import { skillsApi } from '@/features/skills/api'
 import { providersApi } from '@/features/providers/api'
 import { readinessOf } from '@/features/first-hour/readiness.fixture'
 import { ApiError } from '@/lib/api/errors'
@@ -212,7 +216,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   auth.isSuperadmin = true
   auth.can = () => false
+  auth.activeTenant = null
   api.pins.mockResolvedValue({ pins: [] })
+  api.modelServers.mockResolvedValue({ servers: [] })
   vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
     items: [],
     has_more: false,
@@ -262,10 +268,11 @@ it('is headed AI tools, as the navigation names it', async () => {
     await screen.findByRole('heading', { name: 'AI tools' }),
   ).toBeInTheDocument()
 })
-it('opens for a member who reads the accounts and keys, and reads no host inventory', async () => {
-  // Tools is a team member's place too: the accounts and API keys sessions run as. The
-  // install side (inventory, versions, login probes, sign-in) stays the deployment
-  // administrator's, and the page says so instead of refusing the member.
+it('opens for a member who reads the accounts, and reads no host inventory', async () => {
+  // Tools is a team member's place too: the accounts sessions run as (the API keys are
+  // the Providers page beside it). The install side (inventory, versions, login probes,
+  // sign-in) stays the deployment administrator's, and the page says so instead of
+  // refusing the member.
   auth.isSuperadmin = false
   auth.can = (p: string) =>
     p === 'sessions:account:read' || p === 'sessions:provider:read'
@@ -278,18 +285,17 @@ it('opens for a member who reads the accounts and keys, and reads no host invent
     has_more: false,
   })
   mount()
-  const section = await screen.findByRole('region', {
-    name: 'Accounts and API keys',
-  })
+  const section = await screen.findByRole('region', { name: 'Accounts' })
   expect(
-    await within(section).findByRole('heading', { name: 'Accounts' }),
+    await within(section).findByText('No provider accounts', { exact: false }),
   ).toBeInTheDocument()
-  expect(
-    within(section).getByRole('heading', { name: 'API keys' }),
-  ).toBeInTheDocument()
+  // One page per concept: the keys and their verb are on Providers, not here again.
+  expect(screen.queryByRole('heading', { name: 'API keys' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Add an API key' })).toBeNull()
+  expect(providersApi.list).not.toHaveBeenCalled()
   expect(
     screen.getByText(
-      'Sessions run as these accounts and API keys. A system administrator installs the tools and signs them in.',
+      'Sessions run as these accounts; the API keys are on Providers. A system administrator installs the tools and signs them in.',
     ),
   ).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull()
@@ -1076,4 +1082,107 @@ it('keeps a removed tool reachable when its workspace still has a stored pin', a
       expect.any(Object),
     ),
   )
+})
+
+it('starts with the installed tool and its sign-in, before what a new session receives', async () => {
+  // «Installed here» reads the organization's workspace and what it hands a session: it
+  // shows for a signed-in organization, so this case has one, and answers its reads.
+  auth.activeTenant = 't1'
+  vi.spyOn(consoleApi, 'listWorkspaces').mockResolvedValue({
+    items: [],
+  } as never)
+  vi.spyOn(mcpGatewayApi, 'get').mockResolvedValue({
+    version: 1,
+    source: 'store',
+    read_only: false,
+    session_tools: false,
+    session_endpoint: '/session/mcp',
+    governance: {},
+    servers: [],
+  } as never)
+  vi.spyOn(agentOpsApi, 'previewProfile').mockResolvedValue({
+    reason: 'own_login',
+  } as never)
+  vi.spyOn(skillsApi, 'selection').mockResolvedValue({
+    digest: 'd',
+    members: [],
+  } as never)
+  api.inventory.mockResolvedValue({
+    drivers: ['claude'],
+    inventory: {
+      installed: [
+        {
+          driver: 'claude',
+          version: '2.1.261',
+          state: 'installed',
+          executable: '/tools/claude/claude',
+        },
+      ],
+      leftovers: [],
+    },
+    read_only: false,
+    jobs: [],
+  })
+  mount()
+  const tool = await screen.findByTestId('tool-claude')
+  const installed = await screen.findByTestId('installed-here')
+  expect(
+    tool.compareDocumentPosition(installed) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+})
+
+it('names a model server that is not installed in the one Not installed line, not in a card of its own', async () => {
+  api.modelServers.mockResolvedValue({
+    servers: [
+      {
+        kind: 'vllm',
+        name: 'vLLM',
+        installed: false,
+        state: 'stopped',
+        models: [],
+      },
+    ],
+  })
+  mount()
+  await waitFor(() =>
+    expect(screen.getByTestId('not-installed')).toHaveTextContent('vLLM'),
+  )
+  expect(screen.queryByTestId('model-server-vllm')).toBeNull()
+})
+
+it('says which program a missing model server is looked for as, and offers no Install menu with nothing to install', async () => {
+  api.inventory.mockResolvedValue({
+    drivers: ['claude'],
+    inventory: {
+      installed: [
+        {
+          driver: 'claude',
+          version: '2.1.261',
+          state: 'installed',
+          executable: '/tools/claude/claude',
+        },
+      ],
+      leftovers: [],
+    },
+    read_only: false,
+    jobs: [],
+  })
+  api.modelServers.mockResolvedValue({
+    servers: [
+      {
+        kind: 'vllm',
+        name: 'vLLM',
+        installed: false,
+        state: 'stopped',
+        models: [],
+      },
+    ],
+  })
+  mount()
+  await waitFor(() =>
+    expect(screen.getByTestId('not-installed')).toHaveTextContent(
+      "Olivares looks for vllm on this server's PATH.",
+    ),
+  )
+  expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()
 })

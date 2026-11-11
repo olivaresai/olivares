@@ -59,7 +59,7 @@ const TASK_ICON: Record<string, typeof Terminal> = {
   wakeup: AlarmClock,
 }
 
-function StateGlyph({ state }: { state: ActivityState }) {
+export function StateGlyph({ state }: { state: ActivityState }) {
   const { t } = useTranslation('sessions')
   return (
     <StatusGlyph
@@ -148,7 +148,7 @@ function elapsed(item: {
 /** The tool's own end-of-work line ("Background command "X" completed (exit code 0)",
  * "Agent "X" finished") when it only says again the title the row already shows and
  * that it ended, which the row's state says: shown only when it adds something. */
-function summaryOf(
+export function summaryOf(
   item: { summary?: string; state: ActivityState },
   title: string,
 ): string | undefined {

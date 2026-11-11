@@ -33,7 +33,6 @@ func notInEdition() error { return exitcode.New(exitcode.Edition, errNotInEditio
 var paidCommands = map[string]string{
 	"audit tree verify":    "Audit verification",
 	"audit tree prove":     "Audit evidence proofs",
-	"audit verify":         "Audit verification",
 	"audit export":         "Audit export",
 	"audit archive":        "Audit archives",
 	"audit observe-report": "Audit observation reports",

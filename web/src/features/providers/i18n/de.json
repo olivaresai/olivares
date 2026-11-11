@@ -22,6 +22,9 @@
     "name": "Name",
     "kind": "Art",
     "key": "Schlüssel",
+    "usedBy": "Verwendet von",
+    "usedByUnread": "Welche Profile welchen Schlüssel verwenden, konnte nicht gelesen werden.",
+    "usedByPartial": "Einige Profile wurden nicht gelesen: Ein Schlüssel kann mehr Profile haben als angezeigt.",
     "state": "Zustand",
     "connection": "Verbindung",
     "actions": "Aktionen"

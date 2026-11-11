@@ -18,6 +18,8 @@
   "noAgentsHint": "Agents appear here as they are discovered in this workspace.",
   "noGroups": "No agent groups in this workspace yet.",
   "noGroupsHint": "Agent groups appear here once they are defined for this workspace.",
+  "agentsFailed": "The agents of this workspace could not be read.",
+  "groupsFailed": "The agent groups of this workspace could not be read.",
   "viewAll": "View all",
   "defaultBadge": "Default",
   "created": "Created",
@@ -62,5 +64,25 @@
     "statusFailed": "Could not check whether this folder is available over SFTP."
   },
   "showMore": "Show more",
-  "agentsCut": "Not every agent is shown."
+  "agentsCut": "Not every agent is shown.",
+  "files": {
+    "title": "Workspace",
+    "folders": "Folders",
+    "overview": "Overview",
+    "backToFiles": "Files",
+    "addFolder": "Add folder",
+    "emptyTitle": "No folders yet",
+    "emptyDescription": "Add a folder and sessions work inside it, within its limits.",
+    "noAccessTitle": "You cannot open this folder",
+    "noAccessDescription": "It was removed or your role does not include it. Ask an administrator for access.",
+    "showFolders": "Show my folders",
+    "loading": "Reading folders…",
+    "loadFailed": "The folders could not be loaded.",
+    "details": "Wiki and file transfer",
+    "worktreeCount": "Worktrees: {{n}}",
+    "worktreeHint": "Register this worktree as a folder to browse it.",
+    "gitCut": "Not every changed file is marked: Git listed only part of the changes.",
+    "clean": "No uncommitted changes",
+    "changes": "Uncommitted changes: {{n}}"
+  }
 }

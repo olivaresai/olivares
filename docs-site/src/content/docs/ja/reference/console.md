@@ -69,15 +69,15 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
-| 設定済みリソース | `/estate` | 設定した内容と、作業項目を含む各要素の依存関係。 | `sessions:run:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| 設定済みリソース | `/estate` | 設定した内容と、作業項目を含む各要素の依存関係。 | `tenant:admin` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | 検出されたリソース | `/inventory` | コネクターが観測したエージェント・MCPサーバー・モデルと、それぞれを最後に確認した時刻。 | `inventory:catalog:read` | [reference/modules/i-inventory](/ja/reference/modules/i-inventory/) |
-| ワークスペース | `/workspace` | 1 つのワークスペースにスコープされたエージェント、セッション、リソース、アクティビティ | `tenant:read` | [reference/modules/xx-multi-tenancy](/ja/reference/modules/xx-multi-tenancy/) |
+| ワークスペース | `/workspace` | 1 つのワークスペースにスコープされたエージェント、セッション、リソース、アクティビティ | `sessions:workspace:read` | [reference/modules/xx-multi-tenancy](/ja/reference/modules/xx-multi-tenancy/) |
 
 ### AI
 
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
-| エージェントツール | `/agent-tools` | セッションが使うアカウントと API キーを確認します。ツールのインストールとサインインはデプロイ管理者のみです | `sessions:account:read` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
+| エージェントツール | `/agent-tools` | セッションが使うアカウントを確認します。ツールのインストールとサインインはデプロイ管理者のみです | `sessions:account:read` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
 | セッションを運用 | `/agentops` | セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ja/how-to/run-claude-code-with-olivares/) |
 | モデル運用 | `/model-operations` | 所有モデル、admission、デプロイメント | `models:registry:read` | [reference/modules/xxiii-model-operations](/ja/reference/modules/xxiii-model-operations/) |
 | モデル | `/models` | モデル、ルーティング、ガバナンス | `models:catalog:read` | [reference/modules/x-models](/ja/reference/modules/x-models/) |
@@ -87,7 +87,6 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | プロバイダープロファイル | `/provider-profiles` | セッションの起動元となるプロバイダーのホームを登録、管理し、その設定を必要に応じて読み取る | `sessions:profile:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | プロバイダー | `/providers` | セッションの起動に使う API キーとエンドポイントを登録し、テスト・交換・失効を行う | `sessions:provider:read` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
 | レート制限 | `/rate-limits` | Anthropic のレート制限インベントリ（読み取り専用） | `models:ratelimits:read` | [reference/modules/x-models](/ja/reference/modules/x-models/) |
-| リーチ | `/reach` | 各ツールが到達できる接続先と、承認待ちの接続先を確認できます。 | `accessmap:graph:read` | [reference/modules/iii-access-map](/ja/reference/modules/iii-access-map/) |
 | サンドボックス | `/sandbox` | 隔離されたエージェントのテストとリプレイ | `sandbox:run:read` | [reference/modules/xvii-sandbox](/ja/reference/modules/xvii-sandbox/) |
 | セッション | `/sessions` | セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います | `sessions:live:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | 音声 | `/voice` | 音声およびリアルタイムセッション | `voice:session:read` | [reference/modules/xvi-voice](/ja/reference/modules/xvi-voice/) |
@@ -128,13 +127,12 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | アクセスマップ | `/access-map` | 各エージェントが読み書きするもの（R/RW） | `accessmap:graph:read` | [reference/modules/iii-access-map](/ja/reference/modules/iii-access-map/) |
 | ポリシーのエクスポート | `/agentcore-export` | このテナントのガバナンスルールを Cedar ポリシーとして AWS AgentCore へ投影する計画・確認・適用。計画では何も書き込みません | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
 | 管理ポリシー | `/claude-policy` | 管理ポリシー、フック、MCP、サンドボックス、policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/ja/how-to/connectors/claude-code-hooks-pep/) |
-| アイデンティティとアクセス | `/identity` | SSO、SCIM、エージェントが使うアイデンティティ | `governance:identity:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
+| アイデンティティとアクセス | `/identity` | SSO、SCIM、エージェントが使うアイデンティティ | `user:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
 | 推論プロキシ | `/inference-proxy` | プロキシゲート、エグレス DLP ルール、デバイス承認 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/ja/reference/modules/inferenceproxy/) |
-| キルスイッチ | `/killswitch` | 緊急停止、二重統制による復旧、guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ja/how-to/cookbook/kill-switch-drill/) |
+| キルスイッチ | `/killswitch` | 緊急停止、二重統制による復旧、guardian containment | `governance:killswitch:admin` | [how-to/cookbook/kill-switch-drill](/ja/how-to/cookbook/kill-switch-drill/) |
 | 権限 | `/permissions` | アイデンティティ、ロール、承認 | `governance:identity:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
 | ルーチンポリシー | `/routine-policies` | Claude Code ルーチンの頻度下限、同時実行上限、承認要件、cron allowlist。 | `governance:routine:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
 | セキュリティ | `/security` | ガードレール、フォレンジック、異常 | `security:finding:read` | [reference/modules/ix-security](/ja/reference/modules/ix-security/) |
-| ボールト | `/vault` | パスワード、メモ、認証コード | `tenant:read` | [reference/console](/ja/reference/console/) |
 
 ### デリバリー
 
@@ -149,14 +147,15 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | 導入状況 | `/adoption` | 生産性、受け入れ、モデル構成 | `adoption:metrics:read` | [reference/modules/claudeadoption](/ja/reference/modules/claudeadoption/) |
 | サプライチェーン | `/attestation` | リリースアテステーション — SLSA、SBOM、VEX、Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/ja/how-to/verify-a-release/) |
 | 監査台帳 | `/audit` | 改ざん検知可能な証跡台帳 | `audit:read` | [reference/modules/ix-security](/ja/reference/modules/ix-security/) |
-| ダッシュボード | `/dashboards` | 経営指標とレポート | any signed-in user | [reference/modules/xxi-executive-dashboards](/ja/reference/modules/xxi-executive-dashboards/) |
+| ダッシュボード | `/dashboards` | 経営指標とレポート | `tenant:admin` | [reference/modules/xxi-executive-dashboards](/ja/reference/modules/xxi-executive-dashboards/) |
 | 評価 | `/evals` | 品質、評価、リグレッション | `evals:run:read` | [reference/modules/xii-evals](/ja/reference/modules/xii-evals/) |
 | 健全性と SLA | `/health` | エージェントと MCP の稼働時間および SLA | `health:status:read` | [reference/modules/xxii-health](/ja/reference/modules/xxii-health/) |
 | オブザーバビリティ | `/observability` | 標準別の取り込み健全性とトレースのドリルダウン | `health:status:read` | [reference/modules/observability](/ja/reference/modules/observability/) |
-| 運用 | `/operations` | ホスト、そのディスク、稼働中のセッションとその使用量を、24 時間、7 日間、30 日間で表示します。 | `sessions:run:read` | [reference/console](/ja/reference/console/) |
+| 運用 | `/operations` | ホスト、そのディスク、稼働中のセッションとその使用量を、24 時間、7 日間、30 日間で表示します。 | `health:status:read` | [reference/console](/ja/reference/console/) |
+| リーチ | `/reach` | 各ツールが到達できる接続先と、承認待ちの接続先を確認できます。 | `accessmap:graph:read` | [reference/modules/iii-access-map](/ja/reference/modules/iii-access-map/) |
 | 保持期間 | `/retention` | 記録クラスごとの保持期間、それを適用するスイープ、封印された証明書 | `compliance:retention:read` | [reference/modules/xiii-compliance](/ja/reference/modules/xiii-compliance/) |
 | 予算 | `/stored-budgets` | 保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。 | `finops:budget:read` | [reference/modules/xi-finops](/ja/reference/modules/xi-finops/) |
-| 使用量 | `/usage` | 各アカウントの公式の 5 時間と週の上限（上限に近い順）と、今日のトークンとコスト。 | `sessions:run:read` | [reference/console](/ja/reference/console/) |
+| 使用量 | `/usage` | 各アカウントの公式の 5 時間と週の上限（上限に近い順）と、今日のトークンとコスト。 | `sessions:account:read` | [reference/console](/ja/reference/console/) |
 
 ### システムと設定
 
@@ -169,6 +168,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | ログ | `/logs` | レベルやモジュールで絞り込み、検索、一時停止ができるエンジンのライブログストリーム。 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
 | セットアップウィザード | `/onboarding` | 段階的なデプロイメント設定 | `system:admin` | [start/quickstart](/ja/start/quickstart/) |
 | アップデート | `/updates` | このエンジンが実行しているバージョン、チャンネルの最新の署名付きリリース、そしてインストールする操作です | `system:admin` | [how-to/upgrade-and-rollback](/ja/how-to/upgrade-and-rollback/) |
+| ボールト | `/vault` | パスワード、メモ、認証コード | `tenant:read` | [reference/console](/ja/reference/console/) |
 
 ### ログイン、セットアップ、アカウント
 

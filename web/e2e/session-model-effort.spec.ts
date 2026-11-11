@@ -169,7 +169,7 @@ test.describe('cached sign-in eligibility in the launch forms', () => {
         .click()
       await expect.poll(() => catalogReads).toBeGreaterThan(0)
       await expect(
-        form.getByRole('button', { name: 'Start', exact: true }),
+        form.getByRole('button', { name: 'Start session', exact: true }),
       ).toBeEnabled()
       const initialCatalogReads = catalogReads
       // The first form really fetched and cached the reuse sign-in under this authority.
@@ -193,7 +193,7 @@ test.describe('cached sign-in eligibility in the launch forms', () => {
         ).toContainText('fixture-model')
       else
         await expect(
-          form.getByRole('button', { name: 'Start', exact: true }),
+          form.getByRole('button', { name: 'Start session', exact: true }),
         ).toBeDisabled()
       await form
         .getByRole('button', { name: 'More options', exact: true })
@@ -205,7 +205,7 @@ test.describe('cached sign-in eligibility in the launch forms', () => {
         form.getByRole('combobox', { name: 'Account', exact: true }),
       ).toContainText('Select an account')
       await expect(
-        form.getByRole('button', { name: 'Start', exact: true }),
+        form.getByRole('button', { name: 'Start session', exact: true }),
       ).toBeDisabled()
       expect(catalogReads).toBe(initialCatalogReads)
     })
@@ -320,11 +320,14 @@ test.describe('model and effort are chosen where a session is started', () => {
       timeout: 30_000,
     })
     await expect(page.getByTestId('thread-tool')).toHaveText('Claude Code')
-    // Model and effort are two pickers.
+    // Model and effort are one picker, named for both.
     await expect(composer.getByTestId('composer-tool-model')).toHaveText(
-      'Claude Sonnet 5.5',
+      'Claude Sonnet 5.5 · High',
     )
-    await expect(composer.getByTestId('composer-effort')).toHaveText('High')
+    await expect(composer.getByTestId('composer-tool-model')).toHaveAttribute(
+      'aria-label',
+      'Model: Claude Sonnet 5.5, effort High',
+    )
     await expect(composer.getByTestId('composer-tool-model')).toHaveAttribute(
       'title',
       /claude-sonnet-5-5/,
@@ -452,14 +455,15 @@ test.describe('folder-first launch', () => {
     await expect(
       page.getByText('folder-first.txt', { exact: true }).first(),
     ).toBeVisible()
-    await page.getByRole('radio', { name: 'Terminal', exact: true }).click()
     const terminalOpened = page.waitForResponse(
       (r) =>
         /\/terminals$/.test(new URL(r.url()).pathname) &&
         r.request().method() === 'POST',
     )
+    // Opening the drawer starts a shell.
     await page
-      .getByRole('button', { name: 'Open terminal', exact: true })
+      .getByTestId('terminal-drawer')
+      .getByRole('button', { name: 'Terminal', exact: true })
       .click()
     expect((await terminalOpened).status()).toBe(201)
     await expect(page.getByTestId('terminal-screen')).toBeVisible()
@@ -470,6 +474,10 @@ test.describe('folder-first launch', () => {
       process.env.E2E_SESSION_FOLDER!,
     )
     await page
+      .getByRole('button', { name: 'Close Terminal 1', exact: true })
+      .click()
+    await page
+      .getByRole('dialog', { name: 'Close Terminal 1?', exact: true })
       .getByRole('button', { name: 'Close terminal', exact: true })
       .click()
     await page

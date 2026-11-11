@@ -20,6 +20,8 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { RowOpenButton } from '@/components/data/row-open-button'
+import { StaticTable } from '@/components/data/static-table'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -138,11 +140,7 @@ function VaultBody() {
           // same verb only when a successful read proves the vault is empty; a read that
           // failed or is still running keeps the verb here, disabled until the list answers.
           !(list.isSuccess && rows.length === 0) ? (
-            <Button
-              variant="primary"
-              disabled={!list.isSuccess}
-              onClick={() => setAdding(true)}
-            >
+            <Button disabled={!list.isSuccess} onClick={() => setAdding(true)}>
               <Plus />
               {t('vault:add')}
             </Button>
@@ -206,18 +204,32 @@ function VaultBody() {
           {t('vault:noMatch', { query })}
         </p>
       ) : (
-        <ul className="flex flex-col gap-2" aria-label={t('vault:title')}>
-          {shown.map((row) => (
-            <ItemRow
-              key={row.name}
-              row={row}
-              busy={copy.isPending}
-              onOpen={() => setOpened(row)}
-              onCopy={(what) => copy.mutate({ row, what })}
-              onDelete={() => setDeleting(row)}
-            />
-          ))}
-        </ul>
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <StaticTable aria-label={t('vault:title')}>
+            <thead>
+              <tr>
+                <th scope="col">{t('vault:form.name')}</th>
+                <th scope="col">{t('vault:form.type')}</th>
+                <th scope="col">{t('vault:row.changed')}</th>
+                <th scope="col">
+                  <span className="sr-only">{t('vault:row.actions')}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((row) => (
+                <ItemRow
+                  key={row.name}
+                  row={row}
+                  busy={copy.isPending}
+                  onOpen={() => setOpened(row)}
+                  onCopy={(what) => copy.mutate({ row, what })}
+                  onDelete={() => setDeleting(row)}
+                />
+              ))}
+            </tbody>
+          </StaticTable>
+        </div>
       )}
 
       <Dialog open={adding} onOpenChange={setAdding}>
@@ -292,52 +304,60 @@ function ItemRow({
     </Button>
   )
   return (
-    <li className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5">
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={t('row.open', { label: row.label })}
-        onClick={onOpen}
-      >
-        <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0">
-          <span className="block truncate font-mono text-body text-foreground">
-            {row.label}
+    <tr>
+      <td>
+        <RowOpenButton
+          className="flex items-center gap-3"
+          aria-label={t('row.open', { label: row.label })}
+          onOpen={onOpen}
+        >
+          <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-foreground">
+              {row.label}
+            </span>
+            {row.description ? (
+              <span className="block truncate text-caption text-muted-foreground">
+                {row.description}
+              </span>
+            ) : null}
           </span>
-          <span className="block truncate text-caption text-muted-foreground">
-            {t(`kind.${row.kind}`)}
-            {row.hasCode && row.kind !== 'totp' ? ` · ${t('kind.code')}` : ''}
-            {row.description ? ` · ${row.description}` : ''}
-            {' · '}
-            <RelTimeLabel ts={row.updatedAt} />
-          </span>
-        </span>
-      </button>
-      <div className="flex shrink-0 items-center">
-        {row.kind === 'login' && copyButton('password', 'row.copyPassword')}
-        {row.kind === 'note' && copyButton('note', 'row.copyNote')}
-        {row.hasCode && copyButton('code', 'row.copyCode')}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={t('row.menu', { label: row.label })}
-            >
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onOpen}>
-              {t('row.openItem')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onDelete}>
-              <Trash2 />
-              {t('row.delete')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </li>
+        </RowOpenButton>
+      </td>
+      <td className="text-muted-foreground">
+        {t(`kind.${row.kind}`)}
+        {row.hasCode && row.kind !== 'totp' ? ` · ${t('kind.code')}` : ''}
+      </td>
+      <td className="text-muted-foreground">
+        <RelTimeLabel ts={row.updatedAt} />
+      </td>
+      <td>
+        <div className="flex items-center justify-end">
+          {row.kind === 'login' && copyButton('password', 'row.copyPassword')}
+          {row.kind === 'note' && copyButton('note', 'row.copyNote')}
+          {row.hasCode && copyButton('code', 'row.copyCode')}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('row.menu', { label: row.label })}
+              >
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={onOpen}>
+                {t('row.openItem')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onDelete}>
+                <Trash2 />
+                {t('row.delete')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </td>
+    </tr>
   )
 }

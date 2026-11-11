@@ -307,13 +307,38 @@ func runLaunchTargetFromRecord(rec model.Record, runRef string) (RunLaunchTarget
 // are all store.ErrNotFound. Git publication reads it to fetch a session's
 // commit; the caller has already authorized that workspace.
 func (m *Module) ReadRunWorkspacePath(ctx context.Context, tenant model.TenantID, workspace model.ID, runRef string) (string, error) {
-	if m == nil || m.Data == nil {
-		return "", errors.New("sessions: run workspace reader has no data handle")
+	rec, err := m.readConfinedRun(ctx, tenant, workspace, runRef)
+	if err != nil {
+		return "", err
 	}
-	if tenant.IsZero() || workspace.IsZero() || runRef == "" {
+	if rec.String(colRunWorkspacePath) == "" {
 		return "", store.ErrNotFound
 	}
-	var dir string
+	return rec.String(colRunWorkspacePath), nil
+}
+
+// ReadRunLauncher returns the account that launched one run
+// (colRunLauncherUserID), zero for a run no person launched, through the same
+// confined lookup: absent, foreign and lineage-unset runs are store.ErrNotFound.
+// Git publication asks it so that only the launcher, or a run administrator,
+// publishes a run.
+func (m *Module) ReadRunLauncher(ctx context.Context, tenant model.TenantID, workspace model.ID, runRef string) (model.ID, error) {
+	rec, err := m.readConfinedRun(ctx, tenant, workspace, runRef)
+	if err != nil {
+		return "", err
+	}
+	return model.ID(rec.String(colRunLauncherUserID)), nil
+}
+
+// readConfinedRun reads one run's row in workspace only.
+func (m *Module) readConfinedRun(ctx context.Context, tenant model.TenantID, workspace model.ID, runRef string) (model.Record, error) {
+	if m == nil || m.Data == nil {
+		return nil, errors.New("sessions: run workspace reader has no data handle")
+	}
+	if tenant.IsZero() || workspace.IsZero() || runRef == "" {
+		return nil, store.ErrNotFound
+	}
+	var rec model.Record
 	err := m.Data.View(ctx, tenant, func(raw store.Scope) error {
 		sc, err := store.ConfineWorkspace(ctx, raw, workspace)
 		if err != nil {
@@ -327,19 +352,19 @@ func (m *Module) ReadRunWorkspacePath(ctx context.Context, tenant model.TenantID
 		if err != nil {
 			return err
 		}
-		if len(rows) == 0 || rows[0].String(colRunRef) != runRef || rows[0].String(colRunWorkspacePath) == "" {
+		if len(rows) == 0 || rows[0].String(colRunRef) != runRef {
 			return store.ErrNotFound
 		}
-		dir = rows[0].String(colRunWorkspacePath)
+		rec = rows[0]
 		return nil
 	})
 	if errors.Is(err, store.ErrWorkspaceConfinement) {
-		return "", store.ErrNotFound
+		return nil, store.ErrNotFound
 	}
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return dir, nil
+	return rec, nil
 }
 
 // StoredRunID reads the stored row ID of the run runRef names. The native run

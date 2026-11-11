@@ -110,12 +110,9 @@ export function systemText(
     return parts.join(' · ')
   }
   if (item.systemKind === 'apiRetry')
-    return t('sessions:conversation.retrying', {
+    return t('sessions:conversation.providerRetrying', {
       count: item.attempts ?? 1,
-      message:
-        item.httpStatus !== undefined
-          ? `${item.summary} (${item.httpStatus})`
-          : item.summary,
+      code: item.httpStatus ?? item.summary,
     })
   if (item.systemKind === 'retrying')
     return t('sessions:conversation.retrying', {

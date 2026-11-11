@@ -17,7 +17,7 @@
   "openOwner": "Open {{resource}}",
   "sharedScope": "Folders, connectors, MCP servers and policies are organization resources; no workspace binding is inferred.",
   "more": "Showing {{count}}. More are available.",
-  "unavailable": "Could not load this resource family. Refresh to retry.",
+  "unavailable": "Could not load this resource family.",
   "off": "This module is off.",
   "startSession": "Start session",
   "workflows": "Open automations",
@@ -54,5 +54,18 @@
   },
   "nextPage": "Next page",
   "firstPage": "First page",
-  "noDependencies": "No visible dependencies."
+  "noDependencies": "No visible dependencies.",
+  "groups": {
+    "workspace": "Workspaces",
+    "folder": "Folders",
+    "session": "Sessions",
+    "work": "Work items",
+    "connector": "Connectors",
+    "mcp": "MCP servers",
+    "policy": "Policies"
+  },
+  "noResources": {
+    "title": "No resources configured yet",
+    "description": "Workspaces, folders, sessions, connectors, MCP servers and policies appear here once they are set up."
+  }
 }

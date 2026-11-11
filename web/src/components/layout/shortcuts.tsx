@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { usePreferencesStore } from '@/stores/preferences'
+import { useSidePanel } from './side-panel'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -14,6 +16,7 @@ import {
 import { Kbd } from '@/components/ui/kbd'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { FEATURE_VIEWS } from '@/features/registry'
+import { useKeybindings } from '@/lib/keybindings/effective'
 import { moveFirstList } from '@/lib/keybindings/list-navigation'
 import {
   auditKeybindings,
@@ -77,6 +80,7 @@ interface OpenedSession {
 export function GlobalShortcuts() {
   const { t } = useTranslation(['common', 'nav'])
   const navigate = useNavigate()
+  const panel = useSidePanel()
   // The same permission projection the sidebar, palette and directories use.
   const { listed, navigable } = useViewAccess()
   const boundary = useAuthBoundary()
@@ -125,8 +129,12 @@ export function GlobalShortcuts() {
       next.current = opened
     } else if (opened.to !== next.current.to) next.current = opened
   }, [scope, path, sessionParam])
-  const [helpOpen, setHelpOpen] = useState(false)
-  const { valid, problems } = auditKeybindings(KEYBINDINGS)
+  const helpOpen = useCommandStore((s) => s.helpOpen)
+  const setHelpOpen = useCommandStore((s) => s.setHelpOpen)
+  // The help belongs to this shell: a sign-out does not leave it open for the next person.
+  useEffect(() => () => setHelpOpen(false), [setHelpOpen])
+  // The rows print the person's own keys, the ones the handler below fires on.
+  const { valid, problems } = auditKeybindings(useKeybindings())
   const newSession = useNewSession()
   const commandLabel = (command: string) =>
     SHELL_COMMANDS.has(command)
@@ -161,6 +169,19 @@ export function GlobalShortcuts() {
         sessionHistory:
           !!history.current.previous && !helpOpen && !modalIsOpen(),
       })
+      if (chordCommand === 'shell.sidebar' || chordCommand === 'shell.panel') {
+        if (e.defaultPrevented || e.repeat || e.isComposing || modalIsOpen())
+          return
+        if (chordCommand === 'shell.sidebar') {
+          e.preventDefault()
+          const prefs = usePreferencesStore.getState()
+          prefs.setNavCollapsed(prefs.navCollapsed !== true)
+        } else if (panel?.title) {
+          e.preventDefault()
+          panel.setOpen(!panel.open)
+        }
+        return
+      }
       if (chordCommand === 'palette.open') {
         e.preventDefault()
         useCommandStore.getState().toggle()
@@ -192,7 +213,7 @@ export function GlobalShortcuts() {
       if (chordCommand === 'help.toggle') {
         e.preventDefault()
         navLeader.disarm()
-        setHelpOpen((v) => !v)
+        setHelpOpen(!helpOpen)
         return
       }
       if (chordCommand === 'launcher.focus') {
@@ -225,17 +246,15 @@ export function GlobalShortcuts() {
         return
       }
 
-      // Below here only the leader machinery — never with a modifier, never with
-      // shift held. It is NOT in the table: a leader sequence is two keystrokes with a
-      // timeout and a destination read from the feature registry, not a chord, and a
-      // second copy of that list here would go stale against the registry.
-      if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.shiftKey) return
-
       if (helpOpen || modalIsOpen()) return
 
+      // The leader machinery — never with a modifier, never with shift held. It is NOT
+      // in the table: a leader sequence is two keystrokes with a timeout and a
+      // destination read from the feature registry, not a chord, and a second copy of
+      // that list here would go stale against the registry.
+      const bare = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey
       const now = Date.now()
-      if (e.key === NAV_LEADER) {
+      if (bare && e.key === NAV_LEADER) {
         navLeader.arm(now + NAV_SEQUENCE_TIMEOUT_MS)
         return
       }
@@ -244,7 +263,7 @@ export function GlobalShortcuts() {
       // The letter is the sequence's even when it names no place this person is offered:
       // marked handled, so a page's own bare key (`a` approves on the queue) never fires
       // on the second half of `g a`.
-      if (navLeader.armed(now)) {
+      if (bare && navLeader.armed(now)) {
         navLeader.disarm()
         e.preventDefault()
         const binding = visible.find((b) => b.key === e.key)
@@ -254,6 +273,8 @@ export function GlobalShortcuts() {
         void navigate({ to: view.path as never })
         return
       }
+      // The rows below fire on their keys as the person has them (Settings › Keyboard),
+      // with a modifier or Shift if they chose one: the resolver decides, not the event.
       // BARE `j`/`k` MOVE THE PAGE'S LIST: the first focusable grid receives the arrow the letter stands for, so its own handler — clamping,
       // Enter-to-open — moves the row. Placed AFTER the armed-sequence consume, so an
       // armed `g k` navigates to Knowledge and can never move a list.
@@ -270,11 +291,22 @@ export function GlobalShortcuts() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [helpOpen, navigate, visible, newSession, navigable])
+  }, [helpOpen, setHelpOpen, navigate, visible, newSession, navigable, panel])
 
   return (
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        // The dialog primitive gives focus back to what had it when the help opened; from
+        // the account menu that was a menu item, gone by now, and focus fell to <body>.
+        onCloseAutoFocus={(e) => {
+          const el = useCommandStore.getState().takeOpener()
+          if (el?.isConnected) {
+            e.preventDefault()
+            el.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t('common:shortcuts.title')}</DialogTitle>
           <DialogDescription>

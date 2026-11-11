@@ -346,6 +346,8 @@
     "installModel": "モデルをインストール",
     "addProvider": "プロバイダーを追加",
     "sourceFailed": "{{source}}を読み取れませんでした。ほかのソースは引き続き表示されます。",
+    "providerFailed": "{{source}} はモデルを一覧表示しませんでした。プロバイダーで<0>接続をテスト</0>を実行してください。",
+    "providerFailedAlone": "{{source}} はモデルを一覧表示しませんでした。",
     "sources": {
       "tools": "ツールのモデル一覧",
       "ollama": "Ollama",

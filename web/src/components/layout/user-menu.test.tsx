@@ -52,12 +52,19 @@ vi.mock('@/lib/hooks/use-server-info', () => ({
 }))
 
 import i18n from '@/lib/i18n'
+import { useCommandStore } from '@/stores/command'
 import { useThemeStore } from '@/stores/theme'
+import { act, waitFor, within } from '@testing-library/react'
+import { useClientSettings } from '@/features/settings/preferences'
+import { setKeyOverride } from '@/lib/keybindings/effective'
+import { GlobalShortcuts } from './shortcuts'
 import { THEME_OPTIONS } from './theme-toggle'
 import { UserMenu } from './user-menu'
 
 afterEach(() => {
   router.pathname = '/routine-policies'
+  useCommandStore.getState().setHelpOpen(false)
+  useClientSettings.setState({ keyOverrides: {} })
 })
 
 describe('the account menu', () => {
@@ -94,6 +101,56 @@ describe('the account menu', () => {
     expect(help.getAttribute('href')).toMatch(
       /^https:\/\/docs\.olivares\.ai\/.+\/$/,
     )
+  })
+
+  it('opens the keyboard help the top bar no longer paints', async () => {
+    const user = userEvent.setup()
+    renderIntel(<UserMenu />)
+    await user.click(screen.getByRole('button', { name: /, Account$/ }))
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Keyboard shortcuts' }),
+    )
+    expect(useCommandStore.getState().helpOpen).toBe(true)
+  })
+
+  // A menu item that has a key shows it at its right: the key that fires now, the
+  // person's own from Settings › Keyboard. The name stays the item's words.
+  it('shows the key that opens the keyboard help beside its item', async () => {
+    const user = userEvent.setup()
+    renderIntel(<UserMenu />)
+    await user.click(screen.getByRole('button', { name: /, Account$/ }))
+    const item = await screen.findByRole('menuitem', {
+      name: 'Keyboard shortcuts',
+    })
+    const keys = () =>
+      within(item)
+        .getAllByText(/./, { selector: 'kbd' })
+        .map((kbd) => kbd.textContent)
+    expect(keys()).toEqual(['?'])
+    act(() => setKeyOverride('help.toggle|', 'Alt+h'))
+    expect(keys()).toEqual(['Alt', 'H'])
+  })
+
+  it('moves focus into the keyboard help, and back to the account button when it closes', async () => {
+    const user = userEvent.setup()
+    renderIntel(
+      <>
+        <UserMenu />
+        <GlobalShortcuts />
+      </>,
+    )
+    const account = screen.getByRole('button', { name: /, Account$/ })
+    await user.click(account)
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Keyboard shortcuts' }),
+    )
+    const help = await screen.findByRole('dialog')
+    await waitFor(() =>
+      expect(help).toContainElement(document.activeElement as HTMLElement),
+    )
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(account).toHaveFocus())
   })
 
   it("leaves the engine's state to the status bar", async () => {

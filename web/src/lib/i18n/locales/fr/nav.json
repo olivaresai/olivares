@@ -33,6 +33,7 @@
     "communicationsHandoffs": "Transferts",
     "console": "Administration",
     "sourceDiff": "Comparaison de source",
+    "approvals": "Approbations",
     "permissions": "Permissions",
     "identity": "Identité",
     "vault": "Coffre-fort",
@@ -155,7 +156,7 @@
     "updates": "La version que ce moteur exécute, la version signée la plus récente de son canal et une action pour l'installer",
     "logs": "Le flux de journaux du moteur en direct, avec filtres par niveau et module, recherche et pause",
     "sourceDiff": "Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier",
-    "agent-tools": "Voir les comptes et clés d’API avec lesquels les sessions s’exécutent ; installer et connecter les outils revient aux administrateurs du déploiement",
+    "agent-tools": "Voir les comptes avec lesquels les sessions s’exécutent ; installer et connecter les outils revient aux administrateurs du déploiement",
     "storedBudgets": "Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite.",
     "usage": "Les limites officielles sur 5 heures et à la semaine de chaque compte, la plus proche d'abord, et les jetons et le coût du jour.",
     "operations": "L'hôte, ses disques, les sessions en direct et leur utilisation, sur 24 heures, 7 ou 30 jours."
@@ -344,9 +345,13 @@
     "startWithChoice": "Démarrer une nouvelle session avec ce choix",
     "newWithOtherAccess": "Nouvelle session avec un autre accès…",
     "askPlaceholder": "Demandez ce que vous voulez, @ pour le contexte, / pour les commandes et les skills",
+    "messagePlaceholder": "Message pour {{title}}… @ fichiers · / commandes",
     "modelPicker": "Modèle : {{value}}",
-    "effortPicker": "Effort : {{value}}",
+    "modelEffortPicker": "Modèle : {{model}}, effort {{effort}}",
     "accessPicker": "Accès : {{value}}",
+    "moreActions": "Plus d’actions",
+    "moreActionsStashed": "Plus d’actions, avec un brouillon mis de côté",
+    "contextAction": "Contexte et compactage…",
     "accessKeeps": "L’accès change au prochain tour de cette conversation.",
     "queue": {
       "title": "Messages en file d'attente",
@@ -370,18 +375,33 @@
       "placeholder": "Entrée met un message en file pour après ce tour",
       "placeholderSteer": "Entrée le met en file pour après ce tour, Ctrl+Entrée le redirige maintenant",
       "discarded": "La session a été libérée alors que ces messages étaient encore en file :",
-      "copy": "Copier"
-    }
+      "copy": "Copier",
+      "placeholderQueueKey": "{{key}} met un message en file pour après ce tour",
+      "placeholderSteerKey": "{{key}} le redirige maintenant"
+    },
+    "stash": "Mettre ce brouillon de côté",
+    "stashRestore": "Rétablir le brouillon mis de côté",
+    "stashGone": "N’est plus enregistré dans cette session, donc non rétabli : {{names}}",
+    "stashTooLarge": "Ce brouillon est trop volumineux pour être mis de côté : la limite est de {{limit}}. Il reste ici.",
+    "stashNotKept": "Impossible de mettre ce brouillon de côté : ce navigateur ne garde rien d’une visite à l’autre. Il reste seulement dans cet onglet.",
+    "stashNoRoom": "Impossible de mettre ce brouillon de côté : ce navigateur n’a plus de place pour le garder. Rien n’a été retiré, et il reste ici.",
+    "stashDropped": "Mis de côté. Pour faire de la place, le plus ancien a été retiré : {{words}}",
+    "stashTaken": "Le brouillon mis de côté n’est plus là : un autre onglet l’a rétabli, ou une journée est passée.",
+    "plan": "Plan",
+    "planHint": "Planifier d'abord : l'outil lit et propose un plan, sans rien modifier. S'applique dès le prochain message."
   },
   "shell": {
     "more": "Plus",
     "searchCommands": "Recherche et commandes",
     "search": "Recherche",
+    "searchGo": "Rechercher ou aller à…",
     "stopAll": "Tout arrêter",
     "workspaceCount": "Espaces de travail : {{count}}",
     "rail": {
       "title": "Sessions",
-      "all": "Toutes",
+      "seeAll_one": "Voir {{count}} session",
+      "seeAll_many": "Voir les {{count}} sessions",
+      "seeAll_other": "Voir les {{count}} sessions",
       "groups": {
         "needsYou": "Vous attend",
         "working": "En cours",
@@ -431,10 +451,10 @@
     "killswitch": {
       "estateStopped": "TOUS LES AGENTS ARRÊTÉS",
       "estateBody": "Les agents ne peuvent pas agir tant que deux comptes utilisateur n'ont pas approuvé le redémarrage.",
-      "agentStops": "{{count}} arrêt d’agent actif",
-      "agentStops_one": "{{count}} arrêt d’agent actif",
-      "agentStops_many": "{{count}} arrêts d’agent actifs",
-      "agentStops_other": "{{count}} arrêts d’agent actifs",
+      "agentStops": "{{count}} agents arrêtés",
+      "agentStops_one": "{{count}} agent arrêté",
+      "agentStops_many": "{{count}} agents arrêtés",
+      "agentStops_other": "{{count}} agents arrêtés",
       "none": "Rien n'est arrêté. Les sessions et les agents fonctionnent normalement."
     },
     "status": {
@@ -442,6 +462,9 @@
       "running_one": "{{count}} session ouverte",
       "running_many": "{{count}} sessions ouvertes",
       "running_other": "{{count}} sessions ouvertes",
+      "needYou_one": "{{count}} vous attend",
+      "needYou_many": "{{count}} vous attendent",
+      "needYou_other": "{{count}} vous attendent",
       "usage": "Utilisation de {{tool}}",
       "fiveHour": "5 h",
       "week": "sem.",
@@ -452,7 +475,6 @@
     },
     "collapse": "Réduire la navigation",
     "expand": "Développer la navigation",
-    "openNavigation": "Ouvrir la navigation",
     "closeNavigation": "Fermer la navigation"
   },
   "places": {
@@ -471,13 +493,20 @@
   "readOnlyNotice": "Vous pouvez lire cette page, mais pas la modifier. Un administrateur de l'organisation le peut.",
   "business": {
     "sessions": "Enregistrements, automatisations et orchestration des sessions",
+    "providerAssignment": "Fournisseurs attribués à des personnes et des services",
+    "limitAssignment": "Limites d’utilisation fixées pour d’autres personnes et services",
     "people": "Annuaires, départements et administration déléguée",
     "rules": "Politiques, rôles et attributions personnalisés",
     "usage": "Coût par équipe et par projet",
+    "usageBudgets": "Budgets qui avertissent, ralentissent ou bloquent les sessions",
     "securityCompliance": "Référentiels de conformité et preuves",
     "securityRedTeam": "Exécutions et notation de red team",
     "operationsDeploy": "Déployer des agents sur d’autres hôtes",
     "operationsResidency": "Résidence des données et locataires",
-    "retentionSchedules": "Les calendriers ne sont appliqués que dans Olivares Business : cette édition les conserve et ne purge rien."
+    "retentionSchedules": "Les calendriers ne sont appliqués que dans Olivares AI Business : cette édition les conserve et ne purge rien."
+  },
+  "groups": {
+    "control": "Gouvernance",
+    "admin": "Administration"
   }
 }

@@ -190,6 +190,28 @@ func errNoMint(purpose, path string) error {
 			"--data-dir (or OLIVARES_DATA_DIR) at the installation", purpose, path))
 }
 
+// localSigningKey loads the data-dir key at path, minting it on first boot. A
+// read-only command (noMint) only ever loads it: a missing file is errNoMint, and
+// the load itself never creates one, so a key deleted between the existence check
+// and the read is an error, not a freshly minted key.
+func localSigningKey(purpose, path string, noMint bool) (loadedSigningKey, error) {
+	if noMint {
+		if !fileExistsAt(path) {
+			return loadedSigningKey{}, errNoMint(purpose, path)
+		}
+		k, err := secure.LoadExistingSigningKey(path)
+		if err != nil {
+			return loadedSigningKey{}, err
+		}
+		return mintedSigningKey(k, false), nil
+	}
+	k, created, err := secure.LoadOrCreateSigningKey(path)
+	if err != nil {
+		return loadedSigningKey{}, err
+	}
+	return mintedSigningKey(k, created), nil
+}
+
 // fileExistsAt reports whether path names an existing regular file.
 func fileExistsAt(path string) bool {
 	info, err := os.Stat(path)
@@ -251,14 +273,7 @@ func loadAuditSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOption
 	if o.enrolled {
 		return loadEnrolledLocalKey("audit", path)
 	}
-	if o.noMint && !fileExistsAt(path) {
-		return loadedSigningKey{}, errNoMint("audit", path)
-	}
-	k, created, err := secure.LoadOrCreateSigningKey(path)
-	if err != nil {
-		return loadedSigningKey{}, err
-	}
-	return mintedSigningKey(k, created), nil
+	return localSigningKey("audit", path, o.noMint)
 }
 
 // loadCatalogSigningKey resolves the catalog (artifact) signing key. The plain
@@ -321,14 +336,7 @@ func loadCatalogSigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOpti
 	if o.enrolled {
 		return loadEnrolledLocalKey("catalog", path)
 	}
-	if o.noMint && !fileExistsAt(path) {
-		return loadedSigningKey{}, errNoMint("catalog", path)
-	}
-	k, created, err := secure.LoadOrCreateSigningKey(path)
-	if err != nil {
-		return loadedSigningKey{}, err
-	}
-	return mintedSigningKey(k, created), nil
+	return localSigningKey("catalog", path, o.noMint)
 }
 
 // loadPolicySigningKey resolves the policy-artifact signing key — the key
@@ -385,14 +393,7 @@ func loadPolicySigningKey(dataDir string, log *slog.Logger, opts ...keyLoadOptio
 	if o.enrolled {
 		return loadEnrolledLocalKey("policy", path)
 	}
-	if o.noMint && !fileExistsAt(path) {
-		return loadedSigningKey{}, errNoMint("policy", path)
-	}
-	k, created, err := secure.LoadOrCreateSigningKey(path)
-	if err != nil {
-		return loadedSigningKey{}, err
-	}
-	return mintedSigningKey(k, created), nil
+	return localSigningKey("policy", path, o.noMint)
 }
 
 // loadEnrolledLocalKey is the LOAD-ONLY local path of the strict enrolled mode.

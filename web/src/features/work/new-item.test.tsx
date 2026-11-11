@@ -203,6 +203,31 @@ describe('A person records a work item from the Work view', () => {
     ).toBe('/sessions')
   })
 
+  it('New item is the verb of the page header, not one of its controls', async () => {
+    renderIntel(<WorkView />)
+    await screen.findByText('No work items yet')
+    const row = document.querySelector(
+      '[data-slot="page-actions"]',
+    ) as HTMLElement
+    // The verb slot holds the button itself; the controls bag is its own group.
+    const verb = within(row).getByRole('button', { name: 'New item' })
+    expect(verb.parentElement).toBe(row)
+    // Drawn as the primary, not the default secondary button.
+    expect(verb).toHaveClass('bg-accent')
+  })
+
+  it('draws one orange button: the empty list offers New item as a quieter one', async () => {
+    renderIntel(<WorkView />)
+    await screen.findByText('No work items yet')
+    const orange = screen
+      .getAllByRole('button')
+      .filter((button) => button.classList.contains('bg-accent'))
+    expect(orange).toHaveLength(1)
+    expect(
+      within(emptyState()).getByRole('button', { name: 'New item' }),
+    ).not.toHaveClass('bg-accent')
+  })
+
   it('without sessions:work:write it offers no New item', async () => {
     auth.denied = new Set(['sessions:work:write'])
     renderIntel(<WorkView />)

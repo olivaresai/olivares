@@ -41,6 +41,11 @@ describe('StatusBadge', () => {
     )
     expect(container.firstChild).not.toHaveClass('border', 'bg-success-soft')
   })
+
+  it('says a «needs you» status in bold warm ink, as the state word does', () => {
+    const { container } = render(<StatusBadge status="needs-you" />)
+    expect(container.firstChild).toHaveClass('font-bold', 'text-warn')
+  })
 })
 
 describe('AccessModeBadge', () => {

@@ -33,7 +33,8 @@
     "signals": "Signals",
     "hosts": "Hosts",
     "lastSeen": "Last seen",
-    "occurrences": "Seen"
+    "occurrences": "Seen",
+    "where": "Where"
   },
   "searchPlaceholder": "Search name, ref, signal…",
   "hostCount": "{{count}} hosts",
@@ -127,6 +128,10 @@
       "title": "No estate entities discovered yet",
       "description": "Entities appear as connector observations report agents, sessions, identities, MCP capabilities, models, providers, or resources.",
       "action": "Open capabilities"
+    },
+    "filtered": {
+      "title": "No entries match these filters",
+      "description": "Choose another kind or status to see more of the catalog."
     }
   },
   "coverage": {
@@ -206,5 +211,6 @@
       "suspendedTitle": "Tenant service suspended",
       "suspended": "This tenant's service is suspended or not in service, so collection coverage cannot be read."
     }
-  }
+  },
+  "export": "Export"
 }

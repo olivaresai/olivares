@@ -17,7 +17,7 @@
   "openOwner": "{{resource}} öffnen",
   "sharedScope": "Ordner, Konnektoren, MCP-Server und Richtlinien gehören zur Organisation; eine Arbeitsbereichsbindung wird nicht abgeleitet.",
   "more": "Angezeigt: {{count}}. Weitere sind verfügbar.",
-  "unavailable": "Diese Ressourcenart konnte nicht geladen werden. Aktualisieren Sie zum Wiederholen.",
+  "unavailable": "Diese Ressourcenart konnte nicht geladen werden.",
   "off": "Dieses Modul ist ausgeschaltet.",
   "startSession": "Sitzung starten",
   "workflows": "Automatisierungen öffnen",
@@ -54,5 +54,18 @@
   },
   "nextPage": "Nächste Seite",
   "firstPage": "Erste Seite",
-  "noDependencies": "Keine sichtbaren Abhängigkeiten."
+  "noDependencies": "Keine sichtbaren Abhängigkeiten.",
+  "groups": {
+    "workspace": "Arbeitsbereiche",
+    "folder": "Ordner",
+    "session": "Sitzungen",
+    "work": "Arbeitselemente",
+    "connector": "Konnektoren",
+    "mcp": "MCP-Server",
+    "policy": "Richtlinien"
+  },
+  "noResources": {
+    "title": "Noch keine Ressourcen konfiguriert",
+    "description": "Arbeitsbereiche, Ordner, Sitzungen, Konnektoren, MCP-Server und Richtlinien erscheinen hier, sobald sie eingerichtet sind."
+  }
 }

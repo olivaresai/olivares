@@ -239,7 +239,9 @@ describe('a palette verb opens its form on the arrival it was selected for', () 
   it('same route: the already-mounted view opens the form on THIS arrival', async () => {
     holding(...ALERTING)
     const { router } = mount('/alerting')
-    expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('row', { name: /sec-alerts/ }),
+    ).toBeInTheDocument()
     expect(alertingMounts).toBe(1)
 
     const user = userEvent.setup()
@@ -277,7 +279,9 @@ describe('a palette verb opens its form on the arrival it was selected for', () 
   it('one shot: a later visit opens nothing, and a revoke/regrant does not resurrect it', async () => {
     holding(...ALERTING)
     const { qc, router } = mount('/alerting')
-    expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('row', { name: /sec-alerts/ }),
+    ).toBeInTheDocument()
     const user = userEvent.setup()
     await selectVerb(user, 'New alert route')
     await screen.findByRole('dialog', { name: /new route/i })
@@ -298,7 +302,9 @@ describe('a palette verb opens its form on the arrival it was selected for', () 
     await goTo(router, '/elsewhere')
     expect(await screen.findByText('elsewhere')).toBeInTheDocument()
     await goTo(router, '/alerting')
-    expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('row', { name: /sec-alerts/ }),
+    ).toBeInTheDocument()
     // FIRES IF: the command survives the arrival it was selected for — the form would
     // open for an operator who selected nothing on this visit.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -322,7 +328,9 @@ describe('a palette verb opens its form on the arrival it was selected for', () 
     })
 
     await goTo(router, '/alerting')
-    expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('row', { name: /sec-alerts/ }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     // RETIRED WHERE IT WAS REFUSED, not merely left unconsumed.
     expect(useCommandStore.getState().pendingAction).toBeNull()
@@ -333,7 +341,9 @@ describe('a palette verb opens its form on the arrival it was selected for', () 
     })
     await goTo(router, '/elsewhere')
     await goTo(router, '/alerting')
-    expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('row', { name: /sec-alerts/ }),
+    ).toBeInTheDocument()
     // FIRES IF: a refused command outlives the refusal — the grant coming back would open
     // a form nobody asked for on that visit.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -352,7 +362,9 @@ describe('a palette verb opens its form on the arrival it was selected for', () 
     })
 
     await goTo(router, '/alerting')
-    expect(await screen.findByText('sec-alerts')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('row', { name: /sec-alerts/ }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(useCommandStore.getState().pendingAction).toBeNull()
   })

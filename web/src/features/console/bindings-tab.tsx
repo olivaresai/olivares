@@ -49,6 +49,8 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { TrustChrome } from '@/components/ui/trust-chrome'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import type { AgentDTO } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -141,6 +143,9 @@ function BindingsTabReads() {
   const canRead = can('sourcescope:binding:read')
   const canWrite = can('sourcescope:binding:write')
   const canReview = can('sourcescope:posture:admin')
+  // The access map is offered only where its page opens: its read is the administrator's.
+  const { navigable } = useViewAccess()
+  const accessMap = viewById('accessMap')
   const [sourceType, setSourceType] = useState<SourceScopeSourceType>('mcp')
   const [sourceRef, setSourceRef] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -285,11 +290,14 @@ function BindingsTabReads() {
           sourceRef={sourceRef.trim()}
           bindings={rows}
           canRead={canRead}
-          onOpenAccessMap={() =>
-            navigate({
-              to: '/access-map',
-              search: { focus: sourceRef.trim() },
-            } as never)
+          onOpenAccessMap={
+            accessMap && navigable(accessMap)
+              ? () =>
+                  navigate({
+                    to: '/access-map',
+                    search: { focus: sourceRef.trim() },
+                  } as never)
+              : undefined
           }
         />
       ) : null}
@@ -775,7 +783,8 @@ function BindingForm({
             <Button
               type="button"
               size="sm"
-              variant={effect === 'allow' ? 'primary' : 'ghost'}
+              variant="ghost"
+              aria-pressed={effect === 'allow'}
               onClick={() => setEffect('allow')}
             >
               <ShieldCheck />
@@ -784,7 +793,8 @@ function BindingForm({
             <Button
               type="button"
               size="sm"
-              variant={effect === 'forbid' ? 'destructive' : 'ghost'}
+              variant="ghost"
+              aria-pressed={effect === 'forbid'}
               onClick={() => setEffect('forbid')}
             >
               <ShieldOff />
@@ -794,7 +804,8 @@ function BindingForm({
               <Button
                 type="button"
                 size="sm"
-                variant={effect === 'require' ? 'primary' : 'ghost'}
+                variant="ghost"
+                aria-pressed={effect === 'require'}
                 onClick={() => setEffect('require')}
               >
                 <ShieldCheck />
@@ -805,7 +816,8 @@ function BindingForm({
               <Button
                 type="button"
                 size="sm"
-                variant={effect === 'decline' ? 'destructive' : 'ghost'}
+                variant="ghost"
+                aria-pressed={effect === 'decline'}
                 onClick={() => setEffect('decline')}
               >
                 <ShieldOff />
@@ -1279,7 +1291,8 @@ function ResolutionPreview({
   sourceRef: string
   bindings: SourceScopeBindingDTO[]
   canRead: boolean
-  onOpenAccessMap: () => void
+  /** Opens the access map on this source; absent where that page would refuse the person. */
+  onOpenAccessMap?: () => void
 }) {
   const { t } = useTranslation('console')
   const enabled = bindings.filter((binding) => binding.enabled)
@@ -1308,10 +1321,12 @@ function ResolutionPreview({
                 : t('bindings.preview.global', { source: sourceRef })}
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={onOpenAccessMap}>
-          <Network />
-          {t('bindings.preview.openAccessMap')}
-        </Button>
+        {onOpenAccessMap ? (
+          <Button variant="secondary" size="sm" onClick={onOpenAccessMap}>
+            <Network />
+            {t('bindings.preview.openAccessMap')}
+          </Button>
+        ) : null}
       </div>
       <p className="text-body text-muted-foreground">
         {t('bindings.preview.algebra')}

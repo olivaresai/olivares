@@ -180,8 +180,8 @@ engine_proc_gone() {
 # boot_engine_at <bin> <port> <data-dir> <pidfile> [polls] — start an engine, prove it is
 # OURS, print its one-time setup token on stdout, and record the child's pid in <pidfile> so
 # the caller's cleanup trap can kill it. It waits up to <polls> half-second polls (default
-# 40) for /healthz; a caller that boots a virgin store on a loaded runner passes a longer
-# bound, and a dead child still ends the wait at once.
+# 40) for /healthz and the token line together; a caller that boots a virgin store on a
+# loaded runner passes a longer bound, and a dead child still ends the wait at once.
 #
 # A PIDFILE, NOT AN ARRAY, AND THAT IS THE SECOND DEFECT THIS FILE CLOSES. The inline
 # version appended to a `PIDS` array — and every caller invokes it as
@@ -249,6 +249,10 @@ boot_engine_at() {
 	fi
 
 	# --- 2. LIVENESS + readiness ---------------------------------------------------
+	# Ready is /healthz answering AND the setup-token line in the log. An answer can come
+	# before that line is there (seen on CI: the port answered while the log held no setup
+	# banner yet), and reading the log once at that moment blamed the token. Both wait in
+	# this one loop, so the bound stays <polls> polls of 0.5 s; a dead child still ends it.
 	for i in $(seq 1 "${polls}"); do
 		if ! kill -0 "${pid}" 2>/dev/null; then
 			echo "ERROR: the engine we started for 127.0.0.1:${port} EXITED during boot." >&2
@@ -258,7 +262,8 @@ boot_engine_at() {
 			sed 's/^/         /' "${log}" >&2 || true
 			return 1
 		fi
-		if curl -sf "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then break; fi
+		if curl -sf "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1 &&
+			grep -qE 'olst_[A-Z0-9]+' "${log}"; then break; fi
 		sleep 0.5
 	done
 

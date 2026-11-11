@@ -68,6 +68,9 @@ type sessionPolicy struct {
 	programs    []string
 	registries  []SessionRegistry
 	egressHosts []string
+	// autoCompact is the declared Claude Code auto-compact window in tokens (0 = none),
+	// re-resolved for each launch like the fields above.
+	autoCompact int
 	unreadable  bool
 }
 

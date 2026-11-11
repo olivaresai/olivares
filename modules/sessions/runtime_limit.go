@@ -163,6 +163,26 @@ func (m *Module) observeStreamLimit(ctx context.Context, lr *liveRun, line []byt
 		m.recordLimit(ctx, lr, limitReport{Kind: kind})
 	case !f.IsError:
 		m.clearLimit(ctx, lr)
+	case f.providerError():
+		m.recordTurnFailed(ctx, lr)
+	}
+}
+
+// providerError says the provider's answer failed the turn. Only a result that names it
+// counts: a turn a person interrupted also ends on an error result, and its result can
+// arrive before the interrupt is acknowledged.
+func (f limitFrame) providerError() bool {
+	return f.APIErrorStatus != 0 || f.APIError != ""
+}
+
+// recordTurnFailed marks a turn that ended on a provider error that is not a limit. It is
+// no transition: the run stays open, and a repeated failure is no new ledger event.
+func (m *Module) recordTurnFailed(ctx context.Context, lr *liveRun) {
+	lr.mu.Lock()
+	lr.limitClear = false
+	lr.mu.Unlock()
+	if err := m.mutateRun(ctx, lr, func(rec model.Record) { rec[colRunTurnFailed] = true }); err != nil {
+		m.warnf("sessions: could not record the turn a tool ended on an error", "run_ref", lr.runRef, "err", redactErr(err))
 	}
 }
 
@@ -243,9 +263,10 @@ func (m *Module) clearLimit(ctx context.Context, lr *liveRun) {
 		m.warnf("sessions: could not read the run to clear its limit", "run_ref", lr.runRef, "err", redactErr(err))
 		return
 	}
-	if rec.String(colRunUsageLimit) != "" {
+	if rec.String(colRunUsageLimit) != "" || rec.Bool(colRunTurnFailed) {
 		if err := m.mutateRun(ctx, lr, func(rec model.Record) {
 			rec[colRunUsageLimit] = nil
+			rec[colRunTurnFailed] = nil
 			rec[colRunResumeAfterLimit] = false
 			rec[colRunResumeCancelled] = false
 		}); err != nil {

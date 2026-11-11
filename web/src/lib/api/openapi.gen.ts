@@ -2347,8 +2347,56 @@ export interface paths {
      */
     get: operations['listGroups']
     put?: never
-    post?: never
+    /**
+     * Create a group of the operator's own (provisioned_by "operator"), for people a directory does not know; the Business edition (501 departments_unavailable in Community; 409 when the name is in use)
+     * @description Creates a group of the operator's own (provisioned_by operator) for people a directory does not know; the name is trimmed and one already in use is a 409. Business edition: a Community build answers 501 departments_unavailable.
+     */
+    post: operations['createGroup']
     delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/groups/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Remove a group of the operator's own with its roster; its members keep their accounts and roles; a directory group is refused (403 group_origin_read_only); the Business edition (501 departments_unavailable in Community)
+     * @description Removes a group of the operator's own with its roster; its members keep their accounts and roles; a directory group is refused with 403 group_origin_read_only. Business edition: a Community build answers 501 departments_unavailable.
+     */
+    delete: operations['deleteGroup']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/groups/{id}/members/{user_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Add a person of the tenant to a group of the operator's own; idempotent; the Business edition (501 departments_unavailable in Community)
+     * @description Adds a person of the tenant to a group of the operator's own; idempotent. Business edition: a Community build answers 501 departments_unavailable.
+     */
+    put: operations['addGroupMember']
+    post?: never
+    /**
+     * Take a person out of a group of the operator's own; idempotent; the Business edition (501 departments_unavailable in Community)
+     * @description Takes a person out of a group of the operator's own; idempotent. Business edition: a Community build answers 501 departments_unavailable.
+     */
+    delete: operations['removeGroupMember']
     options?: never
     head?: never
     patch?: never
@@ -2484,8 +2532,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Rotate a pending invitation's secret and mail the new link to the invitee (409 invite_delivery_unavailable without a mailer)
-     * @description Rotates a pending invitation's secret and mails the new link to the invitee (202); the token travels only in the mail. 409 when no mailer is configured.
+     * Rotate a pending invitation's secret, voiding the old link, and mail the new link to the invitee or, with delivery=link, return its token once (409 invite_delivery_unavailable without a mailer and without delivery=link)
+     * @description Rotates a pending invitation's secret, voiding the old link, and mails the new link to the invitee (202); with delivery=link the new token comes back once in the response instead. 409 when no mailer is configured and delivery=link is not asked.
      */
     post: operations['resendInvite']
     delete?: never
@@ -2534,6 +2582,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/members/{id}/reactivate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Reactivate a suspended member of the resolved tenant: access returns as it was; a signed-in person also needs the administrative step-up; the Business edition (501 departments_unavailable in Community)
+     * @description Reactivates a suspended member of the resolved tenant: access returns as it was; a signed-in person also needs the administrative step-up. Business edition: a Community build answers 501 departments_unavailable.
+     */
+    post: operations['reactivateMember']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/members/{id}/suspend': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suspend a member of the resolved tenant: their sessions and tokens stop at once, while the membership, role and group places stay; reversible with reactivate; a signed-in person also needs the administrative step-up; the Business edition (501 departments_unavailable in Community)
+     * @description Suspends a member of the resolved tenant: their sessions and tokens stop at once while the membership, role and group places stay; reversible with reactivate; a signed-in person also needs the administrative step-up. Business edition: a Community build answers 501 departments_unavailable.
+     */
+    post: operations['suspendMember']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/memberships': {
     parameters: {
       query?: never
@@ -2564,8 +2652,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token)
-     * @description Creates-or-reuses an account and grants its tenant membership (membership:write, AAL3 step-up). Mode password sets the initial password; mode invite emails a single-use token. An account that exists and is not a member of the tenant answers 202 consent_required and writes nothing.
+     * Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token, or returns it once with delivery link)
+     * @description Creates-or-reuses an account and grants its tenant membership (membership:write, AAL3 step-up). Mode password sets the initial password; mode invite emails a single-use token, or with delivery link returns it once in the response for a link shown on the screen. An account that exists and is not a member of the tenant answers 202 consent_required and writes nothing.
      */
     post: operations['onboardMember']
     delete?: never
@@ -39192,6 +39280,7 @@ export interface paths {
               principal?: {
                 id?: string | null
                 kind?: string | null
+                person?: string | null
               } | null
               resource?: {
                 extra?: {
@@ -39312,6 +39401,7 @@ export interface paths {
               principal?: {
                 id?: string | null
                 kind?: string | null
+                person?: string | null
               } | null
               resource?: {
                 extra?: {
@@ -39430,6 +39520,30 @@ export interface paths {
             note?: string | null
             /** @description Must compile for the selected engine and is capped at 262144 bytes. */
             source: string
+            /** @description Cedar only. Replaces the stored tests; omit it to keep them. A publish that breaks a test is refused with its name. */
+            tests?: {
+              /** @enum {string} */
+              expect: 'allow' | 'deny'
+              /** @description Unique name a refusal quotes. */
+              name: string
+              request: {
+                permission?: string | null
+                principal?: {
+                  id?: string | null
+                  kind?: string | null
+                  person?: string | null
+                } | null
+                resource?: {
+                  extra?: {
+                    [key: string]: string | null
+                  } | null
+                  id?: string | null
+                  kind?: string | null
+                  sensitivity?: string | null
+                } | null
+                tenant?: string | null
+              }
+            }[]
           }
         }
       }
@@ -80209,6 +80323,7 @@ export interface paths {
           'application/json': {
             auth_source?:
               ('' | 'provider_account_home' | 'managed_injection') | null
+            auto_compact_window?: number | null
             display_name?: string | null
             max_data_class?:
               | (
@@ -82934,7 +83049,7 @@ export interface paths {
     put?: never
     post?: never
     /**
-     * sessions module route (requires sessions:run:admin)
+     * sessions module route (requires sessions:run:write)
      * @description Deletes one session run by reference.
      */
     delete: {
@@ -84040,8 +84155,24 @@ export interface paths {
             'application/json': {
               /** @description False when this session's folder cannot be checkpointed; reason says why. */
               available: boolean
+              /** @description What the session's folder differs by now from the start of the first turn: the whole session's changes. Empty when there are no turns or the folder cannot be checkpointed. */
+              files: {
+                /** @description Lines added between the two trees; absent for a binary file. */
+                added?: number
+                /** @description The file's path, relative to the session's folder. */
+                path: string
+                /** @description Lines removed between the two trees; absent for a binary file. */
+                removed?: number
+                /**
+                 * @description What the turn did to the file.
+                 * @enum {string}
+                 */
+                status: 'added' | 'modified' | 'deleted'
+              }[]
               /** @description Why the folder cannot be checkpointed. Absent when it can. */
               reason?: string
+              /** @description True when the session changed more files than are listed. */
+              truncated: boolean
               /** @description The session's turns, oldest first. */
               turns: {
                 /**
@@ -84053,8 +84184,12 @@ export interface paths {
                 clipped: boolean
                 /** @description The files the turn changed. */
                 files: {
+                  /** @description Lines added between the two trees; absent for a binary file. */
+                  added?: number
                   /** @description The file's path, relative to the session's folder. */
                   path: string
+                  /** @description Lines removed between the two trees; absent for a binary file. */
+                  removed?: number
                   /**
                    * @description What the turn did to the file.
                    * @enum {string}
@@ -84285,7 +84420,7 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * sessions module route (requires sessions:run:admin)
+     * sessions module route (requires sessions:run:write)
      * @description Cleans up the resources of one finished session run.
      */
     post: {
@@ -95884,7 +96019,90 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    get?: never
+    /**
+     * Lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them.
+     * @description Lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     put?: never
     /**
      * Opens a shell in the folder, confined as a session in that folder is, and answers with the terminal's id.
@@ -102146,6 +102364,8 @@ export interface components {
       id: string
       /** @description The role the group's members are elevated to; empty when unmapped. */
       mapped_role: string
+      /** @description The ids of the group's members; empty for a workspace-confined caller. */
+      member_ids?: string[]
       /** @description The group's member count. */
       members: number
       /** @description The parent group's id; empty when the group is top-level. */
@@ -102227,7 +102447,7 @@ export interface components {
       check_error?: string
       /** @enum {string} */
       edition: 'community' | 'enterprise'
-      /** @description Present on a Community build that holds a live Business or Enterprise license: the one next step to the licensed build for the way this engine was installed. The newest release above is then the licensed build. */
+      /** @description Present on a Community build that holds a live Engineer, Business or Enterprise license: the one next step to the licensed build for the way this engine was installed. The newest release above is then the licensed build. */
       edition_switch?: {
         /** @description The exact command for this installation; empty where the manifest does it. */
         command?: string
@@ -102241,10 +102461,10 @@ export interface components {
         /** @description What follows the command. */
         then: string
         /**
-         * @description The edition the license entitles; both are one licensed build.
+         * @description The edition the license entitles; all are one licensed build.
          * @enum {string}
          */
-        to: 'business' | 'enterprise'
+        to: 'engineer' | 'business' | 'enterprise'
       }
       notes?: string
       /** Format: date-time */
@@ -102495,6 +102715,11 @@ export interface components {
       /** Format: date-time */
       expires_at?: string
       holder?: string
+      /**
+       * @description The edition the live license entitles; community without one. Absent for a product this build does not know. The build edition stays in edition.
+       * @enum {string}
+       */
+      licensed_edition?: 'community' | 'engineer' | 'business' | 'enterprise'
       licensee?: string
       max_users?: number
       plan?: string
@@ -102796,6 +103021,11 @@ export interface components {
       ok: true
     }
     OnboardInput: {
+      /**
+       * @description With mode invite: link returns the invitation's token once in the response, for a link shown on the screen, instead of mailing it. Empty mails it.
+       * @enum {string}
+       */
+      delivery?: 'link'
       display_name?: string
       /** Format: email */
       email: string
@@ -102814,14 +103044,16 @@ export interface components {
       /** @description Present only for mode=invite. */
       invite?: {
         /**
-         * @description Whether the invitation email left the engine; the token travels only in the mail.
+         * @description sent or failed: whether the invitation email left the engine. link: the token is in this response, once.
          * @enum {string}
          */
-        delivery?: 'sent' | 'failed'
+        delivery?: 'sent' | 'failed' | 'link'
         /** Format: date-time */
         expires_at?: string
         /** Format: uuid */
         id?: string
+        /** @description The invitation's single-use token, present only with delivery link. Shown once; never listed, logged or audited. */
+        token?: string
       }
       membership: {
         /** Format: uuid */
@@ -103056,6 +103288,11 @@ export interface components {
         support_profile?: string
         support_tier?: string
       }
+      /**
+       * @description The edition the live license entitles; community without one. Absent for a product this build does not know. The build edition stays in edition.
+       * @enum {string}
+       */
+      licensed_edition?: 'community' | 'engineer' | 'business' | 'enterprise'
       modules_not_enabled?: string[]
       /** @description A new installation's console navigation lists the first job only; every other page keeps its address. Absent on an installation that existed before. */
       previews_hidden?: boolean
@@ -114944,6 +115181,332 @@ export interface operations {
       }
     }
   }
+  createGroup: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Target tenant id; required when the principal can act in more than one tenant. */
+        'X-Olivares-Tenant'?: string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': {
+          display_name: string
+        }
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': {
+            display_name: string
+            /** Format: uuid */
+            id: string
+            provisioned_by: string
+          }
+        }
+      }
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Unauthenticated */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Conflict / setup required */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Rate limited */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  deleteGroup: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Target tenant id; required when the principal can act in more than one tenant. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        /** @description Resource identifier (UUIDv7). */
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Unauthenticated */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Conflict / setup required */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Rate limited */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  addGroupMember: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Target tenant id; required when the principal can act in more than one tenant. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        /** @description Resource identifier (UUIDv7). */
+        id: string
+        /** @description The person's user id (UUIDv7). */
+        user_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Unauthenticated */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Conflict / setup required */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Rate limited */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  removeGroupMember: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Target tenant id; required when the principal can act in more than one tenant. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        /** @description Resource identifier (UUIDv7). */
+        id: string
+        /** @description The person's user id (UUIDv7). */
+        user_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Unauthenticated */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Conflict / setup required */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Rate limited */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
   setGroupParent: {
     parameters: {
       query?: never
@@ -115468,7 +116031,10 @@ export interface operations {
   }
   resendInvite: {
     parameters: {
-      query?: never
+      query?: {
+        /** @description link: return the new token in the response, for a link shown on the screen, instead of mailing it. */
+        delivery?: 'link'
+      }
       header?: {
         /** @description Target tenant id; required when the principal can act in more than one tenant. */
         'X-Olivares-Tenant'?: string
@@ -115489,14 +116055,16 @@ export interface operations {
         content: {
           'application/json': {
             /**
-             * @description Whether the invitation email left the engine; the token travels only in the mail.
+             * @description sent or failed: whether the invitation email left the engine. link: the token is in this response, once.
              * @enum {string}
              */
-            delivery: 'sent' | 'failed'
+            delivery: 'sent' | 'failed' | 'link'
             /** Format: date-time */
             expires_at: string
             /** Format: uuid */
             id: string
+            /** @description The invitation's single-use token, present only with delivery link. Shown once; never listed, logged or audited. */
+            token?: string
           }
         }
       }
@@ -115645,6 +116213,162 @@ export interface operations {
     }
   }
   removeMember: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Target tenant id; required when the principal can act in more than one tenant. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        /** @description Resource identifier (UUIDv7). */
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Unauthenticated */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Conflict / setup required */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Rate limited */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  reactivateMember: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Target tenant id; required when the principal can act in more than one tenant. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        /** @description Resource identifier (UUIDv7). */
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Unauthenticated */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Conflict / setup required */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Rate limited */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  suspendMember: {
     parameters: {
       query?: never
       header?: {

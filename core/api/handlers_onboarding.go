@@ -26,17 +26,23 @@ import (
 // (the invitee has no session yet); the token is the gate.
 
 // InviteSender delivers an invitation by email, to the invitee's address only.
-// It is the only path an invitation's token takes: no response, log or audit
-// carries it. The sender builds the link itself, from the console address the
-// operator declared for the deployment, with token in its fragment; the API
-// never builds a link, so no request header can choose where a token is sent.
-// When it is nil, invite mode answers 409 invite_delivery_unavailable and writes
-// nothing; a failed send is reported as the invitation's delivery state, and a
-// resend with a new secret retries it. The composition root wires it; the API
-// never holds a mailer.
+// The sender builds the link itself, from the console address the operator
+// declared for the deployment, with token in its fragment; the API never builds
+// a link, so no request header can choose where a token is sent. When it is nil,
+// invite mode answers 409 invite_delivery_unavailable and writes nothing, unless
+// the administrator asks for delivery "link"; a failed send is reported as the
+// invitation's delivery state, and a resend with a new secret retries it. The
+// composition root wires it; the API never holds a mailer.
 type InviteSender interface {
 	SendInvite(ctx context.Context, email, token string, expiresAt time.Time) error
 }
+
+// inviteDeliveryLink hands an invitation's token to the administrator's own
+// session, once, for the link the console shows on the screen: the day-one path
+// of a server with no mail. The token takes exactly one path, the mail or this
+// response, never a list, a log or the audit. Only a human session past the
+// administrative step-up reaches it (requireStepUp refuses every API token).
+const inviteDeliveryLink = "link"
 
 // onboardInput is the POST /v1/onboard payload.
 type onboardInput struct {
@@ -47,6 +53,9 @@ type onboardInput struct {
 	// single-use token). Empty defaults to "password".
 	Mode     string `json:"mode"`
 	Password string `json:"password"`
+	// Delivery "link" returns an invite's token in the response instead of
+	// mailing it. Empty mails it.
+	Delivery string `json:"delivery"`
 }
 
 // acceptInviteInput is the POST /v1/invites/accept payload (unauthenticated).
@@ -76,7 +85,11 @@ func (s *Server) handleOnboardMember(w http.ResponseWriter, r *http.Request, mc 
 		s.writeError(w, r, err)
 		return
 	}
-	if in.Mode == "invite" && s.inviteSender == nil {
+	if in.Delivery != "" && (in.Delivery != inviteDeliveryLink || in.Mode != "invite") {
+		s.badRequest(w, r, "delivery must be \"link\", with mode \"invite\"")
+		return
+	}
+	if in.Mode == "invite" && in.Delivery == "" && s.inviteSender == nil {
 		s.writeError(w, r, auth.ErrInviteDeliveryUnavailable)
 		return
 	}
@@ -105,17 +118,26 @@ func (s *Server) handleOnboardMember(w http.ResponseWriter, r *http.Request, mc 
 		if res.ExpiresAt != nil {
 			expStr = res.ExpiresAt.String()
 		}
-		out["invite"] = map[string]any{
-			"id": res.InviteID.String(), "expires_at": expStr,
-			"delivery": s.deliverInvite(r, res.User.Email, res.InviteID, res.InviteToken, res.ExpiresAt),
-		}
+		inv := s.handOffInvite(w, r, in.Delivery, res.User.Email, res.InviteID, res.InviteToken, res.ExpiresAt)
+		inv["id"], inv["expires_at"] = res.InviteID.String(), expStr
+		out["invite"] = inv
 	}
 	writeJSON(w, http.StatusCreated, out)
 }
 
+// handOffInvite sends an invitation's token down its one path and returns the
+// response fields that say which: delivery "link" with the token itself (the
+// response must then never be cached), or the mail's delivery state.
+func (s *Server) handOffInvite(w http.ResponseWriter, r *http.Request, delivery, email string, id model.ID, token string, expiresAt *model.Timestamp) map[string]any {
+	if delivery == inviteDeliveryLink {
+		w.Header().Set("Cache-Control", "no-store")
+		return map[string]any{"delivery": inviteDeliveryLink, "token": token}
+	}
+	return map[string]any{"delivery": s.deliverInvite(r, email, id, token, expiresAt)}
+}
+
 // deliverInvite hands the invitation's token to the mailer for the invitee's
-// address and returns the delivery state ("sent" or "failed"). The token travels
-// only in the mail.
+// address and returns the delivery state ("sent" or "failed").
 func (s *Server) deliverInvite(r *http.Request, email string, id model.ID, token string, expiresAt *model.Timestamp) string {
 	var exp time.Time
 	if expiresAt != nil {
@@ -129,16 +151,22 @@ func (s *Server) deliverInvite(r *http.Request, email string, id model.ID, token
 	return "sent"
 }
 
-// handleResendInvite rotates a pending invitation's secret and mails the new
-// link to the invitee. membership:write + AAL3; 409 invite_delivery_unavailable
-// without a mailer.
+// handleResendInvite rotates a pending invitation's secret, which voids the old
+// link, and mails the new one to the invitee, or with ?delivery=link returns it
+// once to this session. membership:write + AAL3; 409 invite_delivery_unavailable
+// without a mailer and without delivery=link.
 func (s *Server) handleResendInvite(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	p := mc.Principal
 	tenant := mc.Tenant
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
-	if s.inviteSender == nil {
+	delivery := r.URL.Query().Get("delivery")
+	if delivery != "" && delivery != inviteDeliveryLink {
+		s.badRequest(w, r, "delivery must be \"link\"")
+		return
+	}
+	if delivery == "" && s.inviteSender == nil {
 		s.writeError(w, r, auth.ErrInviteDeliveryUnavailable)
 		return
 	}
@@ -148,10 +176,9 @@ func (s *Server) handleResendInvite(w http.ResponseWriter, r *http.Request, mc M
 		return
 	}
 	exp := inv.ExpiresAt
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"id": inv.ID.String(), "expires_at": inv.ExpiresAt.String(),
-		"delivery": s.deliverInvite(r, inv.Email, inv.ID, token, &exp),
-	})
+	out := s.handOffInvite(w, r, delivery, inv.Email, inv.ID, token, &exp)
+	out["id"], out["expires_at"] = inv.ID.String(), inv.ExpiresAt.String()
+	writeJSON(w, http.StatusAccepted, out)
 }
 
 // handleAcceptInvite redeems an invite token: sets the password, activates the

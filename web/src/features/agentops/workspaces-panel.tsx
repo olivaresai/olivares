@@ -278,7 +278,7 @@ export function WorkspacesPanel() {
               <DialogTitle>{t('firstHour:bring.title')}</DialogTitle>
               <DialogDescription>{t('firstHour:bring.body')}</DialogDescription>
             </DialogHeader>
-            <BringFolders titled={false} onSkip={() => setBringOpen(false)} />
+            <BringFolders onSkip={() => setBringOpen(false)} />
           </DialogContent>
         </Dialog>
       )}
@@ -340,7 +340,10 @@ export function WorkspacesPanel() {
                 </TabsContent>
                 {canWrite && (
                   <TabsContent value="terminal">
-                    <SessionTerminal workspaceRef={browse.workspace_ref} />
+                    <SessionTerminal
+                      workspaceRef={browse.workspace_ref}
+                      root={browse.root_path}
+                    />
                   </TabsContent>
                 )}
               </Tabs>

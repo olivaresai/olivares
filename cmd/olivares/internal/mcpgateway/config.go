@@ -623,6 +623,11 @@ type A2AInboundConfig struct {
 	RequireClientAttestation bool                    `json:"require_client_attestation"`
 	AttesterJWKS             json.RawMessage         `json:"attester_jwks"`
 	Routes                   []A2AInboundRouteConfig `json:"routes"`
+	// PublicURL is the address peers reach /a2a at through the operator's ingress.
+	// Set, the gateway publishes the Agent Card at /.well-known/agent-card.json.
+	PublicURL string `json:"public_url"`
+	// CardSigningJWK is a dedicated private JWK that signs the Agent Card (secret).
+	CardSigningJWK json.RawMessage `json:"card_signing_jwk"`
 }
 
 type A2AInboundRouteConfig struct {

@@ -20,7 +20,8 @@
 //   · the identity cases drive `CapabilityContext` itself, so an implementation that keyed
 //     on the communications scope alone — no principal class, no actor, no credential
 //     generation, no movement counter — fails them.
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
+import { renderIntel } from '@/test/intel'
 import userEvent from '@testing-library/user-event'
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -210,8 +211,9 @@ function Protected({ channel = CHANNEL_ID }: { channel?: string }) {
   return <div data-slot="protected-child" />
 }
 
+// Under a query client, as in the console: the gate reads server-info for the edition.
 function mountGate(child = <Protected />) {
-  return render(
+  return renderIntel(
     <RequirePermission view={ADMIN_VIEW}>{child}</RequirePermission>,
   )
 }
@@ -409,7 +411,7 @@ describe('the continuity boundary, through the real route gate', () => {
   })
 
   it('survives React’s development double mount and cleanup', () => {
-    const { rerender } = render(
+    const { rerender } = renderIntel(
       <StrictMode>
         <RequirePermission view={ADMIN_VIEW}>
           <Protected />

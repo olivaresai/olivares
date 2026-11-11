@@ -3,7 +3,9 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { EmptyState } from '@/components/ui/empty-state'
 import { DENSITY_ROW, densityHeightToken } from '@/stores/preferences'
+import { DataTable, type TableColumn } from './data-table'
 import { StaticTable } from './static-table'
 
 /**
@@ -99,5 +101,52 @@ describe('StaticTable rows that hold a control', () => {
     // ordinary rows looking like rows: `[&_tbody_td]:py-1` is still there.
     const classes = body().className.split(/\s+/)
     expect(classes).toContain('[&_tbody_td]:py-1')
+  })
+})
+
+describe('StaticTable look (A2)', () => {
+  it('heads its columns at 12/700 and lets a row, never a group row, take the hover layer', () => {
+    const classes = body().className.split(/\s+/)
+    expect(classes).toContain('[&_thead_th]:text-overline')
+    expect(classes).not.toContain('[&_thead_th]:font-medium')
+    expect(classes).toContain('[&_tbody_tr]:hover:bg-hover')
+    expect(classes).not.toContain('[&_tbody_tr]:hover:bg-surface')
+    // A group row (one cell across the table) is a heading, not something to press.
+    expect(classes).toContain(
+      '[&_tbody_tr:has(>td[colspan])]:hover:bg-transparent',
+    )
+    // The rows are the caller's, so the TABLE carries the class the tertiary rule reads
+    // (index.css): it is hovered whenever one of its rows is, and gives them the second ink.
+    expect(screen.getByRole('table').matches("[class*=':bg-hover']")).toBe(true)
+  })
+
+  it('heads its columns on the data table header tint, one spelling for both', () => {
+    const columns: TableColumn<{ id: string; name: string }, string>[] = [
+      { accessorKey: 'name', header: 'Name' },
+    ]
+    render(
+      <DataTable
+        columns={columns}
+        data={[{ id: '1', name: 'claude-opus' }]}
+        getRowId={(r) => r.id}
+        empty={<EmptyState title="None" description="No rows." />}
+      />,
+    )
+    const tint = screen
+      .getByRole('columnheader')
+      .className.split(/\s+/)
+      .find((c) => c.startsWith('bg-'))
+    expect(tint).toBe('bg-[color-mix(in_srgb,var(--text)_4%,var(--surface))]')
+    const classes = body().className.split(/\s+/)
+    expect(classes).toContain(`[&_thead_th]:${tint}`)
+    expect(classes).not.toContain('[&_thead_th]:bg-muted')
+  })
+
+  it('pads its cells 16 px at the sides, as the drawing does', () => {
+    const classes = body().className.split(/\s+/)
+    for (const cell of ['thead_th', 'tbody_td', 'tbody_th']) {
+      expect(classes).toContain(`[&_${cell}]:px-4`)
+      expect(classes).not.toContain(`[&_${cell}]:px-3`)
+    }
   })
 })

@@ -229,7 +229,7 @@ func checkJob(file, jobName string, job *yaml.Node) {
 			cond = strings.TrimSpace(n.Value)
 		}
 		if uses := mapValue(step, "uses"); uses != nil && uses.Kind == yaml.ScalarNode &&
-			strings.Contains(uses.Value, installerRepo) {
+			(strings.Contains(uses.Value, installerRepo) || uses.Value == "./.github/actions/install-cosign") {
 			installers = append(installers, stepInfo{line: uses.Line, cond: cond})
 		}
 		run := mapValue(step, "run")

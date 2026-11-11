@@ -40,7 +40,8 @@ func (f fetcher) confine(policy RedirectPolicyV2, allowed []string) fetcher {
 		}
 		return nil
 	}
-	return fetcher{client: &clone, pause: f.pause}
+	f.client = &clone
+	return f
 }
 
 func (f fetcher) bounded(ctx context.Context, u string, max int64, w io.Writer) (FetchedObjectObserved, error) {

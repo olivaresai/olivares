@@ -184,7 +184,8 @@ type Options struct {
 	PIV *auth.PIVConfig
 	// InviteSender delivers onboarding invitation links by email, to the
 	// invitee's address only. nil makes invite mode answer 409
-	// invite_delivery_unavailable: the token is never returned to the inviter.
+	// invite_delivery_unavailable unless the administrator asks for delivery
+	// "link", which returns the token once to that session (handlers_onboarding.go).
 	InviteSender InviteSender
 	// Standing is the port fenced module writers read a referenced account's
 	// standing through (ModuleContext.Standing). nil uses the Authenticator.
@@ -407,14 +408,14 @@ type Server struct {
 	residency *residency.Registry
 	// keyCustody is a detached copy of the non-secret boot inventory.
 	keyCustody KeyCustodyInfo
-	// busStats is the optional event-bus snapshot provider. The previous public
-	// status observation is serialized with busStatusMu so cumulative-counter
-	// DELTAS are computed exactly once per observation.
-	busStats          eventbus.StatsProvider
-	busStatusMu       sync.Mutex
-	busLastStats      eventbus.Stats
-	busLastObservedAt time.Time
-	busHasLastStats   bool
+	// busStats is the optional event-bus snapshot provider. noteIngestLoss
+	// serializes on busStatusMu: the previous snapshot, and when a loss counter
+	// last increased.
+	busStats        eventbus.StatsProvider
+	busStatusMu     sync.Mutex
+	busLastStats    eventbus.Stats
+	busLossAt       time.Time
+	busHasLastStats bool
 	// tlsCertNotAfter reads the live listener certificate expiry (including
 	// reloads); nil means the API does not know of a TLS certificate.
 	tlsCertNotAfter func() (time.Time, bool)
@@ -1157,6 +1158,10 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// every edition, independent of the inbound SCIM server, which is Business.
 	coreRoute(v1, "GET", "/members", s.tenantRoute("user:read"), s.handleListMembers)
 	coreRoute(v1, "DELETE", "/members/{id}", s.tenantRoute("user:write"), s.handleRemoveMember)
+	// Business: suspend a person without removing them, and bring them back
+	// (MemberSuspender; the Community build answers 501 departments_unavailable).
+	coreRoute(v1, "POST", "/members/{id}/suspend", s.tenantRoute("user:write"), s.handleSetMemberSuspended(true))
+	coreRoute(v1, "POST", "/members/{id}/reactivate", s.tenantRoute("user:write"), s.handleSetMemberSuspended(false))
 	// FASE X /: tenant-scoped console onboarding (distinct from the
 	// superadmin-only POST /v1/users). Onboard a non-federated person into the
 	// resolved tenant (membership:write + AAL3), invite by email or admin-set
@@ -1175,6 +1180,11 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// surface: the IdP pushes rosters, never roles.
 	v1.Route("/groups", func(r chi.Router) {
 		coreRoute(r, "GET", "/", s.tenantRoute("membership:read"), s.handleListGroups)
+		// Business (GroupAdministrator): a group of the operator's own, and its roster.
+		coreRoute(r, "POST", "/", s.tenantRoute("membership:write"), s.handleCreateGroup)
+		coreRoute(r, "DELETE", "/{id}", s.tenantRoute("membership:write"), s.handleDeleteGroup)
+		coreRoute(r, "PUT", "/{id}/members/{user_id}", s.tenantRoute("membership:write"), s.handleSetGroupMember(true))
+		coreRoute(r, "DELETE", "/{id}/members/{user_id}", s.tenantRoute("membership:write"), s.handleSetGroupMember(false))
 		coreRoute(r, "PUT", "/{id}/role", s.tenantRoute("membership:write"), s.handleSetGroupRole)
 		// S256: nest a group under another (the group hierarchy). Owner/superadmin
 		// authority, acyclic, operator-only — the IdP pushes membership, never shape.
@@ -2395,7 +2405,7 @@ func (s *Server) licenseStatus() LicenseDisplayInfo {
 		return s.license.LicenseDisplay()
 	}
 	if s.licenseBlob == "" || len(s.licensePub) != ed25519.PublicKeySize {
-		return LicenseDisplayInfo{Status: "none"}
+		return LicenseDisplayInfo{Status: "none", LicensedEdition: license.EditionCommunity}
 	}
 	// VerifyEnvelope, not Verify: the engine must read BOTH signed containers. Until 2026-08-11
 	// this line called Verify, which returns the flat claim set only, so an aggregate v3
@@ -2403,14 +2413,16 @@ func (s *Server) licenseStatus() LicenseDisplayInfo {
 	// ErrMalformed and this deployment reported "invalid" for a license it had just been sold.
 	v, err := license.VerifyEnvelope(s.licenseBlob, s.licensePub)
 	if err != nil {
-		return LicenseDisplayInfo{Status: "invalid"}
+		return LicenseDisplayInfo{Status: "invalid", LicensedEdition: license.EditionCommunity}
 	}
+	status := v.Status(s.clock.Now().Time())
 	return LicenseDisplayInfo{
-		Status:         string(v.Status(s.clock.Now().Time())),
-		Licensee:       v.Licensee(),
-		Plan:           v.Plan(),
-		SupportTier:    v.SupportTier(),
-		SupportProfile: v.SupportProfile(),
+		Status:          string(status),
+		Licensee:        v.Licensee(),
+		Plan:            v.Plan(),
+		SupportTier:     v.SupportTier(),
+		SupportProfile:  v.SupportProfile(),
+		LicensedEdition: v.Edition(status),
 	}
 }
 

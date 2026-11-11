@@ -39,11 +39,16 @@ vi.mock('./api', async (orig) => ({
 import { agentOpsApi } from '@/features/agentops/api'
 import { readinessOf } from '@/features/first-hour/readiness.fixture'
 import type { WorkspaceDTO } from '@/features/agentops/types'
+import { consoleApi } from '@/features/console/api'
 import { providersApi } from '@/features/providers/api'
 import { useTenantStore } from '@/stores/tenant'
 import { StartSessionForm } from './first-hour'
 
-function renderForm(folder: Partial<WorkspaceDTO>) {
+function renderForm(
+  folder: Partial<WorkspaceDTO>,
+  composer = false,
+  onAdvanced?: Parameters<typeof StartSessionForm>[0]['onAdvanced'],
+) {
   vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
     items: [
       {
@@ -72,7 +77,7 @@ function renderForm(folder: Partial<WorkspaceDTO>) {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <StartSessionForm />
+      <StartSessionForm composer={composer} onAdvanced={onAdvanced} />
     </QueryClientProvider>,
   )
 }
@@ -253,5 +258,211 @@ describe('the permissions in the New session picker', () => {
       driver: 'claude',
       permission: 'auto',
     })
+  })
+})
+
+describe('a worktree from the New session form', () => {
+  it('starts on the current checkout unless the person asks for a new worktree', async () => {
+    renderForm({})
+    await screen.findByRole('button', { name: 'Start' })
+    expect(await started()).not.toHaveProperty('worktree')
+  })
+
+  it('starts on a new worktree, from the branch the person names', async () => {
+    const user = userEvent.setup()
+    renderForm({})
+    await screen.findByRole('button', { name: 'Start' })
+    await user.click(await screen.findByRole('radio', { name: 'New worktree' }))
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Start from' }),
+      'release-0.9',
+    )
+    expect(await started()).toMatchObject({
+      worktree: true,
+      worktreeFrom: 'release-0.9',
+    })
+  })
+
+  it('offers the same choice from the composer pill', async () => {
+    const user = userEvent.setup()
+    renderForm({}, true)
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Working copy: Current checkout/,
+      }),
+    )
+    await user.click(await screen.findByRole('radio', { name: 'New worktree' }))
+    expect(
+      await screen.findByRole('textbox', { name: 'Start from' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Working copy: New worktree/ }),
+    ).toBeVisible()
+  })
+
+  it("hands the composer's working copy to More options", async () => {
+    const user = userEvent.setup()
+    const onAdvanced = vi.fn()
+    renderForm({}, true, onAdvanced)
+    const moreOptions = async () => {
+      await user.click(await screen.findByRole('button', { name: /^Folder: / }))
+      await user.click(
+        await screen.findByRole('menuitem', { name: 'More options' }),
+      )
+    }
+    // The folder's checkout: More options opens on it, asking for no worktree.
+    await moreOptions()
+    expect(onAdvanced.mock.calls[0][0]).not.toHaveProperty('worktree')
+    await user.click(
+      screen.getByRole('button', { name: /Working copy: Current checkout/ }),
+    )
+    await user.click(await screen.findByRole('radio', { name: 'New worktree' }))
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Start from' }),
+      'release-0.9',
+    )
+    await user.keyboard('{Escape}')
+    // A new worktree: More options opens on that one, not on the checkout.
+    await moreOptions()
+    expect(onAdvanced.mock.calls[1][0]).toMatchObject({
+      workspaceRef: 'ws_1',
+      worktree: true,
+      worktreeFrom: 'release-0.9',
+    })
+  })
+
+  it("hands the form's working copy to the advanced launch", async () => {
+    const user = userEvent.setup()
+    const onAdvanced = vi.fn()
+    // More options lists the secrets and credentials a session may get.
+    vi.spyOn(consoleApi, 'listSecrets').mockResolvedValue({
+      sealer_available: true,
+      secrets: [],
+    } as Awaited<ReturnType<typeof consoleApi.listSecrets>>)
+    renderForm({}, false, onAdvanced)
+    await screen.findByRole('button', { name: 'Start' })
+    await user.click(await screen.findByRole('radio', { name: 'New worktree' }))
+    await user.click(screen.getByRole('button', { name: 'More options' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Advanced launch options' }),
+    )
+    // At the folder's current commit: the form names no start point.
+    expect(onAdvanced.mock.calls[0][0]).toMatchObject({
+      workspaceRef: 'ws_1',
+      worktree: true,
+    })
+    expect(onAdvanced.mock.calls[0][0]).not.toHaveProperty('worktreeFrom')
+  })
+})
+
+describe("the start composer's More options, held", () => {
+  it('is reached by arrow key, says why, and opens nothing', async () => {
+    const user = userEvent.setup()
+    const onAdvanced = vi.fn()
+    renderForm({}, true, onAdvanced)
+    await user.click(await screen.findByRole('button', { name: /^Folder: / }))
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: 'Another folder…' }),
+    )
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Folder' }),
+      '/srv/work/new-place',
+    )
+    await user.click(screen.getByRole('button', { name: /^Folder: / }))
+    const more = await screen.findByRole('menuitem', { name: /^More options/ })
+    for (let i = 0; i < 10 && document.activeElement !== more; i++)
+      await user.keyboard('{ArrowDown}')
+    expect(more).toHaveFocus()
+    expect(more).toHaveAttribute('aria-disabled', 'true')
+    expect(more).toHaveTextContent(
+      'Start here to keep the folder you typed, or pick it from the folder list to open more options.',
+    )
+    await user.keyboard('{Enter}')
+    await user.keyboard(' ')
+    await user.click(more)
+    expect(onAdvanced).not.toHaveBeenCalled()
+    expect(more).toBeVisible()
+  })
+})
+
+describe('what the New session form hands to its More options', () => {
+  it('the words, the folder and what the agent may do, from the form', async () => {
+    const user = userEvent.setup()
+    const onAdvanced = vi.fn()
+    vi.spyOn(consoleApi, 'listSecrets').mockResolvedValue({
+      sealer_available: true,
+      secrets: [],
+    } as Awaited<ReturnType<typeof consoleApi.listSecrets>>)
+    renderForm({}, false, onAdvanced)
+    await screen.findByRole('button', { name: 'Start' })
+    await user.type(
+      screen.getByRole('textbox', { name: 'First message (optional)' }),
+      'look at the logs',
+    )
+    await user.click(
+      screen.getByRole('combobox', { name: 'What the agent may do' }),
+    )
+    await user.click(await screen.findByRole('option', { name: 'Supervised' }))
+    await user.click(screen.getByRole('button', { name: 'More options' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Advanced launch options' }),
+    )
+    expect(onAdvanced.mock.calls[0][0]).toMatchObject({
+      message: 'look at the logs',
+      workspaceRef: 'ws_1',
+      permission: 'ask',
+    })
+  })
+
+  it("the words, the folder and the folder's permission, from the composer", async () => {
+    const user = userEvent.setup()
+    const onAdvanced = vi.fn()
+    renderForm({ default_permission: 'supervised' }, true, onAdvanced)
+    await user.type(
+      await screen.findByRole('textbox', { name: 'First message (optional)' }),
+      'fix the build',
+    )
+    await user.click(await screen.findByRole('button', { name: /^Folder: / }))
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'More options' }),
+    )
+    expect(onAdvanced.mock.calls[0][0]).toMatchObject({
+      message: 'fix the build',
+      workspaceRef: 'ws_1',
+      permission: 'ask',
+    })
+  })
+})
+
+describe('what the agent may do, in the start composer', () => {
+  it('shows it on a pill and starts under the one the person picks', async () => {
+    const user = userEvent.setup()
+    renderForm({}, true)
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'What the agent may do: Edit files and run commands',
+      }),
+    )
+    await user.click(
+      await screen.findByRole('menuitemradio', { name: 'Supervised' }),
+    )
+    expect(
+      screen.getByRole('button', { name: 'What the agent may do: Supervised' }),
+    ).toBeVisible()
+    expect(await started()).toMatchObject({ permission: 'ask' })
+  })
+
+  it('offers Full and Auto only to someone who may run them', async () => {
+    auth.runAdmin = false
+    const user = userEvent.setup()
+    renderForm({}, true)
+    await user.click(
+      await screen.findByRole('button', { name: /^What the agent may do: / }),
+    )
+    expect(
+      await screen.findByRole('menuitemradio', { name: 'Read only' }),
+    ).toBeVisible()
+    expect(screen.queryByRole('menuitemradio', { name: 'Full' })).toBeNull()
+    expect(screen.queryByRole('menuitemradio', { name: 'Auto' })).toBeNull()
   })
 })

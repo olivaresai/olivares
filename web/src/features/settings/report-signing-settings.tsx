@@ -9,8 +9,9 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
+import { BoxedList } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
-import { KvList, KvRow } from '@/components/ui/kv'
+import { Card, CardContent } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import {
   ModuleGate,
@@ -24,6 +25,7 @@ import {
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { SettingsRow } from './settings-row'
 
 /** Mounted for a system administrator only; the engine checks system:admin itself. A page
  * that titles the section already passes `heading={false}`. */
@@ -124,59 +126,91 @@ function ReportSigningControl({ heading }: { heading: boolean }) {
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant={
-                state === 'signing'
-                  ? 'success'
-                  : state === 'notReady'
-                    ? 'warning'
-                    : 'neutral'
-              }
+          <Card data-slot="signing-card">
+            <CardContent className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant={
+                      state === 'signing'
+                        ? 'success'
+                        : state === 'notReady'
+                          ? 'warning'
+                          : 'neutral'
+                    }
+                  >
+                    {t(`signing.badge.${state}`)}
+                  </Badge>
+                  <span
+                    className="text-body text-text"
+                    data-slot="signing-state"
+                  >
+                    {state === 'notReady'
+                      ? t('signing.state.notReady', {
+                          reason: s.reason ?? t('signing.noReason'),
+                        })
+                      : t(`signing.state.${state}`)}
+                  </span>
+                </div>
+                <span className="text-caption text-text-2">
+                  {t(`signing.source.${s.source}`, {
+                    defaultValue: s.source,
+                  })}
+                </span>
+              </div>
+              <Button
+                variant={s.enabled ? 'secondary' : 'primary'}
+                size="sm"
+                disabled={set.isPending}
+                onClick={() => set.mutate(!s.enabled)}
+              >
+                {set.isPending ? <Spinner size="sm" aria-hidden /> : null}
+                {s.enabled ? t('signing.turnOff') : t('signing.turnOn')}
+              </Button>
+            </CardContent>
+          </Card>
+          {s.key_id || s.public_key ? (
+            <section
+              aria-labelledby="signing-key"
+              className="flex flex-col gap-2"
             >
-              {t(`signing.badge.${state}`)}
-            </Badge>
-            <span className="text-body text-text" data-slot="signing-state">
-              {state === 'notReady'
-                ? t('signing.state.notReady', {
-                    reason: s.reason ?? t('signing.noReason'),
-                  })
-                : t(`signing.state.${state}`)}
-            </span>
-          </div>
-          <KvList>
-            <KvRow label={t('signing.source.label')}>
-              {t(`signing.source.${s.source}`, {
-                defaultValue: s.source,
-              })}
-            </KvRow>
-            {s.key_id ? (
-              <KvRow label={t('signing.keyId')} mono>
-                {s.key_id}
-              </KvRow>
-            ) : null}
-            {s.public_key ? (
-              <KvRow label={t('signing.publicKey')} mono>
-                {s.public_key}
-              </KvRow>
-            ) : null}
-          </KvList>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              variant={s.enabled ? 'secondary' : 'primary'}
-              size="sm"
-              disabled={set.isPending}
-              onClick={() => set.mutate(!s.enabled)}
-            >
-              {set.isPending ? <Spinner size="sm" aria-hidden /> : null}
-              {s.enabled ? t('signing.turnOff') : t('signing.turnOn')}
-            </Button>
-            {s.enabled ? (
-              <span className="text-caption text-text-2">
-                {t('signing.offKeepsKey')}
-              </span>
-            ) : null}
-          </div>
+              <h2
+                id="signing-key"
+                className="text-body-l font-semibold text-text"
+              >
+                {t('signing.source.label')}
+              </h2>
+              <BoxedList>
+                {s.key_id ? (
+                  <SettingsRow
+                    name={t('signing.keyId')}
+                    description=""
+                    control={
+                      <span className="font-mono text-caption break-all text-text-2">
+                        {s.key_id}
+                      </span>
+                    }
+                  />
+                ) : null}
+                {s.public_key ? (
+                  <SettingsRow
+                    name={t('signing.publicKey')}
+                    description=""
+                    control={
+                      <span className="font-mono text-caption break-all text-text-2">
+                        {s.public_key}
+                      </span>
+                    }
+                  />
+                ) : null}
+              </BoxedList>
+            </section>
+          ) : null}
+          {s.enabled ? (
+            <p className="text-caption text-text-2">
+              {t('signing.offKeepsKey')}
+            </p>
+          ) : null}
           {refused ? (
             <p role="alert" className="text-body text-warning">
               {refused}

@@ -89,22 +89,21 @@ func (s *codexSession) reportTurnLimit(params json.RawMessage) {
 			s.cfg.OnTurnOK()
 		}
 	case "failed":
-		if s.cfg.OnLimit == nil || n.Turn.Error == nil {
-			return
-		}
 		var info string
-		if json.Unmarshal(n.Turn.Error.CodexErrorInfo, &info) != nil {
-			return // an object-shaped cause is not a limit
+		if n.Turn.Error != nil {
+			_ = json.Unmarshal(n.Turn.Error.CodexErrorInfo, &info) // an object-shaped cause is not a limit
 		}
-		switch info {
-		case codexErrorUsageLimit:
+		switch {
+		case s.cfg.OnLimit != nil && info == codexErrorUsageLimit:
 			ended := time.Now()
 			if n.Turn.CompletedAt > 0 {
 				ended = time.Unix(n.Turn.CompletedAt, 0)
 			}
 			s.cfg.OnLimit(limitKindUsage, s.exhaustedResetsAt(ended))
-		case codexErrorRateLimit:
+		case s.cfg.OnLimit != nil && info == codexErrorRateLimit:
 			s.cfg.OnLimit(limitKindRate, time.Time{})
+		case s.cfg.OnTurnError != nil:
+			s.cfg.OnTurnError()
 		}
 	}
 }

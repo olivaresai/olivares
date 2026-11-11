@@ -6,6 +6,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api/errors'
 import type { IncidentDTO, SlaDTO, StatusDTO } from './types'
 
 // Resolve permission is toggled per test to exercise the RBAC boundary.
@@ -424,5 +425,27 @@ describe('HealthView — the empty status list', () => {
     renderView()
     await screen.findByText('No subjects monitored yet')
     expect(screen.queryByRole('button', { name: 'Declare a check' })).toBeNull()
+  })
+})
+
+describe('HealthView — the status read refused by edition', () => {
+  // A refused read leaves the summary as a role refusal does: the counts of the last
+  // answer are not this installation's health any more.
+  it('says the edition line in place of the counts of the last answer', async () => {
+    const user = userEvent.setup()
+    renderView()
+    expect(await screen.findAllByText('Healthy')).not.toHaveLength(0)
+    vi.mocked(healthApi.status).mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-health', {
+        edition: 'business',
+      }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(
+      await screen.findByText(/This is part of Olivares AI Business\./),
+    ).toBeInTheDocument()
+    expect(screen.queryAllByText('Healthy')).toHaveLength(0)
+    expect(screen.queryByText('prod orchestrator')).not.toBeInTheDocument()
+    expect(screen.queryByText('Health not authorized')).not.toBeInTheDocument()
   })
 })

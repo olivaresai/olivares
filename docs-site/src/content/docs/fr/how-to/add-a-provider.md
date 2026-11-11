@@ -28,8 +28,8 @@ vous donne les nomment séparément.
 
 ### Depuis la console
 
-1. Ouvrez **Outils** dans la barre supérieure et repérez **Clés d’API**.
-2. Choisissez **Ajouter une clé d’API**. Tant qu’aucune clé n’est enregistrée, le bouton s’intitule **Ajoutez votre premier fournisseur**.
+1. Ouvrez **Outils** dans la barre supérieure et choisissez **Fournisseurs**.
+2. Choisissez **Ajouter une clé d’API** dans l’en-tête de la page.
 3. Choisissez le fournisseur, donnez-lui un nom que vous reconnaîtrez dans un
    sélecteur, et collez la clé. Laissez le point de terminaison vide sauf si vous
    pointez vers votre propre passerelle ; un fournisseur `openai_compatible` en exige

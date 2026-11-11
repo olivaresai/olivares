@@ -78,6 +78,7 @@
     "colActions": "Actions",
     "enabled": "Enabled",
     "disabled": "Disabled",
+    "any": "Any",
     "bulk": {
       "enable": "Enable selected",
       "disable": "Disable selected"

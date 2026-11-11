@@ -1,9 +1,55 @@
 {
   "title": "使用量",
-  "subtitle": "公式の 5 時間と週の上限を、今日のトークンとコストと並べて表示します。",
+  "subtitle": "選んだ日にセッションが使った量とコストを、各アカウントの 5 時間と週の上限と並べて表示します。",
+  "subtitleNoCost": "選んだ日にセッションが使った量を、各アカウントの 5 時間と週の上限と並べて表示します。",
   "tabs": {
     "accounts": "アカウント",
     "timeline": "タイムライン"
+  },
+  "spend": {
+    "heading": "支出",
+    "headingNoCost": "実行数とトークン",
+    "range": {
+      "label": "期間",
+      "d7": "7日間",
+      "d14": "14日間",
+      "d30": "30日間",
+      "custom": "カスタム",
+      "from": "開始日",
+      "to": "終了日",
+      "invalid": "開始日は終了日と同じか、それより前にしてください。期間は最大 {{days}} 日です。"
+    },
+    "tool": "ツール",
+    "allTools": "すべてのツール",
+    "profile": "プロファイル",
+    "allProfiles": "すべてのプロファイル",
+    "export": "エクスポート",
+    "totals": "合計",
+    "cost": "支出",
+    "runs": "実行数",
+    "input": "入力トークン",
+    "output": "出力トークン",
+    "costUnreported": "コストを報告していない実行: {{runs}}",
+    "tokensUnreported": "トークンを報告していない実行: {{runs}}",
+    "empty": {
+      "title": "この期間に実行はありません",
+      "description": "日数を増やすか、セッションを開始してください。使った量がここに表示されます。"
+    },
+    "chart": {
+      "cost": "日別の支出",
+      "tokens": "日別のトークン",
+      "day": "日付",
+      "summary": "{{title}}（{{from}}〜{{to}}）: 合計 {{total}}。",
+      "unpriced": "コストを報告していない実行はグラフに含まれていません。"
+    },
+    "profiles": {
+      "heading": "プロファイル別",
+      "profile": "プロファイル",
+      "input": "入力",
+      "output": "出力",
+      "none": "プロファイルなし",
+      "unnamed": "名前のないプロファイル"
+    }
   },
   "accounts": {
     "heading": "アカウント",
@@ -11,7 +57,8 @@
     "error": "アカウントの上限を読み込めませんでした。",
     "empty": "上限を報告したアカウントはまだありません。",
     "details": "詳細",
-    "detailsFor": "{{account}} の詳細"
+    "detailsFor": "{{account}} の詳細",
+    "emptyChosen": "このツールまたはプロファイルのアカウントは、まだ上限を報告していません。"
   },
   "today": {
     "heading": "今日",

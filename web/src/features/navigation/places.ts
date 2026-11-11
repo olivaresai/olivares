@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ONE NAVIGATION: the left sidebar's places, in order (Sessions, Files and Tools, then
-// the places under More, then Settings at the foot). Each place holds registry views; the sidebar links its
+// THE ONE NAVIGATION: Overview, work, governance and administration, with Settings
+// at the foot. Each place holds registry views; the sidebar links its
 // lead, and the row above a page moves between the pages of its place: at most five, the rest
 // under the row's More menu. A place is offered
 // when the principal may open any of its pages, through the same projection the route guard
@@ -12,8 +12,8 @@
 //
 // A view the lists below do not name (an edition view) joins the place of its registry
 // section (SECTION_PLACE), so no page is ever left out of the navigation. The lists name an
-// edition view only where IA.md puts it apart from its section (residency, tenants); an id
-// this build does not register lists nothing.
+// edition view only where IA.md puts it apart from its section (nodes, the circuit breaker,
+// residency, tenants, posture export); an id this build does not register lists nothing.
 import type { TFunction } from 'i18next'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -28,7 +28,8 @@ import {
   Users,
   Wrench,
 } from 'lucide-react'
-import { BUSINESS_BUILD } from '@/features/business-build'
+import type { PaidEdition } from '@/components/ui/edition-note'
+import { useOpensAtEdition } from '@/features/console/commercial-edition'
 import {
   APPROVALS_SECTION,
   type ShellSection,
@@ -66,10 +67,14 @@ export type PlaceId =
   | 'operations'
   | 'settings'
 
+/** The sidebar group a place sits in, the key under nav:groups; the first places have none. */
+export type PlaceGroup = 'control' | 'admin'
+
 export interface Place {
   /** Stable id: the i18n key under nav:places and the badge key. */
   id: PlaceId
   icon: LucideIcon
+  group?: PlaceGroup
   /** The registry views of its row, its lead first (doors and details are never listed). */
   views: readonly string[]
   /** The rest of its views, under the row's More menu; a place's page all the same. */
@@ -78,9 +83,10 @@ export interface Place {
   section?: ShellSection
 }
 
-/** The sidebar's places in order: the first ones, then the ones under More. One noun each,
- * no group above them. */
+/** The sidebar's places in order: the first ones, then governance and administration. One
+ * noun each. */
 export const PLACES: readonly Place[] = [
+  { id: 'now', icon: House, views: ['home'] },
   {
     id: 'sessions',
     icon: MessageSquare,
@@ -96,17 +102,24 @@ export const PLACES: readonly Place[] = [
       'communicationsNew',
       'communicationsHandoffs',
       'communicationsAdministration',
-      'voice',
-      'sandbox',
+      'automations',
+      'orchestration',
+      'recordings',
     ],
-    more: ['gitPublication', 'sourceDiff', 'recordings', 'session-viewer'],
+    more: [
+      'gitPublication',
+      'sandbox',
+      'voice',
+      'sourceDiff',
+      'session-viewer',
+    ],
   },
   {
     id: 'files',
     icon: Folder,
     // What do I have? The workspace, what is configured in it, what connectors
     // discovered; routes /estate and /inventory keep their paths.
-    views: ['workspaceDashboard', 'estate', 'inventory', 'workspace-templates'],
+    views: ['workspaceDashboard', 'inventory', 'estate', 'workspace-templates'],
   },
   {
     id: 'tools',
@@ -133,10 +146,10 @@ export const PLACES: readonly Place[] = [
       'agentArtifacts',
     ],
   },
-  { id: 'now', icon: House, views: ['home'] },
   {
     id: 'rules',
     icon: ShieldCheck,
+    group: 'control',
     views: ['permissions', 'claudePolicy', 'routinePolicies'],
     more: ['agentcoreExport'],
     section: APPROVALS_SECTION,
@@ -144,42 +157,50 @@ export const PLACES: readonly Place[] = [
   {
     id: 'usage',
     icon: ChartColumn,
-    views: ['usage', 'finops', 'storedBudgets', 'adoption'],
+    group: 'control',
+    views: ['usage', 'storedBudgets', 'adoption', 'teamCosts', 'finops'],
   },
   {
     id: 'activity',
     icon: Activity,
+    group: 'control',
     views: ['audit', 'accessMap', 'logs', 'evals'],
     more: ['observability', 'dashboards', 'retention', 'reach'],
   },
   {
     id: 'people',
     icon: Users,
+    group: 'admin',
     views: ['identity', 'organization', 'console'],
   },
   {
     id: 'security',
     icon: Shield,
-    // Posture, supply chain, compliance, Red team, the kill switch.
-    views: ['security', 'attestation', 'compliance', 'redteam', 'killswitch'],
+    group: 'admin',
+    // Posture, supply chain, compliance, Red team, the kill switch; posture export under
+    // More.
+    views: ['security', 'killswitch', 'attestation', 'compliance', 'redteam'],
+    more: ['postureExport'],
   },
   {
     id: 'operations',
     icon: Server,
+    group: 'admin',
     // The installation and its plumbing: hosts, health, backups, system updates and
-    // webhooks; alerting, the inference proxy, deployment, residency and tenants under More.
+    // webhooks; alerting, the inference proxy, deployment, nodes, the circuit breaker,
+    // residency and tenants under More.
     views: ['operations', 'health', 'backups', 'updates', 'eventing'],
-    more: ['alerting', 'inferenceProxy', 'deploy', 'residency', 'tenants'],
+    more: [
+      'alerting',
+      'inferenceProxy',
+      'deploy',
+      'fleetNodes',
+      'circuitBreaker',
+      'residency',
+      'tenants',
+    ],
   },
 ]
-
-/** What the navigation shows a new person: Sessions, Files and Tools. Every other place is
- * one click away under More and in the palette; none is removed or turned off by this. */
-export const FIRST_PLACES: ReadonlySet<PlaceId> = new Set<PlaceId>([
-  'sessions',
-  'files',
-  'tools',
-])
 
 /** Settings, pinned at the foot: the Settings utility, then the pages it holds. */
 export const SETTINGS_PLACE: Place = {
@@ -217,25 +238,104 @@ const SECTION_PLACE: Readonly<Record<string, PlaceId>> = {
 }
 
 /**
- * What Business adds where Community has the page: one closed row per capability, keyed by
- * the page that shows it (the lead page of its place, Sessions on Work; Retention for its
- * schedules), text under nav:business. Community draws them after that page's content; a
- * Business build registers the real pages and draws none.
+ * A closed row: what a higher edition adds on a page, and the lowest edition that holds it
+ * (the registry's own field). A page's own row says nav:business.<id>; the registered
+ * views placed above Community that a place closes are one row per edition, at the first
+ * one's address.
  */
-const BUSINESS_ROWS: Readonly<Record<string, readonly string[]>> = {
-  work: ['sessions'],
-  identity: ['people'],
-  permissions: ['rules'],
-  usage: ['usage'],
-  security: ['securityCompliance', 'securityRedTeam'],
-  operations: ['operationsDeploy', 'operationsResidency'],
-  retention: ['retentionSchedules'],
+export interface ClosedRow {
+  id: string
+  minEdition: PaidEdition
+  /** A registered view's address: its row opens the view, which says the edition line. */
+  path?: string
+  /** A registered view's: its stored data stays readable below its edition. */
+  readsBelow?: boolean
+  /** The registered views one row closes on its place's page, in place order. */
+  views?: readonly string[]
 }
 
-/** The closed Business rows a page shows: its nav:business keys, none in a Business build. */
-export function businessRows(viewId: string): readonly string[] {
-  return BUSINESS_BUILD ? [] : (BUSINESS_ROWS[viewId] ?? [])
+const business = (id: string): ClosedRow => ({ id, minEdition: 'business' })
+
+/**
+ * What a higher edition adds where Community has the page: one closed row per capability,
+ * keyed by the page that shows it (the lead page of its place, Sessions on Work; Retention
+ * for its schedules), each naming the lowest edition that holds it (docs/editions.md
+ * placement; if in doubt, Business). The shell draws a row after that page's content
+ * exactly where the edition held here does not hold it (editionCovers, BusinessRows).
+ *
+ * Each edition is a copy of the engine's placement, which no read of the console carries
+ * yet; the comment on each row names the line it copies.
+ */
+const BUSINESS_ROWS: Readonly<Record<string, readonly ClosedRow[]>> = {
+  // docs/editions.md: Work, Orchestration; Records, Recording of privileged actions.
+  // No row for the session cockpit: nothing places it above Community yet.
+  work: [business('sessions')],
+  // docs/editions.md: Identity sources, Assigning provider profiles and AI tools to
+  // departments, groups and people; Testing and spend, budgets that throttle or block.
+  'agent-tools': [business('providerAssignment'), business('limitAssignment')],
+  // docs/editions.md: Identity sources, Directories and Group nesting.
+  identity: [business('people')],
+  // docs/editions.md: Authorization, Custom Cedar policies.
+  permissions: [business('rules')],
+  usage: [
+    // modules.json, finops: business.
+    business('usage'),
+    // docs/editions.md: Testing and spend, budgets that alert or block.
+    business('usageBudgets'),
+  ],
+  security: [
+    // docs/editions.md: Compliance, Scheduled reports.
+    business('securityCompliance'),
+    // modules.json, redteam: business.
+    business('securityRedTeam'),
+  ],
+  operations: [
+    // docs/editions.md: Install, Deployment and integration.
+    business('operationsDeploy'),
+    // docs/editions.md: workspace residency is Business; several organizations,
+    // Enterprise.
+    business('operationsResidency'),
+  ],
+  // docs/editions.md: Records, Retention schedules.
+  retention: [business('retentionSchedules')],
 }
+
+/**
+ * The closed rows a page shows where `closed` holds: its own, then the registered views
+ * placed above Community in the place it leads, folded into one row per edition that names
+ * them all and opens the first, so a place never grows a row per module. Which rows are
+ * closed is the shell's question, decided by editionCovers (BusinessRows), never by the
+ * build; by default every row a page may show.
+ */
+export function businessRows(
+  viewId: string,
+  closed: (row: ClosedRow) => boolean = () => true,
+): readonly ClosedRow[] {
+  const place = ALL_PLACES.find((p) => p.views[0] === viewId)
+  const folded = new Map<PaidEdition, ClosedRow>()
+  for (const v of place ? placeViews(place) : []) {
+    if (!v.minEdition) continue
+    const row = { id: v.id, minEdition: v.minEdition, path: v.path }
+    if (!closed({ ...row, readsBelow: v.readsBelow })) continue
+    const first = folded.get(v.minEdition)
+    folded.set(v.minEdition, {
+      ...(first ?? row),
+      views: [...(first?.views ?? []), v.id],
+    })
+  }
+  return [...(BUSINESS_ROWS[viewId] ?? []).filter(closed), ...folded.values()]
+}
+
+/**
+ * Whether a registered view opens at the edition held here (its `minEdition`, decided by
+ * editionCovers, or its `readsBelow` while its module runs): the one answer the navigation
+ * (authorization.ts) and the route gate (RequirePermission) take. A view it does not open
+ * leaves the navigation, is a closed row for an administrator (businessRows) and says the
+ * edition line at its address. It reads the setup gate's own server-info query (same key
+ * and function, 60 s fresh, one retry): like every reader of it, a mount after the answer
+ * is a minute old re-reads it once.
+ */
+export const useViewOpens = useOpensAtEdition
 
 export function placeById(id: PlaceId): Place {
   return ALL_PLACES.find((p) => p.id === id)!
@@ -272,6 +372,8 @@ const ROW_PAGES = 5
 export interface PageLink {
   id: string
   path: string
+  /** The search its link carries: a section of a page that is a page of the row. */
+  search?: Readonly<Record<string, string>>
   /** Under the row's More menu, not in the row itself. */
   more: boolean
 }
@@ -290,7 +392,17 @@ export function placePages(id: PlaceId, gate: ViewGate): PageLink[] {
       (v) =>
         !v.hideInNav && v.navigation.kind === 'feature' && isListed(v, gate),
     )
-    .map((v) => ({ id: v.id, path: v.path }))
+    .flatMap((v): Omit<PageLink, 'more'>[] => {
+      // The section the place opens on (Rules: the approval queue) is a page of its own,
+      // first; its view then opens on its other sections.
+      const s = place.section
+      return s?.view === v.id && gate(v, s)
+        ? [
+            { id: s.key, path: v.path, search: s.search },
+            { id: v.id, path: v.path, search: s.others },
+          ]
+        : [{ id: v.id, path: v.path }]
+    })
   const pages =
     id === 'settings'
       ? [{ id: SETTINGS_UTILITY.id, path: SETTINGS_UTILITY.path }, ...listed]
@@ -304,6 +416,7 @@ export function placePages(id: PlaceId, gate: ViewGate): PageLink[] {
 export interface SidebarPlace {
   id: PlaceId
   icon: LucideIcon
+  group?: PlaceGroup
   path: string
   search?: Readonly<Record<string, string>>
 }
@@ -358,6 +471,7 @@ function placeLink(place: Place, gate: ViewGate): SidebarPlace | null {
   const at = (path: string, search?: Readonly<Record<string, string>>) => ({
     id: place.id,
     icon: place.icon,
+    group: place.group,
     path,
     search,
   })

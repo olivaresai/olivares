@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useRef } from 'react'
 import { Filter, Search, ShieldAlert, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +47,8 @@ export function AccessFilters({
   compact = false,
 }: AccessFiltersProps) {
   const { t } = useTranslation('accessMap')
+  /** Clear removes its own button; the keyboard goes back here. */
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const setModes = (next: Set<string>) => onChange({ ...filter, modes: next })
   const toggleMode = (modes: string[]) => {
@@ -69,6 +72,7 @@ export function AccessFilters({
       <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
+          ref={searchRef}
           value={filter.search}
           onChange={(e) => onChange({ ...filter, search: e.target.value })}
           placeholder={t('filters.search')}
@@ -152,14 +156,15 @@ export function AccessFilters({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() =>
+          onClick={() => {
             onChange({
               modes: new Set(),
               confidence: 'all',
               signalSource: null,
               search: '',
             })
-          }
+            searchRef.current?.focus()
+          }}
         >
           <X className="size-3.5" /> {t('filters.clear')}
         </Button>

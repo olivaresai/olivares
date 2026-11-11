@@ -5,8 +5,10 @@ import { useState } from 'react'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { BoxedList } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Segmented } from '@/components/ui/segmented'
 import { Switch } from '@/components/ui/switch'
 import { Spinner } from '@/components/ui/spinner'
 import { QueryErrorState } from '@/components/layout/query-error-state'
@@ -14,6 +16,7 @@ import { http, type RequestOptions } from '@/lib/api'
 import type { components } from '@/lib/api/openapi.gen'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { SettingsRow } from './settings-row'
 
 export type TracingChoices = components['schemas']['TracingSettings']
 export type TracingStatus = components['schemas']['TracingStatus']
@@ -70,77 +73,122 @@ export function TracingSettings() {
           {t('tracing.businessRequired')}
         </p>
       ) : null}
-      <div className="flex items-center justify-between gap-4">
-        <label htmlFor="tracing-enabled">{t('tracing.enabled')}</label>
-        <Switch
-          id="tracing-enabled"
-          checked={choices.enabled}
-          onCheckedChange={(value) => change('enabled', value)}
-        />
-      </div>
-      <label className="flex flex-col gap-1" htmlFor="tracing-endpoint">
-        {t('tracing.endpoint')}
-        <Input
-          id="tracing-endpoint"
-          value={choices.endpoint}
-          onChange={(event) => change('endpoint', event.target.value)}
-          required={choices.enabled}
-          autoComplete="off"
-        />
-      </label>
-      <label className="flex flex-col gap-1" htmlFor="tracing-protocol">
-        {t('tracing.protocol')}
-        <select
-          id="tracing-protocol"
-          className="h-9 rounded-md border border-ctl-border bg-canvas px-3"
-          value={choices.protocol}
-          onChange={(event) => change('protocol', event.target.value)}
+      <section aria-labelledby="tracing-export" className="flex flex-col gap-2">
+        <h3 id="tracing-export" className="text-body-l font-semibold text-text">
+          {t('tracing.export')}
+        </h3>
+        <BoxedList>
+          <SettingsRow
+            name={t('tracing.enabled')}
+            description=""
+            control={
+              <Switch
+                aria-label={t('tracing.enabled')}
+                checked={choices.enabled}
+                onCheckedChange={(value) => change('enabled', value)}
+              />
+            }
+          />
+          <SettingsRow
+            name={t('tracing.endpoint')}
+            description=""
+            control={
+              <Input
+                aria-label={t('tracing.endpoint')}
+                className="w-72 max-w-full"
+                value={choices.endpoint}
+                onChange={(event) => change('endpoint', event.target.value)}
+                required={choices.enabled}
+                autoComplete="off"
+              />
+            }
+          />
+          <SettingsRow
+            name={t('tracing.protocol')}
+            description=""
+            control={
+              <Segmented<TracingChoices['protocol']>
+                aria-label={t('tracing.protocol')}
+                size="sm"
+                value={choices.protocol}
+                onValueChange={(value) => change('protocol', value)}
+                options={[
+                  { value: 'grpc', label: 'OTLP/gRPC' },
+                  { value: 'http/protobuf', label: 'OTLP/HTTP (protobuf)' },
+                ]}
+              />
+            }
+          />
+          <SettingsRow
+            name={t('tracing.sampleRatio')}
+            description=""
+            control={
+              <Input
+                aria-label={t('tracing.sampleRatio')}
+                className="w-28"
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                required
+                value={choices.sample_ratio}
+                onChange={(event) =>
+                  change('sample_ratio', Number(event.target.value))
+                }
+              />
+            }
+          />
+          <SettingsRow
+            name={t('tracing.serviceName')}
+            description=""
+            control={
+              <Input
+                aria-label={t('tracing.serviceName')}
+                className="w-56 max-w-full"
+                value={choices.service_name}
+                required
+                maxLength={256}
+                onChange={(event) => change('service_name', event.target.value)}
+              />
+            }
+          />
+        </BoxedList>
+      </section>
+      <section
+        aria-labelledby="tracing-advanced"
+        className="flex flex-col gap-2"
+      >
+        <h3
+          id="tracing-advanced"
+          className="text-body-l font-semibold text-text"
         >
-          <option value="grpc">OTLP/gRPC</option>
-          <option value="http/protobuf">OTLP/HTTP (protobuf)</option>
-        </select>
-      </label>
-      <div className="flex items-center justify-between gap-4">
-        <label htmlFor="tracing-insecure">{t('tracing.insecure')}</label>
-        <Switch
-          id="tracing-insecure"
-          checked={choices.insecure}
-          onCheckedChange={(value) => change('insecure', value)}
-        />
-      </div>
-      <label className="flex flex-col gap-1" htmlFor="tracing-sample">
-        {t('tracing.sampleRatio')}
-        <Input
-          id="tracing-sample"
-          type="number"
-          min="0"
-          max="1"
-          step="0.01"
-          required
-          value={choices.sample_ratio}
-          onChange={(event) =>
-            change('sample_ratio', Number(event.target.value))
-          }
-        />
-      </label>
-      <label className="flex flex-col gap-1" htmlFor="tracing-service">
-        {t('tracing.serviceName')}
-        <Input
-          id="tracing-service"
-          value={choices.service_name}
-          required
-          maxLength={256}
-          onChange={(event) => change('service_name', event.target.value)}
-        />
-      </label>
-      <div className="flex items-center justify-between gap-4">
-        <label htmlFor="tracing-compat">{t('tracing.compat')}</label>
-        <Switch
-          id="tracing-compat"
-          checked={choices.genai_compat}
-          onCheckedChange={(value) => change('genai_compat', value)}
-        />
-      </div>
+          {t('tracing.advanced')}
+        </h3>
+        <BoxedList>
+          <SettingsRow
+            name={t('tracing.insecure')}
+            description=""
+            control={
+              <Switch
+                aria-label={t('tracing.insecure')}
+                checked={choices.insecure}
+                onCheckedChange={(value) => change('insecure', value)}
+              />
+            }
+          />
+          <SettingsRow
+            name={t('tracing.compat')}
+            description=""
+            control={
+              <Switch
+                aria-label={t('tracing.compat')}
+                checked={choices.genai_compat}
+                onCheckedChange={(value) => change('genai_compat', value)}
+              />
+            }
+          />
+        </BoxedList>
+      </section>
       {query.data.overrides.length > 0 ? (
         <p role="status" className="break-words text-body-sm text-text-2">
           {t('tracing.overrides', { names: query.data.overrides.join(', ') })}

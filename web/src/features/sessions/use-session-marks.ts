@@ -16,12 +16,11 @@ import { useTranslation } from 'react-i18next'
 import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunMarkDTO } from '@/features/agentops/types'
-import { sessionNameLadder } from '@/features/home/work-line'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { sessionsKeys } from './api'
 import { useOfferUndo } from './list-undo'
-import { primaryRun, type UnifiedSession } from './provenance'
+import { primaryRun, runName, type UnifiedSession } from './provenance'
 
 type Session = Pick<UnifiedSession, 'runs'>
 
@@ -73,7 +72,7 @@ export function useSessionMarks(): SessionMarks {
     return target ? [() => call(target.run_ref)] : []
   }
   const nameOf = (target: NonNullable<ReturnType<typeof markableRun>>) =>
-    sessionNameLadder(target.name, null, t('untitled'), target.title).text
+    runName(target) ?? t('untitled')
   return {
     snooze: (session, ms) => {
       const target = markableRun(session)

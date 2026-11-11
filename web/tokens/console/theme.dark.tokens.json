@@ -1,5 +1,5 @@
 {
-  "$description": "Console DARK theme, emitted to the .dark block of src/styles/tokens.css by tokens/build.mjs. `palette` holds the website's B2 values, so the console and olivares.ai wear one brand (scripts/check-brand-parity.mjs pins the shared subset against the emitted file): four neutrals (frame, canvas, surface, raised), three text tones, the single brand orange #f08000 in its roles, and the status colours with their soft fills. Every text token holds at least 4.5:1 and every control boundary, focus ring and selection border at least 3:1 on every surface, including under the selection and hover fills and on the soft fills (500 pairs over both themes, pinned by src/styles/tokens.test.ts). `tools` holds the four tool data colours, `depth` the two neutral shadows, `roles` the names the components use.",
+  "$description": "Console DARK theme, emitted to the .dark block of src/styles/tokens.css by tokens/build.mjs. `palette` holds the values of direction A2 (scripts/check-brand-parity.mjs pins the subset the website shares against the emitted file): four neutrals (frame, canvas, surface, raised), a well and a pane, the hover, selection and pressed layers, three text tones, the single brand orange #f08000 in its roles, the status colours with their soft fills, and the inverse surface of a toast with its text and action. Every text token holds at least 4.5:1 and every control boundary, focus ring and selection border at least 3:1 on every surface, including under the selection and hover fills and on the soft fills (544 pairs over both themes, pinned by src/styles/tokens.test.ts). `tools` holds the four tool data colours, `depth` the neutral shadows, `roles` the names the components use.",
   "palette": {
     "$type": "color",
     "frame": {
@@ -11,48 +11,60 @@
       "$description": "The sheet: the rounded work area."
     },
     "surface": {
-      "$value": "#343434",
+      "$value": "#343437",
       "$description": "Cards, the composer and list groups."
     },
     "raised": {
-      "$value": "#343434",
+      "$value": "#38383c",
       "$description": "Menus, popovers and dialogs."
     },
     "hover": {
-      "$value": "rgba(255, 255, 255, 0.05)",
-      "$description": "Pointer hover fill. 5%: it stacks on the selected tone, and the dim inks hold 4.5:1 under both."
+      "$value": "rgba(255, 255, 255, 0.0525)",
+      "$description": "Pointer hover fill: A2's 7% at 0.75, the one factor of the contrast ruling; it stacks on the selected fill."
     },
     "active": {
-      "$value": "#38383b",
-      "$description": "Selection and pressed fill: the second surface step, solid."
+      "$value": "rgba(255, 255, 255, 0.075)",
+      "$description": "Selection fill: A2's 10% at 0.75, the one factor of the contrast ruling (0.745 is the lowest that keeps the approved concept's selected step on the canvas, 1.26:1)."
     },
     "line": {
-      "$value": "rgba(255, 255, 255, 0.08)",
+      "$value": "rgba(255, 255, 255, 0.07)",
       "$description": "Hairline separator. Decorative only: it never carries information."
     },
     "line-strong": {
-      "$value": "rgba(255, 255, 255, 0.14)",
+      "$value": "rgba(255, 255, 255, 0.13)",
       "$description": "Stronger hairline. Decorative only."
     },
     "ctl-border": {
-      "$value": "#8a8783",
+      "$value": "#8f8c88",
       "$description": "Boundary of inputs, selects and switches: at least 3:1 on every surface."
     },
     "scrim": {
-      "$value": "rgba(0, 0, 0, 0.5)",
+      "$value": "rgba(0, 0, 0, 0.55)",
       "$description": "Backdrop behind a modal dialog or sheet."
+    },
+    "well": {
+      "$value": "#202023",
+      "$description": "Recessed surface: fields, code, diffs, the terminal, the composer inside a dialog."
+    },
+    "pane": {
+      "$value": "#242427",
+      "$description": "A secondary pane beside the page: the session inspector, a folder list, the drawer bar."
+    },
+    "pressed": {
+      "$value": "rgba(255, 255, 255, 0.16)",
+      "$description": "State layer under a pointer that is down."
     },
     "text": {
       "$value": "#fafaf9",
       "$description": "Primary text."
     },
     "text-2": {
-      "$value": "#b4aeaa",
-      "$description": "Secondary text. Lighter than the website's #a8a29e: on the B2 surface a hovered, selected row is #424245, and the secondary text holds 4.5:1 there."
+      "$value": "#cfcac5",
+      "$description": "Secondary text."
     },
     "text-3": {
-      "$value": "#b4aea5",
-      "$description": "Tertiary text: at least 4.5:1 on every surface, under the selection and hover fills and on every soft fill. Lighter than the website's #a6a097 for the same reason as text-2."
+      "$value": "#aaa59f",
+      "$description": "Tertiary text, for resting surfaces: on a hovered, selected or soft-filled surface the one tertiary rule of src/index.css gives it the secondary ink (A2)."
     },
     "accent": {
       "$value": "#f08000",
@@ -63,19 +75,19 @@
       "$description": "Ink on the orange fill."
     },
     "accent-text": {
-      "$value": "#ff9b3d",
-      "$description": "The orange as text. Brighter than the fill: #f08000 is 4.34:1 on the selected tone."
+      "$value": "#ffb277",
+      "$description": "The orange as text: A2's #ffa257 made lighter (OKLCH L 0.792 to 0.825, hue kept, chroma lowered only to the sRGB edge) so it holds 4.5:1 on a hovered, selected raised row."
     },
     "accent-soft": {
-      "$value": "#3c3127",
-      "$description": "Soft orange fill: 10% of the orange into the canvas, opaque."
+      "$value": "#52402e",
+      "$description": "Soft orange fill, opaque: A2's 16% of rgb(240, 128, 0) composited on the surface #343437, so a tag reads the same in a resting, hovered or selected row (a translucent fill stacked on a row's fill took its ink under 4.5:1)."
     },
     "accent-line": {
       "$value": "rgba(240, 128, 0, 0.42)",
       "$description": "Orange hairline (translucent). Decorative only."
     },
     "accent-border": {
-      "$value": "#ff9b3d",
+      "$value": "#ffa257",
       "$description": "Orange boundary and selection bar: at least 3:1 on canvas and surface."
     },
     "focus": {
@@ -83,44 +95,56 @@
       "$description": "Focus ring (2 px, 2 px offset)."
     },
     "ok": {
-      "$value": "#9cc79c",
+      "$value": "#86dfa0",
       "$description": "Success text and glyph."
     },
     "ok-soft": {
-      "$value": "#343836",
-      "$description": "Soft fill: 10% of its colour into the canvas, opaque. A translucent tint on the B2 surface would take the secondary text under 4.5:1."
+      "$value": "#3f4c46",
+      "$description": "Success soft fill, opaque: A2's 14% of rgb(134, 223, 160) composited on the surface #343437, so a tag reads the same in a resting, hovered or selected row (a translucent fill stacked on a row's fill took its ink under 4.5:1)."
     },
     "warn": {
-      "$value": "#d9b45c",
-      "$description": "Warning text and glyph. Olive in light (hue 54, 6.49:1 on the canvas), gold in dark: never the orange."
+      "$value": "#f2d04f",
+      "$description": "Warning text and glyph: gold, never the orange."
     },
     "warn-soft": {
-      "$value": "#3a3630",
-      "$description": "Soft fill: 10% of its colour into the canvas, opaque. A translucent tint on the B2 surface would take the secondary text under 4.5:1."
+      "$value": "#4f4a3a",
+      "$description": "Warning soft fill, opaque: A2's 14% of rgb(242, 208, 79) composited on the surface #343437, so a tag reads the same in a resting, hovered or selected row (a translucent fill stacked on a row's fill took its ink under 4.5:1)."
     },
     "bad": {
-      "$value": "#eb9999",
-      "$description": "Error text and glyph. Lighter than the website's #e08e8e so it holds 4.5:1 on a hovered, selected row."
+      "$value": "#ffaead",
+      "$description": "Error text and glyph: A2's #ffa1a1 made lighter (OKLCH L 0.803 to 0.828, hue kept, chroma lowered only to the sRGB edge) so it holds 4.5:1 on a hovered, selected raised row."
     },
     "bad-soft": {
-      "$value": "#3c3336",
-      "$description": "Soft fill: 10% of its colour into the canvas, opaque. A translucent tint on the B2 surface would take the secondary text under 4.5:1."
+      "$value": "#504346",
+      "$description": "Error soft fill, opaque: A2's 14% of rgb(255, 161, 161) composited on the surface #343437, so a tag reads the same in a resting, hovered or selected row (a translucent fill stacked on a row's fill took its ink under 4.5:1)."
     },
     "info": {
-      "$value": "#9db9cf",
-      "$description": "Information text and glyph."
+      "$value": "#9ec7f7",
+      "$description": "Information text and glyph: A2's #99c1f1 made lighter (OKLCH L 0.799 to 0.817, hue and chroma kept) so it holds 4.5:1 on a hovered, selected raised row."
     },
     "info-soft": {
-      "$value": "#34363b",
-      "$description": "Soft fill: 10% of its colour into the canvas, opaque. A translucent tint on the B2 surface would take the secondary text under 4.5:1."
+      "$value": "#424851",
+      "$description": "Information soft fill, opaque: A2's 14% of rgb(153, 193, 241) composited on the surface #343437, so a tag reads the same in a resting, hovered or selected row (a translucent fill stacked on a row's fill took its ink under 4.5:1)."
     },
     "diff-add": {
-      "$value": "#343836",
-      "$description": "Soft fill: 10% of its colour into the canvas, opaque. A translucent tint on the B2 surface would take the secondary text under 4.5:1."
+      "$value": "rgba(134, 223, 160, 0.14)",
+      "$description": "Added line in a diff: 14% of the success colour, translucent."
     },
     "diff-del": {
-      "$value": "#3c3336",
-      "$description": "Soft fill: 10% of its colour into the canvas, opaque. A translucent tint on the B2 surface would take the secondary text under 4.5:1."
+      "$value": "rgba(255, 161, 161, 0.14)",
+      "$description": "Removed line in a diff: 14% of the error colour, translucent."
+    },
+    "inverse": {
+      "$value": "#fafaf9",
+      "$description": "Surface of a toast: the opposite of the theme."
+    },
+    "on-inverse": {
+      "$value": "#28282b",
+      "$description": "Text on the inverse surface."
+    },
+    "inverse-accent": {
+      "$value": "#984700",
+      "$description": "The action of a toast."
     }
   },
   "tools": {
@@ -157,21 +181,26 @@
     "account-slate": { "$value": "#adb9c8" }
   },
   "depth": {
-    "$description": "Depth: two neutral shadows, for what floats. No glow, blur or halo: depth is tone steps, one hairline and these two shadows.",
+    "$description": "Depth: neutral shadows for cards, wells and what floats. No glow, blur or halo.",
     "shadow-pop": {
       "$type": "shadow",
-      "$value": "0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85)",
+      "$value": "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4), 0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85)",
       "$description": "Floating layers: dialogs, sheets and the command palette."
     },
     "shadow-raised": {
       "$type": "shadow",
-      "$value": "0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7)",
+      "$value": "inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65)",
       "$description": "Menus, popovers, toasts and tooltips."
     },
     "shadow-card": {
       "$type": "shadow",
-      "$value": "none",
-      "$description": "Cards and panels: none. A panel that does not float carries no shadow."
+      "$value": "inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 0 0 1px rgba(0, 0, 6, 0.22), 0 1px 2px rgba(0, 0, 6, 0.24), 0 3px 8px -2px rgba(0, 0, 6, 0.3)",
+      "$description": "Cards: a hairline ring and a short drop."
+    },
+    "shadow-well": {
+      "$type": "shadow",
+      "$value": "inset 0 1px 2px rgba(0, 0, 0, 0.42), inset 0 0 0 1px rgba(0, 0, 0, 0.2)",
+      "$description": "The inner edge of a well."
     }
   },
   "roles": {
@@ -229,8 +258,8 @@
       "$value": "{palette.bad-soft}"
     },
     "muted": {
-      "$value": "#38383b",
-      "$description": "Solid well: the selection fill (`active`) painted on the canvas, as one opaque color, so text on it is measured like text under the selection fill."
+      "$value": "rgba(255, 255, 255, 0.075)",
+      "$description": "The selection tone as a fill of its own (the value of `active`): neutral badges, hovered menu items and wells."
     },
     "accent-hover": {
       "$value": "#df6d00",
@@ -259,15 +288,15 @@
   },
   "elevation": {
     "$type": "shadow",
-    "$description": "The elevation steps the components use, mapped onto the two shadows of the design: cards on the lower three, popovers and dialogs on the upper two.",
+    "$description": "The elevation steps the components use: the lower three draw nothing (a card draws `shadow-card`), popovers and dialogs take the upper two.",
     "elev-xs": {
-      "$value": "{depth.shadow-card}"
+      "$value": "none"
     },
     "elev-sm": {
-      "$value": "{depth.shadow-card}"
+      "$value": "none"
     },
     "elev-md": {
-      "$value": "{depth.shadow-card}"
+      "$value": "none"
     },
     "elev-lg": {
       "$value": "{depth.shadow-raised}"

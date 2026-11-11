@@ -9,11 +9,23 @@
     "agentCount_one": "{{count}} agent stop active",
     "agentCount_other": "{{count}} agent stops active",
     "agentBody": "The stopped agents cannot act: their tool calls, MCP calls and other actions are refused.",
-    "none": "Nothing is stopped. Sessions and agents run normally.",
+    "noneTitle": "Nothing is stopped",
+    "noneBody": "Sessions and agents run normally.",
     "engagedBy": "Engaged by",
     "revoked": "{{count}} pending approval request canceled",
     "revoked_one": "{{count}} pending approval request canceled",
     "revoked_other": "{{count}} pending approval requests canceled"
+  },
+  "effects": {
+    "title": "What happens when you stop all",
+    "sessions": "Open sessions end",
+    "sessionsHint": "Each session's process stops; its folder stays as it is.",
+    "actions": "Every agent action is refused",
+    "actionsHint": "Tool calls, MCP, schedules, voice, model calls, deployments and event delivery.",
+    "approvals": "Pending approval requests are canceled",
+    "approvalsHint": "Those of the sessions and of agent actions. Requests a person filed outside a session stay, as do requests about the controls.",
+    "ledger": "The stop is recorded in the audit ledger",
+    "ledgerHint": "Who stopped it, when and why, for the review afterwards."
   },
   "engage": {
     "agentRef": "Agent",
@@ -25,6 +37,7 @@
     "confirmBodyEstateNoRestart": "Every agent stops at once: open sessions end, their actions are refused, and the pending approval requests of those sessions and of agent actions are canceled; requests a person filed outside a session stay pending, as do requests about the controls themselves. There is no emergency way around this.",
     "confirmTitleAgent": "Stop this agent?",
     "confirmBodyAgent": "This agent stops at once: its actions are refused and its pending approval requests are canceled. To start it again, two different user accounts must approve, and the stop must be reviewed afterwards.",
+    "confirmBodyAgentNoRestart": "This agent stops at once: its actions are refused and its pending approval requests are canceled.",
     "done": "Kill switch engaged",
     "doneBody": "Stop {{id}} is active. Re-enabling requires dual-control.",
     "alreadyStopped": "An active stop for this scope already exists",
@@ -32,7 +45,6 @@
     "stopsRunning_one": "{{count}} open session stops.",
     "stopsRunning_other": "{{count}} open sessions stop.",
     "stopAll": "Stop all agents",
-    "more": "More",
     "stopOne": "Stop one agent…",
     "stopAgent": "Stop this agent"
   },
@@ -47,7 +59,7 @@
     "status": "{{live}} running, {{ended}} ended."
   },
   "stops": {
-    "title": "Stops",
+    "title": "History",
     "caption": "Each stop: who started it, when, what it covers, why, and how it was ended and reviewed. Every action checks these stops before it runs.",
     "search": "Search stops…",
     "label": "Kill-switch stops",

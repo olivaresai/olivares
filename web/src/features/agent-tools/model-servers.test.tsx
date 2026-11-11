@@ -63,18 +63,31 @@ function mount() {
   )
 }
 
-it('lists each server, says where a missing one is looked for, and offers Start only for an installed one', async () => {
+it('lists an installed server with Start, and leaves a missing one to the Not installed line', async () => {
   mount()
   const llama = await screen.findByTestId('model-server-llama-cpp')
-  const vllm = screen.getByTestId('model-server-vllm')
   expect(within(llama).getByText('Not running')).toBeInTheDocument()
   expect(
     within(llama).getByRole('button', { name: 'Start' }),
   ).toBeInTheDocument()
-  expect(within(vllm).getByText(/not installed/)).toHaveTextContent(
-    'Olivares looks for vllm on this server',
-  )
-  expect(within(vllm).queryByRole('button', { name: 'Start' })).toBeNull()
+  expect(screen.queryByTestId('model-server-vllm')).toBeNull()
+})
+
+it("keeps Start secondary: the page's one primary is Add profile", async () => {
+  mount()
+  const llama = await screen.findByTestId('model-server-llama-cpp')
+  expect(
+    within(llama).getByRole('button', { name: 'Start' }).className,
+  ).not.toMatch(/\bbg-accent\b/)
+})
+
+it('keeps the row of a server that runs although its program is not found, so it can be stopped', async () => {
+  api.modelServers.mockResolvedValue({
+    servers: [{ ...stopped('vllm', 'vLLM', false), state: 'running' }],
+  })
+  mount()
+  const vllm = await screen.findByTestId('model-server-vllm')
+  expect(within(vllm).getByRole('button', { name: 'Stop' })).toBeInTheDocument()
 })
 
 it('starts the named model for the signed-in organization, reads "starting" while it loads and "running" once it answers', async () => {

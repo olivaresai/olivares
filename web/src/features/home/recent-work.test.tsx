@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AUTH, fireEvent, renderIntel, screen } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import { AccountMarksContext } from '@/features/agent-tools/account-marks'
+import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from '@/features/sessions/types'
 import { RecentWork } from './recent-work'
 import { RECENT_WORK_ROWS, sessionNameLadder, workLine } from './work-line'
@@ -15,6 +16,7 @@ import { mergeSessions } from '@/features/sessions/provenance'
 
 import './i18n'
 import '@/features/sessions/i18n'
+import '@/features/agentops/i18n'
 
 /** RecentWork takes the merged sessions (runs and live rows); these fixtures are live rows only. */
 const asSessions = (rows: Parameters<typeof mergeSessions>[0]) =>
@@ -162,6 +164,67 @@ describe('sessionNameLadder — one ladder for every surface', () => {
       from: 'untitled',
     })
     expect(sessionNameLadder('  ', row({ goal: 'G' }), 'U').from).toBe('goal')
+  })
+})
+
+describe('RecentWork — the state a row says', () => {
+  const run = (over: Partial<RunDTO>): RunDTO => ({
+    run_ref: 'r-idle',
+    transport: 'stream-json',
+    permission_mode: 'default',
+    isolation: 'native',
+    state: 'idle',
+    last_event_seq: 0,
+    pep_provisioned: true,
+    record_io: false,
+    critical: false,
+    ...over,
+  })
+
+  it('says the working run of a session that holds an idle one too', () => {
+    const [session] = mergeSessions([], [run({})])
+    const both = {
+      ...session,
+      runs: [run({}), run({ run_ref: 'r-working', state: 'running' })],
+    }
+    renderIntel(<RecentWork sessions={[both]} state="ready" />)
+    const row = screen.getByTestId('home-recent-row')
+    expect(row).toHaveTextContent('Working')
+    expect(row).not.toHaveTextContent('Idle')
+  })
+
+  // One run for the whole row: its folder is the folder of the run its state says.
+  it('tells the folder of the run its state says, not the primary one', () => {
+    const idle = run({ name: 'nightly', workspace_path: '/home/ada/old-docs' })
+    const [session] = mergeSessions([], [idle])
+    const working = run({
+      run_ref: 'r-working',
+      state: 'running',
+      workspace_path: '/home/ada/shop',
+    })
+    renderIntel(
+      <RecentWork
+        sessions={[{ ...session, runs: [idle, working] }]}
+        state="ready"
+      />,
+    )
+    const row = screen.getByTestId('home-recent-row')
+    expect(row).toHaveTextContent('Working')
+    expect(row).toHaveTextContent('shop')
+    expect(row).not.toHaveTextContent('old-docs')
+  })
+
+  // A limit holds a run at rest only until the reset it names: here an hour ahead.
+  it('says Paused, not Failed, for a run a provider limit holds until its reset', () => {
+    const limit = {
+      kind: 'usage',
+      resets_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+    } as const
+    const sessions = mergeSessions([], [run({ limit })])
+    renderIntel(<RecentWork sessions={sessions} state="ready" />)
+    const row = screen.getByTestId('home-recent-row')
+    expect(row).toHaveTextContent('Paused')
+    expect(row).not.toHaveTextContent('Failed')
   })
 })
 

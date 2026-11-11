@@ -150,7 +150,7 @@ export function ModelInstaller({ ollama }: { ollama: Ollama }) {
         ) : (
           <Button
             type="button"
-            variant="primary"
+            variant="secondary"
             size="sm"
             onClick={() => start.mutate()}
             disabled={start.isPending || s.state === 'starting'}
@@ -216,6 +216,12 @@ export function ModelInstaller({ ollama }: { ollama: Ollama }) {
       {p?.state === 'running' ? (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-3">
+            {percent === null ? (
+              <Loader2
+                aria-hidden
+                className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+              />
+            ) : null}
             <div
               className="h-2 min-w-32 flex-1 overflow-hidden rounded-full bg-muted"
               role="progressbar"
@@ -224,14 +230,12 @@ export function ModelInstaller({ ollama }: { ollama: Ollama }) {
               aria-valuemax={100}
               aria-valuenow={percent ?? undefined}
             >
-              <div
-                className={
-                  percent === null
-                    ? 'h-full w-1/3 animate-pulse rounded-full bg-accent-text'
-                    : 'h-full rounded-full bg-accent-text transition-[width] duration-300 ease-out'
-                }
-                style={percent === null ? undefined : { width: `${percent}%` }}
-              />
+              {percent === null ? null : (
+                <div
+                  className="h-full rounded-full bg-accent-text transition-[width] duration-300 ease-out"
+                  style={{ width: `${percent}%` }}
+                />
+              )}
             </div>
             <Button
               type="button"

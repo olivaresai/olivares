@@ -35,7 +35,7 @@
     "sumsAbsent": "keine Abhängigkeits-Hashes erfasst",
     "vcsAvailable": "VCS-Einstellungen durch die Go-Toolchain gestempelt",
     "vcsUnavailable": "Kein VCS-Stempel",
-    "selfHashHint": "Der Self-SHA256 ist ein Stream-Hash der laufenden ausführbaren Datei, der einmalig beim ersten Lesen berechnet wird. Vergleichen Sie ihn OFFLINE mit einer künftigen signierten checksums.txt — der Browser verifiziert niemals Signaturen, und ein Hash allein belegt die Identität, nicht die Herkunft.",
+    "selfHashHint": "Der Self-SHA256 ist ein Hash der laufenden ausführbaren Datei, der einmalig beim ersten Lesen berechnet wird: Er benennt genau diese Bytes und belegt nicht, woher sie stammen. Um ein Release zu prüfen, nutzen Sie „Selbst prüfen“ weiter unten; haben Sie aus dem Archiv installiert, das dort geprüft wird, ergibt sha256sum der Datei olivares in diesem Archiv genau diesen Wert.",
     "published": "Veröffentlicht",
     "notPublished": "Nicht veröffentlicht",
     "verifierAvailable": "Nativer Verifizierer einkompiliert (core/secure/modelsign)",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "Deklariert."
     }
+  },
+  "check": {
+    "title": "Selbst prüfen",
+    "description": "Dieselbe Prüfung in einem Terminal, ohne die Konsole.",
+    "download": "Laden Sie von der <release>Release-Seite von {{version}}</release> checksums.txt, checksums.txt.sig, checksums.txt.pem und das Archiv oder Paket herunter, das Sie installiert haben. Führen Sie dann dies in deren Ordner aus:",
+    "provenance": "Laden Sie zum Archiv multiple.intoto.jsonl von der <release>Release-Seite von {{version}}</release> herunter und führen Sie dies dann in deren Ordner aus:",
+    "passes": "Zeigt es „Verified OK“ und danach OK neben jeder Datei, sind die heruntergeladenen Dateien die, die der Release-Workflow von Olivares AI für {{version}} signiert hat.",
+    "notRelease": "Dieser Build ist kein signiertes Release, daher gibt es keine Release-Signatur, gegen die er sich prüfen ließe.",
+    "business": "Olivares AI Business wird mit den Anweisungen des Business-Kanals geprüft."
   },
   "status": {
     "declared": "Deklariert",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "Release-Artefakte",
     "description": "Was mit einem Release ausgeliefert wird und wie das Vertrauen in jedes Artefakt hergestellt wird. Schlüsselloses (Fulcio/Rekor) und schlüsselbasiertes (Air-Gap) Signieren sind beide gleichrangig — keines ist kanonisch.",
-    "identityNote": "Schlüssellose Signatur-Identität (deklariert): OIDC-Aussteller {{issuer}} · cosign-Zertifikatsidentität {{regexp}}",
+    "identityNote": "Schlüssellose Signatur-Identität (deklariert): OIDC-Aussteller {{issuer}} · cosign-Zertifikatsidentität <identity />",
     "columns": {
       "artifact": "Artefakt",
       "producedBy": "Erzeugt von",

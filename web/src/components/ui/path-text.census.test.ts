@@ -577,7 +577,7 @@ describe('every raw path renders through PathText', () => {
     const catalogs = walk(resolve(SRC, 'features/claude-policy/i18n'), [
       '.json',
     ])
-    expect(catalogs).toHaveLength(9)
+    expect(catalogs).toHaveLength(11)
     for (const file of catalogs) {
       const catalog = JSON.parse(readFileSync(file, 'utf8'))
       expect(catalog.ref.ms.legacyPath, file).toContain('<path />')
@@ -735,6 +735,11 @@ const DECLARED_SPLITS: ReadonlyArray<{ file: string; reason: string }> = [
     file: 'features/sessions/session-activity.tsx',
     reason:
       "a changed file's name shown whole and its folder cut by CSS from the left; the full path is the row's hover, never a string cut",
+  },
+  {
+    file: 'components/ui/file-type-icon.tsx',
+    reason:
+      "the file's name read only to choose its kind's icon by extension; nothing of it is shown",
   },
 ]
 

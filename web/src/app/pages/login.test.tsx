@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NetworkError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
 import type { Whoami } from '@/lib/api/types'
 import { useClientSettings } from '@/features/settings/preferences'
@@ -47,6 +47,14 @@ const serverInfo = vi.hoisted(() => ({
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => serverInfo,
 }))
+
+// The HTTP boundary of the passkey sign-in. The password tests sign in through
+// the mocked auth context and never reach it.
+const post = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/client')>()
+  return { ...actual, http: { ...actual.http, post } }
+})
 
 vi.mock('@/features/identity/passkey-address', () => ({
   PasskeyAddressNotice: () => null,
@@ -210,7 +218,7 @@ describe('SSO sign-in buttons (server-info sso_providers)', () => {
     ).toBeNull()
   })
 
-  it('shows one button per provider above the password form, then a quiet "or"', () => {
+  it('shows a quiet "or" under the sign-in button, then one button per provider', () => {
     serverInfo.data = {
       ...serverInfo.data,
       sso_providers: [
@@ -226,11 +234,14 @@ describe('SSO sign-in buttons (server-info sso_providers)', () => {
     const kc = screen.getByRole('link', { name: 'Sign in with Keycloak' })
     expect(sso).toHaveAttribute('href', START)
     expect(kc.getAttribute('href')).toContain('idp=kc')
-    expect(screen.getByRole('separator', { name: 'or' })).toBeInTheDocument()
-    // Above the form: the buttons come first in document order.
-    const email = screen.getByLabelText('Email')
+    const or = screen.getByRole('separator', { name: 'or' })
+    // Under the form: the filled button, then «or», then the other ways in.
+    const submit = screen.getByRole('button', { name: 'Sign in' })
     expect(
-      kc.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING,
+      submit.compareDocumentPosition(or) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      or.compareDocumentPosition(sso) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
   })
 
@@ -263,6 +274,67 @@ describe('SSO sign-in buttons (server-info sso_providers)', () => {
     renderLogin()
     expect(screen.queryByRole('link', { name: /sign in with/i })).toBeNull()
     expect(screen.queryByRole('separator', { name: 'or' })).toBeNull()
+  })
+})
+
+// The page as drawn: the lockup, then ONE sheet holding the title, the form,
+// the one filled button and the quieter ways in; the status link sits under it.
+describe('the sign-in page as drawn', () => {
+  const sheetOf = (node: Element) => node.closest('[data-slot="auth-sheet"]')
+
+  it('holds the one h1 and the form in one sheet', () => {
+    renderLogin()
+    const headings = screen.getAllByRole('heading', { level: 1 })
+    expect(headings).toHaveLength(1)
+    const sheets = document.querySelectorAll('[data-slot="auth-sheet"]')
+    expect(sheets).toHaveLength(1)
+    const sheet = sheetOf(headings[0])
+    expect(sheet).not.toBeNull()
+    expect(sheet).toContainElement(screen.getByLabelText('Email'))
+    expect(sheet).toContainElement(screen.getByLabelText('Password'))
+  })
+
+  it('fills one button with the accent; the other ways in stay quiet', () => {
+    serverInfo.data = {
+      ...serverInfo.data,
+      sso_providers: [
+        { label: 'Okta', start_url: '/v1/auth/federation/start' },
+      ],
+    }
+    renderLogin()
+    const submit = screen.getByRole('button', { name: 'Sign in' })
+    const sheet = sheetOf(submit)
+    expect(sheet).not.toBeNull()
+    const filled = sheet!.querySelectorAll('.bg-accent')
+    expect(filled).toHaveLength(1)
+    expect(filled[0]).toBe(submit)
+    expect(submit).toHaveClass('w-full')
+    const okta = screen.getByRole('link', { name: 'Sign in with Okta' })
+    expect(sheet).toContainElement(okta)
+    expect(okta).not.toHaveClass('bg-accent')
+  })
+
+  it('puts the status link under the sheet, not inside it', () => {
+    renderLogin()
+    const status = screen.getByRole('link', { name: 'System status' })
+    expect(sheetOf(status)).toBeNull()
+    expect(screen.getByRole('main')).toContainElement(status)
+  })
+
+  it('says a refused sign-in in a notice inside the sheet, announced', async () => {
+    auth.login.mockRejectedValue(
+      new ApiError(401, 'invalid_credentials', 'invalid credentials'),
+    )
+    const user = userEvent.setup()
+    renderLogin()
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com')
+    await user.type(screen.getByLabelText('Password'), 'wrong')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Incorrect email or password.')
+    expect(alert).toHaveAttribute('data-slot', 'notice')
+    expect(alert).toHaveAttribute('data-tone', 'bad')
+    expect(sheetOf(alert)).not.toBeNull()
   })
 })
 
@@ -363,5 +435,340 @@ describe('a sign-in request that gets no answer', () => {
       new TypeError('boom'),
     )
     expect(alert).toHaveTextContent('Control plane unreachable')
+  })
+})
+
+// A passkey is offered only where the engine says this address allows it and the
+// browser can run the ceremony; a success ends exactly as a password does.
+describe('sign-in with a passkey', () => {
+  const OPTIONS_PATH = '/v1/auth/webauthn/sign-in/options'
+  const SIGN_IN_PATH = '/v1/auth/webauthn/sign-in'
+  const ENGINE_WORDS = 'engine words'
+  const OPTIONS = {
+    publicKey: {
+      challenge: 'AQID',
+      rpId: 'console.example.com',
+      userVerification: 'required',
+      timeout: 60000,
+    },
+  }
+  const SESSION = { csrf_token: 'c', session_id: 's', expires_at: 'soon' }
+  const bytes = (...values: number[]) => new Uint8Array(values).buffer
+  const assertion = {
+    id: 'cred-1',
+    rawId: bytes(1, 2),
+    type: 'public-key',
+    response: {
+      clientDataJSON: bytes(3),
+      authenticatorData: bytes(4),
+      signature: bytes(5),
+      userHandle: bytes(6),
+    },
+  }
+  const getCredential = vi.fn()
+  const passkeyButton = () =>
+    screen.queryByRole('button', { name: 'Use a passkey' })
+  const or = () => screen.queryAllByRole('separator', { name: 'or' })
+
+  /** The engine: fresh options, then `signIn` answers the assertion. */
+  function engine(signIn: () => Promise<unknown>) {
+    post.mockImplementation(async (path: string) => {
+      if (path === OPTIONS_PATH) return OPTIONS
+      if (path === SIGN_IN_PATH) return signIn()
+      throw new Error(`unexpected ${path}`)
+    })
+  }
+
+  /** A promise the test settles by hand. */
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    let reject!: (reason: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  beforeEach(() => {
+    serverInfo.data = {
+      setup_required: false,
+      version: 'v',
+      passkey_sign_in: true,
+    }
+    vi.stubGlobal('PublicKeyCredential', function PublicKeyCredential() {})
+    Object.defineProperty(navigator, 'credentials', {
+      configurable: true,
+      value: { get: getCredential },
+    })
+    getCredential.mockReset()
+    getCredential.mockResolvedValue(assertion)
+    post.mockReset()
+    engine(async () => SESSION)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    Object.defineProperty(navigator, 'credentials', {
+      configurable: true,
+      value: undefined,
+    })
+  })
+
+  it.each([undefined, false])(
+    'draws nothing when server-info says passkey_sign_in %s',
+    (allowed) => {
+      serverInfo.data = { setup_required: false, version: 'v' }
+      if (allowed !== undefined) serverInfo.data.passkey_sign_in = allowed
+      renderLogin()
+      expect(passkeyButton()).toBeNull()
+      expect(or()).toHaveLength(0)
+    },
+  )
+
+  it('draws nothing when the browser cannot run a passkey', () => {
+    vi.stubGlobal('PublicKeyCredential', undefined)
+    renderLogin()
+    expect(passkeyButton()).toBeNull()
+    expect(or()).toHaveLength(0)
+  })
+
+  it('draws one quiet button under the "or", above the organization sign-in', () => {
+    serverInfo.data = {
+      ...serverInfo.data,
+      sso_providers: [
+        { label: 'Okta', start_url: '/v1/auth/federation/start' },
+      ],
+    }
+    renderLogin()
+    const passkey = passkeyButton()!
+    const okta = screen.getByRole('link', { name: 'Sign in with Okta' })
+    expect(or()).toHaveLength(1)
+    const [line] = or()
+    expect(
+      line.compareDocumentPosition(passkey) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      passkey.compareDocumentPosition(okta) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(passkey).toHaveAttribute('type', 'button')
+    expect(passkey).not.toHaveClass('bg-accent')
+    expect(passkey.closest('form')).toBeNull()
+  })
+
+  it('signs in exactly as the password does: the session, then the same page', async () => {
+    loginSearch.returnTo = '/audit?from=2026-09-30#entry-7'
+    const user = userEvent.setup()
+    renderLogin()
+    await user.click(passkeyButton()!)
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled())
+    expect(post).toHaveBeenNthCalledWith(
+      1,
+      OPTIONS_PATH,
+      undefined,
+      expect.objectContaining({ anonymous: true }),
+    )
+    const request = getCredential.mock.calls[0][0]
+    expect(new Uint8Array(request.publicKey.challenge)).toEqual(
+      new Uint8Array([1, 2, 3]),
+    )
+    expect(request.publicKey.userVerification).toBe('required')
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      SIGN_IN_PATH,
+      {
+        credential: {
+          id: 'cred-1',
+          rawId: 'AQI',
+          type: 'public-key',
+          response: {
+            clientDataJSON: 'Aw',
+            authenticatorData: 'BA',
+            signature: 'BQ',
+            userHandle: 'Bg',
+          },
+        },
+      },
+      expect.objectContaining({
+        anonymous: true,
+        headers: { 'X-Olivares-Session': 'cookie' },
+      }),
+    )
+    expect(post).toHaveBeenCalledTimes(2)
+    expect(auth.login).not.toHaveBeenCalled()
+    expect(auth.adoptSession).toHaveBeenCalledWith(SESSION)
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/audit',
+      href: '/audit?from=2026-09-30#entry-7',
+      replace: true,
+    })
+  })
+
+  it('returns to rest and says nothing when the person closes the sheet', async () => {
+    const sheet = deferred<never>()
+    getCredential.mockReturnValue(sheet.promise)
+    const user = userEvent.setup()
+    renderLogin()
+    await user.click(passkeyButton()!)
+    const busy = await screen.findByRole('button', { name: 'Signing in…' })
+    expect(busy).toHaveAttribute('aria-busy', 'true')
+    await act(async () => {
+      sheet.reject(new DOMException('dismissed', 'NotAllowedError'))
+    })
+    const rest = await screen.findByRole('button', { name: 'Use a passkey' })
+    expect(rest).not.toHaveAttribute('aria-busy')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(auth.adoptSession).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('holds both ways in while a passkey signs in: one sign-in at a time', async () => {
+    const answer = deferred<typeof SESSION>()
+    engine(() => answer.promise)
+    const user = userEvent.setup()
+    renderLogin()
+    await user.click(passkeyButton()!)
+    const busy = await screen.findByRole('button', { name: 'Signing in…' })
+    expect(busy).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled()
+    await user.click(busy)
+    expect(getCredential).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      answer.resolve(SESSION)
+    })
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledTimes(1))
+    expect(post).toHaveBeenCalledTimes(2)
+    expect(auth.login).not.toHaveBeenCalled()
+  })
+
+  it('holds the passkey while the password signs in', async () => {
+    auth.login.mockReturnValue(new Promise<never>(() => {}))
+    const user = userEvent.setup()
+    renderLogin()
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com')
+    await user.type(screen.getByLabelText('Password'), 'secret')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await waitFor(() =>
+      expect(passkeyButton()).toHaveAttribute('aria-disabled', 'true'),
+    )
+    await user.click(passkeyButton()!)
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'a refused passkey',
+      new ApiError(401, 'invalid_credentials', ENGINE_WORDS),
+      'That passkey did not sign you in. Try again, or use your password.',
+    ],
+    [
+      'too many attempts',
+      new ApiError(429, 'locked_out', ENGINE_WORDS),
+      'Too many attempts. Try again in a moment.',
+    ],
+    [
+      'no answer',
+      new NetworkError('Failed to fetch'),
+      'Control plane unreachable',
+    ],
+  ])('says the page’s own sentence for %s', async (_, failure, sentence) => {
+    engine(async () => {
+      throw failure
+    })
+    const user = userEvent.setup()
+    renderLogin()
+    await user.click(passkeyButton()!)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(sentence)
+    expect(alert).not.toHaveTextContent(ENGINE_WORDS)
+    // The assertion names no account: the page names no email or password.
+    expect(alert).not.toHaveTextContent('Incorrect email or password.')
+    expect(auth.adoptSession).not.toHaveBeenCalled()
+    expect(passkeyButton()).not.toBeNull()
+  })
+
+  // The engine answered and the browser refused: a relying party it will not
+  // use at this address, a failure it does not name, options it cannot read.
+  // The passkey did not sign in; the control plane was reachable.
+  it.each([
+    ['SecurityError', new DOMException('refused', 'SecurityError')],
+    ['UnknownError', new DOMException('unknown', 'UnknownError')],
+    ['TypeError', new TypeError('options it cannot read')],
+  ])(
+    'says the passkey’s own sentence when the browser refuses with %s',
+    async (_, failure) => {
+      getCredential.mockRejectedValue(failure)
+      const user = userEvent.setup()
+      renderLogin()
+      await user.click(passkeyButton()!)
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(
+        'That passkey did not sign you in. Try again, or use your password.',
+      )
+      expect(alert).not.toHaveTextContent('Control plane unreachable')
+      expect(post).toHaveBeenCalledTimes(1)
+      expect(auth.adoptSession).not.toHaveBeenCalled()
+      expect(passkeyButton()).not.toBeNull()
+    },
+  )
+
+  it('says nothing either when the sheet is aborted', async () => {
+    const sheet = deferred<never>()
+    getCredential.mockReturnValue(sheet.promise)
+    const user = userEvent.setup()
+    renderLogin()
+    await user.click(passkeyButton()!)
+    await screen.findByRole('button', { name: 'Signing in…' })
+    await act(async () => {
+      sheet.reject(new DOMException('aborted', 'AbortError'))
+    })
+    const rest = await screen.findByRole('button', { name: 'Use a passkey' })
+    expect(rest).not.toHaveAttribute('aria-busy')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(auth.adoptSession).not.toHaveBeenCalled()
+  })
+
+  it('sends an account its organization signs in to that sign-in', async () => {
+    serverInfo.data = {
+      ...serverInfo.data,
+      sso_providers: [
+        { label: 'Okta', start_url: '/v1/auth/federation/start' },
+      ],
+    }
+    engine(async () => {
+      throw new ApiError(403, 'sso_required', ENGINE_WORDS)
+    })
+    const user = userEvent.setup()
+    renderLogin()
+    await user.click(passkeyButton()!)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      "This account signs in through your organization. Use your organization's sign-in.",
+    )
+    expect(alert).not.toHaveTextContent(ENGINE_WORDS)
+    expect(
+      screen.getByRole('link', { name: 'Sign in with Okta' }),
+    ).toBeInTheDocument()
+  })
+
+  it('says a passkey cannot be used at this address and withdraws the button', async () => {
+    post.mockRejectedValue(
+      new ApiError(503, 'webauthn_relying_party_unusable', ENGINE_WORDS),
+    )
+    const user = userEvent.setup()
+    renderLogin()
+    await user.click(passkeyButton()!)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'Passkeys are not available at this address.',
+    )
+    expect(alert).not.toHaveTextContent(ENGINE_WORDS)
+    expect(passkeyButton()).toBeNull()
+    expect(getCredential).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
+    // The focus left with the button: it goes to the form's first field.
+    expect(screen.getByLabelText('Email')).toHaveFocus()
   })
 })

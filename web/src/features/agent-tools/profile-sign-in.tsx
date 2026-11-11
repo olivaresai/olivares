@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { CodeLine } from '@/components/ui/code-line'
+import { KvList, KvRow } from '@/components/ui/kv'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -171,6 +172,10 @@ export function ProfileSignInPanel({
   const keyFirst = gemini && keyKind !== undefined
   return (
     <div className="flex flex-col gap-4">
+      {/* Where this login is kept: the profile's own folder on this server. */}
+      <KvList>
+        <KvRow label={t('profiles.home')}>{t(homeWords(account))}</KvRow>
+      </KvList>
       {gemini ? (
         <p className="text-body text-text-2">{t('signIn.geminiAccounts')}</p>
       ) : null}
@@ -215,6 +220,16 @@ export function ProfileSignInPanel({
       />
     </div>
   )
+}
+
+/** Where a profile's login is kept, in the words of its sheet: the default
+ * login's folder, the tool's existing folder it adopted, or its own folder made
+ * by Olivares. */
+export function homeWords(account?: ProviderAccountDTO) {
+  if (!account) return 'profiles.homeDefault'
+  return account.home_mode === 'adopted'
+    ? 'profiles.homeAdopted'
+    : 'profiles.homeManaged'
 }
 
 /** Sign in again, or for the first time, from a row. Closes when the tool is signed in. */

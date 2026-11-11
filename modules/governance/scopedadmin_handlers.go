@@ -37,8 +37,12 @@ type catalogDTO struct {
 	Permissions  []string `json:"permissions"`   // exact non-tree core and mounted module permissions
 	Verbs        []string `json:"verbs"`         // read | write | admin
 	BuiltinRoles []string `json:"builtin_roles"` // viewer | editor | admin | owner
-	ScopeTrees   []string `json:"scope_trees"`   // tenant | workspace | agent_group | folder
-	SubjectKinds []string `json:"subject_kinds"` // user | role | group (S256) — what a grant may target
+	// BuiltinRolePermissions is what each built-in role HOLDS in a tenant, keyed by role
+	// name: auth.EffectivePermissions over this catalog's own permissions, so every entry
+	// passed auth.RoleGrants, the predicate that decides the request (never a second list).
+	BuiltinRolePermissions map[string][]string `json:"builtin_role_permissions"`
+	ScopeTrees             []string            `json:"scope_trees"`   // tenant | workspace | agent_group | folder
+	SubjectKinds           []string            `json:"subject_kinds"` // user | role | group (S256) — what a grant may target
 }
 
 type customRoleDTO struct {
@@ -320,14 +324,23 @@ func (m *Module) handleRBACCatalog(w http.ResponseWriter, _ *http.Request, _ api
 	// combination validateScopeRefs rejects. `tree_kinds` is what a scope-tree picker must
 	// filter on; `permissions` is the exact module set, since a module kind does NOT imply
 	// all three verbs (see auth.IsGrantablePermission).
+	perms := append(auth.ModulePermissions(), auth.TenantGrantablePermissions()...)
+	roles := []string{auth.RoleViewer, auth.RoleEditor, auth.RoleAdmin, auth.RoleOwner}
+	// The tenant-wide floor of each role, unconfined: confinement is a property of a
+	// membership, not of the role, and authored grants are listed by their own routes.
+	rolePerms := make(map[string][]string, len(roles))
+	for _, r := range roles {
+		rolePerms[r] = permStrings(auth.EffectivePermissions(r, perms, false))
+	}
 	writeJSON(w, http.StatusOK, catalogDTO{
-		Kinds:        auth.ScopeableKinds(),
-		TreeKinds:    auth.TreeScopeableKinds(),
-		Permissions:  permStrings(append(auth.ModulePermissions(), auth.TenantGrantablePermissions()...)),
-		Verbs:        []string{auth.VerbRead, auth.VerbWrite, auth.VerbAdmin},
-		BuiltinRoles: []string{auth.RoleViewer, auth.RoleEditor, auth.RoleAdmin, auth.RoleOwner},
-		ScopeTrees:   []string{scopeTenant, scopeWorkspace, scopeAgentGroup, scopeFolder},
-		SubjectKinds: []string{subjectUser, subjectRole, subjectGroup},
+		Kinds:                  auth.ScopeableKinds(),
+		TreeKinds:              auth.TreeScopeableKinds(),
+		Permissions:            permStrings(perms),
+		Verbs:                  []string{auth.VerbRead, auth.VerbWrite, auth.VerbAdmin},
+		BuiltinRoles:           roles,
+		BuiltinRolePermissions: rolePerms,
+		ScopeTrees:             []string{scopeTenant, scopeWorkspace, scopeAgentGroup, scopeFolder},
+		SubjectKinds:           []string{subjectUser, subjectRole, subjectGroup},
 	})
 }
 

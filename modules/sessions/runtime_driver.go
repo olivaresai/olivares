@@ -216,6 +216,9 @@ type DriverSessionConfig struct {
 	OnLimit  func(kind string, resetsAt time.Time)
 	OnTurnOK func()
 
+	// OnTurnError is called when the tool ended a turn on an error that is no limit.
+	OnTurnError func()
+
 	// AuthorityCheck re-proves the launch's exact durable authority immediately
 	// before an answer crosses to the child. It is the driver's only way to ask
 	// "am I still the owner?", and the runtime answers with the store, not with
@@ -1009,7 +1012,13 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 				m.recordLimit(context.Background(), lr, limitReport{Kind: kind, ResetsAt: resetsAt})
 			})
 		},
-		OnTurnFailed: func(reason string, cancelled bool) { m.publishTurnFailed(lr, reason, cancelled) },
+		OnTurnFailed: func(reason string, cancelled bool) {
+			m.publishTurnFailed(lr, reason, cancelled)
+			m.deferDurable(lr, func() { m.recordTurnFailed(context.Background(), lr) })
+		},
+		OnTurnError: func() {
+			m.deferDurable(lr, func() { m.recordTurnFailed(context.Background(), lr) })
+		},
 		OnTurnOK: func() {
 			m.deferDurable(lr, func() { m.clearLimit(context.Background(), lr) })
 		},

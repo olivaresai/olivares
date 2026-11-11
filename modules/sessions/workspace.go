@@ -21,7 +21,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/core/model"
-	conversion "github.com/olivaresai/olivares/core/runtime/documents"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
@@ -460,16 +459,9 @@ func (m *Module) readFile(ctx context.Context, tenant model.TenantID, ref, rel, 
 	if err != nil {
 		return fileReadResponse{}, mapFSErr(err)
 	}
-	info, err := os.Stat(abs)
+	f, info, err := openRegularForRead(abs)
 	if err != nil {
-		return fileReadResponse{}, mapFSErr(err)
-	}
-	if info.IsDir() {
-		return fileReadResponse{}, badRequest("path is a directory (use list)")
-	}
-	f, err := os.Open(abs)
-	if err != nil {
-		return fileReadResponse{}, mapFSErr(err)
+		return fileReadResponse{}, err
 	}
 	defer func() { _ = f.Close() }()
 	cap := ws.maxReadBytes
@@ -566,7 +558,7 @@ func (m *Module) writeFile(ctx context.Context, tenant model.TenantID, ref, rel 
 // Binary uploads from My files request conversion. Text edits retain the
 // published raw-write behavior, including creating empty JSON or HTML files.
 func (m *Module) writeDocumentFile(ctx context.Context, tenant model.TenantID, ref, rel string, content []byte, actor, actorKind string) (writeResponse, error) {
-	if !conversion.Supports(rel) {
+	if !m.supportsDocument(rel) {
 		return m.writeWorkspaceFile(ctx, tenant, ref, rel, content, actor, actorKind, false)
 	}
 	// Resolve and authorize before giving bytes to a child.
@@ -583,6 +575,11 @@ func (m *Module) writeDocumentFile(ctx context.Context, tenant model.TenantID, r
 	md, err := m.documentMarkdown(ctx, rel, content)
 	if err != nil {
 		return writeResponse{}, badRequest(err.Error())
+	}
+	// Both files must fit, and the document is written first: a copy that cannot be written is
+	// refused before the document lands, so a refused upload leaves nothing behind.
+	if int64(len(md)) > ws.maxReadBytes {
+		return writeResponse{}, badRequest("the document's Markdown copy exceeds the workspace size limit")
 	}
 	result, err := m.writeWorkspaceFile(ctx, tenant, ref, rel, content, actor, actorKind, false)
 	if err != nil {

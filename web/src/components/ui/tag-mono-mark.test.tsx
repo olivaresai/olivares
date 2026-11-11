@@ -18,6 +18,9 @@ describe('Tag', () => {
     expect(tag).toHaveTextContent('Ready')
     expect(tag.className).toMatch(/\bbg-ok-soft\b/)
     expect(tag.className).toMatch(/\btext-ok\b/)
+    // A2: a status tag carries its word in bold, with no outline.
+    expect(tag).toHaveClass('h-[22px]', 'font-bold')
+    expect(tag).not.toHaveClass('border')
   })
 
   it('is neutral by default, and mono for identifiers', () => {
@@ -25,6 +28,20 @@ describe('Tag', () => {
     const tag = container.firstElementChild!
     expect(tag).toHaveAttribute('data-tone', 'neutral')
     expect(tag.className).toMatch(/\bfont-mono\b/)
+    expect(tag).toHaveClass('font-normal')
+  })
+
+  it('draws a neutral fact on the text tint at 12/500, with no outline', () => {
+    const { container } = render(<Tag>portal</Tag>)
+    const tag = container.firstElementChild!
+    expect(tag).toHaveClass(
+      'h-[22px]',
+      'bg-muted',
+      'text-overline',
+      'font-medium',
+      'text-text-2',
+    )
+    expect(tag).not.toHaveClass('border', 'bg-surface')
   })
 })
 
@@ -60,9 +77,9 @@ describe('MonoMark', () => {
     expect(claude).not.toHaveTextContent('CC')
     expect(claude.querySelector('svg path')).toHaveAttribute(
       'd',
-      expect.stringMatching(/^m4\.7144 15\.9555 /),
+      expect.stringMatching(/^M4\.709 15\.955/),
     )
-    // Simple Icons has no OpenAI mark: Codex keeps its letters on its color.
+    // Codex and Grok Build are drawn too (lobe-icons); only a vendor no set draws keeps letters.
     render(
       <MonoMark
         name="Codex"
@@ -73,9 +90,20 @@ describe('MonoMark', () => {
       />,
     )
     const codex = screen.getByRole('img', { name: 'Codex' })
-    expect(codex).not.toHaveAttribute('data-vendor')
-    expect(codex).toHaveTextContent('CX')
-    expect(codex.querySelector('svg')).toBeNull()
+    expect(codex).toHaveAttribute('data-vendor', 'openai')
+    expect(codex).not.toHaveTextContent('CX')
+    render(<MonoMark name="Grok Build" letters="GB" vendor="xai" labelled />)
+    expect(screen.getByRole('img', { name: 'Grok Build' })).toHaveAttribute(
+      'data-vendor',
+      'grok',
+    )
+    render(
+      <MonoMark name="Telescope" letters="TS" vendor="telescope" labelled />,
+    )
+    const letters = screen.getByRole('img', { name: 'Telescope' })
+    expect(letters).not.toHaveAttribute('data-vendor')
+    expect(letters).toHaveTextContent('TS')
+    expect(letters.querySelector('svg')).toBeNull()
   })
 
   it('carries the account hue as a dot that never stands alone', () => {

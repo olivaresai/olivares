@@ -23,7 +23,7 @@ export type Inline =
 export type Block =
   | { kind: 'paragraph'; inline: Inline[] }
   | { kind: 'heading'; level: number; inline: Inline[] }
-  | { kind: 'code'; text: string }
+  | { kind: 'code'; text: string; lang?: string }
   | { kind: 'quote'; blocks: Block[] }
   | { kind: 'list'; ordered: boolean; start: number; items: Block[][] }
   | { kind: 'table'; head: Inline[][]; rows: Inline[][][] }
@@ -492,7 +492,13 @@ function parseBlocks(
       while (i < lines.length && !closesFence(lines[i]!, fence[1]!))
         body.push(raw[i++]!)
       i++ // the closing fence; a block still streaming runs to the end
-      blocks.push({ kind: 'code', text: body.join('\n') })
+      // The fence's language, when it names one: a shell block can run in a terminal.
+      const lang = fence[2]
+      blocks.push({
+        kind: 'code',
+        text: body.join('\n'),
+        ...(lang ? { lang: lang.toLowerCase() } : {}),
+      })
       continue
     }
     const heading = HEADING.exec(line)
@@ -640,4 +646,21 @@ export function pathRef(text: string): { path: string; line?: number } | null {
   const path = line === undefined ? text : text.slice(0, text.lastIndexOf(':'))
   if (!path.includes('/') && !EXTENSION.test(path)) return null
   return line === undefined ? { path } : { path, line }
+}
+
+/** A path read against the session's folder: whole, and relative to it when it is inside. */
+export function pathInFolder(root: string, path: string) {
+  const base = root.replace(/\/+$/, '')
+  const bare = path.replace(/\/+$/, '')
+  const full = bare.startsWith('/')
+    ? bare
+    : `${base}/${bare.replace(/^\.\//, '')}`
+  const inside = full.startsWith(`${base}/`)
+  return {
+    base,
+    bare,
+    full,
+    inside,
+    relative: inside ? full.slice(base.length + 1) : full,
+  }
 }

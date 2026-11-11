@@ -85,6 +85,14 @@ var corePermissions = map[string]string{
 	"deleteUserSessions": "user:write",
 	"grantMembership":    "membership:write",
 
+	// Business seams: groups of the operator's own and member suspension (handlers_groups.go, handlers_members.go).
+	"createGroup":       "membership:write",
+	"deleteGroup":       "membership:write",
+	"addGroupMember":    "membership:write",
+	"removeGroupMember": "membership:write",
+	"suspendMember":     "user:write",
+	"reactivateMember":  "user:write",
+
 	// Tokens (handlers_core.go; tenant path, see the doc comment above).
 	"listTokens":  "token:read",
 	"issueToken":  "token:write",

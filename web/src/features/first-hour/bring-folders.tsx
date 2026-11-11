@@ -15,6 +15,13 @@ import { StaticTable } from '@/components/data/static-table'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { PathText } from '@/components/ui/path-text'
 import { Spinner } from '@/components/ui/spinner'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
@@ -39,17 +46,8 @@ interface Outcome {
   reason: string | null
 }
 
-/** The folders offered, the person's picks, and the closing line. `onSkip` leaves the
- * step without registering anything. `titled: false` when the caller (a dialog) already
- * shows the title and what this is. */
-export function BringFolders({
-  onSkip,
-  titled = true,
-}: {
-  onSkip?: () => void
-  titled?: boolean
-}) {
-  const { t } = useTranslation('firstHour')
+/** What the person's tools already worked in, read by the engine. */
+function useFolderCandidates(enabled = true) {
   const boundary = useAuthBoundary()
   const candidatesKey = [
     ...agentOpsKeys.boundaryScope(boundary.tenant, boundary.epoch),
@@ -59,8 +57,16 @@ export function BringFolders({
     queryKey: candidatesKey,
     queryFn: ({ signal }) =>
       agentOpsApi.listFolderCandidates({ tenant: boundary.tenant, signal }),
-    enabled: !!boundary.tenant,
+    enabled: enabled && !!boundary.tenant,
   })
+  return { boundary, candidatesKey, query }
+}
+
+/** The folders offered, the person's picks, and the closing line, inside a dialog that
+ * shows the title and what this is. `onSkip` leaves without registering anything. */
+export function BringFolders({ onSkip }: { onSkip?: () => void }) {
+  const { t } = useTranslation('firstHour')
+  const { boundary, candidatesKey, query } = useFolderCandidates()
   const folders = query.data?.folders ?? []
   // Until the person picks, the selection is what the engine preselected.
   const [picked, setPicked] = useState<ReadonlySet<string> | null>(null)
@@ -91,11 +97,13 @@ export function BringFolders({
           await ensureFolder(path, { tenant: boundary.tenant, ...authority })
           settled.current.set(path, null)
         } catch (err) {
-          // A missing step-up or right is the privileged mutation's to report, and a
-          // retry resumes where this one stopped. Any other refusal is this folder's.
+          // A missing step-up, right or edition is the privileged mutation's to report,
+          // and a retry resumes where this one stopped. Any other refusal is this folder's.
           if (
             err instanceof ApiError &&
-            (err.isStepUpRequired || err.isForbidden || err.isUnauthenticated)
+            (err.isStepUpRequired ||
+              err.isForbiddenOrEdition ||
+              err.isUnauthenticated)
           )
             throw err
           settled.current.set(path, failureText(err) ?? t('bring.failed'))
@@ -152,14 +160,6 @@ export function BringFolders({
       aria-label={t('bring.title')}
       role="group"
     >
-      {titled && (
-        <div>
-          <h3 className="text-body font-semibold text-text">
-            {t('bring.title')}
-          </h3>
-          <p className="text-body text-text-2">{t('bring.body')}</p>
-        </div>
-      )}
       {unreadable.map((tool) => (
         <p key={tool.tool} role="status" className="text-body text-text-2">
           {t('bring.unreadable', { tool: tool.name })}
@@ -252,9 +252,11 @@ const toolLabel = (
 
 const SKIPPED_KEY = 'olivares.bring-folders.skipped'
 
-/** The wizard's offer. It is shown to a person who may register folders until they skip
- * it on this browser; the folders page offers it again whenever they want. */
+/** The first-run offer: one line, the list behind Review. It is shown to a person who
+ * may register folders until they skip it on this browser; the folders page offers it
+ * again whenever they want. */
 export function BringFoldersStep() {
+  const { t } = useTranslation('firstHour')
   const { can } = useAuth()
   const [skipped, setSkipped] = useState<boolean>(() => {
     try {
@@ -263,17 +265,50 @@ export function BringFoldersStep() {
       return false
     }
   })
-  if (skipped || !can('sessions:workspace:admin')) return null
+  const [open, setOpen] = useState(false)
+  const offered = !skipped && can('sessions:workspace:admin')
+  const { query } = useFolderCandidates(offered)
+  const count = (query.data?.folders ?? []).filter((f) => !f.skip).length
+  if (!offered) return null
+  // A read that failed says so, with Retry: never nothing, never the offer's words. An
+  // open list says its own failure inside the dialog.
+  if (query.isError && !open)
+    return (
+      <QueryErrorState
+        error={query.error}
+        retry={() => void query.refetch()}
+        title={t('bring.error')}
+      />
+    )
+  // Open stays open: the list is read again after an import, and its result is on screen.
+  if (count === 0 && !open) return null
   return (
-    <BringFolders
-      onSkip={() => {
-        try {
-          preferenceStorage.setItem(SKIPPED_KEY, 'true')
-        } catch {
-          // localStorage unavailable: the choice still holds for this visit
-        }
-        setSkipped(true)
-      }}
-    />
+    <>
+      <p className="text-body text-text-2">
+        {t('bring.offer', { count })}{' '}
+        <Button variant="link" onClick={() => setOpen(true)}>
+          {t('bring.review')}
+        </Button>
+      </p>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{t('bring.title')}</DialogTitle>
+            <DialogDescription>{t('bring.body')}</DialogDescription>
+          </DialogHeader>
+          <BringFolders
+            onSkip={() => {
+              try {
+                preferenceStorage.setItem(SKIPPED_KEY, 'true')
+              } catch {
+                // localStorage unavailable: the choice still holds for this visit
+              }
+              setOpen(false)
+              setSkipped(true)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

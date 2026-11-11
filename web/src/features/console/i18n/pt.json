@@ -4,7 +4,6 @@
   "tabs": {
     "people": "Pessoas",
     "agents": "Agentes",
-    "sso": "Fornecedor de identidade",
     "scopes": "Espaços de trabalho",
     "roles": "Funções",
     "secrets": "Segredos",
@@ -116,7 +115,7 @@
   "people": {
     "title": "Utilizadores",
     "caption": "Adicione uma pessoa a esta organização, com uma palavra-passe que defina ou um convite por email.",
-    "onboard": "Integrar utilizador",
+    "onboard": "Convidar",
     "pendingTitle": "Convites pendentes",
     "pendingCaption": "Convites a aguardar aceitação. A ligação de utilização única define a palavra-passe e ativa a conta.",
     "noInvites": "Sem convites pendentes.",
@@ -131,6 +130,9 @@
     "resend": "Reenviar",
     "resent": "Convite enviado novamente.",
     "resendFailed": "Não foi possível entregar o convite.",
+    "newLink": "Nova ligação",
+    "newLinkTitle": "Nova ligação de convite",
+    "newLinkNote": "A ligação criada antes deixou de funcionar.",
     "inviteFirst": "Convidar o primeiro utilizador"
   },
   "members": {
@@ -143,10 +145,30 @@
     "groups": "Grupos",
     "status": "Estado",
     "action": "Ação",
-    "ssoOnly": "Apenas SSO",
+    "ssoOnly": "Início de sessão único",
+    "signIn": "Início de sessão",
+    "password": "Palavra-passe",
     "externalManagedNotice": "As contas aprovisionadas por um IdP podem ser repostas pelo fornecedor de identidade após uma ativação ou desativação local.",
     "idpManagedConfirm": "Esta conta é aprovisionada por um IdP. O IdP pode repor o estado ativo na próxima sincronização.",
     "noGroups": "Sem grupos",
+    "roleOf": "Função de {{email}}",
+    "roleChanged": "Função alterada para {{email}}.",
+    "ownRoleReason": "Esta é a sua própria função. Outro administrador ou um proprietário pode alterá-la.",
+    "ownRoleReasonOwner": "Esta é a sua própria função. Outro proprietário pode alterá-la.",
+    "lastOwnerReason": "O único proprietário de toda a organização mantém esta função. Torne primeiro outra pessoa proprietária.",
+    "confinedRoleReason": "Esta pessoa trabalha num espaço de trabalho, pelo que a sua função ainda não pode ser alterada aqui.",
+    "roleChangeTitle": "Alterar a função de {{name}} de {{from}} para {{to}}?",
+    "roleChangeConfirm": "Alterar função",
+    "roleGains": {
+      "owner": "Um proprietário pode fazer tudo o que um administrador faz, e alterar ou remover outros proprietários.",
+      "admin": "Um administrador pode adicionar e remover pessoas, alterar as suas funções e alterar as definições desta organização.",
+      "editor": "Um editor pode iniciar sessões e trabalhar com ferramentas e pastas."
+    },
+    "roleLoses": {
+      "admin": "Deixa de poder alterar ou remover proprietários.",
+      "editor": "Deixa de poder gerir pessoas e as definições desta organização.",
+      "viewer": "Deixa de poder iniciar sessões ou alterar o que quer que seja."
+    },
     "disable": "Remover",
     "disableTitle": "Remover da organização",
     "disableBody": "{{email}} será removido desta organização: a respetiva adesão, linhas de grupo, tokens e sessões aqui. A conta em si e as suas outras organizações não são alteradas.",
@@ -156,7 +178,8 @@
     "statuses": {
       "active": "Ativo",
       "inactive": "Inativo",
-      "error": "Erro"
+      "error": "Erro",
+      "suspended": "Suspenso"
     },
     "roles": {
       "viewer": "Leitor",
@@ -172,7 +195,25 @@
     "endSessions": "Terminar sessões",
     "endSessionsFor": "Terminar as sessões de {{email}}?",
     "endSessionsBody": "Todas as sessões ativas de {{email}} deixarão de funcionar nesta organização. As suas sessões noutras organizações, os tokens de API e a conta não são alterados.",
-    "sessionsEnded": "Acesso a esta organização terminado"
+    "sessionsEnded": "Acesso a esta organização terminado",
+    "search": "Pesquisar pessoas",
+    "filterLabel": "Filtrar por estado",
+    "filterAll": "Todos os estados",
+    "noMatch": "Ninguém corresponde",
+    "noMatchHint": "Altere a pesquisa ou o filtro de estado.",
+    "bulkLabel": "Ações para as pessoas selecionadas",
+    "selected": "Selecionadas: {{n}}",
+    "selectAll": "Selecionar todas as pessoas mostradas",
+    "selectRow": "Selecionar {{email}}",
+    "suspend": "Suspender",
+    "reactivate": "Reativar",
+    "suspendTitle": "Suspender o acesso",
+    "suspendBody": "{{email}} deixa de poder iniciar sessão ou usar tokens de API nesta organização, de imediato. A função e os grupos mantêm-se e pode reativar o acesso quando quiser.",
+    "suspendBodyMany": "{{n}} pessoas deixam de poder iniciar sessão ou usar tokens de API nesta organização, de imediato. As funções e os grupos mantêm-se e pode reativar o acesso quando quiser.",
+    "suspendFor": "Suspender {{email}}",
+    "reactivateFor": "Reativar {{email}}",
+    "suspendedToast": "Suspensas: {{n}}",
+    "reactivatedToast": "Reativadas: {{n}}"
   },
   "superadmins": {
     "title": "Administradores da instalação",
@@ -190,7 +231,7 @@
     "disableBody": "A sessão de {{email}} será terminada e as suas sessões e tokens de API revogados. A conta não é eliminada e pode ser reativada. Tem de permanecer outro superadministrador ativo."
   },
   "onboard": {
-    "title": "Integrar utilizador",
+    "title": "Convidar uma pessoa",
     "body": "Crie uma conta nesta organização. A função que atribuir nunca pode ser superior à sua.",
     "displayName": "Nome de apresentação",
     "displayNameHint": "Uma designação legível mostrada na consola.",
@@ -199,14 +240,20 @@
     "mode": "Como iniciam sessão",
     "modePassword": "Definir uma palavra-passe inicial",
     "modeInvite": "Enviar um convite por email",
-    "inviteUnavailable": "Este servidor não consegue enviar convites por email, pelo que deve definir uma palavra-passe inicial.",
+    "modeLink": "Criar uma ligação de convite",
+    "inviteUnavailable": "Este servidor não consegue enviar email, pelo que envia a ligação pessoalmente.",
     "password": "Palavra-passe inicial",
     "passwordHint": "Pelo menos 8 caracteres. O utilizador pode alterá-la mais tarde.",
-    "submit": "Integrar",
+    "submit": "Adicionar pessoa",
+    "submitInvite": "Criar convite",
     "created": "Utilizador integrado.",
     "inviteCreatedTitle": "Convite criado",
     "inviteSentBody": "Foi enviado um convite para {{email}}. A ligação segue apenas para esse endereço; se não chegar, reenvie-a a partir da lista de convites.",
     "inviteFailedBody": "O convite para {{email}} foi criado, mas não foi possível entregar o email. Reenvie-o a partir da lista de convites.",
+    "inviteLinkFor": "O convite para {{email}}.",
+    "inviteLinkLabel": "Ligação de convite",
+    "inviteLinkBody": "Envie-lhe esta ligação. Expira a {{date}} e só funciona uma vez. Serve para escolher a própria palavra-passe.",
+    "copyLink": "Copiar ligação",
     "consentRequiredTitle": "Consentimento necessário",
     "consentRequiredBody": "{{email}} já tem uma conta. Nada foi alterado: a conta só se junta a esta organização se o respetivo titular consentir.",
     "consentRequiredToast": "Consentimento necessário: nada foi alterado.",
@@ -313,7 +360,7 @@
       "sessions": "O segredo é removido do cofre. Uma sessão que o receba continua a ser executada, mas não pode ser retomada, e um modelo que o nomeie não pode ser iniciado, até o recriar."
     },
     "sessionCaption": "Segredos que uma sessão pode receber como variáveis de ambiente. Os nomes começam por env/. Um valor nunca volta a ser mostrado.",
-    "credentialCaption": "Credenciais geridas que uma sessão pode usar através dos auxiliares do motor (Business). Os nomes começam por credential/. Um valor nunca volta a ser mostrado.",
+    "credentialCaption": "Credenciais geridas que uma sessão pode usar através dos auxiliares do motor (Olivares AI Business). Os nomes começam por credential/. Um valor nunca volta a ser mostrado.",
     "colValue": "Valor",
     "colChanged": "Última alteração",
     "colReference": "Referência",
@@ -939,7 +986,7 @@
   "activation": {
     "title": "Ativação do Business",
     "caption": "Ative os módulos que a sua edição inclui. Os controlos com uma predefinição segura são ativados; os controlos que precisam de um segredo ou de uma revisão de política ficam em preparação para que os preencha e promova.",
-    "unavailable": "A ativação está disponível na edição Business.",
+    "unavailable": "A ativação está disponível na edição Olivares AI Business.",
     "enablePreset": "Ativar uma predefinição",
     "addon": "Módulo",
     "state": "Estado",
@@ -1185,7 +1232,7 @@
   "mcpGateway": {
     "title": "Gateway MCP",
     "caption": "Gira os servidores a montante e as ferramentas de sessão desta organização. Os testes de ligação descobrem ferramentas; a execução exige uma política explícita.",
-    "add": "Adicionar servidor",
+    "add": "Adicionar servidor MCP",
     "configure": "Configurar",
     "test": "Testar ligação",
     "enable": "Ativar",
@@ -1308,7 +1355,7 @@
     "command": "Comando",
     "commandHint": "O programa que inicia o servidor nesta máquina, por exemplo npx. É executado com cada sessão, na pasta da sessão.",
     "args": "Argumentos",
-    "argsHint": "Um por linha, por exemplo -y e @modelcontextprotocol/server-everything.",
+    "argsHint": "Um por linha, por exemplo -y e @modelcontextprotocol/server-everything. Não serve para segredos.",
     "env": "Ambiente",
     "envHint": "Um por linha: NAME=value. Não serve para segredos.",
     "envSecrets": "Ambiente secreto",
@@ -1347,6 +1394,8 @@
     "egressHosts": "Anfitriões permitidos",
     "egressHostsHint": "O comando só acede a estes anfitriões HTTPS, um por linha: host ou host:port. Deixe vazio para manter a rede da sessão.",
     "egressHostsInvalid": "Escreva cada anfitrião como host ou host:port, em minúsculas e sem https://, no máximo 16.",
+    "inSessionFolder": "Na pasta da sessão",
+    "reachesOnly": "Só acede a {{hosts}}",
     "starters": {
       "filesystem": {
         "summary": "Lê e escreve ficheiros na pasta da sessão.",

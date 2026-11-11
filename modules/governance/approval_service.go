@@ -6,7 +6,11 @@ package governance
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -64,6 +68,7 @@ func (a *EngineApprovals) Request(ctx context.Context, tenant model.TenantID, pr
 	if principal.SessionIdentity != "" && in.LaunchedBy == "" {
 		in.LaunchedBy = sessionLauncher(principal)
 	}
+	in.SessionAllowanceKey = boundSessionAllowanceKey(principal, in)
 	if err := normalizeApprovalRequest(&in); err != nil {
 		return Approval{}, err
 	}
@@ -356,9 +361,8 @@ func (a *EngineApprovals) ReviewPolicy(ctx context.Context, tenant model.TenantI
 	return policyRef, err
 }
 
-// Cancel lets a resolved session withdraw its own pending request. It shares
-// REST's audited transition; a terminal request returns its unchanged verdict
-// and a conflict error. The launching human's administrator role is not used.
+// Cancel withdraws a pending request or revokes a session allowance through
+// REST's audited transition. Other terminal decisions remain unchanged.
 func (a *EngineApprovals) Cancel(ctx context.Context, tenant model.TenantID, principal auth.Principal, ref string) (Approval, error) {
 	ctx = api.DetachRequestContext(ctx)
 	d, mc, err := a.scope(tenant)
@@ -370,4 +374,109 @@ func (a *EngineApprovals) Cancel(ctx context.Context, tenant model.TenantID, pri
 	}
 	mc.Principal = principal
 	return a.module.cancelApproval(ctx, d, mc, model.ID(ref))
+}
+
+// ReuseSessionAllowance spends a session decision for another identical effect.
+// The engine supplies a digest of the effective input and process fence, never a
+// caller-selected rule. The original decision and every use remain in the ledger.
+func (a *EngineApprovals) ReuseSessionAllowance(ctx context.Context, tenant model.TenantID, principal auth.Principal, in ApprovalRequest, consumer string) (string, error) {
+	if !in.SessionScopeAllowed || in.SessionAllowanceKey == "" || in.Review == nil {
+		return "", nil
+	}
+	if principal.SessionIdentity == "" || principal.SessionIdentity != in.SessionRef || principal.SessionScope() != tenant {
+		return "", auth.ErrUnauthenticated
+	}
+	in.SessionAllowanceKey = boundSessionAllowanceKey(principal, in)
+	in.LaunchedBy = sessionLauncher(principal)
+	ctx = api.DetachRequestContext(ctx)
+	data, _, err := a.scope(tenant)
+	if err != nil {
+		return "", err
+	}
+	var ref string
+	err = data.Mutate(ctx, func(sc store.Scope) error {
+		policies, err := a.module.approvalPolicies(ctx, sc, auth.PersonRefFromActor(in.LaunchedBy).User)
+		if err != nil {
+			return err
+		}
+		for _, policy := range policies {
+			if _, err := parseApprovalSpec(policy.Spec); err != nil {
+				return errors.New("approval policy is unreadable")
+			}
+		}
+		if policy, _, _ := matchApprovalSpec(policies, in.Action, in.SubjectKind, ""); policy != "" {
+			return nil
+		}
+		repo, err := sc.Ext(approvalKind)
+		if err != nil {
+			return err
+		}
+		rows, err := listAll(ctx, repo, eq(colApprovalSessionRef, in.SessionRef), eq(colAction, in.Action), eq(colStatus, statusApproved))
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if !row.Bool(colSessionScopeAllowed) || row.String(colSubjectKind) != in.SubjectKind {
+				continue
+			}
+			var review approvalReviewRecord
+			if err := json.Unmarshal([]byte(row.String(colApprovalReview)), &review); err != nil {
+				return err
+			}
+			if review.SessionAllowanceKey != in.SessionAllowanceKey {
+				continue
+			}
+			allowed, err := sessionDecisionsAllow(ctx, sc, model.ID(row.String(model.ColID)))
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				continue
+			}
+			if approvalGrantStatus(row, a.module.clock.Now(), liveRiskTier(policies, row)) != statusApproved {
+				continue
+			}
+			// Serialize this use with revocation under the repository's existing
+			// version check. A concurrent cancellation refuses this use.
+			if _, err := repo.Update(ctx, row); err != nil {
+				return err
+			}
+			ev, err := sc.Audit().Append(ctx, model.AuditDraft{Actor: "session:" + in.SessionRef, ActorKind: model.ActorAgent, Action: "governance.approval.session.use", TargetKind: approvalKind, TargetID: model.ID(row.String(model.ColID)), Meta: map[string]any{"scope": "session", "consumer_id": consumer, "subject_ref": in.SubjectRef}})
+			if err != nil {
+				return err
+			}
+			if ev.Seq == 0 {
+				return errors.New("session allowance audit unavailable")
+			}
+			ref = row.String(model.ColID)
+			return nil
+		}
+		return nil
+	})
+	return ref, err
+}
+
+func sessionDecisionsAllow(ctx context.Context, sc store.Scope, id model.ID) (bool, error) {
+	repo, err := sc.Ext(decisionKind)
+	if err != nil {
+		return false, err
+	}
+	rows, err := listAll(ctx, repo, eq(colApprovalID, id.String()))
+	if err != nil || len(rows) == 0 {
+		return false, err
+	}
+	for _, row := range rows {
+		if row.String(colDecision) != decisionApprove || row.String(colDecisionScope) != "session" {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func boundSessionAllowanceKey(principal auth.Principal, in ApprovalRequest) string {
+	if in.SessionAllowanceKey == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(fmt.Sprintf("%s:%v:%s", in.SessionRef, principal.SessionFence, in.SessionAllowanceKey)))
+	return hex.EncodeToString(digest[:])
 }

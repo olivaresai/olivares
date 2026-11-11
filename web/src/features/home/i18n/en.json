@@ -10,6 +10,37 @@
     "unavailableDescription": "The sessions read did not answer. The estate figures above are unaffected.",
     "untitled": "Untitled session"
   },
+  "accounts": {
+    "title": "Your accounts",
+    "loading": "Reading your accounts…",
+    "none": "You have no account of your own for {{tool}} yet. Sessions you start work with your own account, and nobody else can use it.",
+    "create": "Create my account",
+    "createFailed": "Your account could not be created.",
+    "createExists": "You already have an account of your own for {{tool}}, so another cannot be made. Ask an administrator if you cannot use it.",
+    "createForbidden": "Your role does not let you create an account of your own. Ask an administrator.",
+    "createNotAssigned": "{{tool}} is not assigned to you, so an account of your own cannot be made for it. Ask a department administrator.",
+    "createUnavailable": "Accounts of your own are not available on this server.",
+    "signInWaits": "Not signed in. Signing in to your own account is not available on this server yet.",
+    "signedIn": "Signed in as {{identity}}",
+    "disabled": "Turned off by an administrator.",
+    "retired": "Retired. Ask an administrator for an account you can use: a new one of your own cannot be made yet.",
+    "limit": "{{label}}: {{percent}}% used",
+    "unavailableTitle": "Your accounts could not be read",
+    "unavailableDescription": "Whether you have an account of your own is not known until they are read."
+  },
+  "folders": {
+    "title": "Your folders",
+    "start": "Start",
+    "startIn": "Start in {{folder}}",
+    "canWork": "Can work",
+    "readOnly": "Read only",
+    "showAll": "Show all folders ({{total}})",
+    "loading": "Loading your folders",
+    "emptyTitle": "You have no folders yet",
+    "emptyDescription": "When your administrator gives you access to a folder, it will show here.",
+    "unavailableTitle": "Couldn’t load your folders",
+    "unavailableDescription": "Your sessions below are not affected."
+  },
   "empty": {
     "title": "Nothing to show yet",
     "description": "Your role doesn't grant read access to any estate module. Ask an administrator for a read grant to see the overview."

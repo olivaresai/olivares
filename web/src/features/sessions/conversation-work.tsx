@@ -20,7 +20,9 @@ import {
 import {
   Fragment,
   memo,
+  useEffect,
   useId,
+  useRef,
   useState,
   type MouseEvent,
   type ReactNode,
@@ -29,7 +31,13 @@ import type { TFunction } from 'i18next'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { PathText } from '@/components/ui/path-text'
-import { formatDuration, formatInt } from '@/lib/format'
+import { StatusDot } from '@/components/ui/status-chip'
+import {
+  formatDateTime,
+  formatDuration,
+  formatInt,
+  formatTimeOfDay,
+} from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { ConversationItem } from './conversation-frames'
 import { MarkdownText } from './markdown-text'
@@ -369,7 +377,7 @@ function WorkRowView({
             className="size-3.5 shrink-0 transition-transform group-open/work:rotate-90 motion-reduce:transition-none"
           />
         </summary>
-        <ol className="flex flex-col pb-1">
+        <ol className="mb-1 flex flex-col rounded-card bg-muted p-1">
           {items.map((item) => (
             <CallRow
               key={item.id}
@@ -420,8 +428,9 @@ function turnCostText(usd: number): string {
  * A FINISHED TURN IS ONE LINE after its answer: what the agent did and how long, "Ran 2
  * commands, edited 1 file · 43s", or "Answered · 8s" when no tool ran. A turn that did not
  * simply finish (failed, interrupted, cancelled, at a limit) says so on that line. Open, it
- * holds the turn's calls, the model, the tokens, the cost and Inspect; a failed result's
- * text, which is the failure, stays under it.
+ * holds the turn's calls, the model, the tokens, the cost (only where the Usage place
+ * opens for the person: a member sees no money) and Inspect; a failed result's text, which
+ * is the failure, stays under it.
  */
 function TurnRowView({
   item,
@@ -432,6 +441,7 @@ function TurnRowView({
   onInspect,
   onFork,
   modelName,
+  tellsCost,
   live,
 }: {
   item: ConversationItem
@@ -442,12 +452,30 @@ function TurnRowView({
   onInspect?: (item: ConversationItem) => void
   onFork?: (end: string) => void
   modelName: (id: string) => string
+  tellsCost: boolean
   live: boolean
 }) {
   const { t } = useTranslation('sessions')
   const [open, setOpen] = useState(false)
   const id = useId()
+  const { i18n } = useTranslation()
+  // FOLDED, NOT GONE: the browser's own find still reaches the calls (hidden until found)
+  // and a match opens the turn. React writes `hidden` as a plain boolean, so the value is
+  // set here. Hidden until found keeps an empty box, so it has no padding while folded.
+  const panel = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = panel.current
+    if (!el || open) return
+    el.setAttribute('hidden', 'until-found')
+    const reveal = () => setOpen(true)
+    el.addEventListener('beforematch', reveal)
+    return () => el.removeEventListener('beforematch', reveal)
+  }, [open])
   const calls = items.length > 0 ? workWords(t, items) : null
+  // A turn that only answered says WHEN, not how many milliseconds the engine took: the
+  // timing is in its details. A turn that worked says what it did and for how long.
+  const plain =
+    !calls && !item.interrupted && !item.resultFailed && !item.stopReason
   const words = [
     calls?.done ? capitalized(calls.done) : null,
     calls?.failed ? <span className="text-danger">{calls.failed}</span> : null,
@@ -457,10 +485,9 @@ function TurnRowView({
         ? t('conversation.toolFailed')
         : item.stopReason
           ? stopText(t, item.stopReason)
-          : calls
-            ? null
-            : t('conversation.answered'),
+          : null,
   ].filter(Boolean)
+  const at = item.at ? Date.parse(item.at) : Number.NaN
   const work = (
     <span>
       {words.map((word, i) => (
@@ -472,6 +499,9 @@ function TurnRowView({
     </span>
   )
   const facts = [
+    plain && item.durationMs !== undefined
+      ? formatDuration(item.durationMs)
+      : null,
     item.model ? modelName(item.model) : null,
     item.inputTokens !== undefined || item.outputTokens !== undefined
       ? t('conversation.tokens', {
@@ -479,57 +509,84 @@ function TurnRowView({
           output: formatInt(item.outputTokens ?? 0),
         })
       : null,
-    item.costUsd !== undefined ? turnCostText(item.costUsd) : null,
+    tellsCost && item.costUsd !== undefined ? turnCostText(item.costUsd) : null,
   ].filter(Boolean)
   return (
     <li>
-      {onFork ? (
-        <Button variant="ghost" size="sm" onClick={() => onFork(item.id)}>
-          <GitFork className="size-3.5" aria-hidden />
-          {t('context.fork')}
-        </Button>
-      ) : null}
       <div
         data-testid="conversation-item"
         data-item-id={item.id}
         data-kind="result"
-        className={cn('rounded-ctl', selectedId === item.id && 'bg-active')}
+        className={cn(
+          'group/turn rounded-ctl',
+          selectedId === item.id && 'bg-active',
+        )}
       >
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => setOpen((value) => !value)}
-          className={cn(
-            'flex min-h-8 w-full items-center gap-2 rounded-ctl px-2 py-1 text-left',
-            'text-caption text-text-3 outline-none hover:bg-hover hover:text-text-2',
-            'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
-            item.resultFailed && 'font-medium text-danger',
-          )}
-        >
-          <span className="min-w-0 truncate tabular-nums" title={item.model}>
-            {item.durationMs === undefined ? (
-              work
-            ) : (
-              <Trans
-                t={t}
-                i18nKey="conversation.turnLine"
-                values={{ duration: formatDuration(item.durationMs) }}
-                components={{ work }}
-              />
-            )}
-          </span>
-          <ChevronRight
-            aria-hidden
+        <div className="flex items-center">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={id}
+            onClick={() => setOpen((value) => !value)}
             className={cn(
-              'size-3.5 shrink-0 transition-transform motion-reduce:transition-none',
-              open && 'rotate-90',
+              'flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-ctl px-2 py-1 text-left',
+              'text-caption text-text-3 outline-none hover:bg-hover hover:text-text-2',
+              'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
+              item.resultFailed && 'font-medium text-danger',
+              // THE WORK OF A TURN CLOSES WITH A HAIRLINE EITHER SIDE; a plain answer has none.
+              !plain &&
+                !item.resultFailed &&
+                'justify-center before:h-px before:flex-1 before:bg-line after:h-px after:flex-1 after:bg-line',
             )}
-          />
-        </button>
-        <div id={id} hidden={!open} className="pb-1">
+          >
+            <span className="min-w-0 truncate tabular-nums" title={item.model}>
+              {plain ? (
+                Number.isNaN(at) ? (
+                  t('conversation.answered')
+                ) : (
+                  <time
+                    dateTime={item.at}
+                    title={formatDateTime(item.at, i18n.language)}
+                  >
+                    {formatTimeOfDay(at, i18n.language)}
+                  </time>
+                )
+              ) : item.durationMs === undefined ? (
+                work
+              ) : (
+                <Trans
+                  t={t}
+                  i18nKey="conversation.turnLine"
+                  values={{ duration: formatDuration(item.durationMs) }}
+                  components={{ work }}
+                />
+              )}
+            </span>
+            <ChevronRight
+              aria-hidden
+              className={cn(
+                'size-3.5 shrink-0 transition-transform motion-reduce:transition-none',
+                open && 'rotate-90',
+              )}
+            />
+          </button>
+          {/* THE ONE BRANCH ACTION of a finished turn: an icon, shown on hover or focus. */}
+          {onFork ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('context.fork')}
+              title={t('context.fork')}
+              className="opacity-0 transition-opacity group-focus-within/turn:opacity-100 group-hover/turn:opacity-100 pointer-coarse:opacity-100"
+              onClick={() => onFork(item.id)}
+            >
+              <GitFork aria-hidden />
+            </Button>
+          ) : null}
+        </div>
+        <div ref={panel} id={id} hidden={!open} className={cn(open && 'pb-1')}>
           {items.length > 0 ? (
-            <ol className="flex flex-col">
+            <ol className="flex flex-col rounded-card bg-muted p-1">
               {items.map((call) => (
                 <CallRow
                   key={call.id}
@@ -581,6 +638,7 @@ function LiveLine({
       aria-live="off"
       className="flex min-w-0 flex-1 items-center gap-2 text-text-2"
     >
+      <StatusDot tone="ok" />
       <span className="min-w-0 truncate tabular-nums">
         {liveWords(t, running, now)}
       </span>
@@ -590,6 +648,38 @@ function LiveLine({
         </span>
       ) : null}
     </span>
+  )
+}
+
+/** The line of a turn that works with no call running: the model thinking or writing.
+ * `since` is the sent message's time, absent while the tool has not shown it yet. */
+export function WorkingLine({
+  since,
+  canInterrupt,
+}: {
+  since?: string
+  canInterrupt: boolean
+}) {
+  const { t } = useTranslation('sessions')
+  const now = useNow(true)
+  const elapsed = since ? now - Date.parse(since) : Number.NaN
+  return (
+    <p
+      data-testid="conversation-working"
+      aria-live="off"
+      className="flex min-h-8 items-center gap-2 px-2 py-1 text-caption text-text-2"
+    >
+      <StatusDot tone="ok" />
+      <span className="min-w-0 truncate tabular-nums">
+        {t('conversation.working')}
+        {elapsed >= 1000 ? ` · ${formatDuration(elapsed)}` : ''}
+      </span>
+      {canInterrupt ? (
+        <span className="ms-auto shrink-0 text-text-3">
+          {t('conversation.escToInterrupt')}
+        </span>
+      ) : null}
+    </p>
   )
 }
 
@@ -759,12 +849,13 @@ function ToolGlyph({ item }: { item: ConversationItem }) {
   }
 }
 
-/** The first lines of an edit's diff, each marked added, removed or unchanged. */
+/** The first lines of an edit's diff, each marked added, removed or unchanged. Its tool's
+ * row above names the file and its +N −M, so the excerpt is the lines only. */
 function DiffExcerpt({ lines }: { lines: string[] }) {
   return (
     <div
       data-testid="conversation-diff"
-      className="mx-2 mb-1 ms-8 overflow-hidden rounded-ctl border border-line font-mono text-caption"
+      className="mx-2 mb-1 ms-8 overflow-hidden rounded-ctl bg-[var(--well)] font-mono text-mono shadow-[var(--shadow-well)]"
     >
       {lines.map((line, i) => (
         <div
@@ -809,6 +900,24 @@ function ToolRow({
   const target = item.toolArgsSummary || item.toolCommand
   // A failed edit changed nothing: its diff is not shown as if it had.
   const diff = item.toolFailed ? undefined : item.toolDiff
+  const category = categoryOf(item)
+  // The last line of a command's output is the one that says how it went ("12 passed").
+  const commandResult =
+    category === 'command'
+      ? item.toolResultSummary
+          ?.split('\n')
+          .findLast((line) => line.trim())
+          ?.trim()
+      : undefined
+  const unfinished =
+    live &&
+    !isAnswered(item) &&
+    !item.toolFailed &&
+    item.toolStatus !== 'stopped'
+  const verb =
+    category === 'agent' || category === 'other'
+      ? (item.toolName ?? t('conversation.tool'))
+      : t(`conversation.verb.${category}${unfinished ? 'Running' : ''}`)
   return (
     <li>
       <details
@@ -826,8 +935,9 @@ function ToolRow({
           )}
         >
           <ToolGlyph item={item} />
-          <span className="shrink-0 font-medium">
-            {item.toolName ?? t('conversation.tool')}
+          {/* What it did, in the person's words; the tool's own name on the hover. */}
+          <span className="shrink-0 font-bold" title={item.toolName}>
+            {verb}
           </span>
           {item.toolPath && !item.toolCommand ? (
             // The path whole through PathText; no copy button inside a <summary>.
@@ -869,7 +979,16 @@ function ToolRow({
               </span>
             ) : null
           ) : isAnswered(item) ? (
-            <Check aria-hidden className="size-3.5 shrink-0 text-text-3" />
+            commandResult ? (
+              <span
+                className="min-w-0 max-w-[40%] truncate text-text-3"
+                title={commandResult}
+              >
+                {commandResult}
+              </span>
+            ) : (
+              <Check aria-hidden className="size-3.5 shrink-0 text-text-3" />
+            )
           ) : item.toolElapsedSeconds !== undefined ? (
             <span className="shrink-0 tabular-nums text-text-3">
               {formatDuration(item.toolElapsedSeconds * 1000)}
@@ -982,6 +1101,7 @@ export const TurnRow = memo(
     a.onInspect === b.onInspect &&
     a.onFork === b.onFork &&
     a.modelName === b.modelName &&
+    a.tellsCost === b.tellsCost &&
     a.live === b.live &&
     samePlain(a.item, b.item) &&
     samePlain(paints(a.items, a.nested), paints(b.items, b.nested)),

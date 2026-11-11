@@ -313,7 +313,12 @@ test('received handoff opens its SHA in a worktree and displays the committed di
     expect(git('rev-parse', 'main')).toBe(baseSHA)
     expect(readFileSync(path.join(repo, 'README'), 'utf8')).toBe('base\n')
     // The context pane holds the existing CodeDiff; navigation preserves the run selection.
-    await page.goto(`/sessions?session=run%3A${runRef}&pane=context`)
+    await page.goto(
+      `/sessions?session=run%3A${runRef}&pane=context&panel=changes`,
+    )
+    await page
+      .getByRole('combobox', { name: 'Changes scope' })
+      .selectOption('branch')
     const changes = page.getByTestId('session-branch-changes')
     await expect(changes).toBeVisible()
     await expect(changes.getByTestId('branch-changes-range')).toContainText(
@@ -323,13 +328,13 @@ test('received handoff opens its SHA in a worktree and displays the committed di
       baseSHA.slice(0, 12),
     )
     await changes.getByRole('button', { name: /README/ }).click()
+    const diff = page.getByRole('dialog', { name: 'README', exact: true })
+    await diff.getByRole('radio', { name: 'Split', exact: true }).click()
     await expect(
-      changes.getByLabel('At the base', { exact: true }).locator('.cm-line'),
+      diff.getByLabel('At the base', { exact: true }).locator('.cm-line'),
     ).toHaveText(['base', ''])
     await expect(
-      changes
-        .getByLabel('At the branch tip', { exact: true })
-        .locator('.cm-line'),
+      diff.getByLabel('At the branch tip', { exact: true }).locator('.cm-line'),
     ).toHaveText(['base', 'handed-over change', ''])
     await page.screenshot({
       path: path.join(evidence, 'displayed-diff.png'),

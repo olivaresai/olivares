@@ -208,6 +208,13 @@ func TestRuntimeAPILaunchRefusesANameASessionHolds(t *testing.T) {
 	if r := launch("web"); r.code != http.StatusCreated {
 		t.Fatalf("a free name = %d %s, want 201", r.code, r.raw)
 	}
+	// A launch that names nothing holds no name (: the console's launch with the
+	// same first message), so a second one starts too.
+	for i := range 2 {
+		if r := launch(""); r.code != http.StatusCreated {
+			t.Fatalf("unnamed launch %d = %d %s, want 201", i+1, r.code, r.raw)
+		}
+	}
 }
 
 // refusalMessage reads the message of a module error envelope.

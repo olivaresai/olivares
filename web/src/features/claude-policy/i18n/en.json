@@ -281,6 +281,20 @@
       "noPolicyBadge": "no policy selected",
       "noPolicyBody": "The store selects no Cedar revision, so there is nothing in force from here. This is not a failure — it is a tenant that has not published a policy yet.",
       "grantsExpired": "This process is past its offline-staleness bound, so the policy's POSITIVE grants have degraded to abstain. Its forbid rules stay enforced. The policy IS loaded here — what expired is the trust in its grants."
+    },
+    "person": "Person",
+    "personHint": "Test as this person, with their role and groups.",
+    "personNone": "Anyone (no person)",
+    "policyTests": {
+      "title": "Policy tests",
+      "sub": "Every publish must keep these true. A publish that breaks one is refused and names it.",
+      "name": "Test name",
+      "expect": "Expected",
+      "allow": "Should be allowed",
+      "deny": "Should be denied",
+      "add": "Add as a test",
+      "empty": "No tests yet. Set up the example request, name it and add it.",
+      "remove": "Remove {{name}}"
     }
   },
   "dist": {

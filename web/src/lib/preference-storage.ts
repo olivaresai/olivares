@@ -11,6 +11,7 @@ export const PREFERENCE_KEYS = [
   'olivares:api-playground',
   'olivares.lang',
   'olivares.sessions.model-favorites',
+  'olivares.tools.model-preferences',
   'olivares.notifications.lastSeen',
   'olivares.onboarding.dismissed',
   'olivares.notices.dismissed',

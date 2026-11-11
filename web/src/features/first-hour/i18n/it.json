@@ -70,8 +70,7 @@
     },
     "signIn": {
       "title": "Accedi",
-      "body": "Usa il tuo abbonamento Claude o ChatGPT. Le credenziali restano su questo server, dove lo strumento le conserva.",
-      "waiting": "Prima installa uno strumento."
+      "body": "Usa il tuo abbonamento Claude o ChatGPT. Le credenziali restano su questo server, dove lo strumento le conserva."
     },
     "start": {
       "title": "Avvia una sessione",
@@ -84,19 +83,39 @@
     "notReady": "{{tool}} non può ancora partire.",
     "folder": "Cartella",
     "folderHint": "Una cartella su questo server.",
+    "folderHintGiven": "Il percorso di una cartella già registrata su questo server. Le nuove le registra un amministratore.",
     "folderChoose": "Scegli una cartella",
     "folderNew": "Una nuova cartella per questa sessione",
     "folderTyped": "Un'altra cartella…",
     "readingFolder": "Lettura della cartella dell'ultima sessione…",
     "prompt": "Primo messaggio (facoltativo)",
     "promptPlaceholder": "Cosa deve fare per prima cosa?",
+    "documents": "Documenti",
+    "attachDocument": "Allega documento",
+    "removeDocument": "Rimuovi {{name}}",
+    "savingDocument": "Salvataggio di {{name}} nella cartella ({{n}} di {{total}})…",
+    "documentFailed": "{{name}} non è stato salvato nella cartella ({{reason}}).",
+    "documentsNeedFolder": "Puoi allegare documenti al lavoro in una delle tue cartelle, nel suo checkout attuale.",
+    "documentsMessage": "Documenti che ho allegato, salvati nella cartella:",
+    "documentsAdded": "Aggiunto al tuo primo messaggio:",
+    "documentsKept": "Già nella cartella: {{paths}}.",
+    "documentsReadOnly": "Questa cartella è di sola lettura: puoi allegare documenti al lavoro in una cartella in cui la sessione può scrivere.",
+    "documentsWaiting": "Avvia attende i documenti allegati: scegli una cartella che possa accoglierli, oppure rimuovili.",
+    "documentWaiting": "{{size}} · in attesa",
+    "documentsNeedWords": "Scrivi qualche parola su cosa fare con i documenti: la sessione prende il nome da ciò che scrivi.",
+    "moreHeldDocuments": "Avvia qui per tenere i documenti allegati, oppure rimuovili per aprire altre opzioni.",
+    "moreHeldFolder": "Avvia qui per tenere la cartella digitata, oppure sceglila dall'elenco delle cartelle per aprire altre opzioni.",
+    "documentTooLarge": "{{name}} supera il limite di questa cartella di {{size}} per file e non è stato allegato.",
+    "documentAttachedTwice": "{{name}} è già allegato.",
     "more": "Altre opzioni",
     "permission": "Cosa può fare l'agente",
     "start": "Avvia",
     "starting": "Avvio…",
+    "startSession": "Avvia sessione",
     "needTool": "Prima installa uno strumento e accedi.",
     "dialogTitle": "Nuova sessione",
     "dialogDescription": "Scegli uno strumento e indica cosa fare.",
+    "keyToStart": "<key/> per avviare",
     "advanced": "Opzioni di avvio avanzate",
     "secrets": "Secret come variabili d'ambiente",
     "secretsHint": "La sessione legge ogni secret del vault scelto dalla variabile che indichi. Il valore non viene mai mostrato, registrato nei log né scritto nella cartella.",
@@ -111,6 +130,7 @@
     "credentialsManage": "Gestisci le credenziali gestite",
     "listUnavailable": "Il motore non ha risposto all'elenco dei secret. Per ora non si può scegliere nulla.",
     "openTools": "Apri gli strumenti AI",
+    "askAdmin": "Chiedi a un amministratore di prepararlo.",
     "model": "Modello",
     "providerDefault": "Predefinito ({{model}})",
     "nativeDefault": "Predefinito di {{tool}}",
@@ -123,14 +143,22 @@
     "profileNeedsKey": "Serve una chiave",
     "foldersUnreadable": "Non è stato possibile leggere le cartelle registrate. Digita il percorso di una cartella su questo server.",
     "folderPermission": "Si avvia come {{name}}, il predefinito di questa cartella.",
-    "autoAsks": "{{tool}} non ha una modalità automatica: chiederà prima di ogni azione."
+    "autoAsks": "{{tool}} non ha una modalità automatica: chiederà prima di ogni azione.",
+    "worktreeCheckout": "Checkout attuale",
+    "worktreeNew": "Nuovo worktree",
+    "worktreeFrom": "Parti da",
+    "worktreeFromHint": "Branch o commit (facoltativo)",
+    "worktreeNewHint": "La sessione lavora su un branch proprio, in una cartella separata. Il checkout resta com'è.",
+    "worktreeLegend": "Copia di lavoro"
   },
   "composer": {
     "toolPill": "Strumento e account: {{value}}",
     "modelPill": "Modello: {{value}}",
     "effortPill": "Sforzo: {{value}}",
     "folderPill": "Cartella: {{value}}",
-    "moreOptions": "Altre opzioni"
+    "moreOptions": "Altre opzioni",
+    "accessPill": "Cosa può fare l'agente: {{value}}",
+    "worktreePill": "Copia di lavoro: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Cartelle registrate: {{count}} caricate; ce ne sono altre.",
@@ -154,6 +182,14 @@
     "cli": "Usa la riga di comando olivares",
     "cliHint": "Su questo server il comando olivares è già installato. Da un altro computer, installalo con:"
   },
+  "passkeyOffer": {
+    "body": "La prossima volta accedi con una passkey: impronta, volto o blocco schermo al posto della password.",
+    "add": "Aggiungi una passkey",
+    "notNow": "Non ora",
+    "added": "Passkey aggiunta. Usala per accedere la prossima volta.",
+    "failed": "La passkey non è stata aggiunta. Riprova, oppure aggiungine una più tardi nelle Impostazioni.",
+    "unknown": "Non è stato possibile confermare la passkey. Potrebbe essere stata aggiunta: controlla nelle Impostazioni prima di aggiungerne un’altra."
+  },
   "permissionSummary": {
     "readOnly": "Legge e pianifica. Ogni modifica viene rifiutata.",
     "ask": "Chiede prima di ogni azione che non sia una lettura.",
@@ -165,6 +201,10 @@
   "bring": {
     "title": "Porta le tue cartelle",
     "body": "Le cartelle in cui i tuoi strumenti hanno già lavorato, lette dai registri propri degli strumenti su percorsi di progetto e date. Non viene registrato nulla finché non confermi.",
+    "offer_one": "{{count}} cartella in cui i tuoi strumenti hanno già lavorato.",
+    "offer_many": "{{count}} cartelle in cui i tuoi strumenti hanno già lavorato.",
+    "offer_other": "{{count}} cartelle in cui i tuoi strumenti hanno già lavorato.",
+    "review": "Controlla",
     "error": "Impossibile cercare le cartelle dei tuoi strumenti.",
     "unreadable": "Non è stato possibile leggere i registri di {{tool}}. Aggiungi le cartelle a mano.",
     "cols": {

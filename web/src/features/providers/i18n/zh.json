@@ -22,6 +22,9 @@
     "name": "名称",
     "kind": "类型",
     "key": "密钥",
+    "usedBy": "使用者",
+    "usedByUnread": "无法读取使用各密钥的配置文件。",
+    "usedByPartial": "部分配置文件未读取：某个密钥的使用者可能多于所示。",
     "state": "状态",
     "connection": "连接",
     "actions": "操作"

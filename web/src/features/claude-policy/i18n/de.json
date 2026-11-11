@@ -281,6 +281,20 @@
       "noPolicyBadge": "keine Richtlinie ausgewählt",
       "noPolicyBody": "Der Speicher wählt keine Cedar-Revision aus, daher ist von hier aus nichts in Kraft. Das ist kein Fehler — es ist ein Mandant, der noch keine Richtlinie veröffentlicht hat.",
       "grantsExpired": "Dieser Prozess hat seine Offline-Veraltungsgrenze überschritten, daher sind die POSITIVEN Gewährungen der Richtlinie zur Enthaltung herabgestuft. Ihre Verbotsregeln bleiben durchgesetzt. Die Richtlinie IST hier geladen — abgelaufen ist das Vertrauen in ihre Gewährungen."
+    },
+    "person": "Person",
+    "personHint": "Als diese Person testen, mit ihrer Rolle und ihren Gruppen.",
+    "personNone": "Beliebig (keine Person)",
+    "policyTests": {
+      "title": "Richtlinientests",
+      "sub": "Jede Veröffentlichung muss diese erfüllen. Eine Veröffentlichung, die einen Test bricht, wird abgelehnt und nennt ihn.",
+      "name": "Testname",
+      "expect": "Erwartet",
+      "allow": "Sollte erlaubt sein",
+      "deny": "Sollte verweigert werden",
+      "add": "Als Test hinzufügen",
+      "empty": "Noch keine Tests. Richten Sie die Beispielanfrage ein, benennen Sie sie und fügen Sie sie hinzu.",
+      "remove": "{{name}} entfernen"
     }
   },
   "dist": {

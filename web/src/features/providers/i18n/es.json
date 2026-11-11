@@ -22,6 +22,9 @@
     "name": "Nombre",
     "kind": "Tipo",
     "key": "Clave",
+    "usedBy": "La usan",
+    "usedByUnread": "No se pudo leer qué perfiles usan cada clave.",
+    "usedByPartial": "Algunos perfiles no se leyeron: una clave puede tener más usuarios de los que se muestran.",
     "state": "Estado",
     "connection": "Conexión",
     "actions": "Acciones"

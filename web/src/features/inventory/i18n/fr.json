@@ -33,7 +33,8 @@
     "signals": "Signaux",
     "hosts": "Hôtes",
     "lastSeen": "Vu pour la dernière fois",
-    "occurrences": "Vu"
+    "occurrences": "Vu",
+    "where": "Où"
   },
   "searchPlaceholder": "Rechercher un nom, une référence, un signal…",
   "hostCount": "{{count}} hôtes",
@@ -127,6 +128,10 @@
       "title": "Aucune entité du parc découverte",
       "description": "Les entités apparaissent lorsque les observations des connecteurs signalent des agents, des sessions, des identités, des capacités MCP, des modèles, des fournisseurs ou des ressources.",
       "action": "Ouvrir les capacités"
+    },
+    "filtered": {
+      "title": "Aucune entrée ne correspond à ces filtres",
+      "description": "Choisissez un autre type ou un autre statut pour voir davantage du catalogue."
     }
   },
   "coverage": {
@@ -206,5 +211,6 @@
       "suspendedTitle": "Service du locataire suspendu",
       "suspended": "Le service de ce locataire est suspendu ou hors service, la couverture de collecte ne peut donc pas être lue."
     }
-  }
+  },
+  "export": "Exporter"
 }

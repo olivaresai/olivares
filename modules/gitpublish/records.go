@@ -134,6 +134,9 @@ type Intent struct {
 	// workspace is the intent's.
 	Proposal Proposal
 	Version  int64
+	// SessionLauncher is the user who launched the session run the publication
+	// names, for the audit of its claim; it is not stored on the intent.
+	SessionLauncher string
 }
 
 func ts(t time.Time) string {

@@ -18,8 +18,6 @@
     "search": "Search entries…",
     "name": "Name",
     "kind": "Kind",
-    "slug": "Slug",
-    "version": "Version",
     "status": "Status",
     "owner": "Owner",
     "signing": "Signing",

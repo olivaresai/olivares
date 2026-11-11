@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
+import { reportEditionRefusal } from '@/lib/hooks/use-privileged-mutation'
 import {
   AsyncSection,
   CaveatNotice,
@@ -327,7 +328,10 @@ function PolicyDialog({
       void qc.invalidateQueries({ queryKey: voiceKeys.policies(activeTenant) })
       onOpenChange(false)
     },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   const valid =

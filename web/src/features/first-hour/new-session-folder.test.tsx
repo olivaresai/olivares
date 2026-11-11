@@ -5,17 +5,34 @@
 // The last registered folder is remembered; otherwise a first session needs an explicit
 // folder choice. A private session folder remains available as an explicit choice.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const link = vi.hoisted(() => ({ search: '', navigate: vi.fn() }))
-const auth = vi.hoisted(() => ({ canReadFolders: true }))
+const auth = vi.hoisted(() => ({
+  canReadFolders: true,
+  // Registering a folder (a new typed path) and opening the AI tools place.
+  canRegisterFolders: true,
+  canOpenTools: true,
+  // Writing files into a folder (attached documents are saved there).
+  canWriteFiles: true,
+}))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     can: (permission: string) =>
-      permission !== 'sessions:workspace:read' || auth.canReadFolders,
+      (permission !== 'sessions:workspace:read' || auth.canReadFolders) &&
+      (permission !== 'sessions:workspace:admin' || auth.canRegisterFolders) &&
+      (permission !== 'sessions:account:read' || auth.canOpenTools) &&
+      (permission !== 'sessions:workspace:write' || auth.canWriteFiles),
     isSuperadmin: true,
     activeTenant: 'tnt-a',
   }),
@@ -38,10 +55,17 @@ vi.mock('./api', async (orig) => ({
 }))
 
 import { agentOpsApi } from '@/features/agentops/api'
+import { consoleApi } from '@/features/console/api'
 import { readinessOf } from '@/features/first-hour/readiness.fixture'
-import type { RunDTO, WorkspaceDTO } from '@/features/agentops/types'
+import type {
+  RunDTO,
+  WorkspaceDTO,
+  WriteResponse,
+} from '@/features/agentops/types'
 import { providersApi } from '@/features/providers/api'
+import { skillsApi } from '@/features/skills/api'
 import { http } from '@/lib/api'
+import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
 import { NewSessionHost } from './new-session-host'
 import { useNewSessionDialog } from './new-session-store'
@@ -89,6 +113,9 @@ beforeEach(() => {
   useClientSettings.getState().restore()
   vi.restoreAllMocks()
   auth.canReadFolders = true
+  auth.canRegisterFolders = true
+  auth.canOpenTools = true
+  auth.canWriteFiles = true
   workspaces([])
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_new' })
@@ -100,6 +127,10 @@ beforeEach(() => {
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
     readinessOf({ claude: 'own_login' }),
   )
+  vi.spyOn(agentOpsApi, 'listFolderCandidates').mockResolvedValue({
+    tools: [],
+    folders: [],
+  })
 })
 
 it.each([false, true])(
@@ -141,11 +172,13 @@ it('the work surface keeps the composer while no tool can start, and Enter does 
   })
   expect(await screen.findByRole('button', { name: 'Start' })).toBeDisabled()
   // The way to get a tool ready sits on the same screen: one card, for the tool the
-  // composer would start, and it follows the tool the person picks.
+  // composer would start, and it follows the tool the person picks. The card is the one
+  // instruction: the composer does not say «Install … first» a second time.
   expect(
-    await screen.findByRole('heading', { name: 'Sign it in' }),
+    await screen.findByRole('heading', { name: 'Start a session' }),
   ).toBeVisible()
   expect(await screen.findByTestId('tool-claude')).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Open AI tools' })).toBeNull()
   expect(screen.queryByTestId('tool-codex')).toBeNull()
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: /^Tool and account: / }))
@@ -154,6 +187,43 @@ it('the work surface keeps the composer while no tool can start, and Enter does 
   expect(screen.queryByTestId('tool-claude')).toBeNull()
   await user.type(composer, 'look at the repo{Enter}')
   expect(launch.launchSession).not.toHaveBeenCalled()
+})
+
+it('the work surface offers the folders the tools already worked in once a tool is ready, and registers none until confirmed', async () => {
+  runs([])
+  vi.spyOn(agentOpsApi, 'listFolderCandidates').mockResolvedValue({
+    tools: [{ tool: 'claude', name: 'Claude Code', readable: true }],
+    folders: [
+      {
+        path: '/srv/work/api',
+        tool: 'claude',
+        last_used: new Date().toISOString(),
+        conversations: 4,
+        preselected: true,
+      },
+    ],
+  })
+  const create = vi.spyOn(agentOpsApi, 'createWorkspace')
+  wrap(<WorkStart />)
+  // The composer is still the way to start; the folders are one line under it.
+  expect(
+    screen.getByRole('textbox', { name: 'First message (optional)' }),
+  ).toBeVisible()
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: 'Review' }))
+  expect(
+    await screen.findByRole('group', { name: 'Bring your folders' }),
+  ).toBeVisible()
+  expect(
+    await screen.findByRole('checkbox', {
+      name: 'Register /srv/work/api (Claude Code)',
+    }),
+  ).toBeChecked()
+  expect(
+    screen.getByRole('button', { name: 'Register selected (1)' }),
+  ).toBeEnabled()
+  // Nothing was registered by looking.
+  expect(create).not.toHaveBeenCalled()
 })
 
 it('the composer is on screen before the engine says which tools can start, and keeps what is typed', async () => {
@@ -169,7 +239,7 @@ it('the composer is on screen before the engine says which tools can start, and 
     name: 'First message (optional)',
   })
   // Unknown is not "no": no tool is called not ready, and Enter has nothing to send yet.
-  expect(screen.queryByRole('heading', { name: 'Sign it in' })).toBeNull()
+  expect(screen.queryByTestId('tool-claude')).toBeNull()
   expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
   const user = userEvent.setup()
   await user.type(composer, 'typed early{Enter}')
@@ -190,7 +260,7 @@ it('the composer comes first and Enter starts the session', async () => {
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
   )
-  expect(screen.queryByRole('heading', { name: 'Sign it in' })).toBeNull()
+  expect(screen.queryByTestId('tool-claude')).toBeNull()
   expect(
     composer.compareDocumentPosition(
       screen.getByRole('button', { name: /^Tool and account: / }),
@@ -204,6 +274,43 @@ it('the composer comes first and Enter starts the session', async () => {
   expect(launch.launchSession.mock.calls[0][0].message).toBe(
     'first line\nsecond',
   )
+})
+
+it("the composer starts on the person's send key: with Ctrl+Enter chosen, Enter breaks the line", async () => {
+  useClientSettings.setState({ sendKey: 'modEnter' })
+  runs([])
+  workspaces([REPO])
+  wrap(<WorkStart />)
+  const composer = await screen.findByRole('textbox', {
+    name: 'First message (optional)',
+  })
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+  )
+  const user = userEvent.setup()
+  await user.type(composer, 'first line{Enter}second')
+  expect(launch.launchSession).not.toHaveBeenCalled()
+  await user.keyboard('{Control>}{Enter}{/Control}')
+  await waitFor(() => expect(launch.launchSession).toHaveBeenCalledOnce())
+  expect(launch.launchSession.mock.calls[0][0].message).toBe(
+    'first line\nsecond',
+  )
+})
+
+it('the composer does not start on Alt+Enter, as a session composer does not', async () => {
+  runs([])
+  workspaces([REPO])
+  wrap(<WorkStart />)
+  const composer = await screen.findByRole('textbox', {
+    name: 'First message (optional)',
+  })
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+  )
+  const user = userEvent.setup()
+  await user.type(composer, 'first line')
+  await user.keyboard('{Alt>}{Enter}{/Alt}')
+  expect(launch.launchSession).not.toHaveBeenCalled()
 })
 
 it('the composer starts on Enter with its pills, and the next composer opens on that choice', async () => {
@@ -1057,7 +1164,7 @@ it('opens a session link as an editable draft and launches only on Start', async
   const user = userEvent.setup()
   await user.clear(prompt)
   await user.type(prompt, 'Review only')
-  await user.click(screen.getByRole('button', { name: 'Start' }))
+  await user.click(screen.getByRole('button', { name: 'Start session' }))
   await waitFor(() =>
     expect(launch.launchSession).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1134,4 +1241,462 @@ it('uses registered folder names in the picker and thread header without storage
   )
   expect(document.body.textContent).not.toContain('tenant-example')
   expect(document.body.textContent).not.toContain('person-example')
+})
+
+describe('a person who is given folders and tools', () => {
+  beforeEach(() => {
+    auth.canRegisterFolders = false
+    auth.canOpenTools = false
+  })
+
+  it('a typed path says it must be a folder already registered, which an administrator adds', async () => {
+    const user = userEvent.setup()
+    runs([])
+    workspaces([REPO])
+    wrap(<StartSessionForm />)
+    await chooseTypedFolder(user)
+    expect(screen.getByRole('textbox', { name: 'Folder' })).toHaveFocus()
+    expect(
+      screen.getByText(
+        'The path of a folder already registered on this server. An administrator registers new ones.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('A folder on this server.')).toBeNull()
+  })
+
+  it('a person who registers folders keeps the hint that any folder on this server will do', async () => {
+    auth.canRegisterFolders = true
+    const user = userEvent.setup()
+    runs([])
+    workspaces([REPO])
+    wrap(<StartSessionForm />)
+    await chooseTypedFolder(user)
+    expect(screen.getByText('A folder on this server.')).toBeInTheDocument()
+  })
+
+  it('a tool that cannot start says who readies it, with no door to a place the person cannot open', async () => {
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
+    runs([])
+    workspaces([REPO])
+    wrap(<StartSessionForm />)
+    expect(
+      await screen.findByText(/Ask an administrator to get it ready\./),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open AI tools' })).toBeNull()
+  })
+})
+
+describe('documents attached to a new session', () => {
+  const MIB = 1024 * 1024
+  const doc = (name: string, content = 'abc') => new File([content], name)
+  const written = (path: string): WriteResponse => ({
+    path,
+    size: 3,
+    sha256: 'h',
+    created: true,
+  })
+  type User = ReturnType<typeof userEvent.setup>
+  const chooseNewFolder = async (user: User) => {
+    await user.click(await screen.findByRole('combobox', { name: 'Folder' }))
+    await user.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
+  }
+  const chooseWorktree = async (user: User) =>
+    user.click(await screen.findByRole('radio', { name: 'New worktree' }))
+  const ONLY_FOLDERS =
+    'Documents can be attached to work in one of your folders, in its current checkout.'
+
+  beforeEach(() => {
+    runs([{ run_ref: 'run_1', state: 'stopped', workspace_ref: 'ws_1' }])
+    workspaces([REPO])
+    vi.spyOn(agentOpsApi, 'statFile').mockRejectedValue(
+      new ApiError(404, 'not_found', 'not found'),
+    )
+    // The skills a session gets, read beside the form: the default department's,
+    // none here. Answered, so the page under test says only its own failures.
+    vi.spyOn(consoleApi, 'listWorkspaces').mockResolvedValue({
+      items: [{ id: 'ws-default', is_default: true }],
+      has_more: false,
+    } as Awaited<ReturnType<typeof consoleApi.listWorkspaces>>)
+    vi.spyOn(skillsApi, 'selection').mockResolvedValue({
+      digest: 'none',
+      members: [],
+    })
+  })
+
+  it('attaches documents with a button, shows each with its name and size, and removes one', async () => {
+    const user = userEvent.setup()
+    wrap(<StartSessionForm />)
+    expect(
+      await screen.findByRole('button', { name: 'Attach document' }),
+    ).toBeInTheDocument()
+    await user.upload(screen.getByTestId('attach-documents-input'), [
+      doc('contrato.docx', 'x'.repeat(2048)),
+      doc('extracto.pdf'),
+    ])
+    const items = within(
+      screen.getByRole('list', { name: 'Documents' }),
+    ).getAllByRole('listitem')
+    expect(items.map((li) => li.textContent)).toEqual([
+      'contrato.docx2 KiB',
+      'extracto.pdf3 B',
+    ])
+    await user.click(
+      screen.getByRole('button', { name: 'Remove extracto.pdf' }),
+    )
+    expect(screen.queryByText('extracto.pdf')).toBeNull()
+    expect(screen.getByText('contrato.docx')).toBeInTheDocument()
+  })
+
+  it('holds More options while documents are attached, and says how to keep them', async () => {
+    const user = userEvent.setup()
+    const onAdvanced = vi.fn()
+    vi.spyOn(consoleApi, 'listSecrets').mockResolvedValue({
+      sealer_available: true,
+      secrets: [],
+    } as Awaited<ReturnType<typeof consoleApi.listSecrets>>)
+    wrap(<StartSessionForm onAdvanced={onAdvanced} />)
+    await screen.findByRole('button', { name: 'Attach document' })
+    await user.upload(screen.getByTestId('attach-documents-input'), [
+      doc('contrato.docx'),
+    ])
+    await user.click(screen.getByRole('button', { name: 'More options' }))
+    const advanced = await screen.findByRole('button', {
+      name: 'Advanced launch options',
+    })
+    // Held, it stays in the Tab order, says why and opens nothing.
+    expect(advanced).toHaveAttribute('aria-disabled', 'true')
+    expect(advanced).not.toBeDisabled()
+    await user.click(advanced)
+    expect(onAdvanced).not.toHaveBeenCalled()
+    expect(
+      screen.getByText(
+        'Start here to keep the attached documents, or remove them to open more options.',
+      ),
+    ).toBeVisible()
+    await user.click(
+      screen.getByRole('button', { name: 'Remove contrato.docx' }),
+    )
+    const released = screen.getByRole('button', {
+      name: 'Advanced launch options',
+    })
+    expect(released).not.toHaveAttribute('aria-disabled')
+    await user.click(released)
+    expect(onAdvanced).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds More options for a folder path typed in, and says how to keep it', async () => {
+    const user = userEvent.setup()
+    const onAdvanced = vi.fn()
+    vi.spyOn(consoleApi, 'listSecrets').mockResolvedValue({
+      sealer_available: true,
+      secrets: [],
+    } as Awaited<ReturnType<typeof consoleApi.listSecrets>>)
+    wrap(<StartSessionForm onAdvanced={onAdvanced} />)
+    await user.click(await screen.findByRole('combobox', { name: 'Folder' }))
+    await user.click(
+      await screen.findByRole('option', { name: 'Another folder…' }),
+    )
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Folder' }),
+      '/srv/work/new-place',
+    )
+    await user.click(screen.getByRole('button', { name: 'More options' }))
+    expect(
+      await screen.findByRole('button', { name: 'Advanced launch options' }),
+    ).toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.getByText(
+        'Start here to keep the folder you typed, or pick it from the folder list to open more options.',
+      ),
+    ).toBeVisible()
+    expect(onAdvanced).not.toHaveBeenCalled()
+  })
+
+  it('shows a document by the path it gets in the folder: whole on hover, its end kept', async () => {
+    const LONG = 'escritura-de-compraventa-del-local-firmada-2026.pdf'
+    const user = userEvent.setup()
+    wrap(<StartSessionForm />)
+    await user.upload(
+      await screen.findByTestId('attach-documents-input'),
+      doc(LONG),
+    )
+    const [item] = within(
+      screen.getByRole('list', { name: 'Documents' }),
+    ).getAllByRole('listitem')
+    const name = within(item).getByTitle(LONG)
+    expect(name).toHaveTextContent(LONG)
+    // Cut in its middle: the extension sits in the part that is kept whole.
+    expect(within(name).getByText(/\.pdf$/)).toBeInTheDocument()
+  })
+
+  it("refuses a file over the folder's own limit when it is attached, naming the file and that limit", async () => {
+    workspaces([{ ...REPO, max_read_bytes: 5 * MIB }])
+    const user = userEvent.setup()
+    const write = vi.spyOn(agentOpsApi, 'writeFile')
+    wrap(<StartSessionForm />)
+    const big = doc('escrituras.pdf')
+    Object.defineProperty(big, 'size', { value: 6 * MIB })
+    await user.upload(await screen.findByTestId('attach-documents-input'), [
+      big,
+      doc('contrato.docx'),
+    ])
+    // The one alert on the page, and all it says.
+    expect(screen.getByRole('alert').textContent).toBe(
+      "escrituras.pdf is over this folder's limit of 5 MiB per file and was not attached.",
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Remove escrituras.pdf' }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Remove contrato.docx' }),
+    ).toBeInTheDocument()
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('says a document with the name of one already attached is attached once', async () => {
+    const user = userEvent.setup()
+    wrap(<StartSessionForm />)
+    const input = await screen.findByTestId('attach-documents-input')
+    await user.upload(input, doc('contrato.docx'))
+    await user.upload(input, doc('contrato.docx', 'another'))
+    expect(
+      screen.getByText('contrato.docx is already attached.'),
+    ).toHaveAttribute('role', 'status')
+    expect(
+      within(screen.getByRole('list', { name: 'Documents' })).getAllByRole(
+        'listitem',
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('saves the documents in the folder at Start under its authority, says so, and names them in the first message', async () => {
+    const user = userEvent.setup()
+    let land: (w: WriteResponse) => void = () => {}
+    const write = vi
+      .spyOn(agentOpsApi, 'writeFile')
+      .mockReturnValue(new Promise((resolve) => (land = resolve)))
+    wrap(<StartSessionForm />)
+    await user.type(
+      screen.getByRole('textbox', { name: 'First message (optional)' }),
+      'Find the payment dates',
+    )
+    const file = doc('contrato.docx')
+    await user.upload(await screen.findByTestId('attach-documents-input'), file)
+    // The line Start adds to the message is shown before Start.
+    expect(screen.getByText('Added to your first message:')).toBeVisible()
+    expect(
+      screen.getByText(
+        'Documents I attached, saved in the folder: - contrato.docx',
+      ),
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    expect(
+      await screen.findByText('Saving contrato.docx in the folder (1 of 1)…'),
+    ).toHaveAttribute('role', 'status')
+    expect(write).toHaveBeenCalledWith(
+      'ws_1',
+      'contrato.docx',
+      file,
+      expect.objectContaining({
+        tenant: 'tnt-a',
+        signal: expect.any(AbortSignal),
+        dispatchGuard: expect.any(Function),
+      }),
+    )
+    expect(agentOpsApi.statFile).toHaveBeenCalledWith(
+      'ws_1',
+      'contrato.docx',
+      expect.objectContaining({ tenant: 'tnt-a' }),
+    )
+    expect(launch.launchSession).not.toHaveBeenCalled()
+    await act(async () => land(written('contrato.docx')))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
+    const [launched] = launch.launchSession.mock.calls[0]
+    expect(launched.quick).toMatchObject({ workspace_ref: 'ws_1' })
+    expect(launched.message).toBe(
+      'Find the payment dates\n\nDocuments I attached, saved in the folder:\n- contrato.docx',
+    )
+  })
+
+  it('asks for a few words when documents are attached and the message is empty, so the documents line never names the session', async () => {
+    const user = userEvent.setup()
+    wrap(<StartSessionForm />)
+    await user.upload(
+      await screen.findByTestId('attach-documents-input'),
+      doc('contrato.docx'),
+    )
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    expect(
+      screen.getByText(
+        'Write a few words about what to do with the documents: the session is named by what you write.',
+      ),
+    ).toBeInTheDocument()
+    await user.type(
+      screen.getByRole('textbox', { name: 'First message (optional)' }),
+      'Summarize',
+    )
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+  })
+
+  it('a document that could not be saved says which and why and which are already in the folder, keeps the text and the others, and is not sent twice', async () => {
+    const user = userEvent.setup()
+    const write = vi
+      .spyOn(agentOpsApi, 'writeFile')
+      .mockResolvedValueOnce(written('contrato.docx'))
+      .mockRejectedValueOnce(new ApiError(500, 'internal', 'disk full'))
+      .mockResolvedValueOnce(written('extracto.pdf'))
+    wrap(<StartSessionForm />)
+    const field = screen.getByRole('textbox', {
+      name: 'First message (optional)',
+    })
+    await user.type(field, 'Reconcile')
+    await user.upload(await screen.findByTestId('attach-documents-input'), [
+      doc('contrato.docx'),
+      doc('extracto.pdf'),
+    ])
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'The session did not start: extracto.pdf was not saved in the folder (disk full). Already in the folder: contrato.docx.',
+    )
+    expect(launch.launchSession).not.toHaveBeenCalled()
+    expect(field).toHaveValue('Reconcile')
+    expect(
+      within(screen.getByRole('list', { name: 'Documents' })).getAllByRole(
+        'listitem',
+      ),
+    ).toHaveLength(2)
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
+    expect(write.mock.calls.map((c) => c[1])).toEqual([
+      'contrato.docx',
+      'extracto.pdf',
+      'extracto.pdf',
+    ])
+    expect(launch.launchSession.mock.calls[0][0].message).toBe(
+      'Reconcile\n\nDocuments I attached, saved in the folder:\n- contrato.docx\n- extracto.pdf',
+    )
+  })
+
+  it('stops when the dialog closes during Start: the documents after the one being saved are never sent', async () => {
+    const user = userEvent.setup()
+    let land: (w: WriteResponse) => void = () => {}
+    const write = vi
+      .spyOn(agentOpsApi, 'writeFile')
+      .mockReturnValueOnce(new Promise((resolve) => (land = resolve)))
+      .mockResolvedValue(written('later.pdf'))
+    // What the dialog reads before it shows the form, as when a link opens it.
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    vi.spyOn(agentOpsApi, 'listProfiles').mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    useNewSessionDialog.setState({
+      open: true,
+      opener: null,
+      advanced: null,
+      draft: null,
+    })
+    wrap(<NewSessionHost />)
+    const dialog = await screen.findByRole('dialog', { name: 'New session' })
+    await user.type(
+      await within(dialog).findByRole('textbox', {
+        name: 'First message (optional)',
+      }),
+      'Compare them',
+    )
+    await user.upload(await screen.findByTestId('attach-documents-input'), [
+      doc('a.pdf'),
+      doc('b.pdf'),
+      doc('c.pdf'),
+    ])
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await act(async () => land(written('a.pdf')))
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(write.mock.calls[0][1]).toBe('a.pdf')
+    expect(agentOpsApi.statFile).toHaveBeenCalledTimes(1)
+    expect(launch.launchSession).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { place: 'a new folder for the session', choose: chooseNewFolder },
+    { place: 'a worktree of its own', choose: chooseWorktree },
+  ])(
+    'offers no attach control for $place, and one line says where documents can be attached',
+    async ({ choose }) => {
+      const user = userEvent.setup()
+      wrap(<StartSessionForm />)
+      expect(
+        await screen.findByRole('button', { name: 'Attach document' }),
+      ).toBeInTheDocument()
+      await choose(user)
+      expect(
+        screen.queryByRole('button', { name: 'Attach document' }),
+      ).toBeNull()
+      expect(screen.getByText(ONLY_FOLDERS)).toBeInTheDocument()
+    },
+  )
+
+  it('offers no attach control in a read-only folder, and says why', async () => {
+    workspaces([{ ...REPO, mount_mode: 'ro' }])
+    wrap(<StartSessionForm />)
+    expect(
+      await screen.findByText(
+        'This folder is read-only: documents can be attached to work in a folder the session can write in.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Attach document' })).toBeNull()
+  })
+
+  it('keeps documents attached before the place changed to one that takes none, as waiting, and Start says why until they are removed', async () => {
+    const user = userEvent.setup()
+    wrap(<StartSessionForm />)
+    await user.type(
+      screen.getByRole('textbox', { name: 'First message (optional)' }),
+      'Read it',
+    )
+    await user.upload(
+      await screen.findByTestId('attach-documents-input'),
+      doc('contrato.docx'),
+    )
+    await chooseNewFolder(user)
+    const [item] = within(
+      screen.getByRole('list', { name: 'Documents' }),
+    ).getAllByRole('listitem')
+    expect(item).toHaveTextContent('contrato.docx3 B · waiting')
+    expect(screen.getByText(ONLY_FOLDERS)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    expect(
+      screen.getByText(
+        'Start waits for the attached documents: choose a folder that can take them, or remove them.',
+      ),
+    ).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', { name: 'Remove contrato.docx' }),
+    )
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+  })
+
+  it('offers the attach control to a person who may write into folders, and none to one who may not', async () => {
+    wrap(<StartSessionForm />)
+    expect(
+      await screen.findByRole('button', { name: 'Attach document' }),
+    ).toBeInTheDocument()
+    cleanup()
+    auth.canWriteFiles = false
+    wrap(<StartSessionForm />)
+    expect(
+      await screen.findByRole('combobox', { name: 'Folder' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Attach document' })).toBeNull()
+  })
 })

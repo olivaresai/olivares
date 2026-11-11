@@ -21,8 +21,10 @@
 // present, never recompute — never fabricate).
 import { ShieldCheck } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { useTabParam } from '@/lib/hooks/use-tab-param'
+import { useCommunityBuild } from '@/lib/hooks/use-server-info'
+import { CodeLine } from '@/components/ui/code-line'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
 import {
@@ -44,6 +46,9 @@ import {
   SCORECARD_CONTRACT,
   SLSA_PROVENANCE,
   VEX_CONTRACT,
+  releaseCheckCommand,
+  releasePage,
+  slsaCheckCommand,
 } from './attestation.data'
 import { attestationApi, attestationKeys } from './api'
 import {
@@ -57,6 +62,7 @@ import {
   SlsaPanel,
   VexPanel,
 } from './components'
+import type { RunningBinaryAttestation } from './types'
 import './i18n'
 
 const ATTESTATION_TABS = [
@@ -82,6 +88,7 @@ export function AttestationView() {
     queryFn: () => attestationApi.binary(),
     enabled: canRead,
   })
+  const community = useCommunityBuild()
 
   // The ONE fact both the notice and the live panel read, so neither can say
   // something the other denies. `=== true` on purpose: undefined (loading, error,
@@ -178,10 +185,14 @@ export function AttestationView() {
             <div className="p-4">
               {/* The keyless identity facts every verify command pins against. */}
               <CaveatNotice tone="neutral" className="mb-3">
-                {t('artifacts.identityNote', {
-                  issuer: OIDC_ISSUER,
-                  regexp: IDENTITY_REGEXP,
-                })}
+                <Trans
+                  t={t}
+                  i18nKey="artifacts.identityNote"
+                  values={{ issuer: OIDC_ISSUER }}
+                  components={{
+                    identity: <CodeLine inline command={IDENTITY_REGEXP} />,
+                  }}
+                />
               </CaveatNotice>
               <ArtifactTable artifacts={RELEASE_ARTIFACTS} />
             </div>
@@ -193,7 +204,14 @@ export function AttestationView() {
             title={t('slsa.title')}
             description={t('slsa.description')}
           >
-            <SlsaPanel slsa={SLSA_PROVENANCE} />
+            <SlsaPanel
+              slsa={SLSA_PROVENANCE}
+              verify={
+                binaryQ.isSuccess && community !== undefined ? (
+                  <SlsaCheck attestation={binaryQ.data} community={community} />
+                ) : null
+              }
+            />
           </SectionCard>
           <SectionCard
             title={t('vex.title')}
@@ -239,6 +257,111 @@ export function AttestationView() {
           </SectionCard>
         </TabsContent>
       </Tabs>
+
+      {/* --- Check it yourself: on a read that holds, for a known build --- */}
+      {binaryQ.isSuccess && community !== undefined ? (
+        <SectionCard
+          title={t('check.title')}
+          description={t('check.description')}
+        >
+          <ReleaseCheck
+            version={binaryQ.data.binary.version}
+            published={binaryQ.data.release.published}
+            community={community}
+          />
+        </SectionCard>
+      ) : null}
     </IntelPage>
+  )
+}
+
+/**
+ * The check a person runs in a terminal on the release this build names, as
+ * INSTALL.md gives it. Only a release-stamped Community build whose version is
+ * a release tag gets the command; any other build says why there is none. The
+ * version is the engine's own stamp, in a command the person copies and a link
+ * the person opens: nothing runs here.
+ */
+function ReleaseCheck({
+  version,
+  published,
+  community,
+}: {
+  version: string
+  published: boolean
+  /** The command names the Community release: a Business build has its own. */
+  community: boolean
+}) {
+  const { t } = useTranslation('attestation')
+  const command = community && published ? releaseCheckCommand(version) : null
+  if (!command) return <NoReleaseCommand community={community} />
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-body text-muted-foreground">
+        <Trans
+          t={t}
+          i18nKey="check.download"
+          values={{ version }}
+          components={{ release: releasePageLink(version) }}
+        />
+      </p>
+      <CodeLine command={command} label={null} />
+      <p className="text-caption text-muted-foreground">
+        {t('check.passes', { version })}
+      </p>
+    </div>
+  )
+}
+
+/** verify-release.sh's SLSA step for the installed archive, through the same
+ *  gate as the check above: a release-stamped Community build only. */
+function SlsaCheck({
+  attestation,
+  community,
+}: {
+  attestation: RunningBinaryAttestation
+  community: boolean
+}) {
+  const { t } = useTranslation('attestation')
+  const { version, os, arch } = attestation.binary
+  const command =
+    community && attestation.release.published
+      ? slsaCheckCommand(version, os, arch)
+      : null
+  if (!command) return <NoReleaseCommand community={community} />
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-caption text-muted-foreground">
+        <Trans
+          t={t}
+          i18nKey="check.provenance"
+          values={{ version }}
+          components={{ release: releasePageLink(version) }}
+        />
+      </p>
+      <CodeLine command={command} label={null} />
+    </div>
+  )
+}
+
+/** A tag's release page, opened only by the person's click, in its own tab. */
+function releasePageLink(version: string) {
+  return (
+    <a
+      href={releasePage(version)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-foreground underline underline-offset-2"
+    />
+  )
+}
+
+/** Why this build has no command that names a Community release. */
+function NoReleaseCommand({ community }: { community: boolean }) {
+  const { t } = useTranslation('attestation')
+  return (
+    <p className="text-body text-muted-foreground">
+      {t(community ? 'check.notRelease' : 'check.business')}
+    </p>
   )
 }

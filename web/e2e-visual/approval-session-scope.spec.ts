@@ -117,7 +117,7 @@ for (const [surface, path, region] of [
     })
     await page.goto(path)
     const button = page.getByRole('button', {
-      name: 'Approve for this session',
+      name: 'Allow for this session',
       exact: true,
     })
     await expect(button).toBeVisible()

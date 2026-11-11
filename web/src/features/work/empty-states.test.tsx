@@ -107,5 +107,7 @@ describe('La lista vacía de Work dice cuál de los dos vacíos es', () => {
       }),
     )
     expect(await screen.findByText('No work items yet')).toBeInTheDocument()
+    // The button that was pressed is gone; the keyboard goes back to the filters.
+    expect(screen.getByRole('combobox', { name: /status/i })).toHaveFocus()
   })
 })

@@ -7,7 +7,7 @@
 // room, so the sidebar, the area directory and the palette say "Communications" once.
 import { describe, expect, it } from 'vitest'
 import { authorizedSections, permissionGate } from '@/features/navigation/model'
-import { VIEWS } from './views'
+import { TAB_PAGES, VIEWS } from './views'
 
 /** Every communications entry navigation offers to someone holding exactly `held`. */
 function offeredTo(held: string[]): string[] {
@@ -63,5 +63,11 @@ describe('communications navigation', () => {
       'communications',
       'communications',
     ])
+  })
+
+  it('gives each tab of the room the page its route registers, one page each', () => {
+    const pages = Object.values(TAB_PAGES)
+    expect([...pages].sort()).toEqual(VIEWS.map((v) => v.path).sort())
+    expect(TAB_PAGES.channels).toBe(VIEWS[0].path)
   })
 })

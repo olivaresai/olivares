@@ -28,14 +28,18 @@ import {
   SESSION_PARAM,
 } from '@/features/sessions/session-address'
 import { inSection } from '@/features/sessions/session-groups'
+import { useUsagePath } from '@/features/sessions/session-meter'
 import { SessionStrip } from '@/features/sessions/session-strip'
 import { useUrlStateNotice } from '@/features/shared'
+import { useAuth } from '@/lib/auth/context'
 import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import { dayCost, failedToday } from './now-sessions'
 import { NowQueue, useFlaggedRequest, useNeedsYouRows } from './now-queue'
 import { RecentWork } from './recent-work'
 import { tileState } from './view-state'
 import { useRecentSessions } from './use-recent-sessions'
+import { YourAccounts } from './your-accounts'
+import { YourFolders } from './your-folders'
 import './i18n'
 
 // The sheet carries the whole conversation renderer: loaded on the first open, not with
@@ -78,6 +82,21 @@ export function HomeView() {
   // Pending requests for Needs you: the approval queue's own read (shared cache).
   const pendingApprovals = usePendingApprovals()
   const { navigable } = useViewAccess()
+  const { can } = useAuth()
+  // THE FOLDERS OF A PERSON WHO IS GIVEN THEM. Whoever registers folders manages
+  // them in Files and keeps this page as it is; a person who starts sessions in
+  // folders given to them meets those folders first.
+  const showFolders =
+    can('sessions:run:write') &&
+    can('sessions:workspace:read') &&
+    !can('sessions:workspace:admin')
+  // A person's own provider accounts, on an engine that makes them (the
+  // permission exists only there). Whoever adds accounts manages them in AI
+  // tools and keeps this page as it is, as with folders.
+  const showAccounts =
+    can('sessions:own-account:write') &&
+    can('sessions:account:read') &&
+    !can('sessions:account:write')
 
   // Each session once: a working one is a Running row (the strip's own count), every
   // other one, idle or waiting for a person included, a Recent row.
@@ -124,22 +143,27 @@ export function HomeView() {
   const exact = !!runsAnswer && !floor(0)
   const today = recentSessions && exact ? dayCost(recentSessions, now) : null
   const sessionsView = viewById('sessions')
-  const usageView = viewById('usage')
-  const strip = recentSessions
-    ? {
-        needYou: needs.count,
-        // This list holds the sessions only; the count also holds approvals, so it is text.
-        needYouLinked: false,
-        running: runsAnswer ? liveSessions.length : null,
-        failed: exact ? failedToday(recentSessions, now) : null,
-        costMicroUsd: today?.costMicroUsd ?? null,
-        listPath:
-          sessionsView && navigable(sessionsView) ? sessionsView.path : null,
-        usagePath: usageView && navigable(usageView) ? usageView.path : null,
-      }
-    : null
+  // WHERE MONEY IS TOLD: only where the Usage place opens for the person, the one
+  // question every Sessions surface asks. The strip and every session row read it.
+  const usagePath = useUsagePath()
+  // The day's figures and their money are drawn for that person only; a person
+  // Usage does not open for meets the sections below and no strip.
+  const strip =
+    recentSessions && usagePath
+      ? {
+          needYou: needs.count,
+          // This list holds the sessions only; the count also holds approvals, so it is text.
+          needYouLinked: false,
+          running: runsAnswer ? liveSessions.length : null,
+          failed: exact ? failedToday(recentSessions, now) : null,
+          costMicroUsd: today?.costMicroUsd ?? null,
+          listPath:
+            sessionsView && navigable(sessionsView) ? sessionsView.path : null,
+          usagePath,
+        }
+      : null
 
-  if (!readsSessions && !pendingApprovals.permitted) {
+  if (!readsSessions && !pendingApprovals.permitted && !showFolders) {
     return (
       <IntelPage
         icon={LayoutDashboard}
@@ -163,6 +187,8 @@ export function HomeView() {
       className="gap-0"
     >
       <div className="flex max-w-3xl flex-col gap-6">
+        {showAccounts ? <YourAccounts /> : null}
+        {showFolders ? <YourFolders /> : null}
         {strip ? <SessionStrip {...strip} className="px-0 pb-0" /> : null}
         {canSessions || pendingApprovals.permitted ? (
           <NowQueue
@@ -183,6 +209,7 @@ export function HomeView() {
             sessions={liveSessions}
             state="ready"
             openAll={!showRecent}
+            costs={!!usagePath}
             onOpen={openSession}
           />
         ) : null}
@@ -192,6 +219,7 @@ export function HomeView() {
             title={t('overview.recent')}
             sessions={settledSessions}
             state={recentState}
+            costs={!!usagePath}
             onOpen={openSession}
           />
         ) : null}

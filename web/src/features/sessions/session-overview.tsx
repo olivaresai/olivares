@@ -35,7 +35,7 @@ import { CanMessage } from './can-message'
 import { isScopedRow, primaryRun, type UnifiedSession } from './provenance'
 import type { EvidenceBlock } from './session-address'
 import { SessionEvidence } from './session-evidence'
-import { SessionMeter, SessionMode } from './session-meter'
+import { SessionMeter, SessionMode, useUsagePath } from './session-meter'
 import { sessionModelRef, sessionUsage } from './session-usage'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkClause } from './work-clause'
@@ -76,6 +76,8 @@ export function SessionOverview({
   const tickedLive = live && tickLive(live, nowMs)
   // With the meter shown, the cost is its to say (or to say it is unknown): the facts
   // line does not repeat it, nor print a second figure beside "cost not reported".
+  // Money is told only where Usage opens for the person: a member sees none.
+  const tellsCost = useUsagePath() !== null
   const facts = tickedLive
     ? workFacts(
         tickedLive,
@@ -83,9 +85,10 @@ export function SessionOverview({
         {
           modelName,
           duration: (ms) => formatDuration(ms),
-          cost: usage
-            ? undefined
-            : (micro) => formatMicroUsd(micro, { locale: lang }),
+          cost:
+            usage || !tellsCost
+              ? undefined
+              : (micro) => formatMicroUsd(micro, { locale: lang }),
         },
         sessionModelRef(run, tickedLive),
       )
@@ -111,7 +114,7 @@ export function SessionOverview({
 
       {/* WHAT IT HAS SPENT: its tokens and cost, said here and not in the header. */}
       {usage ? (
-        <p className="text-caption text-muted-foreground">
+        <p className="text-caption text-muted-foreground empty:hidden">
           <SessionMeter usage={usage} />
         </p>
       ) : null}

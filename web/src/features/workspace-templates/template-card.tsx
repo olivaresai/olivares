@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// TemplateCard — one workspace template as a row of the catalog list.
-// Shows name and description, and the word "Built-in" once for a built-in; version
-// and author live in its detail sheet. The name opens that sheet (read-only for a
-// built-in). Actions: Apply to session, Edit (opens editor sheet), Duplicate (calls
-// API), Archive (with confirmation, blocked for built-in templates).
+// TemplateCard — one workspace template as a row of a boxed list.
+// Shows the name, the word "Built-in" once for a built-in, and one helper line: the
+// model the template pins and the first line of its instructions, or its description
+// when it has none. Version and author live in its detail sheet. The name opens that
+// sheet (read-only for a built-in). Actions: Apply to session, Edit (opens editor
+// sheet), Duplicate (calls API), Archive (with confirmation, blocked for built-ins).
 //
 // ⛔ "Apply to session" LAUNCHES a session under the template. It used to POST
 // /apply and raise a toast, and nothing else happened anywhere: the endpoint answered
@@ -16,10 +17,17 @@
 // dialog is where a session is configured, and the engine merges the template into it
 // before the governance gates.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Copy, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react'
+import {
+  Copy,
+  LayoutTemplate,
+  MoreHorizontal,
+  Pencil,
+  Play,
+  Trash2,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/ui/badge'
+import { BoxedListRow } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
@@ -29,6 +37,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tag } from '@/components/ui/tag'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -126,36 +135,53 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
   })
 
   const isArchived = !!template.archived_at
+  const settings = template.body?.settings
+  const instructions = settings?.custom_instructions?.trim().split('\n')[0]
+  const helper = [settings?.model, instructions || template.description]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <>
-      <li className="flex min-w-0 items-center gap-3 py-2.5">
+      <BoxedListRow role="listitem">
+        <span
+          aria-hidden="true"
+          className="flex size-8 shrink-0 items-center justify-center rounded-card border border-line bg-surface text-text-3 [&_svg]:size-4"
+        >
+          <LayoutTemplate />
+        </span>
         <div className="min-w-0 flex-1">
-          {template.builtin || canWrite ? (
-            <button
-              type="button"
-              onClick={() => onEdit(template)}
-              className="max-w-full break-words text-left text-body font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {template.name}
-            </button>
-          ) : (
-            <span className="break-words text-body font-medium">
-              {template.name}
-            </span>
-          )}
-          {template.description && (
-            <p className="text-caption text-muted-foreground [overflow-wrap:anywhere]">
-              {template.description}
+          <div className="flex min-h-[22px] min-w-0 items-center gap-2">
+            {template.builtin || canWrite ? (
+              <button
+                type="button"
+                onClick={() => onEdit(template)}
+                title={template.name}
+                className="min-w-0 truncate text-left text-body font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {template.name}
+              </button>
+            ) : (
+              <span
+                title={template.name}
+                className="min-w-0 truncate text-body font-medium"
+              >
+                {template.name}
+              </span>
+            )}
+            {template.builtin && (
+              <Tag className="shrink-0">{t('catalog.builtin')}</Tag>
+            )}
+            {isArchived && (
+              <Tag className="shrink-0">{t('catalog.archived')}</Tag>
+            )}
+          </div>
+          {helper && (
+            <p title={helper} className="truncate text-caption text-text-2">
+              {helper}
             </p>
           )}
         </div>
-        {template.builtin && (
-          <span className="shrink-0 text-caption text-muted-foreground">
-            {t('catalog.builtin')}
-          </span>
-        )}
-        {isArchived && <Badge variant="neutral">{t('catalog.archived')}</Badge>}
         {/* Actions menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -206,7 +232,7 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-      </li>
+      </BoxedListRow>
 
       <ConfirmDialog
         open={confirmArchive}

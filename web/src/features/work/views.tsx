@@ -35,7 +35,6 @@ export const VIEWS = [
       { permission: 'sessions:work:admin' },
       { permission: 'sessions:run:write' },
       { permission: 'sessions:message-send:write' },
-      { permission: 'sessions:lease:write' },
       { permission: 'sessions:lease:admin' },
       { permission: 'sessions:decision:admin' },
     ],

@@ -11,6 +11,7 @@
 //    second dispatch can race it. The follow-ups are reconcile, which reads the host and
 //    never dispatches (modules/gitpublish/reconcile.go), and abandon, which records that an
 //    administrator takes responsibility and proves nothing about the host.
+import type { TFunction } from 'i18next'
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import type {
   IntentEffect,
@@ -25,8 +26,50 @@ export function hasChangeAPI(target: PublicationTarget): boolean {
   return target.host === 'github' || target.host === 'gitlab'
 }
 
+/** How a person knows a target, wherever one is named: by its repository and push prefix
+ * when the engine names the repository, so two targets of one prefix are told apart; else
+ * by its push prefix, as each row of the publish block shows it. Never by its id. */
+export function targetName(
+  target: PublicationTarget,
+  t: TFunction<'gitpublish'>,
+): string {
+  return target.repository
+    ? t('session.targetName', {
+        repository: target.repository,
+        prefix: target.push_prefix,
+      })
+    : target.push_prefix
+}
+
+/** The run of the session a publication came from: the intent's own, else, from an engine
+ * that names it only there, the approved proposal's. */
+export function sourceSession(intent: PublicationIntent): string | undefined {
+  return intent.session_run || intent.proposal?.session_run || undefined
+}
+
+/** The target a held push or pull request waits on: the engine stores the target's id
+ * with the plan its approval is bound to after the last `#plan=`. */
+export function approvalTarget(subject: string): string {
+  const plan = subject.lastIndexOf('#plan=')
+  return plan < 0 ? subject : subject.slice(0, plan)
+}
+
+/** The targets a session's run can be published through, and the one its Git panel pushes
+ * to: the engine reads the run in a target's workspace, so only those take it, and the panel
+ * serves the first. The publish block reads the same answer, so the two never disagree on
+ * which target the panel serves. */
+export function sessionTargets(
+  items: readonly PublicationTarget[] = [],
+  workspace?: string,
+): { bound: PublicationTarget[]; served?: PublicationTarget } {
+  const bound = items.filter((tg) => tg.workspace_id === workspace)
+  return { bound, served: bound[0] }
+}
+
 /** The closed refusal vocabulary the module answers with (errors.go, targets.go,
- * publish.go, reconcile.go, routes.go `decode`). Each code has copy under `refusals.<code>`. */
+ * publish.go, changes.go, reconcile.go, routes.go `decode`). Each code has copy under `refusals.<code>`.
+ * `secret_detected` is a 403 of a push or pull request whose commit carries what looks like
+ * a credential: its copy never names what was found. */
 export const REFUSAL_CODES = [
   'approval_denied',
   'approval_unavailable',
@@ -43,6 +86,7 @@ export const REFUSAL_CODES = [
   'head_mismatch',
   'host_credential_refused',
   'host_unavailable',
+  'identity_mismatch',
   'intent_settled',
   'invalid_request',
   'link_not_allowed',
@@ -60,6 +104,8 @@ export const REFUSAL_CODES = [
   'repository_outside_binding',
   'runtime_credential_refused',
   'scoped_grant_required',
+  'secret_detected',
+  'secret_scan_unavailable',
   'separation_of_duty',
   'session_source_refused',
   'session_source_unavailable',
@@ -69,6 +115,7 @@ export const REFUSAL_CODES = [
   'target_changed',
   'target_in_use',
   'unresolved_intent',
+  'unknown_effect',
   'unsupported_requirement',
   'version_conflict',
   'workflow_change_refused',
@@ -261,12 +308,14 @@ export function failureOf(error: unknown): PublicationOutcome | null {
 }
 
 /** The page of a pull request, only when it is a plain https link: the engine builds it from
- * the repository's approved address, and the console still never renders another scheme. */
+ * the repository's approved address, and the console still never renders another scheme,
+ * nor shows or opens a link that carries a user name or password. */
 export function safePullRequestUrl(url?: string): string | null {
   if (!url) return null
   try {
     const parsed = new URL(url)
-    return parsed.protocol === 'https:' ? parsed.href : null
+    const plain = !parsed.username && !parsed.password
+    return parsed.protocol === 'https:' && plain ? parsed.href : null
   } catch {
     return null
   }

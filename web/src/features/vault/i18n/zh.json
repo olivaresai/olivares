@@ -36,7 +36,9 @@
     "menu": "{{label}} 的操作",
     "copyPassword": "复制 {{label}} 的密码",
     "copyNote": "复制 {{label}} 的笔记",
-    "copyCode": "复制 {{label}} 的验证码"
+    "copyCode": "复制 {{label}} 的验证码",
+    "changed": "修改时间",
+    "actions": "操作"
   },
   "delete": {
     "title": "删除 {{label}}？",

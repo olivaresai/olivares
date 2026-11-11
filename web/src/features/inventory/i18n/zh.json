@@ -33,7 +33,8 @@
     "signals": "信号",
     "hosts": "主机",
     "lastSeen": "最后发现",
-    "occurrences": "出现次数"
+    "occurrences": "出现次数",
+    "where": "位置"
   },
   "searchPlaceholder": "搜索名称、引用、信号…",
   "hostCount": "{{count}} 个主机",
@@ -127,6 +128,10 @@
       "title": "尚未发现资产域实体",
       "description": "连接器上报对智能体、会话、身份、MCP 能力、模型、提供商或资源的观测后，相应实体才会显示。",
       "action": "打开能力"
+    },
+    "filtered": {
+      "title": "没有符合这些筛选条件的条目",
+      "description": "选择其他类型或状态以查看更多目录内容。"
     }
   },
   "coverage": {
@@ -206,5 +211,6 @@
       "suspendedTitle": "租户服务已暂停",
       "suspended": "此租户的服务已暂停或未在服务中，因此无法读取采集覆盖。"
     }
-  }
+  },
+  "export": "导出"
 }

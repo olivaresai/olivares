@@ -11,7 +11,10 @@
 // the UI triggers distribution and shows the resulting drift verification — it
 // NEVER writes host files, and never implies the system enforces on its own.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  useFailedActionReporter,
+} from '@/lib/hooks/use-privileged-mutation'
 import { FlaskConical, Send } from 'lucide-react'
 import { useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -118,6 +121,7 @@ export function PolicyAuthoringPanel({
         setDryRun(null)
         return
       }
+      if (reportEditionRefusal(e)) return
       toast.error(
         t('common:errors.generic', { defaultValue: 'Something went wrong' }),
         {
@@ -160,7 +164,7 @@ export function PolicyAuthoringPanel({
       // `isForbidden` es cierto para los DOS 403, así que cerrar el diálogo sigue cubriendo
       // ambas negativas —como antes— y el REPORTE se delega en la política que sí los
       // distingue. La rama genérica de abajo NO cierra el diálogo, y se queda igual.
-      if (e instanceof ApiError && e.isForbidden) {
+      if (e instanceof ApiError && e.isForbiddenOrEdition) {
         setConfirmOpen(false)
         report(e)
         return
@@ -287,7 +291,9 @@ export function PolicyAuthoringPanel({
         {publishPending && (
           <ContractPendingNotice what={t('panel.publishWhat')} />
         )}
-        {publishEditionGated && <BusinessRequiredNotice />}
+        {publishEditionGated && (
+          <BusinessRequiredNotice error={publishMutation.error} />
+        )}
         {published && <PublishResultPanel result={published} />}
       </div>
 

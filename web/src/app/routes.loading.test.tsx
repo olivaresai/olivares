@@ -72,6 +72,7 @@ vi.mock('@/components/layout/app-frame', () => ({
 vi.mock('@/components/layout/sidebar', () => ({
   Sidebar: () => null,
   NavigationDrawer: () => null,
+  PhoneNavigation: () => null,
 }))
 vi.mock('@/components/layout/topbar', () => ({ Topbar: () => null }))
 vi.mock('@/components/layout/command-menu', () => ({ CommandMenu: () => null }))
@@ -82,6 +83,11 @@ vi.mock('@/components/layout/destination-sections', () => ({
 }))
 vi.mock('@/components/layout/shortcuts', () => ({
   GlobalShortcuts: () => null,
+}))
+// The New session dialog is a shell decoration with its own tests; its form reads the
+// keybindings, which read the whole registry this test replaces with one view.
+vi.mock('@/features/first-hour/new-session-host', () => ({
+  NewSessionHost: () => null,
 }))
 // Only the frame is replaced; the shell also asks the real `frameFor` which frame a
 // path gets (destination-sections.tsx), and a mock without it failed every render.

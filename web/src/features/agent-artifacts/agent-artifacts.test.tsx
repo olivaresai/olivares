@@ -334,6 +334,23 @@ describe('agent supply-chain AIBOM', () => {
   })
 })
 
+describe('AgentArtifactsView — the fingerprint column', () => {
+  it('shows each artifact’s content fingerprint, short, in the registry table', async () => {
+    api.artifacts.mockResolvedValue({
+      items: [{ ...artifact, content_hash: '0123456789abcdef0123' }],
+      has_more: false,
+    })
+    wrap(<AgentArtifactsView />)
+    // The table draws its header while it loads: wait for the artifact's row.
+    const row = (await screen.findByText('Skill analyzer')).closest('tr')!
+    expect(
+      screen.getByRole('columnheader', { name: 'Fingerprint' }),
+    ).toBeInTheDocument()
+    expect(within(row).getByText('0123456789ab')).toBeInTheDocument()
+    expect(screen.queryByText('0123456789abcdef0123')).toBeNull()
+  })
+})
+
 describe('read-only permissions', () => {
   it('hides create, delete and seal while retaining read access', async () => {
     const user = userEvent.setup()

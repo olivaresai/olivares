@@ -3,7 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // Shared building blocks for the Claude Code governance console.
-import { QueryErrorState } from '@/components/layout/query-error-state'
+import {
+  EditionRefusalNote,
+  QueryErrorState,
+} from '@/components/layout/query-error-state'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react'
@@ -11,6 +14,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CaveatNotice, SeamBadge } from '@/features/_intel'
 import { ForbiddenState } from '@/components/ui/error-state'
+import { editionRefusal } from '@/components/ui/edition-note'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, NetworkError, isOpenCoreSeam } from '@/lib/api/errors'
 import { cn } from '@/lib/utils'
@@ -35,13 +39,17 @@ export function ContractPendingNotice({ what }: { what: string }) {
 }
 
 /**
- * A route this edition does not serve (HTTP 501). It is mounted and answering —
- * the capability is Business — so it is not the "backend pending" seam. Same
- * `status` role and slot as QueryErrorState's 501 branch, so a screen reader
- * announces it when a tab's query fails.
+ * A route this edition does not serve (HTTP 501, or a refusal by edition). It is mounted
+ * and answering, so it is not the "backend pending" seam. An answer that is an edition
+ * refusal says the one edition line; a 501 that names none keeps this build's sentence.
+ * Same `status` role as QueryErrorState's, so a screen reader announces it when a tab's
+ * query fails.
  */
-export function BusinessRequiredNotice() {
+export function BusinessRequiredNotice({ error }: { error?: unknown }) {
   const { t } = useTranslation('common')
+  // The panel is wider than the route refused: only the answer names the capability.
+  const refusal = editionRefusal(error)
+  if (refusal) return <EditionRefusalNote refusal={refusal} />
   return (
     <p
       role="status"
@@ -90,7 +98,8 @@ export function DeclaredSection<T>({
   }
   if (query.isError) {
     const error = query.error
-    if (isOpenCoreSeam(error)) return <BusinessRequiredNotice />
+    if (isOpenCoreSeam(error) || editionRefusal(error))
+      return <BusinessRequiredNotice error={error} />
     if (!live && isContractPending(error))
       return <ContractPendingNotice what={what} />
     /* ⛔ ASEGURAMIENTO ANTES QUE ROL, y en el ayudante que envuelve a TODA esta feature:

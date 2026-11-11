@@ -139,6 +139,7 @@
   },
   "query": {
     "title": "Obtenção governada",
+    "tryTitle": "Experimentar uma consulta",
     "body": "Executa uma obtenção governada em «{{name}}» como o agente indicado. Os resultados são filtrados pela autorização, pela ACL e pela residência dessa identidade, e esta consulta fica registada na linhagem (origem → resposta).",
     "queryLabel": "Consulta",
     "queryHint": "A consulta de obtenção — é guardada apenas como hash para a linhagem, nunca como texto.",

@@ -39,9 +39,13 @@ func TestScopedPrincipalThroughAuthorizer(t *testing.T) {
 	viewer := ScopedPrincipal("s1", "sub", tenant, RoleViewer)
 	editor := ScopedPrincipal("s2", "sub", tenant, RoleEditor)
 
-	// Module verb tier: a viewer-scoped principal reads module resources.
-	if !az.Allowed(context.Background(), viewer, "security:finding:read", tenant) {
-		t.Error("viewer-scoped principal should hold security:finding:read")
+	// Module verb tier: a viewer-scoped principal reads module resources...
+	if !az.Allowed(context.Background(), viewer, "sessions:run:read", tenant) {
+		t.Error("viewer-scoped principal should hold sessions:run:read")
+	}
+	// ...but not the administrator's reads (adminReadPerms), such as security findings.
+	if az.Allowed(context.Background(), viewer, "security:finding:read", tenant) {
+		t.Error("viewer-scoped principal must NOT hold security:finding:read")
 	}
 	// Privileged reads are editor+: never granted to the viewer tier.
 	for _, perm := range []Permission{"accessgraph:read", "security:observed:read"} {

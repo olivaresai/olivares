@@ -9,6 +9,7 @@
 // records (modules/sessions/session_secret_env.go).
 
 import type { RunDTO } from '@/features/agentops/types'
+import { runLabel } from '@/features/sessions/provenance'
 import { looksLikeCredential } from '@/lib/credentials'
 import type { SourceRosterEntry } from './api'
 import type { MCPServer } from './mcp-gateway-api'
@@ -126,13 +127,13 @@ export function collectSecretUsage(input: {
     for (const ref of run.secret_env ?? [])
       add(store, ref.secret, {
         kind: 'session',
-        label: run.name || run.run_ref,
+        label: runLabel(run),
         id: run.run_ref,
       })
     for (const name of run.credentials ?? [])
       add(store, `credential/${name}`, {
         kind: 'session',
-        label: run.name || run.run_ref,
+        label: runLabel(run),
         id: run.run_ref,
       })
   }

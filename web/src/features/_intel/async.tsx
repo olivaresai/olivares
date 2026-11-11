@@ -51,10 +51,15 @@ export function AsyncSection<T>({
     const error = query.error
     const calm =
       error instanceof ApiError &&
-      (error.isForbidden || isModuleNotEnabled(error)) &&
+      (error.isForbiddenOrEdition || isModuleNotEnabled(error)) &&
       !error.isStepUpRequired
+    // A section is a pane: its answer is the state page made small.
     const state = (
-      <QueryErrorState error={error} retry={() => void query.refetch()} />
+      <QueryErrorState
+        error={error}
+        retry={() => void query.refetch()}
+        size="panel"
+      />
     )
     return calm ? (
       <div className="flex min-h-40 items-center justify-center">{state}</div>

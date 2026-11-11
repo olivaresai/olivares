@@ -87,7 +87,7 @@ export function MessageRail({ nav }: { nav: MessageNavigator }) {
 
 // The thread's own column (session-conversation.tsx) and the composer's: the bar and its
 // notices read inside it, not across the whole pane.
-const COLUMN = 'mx-auto w-full max-w-[760px]'
+const COLUMN = 'mx-auto w-full max-w-[780px]'
 
 /** The toggle at the conversation's top corner, the panel it opens, and a message too far
  * back for the conversation this view holds. The toggle shows while the conversation is

@@ -132,39 +132,46 @@ beforeEach(() => {
   ops.interrupt.mockResolvedValue({ accepted: true })
 })
 
-describe('session header — Interrupt turn beside Stop', () => {
-  it('interrupts the running Claude Code turn without stopping the session', async () => {
+describe('session header — Stop stops the turn and keeps the session', () => {
+  it('Stop interrupts the running turn and never ends the session', async () => {
     renderHeader(run())
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Interrupt turn' }),
-    )
+    await userEvent.click(screen.getByRole('button', { name: 'Stop' }))
     await waitFor(() =>
       expect(ops.interrupt).toHaveBeenCalledWith('run-1', undefined),
     )
     expect(ops.stop).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('ending the session is its own control, named for what it does', async () => {
+    renderHeader(run())
+    await userEvent.click(screen.getByRole('button', { name: 'End session' }))
+    expect(ops.interrupt).not.toHaveBeenCalled()
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
   })
 
   it('presents the work fence of a work-bound run', async () => {
     renderHeader(run({ work_item_id: 'work-a', work_lease_fence: 7 }))
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Interrupt turn' }),
-    )
+    await userEvent.click(screen.getByRole('button', { name: 'Stop' }))
     await waitFor(() => expect(ops.interrupt).toHaveBeenCalledWith('run-1', 7))
   })
 
   it.each([
     ['an idle run', run({ state: 'idle' })],
     ['a relayed run', run({ transport: 'remote-control' })],
-  ])('is not offered for %s', (_, r) => {
+  ])('offers no Stop for %s: only End session', (_, r) => {
     renderHeader(r)
-    expect(screen.queryByRole('button', { name: 'Interrupt turn' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'End session' }),
+    ).toBeInTheDocument()
   })
 
-  it('is not offered to a person who may not write to the run', () => {
+  it('offers neither to a person who may not write to the run', () => {
     auth.can = () => false
     renderHeader(run(), false)
-    expect(screen.queryByRole('button', { name: 'Interrupt turn' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'End session' })).toBeNull()
   })
 })
 

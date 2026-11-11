@@ -7,6 +7,7 @@
 // sign-ins and sign-outs are routine and not shown. An action without a sentence is a record,
 // not a person's action: the bell shows it, as its name made readable, only on request.
 import type { AuditEventDTO } from '@/lib/api/types'
+import { preferenceStorage } from '@/lib/preference-storage'
 
 /** Routine events a person does not wait for: never in the bell. */
 export function hiddenInBell(action: string): boolean {
@@ -89,13 +90,19 @@ export function readableAction(action: string): string {
   return words ? words[0]!.toUpperCase() + words.slice(1) : action
 }
 
-/** Where a click on the event goes, when there is one place to act on it. */
+/** Where a click on the event goes, when there is one place to act on it: the page's
+ * view, so the bell offers it only where it opens, and its address. */
 export function eventLink(
   event: Pick<AuditEventDTO, 'action' | 'target_id'>,
-): { to: string; search?: Record<string, string> } | null {
+): { view: string; to: string; search?: Record<string, string> } | null {
   if (event.action === 'governance.approval.create' && event.target_id)
-    return { to: '/permissions', search: { approval: event.target_id } }
-  if (event.action.startsWith('sessions.run.')) return { to: '/sessions' }
+    return {
+      view: 'permissions',
+      to: '/permissions',
+      search: { approval: event.target_id },
+    }
+  if (event.action.startsWith('sessions.run.'))
+    return { view: 'sessions', to: '/sessions' }
   return null
 }
 
@@ -115,4 +122,35 @@ export function actorOf(
       : { kind: 'member', userId }
   }
   return { kind: 'system' }
+}
+
+/** Where the person's read marks live: their server-kept preferences, so a mark follows
+ * them to another browser. One mark per organization: the newest event they read there. */
+const READ_KEY = 'olivares.notifications.lastSeen'
+
+export function readMarks(): Record<string, string> {
+  try {
+    const stored: unknown = JSON.parse(
+      preferenceStorage.getItem(READ_KEY) ?? '{}',
+    )
+    return stored && typeof stored === 'object' && !Array.isArray(stored)
+      ? (stored as Record<string, string>)
+      : {}
+  } catch {
+    // An unreadable mark forgets: the worst it can do is show events as unread once more.
+    return {}
+  }
+}
+
+export function saveMarks(marks: Record<string, string>): void {
+  preferenceStorage.setItem(READ_KEY, JSON.stringify(marks))
+}
+
+/** Unread: newer than the mark, or no mark yet. A mark (or a time) the clock cannot read
+ * compares as nothing, so the event stays unread rather than silently read. */
+export function isUnread(
+  occurredAt: string,
+  mark: string | undefined,
+): boolean {
+  return mark === undefined || !(Date.parse(mark) >= Date.parse(occurredAt))
 }

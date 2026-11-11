@@ -8,7 +8,7 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { humanDurationSeconds } from '@/features/shared'
-import { formatDateTime } from '@/lib/format'
+import { formatDateTime, formatShortDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { primaryRun, type UnifiedSession } from './provenance'
 import { sessionDisplayState } from './session-display-state'
@@ -82,8 +82,9 @@ function ago(ms: number, now: number): string {
 
 /**
  * The status's mark and word (Failed; Needs you; Working, with how long it has worked;
- * Done; Idle), Pending before a run starts. Any session that is not working also says how
- * long ago it last did something, the date on the hover. The word is the state for a screen reader too, and its colour only repeats it.
+ * Done; Paused; Idle), Pending before a run starts. Any session that is not working also says how
+ * long ago it last did something, the date on the hover; one paused until a scheduled
+ * resume still ahead says when it resumes instead. The word is the state for a screen reader too, and its colour only repeats it.
  */
 export function StateWord({ session }: { session: UnifiedSession }) {
   const { t, i18n } = useTranslation(['sessions', 'agentops'])
@@ -109,6 +110,11 @@ export function StateWord({ session }: { session: UnifiedSession }) {
     since === null
       ? null
       : humanDurationSeconds(Math.max(0, (now - since) / 1000))
+  // A resume the engine refused leaves the run stopped with the time it missed.
+  const resumes =
+    display.status === 'paused' && Date.parse(run?.resume_at ?? '') > now
+      ? run?.resume_at
+      : undefined
   return (
     <>
       <span
@@ -128,7 +134,17 @@ export function StateWord({ session }: { session: UnifiedSession }) {
         <SessionStatusMark status={display.status} decorative />
         {worked ? `${word} ${worked}` : word}
       </span>
-      {!working && session.lastActivityMs > 0 ? (
+      {resumes ? (
+        <time
+          dateTime={resumes}
+          title={formatDateTime(resumes, i18n.language)}
+          className="shrink-0 whitespace-nowrap text-overline font-normal tabular-nums text-text-3"
+        >
+          {t('limit.resumes', {
+            time: formatShortDateTime(resumes, i18n.language),
+          })}
+        </time>
+      ) : !working && session.lastActivityMs > 0 ? (
         <time
           dateTime={new Date(session.lastActivityMs).toISOString()}
           title={formatDateTime(

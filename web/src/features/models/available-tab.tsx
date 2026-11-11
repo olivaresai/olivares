@@ -10,7 +10,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ChevronDown, ChevronRight, Download, Plus } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { StatusBadge } from '@/components/data/badges'
 import { XScroll } from '@/components/data/scroll-edges'
 import { StaticTable } from '@/components/data/static-table'
@@ -30,7 +30,11 @@ import {
   providerKeys,
 } from '@/features/providers/api'
 import { ListTruncationBadge, SectionCard } from '@/features/_intel'
-import { isLiveRun, LIVE_RUN_STATES } from '@/features/sessions/provenance'
+import {
+  isLiveRun,
+  LIVE_RUN_STATES,
+  runLabel,
+} from '@/features/sessions/provenance'
 import {
   addressFromTarget,
   SESSION_PARAM,
@@ -61,7 +65,9 @@ type SourceName = 'tools' | 'ollama' | 'availability' | 'runs'
 function isRefusal(error: unknown): boolean {
   return (
     error instanceof ApiError &&
-    (error.isUnauthenticated || error.isForbidden || error.isStepUpRequired)
+    (error.isUnauthenticated ||
+      error.isForbiddenOrEdition ||
+      error.isStepUpRequired)
   )
 }
 
@@ -174,7 +180,7 @@ function useAvailable() {
       } catch (error) {
         if (
           error instanceof ApiError &&
-          error.isForbidden &&
+          error.isForbiddenOrEdition &&
           !error.isStepUpRequired
         )
           return null
@@ -457,7 +463,7 @@ function ModelCell({ row }: { row: AvailableRow }) {
         </span>
         <Link
           to={'/agent-tools' as never}
-          className="text-accent-text underline underline-offset-2"
+          className="text-foreground underline underline-offset-2"
         >
           {t('available.openAiTools')}
         </Link>
@@ -599,9 +605,9 @@ function ModelRow({
                         }),
                       } as never
                     }
-                    className="text-accent-text underline underline-offset-2"
+                    className="text-foreground underline underline-offset-2"
                   >
-                    {run.name || run.run_ref}
+                    {runLabel(run)}
                   </Link>
                 </li>
               ))}
@@ -634,6 +640,8 @@ export function AvailableTab() {
   // Installing a model is the system administrator's (the AI tools routes admit no one else).
   const canInstall = isSuperadmin && can('sessions:account:read')
   const canAddProvider = can('sessions:provider:write')
+  // A failed provider list: its key is tested on Providers, for who may open it.
+  const canOpenProviders = can('sessions:provider:read')
   const sourcesFailed =
     failed.some((source) => source !== 'runs') || providerFailures.length > 0
   // Nothing here may be read: "install a model" would be advice nobody can follow.
@@ -671,7 +679,22 @@ export function AvailableTab() {
           ))}
           {providerFailures.map((failure) => (
             <p key={failure.key} className="text-caption text-danger">
-              {t('available.sourceFailed', { source: failure.name })}
+              {canOpenProviders ? (
+                <Trans
+                  t={t}
+                  i18nKey="available.providerFailed"
+                  values={{ source: failure.name }}
+                  components={[
+                    <Link
+                      key="providers"
+                      to={'/providers' as never}
+                      className="text-foreground underline underline-offset-2"
+                    />,
+                  ]}
+                />
+              ) : (
+                t('available.providerFailedAlone', { source: failure.name })
+              )}
             </p>
           ))}
         </div>

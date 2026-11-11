@@ -7,9 +7,11 @@
 // the two would make the scroll position lie until each row is measured, so the
 // pair is pinned here rather than trusted.
 import { describe, expect, it } from 'vitest'
+import { preferenceStorage } from '@/lib/preference-storage'
 import {
   DENSITY_ROW,
   densityHeightToken,
+  reviewedId,
   usePreferencesStore,
   type Density,
 } from './preferences'
@@ -117,5 +119,27 @@ describe('the title style (0.5)', () => {
     expect(merge({ titleStyle: 7 }, current).titleStyle).toBe('sentence')
     expect(merge({}, current).titleStyle).toBe('sentence')
     expect(merge({ titleStyle: 'long' }, current).titleStyle).toBe('long')
+  })
+})
+
+// The marks share the one preferences value the server keeps, which it refuses
+// over 16,384 bytes; a refused value would fail every later preference save.
+describe('reviewed marks', () => {
+  it('keeps the newest 500 marks, well under the size the server takes', () => {
+    // The longest id a mark can have: a 32-bit hash written in base 36.
+    const widest = (2 ** 32 - 1).toString(36).length
+    expect(reviewedId('run_1:working:x', '[]').length).toBeLessThanOrEqual(
+      widest,
+    )
+    const ids = Array.from({ length: 501 }, (_, i) =>
+      (2 ** 32 - 1 - i).toString(36),
+    )
+    for (const id of ids) usePreferencesStore.getState().setReviewed(id, true)
+
+    expect(usePreferencesStore.getState().reviewed).toEqual(ids.slice(1))
+    expect(ids.every((id) => id.length === widest)).toBe(true)
+    const saved = preferenceStorage.getItem('olivares.prefs')!
+    expect(new TextEncoder().encode(saved).length).toBeLessThan(16_384 / 2)
+    usePreferencesStore.setState({ reviewed: [] })
   })
 })

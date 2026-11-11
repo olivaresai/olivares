@@ -97,9 +97,9 @@
   },
   "sso": {
     "title": "Authentification unique (OIDC / SAML)",
-    "description": "La connexion unique est configurée par un superadmin dans « Fournisseur d’identité ». Ce panneau vérifie l’URI de redirection exacte et expose l’état de la connexion.",
+    "description": "L’authentification unique est configurée par un superadmin. Ce panneau vérifie l’URI de redirection exacte et expose l’état de la connexion.",
     "notConfigured": "Non configuré",
-    "notConfiguredHint": "Aucun fournisseur d’identité n’est configuré, les requêtes de fédération renvoient donc 501. Un superadmin en configure un dans « Fournisseur d’identité ».",
+    "notConfiguredHint": "Aucun fournisseur d’identité n’est configuré : personne ne se connecte par authentification unique.",
     "seamWhat": "Le résumé de l’état de connexion SSO",
     "protocol": "Protocole",
     "state": "Connexion",
@@ -110,14 +110,13 @@
     "redirectCheckHint": "Collez l’URI de redirection/ACS configurée dans votre fournisseur d’identité. Elle doit correspondre exactement à la valeur ci-dessus (RFC 9700).",
     "redirectMatch": "Correspondance exacte — cette URI de redirection est valide.",
     "redirectMismatch": "Ne correspond pas exactement. L’IdP doit utiliser l’URI de redirection ci-dessus, caractère pour caractère.",
-    "configure": "Ouvrir « Fournisseur d’identité »",
     "testLogin": "Démarrer une connexion de test"
   },
   "scim": {
     "title": "Provisionnement SCIM 2.0",
     "description": "Provisionnement entrant des utilisateurs et des groupes. État en lecture seule du fournisseur de service, des utilisateurs synchronisés et des preuves de départ.",
     "seamWhat": "La configuration du fournisseur de service SCIM",
-    "businessOnly": "Le serveur SCIM entrant nécessite Business. Retirez une personne de l’organisation dans Personnes.",
+    "businessOnly": "Le serveur SCIM entrant nécessite Olivares AI Business. Retirez une personne de l’organisation dans Personnes.",
     "patch": "PATCH",
     "filter": "Filtrer",
     "filterMax": "Pris en charge (max {{n}})",

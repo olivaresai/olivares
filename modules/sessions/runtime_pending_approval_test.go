@@ -7,12 +7,14 @@ package sessions
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
 func TestRunPendingApprovalIsVisibleOnlyForItsCurrentWait(t *testing.T) {
@@ -90,13 +92,62 @@ func TestRunPendingApprovalIsVisibleOnlyForItsCurrentWait(t *testing.T) {
 		}
 	}
 	assertWaiting("")
+	// The live stream carries each change of the wait: the console learns of it at once
+	// instead of on its next poll.
+	waitFor(t, "managed row", func() bool { d, _ := h.m.getRun(t.Context(), tenant, run); return d.LiveRef != "" })
+	managed, err := h.m.getRun(t.Context(), tenant, run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames, unsubscribe := h.m.broker.subscribeTo(tenant, "", managed.LiveRef, "")
+	defer unsubscribe()
+	for len(frames) > 0 {
+		<-frames
+	}
+	// A page opened on this run listens by its run_ref: a fresh session's row is not
+	// proven yet when the page opens. Another session's frame never reaches it.
+	ts := httptest.NewServer(h.srv.Handler())
+	defer ts.Close()
+	streamCtx, cancelStream := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancelStream()
+	req, err := http.NewRequestWithContext(streamCtx, http.MethodGet, ts.URL+"/v1/m/sessions/stream?run_ref="+run, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+admin)
+	req.Header.Set("X-Olivares-Tenant", tenant.String())
+	res, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	byRun := streamConnected(t, res)
+	if err := h.m.onEdge(t.Context(), tenant.String(), sessEdge("sess-other", "file", "/other", sdkmodel.ModeRead, "Read", time.Now())); err != nil {
+		t.Fatal(err)
+	}
+	assertFrame := func(when string) {
+		t.Helper()
+		select {
+		case f := <-frames:
+			if f.RunRef != run {
+				t.Fatalf("%s: frame run_ref=%q, want=%q", when, f.RunRef, run)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("%s: the live stream carried no frame", when)
+		}
+	}
 	ref := model.NewID().String()
 	end, err := h.m.BeginApprovalWait(t.Context(), p, ref, clk.get().Add(time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertWaiting(ref)
+	assertFrame("wait began")
+	if f := streamSession(t, byRun); f.RunRef != run {
+		t.Fatalf("wait began: the run_ref stream carried run_ref=%q first, want=%q", f.RunRef, run)
+	}
 	end() // A decision, cancellation or effective expiry ends the same wait.
+	assertFrame("wait ended")
 	end() // Cleanup is idempotent.
 	assertWaiting("")
 	first, second := model.NewID().String(), model.NewID().String()

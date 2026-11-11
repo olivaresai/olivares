@@ -10,12 +10,24 @@
     "agentCount_many": "{{count}} de paragens de agentes ativas",
     "agentCount_other": "{{count}} paragens de agentes ativas",
     "agentBody": "Os agentes parados não podem agir: as suas chamadas de ferramentas, chamadas MCP e outras ações são recusadas.",
-    "none": "Nada está parado. As sessões e os agentes funcionam normalmente.",
+    "noneTitle": "Nada está parado",
+    "noneBody": "As sessões e os agentes funcionam normalmente.",
     "engagedBy": "Acionado por",
     "revoked": "{{count}} pedido de aprovação pendente cancelado",
     "revoked_one": "{{count}} pedido de aprovação pendente cancelado",
     "revoked_many": "{{count}} de pedidos de aprovação pendentes cancelados",
     "revoked_other": "{{count}} pedidos de aprovação pendentes cancelados"
+  },
+  "effects": {
+    "title": "O que acontece ao parar todos",
+    "sessions": "As sessões abertas terminam",
+    "sessionsHint": "O processo de cada sessão para; a sua pasta fica como está.",
+    "actions": "Todas as ações dos agentes são recusadas",
+    "actionsHint": "Chamadas de ferramentas, MCP, agendamentos, voz, chamadas a modelos, implementações e entrega de eventos.",
+    "approvals": "Os pedidos de aprovação pendentes são cancelados",
+    "approvalsHint": "Os das sessões e os de ações de agentes. Os pedidos que uma pessoa apresentou fora de uma sessão continuam pendentes, tal como os pedidos sobre os próprios controlos.",
+    "ledger": "A paragem fica no registo de auditoria",
+    "ledgerHint": "Quem parou, quando e porquê, para a revisão posterior."
   },
   "engage": {
     "agentRef": "Agente",
@@ -27,6 +39,7 @@
     "confirmBodyEstateNoRestart": "Todos os agentes param de imediato: as sessões abertas terminam, as suas ações são recusadas e os pedidos de aprovação pendentes dessas sessões e das ações de agentes são cancelados; os pedidos que uma pessoa apresentou fora de uma sessão ficam pendentes, tal como os pedidos sobre os próprios controlos. Não há forma de contornar isto, nem em caso de emergência.",
     "confirmTitleAgent": "Parar este agente?",
     "confirmBodyAgent": "Este agente para de imediato: as suas ações são recusadas e os seus pedidos de aprovação pendentes são cancelados. Para o voltar a iniciar, duas contas de utilizador diferentes têm de aprovar e a paragem tem de ser revista depois.",
+    "confirmBodyAgentNoRestart": "Este agente para de imediato: as suas ações são recusadas e os seus pedidos de aprovação pendentes são cancelados.",
     "done": "Kill switch acionado",
     "doneBody": "A paragem {{id}} está ativa. A reativação exige controlo duplo.",
     "alreadyStopped": "Já existe uma paragem ativa para este âmbito",
@@ -35,7 +48,6 @@
     "stopsRunning_many": "Param {{count}} de sessões abertas.",
     "stopsRunning_other": "Param {{count}} sessões abertas.",
     "stopAll": "Parar todos os agentes",
-    "more": "Mais",
     "stopOne": "Parar um agente…",
     "stopAgent": "Parar este agente"
   },
@@ -50,7 +62,7 @@
     "status": "{{live}} em curso, {{ended}} terminadas."
   },
   "stops": {
-    "title": "Paragens",
+    "title": "Histórico",
     "caption": "Cada paragem: quem a iniciou, quando, o que abrange, porquê, e como foi terminada e revista. Cada ação verifica estas paragens antes de ser executada.",
     "search": "Pesquisar paragens…",
     "label": "Paragens do kill switch",

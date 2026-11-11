@@ -22,6 +22,9 @@
     "name": "Nome",
     "kind": "Tipo",
     "key": "Chiave",
+    "usedBy": "Usata da",
+    "usedByUnread": "Non è stato possibile leggere quali profili usano ogni chiave.",
+    "usedByPartial": "Alcuni profili non sono stati letti: una chiave può essere usata da più profili di quelli mostrati.",
     "state": "Stato",
     "connection": "Connessione",
     "actions": "Azioni"

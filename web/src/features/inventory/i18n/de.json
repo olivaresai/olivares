@@ -33,7 +33,8 @@
     "signals": "Signale",
     "hosts": "Hosts",
     "lastSeen": "Zuletzt gesehen",
-    "occurrences": "Gesehen"
+    "occurrences": "Gesehen",
+    "where": "Wo"
   },
   "searchPlaceholder": "Name, Referenz, Signal suchen…",
   "hostCount": "{{count}} Hosts",
@@ -127,6 +128,10 @@
       "title": "Noch keine Bestandsentitäten erkannt",
       "description": "Entitäten erscheinen, sobald Konnektorbeobachtungen Agenten, Sitzungen, Identitäten, MCP-Fähigkeiten, Modelle, Anbieter oder Ressourcen melden.",
       "action": "Fähigkeiten öffnen"
+    },
+    "filtered": {
+      "title": "Keine Einträge entsprechen diesen Filtern",
+      "description": "Wählen Sie eine andere Art oder einen anderen Status, um mehr vom Katalog zu sehen."
     }
   },
   "coverage": {
@@ -206,5 +211,6 @@
       "suspendedTitle": "Mandantendienst ausgesetzt",
       "suspended": "Der Dienst dieses Mandanten ist ausgesetzt oder nicht in Betrieb, daher kann die Erfassungsabdeckung nicht gelesen werden."
     }
-  }
+  },
+  "export": "Exportieren"
 }

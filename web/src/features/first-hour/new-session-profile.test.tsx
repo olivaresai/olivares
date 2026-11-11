@@ -212,9 +212,12 @@ describe('the profile in the New session dialog', () => {
     })
     wrap(<NewSessionDialog open onOpenChange={vi.fn()} />)
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+      expect(
+        screen.getByRole('button', { name: 'Start session' }),
+      ).toBeEnabled(),
     )
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Start' }))
+    const start = screen.getByRole('button', { name: 'Start session' })
+    await userEvent.setup().click(start)
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalled())
     expect(launch.launchSession.mock.calls[0][0].quick.profileRef).toBe('ppf_c')
   })
@@ -234,12 +237,15 @@ describe('the profile in the New session dialog', () => {
     })
     wrap(<NewSessionDialog open onOpenChange={vi.fn()} />)
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+      expect(
+        screen.getByRole('button', { name: 'Start session' }),
+      ).toBeEnabled(),
     )
     expect(
       screen.getByText(/saved default.*no longer available/i),
     ).toBeVisible()
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Start' }))
+    const start = screen.getByRole('button', { name: 'Start session' })
+    await userEvent.setup().click(start)
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalled())
     expect(
       launch.launchSession.mock.calls[0][0].quick.profileRef,
@@ -483,6 +489,10 @@ describe('the profile in the New session dialog', () => {
       profileRef: 'ppf_c',
       model: '',
       effort: '',
+      // What the form shows goes with it: its words, folder and permission.
+      message: '',
+      workspaceRef: 'ws_fixture',
+      permission: 'editsAndCommands',
     })
   })
 
@@ -586,9 +596,11 @@ describe('the profile in the New session dialog', () => {
     wrap(<NewSessionDialog open onOpenChange={() => {}} />)
     await screen.findByRole('combobox', { name: 'Tool' })
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+      expect(
+        screen.getByRole('button', { name: 'Start session' }),
+      ).toBeEnabled(),
     )
-    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await user.click(screen.getByRole('button', { name: 'Start session' }))
     await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
     expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
       profileRef: 'ppf_b',
@@ -849,5 +861,57 @@ describe('the usage of the accounts in the New session dialog', () => {
     ).toBeVisible()
     expect(screen.queryByText(/%/)).toBeNull()
     expect(screen.queryByText(/limit reached/)).toBeNull()
+  })
+})
+
+describe("the New session dialog's answers", () => {
+  it('sit on their own band: the key that starts, Cancel, and Start at its own width', async () => {
+    const onOpenChange = vi.fn()
+    const user = userEvent.setup()
+    wrap(<NewSessionDialog open onOpenChange={onOpenChange} />)
+    const dialog = await screen.findByRole('dialog', { name: 'New session' })
+    // Held, Start sits inside the reason's wrapper; ready, it is its own node again, so
+    // it is taken once ready.
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Start session' }),
+      ).toBeEnabled(),
+    )
+    const start = within(dialog).getByRole('button', { name: 'Start session' })
+    // The band is the row the dialog's Cancel sits in: Start and the key share it.
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+    const band = cancel.parentElement as HTMLElement
+    expect(band).toContainElement(start)
+    expect(start).not.toHaveClass('w-full')
+    expect(band).toHaveTextContent('Enter to start')
+    expect(within(band).getByText('Enter').tagName).toBe('KBD')
+    await user.click(cancel)
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('name Ctrl+Enter when the person sends with it', async () => {
+    useClientSettings.setState({ sendKey: 'modEnter' })
+    wrap(<NewSessionDialog open onOpenChange={vi.fn()} />)
+    const dialog = await screen.findByRole('dialog', { name: 'New session' })
+    await within(dialog).findByRole('button', { name: 'Start session' })
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+    expect(cancel.parentElement).toHaveTextContent('Ctrl+Enter to start')
+  })
+
+  it('leave the form outside a dialog as it was: Start across the form', async () => {
+    wrap(<StartSessionForm />)
+    const start = await screen.findByRole('button', { name: 'Start' })
+    expect(start).toHaveClass('w-full')
+    expect(start.closest('[data-slot=dialog-footer]')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+  })
+
+  it('come after one sentence on what the session may do, in the secondary text', async () => {
+    wrap(<NewSessionDialog open onOpenChange={vi.fn()} />)
+    expect(
+      await screen.findByText(
+        'Reads, edits files and runs commands without asking. Other tools are refused.',
+      ),
+    ).toHaveClass('text-text-2')
   })
 })

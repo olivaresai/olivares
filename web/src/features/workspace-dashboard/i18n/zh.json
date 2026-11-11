@@ -18,6 +18,8 @@
   "noAgentsHint": "在此工作区中被发现后，智能体会显示在这里。",
   "noGroups": "此工作区中还没有智能体组。",
   "noGroupsHint": "为此工作区定义后，智能体组会显示在这里。",
+  "agentsFailed": "无法读取此工作区的智能体。",
+  "groupsFailed": "无法读取此工作区的智能体组。",
   "viewAll": "查看全部",
   "defaultBadge": "默认",
   "created": "创建时间",
@@ -62,5 +64,25 @@
     "statusFailed": "无法确认此文件夹是否可通过 SFTP 访问。"
   },
   "showMore": "显示更多",
-  "agentsCut": "未显示全部智能体。"
+  "agentsCut": "未显示全部智能体。",
+  "files": {
+    "title": "工作区",
+    "folders": "文件夹",
+    "overview": "概览",
+    "backToFiles": "文件",
+    "addFolder": "添加文件夹",
+    "emptyTitle": "还没有文件夹",
+    "emptyDescription": "添加一个文件夹，会话将在其范围内工作。",
+    "noAccessTitle": "无法打开此文件夹",
+    "noAccessDescription": "它已被移除，或你的角色不包含它。请向管理员申请访问权限。",
+    "showFolders": "显示我的文件夹",
+    "loading": "正在读取文件夹…",
+    "loadFailed": "无法加载文件夹。",
+    "details": "Wiki 和文件传输",
+    "worktreeCount": "工作树: {{n}}",
+    "worktreeHint": "将此工作树注册为文件夹后即可浏览。",
+    "gitCut": "并非所有已更改的文件都已标记：Git 只列出了部分更改。",
+    "clean": "没有未提交的更改",
+    "changes": "未提交的更改: {{n}}"
+  }
 }

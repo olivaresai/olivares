@@ -70,13 +70,22 @@ var _ api.LicenseService = (*licenseService)(nil)
 // gates nothing.
 func (s *licenseService) LicenseDisplay() api.LicenseDisplayInfo {
 	d := s.holder.display()
-	info := api.LicenseDisplayInfo{Status: d.status, Licensee: d.licensee}
+	info := api.LicenseDisplayInfo{Status: d.status, Licensee: d.licensee, LicensedEdition: d.edition()}
 	if d.verified {
 		info.Plan = d.lic.Plan()
 		info.SupportTier = d.lic.SupportTier()
 		info.SupportProfile = d.lic.SupportProfile()
 	}
 	return info
+}
+
+// edition is the edition the live license entitles, read at the status the holder reported:
+// Community when no license verified.
+func (d licenseDisplay) edition() string {
+	if !d.verified {
+		return license.EditionCommunity
+	}
+	return d.lic.Edition(license.Status(d.status))
 }
 
 // LicenseStatus renders the full live edition/license view, including live seat usage.
@@ -91,11 +100,12 @@ func (s *licenseService) LicenseStatus(ctx context.Context) (api.LicenseStatus, 
 // quota the console should render.
 func (s *licenseService) statusFor(ctx context.Context, d licenseDisplay) (api.LicenseStatus, error) {
 	out := api.LicenseStatus{
-		Edition:    s.edition,
-		HotApply:   true,
-		Status:     d.status,
-		Source:     d.source.Kind,
-		SourcePath: d.source.Path,
+		Edition:         s.edition,
+		LicensedEdition: d.edition(),
+		HotApply:        true,
+		Status:          d.status,
+		Source:          d.source.Kind,
+		SourcePath:      d.source.Path,
 	}
 	if _, _, present := licenseOverridePresent(s.explicitPath, s.getenv); present {
 		out.ManagedExternally = true

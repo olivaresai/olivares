@@ -78,6 +78,7 @@
     "colActions": "操作",
     "enabled": "已启用",
     "disabled": "已禁用",
+    "any": "任意",
     "bulk": {
       "enable": "启用所选路由",
       "disable": "禁用所选路由"

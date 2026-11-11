@@ -2,29 +2,28 @@
   "doors": {
     "catalog": {
       "title": "Comunicações",
-      "description": "Canais do espaço de trabalho selecionado que pode ler agora, os avisos diretos enviados através deles e a sua caixa de entrada. O motor decide cada leitura e cada ação."
+      "description": "Mensagens entre pessoas e sessões, e os canais que as transportam."
     },
     "inbox": {
       "title": "Caixa de entrada de comunicações",
-      "description": "Mensagens dirigidas a si no espaço de trabalho selecionado: abra e confirme a receção de cada uma."
+      "description": "Mensagens enviadas para si: abra cada uma e confirme a receção."
     },
     "new": {
       "title": "Novo canal",
-      "description": "Crie um canal e escolha quem o pode utilizar desde o início. Ninguém obtém acesso por implicação, e o recibo não é uma lista duradoura de quem o poderá ler mais tarde."
+      "description": "Crie um canal e escolha quem o pode usar."
     },
     "administration": {
       "title": "Administração de canais",
-      "description": "Os canais que pode administrar no espaço de trabalho selecionado: configuração e histórico de concessões. Cada alteração aplica-se apenas à versão que leu. Administrar um canal não exige nem dá o direito de ler o seu conteúdo."
+      "description": "Administre canais e o respetivo acesso; isto nunca lhe permite ler as mensagens."
     },
     "handoffs": {
       "title": "Transferências",
-      "description": "Ofertas de trabalho dirigidas a si no espaço de trabalho selecionado. A lista não mostra o conteúdo das ofertas; abrir uma lê o seu contexto, e o motor decide cada aceitação ou rejeição."
+      "description": "Trabalho que outros lhe propõem transferir: leia-o e depois aceite ou rejeite."
     }
   },
   "tabs": {
     "channels": "Canais",
     "inbox": "Caixa de entrada",
-    "create": "Novo canal",
     "administration": "Administração",
     "handoffs": "Transferências"
   },

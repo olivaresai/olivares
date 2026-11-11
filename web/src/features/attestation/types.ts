@@ -192,8 +192,6 @@ export interface SlsaProvenance {
   /** How the reusable workflow is pinned. HONESTY: semver TAG, NOT a SHA — a SHA pin
    *  would break slsa-verifier's builder-ID check (docs/RELEASE-VERIFICATION.md). */
   reusable_workflow_pin: 'semver_tag' | 'sha' | string
-  /** The verify command an operator runs (slsa-verifier). */
-  verify_command: string
   status: VerificationStatus
   scp: string
 }

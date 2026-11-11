@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, useMemo } from 'react'
+import { Fragment, useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Plus,
@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { BoxedList, BoxedListRow } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
@@ -35,7 +36,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 import { Spinner } from '@/components/ui/spinner'
+import { StatusChip, type StatusTone } from '@/components/ui/status-chip'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
@@ -46,6 +49,8 @@ import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { consoleApi } from './api'
 import { SecretsTab } from './secrets-tab'
 import {
+  hostOf,
+  programName,
   mcpEgressHost,
   mcpGatewayApi,
   mcpGatewayKeys,
@@ -81,17 +86,11 @@ function parsePairs(text: string): Record<string, string> | null {
   return out
 }
 
-/** The default name of a command server: its package or program ("server-everything"
- * for npx -y @modelcontextprotocol/server-everything). */
-function commandName(command: string, args: string[]): string {
-  const last = [...args].reverse().find((a) => a && !a.startsWith('-'))
-  const pick = last ?? command
-  return (
-    pick
-      .split(/[\\/]/)
-      .pop()
-      ?.replace(/@[^@/]*$/, '') || pick
-  )
+/** Where a saved server runs: its host or its program, else the dash. */
+function serverPlace(row: MCPServer): string {
+  const place =
+    row.transport === 'stdio' ? programName(row.command ?? '') : hostOf(row.url)
+  return place || '—'
 }
 
 /** A 409 that is not a stale version (code "conflict"), such as a held server name or an
@@ -104,13 +103,33 @@ function isRefusedConflict(err: unknown): err is ApiError {
     err.message !== ''
   )
 }
-/** The host of an endpoint, for messages and the default name; '' when it does not parse. */
-function hostOf(endpoint: string): string {
-  try {
-    return new URL(endpoint).host
-  } catch {
-    return ''
+
+/** A server's state in words: on and answering; on and failing, which says both;
+ * off; or why its last test failed. */
+function ServerState({ row }: { row: MCPServer }) {
+  const { t } = useTranslation('console')
+  const ok = row.probe.state === 'ok'
+  const verdict = t(`console:mcpGateway.verdict.${row.probe.state}`)
+  const on = t('console:mcpGateway.enabled')
+  let tone: StatusTone = row.probe.state === 'never_tested' ? 'neutral' : 'bad'
+  let words = [verdict]
+  if (row.enabled) {
+    tone = ok ? 'ok' : 'warn'
+    words = ok ? [on] : [on, verdict]
+  } else if (ok) {
+    tone = 'neutral'
+    words = [t('console:mcpGateway.disabled')]
   }
+  return (
+    <StatusChip tone={tone}>
+      {words.map((word, i) => (
+        <Fragment key={word}>
+          {i > 0 && <span aria-hidden="true">·</span>}
+          <span>{word}</span>
+        </Fragment>
+      ))}
+    </StatusChip>
+  )
 }
 
 function GatewayInner({ titled }: { titled: boolean }) {
@@ -253,16 +272,19 @@ function GatewayInner({ titled }: { titled: boolean }) {
             <KeyRound />
             {t('console:mcpGateway.credentials')}
           </Button>
-          <Button
-            disabled={data.read_only}
-            onClick={() => {
-              setStarter(undefined)
-              setEditing(null)
-            }}
-          >
-            <Plus />
-            {t('console:mcpGateway.add')}
-          </Button>
+          <PagePrimaryAction>
+            <Button
+              variant="primary"
+              disabled={data.read_only}
+              onClick={() => {
+                setStarter(undefined)
+                setEditing(null)
+              }}
+            >
+              <Plus />
+              {t('console:mcpGateway.add')}
+            </Button>
+          </PagePrimaryAction>
         </div>
       </div>
       {/* Only a read-only view needs saying why; editable settings are simply editable. */}
@@ -316,34 +338,40 @@ function GatewayInner({ titled }: { titled: boolean }) {
           icon={<PlugZap />}
         />
       ) : (
-        // One list of rows, one server per row: not a grid of cards.
-        <ul className="min-w-0 divide-y divide-border rounded-lg border border-border">
+        // One boxed list, one server per row: its state in one word, where it
+        // runs and what confines it, then its tools.
+        <BoxedList role="list">
           {data.servers.map((row) => (
-            <li key={row.id}>
-              <article className="min-w-0 p-3" aria-label={row.name}>
+            <BoxedListRow key={row.id} role="listitem">
+              <article className="min-w-0 flex-1" aria-label={row.name}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Section className="text-body font-semibold">
                     {row.name}
                   </Section>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant={row.enabled ? 'success' : 'neutral'}>
-                      {t(
-                        row.enabled
-                          ? 'console:mcpGateway.enabled'
-                          : 'console:mcpGateway.disabled',
-                      )}
-                    </Badge>
-                    <Badge
-                      variant={row.probe.state === 'ok' ? 'success' : 'warning'}
-                    >
-                      {t(`console:mcpGateway.verdict.${row.probe.state}`)}
-                    </Badge>
-                  </div>
+                  <ServerState row={row} />
                 </div>
-                <p className="mt-2 break-all font-mono text-caption text-muted-foreground">
-                  {row.transport === 'stdio'
-                    ? [row.command, ...(row.args ?? [])].join(' ')
-                    : row.url}
+                {/* Where it runs: the host or the program, never the saved
+                    address or an argument, which can carry a token. */}
+                <p className="flex flex-wrap gap-x-1.5 text-caption text-muted-foreground">
+                  <span className="break-all font-mono">
+                    {serverPlace(row)}
+                  </span>
+                  {row.transport === 'stdio' && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{t('console:mcpGateway.inSessionFolder')}</span>
+                    </>
+                  )}
+                  {row.egress_hosts?.length ? (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>
+                        {t('console:mcpGateway.reachesOnly', {
+                          hosts: row.egress_hosts.join(', '),
+                        })}
+                      </span>
+                    </>
+                  ) : null}
                 </p>
                 <p className="mt-1 break-all text-caption text-muted-foreground">
                   {row.credential_ref || t('console:mcpGateway.noCredential')}
@@ -482,9 +510,9 @@ function GatewayInner({ titled }: { titled: boolean }) {
                   </p>
                 </details>
               </article>
-            </li>
+            </BoxedListRow>
           ))}
-        </ul>
+        </BoxedList>
       )}
       {!data.read_only && (
         <StarterList
@@ -814,14 +842,10 @@ function GatewayForm({
     (!jwks.trim() || publicKeys !== null) &&
     !(jwksURL && jwks.trim()) &&
     trustWhole
-  // An empty name takes the server's host name.
-  const finalName =
-    name.trim() ||
-    (kind === 'url'
-      ? hostOf(url)
-      : command.trim()
-        ? commandName(command.trim(), argList)
-        : '')
+  // An empty name takes the server's host or its program, never an argument:
+  // an argument can be a token, and the name is shown everywhere.
+  const defaultName = kind === 'url' ? hostOf(url) : programName(command)
+  const finalName = name.trim() || defaultName
   const valid =
     finalName.length > 0 &&
     finalName.length <= 128 &&
@@ -976,13 +1000,7 @@ function GatewayForm({
             id="mcp-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={
-              (kind === 'url'
-                ? hostOf(url)
-                : command.trim()
-                  ? commandName(command.trim(), argList)
-                  : '') || undefined
-            }
+            placeholder={defaultName || undefined}
             maxLength={128}
           />
         </Field>

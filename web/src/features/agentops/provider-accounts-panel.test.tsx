@@ -39,6 +39,7 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  info: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
@@ -640,6 +641,29 @@ describe('ProviderAccountsPanel — adopt', () => {
     expect(toast.success).not.toHaveBeenCalled()
     expect(api.listAccounts).toHaveBeenCalledOnce()
     expect(api.getAccount).not.toHaveBeenCalled()
+  })
+
+  // A 501 edition refusal reaches the feature's own error handler, which reported
+  // everything the engine answered itself: the edition's one line must still be said.
+  it('an adoption refused by edition says the edition line and no failure', async () => {
+    api.adoptAccount.mockRejectedValue(
+      new ApiError(501, 'business_required', 'requires Business'),
+    )
+    const user = userEvent.setup()
+    wrap()
+    const dialog = await openAdopt(user)
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Profile reference' }),
+      'ppf_b',
+    )
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
+    await waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1))
+    expect(within(dialog).queryByRole('alert')).toBeNull()
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
   })
 
   it('an unreachable engine leaves the outcome unknown: the draft closes, the accounts are read again, and a read-only check reconciles', async () => {

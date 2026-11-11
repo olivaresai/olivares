@@ -24,6 +24,7 @@ import {
   type BulkAction,
 } from '@/components/data/bulk-action-bar'
 import { Badge } from '@/components/ui/badge'
+import { BoxedList, BoxedListRow } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -116,6 +117,27 @@ const PAGE = 50
 // Radix Select rejects an empty-string item value, so the "no filter" option
 // carries this sentinel and is mapped back to undefined at the query edge.
 const ALL = 'all'
+
+/** What a test delivery did, in words, from the engine's outcome class: what was sent
+ *  and what answered (`http_<status>`, `timeout`, `network`), or that nothing left and
+ *  why (`endpoint_invalid`, `egress_*`, any other refusal before the send). */
+function testOutcome(
+  name: string,
+  outcome: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const sent = t('subscriptions.testSent', { name })
+  const status = /^http_(\d{3})$/.exec(outcome)?.[1]
+  if (status)
+    return `${sent} ${t('subscriptions.testAnswer.http', { code: status })}`
+  if (outcome === 'timeout' || outcome === 'network')
+    return `${sent} ${t(`subscriptions.testAnswer.${outcome}`)}`
+  if (outcome === 'endpoint_invalid')
+    return t('subscriptions.testNotSent.endpoint_invalid', { name })
+  if (outcome.startsWith('egress_'))
+    return t('subscriptions.testNotSent.egress', { name, outcome })
+  return t('subscriptions.testNotSent.other', { name, outcome })
+}
 
 export function EventingView() {
   const { t } = useTranslation('eventing')
@@ -288,11 +310,14 @@ function SubscriptionsTab({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const testMut = useMutation({
-    mutationFn: (id: string) => eventingApi.testSubscription(id),
-    onMutate: (id) => setTestingId(id),
-    onSuccess: (res) => {
-      if (res.delivered) toast.success(t('subscriptions.testSuccess'))
-      else toast.error(t('subscriptions.testFailed') + `: ${res.outcome}`)
+    mutationFn: (sub: Subscription) => eventingApi.testSubscription(sub.id),
+    onMutate: (sub) => setTestingId(sub.id),
+    // What was sent and what answered, never only «failed».
+    onSuccess: (res, sub) => {
+      const description = testOutcome(sub.name, res.outcome, t)
+      if (res.delivered)
+        toast.success(t('subscriptions.testSuccess'), { description })
+      else toast.error(t('subscriptions.testFailed'), { description })
       setTestingId(null)
     },
     onError: (e: unknown) => {
@@ -418,39 +443,46 @@ function SubscriptionsTab({
                   actions={bulkActions}
                 />
               ) : null}
-              {list.items.map((sub) => (
-                <div key={sub.id} className="flex items-start gap-2">
-                  {canWrite ? (
-                    <Checkbox
-                      className="mt-4"
-                      checked={selectedIds.has(sub.id)}
-                      aria-label={t('common:table.selectRow', { id: sub.id })}
-                      onCheckedChange={() => {
-                        const next = new Set(selectedIds)
-                        if (next.has(sub.id)) next.delete(sub.id)
-                        else next.add(sub.id)
-                        setSelectedIds(next)
-                      }}
-                    />
-                  ) : null}
-                  <div className="min-w-0 flex-1">
-                    <SubscriptionCard
-                      sub={sub}
-                      canRead={canRead}
-                      canWrite={canWrite}
-                      canAdmin={canAdmin}
-                      onEdit={onEdit}
-                      onTest={(id) => testMut.mutate(id)}
-                      onDelete={(id) => deleteMut.mutate(id)}
-                      onRotateSecret={(id) => rotateSecretMut.mutate(id)}
-                      onRotateAuth={() => setRotateAuthSub(sub)}
-                      onReplay={setReplaySub}
-                      onHistory={setHistorySub}
-                      testPending={testingId === sub.id}
-                    />
-                  </div>
-                </div>
-              ))}
+              {/* The destinations: one boxed list, a row per webhook. */}
+              <BoxedList role="list" aria-label={t('subscriptions.title')}>
+                {list.items.map((sub) => (
+                  <BoxedListRow key={sub.id} role="listitem">
+                    <div className="flex min-w-0 flex-1 items-start gap-2">
+                      {canWrite ? (
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={selectedIds.has(sub.id)}
+                          aria-label={t('common:table.selectRow', {
+                            id: sub.id,
+                          })}
+                          onCheckedChange={() => {
+                            const next = new Set(selectedIds)
+                            if (next.has(sub.id)) next.delete(sub.id)
+                            else next.add(sub.id)
+                            setSelectedIds(next)
+                          }}
+                        />
+                      ) : null}
+                      <div className="min-w-0 flex-1">
+                        <SubscriptionCard
+                          sub={sub}
+                          canRead={canRead}
+                          canWrite={canWrite}
+                          canAdmin={canAdmin}
+                          onEdit={onEdit}
+                          onTest={() => testMut.mutate(sub)}
+                          onDelete={(id) => deleteMut.mutate(id)}
+                          onRotateSecret={(id) => rotateSecretMut.mutate(id)}
+                          onRotateAuth={() => setRotateAuthSub(sub)}
+                          onReplay={setReplaySub}
+                          onHistory={setHistorySub}
+                          testPending={testingId === sub.id}
+                        />
+                      </div>
+                    </div>
+                  </BoxedListRow>
+                ))}
+              </BoxedList>
             </div>
           )
         }}

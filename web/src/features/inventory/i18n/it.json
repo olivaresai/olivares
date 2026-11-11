@@ -33,7 +33,8 @@
     "signals": "Segnali",
     "hosts": "Host",
     "lastSeen": "Ultima rilevazione",
-    "occurrences": "Occorrenze"
+    "occurrences": "Occorrenze",
+    "where": "Dove"
   },
   "searchPlaceholder": "Cerca nome, riferimento, segnale…",
   "hostCount": "{{count}} host",
@@ -127,6 +128,10 @@
       "title": "Ancora nessuna entità del parco rilevata",
       "description": "Le entità compaiono quando le osservazioni dei connettori segnalano agenti, sessioni, identità, capacità MCP, modelli, provider o risorse.",
       "action": "Apri le capacità"
+    },
+    "filtered": {
+      "title": "Nessuna voce corrisponde a questi filtri",
+      "description": "Scegli un altro tipo o stato per vedere altro del catalogo."
     }
   },
   "coverage": {
@@ -206,5 +211,6 @@
       "suspendedTitle": "Servizio del tenant sospeso",
       "suspended": "Il servizio di questo tenant è sospeso o non attivo, quindi non è possibile leggere la copertura della raccolta."
     }
-  }
+  },
+  "export": "Esporta"
 }

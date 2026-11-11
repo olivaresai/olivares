@@ -14,6 +14,7 @@
 // The route gate is measured on its own, because it answers something navigation cannot:
 // pending, concealed, and an entity deep link that outranks a refused collection.
 import { render } from '@testing-library/react'
+import { renderIntel } from '@/test/intel'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURE_VIEWS, type FeatureView } from '@/features/registry'
 import type { CapabilityAccess } from '@/lib/auth/capabilities'
@@ -86,7 +87,8 @@ function gate(): ViewGate {
     captured = useViewAccess().listed
     return null
   }
-  render(<Probe />)
+  // Under a query client, as in the console: the projection reads server-info.
+  renderIntel(<Probe />)
   if (!captured) throw new Error('the projection did not render')
   return captured
 }
@@ -196,8 +198,8 @@ describe('the shared projection', () => {
     const g = gate()
     expect(g(view('routinePolicies'))).toBe(true)
     expect(g(view('permissions'))).toBe(false)
-    // A view with no permission at all stays open to every signed-in principal.
-    expect(g(view('dashboards'))).toBe(true)
+    // The organization's rollup asks for the administrator's gate like any ordinary view.
+    expect(g(view('dashboards'))).toBe(false)
   })
 
   it('adds no administration shortcut: the `g` sequences are the ones that already existed', async () => {
@@ -334,7 +336,7 @@ describe('the route gate', () => {
     auth.perms = new Set(['governance:routine:read'])
     expect(routeAccess(view('routinePolicies')).kind).toBe('permitted')
     expect(routeAccess(view('permissions')).kind).toBe('forbidden')
-    expect(routeAccess(view('dashboards')).kind).toBe('permitted')
+    expect(routeAccess(view('dashboards')).kind).toBe('forbidden')
   })
 })
 
@@ -346,7 +348,7 @@ function projections(): { listed: ViewGate; navigable: ViewGate } {
     captured = useViewAccess()
     return null
   }
-  render(<Probe />)
+  renderIntel(<Probe />)
   if (!captured) throw new Error('the projection did not render')
   return captured
 }

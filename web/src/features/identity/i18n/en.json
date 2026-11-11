@@ -97,9 +97,9 @@
   },
   "sso": {
     "title": "Single sign-on (OIDC / SAML)",
-    "description": "Single sign-on is set up under Identity provider, by a superadmin. This panel checks the exact redirect URI and shows the connection state.",
+    "description": "A superadmin sets up single sign-on. This panel checks the exact redirect URI and shows the connection state.",
     "notConfigured": "Not configured",
-    "notConfiguredHint": "No identity provider is configured, so federation requests return 501. A superadmin sets one up under Identity provider.",
+    "notConfiguredHint": "No identity provider is configured, so no one signs in through single sign-on.",
     "seamWhat": "The SSO connection-state summary",
     "protocol": "Protocol",
     "state": "Connection",
@@ -110,14 +110,13 @@
     "redirectCheckHint": "Paste the redirect/ACS URI configured in your identity provider. It must match the value above exactly (RFC 9700).",
     "redirectMatch": "Exact match — this redirect URI is valid.",
     "redirectMismatch": "Does not match exactly. The IdP must use the redirect URI above, character-for-character.",
-    "configure": "Open Identity provider",
     "testLogin": "Start a test login"
   },
   "scim": {
     "title": "SCIM 2.0 provisioning",
     "description": "Inbound provisioning of users and groups. Read-only status of the service provider, the synchronized users, and the leaver evidence.",
     "seamWhat": "The SCIM service-provider configuration",
-    "businessOnly": "The inbound SCIM server requires Business. Remove a person from the organization in People.",
+    "businessOnly": "The inbound SCIM server requires Olivares AI Business. Remove a person from the organization in People.",
     "patch": "PATCH",
     "filter": "Filter",
     "filterMax": "Supported (max {{n}})",

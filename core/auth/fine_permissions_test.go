@@ -66,7 +66,12 @@ func TestTenantCorePermissionRoleMatrix(t *testing.T) {
 		permission auth.Permission
 		minimum    string
 	}{
-		{"audit:read", auth.RoleViewer}, {"authz:read", auth.RoleEditor}, {"accessgraph:read", auth.RoleEditor}, {"authenticator:write", auth.RoleAdmin},
+		// The reads only administrator places use (J2.R2: Security, Operations, Observation).
+		{"health:status:read", auth.RoleViewer}, {"accessmap:graph:read", auth.RoleAdmin},
+		{"inferenceproxy:config:read", auth.RoleAdmin}, {"evals:run:read", auth.RoleAdmin},
+		{"compliance:retention:read", auth.RoleAdmin}, {"observability:attestation:read", auth.RoleAdmin},
+		{"eventing:subscription:read", auth.RoleAdmin}, {"notify:route:read", auth.RoleAdmin},
+		{"audit:read", auth.RoleAdmin}, {"authz:read", auth.RoleEditor}, {"accessgraph:read", auth.RoleEditor}, {"authenticator:write", auth.RoleAdmin},
 	} {
 		for _, role := range []string{auth.RoleViewer, auth.RoleEditor, auth.RoleAdmin, auth.RoleOwner} {
 			if got, want := auth.RoleGrants(role, tc.permission), auth.RoleRank(role) >= auth.RoleRank(tc.minimum); got != want {

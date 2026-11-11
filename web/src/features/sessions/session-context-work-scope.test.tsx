@@ -125,14 +125,14 @@ it('shows no tool mode row before the tool has reported one', () => {
   mount(run)
   expect(screen.queryByTestId('context-tool-mode')).toBeNull()
 })
-it('shows the branch changes of a session in its own worktree', () => {
+it('offers branch changes in the scope selector of a session in its own worktree', () => {
   // What a session changed is the Changes tab's.
   mount(
     { ...run, workspace_ref: 'ws-main', worktree_branch: 'olivares/ab12cd34' },
     undefined,
     'changes',
   )
-  expect(screen.getByTestId('session-branch-changes')).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Branch' })).toBeInTheDocument()
 })
 
 it('shows no branch changes for a session that works in its folder', () => {

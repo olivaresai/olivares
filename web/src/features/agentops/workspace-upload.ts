@@ -5,8 +5,10 @@ import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
+import type { RequestOptions } from '@/lib/api/client'
 import { formatBytes } from '@/lib/format'
-import { agentOpsApi } from './api'
+import { agentOpsApi, type AgentOpsReadScope } from './api'
+import type { WriteResponse } from './types'
 import './i18n'
 
 /** Why the folder takes no upload, or null when it does: the mount mode the engine enforces
@@ -34,9 +36,13 @@ export function labelsToast(
     : null
 }
 
-async function exists(wref: string, path: string): Promise<boolean> {
+async function exists(
+  wref: string,
+  path: string,
+  scope?: AgentOpsReadScope,
+): Promise<boolean> {
   try {
-    await agentOpsApi.statFile(wref, path)
+    await agentOpsApi.statFile(wref, path, scope)
     return true
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) return false
@@ -44,9 +50,32 @@ async function exists(wref: string, path: string): Promise<boolean> {
   }
 }
 
-/** Uploads files into `dir`, one request each. The engine overwrites on a write, and a drag
- * and drop is too easy to aim at the wrong name, so an existing entry is left alone and
- * named in the answer instead of replaced. */
+/** Writes one file into `dir`. The engine overwrites on a write, and a drag and drop is
+ * too easy to aim at the wrong name, so an existing entry is left alone; a file past
+ * `maxBytes` is not sent. Either refusal is the sentence that says so. `authority` pins
+ * both requests to the caller's organization, and its signal and guard stop them. */
+export async function uploadOne(
+  wref: string,
+  dir: string,
+  file: File,
+  maxBytes: number,
+  t: (key: string, opts: { name: string; size?: string }) => string,
+  authority?: AgentOpsReadScope & Pick<RequestOptions, 'dispatchGuard'>,
+): Promise<{ written: WriteResponse } | { refused: string }> {
+  const target = dir ? `${dir}/${file.name}` : file.name
+  if (file.size > maxBytes)
+    return {
+      refused: t('browser.uploadTooLarge', {
+        name: file.name,
+        size: formatBytes(maxBytes),
+      }),
+    }
+  if (await exists(wref, target, authority))
+    return { refused: t('browser.uploadExists', { name: file.name }) }
+  return { written: await agentOpsApi.writeFile(wref, target, file, authority) }
+}
+
+/** Uploads files into `dir`, one request each (uploadOne). */
 export function useWorkspaceUpload({
   wref,
   dir,
@@ -67,19 +96,12 @@ export function useWorkspaceUpload({
       const left: string[] = []
       const labels = new Set<string>()
       for (const file of files) {
-        const target = dir ? `${dir}/${file.name}` : file.name
-        if (file.size > maxBytes) {
-          left.push(
-            t('browser.uploadTooLarge', {
-              name: file.name,
-              size: formatBytes(maxBytes),
-            }),
-          )
-        } else if (await exists(wref, target)) {
-          left.push(t('browser.uploadExists', { name: file.name }))
+        const done = await uploadOne(wref, dir, file, maxBytes, t)
+        if ('refused' in done) {
+          left.push(done.refused)
         } else {
-          const done = await agentOpsApi.writeFile(wref, target, file)
-          for (const hit of done.sensitivity ?? []) labels.add(hit.class)
+          for (const hit of done.written.sensitivity ?? [])
+            labels.add(hit.class)
           sent.push(file.name)
         }
       }

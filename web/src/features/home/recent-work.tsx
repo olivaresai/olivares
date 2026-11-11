@@ -32,6 +32,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { AccountBadge } from '@/features/agent-tools/account-marks'
 import { CcStateBadge } from '@/features/sessions/cc-state-badge'
 import {
+  isWorkingRun,
   primaryRun,
   sessionNaming,
   sharedNames,
@@ -54,11 +55,14 @@ import './i18n'
 function WorkRow({
   session,
   shared,
+  costs,
   onOpen,
 }: {
   session: UnifiedSession
   /** Names another row of this list also carries: those rows show their tail. */
   shared: ReadonlySet<string>
+  /** Tell what the session cost: for a person the Usage place opens for. */
+  costs: boolean
   onOpen?: (address: string) => void
 }) {
   const { t } = useTranslation(['home', 'sessions'])
@@ -66,7 +70,9 @@ function WorkRow({
   // One session, one row: a launched run and what was observed of it are the same row
   // (mergeSessions), named by what its operator typed, else by what it did.
   const live = session.live
-  const run = primaryRun(session.runs)
+  // ONE RUN FOR THE WHOLE ROW: its state, model and folder. Under Running that is the
+  // one at work, which is not always the session's primary run.
+  const run = session.runs.find(isWorkingRun) ?? primaryRun(session.runs)
   const modelName = useModelName(
     run?.provider_profile_ref ?? session.profileRef,
   )
@@ -87,7 +93,9 @@ function WorkRow({
         {
           modelName,
           duration: (ms) => formatDuration(ms),
-          cost: (micro) => formatMicroUsd(micro, { compact: true }),
+          cost: costs
+            ? (micro) => formatMicroUsd(micro, { compact: true })
+            : undefined,
         },
         sessionModelRef(run, live),
       )
@@ -206,6 +214,7 @@ export function RecentWork({
   titled = false,
   title,
   openAll = true,
+  costs = false,
   onOpen,
 }: {
   /** Show the section title (Overview, where the list follows "Needs you"); otherwise it
@@ -215,6 +224,9 @@ export function RecentWork({
   title?: string
   /** End the rows with the way to every session (one list on a page carries it). */
   openAll?: boolean
+  /** Tell what each session cost: only for a person the Usage place opens for,
+   *  so the rows leave it out when the page does not say. */
+  costs?: boolean
   /** The sessions `home-view` holds (runs and live rows merged), most recent first. */
   sessions: UnifiedSession[] | undefined
   state: TileState
@@ -245,6 +257,7 @@ export function RecentWork({
       ) : state === 'unavailable' ? (
         // A failed read is NOT an empty estate, and the two must never look alike.
         <ErrorState
+          size="panel"
           title={t('recent.unavailableTitle')}
           description={t('recent.unavailableDescription')}
         />
@@ -252,6 +265,7 @@ export function RecentWork({
         // Its one action: Sessions, whose composer starts a session and says what a tool
         // still needs (install, sign in) before it can.
         <EmptyState
+          size="panel"
           title={t('recent.emptyTitle')}
           description={t('recent.emptyDescription')}
           action={
@@ -268,6 +282,7 @@ export function RecentWork({
                 key={s.key}
                 session={s}
                 shared={shared}
+                costs={costs}
                 onOpen={onOpen}
               />
             ))}

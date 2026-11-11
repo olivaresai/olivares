@@ -145,7 +145,12 @@ import { NewSessionHost } from '@/features/first-hour/new-session-host'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { SessionsWorkspaceView } from './sessions-workspace-view'
 
-vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: vi.fn(),
+  resolveNotice: vi.fn(),
+  noticeSeen: () => false,
+  rememberNotice: vi.fn(),
+}))
 import { notify, resolveNotice } from '@/lib/notify'
 
 // What the page has told: its notices are toasts now, not strips above the work.
@@ -333,6 +338,7 @@ describe('SessionsWorkspaceView — one destination, both origins', () => {
   //    jsdom lays nothing out: this holds the declaration at both widths and no more.
   it('the three columns declare their own width from the desktop breakpoint up', async () => {
     stubViewportWidth(1440)
+    perms.add('sessions:account:read')
     renderView()
     await rowFor('nightly-indexer')
     const head = (name: RegExp) =>
@@ -359,6 +365,7 @@ describe('SessionsWorkspaceView — one destination, both origins', () => {
 
   it('at phone width no column claims a width, so the ten share the region', async () => {
     stubViewportWidth(390)
+    perms.add('sessions:account:read')
     renderView()
     await rowFor('nightly-indexer')
     for (const name of [/^session$/i, /^state$/i, /^last seen$/i, /^cost$/i]) {
@@ -377,10 +384,22 @@ describe('SessionsWorkspaceView — one destination, both origins', () => {
   })
 
   it('carries the launched session its observed telemetry (the halves are joined)', async () => {
+    perms.add('sessions:account:read')
     renderView()
     const ours = await rowFor('nightly-indexer')
     expect(within(ours).getByText(/1,200/)).toBeInTheDocument()
     expect(within(ours).getByText('$0.042')).toBeInTheDocument()
+  })
+
+  it('shows a member no cost column and no money in any row', async () => {
+    // A member sees no money, only the limits of their own accounts; the session
+    // reported $0.042.
+    renderView()
+    const ours = await rowFor('nightly-indexer')
+    expect(within(ours).getByText(/1,200/)).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: /^cost$/i })).toBeNull()
+    // The table is a grid, as the shared table draws a list it moves through.
+    expect(screen.getByRole('grid')).not.toHaveTextContent('$')
   })
 
   it('filters by origin without making the operator guess a section', async () => {
@@ -773,6 +792,7 @@ describe('SessionsWorkspaceView — two homes, one provider session id', () => {
   }
 
   it('keeps two rows sharing a provider session id, each joined to ITS run', async () => {
+    perms.add('sessions:account:read')
     vi.mocked(sessionsApi.live).mockResolvedValue({
       items: [managedA, managedB],
       has_more: false,
@@ -1151,7 +1171,7 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     expect(naked.map((el) => (el.textContent ?? '').slice(0, 40))).toEqual([])
   })
 
-  it('New session puts the start composer in front of the listed sessions until one is opened', async () => {
+  it('New session puts the start composer in the work region until a session is opened', async () => {
     stubViewportWidth(390)
     perms.add('sessions:run:write')
     useNewSessionDialog.setState({ composing: false })
@@ -1165,13 +1185,9 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     expect(
       await screen.findByRole('textbox', { name: 'First message (optional)' }),
     ).toBeVisible()
-    // On a phone the list stays under the composer: nothing hides a row below 761 px.
-    const rows = await screen.findAllByTestId('rail-row')
-    expect(rows[0].closest('.hidden')).toBeNull()
-    // Opening a row ends the start.
-    await user.click(rows[0])
-    await waitFor(() => expect(start()).toBeNull())
-    // Any session address ends it too (a Table row, a link), so Back shows the list.
+    // The start is the work screen: the list's rows are not drawn beside it.
+    expect(screen.queryAllByTestId('rail-row')).toHaveLength(0)
+    // Any session address ends it (a row, a Table row, a link), so Back shows the list.
     await user.click(screen.getByTestId('sessions-new'))
     await screen.findByRole('textbox', { name: 'First message (optional)' })
     act(() => fakeRouter.go('/sessions?session=sess%3Asess-found'))
@@ -1272,7 +1288,8 @@ describe('SessionsWorkspaceView — an empty estate', () => {
   it('an empty list is the work screen: the composer in the work region, New session in the list header', async () => {
     renderEmpty()
     await composer()
-    expect(screen.getAllByText('No sessions yet')).toHaveLength(1)
+    // The composer is the one thing on the screen: no empty state beside it.
+    expect(screen.queryByText('No sessions yet')).toBeNull()
     expect(screen.queryByText('Select a session')).toBeNull()
     expect(screen.queryByText('No session selected')).toBeNull()
     // The list header stays as it is with sessions listed, and carries the one New session.
@@ -1320,45 +1337,60 @@ describe('SessionsWorkspaceView — an empty estate', () => {
     },
   )
 
+  const coldSelection = (width: number, pane: string) => {
+    stubViewportWidth(width)
+    fakeRouter.reset(`/sessions?session=sess%3Asess-found&pane=${pane}`)
+    vi.mocked(sessionsApi.liveOne).mockResolvedValue(observed)
+    vi.mocked(sessionsApi.timeline).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderEmpty()
+  }
+
+  it('keeps one header New session for a cold selection with empty lists on the list', async () => {
+    coldSelection(1024, 'rail')
+    await screen.findByText('No sessions yet')
+    await waitFor(() =>
+      expect(sessionsApi.liveOne).toHaveBeenCalledWith('sess-found'),
+    )
+    const action = screen.getByRole('button', { name: 'New session' })
+    expect(action).toBeEnabled()
+    expect(action.closest('[data-slot="list-header"]')).not.toBeNull()
+    // One, and in the list header: the rail's own empty state carries none.
+    expect(screen.getAllByRole('button', { name: 'New session' })).toHaveLength(
+      1,
+    )
+    expect(
+      within(screen.getByTestId('work-surface')).getAllByRole('button', {
+        name: 'New session',
+      }),
+    ).toHaveLength(1)
+    expect(
+      within(
+        document.querySelector('[data-slot="empty-state"]') as HTMLElement,
+      ).queryByRole('button', { name: 'New session' }),
+    ).not.toBeInTheDocument()
+  })
+
   it.each([
     [1024, 'narrative'],
-    [1024, 'rail'],
     [1600, 'narrative'],
     // Below 1120 px Details is a modal sheet over the page; from 1120 px it sits beside.
     [1600, 'context'],
   ] as const)(
-    'keeps one header New session for a cold selection with empty lists at %s px, pane %s',
+    'keeps the header New session with the thread in front at %s px, pane %s',
     async (width, pane) => {
-      stubViewportWidth(width)
-      fakeRouter.reset(`/sessions?session=sess%3Asess-found&pane=${pane}`)
-      vi.mocked(sessionsApi.liveOne).mockResolvedValue(observed)
-      vi.mocked(sessionsApi.timeline).mockResolvedValue({
-        items: [],
-        has_more: false,
-      })
-      renderEmpty()
-
-      await screen.findByText('No sessions yet')
+      coldSelection(width, pane)
       await waitFor(() =>
         expect(sessionsApi.liveOne).toHaveBeenCalledWith('sess-found'),
       )
-      const action = screen.getByRole('button', { name: 'New session' })
+      const action = await screen.findByRole('button', { name: 'New session' })
       expect(action).toBeEnabled()
       expect(action.closest('[data-slot="list-header"]')).not.toBeNull()
-      // One, and in the list header: the rail's own empty state carries none.
       expect(
         screen.getAllByRole('button', { name: 'New session' }),
       ).toHaveLength(1)
-      expect(
-        within(
-          document.getElementById('work-pane-rail') as HTMLElement,
-        ).getAllByRole('button', { name: 'New session' }),
-      ).toHaveLength(1)
-      expect(
-        within(
-          document.querySelector('[data-slot="empty-state"]') as HTMLElement,
-        ).queryByRole('button', { name: 'New session' }),
-      ).not.toBeInTheDocument()
     },
   )
 
@@ -1580,6 +1612,8 @@ describe('SessionsWorkspaceView — the strip says what today cost', () => {
   it('sums the costs reported today and leaves out a session that has reported none', async () => {
     // The estate of a working day: one session reported $1.61, another is still working
     // and has reported no cost yet. The strip used to drop the cost whole for that one.
+    // The person may open Usage, where money is told.
+    perms.add('sessions:account:read')
     const now = new Date().toISOString()
     vi.mocked(sessionsApi.live).mockResolvedValue({
       items: [
@@ -1603,6 +1637,37 @@ describe('SessionsWorkspaceView — the strip says what today cost', () => {
       name: 'Sessions at a glance',
     })
     expect(strip).toHaveTextContent('2 working · $1.61 today')
+  })
+
+  it('shows a member no money: who works, and no cost', async () => {
+    // A member sees no money, only the limits of their own accounts: this person cannot
+    // open Usage, and a session reported $1.61 today.
+    const now = new Date().toISOString()
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [
+        { ...observed, cost_micro_usd: 1_610_000, last_event_at: now },
+        {
+          ...observed,
+          session_ref: 'sess-quiet',
+          live_ref: 'lr-quiet',
+          cost_micro_usd: 0,
+          last_event_at: now,
+        },
+      ],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderView('observe', { table: false })
+    const strips = await screen.findAllByRole('navigation', {
+      name: 'Sessions at a glance',
+    })
+    for (const strip of strips) {
+      expect(strip).toHaveTextContent('2 working')
+      expect(strip).not.toHaveTextContent('$')
+    }
   })
 })
 

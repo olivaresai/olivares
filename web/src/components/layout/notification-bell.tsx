@@ -34,18 +34,24 @@ import { DenyDialog, useDecision } from '@/features/governance/decision-dialog'
 import '@/features/governance/i18n'
 import type { ApprovalDTO } from '@/features/governance/types'
 import { usePendingApprovals } from '@/features/governance/use-pending-approvals'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import { auditApi } from '@/lib/api/endpoints'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { useStepUpStore } from '@/stores/step-up'
 import {
   actorOf,
   eventLink,
   hiddenInBell,
+  isUnread,
   readableAction,
+  readMarks,
+  saveMarks,
   sentenceKey,
 } from './bell-events'
 import type { RailRow } from './session-rail-model'
-import { useSessionRail } from './use-session-rail'
+import { useCanOpenApprovals, useSessionRail } from './use-session-rail'
 
 // The bell reads GET /v1/audit/recent: the newest events, newest first, without the
 // ledger's own audit.read events. That read is not itself recorded, so polling it once a
@@ -72,13 +78,15 @@ function actionTone(action: string): string {
 /** One request this person may decide, decided in place. Keyed by its id AND its place:
  * a row the poll moves under the pointer mounts again and ignores Approve for
  * FLAG_ARM_MS, as Now's card does. A request the bell cannot show whole is opened
- * beside the queue instead (`oneClickApprove`). */
+ * beside the queue instead (`oneClickApprove`), where the approvals page opens. */
 function ApprovalItem({
   approval,
+  details,
   onDeny,
   onLeave,
 }: {
   approval: ApprovalDTO
+  details: boolean
   onDeny: (approval: ApprovalDTO) => void
   onLeave: () => void
 }) {
@@ -118,15 +126,17 @@ function ApprovalItem({
         <Button size="sm" variant="ghost" onClick={() => onDeny(approval)}>
           {t('approvals.deny')}
         </Button>
-        <Button size="sm" variant="ghost" asChild>
-          <Link
-            to={'/permissions' as never}
-            search={{ tab: 'approvals', approval: approval.id } as never}
-            onClick={onLeave}
-          >
-            {t('preview.details')}
-          </Link>
-        </Button>
+        {details ? (
+          <Button size="sm" variant="ghost" asChild>
+            <Link
+              to={'/permissions' as never}
+              search={{ tab: 'approvals', approval: approval.id } as never}
+              onClick={onLeave}
+            >
+              {t('preview.details')}
+            </Link>
+          </Button>
+        ) : null}
       </div>
     </li>
   )
@@ -161,6 +171,9 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [denying, setDenying] = useState<ApprovalDTO | null>(null)
   const [includeInternal, setIncludeInternal] = useState(false)
+  // A saved mark draws again. The marks are read below, at each render: the preference
+  // store tells its subscribers when the preferences arrive, never on a write.
+  const [, setMarked] = useState('')
   const stepUp = useStepUpStore((s) => s.request)
   const boundary = JSON.stringify([
     activeTenant,
@@ -179,6 +192,8 @@ export function NotificationBell() {
   // Needs you. Only the server's `may_decide` offers a decision: no role is derived here.
   const pending = usePendingApprovals().query.data
   const approvals = (pending?.items ?? []).filter((a) => a.may_decide === true)
+  // Its details open where the approvals page does: the rail's and Now's rule.
+  const details = useCanOpenApprovals()
   const offered = new Set(approvals.map((a) => a.id))
   // A session waiting on a request listed above is that request: it is not listed twice.
   const questions = (
@@ -191,21 +206,37 @@ export function NotificationBell() {
     ? `${t('notifications.title')}, ${t('nav:shell.rail.state.need')}`
     : t('notifications.title')
 
-  const { data, isLoading } = useQuery({
+  // The recent read is the ledger's: the engine answers it to audit:read alone. A person
+  // without it is told who sees recent activity, never shown an empty ledger, and the
+  // console does not ask. A 403 says the same: the permission changed under the session.
+  const canReadAudit = can('audit:read')
+  const { data, isLoading, error } = useQuery({
     queryKey: ['notifications', activeTenant, boundary],
     queryFn: () => auditApi.recent({ limit: RECENT_READ }),
     refetchInterval: REFETCH_INTERVAL,
     // Read while the bell is open: the dot no longer comes from the ledger. The bell lives
     // in the topbar, outside the routed TenantGate: the read is tenant-scoped, and with no
     // tenant selected the engine answers 400.
-    enabled: open && !!activeTenant,
+    enabled: open && canReadAudit && !!activeTenant,
   })
+  const auditOnly =
+    !canReadAudit || (error instanceof ApiError && error.isForbidden)
 
   const events = (data?.items ?? [])
     .filter((e) => !hiddenInBell(e.action))
     // A record with no sentence would show only its name: it waits behind the checkbox.
     .filter((e) => includeInternal || sentenceKey(e.action) !== null)
     .slice(0, RECENT_LIMIT)
+  // Read up to the newest event the person marked in this organization (an inbox's mark),
+  // read when the bell draws: the preferences may arrive after it first did.
+  const marks = readMarks()
+  const mark = activeTenant ? marks[activeTenant] : undefined
+  const markAllRead = () => {
+    const newest = data?.items[0]?.occurred_at
+    if (!activeTenant || !newest) return
+    saveMarks({ ...marks, [activeTenant]: newest })
+    setMarked(newest)
+  }
   // People are named for a principal who may already read the members; otherwise "You" or
   // "A member". The bell shows no one's address to someone who could not see it elsewhere.
   const canReadMembers = can('user:read')
@@ -230,6 +261,9 @@ export function NotificationBell() {
     })
   }
   const leave = () => setOpen(false)
+  // The full record is the Ledger's, offered only where its page opens.
+  const { navigable } = useViewAccess()
+  const ledger = viewById('audit')
 
   return (
     <>
@@ -252,15 +286,24 @@ export function NotificationBell() {
           >
             <Bell className="size-4" />
             {needsYou && (
-              <span className="absolute right-1 top-1 size-2 rounded-full bg-warn" />
+              <span className="absolute right-1 top-1 size-2 rounded-full bg-accent-strong" />
             )}
           </Button>
         </PopoverTrigger>
         {/* One scroller for the whole popover: every request keeps its actions in reach. */}
         <PopoverContent
           align="end"
-          className="max-h-[var(--radix-popover-content-available-height)] w-80 overflow-y-auto p-0"
+          className="max-h-[var(--radix-popover-content-available-height)] w-[380px] max-w-[var(--radix-popover-content-available-width)] overflow-y-auto p-0"
           sideOffset={8}
+          // It opens on the panel, never on a control: a second Enter on the bell must not
+          // approve, deny or mark anything. Tab reaches the first action. The panel says
+          // the bell's name, so a screen reader tells what opened.
+          aria-label={label}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            const panel = event.currentTarget as HTMLElement
+            panel.focus()
+          }}
         >
           {needsYou ? (
             <section
@@ -278,6 +321,7 @@ export function NotificationBell() {
                   <ApprovalItem
                     key={`${approval.id}:${place}`}
                     approval={approval}
+                    details={details}
                     onDeny={(a) => {
                       // The dialog outlives the popover, which closes under it.
                       setOpen(false)
@@ -292,21 +336,35 @@ export function NotificationBell() {
               </ul>
             </section>
           ) : null}
-          <div className="border-b border-border px-3 py-2">
-            <h3 className="text-body font-medium text-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 border-b border-border px-3 py-2">
+            <h3 className="col-start-1 row-start-1 text-body font-medium text-foreground">
               {t('notifications.title')}
             </h3>
-            <label className="mt-2 flex cursor-pointer items-center gap-2 text-caption text-muted-foreground">
-              <Checkbox
-                checked={includeInternal}
-                onCheckedChange={(checked) =>
-                  setIncludeInternal(checked === true)
-                }
-              />
-              {t('notifications.includeInternal')}
-            </label>
+            {/* After the heading in the page's order, at the end of its row on screen. */}
+            {events.length > 0 ? (
+              <span className="col-start-2 row-start-1">
+                <Button size="sm" variant="ghost" onClick={markAllRead}>
+                  {t('notifications.markAllRead')}
+                </Button>
+              </span>
+            ) : null}
+            {auditOnly ? null : (
+              <label className="col-span-2 mt-2 flex cursor-pointer items-center gap-2 text-caption text-muted-foreground">
+                <Checkbox
+                  checked={includeInternal}
+                  onCheckedChange={(checked) =>
+                    setIncludeInternal(checked === true)
+                  }
+                />
+                {t('notifications.includeInternal')}
+              </label>
+            )}
           </div>
-          {isLoading ? (
+          {auditOnly ? (
+            <p className="px-3 py-6 text-center text-body text-muted-foreground">
+              {t('notifications.auditOnly')}
+            </p>
+          ) : isLoading ? (
             <div className="flex justify-center py-6">
               <Spinner />
             </div>
@@ -317,11 +375,25 @@ export function NotificationBell() {
           ) : (
             <div className="max-h-80 overflow-y-auto">
               {events.map((event) => {
-                const link = eventLink(event)
+                const found = eventLink(event)
+                const page = found && viewById(found.view)
+                // A row opens its page only where that page opens for this person.
+                const link = page && navigable(page) ? found : null
+                const unread = isUnread(event.occurred_at, mark)
                 const body = (
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    {/* The dot is a shape beside the words; the word is for a screen reader. */}
                     <span
-                      className={`min-w-0 text-caption font-medium ${actionTone(event.action)}`}
+                      aria-hidden
+                      className={`mt-1.5 size-2 shrink-0 rounded-full ${unread ? 'bg-accent-strong' : ''}`}
+                    />
+                    {unread ? (
+                      <span className="sr-only">
+                        {t('notifications.unread')}
+                      </span>
+                    ) : null}
+                    <span
+                      className={`min-w-0 flex-1 text-caption font-medium ${actionTone(event.action)}`}
                     >
                       {sentence(event)}
                     </span>
@@ -350,17 +422,19 @@ export function NotificationBell() {
             </div>
           )}
           {/* The audit ledger holds the full record. */}
-          <div className="border-t border-border p-1">
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="w-full"
-              onClick={leave}
-            >
-              <Link to={'/audit' as never}>{t('notifications.viewAll')}</Link>
-            </Button>
-          </div>
+          {ledger && navigable(ledger) ? (
+            <div className="border-t border-border p-1">
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={leave}
+              >
+                <Link to={'/audit' as never}>{t('notifications.viewAll')}</Link>
+              </Button>
+            </div>
+          ) : null}
         </PopoverContent>
       </Popover>
       {denying ? (

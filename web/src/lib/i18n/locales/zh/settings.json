@@ -37,7 +37,7 @@
     "workspaces": "工作区",
     "deploy": "部署与更新",
     "signIn": "登录",
-    "setup": "设置向导",
+    "setup": "初始设置",
     "edition": "版本",
     "modules": "模块",
     "about": "关于",
@@ -53,6 +53,13 @@
   "general": {
     "title": "常规",
     "scope": "你自己的偏好。它们会跟随你到此安装上的每个工作区。",
+    "groups": {
+      "appearance": "外观",
+      "language": "语言和地区",
+      "start": "打开控制台时",
+      "sessions": "会话",
+      "editor": "代码编辑器"
+    },
     "theme": "主题",
     "themeHint": "除非你选择浅色、深色或纯黑，否则跟随系统。",
     "density": "密度",
@@ -65,14 +72,20 @@
     "clock12": "12 小时",
     "startPage": "起始页",
     "startPageHint": "登录后打开的页面。默认：会话。",
-    "confirmStop": "停止会话前确认",
-    "confirmStopHint": "在停止结束仍在工作的会话之前，询问一次。",
+    "confirmStop": "结束会话前确认",
+    "confirmStopHint": "在“结束会话”关闭会话之前，询问一次。",
     "editor": "文件链接使用的编辑器",
     "editorHint": "此电脑上“在…中打开”链接启动的编辑器。默认：VS Code。",
     "editorSsh": "编辑器的 SSH 主机",
     "editorSshHint": "编辑器连接另一台机器上会话文件夹的方式，格式为 user@host 或 user@host:port。留空则使用提供此控制台的地址；若为本机则不使用 SSH。",
     "reduceMotion": "减少动态效果",
-    "reduceMotionHint": "用淡入淡出代替移动。系统要求时开启。"
+    "reduceMotionHint": "用淡入淡出代替移动。系统要求时开启。",
+    "sendKey": "发送键",
+    "sendKeyHint": "在会话中发送消息的按键。选第二项时，Enter 为换行。",
+    "sendWhileRunning": "工具工作时",
+    "sendWhileRunningHint": "一轮运行期间发送键的作用。若 Enter 发送，则 Ctrl+Enter 执行另一种。",
+    "sendQueue": "排队",
+    "sendSteer": "插入当前轮"
   },
   "sessionNotifications": {
     "title": "会话通知",
@@ -84,6 +97,12 @@
     "finished": "本轮已完成。",
     "ended": "会话已结束。",
     "failed": "会话因错误而停止。",
+    "inApp": {
+      "needsYou": "{{name}} 需要您处理",
+      "finished": "{{name}} 本轮已完成",
+      "failed": "{{name}} 因错误而停止"
+    },
+    "open": "打开",
     "pushOn": "即使关闭标签页，此设备也会收到通知。",
     "pushUnavailable": "仅在标签页打开时通知：此设备未能注册推送。",
     "installHint": "通知需要将应用添加到主屏幕：点按“分享”，再选择“添加到主屏幕”。"
@@ -93,14 +112,14 @@
     "scope": "此安装响应的按键。对每个人都相同。"
   },
   "edition": {
-    "scope": "此构建的版本、其许可证，以及 Business 增加的功能。",
+    "scope": "此构建的版本、其许可证，以及 Olivares AI Business 增加的功能。",
     "label": "版本",
     "unknown": "此引擎未报告",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business 新增",
+    "businessAdds": "Olivares AI Business 新增",
     "summary": {
       "Session cockpit and fleet deployment.": "会话驾驶舱与批量部署。",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "实时会话共享，提供具名且会过期的访客访问，以及由所有者批准的消息提议。",
@@ -111,11 +130,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise 包含 Business 的全部内容，另加合同约定的条款以及依赖这些条款的功能。"
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "{{edition}} 版本",
+      "accessibleName": "Olivares AI {{edition}} 版本",
       "show": "显示版本徽章",
       "loadError": "无法加载徽章偏好设置。",
       "saveError": "无法保存徽章偏好设置。请重试。"
@@ -138,15 +159,18 @@
     "email": "电子邮件"
   },
   "stopConfirm": {
-    "title": "停止此会话？",
-    "description": "停止会结束仍在工作的会话。",
-    "confirm": "停止会话"
+    "title": "结束此会话？",
+    "description": "即使会话仍在工作，也会被关闭。",
+    "confirm": "结束会话"
   },
   "modules": {
     "title": "模块",
     "description": "开启或关闭此安装运行的 Olivares 功能。应用会重启引擎一次以生效，重启会停止正在运行的会话。",
     "apply_other": "应用 {{count}} 项更改",
     "applied": "模块选择已保存。",
+    "appliedNow": "已应用。没有会话被停止。",
+    "savedForNextStart": "已保存。将在引擎下次启动时生效；没有正在运行的会话被停止。",
+    "notSaved": "无法保存模块选择。没有任何更改。",
     "restarting": "正在重启引擎…",
     "restartWarning": {
       "title": "重启引擎？",
@@ -299,6 +323,8 @@
   },
   "tracing": {
     "description": "将跟踪和指标导出到您的收集器。更改无需重启即可生效。",
+    "export": "导出",
+    "advanced": "高级",
     "enabled": "启用跟踪",
     "endpoint": "收集器地址",
     "protocol": "协议",
@@ -311,10 +337,16 @@
     "inactive": "跟踪已关闭。",
     "apply": "应用",
     "saved": "跟踪设置已保存。",
-    "businessRequired": "SIEM 推送和外部遥测导出需要 Business。设置会保留；Community 不会发送数据。"
+    "businessRequired": "SIEM 推送和外部遥测导出需要 Olivares AI Business。设置会保留；Olivares AI Community 不会发送数据。"
   },
   "signIn": {
     "methods": "登录方式",
+    "ssoName": "单点登录",
+    "available": "可用",
+    "required": "必需",
+    "blocked": "已阻止",
+    "notSetUp": "未设置",
+    "sessionGroup": "会话",
     "password": "密码",
     "sso": "单点登录：{{providers}}",
     "noSso": "登录页面没有可用的单点登录提供商。",
@@ -332,7 +364,9 @@
     "minutes": "空闲多少分钟后停止",
     "description": "默认关闭。停止已完成且不再打开的会话以释放内存。恢复会保留文件夹和对话。",
     "hint": "0 表示关闭，否则为 6–10080 分钟。五分钟没有输出后开始空闲计时。有待审批事项、运行中的子进程或关联会话，或新消息的会话会继续运行。",
-    "saved": "会话内存设置已保存。"
+    "saved": "会话内存设置已保存。",
+    "group": "空闲时停止",
+    "stop": "停止空闲会话"
   },
   "updates": {
     "title": "更新",

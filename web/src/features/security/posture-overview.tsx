@@ -16,6 +16,8 @@ import { governanceApi, governanceKeys } from '@/features/governance/api'
 import { pendingCount } from '@/features/governance/use-pending-approvals'
 import { killswitchApi, killswitchKeys } from '@/features/killswitch/api'
 import { EVIDENCE_PAGE, modelsApi, modelsKeys } from '@/features/models/api'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import { providerKeys, providersApi } from '@/features/providers/api'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -37,7 +39,8 @@ interface PostureRow {
   id: string
   label: string
   description: string
-  href: string
+  /** The page the row reviews; none where that page would refuse this person. */
+  href?: string
   state: ReadState
   value?: string
   partial?: boolean
@@ -95,13 +98,15 @@ function PostureRowView({ row }: { row: PostureRow }) {
             {value}
           </span>
         )}
-        <Link
-          to={row.href as never}
-          aria-label={`${t('security:posture.review')}: ${row.label}`}
-          className="rounded-sm text-caption font-medium text-muted-foreground outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          {t('security:posture.review')}
-        </Link>
+        {row.href ? (
+          <Link
+            to={row.href as never}
+            aria-label={`${t('security:posture.review')}: ${row.label}`}
+            className="rounded-sm text-caption font-medium text-muted-foreground outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {t('security:posture.review')}
+          </Link>
+        ) : null}
       </div>
     </li>
   )
@@ -116,6 +121,10 @@ export function SecurityPostureOverview() {
   const canReadTokens = can('token:read') && inTenant
   const canReadApprovals = can('governance:approval:read') && inTenant
   const canReadKillSwitch = can('governance:killswitch:read') && inTenant
+  // The stop's state is read on the line above; its page opens on its own, stricter gate.
+  const { navigable } = useViewAccess()
+  const killPage = viewById('killswitch')
+  const killPageOpens = !!killPage && navigable(killPage)
   const canReadProviders = can('sessions:provider:read') && inTenant
   // The admission policy is the models module's: not read while that module is off.
   const modelsOn = useModuleOn('models')
@@ -267,7 +276,7 @@ export function SecurityPostureOverview() {
       id: 'kill-switch',
       label: t('posture.killSwitch.label'),
       description: t('posture.killSwitch.description'),
-      href: '/killswitch',
+      href: killPageOpens ? '/killswitch' : undefined,
       state: readState(canReadKillSwitch, killSwitchQ),
       value: killValue,
       error: killSwitchQ.error,

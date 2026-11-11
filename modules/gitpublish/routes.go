@@ -289,10 +289,15 @@ func toIntentDTO(in Intent, answer string) intentDTO {
 }
 
 // WriteReceipt maps a receipt, or its refusal, to its HTTP answer. The
-// session publish tool answers with it, as the routes do.
+// session publish tool answers with it, as the routes do. A publication waiting
+// for a person's approval answers 202 as a ship waiting for one does.
 func WriteReceipt(w http.ResponseWriter, r Receipt, err error) {
 	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	if r.Answer == ShipAwaitingApproval {
+		writeResponse(w, http.StatusAccepted, toShipDTO(ShipResult{State: ShipAwaitingApproval, Approval: r.Approval}))
 		return
 	}
 	status := http.StatusOK

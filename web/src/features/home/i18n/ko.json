@@ -10,6 +10,37 @@
     "unavailableDescription": "세션 읽기가 응답하지 않았습니다. 위의 에스테이트 수치는 영향을 받지 않습니다.",
     "untitled": "제목 없는 세션"
   },
+  "accounts": {
+    "title": "내 계정",
+    "loading": "계정을 읽는 중…",
+    "none": "아직 {{tool}}의 내 계정이 없습니다. 시작하는 세션은 내 계정으로 작동하며, 다른 사람은 사용할 수 없습니다.",
+    "create": "내 계정 만들기",
+    "createFailed": "계정을 만들지 못했습니다.",
+    "createExists": "{{tool}}의 내 계정이 이미 있으므로 다른 계정을 만들 수 없습니다. 사용할 수 없다면 관리자에게 문의하세요.",
+    "createForbidden": "내 역할로는 내 계정을 만들 수 없습니다. 관리자에게 문의하세요.",
+    "createNotAssigned": "{{tool}}이(가) 나에게 할당되어 있지 않아 내 계정을 만들 수 없습니다. 부서 관리자에게 문의하세요.",
+    "createUnavailable": "이 서버에서는 내 계정을 사용할 수 없습니다.",
+    "signInWaits": "로그인하지 않았습니다. 내 계정 로그인은 이 서버에서 아직 사용할 수 없습니다.",
+    "signedIn": "{{identity}}(으)로 로그인됨",
+    "disabled": "관리자가 비활성화했습니다.",
+    "retired": "폐기됨. 사용할 수 있는 계정을 관리자에게 요청하세요. 새 내 계정은 아직 만들 수 없습니다.",
+    "limit": "{{label}}: {{percent}}% 사용",
+    "unavailableTitle": "계정을 읽지 못했습니다",
+    "unavailableDescription": "읽기 전까지는 내 계정이 있는지 알 수 없습니다."
+  },
+  "folders": {
+    "title": "내 폴더",
+    "start": "시작",
+    "startIn": "{{folder}}에서 시작",
+    "canWork": "작업할 수 있음",
+    "readOnly": "읽기 전용",
+    "showAll": "모든 폴더 보기({{total}})",
+    "loading": "폴더를 불러오는 중",
+    "emptyTitle": "아직 폴더가 없습니다",
+    "emptyDescription": "관리자가 폴더 접근 권한을 부여하면 여기에 표시됩니다.",
+    "unavailableTitle": "폴더를 불러오지 못했습니다",
+    "unavailableDescription": "아래 세션에는 영향이 없습니다."
+  },
   "empty": {
     "title": "아직 표시할 것이 없습니다",
     "description": "현재 역할에 어떤 에스테이트 모듈에 대한 읽기 액세스 권한도 없습니다. 개요를 보려면 관리자에게 읽기 권한 부여를 요청하십시오."

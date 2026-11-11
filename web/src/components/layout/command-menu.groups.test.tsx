@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The palette groups, in order: Actions, Go to, Recent sessions, Settings.
+// The palette groups, in order: Actions, Go to, Settings, Sessions.
 // A leading ">" keeps commands only. Matched characters are marked.
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -51,6 +51,8 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 
 import { CommandMenu } from './command-menu'
+import { useClientSettings } from '@/features/settings/preferences'
+import { setKeyOverride } from '@/lib/keybindings/effective'
 import { useCommandStore } from '@/stores/command'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -67,6 +69,7 @@ afterEach(() => {
   railError = false
   partial = false
   navigateMock.mockReset()
+  useClientSettings.setState({ keyOverrides: {} })
   act(() => useCommandStore.getState().setOpen(false))
   useWorkspaceStore.setState({
     activeWorkspace: null,
@@ -75,7 +78,9 @@ afterEach(() => {
 })
 
 describe('command palette groups', () => {
-  it('lists Actions, then Go to, then Settings', () => {
+  // The concept's palette: 640 px, the groups Actions, Go to, Settings and Sessions in
+  // that order, and a footer that names the keys: ↑↓ move, ↵ open, Esc close.
+  it('lists Actions, then Go to, then Settings, then Sessions', () => {
     useWorkspaceStore.setState({
       activeWorkspace: 'ws-1',
       activeWorkspaceName: 'telescopes',
@@ -85,15 +90,39 @@ describe('command palette groups', () => {
     const names = headings()
     expect(names.indexOf('Go to')).toBeGreaterThan(names.indexOf('Actions'))
     expect(names.indexOf('Settings')).toBeGreaterThan(names.indexOf('Go to'))
-    const recent = names.indexOf('Recent sessions')
-    if (recent >= 0) {
-      expect(recent).toBeGreaterThan(names.indexOf('Go to'))
-      expect(recent).toBeLessThan(names.indexOf('Settings'))
-    }
+    expect(names.indexOf('Sessions')).toBeGreaterThan(names.indexOf('Settings'))
     expect(screen.getByText('in telescopes')).toBeInTheDocument()
-    expect(
-      document.querySelector('[data-slot="palette-footer"]'),
-    ).not.toBeNull()
+    expect(screen.getByRole('dialog')).toHaveClass('sm:max-w-[640px]')
+    const footer = document.querySelector('[data-slot="palette-footer"]')
+    expect(footer).toHaveTextContent(/↑\s*↓\s*move\s*↵\s*open\s*Esc\s*close/)
+    // Esc is drawn once, where the footer says what it does.
+    expect(screen.getAllByText('Esc', { selector: 'kbd' })).toHaveLength(1)
+  })
+
+  // Opened with nothing typed, the palette offers the next step: the selected object's
+  // actions, then starting work, then every place. Themes, sign out, importing and a
+  // page's own verbs are one word away, or all of them under `>`.
+  it('opens on the next step, not on every verb it knows', async () => {
+    const user = userEvent.setup()
+    useCommandStore.getState().setOpen(true)
+    renderIntel(<CommandMenu />)
+    const values = () =>
+      screen
+        .getAllByRole('option')
+        .map((o) => o.getAttribute('data-value') ?? '')
+    const verbs = values().filter(
+      (v) => v.startsWith('session:') || v.startsWith('action:'),
+    )
+    expect(verbs).toEqual(['session:start Start a session'])
+    for (const verb of ['theme:', 'signout', 'session:import'])
+      expect(values().some((v) => v.startsWith(verb))).toBe(false)
+    expect(values().some((v) => v.startsWith('view:'))).toBe(true)
+    await user.type(screen.getByRole('combobox'), 'dark')
+    expect(values().some((v) => v.startsWith('theme:dark'))).toBe(true)
+    await user.clear(screen.getByRole('combobox'))
+    await user.type(screen.getByRole('combobox'), '>')
+    for (const verb of ['theme:', 'signout', 'session:import', 'action:'])
+      expect(values().some((v) => v.startsWith(verb))).toBe(true)
   })
 
   it('does not name a beside action while no beside surface exists', () => {
@@ -249,6 +278,24 @@ describe('recent palette sessions', () => {
     expect(within(recent()[6]).queryByText('7', { selector: 'kbd' })).toBeNull()
     await user.type(screen.getByRole('combobox'), 'Session')
     expect(within(recent()[0]).queryByText('1', { selector: 'kbd' })).toBeNull()
+  })
+
+  // Settings › Keyboard edits a row: the palette prints the keys that now fire.
+  it("prints the person's own keys beside Start a session and a recent session", () => {
+    setKeyOverride('session.new|outsideField', 'Alt+n')
+    setKeyOverride('palette.recent1|paletteRecent', 'Alt+1')
+    useCommandStore.getState().setOpen(true)
+    renderIntel(<CommandMenu />)
+    const keys = (option: HTMLElement) =>
+      within(option)
+        .getAllByText(/./, { selector: 'kbd' })
+        .map((kbd) => kbd.textContent)
+    expect(keys(screen.getByTestId('palette-start-session'))).toEqual([
+      'Alt',
+      'N',
+    ])
+    expect(keys(recent()[0])).toEqual(['Alt', '1'])
+    expect(keys(recent()[1])).toEqual(['2'])
   })
 
   it('ignores missing rows and modified digits', () => {

@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Install reviewed cosign
+description: Install digest-pinned cosign with a release API fallback.
+inputs:
+  cosign-release:
+    description: Reviewed version (other versions are refused).
+    default: v2.6.4
+  install-dir:
+    description: Job-private absolute destination.
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        COSIGN_RELEASE: ${{ inputs.cosign-release }}
+        COSIGN_DEST: ${{ inputs.install-dir }}
+      run: |
+        [[ "$COSIGN_RELEASE" == v2.6.4 ]] || exit 1
+        binary=$(bash "${{ github.action_path }}/../../../scripts/ensure-cosign.sh" --dest "${COSIGN_DEST:-$RUNNER_TEMP/cosign}")
+        dirname "$binary" >> "$GITHUB_PATH"
