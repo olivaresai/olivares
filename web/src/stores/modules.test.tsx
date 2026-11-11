@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { act, renderIntel, screen, waitFor } from '@/test/intel'
 import { FEATURE_EXTENSIONS } from '@/features/extensions'
-import { CONSOLE_ENTRIES } from '@/features/module-spec.gen'
+import { CONSOLE_ENTRIES, PLACED_MODULES } from '@/features/module-spec.gen'
 import { BUSINESS_ONLY_VIEW_IDS, FEATURE_VIEWS } from '@/features/registry'
 import {
   moduleEnabled,
@@ -149,6 +149,30 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
         Object.hasOwn(CONSOLE_ENTRIES, moduleOfPermission(v.permission) ?? ''),
     ).map((v) => v.id)
     expect(unnamed).toEqual([])
+  })
+
+  // The route gate places a module above Community (core/modulespec `edition`,
+  // `reads_below`); the console's view of it takes the same placement, never its own copy.
+  it('every view of a placed module takes its edition from the spec', () => {
+    const differs = FEATURE_VIEWS.filter(
+      (v) => !FEATURE_EXTENSIONS.includes(v),
+    ).flatMap((v) => {
+      const module = moduleOfView(v.permission, v.id) ?? ''
+      const placed = Object.hasOwn(PLACED_MODULES, module)
+        ? PLACED_MODULES[module]
+        : undefined
+      return v.minEdition === placed?.edition &&
+        v.readsBelow === placed?.readsBelow
+        ? []
+        : [v.id]
+    })
+    expect(differs).toEqual([])
+    const knowledge = FEATURE_VIEWS.find((v) => v.id === 'knowledge')!
+    expect(knowledge.minEdition).toBe('engineer')
+    expect(knowledge.readsBelow).toBe(true)
+    const evals = FEATURE_VIEWS.find((v) => v.id === 'evals')!
+    expect(evals.minEdition).toBe('engineer')
+    expect(evals.readsBelow).toBe(false)
   })
 
   it('absent from server-info means every module runs', () => {

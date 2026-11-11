@@ -22,7 +22,11 @@ export async function freshly<T>(read: Promise<T>): Promise<Fresh<T>> {
     return { ok: true, value: await read }
   } catch (err) {
     if (isAbortError(err)) throw err
-    if (err instanceof ApiError && err.isForbidden && !err.isStepUpRequired) {
+    if (
+      err instanceof ApiError &&
+      err.isForbiddenOrEdition &&
+      !err.isStepUpRequired
+    ) {
       throw err
     }
     return { ok: false, failure: classifyFailure(err) }

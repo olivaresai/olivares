@@ -33,6 +33,7 @@
     "communicationsHandoffs": "Handoffs",
     "console": "Administration",
     "sourceDiff": "Source diff",
+    "approvals": "Approvals",
     "permissions": "Permissions",
     "identity": "Identity",
     "vault": "Vault",
@@ -119,7 +120,7 @@
     "agentops": "Start sessions and follow what each one does, including the ones Olivares finds",
     "agentArtifacts": "Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM",
     "models": "Models, routing and governance",
-    "agent-tools": "See the accounts and API keys sessions run as; installing and signing in the tools is for deployment administrators",
+    "agent-tools": "See the accounts sessions run as; installing and signing in the tools is for deployment administrators",
     "modelOps": "Owned models, admission and deployments",
     "finops": "Token cost, budgets and spend",
     "adoption": "Productivity, acceptance & model mix",
@@ -344,9 +345,13 @@
     "startWithChoice": "Start a new session with this choice",
     "newWithOtherAccess": "New session with different access…",
     "askPlaceholder": "Ask anything, @ for context, / for commands and skills",
+    "messagePlaceholder": "Message {{title}}… @ files · / commands",
     "modelPicker": "Model: {{value}}",
-    "effortPicker": "Effort: {{value}}",
+    "modelEffortPicker": "Model: {{model}}, effort {{effort}}",
     "accessPicker": "Access: {{value}}",
+    "moreActions": "More actions",
+    "moreActionsStashed": "More actions, with a draft set aside",
+    "contextAction": "Context and compacting…",
     "accessKeeps": "Access changes on your next turn in this conversation.",
     "queue": {
       "title": "Queued messages",
@@ -370,18 +375,32 @@
       "placeholder": "Enter queues a message for after this turn",
       "placeholderSteer": "Enter queues for after this turn, Ctrl+Enter steers it now",
       "discarded": "The session was released with these messages still queued:",
-      "copy": "Copy"
-    }
+      "copy": "Copy",
+      "placeholderQueueKey": "{{key}} queues a message for after this turn",
+      "placeholderSteerKey": "{{key}} steers it into this turn now"
+    },
+    "stash": "Set this draft aside",
+    "stashRestore": "Bring back the draft set aside",
+    "stashGone": "No longer stored with this session, so not brought back: {{names}}",
+    "stashTooLarge": "This draft is too large to set aside: the limit is {{limit}}. It stays here.",
+    "stashNotKept": "Could not set this draft aside: this browser keeps nothing between visits. It stays only in this tab.",
+    "stashNoRoom": "Could not set this draft aside: this browser has no room left to keep it. Nothing was dropped, and it stays here.",
+    "stashDropped": "Set aside. Dropped to make room, oldest first: {{words}}",
+    "stashTaken": "The draft set aside is no longer here: another tab brought it back, or a day went by.",
+    "plan": "Plan",
+    "planHint": "Plan first: the tool reads and proposes a plan and changes nothing. Applies from your next message."
   },
   "shell": {
     "more": "More",
     "searchCommands": "Search and commands",
     "search": "Search",
+    "searchGo": "Search or go to…",
     "stopAll": "Stop all",
     "workspaceCount": "Workspaces: {{count}}",
     "rail": {
       "title": "Sessions",
-      "all": "All",
+      "seeAll_one": "See {{count}} session",
+      "seeAll_other": "See all {{count}} sessions",
       "groups": {
         "needsYou": "Needs you",
         "working": "Working",
@@ -431,15 +450,17 @@
     "killswitch": {
       "estateStopped": "ALL AGENTS STOPPED",
       "estateBody": "Agents cannot act until two user accounts approve starting again.",
-      "agentStops": "{{count}} agent stop active",
-      "agentStops_one": "{{count}} agent stop active",
-      "agentStops_other": "{{count}} agent stops active",
+      "agentStops": "{{count}} agents stopped",
+      "agentStops_one": "{{count}} agent stopped",
+      "agentStops_other": "{{count}} agents stopped",
       "none": "Nothing is stopped. Sessions and agents run normally."
     },
     "status": {
       "label": "Status",
       "running_one": "{{count}} session open",
       "running_other": "{{count}} sessions open",
+      "needYou_one": "{{count}} needs you",
+      "needYou_other": "{{count}} need you",
       "usage": "{{tool}} usage",
       "fiveHour": "5h",
       "week": "wk",
@@ -450,7 +471,6 @@
     },
     "collapse": "Collapse navigation",
     "expand": "Expand navigation",
-    "openNavigation": "Open navigation",
     "closeNavigation": "Close navigation"
   },
   "places": {
@@ -469,13 +489,20 @@
   "readOnlyNotice": "You can read this page but not change it. An organization admin can.",
   "business": {
     "sessions": "Recordings, automations and orchestration of sessions",
+    "providerAssignment": "Providers assigned to people and departments",
+    "limitAssignment": "Usage limits set for other people and departments",
     "people": "Directories, departments and delegated administration",
     "rules": "Custom policies, roles and grants",
     "usage": "Cost by team and project",
+    "usageBudgets": "Budgets that warn, slow down or block sessions",
     "securityCompliance": "Compliance frameworks and evidence",
     "securityRedTeam": "Red team runs and scoring",
     "operationsDeploy": "Deploy agents to other hosts",
     "operationsResidency": "Data residency and tenants",
-    "retentionSchedules": "Schedules are applied only in Olivares Business: this edition keeps them and purges nothing."
+    "retentionSchedules": "Schedules are applied only in Olivares AI Business: this edition keeps them and purges nothing."
+  },
+  "groups": {
+    "control": "Governance",
+    "admin": "Administration"
   }
 }

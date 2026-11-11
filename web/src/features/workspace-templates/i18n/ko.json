@@ -15,7 +15,8 @@
   "groups": {
     "yours": "내 템플릿",
     "builtin": "기본 제공 템플릿 ({{n}})",
-    "yoursEmpty": "아직 없습니다. 템플릿은 새 세션에 재사용할 수 있는 시작점입니다."
+    "emptyTitle": "아직 템플릿이 없습니다",
+    "emptyDescription": "템플릿은 새 세션에 재사용할 수 있는 시작점입니다."
   },
   "editor": {
     "nameLabel": "이름",
@@ -25,11 +26,11 @@
     "sections": {
       "hooks": "훅",
       "hooksHint": "도구 및 세션 전후에 실행되는 명령입니다.",
-      "settings": "에이전트 설정",
+      "settings": "설정",
       "settingsHint": "권한 모드, 노력 수준, 모델 및 사용자 지정 지침입니다.",
       "connectors": "커넥터",
       "connectorsHint": "이 템플릿을 적용할 때 연결할 커넥터 ID입니다.",
-      "policies": "거버넌스 정책",
+      "policies": "정책",
       "policiesHint": "DLP 모드, 세션 기간 제한, 허용 도구 및 I/O 기록입니다.",
       "secrets": "비밀",
       "secretsHint": "이 템플릿의 세션이 환경 변수로 받는 보관함 비밀입니다.",

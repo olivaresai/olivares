@@ -20,7 +20,7 @@
 //
 // Nothing about the resolution itself changed in the move: every comment below is the
 // one that was in `session-card.tsx`, and the card's own tests are the control.
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
@@ -74,6 +74,7 @@ export function useSessionResolution(
   target: SessionTarget | null,
 ): SessionResolution {
   const { activeTenant, can } = useAuth()
+  const queryClient = useQueryClient()
   const canLiveRead = can('sessions:live:read')
   const canRunRead = can('sessions:run:read')
   const grants = {
@@ -139,18 +140,39 @@ export function useSessionResolution(
     liveRef
       ? snap.live_ref === liveRef
       : snap.session_ref === sessionRef && !isScopedRow(snap)
+  // Opened on a profiled run, the page listens by that run from the start: a fresh
+  // session's row is proven only once the tool reports its id, and the approval it asks
+  // for would otherwise wait for the next poll of the run. The filter does not move when
+  // live_ref arrives, so no frame is lost to a reconnect.
+  const streamRunRef = !target?.liveRef && seedProfiled ? target?.runRef : ''
   const [override, setOverride] = useState<LiveDTO | null>(null)
   const { status: streamStatus } = useLiveStream<LiveDTO>({
     path: '/v1/m/sessions/stream',
     events: ['session'],
-    query: liveRef
-      ? { live_ref: liveRef }
-      : sessionRef
-        ? { ref: sessionRef }
-        : undefined,
-    enabled: !!observedKey && canLiveRead,
+    query: streamRunRef
+      ? { run_ref: streamRunRef }
+      : liveRef
+        ? { live_ref: liveRef }
+        : sessionRef
+          ? { ref: sessionRef }
+          : undefined,
+    enabled: (!!streamRunRef || !!observedKey) && canLiveRead,
     onSnapshot: (snap) => {
-      if (matches(snap)) setOverride(snap)
+      if (!matches(snap) && !(streamRunRef && snap.run_ref === streamRunRef))
+        return
+      setOverride(snap)
+      // A tool's wait for a decision starts and ends on this stream. The run says it
+      // waits, so read it again now rather than on the next poll; a read already in
+      // flight is kept, so a burst of frames asks for one.
+      if (snap.run_ref) {
+        const keep = { cancelRefetch: false }
+        for (const queryKey of [
+          agentOpsKeys.run(activeTenant, snap.run_ref),
+          agentOpsKeys.runs(activeTenant, runsParams),
+        ]) {
+          void queryClient.invalidateQueries({ queryKey, exact: true }, keep)
+        }
+      }
     },
   })
 

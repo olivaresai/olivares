@@ -8,9 +8,21 @@ const DOT = {
   neutral: 'bg-text-3',
   ok: 'bg-ok',
   warn: 'bg-warn',
+  /** What waits for the person: the warm dot, and the word bold in the same ink. */
+  need: 'bg-warn',
   bad: 'bg-bad',
   info: 'bg-info',
 } as const
+
+/** The word: calm in the second tone; a need is warm and bold, a failure in its ink. */
+const WORD: Record<keyof typeof DOT, string> = {
+  neutral: 'text-text-2',
+  ok: 'text-text-2',
+  warn: 'text-text-2',
+  need: 'font-bold text-warn',
+  bad: 'font-medium text-bad',
+  info: 'text-text-2',
+}
 
 export type StatusTone = keyof typeof DOT
 
@@ -28,7 +40,7 @@ export function StatusDot({
       data-slot="status-dot"
       data-shape="dot"
       className={cn(
-        'size-1.5 shrink-0 rounded-full',
+        'size-2 shrink-0 rounded-full',
         'forced-colors:[background-color:CanvasText] forced-colors:[forced-color-adjust:none]',
         DOT[tone],
         className,
@@ -58,7 +70,8 @@ export function StatusChip({
     <span
       data-slot="status-chip"
       className={cn(
-        'inline-flex min-w-0 items-center gap-1.5 text-caption font-medium whitespace-nowrap text-text',
+        'inline-flex min-w-0 items-center gap-2 text-caption whitespace-nowrap',
+        WORD[tone],
         className,
       )}
       {...props}

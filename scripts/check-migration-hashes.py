@@ -294,6 +294,25 @@ for key, pairs in {
 }.items():
     REVIEWED_BINDINGS[key] = REVIEWED_BINDINGS.get(key, ()) + pairs
 
+# dev (baseline origin/main 349731bac): classifyGuardBootstrapReceiptVariant takes each edition's compiled receipt
+# variants from the guardBootVariants memo the boot selector already used, instead of re-walking every ancestor per
+# lineage, and boot calls that one verifier. The verifier is the boot twin's text on that baseline;
+# TestGuardBootVariantsEqualFreshWalk asserts the memo equals the fresh walk for every edition. No migration statement,
+# plan, callback order or written receipt changes; these exact pairs admit only that change.
+for reviewed, key, pairs in (
+    (REVIEWED_MIGRATIONS, 'core/7', (('0892da50017b15b6fedfd7fb6f7a91175ff5792a3394e14de41b585c79465a69',
+                                     '9b75b46fd569079c19dfdbd78c90720f608c89c09e01539c3c2afcecc56eadc4'),)),
+    (REVIEWED_MIGRATIONS, 'core/9', (('b81fdee1f157119a516fff105b8a41c1ed39b8a6926c22970b5052266e4168e7',
+                                     '8fef0b9b84733aae68fd97f67480f09cfde110e40e776feef45a033a4b036819'),)),
+    (REVIEWED_BINDINGS, 'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/1',
+     (('6211b589001e418af326fb950e8877630d54b5eda4df3d2a5fe35720545fc28c',
+       'b0b534999dd38d8cb911c7b04521ad52c2cba50ef2e4c54ccaf1bbb3abb13083'),)),
+    (REVIEWED_BINDINGS, 'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrations/1',
+     (('353fc711128cce216f6e0d41675ca416fc850cfa63bd8bb5b2893dfe95b1d445',
+       'd8a6ad69e3dbaa02759c0cfadd3a0e97e23f78d0c0514baa545df0f53cee0988'),)),
+):
+    reviewed[key] = reviewed.get(key, ()) + pairs
+
 
 def git(*args):
     return subprocess.check_output(['git', *args], cwd=ROOT, stderr=subprocess.PIPE)

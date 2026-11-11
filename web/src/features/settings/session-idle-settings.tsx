@@ -4,13 +4,16 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { BoxedList } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { http, type RequestOptions } from '@/lib/api'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { SettingsRow } from './settings-row'
 
 // The additive API contract; the SDK is regenerated with the integration batch.
 interface IdleSettings {
@@ -53,7 +56,8 @@ export function SessionIdleSettings() {
     return (
       <QueryErrorState error={query.error} retry={() => void query.refetch()} />
     )
-  const minutes = draft ?? query.data.idle_stop_minutes
+  const stored = query.data.idle_stop_minutes
+  const minutes = draft ?? stored
   const valid =
     minutes === 0 ||
     (Number.isInteger(minutes) && minutes > 5 && minutes <= 10080)
@@ -65,24 +69,45 @@ export function SessionIdleSettings() {
         if (valid) save.mutate({ idle_stop_minutes: minutes })
       }}
     >
-      <label className="flex flex-col gap-1" htmlFor="idle-stop-minutes">
-        {t('sessionIdle.minutes')}
-        <Input
-          id="idle-stop-minutes"
-          type="number"
-          min={0}
-          max={10080}
-          step={1}
-          required
-          value={Number.isFinite(minutes) ? minutes : ''}
-          aria-describedby="idle-stop-hint"
-          aria-invalid={!valid}
-          onChange={(event) => setDraft(event.target.valueAsNumber)}
-        />
-      </label>
-      <p id="idle-stop-hint" className="text-body-sm text-text-2">
-        {t('sessionIdle.hint')}
-      </p>
+      <section aria-labelledby="idle-stop" className="flex flex-col gap-2">
+        <h2 id="idle-stop" className="text-body-l font-semibold text-text">
+          {t('sessionIdle.group')}
+        </h2>
+        <BoxedList>
+          <SettingsRow
+            name={t('sessionIdle.stop')}
+            description=""
+            control={
+              // On asks for the minutes when none were saved: 0 is off.
+              <Switch
+                aria-label={t('sessionIdle.stop')}
+                checked={minutes !== 0}
+                onCheckedChange={(on) => setDraft(on ? stored || NaN : 0)}
+              />
+            }
+          />
+          <SettingsRow
+            name={t('sessionIdle.minutes')}
+            description={t('sessionIdle.hint')}
+            descriptionId="idle-stop-hint"
+            control={
+              <Input
+                aria-label={t('sessionIdle.minutes')}
+                className="w-28"
+                type="number"
+                min={0}
+                max={10080}
+                step={1}
+                required
+                value={Number.isFinite(minutes) ? minutes : ''}
+                aria-describedby="idle-stop-hint"
+                aria-invalid={!valid}
+                onChange={(event) => setDraft(event.target.valueAsNumber)}
+              />
+            }
+          />
+        </BoxedList>
+      </section>
       <Button type="submit" disabled={save.isPending || !valid}>
         {t('tracing.apply')}
       </Button>

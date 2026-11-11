@@ -9,6 +9,7 @@ import { AccountUsage, snapshotUsage } from '@/features/agentops/account-usage'
 import { toolName } from '@/features/agentops/engine-tools'
 import { formatDateTime } from '@/lib/format'
 import type { ProviderSnapshot } from './api'
+import { planName } from './plan-name'
 import './i18n'
 
 const STATE_BADGE: Record<ProviderSnapshot['state'], BadgeVariant> = {
@@ -24,8 +25,8 @@ export function ProviderDetails({ snap }: { snap: ProviderSnapshot }) {
   const { t } = useTranslation('agentTools')
   const name = toolName(snap.driver)
   const login = t(snap.default ? 'providers.default' : 'providers.olivares')
-  // The plan is the tool's raw value; a login without one (an API key) shows its method.
-  const plan = snap.plan || snap.auth_method
+  // The plan as its vendor names it; a login without one (an API key) shows its method.
+  const plan = planName(snap.driver, snap.plan) || snap.auth_method
   return (
     <article
       aria-label={`${name} · ${login}`}

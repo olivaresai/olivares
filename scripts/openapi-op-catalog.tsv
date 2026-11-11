@@ -222,6 +222,7 @@ GET	/v1/m/sessions/workspaces/{ref}	Returns one session workspace by reference.
 GET	/v1/m/sessions/workspaces/{ref}/files	Lists the files of a workspace under an optional path prefix, with paging.
 GET	/v1/m/sessions/workspaces/{ref}/files/archive	Returns the files and folders named by the repeated path query parameter as one zip, each file read under the same jail, size limit and DLP policy as a single read; one refused file refuses the whole archive.
 GET	/v1/m/sessions/workspaces/{ref}/files/raw	Reads the content of one workspace file named by the path query parameter, or with rev=HEAD the content git HEAD holds for it.
+GET	/v1/m/sessions/workspaces/{ref}/files/search	Finds the files of a workspace by name, or the lines of its text files by literal, case-insensitive content, under the same path, size and DLP limits as a single read; the response says when a bound cut the search short.
 GET	/v1/m/sessions/workspaces/{ref}/files/stat	Returns the metadata of one workspace entry named by the path query parameter, without its content.
 GET	/v1/m/sourcescope/resources	Lists the discovered resources, optionally filtered by kind, workspace, parent or subtree; a malformed id is refused before any store read.
 PATCH	/v1/m/orchestration/schedules/{id}	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
@@ -399,6 +400,7 @@ PUT	/v1/console/connectors	Onboards a connector instance, or replaces the config
 POST	/v1/console/connectors/test	Tests connectivity for a candidate connector configuration without persisting it.
 GET	/v1/console/health-summary	Returns the deployment health snapshot the console dashboard renders: readiness, the connector catalog size, the configured, running and failed connector counts, the user count and the SSO state.
 GET	/v1/console/keys	Returns the non-secret custody inventory of the signing keys and sealers resolved at boot. No key material is returned.
+GET	/v1/console/edition/summary	Reports, live, which modules placed in a higher edition than the running one are running, grouped by the edition each needs; it changes nothing.
 DELETE	/v1/console/license	Removes the installed license and reverts the deployment to the community build.
 GET	/v1/console/license	Returns the current license status and the entitlements it grants.
 POST	/v1/console/license	Installs a commercial license from the posted document.
@@ -489,8 +491,8 @@ POST	/v1/console/sso/tenants/{tenant}/idps/{alias}/test	Validates a candidate te
 POST	/v1/console/sso/tenants/{tenant}/test	Tests the tenant's primary IdP connectivity (OIDC discovery or SAML metadata fetch) against a candidate config without persisting it.
 POST	/v1/console/updates/apply	Installs the newest release in the channel as the olivares upgrade command does (signed, verified, atomic) and restarts the engine on it; requires the administrative step-up, and the restart stops running sessions. Nothing newer installs and restarts nothing.
 POST	/v1/invites/accept	Redeems an invitation token: sets the password, activates the account and mints a session. Unauthenticated — the single-use token is the gate; a browser session additionally receives the cookie envelope.
-POST	/v1/invites/{id}/resend	Rotates a pending invitation's secret and mails the new link to the invitee (202); the token travels only in the mail. 409 when no mailer is configured.
-POST	/v1/onboard	Creates-or-reuses an account and grants its tenant membership (membership:write, AAL3 step-up). Mode password sets the initial password; mode invite emails a single-use token. An account that exists and is not a member of the tenant answers 202 consent_required and writes nothing.
+POST	/v1/invites/{id}/resend	Rotates a pending invitation's secret, voiding the old link, and mails the new link to the invitee (202); with delivery=link the new token comes back once in the response instead. 409 when no mailer is configured and delivery=link is not asked.
+POST	/v1/onboard	Creates-or-reuses an account and grants its tenant membership (membership:write, AAL3 step-up). Mode password sets the initial password; mode invite emails a single-use token, or with delivery link returns it once in the response for a link shown on the screen. An account that exists and is not a member of the tenant answers 202 consent_required and writes nothing.
 GET	/v1/auth/os-account-bindings/{id}	Reads current administrative mapping metadata for the selected user and tenant after current authorization and configured step-up. Private binding handles and credential references remain internal; only direct TLS is accepted.
 DELETE	/v1/auth/os-account-bindings/{id}	Revokes current OS-account authority under current administrative authorization and configured step-up while preserving the permanent UID, account and user reservation. Only direct TLS is accepted.
 DELETE	/v1/agent-groups/{id}	Deletes one agent group and its roster (the membership rows), never the member agents themselves.
@@ -551,3 +553,9 @@ DELETE	/v1/auth/sessions/{id}	Ends one of the calling person's other sign-ins an
 DELETE	/v1/users/{id}/sessions	Ends a selected tenant member's sign-ins in this organization: scoped sessions are revoked and account sessions are excluded from the tenant, never from another organization. Requires membership write authority and AAL3, and refuses the caller themself, a member above the caller's role, and a workspace-confined caller.
 POST	/v1/auth/sessions/pairing	Creates a ten-minute one-time pairing link for an owner-named device; only the signed-in person can grant it.
 POST	/v1/auth/sessions/pairing/accept	Consumes a pairing link once and returns a new independently revocable session; browser callers receive a protected cookie.
+POST	/v1/groups	Creates a group of the operator's own (provisioned_by operator) for people a directory does not know; the name is trimmed and one already in use is a 409. Business edition: a Community build answers 501 departments_unavailable.
+DELETE	/v1/groups/{id}	Removes a group of the operator's own with its roster; its members keep their accounts and roles; a directory group is refused with 403 group_origin_read_only. Business edition: a Community build answers 501 departments_unavailable.
+PUT	/v1/groups/{id}/members/{user_id}	Adds a person of the tenant to a group of the operator's own; idempotent. Business edition: a Community build answers 501 departments_unavailable.
+DELETE	/v1/groups/{id}/members/{user_id}	Takes a person out of a group of the operator's own; idempotent. Business edition: a Community build answers 501 departments_unavailable.
+POST	/v1/members/{id}/suspend	Suspends a member of the resolved tenant: their sessions and tokens stop at once while the membership, role and group places stay; reversible with reactivate; a signed-in person also needs the administrative step-up. Business edition: a Community build answers 501 departments_unavailable.
+POST	/v1/members/{id}/reactivate	Reactivates a suspended member of the resolved tenant: access returns as it was; a signed-in person also needs the administrative step-up. Business edition: a Community build answers 501 departments_unavailable.

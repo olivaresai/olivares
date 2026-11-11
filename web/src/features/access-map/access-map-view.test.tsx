@@ -148,7 +148,12 @@ vi.mock('@/features/shared', async (orig) => {
   }
 })
 
-vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: vi.fn(),
+  resolveNotice: vi.fn(),
+  noticeSeen: () => false,
+  rememberNotice: vi.fn(),
+}))
 
 import { ApiError } from '@/lib/api/errors'
 import { navLeader } from '@/lib/keybindings/model'
@@ -336,6 +341,21 @@ describe('AccessMapView', () => {
       await screen.findByRole('list', { name: 'Agents' }),
     ).toBeInTheDocument()
     expect(fakeRouter.searchStr()).toBe('')
+  })
+
+  it('after Clear, the keyboard is back in the filters, at the search', async () => {
+    const user = userEvent.setup()
+    fakeRouter.reset('/access-map')
+    renderView()
+    await screen.findByRole('list', { name: 'Agents' })
+    const modes = screen.getByRole('group', { name: 'Access mode' })
+    await user.click(within(modes).getByRole('button', { name: 'Read' }))
+    await user.click(screen.getByRole('button', { name: 'Clear' }))
+    // The pressed button leaves with the filters it cleared.
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull()
+    expect(
+      screen.getByRole('textbox', { name: /search origin/i }),
+    ).toHaveFocus()
   })
 
   it('keeps the audited read said once, in the subtitle, since recording is a Business capability', async () => {
@@ -2264,6 +2284,56 @@ describe('AccessMapView — the detail panel leads to the thing it names', () =>
     await screen.findByText(/A graph node — expand to see what it connects to/i)
     expect(
       screen.queryByRole('button', { name: /^open /i }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+// A READ REFUSED BY EDITION IS NOT A PERMISSION REFUSAL. The access map is placed in Olivares
+// AI Engineer without reads below it, so at Community its graph and drift reads answer 403
+// edition_required; the view said «not authorized» for both. A role 403 keeps its words.
+describe('AccessMapView — reads refused by edition', () => {
+  const byEdition = () =>
+    new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+      edition: 'engineer',
+      capability: 'accessmap',
+    })
+
+  async function openDrift() {
+    const user = userEvent.setup()
+    renderView()
+    await user.click(
+      await screen.findByRole('button', { name: /permitted vs observed/i }),
+    )
+  }
+
+  it('the graph says the edition line, never «not authorized»', async () => {
+    vi.mocked(accessMapApi.graph).mockRejectedValue(byEdition())
+    renderView()
+    expect(
+      await screen.findByText(/is part of Olivares AI Engineer/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/access map not authorized/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('the drift says the edition line, never «not authorized»', async () => {
+    vi.mocked(accessMapApi.drift).mockRejectedValue(byEdition())
+    await openDrift()
+    expect(
+      await screen.findByText(/is part of Olivares AI Engineer/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/drift not authorized/i)).not.toBeInTheDocument()
+  })
+
+  it('a role 403 on the drift still says it is not authorized', async () => {
+    vi.mocked(accessMapApi.drift).mockRejectedValue(
+      new ApiError(403, 'forbidden', 'no'),
+    )
+    await openDrift()
+    expect(await screen.findByText(/drift not authorized/i)).toBeInTheDocument()
+    expect(
+      screen.queryByText(/is part of Olivares AI Engineer/),
     ).not.toBeInTheDocument()
   })
 })

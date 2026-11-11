@@ -30,10 +30,26 @@ async function typeLine(page: Page, line: string) {
   await page.keyboard.press('Enter')
 }
 
+// The folder this journey registered: a fresh engine lists a folder of its own first.
+async function browseFolder(page: Page) {
+  await page
+    .getByRole('row', { name: /Terminal folder/ })
+    .getByRole('button', { name: 'Browse files' })
+    .click()
+}
+
 async function openFolderTerminal(page: Page) {
   await page.goto('/sessions?tab=workspaces')
-  await page.getByRole('button', { name: 'Browse files' }).first().click()
-  await page.getByRole('tab', { name: 'Terminal' }).click()
+  await browseFolder(page)
+  await page.getByRole('tab', { name: 'Terminal', exact: true }).click()
+}
+
+// A running shell asks before it ends: the tab's close, then the dialog's.
+async function closeRunning(page: Page) {
+  await page.getByRole('button', { name: 'Close Terminal 1' }).click()
+  await page
+    .getByRole('button', { name: 'Close terminal', exact: true })
+    .click()
 }
 
 test('a terminal in a folder: git status, confined, recorded, resumed, closed, refused', async ({
@@ -153,17 +169,37 @@ test('a terminal in a folder: git status, confined, recorded, resumed, closed, r
     `audit export: HTTP ${exported.status()}, carries the typed line: ${(await exported.text()).includes('git status')}`,
   )
 
-  // A reload finds the same shell: its earlier output is still on the screen.
+  // A reload finds the same shell: its earlier output is still on the screen. The folder is
+  // in the page's address, so the reload reopens it.
   await page.reload()
-  await page.getByRole('button', { name: 'Browse files' }).first().click()
-  await page.getByRole('tab', { name: 'Terminal' }).click()
+  await page.getByRole('tab', { name: 'Terminal', exact: true }).click()
   await expect(screen(page)).toContainText('Untracked files', {
     timeout: 30_000,
   })
   expect(starts).toHaveLength(1)
 
+  // A terminal programs recognize, and history the server keeps: after a reload the first of
+  // 5,000 lines is still there to scroll to.
+  await typeLine(page, 'echo id=$TERM,$COLORTERM')
+  await expect(screen(page)).toContainText('id=xterm-256color,truecolor', {
+    timeout: 20_000,
+  })
+  await typeLine(page, 'seq 1 5000; echo seqdone')
+  await expect(screen(page)).toContainText('seqdone', { timeout: 30_000 })
+  await page.reload()
+  await page.getByRole('tab', { name: 'Terminal', exact: true }).click()
+  await expect(screen(page)).toContainText('seqdone', { timeout: 30_000 })
+  await page.locator('.xterm-helper-textarea').focus()
+  await page.keyboard.press('Control+Shift+Home')
+  await expect(screen(page)).toContainText(/1\s*2\s*3\s*4\s*5/, {
+    timeout: 20_000,
+  })
+  await page.keyboard.press('Control+Shift+End')
+  await expect(screen(page)).toContainText('seqdone')
+  expect(starts).toHaveLength(1)
+
   // Close ends the shell.
-  await page.getByRole('button', { name: 'Close terminal' }).click()
+  await closeRunning(page)
   await expect(
     page.getByRole('button', { name: 'Open terminal' }),
   ).toBeVisible()
@@ -230,7 +266,7 @@ test('a terminal in a folder: git status, confined, recorded, resumed, closed, r
       .analyze()
   ).violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
   expect(darkViolations.map((v) => `${v.id}: ${v.help}`)).toEqual([])
-  await small.getByRole('button', { name: 'Close terminal' }).click()
+  await closeRunning(small)
   await phone.close()
 
   fs.rmSync(folder, { recursive: true, force: true })

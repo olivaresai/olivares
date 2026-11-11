@@ -37,6 +37,17 @@
     "rotateAuth": "Rotar auth",
     "testSuccess": "Prueba de entrega exitosa",
     "testFailed": "Prueba de entrega fallida",
+    "testSent": "Se envió un evento de prueba firmado (eventing.test) a {{name}}.",
+    "testAnswer": {
+      "http": "Respondió HTTP {{code}}.",
+      "timeout": "No respondió a tiempo.",
+      "network": "No se pudo contactar."
+    },
+    "testNotSent": {
+      "endpoint_invalid": "No se envió nada: la dirección del endpoint de {{name}} no es válida.",
+      "egress": "No se envió nada: la política de salida no deja salir eventos hacia {{name}} ({{outcome}}).",
+      "other": "No se envió nada a {{name}} ({{outcome}})."
+    },
     "deleted": "Suscripción eliminada",
     "rotated": "Secreto rotado",
     "authRotated": "Credencial de auth rotada",
@@ -96,7 +107,7 @@
       "maxAttempts": "Los intentos máximos deben ser 0 o estar entre 1 y 20.",
       "initialInterval": "El intervalo inicial debe ser 0 o estar entre 5 y 3600 segundos."
     },
-    "businessRequired": "El envío SIEM y la exportación externa de telemetría requieren Business. Se conservan los ajustes; Community no envía los datos."
+    "businessRequired": "El envío SIEM y la exportación externa de telemetría requieren Olivares AI Business. Se conservan los ajustes; Olivares AI Community no envía los datos."
   },
   "secret": {
     "title": "Secreto de suscripción",

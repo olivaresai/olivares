@@ -13,7 +13,11 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useIsPhone } from '@/lib/hooks/use-is-phone'
 import { cn } from '@/lib/utils'
-import { PagePrimaryActionSlot, PageSecondaryActionsSlot } from './page-actions'
+import {
+  ShellHeaderContent,
+  PagePrimaryActionSlot,
+  PageSecondaryActionsSlot,
+} from './page-actions'
 
 /**
  * Shared page chrome: title and controls, then the complete description and notices.
@@ -174,23 +178,26 @@ export function PageHeader({
     >
       {/* The actions wrap below the title before the title gets narrower than 10rem. */}
       <Tag className="flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-2 sm:gap-x-4">
-        <div className="min-w-[min(100%,10rem)] flex-1">
-          <h1
+        <ShellHeaderContent part="title">
+          <div className="min-w-[min(100%,10rem)] flex-1">
+            <h1
+              className={cn(
+                'min-w-0 break-words font-display text-title text-foreground',
+                titleHidden && 'sr-only',
+              )}
+            >
+              {title}
+            </h1>
+          </div>
+        </ShellHeaderContent>
+        <ShellHeaderContent part="actions">
+          <div
             className={cn(
-              'min-w-0 break-words font-display text-title text-foreground',
-              titleHidden && 'sr-only',
+              'flex min-w-0 items-center justify-end gap-2',
+              actionsPanelAnchor === 'header' && 'relative',
             )}
           >
-            {title}
-          </h1>
-        </div>
-        <div
-          className={cn(
-            'flex min-w-0 items-center justify-end gap-2',
-            actionsPanelAnchor === 'header' && 'relative',
-          )}
-        >
-          {/* ⛔ THE CONTROLS ARE COLLAPSED, NOT DROPPED. A phone header that hides the
+            {/* ⛔ THE CONTROLS ARE COLLAPSED, NOT DROPPED. A phone header that hides the
               secondary controls and keeps the verb would meet the budget and lose the
               refresh, the range picker and the export — this pass's own rule is that
               nothing leaves the screen, it changes where it is reached from. So below
@@ -198,60 +205,61 @@ export function PageHeader({
               are back in the row and this button does not exist. They are MOUNTED
               either way (`hidden`, not unmounted), so a control that syncs state on
               mount keeps doing it on a phone. */}
-          {isPhone && hasControls && (
-            <button
-              type="button"
-              aria-expanded={overflowOpen}
-              aria-label={t('a11y.pageActions')}
-              data-testid="page-actions-toggle"
-              onClick={() => setOverflowOpen((open) => !open)}
+            {isPhone && hasControls && (
+              <button
+                type="button"
+                aria-expanded={overflowOpen}
+                aria-label={t('a11y.pageActions')}
+                data-testid="page-actions-toggle"
+                onClick={() => setOverflowOpen((open) => !open)}
+                className={cn(
+                  'inline-flex size-11 shrink-0 items-center justify-center rounded-md',
+                  'border border-border text-muted-foreground',
+                  'transition-colors duration-100 ease-out hover:bg-muted hover:text-foreground',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                )}
+              >
+                <MoreHorizontal className="size-4" aria-hidden="true" />
+              </button>
+            )}
+            <div
+              ref={row}
+              data-slot="page-actions"
               className={cn(
-                'inline-flex size-6 shrink-0 items-center justify-center rounded-md',
-                'border border-border text-muted-foreground',
-                'transition-colors duration-100 ease-out hover:bg-muted hover:text-foreground',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                'flex items-center gap-2',
+                isPhone
+                  ? // A panel under the button, OUT OF FLOW, so the row it came from
+                    // costs the header nothing. `hidden` and not unmounted: a control
+                    // that registers something on mount keeps doing it on a phone.
+                    cn(
+                      'absolute right-0 top-full z-20 mt-1 min-w-[11rem] flex-col items-stretch',
+                      // A phone is 390 px wide and this panel is anchored to its right edge:
+                      // measured on `/audit`, whose header carries a scope select, a filter
+                      // popover, saved views and the evidence controls, the panel took its
+                      // content width of 455 and started at x=-81 — off the left edge, where
+                      // nothing can be pressed. The gutter is the screens' own `px-4`.
+                      'max-w-[calc(100vw-2rem)] overflow-x-auto',
+                      'rounded-md border border-border bg-elevated p-1 shadow-lg',
+                      !overflowOpen && 'hidden',
+                    )
+                  : // Desktop: the row WRAPS when the screen's controls outgrow the header's
+                    // width, and never scrolls. Measured 2026-09-19 on the built console at
+                    // 1024 px: `/audit` carries seven controls that need 844 px in a 607 px row,
+                    // and `overflow-x-auto` put `Verification key`, `Export options` and `Export`
+                    // behind a 10 px scrollbar — three actions the operator could not see. With
+                    // `flex-wrap` they take a second line on that one route at that one width;
+                    // at 1280 px and above no route changes. (The phone panel above keeps its
+                    // own `overflow-x-auto`: that one is a 455 px panel on a 390 px screen.)
+                    'min-w-0 flex-row flex-wrap',
               )}
             >
-              <MoreHorizontal className="size-4" aria-hidden="true" />
-            </button>
-          )}
-          <div
-            ref={row}
-            data-slot="page-actions"
-            className={cn(
-              'flex items-center gap-2',
-              isPhone
-                ? // A panel under the button, OUT OF FLOW, so the row it came from
-                  // costs the header nothing. `hidden` and not unmounted: a control
-                  // that registers something on mount keeps doing it on a phone.
-                  cn(
-                    'absolute right-0 top-full z-20 mt-1 min-w-[11rem] flex-col items-stretch',
-                    // A phone is 390 px wide and this panel is anchored to its right edge:
-                    // measured on `/audit`, whose header carries a scope select, a filter
-                    // popover, saved views and the evidence controls, the panel took its
-                    // content width of 455 and started at x=-81 — off the left edge, where
-                    // nothing can be pressed. The gutter is the screens' own `px-4`.
-                    'max-w-[calc(100vw-2rem)] overflow-x-auto',
-                    'rounded-md border border-border bg-elevated p-1 shadow-lg',
-                    !overflowOpen && 'hidden',
-                  )
-                : // Desktop: the row WRAPS when the screen's controls outgrow the header's
-                  // width, and never scrolls. Measured 2026-09-19 on the built console at
-                  // 1024 px: `/audit` carries seven controls that need 844 px in a 607 px row,
-                  // and `overflow-x-auto` put `Verification key`, `Export options` and `Export`
-                  // behind a 10 px scrollbar — three actions the operator could not see. With
-                  // `flex-wrap` they take a second line on that one route at that one width;
-                  // at 1280 px and above no route changes. (The phone panel above keeps its
-                  // own `overflow-x-auto`: that one is a 455 px panel on a 390 px screen.)
-                  'min-w-0 flex-row flex-wrap',
-            )}
-          >
-            {actions}
-            <PageSecondaryActionsSlot />
-            {primaryAction}
-            <PagePrimaryActionSlot />
+              {actions}
+              <PageSecondaryActionsSlot />
+              {primaryAction}
+              <PagePrimaryActionSlot />
+            </div>
           </div>
-        </div>
+        </ShellHeaderContent>
       </Tag>
       {description != null && (
         <p

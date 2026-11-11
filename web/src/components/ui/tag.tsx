@@ -11,21 +11,22 @@ import { cn } from '@/lib/utils'
  */
 const tagVariants = cva(
   cn(
-    'inline-flex h-[22px] max-w-full items-center gap-[5px] rounded-[6px] border px-2',
-    'text-overline whitespace-nowrap [&_svg]:size-3 [&_svg]:shrink-0',
+    'inline-flex h-[22px] max-w-full items-center gap-[5px] rounded-[6px] px-2',
+    'text-overline whitespace-nowrap [&_svg]:size-[13px] [&_svg]:shrink-0',
   ),
   {
     variants: {
+      // A fact on the text tint at 12/500 with no outline; a status fact is bold.
       tone: {
-        neutral: 'border-line bg-surface text-text-2',
-        ok: 'border-transparent bg-ok-soft text-ok',
-        warn: 'border-transparent bg-warn-soft text-warn',
-        bad: 'border-transparent bg-bad-soft text-bad',
-        info: 'border-transparent bg-info-soft text-info',
-        accent: 'border-transparent bg-accent-soft text-accent-text',
+        neutral: 'bg-muted font-medium text-text-2',
+        ok: 'bg-ok-soft font-bold text-ok',
+        warn: 'bg-warn-soft font-bold text-warn',
+        bad: 'bg-bad-soft font-bold text-bad',
+        info: 'bg-info-soft font-bold text-info',
+        accent: 'bg-accent-soft font-bold text-accent-text',
       },
       mono: {
-        true: 'font-mono text-mono-s',
+        true: 'font-mono text-mono-s font-normal',
         false: '',
       },
     },

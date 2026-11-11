@@ -14,11 +14,12 @@ const ExecutiveView = lazy(() =>
 )
 
 export const VIEWS = [
-  // No dedicated backend permission: module XXI is a web-only
-  // rollup of the other modules' read APIs, so the route is open to any signed-in
-  // user and each KPI pillar is gated INSIDE the view by its source's read
-  // permission (a reader who can't see /finops never sees the cost KPI, and the
-  // exported PDF therefore can't leak it). docs/SECURITY-HARDENING.md.
+  // No dedicated backend permission: module XXI is a web-only rollup of the other
+  // modules' read APIs, so the route opens on the administrator's gate (an editor keeps
+  // the tenant read for its own pages; the organization's summary is not one of them)
+  // and each KPI pillar is gated INSIDE the view by its source's read permission (a
+  // reader who can't see /finops never sees the cost KPI, and the exported PDF therefore
+  // can't leak it). docs/SECURITY-HARDENING.md.
   {
     order: 570,
     id: 'dashboards',
@@ -30,6 +31,7 @@ export const VIEWS = [
     },
     helpHref: '/reference/modules/xxi-executive-dashboards',
     icon: BarChart3,
+    permission: 'tenant:admin',
     element: lazyView(ExecutiveView),
   },
 ] satisfies ViewEntry[]

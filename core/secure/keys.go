@@ -20,15 +20,8 @@ import (
 // signer instead of this on-disk path.
 func LoadOrCreateSigningKey(path string) (ed25519.PrivateKey, bool, error) {
 	if fileExists(path) {
-		b, err := readSecret(path)
-		if err != nil {
-			return nil, false, err
-		}
-		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(b)))
-		if err != nil || len(raw) != ed25519.PrivateKeySize {
-			return nil, false, fmt.Errorf("secure: %s is not a valid Ed25519 private key", path)
-		}
-		return ed25519.PrivateKey(raw), false, nil
+		k, err := LoadExistingSigningKey(path)
+		return k, false, err
 	}
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -39,6 +32,23 @@ func LoadOrCreateSigningKey(path string) (ed25519.PrivateKey, bool, error) {
 		return nil, false, err
 	}
 	return priv, true, nil
+}
+
+// LoadExistingSigningKey loads the engine-owned key LoadOrCreateSigningKey wrote at
+// path and NEVER mints one: a missing file is an error, so a read-only command
+// cannot create a key in the gap between its own existence check and this read.
+// It keeps the owner-only permission check of the local key (readSecret), unlike
+// LoadSigningKey, which reads a group-readable mounted Secret.
+func LoadExistingSigningKey(path string) (ed25519.PrivateKey, error) {
+	b, err := readSecret(path)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(b)))
+	if err != nil || len(raw) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("secure: %s is not a valid Ed25519 private key", path)
+	}
+	return ed25519.PrivateKey(raw), nil
 }
 
 // LoadSigningKey loads an EXISTING Ed25519 signing key from path and NEVER mints

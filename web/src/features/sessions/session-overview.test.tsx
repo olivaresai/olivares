@@ -5,7 +5,7 @@
 // THE FACTS THE THREAD'S HEADER NO LONGER SAYS: the working folder in plain words, who
 // manages the session, its mode and what it did. A session with no conversation of its own
 // paints this block as the thread's body.
-import { act, screen } from '@testing-library/react'
+import { act, cleanup, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import type { RunDTO } from '@/features/agentops/types'
@@ -220,5 +220,36 @@ describe('SessionOverview — what the session has spent', () => {
   it('paints no usage line when the tool reported nothing', () => {
     renderOverview(run())
     expect(screen.queryByTestId('context-usage')).toBeNull()
+  })
+
+  it('says what the session cost to a person who can open Usage', () => {
+    renderOverview(
+      run({ input_tokens: 12, output_tokens: 18, cost_micro_usd: 42000 }),
+    )
+    expect(screen.getByTestId('context-usage')).toHaveTextContent('$0.042')
+    cleanup()
+    // No meter: the facts line says it.
+    renderOverview(run(), undefined, { cost_micro_usd: 42000 })
+    expect(screen.getByTestId('narrative-facts')).toHaveTextContent('$0.042')
+  })
+
+  it('shows a member no money: the tokens stay, the cost and its absence go', () => {
+    // A member sees no money, only the limits of their own accounts.
+    auth.can = (permission) => permission !== 'sessions:account:read'
+    renderOverview(
+      run({ input_tokens: 12, output_tokens: 18, cost_micro_usd: 42000 }),
+    )
+    expect(screen.getByTestId('context-usage')).toHaveTextContent(
+      '12 in / 18 out tokens',
+    )
+    expect(screen.getByTestId('session-overview')).not.toHaveTextContent('$')
+    cleanup()
+    renderOverview(run({ input_tokens: 12, output_tokens: 18 }))
+    expect(screen.getByTestId('session-overview')).not.toHaveTextContent(
+      'cost not reported',
+    )
+    cleanup()
+    renderOverview(run(), undefined, { cost_micro_usd: 42000 })
+    expect(screen.getByTestId('session-overview')).not.toHaveTextContent('$')
   })
 })

@@ -145,7 +145,7 @@ export function DisabledReason({
           {action ? (
             <>
               {' '}
-              <span className="text-accent-text [&_a]:underline [&_a]:underline-offset-[3px]">
+              <span className="text-foreground [&_a]:underline [&_a]:underline-offset-[3px]">
                 {action}
               </span>
             </>

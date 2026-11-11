@@ -527,6 +527,12 @@ func doctorSessionConfinement(deps doctorDeps) doctorCheck {
 		c.Status = "fail"
 		c.Detail += "; managed sessions and local MCP children cannot start here"
 		c.Remediation = "use a Linux engine host with Landlock enabled; run olivares doctor on the engine host to verify availability"
+		if runningInContainer() {
+			// A container runs on its host's kernel; in Docker Desktop that is Docker's own Linux VM,
+			// which the user cannot reboot with another lsm= list. Say whose kernel decides, and that
+			// the rest of the engine works: a session is refused, never run unconfined.
+			c.Remediation = "this engine runs in a container, which uses its host's kernel: enable Landlock there (on a Linux host, add landlock to the lsm= list; on Docker Desktop the Linux VM's kernel is Docker's to change, so sessions stay refused until a Docker Desktop release enables Landlock). The console, the API and the audit ledger work without it"
+		}
 		if deps.goos != "linux" {
 			// Landlock is a Linux kernel feature: on another OS this is a known limit
 			// of a correct install, not a fault, so it warns instead of failing doctor.

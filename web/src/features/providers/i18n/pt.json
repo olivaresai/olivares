@@ -22,6 +22,9 @@
     "name": "Nome",
     "kind": "Tipo",
     "key": "Chave",
+    "usedBy": "Usada por",
+    "usedByUnread": "Não foi possível ler que perfis usam cada chave.",
+    "usedByPartial": "Alguns perfis não foram lidos: uma chave pode ser usada por mais perfis do que os mostrados.",
     "state": "Estado",
     "connection": "Ligação",
     "actions": "Ações"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "Ativo",
-    "revoked": "Revogado"
+    "revoked": "Revogado",
+    "disabled": "Desativado"
   },
   "probe": {
     "never": "Não testado",
@@ -70,7 +74,9 @@
     "testing": "A testar…",
     "rotate": "Rodar chave",
     "revoke": "Revogar",
-    "details": "Detalhes"
+    "details": "Detalhes",
+    "disable": "Desativar",
+    "enable": "Ativar"
   },
   "create": {
     "title": "Adicionar um fornecedor",
@@ -171,5 +177,9 @@
   "section": {
     "title": "Chaves de API",
     "add": "Adicionar uma chave de API"
+  },
+  "stateChange": {
+    "disabled": "Fornecedor desativado. Os perfis associados recusam novos arranques até ser reativado.",
+    "active": "Fornecedor ativado."
   }
 }

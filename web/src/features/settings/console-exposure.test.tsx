@@ -65,3 +65,30 @@ it('says why Save is unavailable until the public URL is edited', async () => {
   )
   expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
 })
+
+it('places console access as boxed rows, the public URL as a row with its field', async () => {
+  vi.spyOn(exposureApi, 'get').mockResolvedValue({
+    listen: '0.0.0.0:8443',
+    grpc_listen: '127.0.0.1:9090',
+    public_url: 'https://running.example.test',
+    saved_public_url: 'https://console.example.test',
+    tls: true,
+    admin_step_up: 'totp',
+    external_reachability: 'not verified',
+    addresses: ['https://100.64.0.2:8443'],
+    managed_public: false,
+  })
+  renderIntel(<ConsoleExposure />)
+  const row = (text: string) =>
+    screen.getByText(text).closest('[data-slot="boxed-list-row"]')
+  expect(await screen.findByText('0.0.0.0:8443')).toBeInTheDocument()
+  expect(row('0.0.0.0:8443')).toHaveTextContent('HTTPS / HTTP listener')
+  expect(row('127.0.0.1:9090')).toHaveTextContent('gRPC listener')
+  expect(row('TLS enabled')).toHaveTextContent('Transport')
+  expect(row('https://100.64.0.2:8443')).toHaveTextContent('Local addresses')
+  const field = screen.getByLabelText('Public URL')
+  expect(field.closest('[data-slot="boxed-list-row"]')).toHaveTextContent(
+    'Use the address of your tailnet or named tunnel',
+  )
+  expect(field).toHaveAccessibleDescription(/Use the address of your tailnet/)
+})

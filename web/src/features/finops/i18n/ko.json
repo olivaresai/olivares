@@ -112,7 +112,7 @@
     },
     "truncated": "예산 {{n}}개를 불러왔으며 더 있습니다",
     "truncatedHint": "표시된 것보다 많은 예산이 있습니다. 이 페이지는 ID로 행을 가져옵니다. 여기에 나열되지 않은 상한이 지출이 무제한이라는 증거는 아닙니다 — 단순히 이 페이지 밖에 있을 수 있습니다.",
-    "storedEmptyHint": "Business에서 만든 예산은 여기서 계속 읽고 제거할 수 있습니다."
+    "storedEmptyHint": "Olivares AI Business에서 만든 예산은 여기서 계속 읽고 제거할 수 있습니다."
   },
   "cache": {
     "title": "프롬프트 캐시 효율",

@@ -128,3 +128,28 @@ func TestCommunityStoredBudgetStillEnforcesAndCanBeRemoved(t *testing.T) {
 		t.Fatalf("removed budget still blocks: %+v %v", decision, err)
 	}
 }
+
+// The spend-by-group report, its CSV and the group-budget member resolution at ingest are
+// Business: Community answers the spend route 501 whatever it is asked, and resolves no
+// group when a cost is recorded.
+func TestCommunityServesNoSpendByGroupAndResolvesNoGroupBudget(t *testing.T) {
+	m, st, tenant, _ := newFin(t)
+	reg := editionRegistrar{}
+	m.APIRoutes(reg)
+	h, ok := reg["GET /spend"]
+	if !ok {
+		t.Fatal("published route missing")
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/spend?dimension=user_group&format=csv", nil)
+	h(w, r, api.ModuleContext{Tenant: tenant, Data: api.NewScopedData(st, tenant)})
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("GET /spend?dimension=user_group&format=csv = %d; want 501", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/csv") {
+		t.Errorf("Community answered a CSV: %q", ct)
+	}
+	if got := m.userGroupBudgetMembers(context.Background(), tenant); got != nil {
+		t.Errorf("Community resolved group budget members: %v", got)
+	}
+}

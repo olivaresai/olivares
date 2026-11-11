@@ -12,6 +12,9 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { AuthShell } from '@/components/layout/auth-shell'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { healthApi, healthKeys } from './api'
 import type { ComponentStatus, ComponentStatusDTO } from './types'
@@ -35,94 +38,101 @@ export function StatusPage() {
   const overallStatus = data?.status
 
   return (
-    // ⛔ ES `<main>`, NO UN `<div>` — misma medida del 2026-08-18 que puso la región en `AuthShell`:
-    //    esta página es PÚBLICA (`routes.tsx`: «no authentication required»), así que no pasa por
-    //    `app-layout.tsx` y era la tercera de las patas de entrada que renderizaba sin ningún
-    //    landmark principal. Un lector de pantalla no tenía nada que saltar en la única página que
-    //    este producto enseña a quien todavía no es cliente.
-    <main
-      id="main-content"
-      tabIndex={-1}
-      className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 outline-none"
-    >
-      <header className="mb-8 text-center">
-        <h1 className="font-display text-display-lg text-foreground">
-          {t('statusPage.title')}
-        </h1>
-        <p className="mt-1 text-body text-muted-foreground">
-          {t('statusPage.subtitle')}
-        </p>
-      </header>
+    // The shell every public single-card page uses: its `main` landmark and skip link (this
+    // page needs no sign-in, so it never passes through the signed-in layout), the product
+    // mark above, and the page's one card on the frame.
+    <AuthShell>
+      <Card>
+        <CardContent>
+          <div className="flex flex-col gap-5">
+            <header className="text-center">
+              <h1 className="font-display text-title text-foreground">
+                {t('statusPage.title')}
+              </h1>
+              <p className="mt-1 text-body text-muted-foreground">
+                {t('statusPage.subtitle')}
+              </p>
+            </header>
 
-      {/* Overall status banner. `not_configured` is deliberately NEUTRAL, not a
-          warning tone: an install that simply has optional capabilities left
-          unprovisioned is incomplete, not broken, and painting it amber taught
-          operators to ignore amber. An unanswered probe gets the same neutral
-          tone and says so — never a green verdict with no evidence. */}
-      <div
-        className={cn(
-          'mb-6 rounded-lg border p-6 text-center',
-          overallStatus === 'operational' && 'border-success/30 bg-success/5',
-          (overallStatus === 'not_configured' || overallStatus === undefined) &&
-            'border-border bg-muted/40',
-          overallStatus === 'degraded' && 'border-warning/30 bg-warning/5',
-          overallStatus === 'outage' && 'border-danger/30 bg-danger/5',
-        )}
-      >
-        <StatusIcon status={overallStatus} className="mx-auto mb-2 size-8" />
-        <div className="font-display text-title">
-          {overallStatus ? (
-            t(`statusPage.overall.${overallStatus}`)
-          ) : query.isLoading ? (
-            <span className="mx-auto block h-5 w-48 rounded bg-muted" />
-          ) : (
-            t('statusPage.unavailable')
-          )}
-        </div>
-      </div>
+            {/* Overall status banner. `not_configured` is deliberately NEUTRAL, not a
+                warning tone: an install that simply has optional capabilities left
+                unprovisioned is incomplete, not broken, and painting it amber taught
+                operators to ignore amber. An unanswered probe gets the same neutral
+                tone and says so — never a green verdict with no evidence. */}
+            <div
+              className={cn(
+                'rounded-lg border p-4 text-center',
+                overallStatus === 'operational' &&
+                  'border-success/30 bg-success/5',
+                (overallStatus === 'not_configured' ||
+                  overallStatus === undefined) &&
+                  'border-border bg-muted/40',
+                overallStatus === 'degraded' &&
+                  'border-warning/30 bg-warning/5',
+                overallStatus === 'outage' && 'border-danger/30 bg-danger/5',
+              )}
+            >
+              <StatusIcon
+                status={overallStatus}
+                className="mx-auto mb-2 size-8"
+              />
+              <div className="font-display text-title">
+                {overallStatus ? (
+                  t(`statusPage.overall.${overallStatus}`)
+                ) : query.isLoading ? (
+                  <span className="mx-auto block h-5 w-48 rounded bg-muted" />
+                ) : (
+                  t('statusPage.unavailable')
+                )}
+              </div>
+            </div>
 
-      {/* Component list */}
-      <div className="space-y-0 divide-y rounded-lg border">
-        {query.isLoading ? (
-          <>
-            <ComponentSkeleton />
-            <ComponentSkeleton />
-            <ComponentSkeleton />
-            <ComponentSkeleton />
-          </>
-        ) : data ? (
-          data.components.map((c) => (
-            <ComponentRow key={c.name} component={c} />
-          ))
-        ) : (
-          <div className="p-6 text-center text-body text-muted-foreground">
-            {t('statusPage.unavailable')}
+            {/* Component list */}
+            <div className="space-y-0 divide-y rounded-lg border">
+              {query.isLoading ? (
+                <>
+                  <ComponentSkeleton />
+                  <ComponentSkeleton />
+                  <ComponentSkeleton />
+                  <ComponentSkeleton />
+                </>
+              ) : data ? (
+                data.components.map((c) => (
+                  <ComponentRow key={c.name} component={c} />
+                ))
+              ) : (
+                <div className="p-6 text-center text-body text-muted-foreground">
+                  {t('statusPage.unavailable')}
+                </div>
+              )}
+            </div>
+
+            <footer className="flex items-center justify-between text-caption text-muted-foreground">
+              <span>
+                {data?.timestamp &&
+                  t('statusPage.lastUpdated', {
+                    time: new Date(data.timestamp).toLocaleTimeString(
+                      currentLanguage(),
+                    ),
+                  })}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void query.refetch()}
+                disabled={query.isFetching}
+              >
+                <RefreshCw
+                  aria-hidden
+                  className={query.isFetching ? 'animate-spin' : undefined}
+                />
+                {t('refresh')}
+              </Button>
+            </footer>
           </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <footer className="mt-8 flex items-center justify-between text-caption text-muted-foreground">
-        <span>
-          {data?.timestamp &&
-            t('statusPage.lastUpdated', {
-              time: new Date(data.timestamp).toLocaleTimeString(
-                currentLanguage(),
-              ),
-            })}
-        </span>
-        <button
-          onClick={() => void query.refetch()}
-          disabled={query.isFetching}
-          className="inline-flex items-center gap-1 hover:text-foreground"
-        >
-          <RefreshCw
-            className={cn('size-3', query.isFetching && 'animate-spin')}
-          />
-          {t('refresh')}
-        </button>
-      </footer>
-    </main>
+        </CardContent>
+      </Card>
+    </AuthShell>
   )
 }
 

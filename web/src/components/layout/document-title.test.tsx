@@ -20,7 +20,7 @@ import { routeTree } from '@/app/routes'
 import { BUSINESS_BUILD } from '@/features/business-build'
 import type { ViewGate } from '@/features/navigation/model'
 import { settingsPlace, sidebarPlaces } from '@/features/navigation/places'
-import { ROUTE_ALIASES } from '@/features/registry'
+import { FEATURE_VIEWS, ROUTE_ALIASES } from '@/features/registry'
 import census from '@/features/route-census.json'
 // The title's root-closure import registers this dictionary too; the census reads it loaded.
 import '@/features/health/i18n'
@@ -71,11 +71,17 @@ describe('the document title of every census route', () => {
       (a) => a.from,
     ),
   )
+  // A door reads as the room it opens (/provider-profiles as /agent-tools):
+  // the same page, not a second one to tell apart.
+  const doors = new Set(
+    FEATURE_VIEWS.filter((v) => v.doorTo).map((v) => v.path),
+  )
   const titled = mounted.filter(
     (p) =>
       !(BUSINESS_BUILD && p === '/deploy') &&
       !redirectsOnly.has(p) &&
-      !namedLikeLanding.has(p),
+      !namedLikeLanding.has(p) &&
+      !doors.has(p),
   )
 
   it('is unique per mounted route', () => {
@@ -155,9 +161,28 @@ describe('the document title of every census route', () => {
     expect(title('/models')).toBe('Models · Olivares AI')
   })
 
-  it('names a door by its own entrance, not the room it opens', () => {
-    expect(title('/agentops')).toBe('Operate sessions · Olivares AI')
-    expect(title('/provider-profiles')).toBe('Provider profiles · Olivares AI')
+  // A door mounts its room's screen under its own permission: one page, one
+  // name, as its row and its heading say.
+  it('names a door by the room it opens', () => {
+    expect(title('/agentops')).toBe('Sessions · Olivares AI')
+    expect(title('/agentops')).toBe(title('/sessions'))
+    for (const door of [
+      '/provider-profiles',
+      '/provider-bindings',
+      '/provider-accounts',
+    ])
+      expect(title(door)).toBe(title('/agent-tools'))
+    for (const door of [
+      '/communications/inbox',
+      '/communications/new',
+      '/communications/handoffs',
+      '/communications/administration',
+    ])
+      expect(title(door)).toBe(title('/communications'))
+    // Where the room is closed to the person, the door is the page Tools opens.
+    const roomClosed: ViewGate = (v) =>
+      !['agent-tools', 'providers'].includes(v.id)
+    expect(pageLabel(t, '/provider-profiles', {}, roomClosed)).toBe('Tools')
   })
 
   // The approval queue is the Rules place of the Estate top bar (APPROVALS_SECTION).

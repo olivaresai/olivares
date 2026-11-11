@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useEffect, useRef, useState } from 'react'
-import { useRouterState } from '@tanstack/react-router'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@/components/ui/toaster'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
@@ -29,20 +29,25 @@ import {
   type AttentionSnapshot,
 } from './session-attention'
 
-/** One observer for the whole authenticated shell, including its phone layout. */
+/** One observer for the whole authenticated shell, including its phone layout. The
+ * console tells every signed-in person, in the tab they look at; the browser tells a
+ * person who turned it on here, while the tab is hidden. */
 export function SessionNotifications() {
   const boundary = useAuthBoundary()
   const owner = notificationOwner(boundary.principal, boundary.tenant)
   const selected = useClientSettings((s) => s.sessionNotificationsFor)
-  return owner && selected === owner ? (
-    <SessionAttentionObserver key={boundary.key} />
+  return owner ? (
+    <SessionAttentionObserver key={boundary.key} browser={selected === owner} />
   ) : null
 }
 
-function SessionAttentionObserver() {
+function SessionAttentionObserver({ browser }: { browser: boolean }) {
   const { t } = useTranslation('settings')
+  const navigate = useNavigate()
   const events = useClientSettings((s) => s.notificationEvents)
-  const rail = useSessionRail(true)
+  const inApp = useClientSettings((s) => s.inAppEvents)
+  const rail = useSessionRail(browser)
+  const sessionTo = rail.allTo === '/agentops' ? '/agentops' : '/sessions'
   const wide = useMinWidth(761)
   const selection = useRouterState({
     select: (s) => {
@@ -79,9 +84,9 @@ function SessionAttentionObserver() {
   // the engine, so the person's language and a rotated engine key are picked up, and a device
   // the engine could not register earlier is tried again.
   useEffect(() => {
-    if (pushSupported() && Notification.permission === 'granted')
+    if (browser && pushSupported() && Notification.permission === 'granted')
       void enablePush(pushTextsFrom(t)).catch(() => undefined)
-  }, [t])
+  }, [t, browser])
 
   useEffect(() => {
     const update = () => setHidden(document.hidden)
@@ -103,6 +108,7 @@ function SessionAttentionObserver() {
     for (const [key, { notification, event }] of notifications.current) {
       const session = current.get(key)
       if (
+        !browser ||
         !session ||
         !events[event] ||
         (event === 'needsYou' && session.state !== 'needs-you') ||
@@ -123,7 +129,7 @@ function SessionAttentionObserver() {
         s.state === 'needs-you' &&
         (hidden || !isOnScreen(s, opened)),
     ).length
-    setAttentionCount(count)
+    setAttentionCount(browser ? count : 0)
     if (!hidden && failed.current === 'pending') {
       toast.message(t('sessionNotifications.unavailable'))
       failed.current = 'shown'
@@ -137,10 +143,31 @@ function SessionAttentionObserver() {
         now,
         lastNotified: delivered.current.get(session.key),
       })
+      if (!event) continue
+      if (!hidden) {
+        // In view: the console says it, once, with the one way to answer it.
+        if (!inApp[event]) continue
+        const search = { [SESSION_PARAM]: session.address }
+        toast.message(
+          t(`sessionNotifications.inApp.${event}`, { name: session.name }),
+          {
+            id: `attention:${session.key}`,
+            action: {
+              label: t('sessionNotifications.open'),
+              onClick: () =>
+                void navigate({
+                  to: sessionTo as never,
+                  search: search as never,
+                }),
+            },
+          },
+        )
+        delivered.current.set(session.key, now)
+        continue
+      }
       if (
-        !event ||
+        !browser ||
         !events[event] ||
-        !hidden ||
         typeof Notification === 'undefined' ||
         Notification.permission !== 'granted'
       )
@@ -164,6 +191,17 @@ function SessionAttentionObserver() {
       }
     }
     previous.current = current
-  }, [rail.attention, rail.attentionReady, hidden, opened, t, events])
+  }, [
+    rail.attention,
+    rail.attentionReady,
+    hidden,
+    opened,
+    t,
+    events,
+    inApp,
+    browser,
+    navigate,
+    sessionTo,
+  ])
   return null
 }

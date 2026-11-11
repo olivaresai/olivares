@@ -44,7 +44,10 @@ import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { ListTruncationBadge, SeverityBadge } from '@/features/_intel'
 import { RelTime } from '@/features/shared/rel-time'
 import { ApiError } from '@/lib/api/errors'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  useFailedActionReporter,
+} from '@/lib/hooks/use-privileged-mutation'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { killswitchApi, killswitchKeys } from './api'
@@ -136,6 +139,7 @@ export function GuardianSection() {
         report(err, () => deleteRule.mutate(id))
         return
       }
+      if (reportEditionRefusal(err)) return
       if (err instanceof ApiError && err.isForbidden) {
         toast.warning(t('common:privileged.notAuthorizedToast'))
         return

@@ -4,7 +4,8 @@
 import type { ReactNode } from 'react'
 import { fireEvent, render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { CategoryBarChart } from './index'
+import { FALLBACK } from './chart-theme'
+import { CategoryBarChart, ChartLegend } from './index'
 
 // recharts' ResponsiveContainer waits for a ResizeObserver callback that the jsdom
 // stub never fires, so it renders no children at all — the chart tree would never
@@ -137,5 +138,31 @@ describe('CategoryBarChart keyboard', () => {
     wrap.addEventListener('keydown', seen)
     fireEvent.keyDown(wrap, { key: 'Enter' })
     expect(seen).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the chart frame (A2)', () => {
+  it('keys its legend with round swatches', () => {
+    const { container } = render(
+      <ChartLegend
+        items={[
+          {
+            key: 'claude',
+            label: 'Claude Code',
+            value: 28,
+            color: 'var(--accent)',
+          },
+        ]}
+      />,
+    )
+    const swatch = container.querySelector('li [aria-hidden]')!
+    expect(swatch).toHaveClass('size-2', 'rounded-full')
+    expect(swatch).not.toHaveClass('rounded-[2px]')
+  })
+
+  it('draws the axis line firmer than the grid, in the fallback palette too', () => {
+    // The fallback is the dark theme's: its `--border-strong` and `--border`.
+    expect(FALLBACK.border).toBe('rgba(255, 255, 255, 0.13)')
+    expect(FALLBACK.grid).toBe('rgba(255, 255, 255, 0.07)')
   })
 })

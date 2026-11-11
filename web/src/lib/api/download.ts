@@ -16,6 +16,9 @@ export function serverFilename(headers: Headers, fallback: string): string {
   return m?.[1] ?? m?.[2] ?? fallback
 }
 
+// WebKit cancels a download revoked before it starts; FileSaver.js waits 40 s.
+const REVOKE_DELAY_MS = 40_000
+
 /** Save a Blob as a file through the browser's native download: an anchor with the
  * download attribute, clicked once, its object URL released afterwards. */
 export function downloadBlob(blob: Blob, filename: string): void {
@@ -26,5 +29,5 @@ export function downloadBlob(blob: Blob, filename: string): void {
   document.body.appendChild(a)
   a.click()
   a.remove()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS)
 }

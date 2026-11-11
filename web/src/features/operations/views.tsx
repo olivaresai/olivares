@@ -8,9 +8,8 @@ import type { ViewEntry } from '@/features/registry'
 
 // The lead of the Operations place: the host, the live sessions and their usage, on one page.
 // Each section reads only what the person may read, so the page opens for anyone who can read
-// runs and shows a system administrator the host as well. ponytail: the page opens on
-// sessions:run:read, so a system administrator without it reads the host with
-// `olivares host status`; add a second entry point if such a role appears.
+// the installation's health and shows a system administrator the host as well. It does not open
+// on sessions:run:read: a member reads their own runs and has no Operations.
 const OperationsView = lazy(() =>
   import('./operations-view').then((m) => ({ default: m.OperationsView })),
 )
@@ -27,7 +26,7 @@ export const VIEWS = [
     },
     helpHref: '/reference/console',
     icon: Server,
-    permission: 'sessions:run:read',
+    permission: 'health:status:read',
     element: lazyView(OperationsView),
   },
 ] satisfies ViewEntry[]

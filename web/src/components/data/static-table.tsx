@@ -63,16 +63,19 @@ export function StaticTable({
       data-slot="static-table"
       className={cn(
         'w-full border-collapse text-body',
-        // The header, identical to `DataTable`'s (data-table.tsx:822) — including its
+        // The header, identical to `DataTable`'s — its tint, mixed into the surface, and its
         // HEIGHT, which used to be left to the padding and the caption line and came out
         // at 34 + the 1 px rule, one pixel short of the strip `DataTable` paints. The
-        // literal is `DENSITY_ROW.comfortable.headClassName` and `static-table.test.tsx`
-        // pins it there, for the same reason `h-9` below is pinned: Tailwind only emits a
-        // class whose whole name it reads in the source.
-        '[&_thead_th]:bg-muted [&_thead_th]:h-[35px] [&_thead_th]:px-3 [&_thead_th]:py-2',
+        // literals are `DataTable`'s header tint and `DENSITY_ROW.comfortable.headClassName`,
+        // and `static-table.test.tsx` pins both there, for the same reason `h-9` below is
+        // pinned: Tailwind only emits a class whose whole name it reads in the source.
+        '[&_thead_th]:bg-[color-mix(in_srgb,var(--text)_4%,var(--surface))]',
+        '[&_thead_th]:h-[43px] [&_thead_th]:px-4 [&_thead_th]:py-2',
         '[&_thead_th]:text-left [&_thead_th]:align-middle',
-        '[&_thead_th]:text-caption [&_thead_th]:font-medium [&_thead_th]:tracking-wide',
-        '[&_thead_th]:text-muted-foreground [&_thead_th]:uppercase',
+        '[&_thead_th]:text-overline [&_thead_th]:tracking-normal',
+        '[&_thead_th]:text-muted-foreground [&_thead_th]:normal-case',
+        // A fill set from the table is out of the tertiary rule's reach (index.css): say it here.
+        '[&_thead_th]:[--text-3:var(--text-2)]',
         '[&_thead_tr]:border-b [&_thead_tr]:border-border-strong',
         // The body: one density, one hairline, and none under the last row.
         //
@@ -87,8 +90,8 @@ export function StaticTable({
         // generates a class whose whole name it reads in the source, so a token built by
         // interpolation would compile to no rule and the row would silently keep its
         // old height.
-        '[&_tbody_td]:h-9 [&_tbody_td]:px-3 [&_tbody_td]:py-1 [&_tbody_td]:align-middle',
-        '[&_tbody_th]:h-9 [&_tbody_th]:px-3 [&_tbody_th]:py-1 [&_tbody_th]:text-left',
+        '[&_tbody_td]:h-11 [&_tbody_td]:px-4 [&_tbody_td]:py-1 [&_tbody_td]:align-middle',
+        '[&_tbody_th]:h-11 [&_tbody_th]:px-4 [&_tbody_th]:py-1 [&_tbody_th]:text-left',
         // A CELL THAT HOLDS A CONTROL SPENDS NO PADDING ON IT, because the 36 px box
         // already reserves the room. Measured in the browser on the seeded estate:
         // `/residency` 36.5 px, `/console` 36.5, `/reporting` 37, `/security` 37 and
@@ -117,7 +120,11 @@ export function StaticTable({
         // so in a way that outranks the rule it is opting out of.
         '[&_tbody_td[data-cell="box"]]:py-0',
         '[&_tbody_tr]:border-b [&_tbody_tr]:border-border [&_tbody_tr]:transition-colors',
-        '[&_tbody_tr]:hover:bg-surface',
+        // A row takes the hover layer; a group row (one cell across the table) is a
+        // heading, not something to press, so it does not react. The rows are the
+        // caller's, so the table carries the class: it is hovered whenever a row is, and
+        // the tertiary rule (index.css) gives the whole table the secondary ink then.
+        '[&_tbody_tr]:hover:bg-hover [&_tbody_tr:has(>td[colspan])]:hover:bg-transparent',
         '[&_tbody_tr:last-child]:border-0',
         oneLine &&
           '[&_tbody_td]:whitespace-nowrap [&_tbody_th]:whitespace-nowrap',

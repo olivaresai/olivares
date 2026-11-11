@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Records management — retention, legal hold, and WORM archiving
 
-Audit SIEM export, ledger verification (`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community retains the signed ledger and its reads; `olivares dr backup` remains available. See [edition placement](editions.md).
+Audit SIEM export, ledger verification (`olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community retains the signed ledger and its reads; `olivares dr backup` remains available. See [edition placement](editions.md).
 
 S3 Object Lock archives and notification delivery require Business Regulated Operations.
 So do legal holds and right to erasure. Retention schedules and the hold-checked sweep require Business: Community reads the stored schedules and certificates, refuses authoring and sweeping with `501 business_required`, and runs no sweep, so nothing is purged there and no stored schedule is reported as enabled; a legal hold a Business engine stored keeps vetoing every purge.

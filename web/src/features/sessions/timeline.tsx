@@ -6,6 +6,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   Coins,
+  Hash,
   Plug,
   Wrench,
   type LucideIcon,
@@ -31,6 +32,7 @@ import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import { cn } from '@/lib/utils'
 import { sessionsApi, sessionsKeys } from './api'
+import { useUsagePath } from './session-meter'
 import type { TimelineDTO } from './types'
 import './i18n'
 
@@ -44,7 +46,14 @@ const KIND_META: Record<string, { icon: LucideIcon; tone: string }> = {
   mcp: { icon: Plug, tone: 'text-info' },
   cost: { icon: Coins, tone: 'text-accent-text' },
   finding: { icon: AlertTriangle, tone: 'text-warning' },
+  // A cost event where Usage does not open for the person: its tokens, no coin.
+  tokens: { icon: Hash, tone: 'text-muted-foreground' },
 }
+
+/** The engine writes a cost event as its tokens ("N in / M out tokens"), never with an
+ * amount. Where Usage does not open for the person it is a token fact, named Tokens. */
+const kindKey = (kind: string, tellsCost: boolean) =>
+  kind === 'cost' && !tellsCost ? 'kind.costNoMoney' : `kind.${kind}`
 
 /**
  * SessionTimeline — the session's reconstructible ingest order, keyset-paginated
@@ -64,6 +73,8 @@ export function SessionTimeline({
 }) {
   const { t } = useTranslation('sessions')
   const { activeTenant } = useAuth()
+  // Money is told only where Usage opens for the person (kindKey above).
+  const tellsCost = useUsagePath() !== null
   const [kind, setKind] = useState<string>(ALL)
   const facetKind = kind === ALL ? undefined : kind
   const ref = liveRef || sessionRef || ''
@@ -114,7 +125,7 @@ export function SessionTimeline({
             <SelectItem value={ALL}>{t('timeline.all')}</SelectItem>
             {KINDS.map((k) => (
               <SelectItem key={k} value={k}>
-                {t(`kind.${k}`)}
+                {t(kindKey(k, tellsCost))}
               </SelectItem>
             ))}
           </SelectContent>
@@ -158,16 +169,23 @@ export function SessionTimeline({
             retry={() => void query.refetch()}
           />
         )
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && !query.hasNextPage ? (
+        // Never "nothing yet" above a Load more that can still bring the kind chosen.
         <EmptyState
           icon={<Wrench />}
           title={t('timeline.empty')}
-          description={t('timeline.emptyHint')}
+          description={t(
+            tellsCost ? 'timeline.emptyHint' : 'timeline.emptyHintNoCost',
+          )}
         />
-      ) : (
+      ) : rows.length === 0 ? null : (
         <ol className="flex flex-col" data-testid="timeline-list">
           {rows.map((row, i) => (
-            <TimelineRow key={`${row.at}-${i}`} row={row} />
+            <TimelineRow
+              key={`${row.at}-${i}`}
+              row={row}
+              tellsCost={tellsCost}
+            />
           ))}
         </ol>
       )}
@@ -189,9 +207,18 @@ export function SessionTimeline({
   )
 }
 
-function TimelineRow({ row }: { row: TimelineDTO }) {
+function TimelineRow({
+  row,
+  tellsCost,
+}: {
+  row: TimelineDTO
+  tellsCost: boolean
+}) {
   const { t } = useTranslation('sessions')
-  const meta = KIND_META[row.kind] ?? KIND_META.tool
+  // A token fact (kindKey): Tokens, no coin, and not the "cost" source it came from.
+  const tokens = row.kind === 'cost' && !tellsCost
+  const meta = KIND_META[tokens ? 'tokens' : row.kind] ?? KIND_META.tool
+  const source = tokens ? undefined : row.source
   const Icon = meta.icon
   const label = row.title || row.tool_ref || row.resource_ref || '—'
   return (
@@ -208,7 +235,7 @@ function TimelineRow({ row }: { row: TimelineDTO }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="outline" className="font-mono">
-            {t(`kind.${row.kind}`, { defaultValue: row.kind })}
+            {t(kindKey(row.kind, tellsCost), { defaultValue: row.kind })}
           </Badge>
           <span
             className="truncate text-body font-medium text-foreground"
@@ -218,16 +245,16 @@ function TimelineRow({ row }: { row: TimelineDTO }) {
           </span>
           {row.mode && <AccessModeBadge mode={row.mode} />}
         </div>
-        {(row.resource_ref && row.resource_ref !== label) || row.source ? (
+        {(row.resource_ref && row.resource_ref !== label) || source ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-caption text-muted-foreground">
             {row.resource_ref && row.resource_ref !== label && (
               <span className="truncate" title={row.resource_ref}>
                 {row.resource_ref}
               </span>
             )}
-            {row.source && (
+            {source && (
               <span className="text-muted-foreground/80">
-                {t('timeline.source')}: {row.source}
+                {t('timeline.source')}: {source}
               </span>
             )}
           </div>

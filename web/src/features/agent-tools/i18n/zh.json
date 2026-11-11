@@ -1,7 +1,7 @@
 {
   "title": "AI 工具",
   "description": "在此服务器上安装会话运行的 AI 工具，并完成登录。",
-  "descriptionMember": "会话以这些账户和 API 密钥运行。工具由系统管理员安装并登录。",
+  "descriptionMember": "会话以这些账户运行；API 密钥在“提供商”中。工具由系统管理员安装并登录。",
   "refresh": "刷新",
   "readOnly": "此服务器为只读模式，无法安装。",
   "notInstalled": "没有托管安装",
@@ -95,7 +95,7 @@
     "failed": "未运行：已停止。",
     "start": "启动",
     "stop": "停止",
-    "notInstalled": "{{name}} 未安装。Olivares 会在此服务器的 PATH 中查找 {{program}}。",
+    "lookedFor": "Olivares 会在此服务器的 PATH 中查找 {{program}}。",
     "hint": "其端点已添加到启动它时所指定组织的“提供商”，该组织的 OpenCode 会话可使用其模型。",
     "model": "模型",
     "modelHintLlamaCpp": "输入 .gguf 文件的绝对路径，或以 用户/仓库[:量化] 形式给出的 Hugging Face 模型。",
@@ -134,7 +134,7 @@
     "accountChecking": "账户 · 正在检查…",
     "accountSigningIn": "账户 · 正在登录…",
     "accountUnreadable": "账户 · 无法读取",
-    "keyDetail": "API 密钥 · {{name}}（{{hint}}）",
+    "keyDetail": "API 密钥 · {{name}} · {{hint}}",
     "keyName": "API 密钥 · {{name}}",
     "keyNone": "API 密钥 · 未选择",
     "lastSignIn": "上次登录 {{when}}",
@@ -158,7 +158,11 @@
     "default": "默认登录",
     "readFailed": "无法读取配置文件。",
     "truncated": "部分配置文件未显示。",
-    "retry": "重试"
+    "retry": "重试",
+    "turnOff": "关闭 {{name}}",
+    "turnOn": "开启 {{name}}",
+    "switchedOn": "{{name}} 已开启",
+    "switchedOff": "{{name}} 已关闭"
   },
   "tool": {
     "menu": "{{name}} 的选项",
@@ -196,12 +200,12 @@
     "chooseKey": "选择密钥",
     "addKey": "添加密钥…",
     "create": "创建",
+    "createAndSignIn": "创建并登录",
     "creating": "正在创建…",
     "created": "已创建配置文件 {{name}}",
     "failed": "未能创建配置文件。",
     "bindFailed": "无法设置密钥。",
     "keyNotSet": "配置文件已创建，但未设置密钥：{{error}} 请打开该配置文件选择密钥。",
-    "notNow": "稍后",
     "close": "关闭",
     "keyNeedsAccess": "选择密钥需要修改配置文件的权限。"
   },
@@ -256,9 +260,35 @@
     "packagesHint": "由每个工具的新会话所用的提供商配置文件声明（{{profiles}}）。没有配置文件的工具会获得一个不声明任何内容的新配置文件。"
   },
   "place": {
-    "title": "账户和 API 密钥",
     "accounts": "账户",
     "allAccounts": "所有账户：详情、标签和绑定",
-    "noAccess": "你的角色无法读取此组织的账户和 API 密钥。"
+    "noAccess": "你的角色无法读取此组织的账户。",
+    "keysOnProviders": "API 密钥在<0>提供商</0>中。",
+    "keysAndReferencesOnProviders": "API 密钥及其引用在<0>提供商</0>中。"
+  },
+  "runtime": {
+    "title": "运行时",
+    "autoCompact": "自动压缩阈值",
+    "autoCompactHint": "在 100,000 到 1,000,000 个 token 后压缩。留空则使用 Claude 的默认值。",
+    "autoCompactPlaceholder": "例如 300000",
+    "autoCompactInvalid": "请输入 100000 到 1000000 之间的整数，或留空。",
+    "saved": "运行时已保存。新会话将使用它。"
+  },
+  "models": {
+    "title": "模型",
+    "note": "只有你能看到此列表。隐藏的模型不会出现在选择器中；工具的默认模型和你手动输入的模型仍可使用。",
+    "filter": "筛选模型",
+    "disableAll": "全部隐藏",
+    "enableAll": "全部显示",
+    "addCustom": "添加自定义模型",
+    "customPlaceholder": "模型 ID，例如 claude-opus-5-5",
+    "customInvalid": "模型 ID 不能含空格，最长 200 个字符。",
+    "add": "添加",
+    "fast": "快速模式",
+    "up": "上移 {{name}}",
+    "down": "下移 {{name}}",
+    "use": "显示 {{name}}",
+    "removeCustom": "移除 {{name}}",
+    "empty": "此工具未报告任何模型。请添加你使用的模型。"
   }
 }

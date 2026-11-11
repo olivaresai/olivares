@@ -3,6 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { load, JSON_SCHEMA } from 'js-yaml'
 import { agentOpsApi } from '@/features/agentops/api'
+import {
+  useClientSettings,
+  type AddedScript,
+} from '@/features/settings/preferences'
 import { ApiError } from '@/lib/api/errors'
 
 export interface ProjectScript {
@@ -17,13 +21,19 @@ const object = (value: unknown): Record<string, unknown> =>
     : {}
 const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
 
-/** Read declarations only: even `make -qp` and `task --list` can execute project code. */
+/**
+ * Read declarations only: even `make -qp` and `task --list` can execute project code.
+ * Given the names at the top of the folder (`topLevelFiles`), only the declarations it
+ * holds are read; a file it does not hold would answer 404, which the browser logs.
+ */
 export async function projectScripts(
   workspaceRef: string,
   tenant: string | null,
   signal: AbortSignal,
+  present?: ReadonlySet<string>,
 ): Promise<ProjectScript[]> {
   const read = async (path: string) => {
+    if (present && !present.has(path)) return null
     try {
       const file = await agentOpsApi.readFile(workspaceRef, path, undefined, {
         tenant,
@@ -110,4 +120,32 @@ export async function projectScripts(
     break
   }
   return scripts
+}
+
+/** The names of the files at the top of a folder, every page of its listing. */
+export async function topLevelFiles(
+  workspaceRef: string,
+  tenant: string | null,
+  signal: AbortSignal,
+): Promise<Set<string>> {
+  const names = new Set<string>()
+  let cursor: string | undefined
+  do {
+    const page = await agentOpsApi.listFiles(
+      workspaceRef,
+      { cursor },
+      { tenant, signal },
+    )
+    for (const entry of page.entries)
+      if (entry.type !== 'dir') names.add(entry.name)
+    cursor = page.has_more ? page.cursor : undefined
+  } while (cursor)
+  return names
+}
+
+const NONE: AddedScript[] = []
+
+/** The scripts this person added to the folder (kept with their settings), run as typed. */
+export function useAddedScripts(workspaceRef: string): AddedScript[] {
+  return useClientSettings((s) => s.projectScripts[workspaceRef] ?? NONE)
 }

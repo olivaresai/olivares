@@ -17,6 +17,7 @@ import type { UsagePeriod } from '@/features/models/usage'
 import { useAuth } from '@/lib/auth/context'
 import { HostSection } from './host-section'
 import { LiveSection } from './live-section'
+import { StatusSection } from './status-section'
 import './i18n'
 
 /** The range the person picks, and the usage period it asks for. The host keeps 24 hours. */
@@ -49,6 +50,7 @@ export function OperationsView() {
       }
     >
       <div className="flex flex-col gap-6">
+        {can('health:status:read') ? <StatusSection /> : null}
         {can('system:admin') ? (
           <HostSection longRange={range !== '24h'} />
         ) : null}

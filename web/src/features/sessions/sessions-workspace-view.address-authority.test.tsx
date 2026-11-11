@@ -124,7 +124,12 @@ vi.mock('@/features/agentops/api', async (importOriginal) => ({
 
 import { SessionsWorkspaceView } from './sessions-workspace-view'
 
-vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: vi.fn(),
+  resolveNotice: vi.fn(),
+  noticeSeen: () => false,
+  rememberNotice: vi.fn(),
+}))
 import { notify } from '@/lib/notify'
 
 // What the page has told: its notices are toasts now, not strips above the work.
@@ -436,7 +441,8 @@ describe('a RETIRED address that comes back through Back', () => {
         'rev/narrative/control-the-admitted-half-is-painted',
       ).toHaveTextContent('rev-a-resolved'),
     )
-    await user.click(await railRow('sess:rev-b'))
+    // The list is its own screen, so the second session arrives by its address.
+    act(() => fakeRouter.go('/sessions?session=sess%3Arev-b&pane=narrative'))
     await waitFor(() => expect(fakeRouter.url()).toContain('sess%3Arev-b'))
 
     grant('sessions:run:read')
@@ -475,9 +481,9 @@ describe('opening the session that is beside', () => {
         }) as MediaQueryList,
     )
     onTestFinished(() => wide.mockRestore())
-    fakeRouter.reset(BESIDE_URL)
+    // The list is its own screen: it opens with the beside slot still in the address.
+    fakeRouter.reset(BESIDE_URL.replace('pane=beside', 'pane=rail'))
     renderView(undefined, false)
-    await screen.findByRole('region', { name: 'Session beside' })
     let option: HTMLElement | null = null
     await waitFor(() => {
       openWorkingFold()

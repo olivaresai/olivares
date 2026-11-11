@@ -17,7 +17,7 @@
   "openOwner": "Ouvrir {{resource}}",
   "sharedScope": "Les dossiers, connecteurs, serveurs MCP et politiques appartiennent à l’organisation ; aucun lien à un espace n’est déduit.",
   "more": "Affichage : {{count}}. D’autres sont disponibles.",
-  "unavailable": "Impossible de charger ce type de ressource. Actualisez pour réessayer.",
+  "unavailable": "Impossible de charger ce type de ressource.",
   "off": "Ce module est désactivé.",
   "startSession": "Démarrer une session",
   "workflows": "Ouvrir les automatisations",
@@ -54,5 +54,18 @@
   },
   "nextPage": "Page suivante",
   "firstPage": "Première page",
-  "noDependencies": "Aucune dépendance visible."
+  "noDependencies": "Aucune dépendance visible.",
+  "groups": {
+    "workspace": "Espaces de travail",
+    "folder": "Dossiers",
+    "session": "Sessions",
+    "work": "Travaux",
+    "connector": "Connecteurs",
+    "mcp": "Serveurs MCP",
+    "policy": "Politiques"
+  },
+  "noResources": {
+    "title": "Aucune ressource configurée pour l’instant",
+    "description": "Les espaces de travail, dossiers, sessions, connecteurs, serveurs MCP et politiques apparaissent ici une fois configurés."
+  }
 }

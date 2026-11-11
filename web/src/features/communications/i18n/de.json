@@ -2,29 +2,28 @@
   "doors": {
     "catalog": {
       "title": "Kommunikation",
-      "description": "Kanäle des ausgewählten Arbeitsbereich, die Sie jetzt lesen dürfen, die darüber gesendeten Direktnachrichten und Ihr Posteingang. Die Engine entscheidet über jedes Lesen und jede Aktion."
+      "description": "Nachrichten zwischen Personen und Sitzungen und die Kanäle, die sie tragen."
     },
     "inbox": {
       "title": "Kommunikations-Posteingang",
-      "description": "An Sie adressierte Nachrichten im ausgewählten Arbeitsbereich: jede öffnen und bestätigen."
+      "description": "An Sie gesendete Nachrichten: jede öffnen und bestätigen."
     },
     "new": {
       "title": "Neuer Kanal",
-      "description": "Erstellen Sie einen Kanal und legen Sie von Anfang an fest, wer ihn nutzen darf. Niemand erhält stillschweigend Zugriff, und die Quittung ist keine dauerhafte Liste, wer ihn später lesen darf."
+      "description": "Einen Kanal erstellen und festlegen, wer ihn nutzen darf."
     },
     "administration": {
       "title": "Kanalverwaltung",
-      "description": "Die Kanäle, die Sie im ausgewählten Arbeitsbereich verwalten dürfen: Konfiguration und Berechtigungsverlauf. Jede Änderung gilt nur für die gelesene Version. Einen Kanal zu verwalten erfordert und gewährt kein Recht, seinen Inhalt zu lesen."
+      "description": "Kanäle und ihren Zugriff verwalten; das erlaubt nie, ihre Nachrichten zu lesen."
     },
     "handoffs": {
       "title": "Übergaben",
-      "description": "An Sie adressierte Arbeitsangebote im ausgewählten Arbeitsbereich. Die Liste zeigt keinen Angebotsinhalt; beim Öffnen wird der Kontext gelesen, und die Engine entscheidet über jedes Annehmen oder Ablehnen."
+      "description": "Arbeit, die andere Ihnen übergeben möchten: lesen, dann annehmen oder ablehnen."
     }
   },
   "tabs": {
     "channels": "Kanäle",
     "inbox": "Posteingang",
-    "create": "Neuer Kanal",
     "administration": "Verwaltung",
     "handoffs": "Übergaben"
   },

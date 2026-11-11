@@ -10,7 +10,7 @@
 // ⛔ ONE DECISION, ONE OPERATION ID. The id is minted when the dialog opens and again when the
 //    words change, so shipping again with the same words replays what already landed and, after
 //    a second person approved the push, goes on from there.
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -219,6 +219,29 @@ export function ShipDialog({
   )
 }
 
+/** A push held for another person's approval, said the same way wherever it waits: a ship
+ * here, and the Git panel's Push. `children` says what to do next; `action` is the door to
+ * the approval, where the caller has one. */
+export function ShipHeld({
+  children,
+  action,
+}: {
+  children: ReactNode
+  action?: ReactNode
+}) {
+  const { t } = useTranslation('gitpublish')
+  return (
+    <section
+      role="status"
+      className="space-y-1 rounded-md border border-warning-line bg-warning-soft p-3 text-body"
+    >
+      <h3 className="font-medium text-warning">{t('ship.awaitingTitle')}</h3>
+      <p className="text-foreground">{children}</p>
+      {action}
+    </section>
+  )
+}
+
 /** How far the ship got, in the operator's terms. */
 function ShipOutcome({
   result,
@@ -265,15 +288,7 @@ function ShipOutcome({
   }
   if (result.state === 'awaiting_approval') {
     return (
-      <section
-        role="status"
-        className="space-y-1 rounded-md border border-warning-line bg-warning-soft p-3 text-body"
-      >
-        <h3 className="font-medium text-warning">{t('ship.awaitingTitle')}</h3>
-        <p className="text-foreground">
-          {t('ship.awaitingBody', { id: result.approval_id })}
-        </p>
-      </section>
+      <ShipHeld>{t('ship.awaitingBody', { id: result.approval_id })}</ShipHeld>
     )
   }
   const push = result.push

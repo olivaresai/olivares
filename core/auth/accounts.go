@@ -481,6 +481,14 @@ func grantMembershipTx(ctx context.Context, as store.AuthScope, actor Principal,
 		if err := checkRoleCeiling(actor, tenant, m.Role); err != nil {
 			return model.Membership{}, err
 		}
+		// The organization keeps an active owner: a re-grant that takes a tenant-wide
+		// owner out of that role, by a lower role or a workspace confinement, needs
+		// another one. A person may lower their own role while another owner remains.
+		if m.Role == RoleOwner && m.WorkspaceID.IsZero() && (role != RoleOwner || !workspaceID.IsZero()) {
+			if err := keepsAnActiveOwner(ctx, as, tenant, userID); err != nil {
+				return model.Membership{}, err
+			}
+		}
 		// A re-grant fully specifies the membership: it sets both the role AND the workspace
 		// confinement, so a re-grant can narrow a tenant-wide member to a workspace or
 		// widen a confined one back (both within the granter's role ceiling, checked above).

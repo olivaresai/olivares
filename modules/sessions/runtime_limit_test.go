@@ -138,6 +138,55 @@ func TestClaudeUsageLimitResultIsAFactOnTheRun(t *testing.T) {
 	}
 }
 
+// A turn the tool ended on an error other than a limit is a fact on the run, because the
+// process lives on and the run state cannot say it. The next good turn clears it.
+func TestClaudeFailedTurnIsAFactOnTheRun(t *testing.T) {
+	refused := []byte(`{"type":"result","subtype":"success","is_error":true,"api_error_status":403,"result":"API Error: 403"}`)
+	for _, tc := range []struct {
+		name string
+		turn []byte
+		want bool
+	}{
+		{"the provider refused it", refused, true},
+		{"a server error", []byte(`{"type":"result","subtype":"success","is_error":true,"api_error_status":500,"result":"API Error: 500"}`), true},
+		{"an interrupted turn names no provider error", []byte(`{"type":"result","subtype":"error_during_execution","is_error":true,"result":"boom"}`), false},
+		{"a limit is its own fact", []byte(`{"type":"result","subtype":"success","is_error":true,"api_error_status":429,"result":"slow down"}`), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fr := &fakeRunner{initSID: "sess-turn"}
+			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
+			ctx := context.Background()
+			dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
+				Transport: TransportStreamJSON, Isolation: IsolationNative,
+				Actor: "user:u1", ActorKind: "user",
+			})
+			if err != nil {
+				t.Fatalf("createRun: %v", err)
+			}
+			waitFor(t, "session id capture", func() bool {
+				d, _ := m.getRun(ctx, tenant, dto.RunRef)
+				return d.ClaudeSessionID == "sess-turn"
+			})
+			read := func(want string, frame []byte) runDTO {
+				fr.lastProc().out <- OutputFrame{Stream: streamStdout, Data: frame}
+				fr.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(`{"type":"system","subtype":"status","permissionMode":"` + want + `"}`)}
+				var d runDTO
+				waitFor(t, "the frames were read", func() bool {
+					d, _ = m.getRun(ctx, tenant, dto.RunRef)
+					return d.ToolMode == want
+				})
+				return d
+			}
+			if d := read("plan", tc.turn); d.TurnFailed != tc.want {
+				t.Fatalf("after the turn: TurnFailed = %v, want %v", d.TurnFailed, tc.want)
+			}
+			if d := read("default", []byte(resultFrame)); d.TurnFailed {
+				t.Fatal("a successful turn did not clear TurnFailed")
+			}
+		})
+	}
+}
+
 // A 429 the tool does not type as a usage limit is a rate limit: the kind says so
 // and no reset time is invented for it. A result that failed for another reason
 // carries no limit at all.

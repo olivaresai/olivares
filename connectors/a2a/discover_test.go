@@ -18,7 +18,7 @@ func TestCardURL(t *testing.T) {
 		{"", ""},
 	}
 	for _, c := range cases {
-		if got := cardURL(agentSpec{URL: c.url}, defaultWellKnownPath); got != c.want {
+		if got := cardURL(agentSpec{URL: c.url}, WellKnownCardPath); got != c.want {
 			t.Errorf("cardURL(%q) = %q, want %q", c.url, got, c.want)
 		}
 	}

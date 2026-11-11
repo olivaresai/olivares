@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { governanceApi, governanceKeys } from './api'
+import { DurationSelect } from './duration-select'
 import './i18n'
 import type { ApprovalDTO, CreateApprovalRequest } from './types'
 
@@ -114,32 +115,37 @@ function RequestForm({ onClose }: { onClose: () => void }) {
           />
         </Field>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            label={t('newRequest.subjectKind')}
-            htmlFor="req-subject-kind"
-            description={t('newRequest.subjectKindHint')}
-          >
-            <Input
-              id="req-subject-kind"
-              value={subjectKind}
-              onChange={(e) => setSubjectKind(e.target.value)}
-              mono
-            />
-          </Field>
-          <Field
-            label={t('newRequest.subjectRef')}
-            htmlFor="req-subject-ref"
-            description={t('newRequest.subjectRefHint')}
-          >
-            <Input
-              id="req-subject-ref"
-              value={subjectRef}
-              onChange={(e) => setSubjectRef(e.target.value)}
-              mono
-            />
-          </Field>
-        </div>
+        <details>
+          <summary className="cursor-pointer text-caption text-muted-foreground">
+            {t('newRequest.subjectFold')}
+          </summary>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <Field
+              label={t('newRequest.subjectKind')}
+              htmlFor="req-subject-kind"
+              description={t('newRequest.subjectKindHint')}
+            >
+              <Input
+                id="req-subject-kind"
+                value={subjectKind}
+                onChange={(e) => setSubjectKind(e.target.value)}
+                mono
+              />
+            </Field>
+            <Field
+              label={t('newRequest.subjectRef')}
+              htmlFor="req-subject-ref"
+              description={t('newRequest.subjectRefHint')}
+            >
+              <Input
+                id="req-subject-ref"
+                value={subjectRef}
+                onChange={(e) => setSubjectRef(e.target.value)}
+                mono
+              />
+            </Field>
+          </div>
+        </details>
 
         <Field
           label={t('newRequest.reason')}
@@ -170,29 +176,18 @@ function RequestForm({ onClose }: { onClose: () => void }) {
               mono
             />
           </Field>
-          <Field label={t('newRequest.expiresInSeconds')} htmlFor="req-expires">
-            <Input
+          <Field label={t('newRequest.expiresIn')} htmlFor="req-expires">
+            <DurationSelect
               id="req-expires"
-              type="number"
-              min={0}
-              max={31536000}
               value={expiresIn}
-              onChange={(e) => setExpiresIn(e.target.value)}
-              mono
+              onChange={setExpiresIn}
             />
           </Field>
-          <Field
-            label={t('newRequest.escalateInSeconds')}
-            htmlFor="req-escalate"
-          >
-            <Input
+          <Field label={t('newRequest.escalateIn')} htmlFor="req-escalate">
+            <DurationSelect
               id="req-escalate"
-              type="number"
-              min={0}
-              max={31536000}
               value={escalateIn}
-              onChange={(e) => setEscalateIn(e.target.value)}
-              mono
+              onChange={setEscalateIn}
             />
           </Field>
         </div>

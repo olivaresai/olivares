@@ -42,6 +42,9 @@ const (
 	surfaceManagedInstructions = "managed-instructions"
 	surfaceCedar               = "cedar"
 	surfaceOPA                 = "opa"
+	// surfaceCedarTests holds the administrator's policy tests as a JSON list; a person
+	// in a test is stored as their user id. Selected by its newest active revision.
+	surfaceCedarTests = "cedar-tests"
 )
 
 // maxPolicyContentBytes bounds an authored document so a hostile/huge paste cannot
@@ -389,6 +392,9 @@ var surfaces = surfaceRegistry{entries: []surfaceEntry{
 	{name: surfaceOPA, family: surfaceFamilyOPA, activatable: true, engine: true, content: model.Scan(model.ClassRestrict)},
 	{name: surfaceCedarManaged, family: surfaceFamilyCedar, content: model.Scan(model.ClassAuthority)},
 	{name: surfaceCedarDDIL, family: surfaceFamilyCedar, content: model.Scan(model.ClassAuthority)},
+	// A test names a person only to check a decision about them: it grants nothing, so it never
+	// holds up their retirement. A publish that still names a retired person is refused by name.
+	{name: surfaceCedarTests, family: surfaceFamilyCedar, format: formatJSON, content: model.Scan(model.ClassEvidence)},
 }}
 
 // activationContent is what an activation record stores: the number of the

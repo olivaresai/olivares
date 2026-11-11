@@ -60,15 +60,24 @@ func TestProxyOnlyBoundEndpoint(t *testing.T) {
 		{"http://127.0.0.1:1/", http.StatusForbidden},
 		{"http://[::1]:1/", http.StatusForbidden},
 		{"http://api.anthropic.com/", http.StatusForbidden},
+		{"http://forge.example:3000/team/repo.git/info/refs?service=git-receive-pack", http.StatusForbidden},
 		{provider.URL + "/redirect", http.StatusForbidden},
 	} {
 		resp, err := client.Get(tc.url)
 		if err != nil {
 			t.Fatal(err)
 		}
+		body, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
 		if resp.StatusCode != tc.code {
 			t.Errorf("%s: status %d, want %d", tc.url, resp.StatusCode, tc.code)
+		}
+		if tc.code == http.StatusForbidden && (!strings.Contains(string(body), "bound provider") ||
+			!strings.Contains(string(body), "session's Publish action") || !strings.Contains(string(body), "approval")) {
+			t.Errorf("refusal must explain the provider boundary and approved Publish action: %q", body)
 		}
 	}
 	if got := calls.Load(); got != 2 {
@@ -309,11 +318,11 @@ func TestPublicProvidersAreNotKeyedAndAreBounded(t *testing.T) {
 		t.Fatalf("destinations = %+v, want the bound provider keyed and open, the listed host public and unkeyed", ds)
 	}
 	many := Policy{Providers: []string{"https://api.z.ai/"}}
-	for i := 0; i < maxEndpoints; i++ {
+	for i := 0; i < MaxEndpoints; i++ {
 		many.PublicProviders = append(many.PublicProviders, fmt.Sprintf("https://h%d.example/", i))
 	}
 	if _, err := destinations(many); err == nil {
-		t.Fatalf("%d endpoints were admitted", 1+maxEndpoints)
+		t.Fatalf("%d endpoints were admitted", 1+MaxEndpoints)
 	}
 	if _, err := destinations(Policy{Offline: true, PublicProviders: []string{"https://github.com/"}}); err == nil {
 		t.Fatal("an offline policy granted a listed host")

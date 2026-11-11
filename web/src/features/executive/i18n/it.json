@@ -1,7 +1,7 @@
 {
   "title": "Panoramica esecutiva",
-  "description": "Costi, utilizzo, rischio e compliance a colpo d'occhio: approfondisci nella vista operativa per i dettagli.",
-  "asOfNote": "Rischio, compliance e affidabilità riflettono lo stato attuale; i costi coprono l'intervallo selezionato.",
+  "description": "Utilizzo, rischio e compliance a colpo d'occhio: approfondisci nella vista operativa per i dettagli.",
+  "asOfNote": "Rischio, compliance e affidabilità riflettono lo stato attuale; l'intervallo si applica ai valori nel tempo.",
   "range": {
     "label": "Intervallo",
     "7d": "Ultimi 7 giorni",
@@ -19,12 +19,12 @@
     "generatedLabel": "Generato",
     "tenant": "Organizzazione",
     "allOrgs": "Tutte le organizzazioni",
-    "range": "Intervallo dei costi",
+    "range": "Intervallo",
     "footer": "Olivares AI: solo KPI aggregati; nessun payload né secret."
   },
   "empty": {
     "title": "Nessun KPI esecutivo disponibile",
-    "description": "Non hai accesso in lettura a nessuna delle fonti di costi, rischio, compliance o affidabilità per questa organizzazione."
+    "description": "Non hai accesso in lettura a nessuna delle fonti che questa panoramica legge per questa organizzazione."
   },
   "restricted": {
     "label": "Riservato",

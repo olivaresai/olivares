@@ -63,6 +63,13 @@ describe('withInlineCommands', () => {
     )
     expect(container.querySelectorAll('button')).toHaveLength(1)
     expect(codes[0]!.className).not.toMatch(/break-all/)
+    // A2: code in a sentence is a mono chip on the text tint.
+    expect(codes[0]).toHaveClass('rounded-[5px]', 'bg-muted', 'font-mono')
+    // At 13 px, both the shown command and the one with its Copy.
+    for (const code of codes) {
+      expect(code).toHaveClass('text-mono')
+      expect(code).not.toHaveClass('text-mono-s')
+    }
   })
 
   // CodeLine throws on a blank command, and there is no error boundary above a page: one odd

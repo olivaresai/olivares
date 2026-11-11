@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { Link, useLocation } from '@tanstack/react-router'
-import { Briefcase, Compass } from 'lucide-react'
+import { Compass, Package } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { viewById } from '@/features/navigation/model'
 import { Button } from '@/components/ui/button'
@@ -20,33 +20,36 @@ function GoToNow() {
 
 /**
  * A bookmark of a page this edition does not include (route-census.json `business_paths`):
- * one sentence that names Business and a quiet link to it. The one primary action goes to
- * the start page (`/`); no button offers the Business action, so nothing in Community
- * starts what only Business performs.
+ * calm, never a failure. It names Business once, says the person's data and pages stay the
+ * same, and its one act opens Settings > Edition («View editions»), with a quiet link to
+ * Business beside it. No button offers the Business action, so nothing in Community starts
+ * what only Business performs.
  */
 function BusinessNotice() {
   const { t } = useTranslation('errors')
   return (
     <>
-      <h1 className="sr-only">{t('businessOnly.title')}</h1>
+      <h1 className="sr-only">{t('businessOnly.heading')}</h1>
       <EmptyState
-        icon={<Briefcase />}
-        title={t('businessOnly.title')}
+        title={t('businessOnly.heading')}
         description={t('businessOnly.description')}
         action={
-          <div className="flex items-center gap-4">
-            <Button asChild variant="primary" size="sm">
-              <Link to="/">{t('businessOnly.start')}</Link>
-            </Button>
-            <a
-              href={BUSINESS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-body font-medium text-muted-foreground hover:text-foreground hover:underline"
-            >
-              {t('businessOnly.link')}
-            </a>
-          </div>
+          <Button asChild variant="secondary">
+            <Link to="/settings" search={{ section: 'edition' } as never}>
+              <Package aria-hidden="true" />
+              {t('businessOnly.editions')}
+            </Link>
+          </Button>
+        }
+        secondaryAction={
+          <a
+            href={BUSINESS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-body font-medium text-muted-foreground hover:text-foreground hover:underline"
+          >
+            {t('businessOnly.link')}
+          </a>
         }
       />
     </>

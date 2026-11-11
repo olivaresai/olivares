@@ -9,49 +9,57 @@
 // must not move every page down.
 //
 // The read is the kill switch's own live posture under its own cache key, so this pill and
-// the kill switch page share one answer; it is made only for a principal who may open that
-// page. The words are the kill switch banner's, carried in the shell's `nav` namespace so
-// the shell does not load the whole kill switch dictionary.
+// the kill switch page share one answer; it is made for every principal who may read the
+// stop, and the pill opens the kill switch page only for whom that page opens. The words are
+// the kill switch banner's, carried in the shell's `nav` namespace so the shell does not
+// load the whole kill switch dictionary.
 import { Link } from '@tanstack/react-router'
 import { OctagonAlert, OctagonX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import { cn } from '@/lib/utils'
 import { useKillSwitchState } from './use-killswitch-state'
 
 export function KillSwitchStatus() {
   const { t } = useTranslation('nav')
   const { posture } = useKillSwitchState()
+  const { navigable } = useViewAccess()
   if (!posture || (!posture.estate && posture.agentStops === 0)) return null
   const { estate, agentStops } = posture
   const Icon = estate ? OctagonX : OctagonAlert
-  // A live region around the link, not on it: `status` is not a role a link may take
-  // (axe aria-allowed-role), and a stop that starts or ends is announced either way.
-  return (
-    <span role="status" className="inline-flex shrink-0">
-      <Link
-        to={'/killswitch' as never}
-        data-testid="killswitch-status"
-        title={
-          estate
-            ? `${t('shell.killswitch.estateStopped')} — ${t('shell.killswitch.estateBody')}`
-            : t('shell.killswitch.agentStops', { count: agentStops })
-        }
-        className={cn(
-          'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2 text-[11px] leading-4 font-semibold whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-focus',
-          // On a phone the pill keeps its colour and the kill switch banner's icon, and its
-          // words go to the accessible name and the tooltip: never colour alone.
-          estate
-            ? 'bg-danger-soft text-danger hover:bg-danger-soft/80'
-            : 'bg-warning-soft text-warning hover:bg-warning-soft/80',
-        )}
-      >
+  const page = viewById('killswitch')
+  const pill = {
+    'data-testid': 'killswitch-status',
+    title: estate
+      ? `${t('shell.killswitch.estateStopped')} — ${t('shell.killswitch.estateBody')}`
+      : t('shell.killswitch.agentStops', { count: agentStops }),
+    className: cn(
+      'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2 text-[11px] leading-4 font-semibold whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-focus',
+      estate
+        ? 'bg-danger-soft text-danger hover:bg-danger-soft/80'
+        : 'bg-warning-soft text-warning hover:bg-warning-soft/80',
+    ),
+    children: (
+      <>
         <Icon aria-hidden className="size-3 shrink-0" />
-        <span className="max-[760px]:sr-only">
+        <span>
           {estate
             ? t('shell.killswitch.estateStopped')
             : t('shell.killswitch.agentStops', { count: agentStops })}
         </span>
-      </Link>
+      </>
+    ),
+  }
+  // A live region around the link, not on it: `status` is not a role a link may take
+  // (axe aria-allowed-role), and a stop that starts or ends is announced either way.
+  return (
+    <span role="status" className="inline-flex shrink-0">
+      {page && navigable(page) ? (
+        <Link to={'/killswitch' as never} {...pill} />
+      ) : (
+        <span {...pill} />
+      )}
     </span>
   )
 }

@@ -43,6 +43,10 @@ type AccountCredit struct {
 // answers nothing now and the next read has it (the list). Nil means unknown.
 type AccountUsageSource func(ctx context.Context, tenant model.TenantID, driver, accountRef string, wait bool) []AccountUsage
 
+// AccountPlanSource reads the plan one account's tool reports for its own home, raw as the
+// tool gives it. wait is the same as for AccountUsageSource. Empty means unknown.
+type AccountPlanSource func(ctx context.Context, tenant model.TenantID, driver, accountRef string, wait bool) string
+
 // accountUsageWait bounds how long one account's read waits for the tool.
 const accountUsageWait = 20 * time.Second
 
@@ -56,11 +60,11 @@ type accountUsageDTO struct {
 	ObservedAt  string         `json:"observed_at"`
 }
 
-// withUsage adds the windows the tool reported for the account. An account whose tool
-// reports none (not signed in, an API key, a tool without plan limits, not asked yet)
-// carries no usage field at all.
+// withUsage adds the plan and the windows the tool reported for the account. An account whose
+// tool reports none (not signed in, an API key, a tool without plan limits, not asked yet)
+// carries no usage or plan field at all.
 func (m *Module) withUsage(ctx context.Context, a ProviderAccount, dto providerAccountDTO, wait bool) providerAccountDTO {
-	if m.rt.AccountUsage == nil || a.State != ProfileActive {
+	if (m.rt.AccountUsage == nil && m.rt.AccountPlan == nil) || a.State != ProfileActive {
 		return dto
 	}
 	if wait {
@@ -68,7 +72,11 @@ func (m *Module) withUsage(ctx context.Context, a ProviderAccount, dto providerA
 		ctx, cancel = context.WithTimeout(ctx, accountUsageWait)
 		defer cancel()
 	}
-	for _, u := range m.rt.AccountUsage(ctx, model.TenantID(a.Tenant), a.Driver, a.Ref, wait) {
+	var windows []AccountUsage
+	if m.rt.AccountUsage != nil {
+		windows = m.rt.AccountUsage(ctx, model.TenantID(a.Tenant), a.Driver, a.Ref, wait)
+	}
+	for _, u := range windows {
 		w := accountUsageDTO{Window: u.Window, Label: u.Label, Credit: u.Credit, ObservedAt: u.ObservedAt.UTC().Format(time.RFC3339)}
 		if u.Credit == nil {
 			w.Utilization = &u.Utilization
@@ -77,6 +85,9 @@ func (m *Module) withUsage(ctx context.Context, a ProviderAccount, dto providerA
 			w.ResetsAt = u.ResetsAt.UTC().Format(time.RFC3339)
 		}
 		dto.Usage = append(dto.Usage, w)
+	}
+	if m.rt.AccountPlan != nil {
+		dto.Plan = m.rt.AccountPlan(ctx, model.TenantID(a.Tenant), a.Driver, a.Ref, wait)
 	}
 	return dto
 }

@@ -115,6 +115,25 @@ export const mcpGatewayKeys = {
     ['console', 'mcp-gateway', tenant, epoch] as const,
 }
 
+/** A command's program, shown where a server runs and its default name: the
+ * first token of the command line (the engine keeps a command as one string),
+ * then its last path segment; '' when that token has `:`, `?`, `=` or `@`.
+ * Never an argument, never a fragment of a string that may hold a token. */
+export function programName(command: string): string {
+  const token = command.trim().split(/\s+/)[0] ?? ''
+  if (/[:?=@]/.test(token)) return ''
+  return token.split('/').pop() ?? ''
+}
+
+/** The host of an endpoint, for messages and the default name; '' when it does not parse. */
+export function hostOf(endpoint: string): string {
+  try {
+    return new URL(endpoint).host
+  } catch {
+    return ''
+  }
+}
+
 export function mcpHTTPSURL(value: string): boolean {
   try {
     const url = new URL(value)

@@ -5,9 +5,10 @@
   },
   "businessOnly": {
     "title": "Business の機能です",
-    "description": "このページは Olivares AI Business の機能です。このエディションには含まれていません。",
-    "link": "Business について",
-    "start": "開始ページへ移動"
+    "heading": "このページは Olivares AI Business の機能です",
+    "description": "このインストールは Olivares AI Community です。データとページはそのまま残ります。",
+    "editions": "エディションを見る",
+    "link": "Business について"
   },
   "forbidden": {
     "title": "権限がありません",

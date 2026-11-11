@@ -1,9 +1,26 @@
 {
   "edition": {
     "viewPolicy": "ポリシーを表示",
-    "editingRequiresBusiness": "カスタムポリシー、ロール、権限の編集には Business が必要です。",
+    "editingRequiresBusiness": "カスタムポリシー、ロール、権限の編集には Olivares AI Business が必要です。",
     "disablePolicy": "ポリシーを無効化",
-    "disablePolicyDescription": "作成したポリシーは適用されなくなります。履歴と他の適用中のポリシーは保持されます。"
+    "disablePolicyDescription": "作成したポリシーは適用されなくなります。履歴と他の適用中のポリシーは保持されます。",
+    "note": {
+      "line": "{{capability}} は {{edition}} に含まれます。<0>設定 > エディション</0> でライセンスを追加するか、<1>olivares.ai/pricing</1> をご覧ください。",
+      "lineUnnamed": "この機能は {{edition}} に含まれます。<0>設定 > エディション</0> でライセンスを追加するか、<1>olivares.ai/pricing</1> をご覧ください。",
+      "lineAsk": "{{capability}} は {{edition}} に含まれます。管理者にお問い合わせください。",
+      "lineUnnamedAsk": "この機能は {{edition}} に含まれます。管理者にお問い合わせください。",
+      "readsBelow": "保存済みのデータは引き続き閲覧とエクスポートができます。",
+      "tag": "{{edition}} に含まれます"
+    },
+    "capabilities": {
+      "skills": "スキル",
+      "sso": "シングルサインオン",
+      "approvalTiers": "アクションのリスク階層や承認数の変更",
+      "evals": "評価",
+      "eventing": "Webhook",
+      "notify": "アラート",
+      "claude-policy": "管理ポリシー"
+    }
   },
   "errors": {
     "generic": "エラーが発生しました"
@@ -101,25 +118,18 @@
     "noTargetReason": "実行する組織が必要です。",
     "noTargetHelp": "組織を選択してから、もう一度試してください。",
     "goTo": "移動",
-    "recentSessions": "最近のセッション",
+    "recentSessions": "セッション",
     "settingsGroup": "設定",
     "scope": "{{name}} 内",
     "footerMove": "移動",
     "footerOpen": "開く",
+    "footerClose": "閉じる",
     "footerCommands": "コマンドのみ",
     "objectActions": "{{name}} の操作",
     "footerPeople": "ユーザー",
     "footerSessions": "セッション",
     "peopleHint": "名前を入力してください。",
     "ask": "Olivaresに質問…"
-  },
-  "hintBar": {
-    "move": "移動",
-    "open": "開く",
-    "approve": "承認",
-    "deny": "拒否",
-    "launcher": "ランチャー",
-    "command": "コマンド"
   },
   "permissionWords": {
     "read": "読み取り権限",
@@ -218,6 +228,7 @@
   "notifications": {
     "title": "最近のアクティビティ",
     "empty": "最近のアクティビティはありません。",
+    "auditOnly": "最近のアクティビティは、監査台帳を閲覧できるユーザーに表示されます。",
     "viewAll": "監査台帳ですべて表示",
     "events": {
       "auditCheckpoint": "監査チェックポイントを作成しました",
@@ -275,6 +286,8 @@
       "policyUpdated_you": "あなたがポリシーを更新しました",
       "policyDeleted_you": "あなたがポリシーを削除しました"
     },
+    "unread": "未読",
+    "markAllRead": "すべて既読にする",
     "actors": {
       "you": "あなた",
       "member": "メンバー",
@@ -302,6 +315,15 @@
     "showHelp": "このヘルプを表示"
   },
   "keys": {
+    "refused": {
+      "unknownRow": "このコマンドには変更できるキーがありません。",
+      "notAChord": "キーを 1 つ押してください。単独でも、{{mod}}、Alt、Shift と組み合わせてもかまいません。",
+      "needsModifier": "{{mod}} または Alt を押しながらキーを押してください。ここでは単独のキーが入力中に動作したり、リクエストを決定したりするおそれがあります。",
+      "needsAltOrShift": "Alt、または {{mod}} と Shift を押しながらキーを押してください。{{keys}} は入力中にも押されるため、ここではリクエストを決定してしまうおそれがあります。",
+      "taken": "{{keys}} はすでに「{{command}}」に割り当てられています。別のキーを選ぶか、先にそのコマンドを変更してください。",
+      "leader": "{{keys}} に続けて文字を押すと、「移動」のページが開きます。別のキーを選んでください。",
+      "tooLarge": "保存できる設定がいっぱいです。変更したキーを元に戻すか、追加したスクリプトを削除してから、もう一度試してください。"
+    },
     "group": {
       "general": "全般",
       "launcher": "セッションの開始",
@@ -323,15 +345,19 @@
       "launcher": {
         "focus": "ランチャーへ移動",
         "start": "セッションを開始",
-        "startBackground": "開始してこの画面に残る"
+        "startBackground": "開始してこの画面に残る",
+        "stash": "下書きを退避、または戻す"
       },
       "surface": {
         "openBeside": "隣に開く",
         "closeBeside": "隣のセッションを閉じる",
         "focusBeside": "セッション間でフォーカスを移動",
+        "nextSession": "次のセッションを開く",
+        "previousSession": "前のセッションを開く",
         "nextPane": "次のペイン",
         "previousPane": "前のペイン",
         "approve": "会話内のリクエストを一度だけ承認",
+        "cite": "選択した語句を入力欄に引用",
         "terminal": "ターミナル",
         "changes": "変更",
         "preview": "プレビュー",
@@ -372,6 +398,20 @@
       },
       "ask": {
         "open": "Olivaresに質問"
+      },
+      "shell.sidebar": "サイドバーを切り替え",
+      "shell.panel": "サイドパネルを切り替え",
+      "terminal": {
+        "new": "新しいターミナル",
+        "close": "ターミナルを閉じる",
+        "previous": "前のターミナル",
+        "next": "次のターミナル",
+        "search": "ターミナルを検索",
+        "links": "画面上のリンクを開く",
+        "copy": "選択範囲をコピー",
+        "selectAll": "出力をすべて選択",
+        "scrollTop": "先頭へスクロール",
+        "scrollBottom": "末尾へスクロール"
       }
     },
     "when": {
@@ -379,10 +419,13 @@
       "outsideList": "リストの外",
       "launcherFocused": "ランチャー入力欄内",
       "workSurface": "セッション画面",
+      "sourceDiff": "ソースの差分で",
       "sessionHistory": "前のセッションがある場合",
       "paletteRecent": "検索欄が空のパレットの結果で",
       "approvalQueue": "承認キュー内",
-      "accessMap": "アクセスマップ上"
+      "accessMap": "アクセスマップ上",
+      "terminalFocused": "ターミナル内",
+      "replySelection": "応答内で語句を選択しているとき"
     },
     "precedence": "同じキーを持つ行が 2 つある場合、該当する最後の行が優先されます。",
     "problems_other": "{{count}} 件のキー割り当てを読み取れず、動作しません: {{commands}}"
@@ -436,6 +479,7 @@
     "copy": {
       "message": "メッセージをコピー",
       "code": "コードをコピー",
+      "detail": "詳細をコピー",
       "copied": "コピーしました",
       "failed": "コピーできませんでした。テキストを選択してコピーしてください。",
       "value": "{{value}} をコピー"

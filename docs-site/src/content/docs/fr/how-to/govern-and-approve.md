@@ -4,7 +4,7 @@ description: "Comment un opérateur gouverne l'estate : identité et permissions
 ---
 
 :::note[Business]
-L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), la vérification du registre (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, sa lecture et `olivares dr backup` ; les routes et commandes de preuve renvoient HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), la vérification du registre (`GET /v1/audit/verify`, `olivares audit tree verify`, `olivares audit tree prove`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, sa lecture et `olivares dr backup` ; les routes et commandes de preuve renvoient HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
 :::
 
 Cette page s'adresse à l'opérateur qui a connecté au moins une source et doit
@@ -45,9 +45,9 @@ Les rôles intégrés forment une échelle de capacité croissante :
 
 | Rôle | Ce qu'il peut faire |
 |---|---|
-| `viewer` | lire les données opérationnelles et la piste d'audit |
+| `viewer` | lire les données opérationnelles |
 | `editor` | ce qui précède, plus écrire les données opérationnelles |
-| `admin` | ce qui précède, plus l'IAM du locataire — utilisateurs, appartenances, tokens, paramètres |
+| `admin` | ce qui précède, plus l'IAM du locataire — utilisateurs, appartenances, tokens, paramètres — et la piste d'audit, les règles, les constats de sécurité et les dépenses |
 | `owner` | toutes les permissions au sein du locataire |
 
 Un module déclare ses propres permissions avec espace de noms
@@ -190,7 +190,7 @@ authentifié** :
 
 ```bash
 # Pull the signed, hash-chained ledger for offline re-verification.
-# Requires a token whose role can read the audit trail (viewer and up).
+# Requires a token whose role can read the audit trail (admin and up).
 curl -fsS "https://localhost:8443/v1/audit/export?format=cef" \
   -H "Authorization: Bearer $OLVK_TOKEN" \
   -H "X-Olivares-Tenant: $TENANT" >> /var/log/olivares/audit.cef

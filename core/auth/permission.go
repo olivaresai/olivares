@@ -195,7 +195,6 @@ func IsAccessGraphReconPerm(perm Permission) bool {
 var privilegedReadPerms = map[Permission]struct{}{
 	"sessions:output:read":   {},
 	"accessgraph:read":       {},
-	"accessmap:graph:read":   {},
 	"accessmap:drift:read":   {},
 	"security:observed:read": {},
 	// The authorization-query surface: querying the PDP about arbitrary
@@ -214,11 +213,6 @@ var privilegedReadPerms = map[Permission]struct{}{
 	// viewer can read it). Promoting that one would have broken a documented consumer to
 	// protect a surface it does not cover.
 	"governance:idposture:read": {},
-	// The Claude Code per-developer ROI drill-down exposes the developer email + their
-	// productivity. Deny-closed for the lowest viewer role (the team/org adoption
-	// aggregates ride the ordinary viewer-read tier); editor and above by default, and an
-	// org tightens it via custom roles.: per-team default, per-developer opt-in.
-	"adoption:developer:read": {},
 	// The session-cockpit TRANSCRIPT (V269 / docs/contracts/COCKPIT-02-authz.md §4). A
 	// transcript is the literal keystrokes and output of a governed terminal — the most
 	// content-like read in the product, and one that captures secrets by design, since
@@ -237,6 +231,35 @@ var privilegedReadPerms = map[Permission]struct{}{
 	"session-cockpit:transcript:read": {},
 }
 
+// adminReadPerms are the tenant-wide governance and administration reads, granted
+// from admin up and never by the read or write tier: the audit record, rules and
+// policy, security findings, and other people's usage and money. A person's own
+// sessions, usage and limits stay with them under other permissions. A custom role
+// may still grant these.
+var adminReadPerms = map[Permission]struct{}{
+	// The audit record.
+	"audit:read": {}, "security:integrity:read": {},
+	// Rules and policy.
+	"governance:policy:read": {}, "governance:claude-policy:read": {}, "governance:guardian:read": {},
+	"governance:routine:read": {}, "governance:rbac:read": {}, "governance:breakglass:read": {},
+	"inferenceproxy:dlp:read": {}, "knowledge:dlp:read": {},
+	// Security findings.
+	"security:finding:read": {}, "security:anomaly:read": {}, "security:case:read": {},
+	"governance:agent-risk:read": {},
+	// Other people's usage and money: spend, budgets, adoption per team and per
+	// developer (email and productivity).
+	"finops:spend:read": {}, "finops:budget:read": {},
+	"adoption:metrics:read": {}, "adoption:developer:read": {},
+	// Reads only administrator places use (Security, Operations, Observation): the
+	// access map, the inference proxy's settings, evaluation runs, retention and the
+	// attestation record. health:status:read is not here: ruling 33 does not name it,
+	// and a person reads their own server's health.
+	"accessmap:graph:read": {}, "inferenceproxy:config:read": {},
+	"evals:run:read": {}, "compliance:retention:read": {}, "observability:attestation:read": {},
+	// Operations > Webhooks and Operations > Alerts.
+	"eventing:subscription:read": {}, "notify:route:read": {},
+}
+
 // coreRolePerms is the explicit permission set granted by each built-in role for
 // CORE permissions. Module permissions are granted by verb tier (see RoleGrants).
 var coreRolePerms = buildCoreRolePerms()
@@ -246,8 +269,6 @@ func buildCoreRolePerms() map[string]map[Permission]struct{} {
 	for _, r := range coreReadWriteResources {
 		viewer[Permission(r+":"+VerbRead)] = struct{}{}
 	}
-	// Viewers may read the evidence ledger but not enumerate IAM accounts.
-	viewer["audit:read"] = struct{}{}
 	viewer["tenant:read"] = struct{}{}
 
 	editor := cloneSet(viewer)
@@ -261,6 +282,12 @@ func buildCoreRolePerms() map[string]map[Permission]struct{} {
 		admin[Permission(r+":"+VerbWrite)] = struct{}{}
 	}
 	admin["tenant:admin"] = struct{}{}
+	// The core half of the administrator's reads (the audit record).
+	for p := range adminReadPerms {
+		if !p.IsModule() {
+			admin[p] = struct{}{}
+		}
+	}
 	// Pushing observations from a collector is an admin-tier infrastructure write
 	// (CB-1 option C), gated additionally by the collector's mTLS client cert.
 	admin[PermIngestWrite] = struct{}{}
@@ -317,6 +344,9 @@ func RoleGrants(role string, perm Permission) bool {
 	// lowest viewer role, regardless of the generic read/verb tier. Checked before
 	// the module/core split so the module-namespaced entries do not fall through
 	// roleGrantsVerb's viewer=read default.
+	if _, ok := adminReadPerms[perm]; ok {
+		return RoleRank(role) >= RoleRank(RoleAdmin)
+	}
 	if _, ok := privilegedReadPerms[perm]; ok {
 		return RoleRank(role) >= RoleRank(RoleEditor)
 	}

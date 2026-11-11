@@ -449,6 +449,12 @@ func (m *Module) mintFromProviderRecord(
 	if err != nil {
 		return Credential{}, nil, err
 	}
+	if rec.State == ProviderRecordDisabled {
+		return Credential{}, nil, &runErr{
+			http.StatusConflict,
+			"the provider this profile is bound to is disabled; enable it or bind an active provider before launching",
+		}
+	}
 	if rec.State != ProviderRecordActive {
 		return Credential{}, nil, &runErr{
 			http.StatusConflict,

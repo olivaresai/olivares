@@ -1,13 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { History, RefreshCw, Shield, TriangleAlert, X } from 'lucide-react'
+import { CircleAlert, History, Lock, RefreshCw, X } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { CodeLine } from './code-line'
 import { DisabledReason, type DisabledReasonProps } from './disabled-reason'
+import {
+  STATE_ACTIONS,
+  STATE_ICON,
+  STATE_PAGE,
+  STATE_PANEL,
+  STATE_SENTENCE,
+  STATE_TITLE,
+  StateMark,
+  type StateSize,
+} from './empty-state'
+import { Notice } from './notice'
 import { Skeleton } from './skeleton'
 import { RunningRing } from './status-glyph'
 
@@ -55,6 +67,8 @@ export type StateBlockProps = Base &
         /** How many rows the filters hide. */
         hiddenCount: number
         onClear: () => void
+        /** `panel` inside a side panel, a sheet, a card or a table body. */
+        size?: StateSize
       }
     | {
         state: 'error'
@@ -106,74 +120,77 @@ export type StateBlockProps = Base &
       }
   )
 
-type Tone = 'bad' | 'warn' | 'info'
-
-const BANNER_TONE: Record<Tone, string> = {
-  bad: 'border-bad bg-bad-soft',
-  warn: 'border-warn bg-warn-soft',
-  info: 'border-info bg-info-soft',
-}
-
-const ICON_TONE: Record<Tone, string> = {
-  bad: 'text-bad',
-  warn: 'text-text',
-  info: 'text-info',
-}
-
-/** The banner of the error, stale and outcome-not-known states (and of ErrorState). */
-export function StateBanner({
-  tone,
-  icon,
-  className,
-  children,
-  ...props
-}: HTMLAttributes<HTMLDivElement> & { tone: Tone; icon: ReactNode }) {
-  return (
-    <div
-      data-slot="state-banner"
-      data-tone={tone}
-      className={cn(
-        'flex items-start gap-2.5 rounded-card border px-3 py-2.5 text-start text-caption text-text',
-        BANNER_TONE[tone],
-        className,
-      )}
-      {...props}
-    >
-      <span
-        aria-hidden="true"
-        className={cn('mt-0.5 flex shrink-0 [&_svg]:size-3.5', ICON_TONE[tone])}
-      >
-        {icon}
-      </span>
-      <div className="min-w-0">{children}</div>
-    </div>
-  )
-}
-
-const CENTERED =
-  'flex flex-col items-center justify-center gap-2.5 px-4 py-10 text-center'
 const STACKED = 'flex flex-col gap-2.5 p-4'
-const SKELETON_WIDTHS = ['w-full', 'w-4/5', 'w-[65%]', 'w-[72%]']
+const SKELETON_WIDTHS = ['w-55', 'w-45', 'w-65', 'w-35']
 
-/** The empty-list mark: four ledger lines, one of them orange. */
-function Ledger() {
+function Title({ size, children }: { size?: StateSize; children: ReactNode }) {
   return (
-    <span aria-hidden="true" className="mb-1 flex w-16 flex-col gap-[5px]">
-      <span className="h-1.5 rounded-[3px] bg-line-strong" />
-      <span className="h-1.5 w-4/5 rounded-[3px] bg-accent" />
-      <span className="h-1.5 w-[90%] rounded-[3px] bg-line-strong" />
-      <span className="h-1.5 w-3/5 rounded-[3px] bg-line-strong" />
-    </span>
+    <p className={cn(STATE_TITLE, size === 'panel' && STATE_PANEL.title)}>
+      {children}
+    </p>
   )
-}
-
-function Title({ children }: { children: ReactNode }) {
-  return <p className="m-0 text-heading text-text">{children}</p>
 }
 
 function Sentence({ children }: { children: ReactNode }) {
+  return <p className={STATE_SENTENCE}>{children}</p>
+}
+
+/** A fast load never flashes a skeleton: its rows show after this long. */
+const SKELETON_DELAY_MS = 300
+
+/** Loading: the words for a screen reader at once, so a slow read is heard as one; the box at
+ * its final height from the start, its rows hidden until the delay, so nothing shifts when the
+ * rows or the data arrive. */
+function LoadingBlock({
+  state,
+  label,
+  rows = 4,
+  className,
+  ...rest
+}: Extract<StateBlockProps, { state: 'loading' }>) {
+  const { t } = useTranslation('common')
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(true), SKELETON_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [])
   return (
-    <p className="m-0 max-w-[18rem] text-caption text-text-2">{children}</p>
+    <div
+      role="status"
+      aria-busy="true"
+      data-slot="state-block"
+      data-state={state}
+      className={cn(STACKED, className)}
+      {...rest}
+    >
+      {/* The rows say it; the words are for a screen reader. */}
+      <p className="sr-only">{label ?? t('ui.state.loading')}</p>
+      <div
+        data-slot="state-block-rows"
+        className={cn(
+          'overflow-hidden rounded-card bg-surface shadow-card',
+          !shown && 'invisible',
+        )}
+      >
+        {Array.from({ length: rows }, (_, i) => (
+          <div
+            key={i}
+            data-slot="state-block-skeleton"
+            aria-hidden="true"
+            className="flex h-11 items-center gap-3.5 border-t border-line px-4 first:border-t-0"
+          >
+            <Skeleton className="size-6 shrink-0 rounded-[7px]" />
+            <Skeleton
+              className={cn(
+                'h-2.5 max-w-[60%] rounded-full',
+                SKELETON_WIDTHS[i % SKELETON_WIDTHS.length],
+              )}
+            />
+            <Skeleton className="ms-auto h-2.5 w-16 shrink-0 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -182,39 +199,8 @@ export function StateBlock(props: StateBlockProps) {
   const slot = { 'data-slot': 'state-block', 'data-state': props.state }
 
   switch (props.state) {
-    case 'loading': {
-      const { state: _s, label, rows = 4, className, ...rest } = props
-      return (
-        <div
-          role="status"
-          aria-busy="true"
-          {...slot}
-          className={cn(STACKED, className)}
-          {...rest}
-        >
-          <p className="m-0 text-caption text-text-2">
-            {label ?? t('ui.state.loading')}
-          </p>
-          {Array.from({ length: rows }, (_, i) => (
-            <div
-              key={i}
-              data-slot="state-block-skeleton"
-              aria-hidden="true"
-              className="grid grid-cols-[14px_minmax(0,1fr)_50px] items-center gap-2.5"
-            >
-              <Skeleton className="size-3.5 rounded-full" />
-              <Skeleton
-                className={cn(
-                  'h-3',
-                  SKELETON_WIDTHS[i % SKELETON_WIDTHS.length],
-                )}
-              />
-              <Skeleton className="h-3" />
-            </div>
-          ))}
-        </div>
-      )
-    }
+    case 'loading':
+      return <LoadingBlock {...props} />
 
     case 'empty': {
       const {
@@ -230,16 +216,15 @@ export function StateBlock(props: StateBlockProps) {
         <div
           role="status"
           {...slot}
-          className={cn(CENTERED, className)}
+          className={cn(STATE_PAGE, className)}
           {...rest}
         >
-          <Ledger />
+          <StateMark />
           <Title>{title}</Title>
           <Sentence>{description}</Sentence>
           {command ? <CodeLine inline command={command} /> : null}
-          <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-            {action}
-          </div>
+          {/* The one next action is a pill (the button has no pill size yet). */}
+          <div className={cn(STATE_ACTIONS, '*:rounded-full')}>{action}</div>
         </div>
       )
     }
@@ -251,6 +236,7 @@ export function StateBlock(props: StateBlockProps) {
         filters,
         hiddenCount,
         onClear,
+        size,
         className,
         ...rest
       } = props
@@ -258,20 +244,26 @@ export function StateBlock(props: StateBlockProps) {
         <div
           role="status"
           {...slot}
-          className={cn(CENTERED, className)}
+          className={cn(
+            STATE_PAGE,
+            size === 'panel' && STATE_PANEL.page,
+            className,
+          )}
           {...rest}
         >
-          <Title>{title}</Title>
+          <Title size={size}>{title}</Title>
           <Sentence>
             <span className="block">{filters}</span>
             <span className="block">
               {t('ui.state.filtered.hidden', { count: hiddenCount })}
             </span>
           </Sentence>
-          <Button size="sm" onClick={onClear} className="mt-1">
-            <X aria-hidden="true" />
-            {t('ui.state.filtered.clear')}
-          </Button>
+          <div className={STATE_ACTIONS}>
+            <Button onClick={onClear}>
+              <X aria-hidden="true" />
+              {t('ui.state.filtered.clear')}
+            </Button>
+          </div>
         </div>
       )
     }
@@ -298,37 +290,41 @@ export function StateBlock(props: StateBlockProps) {
         <div
           role="alert"
           {...slot}
-          className={cn(STACKED, className)}
+          className={cn(STATE_PAGE, className)}
           {...rest}
         >
-          <StateBanner tone="bad" icon={<TriangleAlert />}>
-            <strong className="font-semibold">
-              {title ?? t('ui.state.error.title')}
-            </strong>{' '}
-            {description ?? t('ui.state.error.description')}
-          </StateBanner>
-          {request || idLine ? (
-            <div
-              data-slot="state-block-request"
-              className="rounded-card border border-line bg-frame px-3.5 py-2.5 font-mono text-mono-s [overflow-wrap:anywhere] text-text"
-            >
-              {request ? <span className="block">{request}</span> : null}
-              {idLine ? (
-                <span className="block text-text-3 select-all">{idLine}</span>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={onRetry}>
+          <span
+            data-slot="state-icon"
+            aria-hidden="true"
+            className={cn(STATE_ICON, 'text-bad')}
+          >
+            <CircleAlert />
+          </span>
+          <Title>{title ?? t('ui.state.error.title')}</Title>
+          <Sentence>{description ?? t('ui.state.error.description')}</Sentence>
+          <div className={STATE_ACTIONS}>
+            <Button onClick={onRetry}>
               <RefreshCw aria-hidden="true" />
               {t('ui.state.error.retry')}
             </Button>
             {onOpenDiagnostics ? (
-              <Button size="sm" variant="ghost" onClick={onOpenDiagnostics}>
+              <Button variant="ghost" onClick={onOpenDiagnostics}>
                 {t('ui.state.error.diagnostics')}
               </Button>
             ) : null}
           </div>
+          {/* The cause, last and quiet: what failed and the id the engine logs. */}
+          {request || idLine ? (
+            <div
+              data-slot="state-block-request"
+              className="mt-2 max-w-[42ch] font-mono text-mono-s [overflow-wrap:anywhere] text-text-3"
+            >
+              {request ? <span className="block">{request}</span> : null}
+              {idLine ? (
+                <span className="block select-all">{idLine}</span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )
     }
@@ -345,7 +341,7 @@ export function StateBlock(props: StateBlockProps) {
       } = props
       return (
         <div {...slot} className={cn(STACKED, 'gap-3', className)} {...rest}>
-          <StateBanner tone="warn" icon={<History />} role="status">
+          <Notice tone="warn" icon={<History />} role="status">
             <Trans
               t={t}
               i18nKey="ui.state.stale.message"
@@ -359,7 +355,7 @@ export function StateBlock(props: StateBlockProps) {
             >
               {t('ui.state.stale.retry')}
             </Button>
-          </StateBanner>
+          </Notice>
           <div
             data-slot="state-block-stale-rows"
             className="border-s-2 border-dashed border-warn ps-2.5"
@@ -402,19 +398,21 @@ export function StateBlock(props: StateBlockProps) {
         <div
           role="status"
           {...slot}
-          className={cn(CENTERED, className)}
+          className={cn(STATE_PAGE, className)}
           {...rest}
         >
-          <Shield
+          <span
             data-slot="state-icon"
             aria-hidden="true"
-            className="size-5 text-text-3"
-          />
+            className={cn(STATE_ICON, 'text-text-3')}
+          >
+            <Lock />
+          </span>
           <Title>{title ?? t('ui.state.noAccess.title')}</Title>
           <Sentence>
             {description ?? t('ui.state.noAccess.description')}
           </Sentence>
-          {action ? <div className="mt-1">{action}</div> : null}
+          {action ? <div className={STATE_ACTIONS}>{action}</div> : null}
         </div>
       )
     }
@@ -434,12 +432,12 @@ export function StateBlock(props: StateBlockProps) {
       } = props
       return (
         <div {...slot} className={cn(STACKED, className)} {...rest}>
-          <StateBanner tone="info" icon={<RunningRing />} role="status">
+          <Notice icon={<RunningRing />} role="status">
             <strong className="font-semibold">
               {title ?? t('ui.state.unknown.title')}
             </strong>{' '}
             {description ?? t('ui.state.unknown.description')}
-          </StateBanner>
+          </Notice>
           <p className="m-0 font-mono text-mono-s text-text-3">
             {t('ui.state.unknown.checking', { id: requestId, elapsed })}
           </p>

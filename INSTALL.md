@@ -7,7 +7,7 @@ short version, and the deployment tutorials (Compose, Kubernetes/Helm, air-gappe
 [`docs-site/`](docs-site/).
 
 > **Beta.** Releases are cut from this repository. The binaries,
-> images and packages below describe the **next release (Olivares <!-- release -->`0.9`<!-- /release -->), not yet published**;
+> images and packages below describe the **next release (Olivares <!-- release -->`0.10`<!-- /release -->), not yet published**;
 > [building from source](#from-source) remains supported. Everything is self-hosted: the engine
 > makes no mandatory outbound calls at boot and verifying a licence never calls us. The one
 > command that reaches us is `olivares upgrade`, which fetches from the update channel unless
@@ -39,6 +39,7 @@ session on that path.
 | [Docker Compose, SQLite](#docker-compose) | Gate path; requires a passing result on the release image |
 | [HTTPS installer](#https-convenience-path), including its service adapters | **not qualified** |
 | [Standalone Docker](#docker) | **not qualified** |
+| [Docker Desktop on macOS](#docker-desktop-on-macos) | **not qualified** |
 | [Kubernetes: Helm or flat manifest](#kubernetes) | **Business**, not qualified |
 | [Native packages: deb, rpm and apk](#native-packages-deb--rpm--apk) | **not qualified** |
 | [Homebrew](#homebrew-recommended) | **not qualified** |
@@ -138,7 +139,7 @@ removes it afterwards; pass `--install-cosign` to keep that verified copy next t
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
 ```
 
-To pin a release: <!-- release -->`curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 0.9`<!-- /release -->.
+To pin a release: <!-- release -->`curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 0.10`<!-- /release -->.
 
 Use `--bindir "$HOME/.local/bin"` to select an absolute install directory. Verification
 cannot be bypassed and privilege escalation is always an explicit operator step. The
@@ -150,7 +151,7 @@ present:
 <!-- release -->
 ```sh
 # systemd user service on Linux, LaunchAgent on macOS; review before starting
-ver=0.9   # the release tag
+ver=0.10   # the release tag
 sh "olivares-install-$ver.sh" --version "$ver" --user
 olivares doctor --mode user
 
@@ -195,7 +196,7 @@ acts happen, use the signed GitHub Release assets and the direct commands below;
 a package-manager source based on this proposal.
 
 On ARM servers, download the `arm64` asset instead of `amd64`. All assets are on the <!-- release -->
-[release page](https://github.com/olivaresai/olivares/releases/tag/0.9)<!-- /release -->.
+[release page](https://github.com/olivaresai/olivares/releases/tag/0.10)<!-- /release -->.
 
 Each package installs the binary to `/usr/bin/olivares`, an example env file, and a
 no-login `olivares` service user plus the data dir `/var/lib/olivares`. `.deb` and
@@ -215,17 +216,17 @@ elsewhere) and fish (`/usr/share/fish/vendor_completions.d/olivares.fish`). Bash
 <!-- release -->
 ```sh
 # Debian / Ubuntu
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.9/olivares_0.9_linux_amd64.deb
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.10/olivares_0.10_linux_amd64.deb
 # Verify the downloaded package before installing (see Verifying a release).
 sudo dpkg -i olivares_*_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.9/olivares_0.9_linux_amd64.rpm
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.10/olivares_0.10_linux_amd64.rpm
 # Verify the downloaded package before installing (see Verifying a release).
 sudo rpm -i olivares_*_linux_amd64.rpm
 
 # Alpine
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.9/olivares_0.9_linux_amd64.apk
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.10/olivares_0.10_linux_amd64.apk
 # Verify the downloaded package before installing (see Verifying a release).
 sudo apk add --allow-untrusted olivares_*_linux_amd64.apk
 
@@ -282,7 +283,7 @@ it by hand if you really mean to.
 
 <!-- release -->
 ```sh
-ver=0.9; os=linux; arch=amd64
+ver=0.10; os=linux; arch=amd64
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver}_${os}_${arch}.tar.gz
 curl -fsSLO $base/checksums.txt
@@ -309,7 +310,11 @@ persistent data volume:
 <!-- release -->
 ```sh
 set -e
-img=docker.io/olivaresai/olivares:0.9
+docker pull docker.io/olivaresai/olivares:0.10
+img=$(docker image inspect --format '{{index .RepoDigests 0}}' docker.io/olivaresai/olivares:0.10)
+cosign verify "$img" \
+  --certificate-identity https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.10 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
 docker run --rm --entrypoint cat "$img" /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
 apparmor=
 if [ -r /sys/kernel/security/apparmor/features/namespaces/mask ] &&
@@ -326,6 +331,9 @@ docker run -d --name olivares --hostname olivares -p 8443:8443 -p 8444:8444 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
+
+The block runs the image by the digest it verified, not by the tag. On a Mac, Docker Desktop runs it
+as it stands: see [Docker Desktop on macOS](#docker-desktop-on-macos).
 
 A session runs its agent tool in its own user, network and mount namespaces, which Docker's
 default seccomp profile refuses. The image ships the profile that allows exactly those, the one
@@ -362,7 +370,7 @@ host's network namespace (Linux):
 <!-- release -->
 ```sh
 docker run --rm --network host --tmpfs /data:uid=65532,gid=65532 \
-  docker.io/olivaresai/olivares:0.9 \
+  docker.io/olivaresai/olivares:0.10 \
   serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 --data-dir /data
 ```
 <!-- /release -->
@@ -381,16 +389,16 @@ is the **fallback**: the release pipeline builds and signs on ghcr.io and then c
 content to Docker Hub **by digest** (`cosign copy`), so both coordinates resolve to identical
 layers, signatures and attestations. Docker Hub applies a rate limit to **anonymous** pulls;
 ghcr.io does not rate-limit anonymous pulls of public images — `docker login` on Docker Hub, or
-switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: <!-- release -->`:0.9`<!-- /release -->
+switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: <!-- release -->`:0.10`<!-- /release -->
 (pin a release), `:latest`, the Business FIPS and STIG variants
 (STIG-profiled UBI base) — see [SCP-09](docs/SCP-09-FIPS-STIG.md). The base and `:latest` tags
 are multi-arch (amd64/arm64); Business FIPS/STIG images are amd64-only. **For production, pin by digest**
 (`docker.io/olivaresai/olivares@sha256:…`); the mutable tags above are for evaluation only. Verify
-the image: <!-- release -->`cosign verify docker.io/olivaresai/olivares:0.9 --certificate-identity-regexp
+the image: <!-- release -->`cosign verify docker.io/olivaresai/olivares:0.10 --certificate-identity-regexp
 '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$'
 --certificate-oidc-issuer
 https://token.actions.githubusercontent.com`<!-- /release --> (the same verification works identically against the <!-- release -->
-`ghcr.io/olivaresai/olivares:0.9`<!-- /release --> fallback — same digest, signatures and attestations).
+`ghcr.io/olivaresai/olivares:0.10`<!-- /release --> fallback — same digest, signatures and attestations).
 
 ### Docker Compose
 
@@ -423,6 +431,31 @@ The AppArmor step needs an AppArmor 4 parser on the Docker daemon host; see
 
 See [`deploy/compose/`](deploy/compose/) and the
 [Docker Compose tutorial](docs-site/src/content/docs/tutorials/getting-started/docker-compose.mdx).
+
+### Docker Desktop on macOS
+
+**not qualified** by the first-hour gate (see [qualification](#installation-qualification)).
+
+Docker Desktop runs Linux containers in a Linux VM, on Apple silicon and Intel. The image is multi-arch,
+so Docker pulls the one that matches the Mac, and the [Docker](#docker) and [Docker Compose](#docker-compose)
+blocks run on a Mac as they stand: the AppArmor step tests for a file only a Linux host has, so it skips
+itself, and the Docker client reads the seccomp profile from the file the block saves. Install `cosign`
+(`brew install cosign`) for the digest check, and give Docker Desktop's VM at least the 2 GiB of memory
+the Compose file sets for the engine (Settings → Resources).
+
+What differs from a Linux host:
+
+- **The kernel is Docker's.** The engine confines each session with Landlock, in the kernel of Docker's
+  VM. Run `docker exec olivares olivares doctor`: `session-confinement` `ok` means sessions run confined
+  as on Linux. If it fails, a session is refused and never run unconfined; the console, the API and the
+  audit ledger keep working. See
+  [session confinement on Docker Desktop](deploy/compose/README.md#session-confinement-on-docker-desktop).
+- **The project folder.** Put it under a path Docker Desktop shares, and test once that the container user can
+  write to it. See [work on a host project folder](deploy/compose/README.md#work-on-a-host-project-folder).
+- **A model server on the Mac.** `127.0.0.1` inside the container is the container. See
+  [reach a model server on the host](deploy/compose/README.md#reach-a-model-server-on-the-host).
+- **The demo estate.** `--network host` joins the VM's network, not the Mac's, so run the demo from the
+  [macOS binary](#manual-binary).
 
 ### Kubernetes
 
@@ -473,7 +506,7 @@ and its packaging files come from the checkout, never from a branch:
 (
 set -eu
 cd "$(mktemp -d)"
-ver=0.9
+ver=0.10
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/checksums.txt
 curl -fsSLO $base/checksums.txt.sig
@@ -588,7 +621,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.
 
 <!-- release -->
 ```sh
-ver=0.9; arch=arm64   # or amd64 on Intel
+ver=0.10; arch=arm64   # or amd64 on Intel
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver}_darwin_${arch}.tar.gz
 # ...verify (see Verifying a release), then:
@@ -726,7 +759,7 @@ olivares uninstall --plan --data-dir /var/lib/olivares
 olivares uninstall --preserve --data-dir /var/lib/olivares
 olivares uninstall --purge --data-dir /var/lib/olivares --yes
 # Same contract through the verified installer:
-sh olivares-install-0.9.sh --uninstall --plan --data-dir /var/lib/olivares
+sh olivares-install-0.10.sh --uninstall --plan --data-dir /var/lib/olivares
 ```
 <!-- /release -->
 

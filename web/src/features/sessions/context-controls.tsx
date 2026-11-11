@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useState } from 'react'
+import { useRef, useState, type ReactElement } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
@@ -22,16 +23,24 @@ export function ContextControls({
   beforeSend,
   onBeforeSend,
   onCompact,
+  more,
 }: {
   run: RunDTO
   busy: boolean
   beforeSend: boolean
   onBeforeSend: (value: boolean) => void
   onCompact: () => void
+  /** On a phone the panel opens from a menu, not its own button: `more` renders
+   * that menu, given the way to open the panel, which then points at it. */
+  more?: (openPanel: () => void) => ReactElement
 }) {
   const { t } = useTranslation('sessions')
   const { activeTenant, can } = useAuth()
   const [open, setOpen] = useState(false)
+  // Opened from the menu, the panel gives focus back to the menu's button,
+  // unless the person went elsewhere: no Context button is there to take it.
+  const anchor = useRef<HTMLDivElement>(null)
+  const wentElsewhere = useRef(false)
   const writable = can('sessions:run:write') && run.provider_driver === 'claude'
   const { data, isError } = useQuery({
     queryKey: agentOpsKeys.runCommands(activeTenant, run.run_ref),
@@ -52,16 +61,34 @@ export function ContextControls({
   const disabled = !supported || busy || run.state !== 'idle'
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={t('compact.context')}>
-          <ContextRing run={run} />
-          <span>{t('compact.context')}</span>
-        </Button>
-      </PopoverTrigger>
+      {more ? (
+        <PopoverAnchor ref={anchor} className="flex">
+          {more(() => {
+            wentElsewhere.current = false
+            setOpen(true)
+          })}
+        </PopoverAnchor>
+      ) : (
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label={t('compact.context')}>
+            <ContextRing run={run} />
+            <span>{t('compact.context')}</span>
+          </Button>
+        </PopoverTrigger>
+      )}
       <PopoverContent
         align="end"
         aria-label={t('compact.context')}
         className="w-72 space-y-3"
+        onInteractOutside={() => {
+          wentElsewhere.current = true
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!more) return
+          event.preventDefault()
+          if (!wentElsewhere.current)
+            anchor.current?.querySelector('button')?.focus()
+        }}
       >
         <p className="text-caption text-muted-foreground">
           {t('compact.hint')}

@@ -45,6 +45,31 @@ type DepartmentCreator interface {
 	CreateWorkspace(ctx context.Context, p auth.Principal, tenant model.TenantID, ws model.Workspace) (model.Workspace, error)
 }
 
+// GroupAdministrator is the OPTIONAL capability of a DepartmentService that lets an
+// operator manage a group of their own: POST /v1/groups creates a local ("operator")
+// group, DELETE /v1/groups/{id} removes one, and PUT or DELETE
+// /v1/groups/{id}/members/{user_id} adds or takes out a member. A group a directory
+// provisioned is the directory's to change, so the service refuses it with
+// auth.ErrGroupOriginReadOnly. A service without it answers 501
+// departments_unavailable, which grants less.
+type GroupAdministrator interface {
+	// CreateGroup creates an operator group named displayName; a name already in use is store.ErrConflict.
+	CreateGroup(ctx context.Context, p auth.Principal, tenant model.TenantID, displayName string) (model.UserGroup, error)
+	// DeleteGroup removes group id with its roster; its members keep their accounts and roles.
+	DeleteGroup(ctx context.Context, p auth.Principal, tenant model.TenantID, id model.ID) error
+	// SetGroupMember adds (member true) or takes out (false) user; both are idempotent.
+	SetGroupMember(ctx context.Context, p auth.Principal, tenant model.TenantID, group, user model.ID, member bool) error
+}
+
+// MemberSuspender is the OPTIONAL capability of a DepartmentService that suspends a
+// person without removing them: POST /v1/members/{id}/suspend stops their sessions
+// and tokens at once, and .../reactivate restores
+// the access. The membership, role and group places stay. A service without it
+// answers 501 departments_unavailable.
+type MemberSuspender interface {
+	SetMemberSuspended(ctx context.Context, p auth.Principal, tenant model.TenantID, user model.ID, suspended bool) error
+}
+
 // WorkspaceAdministration is the OPTIONAL capability of a mounted module that says
 // whether a caller administers a department: one of its delegation domains (tenant
 // administration or an admin-capable scoped grant) contains the workspace. The

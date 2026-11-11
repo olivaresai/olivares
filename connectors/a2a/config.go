@@ -28,10 +28,11 @@ const (
 // defaultTimeout bounds a single Agent Card fetch.
 const defaultTimeout = 30 * time.Second
 
-// defaultWellKnownPath is the A2A v1.0 recommended Agent Card discovery path
+// WellKnownCardPath is the A2A v1.0 recommended Agent Card discovery path, the one
+// a client reads by default and the inbound server publishes its card at
 // (RFC 8615). It is RECOMMENDED, not mandatory; an operator can override it or
 // point an agent's url directly at a card document.
-const defaultWellKnownPath = "/.well-known/agent-card.json"
+const WellKnownCardPath = "/.well-known/agent-card.json"
 
 // agentSpec is one A2A agent to discover and trust-verify. URL is the agent's base
 // URL (the well-known card path is appended) or a direct card URL. TrustJWKS is the
@@ -81,7 +82,7 @@ func descriptor() sdk.Descriptor {
 			{Key: cfgAgents, Type: sdk.FieldString, Description: "inline JSON array of A2A agent specs to discover and trust-verify"},
 			{Key: cfgInteractions, Type: sdk.FieldString, Description: "inline JSON array of observed A2A task/message records (agent↔agent edges)"},
 			{Key: cfgTimeout, Type: sdk.FieldDuration, Default: defaultTimeout.String(), Description: "per-card fetch timeout"},
-			{Key: cfgWellKnown, Type: sdk.FieldString, Default: defaultWellKnownPath, Description: "Agent Card well-known path appended to an agent base URL"},
+			{Key: cfgWellKnown, Type: sdk.FieldString, Default: WellKnownCardPath, Description: "Agent Card well-known path appended to an agent base URL"},
 			{Key: cfgAllowJKU, Type: sdk.FieldBool, Default: "false", Description: "allow verifying a card against a key fetched from its own jku (self-asserted, lower trust; off by default)"},
 		},
 	}
@@ -99,7 +100,7 @@ func loadConfig(cfg sdk.Config) (config, error) {
 		c.timeout = defaultTimeout
 	}
 	if c.wellKnownPath == "" {
-		c.wellKnownPath = defaultWellKnownPath
+		c.wellKnownPath = WellKnownCardPath
 	}
 
 	if raw := cfg.Get(cfgAgents); raw != "" {

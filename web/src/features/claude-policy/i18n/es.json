@@ -282,6 +282,20 @@
       "noPolicyBadge": "sin política seleccionada",
       "noPolicyBody": "El almacén no selecciona ninguna revisión de Cedar, así que desde aquí no hay nada en vigor. No es un fallo: es un tenant que todavía no ha publicado ninguna política.",
       "grantsExpired": "Este proceso ha superado su límite de obsolescencia sin conexión, así que las concesiones POSITIVAS de la política han degradado a abstención. Sus reglas de prohibición siguen aplicándose. La política SÍ está cargada aquí: lo que ha caducado es la confianza en sus concesiones."
+    },
+    "person": "Persona",
+    "personHint": "Probar como esta persona, con su rol y sus grupos.",
+    "personNone": "Cualquiera (sin persona)",
+    "policyTests": {
+      "title": "Pruebas de la política",
+      "sub": "Cada publicación debe mantenerlas. Una publicación que rompe una prueba se rechaza y la nombra.",
+      "name": "Nombre de la prueba",
+      "expect": "Esperado",
+      "allow": "Debe permitirse",
+      "deny": "Debe denegarse",
+      "add": "Añadir como prueba",
+      "empty": "Aún no hay pruebas. Prepara la solicitud de ejemplo, ponle nombre y añádela.",
+      "remove": "Quitar {{name}}"
     }
   },
   "dist": {

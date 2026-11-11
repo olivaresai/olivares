@@ -332,7 +332,8 @@ func TestRoleGrants(t *testing.T) {
 		{auth.RoleOwner, "accessgraph:read", true},
 		{auth.RoleViewer, "accessmap:graph:read", false},
 		{auth.RoleViewer, "accessmap:drift:read", false},
-		{auth.RoleEditor, "accessmap:graph:read", true},
+		{auth.RoleEditor, "accessmap:graph:read", false}, // an administrator's read (ruling 33)
+		{auth.RoleAdmin, "accessmap:graph:read", true},
 		{auth.RoleEditor, "accessmap:drift:read", true},
 		// other module permissions are still granted by the generic verb tier
 		{auth.RoleViewer, "rrw:access_path:read", true},

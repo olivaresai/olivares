@@ -35,8 +35,10 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { EditionRefusalNote } from '@/components/layout/query-error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { editionRefusal } from '@/components/ui/edition-note'
 import { useLiveStream } from '@/features/shared/sse'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -178,6 +180,8 @@ export function GovernedOpen({ input }: { input: VoiceOpenInput }) {
   if (!can('voice:session:admin')) return null
 
   const outcome = classifyOpen(m.data ?? null, m.error)
+  // An open refused by edition asked no gate: the edition line says what is true instead.
+  const refusal = editionRefusal(m.error)
   return (
     <div className="flex flex-col gap-2">
       <Button
@@ -188,7 +192,8 @@ export function GovernedOpen({ input }: { input: VoiceOpenInput }) {
       >
         {t('surface.open')}
       </Button>
-      {outcome !== 'idle' && (
+      {refusal ? <EditionRefusalNote refusal={refusal} /> : null}
+      {outcome !== 'idle' && !refusal && (
         <p role="status" className="text-body">
           {t(`surface.outcome.${outcome}`)}
           {outcome === 'approval' && m.data?.approval_ref ? (

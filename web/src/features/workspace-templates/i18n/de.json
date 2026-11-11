@@ -15,7 +15,8 @@
   "groups": {
     "yours": "Ihre Vorlagen",
     "builtin": "Integrierte Vorlagen ({{n}})",
-    "yoursEmpty": "Noch keine. Eine Vorlage ist ein wiederverwendbarer Ausgangspunkt für neue Sitzungen."
+    "emptyTitle": "Sie haben noch keine Vorlagen",
+    "emptyDescription": "Eine Vorlage ist ein wiederverwendbarer Ausgangspunkt für neue Sitzungen."
   },
   "editor": {
     "nameLabel": "Name",
@@ -25,11 +26,11 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "Befehle, die vor/nach Werkzeugen und Sitzungen ausgeführt werden.",
-      "settings": "Agenteneinstellungen",
+      "settings": "Einstellungen",
       "settingsHint": "Berechtigungsmodus, Aufwandsstufe, Modell und benutzerdefinierte Anweisungen.",
       "connectors": "Konnektoren",
       "connectorsHint": "Konnektor-IDs, die beim Anwenden dieser Vorlage angehängt werden.",
-      "policies": "Governance-Richtlinien",
+      "policies": "Richtlinien",
       "policiesHint": "DLP-Modus, Sitzungsdauerlimits, erlaubte Werkzeuge und Ein-/Ausgabeaufzeichnung.",
       "secrets": "Geheimnisse",
       "secretsHint": "Tresor-Geheimnisse, die Sitzungen aus dieser Vorlage als Umgebungsvariablen erhalten.",

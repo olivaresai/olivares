@@ -78,6 +78,7 @@ vi.mock('@/components/layout/scope-switcher', () => ({
 vi.mock('@/components/layout/use-session-rail', () => ({
   useSessionRail: () => ({
     sessionCounts: { needsYou: 0, live: 0, running: 0, open: 0 },
+    groups: [],
   }),
 }))
 vi.mock('@/features/governance/use-pending-approvals', async (actual) => ({
@@ -126,6 +127,7 @@ function shownAt(href: string) {
     .filter((a) => a.getAttribute('aria-current') === 'page')
     .map((a) => a.getAttribute('href') ?? '')
   const result = {
+    settings: !!container.querySelector('[data-slot="settings-navigation"]'),
     rows: rows.map((a) => a.getAttribute('href') ?? ''),
     strip,
     marked,
@@ -169,10 +171,10 @@ describe('the first screen', () => {
 
   it('names the places and only the places, on a new installation and any other', () => {
     expect(shownAt('/now').rows).toEqual([
+      '/now',
       '/sessions',
       '/workspace',
       '/agent-tools',
-      '/now',
       '/permissions?tab=approvals',
       // Usage leads with the accounts and today, before Business's FinOps.
       '/usage',
@@ -219,7 +221,9 @@ describe('every page sits in one place', () => {
 
   it('marks exactly one place, the one that holds the page', () => {
     const wrong = listed.flatMap((v) => {
-      const { marked } = shownAt(v.path)
+      const shown = shownAt(v.path)
+      const { marked } = shown
+      if (placeOf(v) === 'settings' && shown.settings) return []
       const at = marked.map((href) => href.split('?')[0])
       const place =
         at.length === 1 && at[0] !== SETTINGS_UTILITY.path

@@ -7,6 +7,12 @@
     "7d": "7 days",
     "30d": "30 days"
   },
+  "status": {
+    "heading": "Components",
+    "healthy": "Everything is working.",
+    "healthyConfigured": "Everything that is configured is working. Not configured: {{list}}.",
+    "attention": "Needs attention: {{list}}."
+  },
   "host": {
     "heading": "Host",
     "keeps24": "The host keeps 24 hours of history, so its charts show the last 24 hours.",

@@ -101,7 +101,8 @@
     "/voice",
     "/work",
     "/workspace",
-    "/workspace-templates"
+    "/workspace-templates",
+    "/group-access"
   ],
   "business_paths": [
     "/automations",
@@ -115,6 +116,7 @@
     "/red-team",
     "/session-viewer/$id",
     "/team-costs",
-    "/organization"
+    "/organization",
+    "/group-access"
   ]
 }

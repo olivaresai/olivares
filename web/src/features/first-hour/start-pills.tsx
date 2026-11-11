@@ -33,6 +33,7 @@ import {
   type ModelChoices,
 } from '@/features/agentops/model-choices'
 import { ModelList } from '@/features/agentops/model-effort-picker'
+import type { PermissionChoice } from '@/features/agentops/session-launch'
 import { ProviderAccent } from '@/features/agentops/provider-accent'
 import { ToolMark } from '@/features/agentops/tool-mark'
 import { cn } from '@/lib/utils'
@@ -52,7 +53,7 @@ const DEFAULT_EFFORT = ' default-effort'
 const PILL =
   'inline-flex h-7 min-w-0 max-w-56 shrink items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-2.5 text-caption text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 pointer-coarse:h-11'
 
-function Pill({
+export function Pill({
   label,
   children,
   className,
@@ -298,6 +299,54 @@ export function EffortPill({
   )
 }
 
+/** What the agent may do, the New session form's presets: the current one on the pill,
+ * the ones this person may choose in its menu, and one the rules refuse greyed with why. */
+export function AccessPill({
+  value,
+  choices,
+  allows,
+  reason,
+  onChange,
+}: {
+  value: PermissionChoice
+  choices: readonly PermissionChoice[]
+  allows: (choice: PermissionChoice) => boolean
+  reason?: string
+  onChange: (choice: PermissionChoice) => void
+}) {
+  const { t } = useTranslation('firstHour')
+  const shown = t(`permission.${value}`)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Pill label={t('composer.accessPill', { value: shown })}>
+          <span className="truncate">{shown}</span>
+        </Pill>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(v) => {
+            const next = choices.find((c) => c === v)
+            if (next) onChange(next)
+          }}
+        >
+          {choices.map((c) => (
+            <DropdownMenuRadioItem
+              key={c}
+              value={c}
+              disabled={!allows(c)}
+              title={allows(c) ? undefined : reason}
+            >
+              {t(`permission.${c}`)}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 /** The folder: the recent folders, a new folder of its own, another one typed, and More
  * options (the advanced launch). */
 export function FolderPill({
@@ -308,6 +357,7 @@ export function FolderPill({
   onMore,
   onCloseAutoFocus,
   autoFocus,
+  moreHeld,
 }: {
   autoFocus?: boolean
   label: string
@@ -316,6 +366,8 @@ export function FolderPill({
   onPick: (value: string) => void
   onMore?: () => void
   onCloseAutoFocus: (event: Event) => void
+  /** Why More options cannot open now: what it cannot take, and how to keep it. */
+  moreHeld?: string
 }) {
   const { t } = useTranslation('firstHour')
   return (
@@ -353,8 +405,19 @@ export function FolderPill({
         {onMore ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onMore}>
-              {t('composer.moreOptions')}
+            <DropdownMenuItem
+              // Held, it stays reachable by arrow key and says why inside itself.
+              onSelect={moreHeld ? (event) => event.preventDefault() : onMore}
+              aria-disabled={moreHeld ? true : undefined}
+            >
+              {moreHeld ? (
+                <span className="flex max-w-64 flex-col">
+                  {t('composer.moreOptions')}
+                  <span className="text-caption text-text-2">{moreHeld}</span>
+                </span>
+              ) : (
+                t('composer.moreOptions')
+              )}
             </DropdownMenuItem>
           </>
         ) : null}

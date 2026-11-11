@@ -11,9 +11,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
+	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions/egress"
@@ -169,6 +174,67 @@ func TestBoundRecord_RevokedRefusesTheLaunch(t *testing.T) {
 	if launchCount(runner) != 0 {
 		t.Fatal("a denied launch started a child")
 	}
+}
+
+// A disabled record refuses every use and says so, keeps its binding, comes back with one
+// action, and leaves the record's other changes open. Revoked stays final.
+func TestBoundRecord_DisabledRefusesUntilEnabled(t *testing.T) {
+	t.Parallel()
+	m, tenant, runner, _, _, rec, prof := boundHarness(t)
+	ctx := context.Background()
+	patchState := func(want int, state string, holds auth.Permission) string {
+		t.Helper()
+		route := chi.NewRouteContext()
+		route.URLParams.Add("ref", rec.Ref)
+		r := httptest.NewRequest(http.MethodPatch, "/v1/m/sessions/providers/"+rec.Ref, strings.NewReader(`{"state":"`+state+`"}`))
+		w := httptest.NewRecorder()
+		m.handlePatchProviderRecord(w, r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, route)),
+			api.ModuleContext{Tenant: tenant, Principal: testActor(), Admission: func(_ context.Context, q auth.Request) bool {
+				return q.Permission == holds
+			}})
+		if w.Code != want {
+			t.Fatalf("PATCH state %q = %d, want %d: %s", state, w.Code, want, w.Body.String())
+		}
+		return w.Body.String()
+	}
+	setState := func(want int, state string) string { return patchState(want, state, permProviderAdmin) }
+
+	// A writer who may rename or rotate may not switch the provider off or back on.
+	patchState(http.StatusForbidden, ProviderRecordDisabled, permProviderWrite)
+	setState(http.StatusBadRequest, "paused")
+	if body := setState(http.StatusOK, ProviderRecordDisabled); !strings.Contains(body, `"state":"disabled"`) {
+		t.Fatalf("the record must show its state: %s", body)
+	}
+	_, err := launchBound(m, tenant, prof)
+	var re *runErr
+	if !errors.As(err, &re) || re.status != http.StatusConflict || !strings.Contains(re.msg, "disabled") {
+		t.Fatalf("launch under a disabled provider = %v, want 409 naming the cause", err)
+	}
+	if launchCount(runner) != 0 {
+		t.Fatal("a refused launch started a child")
+	}
+	if _, err := m.TestProviderRecord(ctx, tenant, rec.Ref, false); !errors.Is(err, ErrProviderRecordDisabled) {
+		t.Fatalf("testing a disabled provider = %v, want ErrProviderRecordDisabled", err)
+	}
+	key := "sk-" + "synthetic-key-rotated-while-disabled"
+	if _, err := m.PatchProviderRecord(ctx, tenant, rec.Ref, ProviderRecordPatch{APIKey: &key, Actor: testActor()}); err != nil {
+		t.Fatalf("a disabled provider's key can still be replaced: %v", err)
+	}
+
+	setState(http.StatusOK, ProviderRecordActive)
+	if _, err := launchBound(m, tenant, prof); err != nil {
+		t.Fatalf("launch after enabling: %v", err)
+	}
+	for _, verb := range []string{"disable", "enable"} {
+		if got := acctAuditsOf(t, m, tenant, "sessions.provider_record."+verb); len(got) != 1 {
+			t.Fatalf("%s audited %d times, want once", verb, len(got))
+		}
+	}
+
+	if _, err := m.RevokeProviderRecord(ctx, testActor(), tenant, rec.Ref); err != nil {
+		t.Fatal(err)
+	}
+	setState(http.StatusConflict, ProviderRecordActive)
 }
 
 // Two endpoints for one launch is a conflict, not an ordering. Choosing silently

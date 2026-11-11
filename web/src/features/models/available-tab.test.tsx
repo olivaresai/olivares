@@ -292,6 +292,40 @@ describe('Models > Available', () => {
     expect(drained?.state.data).toMatchObject({ items: [] })
   })
 
+  it('says the one next step for a provider whose list failed: Test connection on Providers', async () => {
+    serve({
+      availability: [{ ...API_PROVIDER, state: 'failed' }],
+      providers: [
+        {
+          provider_ref: 'provider:1',
+          kind: 'openai_compatible',
+          display_name: 'Local API stub',
+          state: 'active',
+        },
+      ],
+    })
+    renderIntel(<AvailableTab />)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'Local API stub did not list its models: run Test connection on Providers.',
+    )
+    expect(
+      within(alert).getByRole('link', { name: 'Test connection' }),
+    ).toHaveAttribute('href', '/providers')
+  })
+
+  it('offers no Providers step to a reader who cannot open Providers', async () => {
+    auth.denied = new Set(['sessions:provider:read'])
+    serve({
+      availability: [{ ...API_PROVIDER, state: 'failed' }],
+      providers: [],
+    })
+    renderIntel(<AvailableTab />)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('did not list its models.')
+    expect(within(alert).queryByRole('link')).toBeNull()
+  })
+
   it('keeps a failed provider source and its last good models visible', async () => {
     serve({
       availability: [{ ...API_PROVIDER, state: 'failed' }],
@@ -502,6 +536,19 @@ describe('Models > Available', () => {
     const row = await screen.findByRole('row', { name: /gpt-5/ })
     await user.click(within(row).getByRole('button', { name: /1 session/i }))
     expect(screen.getAllByRole('link', { name: 'Session r-a' })).toHaveLength(1)
+  })
+
+  it('names a session nobody named by its title, not its reference', async () => {
+    serve({ runs: [run('r-a', { name: undefined, title: 'Fix the login' })] })
+    const user = userEvent.setup()
+    renderIntel(<AvailableTab />)
+
+    const row = await screen.findByRole('row', { name: /gpt-5/ })
+    await user.click(within(row).getByRole('button', { name: /1 session/i }))
+    expect(
+      await screen.findByRole('link', { name: 'Fix the login' }),
+    ).toHaveAttribute('href', '/sessions?session=run%3Ar-a')
+    expect(screen.queryByRole('link', { name: 'r-a' })).toBeNull()
   })
 
   it('offers no sessions control on a model no live session runs', async () => {

@@ -8,6 +8,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Button } from '@/components/ui/button'
+import { CountBadge } from '@/components/ui/count-badge'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
@@ -17,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { AsyncSection, CaveatNotice, TruncatedNotice } from '@/features/_intel'
+import { AsyncSection, TruncatedNotice } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -71,8 +72,14 @@ export function InventoryView() {
       for (const k of Object.keys(byKind)) if (!known.includes(k)) known.push(k)
     if (!byKind || summary.isError || summary.data?.truncated === true)
       return known
-    return known.filter((k) => (byKind[k]?.total ?? 0) > 0)
-  }, [summary.data, summary.isError])
+    return known.filter((k) => k === kind || (byKind[k]?.total ?? 0) > 0)
+  }, [summary.data, summary.isError, kind])
+
+  // The same rule for the figures: only a complete summary can count a kind.
+  const counts =
+    summary.data?.by_kind && !summary.isError && summary.data.truncated !== true
+      ? summary.data
+      : undefined
 
   const facetKind = kind === ALL ? undefined : kind
   const facetStatus = status === ALL ? undefined : status
@@ -83,12 +90,12 @@ export function InventoryView() {
         icon={Boxes}
         title={t('title')}
         description={t('subtitle')}
-        notices={<CaveatNotice tone="info">{t('scope.note')}</CaveatNotice>}
-        actions={
-          <>
+        notices={
+          <p className="flex flex-wrap items-baseline gap-x-2 text-caption text-text-2">
+            <span>{t('scope.note')}</span>
             {/* MCP servers are added and governed in one place; this page only lists
                 what the connectors found. */}
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="link" className="h-auto text-caption" asChild>
               <Link
                 to={'/capabilities' as never}
                 search={{ tab: 'servers' } as never}
@@ -96,18 +103,20 @@ export function InventoryView() {
                 {t('mcpPointer')}
               </Link>
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void summary.refetch()}
-              disabled={summary.isFetching}
-            >
-              <RefreshCw
-                className={cn('size-3.5', summary.isFetching && 'animate-spin')}
-              />
-              {t('refresh')}
-            </Button>
-          </>
+          </p>
+        }
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void summary.refetch()}
+            disabled={summary.isFetching}
+          >
+            <RefreshCw
+              className={cn('size-3.5', summary.isFetching && 'animate-spin')}
+            />
+            {t('refresh')}
+          </Button>
         }
       />
 
@@ -128,23 +137,32 @@ export function InventoryView() {
             <TabsTrigger value="topology">{t('tabs.topology')}</TabsTrigger>
             <TabsTrigger value="coverage">{t('tabs.coverage')}</TabsTrigger>
           </TabsList>
-          <div className="flex items-center gap-2">
-            <Select value={kind} onValueChange={setKind}>
-              <SelectTrigger
-                className="h-7 w-auto min-w-[8rem] text-caption"
-                aria-label={t('facets.allKinds')}
-              >
-                <SelectValue placeholder={t('facets.allKinds')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('facets.allKinds')}</SelectItem>
-                {kindOptions.map((k) => (
-                  <SelectItem key={k} value={k}>
-                    {t(`kinds.${k}`, { defaultValue: k })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        </div>
+
+        {/* Only the catalog reads these filters; the other tabs have their own reads. */}
+        {tab === 'catalog' && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <div
+              role="group"
+              aria-label={t('cols.kind')}
+              className="flex flex-wrap items-center gap-1"
+            >
+              <KindChip
+                label={t('facets.allKinds')}
+                count={counts?.total}
+                pressed={kind === ALL}
+                onSelect={() => setKind(ALL)}
+              />
+              {kindOptions.map((k) => (
+                <KindChip
+                  key={k}
+                  label={t(`kinds.${k}`, { defaultValue: k })}
+                  count={counts?.by_kind[k]?.total}
+                  pressed={kind === k}
+                  onSelect={() => setKind(k)}
+                />
+              ))}
+            </div>
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger
                 className="h-7 w-auto min-w-[7rem] text-caption"
@@ -159,7 +177,7 @@ export function InventoryView() {
               </SelectContent>
             </Select>
           </div>
-        </div>
+        )}
 
         {/* Keyed by tenant: the rows, the topology cards and the selected entry are
             owned by the tenant they were read in (see TenantEstate). The facets, the
@@ -332,10 +350,10 @@ function SummaryTiles({ data }: { data: InventorySummary }) {
     <div className="flex flex-col gap-3">
       {/* `truncated` means the engine aggregated one bounded page and there was
           more: every figure below is a floor, so it is flagged as partial, and the
-          kind facet above keeps every option (see kindOptions). Strict `=== true`:
+          kind chips keep every option (see kindOptions). Strict `=== true`:
           a cast is not a runtime check. */}
       {data.truncated === true ? <TruncatedNotice /> : null}
-      <ul className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-body">
+      <ul className="grid grid-cols-2 overflow-hidden rounded-card border border-line bg-surface sm:grid-cols-4 sm:[&>li+li]:border-s sm:[&>li+li]:border-line">
         <SummaryFact label={t('summary.total')} value={totals.total} />
         <SummaryFact
           label={t('summary.active')}
@@ -353,6 +371,30 @@ function SummaryTiles({ data }: { data: InventorySummary }) {
   )
 }
 
+/** One kind filter: a toggle that says it is pressed, with its count when one is known. */
+function KindChip({
+  label,
+  count,
+  pressed,
+  onSelect,
+}: {
+  label: string
+  count?: number
+  pressed: boolean
+  onSelect: () => void
+}) {
+  return (
+    <Button
+      size="sm"
+      variant={pressed ? 'secondary' : 'ghost'}
+      aria-pressed={pressed}
+      onClick={onSelect}
+    >
+      {label} {count !== undefined && <CountBadge count={formatInt(count)} />}
+    </Button>
+  )
+}
+
 function SummaryFact({
   label,
   value,
@@ -363,11 +405,11 @@ function SummaryFact({
   tone?: 'success' | 'warning'
 }) {
   return (
-    <li className="flex items-baseline gap-1.5">
+    <li className="flex flex-col gap-0.5 px-4 py-3">
       <span className="text-caption text-muted-foreground">{label}</span>
       <span
         className={cn(
-          'tabular-nums font-medium',
+          'font-display text-heading tabular-nums',
           tone === 'success' && 'text-success',
           tone === 'warning' && 'text-warning',
           !tone && 'text-foreground',

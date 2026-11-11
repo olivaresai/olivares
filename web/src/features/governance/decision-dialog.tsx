@@ -155,11 +155,14 @@ export function useDecision(
 }
 
 /**
- * Whether this person may decide this request now, as the engine would answer: it is
- * pending, they hold the approver's permission, they did not ask for it (separation of
- * duties; a token has no stable user id) and they have not decided it already (a request
+ * Whether this person may decide this request now. The engine answers it in `may_decide`
+ * on the list and on the request, and that answer is followed: besides the approver's
+ * permission and separation of duties, it admits a person's own decision on an action
+ * Ask Olivares proposed for them that no approval policy matches. Only a read without
+ * that field falls back to the role rule: pending, the approver's permission, not their
+ * own request (a token has no stable user id). Either way they decide once: a request
  * that needs more than one approver stays pending after theirs, and a second decision
- * from them is refused with 409). Offering what the engine refuses would be a dead end.
+ * from them is refused with 409. Offering what the engine refuses would be a dead end.
  */
 export function useMayDecide(approval: ApprovalDTO | undefined): {
   mayDecide: boolean
@@ -176,10 +179,17 @@ export function useMayDecide(approval: ApprovalDTO | undefined): {
   const decidedByMe =
     !!principal?.actor &&
     !!decisions.data?.items.some((d) => d.decider === principal.actor)
+  // The engine's own answer when the request carries it (`may_decide`); the role check
+  // only for an engine that does not send it.
   const mayDecide =
     approval?.status === 'pending' &&
     !decidedByMe &&
-    can('governance:approval:admin') &&
-    canDecideOnRequest(approval.requested_by, principal?.actor, principal?.kind)
+    (approval.may_decide ??
+      (can('governance:approval:admin') &&
+        canDecideOnRequest(
+          approval.requested_by,
+          principal?.actor,
+          principal?.kind,
+        )))
   return { mayDecide, decidedByMe }
 }

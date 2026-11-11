@@ -44,6 +44,7 @@ import {
 } from 'lucide-react'
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -51,6 +52,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
+import { StateBlock } from '@/components/ui/state-block'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { runFolder } from './folder'
 import { AccountBadge } from '@/features/agent-tools/account-marks'
@@ -484,6 +486,14 @@ export function WorkRail({
     rowRefs.current.get(address)?.focus()
   }, [])
 
+  // THE FOCUS FOLLOWS A SESSION OPENED FROM OUTSIDE THE ROWS (the next or previous
+  // session key) while it is in the list, so the next key acts on the open row.
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (selected && listRef.current?.contains(document.activeElement))
+      rowRefs.current.get(selected)?.focus()
+  }, [selected])
+
   /**
    * EVERY KEY HERE COMES FROM THE DECLARED TABLE, not from this switch. The table is
    * what the documentation page prints and what `model.test.ts` enumerates; a key
@@ -549,6 +559,7 @@ export function WorkRail({
     if (error) return <QueryErrorState error={error} retry={onRetry} />
     return (
       <EmptyState
+        size="panel"
         icon={<SquareTerminal />}
         title={t('empty.title')}
         description={t('empty.description')}
@@ -677,8 +688,11 @@ export function WorkRail({
         is kept and each listbox owns options only. One wrapper owns the keys, so the
         arrow keys walk across all of them. With every session folded there is no option
         to own, and no listbox is drawn. */}
+      {/* The first read: what loads, and rows where the sessions will be. */}
+      {loading && sessions.length === 0 ? <StateBlock state="loading" /> : null}
       {loading || visible.length > 0 ? (
         <div
+          ref={listRef}
           data-testid="work-rail"
           onKeyDown={onKeyDown}
           className="flex flex-col"

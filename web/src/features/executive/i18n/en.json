@@ -1,7 +1,7 @@
 {
   "title": "Executive overview",
-  "description": "Cost, usage, risk and compliance at a glance — drill down to the operational view for the detail.",
-  "asOfNote": "Risk, compliance and reliability reflect the current state; cost spans the selected range.",
+  "description": "Usage, risk and compliance at a glance — drill down to the operational view for the detail.",
+  "asOfNote": "Risk, compliance and reliability reflect the current state; the range applies to figures over time.",
   "range": {
     "label": "Range",
     "7d": "Last 7 days",
@@ -19,12 +19,12 @@
     "generatedLabel": "Generated",
     "tenant": "Organization",
     "allOrgs": "All organizations",
-    "range": "Cost range",
+    "range": "Range",
     "footer": "Olivares AI — aggregated KPIs only; no payloads or secrets."
   },
   "empty": {
     "title": "No executive KPIs available",
-    "description": "You don't have read access to any of the cost, risk, compliance or reliability sources for this organization."
+    "description": "You don't have read access to any of the sources this overview reads for this organization."
   },
   "restricted": {
     "label": "Restricted",

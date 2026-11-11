@@ -752,8 +752,20 @@ func (a *auditLog) Walk(ctx context.Context, fromSeq int64, fn func(model.AuditE
 // ASCII only and PostgreSQL has no instr, so no SQL rendering of Q keeps the
 // published semantics on both engines.
 func (a *auditLog) WalkFiltered(ctx context.Context, fromSeq int64, f store.AuditFilter, fn func(model.AuditEvent) error) error {
-	where := []string{"tenant_id = ?", "seq >= ?"}
-	args := []any{a.tenant.String(), fromSeq}
+	return a.walkFiltered(ctx, "seq >= ?", fromSeq, "ASC", f, fn)
+}
+
+// WalkFilteredDesc implements store.FilteredReverseWalker: WalkFiltered's predicates
+// and Q rule unchanged, over seq <= toSeq, newest first.
+func (a *auditLog) WalkFilteredDesc(ctx context.Context, toSeq int64, f store.AuditFilter, fn func(model.AuditEvent) error) error {
+	return a.walkFiltered(ctx, "seq <= ?", toSeq, "DESC", f, fn)
+}
+
+// walkFiltered is the one filtered walk: seqCond bounds the sequence and order is
+// the scan direction; both are the two fixed literals of its callers above.
+func (a *auditLog) walkFiltered(ctx context.Context, seqCond string, seq int64, order string, f store.AuditFilter, fn func(model.AuditEvent) error) error {
+	where := []string{"tenant_id = ?", seqCond}
+	args := []any{a.tenant.String(), seq}
 	if f.Actor != "" {
 		where = append(where, "actor = ?")
 		args = append(args, f.Actor)
@@ -794,7 +806,7 @@ func (a *auditLog) WalkFiltered(ctx context.Context, fromSeq int64, f store.Audi
 		args = append(args, runArgs...)
 	}
 	q := a.dia.Rebind("SELECT " + columnList(auditColumns) + " FROM " + a.relation(auditTable) +
-		" WHERE " + strings.Join(where, " AND ") + " ORDER BY seq ASC")
+		" WHERE " + strings.Join(where, " AND ") + " ORDER BY seq " + order)
 	rows, err := a.tx.QueryContext(ctx, q, args...)
 	if err != nil {
 		return err

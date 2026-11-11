@@ -49,7 +49,10 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  useFailedActionReporter,
+} from '@/lib/hooks/use-privileged-mutation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CodeDiff } from '@/components/ui/code-diff'
@@ -75,8 +78,10 @@ import { CaveatNotice, SectionCard } from '@/features/_intel'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import { consoleApi, consoleKeys } from '@/features/console/api'
 import { claudePolicyApi, claudePolicyKeys } from './api'
 import { DeclaredSection } from './components'
+import { PolicyTestsCard } from './policy-tests-card'
 import type {
   PdpActivePolicy,
   PdpActiveSurface,
@@ -84,6 +89,7 @@ import type {
   PdpEngine,
   PdpExampleRequest,
   PdpLiveActivation,
+  PdpPolicyTest,
   PdpPublishResult,
   PdpRevision,
   PdpRollbackResult,
@@ -92,6 +98,7 @@ import type {
 } from './types'
 
 const ENGINES: readonly PdpEngine[] = ['cedar', 'opa']
+const NO_PERSON = 'none'
 
 // Seeded policy SOURCE (the document being edited), not UI chrome — it stays in the
 // policy language, like the seeded JSON documents of the managed-* surfaces. Its
@@ -158,9 +165,13 @@ export function CedarOpaView({ active }: { active: boolean }) {
   const [rollbackTarget, setRollbackTarget] = useState<PdpRevision | null>(null)
   const selectedRevision = rollbackTarget ?? viewTarget
   const [outcome, setOutcome] = useState<LifecycleOutcome | null>(null)
+  // null keeps the stored policy tests; a list replaces them on the next publish.
+  const [tests, setTests] = useState<PdpPolicyTest[] | null>(null)
+  const [refusal, setRefusal] = useState<string | null>(null)
 
   // Example request (mirrors the engine's auth.Request / ResourceAttrs).
   const [req, setReq] = useState({
+    person: '',
     principalKind: 'user',
     permission: 'memory:read',
     tenant: '',
@@ -168,8 +179,16 @@ export function CedarOpaView({ active }: { active: boolean }) {
     resourceId: '',
     sensitivity: 'secret',
   })
+  // Naming a person discloses their standing, which the engine keeps to policy admins.
+  const canPickPerson = canAdmin && can('user:read')
+  const members = useQuery({
+    queryKey: consoleKeys.members(activeTenant),
+    queryFn: () => consoleApi.listMembers(),
+    enabled: active && canPickPerson,
+    retry: false,
+  })
   const exampleRequest = (): PdpExampleRequest => ({
-    principal: { kind: req.principalKind },
+    principal: { kind: req.principalKind, person: req.person || undefined },
     permission: req.permission,
     tenant: req.tenant || undefined,
     resource: {
@@ -259,6 +278,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
     setSource(DEFAULT_SOURCE[e])
     setValidateResult(null)
     setDecision(null)
+    setRefusal(null)
     setOutcome(null)
     setNote('')
   }
@@ -345,6 +365,7 @@ export function CedarOpaView({ active }: { active: boolean }) {
       report(e)
       return
     }
+    if (reportEditionRefusal(e)) return
     if (e instanceof ApiError && e.isForbidden) {
       toast.warning(t('common:privileged.notAuthorizedToast'))
       return
@@ -359,19 +380,30 @@ export function CedarOpaView({ active }: { active: boolean }) {
     mutationFn: () =>
       engine === 'cedar'
         ? cedarAuthoring
-          ? cedarAuthoring.publish(source, note.trim() || undefined)
+          ? cedarAuthoring.publish(
+              source,
+              note.trim() || undefined,
+              tests ?? undefined,
+            )
           : Promise.reject(
               new Error(t('common:edition.editingRequiresBusiness')),
             )
         : claudePolicyApi.pdpPublish(engine, source, note.trim() || undefined),
+    onMutate: () => setRefusal(null),
     onSuccess: async (result) => {
       setOutcome({ kind: 'publish', result })
       setConfirmPublish(false)
+      setTests(null)
       await invalidateLifecycle()
       announce(result.live_activation)
     },
     onError: (e) => {
       setConfirmPublish(false)
+      // A refusal names what to fix, so it stays beside the action that caused it.
+      if (e instanceof ApiError && e.status === 400) {
+        setRefusal(e.message)
+        return
+      }
       onLifecycleError(e)
     },
   })
@@ -595,6 +627,11 @@ export function CedarOpaView({ active }: { active: boolean }) {
                   </span>
                 )}
               </div>
+              {refusal && (
+                <p role="alert" className="text-caption text-danger">
+                  {refusal}
+                </p>
+              )}
             </div>
           )}
 
@@ -634,6 +671,37 @@ export function CedarOpaView({ active }: { active: boolean }) {
             description={t('pdp.exampleSub')}
           >
             <div className="flex flex-col gap-3">
+              {canPickPerson && (
+                <Field
+                  label={t('pdp.person')}
+                  htmlFor="pdp-person"
+                  description={t('pdp.personHint')}
+                >
+                  <Select
+                    value={req.person || NO_PERSON}
+                    onValueChange={(v) =>
+                      setReq((r) => ({
+                        ...r,
+                        person: v === NO_PERSON ? '' : v,
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="pdp-person">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_PERSON}>
+                        {t('pdp.personNone')}
+                      </SelectItem>
+                      {(members.data?.items ?? []).map((m) => (
+                        <SelectItem key={m.user_id} value={m.user_id}>
+                          {m.display_name || m.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
               <Field label={t('pdp.principalKind')} htmlFor="pdp-pk">
                 <Input
                   id="pdp-pk"
@@ -683,6 +751,13 @@ export function CedarOpaView({ active }: { active: boolean }) {
               </Field>
             </div>
           </SectionCard>
+          {engine === 'cedar' && canAuthor && (
+            <PolicyTestsCard
+              tests={tests ?? activeQuery.data?.tests ?? []}
+              example={exampleRequest}
+              onChange={setTests}
+            />
+          )}
         </aside>
       </div>
 

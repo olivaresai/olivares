@@ -80,13 +80,17 @@ function backgrounds(page: Page) {
   )
 }
 
-/** Wait for the page itself: its chunk and its first answers, so the picture is not a spinner. */
+/** Wait for the page itself: its chunk and its first answers, so the picture
+ * shows neither skeleton rows nor a spinner. A view's chunk and a list load
+ * as a loading state, `aria-busy` while it lasts; a spinner is a status named
+ * Loading…. */
 async function settle(page: Page) {
   const main = page.locator('#main-content')
   await expect(main).toBeVisible()
-  await expect(main.getByRole('status', { name: 'Loading…' })).toHaveCount(0, {
+  await expect(main.locator('[aria-busy="true"]')).toHaveCount(0, {
     timeout: 20_000,
   })
+  await expect(main.getByRole('status', { name: 'Loading…' })).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
 }
 

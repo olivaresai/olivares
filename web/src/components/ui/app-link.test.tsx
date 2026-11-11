@@ -41,7 +41,22 @@ const PAGES = new Set([...census.paths, ...census.business_paths])
 /** `<a ... href="/page...">` and `<a ... href={`/page...`}`: the first path segment. */
 const ANCHOR = /<a\b[^<]*?\bhref=(?:"|\{`|\{")\/([^"`/?#$]*)/g
 
+/** An opening link tag whose own attributes name the accent text colour. */
+const ORANGE_LINK = /<(?:a|Link|AppLink)\s[^<]*?\btext-accent-text\b/g
+
 describe('in-app links', () => {
+  it('take the text colour with an underline: orange is the primary action', () => {
+    const orange: string[] = []
+    for (const file of sources(SRC)) {
+      const text = readFileSync(file, 'utf8')
+      for (const hit of text.matchAll(ORANGE_LINK)) {
+        const line = text.slice(0, hit.index).split('\n').length
+        orange.push(`${relative(SRC, file)}:${line}`)
+      }
+    }
+    expect(orange).toEqual([])
+  })
+
   it('are router links, never a plain anchor that reloads the document', () => {
     const plain: string[] = []
     for (const file of sources(SRC)) {

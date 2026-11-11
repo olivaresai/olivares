@@ -75,9 +75,8 @@ func (m *Module) PullRequestChanges(ctx context.Context, c Caller, workspace mod
 // change on the host and, for a push, the commit the host holds for the branch
 // ("" when it holds none or hides it).
 type publicationRead struct {
-	paths   []string
-	secrets []string
-	tip     string
+	paths []string
+	tip   string
 }
 
 // admitted loads the stored target and asks A1 the effect's question as the
@@ -131,7 +130,7 @@ func (m *Module) read(ctx context.Context, c Caller, workspace model.ID, s spec)
 	if e := targetRules(tg, s); e != nil {
 		return publicationRead{}, e
 	}
-	if e := m.feed(actx, c, tg, rb, s); e != nil {
+	if _, e := m.feed(actx, c, tg, rb, s); e != nil {
 		return publicationRead{}, e
 	}
 	// What a person is asked to approve is refused here as the publish would:
@@ -151,10 +150,6 @@ func (m *Module) read(ctx context.Context, c Caller, workspace model.ID, s spec)
 	rel := &releaser{host: host, tok: tok}
 	defer rel.release(ctx) // a panic still releases; release runs once
 	out := publicationRead{}
-	out.secrets, err = m.secretPaths(actx, rb.LocalPath, s.req.Commit)
-	if err != nil {
-		return publicationRead{}, err
-	}
 	var rerr error
 	out.paths, rerr = m.readChangedPaths(actx, host, tok, tg, rb, s)
 	if rerr == nil && s.effect == effectPush {

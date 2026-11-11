@@ -14,7 +14,9 @@
 //    rejected: this console is served by a multi-tenant engine and has no privileged
 //    host to write to, and bindings belong to the principal rather than to a filesystem. So this table is CODE, shipped with the
 //    console and identical for everyone — and the one page that documents it READS it,
-//    so the documentation cannot drift from the behaviour.
+//    so the documentation cannot drift from the behaviour. A person changes a row's
+//    keys in Settings › Keyboard; the edit is their preference on the server row, and
+//    `resolveBinding` and every printed hint read the table WITH it (`withOverrides`).
 //
 // ⛔ AND THE THREE RULES ARE THE REFERENCE'S, because they are the small testable part
 //    worth taking:
@@ -109,6 +111,17 @@ export function chordHint(keys: string): string {
   return parts.join(parts.every((p) => p.length === 1) ? '' : '+')
 }
 
+/** A chord as `aria-keyshortcuts` names it: Mod as Control and as Meta, a letter as its
+ * capital, the space bar as Space; nothing when the keys are not a chord. */
+export function ariaKeys(keys: string): string | undefined {
+  const chord = parseChord(keys)
+  if (!chord) return undefined
+  const named = chord.key === ' ' ? 'Space' : chord.key
+  const key = named.length === 1 ? named.toUpperCase() : named
+  const rest = `${chord.alt ? 'Alt+' : ''}${chord.shift ? 'Shift+' : ''}${key}`
+  return chord.mod ? `Control+${rest} Meta+${rest}` : rest
+}
+
 /** The parts of a keyboard event this matches on — so a test needs no real event. */
 export interface KeyEventLike {
   key: string
@@ -123,11 +136,12 @@ export interface KeyEventLike {
 /**
  * Does this event produce this chord?
  *
- * ⛔ SHIFT IS ONLY COMPARED FOR NAMED KEYS, and the reason is that a printable
- *    character already carries it: `?` is typed with Shift on most layouts, so demanding
- *    `shiftKey === false` for a `?` rule would make it unreachable, and demanding
- *    `true` would break the layouts where it is not. For `Enter`, `ArrowDown` and the
- *    rest, Shift is a real distinction and is compared exactly.
+ * ⛔ SHIFT IS ONLY COMPARED FOR NAMED KEYS AND LETTERS, and the reason is that any
+ *    other character already carries it: `?` is typed with Shift on most layouts, so
+ *    demanding `shiftKey === false` for a `?` rule would make it unreachable, and
+ *    demanding `true` would break the layouts where it is not. For `Enter`, `ArrowDown`
+ *    and the rest, and for a letter (Shift+P types a capital, so it is not `p`), Shift
+ *    is a real distinction and is compared exactly, as a person's edit writes it.
  */
 export function chordMatches(chord: Chord, event: KeyEventLike): boolean {
   const printable = chord.key.length === 1
@@ -143,7 +157,10 @@ export function chordMatches(chord: Chord, event: KeyEventLike): boolean {
   const mod = !!event.metaKey || !!event.ctrlKey
   if (mod !== chord.mod) return false
   if (!!event.altKey !== chord.alt) return false
-  if (!printable && !!event.shiftKey !== chord.shift) return false
+  // A letter is compared without its case (Caps Lock types the capital alone), so its
+  // Shift is read here.
+  const exactShift = !printable || /^[a-z]$/i.test(chord.key)
+  if (exactShift && !!event.shiftKey !== chord.shift) return false
   if (printable && chord.shift && !event.shiftKey) return false
   return true
 }
@@ -180,12 +197,180 @@ export function auditKeybindings(rules: readonly KeyRule[]): KeyAudit {
   return { valid, problems }
 }
 
+/** One row of Settings › Keyboard: a command in its context. */
+export function ruleId(rule: KeyRule): string {
+  return `${rule.command}|${rule.when ?? ''}`
+}
+
+/**
+ * The table as a person uses it: each row they changed takes the one chord they chose,
+ * in the place of all the chords it had, and in its own place, so the precedence holds.
+ * An edit that is not a chord changes nothing.
+ */
+export function withOverrides(
+  rules: readonly KeyRule[],
+  overrides: Readonly<Record<string, string>>,
+): readonly KeyRule[] {
+  const edited = new Set<string>()
+  return rules.flatMap((rule) => {
+    const id = ruleId(rule)
+    const keys = Object.hasOwn(overrides, id) ? overrides[id] : undefined
+    if (keys === undefined || !parseChord(keys)) return [rule]
+    if (edited.has(id)) return []
+    edited.add(id)
+    return [{ ...rule, keys }]
+  })
+}
+
+/** Why an edit of a row's keys cannot work, for Settings › Keyboard to say. */
+export type KeyEditRefusal =
+  | { ok: false; reason: 'unknownRow' }
+  | { ok: false; reason: 'notAChord' }
+  | { ok: false; reason: 'needsModifier' }
+  | { ok: false; reason: 'needsAltOrShift' }
+  | { ok: false; reason: 'taken'; by: KeyRule }
+  | { ok: false; reason: 'leader' }
+  | { ok: false; reason: 'tooLarge' }
+export type KeyEditResult = { ok: true } | KeyEditRefusal
+
+/** Longer than any chord a person presses: an edit past it is not keys. */
+const KEY_EDIT_MAX = 32
+/** The contexts in which a key never reaches a field, so one key alone may act there.
+ * Any other context, or none, is one where a person may be typing. */
+const OUTSIDE_A_FIELD: ReadonlySet<string> = new Set([
+  'outsideField',
+  'outsideList',
+  'railFocused',
+  'paletteRecent',
+  'approvalQueue',
+  'accessMap',
+  'sourceDiff',
+])
+/** The rows that decide a request: never on one key alone. */
+const DECIDES: ReadonlySet<string> = new Set([
+  'approvals.approve',
+  'approvals.deny',
+  'surface.approve',
+])
+
+const sameChord = (a: Chord | null, b: Chord) =>
+  !!a &&
+  a.key.toLowerCase() === b.key.toLowerCase() &&
+  a.mod === b.mod &&
+  a.shift === b.shift &&
+  a.alt === b.alt
+
+/** Whether the table gives the row `id` these keys. */
+const declares = (rules: readonly KeyRule[], id: string, chord: Chord) =>
+  rules.some((r) => ruleId(r) === id && sameChord(parseChord(r.keys), chord))
+
+/**
+ * Whether a person may give the row `id` these keys, or with null give it back the
+ * table's, with their other edits: a row of the table, a chord, Mod or Alt where one
+ * key alone could fire while they type or decide a request (and Alt, or Mod with
+ * Shift, where it decides one), not the `leader` that starts the go-to keys (the
+ * table's `g`), and keys no other row answers (both would act, or the last rule that
+ * matches would win without a word).
+ */
+export function checkKeyEdit(
+  rules: readonly KeyRule[],
+  edits: Readonly<Record<string, string>>,
+  id: string,
+  keys: string | null,
+  leader: string,
+): KeyEditResult {
+  const own = rules.filter((r) => ruleId(r) === id)
+  if (own.length === 0) return { ok: false, reason: 'unknownRow' }
+  const rule = own[0]
+  let chords = own.flatMap((r) => parseChord(r.keys) ?? [])
+  if (keys !== null) {
+    const chord = keys.length <= KEY_EDIT_MAX ? parseChord(keys) : null
+    if (!chord) return { ok: false, reason: 'notAChord' }
+    const typing = !rule.when || !OUTSIDE_A_FIELD.has(rule.when)
+    if ((typing || DECIDES.has(rule.command)) && !chord.mod && !chord.alt)
+      return { ok: false, reason: 'needsModifier' }
+    // Mod alone is pressed while typing too (Ctrl+A selects a field's words): a key
+    // that decides a request takes Alt, or Mod with Shift.
+    if (DECIDES.has(rule.command) && !chord.alt && !chord.shift)
+      return { ok: false, reason: 'needsAltOrShift' }
+    // One `g` arms the go-to keys before any row reads it.
+    const bare = !chord.mod && !chord.alt && !chord.shift
+    if (bare && chord.key.toLowerCase() === leader)
+      return { ok: false, reason: 'leader' }
+    chords = [chord]
+  }
+  // The other rows as the person has them; this row's own edit is the one being made.
+  const { [id]: _edit, ...others } = edits
+  const table = withOverrides(rules, others)
+  // In any context: each handler supplies its own, and several hold at once (a list
+  // outside a field, and the approvals queue). Keys the table gives both rows are its
+  // own precedence, not a clash.
+  for (const chord of chords) {
+    const by = table.find(
+      (other) =>
+        ruleId(other) !== id &&
+        sameChord(parseChord(other.keys), chord) &&
+        !(declares(rules, id, chord) && declares(rules, ruleId(other), chord)),
+    )
+    if (by) return { ok: false, reason: 'taken', by }
+  }
+  return { ok: true }
+}
+
+/**
+ * The edits of a stored value that pass `checkKeyEdit`, each with all the others, in
+ * table order, so the order they were saved in decides nothing. Of two edits that
+ * clash, the row earlier in the table keeps its own. A row that loses its edit takes
+ * the table's keys back, which can clash with an edit kept: so again, until none drops.
+ */
+export function validKeyEdits(
+  rules: readonly KeyRule[],
+  stored: unknown,
+  leader: string,
+): Record<string, string> {
+  const saved: Record<string, unknown> =
+    stored !== null && typeof stored === 'object'
+      ? (stored as Record<string, unknown>)
+      : {}
+  const edits: Record<string, string> = {}
+  for (const id of new Set(rules.map(ruleId))) {
+    const keys = saved[id]
+    if (typeof keys === 'string') edits[id] = keys
+  }
+  const order = Object.keys(edits)
+  let dropped = true
+  while (dropped) {
+    dropped = false
+    for (const id of order) {
+      if (!Object.hasOwn(edits, id)) continue
+      const result = checkKeyEdit(rules, edits, id, edits[id], leader)
+      if (result.ok) continue
+      const by = result.reason === 'taken' ? ruleId(result.by) : ''
+      const later =
+        Object.hasOwn(edits, by) && order.indexOf(by) > order.indexOf(id)
+      delete edits[later ? by : id]
+      dropped = true
+    }
+  }
+  return edits
+}
+
+/** The person's own keys the resolver applies, checked against the table: handed over by
+ * lib/keybindings/effective.ts once it loads and on every change of the settings. */
+let personalKeys: Readonly<Record<string, string>> = {}
+export function setPersonalKeys(edits: Readonly<Record<string, string>>): void {
+  personalKeys = edits
+}
+
 /**
  * Which command this event fires in this context, or null.
  *
  * LAST MATCHING RULE WINS: a later entry overrides an earlier one, so a narrower rule
  * is written below the general one it refines. That is the precedence, it is the only
  * precedence, and it is what the documentation page states.
+ *
+ * The rules are read with the person's own keys from Settings › Keyboard, so every
+ * handler fires on the keys the person chose and the hints print.
  */
 export function resolveBinding(
   rules: readonly KeyRule[],
@@ -193,7 +378,8 @@ export function resolveBinding(
   context: KeyContext = {},
 ): string | null {
   let won: string | null = null
-  for (const { rule, chord } of auditKeybindings(rules).valid) {
+  const edited = withOverrides(rules, personalKeys)
+  for (const { rule, chord } of auditKeybindings(edited).valid) {
     // An unknown context key is FALSE: a rule nobody supplies a context for never
     // fires, which is what stops a `when` from being accidentally global.
     if (rule.when !== undefined && context[rule.when] !== true) continue

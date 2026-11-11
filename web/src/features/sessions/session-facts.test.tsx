@@ -7,12 +7,15 @@ import { renderIntel } from '@/test/intel'
 import type { RunDTO } from '@/features/agentops/types'
 import { mergeSessions } from './provenance'
 import { SessionFacts } from './session-facts'
+import type { LiveDTO } from './types'
 import './i18n'
 import '@/features/agentops/i18n'
 
-vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+const auth = vi.hoisted(() => ({
+  activeTenant: 't1',
+  can: (_: string): boolean => true,
 }))
+vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 const accounts = vi.hoisted(() => ({ getAccount: vi.fn() }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const actual =
@@ -49,12 +52,30 @@ const RUN: RunDTO = {
   workspace_path: '/srv/payments-api',
 }
 
+// What the session's tool reported: its tokens and what they cost.
+const LIVE: LiveDTO = {
+  session_ref: 'sess_71c0',
+  live_ref: 'lr_71c0',
+  attribution: 'managed',
+  cc_state: 'active',
+  input_tokens: 12,
+  output_tokens: 18,
+  cost_micro_usd: 42000,
+  event_count: 1,
+  tool_call_count: 1,
+  first_event_at: '2026-10-28T06:00:00Z',
+  last_event_at: '2026-10-28T06:01:00Z',
+  duration_seconds: 60,
+  run_ref: RUN.run_ref,
+}
+
 function render(
   run: RunDTO = RUN,
   account: string | null = 'Marc’s Claude account',
   accountRef: string | undefined = RUN.provider_profile_ref,
+  live?: LiveDTO,
 ) {
-  const session = mergeSessions([], [run])[0]!
+  const session = mergeSessions(live ? [live] : [], [run])[0]!
   return renderIntel(
     <SessionFacts
       session={session}
@@ -67,6 +88,7 @@ function render(
 }
 
 beforeEach(() => {
+  auth.can = () => true
   accounts.getAccount.mockReset().mockResolvedValue({ usage: [] })
 })
 
@@ -116,6 +138,26 @@ describe('SessionFacts — the session as a person reads it', () => {
       .closest('div')!
     expect(access).toHaveTextContent('Access not reported')
     expect(access).not.toHaveTextContent(/default/)
+  })
+
+  it('says the cost of the run only where Usage opens, and the other facts to anyone', () => {
+    const { unmount } = render(RUN, undefined, undefined, LIVE)
+    const facts = screen.getByRole('region', { name: 'Session' })
+    expect(within(facts).getByText('Cost').closest('div')).toHaveTextContent(
+      '$0.042',
+    )
+    unmount()
+    // A member sees no money, only the limits of their own accounts.
+    auth.can = (permission) => permission !== 'sessions:account:read'
+    render(RUN, undefined, undefined, LIVE)
+    const member = screen.getByRole('region', { name: 'Session' })
+    expect(within(member).queryByText('Cost')).toBeNull()
+    expect(member).not.toHaveTextContent('$')
+    expect(
+      within(member).getByText('Workspace').closest('div'),
+    ).toHaveTextContent('payments-api')
+    expect(within(member).getByText('State')).toBeInTheDocument()
+    expect(within(member).getByText('Tool')).toBeInTheDocument()
   })
 
   it('leaves out a fact the engine did not send instead of printing a reference', () => {

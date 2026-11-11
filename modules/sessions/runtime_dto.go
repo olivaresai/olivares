@@ -24,6 +24,7 @@ import (
 // activity is stale (a read-time projection, never a stored flip-flop — mirrors the
 // observe overlay's cc_state).
 type runDTO struct {
+	LastTurn *runTurnDTO `json:"last_turn,omitempty"`
 	// Completion belongs only to an originating in-process launch call.
 	Completion RuntimeLaunchCompletion `json:"-"`
 	RunRef     string                  `json:"run_ref"`
@@ -197,6 +198,11 @@ type runDTO struct {
 	// after a later turn succeeds.
 	Limit *runLimit `json:"limit,omitempty"`
 
+	// TurnFailed says the last turn ended on a provider error that is not a limit, such
+	// as a refused request. Absent otherwise, and again after a later turn succeeds; the
+	// run stays open either way.
+	TurnFailed bool `json:"turn_failed,omitempty"`
+
 	// LiveRef (B2) is the opaque id of the plane's managed live row for this run,
 	// present only once the bridge proved the run owns its provider id. A console
 	// navigates from a profiled run to its session by THIS, never by the bare
@@ -287,6 +293,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		UsageModelRef:          rec.String(colRunUsageModelRef),
 		ToolMode:               rec.String(colRunToolMode),
 		Limit:                  storedRunLimit(rec),
+		TurnFailed:             rec.Bool(colRunTurnFailed),
 		ResumeAt:               rec.String(colRunResumeAt),
 		ResumeCancelled:        rec.Bool(colRunResumeCancelled),
 	}
@@ -429,6 +436,9 @@ type createRunRequest struct {
 	// workspace's repository instead of the workspace's HEAD (the work a handoff names).
 	// Absent keeps today's start; it needs Worktree.
 	WorktreeFrom string `json:"worktree_from"`
+	// FromCheckpoint starts that worktree with the files the named turn of another of the
+	// caller's sessions in the same folder found («Edit from here»); it needs Worktree.
+	FromCheckpoint *RunCheckpointRef `json:"from_checkpoint"`
 	// SourceURL is the page of a GitHub issue or pull request to start from. It implies
 	// Worktree and names the branch after the item (session_source_item.go).
 	SourceURL string `json:"source_url"`
@@ -483,6 +493,10 @@ type inputRequest struct {
 	// (GET /runs/{ref}/diff). The message itself is the input as usual; this only names
 	// the place, so the ledger records it once the input was accepted.
 	ReviewComment *reviewCommentPlace `json:"review_comment,omitempty"`
+	// CommandID names this input, so a retry of the same send runs the agent once and
+	// answers the first receipt (run_command.go). A canonical UUID; absent, every send
+	// is a new input, as before.
+	CommandID string `json:"command_id,omitempty"`
 }
 
 // reviewCommentPlace is where on a session's branch diff a comment was made: a file of

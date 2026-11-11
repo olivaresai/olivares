@@ -1,7 +1,7 @@
 {
   "title": "Herramientas de IA",
   "description": "Instala en este servidor las herramientas de IA que ejecutan las sesiones e inicia sesión en ellas.",
-  "descriptionMember": "Las sesiones se ejecutan con estas cuentas y claves de API. Un administrador del sistema instala las herramientas e inicia su sesión.",
+  "descriptionMember": "Las sesiones se ejecutan con estas cuentas; las claves de API están en Proveedores. Un administrador del sistema instala las herramientas e inicia su sesión.",
   "refresh": "Actualizar",
   "readOnly": "Este servidor es de solo lectura. La instalación está deshabilitada.",
   "notInstalled": "Sin instalación administrada",
@@ -95,7 +95,7 @@
     "failed": "Detenido: se paró.",
     "start": "Iniciar",
     "stop": "Detener",
-    "notInstalled": "{{name}} no está instalado. Olivares busca {{program}} en el PATH de este servidor.",
+    "lookedFor": "Olivares busca {{program}} en el PATH de este servidor.",
     "hint": "Su endpoint está en los Proveedores de la organización para la que se inició, para que las sesiones de OpenCode de allí usen sus modelos.",
     "model": "Modelo",
     "modelHintLlamaCpp": "Una ruta absoluta a un archivo .gguf, o un modelo de Hugging Face como usuario/repo[:cuantización].",
@@ -134,7 +134,7 @@
     "accountChecking": "Cuenta · comprobando…",
     "accountSigningIn": "Cuenta · iniciando sesión…",
     "accountUnreadable": "Cuenta · no se puede leer",
-    "keyDetail": "Clave de API · {{name}} ({{hint}})",
+    "keyDetail": "Clave de API · {{name}} · {{hint}}",
     "keyName": "Clave de API · {{name}}",
     "keyNone": "Clave de API · ninguna elegida",
     "lastSignIn": "Última sesión iniciada {{when}}",
@@ -158,7 +158,11 @@
     "default": "Inicio de sesión predeterminado",
     "readFailed": "No se pudieron leer los perfiles.",
     "truncated": "Algunos perfiles no se muestran.",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "turnOff": "Apagar {{name}}",
+    "turnOn": "Encender {{name}}",
+    "switchedOn": "{{name}} está activado",
+    "switchedOff": "{{name}} está desactivado"
   },
   "tool": {
     "menu": "Opciones de {{name}}",
@@ -196,12 +200,12 @@
     "chooseKey": "Elige una clave",
     "addKey": "Añadir una clave…",
     "create": "Crear",
+    "createAndSignIn": "Crear e iniciar sesión",
     "creating": "Creando…",
     "created": "Perfil {{name}} creado",
     "failed": "No se creó el perfil.",
     "bindFailed": "No se pudo asignar la clave.",
     "keyNotSet": "Se creó el perfil, pero no se asignó la clave: {{error}} Abre el perfil para elegir una clave.",
-    "notNow": "Ahora no",
     "close": "Cerrar",
     "keyNeedsAccess": "Elegir una clave requiere permiso para cambiar perfiles."
   },
@@ -256,9 +260,35 @@
     "packagesHint": "Los declara el perfil de proveedor que usa la nueva sesión de cada herramienta ({{profiles}}). Una herramienta sin perfil recibe uno nuevo que no declara ninguno."
   },
   "place": {
-    "title": "Cuentas y claves de API",
     "accounts": "Cuentas",
     "allAccounts": "Todas las cuentas: detalles, etiquetas y vínculos",
-    "noAccess": "Tu rol no puede leer las cuentas ni las claves de API de esta organización."
+    "noAccess": "Tu rol no puede leer las cuentas de esta organización.",
+    "keysOnProviders": "Las claves de API están en <0>Proveedores</0>.",
+    "keysAndReferencesOnProviders": "Las claves de API y sus referencias están en <0>Proveedores</0>."
+  },
+  "runtime": {
+    "title": "Ejecución",
+    "autoCompact": "Compactar automáticamente tras",
+    "autoCompactHint": "Compacta tras 100 000 a 1 000 000 de tokens. Déjalo vacío para usar el valor de Claude.",
+    "autoCompactPlaceholder": "p. ej. 300000",
+    "autoCompactInvalid": "Introduce un número entero de 100000 a 1000000 o déjalo vacío.",
+    "saved": "Ejecución guardada. Las sesiones nuevas la usan."
+  },
+  "models": {
+    "title": "Modelos",
+    "note": "Solo tú ves esta lista. Un modelo oculto sale de los selectores; el predeterminado de la herramienta y un modelo que escribas siguen funcionando.",
+    "filter": "Filtrar modelos",
+    "disableAll": "Ocultar todos",
+    "enableAll": "Mostrar todos",
+    "addCustom": "Añadir modelo propio",
+    "customPlaceholder": "ID del modelo, p. ej. claude-opus-5-5",
+    "customInvalid": "Un ID de modelo no tiene espacios y tiene como máximo 200 caracteres.",
+    "add": "Añadir",
+    "fast": "Modo rápido",
+    "up": "Subir {{name}}",
+    "down": "Bajar {{name}}",
+    "use": "Mostrar {{name}}",
+    "removeCustom": "Quitar {{name}}",
+    "empty": "Esta herramienta no informa de modelos. Añade los que uses."
   }
 }

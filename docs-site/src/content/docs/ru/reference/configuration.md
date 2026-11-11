@@ -4,7 +4,7 @@ description: "Проверенная поверхность конфигурац
 ---
 
 :::note[Business]
-Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), проверка журнала (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, его чтение и `olivares dr backup`; соответствующие маршруты и команды возвращают HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL с сегментами аудита также требуют Business.
+Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), проверка журнала (`GET /v1/audit/verify`, `olivares audit tree verify`, `olivares audit tree prove`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, его чтение и `olivares dr backup`; соответствующие маршруты и команды возвращают HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL с сегментами аудита также требуют Business.
 :::
 
 Начиная с 0.1, ключи подписи и файлы конфигурации, запечатанные с помощью KMS (CMEK), требуют сборки Business. Ключи подписи, предоставленные оператором, и `keys status` остаются в Community. Заявления о хранении ключей BYOK (`OLIVARES_KEY_CUSTODY=byok`) и HYOK (`OLIVARES_LEDGER_CUSTODY=hyok`), внешняя подпись контрольных точек (`OLIVARES_LEDGER_SIGNER`) и `olivares audit key-transition` требуют сборки Business; Community отказывает им с кодом выхода 9. Community отказывает установке с настроенным CMEK до открытия хранилища или создания ключей. Для `dr backup` и `keys unseal` используйте Business с KMS клиента; восстановление не требует действующей лицензии.

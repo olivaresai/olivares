@@ -1089,7 +1089,8 @@ DERIVED_ALLOW = [
 # decided. Arm A judges those names on every documentation and artifact surface; elsewhere in
 # the published tree they are test fixtures, a synthetic build and a comment (measured
 # 2026-10-08), none a shipped coordinate.
-PIN_CONTEXT = re.compile(r"(?:olivares(?:ai)?/olivares:|olivares[-_])$")
+PIN_PREFIX = re.compile(r"(?:olivares(?:ai)?/olivares:|olivares[-_])")
+PIN_CONTEXT = re.compile(PIN_PREFIX.pattern + "$")
 
 
 def is_pin(m):
@@ -1934,8 +1935,11 @@ def file_hits(path, text, start, wanted):
     starts = [a for a, _ in spans]
     inline = next((p for suffixes, p in MARK_FORMS if path.endswith(suffixes)), None)
     filled = set()
-    tool_versions = tool_install_versions(text)
     readme = re.fullmatch(r"README(?:\.[^.]+)?\.md", path) is not None
+    # Most source files have no pin; marks above still validate before this shortcut.
+    if wanted is is_pin and not spans and not readme and not PIN_PREFIX.search(text):
+        return []
+    tool_versions = tool_install_versions(text)
     hits = []
     for number, (offset, body) in enumerate(lines_at(text), 1):
         lead = len(body) - len(body.lstrip())

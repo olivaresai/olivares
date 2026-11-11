@@ -4,13 +4,20 @@
 //
 // Which word a run's state is said with: the rule, and the one read it may need.
 import { useQuery } from '@tanstack/react-query'
+import { limitLifted } from '@/features/sessions/session-limit-text'
 import { useTenantStore } from '@/stores/tenant'
 import { agentOpsApi, agentOpsKeys } from './api'
 import type { RunDTO, RunEventDTO } from './types'
 
 export type RunWordFacts = Pick<
   RunDTO,
-  'run_ref' | 'state' | 'reason' | 'exit_code'
+  | 'run_ref'
+  | 'state'
+  | 'reason'
+  | 'exit_code'
+  | 'turn_failed'
+  | 'limit'
+  | 'resume_at'
 >
 
 /** The page of a run's ledger the badge reads: the same read as the detail's Events tab. */
@@ -33,6 +40,17 @@ export function runStateWord(
   run: Omit<RunWordFacts, 'run_ref'>,
   ledger?: readonly RunEventDTO[],
 ): string {
+  // The process is open at rest, so only this says the provider refused the last turn.
+  if (run.state === 'idle' && run.turn_failed === true) return 'failed'
+  // A limit fails nothing. A run at rest waits for the reset its limit names, and a
+  // stopped one for the resume a person scheduled (`resume_at`). A run at a turn works
+  // whatever its limit says: the engine clears a limit only when a turn succeeds.
+  const limit = run.state === 'idle' ? run.limit : undefined
+  if (
+    (limit?.resets_at && !limitLifted(limit)) ||
+    (run.state === 'stopped' && run.resume_at)
+  )
+    return 'paused'
   if (run.state !== 'stopped' || run.exit_code !== 0 || run.reason !== 'exit 0')
     return String(run.state)
   if (!ledger) return 'ended'

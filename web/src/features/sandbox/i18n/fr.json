@@ -4,7 +4,7 @@
     "hint": "Cette liste sandbox est plafonnée. Seules les lignes chargées sont affichées."
   },
   "title": "Bac à sable de test",
-  "description": "Exécutions isolées et éphémères sur des ressources simulées — simulations de scénarios, rejeux déterministes et comparaisons avant/après déploiement. Les sorties sont synthétiques ; aucun texte cible réel n’est jamais conservé.",
+  "description": "Rejouer des scénarios sur des outils simulés et comparer les exécutions avant un déploiement.",
   "tabs": {
     "runs": "Exécutions",
     "comparisons": "Comparaisons",

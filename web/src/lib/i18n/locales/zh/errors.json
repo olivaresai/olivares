@@ -5,9 +5,10 @@
   },
   "businessOnly": {
     "title": "属于 Business 版",
-    "description": "此页面属于 Olivares AI Business，当前版本不包含。",
-    "link": "了解 Business",
-    "start": "前往起始页"
+    "heading": "此页面属于 Olivares AI Business",
+    "description": "此安装运行的是 Olivares AI Community。你的数据和页面保持不变。",
+    "editions": "查看版本",
+    "link": "了解 Business"
   },
   "forbidden": {
     "title": "未获授权",

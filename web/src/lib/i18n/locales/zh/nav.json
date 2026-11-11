@@ -33,6 +33,7 @@
     "communicationsHandoffs": "交接",
     "console": "管理",
     "sourceDiff": "源差异",
+    "approvals": "审批",
     "permissions": "权限",
     "identity": "身份",
     "vault": "保险库",
@@ -155,7 +156,7 @@
     "updates": "此引擎正在运行的版本、其通道中最新的已签名版本，以及安装它的一个操作",
     "logs": "引擎实时日志流，支持按级别和模块筛选、搜索和暂停",
     "sourceDiff": "逐个文件比较已连接 Git 仓库的基准修订与 head 修订",
-    "agent-tools": "查看会话所用的账户和 API 密钥；安装工具并登录仅限部署管理员",
+    "agent-tools": "查看会话所用的账户；安装工具并登录仅限部署管理员",
     "storedBudgets": "针对每个已保存限额的消耗情况。预留容量计入限额。",
     "usage": "每个账户的官方 5 小时和每周限额（最接近限额的在前），以及今天的令牌和费用。",
     "operations": "主机、它的磁盘、正在运行的会话及其用量，按 24 小时、7 天或 30 天查看。"
@@ -344,9 +345,13 @@
     "startWithChoice": "用此选择启动新会话",
     "newWithOtherAccess": "用其他访问权限新建会话…",
     "askPlaceholder": "随便问，输入 @ 添加上下文，输入 / 使用命令和技能",
+    "messagePlaceholder": "发给 {{title}} 的消息… @ 文件 · / 命令",
     "modelPicker": "模型：{{value}}",
-    "effortPicker": "推理强度：{{value}}",
+    "modelEffortPicker": "模型：{{model}}，推理强度 {{effort}}",
     "accessPicker": "访问权限：{{value}}",
+    "moreActions": "更多操作",
+    "moreActionsStashed": "更多操作，有暂存的草稿",
+    "contextAction": "上下文与压缩…",
     "accessKeeps": "访问权限将在此对话的下一轮生效。",
     "queue": {
       "title": "排队的消息",
@@ -370,18 +375,31 @@
       "placeholder": "按 Enter 将消息排队，等本轮结束后发送",
       "placeholderSteer": "按 Enter 排队到本轮之后，按 Ctrl+Enter 立即插入当前轮",
       "discarded": "会话被释放时，以下消息仍在排队：",
-      "copy": "复制"
-    }
+      "copy": "复制",
+      "placeholderQueueKey": "按 {{key}} 排队到本轮之后",
+      "placeholderSteerKey": "按 {{key}} 立即插入当前轮"
+    },
+    "stash": "暂存草稿",
+    "stashRestore": "恢复暂存的草稿",
+    "stashGone": "此会话中已不再保存，因此未恢复：{{names}}",
+    "stashTooLarge": "此草稿太大，无法暂存：上限为 {{limit}}。草稿仍保留在这里。",
+    "stashNotKept": "无法暂存此草稿：此浏览器在两次访问之间不保留任何内容。草稿仅保留在此标签页中。",
+    "stashNoRoom": "无法暂存此草稿：此浏览器已没有空间保存它。没有删除任何内容，草稿仍保留在这里。",
+    "stashDropped": "已暂存。为腾出空间，已从最早的开始删除：{{words}}",
+    "stashTaken": "暂存的草稿已不在这里：另一个标签页已将其恢复，或已过去一天。",
+    "plan": "计划",
+    "planHint": "先做计划：工具只读取并提出计划，不做任何更改。从下一条消息起生效。"
   },
   "shell": {
     "more": "更多",
     "searchCommands": "搜索和命令",
     "search": "搜索",
+    "searchGo": "搜索或前往…",
     "stopAll": "全部停止",
     "workspaceCount": "工作区：{{count}}",
     "rail": {
       "title": "会话",
-      "all": "全部",
+      "seeAll_other": "查看全部 {{count}} 个会话",
       "groups": {
         "needsYou": "需要你处理",
         "working": "运行中",
@@ -431,13 +449,14 @@
     "killswitch": {
       "estateStopped": "所有智能体已停止",
       "estateBody": "在两个用户账户批准重新启动之前，智能体无法执行操作。",
-      "agentStops": "{{count}} 项智能体停止生效中",
-      "agentStops_other": "{{count}} 项智能体停止生效中",
+      "agentStops": "{{count}} 个智能体已停止",
+      "agentStops_other": "{{count}} 个智能体已停止",
       "none": "没有任何停止。会话和智能体正常运行。"
     },
     "status": {
       "label": "状态",
       "running_other": "{{count}} 个未结束的会话",
+      "needYou_other": "{{count}} 个需要你处理",
       "usage": "{{tool}} 用量",
       "fiveHour": "5 小时",
       "week": "周",
@@ -448,7 +467,6 @@
     },
     "collapse": "收起导航",
     "expand": "展开导航",
-    "openNavigation": "打开导航",
     "closeNavigation": "关闭导航"
   },
   "places": {
@@ -467,13 +485,20 @@
   "readOnlyNotice": "你可以查看此页面，但不能更改。组织管理员可以更改。",
   "business": {
     "sessions": "会话的录制、自动化与编排",
+    "providerAssignment": "分配给人员和部门的提供商",
+    "limitAssignment": "为其他人员和部门设置的使用限额",
     "people": "目录、部门与委派管理",
     "rules": "自定义策略、角色与授权",
     "usage": "按团队和项目统计成本",
+    "usageBudgets": "可发出警告、减速或阻止会话的预算",
     "securityCompliance": "合规框架与证据",
     "securityRedTeam": "红队演练运行与评分",
     "operationsDeploy": "将智能体部署到其他主机",
     "operationsResidency": "数据驻留与租户",
-    "retentionSchedules": "保留策略仅在 Olivares Business 中执行：此版本只保存它们，不清除任何内容。"
+    "retentionSchedules": "保留策略仅在 Olivares AI Business 中执行：此版本只保存它们，不清除任何内容。"
+  },
+  "groups": {
+    "control": "治理",
+    "admin": "管理"
   }
 }

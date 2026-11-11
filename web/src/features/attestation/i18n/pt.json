@@ -35,7 +35,7 @@
     "sumsAbsent": "nenhuma soma de dependências registada",
     "vcsAvailable": "Definições VCS marcadas pela cadeia de ferramentas do Go",
     "vcsUnavailable": "Sem marca VCS",
-    "selfHashHint": "O auto-SHA256 é um hash em fluxo do executável em execução, calculado uma vez na primeira leitura. Compare-o OFFLINE com um futuro checksums.txt assinado — o navegador nunca verifica assinaturas, e um hash por si só prova a identidade, não a proveniência.",
+    "selfHashHint": "O auto-SHA256 é um hash do executável em execução, calculado uma vez na primeira leitura: identifica exatamente estes bytes e não prova de onde vêm. Para verificar uma versão, use «Verifique por si próprio» mais abaixo; se instalou a partir do arquivo que verifica, o sha256sum do ficheiro olivares contido nesse arquivo dá este mesmo valor.",
     "published": "Publicada",
     "notPublished": "Não publicada",
     "verifierAvailable": "Verificador nativo incluído na compilação (core/secure/modelsign)",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "Declarado."
     }
+  },
+  "check": {
+    "title": "Verifique por si próprio",
+    "description": "A mesma verificação a partir de um terminal, sem passar pela consola.",
+    "download": "Na <release>página da versão {{version}}</release>, transfira checksums.txt, checksums.txt.sig, checksums.txt.pem e o arquivo ou pacote que instalou. Depois execute isto na pasta onde estão:",
+    "provenance": "Com o arquivo, transfira multiple.intoto.jsonl da <release>página da versão {{version}}</release> e depois execute isto na pasta onde estão:",
+    "passes": "Se mostrar «Verified OK» e depois OK junto a cada ficheiro, os ficheiros que transferiu são os que o fluxo de publicação do Olivares AI assinou para {{version}}.",
+    "notRelease": "Esta compilação não é uma versão assinada, por isso não há assinatura de versão com que a verificar.",
+    "business": "O Olivares AI Business verifica-se com as instruções do canal Business."
   },
   "status": {
     "declared": "Declarado",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "Artefactos da versão",
     "description": "O que acompanha uma versão e como a confiança de cada artefacto é estabelecida. A assinatura sem chave (Fulcio/Rekor) e com chave (air-gap) são ambas de primeira classe — nenhuma é a canónica.",
-    "identityNote": "Identidade de assinatura sem chave (declarada): emissor OIDC {{issuer}} · identidade do certificado cosign {{regexp}}",
+    "identityNote": "Identidade de assinatura sem chave (declarada): emissor OIDC {{issuer}} · identidade do certificado cosign <identity />",
     "columns": {
       "artifact": "Artefacto",
       "producedBy": "Produzido por",

@@ -22,7 +22,7 @@ ventanas de uso y los modelos que informa la herramienta. Los valores que faltan
 siguen sin estar disponibles, y las actualizaciones fallidas se marcan como
 obsoletas.
 
-**Claves de API** en **Herramientas** (`/agent-tools`) guarda las claves de API y
+**Proveedores** (`/providers`, en **Herramientas**) guarda las claves de API y
 los endpoints de modelos locales. Añade y prueba allí el proveedor; después
 úsalo desde **Nueva sesión**. Una clave de proveedor y una suscripción a una
 herramienta son formas distintas de conectarse. Ollama necesita un endpoint
@@ -50,7 +50,7 @@ escríbelo antes de pulsar **Iniciar**.
 Una herramienta que usa una clave de proveedor utiliza su modelo guardado o te
 deja seleccionar un modelo devuelto por la prueba de conexión. Si el modelo es
 obligatorio pero la prueba no ha devuelto ninguno, prueba primero la conexión en
-**Claves de API** de **Herramientas**. Claude Code puede usar su modelo
+**Proveedores**. Claude Code puede usar su modelo
 predeterminado nativo.
 
 Para la instalación de Compose del README, ejecuta la CLI dentro del contenedor
@@ -59,7 +59,7 @@ cuenta de administrador de Olivares que creaste durante la configuración, no co
 tu suscripción a la herramienta.
 
 Al usar una clave de proveedor con una herramienta que requiere un modelo, como
-Codex, guarda un valor predeterminado en **Claves de API** de **Herramientas**
+Codex, guarda un valor predeterminado en **Proveedores**
 antes de ejecutar `session start` más abajo. Si ni el proveedor ni el perfil de
 la herramienta tienen un modelo configurado, añade `--model <tested-model-id>` al
 comando `session start`, sustituyendo el marcador por un ID de modelo devuelto
@@ -121,7 +121,7 @@ Para un home de herramienta configurado que ya exista, la pestaña **Perfiles de
 proveedor** de **Sesiones** (`/sessions?tab=profiles`) permite a un administrador
 registrar un perfil e inspeccionar si está listo para lanzar. El perfil y los
 enlaces de origen de una cuenta con nombre también aparecen en su detalle en
-**Herramientas**. Los homes deben existir en el host de ejecución. Usa **Más
+**Herramientas de IA**. Los homes deben existir en el host de ejecución. Usa **Más
 opciones → Opciones avanzadas de lanzamiento** en **Nueva sesión** para
 seleccionar ese perfil. Las sustituciones de binario eligen un ejecutable; si no,
 el motor prueba primero la instalación gestionada verificada más reciente y

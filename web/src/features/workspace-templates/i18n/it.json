@@ -15,7 +15,8 @@
   "groups": {
     "yours": "I tuoi template",
     "builtin": "Template integrati ({{n}})",
-    "yoursEmpty": "Ancora nessuno. Un template è un punto di partenza riutilizzabile per le nuove sessioni."
+    "emptyTitle": "Non hai ancora template",
+    "emptyDescription": "Un template è un punto di partenza riutilizzabile per le nuove sessioni."
   },
   "editor": {
     "nameLabel": "Nome",
@@ -25,11 +26,11 @@
     "sections": {
       "hooks": "Hook",
       "hooksHint": "Comandi eseguiti prima/dopo i tool e le sessioni.",
-      "settings": "Impostazioni dell'agente",
+      "settings": "Impostazioni",
       "settingsHint": "Modalità dei permessi, livello di impegno, modello e istruzioni personalizzate.",
       "connectors": "Connettori",
       "connectorsHint": "ID dei connettori da collegare quando questo template viene applicato.",
-      "policies": "Policy di governance",
+      "policies": "Policy",
       "policiesHint": "Modalità DLP, limiti di durata della sessione, tool consentiti e registrazione dell'I/O.",
       "secrets": "Segreti",
       "secretsHint": "Segreti del vault che le sessioni di questo template ricevono come variabili d’ambiente.",

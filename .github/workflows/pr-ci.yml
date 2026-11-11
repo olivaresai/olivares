@@ -326,7 +326,7 @@ jobs:
       - name: package the candidate for the native service journey
         timeout-minutes: 5
         run: bash scripts/package-service-candidate.sh
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         timeout-minutes: 3
         with:
           cosign-release: 'v2.6.4'
@@ -399,8 +399,18 @@ jobs:
           baseline="$(jq -r '.tag_name // empty' "$proof/baseline.json")"
           if [[ -n "$baseline" ]]; then
             base="https://github.com/olivaresai/olivares/releases/download/$baseline"
+            # github.com's release-download front answered 504 for hours on 2026-11-08 and 2026-11-09 while the
+            # release API served the same asset. Only the source changes: the cosign verification and the
+            # sha256 check below still decide what is trusted.
+            fetch_asset() {
+              local api="https://api.github.com/repos/olivaresai/olivares/releases/tags/$baseline" url
+              curl -fSL --retry 3 --max-time 90 "$base/$1" -o "$proof/$1" && return
+              echo "pr-ci: $base/$1 failed; fetching the same asset through $api" >&2
+              url="$(curl -fsSL --retry 3 --max-time 90 "$api" | jq -er --arg name "$1" '.assets[] | select(.name == $name) | .url')" &&
+                curl -fSL --retry 3 --max-time 90 -H 'Accept: application/octet-stream' "$url" -o "$proof/$1"
+            }
             for asset in checksums.txt checksums.txt.sig checksums.txt.pem; do
-              curl -fSL --retry 2 --max-time 90 "$base/$asset" -o "$proof/$asset"
+              fetch_asset "$asset"
             done
             "$OLIVARES_COSIGN_BIN" verify-blob --certificate "$proof/checksums.txt.pem" \
               --signature "$proof/checksums.txt.sig" \
@@ -447,7 +457,7 @@ jobs:
               continue
             fi
             old="olivares_${baseline}_linux_amd64.$fmt"
-            curl -fSL --retry 2 --max-time 90 "$base/$old" -o "$proof/$old"
+            fetch_asset "$old"
             awk -v name="$old" '$2 == name {print; count++} END {if (count != 1) exit 1}' \
               "$proof/checksums.txt" > "$proof/old-checksum.txt"
             (cd "$proof" && sha256sum --check old-checksum.txt)
@@ -699,12 +709,12 @@ jobs:
         timeout-minutes: 55
         env:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
-        # Record sampled host resources after normal exit or TERM when the shell can run
-        # the trap and its log reaches GitHub. Shutdown-signal/143 observations on 2026-09-19
-        # did not identify their cause. These host samples are not process RSS; neither a
-        # missing report nor a low sampled peak proves or excludes OOM. SIGKILL, host loss
-        # or lost logs can prevent publication. Explicit unavailable-data paths in the
-        # witness print COULD NOT LOOK and return zero; the test command owns its verdict.
+        # Record the job's cgroup v2 figures (CPU used, memory peak, OOM events) after normal
+        # exit or TERM when the shell can run the trap and its log reaches GitHub. Shutdown-signal/143
+        # observations on 2026-09-19 did not identify their cause. The figures are the cgroup's,
+        # not per process; neither a missing report nor a low peak proves or excludes OOM.
+        # SIGKILL, host loss or lost logs can prevent publication. Explicit unavailable-data
+        # paths in the witness print COULD NOT LOOK and return zero; the test command owns its verdict.
         run: |
           set -euo pipefail
           WITNESS="$RUNNER_TEMP/resource-witness-${{ matrix.shard }}.txt"
@@ -931,7 +941,7 @@ jobs:
           pnpm --dir web exec playwright install "${deps[@]}" chromium
           echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
           echo "NODE_PATH=$PWD/web/node_modules" >> "$GITHUB_ENV"
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         timeout-minutes: 5
         with:
           cosign-release: v2.6.4

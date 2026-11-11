@@ -1,7 +1,7 @@
 {
   "title": "Visão executiva",
-  "description": "Custo, utilização, risco e conformidade num relance — aprofunde na vista operacional para ver o detalhe.",
-  "asOfNote": "O risco, a conformidade e a fiabilidade refletem o estado atual; o custo abrange o intervalo selecionado.",
+  "description": "Utilização, risco e conformidade num relance — aprofunde na vista operacional para ver o detalhe.",
+  "asOfNote": "O risco, a conformidade e a fiabilidade refletem o estado atual; o intervalo aplica-se aos valores ao longo do tempo.",
   "range": {
     "label": "Intervalo",
     "7d": "Últimos 7 dias",
@@ -19,12 +19,12 @@
     "generatedLabel": "Gerado",
     "tenant": "Organização",
     "allOrgs": "Todas as organizações",
-    "range": "Intervalo de custo",
+    "range": "Intervalo",
     "footer": "Olivares AI — apenas KPIs agregados; sem payloads nem segredos."
   },
   "empty": {
     "title": "Sem KPIs executivos disponíveis",
-    "description": "Não tem acesso de leitura a nenhuma das origens de custo, risco, conformidade ou fiabilidade desta organização."
+    "description": "Não tem acesso de leitura a nenhuma das origens que esta visão geral lê para esta organização."
   },
   "restricted": {
     "label": "Restrito",

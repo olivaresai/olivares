@@ -96,6 +96,9 @@ func buildOpenAPI() map[string]any {
 	idParam := obj("name", "id", "in", "path", "required", true,
 		"description", "Resource identifier (UUIDv7).",
 		"schema", obj("type", "string", "format", "uuid"))
+	groupUserParam := obj("name", "user_id", "in", "path", "required", true,
+		"description", "The person's user id (UUIDv7).",
+		"schema", obj("type", "string", "format", "uuid"))
 	agentIDParam := obj("name", "agentID", "in", "path", "required", true,
 		"description", "Agent identifier (UUIDv7).",
 		"schema", obj("type", "string", "format", "uuid"))
@@ -141,8 +144,12 @@ func buildOpenAPI() map[string]any {
 	// list operations are one handler (auditListInto): a parameter declared on only one
 	// of them is exactly how the system route came to publish that it accepts no query.
 	auditFromParam := obj("name", "from", "in", "query", "required", false,
-		"description", "Start from this sequence number. The page runs FORWARDS from it, in ascending sequence order; pair it with head_seq to address the newest events.",
+		"description", "Start from this sequence number. The page runs FORWARDS from it, in ascending sequence order; pair it with head_seq to address the newest events. With `order=desc` the page runs BACKWARDS from it (default: the head), and `next_from` is the next page's `from`.",
 		"schema", obj("type", "integer", "default", 1))
+	// The scan direction of the same handler, so both audit list operations declare it.
+	auditOrderParam := obj("name", "order", "in", "query", "required", false,
+		"description", "`asc` (the default) reads oldest first; `desc` reads newest first with the same filters and the filtered envelope: `next_from` is one below the last returned event while `has_more`, and `scan_complete` is true once the scan reached the first event. Any other value is a 400. A store without the backward scan answers 501 `audit_filter_unavailable`.",
+		"schema", obj("type", "string", "enum", arr("asc", "desc"), "default", "asc"))
 	// Repeatable, and declared as such: one occurrence per action family to leave out.
 	// It filters the VIEW only — the ledger still records every event, including the
 	// read this request performs, so an unfiltered page still returns them all.
@@ -458,7 +465,7 @@ func buildOpenAPI() map[string]any {
 		// ── Audit ──────────────────────────────────────────────────────
 		"/v1/audit", obj("get", op("listAuditEvents", "Read the tenant evidence ledger", tagAudit, true,
 			jsonResp("OK", auditListOf(ref("AuditEvent"))),
-			nil, tenantParam, auditFromParam, limitParam, auditExcludeActionParam, auditToolParam, auditFolderParam)),
+			nil, tenantParam, auditFromParam, limitParam, auditExcludeActionParam, auditToolParam, auditFolderParam, auditOrderParam)),
 		// The system route runs the SAME handler, so it has always accepted ?from and ?limit
 		// and the console has always sent them (web/src/features/audit/audit-view.tsx).
 		// Declaring them is a correction, not a widening: publishing no parameters made the
@@ -466,7 +473,7 @@ func buildOpenAPI() map[string]any {
 		// impossible a request the engine answers — and head_seq, whose whole use is to be
 		// paired with ?from, turned that contradiction into a load-bearing one.
 		"/v1/audit/system", obj("get", op("listSystemAuditEvents", "Read the system-tenant evidence ledger (cross-tenant ops; superadmin only)", tagAudit, true,
-			jsonResp("OK", auditListOf(ref("AuditEvent"))), nil, auditFromParam, limitParam, auditExcludeActionParam)),
+			jsonResp("OK", auditListOf(ref("AuditEvent"))), nil, auditFromParam, limitParam, auditExcludeActionParam, auditOrderParam)),
 		// The declared shape mirrors handleAuditVerify 1:1. It previously advertised
 		// five fields (valid/events_checked/checkpoints_checked/first_seq/last_seq)
 		// that the handler has never returned — a published contract describing a
@@ -582,6 +589,12 @@ func buildOpenAPI() map[string]any {
 		"/v1/members/{id}", obj("delete", op204("removeMember",
 			"Remove a member from the resolved tenant: a scoped offboard that leaves the account and its other organizations alone (404 when the id is not a member; 409 when the caller removes itself or the last active owner; 403 when the member outranks the caller or the caller is confined to a workspace; a signed-in person also needs the administrative step-up)",
 			tagSystem, true, idParam, tenantParam)),
+		"/v1/members/{id}/suspend", obj("post", op204("suspendMember",
+			"Suspend a member of the resolved tenant: their sessions and tokens stop at once, while the membership, role and group places stay; reversible with reactivate; a signed-in person also needs the administrative step-up; the Business edition (501 departments_unavailable in Community)",
+			tagSystem, true, idParam, tenantParam)),
+		"/v1/members/{id}/reactivate", obj("post", op204("reactivateMember",
+			"Reactivate a suspended member of the resolved tenant: access returns as it was; a signed-in person also needs the administrative step-up; the Business edition (501 departments_unavailable in Community)",
+			tagSystem, true, idParam, tenantParam)),
 
 		// ── Directory: provisioned groups, invitations, onboarding ────
 		"/v1/groups", obj("get", op("listGroups",
@@ -589,7 +602,29 @@ func buildOpenAPI() map[string]any {
 			tagDirectory, true,
 			jsonResp("OK", obj("type", "object", "properties", obj(
 				"groups", obj("type", "array", "items", ref("DirectoryGroup")),
-			), "required", arr("groups"))), nil, tenantParam)),
+			), "required", arr("groups"))), nil, tenantParam),
+			"post", op201("createGroup",
+				"Create a group of the operator's own (provisioned_by \"operator\"), for people a directory does not know; the Business edition (501 departments_unavailable in Community; 409 when the name is in use)",
+				tagDirectory, true,
+				jsonResp("Created", obj("type", "object", "properties", obj(
+					"id", obj("type", "string", "format", "uuid"),
+					"display_name", obj("type", "string"),
+					"provisioned_by", obj("type", "string"),
+				), "required", arr("id", "display_name", "provisioned_by"))),
+				body(obj("type", "object", "additionalProperties", false,
+					"required", arr("display_name"),
+					"properties", obj("display_name", obj("type", "string", "minLength", 1)))),
+				tenantParam)),
+		"/v1/groups/{id}", obj("delete", op204("deleteGroup",
+			"Remove a group of the operator's own with its roster; its members keep their accounts and roles; a directory group is refused (403 group_origin_read_only); the Business edition (501 departments_unavailable in Community)",
+			tagDirectory, true, idParam, tenantParam)),
+		"/v1/groups/{id}/members/{user_id}", obj(
+			"put", op204("addGroupMember",
+				"Add a person of the tenant to a group of the operator's own; idempotent; the Business edition (501 departments_unavailable in Community)",
+				tagDirectory, true, idParam, groupUserParam, tenantParam),
+			"delete", op204("removeGroupMember",
+				"Take a person out of a group of the operator's own; idempotent; the Business edition (501 departments_unavailable in Community)",
+				tagDirectory, true, idParam, groupUserParam, tenantParam)),
 		"/v1/groups/{id}/role", obj("put", op("setGroupRole",
 			"Set (or clear, with an empty role) the role a group's members are elevated to in the group's tenant; ceiling-checked against the caller's authority",
 			tagDirectory, true,
@@ -644,17 +679,20 @@ func buildOpenAPI() map[string]any {
 					"password", obj("type", "string", "format", "password", "minLength", 12, "writeOnly", true)))))),
 		"/v1/invites/{id}", obj("delete", op204("revokeInvite", "Delete a pending invitation", tagDirectory, true, idParam, tenantParam)),
 		"/v1/invites/{id}/resend", obj("post", op202("resendInvite",
-			"Rotate a pending invitation's secret and mail the new link to the invitee (409 invite_delivery_unavailable without a mailer)",
+			"Rotate a pending invitation's secret, voiding the old link, and mail the new link to the invitee or, with delivery=link, return its token once (409 invite_delivery_unavailable without a mailer and without delivery=link)",
 			tagDirectory, true,
 			jsonResp("Accepted", obj("type", "object", "properties", obj(
 				"id", obj("type", "string", "format", "uuid"),
 				"expires_at", obj("type", "string", "format", "date-time"),
-				"delivery", obj("type", "string", "enum", arr("sent", "failed"),
-					"description", "Whether the invitation email left the engine; the token travels only in the mail."),
+				"delivery", obj("type", "string", "enum", arr("sent", "failed", "link"),
+					"description", "sent or failed: whether the invitation email left the engine. link: the token is in this response, once."),
+				"token", obj("type", "string", "description", "The invitation's single-use token, present only with delivery link. Shown once; never listed, logged or audited."),
 			), "required", arr("id", "expires_at", "delivery"))),
-			nil, idParam, tenantParam)),
+			nil, idParam, tenantParam, obj("name", "delivery", "in", "query", "required", false,
+				"description", "link: return the new token in the response, for a link shown on the screen, instead of mailing it.",
+				"schema", obj("type", "string", "enum", arr("link"))))),
 		"/v1/onboard", obj("post", consentRequired(op201("onboardMember",
-			"Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token)",
+			"Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token, or returns it once with delivery link)",
 			tagDirectory, true,
 			jsonResp("Created", ref("OnboardResult")),
 			body(ref("OnboardInput")), tenantParam))),
@@ -783,6 +821,8 @@ func buildOpenAPI() map[string]any {
 					"acknowledge", obj("type", "boolean"),
 				)))),
 			"delete", op204("uninstallLicense", "Remove the installed license (revert to community)", tagConsole, true)),
+		"/v1/console/edition/summary", obj("get", op("getEditionSummary", "Which modules placed in a higher edition than the running one are running, by the edition each needs; changes nothing", tagConsole, true,
+			jsonResp("OK", ref("EditionSummary")), nil)),
 		"/v1/console/connectors", obj(
 			"get", op("listConnectorCatalog", "List available connector types with their configuration fields", tagConsole, true,
 				jsonResp("OK", obj("type", "object", "properties", obj(
@@ -1531,6 +1571,26 @@ func buildOpenAPI() map[string]any {
 			"backup_key_required", obj("type", "boolean", "description", "Appliance setup requires confirmation that the recovery key was saved separately."),
 			"backup_key_path", obj("type", "string", "description", "The appliance's configured recovery-secret file, including an explicit passphrase-file override; absent when DR is unavailable."),
 			"edition", obj("type", "string"),
+			"licensed_edition", obj("type", "string", "enum", arr("community", "engineer", "business", "enterprise"),
+				"description", "The edition the live license entitles; community without one. Absent for a product this build does not know. The build edition stays in edition."),
+			"placement", obj("type", "object", "description", "Where each placed capability lives: the engine's own table, read by the route gate. A client keeps no copy.",
+				"properties", obj(
+					"modules", obj("type", "array", "description", "Modules placed above Community, in registration order. Below its edition a module answers 403 edition_required, except GET, HEAD and DELETE when reads_below is true.",
+						"items", obj("type", "object", "properties", obj(
+							"namespace", obj("type", "string"),
+							"edition", obj("type", "string", "enum", arr("engineer", "business", "enterprise"), "description", "The lowest edition that holds the module."),
+							"reads_below", obj("type", "boolean", "description", "Stored data stays readable, exportable and removable below the edition."),
+							"title", obj("type", "string", "description", "The capability's name in English, as the refusal sentence uses it."),
+						), "required", arr("namespace", "edition", "reads_below", "title"))),
+					"routes", obj("type", "array", "description", "Routes outside the modules that are placed above Community. The verbs listed are refused below the edition; the others stay open.",
+						"items", obj("type", "object", "properties", obj(
+							"prefix", obj("type", "string", "description", "The route and every route below it."),
+							"methods", obj("type", "array", "items", obj("type", "string")),
+							"edition", obj("type", "string", "enum", arr("engineer", "business", "enterprise")),
+							"capability", obj("type", "string", "description", "The stable key edition_required carries."),
+							"title", obj("type", "string"),
+						), "required", arr("prefix", "methods", "edition", "capability", "title"))),
+				), "required", arr("modules", "routes")),
 			"tls_pin_sha256", obj("type", "string",
 				"description", "The --pin-sha256 value of the certificate this engine serves (base64 SHA-256 of its SubjectPublicKeyInfo). Absent when the engine serves plain HTTP."),
 			"modules_not_enabled", obj("type", "array", "items", obj("type", "string")),
@@ -1781,6 +1841,17 @@ func buildOpenAPI() map[string]any {
 			"invalid_subject", obj("type", "integer", "format", "int64", "minimum", 0),
 		), "required", arr("connected", "pending_msgs", "pending_bytes", "dropped", "publish_errors", "decode_errors", "gate_skipped", "invalid_subject")),
 
+		"EditionSummary", obj("type", "object", "required", arr("edition", "needs"), "properties", obj(
+			"edition", obj("type", "string", "enum", arr("community", "engineer", "business", "enterprise")),
+			"needs", obj("type", "array", "items", obj("type", "object", "required", arr("edition", "capabilities"), "properties", obj(
+				"edition", obj("type", "string", "enum", arr("engineer", "business", "enterprise")),
+				"capabilities", obj("type", "array", "items", obj("type", "object", "required", arr("capability", "title"), "properties", obj(
+					"capability", obj("type", "string"),
+					"title", obj("type", "string"),
+				))),
+			))),
+		)),
+
 		// ── Console: license ────────────────────────────────────────
 		"LicenseStatus", obj("type", "object", "properties", obj(
 			"valid", obj("type", "boolean"),
@@ -1788,7 +1859,8 @@ func buildOpenAPI() map[string]any {
 			"plan", obj("type", "string"),
 			"support_tier", obj("type", "string"),
 			"support_profile", obj("type", "string", "description", "Signed v3 product profile; separate from the legacy support relationship. Display only."),
-			"max_users", obj("type", "integer"),
+			"licensed_edition", obj("type", "string", "enum", arr("community", "engineer", "business", "enterprise"),
+				"description", "The edition the live license entitles; community without one. Absent for a product this build does not know. The build edition stays in edition."),
 			"expires_at", obj("type", "string", "format", "date-time"),
 			"holder", obj("type", "string"),
 		)),
@@ -2103,6 +2175,8 @@ func buildOpenAPI() map[string]any {
 			"parent_group_id", obj("type", "string", "description", "The parent group's id; empty when the group is top-level."),
 			"workspace_id", obj("type", "string", "description", "The workspace where the group is placed; empty when unplaced or concealed from a workspace-confined caller."),
 			"members", obj("type", "integer", "description", "The group's member count."),
+			"member_ids", obj("type", "array", "items", obj("type", "string", "format", "uuid"),
+				"description", "The ids of the group's members; empty for a workspace-confined caller."),
 		), "required", arr("id", "display_name", "mapped_role", "parent_group_id", "workspace_id", "members")),
 
 		// ── Invitations and onboarding ──────────────────────────────
@@ -2122,6 +2196,8 @@ func buildOpenAPI() map[string]any {
 				"mode", obj("type", "string", "enum", arr("password", "invite"),
 					"description", "password: the admin sets the initial password. invite: email a single-use token. Empty defaults to password."),
 				"password", obj("type", "string", "format", "password", "writeOnly", true),
+				"delivery", obj("type", "string", "enum", arr("link"),
+					"description", "With mode invite: link returns the invitation's token once in the response, for a link shown on the screen, instead of mailing it. Empty mails it."),
 			), "required", arr("email")),
 		"OnboardResult", obj("type", "object", "properties", obj(
 			"user", ref("User"),
@@ -2136,8 +2212,9 @@ func buildOpenAPI() map[string]any {
 				"properties", obj(
 					"id", obj("type", "string", "format", "uuid"),
 					"expires_at", obj("type", "string", "format", "date-time"),
-					"delivery", obj("type", "string", "enum", arr("sent", "failed"),
-						"description", "Whether the invitation email left the engine; the token travels only in the mail."),
+					"delivery", obj("type", "string", "enum", arr("sent", "failed", "link"),
+						"description", "sent or failed: whether the invitation email left the engine. link: the token is in this response, once."),
+					"token", obj("type", "string", "description", "The invitation's single-use token, present only with delivery link. Shown once; never listed, logged or audited."),
 				)),
 		), "required", arr("user", "created", "membership")),
 
@@ -2395,10 +2472,10 @@ func buildOpenAPI() map[string]any {
 			"running_sessions", obj("type", "integer",
 				"description", "Sessions this engine runs now. The restart that applies an update stops every one of them; each can be resumed."),
 			"edition_switch", obj("type", "object", "additionalProperties", false,
-				"description", "Present on a Community build that holds a live Business or Enterprise license: the one next step to the licensed build for the way this engine was installed. The newest release above is then the licensed build.",
+				"description", "Present on a Community build that holds a live Engineer, Business or Enterprise license: the one next step to the licensed build for the way this engine was installed. The newest release above is then the licensed build.",
 				"required", arr("to", "install", "then", "console_action"),
 				"properties", obj(
-					"to", obj("type", "string", "enum", arr("business", "enterprise"), "description", "The edition the license entitles; both are one licensed build."),
+					"to", obj("type", "string", "enum", arr("engineer", "business", "enterprise"), "description", "The edition the license entitles; all are one licensed build."),
 					"install", obj("type", "string", "enum", arr("binary", "container", "package", "kubernetes"), "description", "How this engine was installed."),
 					"command", obj("type", "string", "description", "The exact command for this installation; empty where the manifest does it."),
 					"then", obj("type", "string", "description", "What follows the command."),
@@ -2483,6 +2560,8 @@ func apiErrorSchema() map[string]any {
 			"message", oas.Obj("type", "string"),
 			"module", oas.Obj("type", "string", "description", "With code module_not_enabled: the namespace of the module this node does not run."),
 			"remedy", oas.Obj("type", "string", "description", "When a person can act on the failure: the one next step, fixed text chosen by the code."),
+			"edition", oas.Obj("type", "string", "enum", []any{"engineer", "business", "enterprise"}, "description", "On an edition refusal (edition_required, business_required, addon_requires_license and the other codes that send a person to an edition): the lowest edition that holds the capability."),
+			"capability", oas.Obj("type", "string", "description", "With code edition_required: the stable key of the capability, which a client translates."),
 		), "required", []any{"code", "message"}),
 	), "required", []any{"error"})
 }

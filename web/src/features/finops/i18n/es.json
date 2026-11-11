@@ -116,7 +116,7 @@
     },
     "truncated": "Cargados {{n}} presupuestos; hay más",
     "truncatedHint": "Hay más presupuestos de los que se ven; esta página toma filas por id. Que un límite no aparezca aquí no demuestra que el gasto esté sin tope: puede estar simplemente más allá de esta página.",
-    "storedEmptyHint": "Los presupuestos creados en Business se pueden consultar y eliminar aquí."
+    "storedEmptyHint": "Los presupuestos creados en Olivares AI Business se pueden consultar y eliminar aquí."
   },
   "cache": {
     "title": "Eficiencia de la caché de prompts",

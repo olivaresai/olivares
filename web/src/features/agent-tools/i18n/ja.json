@@ -1,7 +1,7 @@
 {
   "title": "AI ツール",
   "description": "セッションが実行する AI ツールをこのサーバーにインストールし、サインインします。",
-  "descriptionMember": "セッションはこれらのアカウントと APIキーで動きます。ツールのインストールとサインインはシステム管理者が行います。",
+  "descriptionMember": "セッションはこれらのアカウントで動きます。APIキーは「プロバイダー」にあります。ツールのインストールとサインインはシステム管理者が行います。",
   "refresh": "更新",
   "readOnly": "このサーバーは読み取り専用です。インストールは無効です。",
   "notInstalled": "管理されたインストールなし",
@@ -95,7 +95,7 @@
     "failed": "停止中: 終了しました。",
     "start": "起動",
     "stop": "停止",
-    "notInstalled": "{{name}} はインストールされていません。Olivares はこのサーバーの PATH から {{program}} を探します。",
+    "lookedFor": "Olivares はこのサーバーの PATH から {{program}} を探します。",
     "hint": "エンドポイントは、起動時に指定した組織のプロバイダーに登録されており、その組織の OpenCode セッションでモデルを使えます。",
     "model": "モデル",
     "modelHintLlamaCpp": ".gguf ファイルの絶対パス、または Hugging Face のモデルを ユーザー/リポジトリ[:量子化] の形式で入力してください。",
@@ -134,7 +134,7 @@
     "accountChecking": "アカウント · 確認中…",
     "accountSigningIn": "アカウント · サインイン中…",
     "accountUnreadable": "アカウント · 読み取れません",
-    "keyDetail": "APIキー · {{name}} ({{hint}})",
+    "keyDetail": "APIキー · {{name}} · {{hint}}",
     "keyName": "APIキー · {{name}}",
     "keyNone": "APIキー · 未選択",
     "lastSignIn": "最終サインイン {{when}}",
@@ -158,7 +158,11 @@
     "default": "既定のサインイン",
     "readFailed": "プロファイルを読み込めませんでした。",
     "truncated": "表示されていないプロファイルがあります。",
-    "retry": "再試行"
+    "retry": "再試行",
+    "turnOff": "{{name}}をオフにする",
+    "turnOn": "{{name}}をオンにする",
+    "switchedOn": "{{name}}をオンにしました",
+    "switchedOff": "{{name}}をオフにしました"
   },
   "tool": {
     "menu": "{{name}} のオプション",
@@ -196,12 +200,12 @@
     "chooseKey": "キーを選択",
     "addKey": "キーを追加…",
     "create": "作成",
+    "createAndSignIn": "作成してサインイン",
     "creating": "作成中…",
     "created": "プロファイル {{name}} を作成しました",
     "failed": "プロファイルを作成できませんでした。",
     "bindFailed": "キーを設定できませんでした。",
     "keyNotSet": "プロファイルは作成されましたが、キーは設定されていません：{{error}} プロファイルを開いてキーを選んでください。",
-    "notNow": "あとで",
     "close": "閉じる",
     "keyNeedsAccess": "キーを選ぶにはプロファイルを変更する権限が必要です。"
   },
@@ -256,9 +260,35 @@
     "packagesHint": "各ツールの新しいセッションが使うプロバイダープロファイルで宣言されています（{{profiles}}）。プロファイルのないツールには、何も宣言しない新しいプロファイルが作られます。"
   },
   "place": {
-    "title": "アカウントと APIキー",
     "accounts": "アカウント",
     "allAccounts": "すべてのアカウント: 詳細、ラベル、バインディング",
-    "noAccess": "あなたのロールでは、この組織のアカウントと APIキーを読み取れません。"
+    "noAccess": "あなたのロールでは、この組織のアカウントを読み取れません。",
+    "keysOnProviders": "APIキーは<0>プロバイダー</0>にあります。",
+    "keysAndReferencesOnProviders": "APIキーとその参照は<0>プロバイダー</0>にあります。"
+  },
+  "runtime": {
+    "title": "ランタイム",
+    "autoCompact": "自動コンパクトのしきい値",
+    "autoCompactHint": "100,000〜1,000,000 トークンでコンパクトします。空欄にすると Claude の既定値を使います。",
+    "autoCompactPlaceholder": "例: 300000",
+    "autoCompactInvalid": "100000〜1000000 の整数を入力するか、空欄にしてください。",
+    "saved": "ランタイムを保存しました。新しいセッションから使われます。"
+  },
+  "models": {
+    "title": "モデル",
+    "note": "このリストはあなただけに表示されます。非表示のモデルは選択肢から外れますが、ツールの既定と入力したモデルは引き続き使えます。",
+    "filter": "モデルを絞り込む",
+    "disableAll": "すべて非表示",
+    "enableAll": "すべて表示",
+    "addCustom": "カスタムモデルを追加",
+    "customPlaceholder": "モデル ID（例: claude-opus-5-5）",
+    "customInvalid": "モデル ID に空白は使えず、200 文字までです。",
+    "add": "追加",
+    "fast": "高速モード",
+    "up": "{{name}} を上へ",
+    "down": "{{name}} を下へ",
+    "use": "{{name}} を表示",
+    "removeCustom": "{{name}} を削除",
+    "empty": "このツールはモデルを報告しません。使うモデルを追加してください。"
   }
 }

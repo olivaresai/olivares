@@ -138,7 +138,11 @@ func (m *Module) moveRun(ctx context.Context, tenant model.TenantID, runRef, tar
 			return nil
 		},
 		// The limit was the old account's; the next turn finds out about the new one.
-		mutate: func(cur model.Record) { setProfileSnapshot(cur, &dst); cur[colRunUsageLimit] = nil },
+		mutate: func(cur model.Record) {
+			setProfileSnapshot(cur, &dst)
+			cur[colRunUsageLimit] = nil
+			cur[colRunTurnFailed] = nil
+		},
 		within: func(ctx context.Context, sc store.Scope, _ model.Record) error {
 			return retargetManagedLive(ctx, sc, runRef, dst.ProfileID)
 		},

@@ -43,8 +43,8 @@ function SheetBody({
 
   return (
     <>
-      {/* The name its operator typed; "Session" for one without, whose header tells it
-          by the tail of its reference. */}
+      {/* The name its operator typed, else the engine's title; "Session" for one with
+          neither, whose header names it by its tool and folder, else its reference tail. */}
       <SheetTitle className="sr-only">
         {operatorName(resolution.session) ??
           runTitle(resolution.session) ??

@@ -5,6 +5,7 @@
 package gitpublish
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"strings"
@@ -133,7 +134,13 @@ type Intent struct {
 	// Proposal is the approved session request this intent carries out; its
 	// workspace is the intent's.
 	Proposal Proposal
-	Version  int64
+	// SessionRun is the session run the publication came from, on every intent that has one
+	// (an approved proposal's, a session's push, a ship's pull request).
+	SessionRun string
+	Version    int64
+	// SessionLauncher is the user who launched the session run the publication
+	// names, for the audit of its claim; it is not stored on the intent.
+	SessionLauncher string
 }
 
 func ts(t time.Time) string {
@@ -191,6 +198,7 @@ func (in Intent) record() model.Record {
 		"acknowledge_intent": nullable(in.AcknowledgeIntent),
 		"claimed_at":         ts(in.ClaimedAt), "dispatch_deadline": ts(in.DispatchDeadline), "release_failure": in.ReleaseFailure,
 		"proposal_session_run": nullable(in.Proposal.SessionRun), "proposal_approval": nullable(in.Proposal.Approval),
+		"session_run": nullable(in.SessionRun),
 	}
 	if in.ID != "" {
 		r[model.ColID] = in.ID.String()
@@ -228,6 +236,8 @@ func intentFrom(r model.Record) Intent {
 		AcknowledgeIntent: r.String("acknowledge_intent"),
 		ClaimedAt:         parseTS(r.String("claimed_at")), DispatchDeadline: parseTS(r.String("dispatch_deadline")),
 		ReleaseFailure: r.String("release_failure"), Version: r.Int(model.ColVersion), Proposal: p,
+		// An intent written before the column names its session through its proposal only.
+		SessionRun: cmp.Or(r.String("session_run"), p.SessionRun),
 	}
 }
 

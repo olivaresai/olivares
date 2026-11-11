@@ -165,6 +165,12 @@ func gitRun(ctx context.Context, dir string, args ...string) (stdout string, cod
 // supplies its freshly created directory as HOME so libcurl cannot fall back to
 // the engine user's .netrc. Existing local-only callers retain their environment.
 func gitRunWithHome(ctx context.Context, dir, home string, args ...string) (stdout string, code int, stderr string, err error) {
+	return gitRunCapped(ctx, dir, home, worktreeGitOutputLimit, args...)
+}
+
+// gitRunCapped is the same run for a caller that needs more of stdout than the usual
+// limit. The cut is silent, so such a caller compares the length it got with its limit.
+func gitRunCapped(ctx context.Context, dir, home string, stdoutLimit int, args ...string) (stdout string, code int, stderr string, err error) {
 	git, err := exec.LookPath("git")
 	if err != nil {
 		return "", -1, "", &runErr{http.StatusServiceUnavailable,
@@ -195,7 +201,7 @@ func gitRunWithHome(ctx context.Context, dir, home string, args ...string) (stdo
 		cmd.Env = append(cmd.Env, "HOME="+home, "XDG_CONFIG_HOME="+home)
 	}
 	cmd.WaitDelay = worktreeGitWaitDelay
-	out, errb := &cappedBuffer{limit: worktreeGitOutputLimit}, &cappedBuffer{limit: worktreeGitOutputLimit}
+	out, errb := &cappedBuffer{limit: stdoutLimit}, &cappedBuffer{limit: worktreeGitOutputLimit}
 	cmd.Stdout, cmd.Stderr = out, errb
 	waitErr := cmd.Run()
 	var exit *exec.ExitError
@@ -348,7 +354,7 @@ func (m *Module) prepareRunWorktree(ctx context.Context, runRef string, ws *reso
 	out, err := gitOK(ctx, ws.rootReal, "rev-parse", "--is-inside-work-tree", "--show-prefix")
 	if err != nil && strings.Contains(err.Error(), "not a git repository") {
 		// git's own refusal, in one sentence with the way out (both clients print it as is).
-		return "", "", worktreeRefusal("A worktree needs a git repository, and %s is not one: run git init there, or start without a worktree.", ws.rootReal)
+		return "", "", &codedRunErr{&runErr{http.StatusUnprocessableEntity, fmt.Sprintf("A worktree needs a git repository, and %s is not one: run git init there, or start without a worktree.", ws.rootReal)}, "not_a_git_repository"}
 	}
 	if err != nil {
 		return "", "", worktreeRefusal("git cannot use the workspace folder for a new worktree: %v", err)

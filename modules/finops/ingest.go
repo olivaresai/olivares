@@ -77,8 +77,11 @@ type attribution struct {
 	// Group refs are preventive-only attribution supplied or resolved by CheckBudget.
 	// The cost read-model intentionally has no group columns; group budgets aggregate
 	// by member fan-out over actor/agent_ref instead.
-	UserGroupRefs  []string
-	AgentGroupRefs []string
+	UserGroupRefs []string
+	// userGroupMembers are the members of the user_group budgets, resolved before the
+	// transaction so the alert evaluation can scope them. Never part of the natural key.
+	userGroupMembers map[string]groupMemberRefs
+	AgentGroupRefs   []string
 
 	// Labels are the sample's operator-supplied attribution tags (e.g.
 	// OTEL_RESOURCE_ATTRIBUTES from a Claude Code fleet). team/project are
@@ -149,7 +152,7 @@ type costIngestEffects struct {
 // CostRecord ledger entry are updated together. BILLED samples are reconciliation
 // data and are NOT written to the canonical CostRecord ledger, so the ledger stays
 // single-provenance (estimated) and its consumers never mix streams.
-func (m *Module) ingestCostInTx(ctx context.Context, sc store.Scope, cost sdkmodel.CostSample, audit auditHook, sessionLink *model.ID) (costIngestEffects, error) {
+func (m *Module) ingestCostInTx(ctx context.Context, sc store.Scope, cost sdkmodel.CostSample, audit auditHook, sessionLink *model.ID, groupMembers map[string]groupMemberRefs) (costIngestEffects, error) {
 	if cost.ProviderRef == "" && cost.ModelRef == "" {
 		return costIngestEffects{}, nil
 	}
@@ -205,6 +208,8 @@ func (m *Module) ingestCostInTx(ctx context.Context, sc store.Scope, cost sdkmod
 		Team:    cost.Labels["team"],
 		Project: cost.Labels["project"],
 		Labels:  cost.Labels,
+
+		userGroupMembers: groupMembers,
 	}
 	if err := resolveSession(ctx, sc, &attr, sessionLink); err != nil {
 		return costIngestEffects{}, err
@@ -366,12 +371,16 @@ func (m *Module) onCost(ctx context.Context, tenant model.TenantID, cost sdkmode
 	if cost.OccurredAt.IsZero() {
 		cost.OccurredAt = m.clock.Now().Time()
 	}
+	var groupMembers map[string]groupMemberRefs
+	if cost.Actor != "" {
+		groupMembers = m.userGroupBudgetMembers(ctx, tenant)
+	}
 	var effects costIngestEffects
 	if err := m.mutate(ctx, tenant, func(sc store.Scope) error {
 		var err error
 		// Assigned, never appended: if the store ever re-ran this callback, the
 		// signals of the attempt that did not commit must not be published.
-		effects, err = m.ingestCostInTx(ctx, sc, cost, audit, sessionLink)
+		effects, err = m.ingestCostInTx(ctx, sc, cost, audit, sessionLink, groupMembers)
 		return err
 	}); err != nil {
 		return err

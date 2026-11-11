@@ -38,6 +38,14 @@ vi.mock('@/lib/auth/context', () => ({
 // The real HTTP verbs, so the wrappers' method + path + body have a regression of
 // their own: every other cell here substitutes sandboxApi, which means a typo in the
 // route would keep all of them green while the engine answered 404.
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
+
 const httpMock = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 vi.mock('@/lib/api/client', () => ({ http: httpMock }))
 
@@ -309,6 +317,28 @@ describe('Scenario authoring — the console calls what the engine already serve
     expect(api.scenarios).toHaveBeenCalledTimes(1)
   })
 
+  // Refused by edition, the form keeps what was typed and says the edition line, calm:
+  // never «not authorized» in its failure area, which is a role's word.
+  it('a create refused by edition says the edition line and keeps the form', async () => {
+    const { ApiError } = await import('@/lib/api/errors')
+    api.createScenario.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'engineer',
+        capability: 'sandbox',
+      }),
+    )
+    const user = await openScenariosTab(['sandbox:scenario:write'])
+    await user.click(screen.getByRole('button', { name: 'New scenario' }))
+    await user.type(await screen.findByLabelText(/^Name/), 'Checkout agent')
+    await user.click(screen.getByRole('button', { name: 'Create scenario' }))
+
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = renderIntel(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Engineer.')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByLabelText(/^Name/)).toHaveValue('Checkout agent')
+  })
+
   it('does not offer authoring at all without sandbox:scenario:write', async () => {
     await openScenariosTab(['sandbox:scenario:read'])
     expect(
@@ -563,6 +593,66 @@ it('replays one scoped instance and refuses an ambiguous legacy selector', async
   await waitFor(() =>
     expect(api.replay).toHaveBeenCalledWith({ live_ref: live }),
   )
+})
+
+// A replay the engine refuses by edition is the calm edition line, never its sentence in a
+// red toast; any other failure, a role's refusal too, says the engine's sentence as before.
+describe('SandboxView — a replay that fails', () => {
+  async function replay() {
+    auth.perms = new Set(['sandbox:run:write'])
+    const user = userEvent.setup()
+    renderIntel(<SandboxView />)
+    await user.click(
+      await screen.findByRole('button', { name: /Replay a session/i }),
+    )
+    const dialog = screen.getByRole('dialog')
+    await user.type(
+      within(dialog).getAllByRole('textbox')[0],
+      '11111111-1111-4111-8111-111111111111',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Replay' }))
+  }
+
+  it('refused by edition: the edition line, calm', async () => {
+    const { ApiError } = await import('@/lib/api/errors')
+    api.replay.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'engineer',
+        capability: 'sandbox',
+      }),
+    )
+    await replay()
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = renderIntel(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Engineer.')
+    expect(container.textContent).not.toMatch(/raw: 403|edition_required/)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('any other failure: the engine’s sentence', async () => {
+    const { ApiError } = await import('@/lib/api/errors')
+    api.replay.mockRejectedValue(
+      new ApiError(500, 'internal', 'the runner is unavailable'),
+    )
+    await replay()
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('the runner is unavailable'),
+    )
+    expect(toast.info).not.toHaveBeenCalled()
+  })
+
+  it('a role’s refusal: the engine’s sentence, never the role toast', async () => {
+    const { ApiError } = await import('@/lib/api/errors')
+    api.replay.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'policy p-7 refuses replays'),
+    )
+    await replay()
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('policy p-7 refuses replays'),
+    )
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+  })
 })
 
 describe('SandboxView — las tres acciones y sus dos niveles de permiso', () => {

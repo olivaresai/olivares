@@ -32,6 +32,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import { useAuth } from '@/lib/auth/context'
 import { identityApi, identityKeys } from './api'
 import type { IdentityDTO } from './types'
@@ -256,6 +258,9 @@ function RosterDetailSheet({
 }) {
   const { t } = useTranslation(['identity', 'common'])
   const navigate = useNavigate()
+  // The access map is offered only where its page opens: its read is the administrator's.
+  const { navigable } = useViewAccess()
+  const accessMap = viewById('accessMap')
   if (!identity) return null
   return (
     <Sheet open={!!identity} onOpenChange={(o) => !o && onClose()}>
@@ -284,25 +289,27 @@ function RosterDetailSheet({
           <p className="text-caption text-muted-foreground">
             {t('roster.convergenceNote')}
           </p>
-          <div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                // Feature routes are generated dynamically from the registry, so
-                // their paths are not in the statically-typed route tree; navigate
-                // with a loose cast. The target reads `focus` from the URL query
-                // (access-map-view.tsx) — no route/shell change needed.
-                navigate({
-                  to: '/access-map',
-                  search: { focus: identity.ref },
-                } as never)
-              }
-            >
-              <Network className="size-4" aria-hidden />
-              {t('roster.openInAccessMap')}
-            </Button>
-          </div>
+          {accessMap && navigable(accessMap) ? (
+            <div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  // Feature routes are generated dynamically from the registry, so
+                  // their paths are not in the statically-typed route tree; navigate
+                  // with a loose cast. The target reads `focus` from the URL query
+                  // (access-map-view.tsx) — no route/shell change needed.
+                  navigate({
+                    to: '/access-map',
+                    search: { focus: identity.ref },
+                  } as never)
+                }
+              >
+                <Network className="size-4" aria-hidden />
+                {t('roster.openInAccessMap')}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </SheetContent>
     </Sheet>

@@ -301,6 +301,16 @@ describe('PathText', () => {
     expect(base).toHaveClass('text-mono', 'text-text')
   })
 
+  // On a surface of another colour (a toast on the inverse surface) the path takes the
+  // words around it: no colour of its own, the default unchanged.
+  it('takes the surrounding text colour with the inherit tone', () => {
+    const { container } = render(<PathText value={FILE} tone="inherit" />)
+    const root = container.querySelector('[data-slot="path-text"]')!
+    expect(root).toHaveClass('text-inherit')
+    expect(root).not.toHaveClass('text-text')
+    expect(root).not.toHaveClass('text-text-2')
+  })
+
   // A path sits inside sentences and table cells: its root must be phrasing content.
   it('keeps valid inside a paragraph', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})

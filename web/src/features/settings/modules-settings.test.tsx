@@ -11,6 +11,7 @@ import {
   waitFor,
   within,
 } from '@/test/intel'
+import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api'
 import { consoleApi } from '@/features/console/api'
@@ -352,6 +353,47 @@ it('explains Apply after a module read failure', async () => {
   )
 })
 
+it('says a failed read once, as the alert: no status beside it repeats it', async () => {
+  vi.spyOn(modulesApi, 'get').mockRejectedValue(new Error('offline'))
+  renderIntel(<ModulesSettings />)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'The module list could not be read.',
+  )
+  expect(
+    screen
+      .queryAllByRole('status')
+      .filter((s) => s.textContent?.includes('could not be read')),
+  ).toHaveLength(0)
+  // Apply still gives it as its reason.
+  expect(
+    screen.getByRole('button', { name: 'Apply' }),
+  ).toHaveAccessibleDescription('The module list could not be read. Try again.')
+})
+
+it('shows the list loading as skeleton rows, not a spinner over nothing', () => {
+  vi.spyOn(modulesApi, 'get').mockImplementation(() => new Promise(() => {}))
+  renderIntel(<ModulesSettings />)
+  const loading = document.querySelector(
+    '[data-slot="state-block"][data-state="loading"]',
+  )
+  expect(loading).toHaveAttribute('role', 'status')
+})
+
+it('says a failed read with Retry, and Retry reads the list again', async () => {
+  const get = vi
+    .spyOn(modulesApi, 'get')
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValue(structuredClone(catalog))
+  renderIntel(<ModulesSettings />)
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('The module list could not be read.')
+  await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+  expect(
+    await screen.findByRole('switch', { name: /inventory/i }),
+  ).toBeInTheDocument()
+})
+
 it('explains Apply during saving and removes the idle reason when a choice changes', async () => {
   vi.spyOn(modulesApi, 'select').mockImplementation(() => new Promise(() => {}))
   const user = userEvent.setup()
@@ -402,6 +444,95 @@ it('Turn on applies at once when no session runs', async () => {
     expect(select).toHaveBeenCalledWith(['finops', 'health', 'inventory']),
   )
   expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+describe('what a module change does now, as the engine answers it', () => {
+  const savedForNextStart = new ApiError(
+    503,
+    'modules_restart_unavailable',
+    'The module change is saved. It applies the next time the engine starts; no running session was stopped.',
+  )
+  beforeEach(() => {
+    vi.mocked(toast.success).mockClear()
+    vi.mocked(toast.error).mockClear()
+  })
+
+  it('applied at once: says so, and that no session stopped', async () => {
+    vi.spyOn(modulesApi, 'select').mockResolvedValue(structuredClone(catalog))
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(
+        'Applied. No session was stopped.',
+        undefined,
+      ),
+    )
+    expect(screen.queryByText('Restarting the engine…')).toBeNull()
+  })
+
+  it('saved for the next start: says so as an alert and reads the list again', async () => {
+    vi.spyOn(modulesApi, 'select').mockRejectedValue(savedForNextStart)
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+    const reads = vi.mocked(modulesApi.get).mock.calls.length
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Saved. It applies the next time the engine starts; no running session was stopped.',
+    )
+    // Apply read the running sessions once before it sent the change; the list is
+    // read again after the answer.
+    await waitFor(() =>
+      expect(vi.mocked(modulesApi.get).mock.calls.length).toBeGreaterThan(
+        reads + 1,
+      ),
+    )
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('applied at once: re-reads server-info, so the navigation and the module’s page follow it without a reload', async () => {
+    vi.spyOn(modulesApi, 'select').mockResolvedValue(structuredClone(catalog))
+    const queryClient = createTestQueryClient()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const user = userEvent.setup()
+    renderIntel(<TurnOnModule module="inventory" />, { queryClient })
+    await user.click(screen.getByRole('button', { name: 'Turn on Inventory' }))
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: queryKeys.serverInfo,
+      }),
+    )
+    expect(screen.queryByText('Restarting the engine…')).toBeNull()
+  })
+
+  it('not saved: says nothing changed as an alert', async () => {
+    vi.spyOn(modulesApi, 'select').mockRejectedValue(
+      new ApiError(503, 'modules_not_recorded', 'not recorded'),
+    )
+    const user = userEvent.setup()
+    renderIntel(<ModulesSettings />)
+    await user.click(await screen.findByRole('switch', { name: 'Inventory' }))
+    await user.click(screen.getByRole('button', { name: 'Apply 1 change' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The module selection could not be saved. Nothing changed.',
+    )
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('Turn on saved for the next start: says so in place of the button', async () => {
+    vi.spyOn(modulesApi, 'select').mockRejectedValue(savedForNextStart)
+    const user = userEvent.setup()
+    renderIntel(<TurnOnModule module="inventory" />)
+    await user.click(screen.getByRole('button', { name: 'Turn on Inventory' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Saved. It applies the next time the engine starts; no running session was stopped.',
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Turn on Inventory' }),
+    ).toBeNull()
+  })
 })
 
 describe('when the restart does not end cleanly', () => {

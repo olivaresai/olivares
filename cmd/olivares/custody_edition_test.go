@@ -251,7 +251,7 @@ func TestCommunityAuditVerifyRefusedBeforeOffBoxSigner(t *testing.T) {
 	asEdition(t, "community")
 	clearOlivaresEnv(t)
 	t.Setenv(envLedgerSigner, "aws-kms")
-	_, _, err := execRootOwnProcess(t, "audit", "verify", "--data-dir", filepath.Join(t.TempDir(), "absent"))
+	_, _, err := execRootOwnProcess(t, "audit", "verify", "--data-dir", filepath.Join(t.TempDir(), "absent"), "--tenant", "00000000-0000-0000-0000-000000000001")
 	if err == nil || exitcode.From(err) != exitcode.Edition {
 		t.Fatalf("verify = %v, want edition refusal", err)
 	}

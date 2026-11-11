@@ -5,6 +5,12 @@
   },
   "title": "速率限制",
   "description": "您的组织和工作区的速率限制。只读。",
+  "profiles": {
+    "title": "各配置文件的限额",
+    "description": "每个配置文件的工具允许它使用多少，以及何时重置。限额由工具报告，Olivares 不设置。",
+    "none": "目前没有配置文件的工具报告生效中的限额。",
+    "truncated": "部分配置文件未显示。"
+  },
   "caveats": {
     "keepInSync": "网关／代理必须保持同步：这些限制构成上游网关或代理必须镜像的清单。它们不在此处强制执行，更改限制需在提供商进行，而非在本控制台。",
     "managedAgents": "Managed Agents 不在 Rate Limits API 的覆盖范围内。其限制属于已记录的缺口，而非数值为零——之所以不显示 Managed Agents 行，是因为 API 并未报告该项。"

@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api/errors'
@@ -268,7 +268,7 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
   })
 
-  it('the page header carries one verb: Stop all agents (New rule sits in its section)', async () => {
+  it('both stops sit in the state block; the page header carries no verb (New rule sits in its section)', async () => {
     // With the provider the console mounts (AppLayout), so a section's PagePrimaryAction
     // would land in the header as it does on screen.
     wrap(
@@ -276,19 +276,22 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
         <KillswitchView />
       </PageActionsProvider>,
     )
-    await screen.findByRole('button', { name: /^stop all agents$/i })
-    const header = document.querySelector<HTMLElement>(
-      '[data-slot="page-header"]',
-    )!
+    const state = await screen.findByRole('region', {
+      name: en.banner.noneTitle,
+    })
     expect(
-      within(header).getByRole('button', { name: /^stop all agents$/i }),
+      within(state).getByRole('button', { name: /^stop all agents$/i }),
     ).toBeInTheDocument()
     expect(
-      within(header).queryByRole('button', { name: /new rule/i }),
-    ).toBeNull()
+      within(state).getByRole('button', { name: /^stop one agent/i }),
+    ).toBeInTheDocument()
     expect(
       await screen.findByRole('button', { name: /new rule/i }),
     ).toBeInTheDocument()
+    const header = document.querySelector<HTMLElement>(
+      '[data-slot="page-header"]',
+    )!
+    expect(within(header).queryByRole('button')).toBeNull()
   })
 
   it('a reason typed in the confirmation is the one sent', async () => {
@@ -316,15 +319,12 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
     )
   })
 
-  it('a single-agent stop lives under More and sends its ref as scope_ref', async () => {
+  it('a single-agent stop is a button beside Stop all and sends its ref as scope_ref', async () => {
     api.engage.mockResolvedValue(agentStopFixture)
     wrap(<KillswitchView />)
 
     await userEvent.click(
-      await screen.findByRole('button', { name: /^more$/i }),
-    )
-    await userEvent.click(
-      await screen.findByRole('menuitem', { name: /stop one agent/i }),
+      await screen.findByRole('button', { name: /^stop one agent/i }),
     )
     const dialog = await screen.findByRole('dialog')
     const confirm = within(dialog).getByRole('button', {
@@ -356,10 +356,7 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
 
     const openAgentStop = async () => {
       await userEvent.click(
-        await screen.findByRole('button', { name: /^more$/i }),
-      )
-      await userEvent.click(
-        await screen.findByRole('menuitem', { name: /stop one agent/i }),
+        await screen.findByRole('button', { name: /^stop one agent/i }),
       )
       return screen.findByRole('dialog')
     }
@@ -401,6 +398,92 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
     // The engine's message NAMES the existing stop — relayed, not replaced.
     expect(toast.warning.mock.calls[0][1]?.description).toMatch(/ks-estate-1/)
     expect(toast.error).not.toHaveBeenCalled()
+  })
+})
+
+describe('KillswitchView — what a stop does, said before any stop', () => {
+  it('the calm state is a block with its title and one sentence', async () => {
+    wrap(<KillswitchView />)
+    const state = await screen.findByRole('region', {
+      name: en.banner.noneTitle,
+    })
+    expect(within(state).getByText(en.banner.noneBody)).toBeInTheDocument()
+  })
+
+  it('a state that cannot be read says so and keeps both stops offered', async () => {
+    api.state.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    wrap(<KillswitchView />)
+    const state = await screen.findByRole('region', { name: en.title })
+    expect(
+      await within(state).findByRole('button', { name: 'Retry' }),
+    ).toBeInTheDocument()
+    expect(
+      within(state).getByRole('button', { name: /^stop all agents$/i }),
+    ).toBeEnabled()
+    expect(
+      within(state).getByRole('button', { name: /^stop one agent/i }),
+    ).toBeEnabled()
+  })
+
+  it('a refetch that fails after a good read shows Retry and never the stale calm state', async () => {
+    api.engage.mockResolvedValue(estateStopFixture)
+    wrap(<KillswitchView />)
+    const state = await screen.findByRole('region', {
+      name: en.banner.noneTitle,
+    })
+    api.state.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    await stopAll() // the stop lands, and the state read after it fails
+
+    expect(
+      await within(state).findByRole('button', { name: 'Retry' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(en.banner.noneTitle)).toBeNull()
+    expect(screen.queryByText(en.banner.noneBody)).toBeNull()
+    expect(
+      within(state).getByRole('button', { name: /^stop all agents$/i }),
+    ).toBeEnabled()
+  })
+
+  it('a refetch that fails after every agent was stopped offers Stop all again and claims no stop', async () => {
+    api.state.mockResolvedValue(estateStoppedStateFixture)
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <KillswitchView />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText(en.banner.estateTitle)).toBeInTheDocument()
+    // Two other administrators may have started the agents again meanwhile: a
+    // read that fails cannot keep Stop all closed on the last good answer.
+    api.state.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    await act(() => qc.refetchQueries())
+
+    const state = await screen.findByRole('region', { name: en.title })
+    expect(
+      await within(state).findByRole('button', { name: 'Retry' }),
+    ).toBeInTheDocument()
+    const stopAllButton = within(state).getByRole('button', {
+      name: /^stop all agents$/i,
+    })
+    expect(stopAllButton).toBeEnabled()
+    expect(stopAllButton).not.toHaveAttribute('title')
+    expect(screen.queryByText(en.banner.estateTitle)).toBeNull()
+  })
+
+  it('lists what stopping every agent does, for whoever reads the page', async () => {
+    authState.can = (p) => p !== 'governance:killswitch:admin'
+    wrap(<KillswitchView />)
+    const list = await screen.findByRole('list', { name: en.effects.title })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(4)
+    for (const item of [
+      en.effects.sessions,
+      en.effects.actions,
+      en.effects.approvals,
+      en.effects.ledger,
+    ])
+      expect(within(list).getByText(item)).toBeInTheDocument()
   })
 })
 
@@ -564,6 +647,35 @@ describe('KillswitchView — the live session list', () => {
 
     expect(await within(list).findByRole('alert')).toBeInTheDocument()
     expect(within(list).getByText('billing-reconciler')).toBeInTheDocument()
+  })
+
+  it('a stop state that cannot be read marks no session Stopped', async () => {
+    api.state.mockResolvedValue(estateStoppedStateFixture)
+    runsByState([run({ state: 'stopped', stopped_at: '2026-06-11T09:00:07Z' })])
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <KillswitchView />
+      </QueryClientProvider>,
+    )
+    const list = await screen.findByTestId('killswitch-runs')
+    expect(await within(list).findByText(/^stopped$/i)).toBeInTheDocument()
+
+    // Which sessions the stop ended is read from the stop state: once that read
+    // fails, no row may keep a Stopped mark from the last good answer.
+    api.state.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    await act(() => qc.refetchQueries())
+
+    const state = await screen.findByRole('region', { name: en.title })
+    expect(
+      await within(state).findByRole('button', { name: 'Retry' }),
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(within(list).queryByText(/^stopped$/i)).toBeNull(),
+    )
+    expect(within(list).getByText(en.runs.caption)).toBeInTheDocument()
   })
 
   it('a truncated read says so and never claims nothing is running', async () => {
@@ -850,6 +962,37 @@ describe('KillswitchView — the two-admin rule, said before and after', () => {
     expect(await within(dialog).findByText(LINE)).toBeInTheDocument()
   })
 
+  it('the agent stop says it too, in place of its own restart sentence', async () => {
+    members.listMembers.mockResolvedValue({
+      items: [admin('a', 'owner')],
+      has_more: false,
+    })
+    wrap(<KillswitchView />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^stop one agent/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(LINE)).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(en.engage.confirmBodyAgentNoRestart),
+    ).toBeInTheDocument()
+    expect(within(dialog).queryByText(en.engage.confirmBodyAgent)).toBeNull()
+  })
+
+  it('with three admin accounts the agent stop keeps its own sentence', async () => {
+    wrap(<KillswitchView />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^stop one agent/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(members.listMembers).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 30))
+    expect(within(dialog).queryByText(LINE)).toBeNull()
+    expect(
+      within(dialog).getByText(en.engage.confirmBodyAgent),
+    ).toBeInTheDocument()
+  })
+
   it("a refused post-review shows the engine's sentence in the dialog", async () => {
     const sentence =
       'separation of duties: whoever engaged, requested or executed the re-enable cannot review it'
@@ -958,7 +1101,6 @@ describe('KillswitchView — evidence pack download', () => {
     await waitFor(() => expect(click).toHaveBeenCalled())
     expect(downloadedAs).toBe('killswitch-ks-rev-1-evidence.json')
     expect(createObjectURL).toHaveBeenCalledTimes(1)
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock')
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
     click.mockRestore()
   })
@@ -1182,7 +1324,7 @@ describe('KillswitchView — RBAC gating', () => {
     expect(
       screen.queryByRole('button', { name: /stop all agents/i }),
     ).toBeNull()
-    expect(screen.queryByRole('button', { name: /^more$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /stop one agent/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /re-enable/i })).toBeNull()
     expect(
       screen.queryByRole('button', { name: /download evidence pack/i }),

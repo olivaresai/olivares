@@ -33,6 +33,7 @@
     "communicationsHandoffs": "Traspasos",
     "console": "Administración",
     "sourceDiff": "Diferencia de origen",
+    "approvals": "Aprobaciones",
     "permissions": "Permisos",
     "identity": "Identidad",
     "vault": "Caja fuerte",
@@ -155,7 +156,7 @@
     "updates": "La versión que ejecuta este motor, la versión firmada más reciente de su canal y una acción para instalarla",
     "logs": "El flujo de registros del motor en vivo, con filtros por nivel y módulo, búsqueda y pausa",
     "sourceDiff": "Compara una revisión base y una revisión head de un repositorio Git conectado, archivo por archivo",
-    "agent-tools": "Consulta las cuentas y claves de API con las que se ejecutan las sesiones; instalar las herramientas e iniciar su sesión es cosa de los administradores del despliegue",
+    "agent-tools": "Consulta las cuentas con las que se ejecutan las sesiones; instalar las herramientas e iniciar su sesión es cosa de los administradores del despliegue",
     "storedBudgets": "Consumo frente a cada límite guardado. La capacidad reservada cuenta para el límite.",
     "usage": "Los límites oficiales de 5 horas y semanales de cada cuenta, la más cercana primero, y los tokens y el coste de hoy.",
     "operations": "El host, sus discos, las sesiones en vivo y su uso, durante 24 horas, 7 o 30 días."
@@ -344,9 +345,13 @@
     "startWithChoice": "Iniciar una sesión nueva con esta elección",
     "newWithOtherAccess": "Sesión nueva con otro acceso…",
     "askPlaceholder": "Pregunta lo que quieras, @ para contexto, / para comandos y skills",
+    "messagePlaceholder": "Mensaje para {{title}}… @ archivos · / comandos",
     "modelPicker": "Modelo: {{value}}",
-    "effortPicker": "Esfuerzo: {{value}}",
+    "modelEffortPicker": "Modelo: {{model}}, esfuerzo {{effort}}",
     "accessPicker": "Acceso: {{value}}",
+    "moreActions": "Más acciones",
+    "moreActionsStashed": "Más acciones, con un borrador apartado",
+    "contextAction": "Contexto y compactación…",
     "accessKeeps": "El acceso cambia en tu próximo turno en esta conversación.",
     "queue": {
       "title": "Mensajes en cola",
@@ -370,18 +375,33 @@
       "placeholder": "Entrar pone el mensaje en cola para después de este turno",
       "placeholderSteer": "Entrar lo pone en cola para después de este turno, Ctrl+Entrar lo redirige ahora",
       "discarded": "La sesión se liberó con estos mensajes aún en cola:",
-      "copy": "Copiar"
-    }
+      "copy": "Copiar",
+      "placeholderQueueKey": "{{key}} pone un mensaje en cola para después de este turno",
+      "placeholderSteerKey": "{{key}} lo redirige ahora"
+    },
+    "stash": "Apartar este borrador",
+    "stashRestore": "Recuperar el borrador apartado",
+    "stashGone": "Ya no se guarda en esta sesión y no se ha recuperado: {{names}}",
+    "stashTooLarge": "Este borrador es demasiado grande para apartarlo: el límite es {{limit}}. Se queda aquí.",
+    "stashNotKept": "No se ha podido apartar este borrador: este navegador no guarda nada entre visitas. Se queda solo en esta pestaña.",
+    "stashNoRoom": "No se ha podido apartar este borrador: este navegador ya no tiene espacio para guardarlo. No se ha descartado nada y se queda aquí.",
+    "stashDropped": "Apartado. Para hacer sitio se ha descartado lo más antiguo: {{words}}",
+    "stashTaken": "El borrador apartado ya no está aquí: otra pestaña lo ha recuperado o ha pasado un día.",
+    "plan": "Plan",
+    "planHint": "Planificar primero: la herramienta lee y propone un plan, y no cambia nada. Se aplica desde el próximo mensaje."
   },
   "shell": {
     "more": "Más",
     "searchCommands": "Buscar y comandos",
     "search": "Buscar",
+    "searchGo": "Buscar o ir a…",
     "stopAll": "Detener todo",
     "workspaceCount": "Espacios de trabajo: {{count}}",
     "rail": {
       "title": "Sesiones",
-      "all": "Todas",
+      "seeAll_one": "Ver {{count}} sesión",
+      "seeAll_many": "Ver las {{count}} sesiones",
+      "seeAll_other": "Ver las {{count}} sesiones",
       "groups": {
         "needsYou": "Te necesita",
         "working": "En marcha",
@@ -431,10 +451,10 @@
     "killswitch": {
       "estateStopped": "TODOS LOS AGENTES PARADOS",
       "estateBody": "Los agentes no pueden actuar hasta que dos cuentas de usuario aprueben volver a arrancar.",
-      "agentStops": "{{count}} parada de agente activa",
-      "agentStops_one": "{{count}} parada de agente activa",
-      "agentStops_many": "{{count}} paradas de agente activas",
-      "agentStops_other": "{{count}} paradas de agente activas",
+      "agentStops": "{{count}} agentes detenidos",
+      "agentStops_one": "{{count}} agente detenido",
+      "agentStops_many": "{{count}} agentes detenidos",
+      "agentStops_other": "{{count}} agentes detenidos",
       "none": "No hay nada parado. Las sesiones y los agentes funcionan con normalidad."
     },
     "status": {
@@ -442,6 +462,9 @@
       "running_one": "{{count}} sesión abierta",
       "running_many": "{{count}} sesiones abiertas",
       "running_other": "{{count}} sesiones abiertas",
+      "needYou_one": "{{count}} te necesita",
+      "needYou_many": "{{count}} te necesitan",
+      "needYou_other": "{{count}} te necesitan",
       "usage": "Uso de {{tool}}",
       "fiveHour": "5 h",
       "week": "sem.",
@@ -452,7 +475,6 @@
     },
     "collapse": "Contraer la navegación",
     "expand": "Expandir la navegación",
-    "openNavigation": "Abrir la navegación",
     "closeNavigation": "Cerrar la navegación"
   },
   "places": {
@@ -471,13 +493,20 @@
   "readOnlyNotice": "Puedes leer esta página, pero no cambiarla. Un administrador de la organización sí puede.",
   "business": {
     "sessions": "Grabaciones, automatizaciones y orquestación de sesiones",
+    "providerAssignment": "Proveedores asignados a personas y departamentos",
+    "limitAssignment": "Límites de uso fijados para otras personas y departamentos",
     "people": "Directorios, departamentos y administración delegada",
     "rules": "Políticas, roles y concesiones personalizados",
     "usage": "Coste por equipo y proyecto",
+    "usageBudgets": "Presupuestos que avisan, frenan o bloquean sesiones",
     "securityCompliance": "Marcos de cumplimiento y evidencias",
     "securityRedTeam": "Ejecuciones y puntuación de red team",
     "operationsDeploy": "Desplegar agentes en otros hosts",
     "operationsResidency": "Residencia de datos e inquilinos",
-    "retentionSchedules": "Los calendarios solo se aplican en Olivares Business: esta edición los conserva y no purga nada."
+    "retentionSchedules": "Los calendarios solo se aplican en Olivares AI Business: esta edición los conserva y no purga nada."
+  },
+  "groups": {
+    "control": "Gobierno",
+    "admin": "Administración"
   }
 }

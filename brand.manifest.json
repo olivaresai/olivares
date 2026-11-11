@@ -72,7 +72,7 @@
       "hubPath": ":root --accent-text",
       "webVar": "--color-primary",
       "webTheme": "light",
-      "value": "#a84f00"
+      "value": "#954600"
     },
     {
       "id": "surface-light",
@@ -88,7 +88,7 @@
       "hubPath": ":root --border",
       "webVar": "--color-border",
       "webTheme": "light",
-      "value": "#e6e6e4"
+      "value": "rgba(40, 40, 43, 0.09)"
     },
     {
       "id": "border-strong-light",
@@ -96,7 +96,7 @@
       "hubPath": ":root --border-strong",
       "webVar": "--color-border-strong",
       "webTheme": "light",
-      "value": "#d6d6d3"
+      "value": "rgba(40, 40, 43, 0.16)"
     },
     {
       "id": "text-muted-light",
@@ -104,7 +104,7 @@
       "hubPath": ":root --muted-foreground",
       "webVar": "--color-text-muted",
       "webTheme": "light",
-      "value": "#5c564e"
+      "value": "#4a4540"
     },
     {
       "id": "ok-light",
@@ -112,7 +112,7 @@
       "hubPath": ":root --success",
       "webVar": "--color-ok",
       "webTheme": "light",
-      "value": "#2f6b2c"
+      "value": "#146a3a"
     },
     {
       "id": "warn-light",
@@ -120,7 +120,7 @@
       "hubPath": ":root --warning",
       "webVar": "--color-warn",
       "webTheme": "light",
-      "value": "#665c00"
+      "value": "#7a5600"
     },
     {
       "id": "danger-light",
@@ -128,7 +128,7 @@
       "hubPath": ":root --danger",
       "webVar": "--color-danger",
       "webTheme": "light",
-      "value": "#b0201b"
+      "value": "#ae241c"
     },
     {
       "id": "info-light",
@@ -136,7 +136,7 @@
       "hubPath": ":root --info",
       "webVar": "--color-info",
       "webTheme": "light",
-      "value": "#1e5a86"
+      "value": "#1759a8"
     },
     {
       "id": "surface-dark",
@@ -144,7 +144,7 @@
       "hubPath": ".dark --surface",
       "webVar": "--color-surface",
       "webTheme": "dark",
-      "value": "#343434"
+      "value": "#343437"
     },
     {
       "id": "border-dark",
@@ -152,7 +152,7 @@
       "hubPath": ".dark --border",
       "webVar": "--color-border",
       "webTheme": "dark",
-      "value": "rgba(255, 255, 255, 0.08)"
+      "value": "rgba(255, 255, 255, 0.07)"
     },
     {
       "id": "border-strong-dark",
@@ -160,7 +160,7 @@
       "hubPath": ".dark --border-strong",
       "webVar": "--color-border-strong",
       "webTheme": "dark",
-      "value": "rgba(255, 255, 255, 0.14)"
+      "value": "rgba(255, 255, 255, 0.13)"
     },
     {
       "id": "ok-dark",
@@ -168,7 +168,7 @@
       "hubPath": ".dark --success",
       "webVar": "--color-ok",
       "webTheme": "dark",
-      "value": "#9cc79c"
+      "value": "#86dfa0"
     },
     {
       "id": "warn-dark",
@@ -176,7 +176,7 @@
       "hubPath": ".dark --warning",
       "webVar": "--color-warn",
       "webTheme": "dark",
-      "value": "#d9b45c"
+      "value": "#f2d04f"
     },
     {
       "id": "info-dark",
@@ -184,7 +184,7 @@
       "hubPath": ".dark --info",
       "webVar": "--color-info",
       "webTheme": "dark",
-      "value": "#9db9cf"
+      "value": "#9ec7f7"
     }
   ]
 }

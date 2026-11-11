@@ -34,6 +34,7 @@
       "class": "Classe",
       "name": "Nome",
       "version": "Versão",
+      "fingerprint": "Impressão digital",
       "provenance": "Proveniência",
       "posture": "Resultado de análise registado",
       "issues": "Problemas",

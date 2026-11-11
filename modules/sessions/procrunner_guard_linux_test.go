@@ -741,6 +741,48 @@ func TestKillTreeKillsWhatItListsWhenAStateCannotBeRead(t *testing.T) {
 	}
 }
 
+// A killed multi-threaded program is a zombie while its last threads still exit,
+// and its children are handed to the guard only when the last thread is gone. A
+// zombie child therefore is not an empty tree: the pass waits for the guard to reap
+// it, and then kills the command the program had started. The fake procfs lists the
+// zombie first and the orphan once the zombie is gone, as the kernel does.
+func TestKillTreeWaitsForAZombieChildToHandOverItsCommand(t *testing.T) {
+	saved := killPassPause
+	killPassPause = 300 * time.Millisecond // the fake listing changes inside this window
+	t.Cleanup(func() { killPassPause = saved })
+	command := exec.Command("/bin/sleep", "600")
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- command.Wait() }()
+	t.Cleanup(func() { _ = command.Process.Kill() })
+	root := t.TempDir()
+	const zombie = 4242
+	writeFakeProcess(t, root, zombie, "Z", 1)
+	writeFakeProcess(t, root, command.Process.Pid, "S", 1)
+	writeFakeChildren(t, root, 1, 1, strconv.Itoa(zombie)+" ")
+	children := filepath.Join(root, "1", "task", "1", "children")
+	ended := make(chan bool, 1) // whether the command ended before the deadline
+	go func() {
+		time.Sleep(killPassPause / 2)
+		_ = os.WriteFile(children, []byte(strconv.Itoa(command.Process.Pid)+" "), 0o600) // the zombie is reaped, its command handed over
+		select {
+		case <-exited:
+			ended <- true
+		case <-time.After(5 * time.Second):
+			ended <- false
+		}
+		_ = os.WriteFile(children, nil, 0o600) // the killed command is gone from the guard's list
+	}()
+	if survivors, err := killTreeAt(root, 1); err != nil || survivors != 0 {
+		t.Fatalf("killTreeAt = %d survivors, %v; want none", survivors, err)
+	}
+	if !<-ended {
+		t.Fatal("the pass ended at a zombie child and left the command the program had started")
+	}
+}
+
 // A program another package starts itself (the cockpit's terminal panes) gets the
 // same guard: ending it reaches what left the session with setsid, which a signal to
 // the session cannot.

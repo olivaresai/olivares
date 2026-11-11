@@ -112,6 +112,15 @@ function Shell() {
 async function mount() {
   // A fresh shared Whoami cache isolates the PRIVATE read without replacing Auth's query.
   client.setQueryData(queryKeys.whoami, A)
+  // The shell's server-info read has answered: the navigation and the route gate take the
+  // edition held here from it, so it is no read of this case.
+  client.setQueryData(queryKeys.serverInfo, {
+    version: 'v-test-navigation',
+    engine: 'sqlite',
+    setup_required: false,
+    edition: 'community',
+    license: { status: 'none', licensee: '' },
+  })
   const root = createRootRoute({
     component: () => (
       <AuthProvider>

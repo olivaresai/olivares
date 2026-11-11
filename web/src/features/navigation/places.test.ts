@@ -25,7 +25,6 @@ import {
   type ViewGate,
 } from './model'
 import {
-  FIRST_PLACES,
   PLACES,
   buildNavSearchIndex,
   businessRows,
@@ -43,12 +42,12 @@ const everything: ViewGate = () => true
 const t = i18n.getFixedT('en', 'nav')
 
 describe('the sidebar follows the 0.7 map', () => {
-  it('names Sessions, Files and Tools first, then the places under More, one noun each, with Settings at the foot', () => {
+  it('lists the ten places in order, one noun each, in their groups, with Settings at the foot', () => {
     expect(sidebarPlaces(everything).map((p) => t(`places.${p.id}`))).toEqual([
+      'Overview',
       'Sessions',
       'Files',
       'Tools',
-      'Overview',
       'Rules',
       'Usage',
       'Audit',
@@ -56,7 +55,18 @@ describe('the sidebar follows the 0.7 map', () => {
       'Security',
       'Operations',
     ])
-    expect([...FIRST_PLACES]).toEqual(['sessions', 'files', 'tools'])
+    expect(sidebarPlaces(everything).map((p) => p.group)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'control',
+      'control',
+      'control',
+      'admin',
+      'admin',
+      'admin',
+    ])
     expect(t(`places.${settingsPlace().id}`)).toBe('Settings')
     expect(settingsPlace().path).toBe('/settings')
   })
@@ -150,15 +160,20 @@ describe('every page sits in exactly one place', () => {
       placePages(id, everything).map((p) => p.id),
     )
     expect(new Set(listed).size).toBe(listed.length)
+    // Two kinds of page are no registered view: the Settings utility, and the
+    // section a place opens on as a page of its own (Rules: Approvals, a tab of
+    // /permissions). Each is listed once; every other page is a view.
+    const sections = PLACES.flatMap((p) => (p.section ? [p.section.key] : []))
+    expect(listed).toContain(APPROVALS_SECTION.key)
     const expected = FEATURE_VIEWS.filter(
       (v) =>
         !v.hideInNav &&
         v.navigation.kind === 'feature' &&
         isListed(v, everything),
     ).map((v) => v.id)
-    expect(listed.filter((id) => id !== 'settings').sort()).toEqual(
-      [...expected].sort(),
-    )
+    expect(
+      listed.filter((id) => id !== 'settings' && !sections.includes(id)).sort(),
+    ).toEqual([...expected].sort())
   })
 
   it('places an edition page no list names by its registry section', () => {
@@ -192,8 +207,8 @@ describe('a place appears only where one of its pages opens', () => {
     const roomClosed = permissionGate((p) => p !== 'sessions:account:read')
     const tools = sidebarPlaces(roomClosed).find((p) => p.id === 'tools')
     expect(tools?.path).toBe('/providers')
-    // With the room open, the door is not listed beside it.
-    expect(placePages('tools', everything).map((p) => p.id)).not.toContain(
+    // API keys retain a distinct Providers tab beside AI tools.
+    expect(placePages('tools', everything).map((p) => p.id)).toContain(
       'providers',
     )
   })
@@ -233,10 +248,11 @@ describe('Admin and Settings hold what IA.md names (0.5 fold)', () => {
     expect(placePages('security', everything).map((p) => p.id)).toEqual(
       registered([
         'security',
+        'killswitch',
         'attestation',
         'compliance',
         'redteam',
-        'killswitch',
+        'postureExport',
       ]),
     )
     expect(placePages('activity', everything).map((p) => p.id)).not.toContain(
@@ -258,6 +274,8 @@ describe('Admin and Settings hold what IA.md names (0.5 fold)', () => {
         'alerting',
         'inferenceProxy',
         'deploy',
+        'fleetNodes',
+        'circuitBreaker',
         'residency',
         'tenants',
       ]),
@@ -280,6 +298,23 @@ describe('Admin and Settings hold what IA.md names (0.5 fold)', () => {
     ).toBe('operations')
   })
 
+  it('files the Business pages a section would put under People or Audit in the job they serve', () => {
+    // Nodes and the circuit breaker serve the installation, posture export
+    // serves security; the Business extension registers them under the
+    // administration, access and audit sections.
+    expect(
+      placeOfView(editionView('fleetNodes', 'system', 'administration')),
+    ).toBe('operations')
+    expect(
+      placeOfView(editionView('circuitBreaker', 'security-identity', 'access')),
+    ).toBe('operations')
+    expect(
+      placeOfView(
+        editionView('postureExport', 'observation', 'audit-recordings'),
+      ),
+    ).toBe('security')
+  })
+
   it('keeps system updates out of Settings: its pages are personal ones', () => {
     expect(placePages('settings', everything).map((p) => p.id)).toEqual([
       'settings',
@@ -298,6 +333,30 @@ describe('Admin and Settings hold what IA.md names (0.5 fold)', () => {
   })
 })
 
+describe('Rules leads with its approval queue, a page of its own in the row', () => {
+  it('lists Approvals first, then Permissions, each opening its own tab of the same page', () => {
+    const [approvals, permissions] = placePages('rules', everything)
+    expect(approvals).toEqual({
+      id: 'approvals',
+      path: '/permissions',
+      search: { tab: 'approvals' },
+      more: false,
+    })
+    expect(permissions).toEqual({
+      id: 'permissions',
+      path: '/permissions',
+      search: { tab: 'policies' },
+      more: false,
+    })
+  })
+
+  it('offers no Approvals page to a person who may not read the queue, and Permissions opens bare', () => {
+    const pages = placePages('rules', (_view, section) => !section)
+    expect(pages.map((p) => p.id)).not.toContain('approvals')
+    expect(pages.find((p) => p.id === 'permissions')?.search).toBeUndefined()
+  })
+})
+
 describe('a row shows at most five pages of its place; More holds the rest (DESIGN-0.7 section 4)', () => {
   const rowOf = (id: PlaceId, gate: ViewGate = everything) =>
     placePages(id, gate)
@@ -309,18 +368,13 @@ describe('a row shows at most five pages of its place; More holds the rest (DESI
       .map((p) => p.id)
 
   it('names the row and the More of each place', () => {
-    expect(rowOf('sessions')).toEqual([
-      'sessions',
-      'work',
-      'communications',
-      'voice',
-      'sandbox',
-    ])
+    expect(rowOf('sessions')).toEqual(['sessions', 'work', 'communications'])
     expect(moreOf('sessions')).toEqual(
-      registered(['gitPublication', 'sourceDiff', 'recordings']),
+      registered(['gitPublication', 'sandbox', 'voice', 'sourceDiff']),
     )
     expect(rowOf('tools')).toEqual([
       'agent-tools',
+      'providers',
       'models',
       'capabilities',
       'knowledge',
@@ -354,6 +408,8 @@ describe('a row shows at most five pages of its place; More holds the rest (DESI
         'alerting',
         'inferenceProxy',
         'deploy',
+        'fleetNodes',
+        'circuitBreaker',
         'residency',
         'tenants',
       ]),
@@ -519,9 +575,14 @@ const PLACE_OF: Readonly<Record<string, PlaceId>> = {
     ['identity', 'organization', 'console'].map((id) => [id, 'people']),
   ),
   ...Object.fromEntries(
-    ['security', 'attestation', 'compliance', 'redteam', 'killswitch'].map(
-      (id) => [id, 'security'],
-    ),
+    [
+      'security',
+      'attestation',
+      'compliance',
+      'redteam',
+      'killswitch',
+      'postureExport',
+    ].map((id) => [id, 'security']),
   ),
   ...Object.fromEntries(
     [
@@ -533,6 +594,8 @@ const PLACE_OF: Readonly<Record<string, PlaceId>> = {
       'eventing',
       'alerting',
       'inferenceProxy',
+      'fleetNodes',
+      'circuitBreaker',
       'residency',
       'tenants',
     ].map((id) => [id, 'operations']),
@@ -619,31 +682,54 @@ describe('the palette names the place alone and keeps the former names as search
   })
 })
 
-describe('the closed Business rows', () => {
-  const rowsByView = (rows: (id: string) => readonly string[]) =>
+describe('the closed rows of a higher edition', () => {
+  const rowsByView = (rows: (id: string) => readonly unknown[]) =>
     Object.fromEntries(
       FEATURE_VIEWS.flatMap((v) =>
         rows(v.id).length ? [[v.id, rows(v.id)]] : [],
       ),
     )
+  const businessRow = (id: string) => ({ id, minEdition: 'business' })
+  const ROWS = {
+    work: [businessRow('sessions')],
+    'agent-tools': [
+      businessRow('providerAssignment'),
+      businessRow('limitAssignment'),
+    ],
+    identity: [businessRow('people')],
+    permissions: [businessRow('rules')],
+    usage: [businessRow('usage'), businessRow('usageBudgets')],
+    security: [
+      businessRow('securityCompliance'),
+      businessRow('securityRedTeam'),
+    ],
+    operations: [
+      businessRow('operationsDeploy'),
+      businessRow('operationsResidency'),
+    ],
+    retention: [businessRow('retentionSchedules')],
+  }
 
-  it('Community shows them on the page of their capability, and nowhere else', () => {
-    expect(rowsByView(businessRows)).toEqual(
-      BUSINESS_BUILD
-        ? {}
-        : {
-            work: ['sessions'],
-            identity: ['people'],
-            permissions: ['rules'],
-            usage: ['usage'],
-            security: ['securityCompliance', 'securityRedTeam'],
-            operations: ['operationsDeploy', 'operationsResidency'],
-            retention: ['retentionSchedules'],
-          },
-    )
+  // A registered view placed above Community brings its own row, at its address (`path`):
+  // the enterprise overlay's views do, so the table below is the pages' own rows.
+  const own = (rows: typeof businessRows) => (id: string) =>
+    rows(id).filter((row) => row.path === undefined)
+
+  it('sit on the page of their capability, each with its minimum edition, and nowhere else', () => {
+    expect(rowsByView(own(businessRows))).toEqual(ROWS)
   })
 
-  it('a Business build draws none', async () => {
+  // Nothing places the cockpit above Community yet: its row would be false.
+  it('no closed row names the session cockpit', () => {
+    const ids = FEATURE_VIEWS.flatMap((v) =>
+      own(businessRows)(v.id).map((r) => r.id),
+    )
+    expect(ids.filter((id) => /cockpit/i.test(id))).toEqual([])
+  })
+
+  // Which of them shows is the licensed edition's question (editionCovers, in the shell),
+  // never the build's: a Business build lists the same rows.
+  it('a Business build lists the same rows', async () => {
     vi.resetModules()
     vi.doMock('@/features/business-build', async (original) => ({
       ...(await original<typeof import('@/features/business-build')>()),
@@ -651,7 +737,7 @@ describe('the closed Business rows', () => {
     }))
     try {
       const business = await import('./places')
-      expect(rowsByView(business.businessRows)).toEqual({})
+      expect(rowsByView(own(business.businessRows))).toEqual(ROWS)
     } finally {
       vi.doUnmock('@/features/business-build')
       vi.resetModules()

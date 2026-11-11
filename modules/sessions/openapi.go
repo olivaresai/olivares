@@ -103,6 +103,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 		}
 		return responses, true
 	}
+	if sessionsFileSearchRoute(method, pattern) {
+		return sessionsFileSearchResponses(), true
+	}
 	if method == http.MethodGet && pattern == "/workspaces/{ref}/files/archive" {
 		responses := api.GenericModuleResponses()
 		responses["200"] = oas.Obj("description", "The named entries as one zip",
@@ -301,6 +304,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 // these route/header/query controls are required for a generated client to
 // invoke validate, plan and apply correctly.
 func sessionsParameters(method, pattern string) []map[string]any {
+	if sessionsFileSearchRoute(method, pattern) {
+		return sessionsFileSearchParameters()
+	}
 	if sessionsRawFileWrite(method, pattern) {
 		return []map[string]any{oas.Param("documents", "query", "Convert supported document uploads to Markdown beside the preserved original. Other file formats are stored unchanged. Omit to retain raw-write behavior.", false, oas.Obj("type", "string", "enum", oas.Enum("markdown")))}
 	}
@@ -516,6 +522,8 @@ func sessionsRequestBody(method, pattern string) (map[string]any, bool) {
 						"items", oas.Obj("type", "string"),
 						"description", "Ids of files stored with this session (POST /runs/{ref}/attachments), sent with text as one message. Documents reach the tool as Markdown; images retain native delivery and a tool that takes no images refuses them. Not accepted with line, message or work_lease_fence."),
 					"work_lease_fence", oas.Obj("type", "integer", "format", "int64", "minimum", 1),
+					"command_id", oas.Obj("type", "string", "format", "uuid", "minLength", 36, "maxLength", 36,
+						"description", "Names this input so a retry runs the agent once: the same person sending the same input under the same id on this session gets the first receipt and nothing is sent again. The same id with another input is a 409. Canonical lower-case UUID; another person's id never matches yours."),
 					"review_comment", oas.Obj("type", "object", "additionalProperties", false,
 						"required", []string{"path", "line", "side"},
 						"description", "Says the input is a comment on one line of the session's branch diff (GET /runs/{ref}/diff). The message is sent as usual; this names the place, and the ledger records it as sessions.run.review_comment once the input was accepted. Not accepted with attachments.",
@@ -699,7 +707,7 @@ func sessionsRunMarkStateSchema() map[string]any {
 }
 
 // sessionsRunInputAcceptedSchema is the exact body POST /runs/{ref}/input returns on
-// success. It is closed because the handler writes this one key and nothing else.
+// success. It is closed because the handler writes these keys and nothing else.
 func sessionsRunInputAcceptedSchema() map[string]any {
 	return oas.Obj(
 		"type", "object", "additionalProperties", false,
@@ -707,6 +715,9 @@ func sessionsRunInputAcceptedSchema() map[string]any {
 		"properties", oas.Obj("accepted", oas.Obj(
 			"type", "boolean",
 			"description", "Always true; a non-2xx status is the only way this operation reports refusal.",
+		), "command_id", oas.Obj(
+			"type", "string", "format", "uuid",
+			"description", "The command_id the input was sent with, when it had one; a retry of that command gets this same receipt.",
 		)),
 	)
 }

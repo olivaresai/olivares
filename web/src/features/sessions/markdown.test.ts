@@ -64,7 +64,7 @@ describe('parseMarkdown — blocks', () => {
     // the second item holds its own words and a nested list of two
     expect(bullets.items[1]!.map((b) => b.kind)).toEqual(['paragraph', 'list'])
     expect(steps).toMatchObject({ ordered: true, start: 1 })
-    expect(code).toEqual({ kind: 'code', text: 'make test' })
+    expect(code).toEqual({ kind: 'code', text: 'make test', lang: 'sh' })
   })
 
   it('keeps one ordered list across blank lines and honours its first number', () => {
@@ -90,7 +90,7 @@ describe('parseMarkdown — blocks', () => {
 
   it('keeps a fence open to the end of the reply while it is still streaming', () => {
     expect(parseMarkdown('```py\nprint(1)\nprint(2)')).toEqual([
-      { kind: 'code', text: 'print(1)\nprint(2)' },
+      { kind: 'code', text: 'print(1)\nprint(2)', lang: 'py' },
     ])
     // markers inside a fence are the code, not markdown
     expect(parseMarkdown('~~~\n- **x**\n~~~')).toEqual([
@@ -98,7 +98,7 @@ describe('parseMarkdown — blocks', () => {
     ])
     // a longer fence holds a shorter one
     expect(parseMarkdown('````md\n```\ninner\n```\n````')).toEqual([
-      { kind: 'code', text: '```\ninner\n```' },
+      { kind: 'code', text: '```\ninner\n```', lang: 'md' },
     ])
   })
 
@@ -130,6 +130,7 @@ describe('parseMarkdown — blocks', () => {
     expect(list.items[0]![1]).toEqual({
       kind: 'code',
       text: 'make\n\n\nmake test',
+      lang: 'sh',
     })
   })
 
@@ -450,7 +451,7 @@ describe('parseMarkdown — a hostile or runaway reply stays bounded', () => {
 
   it('still opens a fence that has trailing spaces or tabs after its language', () => {
     expect(parseMarkdown('```ts \t \nx\n```')).toEqual([
-      { kind: 'code', text: 'x' },
+      { kind: 'code', text: 'x', lang: 'ts' },
     ])
     expect(parseMarkdown('~~~   \nx')).toEqual([{ kind: 'code', text: 'x' }])
     // blanks only after the marker, as many as the reply allows
@@ -479,6 +480,7 @@ describe('plainText — review of the copy', () => {
     expect(blocks.at(-1)).toEqual({
       kind: 'code',
       text: 'build:\n\tgo build ./...',
+      lang: 'make',
     })
     expect(plainText(blocks)).toBe('Run:\n\nbuild:\n\tgo build ./...')
   })
@@ -501,6 +503,7 @@ it('keeps a list whole when a fence in an item has a tab-led line', () => {
   expect(list.items[0]![1]).toEqual({
     kind: 'code',
     text: 'build:\n\tgo build',
+    lang: 'make',
   })
   expect(list.items[1]).toEqual([{ kind: 'paragraph', inline: ['next'] }])
 })
@@ -530,6 +533,7 @@ describe('parseMarkdown — tabs in and around a fence', () => {
     expect(inner.items[0]![1]).toEqual({
       kind: 'code',
       text: 'all:\n\tgo build',
+      lang: 'make',
     })
   })
 })

@@ -4,7 +4,7 @@
 //
 // TemplateEditor — Sheet-based form for creating or editing workspace templates.
 // The sheet asks a name and a description; Hooks (dynamic list of command entries),
-// Agent settings (permission_mode, effort, model, custom_instructions), Secrets
+// Settings (permission_mode, effort, model, custom_instructions), Secrets
 // (secret_env), Connectors (comma-separated IDs) and Policies (dlp_mode,
 // max_session_duration_minutes, allowed_tools, record_io, …) are native <details>,
 // closed on open, each summarized by counts or the model name, never a secret.
@@ -768,8 +768,11 @@ function Section({ title, summary, hint, children }: SectionProps) {
           aria-hidden
           className="size-4 shrink-0 text-text-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
         />
-        <span>{title}</span>
-        <span className="ms-auto text-caption font-normal text-muted-foreground">
+        <span className="shrink-0">{title}</span>
+        <span
+          title={summary}
+          className="ms-auto min-w-0 truncate text-caption font-normal text-muted-foreground"
+        >
           {summary}
         </span>
       </summary>

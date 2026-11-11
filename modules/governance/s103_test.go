@@ -85,6 +85,36 @@ func (h *harness) tenantAdmin() (model.TenantID, string) {
 // after ReloadActivePDP (the boot-reload the composition root runs per tenant),
 // enforces the stored active Cedar policy — so activation survives a restart.
 
+// TestPdpDryRunAgainstNamedPerson proves a test against a person decides with that
+// person's stored standing: the same policy forbids the viewer it names and leaves the
+// anonymous example, which carries no role, alone.
+func TestPdpDryRunAgainstNamedPerson(t *testing.T) {
+	h := newHarness(t)
+	h.useApprovalAuthority()
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	_, tok := h.roleUser(admin, tenant, "boss@acme.io", "admin")
+	viewerID, _ := h.roleUser(admin, tenant, "ana@acme.io", "viewer")
+	dryRun := func(principal map[string]any) resp {
+		return h.do("POST", "/v1/m/governance/pdp/dry-run", tok, map[string]any{
+			"engine": "cedar",
+			"source": `forbid(principal in Role::"viewer", action, resource);`,
+			"request": map[string]any{
+				"principal": principal, "permission": "agent:read", "resource": map[string]any{"kind": "agent"},
+			},
+		}, tenantHdr(tenant))
+	}
+	if got := dryRun(map[string]any{"kind": "user"}); got.code != http.StatusOK || got.body["allow"] != true {
+		t.Fatalf("anonymous example = %d %s, want allowed", got.code, got.raw)
+	}
+	if got := dryRun(map[string]any{"person": viewerID}); got.code != http.StatusOK || got.body["allow"] != false {
+		t.Fatalf("named viewer = %d %s, want forbidden by the role rule", got.code, got.raw)
+	}
+	if got := dryRun(map[string]any{"person": "nobody@acme.io"}); got.code != http.StatusNotFound {
+		t.Fatalf("unknown person = %d %s, want 404", got.code, got.raw)
+	}
+}
+
 // --- D: tool confirmation -----------------------------------------------------
 
 // --- E: WIF graph -------------------------------------------------------------

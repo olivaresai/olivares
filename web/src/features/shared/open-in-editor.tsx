@@ -8,6 +8,26 @@ import { useClientSettings } from '@/features/settings/preferences'
 import { EDITORS, editorLink, sshTarget } from '@/lib/editor-links'
 import './i18n'
 
+/** The link to a file in the editor the person chose, and its name; null when no link can
+ * be built. */
+export function useEditorLink(
+  root: string,
+  file: string,
+  line?: number,
+): { href: string; label: string } | null {
+  const { t } = useTranslation('shared')
+  const editor = useClientSettings((s) => s.editor)
+  const editorSsh = useClientSettings((s) => s.editorSsh)
+  const href = editorLink(
+    editor,
+    { root, file, line },
+    sshTarget(editorSsh, window.location.hostname),
+  )
+  return href
+    ? { href, label: t('openInEditor', { editor: EDITORS[editor].label }) }
+    : null
+}
+
 /**
  * A link that opens a file of a session's folder in the editor the person chose in Settings
  * (VS Code, Zed or a JetBrains IDE), at `line` when given. It is only a link: the editor's
@@ -26,16 +46,9 @@ export function OpenInEditor({
   /** Where the toolbar shows its actions as icons: the label's own classes. */
   labelClassName?: string
 }) {
-  const { t } = useTranslation('shared')
-  const editor = useClientSettings((s) => s.editor)
-  const editorSsh = useClientSettings((s) => s.editorSsh)
-  const href = editorLink(
-    editor,
-    { root, file, line },
-    sshTarget(editorSsh, window.location.hostname),
-  )
-  if (!href) return null
-  const label = t('openInEditor', { editor: EDITORS[editor].label })
+  const link = useEditorLink(root, file, line)
+  if (!link) return null
+  const { href, label } = link
   return (
     <Button asChild variant="ghost" size="sm" className="shrink-0">
       <a href={href} title={label}>

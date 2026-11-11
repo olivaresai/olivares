@@ -159,6 +159,10 @@
         "deb": {
           "depends": [
             "apparmor"
+          ],
+          "recommends": [
+            "openssh-sftp-server",
+            "htop"
           ]
         },
         "rpm": {

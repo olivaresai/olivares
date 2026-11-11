@@ -307,6 +307,23 @@ func githubPublicationConfig() map[string]string {
 	}
 }
 
+// The custody names an approved repository for a target read without creating
+// the server repository; a repository the row does not approve is not named.
+func TestGitpublishCustodyNamesTheRepositoryWithoutCreatingIt(t *testing.T) {
+	ctx := context.Background()
+	c, secrets, inits := newTestGitpublishCustody(t, gitpublishTestSource("gh", "github", githubPublicationConfig()))
+	name, err := c.RepositoryName(ctx, gitpublishTestTenant, gitpublishTestWorkspace, "gh:acme/widgets")
+	if err != nil || name != "acme/widgets" {
+		t.Fatalf("repository name = %q, %v", name, err)
+	}
+	if _, err := c.RepositoryName(ctx, gitpublishTestTenant, gitpublishTestWorkspace, "gh:acme/unlisted"); !errors.Is(err, gitpublish.ErrBindingNotApproved) {
+		t.Fatalf("an unapproved repository was named: %v", err)
+	}
+	if len(inits.paths) != 0 || len(secrets.reads) != 0 {
+		t.Fatalf("naming created repositories %v or read secrets %v", inits.paths, secrets.reads)
+	}
+}
+
 func TestGitpublishCustodySelectsApprovedBindings(t *testing.T) {
 	ctx := context.Background()
 	c, secrets, inits := newTestGitpublishCustody(t,

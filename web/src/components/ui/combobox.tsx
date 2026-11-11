@@ -16,17 +16,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { fieldWell } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 /**
  * Combobox — the FILTERED sibling of `Select` (W3C ARIA APG `combobox` pattern:
- * an editable input over a filtered listbox popup). The trigger reads like an Input
- * (h-8, hairline, copper focus ring, ChevronsUpDown affordance) and opens a Popover
+ * an editable input over a filtered listbox popup). The trigger is the field well of an
+ * Input (the density token's height, the ring on its boundary, a ChevronsUpDown affordance in
+ * the second tone) and opens a Popover
  * holding a `cmdk` Command: a type-to-filter input, a listbox of options, and an
  * empty state. All the combobox a11y roles come from cmdk — the input is
  * `role="combobox"` with `aria-autocomplete="list"`, `aria-expanded`,
  * `aria-controls` and a moving `aria-activedescendant`; the list is
- * `role="listbox"`; each row is `role="option"` with `aria-selected`. Per APG, DOM
+ * `role="listbox"`; each row is `role="option"` with `aria-selected`, 44 px high on a
+ * phone. Per APG, DOM
  * focus stays on the input while Arrow keys move the active descendant; Enter selects
  * and Escape closes, both returning focus to the trigger. Use for filtered selectors
  * (tenant, model, resource) where `Select` would be too long to scan.
@@ -115,27 +118,18 @@ export function Combobox({
           disabled={disabled}
           data-slot="combobox-trigger"
           className={cn(
-            'flex h-8 w-full items-center justify-between gap-2 rounded-md border border-ctl-border bg-surface px-2.5',
-            'text-body text-foreground transition-colors outline-none',
-            'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-            'aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger',
-            'disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted',
+            fieldWell,
+            'flex h-[var(--density-control)] items-center justify-between gap-2 ps-[11px] pe-2 max-md:min-h-11',
             '[&_svg]:size-4 [&_svg]:shrink-0',
             className,
           )}
         >
           <span
-            className={cn(
-              'line-clamp-1 text-left',
-              !selected && 'text-muted-foreground',
-            )}
+            className={cn('line-clamp-1 text-left', !selected && 'text-text-3')}
           >
             {selected ? selected.label : placeholder}
           </span>
-          <ChevronsUpDown
-            className="size-4 text-muted-foreground"
-            aria-hidden="true"
-          />
+          <ChevronsUpDown className="size-4 text-text-2" aria-hidden="true" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -154,6 +148,7 @@ export function Combobox({
                 keywords={[option.label, ...(option.keywords ?? [])]}
                 disabled={option.disabled}
                 onSelect={choose}
+                className="max-md:min-h-11"
               >
                 <span className="line-clamp-1 flex-1">{option.label}</span>
                 <Check

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ConsumptionBar, SectionCard, SeverityBadge } from '@/features/_intel'
 import { formatDateTime, formatPercent } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import {
   alertAmount,
   budgetAmount,
@@ -65,10 +66,15 @@ export function BudgetCard({
   status,
   actions,
   details,
+  scopeLabel,
+  className,
 }: {
   status: BudgetStatus
   actions?: ReactNode
   details?: ReactNode
+  /** The scope in words (a department's name), when the caller knows it. */
+  scopeLabel?: string
+  className?: string
 }) {
   const { t, i18n } = useTranslation('finops')
   const amount = budgetAmount(status)
@@ -85,7 +91,7 @@ export function BudgetCard({
       : null
   const reserved = status.amount?.components?.static_reservation
   return (
-    <SectionCard className={over ? 'border-warning-line' : undefined}>
+    <SectionCard className={cn(over && 'border-warning-line', className)}>
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -103,7 +109,7 @@ export function BudgetCard({
               <span className="font-mono">
                 {status.dimension === 'global'
                   ? t('budgets.global')
-                  : `${status.dimension}: ${status.key}`}
+                  : (scopeLabel ?? `${status.dimension}: ${status.key}`)}
               </span>
               {' · '}
               {t(`periods.${status.period}`, { defaultValue: status.period })}

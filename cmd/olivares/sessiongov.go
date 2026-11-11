@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -345,8 +346,11 @@ const launchAdmissionDomain = "olivares.session.launch.admission.v1"
 // under a key of its own rather than conflicting with the launch. A launch without a run
 // reference gets a fresh key.
 func launchAdmission(intent sessions.LaunchIntent) finops.AdmissionRequest {
+	groups := append([]string(nil), intent.UserGroupRefs...)
+	sort.Strings(groups) // the admission payload and its key must not depend on the order
 	dims := finops.SpendDims{
 		AgentRef: intent.AgentRef, SessionRef: intent.RunRef, ModelRef: intent.Model,
+		UserGroupRefs: groups,
 		// The session's workspace is its FinOps WorkspaceRef dimension, so a
 		// workspace-scoped enforcing budget also caps the launch. Admission resolves the
 		// firm identity itself from AgentRef when an identity budget exists.
@@ -354,11 +358,13 @@ func launchAdmission(intent sessions.LaunchIntent) finops.AdmissionRequest {
 	}
 	key := model.NewID().String()
 	if run := strings.TrimSpace(intent.RunRef); run != "" {
-		key = run + "/" + launchDimsDigest(dims)
+		key = run + "/" + launchDimsDigest(dims, intent.Actor)
 	}
 	return finops.AdmissionRequest{
-		Scope: finops.AdmissionScopeSessionLaunch,
-		Dims:  dims,
+		Scope:    finops.AdmissionScopeSessionLaunch,
+		Dims:     dims,
+		ActorRef: intent.Actor,
+		Groups:   groups,
 		// A launch never learns what the session goes on to spend: that arrives later, per
 		// request, on the bus. It has nothing to commit or release, so it holds nothing
 		// (engineGateNoEstimate, budgetgate.go).
@@ -371,12 +377,19 @@ func launchAdmission(intent sessions.LaunchIntent) finops.AdmissionRequest {
 }
 
 // launchDimsDigest is the hex SHA-256 of every dimension launchAdmission sets, each
-// length-prefixed so no two sets of dimensions share an encoding.
-func launchDimsDigest(dims finops.SpendDims) string {
+// length-prefixed so no two sets of dimensions share an encoding. The actor and the groups
+// join only when a launch carries them, so a launch without either keeps its key.
+func launchDimsDigest(dims finops.SpendDims, actor string) string {
 	h := sha256.New()
 	writeLenPrefixed(h, []byte(launchAdmissionDomain))
 	for _, v := range []string{dims.AgentRef, dims.SessionRef, dims.ModelRef, dims.WorkspaceRef} {
 		writeLenPrefixed(h, []byte(v))
+	}
+	if actor != "" || len(dims.UserGroupRefs) > 0 {
+		writeLenPrefixed(h, []byte(actor))
+		for _, g := range dims.UserGroupRefs {
+			writeLenPrefixed(h, []byte(g))
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -434,7 +447,7 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 		case !chk.Allowed:
 			return sessions.LaunchDecision{
 				Allowed:      false,
-				Reason:       "session budget " + budgetActionLabel(chk.Action), // money-free (docs/SECURITY-HARDENING.md)
+				Reason:       launchBudgetRefusal(chk), // money-free (docs/SECURITY-HARDENING.md)
 				DeniedStatus: budgetStatus(chk.Action),
 			}, nil
 		}
@@ -743,6 +756,22 @@ func secretEnvNames(refs []sessions.SecretEnvRef) []string {
 		out = append(out, ref.Env+"<-"+ref.Secret)
 	}
 	return out
+}
+
+// launchBudgetRefusal is what the person launching reads when a budget stops them:
+// what stopped it and what to do next, without amounts. A throttle keeps its label.
+func launchBudgetRefusal(chk finops.Reservation) string {
+	if chk.Action != "block" {
+		return "session budget " + budgetActionLabel(chk.Action)
+	}
+	if chk.SpendLimit {
+		return "your spend limit for this period is used up: ask an admin to raise it"
+	}
+	subject := "the budget"
+	if name := strings.TrimSpace(chk.BudgetName); name != "" {
+		subject += " " + strconv.Quote(name)
+	}
+	return subject + " for this period is used up: ask an admin to raise it or add an exception for you"
 }
 
 // budgetActionLabel maps a FinOps action to a money-free reason fragment.

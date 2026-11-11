@@ -624,7 +624,7 @@ func endpointRelay(socket string, d destination) http.Handler {
 		forward.URL.Scheme, forward.URL.Host = "http", d.address()
 		forward.Host, forward.RequestURI = d.address(), ""
 		if r.Header.Get("Upgrade") != "" || !requestAllowed(forward, []destination{d}) {
-			http.Error(w, "session destination denied", http.StatusForbidden)
+			http.Error(w, destinationDeniedMessage, http.StatusForbidden)
 			return
 		}
 		reverse.ServeHTTP(w, forward)

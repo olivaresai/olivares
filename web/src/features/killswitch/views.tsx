@@ -22,7 +22,10 @@ export const VIEWS = [
     },
     helpHref: '/how-to/cookbook/kill-switch-drill',
     icon: OctagonAlert,
-    permission: 'governance:killswitch:read',
+    // The page that engages and releases stops is the administrator's. The stop's state
+    // stays readable on governance:killswitch:read: the status line and a session's
+    // governance panel say why sessions stopped.
+    permission: 'governance:killswitch:admin',
     // ⌘K "Stop all agents" (console remake 26.10, CONCEPT-IA command menu): opens the
     // stop-all confirmation; engaging stays that confirmation's own button.
     commandActions: [

@@ -91,60 +91,58 @@ export default function GovernanceView() {
 
   return (
     <div className="flex flex-col gap-5 pb-10">
+      {/* The page says where the person is: the queue is Rules' Approvals. */}
       <PageHeader
-        title={t('title')}
+        title={tab === 'approvals' ? t('tabs.approvals') : t('title')}
         description={t('subtitle')}
         icon={ShieldCheck}
       />
 
       <RecordingNoticeSlot namespace="governance" />
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          {canReadApprovals && (
-            <TabsTrigger value="approvals">{t('tabs.approvals')}</TabsTrigger>
-          )}
-          <TabsTrigger value="policies">{t('tabs.policies')}</TabsTrigger>
-          <TabsTrigger value="identities">{t('tabs.identities')}</TabsTrigger>
-          <TabsTrigger value="vaults">{t('tabs.vaults')}</TabsTrigger>
-          <TabsTrigger value="agent-risk">{t('tabs.agentRisk')}</TabsTrigger>
+      {/* The queue is a page of its own, not a tab: no tab list, no tab panel.
+          The tab is 'approvals' only where the person may read the queue. */}
+      {tab === 'approvals' ? (
+        <ApprovalsTab />
+      ) : (
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="policies">{t('tabs.policies')}</TabsTrigger>
+            <TabsTrigger value="identities">{t('tabs.identities')}</TabsTrigger>
+            <TabsTrigger value="vaults">{t('tabs.vaults')}</TabsTrigger>
+            <TabsTrigger value="agent-risk">{t('tabs.agentRisk')}</TabsTrigger>
+            {panels.map((p) => (
+              <TabsTrigger key={p.id} value={p.id}>
+                {p.label()}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          <TabsContent value="policies">
+            <PoliciesView />
+          </TabsContent>
+
+          <TabsContent value="identities">
+            <IdentitiesView />
+          </TabsContent>
+
+          <TabsContent value="vaults">
+            <VaultsView />
+          </TabsContent>
+
+          <TabsContent value="agent-risk">
+            <AgentRiskView />
+          </TabsContent>
+
           {panels.map((p) => (
-            <TabsTrigger key={p.id} value={p.id}>
-              {p.label()}
-            </TabsTrigger>
+            <TabsContent key={p.id} value={p.id}>
+              <PanelSlot>
+                <p.Component />
+              </PanelSlot>
+            </TabsContent>
           ))}
-        </TabsList>
-
-        {canReadApprovals && (
-          <TabsContent value="approvals">
-            <ApprovalsTab active={tab === 'approvals'} />
-          </TabsContent>
-        )}
-
-        <TabsContent value="policies">
-          <PoliciesView />
-        </TabsContent>
-
-        <TabsContent value="identities">
-          <IdentitiesView />
-        </TabsContent>
-
-        <TabsContent value="vaults">
-          <VaultsView />
-        </TabsContent>
-
-        <TabsContent value="agent-risk">
-          <AgentRiskView />
-        </TabsContent>
-
-        {panels.map((p) => (
-          <TabsContent key={p.id} value={p.id}>
-            <PanelSlot>
-              <p.Component />
-            </PanelSlot>
-          </TabsContent>
-        ))}
-      </Tabs>
+        </Tabs>
+      )}
     </div>
   )
 }
@@ -165,7 +163,7 @@ function searchText(a: ApprovalDTO): string {
     .toLowerCase()
 }
 
-function ApprovalsTab({ active }: { active: boolean }) {
+function ApprovalsTab() {
   const { t } = useTranslation(['governance', 'common'])
   const { activeTenant, can, principal } = useAuth()
   const canRead = can('governance:approval:read')
@@ -198,9 +196,9 @@ function ApprovalsTab({ active }: { active: boolean }) {
   const approvals = useQuery({
     queryKey: governanceKeys.approvals(activeTenant, params),
     queryFn: () => governanceApi.listApprovals(params),
-    enabled: canRead && active,
-    // Poll the live queue (no SSE). Only when this tab is active.
-    refetchInterval: active ? APPROVALS_POLL_MS : false,
+    enabled: canRead,
+    // Poll the live queue (no SSE) while its page is open.
+    refetchInterval: APPROVALS_POLL_MS,
   })
 
   const sweep = usePrivilegedMutation<void, SweepReport>({
@@ -223,13 +221,14 @@ function ApprovalsTab({ active }: { active: boolean }) {
   const items = (approvals.data?.items ?? []).filter(
     (a) => !query || searchText(a).includes(query),
   )
-  // Separation of duties decides the flag as it decides the buttons: the requester cannot
-  // decide their own, and a token has no stable user id.
-  const flaggedId = canDecide
-    ? flaggedApprovalId(items, (a) =>
-        canDecideOnRequest(a.requested_by, principal?.actor, principal?.kind),
-      )
-    : undefined
+  // The engine answers who may decide each request (`may_decide`), and the flag reads it
+  // by the rule the open request's buttons use (useMayDecide): it never points at a
+  // request the engine refuses this person, nor passes one it offers them.
+  const mayDecide = (a: ApprovalDTO) =>
+    a.may_decide ??
+    (canDecide &&
+      canDecideOnRequest(a.requested_by, principal?.actor, principal?.kind))
+  const flaggedId = flaggedApprovalId(items, mayDecide)
   // THE REQUEST ON SCREEN STAYS ON SCREEN. The first one shown is the flagged one (or the
   // first row), and from then on the panel shows what the person picked: a decision, a
   // poll or another approver never swaps a different request in under their hand, where

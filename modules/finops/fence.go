@@ -58,6 +58,23 @@ func spendLimitSubjects(s storedSpendLimitSpec) []model.ID {
 	return []model.ID{id}
 }
 
+// budgetSubjects returns the accounts a budget names: the exempt actors of a group
+// budget ("user:<id>", validated by budgetSpec.validate). The fence skips an id that
+// names no account.
+func budgetSubjects(s budgetSpec) []model.ID {
+	var out []model.ID
+	for _, actor := range s.ExemptActors {
+		rest, ok := strings.CutPrefix(actor, "user:")
+		if !ok {
+			continue
+		}
+		if id, err := model.ParseID(rest); err == nil && !id.IsZero() {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // mutate is the module's ONE write funnel (CUTS B2): every successful commit
 // invalidates the tenant's HasAdmissionTargets memo, so a budget, spend-limit or
 // lifecycle write takes effect on the very next launch probe. Handlers reach it

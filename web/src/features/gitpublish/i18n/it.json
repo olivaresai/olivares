@@ -95,7 +95,8 @@
     "title": "Pubblica",
     "hint": "Esegui il push del commit di questa sessione attraverso la destinazione di pubblicazione del suo workspace. Il motore recupera il commit dalla cartella della sessione.",
     "publish": "Pubblica",
-    "publishTo": "Pubblica su {{prefix}}"
+    "publishTo": "Pubblica su {{prefix}}",
+    "targetName": "{{repository}}, sotto {{prefix}}"
   },
   "fields": {
     "ref": "Ref del branch",
@@ -178,6 +179,7 @@
     "link_not_allowed": "Il link deve puntare a una pull request del repository approvato.",
     "host_credential_refused": "L’host Git ha rifiutato la credenziale del binding o il suo ambito. Non è stato inviato nulla.",
     "host_unavailable": "L'host Git non è raggiungibile. Non è stato inviato nulla.",
+    "identity_mismatch": "Questa modifica può essere pubblicata solo con il binding di credenziale per cui è stata preparata, e questa destinazione ne usa un altro. Non è stato inviato nulla.",
     "intent_settled": "L'intent è già concluso, quindi non può essere abbandonato.",
     "invalid_request": "La richiesta è incompleta o malformata. Controlla i nomi dei branch e gli ID dei commit.",
     "lookup_incomplete": "Lo stato attuale dell’host non è stato letto per intero, quindi non è stato inviato nulla.",
@@ -191,6 +193,8 @@
     "repository_outside_binding": "Il repository è fuori dai proprietari consentiti dal binding di credenziale.",
     "runtime_credential_refused": "La credenziale di runtime di una sessione non può pubblicare. Agisci con la tua credenziale.",
     "scoped_grant_required": "Questa azione richiede una concessione con ambito su questa destinazione.",
+    "secret_detected": "Il commit contiene qualcosa che sembra una credenziale, quindi non è stato inviato nulla. Rimuovila dal commit, poi ripeti la richiesta.",
+    "secret_scan_unavailable": "Non è stato possibile verificare se il commit contiene credenziali, quindi non è stato pubblicato nulla.",
     "separation_of_duty": "Hai avviato la sessione che ha scritto questa modifica. Chiedi a un'altra persona di rivederla e farne il merge.",
     "session_source_refused": "L’esecuzione della sessione non è nel workspace di questa destinazione, oppure la sua cartella non è un repository da cui il motore può recuperare.",
     "session_source_unavailable": "La cartella della sessione non è stata letta in tempo. Non è stato eseguito alcun push.",
@@ -200,6 +204,7 @@
     "target_changed": "La destinazione è cambiata dopo l'ammissione della richiesta. Non è stato inviato nulla.",
     "target_in_use": "Un intent in invio, incerto o abbandonato trattiene ancora questa destinazione.",
     "unresolved_intent": "Un intent non risolto trattiene già questo branch, questa pull request o questo merge.",
+    "unknown_effect": "L’intent registra un’azione che questa versione del motore non conosce, quindi non può essere riconciliato.",
     "unsupported_requirement": "L'host non può soddisfare questo requisito, ad esempio un merge con rebase su GitLab.",
     "version_conflict": "La destinazione è cambiata da quando l'hai aperta. Riaprila per vedere la versione attuale.",
     "workflow_change_refused": "Il commit modifica i file di workflow CI, che questa destinazione rifiuta di pubblicare.",
@@ -215,6 +220,38 @@
     "title": "Intent",
     "empty": "Nessun intent di pubblicazione è registrato per questa destinazione.",
     "open": "Apri l'intent {{id}}"
+  },
+  "publications": {
+    "title": "Pubblicazioni",
+    "description": "Ciò che Olivares AI ha pubblicato su queste destinazioni e ciò che attende un’approvazione, prima i più recenti. Lo stato di una pull request è quello che Olivares AI ha visto; il suo link mostra quello di oggi.",
+    "show": "Mostra",
+    "all": "Tutte",
+    "approval": "Approvazione",
+    "session": "Sessione",
+    "approved": "Approvata",
+    "notAsked": "Non richiesta",
+    "approvedUnused": "Approvata, non usata",
+    "heldPush": "{{state}}: il push su {{target}}",
+    "heldPullRequest": "{{state}}: la pull request su {{target}}",
+    "cut": "Sono state lette solo le {{n}} approvazioni più vecchie. Tutte sono in Approvazioni.",
+    "openSession": "Apri la sessione",
+    "openSessionOf": "Apri la sessione che ha pubblicato {{branch}} su {{target}}",
+    "aSession": "Una sessione",
+    "empty": "Qui non è stato ancora pubblicato nulla",
+    "emptyNext": "Pubblica dal pannello Modifiche di una sessione, o da una destinazione qui.",
+    "readFailed": "Non è stato possibile leggere ciò che è stato pubblicato su {{target}}",
+    "heldReadFailed": "Non è stato possibile leggere ciò che attende un’approvazione",
+    "heldHidden": "Ciò che attende l’approvazione di un’altra persona è elencato per chi può leggere le approvazioni."
+  },
+  "pullRequests": {
+    "title": "Pull request",
+    "pullRequest": "Pull request",
+    "branch": "Branch",
+    "opened": "È stata aperta",
+    "merged": "Unita",
+    "link": "#{{number}} {{title}}",
+    "empty": "Qui non è ancora stata aperta nessuna pull request",
+    "emptyNext": "Aprine una dal pannello Modifiche di una sessione, o da una destinazione qui."
   },
   "intent": {
     "title": "Intent {{id}}",

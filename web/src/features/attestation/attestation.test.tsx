@@ -1,8 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen, waitFor, within } from '@/test/intel'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  act,
+  createTestQueryClient,
+  renderIntel,
+  screen,
+  waitFor,
+  within,
+} from '@/test/intel'
+import { fakeRouter } from '@/test/fake-router'
 import '@/features/_intel' // register the shared `intel` namespace for badges/notices
 import {
   AirgapPanel,
@@ -21,6 +29,8 @@ import {
   exampleReleaseFixture,
   publishedBinaryAttestationFixture,
 } from './fixtures'
+import type { RunningBinaryAttestation } from './types'
+import en from './i18n/en.json'
 import './i18n'
 
 vi.mock('@tanstack/react-router', async () =>
@@ -43,10 +53,20 @@ vi.mock('./api', async (importOriginal) => {
   return { ...actual, attestationApi: api }
 })
 
+// The edition is a build fact from server-info: the terminal check names the
+// Community release, so a Business build must not be handed it.
+const build = vi.hoisted(() => ({ community: true as boolean | undefined }))
+vi.mock('@/lib/hooks/use-server-info', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/hooks/use-server-info')>()),
+  useCommunityBuild: () => build.community,
+}))
+
 const release = exampleReleaseFixture
 
 afterEach(() => {
   auth.can = () => true
+  build.community = true
+  fakeRouter.reset()
   vi.clearAllMocks()
 })
 
@@ -193,10 +213,14 @@ describe('BinaryPanel — measured honesty', () => {
     expect(
       screen.getByText(/Go stamps no vcs\.\* settings/i),
     ).toBeInTheDocument()
-    // Self-hash is a fingerprint for OFFLINE comparison — the hint says so.
+    // The self hash names these bytes and says so; a release is checked by the
+    // card below, never by finding this hash in checksums.txt, which lists the
+    // archives and packages, not the executable inside them.
     expect(
-      screen.getByText(/Compare it OFFLINE against a future signed/i),
+      screen.getByText(/does not prove where they came from/i),
     ).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(en.check.title))).toBeInTheDocument()
+    expect(screen.queryByText(/checksums\.txt/)).toBeNull()
   })
 })
 
@@ -386,6 +410,20 @@ describe('AttestationView — RBAC + live flip', () => {
     ).toBeInTheDocument()
   })
 
+  // cosign matches an identity pattern unanchored: the declared one must be the
+  // whole identity docs/RELEASE-VERIFICATION.md and verify-release.sh require,
+  // the release workflow at a MAJOR.MINOR tag, never a prefix of the repo.
+  it('names the exact identity a release signature carries, ready to copy', async () => {
+    api.binary.mockResolvedValue(binaryAttestationFixture)
+    renderIntel(<AttestationView />)
+    const identity = String.raw`^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$`
+    const code = await screen.findByText(identity, { selector: 'code' })
+    const line = code.closest('[data-slot="code-line"]') as HTMLElement
+    expect(
+      within(line).getByRole('button', { name: 'Copy command' }),
+    ).toBeInTheDocument()
+  })
+
   // The gate is DENY-CLOSED: only an actual `published` answer removes the notice.
   // While the live read is in flight the console knows nothing, and "nothing" must
   // not be rendered as "a release exists".
@@ -396,5 +434,136 @@ describe('AttestationView — RBAC + live flip', () => {
     expect(
       screen.getByText(/This build is not a published release/i),
     ).toBeInTheDocument()
+  })
+})
+
+// --- Check it yourself: the terminal check of the release this build names ---
+
+/** A release build of 0.10: the version stamp is the signed tag. */
+const release010: RunningBinaryAttestation = {
+  ...publishedBinaryAttestationFixture,
+  binary: { ...publishedBinaryAttestationFixture.binary, version: '0.10' },
+}
+
+/** INSTALL.md's own check of a downloaded release, flag for flag, for 0.10. */
+const CHECK_010 = [
+  'cosign verify-blob',
+  '--certificate checksums.txt.pem',
+  '--signature checksums.txt.sig',
+  '--certificate-identity',
+  'https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/0.10',
+  '--certificate-oidc-issuer https://token.actions.githubusercontent.com',
+  'checksums.txt && sha256sum --ignore-missing -c checksums.txt',
+].join(' ')
+
+describe('AttestationView — check it yourself', () => {
+  it('gives the terminal check of the installed release, pinned to its tag', async () => {
+    api.binary.mockResolvedValue(release010)
+    renderIntel(<AttestationView />)
+    expect(
+      await screen.findByRole('heading', { name: en.check.title }),
+    ).toBeInTheDocument()
+    // Other lines on the page have a Copy control of their own.
+    const command = screen.getByText(CHECK_010, { selector: 'code' })
+    const line = command.closest('[data-slot="code-line"]') as HTMLElement
+    expect(
+      within(line).getByRole('button', { name: 'Copy command' }),
+    ).toBeInTheDocument()
+    // Where the files come from: the release page of the same tag, opened only
+    // by the person's click, in a tab of its own.
+    const page = screen.getByRole('link', { name: '0.10 release page' })
+    expect(page).toHaveAttribute(
+      'href',
+      'https://github.com/olivaresai/olivares/releases/tag/0.10',
+    )
+    expect(page).toHaveAttribute('target', '_blank')
+    expect(page).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('a build that is not a release gets no command to check', async () => {
+    api.binary.mockResolvedValue(binaryAttestationFixture)
+    renderIntel(<AttestationView />)
+    expect(await screen.findByText(en.check.notRelease)).toBeInTheDocument()
+    expect(screen.queryByText(/cosign verify-blob/)).toBeNull()
+  })
+
+  it('a stamp that is not a release tag gets no command, even when published', async () => {
+    // Every signature names a MAJOR.MINOR tag: 26.8.0 can have none.
+    api.binary.mockResolvedValue(publishedBinaryAttestationFixture)
+    renderIntel(<AttestationView />)
+    expect(await screen.findByText(en.check.notRelease)).toBeInTheDocument()
+    expect(screen.queryByText(/cosign verify-blob/)).toBeNull()
+  })
+
+  it('a Business build is sent to its own channel, never the Community check', async () => {
+    build.community = false
+    api.binary.mockResolvedValue(release010)
+    renderIntel(<AttestationView />)
+    expect(await screen.findByText(en.check.business)).toBeInTheDocument()
+    expect(screen.queryByText(/cosign verify-blob/)).toBeNull()
+  })
+
+  it('a read that fails after a good one takes the command away', async () => {
+    api.binary.mockResolvedValue(release010)
+    const queryClient = createTestQueryClient()
+    renderIntel(<AttestationView />, { queryClient })
+    expect(
+      await screen.findByText(CHECK_010, { selector: 'code' }),
+    ).toBeInTheDocument()
+
+    api.binary.mockRejectedValue(new Error('boom'))
+    await act(() => queryClient.refetchQueries())
+
+    expect(
+      await screen.findByRole('button', { name: 'Retry' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/cosign verify-blob/)).toBeNull()
+    expect(screen.queryByRole('heading', { name: en.check.title })).toBeNull()
+  })
+})
+
+// --- The SLSA check of the installed archive, on the Provenance tab ---------
+
+/** verify-release.sh's own SLSA step, for the linux/amd64 archive of 0.10. */
+const SLSA_010 = [
+  'slsa-verifier verify-artifact olivares_0.10_linux_amd64.tar.gz',
+  '--provenance-path multiple.intoto.jsonl',
+  '--source-uri github.com/olivaresai/olivares --source-tag 0.10',
+].join(' ')
+
+describe('AttestationView — the SLSA check of the installed archive', () => {
+  beforeEach(() => fakeRouter.reset('/?tab=provenance'))
+
+  it('gives the SLSA check of the installed archive, ready to copy', async () => {
+    api.binary.mockResolvedValue(release010)
+    renderIntel(<AttestationView />)
+    const code = await screen.findByText(SLSA_010, { selector: 'code' })
+    const line = code.closest('[data-slot="code-line"]') as HTMLElement
+    expect(
+      within(line).getByRole('button', { name: 'Copy command' }),
+    ).toBeInTheDocument()
+    // The declared placeholder, which failed as copied, is gone.
+    expect(screen.queryByText(/verify-artifact …/)).toBeNull()
+    // The provenance file the command names comes from the same release page.
+    const panel = screen.getByRole('tabpanel')
+    expect(
+      within(panel).getByText(/download multiple\.intoto\.jsonl/),
+    ).toBeInTheDocument()
+    expect(
+      within(panel).getByRole('link', { name: '0.10 release page' }),
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/olivaresai/olivares/releases/tag/0.10',
+    )
+  })
+
+  it('a build that is not a release gets no SLSA command', async () => {
+    api.binary.mockResolvedValue(binaryAttestationFixture)
+    renderIntel(<AttestationView />)
+    const panel = await screen.findByRole('tabpanel')
+    expect(
+      await within(panel).findByText(en.check.notRelease),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/slsa-verifier verify-artifact/)).toBeNull()
   })
 })

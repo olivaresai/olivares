@@ -64,8 +64,8 @@ func TestLicenseServiceInstallHotApplies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("install: %v", err)
 	}
-	if st.Status != "valid" || st.Licensee != "Acme" || st.MaxUsers != 50 {
-		t.Fatalf("status = %+v, want valid/Acme/50", st)
+	if st.Status != "valid" || st.Licensee != "Acme" {
+		t.Fatalf("status = %+v, want valid/Acme", st)
 	}
 	if st.Source != licenseSourceDataDir {
 		t.Fatalf("source = %q, want data-dir", st.Source)

@@ -125,6 +125,7 @@ it('uses defaults for malformed nested settings received from the server', async
           clock: '12',
           sessionDefaults: null,
           notificationEvents: { finished: 'yes' },
+          inAppEvents: { needsYou: 'no', failed: false },
         },
         version: 0,
       }),
@@ -144,6 +145,105 @@ it('uses defaults for malformed nested settings received from the server', async
     finished: true,
     failed: true,
   })
+  // The console's own choice: a field that is not a boolean is the default, one that is stays.
+  expect(useClientSettings.getState().inAppEvents).toEqual({
+    needsYou: true,
+    finished: true,
+    failed: false,
+  })
+})
+// The key edits of Settings › Keyboard come back from the server as stored text; a
+// value that is not text is not an edit.
+it("keeps a person's key edits from the server, and only those stored as text", async () => {
+  fixture.load.mockResolvedValue({
+    stored: true,
+    preferences: {
+      'olivares.settings': JSON.stringify({
+        state: {
+          clock: '12',
+          keyOverrides: { 'palette.open|': 'Mod+p', 'help.toggle|': 7 },
+        },
+        version: 0,
+      }),
+    },
+  })
+  setup()
+  await screen.findByText('12')
+  expect(useClientSettings.getState().keyOverrides).toEqual({
+    'palette.open|': 'Mod+p',
+  })
+  useClientSettings.setState({ keyOverrides: {} })
+})
+// The settings keep the key edits as stored text: the keybindings read each against the
+// table, as when it was made (lib/keybindings/model.test.ts), and the store, which the
+// registry's views read, knows nothing of the table.
+it('keeps the stored key edits as text, for the keybindings to read against the table', async () => {
+  fixture.load.mockResolvedValue({
+    stored: true,
+    preferences: {
+      'olivares.settings': JSON.stringify({
+        state: {
+          clock: '12',
+          keyOverrides: {
+            'palette.open|': 'Mod+p',
+            'palette.close|': 'Mod+n',
+            'approvals.deny|approvalQueue': 'x',
+            'help.toggle|': 'Mod+p',
+          },
+        },
+        version: 0,
+      }),
+    },
+  })
+  setup()
+  await screen.findByText('12')
+  expect(useClientSettings.getState().keyOverrides).toEqual({
+    'palette.open|': 'Mod+p',
+    'palette.close|': 'Mod+n',
+    'approvals.deny|approvalQueue': 'x',
+    'help.toggle|': 'Mod+p',
+  })
+  // The keybindings read them against the table when they first load (here, after the
+  // blob: nothing in this file loaded them before) and on every change of the store: a
+  // stored edit that cannot work never reaches the resolver.
+  const { resolveBinding } = await import('@/lib/keybindings/model')
+  const { KEYBINDINGS } = await import('@/lib/keybindings/table')
+  await import('@/lib/keybindings/effective')
+  const resolved = () => [
+    resolveBinding(KEYBINDINGS, { key: 'x' }, { approvalQueue: true }),
+    resolveBinding(KEYBINDINGS, { key: 'p', ctrlKey: true }),
+  ]
+  expect(resolved()).toEqual([null, 'palette.open'])
+  const stored = useClientSettings.getState().keyOverrides
+  act(() => useClientSettings.setState({ keyOverrides: { ...stored } }))
+  expect(resolved()).toEqual([null, 'palette.open'])
+  useClientSettings.setState({ keyOverrides: {} })
+})
+// Two rows whose keys a person swapped through a third key are saved in the order the
+// edits were made: the re-edited row last. Both come back (and both work: model.test.ts).
+it('reads back two rows whose keys a person swapped, in the order they were saved', async () => {
+  fixture.load.mockResolvedValue({
+    stored: true,
+    preferences: {
+      'olivares.settings': JSON.stringify({
+        state: {
+          clock: '12',
+          keyOverrides: {
+            'shell.sidebar|': 'Mod+k',
+            'palette.open|': 'Mod+b',
+          },
+        },
+        version: 0,
+      }),
+    },
+  })
+  setup()
+  await screen.findByText('12')
+  expect(useClientSettings.getState().keyOverrides).toEqual({
+    'palette.open|': 'Mod+b',
+    'shell.sidebar|': 'Mod+k',
+  })
+  useClientSettings.setState({ keyOverrides: {} })
 })
 it('resets a different user to defaults without leaking the first user settings', async () => {
   const view = setup()

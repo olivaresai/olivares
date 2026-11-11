@@ -2,24 +2,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { preferenceStorage } from '@/lib/preference-storage'
-import {
-  cleanup,
-  fireEvent,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+  useSearch,
+} from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import { stubViewportWidth } from '@/test/viewport'
 import { agentOpsApi } from '@/features/agentops/api'
 import { mergeSessions } from './provenance'
+import { decodeShow } from './session-address'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
 import type { SessionResolution } from './use-session-resolution'
+import { useTerminalDrawer } from './terminal-drawer'
+import { resetTerminalGroups } from './terminal-store'
 import { WorkSurface } from './work-surface'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
+import { usePreferencesStore } from '@/stores/preferences'
 import i18n from '@/lib/i18n'
 import './i18n'
 import '@/features/agentops/i18n'
@@ -105,7 +110,7 @@ function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
     <WorkSurface
       sessions={sessions}
       loading={false}
-      address={{ address: 'live:lr-a', pane: 'rail', evidence: 'checks' }}
+      address={{ address: 'live:lr-a', pane: 'narrative', evidence: 'checks' }}
       resolution={resolution}
       pinned={new Set()}
       onTogglePin={vi.fn()}
@@ -119,12 +124,19 @@ function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
   return { onPane, onOpen, unmount: rendered.unmount }
 }
 
+function renderList(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
+  return renderSurface({
+    address: { address: 'live:lr-a', pane: 'rail', evidence: 'checks' },
+    ...over,
+  })
+}
+
 /** The surface rendered once, then again with other props, as a navigation does. */
 function renderIntelSurface(first: Partial<Parameters<typeof WorkSurface>[0]>) {
   const base: Parameters<typeof WorkSurface>[0] = {
     sessions,
     loading: false,
-    address: { address: 'live:lr-a', pane: 'rail', evidence: 'checks' },
+    address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
     resolution,
     pinned: new Set(),
     onTogglePin: vi.fn(),
@@ -203,7 +215,7 @@ describe('WorkSurface', () => {
     'activates a focused Open beside button with %s without opening a primary session',
     async (key) => {
       const onOpenBeside = vi.fn()
-      const { onOpen } = renderSurface({ onOpenBeside })
+      const { onOpen } = renderList({ onOpenBeside })
       screen.getAllByLabelText('Open beside')[0].focus()
       await userEvent.keyboard(key)
       expect(onOpenBeside).toHaveBeenCalledWith(sessions[1])
@@ -267,7 +279,7 @@ describe('WorkSurface', () => {
 
   it('keeps the pointer Open beside button out of the listbox tree and the tab order', async () => {
     const onOpenBeside = vi.fn()
-    renderSurface({ onOpenBeside })
+    renderList({ onOpenBeside })
     // Only the OTHER row offers it; the selected row is already the primary session.
     const buttons = screen.getAllByLabelText('Open beside')
     expect(buttons).toHaveLength(1)
@@ -284,7 +296,7 @@ describe('WorkSurface', () => {
 
   it('opens the focused rail row beside with the declared command, and nothing else', () => {
     const onOpenBeside = vi.fn()
-    renderSurface({ onOpenBeside })
+    renderList({ onOpenBeside })
     const [selected, other] = screen.getAllByRole('option')
     other.focus()
     fireEvent.keyDown(other, { key: 'o', altKey: true, shiftKey: true })
@@ -387,12 +399,12 @@ describe('WorkSurface', () => {
     })
     expect(screen.getByTestId('work-composer')).toBeInTheDocument()
   })
-  it('mounts all three panes on a desktop whatever is in front', async () => {
+  it('mounts the thread and Details without a second work list', async () => {
     stubViewportWidth(1440)
     renderSurface()
-    await screen.findByTestId('work-rail')
-    for (const id of ['rail', 'narrative', 'context'])
-      expect(pane(id)).not.toBeNull()
+    await screen.findByTestId('session-narrative')
+    expect(pane('rail')).toBeNull()
+    for (const id of ['narrative', 'context']) expect(pane(id)).not.toBeNull()
   })
 
   it('keeps the conversation in front while Details sits beside it from 1120 px', async () => {
@@ -417,7 +429,7 @@ describe('WorkSurface', () => {
     // One Details at a time: the grid holds no second copy of it.
     expect(document.querySelectorAll('#work-pane-context')).toHaveLength(1)
     expect(sheet).toHaveAttribute('id', 'work-pane-context')
-    expect(pane('rail')?.className).toContain('hidden min-[761px]:flex')
+    expect(pane('rail')).toBeNull()
     expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
     await user.click(within(sheet).getByRole('button', { name: 'Close' }))
     expect(onPane).toHaveBeenCalledWith('narrative')
@@ -438,20 +450,20 @@ describe('WorkSurface', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows the list and the thread side by side from 761 px, and one at a time below it', async () => {
+  it('uses the thread destination without a second list', async () => {
     renderSurface({
       address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
     })
-    await screen.findByTestId('work-rail')
+    await screen.findByTestId('session-narrative')
     // The thread is in front: the list shows beside it from 761 px up and is hidden below.
-    expect(pane('rail')?.className).toContain('hidden min-[761px]:flex')
+    expect(pane('rail')).toBeNull()
     expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
   })
 
-  it('lays the list out at 292 px and Details at 304 px, 264 and 280 px at 1350 px and below, with no card chrome', async () => {
+  it('gives the conversation the list column width, keeping Details at its chosen size', async () => {
     stubViewportWidth(1440)
     renderSurface()
-    await screen.findByTestId('work-rail')
+    await screen.findByTestId('session-narrative')
     const grid = document.querySelector('[data-context]') as HTMLElement
     const cls = grid.className
     expect(cls).toContain('[--list-w:292px]')
@@ -459,20 +471,20 @@ describe('WorkSurface', () => {
     expect(cls).toContain('[--ctx-w:304px]')
     expect(cls).toContain('max-[1350px]:[--ctx-w:280px]')
     expect(cls.split(/\s+/).filter((c) => c.includes('grid-cols-'))).toEqual([
-      'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+      'grid-cols-[minmax(0,1fr)_min(var(--ctx-w),35%)]',
     ])
-    for (const id of ['rail', 'narrative', 'context'])
+    for (const id of ['narrative', 'context'])
       expect(pane(id)?.className).not.toMatch(
         /rounded-lg|border-border|bg-surface/,
       )
-    expect(pane('rail')?.className).toContain('min-[761px]:border-r')
+    expect(pane('rail')).toBeNull()
   })
 
-  it('puts the list header above the rows, inside the list column', async () => {
-    renderSurface({ listHeader: <div data-testid="head">Sessions head</div> })
+  it('puts the page header above the rows, as the first thing on the surface', async () => {
+    renderList({ listHeader: <div data-testid="head">Sessions head</div> })
     const rail = await screen.findByTestId('work-rail')
     const head = screen.getByTestId('head')
-    expect(pane('rail')).toContainElement(head)
+    expect(screen.getByTestId('work-surface').firstElementChild).toBe(head)
     expect(
       head.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
@@ -681,7 +693,7 @@ describe('WorkSurface', () => {
       const wide = renderSurface()
       // 264 px list + 576 px conversation + 280 px Details at 1120 px.
       expect(grid().className).toContain(
-        'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+        'grid-cols-[minmax(0,1fr)_min(var(--ctx-w),35%)]',
       )
       expect(pane('context')).not.toBeNull()
       wide.unmount()
@@ -712,7 +724,7 @@ describe('WorkSurface', () => {
   })
 
   it('passes the open session to the rail as the selected row', async () => {
-    renderSurface()
+    renderList()
     const rail = await screen.findByTestId('work-rail')
     const selected = rail.querySelector('[aria-selected="true"]')
     expect(selected).toHaveAttribute('data-address', 'live:lr-a')
@@ -734,7 +746,7 @@ describe('WorkSurface', () => {
     // The field is addressed to the open session, by the name the header paints.
     expect(screen.getByTestId('launcher-input')).toHaveAttribute(
       'placeholder',
-      'Ask anything, @ for context, / for commands and skills',
+      'Message nightly… @ files · / commands',
     )
     expect(screen.queryByTestId('composer-session-state')).toBeNull()
   })
@@ -763,25 +775,16 @@ describe('WorkSurface', () => {
   // 26.10.1 review, measured again before this fix: an empty estate painted one
   // empty state per pane ("No sessions yet", "Select a session") with a New session in
   // each, under the header's own. Nothing to list is one fact: one empty state, one action.
-  it('an empty estate is the three regions, with what it is given in the work region', async () => {
+  it('a new session uses the work region without empty list and Details columns', () => {
     renderSurface({
       sessions: [],
       address: { address: '', pane: 'rail', evidence: 'checks' },
       resolution: { ...resolution, target: null, live: undefined },
       emptyAction: <textarea aria-label="First message" />,
-      listHeader: <div data-testid="head">Sessions head</div>,
     })
-    expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
-    expect(
-      within(pane('narrative') as HTMLElement).getByRole('textbox', {
-        name: 'First message',
-      }),
-    ).toBeInTheDocument()
-    expect(pane('context')).toHaveTextContent(
-      'the files it changes appear here as it works',
-    )
-    expect(screen.getByTestId('head')).toBeInTheDocument()
-    expect(screen.queryByText('Select a session')).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'First message' })).toBeVisible()
+    expect(pane('rail')).toBeNull()
+    expect(pane('context')).toBeNull()
   })
 
   it('an empty estate for a person who cannot start one is one empty state, not one per pane', async () => {
@@ -807,9 +810,8 @@ describe('WorkSurface', () => {
       resolution: { ...resolution, target: null, live: undefined },
       emptyAction: <button type="button">New session</button>,
     })
-    expect(
-      within(pane('narrative') as HTMLElement).getByText('Select a session'),
-    ).toBeInTheDocument()
+    expect(screen.getByTestId('work-rail')).toBeInTheDocument()
+    expect(pane('narrative')).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(screen.queryByTestId('work-composer')).toBeNull()
   })
@@ -957,18 +959,20 @@ describe('WorkSurface — the filter field', () => {
     [],
   )
 
-  it('appears under the header only when there are more than 6 sessions', async () => {
-    renderSurface({ sessions: many })
-    expect(await screen.findByTestId('rail-filter')).toBeInTheDocument()
-    cleanup()
-    renderSurface({ sessions: many.slice(0, 6) })
-    await screen.findByTestId('work-rail')
-    expect(screen.queryByTestId('rail-filter')).toBeNull()
+  it('is there for a list of any length', async () => {
+    const user = userEvent.setup()
+    renderList({ sessions: many.slice(0, 3) })
+    await user.type(await screen.findByTestId('rail-filter'), 'docs')
+    const rows = within(screen.getByTestId('work-rail')).getAllByTestId(
+      'rail-row',
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveTextContent('write the docs')
   })
 
   it('narrows the rows by what they show, with no request', async () => {
     const user = userEvent.setup()
-    renderSurface({ sessions: many })
+    renderList({ sessions: many })
     await user.type(await screen.findByTestId('rail-filter'), 'parser')
     const rows = within(screen.getByTestId('work-rail')).getAllByTestId(
       'rail-row',
@@ -979,13 +983,300 @@ describe('WorkSurface — the filter field', () => {
 
   it('says nothing matches, once, instead of an empty list', async () => {
     const user = userEvent.setup()
-    renderSurface({ sessions: many })
+    renderList({ sessions: many })
     await user.type(await screen.findByTestId('rail-filter'), 'zzzz')
     expect(await screen.findByTestId('rail-no-match')).toHaveTextContent(
       'No session matches.',
     )
     expect(screen.queryByTestId('work-rail')).toBeNull()
     expect(screen.queryByText('No sessions yet')).toBeNull()
+  })
+
+  it('clears a search that matches nothing, and gives the field the keyboard', async () => {
+    const user = userEvent.setup()
+    renderList({ sessions: many })
+    const field = await screen.findByTestId('rail-filter')
+    await user.type(field, 'zzzz')
+    await user.click(
+      await screen.findByRole('button', { name: 'Clear filters' }),
+    )
+    expect(field).toHaveValue('')
+    expect(field).toHaveFocus()
+    const rows = within(screen.getByTestId('work-rail')).getAllByTestId(
+      'rail-row',
+    )
+    expect(rows).toHaveLength(many.length)
+  })
+
+  // The strip's section is in the address (`?show=`), and it narrows the list too.
+  it('lets Clear filters drop the section the strip chose, from the address', async () => {
+    // One session at rest, outside the strip's Working section.
+    const [atRest] = mergeSessions(
+      [
+        {
+          ...live({
+            session_ref: 'sess-h',
+            live_ref: 'lr-h',
+            cc_state: 'idle',
+          }),
+          summary: 'archive the logs',
+        },
+      ],
+      [],
+    )
+    const sessions = [...many, atRest]
+    const root = createRootRoute({
+      // The view decodes `?show=` and hands it down; so does this page.
+      component: function Page() {
+        const search = useSearch({ strict: false }) as Record<string, string>
+        return (
+          <WorkSurface
+            sessions={sessions}
+            loading={false}
+            show={decodeShow(search).value}
+            address={{ address: 'live:lr-a', pane: 'rail', evidence: 'checks' }}
+            resolution={resolution}
+            pinned={new Set()}
+            onTogglePin={vi.fn()}
+            onOpen={vi.fn()}
+            onPane={vi.fn()}
+            onEvidence={vi.fn()}
+            onOpenDetail={vi.fn()}
+          />
+        )
+      },
+    })
+    const router = createRouter({
+      routeTree: root,
+      history: createMemoryHistory({ initialEntries: ['/?show=active'] }),
+    })
+    renderIntel(<RouterProvider router={router} />)
+    const user = userEvent.setup()
+    const field = await screen.findByTestId('rail-filter')
+    const rows = () =>
+      within(screen.getByTestId('work-rail')).getAllByTestId('rail-row')
+    expect(rows()).toHaveLength(many.length)
+    await user.type(field, 'zzzz')
+    expect(await screen.findByTestId('rail-no-match')).toHaveTextContent(
+      'Working',
+    )
+    await user.click(
+      await screen.findByRole('button', { name: 'Clear filters' }),
+    )
+    await waitFor(() =>
+      expect(router.state.location.search).not.toHaveProperty('show'),
+    )
+    await waitFor(() => expect(rows()).toHaveLength(sessions.length))
+    expect(field).toHaveValue('')
+    expect(field).toHaveFocus()
+  })
+})
+
+describe('WorkSurface — the folder filter', () => {
+  const inFolders = mergeSessions(
+    [
+      {
+        ...live({ session_ref: 'sess-a', live_ref: 'lr-a', project: 'shop' }),
+        summary: 'fix the parser',
+      },
+      {
+        ...live({ session_ref: 'sess-b', live_ref: 'lr-b', project: 'docs' }),
+        summary: 'write the docs',
+      },
+      {
+        ...live({ session_ref: 'sess-c', live_ref: 'lr-c', project: 'shop' }),
+        summary: 'tune the cache',
+      },
+    ],
+    [],
+  )
+  const rowNames = () =>
+    within(screen.getByTestId('work-rail'))
+      .getAllByTestId('rail-row-name')
+      .map((row) => row.textContent)
+  const folderFilter = () =>
+    screen.findByRole('combobox', { name: 'Filter by folder' })
+
+  beforeEach(() => usePreferencesStore.setState({ sessionsFolder: null }))
+  afterEach(() => usePreferencesStore.setState({ sessionsFolder: null }))
+
+  it('narrows the list to one folder, and the choice is stored', async () => {
+    const user = userEvent.setup()
+    renderList({ sessions: inFolders })
+    await user.click(await folderFilter())
+    await user.click(await screen.findByRole('option', { name: 'docs' }))
+    expect(rowNames()).toEqual(['write the docs'])
+    expect(usePreferencesStore.getState().sessionsFolder).toBe('docs')
+  })
+
+  it('reads a stored folder on arrival, as after a reload', async () => {
+    usePreferencesStore.setState({ sessionsFolder: 'shop' })
+    renderList({ sessions: inFolders })
+    expect(await folderFilter()).toHaveTextContent('shop')
+    expect(rowNames()).toEqual(['fix the parser', 'tune the cache'])
+  })
+
+  it('shows the whole list when the stored folder has no session left', async () => {
+    usePreferencesStore.setState({ sessionsFolder: 'gone' })
+    renderList({ sessions: inFolders })
+    expect(await folderFilter()).toHaveTextContent('All folders')
+    expect(rowNames()).toHaveLength(3)
+  })
+
+  it('lets Clear filters drop the folder too, when nothing in it matches', async () => {
+    usePreferencesStore.setState({ sessionsFolder: 'docs' })
+    const user = userEvent.setup()
+    renderList({ sessions: inFolders })
+    await user.type(await screen.findByTestId('rail-filter'), 'parser')
+    await user.click(
+      await screen.findByRole('button', { name: 'Clear filters' }),
+    )
+    expect(rowNames()).toHaveLength(3)
+    expect(usePreferencesStore.getState().sessionsFolder).toBeNull()
+  })
+
+  it('is not offered when every session is in one folder', async () => {
+    renderList({
+      sessions: inFolders.filter((s) => s.live?.project === 'shop'),
+    })
+    await screen.findByTestId('work-rail')
+    expect(
+      screen.queryByRole('combobox', { name: 'Filter by folder' }),
+    ).toBeNull()
+  })
+})
+
+describe('WorkSurface — the next and previous session keys', () => {
+  const three = mergeSessions(
+    [
+      {
+        ...live({ session_ref: 'sess-a', live_ref: 'lr-a' }),
+        summary: 'first',
+      },
+      {
+        ...live({ session_ref: 'sess-b', live_ref: 'lr-b' }),
+        summary: 'second',
+      },
+      {
+        ...live({ session_ref: 'sess-c', live_ref: 'lr-c' }),
+        summary: 'third',
+      },
+    ],
+    [],
+  )
+  const press = (key: 'ArrowDown' | 'ArrowUp') =>
+    fireEvent.keyDown(window, { key, altKey: true, shiftKey: true })
+  const summaries = (fn: ReturnType<typeof vi.fn>) =>
+    fn.mock.calls.map(
+      ([session]) => (session as (typeof three)[number]).live?.summary,
+    )
+  const onSecond = (sessions: typeof three) => {
+    const second = sessions.find((s) => s.live?.summary === 'second')!
+    return {
+      sessions,
+      address: {
+        address: `live:${second.live!.live_ref}`,
+        pane: 'narrative' as const,
+        evidence: 'checks' as const,
+      },
+      resolution: { ...resolution, session: second },
+    }
+  }
+
+  it('open the sessions next to the open one, in the order of the list', () => {
+    const { onOpen } = renderSurface(onSecond(three))
+    press('ArrowDown')
+    press('ArrowUp')
+    expect(summaries(onOpen)).toEqual(['third', 'first'])
+  })
+
+  it('stop at the ends of the list', () => {
+    const first = three.find((s) => s.live?.summary === 'first')!
+    const { onOpen } = renderSurface({
+      sessions: three,
+      address: {
+        address: `live:${first.live!.live_ref}`,
+        pane: 'narrative',
+        evidence: 'checks',
+      },
+      resolution: { ...resolution, session: first },
+    })
+    press('ArrowUp')
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  // On a Mac, Option+Shift+Up and Down extend a selection to the paragraph's edge: a
+  // field keeps the keys, and an open dialog owns the keyboard.
+  it('do nothing in the composer, and leave it the key', () => {
+    const { onOpen } = renderSurface(onSecond(three))
+    const field = document.createElement('textarea')
+    document.body.append(field)
+    field.focus()
+    const kept = fireEvent.keyDown(field, {
+      key: 'ArrowDown',
+      altKey: true,
+      shiftKey: true,
+    })
+    field.remove()
+    expect(kept).toBe(true)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  // The list in front with a session open, as a wide screen keeps it.
+  const listOn = (summary: string) => {
+    const open = three.find((s) => s.live?.summary === summary)!
+    return {
+      sessions: three,
+      address: {
+        address: `live:${open.live!.live_ref}`,
+        pane: 'rail' as const,
+        evidence: 'checks' as const,
+      },
+      resolution: { ...resolution, session: open },
+    }
+  }
+
+  it('do nothing in the filter field, and leave it the key', async () => {
+    const { onOpen } = renderSurface(listOn('second'))
+    const field = await screen.findByTestId('rail-filter')
+    field.focus()
+    const kept = fireEvent.keyDown(field, {
+      key: 'ArrowUp',
+      altKey: true,
+      shiftKey: true,
+    })
+    expect(kept).toBe(true)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('do nothing while a dialog is open', () => {
+    const { onOpen } = renderSurface(onSecond(three))
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('data-state', 'open')
+    document.body.append(dialog)
+    const kept = press('ArrowDown')
+    dialog.remove()
+    expect(kept).toBe(true)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('move from a row of the list, and the selection and focus follow', () => {
+    const onOpen = vi.fn()
+    const { rerender } = renderIntelSurface({ ...listOn('second'), onOpen })
+    const row = (name: RegExp) => screen.getByRole('option', { name })
+    row(/second/).focus()
+    fireEvent.keyDown(row(/second/), {
+      key: 'ArrowDown',
+      altKey: true,
+      shiftKey: true,
+    })
+    expect(summaries(onOpen)).toEqual(['third'])
+    // The page opens it: the address names it, and a wide screen keeps the list.
+    rerender({ ...listOn('third'), onOpen })
+    expect(row(/third/)).toHaveAttribute('aria-selected', 'true')
+    expect(row(/second/)).toHaveAttribute('aria-selected', 'false')
+    expect(row(/third/)).toHaveFocus()
   })
 })
 
@@ -1046,7 +1337,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
   const estate = mergeSessions([], [RUN, ARCHIVED])
 
   it('gives every row its actions menu on a right-click', async () => {
-    renderSurface({ sessions: estate })
+    renderList({ sessions: estate })
     const row = screen
       .getAllByTestId('rail-row')
       .find((el) => el.textContent?.includes('nightly'))!
@@ -1061,7 +1352,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
     // The same fold as Snoozed: the rows stay where they were, and the archived
     // ones join the end of the list while the section is open.
     const user = userEvent.setup()
-    renderSurface({ sessions: estate })
+    renderList({ sessions: estate })
     const names = () =>
       screen.getAllByTestId('rail-row-name').map((el) => el.textContent)
     expect(names()).toEqual(['nightly'])
@@ -1078,7 +1369,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
   })
 
   it('draws only the Archived toggle, and never "no sessions", when every session is archived', () => {
-    renderSurface({ sessions: mergeSessions([], [ARCHIVED]) })
+    renderList({ sessions: mergeSessions([], [ARCHIVED]) })
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(screen.queryByText('No sessions yet')).toBeNull()
     expect(screen.getByRole('button', { name: 'Archived 1' })).toBeVisible()
@@ -1086,7 +1377,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
 
   it('gives focus back to the row once a dialog opened from its menu closes', async () => {
     const user = userEvent.setup()
-    renderSurface({ sessions: estate })
+    renderList({ sessions: estate })
     const row = screen
       .getAllByTestId('rail-row')
       .find((el) => el.textContent?.includes('nightly'))!
@@ -1104,7 +1395,7 @@ describe('WorkSurface — the row menu and the Archived section', () => {
   })
 
   it('draws no Archived toggle while nothing is archived', () => {
-    renderSurface({ sessions: mergeSessions([], [RUN]) })
+    renderList({ sessions: mergeSessions([], [RUN]) })
     expect(screen.queryByRole('button', { name: /^Archived/ })).toBeNull()
   })
 })
@@ -1121,7 +1412,7 @@ it('opens session panels and composer pickers with the documented shortcuts', as
   const managed = live({ attribution: 'managed' })
   const session = mergeSessions([managed], [run])[0]
   const onPanel = vi.fn()
-  renderSurface({
+  renderList({
     address: { address: session.key, pane: 'narrative', evidence: 'checks' },
     resolution: { ...resolution, session, live: managed, runs: [run] },
     onPanel,
@@ -1129,13 +1420,21 @@ it('opens session panels and composer pickers with the documented shortcuts', as
   const field = await screen.findByTestId('launcher-input')
   field.focus()
   for (const [key, shiftKey, panel] of [
-    ['j', false, 'terminal'],
     ['d', false, 'changes'],
     ['j', true, 'preview'],
   ] as const) {
     fireEvent.keyDown(field, { key, ctrlKey: true, shiftKey })
     expect(onPanel).toHaveBeenLastCalledWith(panel)
   }
+  // The terminal is the drawer under the conversation, not a tab: the same key opens
+  // and shuts it, and the side pane is left alone.
+  const drawer = () => useTerminalDrawer.getState().open[run.run_ref] ?? false
+  onPanel.mockClear()
+  fireEvent.keyDown(field, { key: 'j', ctrlKey: true })
+  expect(drawer()).toBe(true)
+  fireEvent.keyDown(field, { key: 'j', ctrlKey: true })
+  expect(drawer()).toBe(false)
+  expect(onPanel).not.toHaveBeenCalled()
   const terminal = document.createElement('div')
   terminal.className = 'xterm'
   const terminalInput = document.createElement('textarea')
@@ -1154,7 +1453,8 @@ it('opens session panels and composer pickers with the documented shortcuts', as
     expect(onPanel).not.toHaveBeenCalled()
     expect(eof.defaultPrevented).toBe(false)
     fireEvent.keyDown(terminalInput, { key: 'j', ctrlKey: true })
-    expect(onPanel).toHaveBeenLastCalledWith('terminal')
+    expect(drawer()).toBe(true)
+    expect(onPanel).not.toHaveBeenCalled()
   } finally {
     terminal.remove()
   }
@@ -1192,4 +1492,81 @@ it('opens session panels and composer pickers with the documented shortcuts', as
       `keys.command.${command}`,
     )
   }
+})
+
+it('leaves Details beside the conversation when the terminal is maximized', async () => {
+  // The drawer lies under the whole surface: hiding Details would give it no width.
+  stubViewportWidth(1600)
+  const managed = live({ attribution: 'managed' })
+  useTerminalDrawer.setState({
+    open: { [RUN.run_ref]: true },
+    maximized: { [RUN.run_ref]: true },
+  })
+  try {
+    renderSurface({
+      resolution: {
+        ...resolution,
+        session: mergeSessions([managed], [RUN])[0],
+        live: managed,
+        runs: [RUN],
+      },
+    })
+    await screen.findByTestId('session-narrative')
+    const surface = document.querySelector('[data-context]') as HTMLElement
+    expect(surface.dataset.context).toBe('open')
+    expect(screen.getByTestId('session-context')).toBeInTheDocument()
+  } finally {
+    useTerminalDrawer.setState({ open: {}, maximized: {} })
+  }
+})
+
+describe('the terminal drawer', () => {
+  // A session with a folder this person may use a terminal in, at 1600 px,
+  // where Details is open beside the conversation.
+  async function renderWithFolder() {
+    stubViewportWidth(1600)
+    const folderRun = { ...RUN, workspace_ref: 'ws-main' }
+    const managed = live({ attribution: 'managed' })
+    renderSurface({
+      resolution: {
+        ...resolution,
+        session: mergeSessions([managed], [folderRun])[0],
+        live: managed,
+        runs: [folderRun],
+      },
+    })
+    return screen.findByTestId('terminal-drawer')
+  }
+  const spies: { mockRestore: () => void }[] = []
+  beforeEach(() => {
+    spies.push(
+      vi.spyOn(agentOpsApi, 'getWorkspace').mockResolvedValue({
+        workspace_ref: 'ws-main',
+        root_path: '/work/main',
+        mount_mode: 'rw',
+        max_read_bytes: 0,
+        dlp_mode: 'off',
+        state: 'active',
+      }),
+      vi.spyOn(agentOpsApi, 'listTerminals').mockResolvedValue({ items: [] }),
+    )
+  })
+  afterEach(() => {
+    spies.splice(0).forEach((s) => s.mockRestore())
+    resetTerminalGroups()
+  })
+
+  it('lies under the whole surface, Details included, so it keeps the width', async () => {
+    const drawer = await renderWithFolder()
+    const surface = document.querySelector('[data-context]') as HTMLElement
+    expect(surface.dataset.context).toBe('open')
+    expect(surface).not.toContainElement(drawer)
+  })
+
+  it('is a well under the page, its bar a pane above the screen', async () => {
+    const drawer = await renderWithFolder()
+    expect(drawer.className).toMatch(/bg-\[var\(--well/)
+    const toggle = within(drawer).getByRole('button', { name: /^Terminal/ })
+    expect(toggle.parentElement?.className).toMatch(/bg-\[var\(--pane/)
+  })
 })

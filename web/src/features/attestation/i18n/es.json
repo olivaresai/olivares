@@ -35,7 +35,7 @@
     "sumsAbsent": "sin sumas de dependencias registradas",
     "vcsAvailable": "Ajustes VCS sellados por la toolchain de Go",
     "vcsUnavailable": "Sin sello VCS",
-    "selfHashHint": "El auto-SHA256 es un hash en streaming del ejecutable en ejecución, calculado una vez en la primera lectura. Compáralo SIN CONEXIÓN con un futuro checksums.txt firmado: el navegador nunca verifica firmas, y un hash por sí solo demuestra identidad, no procedencia.",
+    "selfHashHint": "El auto-SHA256 es un hash del ejecutable en ejecución, calculado una vez en la primera lectura: identifica estos bytes exactos y no demuestra de dónde vienen. Para comprobar una versión, usa «Compruébalo tú mismo» más abajo; si instalaste desde el archivo que comprueba, sha256sum del binario olivares que contiene ese archivo da este mismo valor.",
     "published": "Publicado",
     "notPublished": "No publicado",
     "verifierAvailable": "Verificador nativo compilado (core/secure/modelsign)",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "Declarado."
     }
+  },
+  "check": {
+    "title": "Compruébalo tú mismo",
+    "description": "La misma comprobación desde un terminal, sin pasar por la consola.",
+    "download": "Desde la <release>página de la versión {{version}}</release>, descarga checksums.txt, checksums.txt.sig, checksums.txt.pem y el archivo o paquete que instalaste. Después ejecuta esto en su carpeta:",
+    "provenance": "Junto con el archivo, descarga multiple.intoto.jsonl desde la <release>página de la versión {{version}}</release> y ejecuta esto en su carpeta:",
+    "passes": "Si muestra «Verified OK» y después OK junto a cada archivo, los archivos que descargaste son los que firmó el flujo de publicación de Olivares AI para {{version}}.",
+    "notRelease": "Esta compilación no es una versión firmada, así que no hay firma de versión con la que comprobarla.",
+    "business": "Olivares AI Business se comprueba con las instrucciones del canal Business."
   },
   "status": {
     "declared": "Declarado",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "Artefactos del release",
     "description": "Qué acompaña a un release y cómo se establece la confianza de cada artefacto. La firma sin clave (Fulcio/Rekor) y con clave (air-gap) son ambas de primer nivel; ninguna es canónica.",
-    "identityNote": "Identidad de firma sin clave (declarada): emisor OIDC {{issuer}} · identidad del certificado cosign {{regexp}}",
+    "identityNote": "Identidad de firma sin clave (declarada): emisor OIDC {{issuer}} · identidad del certificado cosign <identity />",
     "columns": {
       "artifact": "Artefacto",
       "producedBy": "Producido por",

@@ -55,7 +55,7 @@ export function OllamaService() {
           </Button>
         ) : (
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
             onClick={() => start.mutate()}
             disabled={start.isPending}

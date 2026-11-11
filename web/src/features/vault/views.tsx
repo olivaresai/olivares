@@ -16,10 +16,12 @@ export const VIEWS = [
     order: 195,
     id: 'vault',
     path: '/vault',
+    // A page of Settings > You (navigation/places.ts SETTINGS_PLACE), filed under the
+    // Settings utility's own section, never under the Security area.
     navigation: {
       kind: 'feature',
-      areaId: 'security-identity',
-      sectionId: 'access',
+      areaId: 'system',
+      sectionId: 'preferences',
     },
     helpHref: '/reference/console',
     icon: LockKeyhole,

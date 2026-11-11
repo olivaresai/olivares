@@ -5,9 +5,10 @@
   },
   "businessOnly": {
     "title": "Forma parte de Business",
-    "description": "Esta página forma parte de Olivares AI Business. Esta edición no la incluye.",
-    "link": "Acerca de Business",
-    "start": "Ir a la página de inicio"
+    "heading": "Esta página forma parte de Olivares AI Business",
+    "description": "Esta instalación usa Olivares AI Community. Tus datos y tus páginas siguen igual.",
+    "editions": "Ver ediciones",
+    "link": "Acerca de Business"
   },
   "forbidden": {
     "title": "Sin autorización",

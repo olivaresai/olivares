@@ -3,9 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ApiError } from '@/lib/api/errors'
 import type {
   ContextPolicyDTO,
   KbDTO,
@@ -21,6 +22,7 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  info: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
@@ -191,6 +193,69 @@ describe('KnowledgeView — knowledge bases tab', () => {
     wrap(<KnowledgeView />)
     await screen.findByText('engineering-handbook')
     expect(screen.getByText(/lexical — not semantic/i)).toBeInTheDocument()
+  })
+
+  it('tries a query beside the knowledge bases, on the one chosen there', async () => {
+    const second = { ...kbFixture, id: 'kb2', name: 'support-runbooks' }
+    api.listKbs.mockResolvedValue({
+      items: [kbFixture, second],
+      has_more: false,
+    })
+    api.query.mockResolvedValue({
+      lineage_id: 'ln1',
+      results: [],
+      count: 0,
+      embed_model: 'local-hash',
+      egress: false,
+    })
+    const user = userEvent.setup()
+    wrap(<KnowledgeView />)
+    expect(
+      await screen.findByRole('region', { name: 'Try a query' }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('combobox', { name: 'Knowledge base' }))
+    await user.click(
+      await screen.findByRole('option', { name: 'support-runbooks' }),
+    )
+    await user.type(screen.getByRole('textbox', { name: /query/i }), 'runbook')
+    await user.click(screen.getByRole('button', { name: /^run retrieval$/i }))
+    await waitFor(() => expect(api.query).toHaveBeenCalledTimes(1))
+    expect(api.query.mock.calls[0]![0]).toBe('kb2')
+  })
+
+  it('keeps an edition refusal in the panel as the calm edition line', async () => {
+    api.listKbs.mockResolvedValue({ items: [kbFixture], has_more: false })
+    api.query.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'Retrieval is held.', 'r', {
+        edition: 'engineer',
+        capability: 'knowledge-panel-fixture',
+      }),
+    )
+    const user = userEvent.setup()
+    wrap(<KnowledgeView />)
+    const panel = await screen.findByRole('region', { name: 'Try a query' })
+    await user.type(
+      within(panel).getByRole('textbox', { name: /query/i }),
+      'runbook',
+    )
+    await user.click(
+      within(panel).getByRole('button', { name: /^run retrieval$/i }),
+    )
+    expect(
+      await within(panel).findByText(/is part of Olivares AI Engineer\./),
+    ).toBeInTheDocument()
+    expect(
+      within(panel).queryByText(/retrieval denied by governance/i),
+    ).toBeNull()
+    expect(within(panel).queryByText('Retrieval is held.')).toBeNull()
+  })
+
+  it('offers no query to whom retrieval is not granted', async () => {
+    authState.can = (p) => p !== 'knowledge:retrieval:read'
+    api.listKbs.mockResolvedValue({ items: [kbFixture], has_more: false })
+    wrap(<KnowledgeView />)
+    await screen.findByText('engineering-handbook')
+    expect(screen.queryByRole('region', { name: 'Try a query' })).toBeNull()
   })
 
   it('renders the create button and gates it on kb:write', async () => {
@@ -696,5 +761,56 @@ describe('Context policies tab', () => {
       await screen.findByText(/not authorized|forbidden/i),
     ).toBeInTheDocument()
     expect(api.listContextPolicies).not.toHaveBeenCalled()
+  })
+})
+
+// A RETRIEVAL REFUSED BY EDITION IS NOT A GOVERNANCE DENIAL. The dialog said «Retrieval denied
+// by governance» and the engine's sentence beside the edition toast: the edition answered,
+// not the knowledge base's policy. A governance 403 keeps its own words.
+describe('QueryDialog — a retrieval refused by edition', () => {
+  async function retrieve() {
+    const user = userEvent.setup()
+    wrap(<QueryDialog kb={kbFixture} open onOpenChange={() => {}} />)
+    await user.type(screen.getByRole('textbox', { name: /query/i }), 'runbook')
+    await user.click(screen.getByRole('button', { name: /^run retrieval$/i }))
+  }
+
+  it('says the edition line, never a governance denial', async () => {
+    api.query.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'Knowledge is part of it.', 'r', {
+        edition: 'engineer',
+        capability: 'knowledge',
+      }),
+    )
+    await retrieve()
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    // The dialog's own refusal is drawn when the request settles: Run is enabled again.
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^run retrieval$/i }),
+      ).toBeEnabled(),
+    )
+    expect(
+      screen.queryByText(/retrieval denied by governance/i),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Knowledge is part of it.'),
+    ).not.toBeInTheDocument()
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Engineer.')
+  })
+
+  it('a governance 403 still says retrieval was denied, and why', async () => {
+    api.query.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'the ACL does not name this agent'),
+    )
+    await retrieve()
+    expect(
+      await screen.findByText(/retrieval denied by governance/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('the ACL does not name this agent'),
+    ).toBeInTheDocument()
+    expect(toast.info).not.toHaveBeenCalled()
   })
 })

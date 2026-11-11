@@ -358,6 +358,7 @@ function DetailBody({
           <QueryErrorState error={docsError} retry={onRetryDocs} />
         ) : docs.length === 0 ? (
           <EmptyState
+            size="panel"
             title={t('kbDetail.docsEmpty')}
             description={t('kbDetail.docsEmptyHint')}
           />

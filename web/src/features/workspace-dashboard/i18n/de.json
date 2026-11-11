@@ -18,6 +18,8 @@
   "noAgentsHint": "Agenten erscheinen hier, sobald sie in diesem Arbeitsbereich entdeckt werden.",
   "noGroups": "Noch keine Agentengruppen in diesem Arbeitsbereich.",
   "noGroupsHint": "Agentengruppen erscheinen hier, sobald sie für diesen Arbeitsbereich definiert sind.",
+  "agentsFailed": "Die Agenten dieses Arbeitsbereichs konnten nicht gelesen werden.",
+  "groupsFailed": "Die Agentengruppen dieses Arbeitsbereichs konnten nicht gelesen werden.",
   "viewAll": "Alle anzeigen",
   "defaultBadge": "Standard",
   "created": "Erstellt",
@@ -62,5 +64,25 @@
     "statusFailed": "Es konnte nicht geprüft werden, ob dieser Ordner per SFTP verfügbar ist."
   },
   "showMore": "Mehr anzeigen",
-  "agentsCut": "Nicht alle Agenten werden angezeigt."
+  "agentsCut": "Nicht alle Agenten werden angezeigt.",
+  "files": {
+    "title": "Arbeitsbereich",
+    "folders": "Ordner",
+    "overview": "Übersicht",
+    "backToFiles": "Dateien",
+    "addFolder": "Ordner hinzufügen",
+    "emptyTitle": "Noch keine Ordner",
+    "emptyDescription": "Fügen Sie einen Ordner hinzu, und Sitzungen arbeiten darin, innerhalb seiner Grenzen.",
+    "noAccessTitle": "Sie können diesen Ordner nicht öffnen",
+    "noAccessDescription": "Er wurde entfernt oder Ihre Rolle umfasst ihn nicht. Bitten Sie einen Administrator um Zugriff.",
+    "showFolders": "Meine Ordner anzeigen",
+    "loading": "Ordner werden gelesen…",
+    "loadFailed": "Die Ordner konnten nicht geladen werden.",
+    "details": "Wiki und Dateiübertragung",
+    "worktreeCount": "Worktrees: {{n}}",
+    "worktreeHint": "Registrieren Sie diesen Worktree als Ordner, um ihn zu durchsuchen.",
+    "gitCut": "Nicht jede geänderte Datei ist markiert: Git hat nur einen Teil der Änderungen aufgelistet.",
+    "clean": "Keine unbestätigten Änderungen",
+    "changes": "Unbestätigte Änderungen: {{n}}"
+  }
 }

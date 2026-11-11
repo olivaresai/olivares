@@ -139,6 +139,7 @@
   },
   "query": {
     "title": "Governed retrieval",
+    "tryTitle": "Try a query",
     "body": "Runs a governed retrieval against “{{name}}” as the given agent. Results are filtered by that identity’s clearance, ACL and residency, and this query is recorded in the lineage (origin → answer).",
     "queryLabel": "Query",
     "queryHint": "The retrieval query — this is hashed for lineage, never stored as text.",

@@ -1101,3 +1101,101 @@ func TestProfileAccess_TheModelsListAsksTheKeyRuleThroughMayUseProviderRecord(t 
 		t.Errorf("MayUseProviderRecord with no assignments wired = %v, %v, want every key shown, as before", ok, err)
 	}
 }
+
+// A login a person owns (owner_ref) is that person's alone: nobody else starts a session on
+// it or acts on one that runs on it, an administrator neither, and no assignment changes that.
+// The engine runs with every profile assigned to everyone and with steering others licensed,
+// so the owner rule is the only thing that can refuse.
+func TestLaunchRefusesAnotherPersonsOwnedAccount(t *testing.T) {
+	f := newSteeringFixture(t)
+	f.m.rt.ProfileAccess = &fakeProfileAccess{}
+	f.m.rt.SteerOthers = steerOthersLicensed
+	run := f.launch(f.owner)
+	setProfileOwner(t, f.m, f.tenant, f.profileRef.(string), launcherOf(t, f.m, f.tenant, run))
+
+	launch := func(token string) resp {
+		return f.h.doJSON("POST", "/v1/m/sessions/runs", token, map[string]any{
+			"workspace_ref": f.workspaceRef, "provider_profile_ref": f.profileRef,
+			"transport": "stream-json", "isolation": "native", "permission_mode": "default",
+		}, tenantHdr(f.tenant))
+	}
+	// Every route that acts on the run; the last two need run administration, which only the
+	// administrator holds (the colleague's 403 there is the role check).
+	acting := append(slices.Clone(steeringCalls[:3]), []steeringCall{
+		{"interrupt", "POST", "/interrupt", nil},
+		{"task stop", "POST", "/tasks/t1/stop", nil},
+		{"commands", "GET", "/commands", nil},
+		{"git commit", "POST", "/git/commit", map[string]any{"message": "x"}},
+		{"attachment", "POST", "/attachments", map[string]any{}},
+		{"preview", "POST", "/preview", map[string]any{"port": 3000}},
+		{"stop", "POST", "/stop", nil},
+		{"cleanup", "POST", "/cleanup", nil},
+		{"delete", "DELETE", "", nil},
+	}...)
+	for who, token := range map[string]string{"colleague": f.colleague, "administrator": f.admin} {
+		if got := launch(token); got.code != http.StatusForbidden || !strings.Contains(got.raw, "not assigned") {
+			t.Errorf("%s: launch under another person's login = %d %s, want 403", who, got.code, got.raw)
+		}
+		for i, c := range acting {
+			got := f.do(token, run, c)
+			roleOnly := who == "colleague" && i >= len(acting)-2
+			if got.code != http.StatusForbidden || (!roleOnly && !strings.Contains(got.raw, "not assigned")) {
+				t.Errorf("%s: %s on a session on another person's login = %d %s, want 403", who, c.name, got.code, got.raw)
+			}
+		}
+	}
+	if got := f.do(f.owner, run, steeringCalls[0]); got.code != http.StatusAccepted {
+		t.Errorf("owner: input = %d %s, want 202", got.code, got.raw)
+	}
+	if got := launch(f.owner); got.code != http.StatusCreated {
+		t.Errorf("owner: launch on their own login = %d %s, want 201", got.code, got.raw)
+	}
+}
+
+// A run whose profile row is gone cannot be resumed: the stored profile is read again before
+// any launch term, as it was before the owner rule asked the profile too.
+func TestResumeOfARunWhoseProfileIsGoneIsNotFound(t *testing.T) {
+	f := newSteeringFixture(t)
+	run := f.launch(f.owner)
+	if got := f.do(f.owner, run, steeringCall{"stop", "POST", "/stop", nil}); got.code != http.StatusOK {
+		t.Fatalf("stop = %d %s", got.code, got.raw)
+	}
+	ctx := context.Background()
+	if err := f.m.Data.Mutate(ctx, f.tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(providerProfileKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findProfileRec(ctx, sc, f.profileRef.(string))
+		if err != nil {
+			return err
+		}
+		return repo.Delete(ctx, model.ID(rec.String(model.ColID)))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.do(f.owner, run, steeringCalls[1]); got.code != http.StatusNotFound {
+		t.Errorf("resume of a run whose profile is gone = %d %s, want 404", got.code, got.raw)
+	}
+}
+
+// setProfileOwner binds a profile to the person whose account id is owner.
+func setProfileOwner(t *testing.T, m *Module, tenant model.TenantID, profileRef, owner string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(providerProfileKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findProfileRec(ctx, sc, profileRef)
+		if err != nil {
+			return err
+		}
+		rec[colPPOwnerRef] = owner
+		_, err = repo.Update(ctx, rec)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

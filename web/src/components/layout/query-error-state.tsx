@@ -12,10 +12,16 @@
 //   - 501 (open-core seam): this edition does not include it; no Retry;
 //   - 404 module_not_enabled: the module is off here, with the administrator's enable action.
 //     No Retry, and no New: ModuleGate does not mount the panel's reads or its actions;
-//   - a network failure or a 5xx: the error, with Retry and the request id.
+//   - a network failure or a 5xx: the error, with Retry, the request id and its cause
+//     behind «Copy detail».
 import { lazy, Suspense, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import type { StateSize } from '@/components/ui/empty-state'
+import {
+  ErrorState,
+  ForbiddenState,
+  errorDetail,
+} from '@/components/ui/error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { useModuleName } from '@/features/settings/module-names'
 import {
@@ -29,6 +35,11 @@ import { networkErrorText } from '@/lib/api/network-error-text'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { useModuleOn } from '@/stores/modules'
+import {
+  EditionNote,
+  editionRefusal,
+  type EditionNoteProps,
+} from '@/components/ui/edition-note'
 
 // The enable action lives with the Modules screen; it loads only when the line offers it.
 const TurnOnModule = lazy(() =>
@@ -82,6 +93,15 @@ export function ModuleEnableAction({ module }: { module?: string }) {
   )
 }
 
+/** The edition line where a panel mounts it. Whoever can add a license reads its ways on;
+ * anyone else is asked to ask an administrator. The gate is the license tab's own. */
+export function EditionRefusalNote(
+  props: Omit<EditionNoteProps, 'canAddLicense'>,
+) {
+  const { isSuperadmin } = useAuth()
+  return <EditionNote {...props} canAddLicense={isSuperadmin} />
+}
+
 /** Mounts `children` only while `module` runs here: a panel that reads another module's
  * routes neither reads them nor offers New while that module is off (EU18). */
 export function ModuleGate({
@@ -114,6 +134,8 @@ export interface QueryErrorStateProps {
   /** The failure's own words; the default is the generic one. */
   title?: ReactNode
   description?: ReactNode
+  /** `panel` inside a side panel, a sheet, a card or a table body. */
+  size?: StateSize
   className?: string
 }
 
@@ -124,6 +146,7 @@ export function QueryErrorState({
   module,
   title,
   description,
+  size,
   className,
 }: QueryErrorStateProps) {
   const { t } = useTranslation('errors')
@@ -134,6 +157,10 @@ export function QueryErrorState({
         onElevated={retry ? () => retry() : undefined}
       />
     )
+  // The panel's module is wider than what an answer refuses: it never names the capability.
+  const refusal = editionRefusal(error)
+  if (refusal)
+    return <EditionRefusalNote refusal={refusal} className={className} />
   if (
     error instanceof ApiError &&
     error.isForbidden &&
@@ -142,6 +169,7 @@ export function QueryErrorState({
     return (
       <ForbiddenState
         className={className}
+        size={size}
         title={t('tenantAdmission.title')}
         description={t('tenantAdmission.description')}
       />
@@ -152,6 +180,7 @@ export function QueryErrorState({
     return (
       <ForbiddenState
         className={className}
+        size={size}
         title={
           subject
             ? t('forbidden.accessTo', { subject })
@@ -192,6 +221,7 @@ export function QueryErrorState({
   return (
     <ErrorState
       className={className}
+      size={size}
       title={
         title ??
         (network
@@ -210,6 +240,7 @@ export function QueryErrorState({
       }
       retry={retry}
       requestId={error instanceof ApiError ? error.requestId : undefined}
+      detail={errorDetail(error)}
     />
   )
 }

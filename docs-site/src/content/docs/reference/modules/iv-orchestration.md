@@ -48,6 +48,35 @@ invalidates a stale approval) before any dispatch. Reading the graph and firing 
 viewers, declare/retarget for editors, **fire** for admins only) — see
 [govern and approve](/how-to/govern-and-approve/).
 
+## Inbound A2A and its Agent Card
+
+An agent in another system can hand work to Olivares over [A2A](https://a2a-protocol.org/)
+1.0: the agent gateway's `a2a_inbound` block mounts an authenticated JSON-RPC
+endpoint at `/a2a`, and each accepted message becomes governed work on the
+operator route of its token issuer. With `public_url` set, the gateway also
+publishes the public Agent Card at `GET /.well-known/agent-card.json`, so a
+standard A2A client discovers the endpoint on its own:
+
+```json
+"a2a_inbound": {
+  "public_url": "https://agents.example.com/a2a",
+  "audience": "https://agents.example.com/a2a",
+  "allowed_issuers": ["https://idp.example.com"],
+  "card_signing_jwk": { "kty": "OKP", "crv": "Ed25519", "alg": "EdDSA", "kid": "card-1", "x": "…", "d": "…" },
+  "routes": [ … ]
+}
+```
+
+The card names one skill per route (its work kind and the issuer it accepts),
+the JSON-RPC interface at `public_url`, and the bearer-JWT scheme the endpoint
+enforces: the audience, the allowed issuers and, when required, client
+attestation. Tenants, workspaces and owners stay private. `card_signing_jwk` is
+optional: a dedicated private key, never the licence, update or audit key, that
+signs the card. A peer Olivares delegates only to a signed card that verifies
+against the matching public key, so set it for Olivares-to-Olivares delegation.
+Without `public_url` the path answers `404` and the boot log says so; with
+inbound A2A off it always answers `404`.
+
 ## What it consumes & produces on the bus
 
 It consumes exactly one channel: [`edge.observed`](/reference/events/). A

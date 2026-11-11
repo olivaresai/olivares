@@ -194,11 +194,10 @@ func strictCostWindowForBudget(tenant model.TenantID, spec budgetSpec, now time.
 // A dimension added there and not here is refused rather than silently broadened —
 // deny-closed is the only safe direction for a scope predicate.
 //
-// The group dimensions are absent ON PURPOSE, and their absence is a refusal, not a
-// removal from scope: user_group and agent_group have no column of their own, their
-// spend is a fan-out over the directory members that aggregateGroupPeriod resolves,
-// and resolving them here would mean a second membership subsystem. Full group
-// accounting stays later work with the existing group primitives.
+// The group dimensions are absent ON PURPOSE: user_group and agent_group have no column
+// of their own. A user_group budget whose members were resolved before the transaction
+// (userGroupBudgetMembers) is scoped by strictCostScope over the actor column; agent_group
+// has no such resolution here, and its absence stays a refusal.
 var supportedScopeDimensions = []string{
 	"provider", "model", "agent", "session", "team", "project", "workspace",
 	"api_key", "actor", "service_tier", "context_window", "inference_geo",
@@ -213,6 +212,9 @@ func strictCostScope(spec budgetSpec) ([]model.Filter, bool, amountCause) {
 		// A verified global scope: the tenant is the subject, so no predicate is the
 		// correct predicate. This is the ONLY case where nil filters mean resolved.
 		return nil, true, ""
+	case spec.Dimension == "user_group" && len(spec.memberRefs) > 0:
+		// The members were resolved before the transaction: their actor column is the scope.
+		return spec.sampleFilters(), true, ""
 	case isGroupDimension(spec.Dimension):
 		return nil, false, causeScopeGroupUnresolved
 	}
@@ -384,7 +386,7 @@ func strictCostRowPredicates(filters []model.Filter) ([]model.Filter, amountCaus
 			}
 		case model.OpIn:
 			refs, ok := f.Value.([]string)
-			if f.Column != colWorkspaceRef || !ok || !validWorkspaceRefs(refs) {
+			if !ok || f.Column != colWorkspaceRef && f.Column != colActor || !validWorkspaceRefs(refs) {
 				return nil, causeScopePredicateUnsupported
 			}
 		default:
@@ -468,7 +470,7 @@ func strictCostRowFault(r model.Record, w strictCostWindow, predicates []model.F
 func dimensionCellSatisfies(r model.Record, p model.Filter) (amountCause, bool) {
 	if p.Op == model.OpIn {
 		refs, ok := p.Value.([]string)
-		if p.Column != colWorkspaceRef || !ok || !validWorkspaceRefs(refs) {
+		if !ok || p.Column != colWorkspaceRef && p.Column != colActor || !validWorkspaceRefs(refs) {
 			return causeScopePredicateUnsupported, false
 		}
 		cell, present := r[p.Column]

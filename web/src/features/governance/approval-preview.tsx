@@ -20,11 +20,13 @@ import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { sessionNameLadder } from '@/features/home/work-line'
 import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
-import { runAwaitedApproval } from '@/features/sessions/provenance'
+import { runAwaitedApproval, runName } from '@/features/sessions/provenance'
 import { useMemberNames } from '@/features/shared'
 import { readableAction } from '@/components/layout/bell-events'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
+import { RelTime } from '@/features/shared/rel-time'
+import { useMinuteClock } from '@/components/layout/use-session-rail'
 import './i18n'
 import { governanceApi, governanceKeys } from './api'
 import type { ApprovalDTO } from './types'
@@ -85,14 +87,10 @@ export function useApprovalSession(approval: ApprovalDTO) {
   })
   return {
     name:
-      owner || row
-        ? sessionNameLadder(
-            owner?.name,
-            row,
-            t('preview.untitled'),
-            owner?.title,
-          ).text
-        : undefined,
+      (owner && runName(owner)) ||
+      (owner || row
+        ? sessionNameLadder(null, row, t('preview.untitled')).text
+        : undefined),
     folder: workspace.data?.root_path,
     /** What the session reaches, as the run read reports it. */
     reaches: owner?.reaches,
@@ -429,7 +427,7 @@ export function ReviewText({
       {long ? (
         <button
           type="button"
-          className="text-caption text-accent-text underline underline-offset-2"
+          className="text-caption text-foreground underline underline-offset-2"
           aria-expanded={all}
           onClick={() => setAll((v) => !v)}
         >
@@ -480,9 +478,14 @@ export function ApprovalWhatRuns({ approval }: { approval: ApprovalDTO }) {
   )
 }
 
-/** One request, as a person reviews it: session, folder, who asks, tool, then what runs. */
+/** The classes of change the engine records for a publication, each with its words. */
+const CHANGE_CLASSES = new Set(['docs_only', 'code', 'sensitive'])
+
+/** One request, as a person reviews it: session, folder, who asks, tool, what the change
+ * touches and when an open request lapses, then what runs. */
 export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
   const { t } = useTranslation('governance')
+  const now = useMinuteClock()
   const session = useApprovalSession(approval)
   const members = useMemberNames()
   const { principal, can } = useAuth()
@@ -517,6 +520,34 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
         </KvRow>
         {review?.tool ? (
           <KvRow label={t('preview.tool')}>{review.tool}</KvRow>
+        ) : null}
+        {approval.change_class ? (
+          <KvRow label={t('preview.touches')} align="start">
+            <span className="flex min-w-0 flex-col gap-1">
+              {CHANGE_CLASSES.has(approval.change_class) ? (
+                <span>{t(`preview.changeClass.${approval.change_class}`)}</span>
+              ) : null}
+              {approval.change_paths?.map((path) => (
+                <PathText key={path} value={path} />
+              ))}
+            </span>
+          </KvRow>
+        ) : null}
+        {approval.status === 'pending' && approval.expires_at ? (
+          // What happens at the end, as the engine does it: an open request past its
+          // time is expired, nobody can decide it, and what it asked for never runs.
+          // The clock decides which is true now, not the last poll.
+          <KvRow label={t('detail.expiresAt')} align="start">
+            <Trans
+              i18nKey={
+                Date.parse(approval.expires_at) > now
+                  ? 'preview.lapses'
+                  : 'preview.lapsed'
+              }
+              ns="governance"
+              components={{ when: <RelTime ts={approval.expires_at} /> }}
+            />
+          </KvRow>
         ) : null}
       </KvList>
       <ApprovalWhatRuns approval={approval} />

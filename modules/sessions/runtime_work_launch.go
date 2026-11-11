@@ -177,6 +177,7 @@ func (m *Module) createRunForWork(
 		return runDTO{}, workLaunchReservation{}, false, err
 	}
 	spec.Runtime.asks.profileAccess = m.askProfileAccess(ctx, tenant, agent.Principal)
+	spec.Runtime.asks.modelAccess = m.askModelAccess(ctx, tenant, agent.Principal)
 	// The owner agent's department standards, as a person's are asked for POST /runs.
 	spec.Runtime.asks.standing = m.askStanding(ctx, tenant, agent.Principal)
 	spec.askedAgent = agentRef

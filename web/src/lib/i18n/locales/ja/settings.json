@@ -53,6 +53,13 @@
   "general": {
     "title": "一般",
     "scope": "あなた自身の設定です。このインストールのすべてのワークスペースに付いていきます。",
+    "groups": {
+      "appearance": "外観",
+      "language": "言語と地域",
+      "start": "コンソールを開いたとき",
+      "sessions": "セッション",
+      "editor": "コードエディター"
+    },
     "theme": "テーマ",
     "themeHint": "ライト、ダーク、ブラックのいずれかを選ぶまで、システムに従います。",
     "density": "密度",
@@ -65,14 +72,20 @@
     "clock12": "12 時間",
     "startPage": "開始ページ",
     "startPageHint": "サインインしたときに開くページです。既定: セッション。",
-    "confirmStop": "セッションを停止する前に確認する",
-    "confirmStopHint": "作業中のセッションを停止が終える前に、一度確認します。",
+    "confirmStop": "セッションを終了する前に確認する",
+    "confirmStopHint": "「セッションを終了」でセッションを閉じる前に、一度確認します。",
     "editor": "ファイルリンクのエディター",
     "editorHint": "このコンピューターで「開く」リンクが起動するエディター。既定: VS Code。",
     "editorSsh": "エディターの SSH ホスト",
     "editorSshHint": "別のマシンにあるセッションフォルダーにエディターが接続する方法。user@host または user@host:port の形式。空欄の場合はこのコンソールの提供元アドレスを使い、このコンピューターなら SSH は使いません。",
     "reduceMotion": "動きを減らす",
-    "reduceMotionHint": "動きをフェードに置き換えます。システムが求めたときにオンになります。"
+    "reduceMotionHint": "動きをフェードに置き換えます。システムが求めたときにオンになります。",
+    "sendKey": "送信キー",
+    "sendKeyHint": "セッションでメッセージを送信するキーです。2つ目を選ぶと、Enter は改行になります。",
+    "sendWhileRunning": "ツールの作業中",
+    "sendWhileRunningHint": "ターンの実行中に送信キーが行うことです。Enter で送信する場合、Ctrl+Enter がもう一方を行います。",
+    "sendQueue": "待機させる",
+    "sendSteer": "ターンに割り込ませる"
   },
   "sessionNotifications": {
     "title": "セッション通知",
@@ -84,6 +97,12 @@
     "finished": "ターンが完了しました。",
     "ended": "セッションが終了しました。",
     "failed": "セッションがエラーで停止しました。",
+    "inApp": {
+      "needsYou": "{{name}} が対応を必要としています",
+      "finished": "{{name}} のターンが完了しました",
+      "failed": "{{name}} がエラーで停止しました"
+    },
+    "open": "開く",
     "pushOn": "タブを閉じていても、このデバイスに通知が届きます。",
     "pushUnavailable": "タブを開いている間だけ通知されます。このデバイスをプッシュに登録できませんでした。",
     "installHint": "通知を受け取るには、アプリをホーム画面に追加してください。共有をタップし、「ホーム画面に追加」を選びます。"
@@ -93,14 +112,14 @@
     "scope": "このインストールが応答するキーです。だれにとっても同じです。"
   },
   "edition": {
-    "scope": "このビルドのエディション、そのライセンス、Business で追加される機能。",
+    "scope": "このビルドのエディション、そのライセンス、Olivares AI Business で追加される機能。",
     "label": "エディション",
     "unknown": "このエンジンは報告していません",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business で追加されるもの",
+    "businessAdds": "Olivares AI Business で追加されるもの",
     "summary": {
       "Session cockpit and fleet deployment.": "セッションコックピットとフリートへのデプロイ。",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "名前付きで有効期限のあるゲストアクセスと、所有者が承認するメッセージ提案によるライブセッション共有。",
@@ -111,11 +130,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise には Business のすべてに加え、契約で合意した条件とそれに依存する機能が含まれます。"
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "{{edition}} エディション",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "エディションバッジを表示",
       "loadError": "バッジの設定を読み込めませんでした。",
       "saveError": "バッジの設定を保存できませんでした。もう一度お試しください。"
@@ -138,15 +159,18 @@
     "email": "メールアドレス"
   },
   "stopConfirm": {
-    "title": "このセッションを停止しますか？",
-    "description": "停止は、まだ作業中のセッションを終えます。",
-    "confirm": "セッションを停止"
+    "title": "このセッションを終了しますか？",
+    "description": "まだ作業中でも、セッションは閉じられます。",
+    "confirm": "セッションを終了"
   },
   "modules": {
     "title": "モジュール",
     "description": "このインストールで動かす Olivares の機能をオン・オフします。適用するとエンジンが 1 回再起動して変更を反映し、実行中のセッションは停止します。",
     "apply_other": "{{count}} 件の変更を適用",
     "applied": "モジュールの選択を保存しました。",
+    "appliedNow": "適用しました。停止したセッションはありません。",
+    "savedForNextStart": "保存しました。次回エンジンの起動時に適用されます。実行中のセッションは停止していません。",
+    "notSaved": "モジュールの選択を保存できませんでした。何も変更されていません。",
     "restarting": "エンジンを再起動しています…",
     "restartWarning": {
       "title": "エンジンを再起動しますか？",
@@ -299,6 +323,8 @@
   },
   "tracing": {
     "description": "トレースとメトリクスを指定したコレクターへ送信します。変更は再起動せずに適用されます。",
+    "export": "エクスポート",
+    "advanced": "詳細設定",
     "enabled": "トレースを有効にする",
     "endpoint": "コレクターのアドレス",
     "protocol": "プロトコル",
@@ -311,10 +337,16 @@
     "inactive": "トレースは無効です。",
     "apply": "適用",
     "saved": "トレース設定を保存しました。",
-    "businessRequired": "SIEM 配信と外部テレメトリエクスポートには Business が必要です。設定は保持されますが、Community はデータを送信しません。"
+    "businessRequired": "SIEM 配信と外部テレメトリエクスポートには Olivares AI Business が必要です。設定は保持されますが、Olivares AI Community はデータを送信しません。"
   },
   "signIn": {
     "methods": "サインイン方法",
+    "ssoName": "シングルサインオン",
+    "available": "利用可能",
+    "required": "必須",
+    "blocked": "ブロック中",
+    "notSetUp": "未設定",
+    "sessionGroup": "セッション",
     "password": "パスワード",
     "sso": "シングルサインオン: {{providers}}",
     "noSso": "サインインページで利用できるシングルサインオンプロバイダーはありません。",
@@ -332,7 +364,9 @@
     "minutes": "アイドル状態で停止するまでの分数",
     "description": "既定では無効です。開かれていない完了済みセッションを停止してメモリを解放します。再開するとフォルダと会話が維持されます。",
     "hint": "0で無効、それ以外は6～10080分です。出力がない状態が5分続くとアイドルになります。承認待ち、実行中の子プロセスや関連セッション、新しいメッセージがある場合は停止しません。",
-    "saved": "セッションのメモリ設定を保存しました。"
+    "saved": "セッションのメモリ設定を保存しました。",
+    "group": "アイドル時の停止",
+    "stop": "アイドル状態のセッションを停止"
   },
   "updates": {
     "title": "アップデート",

@@ -21,6 +21,24 @@ type infraFixedClock struct{ now time.Time }
 
 func (c infraFixedClock) Now() model.Timestamp { return model.NewTimestamp(c.now) }
 
+// stepClock is a clock a test moves forward.
+type stepClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func (c *stepClock) Now() model.Timestamp {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return model.NewTimestamp(c.now)
+}
+
+func (c *stepClock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
 type mutableBusStats struct {
 	mu    sync.Mutex
 	stats eventbus.Stats
@@ -163,7 +181,8 @@ func TestPublicStatusIngestUsesBusCounterDeltasWithoutNames(t *testing.T) {
 		Subscribers:    []eventbus.SubscriberStats{{Name: privateSubscriberName, Depth: 0, Capacity: 10}},
 		PublishBlocked: 4,
 	}}
-	h := newHarnessOpts(t, func(o *api.Options) { o.BusStats = provider })
+	clock := &stepClock{now: time.Date(2026, 11, 11, 3, 0, 0, 0, time.UTC)}
+	h := newHarnessOpts(t, func(o *api.Options) { o.BusStats = provider; o.Clock = clock })
 
 	first := h.do(http.MethodGet, "/status", "", nil, nil)
 	if got := componentStatus(t, first, "ingest"); got != "operational" {
@@ -178,8 +197,18 @@ func TestPublicStatusIngestUsesBusCounterDeltasWithoutNames(t *testing.T) {
 		t.Fatalf("public /status leaked subscriber/module name: %s", second.raw)
 	}
 
+	// No poll consumes the loss: the console's next polls, every 30 s, and a
+	// second reader all still see it.
+	for i := 0; i < 4; i++ {
+		clock.advance(30 * time.Second)
+		if got := componentStatus(t, h.do(http.MethodGet, "/status", "", nil, nil), "ingest"); got != "degraded" {
+			t.Fatalf("poll %d after the loss: ingest = %q, want degraded", i+1, got)
+		}
+	}
+
 	// Cumulative history alone is not a permanent incident: with no new delta,
-	// the following observation returns to operational.
+	// ingest returns to operational once the loss is older than its hold.
+	clock.advance(5 * time.Minute)
 	third := h.do(http.MethodGet, "/status", "", nil, nil)
 	if got := componentStatus(t, third, "ingest"); got != "operational" {
 		t.Fatalf("unchanged cumulative counter ingest = %q, want operational", got)

@@ -15,7 +15,7 @@ import (
 // A read or search that names its files is a read (opencode.tool.use:read), as Claude
 // Code's reads are: every preset allows it without a person, read-only included, and it
 // is audited as allowed. One that names no file (a web search) is not a read, and an edit
-// is never one.
+// is a write, never a read.
 func TestProviderSessionOpenCodeReadsAreReadsForEveryPreset(t *testing.T) {
 	for _, preset := range []struct{ name, mode string }{
 		{"read-only", "plan"}, {"ask", "default"}, {"edits-only", "acceptEdits"},
@@ -67,8 +67,9 @@ func TestProviderSessionOpenCodeReadsAreReadsForEveryPreset(t *testing.T) {
 				}
 				request.CommandLine = ""
 				request.ToolKind, request.FilePaths, request.FactsComplete = "edit", []string{"README.md"}, true
-				if decision, _ := policy.Decide(t.Context(), tenant, request); decision.Disposition == sessions.ProviderApprovalAllow {
-					t.Fatalf("an edit under the %s preset was allowed like a read: %+v", preset.name, decision)
+				// An edit is a write: Auto-accept edits alone accepts it without a person.
+				if decision, _ := policy.Decide(t.Context(), tenant, request); (decision.Disposition == sessions.ProviderApprovalAllow) != (preset.mode == "acceptEdits") {
+					t.Fatalf("an edit under the %s preset = %+v; only Auto-accept edits accepts it", preset.name, decision)
 				}
 			})
 		}

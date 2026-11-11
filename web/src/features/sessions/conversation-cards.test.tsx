@@ -35,9 +35,11 @@ vi.mock('@/lib/auth/context', () => ({
 
 const activity = vi.hoisted(() => vi.fn())
 const input = vi.hoisted(() => vi.fn().mockResolvedValue({}))
+const resume = vi.hoisted(() => vi.fn())
 vi.mock('@/features/agentops/api', () => ({
-  agentOpsApi: { inputText: input, input, activity },
+  agentOpsApi: { inputText: input, input, activity, resume },
   agentOpsKeys: {
+    all: (tenant: string | null) => ['agentops', tenant],
     runActivity: (tenant: string | null, ref: string) => [
       'activity',
       tenant,
@@ -68,6 +70,7 @@ const QUESTION = {
 function show(
   card: Parameters<typeof ConversationCard>[0]['card'],
   answerable = true,
+  shown: RunDTO = run,
 ) {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
@@ -75,7 +78,7 @@ function show(
   return render(
     <QueryClientProvider client={client}>
       <ul>
-        <ConversationCard card={card} run={run} answerable={answerable} />
+        <ConversationCard card={card} run={shown} answerable={answerable} />
       </ul>
     </QueryClientProvider>,
   )
@@ -264,6 +267,26 @@ describe('conversation cards', () => {
     show({ kind: 'plan', plan: '## Steps\n\n- Read\n- Change' })
     expect(screen.getByRole('region', { name: 'Proposed plan' })).toBeVisible()
     expect(screen.getByText('Change')).toBeVisible()
+  })
+
+  it('implements a plan in the same session: resumes it for building, then says go', async () => {
+    const planning = { ...run, permission_mode: 'plan' } as RunDTO
+    resume.mockResolvedValue({ ...planning, permission_mode: 'dontAsk' })
+    const user = userEvent.setup()
+    show({ kind: 'plan', plan: '1. Read\n2. Change' }, true, planning)
+    await user.click(screen.getByRole('button', { name: 'Implement' }))
+    await waitFor(() => expect(resume).toHaveBeenCalledWith('run-1', 'dontAsk'))
+    await waitFor(() => expect(input).toHaveBeenCalledTimes(1))
+    const line = JSON.parse(input.mock.calls[0]?.[1] as string)
+    expect(line.message.content).toBe('Implement the plan.')
+  })
+
+  it('offers no Implement on a plan once something was said after it', () => {
+    show({ kind: 'plan', plan: '1. Read' }, false, {
+      ...run,
+      permission_mode: 'plan',
+    } as RunDTO)
+    expect(screen.queryByRole('button', { name: 'Implement' })).toBeNull()
   })
 })
 

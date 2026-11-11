@@ -21,7 +21,7 @@ const KEY_FILE = 'olivares-folder.key'
 /** The server answers 404 where it does not serve SFTP and 403 where the person may not read
  * and write the folder: in both the card is not there. */
 const absent = (error: unknown) =>
-  error instanceof ApiError && (error.status === 404 || error.status === 403)
+  error instanceof ApiError && (error.isNotFound || error.isForbiddenOrEdition)
 
 /** An IPv6 host needs its brackets in a user@host:path. */
 const hostOf = (hostname: string) =>

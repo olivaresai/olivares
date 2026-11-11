@@ -310,6 +310,31 @@ describe('NowQueue — what needs a person', () => {
     expectNoRawI18nKeys(document.body)
   })
 
+  it('heads a request with no words of its own in plain words, never its action name', () => {
+    renderIntel(
+      <Queue
+        state="ready"
+        sessions={[]}
+        approvals={[
+          {
+            id: 'ap-migrate-bare',
+            action: 'db.migrate',
+            requested_by: 'user:ada',
+            status: 'pending',
+            required_approvals: 1,
+            approve_count: 0,
+            reject_count: 0,
+            escalated: false,
+          },
+        ]}
+      />,
+    )
+    const card = screen.getByRole('article', { name: 'Request' })
+    expect(
+      within(card).queryByRole('heading', { name: 'Db migrate' }),
+    ).toBeNull()
+  })
+
   it('leads the card with the request’s own words, never its action name made readable', () => {
     const reason =
       'The staging invoice schema needs the ledger reference column.'
@@ -777,6 +802,69 @@ describe('NowQueue — what needs a person', () => {
     auth.can = (p) => p !== 'governance:approval:admin'
     renderIntel(<Queue state="ready" sessions={[]} approvals={[MIGRATION]} />)
     expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+  })
+
+  // The engine answers who may decide each request (`may_decide`), as the approval
+  // queue reads it; the role decides only where the engine does not answer.
+  it('flags a request the engine says this person may decide, whatever their role', () => {
+    auth.can = (p) => p !== 'governance:approval:admin'
+    const theirs = { ...MIGRATION, may_decide: true }
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[theirs]} />)
+    expect(screen.getByTestId('now-flagged-request')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Approve once' }),
+    ).toBeInTheDocument()
+  })
+
+  it('a request the engine says this person may not decide is a quiet row, whatever their role', () => {
+    const refused = { ...MIGRATION, may_decide: false }
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[refused]} />)
+    expect(screen.queryByTestId('now-flagged-request')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull()
+    expect(screen.getByTestId('now-approval-row')).toHaveAttribute(
+      'href',
+      '/permissions?tab=approvals&approval=ap-migrate',
+    )
+  })
+
+  it('a request another person decided while the card was open offers no Approve once it is read again', async () => {
+    const decide = vi.spyOn(governanceApi, 'decide')
+    const { rerender } = renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[MIGRATION]} />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Approve once' }),
+    ).toBeInTheDocument()
+    await armed()
+    // Read again between open and click: someone else approved it, on an engine that
+    // sends no may decide, so only the request itself says it is no longer open.
+    const decided = { ...MIGRATION, status: 'approved', approve_count: 1 }
+    rerender(<Queue state="ready" sessions={[]} approvals={[decided]} />)
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('a request the engine stops letting this person decide takes the card and its Approve away', () => {
+    const theirs = { ...MIGRATION, may_decide: true }
+    const { rerender } = renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[theirs]} />,
+    )
+    expect(screen.getByTestId('now-flagged-request')).toBeInTheDocument()
+    const refused = { ...theirs, may_decide: false }
+    rerender(<Queue state="ready" sessions={[]} approvals={[refused]} />)
+    expect(screen.queryByTestId('now-flagged-request')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+  })
+
+  it.each([
+    ['with the permission that decides, flags the request', true],
+    ['without it, leaves a quiet row', false],
+  ])('where the engine does not answer, the role decides: %s', (_, role) => {
+    if (!role) auth.can = (p) => p !== 'governance:approval:admin'
+    expect(MIGRATION.may_decide).toBeUndefined()
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[MIGRATION]} />)
+    expect(screen.queryByTestId('now-flagged-request') !== null).toBe(role)
   })
 
   it('a request that needs two people offers no second Approve to the first', async () => {

@@ -55,6 +55,7 @@ vi.mock('@/lib/hooks/use-server-info', () => ({
 vi.mock('./sidebar', () => ({
   Sidebar: () => null,
   NavigationDrawer: () => null,
+  PhoneNavigation: () => null,
 }))
 vi.mock('./topbar', () => ({ Topbar: () => <header data-slot="topbar" /> }))
 vi.mock('./status-bar', () => ({ StatusBar: () => null }))

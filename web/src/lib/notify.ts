@@ -26,6 +26,15 @@ import { preferenceStorage } from '@/lib/preference-storage'
 const DISMISSED_KEY = 'olivares.notices.dismissed'
 /** The newest dismissals kept. A condition older than these is shown once more. */
 const REMEMBERED = 24
+/**
+ * The edition line (EditionNote) remembers here too, with a bound of its own, so the
+ * capabilities a person met never push a dismissed notice out, and the value stays far
+ * under the engine's 16384 bytes for one preference. Only a short printable capability key
+ * is kept: any other is told again, the worst a lost memory can do.
+ */
+const EDITION_PREFIX = 'edition-note:'
+const EDITION_KEY = /^edition-note:[\x21-\x7e]{1,64}$/
+const EDITION_REMEMBERED = 64
 
 export interface Notice {
   message: string
@@ -57,7 +66,13 @@ function dismissed(): Record<string, string> {
 }
 
 function store(next: Record<string, string>) {
-  const newest = Object.entries(next).slice(-REMEMBERED)
+  const entries = Object.entries(next)
+  const notices = entries.filter(([key]) => !key.startsWith(EDITION_PREFIX))
+  const editions = entries.filter(([key]) => EDITION_KEY.test(key))
+  const newest = [
+    ...notices.slice(-REMEMBERED),
+    ...editions.slice(-EDITION_REMEMBERED),
+  ]
   preferenceStorage.setItem(
     DISMISSED_KEY,
     JSON.stringify(Object.fromEntries(newest)),
@@ -67,6 +82,18 @@ function store(next: Record<string, string>) {
 function forget(condition: string) {
   const { [condition]: _gone, ...rest } = dismissed()
   store(rest)
+}
+
+/** Whether this person was already told `condition` in this state: the same memory as a
+ * dismissed notice, for a line that is shown once and never closed by hand. */
+export function noticeSeen(condition: string, signature = ''): boolean {
+  return dismissed()[condition] === signature
+}
+
+/** Remember that this person was told `condition`, so it is not told again in this state. */
+export function rememberNotice(condition: string, signature = ''): void {
+  const { [condition]: _old, ...rest } = dismissed()
+  store({ ...rest, [condition]: signature })
 }
 
 /**

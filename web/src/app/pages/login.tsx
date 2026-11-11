@@ -3,21 +3,23 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
+  useIsMutating,
   useMutation,
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, Navigate, useNavigate, useSearch } from '@tanstack/react-router'
+import { CircleAlert } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { isEngineEmail } from '@/lib/email'
-import { AuthShell } from '@/components/layout/auth-shell'
+import { AuthSheet, AuthShell } from '@/components/layout/auth-shell'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Notice } from '@/components/ui/notice'
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import { networkErrorText } from '@/lib/api/network-error-text'
 import { queryKeys } from '@/lib/api/query'
@@ -28,6 +30,7 @@ import { can as rbacCan } from '@/lib/auth/rbac'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { SecondFactorPanel } from '@/features/identity/totp-login'
 import { SsoButtons } from './login-sso'
+import { offersPasskey, PASSKEY_SIGN_IN, PasskeySignIn } from './login-passkey'
 import type { LoginChallenge } from '@/lib/api/types'
 import { viewById } from '@/features/navigation/model'
 import type { FeatureView } from '@/features/registry'
@@ -105,6 +108,7 @@ export function LoginPage() {
         }
       : { to: startPath(permitsNow(queryClient, can)) as '/' }
   const serverInfo = useServerInfo()
+  const passkeyBusy = useIsMutating({ mutationKey: PASSKEY_SIGN_IN }) > 0
   const form = useForm<LoginValues>({
     resolver: zodResolver(schema),
     defaultValues: { email: '', password: '' },
@@ -152,9 +156,9 @@ export function LoginPage() {
 
   return (
     <AuthShell>
-      <Card className="p-6 sm:p-7">
-        <div className="mb-6 flex flex-col gap-1.5">
-          <h1 className="font-display text-title text-foreground">
+      <AuthSheet>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[1.375rem]/7 font-extrabold text-balance text-text">
             {t('login.title')}
           </h1>
           {/* ⛔ THE SUBTITLE USED TO RESTATE THE TITLE. "Sign in to the control
@@ -162,7 +166,7 @@ export function LoginPage() {
               they did not read half a second earlier, and in Spanish it read
               "Accede al control plane." — an English term inside a Spanish sentence
               on screen one. It now says what the credentials ARE. */}
-          <p className="text-body text-muted-foreground">
+          <p className="text-body text-pretty text-text-2">
             {t('login.subtitle')}
           </p>
           {endReason ? (
@@ -186,13 +190,9 @@ export function LoginPage() {
           />
         ) : (
           <>
-            <SsoButtons
-              providers={serverInfo.data?.sso_providers}
-              returnTo={requestedPath}
-            />
             <form
               onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
-              className="flex flex-col gap-4"
+              className="flex flex-col gap-4.5"
               noValidate
             >
               <Field
@@ -232,46 +232,57 @@ export function LoginPage() {
               </Field>
 
               {submitError && (
-                <p className="text-body text-danger" role="alert">
+                <Notice tone="bad" icon={<CircleAlert />} role="alert">
                   {submitError}
-                </p>
+                </Notice>
               )}
 
               <Button
                 type="submit"
                 variant="primary"
-                disabled={mutation.isPending}
-                className="w-full"
+                size="lg"
+                disabled={mutation.isPending || passkeyBusy}
+                className="mt-0.5 w-full"
               >
                 {mutation.isPending ? t('login.signingIn') : t('login.submit')}
               </Button>
             </form>
+            <SsoButtons
+              providers={serverInfo.data?.sso_providers}
+              returnTo={requestedPath}
+            >
+              {offersPasskey(serverInfo.data) && (
+                <PasskeySignIn
+                  disabled={mutation.isPending}
+                  onSession={finishSecondFactor}
+                  onUnusable={() => form.setFocus('email')}
+                />
+              )}
+            </SsoButtons>
           </>
         )}
         {ANONYMOUS_VIEWS.some((view) => view.loginLabel) && (
-          <div className="mt-4 flex flex-col gap-2">
+          <div className="flex flex-col gap-4.5">
             {ANONYMOUS_VIEWS.filter((view) => view.loginLabel).map((view) => (
               <Button
                 key={view.id}
                 asChild
                 variant="secondary"
-                className="h-auto min-h-11 w-full whitespace-normal py-2"
+                className="h-auto min-h-10 w-full whitespace-normal py-2"
               >
                 <Link to={view.path as '/'}>{view.loginLabel?.()}</Link>
               </Button>
             ))}
           </div>
         )}
-      </Card>
-      {/* Passkeys are optional (Settings > Security), so the sign-in page says
-          nothing about them: the form is the page. */}
-      <div className="mt-5 flex flex-col items-center gap-3">
+      </AuthSheet>
+      <div className="flex flex-col items-center">
         {/*surface the public status page (it needs no session) so an operator
          * facing a login failure can tell an outage from a credential problem. */}
-        <p className="text-caption text-muted-foreground">
+        <p className="text-caption text-text-3">
           <Link
             to="/status-page"
-            className="underline-offset-2 hover:underline"
+            className="inline-flex min-h-6 items-center text-foreground underline underline-offset-[3px] max-md:min-h-11"
           >
             {t('login.statusPage')}
           </Link>

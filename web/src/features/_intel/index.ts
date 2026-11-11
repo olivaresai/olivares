@@ -22,7 +22,11 @@ export {
   GateBadge,
 } from './badges'
 export { HashChip } from './hash-chip'
-export { MetricStat, StatGrid, type MetricStatProps } from './metric'
+export {
+  MetricStat,
+  StatGrid,
+  type MetricStatProps,
+} from '@/components/ui/figures'
 export {
   IntelNotice,
   ListTruncationBadge,

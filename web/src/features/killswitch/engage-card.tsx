@@ -5,22 +5,16 @@
 // The emergency stop (POST /killswitch). Engage is deliberately CHEAP server-side
 // (admin-tier + reason; no approval gate, no AAL bar — see modules/governance/killswitch.go
 // header), so the console offers ONE verb, "Stop all agents", behind one danger-toned
-// confirmation; stopping a single agent sits under More. The reason is optional here: the
+// confirmation; stopping a single agent is the button beside it. The reason is optional: the
 // engine requires one for the audit record, so an empty reason sends NO_REASON. A 409 means
 // the scope is already stopped — the existing stop is surfaced (state refetch + the
 // engine's message naming it), never swallowed.
-import { MoreHorizontal, OctagonAlert } from 'lucide-react'
+import { OctagonAlert } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -123,6 +117,36 @@ function ReasonField({
 }
 
 /**
+ * acceptance (09b, one-admin install): starting again needs two OTHER admin accounts to
+ * approve and one to review, for one agent as for all. With fewer than three active admin
+ * accounts a stop's confirmation says so before the stop; a roster that cannot be read
+ * says it too.
+ */
+function useFewAdmins(open: boolean): boolean {
+  const { activeTenant } = useAuth()
+  const roster = useQuery({
+    queryKey: consoleKeys.members(activeTenant),
+    queryFn: () => consoleApi.listMembers(),
+    enabled: open,
+    retry: false,
+  })
+  const activeAdmins = (roster.data?.items ?? []).filter(
+    (m) => m.status === 'active' && (m.role === 'admin' || m.role === 'owner'),
+  ).length
+  return !roster.isSuccess || activeAdmins < 3
+}
+
+/** What starting again needs, said in a stop's confirmation on a small installation. */
+function RestartNeedsAdmins() {
+  const { t } = useTranslation('killswitch')
+  return (
+    <p className="text-body text-warning" data-slot="restart-needs-admins">
+      {t('engage.restartNeedsAdmins')}
+    </p>
+  )
+}
+
+/**
  * The Stop all confirmation, opened by the kill switch's own button and by the status
  * bar's. `running`, when the opener knows it, says how many sessions stop.
  */
@@ -136,25 +160,12 @@ export function StopAllConfirm({
   running?: number
 }) {
   const { t } = useTranslation(['killswitch', 'common'])
-  const { activeTenant } = useAuth()
   const [reason, setReason] = useState('')
   const { engage, reasonOrDefault } = useEngage(
     () => onOpenChange(false),
     () => setReason(''),
   )
-  // acceptance (09b, one-admin install): starting the estate again needs two OTHER admin
-  // accounts to approve and one to review. With fewer than three active admin accounts
-  // the confirmation says so before the stop; a roster that cannot be read says it too.
-  const roster = useQuery({
-    queryKey: consoleKeys.members(activeTenant),
-    queryFn: () => consoleApi.listMembers(),
-    enabled: open,
-    retry: false,
-  })
-  const activeAdmins = (roster.data?.items ?? []).filter(
-    (m) => m.status === 'active' && (m.role === 'admin' || m.role === 'owner'),
-  ).length
-  const fewAdmins = !roster.isSuccess || activeAdmins < 3
+  const fewAdmins = useFewAdmins(open)
 
   return (
     <ConfirmDialog
@@ -183,11 +194,7 @@ export function StopAllConfirm({
           {t('engage.stopsRunning', { count: running })}
         </p>
       ) : null}
-      {fewAdmins ? (
-        <p className="text-body text-warning" data-slot="restart-needs-admins">
-          {t('engage.restartNeedsAdmins')}
-        </p>
-      ) : null}
+      {fewAdmins ? <RestartNeedsAdmins /> : null}
       <ReasonField value={reason} onChange={setReason} />
     </ConfirmDialog>
   )
@@ -217,8 +224,8 @@ export function StopAllAction({ estateStopped }: { estateStopped: boolean }) {
   )
 }
 
-/** More: the single-agent stop, which needs the agent and is the rarer case. */
-export function StopAgentMenu() {
+/** The single-agent stop, beside Stop all: it needs the agent, so it opens a form. */
+export function StopAgentAction() {
   const { t } = useTranslation(['killswitch', 'common'])
   const [open, setOpen] = useState(false)
   const [agentRef, setAgentRef] = useState('')
@@ -230,31 +237,20 @@ export function StopAgentMenu() {
       setReason('')
     },
   )
+  const fewAdmins = useFewAdmins(open)
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t('engage.more')}
-            title={t('engage.more')}
-          >
-            <MoreHorizontal />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => setOpen(true)}>
-            {t('engage.stopOne')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button onClick={() => setOpen(true)}>{t('engage.stopOne')}</Button>
       <ConfirmDialog
         open={open}
         onOpenChange={(o) => !engage.isPending && setOpen(o)}
         title={t('engage.confirmTitleAgent')}
-        description={t('engage.confirmBodyAgent')}
+        description={
+          fewAdmins
+            ? t('engage.confirmBodyAgentNoRestart')
+            : t('engage.confirmBodyAgent')
+        }
         tone="danger"
         confirmLabel={t('engage.stopAgent')}
         // The engine 400s an agent stop without its ref.
@@ -268,6 +264,7 @@ export function StopAgentMenu() {
           })
         }
       >
+        {fewAdmins ? <RestartNeedsAdmins /> : null}
         <Field
           label={t('engage.agentRef')}
           htmlFor="ks-agent-ref"

@@ -15,7 +15,8 @@
   "groups": {
     "yours": "Your templates",
     "builtin": "Built-in templates ({{n}})",
-    "yoursEmpty": "None yet. A template is a reusable starting point for new sessions."
+    "emptyTitle": "You have no templates yet",
+    "emptyDescription": "A template is a reusable starting point for new sessions."
   },
   "editor": {
     "nameLabel": "Name",
@@ -25,11 +26,11 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "Commands run before/after tools and sessions.",
-      "settings": "Agent settings",
+      "settings": "Settings",
       "settingsHint": "Permission mode, effort level, model, and custom instructions.",
       "connectors": "Connectors",
       "connectorsHint": "Connector IDs to attach when this template is applied.",
-      "policies": "Governance policies",
+      "policies": "Policies",
       "policiesHint": "DLP mode, session duration limits, allowed tools, and I/O recording.",
       "secrets": "Secrets",
       "secretsHint": "Vault secrets that sessions from this template receive as environment variables.",
@@ -101,7 +102,7 @@
     "unenforceable": "This template cannot be applied: {{reasons}}"
   },
   "errors": {
-    "loadFailed": "Failed to load templates.",
+    "loadFailed": "Could not load templates",
     "saveFailed": "Failed to save template.",
     "applyFailed": "Failed to apply template.",
     "archiveFailed": "Failed to archive template.",

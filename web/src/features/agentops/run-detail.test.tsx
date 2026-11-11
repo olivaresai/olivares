@@ -95,7 +95,7 @@ describe('Stop asks when confirm-before-stop is on', () => {
     wrap(unnamed)
     const user = await clickStop()
     expect(
-      await screen.findByRole('heading', { name: /stop this session/i }),
+      await screen.findByRole('heading', { name: /end this session/i }),
     ).toBeInTheDocument()
     expect(httpPost).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -105,7 +105,7 @@ describe('Stop asks when confirm-before-stop is on', () => {
   it('sends exactly one stop when the operator confirms', async () => {
     wrap(unnamed)
     const user = await clickStop()
-    await user.click(screen.getByRole('button', { name: 'Stop the session' }))
+    await user.click(screen.getByRole('button', { name: 'End the session' }))
     const stops = httpPost.mock.calls.filter((call) =>
       String(call[0]).endsWith('/stop'),
     )
@@ -118,7 +118,7 @@ describe('Stop asks when confirm-before-stop is on', () => {
     wrap(unnamed)
     await clickStop()
     expect(
-      screen.queryByRole('heading', { name: /stop this session/i }),
+      screen.queryByRole('heading', { name: /end this session/i }),
     ).not.toBeInTheDocument()
     const stops = httpPost.mock.calls.filter((call) =>
       String(call[0]).endsWith('/stop'),

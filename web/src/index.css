@@ -17,7 +17,7 @@
 /* Generated design tokens (DTCG → Style Dictionary). DO NOT edit the output;
  * edit web/tokens/*.tokens.json and run `pnpm tokens` (CI: `pnpm tokens:check`). */
 @import './styles/tokens.css';
-/* Inter, Space Grotesk and JetBrains Mono 400/500, self-hosted (SIL OFL 1.1). */
+/* Adwaita Sans (variable) and Adwaita Mono 400/700, self-hosted (SIL OFL 1.1). */
 @import './styles/fonts.css';
 
 /* ⛔ THE DTCG SOURCES ARE NOT A TEMPLATE, AND TAILWIND WAS READING THEM AS ONE.
@@ -56,22 +56,21 @@
     /* The body step of the ladder (14/20); the root stays 16px for rem math. */
     font-size: var(--text-body);
     line-height: var(--text-body--line-height);
-    /* Inter's open digits (ss01) and alternate one (cv01), as the website sets them. */
-    font-feature-settings:
-      'ss01' 1,
-      'cv01' 1;
+    /* Adwaita Sans as drawn: no feature switched on, and bold only from the variable
+     * face's real weights, while emphasis keeps the browser's slant (no italic face ships). */
+    font-feature-settings: normal;
+    font-synthesis-weight: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
-  /* Monospace carries ids/hashes/tokens everywhere — always a slashed zero. */
+  /* Ids, hashes and tokens are set in Adwaita Mono, with the zero it draws. */
   code,
   kbd,
   samp,
   pre {
     font-family: var(--font-mono);
-    font-feature-settings: 'zero' 1;
   }
 
   /* Machine text shows the characters it holds: no ligature draws >= as ≥, in a
@@ -84,16 +83,83 @@
     font-variant-ligatures: none;
   }
 
-  /* Focus: a ring, never a glow. Components opt out with `outline-none` and draw
-   * their own ring; native focusables (links, inputs) get this AA-visible outline. */
+  /* Focus: a 2 px ring in the focus tone that keeps the widget's own shape, never a glow.
+   * Components opt out with `outline-none` and draw their own ring; the shell's rows and
+   * tabs pull it inside with `-outline-offset-2`. */
   :focus-visible {
-    outline: 2px solid var(--ring);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
-    border-radius: 2px;
   }
 
   ::selection {
     background-color: color-mix(in oklab, var(--accent) 28%, transparent);
+  }
+
+  /* Tertiary text is for resting surfaces (A2). Where a hover, selection, soft or status-tint fill
+   * is painted it takes the secondary ink, which holds 4.5:1 on every stack of those fills. The rule
+   * matches the class that paints the fill, in three parts: a fill behind a variant (`hover:bg-muted`)
+   * in the state it is painted in, and a fill painted at rest as the first class or as a later one
+   * (`bg-muted/30`, never `hover:bg-muted`, which paints nothing at rest). !important because a
+   * trust-chrome surface (the approval card) re-declares every token on itself, unlayered. ONE rule:
+   * styles/tokens.test.ts pins its selector part by part, measures tertiary text on each stack with
+   * the ink it gives, and holds every fill spelling the console's components paint to it. */
+  :is(
+    [class*=':bg-hover'],
+    [class*=':bg-muted'],
+    [class*=':bg-active'],
+    [class*=':bg-accent-soft'],
+    [class*=':bg-bad-soft'],
+    [class*=':bg-danger-soft'],
+    [class*=':bg-warning-soft']
+  ):is(
+    :hover,
+    :focus-visible,
+    :disabled,
+    [data-highlighted],
+    [data-state='active'],
+    [data-state='open'],
+    [aria-pressed='true'],
+    [aria-current='page'],
+    [data-selected='true'],
+    [data-current]
+  ),
+  :is(
+    [class^='bg-hover'],
+    [class^='bg-muted'],
+    [class^='bg-active'],
+    [class^='bg-accent-soft'],
+    [class^='bg-ok-soft'],
+    [class^='bg-warn-soft'],
+    [class^='bg-bad-soft'],
+    [class^='bg-info-soft'],
+    [class^='bg-success-soft'],
+    [class^='bg-warning-soft'],
+    [class^='bg-danger-soft'],
+    [class^='bg-diff-'],
+    [class^='bg-success/'],
+    [class^='bg-warning/'],
+    [class^='bg-danger/'],
+    [class^='bg-warn/']
+  ),
+  :is(
+    [class*=' bg-hover'],
+    [class*=' bg-muted'],
+    [class*=' bg-active'],
+    [class*=' bg-accent-soft'],
+    [class*=' bg-ok-soft'],
+    [class*=' bg-warn-soft'],
+    [class*=' bg-bad-soft'],
+    [class*=' bg-info-soft'],
+    [class*=' bg-success-soft'],
+    [class*=' bg-warning-soft'],
+    [class*=' bg-danger-soft'],
+    [class*=' bg-diff-'],
+    [class*=' bg-success/'],
+    [class*=' bg-warning/'],
+    [class*=' bg-danger/'],
+    [class*=' bg-warn/']
+  ) {
+    --text-3: var(--text-2) !important;
   }
 
   /*selection/active state under Windows High Contrast (forced-colors).
@@ -158,6 +224,42 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* `outline-none` also sets `--tw-outline-style: none`, which `focus-visible:outline-<n>` reads: the
+ * ring a component draws would resolve to none. Unlayered, this beats the utility, so the ring paints;
+ * an element with only `outline-none` keeps no outline, because its `outline-style: none` is its own. */
+:focus-visible {
+  --tw-outline-style: solid;
+}
+
+/* The header bar is flat while a document page rests at its top: a hairline fades in over
+ * the first 20 px the page scrolls under it, tied to the scroll, so it ends where the scroll
+ * does (never a loop). A work page keeps the plain rule its panes need, and so does a browser
+ * without scroll-driven animations. */
+@supports (animation-timeline: scroll()) {
+  [data-slot='sheet']:has([data-slot='console-page']) > [data-slot='topbar'] {
+    border-bottom-color: transparent;
+  }
+  [data-slot='console-page']::before {
+    content: '';
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    height: 1px;
+    margin-bottom: -1px;
+    background: var(--line-strong);
+    opacity: 0;
+    animation: undershoot linear both;
+    animation-timeline: scroll(nearest);
+    animation-range: 0 20px;
+  }
+}
+@keyframes undershoot {
+  to {
+    opacity: 1;
   }
 }
 

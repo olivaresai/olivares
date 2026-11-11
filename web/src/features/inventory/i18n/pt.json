@@ -33,7 +33,8 @@
     "signals": "Sinais",
     "hosts": "Anfitriões",
     "lastSeen": "Visto pela última vez",
-    "occurrences": "Visto"
+    "occurrences": "Visto",
+    "where": "Onde"
   },
   "searchPlaceholder": "Pesquisar nome, referência, sinal…",
   "hostCount": "{{count}} anfitriões",
@@ -127,6 +128,10 @@
       "title": "Ainda não foram descobertas entidades do parque",
       "description": "As entidades aparecem à medida que as observações dos conectores reportam agentes, sessões, identidades, capacidades MCP, modelos, fornecedores ou recursos.",
       "action": "Abrir capacidades"
+    },
+    "filtered": {
+      "title": "Nenhuma entrada corresponde a estes filtros",
+      "description": "Escolha outro tipo ou estado para ver mais do catálogo."
     }
   },
   "coverage": {
@@ -206,5 +211,6 @@
       "suspendedTitle": "Serviço do tenant suspenso",
       "suspended": "O serviço deste tenant está suspenso ou fora de serviço, pelo que a cobertura de recolha não pode ser lida."
     }
-  }
+  },
+  "export": "Exportar"
 }

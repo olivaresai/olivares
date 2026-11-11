@@ -59,6 +59,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { KvList, KvRow } from '@/components/ui/kv'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
@@ -75,6 +76,7 @@ import { useAuth } from '@/lib/auth/context'
 import { usePendingCommandAction } from '@/features/navigation/command-actions'
 import { ApiError } from '@/lib/api/errors'
 import {
+  reportEditionRefusal,
   useFailedActionReporter,
   usePrivilegedMutation,
 } from '@/lib/hooks/use-privileged-mutation'
@@ -233,7 +235,7 @@ function RoutesTab({
       // ceremonia del de rol, que es lo que este `onError` colapsaba. `isForbidden` es
       // cierto para los DOS (lib/api/errors.ts:59), así que el cierre del diálogo cubre
       // igual las dos negativas, como antes.
-      if (e instanceof ApiError && e.isForbidden) setDeleting(null)
+      if (e instanceof ApiError && e.isForbiddenOrEdition) setDeleting(null)
       report(e)
     },
   })
@@ -260,6 +262,9 @@ function RoutesTab({
   })
 
   const routes = routesQ.data?.items ?? []
+  // The route shown beside the list: the one chosen in it, or the first.
+  const [chosenId, setChosenId] = useState<string | null>(null)
+  const chosen = routes.find((r) => (r.id ?? r.name) === chosenId) ?? routes[0]
   const setEnabled = async (id: string, enabled: boolean) => {
     // Notify exposes an audited full PUT. Fetch the latest route first so bulk
     // enable/disable preserves predicates and delivery-window configuration.
@@ -391,38 +396,42 @@ function RoutesTab({
           actions={bulkActions}
         />
       ) : null}
-      <DataTable
-        columns={columns}
-        data={routes}
-        isLoading={routesQ.isLoading}
-        error={routesQ.error}
-        onRetry={() => void routesQ.refetch()}
-        empty={
-          <EmptyState
-            title={t('routes.empty')}
-            description={t('routes.emptyHint')}
-            // "Add a route to send matching findings to a destination" — the same
-            // button the page offers above the table, on the same right.
-            action={
-              canWrite ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setCreating(true)}
-                >
-                  <Plus />
-                  {t('routes.add')}
-                </Button>
-              ) : null
-            }
-          />
-        }
-        getRowId={(route) => route.id ?? route.name}
-        selectable={canWrite}
-        selectedIds={selectedIds}
-        onSelectedIdsChange={setSelectedIds}
-        label={t('tabs.routes')}
-      />
+      <div className="grid gap-4 xl:grid-cols-[3fr_2fr] xl:items-start">
+        <DataTable
+          columns={columns}
+          data={routes}
+          isLoading={routesQ.isLoading}
+          error={routesQ.error}
+          onRetry={() => void routesQ.refetch()}
+          empty={
+            <EmptyState
+              title={t('routes.empty')}
+              description={t('routes.emptyHint')}
+              // "Add a route to send matching findings to a destination" — the same
+              // button the page offers above the table, on the same right.
+              action={
+                canWrite ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setCreating(true)}
+                  >
+                    <Plus />
+                    {t('routes.add')}
+                  </Button>
+                ) : null
+              }
+            />
+          }
+          getRowId={(route) => route.id ?? route.name}
+          selectable={canWrite}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
+          label={t('tabs.routes')}
+          onRowClick={(r) => setChosenId(r.id ?? r.name)}
+        />
+        {chosen ? <RouteFacts route={chosen} /> : null}
+      </div>
 
       <TestSignalPanel />
 
@@ -522,6 +531,47 @@ function RoutesTab({
         />
       ) : null}
     </div>
+  )
+}
+
+/** The route chosen in the list: where it sends and what it matches. */
+function RouteFacts({ route }: { route: NotifyRoute }) {
+  const { t } = useTranslation('alerting')
+  const orAny = (values?: string[]) =>
+    values?.length ? values.join(', ') : t('routes.any')
+  return (
+    <section aria-labelledby="alerting-route" className="flex flex-col gap-1">
+      <h2 id="alerting-route" className="text-body font-semibold">
+        {route.name}
+      </h2>
+      <KvList>
+        <KvRow label={t('routes.dialog.destination')}>
+          {route.destination}
+        </KvRow>
+        <KvRow label={t('routes.dialog.minSeverity')}>
+          {route.min_severity
+            ? t(`severities.${route.min_severity}`, {
+                defaultValue: route.min_severity,
+              })
+            : t('severities.any')}
+        </KvRow>
+        <KvRow label={t('routes.dialog.matchTypes')}>
+          {orAny(route.match_types)}
+        </KvRow>
+        <KvRow label={t('routes.dialog.matchKinds')}>
+          {orAny(route.match_kinds)}
+        </KvRow>
+        <KvRow label={t('routes.dialog.matchSources')}>
+          {orAny(route.match_sources)}
+        </KvRow>
+        <KvRow label={t('routes.dialog.matchSubjectKinds')}>
+          {orAny(route.match_subject_kinds)}
+        </KvRow>
+        <KvRow label={t('routes.colStatus')}>
+          {route.enabled === false ? t('routes.disabled') : t('routes.enabled')}
+        </KvRow>
+      </KvList>
+    </section>
   )
 }
 
@@ -850,7 +900,10 @@ function TestSignalPanel() {
         subject_kind: subjectKind,
       }),
     onSuccess: setResult,
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
+    onError: (e: unknown) => {
+      if (!reportEditionRefusal(e))
+        toast.error(String((e as Error).message ?? e))
+    },
   })
 
   return (
@@ -1207,6 +1260,7 @@ function DeadLettersTab() {
  *        code=step_up_required           → the ceremony (errors.ts:71-79 says to branch
  *                                          on this BEFORE isForbidden, which is only a status)
  *        anything else 403               → the role boundary, calm and not a failure
+ *   an edition refusal is no box: the reporter says its one line
  *   ---- anything else carries the engine's own message
  */
 type RedeliverFailureKind =
@@ -1354,6 +1408,11 @@ function OutboxList({ canRedeliver }: { canRedeliver: boolean }) {
     setFailure(null)
     redeliver.mutate(row, {
       onError: (err) => {
+        // The reporter says an edition refusal's one line: no box beside it.
+        if (err instanceof ApiError && err.isEditionRefusal) {
+          setConfirming(null)
+          return
+        }
         setFailure({
           destination: row.destination,
           kind: redeliverFailureKind(err),

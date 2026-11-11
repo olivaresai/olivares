@@ -94,6 +94,7 @@ The existing readers now derive their lists from this table:
 | `core/runtime` | Existing delivery-class keys and policy |
 | `check-public-counts.sh`, `ai-state.sh` and `gen-release-diagrams.mjs` | Unique selectable implementation packages |
 | `web/src/stores/modules.ts` | The module each console view follows, from the generated `web/src/features/module-spec.gen.ts` |
+| `web/src/features/registry.tsx` | The edition and `reads_below` of each console view of a module with a `title`, from the same generated file |
 
 Boot, the schema manifest, database directory activation, OpenAPI and server-info
 continue to consume the resulting module instances. Configured instances retain

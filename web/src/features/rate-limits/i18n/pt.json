@@ -5,6 +5,12 @@
   },
   "title": "Limites de pedidos",
   "description": "Limites de taxa da sua organização e dos espaços de trabalho. Só de leitura.",
+  "profiles": {
+    "title": "Limites de cada perfil",
+    "description": "O que a ferramenta de cada perfil lhe permite usar e quando isso é reposto. A ferramenta comunica-os; a Olivares não os define.",
+    "none": "Nenhuma ferramenta de um perfil comunica agora um limite em vigor.",
+    "truncated": "Alguns perfis não são mostrados."
+  },
   "caveats": {
     "keepInSync": "Os gateways/proxies têm de manter a sincronização: estes limites são o inventário que um gateway ou proxy a montante tem de espelhar. Não são impostos aqui, e a sua alteração faz-se no fornecedor, não nesta consola.",
     "managedAgents": "Os Managed Agents NÃO são abrangidos pela API Rate Limits. Os seus limites são uma lacuna documentada, não um valor zero — não é apresentada nenhuma linha de Managed Agents porque a API não comunica nenhuma."

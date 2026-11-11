@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -157,6 +158,41 @@ func TestWorkspace_ReadSizeLimitTruncates(t *testing.T) {
 	}
 	if !rd.Truncated || len(rd.Content) != 8 {
 		t.Fatalf("read should clip at the cap: truncated=%v len=%d", rd.Truncated, len(rd.Content))
+	}
+}
+
+// TestWorkspace_ReadRefusesANonRegularFile holds the read and the archive of a FIFO: a
+// blocking open would wait for a writer forever and hold the request, one per pipe.
+// Each answers at once that the path is not a regular file.
+func TestWorkspace_ReadRefusesANonRegularFile(t *testing.T) {
+	t.Parallel()
+
+	m, _, tenant, _ := newRuntimeHarness(t)
+	ctx := context.Background()
+	ws := mkWorkspace(t, m, tenant, CreateWorkspaceParams{})
+	if err := syscall.Mkfifo(filepath.Join(ws.RootPath, "pipe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, call := range map[string]func() error{
+		"read": func() error {
+			_, err := m.readFile(ctx, tenant, ws.WorkspaceRef, "pipe", actorU, actorKindU)
+			return err
+		},
+		"archive": func() error {
+			_, _, err := m.archiveFiles(ctx, tenant, ws.WorkspaceRef, []string{"pipe"}, actorU, actorKindU)
+			return err
+		},
+	} {
+		done := make(chan error, 1)
+		go func() { done <- call() }()
+		select {
+		case err := <-done:
+			if !isStatus(err, 400) || !strings.Contains(err.Error(), "not a regular file") {
+				t.Errorf("%s of a FIFO = %v, want 400 not a regular file", name, err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s of a FIFO blocked", name)
+		}
 	}
 }
 
@@ -496,5 +532,29 @@ func TestDocumentMentionPinsCompanionDirectory(t *testing.T) {
 	entries, err = os.ReadDir(docs + "-old")
 	if err != nil || len(entries) != 2 {
 		t.Fatalf("companion absent from pinned directory: %v, %v", entries, err)
+	}
+}
+
+// An uploaded document whose Markdown copy does not fit the folder's size limit is refused
+// before anything is written: before, the document landed and only its copy was refused, so
+// the person was told the upload failed while the document was already there.
+func TestDocumentUploadIsRefusedWholeWhenItsCopyDoesNotFit(t *testing.T) {
+	m, _, tenant, _ := newRuntimeHarness(t)
+	folder := mkWorkspace(t, m, tenant, CreateWorkspaceParams{MaxReadBytes: 64})
+	m.UseDocumentConverter(func(context.Context, string, []byte) ([]byte, error) {
+		return bytes.Repeat([]byte("a long table cell "), 10), nil
+	})
+	_, err := m.writeDocumentFile(context.Background(), tenant, folder.WorkspaceRef, "report.pdf", []byte("%PDF a small document"), actorU, actorKindU)
+	var re *runErr
+	if !errors.As(err, &re) || re.status != 400 {
+		t.Fatalf("upload with a copy over the limit = %v, want 400", err)
+	}
+	entries, err := os.ReadDir(folder.RootPath)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("the refused upload left %v (%v), want nothing written", entries, err)
+	}
+	m.UseDocumentConverter(func(context.Context, string, []byte) ([]byte, error) { return []byte("cell"), nil })
+	if _, err := m.writeDocumentFile(context.Background(), tenant, folder.WorkspaceRef, "report.pdf", []byte("%PDF a small document"), actorU, actorKindU); err != nil {
+		t.Fatalf("the retry whose copy fits: %v", err)
 	}
 }

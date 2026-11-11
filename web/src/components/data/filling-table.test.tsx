@@ -3,6 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { densityHeightToken } from '@/stores/preferences'
 import { FillingTable } from './filling-table'
 
 afterEach(cleanup)
@@ -41,6 +42,13 @@ describe('FillingTable — the region takes the height, never the rows', () => {
     const table = screen.getByRole('table')
     expect(table.className).not.toMatch(/min-h-/)
     const region = table.closest('[data-slot="table-region"]')!
+    // A2: the region is a surface with the card shadow and no outline.
+    expect(region).toHaveClass(
+      'rounded-card',
+      'bg-surface',
+      'shadow-[var(--shadow-card)]',
+    )
+    expect(region.className).not.toMatch(/\bborder\b/)
     expect(region.className).toMatch(/min-h-\[calc\(100svh-8rem\)\]/)
     expect(region.className).toMatch(/\bflex\b/)
     expect(table.className).toMatch(/flex-1/)
@@ -60,7 +68,9 @@ describe('FillingTable — the region takes the height, never the rows', () => {
       expect(row.className).not.toMatch(/h-\[|min-h-|flex-1/)
     }
     // The cells carry the density the primitive owns, and nothing overrides it.
-    expect(table.className).toMatch(/\[&_tbody_td\]:h-9/)
+    expect(table.className.split(/\s+/)).toContain(
+      `[&_tbody_td]:${densityHeightToken('comfortable')}`,
+    )
   })
 
   it('carries the quiet next-action line at the bottom of the foot', () => {

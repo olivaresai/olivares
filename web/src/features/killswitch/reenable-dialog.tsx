@@ -31,7 +31,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { StatusBadge } from '@/components/data/badges'
 import { ApiError } from '@/lib/api/errors'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  useFailedActionReporter,
+} from '@/lib/hooks/use-privileged-mutation'
 import { useAuth } from '@/lib/auth/context'
 import { killswitchApi, killswitchKeys } from './api'
 import './i18n'
@@ -108,6 +111,7 @@ function ReenableBody({
         report(err, () => reenable.mutate())
         return
       }
+      if (reportEditionRefusal(err)) return
       if (err instanceof ApiError && err.isForbidden) {
         toast.warning(t('common:privileged.notAuthorizedToast'), {
           description: err.message,
@@ -174,7 +178,7 @@ function ReenableBody({
           </div>
           <Link
             to={'/permissions' as never}
-            className="text-body text-accent-text underline-offset-4 hover:underline"
+            className="text-body text-foreground underline underline-offset-4"
           >
             {t('reenable.goToApprovals')}
           </Link>

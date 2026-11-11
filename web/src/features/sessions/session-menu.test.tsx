@@ -6,7 +6,7 @@
 // How the menu opens (right-click, `⋯`, Shift+F10) is `work-rail.test.tsx`'s.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -188,6 +188,7 @@ describe('the session menu — what a row can do', () => {
       'Copy link',
       'Copy session id',
       'Copy transcript',
+      'Export as Markdown',
       'Delete…',
     ])
   })
@@ -712,6 +713,45 @@ describe('the session menu — copy', () => {
       ),
     )
     expect(await copied()).toBe('')
+  })
+
+  it('exports the transcript as a Markdown file, each message under its heading', async () => {
+    ops.messages.mockResolvedValue({
+      driver: 'claude',
+      transcript: 'read',
+      total: 2,
+      items: [
+        { id: 1, role: 'user', first_line: 'hi', text: 'hi' },
+        { id: 2, role: 'assistant', first_line: 'ok', text: 'ok' },
+      ],
+    })
+    const files: Blob[] = []
+    const made = vi.spyOn(URL, 'createObjectURL').mockImplementation((file) => {
+      files.push(file as Blob)
+      return 'blob:export'
+    })
+    const revoked = vi
+      .spyOn(URL, 'revokeObjectURL')
+      .mockImplementation(() => {})
+    onTestFinished(() => {
+      made.mockRestore()
+      revoked.mockRestore()
+    })
+    let savedAs = ''
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        savedAs = this.download
+      })
+    const { user, menu } = await openMenu({ session: launched() })
+    await user.click(item(menu, 'Export as Markdown'))
+    await waitFor(() => expect(savedAs).toBe('nightly.md'))
+    expect(files).toHaveLength(1)
+    expect(files[0]!.type).toBe('text/markdown')
+    expect(await files[0]!.text()).toBe(
+      '## You\n\nhi\n\n## Claude Code\n\nok\n',
+    )
+    click.mockRestore()
   })
 })
 

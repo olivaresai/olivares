@@ -41,8 +41,68 @@ export const ATTESTATION_AS_OF = '2026-06-06'
 /** The OIDC issuer keyless signing relies on (docs/RELEASE-VERIFICATION.md). */
 export const OIDC_ISSUER = 'https://token.actions.githubusercontent.com'
 
-/** Certificate identity regexp cosign verifies against (docs/RELEASE-VERIFICATION.md). */
-export const IDENTITY_REGEXP = '^https://github.com/olivaresai/olivares'
+// The URLs below are written whole: scripts/check-emitted-urls.sh finds every URL
+// the product emits by its literal, and declares each one in its record.
+
+/** The workflow a release signature names (verify-release.sh, INSTALL.md). */
+const RELEASE_WORKFLOW =
+  'https://github.com/olivaresai/olivares/.github/workflows/release.yml'
+
+/** Certificate identity regexp cosign verifies against: the release workflow at
+ *  a MAJOR.MINOR tag (docs/RELEASE-VERIFICATION.md, verify-release.sh). Whole,
+ *  because cosign matches it unanchored; built from the one workflow address. */
+export const IDENTITY_REGEXP = `^${RELEASE_WORKFLOW.replaceAll('.', '\\.')}@refs/tags/[0-9]+\\.[0-9]+$`
+
+/** A release tag is MAJOR.MINOR, the only tag that signing identity accepts. */
+const RELEASE_TAG = /^\d+\.\d+$/
+
+/** The page that holds a Community release's files (INSTALL.md). */
+export const releasePage = (tag: string) =>
+  `https://github.com/olivaresai/olivares/releases/tag/${tag}`
+
+/** The source repository SLSA provenance names (verify-release.sh SOURCE_URI). */
+const SOURCE_URI = 'github.com/olivaresai/olivares'
+
+/** A platform as Go and the release archives spell it (linux, amd64…). */
+const PLATFORM = /^[a-z0-9]+$/
+
+/**
+ * INSTALL.md's own check of a downloaded release, for one tag: the cosign
+ * signature over checksums.txt by the release workflow at that tag, then the
+ * SHA-256 of every file downloaded beside it. `null` for a version that is not
+ * a release tag: no signature can name it.
+ */
+export function releaseCheckCommand(version: string): string | null {
+  if (!RELEASE_TAG.test(version)) return null
+  return [
+    'cosign verify-blob',
+    '--certificate checksums.txt.pem',
+    '--signature checksums.txt.sig',
+    `--certificate-identity ${RELEASE_WORKFLOW}@refs/tags/${version}`,
+    `--certificate-oidc-issuer ${OIDC_ISSUER}`,
+    'checksums.txt && sha256sum --ignore-missing -c checksums.txt',
+  ].join(' ')
+}
+
+/**
+ * verify-release.sh's own SLSA step for one release and platform: the
+ * archive INSTALL.md names, the provenance the release's generator publishes
+ * (multiple.intoto.jsonl), the source repository and the tag. `null` for a
+ * version that is not a release tag or a platform no archive can name.
+ */
+export function slsaCheckCommand(
+  version: string,
+  os: string,
+  arch: string,
+): string | null {
+  if (!RELEASE_TAG.test(version) || !PLATFORM.test(os) || !PLATFORM.test(arch))
+    return null
+  return [
+    `slsa-verifier verify-artifact olivares_${version}_${os}_${arch}.tar.gz`,
+    '--provenance-path multiple.intoto.jsonl',
+    `--source-uri ${SOURCE_URI} --source-tag ${version}`,
+  ].join(' ')
+}
 
 /** The "what ships with a release" table (docs/RELEASE-VERIFICATION.md §"What ships"). */
 export const RELEASE_ARTIFACTS: ReleaseArtifact[] = [
@@ -123,8 +183,6 @@ export const SLSA_PROVENANCE: SlsaProvenance = {
     'in-toto Statement (ITE-6) · SLSA Provenance v1 predicate (https://slsa.dev/provenance/v1)',
   generator: 'slsa-github-generator (generic + container)',
   reusable_workflow_pin: 'semver_tag',
-  verify_command:
-    'slsa-verifier verify-artifact … --source-uri github.com/olivaresai/olivares --source-tag <version>',
   status: 'declared',
   scp: 'SCP-01',
 }

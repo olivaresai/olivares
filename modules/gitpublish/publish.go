@@ -5,6 +5,7 @@
 package gitpublish
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -46,6 +47,9 @@ type PullRequestInput struct {
 	Draft               bool
 	AcknowledgeIntent   model.ID
 	Proposal            Proposal
+	// SessionRun names the session a ship's pull request came from, for its intent only: the
+	// commit was fed by the ship's push.
+	SessionRun string
 }
 
 // Proposal is a session's publish request that a person approved. The
@@ -87,8 +91,10 @@ type MergeInput struct {
 type Receipt struct {
 	Intent Intent
 	// Answer is the intent state, or "dispatching" for a replay that does not
-	// own the dispatch.
-	Answer string
+	// own the dispatch, or ShipAwaitingApproval, with no intent, while the
+	// tenant's approval policy waits for a person: Approval names that approval.
+	Answer   string
+	Approval string
 }
 
 var (
@@ -114,7 +120,11 @@ type spec struct {
 	capabilities gp.TargetCapabilities // facts of the credential binding's kind
 	session      string                // push: the session run whose folder feeds the server repository
 	proposal     Proposal
+	from         string // the session the publication came from when session is not set: recorded only
 	digest       string
+	ship         string // a ship's operation id: the approval is the ship's
+	reason       string // what the approval request says, when the caller words it
+	approved     bool   // the ship's push already asked the approval policy for this effect
 }
 
 // Validate reports the push's own shape refusal, or nil: the checks Push
@@ -146,10 +156,13 @@ func (m *Module) Push(ctx context.Context, c Caller, in PushInput) (Receipt, err
 	if e := in.check(); e != nil {
 		return Receipt{}, e
 	}
-	s := spec{effect: effectPush, perm: permPush, action: actionPush, host: gp.EffectPush, target: in.Target, op: in.OperationID, ack: in.AcknowledgeIntent,
-		req: Requested{Ref: in.Ref, ExpectedOld: in.ExpectedOld, Commit: in.Commit, Tree: in.Tree}, branch: strings.TrimPrefix(in.Ref, "refs/heads/"), session: in.SessionRun, proposal: in.Proposal}
-	s.scope = "push:" + in.Ref
-	return m.publish(ctx, c, s)
+	return m.publish(ctx, c, pushSpec(in))
+}
+
+func pushSpec(in PushInput) spec {
+	return spec{effect: effectPush, perm: permPush, action: actionPush, host: gp.EffectPush, target: in.Target, op: in.OperationID, ack: in.AcknowledgeIntent,
+		req: Requested{Ref: in.Ref, ExpectedOld: in.ExpectedOld, Commit: in.Commit, Tree: in.Tree}, branch: strings.TrimPrefix(in.Ref, "refs/heads/"), session: in.SessionRun, proposal: in.Proposal,
+		scope: "push:" + in.Ref}
 }
 
 // Validate reports the pull request's own shape refusal, or nil: the checks
@@ -176,10 +189,13 @@ func (m *Module) OpenPullRequest(ctx context.Context, c Caller, in PullRequestIn
 	if e := in.check(); e != nil {
 		return Receipt{}, e
 	}
-	s := spec{effect: effectPullRequest, perm: permPullRequest, action: actionPullRequest, host: gp.EffectPullRequest, target: in.Target, op: in.OperationID,
-		ack: in.AcknowledgeIntent, req: Requested{HeadRef: in.HeadRef, Base: in.Base, Commit: in.Commit, Title: in.Title}, body: in.Body, draft: in.Draft, proposal: in.Proposal}
-	s.scope = "pull_request:" + in.HeadRef + "\x00" + in.Base
-	return m.publish(ctx, c, s)
+	return m.publish(ctx, c, pullRequestSpec(in))
+}
+
+func pullRequestSpec(in PullRequestInput) spec {
+	return spec{effect: effectPullRequest, perm: permPullRequest, action: actionPullRequest, host: gp.EffectPullRequest, target: in.Target, op: in.OperationID,
+		ack: in.AcknowledgeIntent, req: Requested{HeadRef: in.HeadRef, Base: in.Base, Commit: in.Commit, Title: in.Title}, body: in.Body, draft: in.Draft, proposal: in.Proposal,
+		from: in.SessionRun, scope: "pull_request:" + in.HeadRef + "\x00" + in.Base}
 }
 
 // Merge merges a pull request whose head is the reviewed expected head.
@@ -385,7 +401,8 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	}
 
 	// A3: local content, then the narrowed capability and the host preflight.
-	if e := m.feed(actx, c, tg, rb, s); e != nil {
+	launcher, e := m.feed(actx, c, tg, rb, s)
+	if e != nil {
 		return Receipt{}, e
 	}
 	if s.effect != effectMerge && s.effect != effectIssueComment {
@@ -394,14 +411,32 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 			return Receipt{}, refuse("content_mismatch", http.StatusUnprocessableEntity)
 		}
 	}
+	var secrets []string
 	if s.effect == effectPush || s.effect == effectPullRequest {
-		paths, err := m.secretPaths(actx, rb.LocalPath, s.req.Commit)
-		if err != nil {
+		if secrets, err = m.secretPaths(actx, rb.LocalPath, s.req.Commit); err != nil {
 			return Receipt{}, err
 		}
-		if len(paths) > 0 && s.proposal == (Proposal{}) {
-			return Receipt{}, &Error{Code: "secret_detected", Status: http.StatusForbidden, Path: paths[0], Class: "secret.credential"}
+		// Only a ship asks a person to approve a commit holding a credential.
+		if len(secrets) > 0 && s.proposal == (Proposal{}) && s.ship == "" {
+			return Receipt{}, &Error{Code: "secret_detected", Status: http.StatusForbidden, Path: secrets[0], Class: "secret.credential"}
 		}
+	}
+	// The tenant's approval policy, asked once per publication before the host
+	// is opened. A session's proposal carries the approval it already spent.
+	if s.proposal.Approval == "" && !s.approved {
+		decision, e := m.approve(actx, c, tg, s, secrets)
+		if e != nil {
+			return Receipt{}, e
+		}
+		if decision.State == GatePending {
+			return Receipt{Answer: ShipAwaitingApproval, Approval: decision.Ref}, nil
+		}
+		if decision.Ref != "" && s.session != "" {
+			s.proposal = Proposal{SessionRun: s.session, Workspace: tg.Workspace, Approval: decision.Ref}
+		}
+	}
+	if len(secrets) > 0 && s.proposal == (Proposal{}) {
+		return Receipt{}, &Error{Code: "secret_detected", Status: http.StatusForbidden, Path: secrets[0], Class: "secret.credential"}
 	}
 	host, err := m.opts.Custody.OpenHost(actx, c.Tenant, cb, rb)
 	if err != nil {
@@ -449,6 +484,7 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 		Effect: s.effect, OperationID: s.op, ScopeKey: s.scope, Digest: digest,
 		SubjectActor: sub.Actor, SubjectActorKind: sub.ActorKind, AgentIdentity: sub.AgentIdentity,
 		Attempt: 1, State: StateDispatching, Receipt: ReceiptNone, Requested: s.req, AcknowledgeIntent: s.ack.String(), Proposal: s.proposal,
+		SessionLauncher: launcher.String(), SessionRun: cmp.Or(s.session, s.proposal.SessionRun, s.from),
 	}
 	if !sub.UserID.IsZero() {
 		in.SubjectUser = sub.UserID.String()
@@ -557,43 +593,73 @@ func openOnly(list []gp.Change) []gp.Change {
 }
 
 // feed fetches the pushed commit from the named session run's folder into the
-// server repository, after A1 admitted the caller on the target's workspace.
-// The run is read in that workspace only, and any run there may be named: the
-// authority to publish is the workspace's, as for every other push. A push that
-// names no run is unchanged.
+// server repository, after A1 admitted the caller on the target's workspace,
+// and answers the run's launcher. The run is read in that workspace only, and
+// only its launcher or a run administrator may name it (runPublisher). A push
+// that names no run is unchanged.
 //
 // ponytail: the fetch runs inside the admission window (AdmissionTimeout, 30s by
 // default), so a first fetch of a very large history answers
 // session_source_unavailable; a repository that hits it is the trigger for a
 // feed step of its own.
-func (m *Module) feed(ctx context.Context, c Caller, tg Target, rb RepositoryBinding, s spec) *Error {
+func (m *Module) feed(ctx context.Context, c Caller, tg Target, rb RepositoryBinding, s spec) (model.ID, *Error) {
 	if s.session == "" {
-		return nil
+		return "", nil
 	}
-	if m.opts.Sessions == nil {
-		return refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	launcher, e := m.runPublisher(ctx, c, tg, s.session)
+	if e != nil {
+		return "", e
 	}
 	dir, err := m.opts.Sessions.ReadRunWorkspacePath(ctx, c.Tenant, tg.Workspace, s.session)
 	if errors.Is(err, store.ErrNotFound) {
-		return refuse("session_source_refused", http.StatusUnprocessableEntity)
+		return "", refuse("session_source_refused", http.StatusUnprocessableEntity)
 	}
 	if err != nil {
-		return refuse("session_source_unavailable", http.StatusServiceUnavailable)
+		return "", refuse("session_source_unavailable", http.StatusServiceUnavailable)
 	}
 	switch err := m.opts.Git.Fetch(ctx, rb.LocalPath, dir, s.req.Commit); {
 	case err == nil:
-		return nil
+		return launcher, nil
 	case ctx.Err() != nil:
-		return refuse("session_source_unavailable", http.StatusServiceUnavailable)
+		return "", refuse("session_source_unavailable", http.StatusServiceUnavailable)
 	case errors.Is(err, gp.ErrSource):
-		return refuse("session_source_refused", http.StatusUnprocessableEntity)
+		return "", refuse("session_source_refused", http.StatusUnprocessableEntity)
 	case errors.Is(err, gp.ErrContent):
-		return refuse("content_mismatch", http.StatusUnprocessableEntity)
+		return "", refuse("content_mismatch", http.StatusUnprocessableEntity)
 	case errors.Is(err, gp.ErrRepositoryConfig):
-		return refuse("repository_config_refused", http.StatusUnprocessableEntity)
+		return "", refuse("repository_config_refused", http.StatusUnprocessableEntity)
 	default:
-		return refuse("session_source_unavailable", http.StatusServiceUnavailable)
+		return "", refuse("session_source_unavailable", http.StatusServiceUnavailable)
 	}
+}
+
+// runPublisher answers the launcher of the session run a publication names,
+// when the caller may publish it: its launcher, or an administrator admitted
+// for sessions:run:admin in the target's workspace. Anyone else is not_found,
+// as a run in another workspace answers a launcher's denial on it.
+func (m *Module) runPublisher(ctx context.Context, c Caller, tg Target, run string) (model.ID, *Error) {
+	if m.opts.Sessions == nil {
+		return "", refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	}
+	launcher, err := m.opts.Sessions.ReadRunLauncher(ctx, c.Tenant, tg.Workspace, run)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", refuse("session_source_refused", http.StatusUnprocessableEntity)
+	}
+	if err != nil {
+		return "", refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	}
+	if !launcher.IsZero() && launcher == c.Principal.UserID {
+		return launcher, nil
+	}
+	if _, err := m.opts.Authority.Admit(ctx, c.Principal, c.Tenant, Question{Permission: permRunAdmin, Workspace: tg.Workspace}); err != nil {
+		if errors.Is(err, auth.ErrRouteDenied) || errors.Is(err, auth.ErrScopedGrantRequired) || errors.Is(err, auth.ErrRouteUndecided) {
+			// Another person's run answers as a run that is not there: a member
+			// cannot tell the two apart.
+			return "", refuse("session_source_refused", http.StatusUnprocessableEntity)
+		}
+		return "", authError(err)
+	}
+	return launcher, nil
 }
 
 // targetRules applies the target's ref and base rules.
@@ -823,7 +889,7 @@ func (m *Module) claim(ctx context.Context, c Caller, adm Admission, in Intent, 
 			if err != nil {
 				return err
 			}
-			won = true
+			out.SessionLauncher, won = in.SessionLauncher, true
 			if err := auditIntent(ctx, sc, out, "admitted"); err != nil {
 				return err
 			}
@@ -855,6 +921,7 @@ func (m *Module) claim(ctx context.Context, c Caller, adm Admission, in Intent, 
 			return errLostClaim
 		}
 		out, won = intentFrom(rec), true
+		out.SessionLauncher = in.SessionLauncher
 		if err := auditIntent(ctx, sc, out, "admitted"); err != nil {
 			return err
 		}

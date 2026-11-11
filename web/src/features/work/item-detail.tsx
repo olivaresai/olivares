@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { useOwnerLabel } from './owner-label'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
 import {
   Sheet,
   SheetContent,
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
+import { formatDateTime } from '@/lib/format'
 import {
   acceptanceEvaluateBody,
   buildIntent,
@@ -34,8 +36,9 @@ import { WorkSection } from './work-section'
 import type { AcceptanceCriterion, WorkItem, WorkSnapshot } from './types'
 
 /** The FSM transitions the engine accepts, mirroring validRouteBodyCommand
- * (work_api.go:263-270). `item.archive` and `item.fail` additionally require admin, and
- * the engine re-authorizes them per resource (work_api.go:185-193). */
+ * (work_api.go:263-270), all on the route's sessions:work:write. `item.fail` is
+ * among them: the engine then admits admin or the item's owner and refuses anyone
+ * else. `item.archive` also needs work admin, which the engine re-asks per item. */
 const TRANSITIONS = [
   'item.ready',
   'item.block',
@@ -43,8 +46,9 @@ const TRANSITIONS = [
   'item.submit',
   'item.complete',
   'item.cancel',
+  'item.fail',
 ] as const
-const ADMIN_TRANSITIONS = ['item.fail', 'item.archive'] as const
+const ADMIN_TRANSITIONS = ['item.archive'] as const
 const DETAIL_TAB_VALUES: WorkDetailTab[] = [
   'overview',
   'acceptance',
@@ -261,6 +265,12 @@ function OverviewTab({
         <dd>
           <Badge variant="outline">{item.priority}</Badge>
         </dd>
+        {item.dependency_blocked ? (
+          <>
+            <dt className="text-muted-foreground">{t('detail.waitsOn')}</dt>
+            <dd className="text-caption">{t('detail.waitsOnDependencies')}</dd>
+          </>
+        ) : null}
         {item.blocked_code ? (
           <>
             <dt className="text-muted-foreground">{t('detail.blocked')}</dt>
@@ -279,6 +289,17 @@ function OverviewTab({
             </dd>
           </>
         ) : null}
+        {item.terminal_at ? (
+          <>
+            <dt className="text-muted-foreground">{t('detail.ended')}</dt>
+            <dd className="text-caption">{formatDateTime(item.terminal_at)}</dd>
+          </>
+        ) : item.due_at ? (
+          <>
+            <dt className="text-muted-foreground">{t('detail.due')}</dt>
+            <dd className="text-caption">{formatDateTime(item.due_at)}</dd>
+          </>
+        ) : null}
         <dt className="text-muted-foreground">{t('detail.etag')}</dt>
         <dd className="font-mono text-caption">{etag ?? '—'}</dd>
       </dl>
@@ -286,24 +307,22 @@ function OverviewTab({
       {onOffer ? (
         <div className="flex flex-col gap-2 border-t border-border pt-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canOffer}
-              title={!canOffer ? t('handoff.noPermission') : undefined}
-              aria-describedby={!canOffer ? 'work-handoff-denied' : undefined}
-              onClick={() => onOffer(item.id)}
-              data-slot="work-offer-handoff"
-            >
-              {t('handoff.offer')}
-            </Button>
             {canOffer ? (
-              <span className="text-caption text-muted-foreground">
-                {t('handoff.offerHint')}
-              </span>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOffer(item.id)}
+                  data-slot="work-offer-handoff"
+                >
+                  {t('handoff.offer')}
+                </Button>
+                <span className="text-caption text-muted-foreground">
+                  {t('handoff.offerHint')}
+                </span>
+              </>
             ) : (
               <p
-                id="work-handoff-denied"
                 className="text-caption text-muted-foreground"
                 data-slot="work-offer-denied"
               >
@@ -316,13 +335,11 @@ function OverviewTab({
 
       <div className="flex flex-col gap-2 border-t border-border pt-4">
         <div className="flex flex-wrap gap-2">
-          {TRANSITIONS.map((cmd) => (
+          {(canWrite ? TRANSITIONS : []).map((cmd) => (
             <Button
               key={cmd}
               variant="outline"
               size="sm"
-              disabled={!canWrite}
-              title={!canWrite ? t('transition.noWrite') : undefined}
               onClick={() =>
                 onIntent(
                   buildIntent({
@@ -339,13 +356,11 @@ function OverviewTab({
               {t(`transition.${cmd}`)}
             </Button>
           ))}
-          {ADMIN_TRANSITIONS.map((cmd) => (
+          {(canWrite && canAdmin ? ADMIN_TRANSITIONS : []).map((cmd) => (
             <Button
               key={cmd}
               variant="outline"
               size="sm"
-              disabled={!canAdmin}
-              title={!canAdmin ? t('transition.noAdmin') : undefined}
               onClick={() =>
                 onIntent(
                   buildIntent({
@@ -421,9 +436,11 @@ function AcceptanceTab({
       </p>
 
       {criteria.length === 0 ? (
-        <p className="text-body text-muted-foreground">
-          {t('acceptance.none')}
-        </p>
+        <EmptyState
+          quiet
+          title={t('acceptance.none')}
+          description={t('acceptance.noneBody')}
+        />
       ) : (
         <ul className="flex flex-col divide-y divide-border">
           {criteria.map((c) => (
@@ -535,9 +552,11 @@ function DependenciesTab({ itemId }: { itemId: string }) {
       <WorkSection query={query}>
         {(page) =>
           page.items.length === 0 ? (
-            <p className="text-body text-muted-foreground">
-              {t('dependencies.none')}
-            </p>
+            <EmptyState
+              quiet
+              title={t('dependencies.none')}
+              description={t('dependencies.noneBody')}
+            />
           ) : (
             <>
               <ul className="flex flex-col divide-y divide-border">
@@ -593,7 +612,6 @@ export function LeaseTab({
   const { t } = useTranslation('work')
   const { activeTenant, can } = useAuth()
   const canRead = can('sessions:lease:read')
-  const canWrite = can('sessions:lease:write')
   const canAdmin = can('sessions:lease:admin')
 
   // ⛔ LA LECTURA TAMBIÉN ESTÁ GATEADA. El motor registra los dos GET con
@@ -618,25 +636,11 @@ export function LeaseTab({
    * showed six buttons that did nothing (canon §1.10). Going through the intent also gives
    * them what the page itself promises three lines above: the plan, shown before it is applied.
    */
-  const action = (
-    command: WorkCommandName,
-    label: string,
-    allowed: boolean,
-  ) => (
+  const action = (command: WorkCommandName, label: string) => (
     <Button
       key={command}
       size="sm"
       variant="outline"
-      disabled={!allowed}
-      title={
-        !allowed
-          ? command === 'lease.takeover' ||
-            command === 'lease.revoke' ||
-            command === 'lease.clock_rebase'
-            ? t('lease.noAdmin')
-            : t('lease.noWrite')
-          : undefined
-      }
       onClick={() =>
         onIntent(
           // The ETag comes from the item read, never rebuilt from `lease.version`: the engine
@@ -651,13 +655,10 @@ export function LeaseTab({
             command,
             itemId,
             etag: query.data?.etag ?? etag,
-            // El titular que la pantalla YA muestra. `acquire` no lo lleva a propósito: sobre un
-            // lease vacante no hay titular que heredar, y sembrarlo con el del lease anterior
-            // sería afirmar algo que no consta.
-            body:
-              command !== 'lease.acquire' && query.data?.lease.holder_sid
-                ? { holder_sid: query.data.lease.holder_sid }
-                : undefined,
+            // The holder the screen already shows, never one to transcribe.
+            body: query.data?.lease.holder_sid
+              ? { holder_sid: query.data.lease.holder_sid }
+              : undefined,
           }),
         )
       }
@@ -708,26 +709,27 @@ export function LeaseTab({
               </dd>
             </dl>
 
-            <div className="flex flex-wrap gap-2">
-              {action('lease.acquire', t('lease.actions.acquire'), canWrite)}
-              {action('lease.renew', t('lease.actions.renew'), canWrite)}
-              {action('lease.release', t('lease.actions.release'), canWrite)}
-              {action('lease.takeover', t('lease.actions.takeover'), canAdmin)}
-              {action('lease.revoke', t('lease.actions.revoke'), canAdmin)}
-              {action(
-                'lease.clock_rebase',
-                t('lease.actions.clockRebase'),
-                canAdmin,
-              )}
-            </div>
-
-            {/* Saying WHY a control is inert beats a greyed button with no reason. */}
-            {!canWrite && (
-              <p className="text-caption text-muted-foreground">
-                {t('lease.noWrite')}
+            {/* Acquire, Renew and Release are the session's own: the engine
+                takes them only under the session's credential, which no
+                person's sign-in carries. */}
+            {lease.liveness_verdict === 'NO_HE_PODIDO_MIRAR' ? null : (
+              <p className="text-body text-muted-foreground">
+                {lease.live && lease.holder_sid
+                  ? t('lease.heldBy', { holder: lease.holder_sid })
+                  : t('lease.vacant')}
               </p>
             )}
-            {canWrite && !canAdmin && (
+
+            {canAdmin ? (
+              <div className="flex flex-wrap gap-2">
+                {action('lease.takeover', t('lease.actions.takeover'))}
+                {action('lease.revoke', t('lease.actions.revoke'))}
+                {action('lease.clock_rebase', t('lease.actions.clockRebase'))}
+              </div>
+            ) : null}
+
+            {/* A verb the person may not use is absent; this line says who may. */}
+            {!canAdmin && (
               <p className="text-caption text-muted-foreground">
                 {t('lease.noAdmin')}
               </p>
@@ -752,9 +754,11 @@ function EventsTab({ itemId }: { itemId: string }) {
       <WorkSection query={query}>
         {(page) =>
           page.items.length === 0 ? (
-            <p className="text-body text-muted-foreground">
-              {t('events.none')}
-            </p>
+            <EmptyState
+              quiet
+              title={t('events.none')}
+              description={t('events.noneBody')}
+            />
           ) : (
             <>
               <ul className="flex flex-col divide-y divide-border">

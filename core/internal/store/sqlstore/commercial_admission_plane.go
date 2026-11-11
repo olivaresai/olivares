@@ -346,7 +346,7 @@ func guardAdmissionVerifyHistory(
 		return guardEditionHistory{}, err
 	}
 	if _, commercial := graph.nodes[-current.CodeEpoch]; !commercial {
-		return verifyGuardBootEditionHistory(ctx, q, dia, current)
+		return verifyGuardEditionHistory(ctx, q, dia, current)
 	}
 	if err := verifyGuardControlPlaneShape(ctx, q, dia); err != nil {
 		return guardEditionHistory{}, err

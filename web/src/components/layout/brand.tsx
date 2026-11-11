@@ -47,14 +47,17 @@ export function BrandMark({ className }: { className?: string }) {
  */
 export function Wordmark({
   className,
+  markClassName,
   compact = false,
 }: {
   className?: string
+  /** The mark's size where the lockup is drawn larger than 20 px (the sidebar head). */
+  markClassName?: string
   compact?: boolean
 }) {
   return (
     <span className={cn('flex items-center gap-2 text-foreground', className)}>
-      <BrandMark />
+      <BrandMark className={markClassName} />
       {!compact && (
         <svg
           viewBox={OLIVARES_WORDMARK_VIEW_BOX}

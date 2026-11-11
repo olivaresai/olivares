@@ -143,7 +143,7 @@ for (const theme of ['light', 'dark']) {
       const title = header.locator('h1')
       await expect(title).toHaveText('AI tools')
       await expect(
-        page.getByRole('heading', { name: 'Accounts and API keys' }),
+        page.getByRole('heading', { name: 'Accounts', exact: true }),
       ).toBeVisible()
       await page.evaluate(() => document.fonts.ready)
 

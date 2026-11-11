@@ -145,6 +145,10 @@
     "expiredAt": "Caducada {{time}}",
     "approveOnce": "Aprobar una vez",
     "approveForSession": "Aprobar para esta sesión",
+    "allowances": "Permisos de esta sesión",
+    "revokeAllowance": "Revocar",
+    "sessionPolicy": "La política exige revisar cada solicitud.",
+    "allowancesError": "No se pudieron consultar o actualizar los permisos de la sesión.",
     "approving": "Aprobando…",
     "deny": "Rechazar",
     "noMatch": "Ninguna solicitud coincide con la búsqueda",
@@ -155,7 +159,9 @@
     "approved": "Aprobada",
     "rejected": "Rechazada",
     "canceled": "Cancelada",
-    "expired": "Caducada"
+    "expired": "Caducada",
+    "approvedNotUsed": "Aprobada, sin usar",
+    "approvedUsed": "Aprobada, usada"
   },
   "decide": {
     "rejectTitle": "¿Rechazar esta solicitud?",
@@ -196,10 +202,11 @@
     "reasonHint": "Contexto para quienes revisan (opcional).",
     "requiredApprovals": "Aprobaciones requeridas",
     "requiredApprovalsHint": "Se ignora si aplica una política de aprobación coincidente — la política es la autoridad.",
-    "expiresInSeconds": "Caduca en (segundos)",
-    "escalateInSeconds": "Escala en (segundos)",
     "submit": "Enviar solicitud",
-    "created": "Solicitud de aprobación abierta"
+    "created": "Solicitud de aprobación abierta",
+    "expiresIn": "Caduca en",
+    "escalateIn": "Escala en",
+    "subjectFold": "A qué se aplica (opcional)"
   },
   "detail": {
     "title": "Solicitud de aprobación",
@@ -227,9 +234,12 @@
     "reenableNeedsAdmins": "Dos cuentas de administrador distintas deben aprobarlo. Créalas en Identidad y acceso, o con `olivares users create`.",
     "openIdentity": "Abrir Identidad",
     "cannotDecideOwn": "No puedes aprobar tu propia solicitud. Otro administrador debe decidir.",
-    "requesterCannotApprove": "Quien hizo la solicitud no puede aprobarla.",
+    "ownRequest": "No puedes aprobar tu propia solicitud.",
     "launchedBy": "Iniciada por",
-    "decidedByYou": "Aprobaste esta solicitud. Espera a otra persona que la apruebe."
+    "decidedByYou": "Aprobaste esta solicitud. Espera a otra persona que la apruebe.",
+    "whoDecides": "Quién puede decidirla: {{names}}.",
+    "nobodyDecides": "Nadie más puede decidir esta solicitud.",
+    "someoneWithRights": "alguien con permiso para aprobar"
   },
   "policies": {
     "title": "Políticas",
@@ -240,6 +250,23 @@
     "enabled": "Activada",
     "rules": "Reglas",
     "newPolicy": "Nueva política",
+    "roles": {
+      "title": "Roles",
+      "role": "Rol",
+      "can": "Qué puede hacer",
+      "people": "Personas",
+      "kind": "Tipo",
+      "builtIn": "Incluido",
+      "custom": "Personalizado",
+      "from": "Basado en {{role}}",
+      "empty": "Aquí aparecen los roles incluidos, cada uno con lo que puede hacer.",
+      "does": {
+        "owner": "Todos los permisos dentro del tenant",
+        "admin": "Lo anterior, más IAM del tenant — usuarios, pertenencias, tokens, ajustes",
+        "editor": "Lo anterior, más escribir datos operativos",
+        "viewer": "Leer datos operativos y el rastro de auditoría"
+      }
+    },
     "empty": "No hay políticas",
     "emptyHint": "Redacta una regla de denegación ABAC o un umbral de aprobación para gobernar las acciones coincidentes.",
     "kindAbac": "ABAC",
@@ -278,23 +305,20 @@
     "denyImplicit": "Denegar (implícito)",
     "requiredApprovals": "Aprobaciones requeridas",
     "requiredApprovalsHint": "De 0 a 64. Vacío o 0 usa el valor predeterminado del motor, que puede ser mayor en acciones críticas.",
-    "expiresInSeconds": "Caduca en (segundos)",
-    "expiresInSecondsHint": "0–31536000 (0 = nunca).",
-    "escalateInSeconds": "Escala en (segundos)",
-    "escalateInSecondsHint": "0–31536000 (0 = nunca).",
     "countError": "Introduce un número entero de 0 a {{max}}.",
     "matchAction": "Acción coincidente",
     "matchActionHint": "Vacío = coincide con cualquier acción.",
     "matchSubjectKind": "Tipo de sujeto coincidente",
     "matchSubjectKindHint": "Vacío = coincide con cualquier tipo de sujeto.",
-    "needsBusiness": "Un nivel de riesgo o un número de aprobaciones distinto del predeterminado de la acción requiere Business. Desactiva esta política para conservarla guardada.",
     "create": "Crear política",
     "save": "Guardar cambios",
     "confirmCreateBody": "Una política ABAC activada restringe más el acceso de inmediato; una política de aprobación activada empieza a requerir aprobaciones humanas para las acciones coincidentes. Surte efecto de inmediato.",
     "confirmUpdateBody": "Si está activada, el cambio surte efecto de inmediato en la ruta de autorización / flujo de aprobación. El tipo de política no se puede cambiar.",
     "created": "Política creada",
     "updated": "Política actualizada",
-    "credentialWarning": "Eso parece el valor de una credencial. Las reglas de política solo llevan referencias y selectores — nunca un secreto."
+    "credentialWarning": "Eso parece el valor de una credencial. Las reglas de política solo llevan referencias y selectores — nunca un secreto.",
+    "expiresIn": "Caduca en",
+    "escalateIn": "Escala en"
   },
   "policyRemove": {
     "title": "¿Eliminar esta política?",
@@ -674,6 +698,14 @@
     "askedByForSession": "{{name}} para una nueva sesión",
     "askedByThroughSession": "{{name}} desde su sesión",
     "tool": "Herramienta",
+    "touches": "Afecta a",
+    "changeClass": {
+      "docs_only": "Solo documentación",
+      "code": "Código",
+      "sensitive": "Archivos sensibles"
+    },
+    "lapses": "<when />; después nadie puede aprobarla y no se ejecuta.",
+    "lapsed": "Caducó <when />: nadie puede aprobarla y no se ejecuta.",
     "willRun": "Qué se ejecutará",
     "noReview": "Esta solicitud no incluye qué se ejecutará.",
     "commandUnknown": "Esta herramienta aún no muestra el comando",
@@ -735,5 +767,15 @@
       "editor": "Editor",
       "owner": "Propietario"
     }
+  },
+  "durations": {
+    "none": "Sin límite",
+    "h1": "1 hora",
+    "h4": "4 horas",
+    "h8": "8 horas",
+    "h24": "24 horas",
+    "d7": "7 días",
+    "d30": "30 días",
+    "seconds": "{{value}} segundos"
   }
 }

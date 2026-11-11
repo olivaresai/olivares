@@ -16,8 +16,24 @@ function token(name: string): string | undefined {
   return value || undefined
 }
 
+/** The console's mono face, loaded, so the screen measures its cells with the right glyphs. */
+export async function terminalFont(): Promise<string | undefined> {
+  // The face is a Tailwind theme value, not a variable on the page: an element wearing it says.
+  const probe = document.createElement('span')
+  probe.className = 'font-mono'
+  document.body.appendChild(probe)
+  const family = getComputedStyle(probe).fontFamily.trim()
+  probe.remove()
+  if (!family) return undefined
+  await Promise.resolve(document.fonts?.load(`13px ${family}`)).catch(
+    () => undefined, // It is drawn in the fallback face of the same stack.
+  )
+  return family
+}
+
 export function terminalTheme(): ITheme {
-  const background = token('--background')
+  // The screen is the well the drawer is; the frame until the console has one.
+  const background = token('--well') ?? token('--frame')
   const foreground = token('--foreground')
   const muted = token('--muted')
   const dim = token('--muted-foreground')
@@ -31,7 +47,8 @@ export function terminalTheme(): ITheme {
     foreground,
     cursor: accent,
     cursorAccent: background,
-    selectionBackground: token('--accent-soft'),
+    // xterm draws an opaque selection at 30 %: of the orange, like the console's ::selection.
+    selectionBackground: token('--accent'),
     black: muted,
     red: danger,
     green: success,

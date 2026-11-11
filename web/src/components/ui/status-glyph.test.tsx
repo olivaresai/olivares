@@ -74,12 +74,22 @@ describe('StatusGlyph renders its word', () => {
     expect(screen.getByText('Handoff to you')).toBeInTheDocument()
   })
 
-  it.each(WORDS)('%s uses the shared 6 px dot without a box', (status) => {
+  it.each(WORDS)('%s uses the shared 8 px dot without a box', (status) => {
     const { container } = render(<StatusGlyph status={status} />)
     const dot = container.querySelector('[data-slot="status-dot"]')!
     expect(dot).not.toBeNull()
-    expect(dot).toHaveClass('size-1.5', 'rounded-full')
+    expect(dot).toHaveClass('size-2', 'rounded-full')
     expect(container.firstChild).not.toHaveClass('border', 'bg-surface')
+  })
+
+  it('says «needs you» in bold warm ink and a failure in its own ink; the rest stay calm', () => {
+    const { container, rerender } = render(<StatusGlyph status="needs-you" />)
+    expect(container.firstChild).toHaveClass('font-bold', 'text-warn')
+    rerender(<StatusGlyph status="failed" />)
+    expect(container.firstChild).toHaveClass('font-medium', 'text-bad')
+    rerender(<StatusGlyph status="working" />)
+    expect(container.firstChild).toHaveClass('text-text-2')
+    expect(container.firstChild).not.toHaveClass('font-bold')
   })
 
   it('working is a solid green dot: the word carries the state, nothing pulses', () => {

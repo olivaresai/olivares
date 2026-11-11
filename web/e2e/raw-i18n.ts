@@ -12,9 +12,8 @@
 export function rawKeyProbe(): string[] {
   const bad: string[] = []
   // ⛔ THE WHOLE BODY, NOT `#main-content`. The first version of this probe walked
-  //    the main landmark, which on /login is the CARD — so the statement column, the
-  //    theme toggle and the deployment footer were all outside what
-  //    it measured, and a missing `auth:shell.*` key would have rendered its raw key
+  //    the main landmark, which on /login is the CARD — so the theme toggle was
+  //    outside what it measured, and a missing key there would have rendered raw
   //    in nine languages under a green test. Found by re-reading my own instrument,
   //    which is the failure mode a review names: a check that looks like coverage and
   //    measures less than it claims.

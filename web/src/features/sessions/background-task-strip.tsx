@@ -65,7 +65,7 @@ export function BackgroundTaskStrip({ run }: { run: RunDTO }) {
           >
             <span
               aria-hidden
-              className="size-1.5 shrink-0 animate-pulse rounded-full bg-ok motion-reduce:animate-none"
+              className="size-1.5 shrink-0 rounded-full bg-ok"
             />
             <span
               className="min-w-0 max-w-64 truncate text-text"

@@ -63,6 +63,7 @@ func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("DELETE", "/workspaces/{ref}", permWsAdmin, folder, m.handleDeleteWorkspace)
 	reg.HandleEntity("GET", "/workspaces/{ref}/files", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleListFiles))
 	reg.HandleEntity("GET", "/workspaces/{ref}/files/stat", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleStatFile))
+	reg.HandleEntity("GET", "/workspaces/{ref}/files/search", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleSearchFiles))
 	reg.HandleEntity("GET", "/workspaces/{ref}/files/raw", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleReadFile))
 	reg.HandleEntity("GET", "/workspaces/{ref}/files/archive", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleArchiveFiles))
 	reg.HandleEntity("PUT", "/workspaces/{ref}/files/raw", permWsWrite, folder, m.workspaceRight(permWsWrite, auth.TrusteeWrite, m.handleWriteFile))

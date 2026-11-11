@@ -12,6 +12,22 @@ vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))
 
+// Usage does not open for this person: no cost and no word for it.
+const state = vi.hoisted(() => ({ noMoney: false }))
+vi.mock('@/features/navigation/authorization', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/navigation/authorization')>()
+  const navigable = (v: { id: string }) => !(state.noMoney && v.id === 'usage')
+  return {
+    ...actual,
+    useViewAccess: () => ({
+      state: () => 'allowed',
+      navigable,
+      listed: navigable,
+    }),
+  }
+})
+
 const usageMock = vi.fn()
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -92,6 +108,7 @@ const DAILY = {
 }
 
 beforeEach(() => {
+  state.noMoney = false
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-11-03T10:00:00Z'))
   profilesMock.mockReset().mockResolvedValue({ items: [] })
@@ -123,6 +140,32 @@ describe('Models > Usage', () => {
     expect(
       screen.getByRole('row', { name: /Not recorded/ }),
     ).toBeInTheDocument()
+  })
+
+  it('tells the cost only to a person Usage opens for: no $, no cost, no spend for anyone else', async () => {
+    const user = userEvent.setup()
+    const shown = renderIntel(<UsageTab />)
+    const priced = await screen.findByRole('row', { name: /claude-opus-5-5/ })
+    expect(within(priced).getByText('$1.50')).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: 'Cost' }),
+    ).toBeInTheDocument()
+    shown.unmount()
+
+    state.noMoney = true
+    renderIntel(<UsageTab />)
+    const opus = await screen.findByRole('row', { name: /claude-opus-5-5/ })
+    // The runs and the tokens stay; the money column goes.
+    expect(within(opus).getByText('3')).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: 'Input tokens' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: /cost/i })).toBeNull()
+    expect(document.body).not.toHaveTextContent(/\$|cost|spend/i)
+
+    await user.click(screen.getByRole('button', { name: /show as table/i }))
+    await screen.findByRole('row', { name: /2026-11-02/ })
+    expect(document.body).not.toHaveTextContent(/\$|cost|spend/i)
   })
 
   it('asks for 7 days by model, then 30 days by account when switched', async () => {

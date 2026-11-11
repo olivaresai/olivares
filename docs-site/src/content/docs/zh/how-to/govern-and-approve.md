@@ -4,7 +4,7 @@ description: "运营者如何治理 estate：身份与权限、deny-by-default �
 ---
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、账本验证（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、账本读取和 `olivares dr backup`；证据操作返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、账本验证（`GET /v1/audit/verify`、`olivares audit tree verify`, `olivares audit tree prove`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、账本读取和 `olivares dr backup`；证据操作返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
 :::
 
 本页面向已连接至少一个数据源、现在需要**治理** estate 的运营者：
@@ -40,9 +40,9 @@ description: "运营者如何治理 estate：身份与权限、deny-by-default �
 
 | 角色 | 它能做什么 |
 |---|---|
-| `viewer` | 读取运营数据和审计轨迹 |
+| `viewer` | 读取运营数据 |
 | `editor` | 以上，外加写入运营数据 |
-| `admin` | 以上，外加租户 IAM——用户、成员资格、token、设置 |
+| `admin` | 以上，外加租户 IAM——用户、成员资格、token、设置——以及审计轨迹、规则、安全发现和支出 |
 | `owner` | 租户内的全部权限 |
 
 一个模块声明它自己带命名空间的权限（`<namespace>:<resource>:<verb>`），
@@ -163,7 +163,7 @@ permitted-vs-observed 差异，模块 IX 产出发现项。**审批引擎是真�
 
 ```bash
 # Pull the signed, hash-chained ledger for offline re-verification.
-# Requires a token whose role can read the audit trail (viewer and up).
+# Requires a token whose role can read the audit trail (admin and up).
 curl -fsS "https://localhost:8443/v1/audit/export?format=cef" \
   -H "Authorization: Bearer $OLVK_TOKEN" \
   -H "X-Olivares-Tenant: $TENANT" >> /var/log/olivares/audit.cef

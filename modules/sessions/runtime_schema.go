@@ -269,6 +269,11 @@ const (
 	// the last turn did not end on a limit; a later successful turn writes NULL again.
 	colRunUsageLimit = "usage_limit"
 
+	// colRunTurnFailed says the last turn ended on a provider error that is not a limit
+	// (runtime_limit.go): the process lives on, so the run state cannot say it. NULL
+	// means it did not; a later successful turn writes NULL again.
+	colRunTurnFailed = "turn_failed"
+
 	// colRunToolMode is the session's mode as the TOOL last reported it
 	// (runtime_tool_mode.go): Claude Code's permission mode, Codex's approval
 	// policy and sandbox. It is not colPermissionMode, which is what the launch
@@ -475,6 +480,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colLimitResumeCredentialSeal, Kind: model.KindText, Nullable: true, Principal: model.None("irreversible verifier fingerprint, never bearer material or identity: runtime_limit_resume.go:313")},
 			{Name: colRunResumeAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
 			{Name: colRunUsageLimit, Kind: model.KindJSON, Nullable: true, Principal: model.None("the limit kind, reset time and profile reference the tool reported, shown only: runtime_limit.go:51, runtime_limit.go:198, runtime_dto.go:231")},
+			{Name: colRunTurnFailed, Kind: model.KindBool, Nullable: true},
 			{Name: colRunToolMode, Kind: model.KindText, Nullable: true, Principal: model.None("the session's mode as the tool reported it, shown only: runtime_tool_mode.go:29-39, runtime_tool_mode.go:45-51, runtime_dto.go:211")},
 		},
 		// The run's authorization lineage. Unset is HIDDEN, never the tenant

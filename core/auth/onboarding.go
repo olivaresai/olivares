@@ -61,9 +61,9 @@ type OnboardResult struct {
 	// Created reports whether a NEW account was created (false = the email already
 	// had an account and only the membership was granted/updated).
 	Created bool
-	// InviteToken is the single-use token for the invitation mailer (invite mode,
-	// new account only). It goes only to the invitee's address, never into a
-	// response, a log or the audit.
+	// InviteToken is the single-use token (invite mode, new account only). It
+	// goes down one path, the invitation mail or the administrator's own
+	// response for a link shown on the screen, never into a log or the audit.
 	InviteToken string
 	// InviteID is the stored invite's id (for revocation/listing).
 	InviteID model.ID
@@ -352,8 +352,8 @@ func (a *Authenticator) ListPendingInvites(ctx context.Context, tenant model.Ten
 }
 
 // ResendInvite rotates a pending invitation's secret and restarts its expiry,
-// so only the newly mailed token redeems it. It returns the invitation and the
-// new token for the invitation mailer; the token never reaches a response.
+// so only the new token redeems it. It returns the invitation and the new token
+// for its one path (see OnboardResult.InviteToken).
 func (a *Authenticator) ResendInvite(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID) (model.UserInvite, string, error) {
 	cred, err := NewCredential(PrefixInvite)
 	if err != nil {

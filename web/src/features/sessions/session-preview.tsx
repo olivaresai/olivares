@@ -16,12 +16,14 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { ExternalLink, MousePointerClick, RotateCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { PassageNotes } from '@/features/agentops/passage-notes'
 import type { RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
+import { runLabel } from './provenance'
 import './i18n'
 
 /** A dev server the agent starts shows up within a few seconds. */
@@ -129,9 +131,13 @@ export function SessionPreview({ run }: { run: RunDTO }) {
           {t('preview.notRunning')}
         </p>
       ) : ports.isError ? (
-        <p className="text-caption text-danger">{t('preview.error')}</p>
+        <QueryErrorState
+          error={ports.error}
+          retry={() => void ports.refetch()}
+          title={t('preview.error')}
+        />
       ) : listed.length === 0 ? (
-        <p className="text-caption text-muted-foreground">
+        <p role="status" className="text-caption text-muted-foreground">
           {ports.isPending ? t('preview.loading') : t('preview.none')}
         </p>
       ) : !can('sessions:run:write') ? (
@@ -248,7 +254,7 @@ export function SessionPreview({ run }: { run: RunDTO }) {
                 : undefined
             }
             // Named: the notes may go to another session, for which "this" is itself.
-            path={`the preview of session ${run.name || run.run_ref.slice(0, 8)}`}
+            path={`the preview of session ${runLabel(run)}`}
             picked={picked}
             onPicked={() => setPicked(null)}
           />

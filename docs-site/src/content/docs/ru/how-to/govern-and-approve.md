@@ -4,7 +4,7 @@ description: "Как оператор управляет estate: идентич�
 ---
 
 :::note[Business]
-Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), проверка журнала (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, его чтение и `olivares dr backup`; соответствующие маршруты и команды возвращают HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL с сегментами аудита также требуют Business.
+Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), проверка журнала (`GET /v1/audit/verify`, `olivares audit tree verify`, `olivares audit tree prove`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, его чтение и `olivares dr backup`; соответствующие маршруты и команды возвращают HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL с сегментами аудита также требуют Business.
 :::
 
 Эта страница для оператора, который подключил хотя бы один источник и теперь
@@ -46,9 +46,9 @@ confused-deputy и IDOR.
 
 | Роль | Что она может |
 |---|---|
-| `viewer` | читать операционные данные и аудиторский след |
+| `viewer` | читать операционные данные |
 | `editor` | вышеперечисленное плюс запись операционных данных |
-| `admin` | вышеперечисленное плюс арендный IAM — пользователи, членства, токены, настройки |
+| `admin` | вышеперечисленное плюс арендный IAM — пользователи, членства, токены, настройки — а также аудиторский след, правила, находки безопасности и расходы |
 | `owner` | все разрешения в пределах арендатора |
 
 Модуль объявляет собственные разрешения в своём пространстве имён
@@ -195,7 +195,7 @@ III, находки из модуля IX) → **уполномоченный о�
 
 ```bash
 # Pull the signed, hash-chained ledger for offline re-verification.
-# Requires a token whose role can read the audit trail (viewer and up).
+# Requires a token whose role can read the audit trail (admin and up).
 curl -fsS "https://localhost:8443/v1/audit/export?format=cef" \
   -H "Authorization: Bearer $OLVK_TOKEN" \
   -H "X-Olivares-Tenant: $TENANT" >> /var/log/olivares/audit.cef

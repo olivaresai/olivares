@@ -89,8 +89,16 @@ func (m *Module) listChecksAs(w http.ResponseWriter, r *http.Request, mc api.Mod
 			return err
 		}
 		page = p
+		evRepo, err := sc.Ext(eventKind)
+		if err != nil {
+			return err
+		}
 		for _, rec := range recs {
-			out = append(out, toStatusDTO(rec))
+			dto, err := m.withFailures7d(r.Context(), evRepo, toStatusDTO(rec))
+			if err != nil {
+				return err
+			}
+			out = append(out, dto)
 		}
 		return nil
 	})
@@ -101,10 +109,27 @@ func (m *Module) listChecksAs(w http.ResponseWriter, r *http.Request, mc api.Mod
 	writeJSON(w, http.StatusOK, listResponse[statusDTO]{Items: out, Cursor: page.Cursor, HasMore: page.HasMore})
 }
 
-// handleListEvents lists the append-only reliability transition ledger, optionally
-// filtered by ?subject_kind and ?subject_ref.
+// handleListEvents lists the append-only reliability transition ledger, optionally filtered by ?subject_kind and ?subject_ref: oldest first, or newest first with ?order=desc.
 func (m *Module) handleListEvents(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	q := listQuery(r)
+	var desc bool
+	var after eventCursor
+	switch r.URL.Query().Get("order") {
+	case "", "asc":
+	case "desc":
+		desc = true
+		if q.Cursor != "" {
+			c, err := parseEventCursor(q.Cursor)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, errorBody("invalid cursor"))
+				return
+			}
+			after = c
+		}
+	default:
+		writeJSON(w, http.StatusBadRequest, errorBody("order must be asc or desc"))
+		return
+	}
 	if sk := r.URL.Query().Get("subject_kind"); sk != "" {
 		q.Filters = append(q.Filters, eq(colEvSubjectKind, sk))
 	}
@@ -118,7 +143,13 @@ func (m *Module) handleListEvents(w http.ResponseWriter, r *http.Request, mc api
 		if err != nil {
 			return err
 		}
-		recs, p, err := repo.List(r.Context(), q)
+		var recs []model.Record
+		var p model.Page
+		if desc {
+			recs, p, err = listEventsNewestFirst(r.Context(), repo, q.Filters, q.Limit, after)
+		} else {
+			recs, p, err = repo.List(r.Context(), q)
+		}
 		if err != nil {
 			return err
 		}

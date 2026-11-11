@@ -228,6 +228,32 @@ describe('SessionPreview', () => {
     )
   })
 
+  it('says the ports could not be read, and reads them again on Retry', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.previewPorts).mockRejectedValueOnce(
+      new Error('engine down'),
+    )
+    show()
+    expect(
+      await screen.findByText(
+        "The session's ports could not be read. Try again in a moment.",
+      ),
+    ).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByRole('combobox', { name: 'Port' })).toBeTruthy()
+    expect(agentOpsApi.previewPorts).toHaveBeenCalledTimes(2)
+  })
+
+  it('announces that it looks for the ports while it reads them', async () => {
+    vi.mocked(agentOpsApi.previewPorts).mockReturnValue(
+      new Promise<never>(() => {}),
+    )
+    show()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      "Looking for the session's ports…",
+    )
+  })
+
   it('asks for no ports while the session is not running', async () => {
     show({ ...run, state: 'stopped' })
     expect(

@@ -89,6 +89,18 @@ vi.mock('@/features/agentops/api', async (importOriginal) => {
   }
 })
 
+const statusMock = vi.fn()
+vi.mock('@/features/health/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/health/api')>()
+  return {
+    ...actual,
+    healthApi: {
+      ...actual.healthApi,
+      publicStatus: (...a: unknown[]) => statusMock(...a),
+    },
+  }
+})
+
 const { OperationsView } = await import('./operations-view')
 
 const sample = (at: string, cpu: number, memoryGiB: number) => ({
@@ -158,6 +170,16 @@ const session = (
 
 const ANA = { kind: 'user', user_id: 'u1', name: 'Ana' }
 
+// What `GET /status` answers: each component the engine reports and its state.
+const statusOf = (states: Record<string, string>) => ({
+  status: 'operational',
+  components: Object.entries(states).map(([name, status]) => ({
+    name,
+    status,
+  })),
+  timestamp: '2026-11-03T10:00:00Z',
+})
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-11-03T10:00:00Z'))
@@ -169,9 +191,101 @@ beforeEach(() => {
   }
   hostMock.mockReset().mockResolvedValue(HOST)
   usageMock.mockReset().mockResolvedValue({ group_by: 'model', items: [] })
+  statusMock
+    .mockReset()
+    .mockResolvedValue(statusOf({ api: 'operational', store: 'operational' }))
 })
 
 afterEach(() => vi.useRealTimers())
+
+describe('Operations: the components', () => {
+  it('says everything is working when every component works', async () => {
+    state.perms = new Set(['health:status:read'])
+    renderIntel(<OperationsView />)
+
+    expect(await screen.findByText('Everything is working.')).toHaveAttribute(
+      'role',
+      'status',
+    )
+  })
+
+  it('says what is configured works, names what is not configured, and lists each state word', async () => {
+    state.perms = new Set(['health:status:read'])
+    statusMock.mockResolvedValue(
+      statusOf({
+        api: 'operational',
+        store: 'operational',
+        knowledge: 'not_configured',
+      }),
+    )
+    renderIntel(<OperationsView />)
+
+    expect(
+      await screen.findByText(
+        'Everything that is configured is working. Not configured: Knowledge retrieval.',
+      ),
+    ).toHaveAttribute('role', 'status')
+    const list = screen.getByRole('list', { name: 'Components' })
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows).toHaveLength(3)
+    expect(rows[1]).toHaveTextContent(/Database.*Operational/)
+    expect(rows[2]).toHaveTextContent(/Knowledge retrieval.*Not configured/)
+  })
+
+  it('names each component that is not working, and leaves out an optional one not set up', async () => {
+    state.perms = new Set(['health:status:read'])
+    statusMock.mockResolvedValue(
+      statusOf({
+        api: 'operational',
+        store: 'outage',
+        connectors: 'degraded',
+        knowledge: 'not_configured',
+      }),
+    )
+    renderIntel(<OperationsView />)
+
+    expect(
+      await screen.findByText('Needs attention: Database, Connectors.'),
+    ).toHaveAttribute('role', 'status')
+    expect(screen.queryByText('Everything is working.')).toBeNull()
+    const list = screen.getByRole('list', { name: 'Components' })
+    expect(within(list).getByText('Outage')).toBeInTheDocument()
+    expect(within(list).getByText('Degraded')).toBeInTheDocument()
+  })
+
+  it('names a component in a state this build cannot name, rather than calling it fine', async () => {
+    state.perms = new Set(['health:status:read'])
+    statusMock.mockResolvedValue(
+      statusOf({ api: 'operational', store: 'weird' }),
+    )
+    renderIntel(<OperationsView />)
+
+    expect(
+      await screen.findByText('Needs attention: Database.'),
+    ).toHaveAttribute('role', 'status')
+    expect(screen.queryByText(/is working/)).toBeNull()
+  })
+
+  it('shows the failure with Retry when the status cannot be read, never that all is well', async () => {
+    state.perms = new Set(['health:status:read'])
+    statusMock.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    renderIntel(<OperationsView />)
+
+    expect(
+      await screen.findByRole('button', { name: /retry/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Everything is working.')).toBeNull()
+    expect(screen.queryByRole('list', { name: 'Components' })).toBeNull()
+  })
+
+  it('does not read the components without the health read', async () => {
+    state.perms = new Set(['sessions:run:read'])
+    renderIntel(<OperationsView />)
+    await vi.waitFor(() => expect(usageMock).toHaveBeenCalled())
+    expect(statusMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('heading', { name: 'Components' })).toBeNull()
+  })
+})
 
 describe('Operations: the host', () => {
   it('charts CPU and memory with a sentence each, and the disks and folders as tables', async () => {
@@ -361,5 +475,40 @@ describe('Operations: the range', () => {
 
     await user.click(screen.getByRole('radio', { name: '7 days' }))
     expect(screen.getByText(/keeps 24 hours/i)).toBeInTheDocument()
+  })
+})
+
+describe('Operations: the usage', () => {
+  it('tells the cost only to a person Usage opens for: no $, no cost, no spend for anyone else', async () => {
+    usageMock.mockImplementation((q: { bucket?: string }) =>
+      Promise.resolve({
+        group_by: 'model',
+        items: q.bucket
+          ? []
+          : [
+              {
+                key: 'claude-opus-5-5',
+                runs: 3,
+                input_tokens: 1200,
+                output_tokens: 300,
+                cost_micro_usd: 1_500_000,
+                runs_without_tokens: 0,
+                runs_without_cost: 0,
+              },
+            ],
+      }),
+    )
+    state.perms = new Set(['sessions:run:read', 'sessions:account:read'])
+    const shown = renderIntel(<OperationsView />)
+    const priced = await screen.findByRole('row', { name: /claude-opus-5-5/ })
+    expect(within(priced).getByText('$1.50')).toBeInTheDocument()
+    shown.unmount()
+
+    state.perms = new Set(['sessions:run:read'])
+    renderIntel(<OperationsView />)
+    const opus = await screen.findByRole('row', { name: /claude-opus-5-5/ })
+    expect(within(opus).getByText('3')).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: /cost/i })).toBeNull()
+    expect(document.body).not.toHaveTextContent(/\$|cost|spend/i)
   })
 })

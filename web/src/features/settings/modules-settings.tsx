@@ -13,16 +13,20 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { CircleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Notice } from '@/components/ui/notice'
 import { Spinner } from '@/components/ui/spinner'
+import { StateBlock } from '@/components/ui/state-block'
 import { Switch } from '@/components/ui/switch'
 import { waitForEngineRestart } from '@/features/console/engine-restart'
 import { consoleApi, consoleKeys } from '@/features/console/api'
 import { http, queryKeys } from '@/lib/api'
-import { isOpenCoreSeam } from '@/lib/api/errors'
+import { ApiError, isOpenCoreSeam } from '@/lib/api/errors'
 import { readable } from './module-names'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 
@@ -94,6 +98,33 @@ function useRestartWait(onBack?: () => void) {
     })
   }
   return { phase, start }
+}
+
+/** A change the engine did not apply now (core/api errors.go, both 503): saved for the
+ * next start because the engine could not restart, or not saved at all. Each is its own
+ * sentence. */
+type ChangeRefusal = 'savedForNextStart' | 'notSaved'
+
+function changeRefusal(err: unknown): ChangeRefusal | null {
+  if (!(err instanceof ApiError)) return null
+  if (err.code === 'modules_restart_unavailable') return 'savedForNextStart'
+  return err.code === 'modules_not_recorded' ? 'notSaved' : null
+}
+
+/** The refusal as an alert, in the shared notice. */
+function RefusalNotice({ refusal }: { refusal: ChangeRefusal }) {
+  const { t } = useTranslation('settings')
+  return (
+    <Notice
+      role="alert"
+      tone={refusal === 'notSaved' ? 'bad' : 'warn'}
+      icon={<CircleAlert />}
+    >
+      {refusal === 'notSaved'
+        ? t('modules.notSaved')
+        : t('modules.savedForNextStart')}
+    </Notice>
+  )
 }
 
 export type ModuleRowState =
@@ -212,6 +243,7 @@ export function ModulesSettings() {
     retry: false,
   })
   const [draft, setDraft] = useState<Set<string> | null>(null)
+  const [refusal, setRefusal] = useState<ChangeRefusal | null>(null)
   const restart = useRestartWait(() => setDraft(null))
   const restarting = restart.phase === 'waiting'
   const applyReasonId = useId()
@@ -252,7 +284,9 @@ export function ModulesSettings() {
           .filter((m) => !m.always_on && choice.has(m.name))
           .map((m) => m.name),
       ),
-    successMessage: t('modules.applied'),
+    // Applied at once, no session stopped; a restart says so on its own.
+    successMessage: (status) =>
+      status.restarting ? t('modules.applied') : t('modules.appliedNow'),
     stepUpAction: 'modules',
     onDone: (status) => {
       // Show what the engine answered; a read now could reach the stopping process.
@@ -262,9 +296,25 @@ export function ModulesSettings() {
       else
         void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
     },
+    onError: (err) => {
+      const answer = changeRefusal(err)
+      if (!answer) return false
+      setRefusal(answer)
+      if (answer === 'savedForNextStart') {
+        // Saved: the rows show what runs now against what waits for the start.
+        setDraft(null)
+        void queryClient.invalidateQueries({ queryKey: modulesKey })
+      }
+      return true
+    },
   })
 
-  const warning = useRestartWarning(() => apply.mutate())
+  const warning = useRestartWarning(() => {
+    setRefusal(null)
+    apply.mutate()
+  })
+  // A failed read is shown with Retry; a 501 is only the sentence under Apply.
+  const readFailed = query.isError && !isOpenCoreSeam(query.error)
 
   const applyReason = restarting
     ? t('modules.restarting')
@@ -312,6 +362,8 @@ export function ModulesSettings() {
         <p
           id={applyReasonId}
           role="status"
+          // The alert below says it; hidden, it is still Apply's reason.
+          hidden={readFailed}
           className="flex items-center gap-2 text-caption text-text-2"
           data-slot={restarting ? 'engine-restarting' : undefined}
         >
@@ -319,10 +371,16 @@ export function ModulesSettings() {
           {applyReason}
         </p>
       ) : null}
+      {refusal ? <RefusalNotice refusal={refusal} /> : null}
       {query.isLoading ? (
-        <div className="flex justify-center py-6">
-          <Spinner />
-        </div>
+        <StateBlock state="loading" rows={6} />
+      ) : readFailed ? (
+        <QueryErrorState
+          size="panel"
+          error={query.error}
+          retry={() => void query.refetch()}
+          title={t('modules.loadFailed')}
+        />
       ) : query.isError ? null : (
         <ul className="divide-y divide-line" data-slot="modules-list">
           {(query.data?.modules ?? []).map((m) => {
@@ -436,6 +494,7 @@ export function TurnOnModule({
   const { t } = useTranslation('settings')
   const queryClient = useQueryClient()
   const restart = useRestartWait()
+  const [refusal, setRefusal] = useState<ChangeRefusal | null>(null)
   const turnOn = usePrivilegedMutation<void, ModuleSelection>({
     mutationFn: async () => {
       const current = await modulesApi.get()
@@ -444,15 +503,24 @@ export function TurnOnModule({
         .map((m) => m.name)
       return modulesApi.select([...new Set([...selected, module])])
     },
-    successMessage: t('modules.applied'),
+    successMessage: (status) =>
+      status.restarting ? t('modules.applied') : t('modules.appliedNow'),
     stepUpAction: 'modules',
     onDone: (status) => {
       if (status.restarting) restart.start()
       else
         void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
     },
+    onError: (err) => {
+      const answer = changeRefusal(err)
+      if (answer) setRefusal(answer)
+      return answer !== null
+    },
   })
-  const warning = useRestartWarning(() => turnOn.mutate())
+  const warning = useRestartWarning(() => {
+    setRefusal(null)
+    turnOn.mutate()
+  })
   const name = t(`modules.names.${module}`, { defaultValue: readable(module) })
   if (restart.phase === 'waiting')
     return (
@@ -470,8 +538,12 @@ export function TurnOnModule({
         {t('modules.stillRestarting')}
       </p>
     )
+  // Saved for the next start: nothing more to press here.
+  if (refusal === 'savedForNextStart')
+    return <RefusalNotice refusal={refusal} />
   return (
     <>
+      {refusal ? <RefusalNotice refusal={refusal} /> : null}
       <Button
         variant="primary"
         size={plain ? 'base' : 'sm'}

@@ -20,6 +20,8 @@ WORKDIR /src
 RUN npm install -g corepack@0.34.6 && corepack enable pnpm
 # Copy only what the web build needs first, for layer caching.
 COPY web/package.json web/pnpm-lock.yaml ./web/
+# pnpm applies web/package.json patchedDependencies during install, so their files come in with it.
+COPY web/patches/ ./web/patches/
 RUN cd web && pnpm install --frozen-lockfile
 COPY web/ ./web/
 COPY docs/editions.md ./docs/editions.md
@@ -72,7 +74,7 @@ FROM node:24-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
-       vim less procps curl jq iproute2 tar gzip openssh-client netcat-openbsd \
+       vim htop less procps curl jq iproute2 tar gzip openssh-client openssh-sftp-server netcat-openbsd \
     && curl -fsSL -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
        https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && { test "$(sha256sum /usr/share/keyrings/githubcli-archive-keyring.gpg)" = \

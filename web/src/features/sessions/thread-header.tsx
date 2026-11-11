@@ -2,18 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE HEAD OF A THREAD: ONE 48 px LINE.
+// THE HEAD OF A THREAD: ONE 48 px BAR, A WINDOW TITLE.
 //
-// The state as a dot, the session's name, the folder it works in, the tool, the model and
-// its effort, what it has spent; on the right the lifecycle controls as icons (Interrupt only while a
-// turn runs, Stop), the Context toggle and a `⋯` menu with the rest (Full controls, Copy
-// reference, In a terminal, and the pin). It used to be a 280 px block that said the state
-// five times.
+// The session's name, and under it one quiet line of where it works and with what (the
+// folder, the branch, the tool, the model); on the right the state in words beside the
+// actions that act on it, what it has spent, the lifecycle controls as icons (Stop only
+// while a turn runs, End session), the Context toggle and a `⋯` menu with the rest (Full
+// controls, Copy reference, Open in the editor, In a terminal, and the pin). It used to be
+// a 280 px block that said the state five times.
 //
 // ⛔ WHAT THE LINE DOES NOT SAY IS NOT LOST: the badges (who manages the session, its mode,
 //    the live stream) and the working folder's path are the Context pane's, in plain
 //    words (`session-overview.tsx`). Paths, ids and sandbox names are never in a header.
-import { ArrowUpRight, Folder, MoreHorizontal, Pin, PinOff } from 'lucide-react'
+import {
+  ArrowUpRight,
+  ExternalLink,
+  Folder,
+  GitBranch,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+} from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/lib/auth/context'
@@ -36,14 +45,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
+import { PathText } from '@/components/ui/path-text'
 import { toast } from '@/components/ui/toaster'
 import { AtLimit, useAccountUsageOf } from '@/features/agentops/account-usage'
 import { toolName } from '@/features/agentops/engine-tools'
+import { modelName } from '@/features/agentops/model-name'
 import { ToolMark } from '@/features/agentops/tool-mark'
 import { AccountBadge } from '@/features/agent-tools/account-marks'
 import type { RunDTO } from '@/features/agentops/types'
+import { formatMicroUsd } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { OpenInEditor } from '@/features/shared/open-in-editor'
+import { useEditorLink } from '@/features/shared/open-in-editor'
 import { folderName, runFolder } from './folder'
 import type { Capability, UnifiedSession } from './provenance'
 import { hostIsolationUnavailable } from './provenance'
@@ -52,7 +64,9 @@ import { RunActions } from './run-actions'
 import { SessionGit } from './session-git'
 import { SessionMarkItems } from './session-mark-items'
 import { LimitNotice } from './session-limit'
+import { useUsagePath } from './session-meter'
 import { StateDot } from './session-state-dot'
+import { StateWord } from './session-state-word'
 import { useSessionMarks } from './use-session-marks'
 import type { LiveDTO } from './types'
 import './i18n'
@@ -171,79 +185,95 @@ export function ThreadHeader({
     run?.workspace_path?.replace(/[/\\]+[^/\\]+[/\\]*$/, '') ?? ''
   const parent = folderName(parentPath)
   const driver = run?.provider_driver || live?.provider || live?.engine
-  // THE SESSION, THEN ITS TOOL. Two panes beside each other must say which
-  // session each is, so the header is the name and the tool; the model and the effort
-  // are said once per pane, by the composer's picker, and a model other than the one
+  // THE SESSION, THEN ITS TOOL AND MODEL. Two panes beside each other must say which
+  // session each is. The effort stays the composer's, and a model other than the one
   // asked for is the narrative's warning.
   const tool = driver ? toolName(driver) : null
+  const modelRef = run?.usage_model_ref || run?.model_ref
+  const editorLink = useEditorLink(
+    parentPath || '/',
+    folderName(run?.workspace_path) ?? '',
+  )
   const accountUsage = useAccountUsageOf(
     live?.provider_profile_ref || run?.provider_profile_ref,
   )
   const marks = useSessionMarks()
+  // Money only where Usage opens: the Sessions page's one question.
+  const tellsCost = useUsagePath() !== null
 
-  // The one-line form gives way by the width of ITS PANE, not the window's (a container
-  // query): two panes beside each other at 1280 px are 340 px each, and there the name
-  // and the controls stay while the usage, the folder and then the tool step aside
-  //. The stacked form shows them all, on their own line.
+  // THE QUIET LINE UNDER THE NAME gives way by the width of ITS PANE, not the window's (a
+  // container query): two panes beside each other at 1280 px are 340 px each. The facts
+  // keep the drawing's order and give way from its end, the model first, then the tool, so
+  // a dot always stands between two facts that show; the folder and the branch stay and
+  // are cut. The stacked form shows them all and lets them wrap.
   const stackedFacts = stacked || !!run?.limit?.resets_at
   const facts = (
-    <>
-      {tool ? (
-        <>
-          <ToolMark
-            driver={driver!}
-            className={cn(
-              !stackedFacts && 'hidden @min-[26rem]/thread:inline-grid',
-            )}
-          />
-          <span
-            data-testid="thread-tool"
-            className={cn(
-              'min-w-0 truncate text-caption text-text-2',
-              !stackedFacts && 'hidden @min-[26rem]/thread:inline',
-            )}
-          >
-            {tool}
-          </span>
-        </>
-      ) : null}
-      {/* The account's quota is not the session's: it is the status bar's, and Details'
-          "Account usage" (`session-facts.tsx`). Here only a reached limit is said, as it
-          stops the turn. */}
-      <AtLimit usage={accountUsage} className="min-w-0 truncate" />
+    <span
+      data-slot="thread-facts"
+      className={cn(
+        'flex min-w-0 items-center text-overline font-normal text-text-2',
+        "[&>*+*]:before:mx-1.5 [&>*+*]:before:font-sans [&>*+*]:before:text-text-3 [&>*+*]:before:content-['·']",
+        stackedFacts
+          ? 'flex-wrap gap-y-1'
+          : 'overflow-hidden whitespace-nowrap',
+      )}
+    >
       {folder ? (
         <span
           data-testid="narrative-folder"
           title={registeredName || run?.workspace_path}
-          className={cn(
-            'max-w-40 shrink-0 truncate rounded-[6px] bg-muted px-1.5 py-0.5 text-overline font-normal text-text-2',
-            !stackedFacts && 'hidden @min-[40rem]/thread:inline-block',
-          )}
+          className="min-w-0 truncate"
         >
           <Folder
-            className="me-1 inline size-3 align-[-2px] text-text-3"
+            className="me-1 inline size-[13px] align-[-2px] text-text-3"
             aria-hidden="true"
           />
           {registeredName || (parent ? `${parent} / ${folder}` : folder)}
         </span>
       ) : null}
-      {folder && run?.workspace_path ? (
+      {run?.worktree_branch ? (
         <span
-          className={cn(
-            'shrink-0 items-center gap-1',
-            !stackedFacts ? 'hidden @min-[40rem]/thread:flex' : 'flex',
-          )}
+          data-testid="thread-branch"
+          title={run.worktree_branch}
+          className="flex min-w-0 items-center font-mono text-mono-s"
         >
-          <OpenInEditor
-            root={parentPath || '/'}
-            file={folderName(run.workspace_path) ?? ''}
-            labelClassName="sr-only"
+          <GitBranch
+            className="me-1 inline size-[13px] align-[-2px] text-text-3"
+            aria-hidden="true"
           />
-          <SessionGit run={run} variant="init" />
+          <PathText
+            value={run.worktree_branch}
+            copy={false}
+            tone="muted"
+            size="small"
+          />
         </span>
       ) : null}
-      {run ? <LimitNotice run={run} caps={caps} /> : null}
-    </>
+      {tool ? (
+        <span
+          className={cn(
+            'inline-flex min-w-0 items-center gap-1',
+            !stackedFacts && 'hidden @min-[26rem]/thread:inline-flex',
+          )}
+        >
+          <ToolMark driver={driver!} />
+          <span data-testid="thread-tool" className="min-w-0 truncate">
+            {tool}
+          </span>
+        </span>
+      ) : null}
+      {modelRef ? (
+        <span
+          data-testid="thread-model"
+          className={cn(
+            'min-w-0 truncate',
+            !stackedFacts && 'hidden @min-[48rem]/thread:inline',
+          )}
+        >
+          {modelName(modelRef)}
+        </span>
+      ) : null}
+    </span>
   )
 
   return (
@@ -255,38 +285,75 @@ export function ThreadHeader({
       )}
     >
       {back}
-      <StateDot session={session} />
-      <h2
-        title={titleHint}
-        className={cn(
-          // THE TITLE GIVES WAY LAST: it keeps 16 characters before anything
-          // beside it shrinks, and takes the room the facts leave.
-          'min-w-[16ch] truncate text-body-l font-semibold text-text',
-          // A zero basis keeps a long name on the controls' line, cut, instead of
-          // wrapping the controls under it.
-          stackedFacts && 'flex-1 basis-0',
-          titleMono && 'font-mono',
-        )}
+      <div
+        data-slot="thread-title"
+        className="flex min-w-0 flex-1 flex-col justify-center"
       >
-        {title}
-      </h2>
-      {/* Beside the name, not among the facts: those hide on a phone, and which account a
-          thread runs under is what tells two of the same tool apart there too. */}
-      <AccountBadge
-        profileRef={session.profileRef}
-        className="max-w-20 shrink-0 min-[761px]:max-w-32"
-      />
-      {stackedFacts ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <h2
+            title={titleHint}
+            className={cn(
+              // THE TITLE takes the room the controls leave and is cut there: a width
+              // of its own would push it under them in a narrow pane.
+              'truncate text-body-l font-bold text-text',
+              titleMono && 'font-mono',
+            )}
+          >
+            {title}
+          </h2>
+          {/* Beside the name, not among the facts: those give way in a narrow pane, and
+              which account a thread runs under is what tells two of the same tool
+              apart there too. */}
+          <AccountBadge
+            profileRef={session.profileRef}
+            className="max-w-20 shrink-0 min-[761px]:max-w-32"
+          />
+        </div>
         <div
-          data-slot="thread-facts"
-          className="order-last flex min-w-0 basis-full flex-wrap items-center gap-x-2 gap-y-1"
+          className={cn(
+            'flex min-w-0 items-center gap-x-2',
+            stackedFacts && 'flex-wrap gap-y-1',
+          )}
         >
           {facts}
+          {/* The account's quota is not the session's: it is the status bar's, and
+              Details' "Account usage" (`session-facts.tsx`). Here only a reached limit is
+              said, as it stops the turn. */}
+          <AtLimit usage={accountUsage} className="min-w-0 truncate" />
+          {run ? <LimitNotice run={run} caps={caps} /> : null}
         </div>
-      ) : (
-        facts
-      )}
+      </div>
       <span className="ml-auto flex shrink-0 items-center gap-0.5">
+        {folder && run?.workspace_path ? (
+          <span
+            className={cn(
+              'me-1 shrink-0 items-center gap-1',
+              !stackedFacts ? 'hidden @min-[40rem]/thread:flex' : 'flex',
+            )}
+          >
+            <SessionGit run={run} variant="init" />
+          </span>
+        ) : null}
+        {/* THE STATE IN WORDS, beside the actions that act on it; a narrow pane keeps its
+            dot, named by the word. */}
+        <span
+          data-slot="thread-state"
+          className="me-1.5 hidden items-center gap-1.5 @min-[40rem]/thread:inline-flex"
+        >
+          <StateWord session={session} />
+        </span>
+        <StateDot
+          session={session}
+          className="me-1 @min-[40rem]/thread:hidden"
+        />
+        {tellsCost && run?.cost_micro_usd ? (
+          <span
+            data-testid="thread-cost"
+            className="me-1 hidden text-caption tabular-nums text-text-2 @min-[40rem]/thread:inline"
+          >
+            {formatMicroUsd(run.cost_micro_usd)}
+          </span>
+        ) : null}
         <RunActions
           compact
           run={run}
@@ -344,6 +411,14 @@ export function ThreadHeader({
                 }}
               >
                 {t('thread.copyReference')}
+              </DropdownMenuItem>
+            ) : null}
+            {run?.workspace_path && editorLink ? (
+              <DropdownMenuItem asChild>
+                <a href={editorLink.href}>
+                  <ExternalLink />
+                  {editorLink.label}
+                </a>
               </DropdownMenuItem>
             ) : null}
             {run ? (

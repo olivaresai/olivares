@@ -28,7 +28,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Toaster, toast } from '@/components/ui/toaster'
 import {
   dismissAllNotices,
+  noticeSeen,
   notify,
+  rememberNotice,
   resolveNotice,
   type Notice,
 } from '@/lib/notify'
@@ -64,6 +66,29 @@ describe('notify: the one toast', () => {
     expect(screen.getByText('Link value ignored')).toBeInTheDocument()
     await elapse(500 + REMOVAL_MS)
     expect(screen.queryByText('Link value ignored')).toBeNull()
+  })
+
+  it('is one pill on the inverse surface, low on the sheet, announced politely', async () => {
+    act(() => notify({ message: 'report.xlsx saved to Invoices 2026' }))
+    const text = await screen.findByText('report.xlsx saved to Invoices 2026')
+    const pill = text.closest('[data-sonner-toast]')!
+    expect(pill).toHaveClass(
+      'bg-[var(--inverse)]',
+      'text-[var(--on-inverse)]',
+      'rounded-[22px]',
+      'shadow-pop',
+    )
+    const toaster = pill.closest('[data-sonner-toaster]')!
+    expect(toaster).toHaveAttribute('data-y-position', 'bottom')
+    expect(toaster).toHaveAttribute('data-x-position', 'center')
+    // Wherever the phone's bottom bar shows (below 761 px), the toast sits 76 px up,
+    // above the bar's 56 px, instead of covering it.
+    expect(toaster).toHaveClass('max-[761px]:bottom-[76px]!')
+    expect(toaster.closest('section')).toHaveAttribute('aria-live', 'polite')
+    // A way to dismiss it, at the end of the line.
+    expect(screen.getByRole('button', { name: /close/i })).toHaveClass(
+      'order-last',
+    )
   })
 
   it('keeps an error until it is dismissed', async () => {
@@ -352,7 +377,7 @@ const CENSUS: Record<string, Where> = {
   UrlStateNotice: 'toast', // draws nothing: the element form of useUrlStateNotice
   // inline, in the state it belongs to
   ModuleOffNotice: 'inline',
-  StateBanner: 'inline',
+  Notice: 'inline', // the one boxed inline notice (components/ui/notice.tsx)
   BusinessRequiredNotice: 'inline',
   CapabilityNotice: 'inline',
   FailureNotice: 'inline',
@@ -391,12 +416,52 @@ const FILES = sources(SRC).map((path) => ({
   text: readFileSync(path, 'utf8'),
 }))
 
+// THE EDITION LINE'S MEMORY (EditionNote) lives in the same value as the dismissed notices,
+// with a bound of its own: the capabilities a person met never push a dismissed notice out,
+// and the value stays under the engine's cap for one preference (16384 bytes,
+// modules/consoleviews/ui_state.go).
+describe('the edition line remembered beside the dismissed notices', () => {
+  const DISMISSED = 'olivares.notices.dismissed'
+  const stored = () => preferenceStorage.getItem(DISMISSED) ?? ''
+
+  beforeEach(() => {
+    preferenceStorage.attach(null, {}, ['https://console.test', 'user', 'ana'])
+  })
+
+  it('many capabilities never push a dismissed notice out', () => {
+    rememberNotice('engine-unreachable', 'offline')
+    rememberNotice('license-expired', '2026-11-01')
+    for (let i = 0; i < 40; i++)
+      rememberNotice(`edition-note:capability-${i}`, 'business')
+    expect(noticeSeen('engine-unreachable', 'offline')).toBe(true)
+    expect(noticeSeen('license-expired', '2026-11-01')).toBe(true)
+    expect(noticeSeen('edition-note:capability-39', 'business')).toBe(true)
+  })
+
+  it('stays under the engine cap however many notices and capabilities there are', () => {
+    for (let i = 0; i < 40; i++)
+      rememberNotice(`condition-${i}-${'n'.repeat(40)}`, 'state')
+    for (let i = 0; i < 300; i++)
+      rememberNotice(`edition-note:${'c'.repeat(58)}-${i}`, 'enterprise')
+    expect(new TextEncoder().encode(stored()).length).toBeLessThan(16384)
+    expect(noticeSeen(`condition-39-${'n'.repeat(40)}`, 'state')).toBe(true)
+    const newest = `edition-note:${'c'.repeat(58)}-299`
+    expect(noticeSeen(newest, 'enterprise')).toBe(true)
+  })
+
+  it('keeps no capability key that is not a short printable one', () => {
+    rememberNotice(`edition-note:${'x'.repeat(5000)}`, 'business')
+    rememberNotice('edition-note:knöwledge', 'business')
+    expect(stored()).not.toMatch(/xxxx|knöwledge/)
+  })
+})
+
 describe('the notice census', () => {
   it('lists every banner-like component the console exports', () => {
     const found = new Set<string>()
     for (const { text } of FILES) {
       for (const m of text.matchAll(
-        /^export (?:default )?(?:function|const|class) ([A-Z]\w*(?:Notice|Banner)\w*)/gm,
+        /^export (?:default )?(?:function|const|class) ((?:[A-Z]\w*)?(?:Notice|Banner)\w*)/gm,
       )) {
         found.add(m[1])
       }

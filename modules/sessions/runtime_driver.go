@@ -216,6 +216,9 @@ type DriverSessionConfig struct {
 	OnLimit  func(kind string, resetsAt time.Time)
 	OnTurnOK func()
 
+	// OnTurnError is called when the tool ended a turn on an error that is no limit.
+	OnTurnError func()
+
 	// AuthorityCheck re-proves the launch's exact durable authority immediately
 	// before an answer crosses to the child. It is the driver's only way to ask
 	// "am I still the owner?", and the runtime answers with the store, not with
@@ -1009,7 +1012,13 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 				m.recordLimit(context.Background(), lr, limitReport{Kind: kind, ResetsAt: resetsAt})
 			})
 		},
-		OnTurnFailed: func(reason string, cancelled bool) { m.publishTurnFailed(lr, reason, cancelled) },
+		OnTurnFailed: func(reason string, cancelled bool) {
+			m.publishTurnFailed(lr, reason, cancelled)
+			m.deferDurable(lr, func() { m.recordTurnFailed(context.Background(), lr) })
+		},
+		OnTurnError: func() {
+			m.deferDurable(lr, func() { m.recordTurnFailed(context.Background(), lr) })
+		},
 		OnTurnOK: func() {
 			m.deferDurable(lr, func() { m.clearLimit(context.Background(), lr) })
 		},
@@ -1198,7 +1207,8 @@ func (m *Module) driverInputImages(ctx context.Context, lr *liveRun, text string
 
 // driverInputAdmitted is the I/O half after known authority and input-fact commit under the run
 // lock. Existing callers enter through driverInput; checked delivery establishes
-// the same authority in its final transaction and must not open another one here.
+// the same authority in its final transaction and opens no transaction here: the row of
+// the turn it starts committed with that admission (admitRunTurn, openRunTurn).
 func (m *Module) driverInputAdmitted(ctx context.Context, lr *liveRun, text string, launch model.ID, sid string) (bool, error) {
 	return m.driverInputAdmittedImages(ctx, lr, text, nil, launch, sid)
 }
@@ -1223,8 +1233,14 @@ func (m *Module) driverInputAdmittedImages(ctx context.Context, lr *liveRun, tex
 	if err := m.runtimeInputLiveCurrent(ctx, lr, launch, sid); err != nil {
 		return false, err
 	}
+	var durableTurn model.ID
 	if lr.session.ActiveTurn() == "" {
 		if err := lr.beginSessionTurn(ctx); err != nil {
+			return false, err
+		}
+		var err error
+		durableTurn, err = m.openRunTurn(ctx, lr, "", lr.driver.Key())
+		if err != nil {
 			return false, err
 		}
 	}
@@ -1253,6 +1269,22 @@ func (m *Module) driverInputAdmittedImages(ctx context.Context, lr *liveRun, tex
 		}
 	} else {
 		attempted, err = lr.session.Input(ctx, text)
+	}
+	// No result will come for a turn the driver holds no active turn for: a refusal
+	// before any byte moved, a failed attempt, or a turn already over when its start
+	// response was read. The row settles now; a result that did arrive has settled it
+	// first, and a closed row is never rewritten. Any other attempt may be running, so
+	// its row stays open for its result or the process end.
+	if !durableTurn.IsZero() && (!attempted || lr.session.ActiveTurn() == "") {
+		state := "completed"
+		switch {
+		case !attempted:
+			state = turnUnsent
+		case err != nil:
+			state = "failed"
+		}
+		m.finishRunTurn(lr, state, durableTurn, false)
+		lr.forgetDurableTurn(durableTurn)
 	}
 	if !attempted {
 		lr.mu.Lock()
@@ -1283,8 +1315,20 @@ func (m *Module) interruptDriverTurn(ctx context.Context, lr *liveRun) (bool, er
 		return false, err
 	}
 	callErr := m.endSessionCalls(lr, "")
-	attempted, err := lr.session.Interrupt(ctx)
-	err = errors.Join(callErr, err)
+	durableTurn := lr.durableTurn(false)
+	attempted, interruptErr := lr.session.Interrupt(ctx)
+	// The row follows the driver's own answer: a call owner slow to close fails the
+	// wait above, not the interrupt.
+	if interruptErr == nil {
+		m.finishRunTurn(lr, "interrupted", durableTurn, false)
+		// Codex ends its turn inside Interrupt, so the completion frame that follows
+		// finds no active turn and pops nothing: the row leaves the queue here. ACP
+		// keeps its prompt until the response and pops the row then.
+		if lr.session.ActiveTurn() == "" {
+			lr.forgetDurableTurn(durableTurn)
+		}
+	}
+	err := errors.Join(callErr, interruptErr)
 	if err == nil {
 		lr.setTurnInterrupted(true)
 	}

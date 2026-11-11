@@ -30,6 +30,11 @@ var (
 	// ErrSubjectErased means a referenced account was erased. Answered 409
 	// subject_erased.
 	ErrSubjectErased = errors.New("auth: a referenced account was erased")
+	// ErrSubjectRetired means a referenced account was removed from the tenant
+	// and its removal completed. A write that grants it authority there is
+	// refused: re-admitting the account later must not revive the grant. Answered
+	// 409 subject_retired.
+	ErrSubjectRetired = errors.New("auth: a referenced account was removed from this organization")
 )
 
 // Standing is what a writer must know about one referenced account in one

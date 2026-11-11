@@ -11,6 +11,7 @@ import type { ApprovalDTO, BindingDTO, PolicyDTO } from './types'
 import { ApiError } from '@/lib/api/errors'
 
 import { fakeRouter } from '@/test/fake-router'
+import { consoleApi } from '@/features/console/api'
 
 vi.mock('@/features/extensions', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/extensions')>()
@@ -80,6 +81,7 @@ vi.mock('./api', async (importOriginal) => {
 
 import GovernanceView from './governance-view'
 import { PolicyEditorDialog } from './policy-editor'
+import { NewRequestDialog } from './new-request-dialog'
 import { IdentitiesView } from './identities-view'
 import { GroupMembersSheet } from './group-members'
 
@@ -150,6 +152,11 @@ afterEach(() => {
   fakeRouter.reset('/')
 })
 
+// The approval queue is the lead tab of Rules, a page of its own: it opens alone, and the
+// sections of Permissions below it no longer list it.
+const QUEUE_CAPTION =
+  'Requests waiting for a decision. Every approve, reject and cancel is recorded.'
+
 describe('GovernanceView — approval queue (HITL)', () => {
   it('Community omits the break-glass panel, including a stored deep link', () => {
     fakeRouter.reset('/permissions?tab=break-glass')
@@ -157,10 +164,8 @@ describe('GovernanceView — approval queue (HITL)', () => {
     expect(
       screen.queryByRole('tab', { name: /emergency access/i }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /approvals/i })).toHaveAttribute(
-      'data-state',
-      'active',
-    )
+    expect(screen.getByText(QUEUE_CAPTION)).toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).toBeNull()
   })
   // Changed by the SC sweep on 09b (Root): the list leads with what will run; the action
   // and the references moved to the review's Details, so they are not in the row.
@@ -344,6 +349,27 @@ describe('Approve after the request is no longer pending', () => {
   })
 })
 
+describe('NewRequestDialog — durations in human units', () => {
+  it('sends the 4-hour expiry chosen from the menu, in seconds', async () => {
+    api.createApproval.mockResolvedValue({ id: 'a1' })
+    wrap(<NewRequestDialog open onOpenChange={() => {}} />)
+    await userEvent.type(screen.getByLabelText(/^action/i), 'deploy.prod')
+    await userEvent.click(screen.getByRole('combobox', { name: 'Expires in' }))
+    await userEvent.click(screen.getByRole('option', { name: '4 hours' }))
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Submit request' }),
+    )
+    await waitFor(() =>
+      expect(api.createApproval).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'deploy.prod',
+          expires_in_seconds: 14400,
+        }),
+      ),
+    )
+  })
+})
+
 describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
   it('shows the audit notice and offers NO secret-value input; gates on a name', async () => {
     wrap(<PolicyEditorDialog open onOpenChange={() => {}} />)
@@ -522,10 +548,10 @@ describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
   // The form has no risk-tier field, but it keeps the tier of a stored policy and asks
   // for an approval count. Saving a tier or a count other than the action's default is
   // how Community refuses from this form (501 business_required). The dialog says why,
-  // in a line that stays.
-  it('names the Business limit in the dialog when the server refuses a tier or an approval count', async () => {
+  // in the one edition line, calm, naming the edition whole; the line stays.
+  it('names the edition in the dialog when the server refuses a tier or an approval count', async () => {
     const limit =
-      /an approval count other than the action's default needs business/i
+      "Changing an action's risk tier or approval count is part of Olivares AI Business."
     api.updatePolicy.mockRejectedValue(
       new ApiError(
         501,
@@ -541,15 +567,20 @@ describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
       spec: { risk_tier: 'high', match: { action: 'deploy.apply' } },
     }
     wrap(<PolicyEditorDialog open onOpenChange={() => {}} policy={policy} />)
-    expect(screen.queryByText(limit)).toBeNull()
+    expect(screen.queryByText(limit, { exact: false })).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(limit)
+    const line = await screen.findByText(limit, { exact: false })
+    expect(line.closest('[role="status"]')).toHaveTextContent(
+      'What is already stored stays readable and exportable.',
+    )
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(document.body).not.toHaveTextContent(/business_required|\b501\b/)
     expect(toast.error).not.toHaveBeenCalled()
     // A later save that works clears the line.
     api.updatePolicy.mockResolvedValue(policy)
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
-    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByText(limit, { exact: false })).toBeNull()
   })
 
   it('keeps the generic error toast for any other refusal', async () => {
@@ -599,14 +630,6 @@ describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
       )
       expect(create).toBeDisabled()
     }
-    const expires = screen.getByLabelText(/^expires in/i)
-    await userEvent.clear(expires)
-    await userEvent.type(expires, '31536001')
-    expect(
-      screen.getByText('Enter a whole number from 0 to 31536000.'),
-    ).toBeInTheDocument()
-    expect(create).toBeDisabled()
-    await userEvent.clear(expires)
     await userEvent.clear(required)
     await userEvent.type(required, '2')
     expect(screen.queryByRole('alert')).toBeNull()
@@ -803,13 +826,31 @@ describe('GovernanceView — ?tab= deep link (console remake slice 4)', () => {
       'aria-selected',
       'true',
     )
+    expect(screen.queryByRole('tab', { name: 'Approvals' })).toBeNull()
     first.unmount()
     fakeRouter.reset('/permissions')
     wrap(<GovernanceView />)
-    expect(screen.getByRole('tab', { name: 'Approvals' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
+    expect(screen.getByText(QUEUE_CAPTION)).toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).toBeNull()
+  })
+
+  it('names the page it is on, and the queue is the page, not a tab panel without its tab', () => {
+    fakeRouter.reset('/permissions')
+    const first = wrap(<GovernanceView />)
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Approvals' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(QUEUE_CAPTION)).toBeInTheDocument()
+    expect(screen.queryByRole('tabpanel')).toBeNull()
+    first.unmount()
+    fakeRouter.reset('/permissions?tab=policies')
+    wrap(<GovernanceView />)
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Permissions' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('tabpanel', { name: 'Policies' }),
+    ).toBeInTheDocument()
   })
 
   // AR hold07 finding 5: the list said an enabled policy may be inert, while the deny it
@@ -860,5 +901,156 @@ describe('the decision styles', () => {
     expect(
       within(dialog).getByRole('button', { name: /^deny$/i }).className,
     ).toMatch(/danger/)
+  })
+})
+
+// CONCEPT §4.16: Permissions lists the engine's roles, each with the line the
+// product's documentation gives it, how many people hold it and whether it is
+// built in or the organization's own.
+describe('Permissions: the roles table', () => {
+  const member = (user_id: string, role: string) =>
+    ({ user_id, email: `${user_id}@example.test`, role }) as never
+  const spies: { mockRestore: () => void }[] = []
+  /** The text of each cell of a row. */
+  const cellsOf = (row: HTMLElement) =>
+    within(row)
+      .queryAllByRole('gridcell')
+      .map((cell) => cell.textContent)
+  /** Each data row of the Roles table (after its header row), as its cells. */
+  const roleRows = (grid: HTMLElement) =>
+    within(grid).getAllByRole('row').slice(1).map(cellsOf)
+  const BUILT_IN = [
+    ['Viewer', 'Read operational data and the audit trail', '1', 'Built-in'],
+    ['Editor', 'The above, plus write operational data', '0', 'Built-in'],
+    [
+      'Admin',
+      'The above, plus tenant IAM — users, memberships, tokens, settings',
+      '2',
+      'Built-in',
+    ],
+    ['Owner', 'All permissions within the tenant', '1', 'Built-in'],
+  ]
+
+  beforeEach(() => {
+    fakeRouter.reset('/permissions?tab=policies')
+    spies.push(
+      vi.spyOn(consoleApi, 'rbacCatalog').mockResolvedValue({
+        builtin_roles: ['viewer', 'editor', 'admin', 'owner'],
+      } as never),
+      vi.spyOn(consoleApi, 'listMembers').mockResolvedValue({
+        items: [
+          member('u1', 'owner'),
+          member('u2', 'admin'),
+          member('u3', 'admin'),
+          member('u4', 'viewer'),
+        ],
+        has_more: false,
+      }),
+      vi.spyOn(consoleApi, 'listRoles').mockResolvedValue({
+        items: [
+          {
+            name: 'billing-reviewer',
+            display_name: 'Billing reviewer',
+            base_role: 'viewer',
+            permissions: [],
+          },
+        ],
+        has_more: false,
+      }),
+    )
+  })
+  afterEach(() => {
+    for (const spy of spies.splice(0)) spy.mockRestore()
+  })
+
+  it('lists the engine roles with their documented line, how many hold each, and the type', async () => {
+    wrap(<GovernanceView />)
+    const grid = await screen.findByRole('grid', { name: 'Roles' })
+    await within(grid).findByText('Billing reviewer')
+    expect(roleRows(grid)).toEqual([
+      ...BUILT_IN,
+      ['Billing reviewer', 'Starts from Viewer', '—', 'Custom'],
+    ])
+  })
+
+  it('counts people only for a person who may read them', async () => {
+    authState.can = (p: string) => p !== 'user:read'
+    wrap(<GovernanceView />)
+    const grid = await screen.findByRole('grid', { name: 'Roles' })
+    await within(grid).findByText('Billing reviewer')
+    expect(
+      within(grid).queryByRole('columnheader', { name: 'People' }),
+    ).toBeNull()
+    expect(consoleApi.listMembers).not.toHaveBeenCalled()
+  })
+
+  it('shows no roles to a person who may not read them', () => {
+    authState.can = (p: string) => p !== 'governance:rbac:read'
+    wrap(<GovernanceView />)
+    expect(screen.queryByRole('region', { name: 'Roles' })).toBeNull()
+    expect(consoleApi.rbacCatalog).not.toHaveBeenCalled()
+    expect(consoleApi.listRoles).not.toHaveBeenCalled()
+  })
+
+  it('lists the built-in roles where the edition has no custom roles, without an error', async () => {
+    vi.mocked(consoleApi.listRoles).mockRejectedValue(
+      new ApiError(501, 'business_required', 'Custom roles are Business.'),
+    )
+    wrap(<GovernanceView />)
+    const roles = screen.getByRole('region', { name: 'Roles' })
+    const grid = await within(roles).findByRole('grid', { name: 'Roles' })
+    await within(grid).findByText('Owner')
+    expect(roleRows(grid)).toEqual(BUILT_IN)
+    expect(within(roles).queryByRole('button', { name: /retry/i })).toBeNull()
+  })
+
+  it('keeps the roles when the people read fails, and says so with Retry', async () => {
+    vi.mocked(consoleApi.listMembers).mockRejectedValue(
+      new ApiError(500, 'internal', 'members unavailable'),
+    )
+    wrap(<GovernanceView />)
+    const roles = screen.getByRole('region', { name: 'Roles' })
+    expect(
+      await within(roles).findByRole('button', { name: /retry/i }),
+    ).toBeInTheDocument()
+    const grid = within(roles).getByRole('grid', { name: 'Roles' })
+    expect(roleRows(grid).map((cells) => cells.slice(0, 3))).toEqual([
+      ['Viewer', 'Read operational data and the audit trail', '—'],
+      ['Editor', 'The above, plus write operational data', '—'],
+      [
+        'Admin',
+        'The above, plus tenant IAM — users, memberships, tokens, settings',
+        '—',
+      ],
+      ['Owner', 'All permissions within the tenant', '—'],
+      ['Billing reviewer', 'Starts from Viewer', '—'],
+    ])
+  })
+
+  it('keeps the built-in roles when the custom roles read fails, and says so with Retry', async () => {
+    vi.mocked(consoleApi.listRoles).mockRejectedValue(
+      new ApiError(500, 'internal', 'roles unavailable'),
+    )
+    wrap(<GovernanceView />)
+    const roles = screen.getByRole('region', { name: 'Roles' })
+    expect(
+      await within(roles).findByRole('button', { name: /retry/i }),
+    ).toBeInTheDocument()
+    expect(
+      roleRows(within(roles).getByRole('grid', { name: 'Roles' })),
+    ).toEqual(BUILT_IN)
+  })
+
+  it('says the roles read failed, with Retry, and lists no role it did not read', async () => {
+    vi.mocked(consoleApi.rbacCatalog).mockRejectedValue(
+      new ApiError(500, 'internal', 'catalog unavailable'),
+    )
+    wrap(<GovernanceView />)
+    const roles = screen.getByRole('region', { name: 'Roles' })
+    expect(
+      await within(roles).findByRole('button', { name: /retry/i }),
+    ).toBeInTheDocument()
+    // The table keeps only its header row while it shows the error.
+    expect(roleRows(within(roles).getByRole('grid'))).toEqual([])
   })
 })

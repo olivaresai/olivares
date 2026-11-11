@@ -159,11 +159,17 @@ describe('account read leaves the room, same boundary', () => {
     await waitFor(() => expect(api.getAccount).toHaveBeenCalledOnce())
     const pointRead = signalOf(api.getAccount.mock.calls[0])
     expect(accountBytes(qc)).not.toEqual([])
+    // The account list is on screen (its own line), then leaves with the read tier.
+    expect(
+      screen.getByText(/^Tool accounts in this organization/),
+    ).toBeInTheDocument()
 
     auth.perms = new Set([PR])
     rerender()
     await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: 'Accounts' })).toBeNull(),
+      expect(
+        screen.queryByText(/^Tool accounts in this organization/),
+      ).toBeNull(),
     )
     expect(pointRead?.aborted).toBe(true)
     await waitFor(() => expect(accountBytes(qc)).toEqual([]))
@@ -318,11 +324,16 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
     const user = userEvent.setup()
     const { qc, rerender } = wrap()
     await submitAdoption(user, 'ppf_b')
+    expect(
+      screen.getByText(/^Tool accounts in this organization/),
+    ).toBeInTheDocument()
 
     auth.perms = new Set([PR, AW])
     rerender()
     await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: 'Accounts' })).toBeNull(),
+      expect(
+        screen.queryByText(/^Tool accounts in this organization/),
+      ).toBeNull(),
     )
     await act(async () => {
       answer.resolve(adopted)

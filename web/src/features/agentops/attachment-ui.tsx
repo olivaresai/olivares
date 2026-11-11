@@ -22,7 +22,8 @@ import { agentOpsApi, agentOpsKeys } from './api'
 import { ATTACH_ACCEPT, dataUrlOf, type DraftImage } from './attachments'
 import './i18n'
 
-/** The picker button. The file input is the platform's own; the button only opens it. */
+/** The picker button, flat like the composer's pickers. The file input is the
+ * platform's own; the button only opens it. */
 export function AttachButton({
   disabled,
   onFiles,
@@ -52,8 +53,7 @@ export function AttachButton({
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className="rounded-full"
+        size="sm"
         disabled={disabled}
         aria-label={t('attach.add')}
         title={t('attach.add')}

@@ -5,7 +5,9 @@ import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCopy, type CopyState } from './use-copy'
 
-/** The icon button of a copy: a check once the text is on the clipboard. */
+/** The icon button of a copy: a check once the text is on the clipboard. A flat icon button in
+ * the second tone with the hover and press layers, its corners those of a well's inner control,
+ * so it sits inside the well of the value it copies. */
 export function CopyIcon({
   state,
   label,
@@ -23,8 +25,8 @@ export function CopyIcon({
       onClick={onCopy}
       aria-label={label}
       className={cn(
-        'inline-flex size-7 shrink-0 items-center justify-center rounded-ctl text-text-3',
-        'transition-colors duration-100 ease-out hover:bg-hover hover:text-text',
+        'inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-text-2',
+        'transition-[color,background-color] ease-out hover:bg-hover hover:text-text active:bg-[var(--pressed)]',
         'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
         className,
       )}

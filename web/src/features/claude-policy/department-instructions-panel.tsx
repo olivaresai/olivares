@@ -28,6 +28,7 @@ import { isOpenCoreSeam } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import {
   failureText,
+  reportEditionRefusal,
   usePrivilegedMutation,
 } from '@/lib/hooks/use-privileged-mutation'
 import { claudePolicyApi, claudePolicyKeys } from './api'
@@ -57,7 +58,8 @@ export function DepartmentInstructionsPanel() {
     onSuccess: setPreview,
     onError: (e) => {
       setPreview(null)
-      if (isOpenCoreSeam(e)) return
+      // A 501 is said in place, below; another edition refusal as the edition line.
+      if (isOpenCoreSeam(e) || reportEditionRefusal(e)) return
       toast.error(t('claudePolicy:department.previewFailed'), {
         description: failureText(e),
       })
@@ -73,11 +75,12 @@ export function DepartmentInstructionsPanel() {
     onError: isOpenCoreSeam,
   })
   // Community answers 501 for this surface: say it is Business, not "0 revisions".
-  const editionGated = [
+  const editionError = [
     versions.error,
     previewMutation.error,
     publishMutation.error,
-  ].some(isOpenCoreSeam)
+  ].find(isOpenCoreSeam)
+  const editionGated = editionError !== undefined
 
   const departments = (workspaces.data?.items ?? []).filter(
     (ws) => ws.status === 'active',
@@ -116,7 +119,9 @@ export function DepartmentInstructionsPanel() {
           </Select>
         </Field>
 
-        {department !== '' && editionGated && <BusinessRequiredNotice />}
+        {department !== '' && editionGated && (
+          <BusinessRequiredNotice error={editionError} />
+        )}
         {department !== '' && !editionGated && (
           <>
             <div className="flex flex-wrap items-center gap-2">

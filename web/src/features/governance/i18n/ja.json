@@ -143,6 +143,10 @@
     "expiredAt": "期限切れ {{time}}",
     "approveOnce": "今回だけ承認",
     "approveForSession": "このセッション中は承認",
+    "allowances": "このセッションの許可",
+    "revokeAllowance": "取り消す",
+    "sessionPolicy": "ポリシーにより毎回のリクエスト確認が必要です。",
+    "allowancesError": "セッションの許可を読み取りまたは更新できませんでした。",
     "approving": "承認中…",
     "deny": "却下",
     "noMatch": "検索に一致するリクエストはありません",
@@ -153,7 +157,9 @@
     "approved": "承認済み",
     "rejected": "却下",
     "canceled": "キャンセル済み",
-    "expired": "期限切れ"
+    "expired": "期限切れ",
+    "approvedNotUsed": "承認済み、未使用",
+    "approvedUsed": "承認済み、使用済み"
   },
   "decide": {
     "rejectTitle": "この要求を却下しますか？",
@@ -194,10 +200,11 @@
     "reasonHint": "レビュー担当者向けのコンテキスト（任意）。",
     "requiredApprovals": "必要な承認数",
     "requiredApprovalsHint": "一致する承認ポリシーが適用される場合は無視されます。ポリシーが優先されます。",
-    "expiresInSeconds": "有効期限（秒）",
-    "escalateInSeconds": "エスカレーションまで（秒）",
     "submit": "要求を送信",
-    "created": "承認要求を開きました"
+    "created": "承認要求を開きました",
+    "expiresIn": "有効期限",
+    "escalateIn": "エスカレーションまで",
+    "subjectFold": "対象（任意）"
   },
   "detail": {
     "title": "承認要求",
@@ -225,9 +232,12 @@
     "reenableNeedsAdmins": "ほかの管理者アカウント 2 つの承認が必要です。「アイデンティティとアクセス」または `olivares users create` で作成してください。",
     "openIdentity": "「アイデンティティ」を開く",
     "cannotDecideOwn": "自分のリクエストは承認できません。別の管理者が判断する必要があります。",
-    "requesterCannotApprove": "リクエストした本人は、そのリクエストを承認できません。",
+    "ownRequest": "自分のリクエストは承認できません。",
     "launchedBy": "起動したユーザー",
-    "decidedByYou": "このリクエストは承認済みです。別の承認者を待っています。"
+    "decidedByYou": "このリクエストは承認済みです。別の承認者を待っています。",
+    "whoDecides": "判断できる人: {{names}}。",
+    "nobodyDecides": "このリクエストを判断できる人はほかにいません。",
+    "someoneWithRights": "承認権限を持つ人"
   },
   "policies": {
     "title": "ポリシー",
@@ -238,6 +248,23 @@
     "enabled": "有効",
     "rules": "ルール",
     "newPolicy": "新規ポリシー",
+    "roles": {
+      "title": "ロール",
+      "role": "ロール",
+      "can": "できること",
+      "people": "人数",
+      "kind": "種類",
+      "builtIn": "組み込み",
+      "custom": "カスタム",
+      "from": "{{role}}がベース",
+      "empty": "組み込みのロールと、それぞれにできることがここに表示されます。",
+      "does": {
+        "owner": "テナント内のすべての権限",
+        "admin": "上記に加え、テナント IAM ── ユーザー、メンバーシップ、トークン、設定",
+        "editor": "上記に加え、運用データの書き込み",
+        "viewer": "運用データと監査証跡を読む"
+      }
+    },
     "empty": "ポリシーはありません",
     "emptyHint": "一致するアクションを統制するために、ABAC 拒否ルールまたは承認しきい値を作成してください。",
     "kindAbac": "ABAC",
@@ -274,23 +301,20 @@
     "denyImplicit": "拒否（暗黙）",
     "requiredApprovals": "必要な承認数",
     "requiredApprovalsHint": "0〜64。空欄または 0 はエンジンの既定値を使います。重要なアクションでは既定値が高くなる場合があります。",
-    "expiresInSeconds": "有効期限（秒）",
-    "expiresInSecondsHint": "0〜31536000（0 = 期限なし）。",
-    "escalateInSeconds": "エスカレーションまで（秒）",
-    "escalateInSecondsHint": "0〜31536000（0 = エスカレーションなし）。",
     "countError": "0〜{{max}} の整数を入力してください。",
     "matchAction": "一致するアクション",
     "matchActionHint": "空欄 = 任意のアクションに一致。",
     "matchSubjectKind": "一致するサブジェクトの種類",
     "matchSubjectKindHint": "空欄 = 任意のサブジェクトの種類に一致。",
-    "needsBusiness": "リスクレベルまたは承認数をアクションの既定値から変更するには Business が必要です。このポリシーを無効にすると、保存したまま残せます。",
     "create": "ポリシーを作成",
     "save": "変更を保存",
     "confirmCreateBody": "有効な ABAC ポリシーは直ちにアクセスをさらに制限します。有効な承認ポリシーは、一致するアクションに対して人による承認を要求し始めます。直ちに有効になります。",
     "confirmUpdateBody": "有効な場合、変更は認可パス／承認フローに直ちに反映されます。ポリシーの種類は変更できません。",
     "created": "ポリシーを作成しました",
     "updated": "ポリシーを更新しました",
-    "credentialWarning": "これはクレデンシャルの値のように見えます。ポリシールールが保持するのは参照とセレクターのみであり、シークレットを含めることはできません。"
+    "credentialWarning": "これはクレデンシャルの値のように見えます。ポリシールールが保持するのは参照とセレクターのみであり、シークレットを含めることはできません。",
+    "expiresIn": "有効期限",
+    "escalateIn": "エスカレーションまで"
   },
   "policyRemove": {
     "title": "このポリシーを削除しますか？",
@@ -668,6 +692,14 @@
     "askedByForSession": "{{name}}（新しいセッション）",
     "askedByThroughSession": "{{name}}（実行中のセッション）",
     "tool": "ツール",
+    "touches": "対象",
+    "changeClass": {
+      "docs_only": "ドキュメントのみ",
+      "code": "コード",
+      "sensitive": "機密ファイル"
+    },
+    "lapses": "<when />に期限切れになります。その後は誰も承認できず、実行されません。",
+    "lapsed": "<when />に期限切れになりました。誰も承認できず、実行されません。",
     "willRun": "実行される内容",
     "noReview": "このリクエストには実行される内容が含まれていません。",
     "commandUnknown": "このツールではまだコマンドが表示されません",
@@ -729,5 +761,15 @@
       "editor": "編集者",
       "owner": "所有者"
     }
+  },
+  "durations": {
+    "none": "無期限",
+    "h1": "1時間",
+    "h4": "4時間",
+    "h8": "8時間",
+    "h24": "24時間",
+    "d7": "7日間",
+    "d30": "30日間",
+    "seconds": "{{value}} 秒"
   }
 }

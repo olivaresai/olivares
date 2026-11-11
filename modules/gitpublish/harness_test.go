@@ -375,6 +375,8 @@ type fakeCustody struct {
 	repoID     string
 	webBase    string
 	webBaseErr error
+	repoName   string
+	rbCalls    int
 	tenant     model.TenantID
 	workspace  model.ID
 	approved   map[string]bool
@@ -402,6 +404,7 @@ func (c *fakeCustody) CredentialBinding(_ context.Context, tn model.TenantID, ws
 func (c *fakeCustody) RepositoryBinding(_ context.Context, tn model.TenantID, ws model.ID, id string) (RepositoryBinding, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.rbCalls++
 	if !c.approved[id] || !c.inScope(tn, ws) {
 		return RepositoryBinding{}, ErrBindingNotApproved
 	}
@@ -410,6 +413,22 @@ func (c *fakeCustody) RepositoryBinding(_ context.Context, tn model.TenantID, ws
 		repoID = "R_1"
 	}
 	return RepositoryBinding{ID: id, Version: c.rbVer, RepoID: repoID, Owner: "acme", Name: "widgets", LocalPath: "/srv/olivares/gitpublish/r1.git"}, nil
+}
+
+// repositoryBindings counts the resolutions of a server repository.
+func (c *fakeCustody) repositoryBindings() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rbCalls
+}
+
+func (c *fakeCustody) RepositoryName(_ context.Context, tn model.TenantID, ws model.ID, id string) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.approved[id] || !c.inScope(tn, ws) {
+		return "", ErrBindingNotApproved
+	}
+	return c.repoName, nil
 }
 
 func (c *fakeCustody) RepositoryWebBase(_ context.Context, tn model.TenantID, ws model.ID, id string) (string, error) {
@@ -498,7 +517,7 @@ func newHarness(t *testing.T) *harness {
 	h := &harness{t: t, host: newFakeHost(), authz: &fakeAuthority{deny: map[model.ID]error{}}}
 	h.git = &fakeGit{host: h.host, treeFor: map[string]string{shaCommit: shaTree, shaBase: shaTree, shaOther: shaTree}}
 	h.custody = &fakeCustody{host: h.host, cbVer: 1, rbVer: 1, owners: []string{"acme"}, approved: map[string]bool{"cb1": true, "rb1": true, "rb2": true}}
-	h.m = New(Options{ScanSecrets: cleanPublicationScan, Custody: h.custody, Git: h.git, Authority: h.authz, DispatchTimeout: 2 * time.Second})
+	h.m = New(Options{ScanSecrets: cleanPublicationScan, Custody: h.custody, Git: h.git, Authority: h.authz, Gate: &fakeGate{}, DispatchTimeout: 2 * time.Second})
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, h.m.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)

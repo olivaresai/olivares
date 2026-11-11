@@ -72,6 +72,7 @@ const (
 	reasonObservationRequest = "the host's request id, cut to 128 characters of a fixed alphabet: connectors/gitpublish/result.go:119-132, publish.go:839"
 	reasonObservationAt      = "an RFC 3339 UTC instant written as a time: records.go:319, records.go:129-134"
 	reasonProposalRun        = "the session run whose approved proposal the intent carries out, a validated run id, only checked for presence, rendered and audited: publish.go:62-68, publish.go:585-600, audit.go:43"
+	reasonSessionRun         = "the session run a publication came from, a validated run id, recorded and only rendered: publish.go:487, records.go:240, routes.go:293"
 	reasonProposalApproval   = "the governance approval id the proposal spent, matched against the operation alphabet and only rendered and audited: publish.go:62-68, audit.go:43, routes.go:202"
 	reasonCommentState       = "a run result from a closed set, rendered in the external comment: comments.go:38-41, comments.go:72"
 	reasonPullRequestURL     = "an optional HTTPS pull-request URL bound to the approved repository, rendered in the external comment: publish.go:329, comments.go:73-74"
@@ -169,6 +170,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		nullIntField("req_cost_micro_usd"),
 		nullText("obs_comment_id", reasonObservedCommentID),
 		nullText("obs_comment_url", reasonObservedCommentURL),
+		nullText("session_run", reasonSessionRun),
 	}
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:   kindIntent,

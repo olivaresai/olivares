@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 """Fast shell behavior checks; actual root exec is in the image qualifier."""
+import json
 import os
 from pathlib import Path
 import re
@@ -19,8 +20,10 @@ class ContainerShellTests(unittest.TestCase):
             with self.subTest(dockerfile=name):
                 runtime = (ROOT / name).read_text().rsplit("\nFROM ", 1)[1]
                 install = " ".join(re.findall(r"apt-get install (.*?)&&", runtime, re.S))
+                # htop is what a person runs in the session terminal; openssh-sftp-server is the
+                # sftp-server the engine's SFTP listener starts for a folder (modules/sessions/sftp.go).
                 for package in ("vim", "less", "procps", "curl", "jq", "iproute2", "tar", "gzip",
-                                "gh", "openssh-client", "netcat-openbsd"):
+                                "gh", "openssh-client", "netcat-openbsd", "htop", "openssh-sftp-server"):
                     self.assertIn(package, install.split())
                 # A confined session's ssh reaches a declared host through the session
                 # proxy's CONNECT tunnel (modules/sessions/egress), and only then.
@@ -38,6 +41,20 @@ class ContainerShellTests(unittest.TestCase):
                 self.assertIn("1i . /etc/olivares-bashrc", runtime)
                 self.assertIn("USER 65532:65532", runtime)
                 self.assertIn("ENV HOME=/var/lib/olivares/home", runtime)
+
+    def test_session_image_and_packages_carry_the_terminal_and_sftp_tools(self):
+        # The image a container session runs in has htop beside the tools it already has.
+        recipe = (ROOT / "packaging/container/session/Containerfile").read_text()
+        self.assertIn("htop", " ".join(re.findall(r"apt-get install (.*?)&&", recipe, re.S)).split())
+        # The deb recommends the sftp-server the engine's SFTP listener starts; weak
+        # dependencies, so a host without them still installs and the listener says why it is off.
+        nfpm = next(n for n in json.loads((ROOT / "packaging/nfpm/packages.json").read_text())["nfpms"]
+                    if n.get("package_name") == "olivares" and "deb" in n.get("formats", []))
+        self.assertIn("openssh-sftp-server", nfpm["overrides"]["deb"].get("recommends", []))
+        self.assertIn("htop", nfpm["overrides"]["deb"].get("recommends", []))
+        # The rpm recommends no SSH server: the default preset of its family enables sshd at the
+        # next boot. Its SFTP comes from an openssh-server the administrator installs.
+        self.assertNotIn("openssh-server", nfpm["overrides"]["rpm"].get("recommends", []))
 
     def test_gh_comes_from_githubs_signed_repository(self):
         # Debian trixie's gh 2.46.0 is built with go1.23.4 and carries its Go advisories.

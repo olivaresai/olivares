@@ -11,12 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func runAuditVerify(cmd *cobra.Command, dataDir, engine, dsn, ownerDSN, tenant, pubAlg string, pubB64s, eventPubB64s []string, fromSeq int64, strict bool) error {
-	return exitcode.New(exitcode.Edition, audit.ErrBusinessAudit)
-}
-
-const auditVerificationAvailable = false
-
 func runAuditTreeProve(cmd *cobra.Command, dataDir, engine, dsn, ownerDSN, tenant, checkpointPath, pubkey string, seq int64) error {
 	return exitcode.New(exitcode.Edition, audit.ErrBusinessAudit)
 }

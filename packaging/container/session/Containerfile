@@ -31,7 +31,7 @@ FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
-       ca-certificates curl git jq less openssh-client procps ripgrep \
+       ca-certificates curl git htop jq less openssh-client procps ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
 LABEL org.opencontainers.image.title="olivares-session" \

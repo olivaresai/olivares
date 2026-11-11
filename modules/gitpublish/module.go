@@ -56,6 +56,9 @@ const (
 	permPullRequest  auth.Permission = "gitpublish:pull_request:write"
 	permMerge        auth.Permission = "gitpublish:merge:admin"
 	permIssueComment auth.Permission = "gitpublish:issue_comment:write"
+	// permRunAdmin is the sessions module's: it lets an administrator publish
+	// a session run another person launched.
+	permRunAdmin auth.Permission = "sessions:run:admin"
 )
 
 // The Cedar actions the module's governed routes name.
@@ -82,7 +85,8 @@ type Options struct {
 	// push that names a run; a push that names none never reads it.
 	Sessions SessionFolders
 	// Work commits a session run's folder for a ship, and Gate asks the tenant's
-	// approval policy before its push. Nil refuses a ship: authority_unavailable.
+	// approval policy before every publication. Nil Work refuses a ship and nil
+	// Gate refuses every publication: authority_unavailable.
 	Work SessionWork
 	Gate ShipGate
 	Now  func() time.Time
@@ -188,7 +192,7 @@ func (m *Module) UseSessions(s SessionFolders) { m.opts.Sessions = s }
 // UseSessionWork late-binds the sessions module's commit of a run's folder.
 func (m *Module) UseSessionWork(w SessionWork) { m.opts.Work = w }
 
-// UseShipGate late-binds the approval policy's door before a ship's push.
+// UseShipGate late-binds the approval policy's door before every publication.
 func (m *Module) UseShipGate(g ShipGate) { m.opts.Gate = g }
 
 var _ Git = (*gp.Executor)(nil)

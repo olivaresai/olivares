@@ -15,7 +15,8 @@
   "groups": {
     "yours": "你的模板",
     "builtin": "内置模板（{{n}}）",
-    "yoursEmpty": "暂无模板。模板是新会话可重复使用的起点。"
+    "emptyTitle": "你还没有模板",
+    "emptyDescription": "模板是新会话可重复使用的起点。"
   },
   "editor": {
     "nameLabel": "名称",
@@ -25,11 +26,11 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "在工具和会话前后执行的命令。",
-      "settings": "智能体设置",
+      "settings": "设置",
       "settingsHint": "权限模式、努力程度、模型和自定义指令。",
       "connectors": "连接器",
       "connectorsHint": "应用此模板时要附加的连接器 ID。",
-      "policies": "治理策略",
+      "policies": "策略",
       "policiesHint": "DLP 模式、会话时长限制、允许的工具和 I/O 记录。",
       "secrets": "密钥",
       "secretsHint": "来自此模板的会话以环境变量形式接收的保管库密钥。",

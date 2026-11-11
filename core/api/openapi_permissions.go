@@ -42,8 +42,10 @@ import "github.com/olivaresai/olivares/core/auth"
 // for.
 var corePermissions = map[string]string{
 	"getMCPGateway": "tenant:admin", "addMCPGatewayServer": "tenant:admin", "updateMCPGatewayServer": "tenant:admin", "removeMCPGatewayServer": "tenant:admin", "testMCPGatewayServer": "tenant:admin", "setMCPGatewaySessionTools": "tenant:admin",
-	"getTOTPPolicy": "system:admin",
-	"setTOTPPolicy": "system:admin",
+	// The edition summary (edition_summary.go: systemRoute system:admin).
+	"getEditionSummary": "system:admin",
+	"getTOTPPolicy":     "system:admin",
+	"setTOTPPolicy":     "system:admin",
 	// Administrative step-up policy (handlers_stepup_policy.go: authzSystem system:admin).
 	"getConsoleExposure": "system:admin",
 	"setConsoleExposure": "system:admin",
@@ -84,6 +86,14 @@ var corePermissions = map[string]string{
 	"enableSuperadmin":   "user:write",
 	"deleteUserSessions": "user:write",
 	"grantMembership":    "membership:write",
+
+	// Business seams: groups of the operator's own and member suspension (handlers_groups.go, handlers_members.go).
+	"createGroup":       "membership:write",
+	"deleteGroup":       "membership:write",
+	"addGroupMember":    "membership:write",
+	"removeGroupMember": "membership:write",
+	"suspendMember":     "user:write",
+	"reactivateMember":  "user:write",
 
 	// Tokens (handlers_core.go; tenant path, see the doc comment above).
 	"listTokens":  "token:read",

@@ -18,9 +18,10 @@ import type { paths } from '@/lib/api/openapi.gen'
 export type ProviderKind =
   'anthropic' | 'openai' | 'xai' | 'gemini' | 'openai_compatible' | 'ollama'
 
-/** Two states. Revoking is final for that reference: the record is kept so the
- * sessions it authorised still read truthfully, not so it can come back. */
-export type ProviderState = 'active' | 'revoked'
+/** Disabling is reversible and refuses new launches. Revoking is final for that reference:
+ * the record is kept so the sessions it authorised still read truthfully, not so it can
+ * come back. */
+export type ProviderState = 'active' | 'disabled' | 'revoked'
 
 /**
  * What the last connection test found. Three values, and they are three answers to
@@ -89,4 +90,5 @@ export interface PatchProviderRequest {
   base_url?: string
   api_key?: string
   default_model?: string
+  state?: 'active' | 'disabled'
 }

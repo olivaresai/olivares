@@ -15,8 +15,8 @@ import {
 import { cn } from '@/lib/utils'
 
 /**
- * Tabs — segmented navigation over Radix Tabs: a muted track and a neutral raised
- * selection, matching Segmented. Radix supplies roving tabindex and ARIA.
+ * Tabs — flat navigation over Radix Tabs: no track, and the selected tab on the
+ * selected fill. Radix supplies roving tabindex and ARIA.
  *
  * OVERFLOW, measured on the rendered console (console-ui-current-baseline, 2026-09-06):
  * `/console` carries eleven tabs, `/knowledge` nine, `/health` and `/finops` eight. The
@@ -324,8 +324,8 @@ export function TabsList({
           assignRef(ref, node)
         }}
         className={cn(
-          // A segmented control: one muted track, the selected tab a raised segment.
-          'relative flex h-8 w-fit max-w-full min-w-0 items-center gap-0.5 rounded-ctl bg-hover p-0.5',
+          // Flat tabs: no track, the selected tab on the selected fill.
+          'relative flex h-8 w-fit max-w-full min-w-0 items-center gap-0.5 rounded-ctl bg-transparent p-0.5',
           'overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           // A VERTICAL list (a section list beside the work): no strip, no rule, rows.
           'data-[orientation=vertical]:h-auto data-[orientation=vertical]:w-full data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch data-[orientation=vertical]:gap-px data-[orientation=vertical]:rounded-none data-[orientation=vertical]:bg-transparent data-[orientation=vertical]:p-0 data-[orientation=vertical]:overflow-visible',
@@ -408,9 +408,9 @@ export function TabsTrigger({
         'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[5px] px-3 text-body font-medium whitespace-nowrap',
         'text-text-2 transition-[color,background-color,box-shadow] duration-100 ease-out',
         'hover:text-text',
-        // The selected segment is Segmented's: the raised fill and a 1 px ring, visible in
-        // both themes (a shadow alone vanishes on the dark canvas).
-        'data-[state=active]:bg-raised data-[state=active]:text-text data-[state=active]:shadow-[0_0_0_1px_var(--line-strong)]',
+        // The selected tab: the selected fill and a 1 px ring, visible in both themes
+        // (a shadow alone vanishes on the dark canvas).
+        'data-[state=active]:bg-active data-[state=active]:text-text data-[state=active]:shadow-[0_0_0_1px_var(--line-strong)]',
         'outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
         'disabled:pointer-events-none disabled:text-text-3',
         // In a vertical list a tab is a row: no underline, the selected row is filled.

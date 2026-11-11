@@ -22,6 +22,9 @@
     "name": "Name",
     "kind": "Kind",
     "key": "Key",
+    "usedBy": "Used by",
+    "usedByUnread": "Which profiles use each key could not be read.",
+    "usedByPartial": "Some profiles were not read: a key may be used by more than shown.",
     "state": "State",
     "connection": "Connection",
     "actions": "Actions"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "Active",
-    "revoked": "Revoked"
+    "revoked": "Revoked",
+    "disabled": "Disabled"
   },
   "probe": {
     "never": "Not tested",
@@ -70,7 +74,9 @@
     "testing": "Testing…",
     "rotate": "Rotate key",
     "revoke": "Revoke",
-    "details": "Details"
+    "details": "Details",
+    "disable": "Disable",
+    "enable": "Enable"
   },
   "create": {
     "title": "Add a provider",
@@ -171,5 +177,9 @@
   "section": {
     "title": "API keys",
     "add": "Add an API key"
+  },
+  "stateChange": {
+    "disabled": "Provider disabled. Bound profiles refuse new launches until it is enabled again.",
+    "active": "Provider enabled."
   }
 }

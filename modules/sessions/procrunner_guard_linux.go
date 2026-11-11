@@ -289,6 +289,9 @@ func runSessionGuard(args []string) int {
 		if err == syscall.EINTR {
 			continue
 		}
+		if err == syscall.ECHILD && engineGone.Load() {
+			select {} // endTree reaped the last child itself and ends the guard when it is done
+		}
 		if err != nil {
 			if killOnExit {
 				fmt.Fprintln(os.Stderr, "olivares: session guard: wait:", err)
@@ -437,7 +440,18 @@ func dropCapabilities() {
 // and the next one that kills theirs end it. A process with SIGKILL pending cannot
 // finish a fork, so a pass that finds none is the end.
 func killTree(guard int) (survivors int, err error) {
-	return killTreeAt("/proc", guard)
+	return killTreeWith("/proc", guard, reapChildren)
+}
+
+// reapChildren collects the children that ended, so a killed one leaves the guard's
+// list. It never waits, and the guard's own wait loop may collect them first.
+func reapChildren() {
+	var status syscall.WaitStatus
+	for {
+		if pid, err := syscall.Wait4(-1, &status, syscall.WNOHANG, nil); pid <= 0 || err != nil {
+			return
+		}
+	}
 }
 
 // killPassPause is the wait between two kill passes, long enough for a killed
@@ -455,16 +469,27 @@ const killPasses = 2000
 // guard is its own process, so its pause is the default one.
 const treeKillBound = 2 * killPasses * defaultKillPassPause
 
-// killTreeAt is killTree at a procfs root. A pass kills every child it lists before
-// it looks at the error: a child whose state cannot be read is still killed, and
-// the error says the tree could not be proven empty. Such a child cannot be told
-// from a zombie, so it is signalled once and the passes go on until one finds
-// nothing new to kill: what it had started is the guard's child by then.
+// killTreeAt is killTree at a procfs root, without reaping: a test's fake listing
+// changes by itself.
 func killTreeAt(procfs string, guard int) (survivors int, err error) {
+	return killTreeWith(procfs, guard, nil)
+}
+
+// killTreeWith ends only when the guard has no child left, live or zombie. A killed
+// multi-threaded program is a zombie while its last threads still exit, and its
+// children are handed to the guard only when the last one is gone: a pass that
+// stopped at a zombie ended the guard first, and the command the program had
+// started was left to PID 1. reap, when set, collects the zombies each pass.
+// A pass kills every child it lists before it looks at the error: a child whose
+// state cannot be read is still killed, and the error says the tree could not be
+// proven empty. Such a child cannot be told from a zombie, so it is signalled once
+// and the passes go on until one finds nothing new to kill: what it had started is
+// the guard's child by then.
+func killTreeWith(procfs string, guard int, reap func()) (survivors int, err error) {
 	signalled := map[int]bool{}
 	var unread error
 	for range killPasses {
-		live, err := liveChildrenAt(procfs, guard)
+		live, zombies, err := childrenAt(procfs, guard)
 		if unread == nil {
 			unread = err
 		}
@@ -474,10 +499,13 @@ func killTreeAt(procfs string, guard int) (survivors int, err error) {
 			signalled[pid] = true
 			_ = syscall.Kill(pid, syscall.SIGKILL) // ESRCH: gone already; anything else shows as a survivor
 		}
-		if len(live) == 0 || (err != nil && !fresh) {
+		if (len(live) == 0 && zombies == 0) || (err != nil && !fresh) {
 			return 0, unread
 		}
 		time.Sleep(killPassPause)
+		if reap != nil {
+			reap()
+		}
 	}
 	live, err := liveChildrenAt(procfs, guard)
 	if err == nil {
@@ -487,7 +515,14 @@ func killTreeAt(procfs string, guard int) (survivors int, err error) {
 }
 
 // liveChildrenAt lists the children of pid that are not zombies, from the procfs
-// at root. The kernel keeps the list of a process's children in its own /proc
+// at root; childrenAt also counts the zombies.
+func liveChildrenAt(procfs string, pid int) ([]int, error) {
+	live, _, err := childrenAt(procfs, pid)
+	return live, err
+}
+
+// childrenAt lists the children of pid that are not zombies, and counts the zombies,
+// from the procfs at root. The kernel keeps the list of a process's children in its own /proc
 // entry (one file per thread), so the guard reads only what it needs: under
 // SELinux the engine may read the state of its tool's and commands' domains and no
 // other, and a walk of every pid died at the first process of anyone else. A
@@ -496,30 +531,31 @@ func killTreeAt(procfs string, guard int) (survivors int, err error) {
 // failure is an error, never evidence that the tree is empty. A listed child whose
 // state cannot be read stays in the list with the error, so a kill pass can still
 // end it.
-func liveChildrenAt(procfs string, pid int) ([]int, error) {
+func childrenAt(procfs string, pid int) (live []int, zombies int, err error) {
 	kids, ok, err := listedChildren(procfs, pid)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if !ok {
 		return scannedChildren(procfs, pid)
 	}
-	var out []int
 	var unread error
 	for _, child := range kids {
 		state, _, err := processState(procfs, child)
 		if err != nil {
-			out = append(out, child) // state unknown: kill it, and say it could not be read
+			live = append(live, child) // state unknown: kill it, and say it could not be read
 			if unread == nil {
 				unread = err
 			}
 			continue
 		}
 		if isLive(state) {
-			out = append(out, child)
+			live = append(live, child)
+		} else if state == "Z" {
+			zombies++
 		}
 	}
-	return out, unread
+	return live, zombies, unread
 }
 
 // listedChildren reads pid's children from /proc/<pid>/task/<tid>/children, each
@@ -555,16 +591,15 @@ func listedChildren(procfs string, pid int) (kids []int, ok bool, err error) {
 	return kids, ok, nil
 }
 
-// scannedChildren is liveChildrenAt without the kernel's list: every process's
+// scannedChildren is childrenAt without the kernel's list: every process's
 // parent, read from its stat. A record it cannot read leaves it unable to say whose
 // child that process is, so it returns the error and lists nothing, and the pass
 // kills nothing: only a kernel without CONFIG_PROC_CHILDREN reaches this.
-func scannedChildren(procfs string, pid int) ([]int, error) {
+func scannedChildren(procfs string, pid int) (live []int, zombies int, err error) {
 	entries, err := os.ReadDir(procfs)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	var out []int
 	for _, e := range entries {
 		child, err := strconv.Atoi(e.Name())
 		if err != nil {
@@ -572,13 +607,18 @@ func scannedChildren(procfs string, pid int) ([]int, error) {
 		}
 		state, ppid, err := processState(procfs, child)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		if isLive(state) && ppid == pid {
-			out = append(out, child)
+		if ppid != pid {
+			continue
+		}
+		if isLive(state) {
+			live = append(live, child)
+		} else if state == "Z" {
+			zombies++
 		}
 	}
-	return out, nil
+	return live, zombies, nil
 }
 
 // isLive reports whether a state letter from processState is a process that still

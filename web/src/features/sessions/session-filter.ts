@@ -9,14 +9,12 @@
 import { runFolder } from './folder'
 import {
   primaryRun,
+  sessionFolder,
   sessionNaming,
   sessionPlace,
   sharedNames,
   type UnifiedSession,
 } from './provenance'
-
-/** Below this many sessions the list is short enough to read, and has no filter field. */
-export const FILTER_FROM = 6
 
 function haystack(
   session: UnifiedSession,
@@ -46,4 +44,14 @@ export function filterSessions(
     const text = haystack(s, untitled, shared)
     return words.every((w) => text.includes(w))
   })
+}
+
+/** The folders the list's sessions work in, by the name their rows show, sorted. */
+export function sessionFolders(sessions: readonly UnifiedSession[]): string[] {
+  const names = new Set<string>()
+  for (const session of sessions) {
+    const folder = sessionFolder(session)
+    if (folder) names.add(folder)
+  }
+  return [...names].sort((a, b) => a.localeCompare(b))
 }

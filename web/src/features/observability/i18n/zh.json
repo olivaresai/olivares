@@ -31,7 +31,7 @@
       "available": "可用",
       "opt_in_off": "未启用",
       "blocked": "已阻断",
-      "unavailable": "需要 Business"
+      "unavailable": "需要 Olivares AI Business"
     },
     "optInOff": "约定处于开发阶段——默认关闭；通过连接器门控启用。",
     "gate": "门控",

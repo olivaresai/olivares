@@ -32,6 +32,9 @@ import (
 	"github.com/olivaresai/olivares/sdk/netbind"
 )
 
+const destinationDeniedMessage = "session destination denied: this session can only reach its bound provider. " +
+	"To push changes or open a pull request, use the session's Publish action with your approval."
+
 // Policy is resolved by the engine, never from a child's proxy environment.
 // Controls are existing authenticated HTTP hook/MCP URLs. They grant only
 // their exact paths, never a CONNECT tunnel to the engine's API listener.
@@ -75,9 +78,10 @@ type Policy struct {
 	ControlDial func(context.Context, string, string) (net.Conn, error) `json:"-"`
 }
 
-// maxEndpoints bounds a policy: the provider, up to three hook and session
+// MaxEndpoints bounds a policy: the provider, up to three hook and session
 // relays, eight registries and four declared hosts on https and on ssh (1+3+8+8).
-const maxEndpoints = 20
+// A workspace's approved push remotes take what room is left.
+const MaxEndpoints = 20
 
 type destination struct {
 	host, port string
@@ -98,7 +102,7 @@ func destinations(p Policy) ([]destination, error) {
 		}
 		return nil, nil
 	}
-	if len(p.Providers) == 0 && !p.OwnNetwork || len(p.Providers)+len(p.PublicProviders)+len(p.Controls) > maxEndpoints {
+	if len(p.Providers) == 0 && !p.OwnNetwork || len(p.Providers)+len(p.PublicProviders)+len(p.Controls) > MaxEndpoints {
 		return nil, errors.New("session egress requires a bounded provider endpoint list")
 	}
 	var out []destination
@@ -386,7 +390,7 @@ func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokes
 		// decrypted requests must never reopen an opaque channel.
 		if r.Header.Get("X-Upstream-Https-Proxy") != "" || r.Header.Get("Upgrade") != "" ||
 			(r.Method == http.MethodConnect && r.URL.Scheme != "") || !requestAllowed(r, ds) {
-			return errors.New("session destination denied")
+			return errors.New(destinationDeniedMessage)
 		}
 		return nil
 	}
@@ -429,7 +433,7 @@ func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokes
 			// disagreement to choose a second destination.
 			d, allowed := allowedDestination(r, ds)
 			if r.Header.Get("X-Upstream-Https-Proxy") != "" || r.Header.Get("Upgrade") != "" || !allowed {
-				http.Error(w, "session destination denied", http.StatusForbidden)
+				http.Error(w, destinationDeniedMessage, http.StatusForbidden)
 				return
 			}
 			if r.Method == http.MethodConnect {
@@ -532,7 +536,7 @@ func allowedDestination(r *http.Request, ds []destination) (destination, bool) {
 func (p *proxy) serveTunnel(w http.ResponseWriter, r *http.Request) {
 	host, port, err := net.SplitHostPort(r.Host)
 	if err != nil {
-		http.Error(w, "session destination denied", http.StatusForbidden)
+		http.Error(w, destinationDeniedMessage, http.StatusForbidden)
 		return
 	}
 	upstream, err := p.tunnelDial(r.Context(), host, port)

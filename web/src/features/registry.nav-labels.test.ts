@@ -44,9 +44,10 @@ const LOCALES_ROOT = resolve(__dirname, '../lib/i18n/locales')
  * the raw key exactly like a registry id would.
  *
  * `settings` is the static footer entry: sidebar.tsx:608 (the foot of All areas),
- * the palette's settings rows and user-menu.tsx:151.
+ * the palette's settings rows and user-menu.tsx:151. `approvals` is the Rules row's
+ * section page (APPROVALS_SECTION, places.ts placePages).
  */
-const NON_REGISTRY_ITEM_KEYS = ['settings'] as const
+const NON_REGISTRY_ITEM_KEYS = ['settings', 'approvals'] as const
 
 /**
  * Every id needing a label — INCLUDING `hideInNav` views. Hidden means absent

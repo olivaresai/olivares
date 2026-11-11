@@ -1,9 +1,26 @@
 {
   "edition": {
     "viewPolicy": "Voir la politique",
-    "editingRequiresBusiness": "La modification des politiques, rôles et autorisations personnalisés nécessite Business.",
+    "editingRequiresBusiness": "La modification des politiques, rôles et autorisations personnalisés nécessite Olivares AI Business.",
     "disablePolicy": "Désactiver la politique",
-    "disablePolicyDescription": "La politique rédigée cesse de s’appliquer. Son historique et les autres politiques appliquées sont conservés."
+    "disablePolicyDescription": "La politique rédigée cesse de s’appliquer. Son historique et les autres politiques appliquées sont conservés.",
+    "note": {
+      "line": "{{capability}} fait partie de {{edition}}. Ajoutez une licence dans <0>Paramètres > Édition</0> ou consultez <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "Ceci fait partie de {{edition}}. Ajoutez une licence dans <0>Paramètres > Édition</0> ou consultez <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} fait partie de {{edition}}. Demandez à un administrateur.",
+      "lineUnnamedAsk": "Ceci fait partie de {{edition}}. Demandez à un administrateur.",
+      "readsBelow": "Ce qui est déjà enregistré reste lisible et exportable.",
+      "tag": "Fait partie de {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skills",
+      "sso": "Authentification unique",
+      "approvalTiers": "Modifier le niveau de risque ou le nombre d'approbations d'une action",
+      "evals": "Évaluations",
+      "eventing": "Webhooks",
+      "notify": "Alertes",
+      "claude-policy": "Politique gérée"
+    }
   },
   "errors": {
     "generic": "Une erreur s'est produite"
@@ -101,25 +118,18 @@
     "noTargetReason": "Nécessite une organisation dans laquelle l’exécuter.",
     "noTargetHelp": "Sélectionnez une organisation, puis réessayez.",
     "goTo": "Aller à",
-    "recentSessions": "Sessions récentes",
+    "recentSessions": "Sessions",
     "settingsGroup": "Paramètres",
     "scope": "dans {{name}}",
     "footerMove": "déplacer",
     "footerOpen": "ouvrir",
+    "footerClose": "fermer",
     "footerCommands": "commandes seulement",
     "objectActions": "Pour {{name}}",
     "footerPeople": "personnes",
     "footerSessions": "sessions",
     "peopleHint": "Saisissez un nom.",
     "ask": "Demander à Olivares…"
-  },
-  "hintBar": {
-    "move": "déplacer",
-    "open": "ouvrir",
-    "approve": "approuver",
-    "deny": "refuser",
-    "launcher": "lanceur",
-    "command": "commandes"
   },
   "permissionWords": {
     "read": "un accès en lecture",
@@ -218,6 +228,7 @@
   "notifications": {
     "title": "Activité récente",
     "empty": "Aucune activité récente.",
+    "auditOnly": "L’activité récente est affichée aux personnes autorisées à lire le registre d’audit.",
     "viewAll": "Tout voir dans le registre d’audit",
     "events": {
       "auditCheckpoint": "Point de contrôle d’audit créé",
@@ -275,6 +286,8 @@
       "policyUpdated_you": "Vous avez mis à jour une politique",
       "policyDeleted_you": "Vous avez supprimé une politique"
     },
+    "unread": "Non lu",
+    "markAllRead": "Tout marquer comme lu",
     "actors": {
       "you": "Vous",
       "member": "Un membre",
@@ -302,6 +315,15 @@
     "showHelp": "Afficher cette aide"
   },
   "keys": {
+    "refused": {
+      "unknownRow": "Cette commande n’a pas de touches à modifier.",
+      "notAChord": "Appuyez sur une touche, seule ou avec {{mod}}, Alt ou Shift.",
+      "needsModifier": "Maintenez {{mod}} ou Alt avec la touche : ici, une seule touche pourrait agir pendant la saisie ou trancher une demande.",
+      "needsAltOrShift": "Maintenez Alt, ou {{mod}} et Shift, avec la touche : {{keys}} sert aussi pendant la saisie, et ici il trancherait une demande.",
+      "taken": "{{keys}} sert déjà à {{command}}. Choisissez d’autres touches ou modifiez d’abord cette commande.",
+      "leader": "{{keys}} suivie d’une lettre ouvre une page de « Aller à ». Choisissez d’autres touches.",
+      "tooLarge": "Vos paramètres enregistrés sont pleins. Réinitialisez une touche modifiée ou retirez un script ajouté, puis réessayez."
+    },
     "group": {
       "general": "Général",
       "launcher": "Démarrer une session",
@@ -323,15 +345,19 @@
       "launcher": {
         "focus": "Aller au lanceur",
         "start": "Démarrer la session",
-        "startBackground": "La démarrer et rester ici"
+        "startBackground": "La démarrer et rester ici",
+        "stash": "Mettre le brouillon de côté ou le rétablir"
       },
       "surface": {
         "openBeside": "Ouvrir à côté",
         "closeBeside": "Fermer la session à côté",
         "focusBeside": "Déplacer le focus entre les sessions",
+        "nextSession": "Ouvrir la session suivante",
+        "previousSession": "Ouvrir la session précédente",
         "nextPane": "Volet suivant",
         "previousPane": "Volet précédent",
         "approve": "Approuver une fois la demande de la conversation",
+        "cite": "Citer les mots sélectionnés dans le champ de message",
         "terminal": "Terminal",
         "changes": "Modifications",
         "preview": "Aperçu",
@@ -372,6 +398,20 @@
       },
       "ask": {
         "open": "Demander à Olivares"
+      },
+      "shell.sidebar": "Basculer la barre latérale",
+      "shell.panel": "Basculer le panneau latéral",
+      "terminal": {
+        "new": "Nouveau terminal",
+        "close": "Fermer le terminal",
+        "previous": "Terminal précédent",
+        "next": "Terminal suivant",
+        "search": "Rechercher dans le terminal",
+        "links": "Ouvrir un lien à l’écran",
+        "copy": "Copier la sélection",
+        "selectAll": "Sélectionner toute la sortie",
+        "scrollTop": "Aller au début",
+        "scrollBottom": "Aller à la fin"
       }
     },
     "when": {
@@ -379,10 +419,13 @@
       "outsideList": "hors d’une liste",
       "launcherFocused": "dans le champ du lanceur",
       "workSurface": "sur l’écran des sessions",
+      "sourceDiff": "dans la comparaison de source",
       "sessionHistory": "quand une session précédente est disponible",
       "paletteRecent": "dans les résultats de la palette avec une recherche vide",
       "approvalQueue": "dans la file des approbations",
-      "accessMap": "sur la carte des accès"
+      "accessMap": "sur la carte des accès",
+      "terminalFocused": "dans un terminal",
+      "replySelection": "avec des mots sélectionnés dans une réponse"
     },
     "precedence": "Quand deux lignes partagent les mêmes touches, la dernière applicable l’emporte.",
     "problems_one": "{{count}} raccourci n’a pas pu être lu et ne se déclenche pas : {{commands}}",
@@ -440,6 +483,7 @@
     "copy": {
       "message": "Copier le message",
       "code": "Copier le code",
+      "detail": "Copier le détail",
       "copied": "Copié",
       "failed": "Copie impossible. Sélectionnez le texte et copiez-le.",
       "value": "Copier {{value}}"

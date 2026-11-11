@@ -7,37 +7,51 @@ import type { ButtonHTMLAttributes, Ref } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Button — the design-system action primitive (console 1.0). The orange
- * `primary` is the ONE verb a view exists for; every other labelled action is `secondary`
- * (a tonal fill, no border; `outline` is the same button, kept so no caller breaks);
- * toolbars and pane headers use `ghost`; icon buttons (`icon`, `icon-sm`) keep a 40 px hit
- * area around their 32/28 px face, with that space reserved in the layout. Destructive actions are a soft danger by default and a
- * solid fill only on an irreversible confirm step. Links are the text colour, never orange.
- * Focus is a 2 px outline in the focus color with a 2 px offset (an outline, so
+ * Button — the design-system action primitive, drawn as direction A2 draws it: bold labels and
+ * one state layer. The orange `primary` is the ONE suggested verb a view exists for, in the
+ * graphite ink (white on the orange is 2.7:1); every other labelled action is `secondary`, which
+ * rests on the selection token (10 % of its ink in the drawing, shipped as the token under the
+ * contrast ruling's 0.75 factor) and deepens to 15 % of its ink under the pointer and 24 % pressed
+ * (`outline` is the same button, kept so no caller breaks); toolbars and pane headers use the flat
+ * `ghost`, which `aria-pressed` turns into a selected toggle (the selection fill and a bold label);
+ * icon buttons (`icon`, `icon-sm`) keep a 42 px hit area around their 34/30 px face, with that
+ * space reserved in the layout, and are 44 px on a phone. The destructive answer is OUTLINED in
+ * its colour and never filled at rest (a fill lowers its label under 4.5:1 on a warm row): 8 %
+ * under the pointer, a 2 px edge pressed; the solid fill is for an irreversible confirm step only.
+ * Heights: small 30, regular the density token, large 44, and 44 px high on a phone. Nothing
+ * scales or moves when pressed; motion is the duration token, none under reduced motion. A link
+ * is the accent text with its underline at 45 %, full under the pointer: the accent ink, never
+ * the orange fill. Focus is a 2 px outline in the focus color with a 2 px offset (an outline, so
  * forced-colors mode keeps it). A control that cannot act — the native `disabled` attribute
- * or `aria-disabled="true"` — is never faded and never dashed: it keeps full legibility in
- * the third text tone on no fill, and its reason is visible text beside it (wrap it in
- * `DisabledReason`).
+ * or `aria-disabled="true"` — is faded to 45 %, and its reason is visible text beside it (wrap
+ * it in `DisabledReason`). An `aria-disabled` control keeps its pointer events, so
+ * `DisabledReason` refuses the click instead of letting it fall through to a row behind it, and
+ * shows the reason on hover; each variant paints its rest look back under the pointer and when
+ * pressed (`aria-disabled:hover:`, `aria-disabled:active:`), so it never looks pressable.
  */
-const SECONDARY = 'bg-active text-text hover:bg-line-strong'
-const GHOST = 'bg-transparent text-text-2 hover:bg-hover hover:text-text'
-const DANGER = 'border-transparent bg-bad-soft text-bad hover:border-bad'
+const SECONDARY =
+  'bg-active text-text hover:bg-[color-mix(in_srgb,var(--text)_15%,transparent)] active:bg-[color-mix(in_srgb,var(--text)_24%,transparent)] aria-disabled:hover:bg-active aria-disabled:active:bg-active'
+const GHOST =
+  'bg-transparent font-medium text-text-2 hover:bg-hover hover:text-text active:bg-[var(--pressed)] aria-pressed:bg-active aria-pressed:font-bold aria-pressed:text-text aria-disabled:hover:bg-transparent aria-disabled:hover:text-text-2 aria-disabled:active:bg-transparent'
+const DANGER =
+  'bg-transparent text-bad shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bad)_45%,transparent)] hover:bg-[color-mix(in_srgb,var(--bad)_8%,transparent)] hover:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bad)_70%,transparent)] active:bg-[color-mix(in_srgb,var(--bad)_8%,transparent)] active:shadow-[inset_0_0_0_2px_var(--bad)] aria-disabled:hover:bg-transparent aria-disabled:hover:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bad)_45%,transparent)] aria-disabled:active:bg-transparent aria-disabled:active:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bad)_45%,transparent)]'
 
 const buttonVariants = cva(
   cn(
     'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-ctl border border-transparent',
-    'text-body font-medium transition-[color,background-color,border-color,filter] duration-100 ease-out select-none outline-none',
+    'text-body font-bold transition-[color,background-color,border-color,box-shadow,filter] ease-out select-none outline-none',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-    'disabled:pointer-events-none disabled:border-transparent disabled:bg-transparent disabled:text-text-3',
-    'aria-disabled:cursor-not-allowed aria-disabled:border-transparent aria-disabled:bg-transparent aria-disabled:text-text-3',
-    'aria-disabled:hover:bg-transparent aria-disabled:hover:text-text-3 aria-disabled:hover:brightness-100',
+    'disabled:pointer-events-none disabled:opacity-45',
+    'aria-disabled:cursor-not-allowed aria-disabled:opacity-45',
     '[&_svg]:size-4 [&_svg]:shrink-0',
+    // A key hint inside a button is a soft key in the button's own ink.
+    '[&_kbd]:bg-current/14 [&_kbd]:text-inherit [&_kbd]:shadow-none',
   ),
   {
     variants: {
       variant: {
         primary:
-          'border-accent-border bg-accent font-semibold text-on-accent hover:brightness-106 active:bg-accent-active disabled:bg-surface aria-disabled:bg-surface aria-disabled:hover:bg-surface',
+          'bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-active aria-disabled:hover:bg-accent aria-disabled:active:bg-accent',
         secondary: SECONDARY,
         outline: SECONDARY,
         icon: GHOST,
@@ -45,21 +59,25 @@ const buttonVariants = cva(
         danger: DANGER,
         destructive: DANGER,
         'destructive-solid':
-          'bg-danger-solid text-danger-solid-foreground hover:brightness-110 active:brightness-95',
-        link: 'h-auto rounded-none border-0 p-0 text-text underline underline-offset-[3px] decoration-text-3 decoration-1 hover:decoration-text hover:decoration-2',
+          'bg-danger-solid text-danger-solid-foreground hover:brightness-110 active:brightness-95 aria-disabled:hover:brightness-100 aria-disabled:active:brightness-100',
+        link: 'h-auto rounded-none border-0 p-0 font-medium text-accent-text underline underline-offset-[3px] decoration-1 decoration-accent-text/45 hover:decoration-accent-text aria-disabled:hover:decoration-accent-text/45',
       },
       size: {
-        sm: 'h-7 gap-1.5 px-2.5 text-caption [&_svg]:size-3.5',
-        md: 'h-8 px-3',
-        base: 'h-8 px-3',
-        lg: 'h-10 rounded-[9px] px-4 text-body-l',
-        // Absolute offsets start inside the 1 px border. Reserve the outside
-        // space in the layout so a later action cannot cover this one's face.
-        icon: "relative m-1 size-8 after:absolute after:-inset-[5px] after:content-['']",
+        sm: 'h-[30px] gap-1.5 px-[11px] text-caption max-md:min-h-11 [&_svg]:size-3.5',
+        md: 'h-[var(--density-control)] px-3.5 max-md:min-h-11',
+        base: 'h-[var(--density-control)] px-3.5 max-md:min-h-11',
+        lg: 'h-11 px-5 text-body-l max-md:min-h-11',
+        // Absolute offsets start inside the 1 px border, so the hit area is 42 px:
+        // 4 px (icon) and 6 px (icon-sm) outside the face. That space is reserved
+        // in the layout so a later action cannot cover this one's face; 44 would
+        // need a wider margin and move every icon button by a pixel.
+        icon: "relative m-1 size-[var(--density-control)] after:absolute after:-inset-[5px] after:content-[''] max-md:size-11",
         'icon-sm':
-          "relative m-1.5 size-7 after:absolute after:-inset-[7px] after:content-[''] [&_svg]:size-3.5",
+          "relative m-1.5 size-[30px] after:absolute after:-inset-[7px] after:content-[''] max-md:size-11 [&_svg]:size-3.5",
       },
     },
+    // A link inside a sentence keeps the line's height on a phone.
+    compoundVariants: [{ variant: 'link', className: 'max-md:min-h-0' }],
     defaultVariants: { variant: 'secondary', size: 'base' },
   },
 )

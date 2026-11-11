@@ -1,6 +1,6 @@
 {
   "title": "Voix et temps réel",
-  "description": "Sessions vocales et en temps réel gouvernées sur l’ensemble du parc. La console n’affiche que des références et des agrégats — jamais d’audio, de texte de transcription, d’invites ni de PII.",
+  "description": "Les sessions vocales et les politiques qui permettent de les ouvrir.",
   "tabs": {
     "sessions": "Sessions",
     "policies": "Politiques",

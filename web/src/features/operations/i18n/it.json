@@ -7,6 +7,12 @@
     "7d": "7 giorni",
     "30d": "30 giorni"
   },
+  "status": {
+    "heading": "Componenti",
+    "healthy": "Tutto funziona.",
+    "healthyConfigured": "Tutto ciò che è configurato funziona. Non configurato: {{list}}.",
+    "attention": "Richiede attenzione: {{list}}."
+  },
   "host": {
     "heading": "Host",
     "keeps24": "L'host conserva 24 ore di cronologia, quindi i suoi grafici mostrano le ultime 24 ore.",

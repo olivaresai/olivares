@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +22,7 @@ vi.mock('@/features/agentops/api', async (orig) => ({
     getWorkspace: vi.fn(),
     readFile: vi.fn(),
     writeFile: vi.fn(),
+    statFile: vi.fn(),
   },
 }))
 vi.mock('@/components/ui/code-editor', () => ({
@@ -214,6 +215,236 @@ describe('WorkspaceBrowser previews', () => {
     expect(screen.queryByRole('img')).toBeNull()
     expect(screen.queryByTestId('editor')).toBeNull()
   })
+
+  it('names a link in the tree with a translated word', async () => {
+    vi.mocked(agentOpsApi.listFiles).mockResolvedValue({
+      path: '',
+      has_more: false,
+      entries: [{ ...entry('latest'), is_symlink: true }],
+    })
+    show()
+    const row = await screen.findByRole('treeitem', { name: /latest/ })
+    expect(within(row).getByText('Link')).toBeVisible()
+    expect(screen.queryByText('link')).toBeNull()
+  })
+
+  it('gives each tree row a 44 px target on a phone', async () => {
+    show()
+    const row = await screen.findByRole('treeitem', { name: 'docs' })
+    expect(row.firstElementChild).toHaveClass('max-md:min-h-11')
+  })
+
+  it('says a refused subfolder is refused, with no Retry that cannot help', async () => {
+    vi.mocked(agentOpsApi.listFiles).mockImplementation(async (_ws, params) => {
+      if (params?.path) throw new ApiError(403, 'forbidden', 'Forbidden')
+      return { path: '', has_more: false, entries: [entry('docs', 'dir')] }
+    })
+    const user = userEvent.setup()
+    show()
+    const docs = await screen.findByRole('treeitem', { name: 'docs' })
+    await user.click(within(docs).getByText('docs'))
+
+    expect(
+      await within(docs).findByText('You do not have access to this.'),
+    ).toBeVisible()
+    expect(within(docs).queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(within(docs).queryByText('Forbidden')).toBeNull()
+  })
+})
+
+describe('WorkspaceBrowser save preconditions', () => {
+  function versioned() {
+    vi.mocked(agentOpsApi.readFile).mockImplementation(
+      async (_ws, path, rev) =>
+        rev === 'HEAD'
+          ? text(path, '# Before\n')
+          : { ...text(path, '# Original\n'), etag: '"e1"' },
+    )
+    vi.mocked(agentOpsApi.statFile).mockResolvedValue(entry('README.md'))
+  }
+
+  const written = (etag: string) => ({
+    path: 'README.md',
+    size: 1,
+    sha256: 'x',
+    created: false,
+    etag,
+  })
+
+  async function editAndSave() {
+    const user = userEvent.setup()
+    show('/workspaces?file=README.md')
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Change draft' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    return user
+  }
+
+  it('saves over the version it read, naming it', async () => {
+    versioned()
+    vi.mocked(agentOpsApi.writeFile).mockResolvedValue({
+      path: 'README.md',
+      size: 1,
+      sha256: 'x',
+      created: false,
+    })
+    await editAndSave()
+
+    await waitFor(() => expect(agentOpsApi.writeFile).toHaveBeenCalledTimes(1))
+    const [, path, , opts] = vi.mocked(agentOpsApi.writeFile).mock.calls[0]!
+    expect(path).toBe('README.md')
+    expect(opts?.version).toBe('"e1"')
+  })
+
+  it('saves with no precondition when the read gave no version', async () => {
+    vi.mocked(agentOpsApi.readFile).mockImplementation(async (_ws, path) =>
+      text(path, '# Original\n'),
+    )
+    vi.mocked(agentOpsApi.writeFile).mockResolvedValue({
+      path: 'README.md',
+      size: 1,
+      sha256: 'x',
+      created: false,
+    })
+    await editAndSave()
+
+    await waitFor(() => expect(agentOpsApi.writeFile).toHaveBeenCalledTimes(1))
+    const [, , , opts] = vi.mocked(agentOpsApi.writeFile).mock.calls[0]!
+    expect(opts?.version).toBeUndefined()
+    expect(opts?.create).toBeUndefined()
+  })
+
+  it('a draft typed during a save takes the version that save made', async () => {
+    versioned()
+    let finish!: (value: ReturnType<typeof written>) => void
+    vi.mocked(agentOpsApi.writeFile)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+      .mockResolvedValue(written('"e3"'))
+    const user = await editAndSave()
+    await user.click(screen.getByRole('button', { name: 'Change draft' }))
+    finish(written('"e2"'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(agentOpsApi.writeFile).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(agentOpsApi.writeFile).mock.calls[1]![3]?.version).toBe(
+      '"e2"',
+    )
+  })
+
+  it('a second save right after the first names the version the first made', async () => {
+    versioned()
+    // The re-read after the save never lands: only the write's answer knows the version.
+    vi.mocked(agentOpsApi.readFile)
+      .mockImplementationOnce(async (_ws, path) => ({
+        ...text(path, '# Original\n'),
+        etag: '"e1"',
+      }))
+      .mockImplementation(() => new Promise(() => {}))
+    vi.mocked(agentOpsApi.writeFile)
+      .mockResolvedValueOnce(written('"e2"'))
+      .mockResolvedValue(written('"e3"'))
+    const user = await editAndSave()
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Save' })).toBeNull(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(agentOpsApi.writeFile).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(agentOpsApi.writeFile).mock.calls[1]![3]?.version).toBe(
+      '"e2"',
+    )
+  })
+
+  it('asks to open the file again when the engine wants a precondition', async () => {
+    versioned()
+    vi.mocked(agentOpsApi.writeFile).mockRejectedValue(
+      new ApiError(428, 'precondition_required', 'Read it (GET …/files/raw).'),
+    )
+    await editAndSave()
+
+    const notice = await screen.findByRole('alert')
+    expect(notice).toHaveTextContent(
+      'This file cannot be saved until it is opened again.',
+    )
+    expect(notice).not.toHaveTextContent('GET')
+    expect(
+      within(notice).getByRole('button', { name: 'Reload the server version' }),
+    ).toBeVisible()
+  })
+
+  it('says a file deleted on the server is gone, and offers only a copy', async () => {
+    versioned()
+    vi.mocked(agentOpsApi.statFile).mockRejectedValue(
+      new ApiError(404, 'not_found', 'missing'),
+    )
+    vi.mocked(agentOpsApi.writeFile).mockRejectedValue(
+      new ApiError(412, 'precondition_failed', 'The file no longer exists.'),
+    )
+    await editAndSave()
+
+    const notice = await screen.findByRole('alert')
+    expect(notice).toHaveTextContent('This file is no longer on the server.')
+    expect(
+      within(notice).getByRole('button', { name: 'Copy my text' }),
+    ).toBeVisible()
+    expect(
+      within(notice).queryByRole('button', {
+        name: 'Reload the server version',
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps the text when the file changed since it was opened', async () => {
+    versioned()
+    vi.mocked(agentOpsApi.writeFile).mockRejectedValue(
+      new ApiError(412, 'precondition_failed', 'The file changed.'),
+    )
+    const user = await editAndSave()
+
+    const notice = await screen.findByRole('alert')
+    expect(notice).toHaveTextContent(
+      'This file changed on the server since you opened it.',
+    )
+    expect(screen.getByTestId('editor')).toHaveTextContent(
+      'changed during save',
+    )
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(agentOpsApi.writeFile).toHaveBeenCalledTimes(1)
+
+    await user.click(
+      within(notice).getByRole('button', { name: 'Copy my text' }),
+    )
+    expect(await navigator.clipboard.readText()).toContain(
+      'changed during save',
+    )
+    expect(screen.getByTestId('editor')).toHaveTextContent(
+      'changed during save',
+    )
+
+    await user.click(
+      within(notice).getByRole('button', {
+        name: 'Reload the server version',
+      }),
+    )
+    const confirm = await screen.findByRole('dialog')
+    await user.click(
+      within(confirm).getByRole('button', { name: 'Discard my edit' }),
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Save' })).toBeNull(),
+    )
+    expect(agentOpsApi.writeFile).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('WorkspaceBrowser file URL', () => {
@@ -333,7 +564,9 @@ describe('WorkspaceBrowser file URL', () => {
     })
     expect(new URLSearchParams(fakeRouter.searchStr()).has('file')).toBe(false)
 
-    await user.click(await screen.findByText('README.md'))
+    // The folder opens in place in the tree, so its README.md sits beside the root one.
+    const docs = screen.getByRole('treeitem', { name: 'docs' })
+    await user.click(await within(docs).findByText('README.md'))
     expect(
       await screen.findByRole('heading', { name: 'docs/README.md', level: 2 }),
     ).toBeInTheDocument()

@@ -28,6 +28,8 @@ import {
   operatorName,
   runTitle,
   primaryRun,
+  sessionFolder,
+  sessionPlace,
   sessionReference,
   sessionShortId,
   type UnifiedSession,
@@ -133,13 +135,19 @@ export function SessionNarrative({
   const run = primaryRun(session.runs)
   const mismatch = modelMismatch(run, inUseModel)
   const caps = capabilities({ ...session, runs: run ? [run] : [] }, grants)
-  // ⛔ THE HEADING ANSWERS *WHICH* SESSION. It must not be the sentence the overview tells
-  //    (*what it did*), and it must not be the raw reference either, which is what
-  //    `sessionLabel` painted here in the monospaced face. So: the name its operator typed,
-  //    else the title the engine cut from its first message (it says which session this is,
-  //    as no later action does), else the distinguishing tail of the reference — whose whole value is on `title` and
-  //    in the identifiers block.
-  const named = operatorName(session) ?? runTitle(session)
+  // ⛔ THE HEADING ANSWERS *WHICH* SESSION, in words a person reads. It must not be the
+  //    sentence the overview tells (*what it did*), nor the raw reference. So: the name its
+  //    operator typed, else the title the engine cut from its first message (it says which
+  //    session this is, as no later action does), else where it works and with what
+  //    (`sessionPlace`, "Claude Code · billing-api"), as the lists call it, once its folder
+  //    is known: the tool alone is every session of that tool and tells none apart. Only
+  //    a session with none of these is headed by the distinguishing tail of its reference,
+  //    in the monospaced face; the tail and the whole reference stay on `title` and in the
+  //    identifiers block.
+  const named =
+    operatorName(session) ??
+    runTitle(session) ??
+    (sessionFolder(session) ? sessionPlace(session) : null)
   const shortId = sessionShortId(session)
   const reference = sessionReference(session)
   const titleHint = [named, shortId, reference]

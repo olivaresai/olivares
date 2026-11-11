@@ -1,9 +1,55 @@
 {
   "title": "Nutzung",
-  "subtitle": "Offizielle 5-Stunden- und Wochenlimits neben den Tokens und Kosten von heute.",
+  "subtitle": "Was Sitzungen an den gewählten Tagen verbraucht und gekostet haben, neben den 5-Stunden- und Wochenlimits jedes Kontos.",
+  "subtitleNoCost": "Was Sitzungen an den gewählten Tagen verbraucht haben, neben den 5-Stunden- und Wochenlimits jedes Kontos.",
   "tabs": {
     "accounts": "Konten",
     "timeline": "Zeitachse"
+  },
+  "spend": {
+    "heading": "Ausgaben",
+    "headingNoCost": "Ausführungen und Tokens",
+    "range": {
+      "label": "Zeitraum",
+      "d7": "7 Tage",
+      "d14": "14 Tage",
+      "d30": "30 Tage",
+      "custom": "Eigener",
+      "from": "Erster Tag",
+      "to": "Letzter Tag",
+      "invalid": "Der erste Tag muss vor dem letzten liegen oder derselbe sein. Ein Zeitraum umfasst höchstens {{days}} Tage."
+    },
+    "tool": "Werkzeug",
+    "allTools": "Alle Werkzeuge",
+    "profile": "Profil",
+    "allProfiles": "Alle Profile",
+    "export": "Exportieren",
+    "totals": "Summen",
+    "cost": "Ausgaben",
+    "runs": "Ausführungen",
+    "input": "Eingabe-Tokens",
+    "output": "Ausgabe-Tokens",
+    "costUnreported": "Ausführungen ohne gemeldete Kosten: {{runs}}",
+    "tokensUnreported": "Ausführungen ohne gemeldete Tokens: {{runs}}",
+    "empty": {
+      "title": "An diesen Tagen lief nichts",
+      "description": "Wählen Sie mehr Tage oder starten Sie eine Sitzung: Was sie verbraucht, erscheint hier."
+    },
+    "chart": {
+      "cost": "Ausgaben pro Tag",
+      "tokens": "Tokens pro Tag",
+      "day": "Tag",
+      "summary": "{{title}} vom {{from}} bis {{to}}: insgesamt {{total}}.",
+      "unpriced": "Ausführungen ohne gemeldete Kosten fehlen im Diagramm."
+    },
+    "profiles": {
+      "heading": "Nach Profil",
+      "profile": "Profil",
+      "input": "Eingabe",
+      "output": "Ausgabe",
+      "none": "Kein Profil",
+      "unnamed": "Unbenanntes Profil"
+    }
   },
   "accounts": {
     "heading": "Konten",
@@ -11,7 +57,8 @@
     "error": "Die Limits der Konten konnten nicht gelesen werden.",
     "empty": "Noch kein Konto hat seine Limits gemeldet.",
     "details": "Details",
-    "detailsFor": "Details zu {{account}}"
+    "detailsFor": "Details zu {{account}}",
+    "emptyChosen": "Kein Konto dieses Werkzeugs oder Profils hat bisher seine Limits gemeldet."
   },
   "today": {
     "heading": "Heute",

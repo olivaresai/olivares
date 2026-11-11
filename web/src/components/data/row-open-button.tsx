@@ -34,7 +34,9 @@ export function RowOpenButton({
       aria-label={ariaLabel}
       className={cn(
         'min-h-6 min-w-0 max-w-full rounded-sm text-left outline-none',
-        'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        // The 2 px outline in the focus color (an outline, so forced-colors mode keeps
+        // it); solid, because `outline-none` leaves the style at none.
+        'focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus',
         className,
       )}
       onClick={activate}

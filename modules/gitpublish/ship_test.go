@@ -6,6 +6,7 @@ package gitpublish
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -330,4 +331,29 @@ func callQuery(h api.ModuleHandler, c Caller, query string) *httptest.ResponseRe
 	rec := httptest.NewRecorder()
 	h(rec, req, api.ModuleContext{Principal: c.Principal, Tenant: c.Tenant})
 	return rec
+}
+
+// Every publication names the session it came from (dev row 7), not only one a person
+// approved: a ship with no approval policy records its session on its push and on its pull
+// request.
+func TestEveryIntentNamesTheSessionItCameFrom(t *testing.T) {
+	h, _, _ := shipHarness(t)
+	if _, err := h.ship(h.user(), "ship-1"); err != nil {
+		t.Fatal(err)
+	}
+	rec := callQuery(handlerFor(t, h.m, http.MethodGet, "/intents"), h.user(), "target_id="+h.target.ID.String())
+	var list struct {
+		Items []struct {
+			Effect     string `json:"effect"`
+			SessionRun string `json:"session_run"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil || rec.Code != http.StatusOK || len(list.Items) != 2 {
+		t.Fatalf("intents = %d %s, want the push and the pull request", rec.Code, rec.Body.String())
+	}
+	for _, in := range list.Items {
+		if in.SessionRun != runOne {
+			t.Errorf("the %s intent names session %q, want %q", in.Effect, in.SessionRun, runOne)
+		}
+	}
 }

@@ -20,7 +20,9 @@ export const VIEWS = [
     },
     helpHref: '/reference/modules/ii-sessions',
     icon: Shapes,
-    permission: 'sessions:run:read',
+    // The organization's hosts and how they depend on each other: the administrator's page.
+    // An editor keeps tenant:read for its own pages (a session's context, skills, work items).
+    permission: 'tenant:admin',
     changes: [
       { permission: 'sessions:run:write' },
       { permission: 'sessions:work:write' },

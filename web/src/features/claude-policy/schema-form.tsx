@@ -117,7 +117,7 @@ export function SchemaForm({
                 href={d.source}
                 target="_blank"
                 rel="noreferrer"
-                className="ml-auto inline-flex items-center gap-1 text-[0.7rem] text-muted-foreground hover:text-accent-text"
+                className="ml-auto inline-flex items-center gap-1 text-[0.7rem] text-muted-foreground hover:text-foreground"
               >
                 {t('form.docs')} <ExternalLink className="size-3" aria-hidden />
               </a>

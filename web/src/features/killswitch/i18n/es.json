@@ -10,12 +10,24 @@
     "agentCount_many": "{{count}} paradas de agente activas",
     "agentCount_other": "{{count}} paradas de agente activas",
     "agentBody": "Los agentes parados no pueden actuar: se rechazan sus llamadas a herramientas, sus llamadas a MCP y sus demás acciones.",
-    "none": "No hay nada parado. Las sesiones y los agentes funcionan con normalidad.",
+    "noneTitle": "No hay nada parado",
+    "noneBody": "Las sesiones y los agentes funcionan con normalidad.",
     "engagedBy": "Activada por",
     "revoked": "{{count}} solicitud de aprobación pendiente cancelada",
     "revoked_one": "{{count}} solicitud de aprobación pendiente cancelada",
     "revoked_many": "{{count}} solicitudes de aprobación pendientes canceladas",
     "revoked_other": "{{count}} solicitudes de aprobación pendientes canceladas"
+  },
+  "effects": {
+    "title": "Qué pasa al parar todos",
+    "sessions": "Las sesiones abiertas terminan",
+    "sessionsHint": "El proceso de cada sesión se detiene; su carpeta queda como está.",
+    "actions": "Se rechaza cada acción de los agentes",
+    "actionsHint": "Llamadas a herramientas, MCP, programaciones, voz, llamadas a modelos, despliegues y entrega de eventos.",
+    "approvals": "Se cancelan las solicitudes de aprobación pendientes",
+    "approvalsHint": "Las de las sesiones y las de acciones de agentes. Las que una persona presentó fuera de una sesión siguen pendientes, igual que las que tratan sobre los controles.",
+    "ledger": "La parada queda en el registro de auditoría",
+    "ledgerHint": "Quién paró, cuándo y por qué, para la revisión posterior."
   },
   "engage": {
     "agentRef": "Agente",
@@ -27,6 +39,7 @@
     "confirmBodyEstateNoRestart": "Todos los agentes se paran a la vez: las sesiones abiertas terminan, se rechazan sus acciones y se cancelan las solicitudes de aprobación pendientes de esas sesiones y de las acciones de agentes; las solicitudes que una persona presentó fuera de una sesión siguen pendientes, igual que las que tratan sobre los propios controles. No hay ninguna vía de emergencia para evitarlo.",
     "confirmTitleAgent": "¿Detener este agente?",
     "confirmBodyAgent": "Este agente se para a la vez: se rechazan sus acciones y se cancelan sus solicitudes de aprobación pendientes. Para volver a arrancarlo deben aprobarlo dos cuentas de usuario distintas, y la parada debe revisarse después.",
+    "confirmBodyAgentNoRestart": "Este agente se para a la vez: se rechazan sus acciones y se cancelan sus solicitudes de aprobación pendientes.",
     "done": "Kill switch activado",
     "doneBody": "La parada {{id}} está activa. Reactivar exige doble control.",
     "alreadyStopped": "Ya existe una parada activa para este alcance",
@@ -35,7 +48,6 @@
     "stopsRunning_many": "Se paran {{count}} sesiones abiertas.",
     "stopsRunning_other": "Se paran {{count}} sesiones abiertas.",
     "stopAll": "Parar todos los agentes",
-    "more": "Más",
     "stopOne": "Detener un agente…",
     "stopAgent": "Detener este agente"
   },
@@ -50,7 +62,7 @@
     "status": "{{live}} en marcha, {{ended}} terminadas."
   },
   "stops": {
-    "title": "Paradas",
+    "title": "Historial",
     "caption": "Cada parada: quién la inició, cuándo, qué abarca, por qué y cómo terminó y se revisó. Cada acción comprueba estas paradas antes de ejecutarse.",
     "search": "Buscar paradas…",
     "label": "Paradas del kill switch",

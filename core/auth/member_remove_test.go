@@ -138,3 +138,83 @@ func TestRemoveMemberOfANonMemberWritesNothing(t *testing.T) {
 		t.Errorf("another tenant's member after the refused removal = %v, want still a member", err)
 	}
 }
+
+// suspend writes the suspension exclusion the Business build's suspend writes.
+func suspend(t *testing.T, ctx context.Context, st store.Store, user model.ID, tenant model.TenantID) {
+	t.Helper()
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		_, err := as.TenantExclusions().Create(ctx, model.TenantExclusion{UserID: user, TargetTenantID: tenant, Kind: model.ExclusionSuspend})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A suspended owner cannot run the organization: removing the only other owner is
+// refused as the last active owner while the second is suspended, and allowed once
+// it is not.
+func TestSuspendedOwnerDoesNotCountAsTheActiveOwner(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	a := auth.NewAuthenticator(st, nil)
+	super := mustSuperadmin(t, ctx, a)
+	tenant := provisionTenant(t, st, "acme")
+	first, err := a.CreateUser(ctx, super, auth.NewUser{Email: "o1@acme.com", Password: "pw-" + model.NewID().String(), Tenant: tenant, Role: auth.RoleOwner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := a.CreateUser(ctx, super, auth.NewUser{Email: "o2@acme.com", Password: "pw-" + model.NewID().String(), Tenant: tenant, Role: auth.RoleOwner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	suspend(t, ctx, st, second.ID, tenant)
+	if err := a.RemoveMember(ctx, super, tenant, first.ID); !errors.Is(err, auth.ErrLastOwner) {
+		t.Fatalf("removing the owner beside a suspended one = %v, want ErrLastOwner", err)
+	}
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		rows, _, err := as.TenantExclusions().List(ctx, model.Query{})
+		if err != nil {
+			return err
+		}
+		for _, x := range rows {
+			if err := as.TenantExclusions().Delete(ctx, x.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.RemoveMember(ctx, super, tenant, first.ID); err != nil {
+		t.Fatalf("removing the owner beside an active one = %v, want nil", err)
+	}
+}
+
+// Removing a suspended member removes the suspension with the membership, so a
+// person added again later is not still suspended.
+func TestRemovingASuspendedMemberLiftsTheSuspension(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	a := auth.NewAuthenticator(st, nil)
+	super := mustSuperadmin(t, ctx, a)
+	tenant := provisionTenant(t, st, "acme")
+	u, err := a.CreateUser(ctx, super, auth.NewUser{Email: "leaver@acme.com", Password: "pw-" + model.NewID().String(), Tenant: tenant, Role: auth.RoleViewer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	suspend(t, ctx, st, u.ID, tenant)
+	if err := a.RemoveMember(ctx, super, tenant, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AuthView(ctx, func(as store.AuthScope) error {
+		rows, _, err := as.TenantExclusions().List(ctx, model.Query{Filters: []model.Filter{
+			{Column: "kind", Op: model.OpEq, Value: string(model.ExclusionSuspend)},
+		}})
+		if len(rows) != 0 {
+			t.Errorf("suspension rows after the removal = %d, want 0", len(rows))
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -22,6 +22,9 @@
     "name": "Nom",
     "kind": "Type",
     "key": "Clé",
+    "usedBy": "Utilisée par",
+    "usedByUnread": "Impossible de lire quels profils utilisent chaque clé.",
+    "usedByPartial": "Certains profils n’ont pas été lus : une clé peut servir à plus de profils qu’affiché.",
     "state": "État",
     "connection": "Connexion",
     "actions": "Actions"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "Actif",
-    "revoked": "Révoqué"
+    "revoked": "Révoqué",
+    "disabled": "Désactivé"
   },
   "probe": {
     "never": "Non testé",
@@ -70,7 +74,9 @@
     "testing": "Test en cours…",
     "rotate": "Changer la clé",
     "revoke": "Révoquer",
-    "details": "Détails"
+    "details": "Détails",
+    "disable": "Désactiver",
+    "enable": "Activer"
   },
   "create": {
     "title": "Ajouter un fournisseur",
@@ -171,5 +177,9 @@
   "section": {
     "title": "Clés d’API",
     "add": "Ajouter une clé d’API"
+  },
+  "stateChange": {
+    "disabled": "Fournisseur désactivé. Les profils liés refusent les nouveaux lancements jusqu’à sa réactivation.",
+    "active": "Fournisseur activé."
   }
 }

@@ -7,6 +7,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -44,6 +45,14 @@ func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request, mc Mod
 		if confined && g.Group.WorkspaceID != confinedWS {
 			place = ""
 		}
+		// The roster of a group reaches people outside a confined caller's workspace,
+		// which the member roster (handleListMembers) withholds from it too.
+		memberIDs := make([]string, 0, len(g.Members))
+		for _, m := range g.Members {
+			if !confined {
+				memberIDs = append(memberIDs, m.ID.String())
+			}
+		}
 		items = append(items, map[string]any{
 			"id":              g.Group.ID.String(),
 			"display_name":    g.Group.DisplayName,
@@ -53,6 +62,7 @@ func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request, mc Mod
 			"parent_group_id": g.Group.ParentGroupID.String(),
 			"workspace_id":    place,
 			"members":         len(g.Members),
+			"member_ids":      memberIDs,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"groups": items})
@@ -151,4 +161,73 @@ func (s *Server) handleSetGroupWorkspace(w http.ResponseWriter, r *http.Request,
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": g.ID.String(), "display_name": g.DisplayName, "workspace_id": g.WorkspaceID.String(),
 	})
+}
+
+// handleCreateGroup creates a group of the operator's own (origin "operator"): the
+// local counterpart of a directory group, for people the directory does not know. It
+// is the Business department surface (GroupAdministrator); the Community build
+// answers 501 departments_unavailable. The name is trimmed, and one already in use
+// is a 409.
+func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	admin, ok := s.departments.(GroupAdministrator)
+	if !ok {
+		s.writeError(w, r, ErrDepartmentsUnavailable)
+		return
+	}
+	var in struct {
+		DisplayName string `json:"display_name"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
+		return
+	}
+	name := strings.TrimSpace(in.DisplayName)
+	if name == "" {
+		s.badRequest(w, r, "display_name is required")
+		return
+	}
+	g, err := admin.CreateGroup(r.Context(), mc.Principal, mc.Tenant, name)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id": g.ID.String(), "display_name": g.DisplayName, "provisioned_by": g.ProvisionedBy,
+	})
+}
+
+// handleDeleteGroup removes a group of the operator's own with its roster. The
+// members keep their accounts and roles; a group a directory provisioned is the
+// directory's to remove (403 group_origin_read_only).
+func (s *Server) handleDeleteGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	admin, ok := s.departments.(GroupAdministrator)
+	if !ok {
+		s.writeError(w, r, ErrDepartmentsUnavailable)
+		return
+	}
+	if err := admin.DeleteGroup(r.Context(), mc.Principal, mc.Tenant, model.ID(chi.URLParam(r, "id"))); err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleSetGroupMember adds (PUT) or takes out (DELETE) one person of the tenant in
+// a group of the operator's own. Both are idempotent, and the engine refuses a
+// person who is not a member of the tenant and a role the caller cannot confer.
+func (s *Server) handleSetGroupMember(member bool) func(http.ResponseWriter, *http.Request, ModuleContext) {
+	return func(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+		admin, ok := s.departments.(GroupAdministrator)
+		if !ok {
+			s.writeError(w, r, ErrDepartmentsUnavailable)
+			return
+		}
+		err := admin.SetGroupMember(r.Context(), mc.Principal, mc.Tenant,
+			model.ID(chi.URLParam(r, "id")), model.ID(chi.URLParam(r, "user_id")), member)
+		if err != nil {
+			s.writeError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

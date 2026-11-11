@@ -192,6 +192,9 @@ type Module struct {
 	policyResolver   store.PolicyResolver
 	policyKinds      map[string]PolicyKindAuthoring
 	approvalCapacity func(context.Context, model.TenantID) (int64, error)
+	// grantReuseWindow is how long after its decision the ship gate reuses an approved
+	// grant (UseGrantReuseWindow); nil or zero leaves spendable_until unset.
+	grantReuseWindow func(model.TenantID) time.Duration
 	log              *slog.Logger
 	data             api.ModuleData
 	host             sdk.Host

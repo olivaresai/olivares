@@ -7,6 +7,11 @@ import type { RequestOptions } from '@/lib/api/client'
 import type { ConversationItem } from './conversation-frames'
 export const CONTEXT_MAX_BYTES = 256 * 1024
 
+/** Where a fork may end: a finished turn, or the limit that stopped one. */
+export function endsTurn(item: ConversationItem): boolean {
+  return item.kind === 'result' || item.systemKind === 'rate_limit'
+}
+
 /** A portable context snapshot, reviewed as the new session's first message.
  * Tool rows are the same shortened descriptions the conversation displays. */
 export function forkContext(
@@ -15,11 +20,7 @@ export function forkContext(
   end: string,
 ): string {
   const index = items.findIndex((i) => i.id === end)
-  if (
-    index < 0 ||
-    (items[index].kind !== 'result' && items[index].systemKind !== 'rate_limit')
-  )
-    throw new Error('unfinished turn')
+  if (index < 0 || !endsTurn(items[index])) throw new Error('unfinished turn')
   const text =
     `Context from session ${source} through turn ${end} (tool output shortened):\n\n` +
     items
@@ -67,6 +68,8 @@ export async function transcriptText(
   you: string,
   assistant: string,
   scope?: Pick<RequestOptions, 'tenant' | 'signal' | 'dispatchGuard'>,
+  /** Each message under a Markdown heading, for a file the person keeps. */
+  markdown = false,
 ): Promise<Copied> {
   const read = (params: RunMessagesParams) =>
     scope
@@ -101,7 +104,10 @@ export async function transcriptText(
         if (whole?.text !== undefined && !whole.clipped) text = whole.text
         else clipped++
       }
-      parts.push(`${m.role === 'user' ? you : assistant}:\n${text ?? ''}\n`)
+      const who = m.role === 'user' ? you : assistant
+      parts.push(
+        markdown ? `## ${who}\n\n${text ?? ''}\n` : `${who}:\n${text ?? ''}\n`,
+      )
     }
     // A page that points back at itself would be read forever.
     if (page.next !== undefined && page.next === cursor)

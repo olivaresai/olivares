@@ -5,6 +5,12 @@
   },
   "title": "Rate Limits",
   "description": "Rate limits of your organization and workspaces. Read-only.",
+  "profiles": {
+    "title": "Limits of each profile",
+    "description": "What each profile's tool lets it use, and when that resets. The tool reports these; Olivares does not set them.",
+    "none": "No profile's tool reports a limit in force now.",
+    "truncated": "Some profiles are not shown."
+  },
   "caveats": {
     "keepInSync": "Gateways/proxies must keep in sync: these limits are the inventory an upstream gateway or proxy must mirror. They are not enforced here, and changing them is done at the provider, not in this console.",
     "managedAgents": "Managed Agents are NOT covered by the Rate Limits API. Their limits are a documented gap, not a value of zero — no Managed-Agents row is shown because the API does not report one."

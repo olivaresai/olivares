@@ -34,6 +34,7 @@
       "class": "클래스",
       "name": "이름",
       "version": "버전",
+      "fingerprint": "지문",
       "provenance": "출처",
       "posture": "기록된 스캔 결과",
       "issues": "문제",

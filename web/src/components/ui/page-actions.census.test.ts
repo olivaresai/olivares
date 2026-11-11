@@ -45,10 +45,6 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   },
 
   {
-    dir: 'features/agent-tools',
-    why: 'each tool row carries its own verbs (install, sign in, review a version)',
-  },
-  {
     dir: 'features/api-playground',
     why: 'the verb IS the request the operator composes in the form',
   },
@@ -67,10 +63,6 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   {
     dir: 'features/claude-policy',
     why: 'one policy document, edited in place',
-  },
-  {
-    dir: 'features/communications',
-    why: 'composing is a route of its own (/communications/new)',
   },
   {
     dir: 'features/compliance',
@@ -108,6 +100,10 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   {
     dir: 'features/inventory',
     why: 'a discovered estate: rows come from the engine, never from here',
+  },
+  {
+    dir: 'features/killswitch',
+    why: 'both stops sit in the state block beside the state they change; a header verb would split them',
   },
   {
     dir: 'features/logs',
@@ -178,14 +174,6 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   {
     dir: 'features/usage',
     why: "a read of each account's limits and today's use; each account row links to its details",
-  },
-  {
-    dir: 'features/work',
-    why: 'work items arrive from sessions; the console decides them per row',
-  },
-  {
-    dir: 'features/workspace-dashboard',
-    why: 'a dashboard over one workspace',
   },
 ]
 

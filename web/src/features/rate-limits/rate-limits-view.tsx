@@ -20,6 +20,18 @@ import { Gauge } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/auth/context'
+import { BoxedList, BoxedListRow } from '@/components/ui/boxed-list'
+import {
+  useProfileList,
+  type ProfileList,
+} from '@/features/agent-tools/use-profiles'
+import { accountLabel } from '@/features/agent-tools/account-marks'
+import {
+  hasFigures,
+  UsageMeter,
+  UsageWindows,
+} from '@/features/agentops/account-usage'
+import { toolName } from '@/features/agentops/engine-tools'
 import { COST_VIEW } from '@/features/registry'
 import { useViewAccess } from '@/features/navigation/authorization'
 import {
@@ -42,7 +54,11 @@ import './i18n'
 export function RateLimitsView() {
   const access = useViewAccess()
   const { t } = useTranslation(['rateLimits', 'common'])
-  const { activeTenant } = useAuth()
+  const { activeTenant, can } = useAuth()
+  // Each profile's own limits: what its tool lets it use and when that resets, read from
+  // the accounts the person may read (their own and the installation's shared ones).
+  const accountsRead = can('sessions:account:read')
+  const profiles = useProfileList(accountsRead)
 
   // REAL: the governance Info finding carrying the count (subject anthropic.rate_limit).
   // It is the security module's: while that is off the summary says so (EU18).
@@ -93,6 +109,17 @@ export function RateLimitsView() {
         </>
       }
     >
+      {accountsRead ? (
+        <SectionCard
+          title={t('profiles.title')}
+          description={t('profiles.description')}
+        >
+          <AsyncSection query={profiles} skeletonHeight={104}>
+            {(list) => <ProfileLimits list={list} />}
+          </AsyncSection>
+        </SectionCard>
+      ) : null}
+
       <SectionCard
         title={t('summary.title')}
         description={t('summary.description')}
@@ -141,5 +168,45 @@ export function RateLimitsView() {
         </div>
       </SectionCard>
     </IntelPage>
+  )
+}
+
+/** One row per profile whose tool reported a limit: who it is, what the tool limits and
+ * when that resets (the account read's `usage`, GET /v1/m/sessions/provider-accounts).
+ * Olivares sets none of these: the tool reports them. */
+function ProfileLimits({ list }: { list: ProfileList }) {
+  const { t } = useTranslation('rateLimits')
+  // A profile is listed when its tool gave a figure for a window still in force.
+  const limited = [...list.accounts, ...list.disabled].filter((account) =>
+    hasFigures(account.usage),
+  )
+  return (
+    <div className="flex flex-col gap-2">
+      {limited.length > 0 ? (
+        <BoxedList>
+          {limited.map((account) => (
+            <BoxedListRow key={account.account_ref}>
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="text-body font-medium text-text">
+                  {accountLabel(account)}
+                </span>
+                <span className="text-caption text-text-2">
+                  {toolName(account.driver)}
+                </span>
+                <UsageWindows usage={account.usage} />
+              </div>
+              <UsageMeter usage={account.usage} />
+            </BoxedListRow>
+          ))}
+        </BoxedList>
+      ) : list.truncated ? null : (
+        <p className="text-body text-text-2">{t('profiles.none')}</p>
+      )}
+      {list.truncated ? (
+        <p role="status" className="text-caption text-text-2">
+          {t('profiles.truncated')}
+        </p>
+      ) : null}
+    </div>
   )
 }

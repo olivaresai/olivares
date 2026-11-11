@@ -223,6 +223,11 @@ func finopsBudgetSchema() map[string]any {
 		),
 		"reserved_micro_usd", oas.Obj("type", "integer", "format", "int64", "minimum", 0),
 		"fail_closed", oas.Obj("type", "boolean"),
+		"exempt_actors", oas.Obj(
+			"type", "array", "maxItems", maxExemptActors,
+			"items", oas.Obj("type", "string", "pattern", "^user:"),
+			"description", "user_group budgets only: the people (user:<id>) the budget lets continue at its limit. Their spend still counts and its alerts still fire.",
+		),
 	)
 	schema := finopsObjectSchema(properties, "name", "limit_micro_usd")
 	schema["allOf"] = []any{

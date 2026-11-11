@@ -323,6 +323,22 @@ func TestAdministratorEndsMemberSessionsWithTenantPermissionAndAudit(t *testing.
 		t.Fatal(err)
 	}
 	assertSessionAudit(t, h, "auth.sessions.admin_revoke", adminPrincipal.UserID.String(), memberPrincipal.UserID.String())
+	// The organization's own administrators read the act in their ledger, as they read an
+	// interrupt or a stop of one session.
+	recent := h.do("GET", "/v1/audit/recent?limit=50", admin, nil, tenantHdr(tenant))
+	if recent.code != http.StatusOK {
+		t.Fatalf("tenant audit recent = %d %s", recent.code, recent.raw)
+	}
+	inTenant := false
+	for _, item := range recent.body["items"].([]any) {
+		event := item.(map[string]any)
+		if event["action"] == "auth.sessions.admin_revoke" && event["actor"] == "user:"+adminPrincipal.UserID.String() && event["target_id"] == memberPrincipal.UserID.String() {
+			inTenant = true
+		}
+	}
+	if !inTenant {
+		t.Fatalf("the tenant's audit lacks the administrator's revocation of the member's sessions: %s", recent.raw)
+	}
 }
 
 func assertSessionAudit(t *testing.T, h *harness, action, actorID, targetID string) {

@@ -375,6 +375,23 @@ func createBudget(t testing.TB, st store.Store, tenant model.TenantID, name stri
 	return id
 }
 
+// createFencedBudget stores a budget policy the way the budget writer does: the
+// accounts its exempt actors name are pinned first.
+func createFencedBudget(t testing.TB, m *Module, tenant model.TenantID, name string, spec budgetSpec) model.ID {
+	t.Helper()
+	var id model.ID
+	if err := m.fencedMutate(context.Background(), tenant, budgetSubjects(spec), func(sc store.Scope) error {
+		p, err := sc.Policies().Create(context.Background(), model.Policy{
+			Name: name, Kind: policyKindBudget, Enabled: true, Spec: spec.toSpecMap(),
+		})
+		id = p.ID
+		return err
+	}); err != nil {
+		t.Fatalf("createFencedBudget: %v", err)
+	}
+	return id
+}
+
 // uniqueSlugSuffix returns a short random org-slug suffix.
 //
 // this was string(model.NewID())[:8]. model.NewID is a UUIDv7, whose first

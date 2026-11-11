@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api/errors'
@@ -390,6 +390,84 @@ describe('ServerDetailSheet — untrusted annotations, RBAC, delete flow', () =>
     // The ref locator value must not be rendered as a usable plaintext field.
     expect(screen.queryByText('$GITHUB_TOKEN')).toBeNull()
   })
+
+  it('shows where a server runs, never its whole address or command line', async () => {
+    api.getServer.mockResolvedValue({
+      ...detailFixture,
+      endpoint: '/opt/mcp/fixture-server --api-key x9',
+    })
+    wrap(<ServerDetailSheet serverId="s1" open onOpenChange={() => {}} />)
+    expect(await screen.findByText('fixture-server')).toBeInTheDocument()
+    expect(screen.queryByText(/x9|--api-key/)).toBeNull()
+  })
+
+  // A URL server gives its parsed host, never a path segment; a command
+  // server its bare program, the command line's first token; else the dash.
+  for (const [what, transport, endpoint, shown, hidden] of [
+    [
+      'a bad port and a query',
+      'http',
+      'https://tools.test:99999/p?k=v',
+      '—',
+      /k=v/,
+    ],
+    [
+      'userinfo and a bad port',
+      'http',
+      'https://fx:fy@tools.test:bad',
+      '—',
+      /fx/,
+    ],
+    ['no scheme', 'http', 'tools.test:8080/p?k=v', '—', /k=v/],
+    ['no scheme and a path', 'http', 'tools.test/mcp/k9', '—', /k9|mcp/],
+    [
+      'userinfo and a query',
+      'http',
+      'https://fx:fy@tools.test/mcp?k=v',
+      'tools.test',
+      /fx|k=v/,
+    ],
+    ['an IPv6 host', 'http', 'https://[::1]:8080/mcp', '[::1]:8080', /\/mcp/],
+    ['an assignment first', 'stdio', 'ENV=x cmd', '—', /ENV=x|cmd/],
+    [
+      'an assignment and a path',
+      'stdio',
+      'FOO=x /opt/mcp/fixture-server',
+      '—',
+      /FOO/,
+    ],
+    [
+      'flags',
+      'stdio',
+      'npx -y fixture-pkg --flag v',
+      'npx',
+      /fixture-pkg|--flag/,
+    ],
+    ['a command line', 'stdio', 'tool --api-key k9', 'tool', /k9|--api-key/],
+    [
+      'a path command line',
+      'stdio',
+      '/usr/local/bin/tool --api-key k9',
+      'tool',
+      /k9|usr/,
+    ],
+    [
+      'a tab in the command line',
+      'stdio',
+      '/usr/local/bin/tool\t--api-key k9',
+      'tool',
+      /k9|usr/,
+    ],
+  ] as const)
+    it(`shows only the place of an endpoint with ${what}`, async () => {
+      const detail = { ...detailFixture, transport, endpoint }
+      api.getServer.mockResolvedValue(detail)
+      wrap(<ServerDetailSheet serverId="s1" open onOpenChange={() => {}} />)
+      const heading = await screen.findByRole('heading', { name: 'Endpoint' })
+      const section = heading.closest('section')!
+      expect(within(section).getByText(shown)).toBeInTheDocument()
+      expect(within(section).queryByText(hidden)).toBeNull()
+    })
 
   it('hides config write actions when the role cannot write', async () => {
     authState.can = (p) => p !== 'capabilities:config:write'

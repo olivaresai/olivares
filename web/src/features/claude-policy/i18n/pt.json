@@ -282,6 +282,20 @@
       "noPolicyBadge": "nenhuma política selecionada",
       "noPolicyBody": "O armazenamento não seleciona nenhuma revisão de Cedar, por isso nada está em vigor a partir daqui. Isto não é uma falha — é um tenant que ainda não publicou uma política.",
       "grantsExpired": "Este processo ultrapassou o seu limite de desatualização offline, por isso as concessões POSITIVAS da política passaram a abster-se. As suas regras forbid continuam impostas. A política ESTÁ carregada aqui — o que expirou foi a confiança nas suas concessões."
+    },
+    "person": "Pessoa",
+    "personHint": "Testar como esta pessoa, com o seu papel e grupos.",
+    "personNone": "Qualquer pessoa (nenhuma)",
+    "policyTests": {
+      "title": "Testes da política",
+      "sub": "Cada publicação deve mantê-los. Uma publicação que quebra um teste é recusada e indica-o.",
+      "name": "Nome do teste",
+      "expect": "Esperado",
+      "allow": "Deve ser permitido",
+      "deny": "Deve ser negado",
+      "add": "Adicionar como teste",
+      "empty": "Ainda sem testes. Prepare o pedido de exemplo, dê-lhe um nome e adicione-o.",
+      "remove": "Remover {{name}}"
     }
   },
   "dist": {

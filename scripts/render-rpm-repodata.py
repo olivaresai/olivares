@@ -24,7 +24,7 @@ After the signature, ``delivery.json`` is written beside ``repodata/``
 sha256 of ``repomd.xml`` and ``repomd.xml.asc``, and one entry per package in
 the signed primary metadata with its name, NEVRA, arch, file and sha256. The
 NEVRA omits a zero epoch. ``--expect-package`` names the exact package set a
-consumer requires; the appliance lane passes ``olivares`` and
+consumer requires; the appliance builder passes ``olivares`` and
 ``olivares-appliance-base``. The renderer verifies the manifest against the
 tree before it writes ``checksums.txt``; ``verify-delivery`` repeats that check.
 """

@@ -4,7 +4,6 @@
   "tabs": {
     "people": "Personen",
     "agents": "Agenten",
-    "sso": "Identitätsanbieter",
     "scopes": "Arbeitsbereiche",
     "roles": "Rollen",
     "secrets": "Secrets",
@@ -116,7 +115,7 @@
   "people": {
     "title": "Benutzer",
     "caption": "Fügen Sie dieser Organisation eine Person hinzu, mit einem von Ihnen gesetzten Passwort oder einer E-Mail-Einladung.",
-    "onboard": "Benutzer aufnehmen",
+    "onboard": "Einladen",
     "pendingTitle": "Ausstehende Einladungen",
     "pendingCaption": "Einladungen, die auf Annahme warten. Der einmalig nutzbare Link legt das Passwort fest und aktiviert das Konto.",
     "noInvites": "Keine ausstehenden Einladungen.",
@@ -131,6 +130,9 @@
     "resend": "Erneut senden",
     "resent": "Einladung erneut gesendet.",
     "resendFailed": "Die Einladung konnte nicht zugestellt werden.",
+    "newLink": "Neuer Link",
+    "newLinkTitle": "Neuer Einladungslink",
+    "newLinkNote": "Der zuvor erstellte Link funktioniert nicht mehr.",
     "inviteFirst": "Ersten Benutzer einladen"
   },
   "members": {
@@ -143,10 +145,30 @@
     "groups": "Gruppen",
     "status": "Status",
     "action": "Aktion",
-    "ssoOnly": "Nur SSO",
+    "ssoOnly": "Single Sign-On",
+    "signIn": "Anmeldung",
+    "password": "Passwort",
     "externalManagedNotice": "Vom IdP bereitgestellte Konten können nach einer lokalen Aktivierung oder Deaktivierung vom Identitätsanbieter wieder abgeglichen werden.",
     "idpManagedConfirm": "Dieses Konto wird von einem IdP bereitgestellt. Der IdP kann den aktiven Status bei der nächsten Synchronisierung wieder abgleichen.",
     "noGroups": "Keine Gruppen",
+    "roleOf": "Rolle von {{email}}",
+    "roleChanged": "Rolle von {{email}} geändert.",
+    "ownRoleReason": "Das ist Ihre eigene Rolle. Ein anderer Administrator oder ein Eigentümer kann sie ändern.",
+    "ownRoleReasonOwner": "Das ist Ihre eigene Rolle. Ein anderer Eigentümer kann sie ändern.",
+    "lastOwnerReason": "Der einzige Eigentümer der gesamten Organisation behält diese Rolle. Machen Sie zuerst eine andere Person zum Eigentümer.",
+    "confinedRoleReason": "Diese Person arbeitet innerhalb eines Arbeitsbereichs, daher kann ihre Rolle hier noch nicht geändert werden.",
+    "roleChangeTitle": "Rolle von {{name}} von {{from}} zu {{to}} ändern?",
+    "roleChangeConfirm": "Rolle ändern",
+    "roleGains": {
+      "owner": "Ein Eigentümer kann alles, was ein Administrator kann, und andere Eigentümer ändern oder entfernen.",
+      "admin": "Ein Administrator kann Personen hinzufügen und entfernen, ihre Rollen ändern und die Einstellungen dieser Organisation ändern.",
+      "editor": "Ein Bearbeiter kann Sitzungen starten und mit Werkzeugen und Ordnern arbeiten."
+    },
+    "roleLoses": {
+      "admin": "Die Person kann keine Eigentümer mehr ändern oder entfernen.",
+      "editor": "Die Person kann Personen und die Einstellungen dieser Organisation nicht mehr verwalten.",
+      "viewer": "Die Person kann keine Sitzungen mehr starten und nichts mehr ändern."
+    },
     "disable": "Entfernen",
     "disableTitle": "Aus der Organisation entfernen",
     "disableBody": "{{email}} wird aus dieser Organisation entfernt: Mitgliedschaft, Gruppenzeilen, Tokens und Sitzungen hier. Das Konto selbst und seine anderen Organisationen bleiben unverändert.",
@@ -156,7 +178,8 @@
     "statuses": {
       "active": "Aktiv",
       "inactive": "Inaktiv",
-      "error": "Fehler"
+      "error": "Fehler",
+      "suspended": "Gesperrt"
     },
     "roles": {
       "viewer": "Betrachter",
@@ -172,7 +195,25 @@
     "endSessionsFor": "Anmeldungen für {{email}} beenden?",
     "endSessionsBody": "Alle aktiven Anmeldungen für {{email}} funktionieren in dieser Organisation nicht mehr. Anmeldungen bei anderen Organisationen, API-Tokens und Konto bleiben unverändert.",
     "sessionsEnded": "Der Zugriff auf diese Organisation wurde beendet",
-    "totpResetDone": "TOTP-Faktor zurückgesetzt."
+    "totpResetDone": "TOTP-Faktor zurückgesetzt.",
+    "search": "Personen suchen",
+    "filterLabel": "Nach Status filtern",
+    "filterAll": "Alle Status",
+    "noMatch": "Keine Treffer",
+    "noMatchHint": "Ändern Sie die Suche oder den Statusfilter.",
+    "bulkLabel": "Aktionen für die ausgewählten Personen",
+    "selected": "Ausgewählt: {{n}}",
+    "selectAll": "Alle angezeigten Personen auswählen",
+    "selectRow": "{{email}} auswählen",
+    "suspend": "Sperren",
+    "reactivate": "Entsperren",
+    "suspendTitle": "Zugriff sperren",
+    "suspendBody": "{{email}} kann sich in dieser Organisation ab sofort nicht mehr anmelden und keine API-Token mehr verwenden. Rolle und Gruppen bleiben erhalten, und Sie können den Zugriff jederzeit wieder freigeben.",
+    "suspendBodyMany": "{{n}} Personen können sich in dieser Organisation ab sofort nicht mehr anmelden und keine API-Token mehr verwenden. Rollen und Gruppen bleiben erhalten, und Sie können den Zugriff jederzeit wieder freigeben.",
+    "suspendFor": "{{email}} sperren",
+    "reactivateFor": "{{email}} entsperren",
+    "suspendedToast": "Gesperrt: {{n}}",
+    "reactivatedToast": "Entsperrt: {{n}}"
   },
   "superadmins": {
     "title": "Administratoren der Installation",
@@ -190,7 +231,7 @@
     "disableBody": "{{email}} wird abgemeldet und seine Sitzungen und API-Token werden widerrufen. Das Konto wird nicht gelöscht und kann wieder aktiviert werden. Ein weiterer aktiver Superadministrator muss verbleiben."
   },
   "onboard": {
-    "title": "Benutzer aufnehmen",
+    "title": "Person einladen",
     "body": "Erstellen Sie ein Konto in dieser Organisation. Die vergebene Rolle kann nie höher sein als Ihre eigene.",
     "displayName": "Anzeigename",
     "displayNameHint": "Eine menschenlesbare Bezeichnung, die in der Konsole angezeigt wird.",
@@ -199,14 +240,20 @@
     "mode": "Wie sie sich anmelden",
     "modePassword": "Ein anfängliches Passwort festlegen",
     "modeInvite": "Eine E-Mail-Einladung senden",
-    "inviteUnavailable": "Dieser Server kann keine Einladungen per E-Mail senden. Legen Sie daher ein Anfangspasswort fest.",
+    "modeLink": "Einladungslink erstellen",
+    "inviteUnavailable": "Dieser Server kann keine E-Mails senden. Sie senden den Link daher selbst.",
     "password": "Anfängliches Passwort",
     "passwordHint": "Mindestens 8 Zeichen. Der Benutzer kann es später ändern.",
-    "submit": "Aufnehmen",
+    "submit": "Person hinzufügen",
+    "submitInvite": "Einladung erstellen",
     "created": "Benutzer aufgenommen.",
     "inviteCreatedTitle": "Einladung erstellt",
     "inviteSentBody": "Eine Einladung wurde an {{email}} gesendet. Der Link geht nur an diese Adresse; kommt sie nicht an, senden Sie sie über die Einladungsliste erneut.",
     "inviteFailedBody": "Die Einladung an {{email}} wurde erstellt, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie über die Einladungsliste erneut.",
+    "inviteLinkFor": "Die Einladung für {{email}}.",
+    "inviteLinkLabel": "Einladungslink",
+    "inviteLinkBody": "Senden Sie diesen Link. Er läuft am {{date}} ab und funktioniert nur einmal. Damit wählt die Person ihr eigenes Passwort.",
+    "copyLink": "Link kopieren",
     "consentRequiredTitle": "Zustimmung erforderlich",
     "consentRequiredBody": "{{email}} hat bereits ein Konto. Es wurde nichts geändert: Das Konto tritt dieser Organisation nur bei, wenn die Person, der es gehört, zustimmt.",
     "consentRequiredToast": "Zustimmung erforderlich: Es wurde nichts geändert.",
@@ -313,7 +360,7 @@
       "sessions": "Das Secret wird aus dem Speicher entfernt. Eine Sitzung, die es erhält, läuft weiter, kann aber nicht fortgesetzt werden, und eine Vorlage, die es nennt, kann nicht starten, bis Sie es neu anlegen."
     },
     "sessionCaption": "Geheimnisse, die eine Sitzung als Umgebungsvariablen erhalten kann. Namen beginnen mit env/. Ein Wert wird nie wieder angezeigt.",
-    "credentialCaption": "Verwaltete Zugangsdaten, die eine Sitzung über die Helfer der Engine nutzen kann (Business). Namen beginnen mit credential/. Ein Wert wird nie wieder angezeigt.",
+    "credentialCaption": "Verwaltete Zugangsdaten, die eine Sitzung über die Helfer der Engine nutzen kann (Olivares AI Business). Namen beginnen mit credential/. Ein Wert wird nie wieder angezeigt.",
     "colValue": "Wert",
     "colChanged": "Zuletzt geändert",
     "colReference": "Referenz",
@@ -937,7 +984,7 @@
   "activation": {
     "title": "Business-Aktivierung",
     "caption": "Aktivieren Sie die in Ihrer Edition enthaltenen Module. Kontrollen mit sicherer Voreinstellung werden aktiviert; Kontrollen, die ein Geheimnis oder eine Richtlinienprüfung benötigen, werden zum Ausfüllen und Freigeben vorbereitet.",
-    "unavailable": "Die Aktivierung ist in der Business-Edition verfügbar.",
+    "unavailable": "Die Aktivierung ist in der Olivares AI Business-Edition verfügbar.",
     "enablePreset": "Preset aktivieren",
     "addon": "Modul",
     "state": "Status",
@@ -1182,7 +1229,7 @@
   "mcpGateway": {
     "title": "MCP-Gateway",
     "caption": "Verwalten Sie MCP-Server und Sitzungstools dieser Organisation. Tests entdecken Werkzeuge; ihre Ausführung benötigt eine explizite Richtlinie.",
-    "add": "Server hinzufügen",
+    "add": "MCP-Server hinzufügen",
     "configure": "Konfigurieren",
     "test": "Verbindung testen",
     "enable": "Aktivieren",
@@ -1305,7 +1352,7 @@
     "command": "Befehl",
     "commandHint": "Das Programm, das den Server auf diesem Rechner startet, zum Beispiel npx. Es läuft mit jeder Sitzung, im Ordner der Sitzung.",
     "args": "Argumente",
-    "argsHint": "Eins pro Zeile, zum Beispiel -y und @modelcontextprotocol/server-everything.",
+    "argsHint": "Eins pro Zeile, zum Beispiel -y und @modelcontextprotocol/server-everything. Nicht für Geheimnisse.",
     "env": "Umgebung",
     "envHint": "Eine pro Zeile: NAME=Wert. Nicht für Geheimnisse.",
     "envSecrets": "Geheime Umgebung",
@@ -1344,6 +1391,8 @@
     "egressHosts": "Erlaubte Hosts",
     "egressHostsHint": "Der Befehl erreicht nur diese HTTPS-Hosts, einer pro Zeile: host oder host:port. Leer lassen, um das Netzwerk der Sitzung beizubehalten.",
     "egressHostsInvalid": "Schreiben Sie jeden Host als host oder host:port, kleingeschrieben und ohne https://, höchstens 16.",
+    "inSessionFolder": "Im Ordner der Sitzung",
+    "reachesOnly": "Erreicht nur {{hosts}}",
     "starters": {
       "filesystem": {
         "summary": "Liest und schreibt Dateien im Ordner der Sitzung.",

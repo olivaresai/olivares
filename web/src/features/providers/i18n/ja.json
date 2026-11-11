@@ -22,6 +22,9 @@
     "name": "名前",
     "kind": "種類",
     "key": "キー",
+    "usedBy": "使用プロファイル",
+    "usedByUnread": "各キーを使うプロファイルを読み取れませんでした。",
+    "usedByPartial": "一部のプロファイルは読み取られていません。キーは表示以外のプロファイルにも使われている可能性があります。",
     "state": "状態",
     "connection": "接続",
     "actions": "操作"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "有効",
-    "revoked": "失効"
+    "revoked": "失効",
+    "disabled": "無効"
   },
   "probe": {
     "never": "未テスト",
@@ -70,7 +74,9 @@
     "testing": "テスト中…",
     "rotate": "キーを交換",
     "revoke": "失効させる",
-    "details": "詳細"
+    "details": "詳細",
+    "disable": "無効にする",
+    "enable": "有効にする"
   },
   "create": {
     "title": "プロバイダーを追加",
@@ -171,5 +177,9 @@
   "section": {
     "title": "APIキー",
     "add": "APIキーを追加"
+  },
+  "stateChange": {
+    "disabled": "プロバイダーを無効にしました。再度有効にするまで、関連付けられたプロファイルは起動を拒否します。",
+    "active": "プロバイダーを有効にしました。"
   }
 }

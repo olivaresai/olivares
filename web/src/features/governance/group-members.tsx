@@ -120,11 +120,13 @@ export function GroupMembersSheet({
             />
           ) : query.data?.not_found ? (
             <EmptyState
+              size="panel"
               title={t('members.title')}
               description={t('members.notFound')}
             />
           ) : members.length === 0 ? (
             <EmptyState
+              size="panel"
               description={t('members.emptyHint')}
               title={t('members.empty')}
             />

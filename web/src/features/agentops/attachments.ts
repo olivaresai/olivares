@@ -37,9 +37,14 @@ export const ATTACH_TYPES = [
   ...Object.values(DOCUMENT_MEDIA_TYPES),
 ] as const
 
-/** MIME metadata can be empty or generic for an Office file on a person's OS. */
+/** An image keeps its own type; MIME metadata can be empty or generic for an Office file
+ * on a person's OS, and only then does the extension decide. */
 function attachmentMediaType(file: File): string {
-  if ((ATTACH_TYPES as readonly string[]).includes(file.type)) return file.type
+  if (
+    file.type.startsWith('image/') ||
+    (ATTACH_TYPES as readonly string[]).includes(file.type)
+  )
+    return file.type
   return (
     DOCUMENT_MEDIA_TYPES[file.name.toLowerCase().split('.').at(-1) ?? ''] ??
     file.type
@@ -89,11 +94,14 @@ export interface DraftImage {
   id?: string
 }
 
-/** Supported files in a clipboard or drop payload, in order. Other payloads
- * stay with the browser, including a pasted file path. */
+/** Images and supported documents in a clipboard or drop payload, in order. An image the
+ * engine does not take is kept, so it is said to be refused; other payloads stay with the
+ * browser, including a pasted file path. */
 export function imagesIn(data: DataTransfer | null): File[] {
-  return Array.from(data?.files ?? []).filter((f) =>
-    (ATTACH_TYPES as readonly string[]).includes(attachmentMediaType(f)),
+  return Array.from(data?.files ?? []).filter(
+    (f) =>
+      f.type.startsWith('image/') ||
+      (ATTACH_TYPES as readonly string[]).includes(attachmentMediaType(f)),
   )
 }
 
@@ -223,6 +231,49 @@ export function useImageDraft(runRef: string) {
     [update],
   )
 
+  /** Puts back the files of a draft set aside, by their ids, and reads each again from the
+   * engine for its thumbnail. They take new list keys, so they cannot collide with one
+   * attached since. A session keeps only its newest images (one request to the model
+   * takes them all), so the engine may have let one go: that one leaves the draft, and
+   * the names of those are what this resolves to. */
+  const restore = useCallback(
+    async (files: readonly { id: string; name: string }[]) => {
+      const back = files
+        .filter((f) => !latest.current.some((c) => c.id === f.id))
+        .map((f) => ({
+          key: `${runRef}:${counter.current++}`,
+          name: f.name,
+          id: f.id,
+          preview: '',
+        }))
+      update((list) => [...list, ...back])
+      const here = () => mounted.current && currentRun.current === runRef
+      const gone = await Promise.all(
+        back.map(async (image) => {
+          try {
+            const preview = await dataUrlOf(
+              await agentOpsApi.attachmentImage(runRef, image.id),
+            )
+            if (here())
+              update((list) =>
+                list.map((i) => (i.key === image.key ? { ...i, preview } : i)),
+              )
+            return []
+          } catch (error) {
+            // Only the engine's 404 says the file is gone; any other failure keeps it
+            // by name, and the send says what the engine answers.
+            if (!(error instanceof ApiError && error.isNotFound)) return []
+            if (here())
+              update((list) => list.filter((i) => i.key !== image.key))
+            return [image.name]
+          }
+        }),
+      )
+      return gone.flat()
+    },
+    [runRef, update],
+  )
+
   return {
     images,
     ids: images.flatMap((i) => (i.id ? [i.id] : [])),
@@ -230,5 +281,6 @@ export function useImageDraft(runRef: string) {
     add,
     remove,
     discard,
+    restore,
   }
 }

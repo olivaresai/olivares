@@ -15,7 +15,8 @@
   "groups": {
     "yours": "Seus modelos",
     "builtin": "Modelos integrados ({{n}})",
-    "yoursEmpty": "Nenhum ainda. Um modelo é um ponto de partida reutilizável para novas sessões."
+    "emptyTitle": "Ainda não tem modelos",
+    "emptyDescription": "Um modelo é um ponto de partida reutilizável para novas sessões."
   },
   "editor": {
     "nameLabel": "Nome",
@@ -25,11 +26,11 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "Comandos executados antes/depois das ferramentas e das sessões.",
-      "settings": "Definições do agente",
+      "settings": "Definições",
       "settingsHint": "Modo de permissões, nível de esforço, modelo e instruções personalizadas.",
       "connectors": "Conectores",
       "connectorsHint": "IDs de conectores a anexar quando este modelo for aplicado.",
-      "policies": "Políticas de governação",
+      "policies": "Políticas",
       "policiesHint": "Modo DLP, limites de duração da sessão, ferramentas permitidas e gravação de E/S.",
       "secrets": "Segredos",
       "secretsHint": "Segredos do cofre que as sessões deste modelo recebem como variáveis de ambiente.",

@@ -2,15 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { consoleApi } from '@/features/console/api'
+import { consoleApi, consoleKeys } from '@/features/console/api'
 import { http } from '@/lib/api'
 import { ApiError } from '@/lib/api/errors'
 import { identityApi } from '@/features/identity/api'
 import { StepUpPolicySetting } from '@/features/identity/step-up-policy'
-import { SettingsPage } from './settings'
+import { SettingsSectionNavigation } from '@/components/layout/settings-section-navigation'
+import { fakeRouter } from '@/test/fake-router'
+import { SettingsPage as SettingsContent } from './settings'
+
+// The section navigation lives in the shell sidebar, not in the page: mount it beside the content.
+function SettingsPage() {
+  return (
+    <>
+      <SettingsSectionNavigation />
+      <SettingsContent />
+    </>
+  )
+}
 
 const oneKey = vi.hoisted(() => ({
   items: [
@@ -25,13 +37,12 @@ const state = vi.hoisted(() => ({
   admin: true,
   satisfied: true,
   amr: ['pwd'] as string[],
+  providers: [] as Array<{ label: string; start_url: string }>,
 }))
-vi.mock('@tanstack/react-router', async () => ({
-  useNavigate: () => vi.fn(),
-  useRouter: () => undefined,
-  useRouterState: () => undefined,
-  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
-}))
+// A section click moves the address the page reads, so the router double keeps one location.
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     principal: {
@@ -58,8 +69,26 @@ vi.mock('@/features/console/api', async (original) => ({
     })),
   },
 }))
+// An edition's own sign-in card, as the identity page's login tab offered it.
+vi.mock('@/features/extensions', async (original) => {
+  const actual = await original<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: {
+      ...actual.PANEL_EXTENSIONS,
+      identityLoginCards: [
+        { id: 'hardware-key', Component: () => 'Hardware key card' },
+        {
+          id: 'admin-card',
+          permission: 'system:admin',
+          Component: () => 'Admin card',
+        },
+      ],
+    },
+  }
+})
 vi.mock('@/lib/hooks/use-server-info', () => ({
-  useServerInfo: () => ({ data: { sso_providers: [] } }),
+  useServerInfo: () => ({ data: { sso_providers: state.providers } }),
 }))
 vi.mock('@/features/identity/api', async (original) => ({
   ...(await original<typeof import('@/features/identity/api')>()),
@@ -90,11 +119,12 @@ beforeEach(() => {
   state.admin = true
   state.satisfied = true
   state.amr = ['pwd']
+  state.providers = []
   vi.mocked(identityApi.webauthnCredentials).mockResolvedValue(oneKey)
   vi.mocked(identityApi.authSessions).mockClear()
   vi.mocked(identityApi.authSessions).mockResolvedValue({ items: [] })
   vi.mocked(identityApi.authSessionDelete).mockClear()
-  window.history.replaceState(null, '', '/settings')
+  fakeRouter.reset('/settings')
 })
 
 it.each([true, false])(
@@ -113,7 +143,8 @@ it.each([true, false])(
     expect(await screen.findByText('My laptop')).toBeInTheDocument()
     expect(screen.getByText('Session lifetime')).toBeInTheDocument()
     expect(screen.getByText('12 hours')).toBeInTheDocument()
-    expect(screen.getByText('Password', { selector: 'p' })).toBeInTheDocument()
+    const methods = screen.getByRole('region', { name: 'Sign-in methods' })
+    expect(within(methods).getByText('Password')).toBeInTheDocument()
     expect(
       screen.queryByText(/not edited from this screen yet/),
     ).not.toBeInTheDocument()
@@ -595,4 +626,95 @@ it('tells apart two browser sign-ins by the address they came from', async () =>
   expect(
     screen.getByRole('button', { name: /End Browser 198\.51\.100\.9 sign-in/ }),
   ).toBeInTheDocument()
+})
+
+/** The boxed row that carries this name, with its sentence and its state. */
+function methodRow(name: string) {
+  const methods = screen.getByRole('region', { name: 'Sign-in methods' })
+  return within(methods).getByText(name).closest('[data-slot="boxed-list-row"]')
+}
+
+it('lists the sign-in methods as boxed rows, each with its state', async () => {
+  await openSignInSettings()
+  expect(methodRow('Single sign-on')).toHaveTextContent(
+    'No single sign-on provider is available on the sign-in page.',
+  )
+  expect(methodRow('Single sign-on')).toHaveTextContent('Not set up')
+  await waitFor(() =>
+    expect(methodRow('Password')).toHaveTextContent('Available'),
+  )
+  expect(methodRow('Password')).toHaveTextContent(
+    'Local password sign-in is available.',
+  )
+})
+
+it('says single sign-on is required where it blocks the password', async () => {
+  state.providers = [{ label: 'Okta', start_url: '/v1/auth/sso/okta' }]
+  vi.mocked(consoleApi.getSSO).mockResolvedValueOnce({
+    require_sso: true,
+    enforced_by: 'enterprise',
+    status: 'active',
+    protocol: 'oidc',
+  } as Awaited<ReturnType<typeof consoleApi.getSSO>>)
+  await openSignInSettings()
+  await waitFor(() =>
+    expect(methodRow('Password')).toHaveTextContent('Blocked'),
+  )
+  expect(methodRow('Single sign-on: Okta')).toHaveTextContent('Required')
+})
+
+it('states the session lifetime as a boxed row under Session', async () => {
+  await openSignInSettings()
+  const session = screen.getByRole('region', { name: 'Session' })
+  const lifetime = within(session).getByText('Session lifetime')
+  expect(lifetime.closest('[data-slot="boxed-list-row"]')).toHaveTextContent(
+    '12 hours',
+  )
+})
+
+it('shows only the error when a read of the policy fails after a good one', async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  render(
+    <QueryClientProvider client={client}>
+      <SettingsPage />
+    </QueryClientProvider>,
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Sign-in' }))
+  await waitFor(() =>
+    expect(methodRow('Password')).toHaveTextContent('Available'),
+  )
+  vi.mocked(consoleApi.getSSO).mockRejectedValueOnce(new Error('offline'))
+  await act(() => client.refetchQueries({ queryKey: consoleKeys.sso() }))
+  expect(
+    await screen.findByRole('button', { name: /retry/i }),
+  ).toBeInTheDocument()
+  expect(methodRow('Password')).not.toHaveTextContent('Available')
+  expect(
+    screen.queryByText('Local password sign-in is available.'),
+  ).not.toBeInTheDocument()
+})
+
+it('says the state of single sign-on to an administrator only from the policy', async () => {
+  state.providers = [{ label: 'Okta', start_url: '/v1/auth/sso/okta' }]
+  const pending = new Promise<never>(() => {})
+  vi.mocked(consoleApi.getSSO).mockReturnValueOnce(pending)
+  await openSignInSettings()
+  const sso = methodRow('Single sign-on: Okta')
+  expect(sso).not.toHaveTextContent('Available')
+  expect(sso).not.toHaveTextContent('Not set up')
+  expect(sso).not.toHaveTextContent('Required')
+})
+
+it('shows the sign-in cards an edition adds, as the login tab of People did', async () => {
+  await openSignInSettings()
+  expect(await screen.findByText('Hardware key card')).toBeInTheDocument()
+})
+
+it('shows an edition card only to a person its own permission allows', async () => {
+  state.admin = false
+  await openSignInSettings()
+  expect(await screen.findByText('Hardware key card')).toBeInTheDocument()
+  expect(screen.queryByText('Admin card')).toBeNull()
 })

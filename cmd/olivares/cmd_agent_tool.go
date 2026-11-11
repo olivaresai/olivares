@@ -751,6 +751,11 @@ func renderToolInventory(w io.Writer, inv *toolinstall.Inventory) error {
 			})
 		}
 		renderTo(w).Table(tbl)
+		for _, in := range inv.Installed {
+			if in.CompatibilityNote != "" {
+				fmt.Fprintln(w, in.CompatibilityNote)
+			}
+		}
 	}
 	for _, lo := range inv.Leftovers {
 		fmt.Fprintf(w, "leftover staging: %s (%s)\n", lo.Path, lo.Note)

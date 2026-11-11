@@ -2602,6 +2602,11 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 			} else if b.set.sessions != nil {
 				b.set.sessionDependencies.GitRead, b.set.sessionDependencies.GitReadDataDir = custody, dir
 			}
+			// The same custody names the push remotes a confined session of a
+			// workspace may reach: its approved targets' hosts, never their credential.
+			if b.set.sessions != nil {
+				b.set.sessionDependencies.ApprovedRemotes = gitpublishSessionRemotes{targets: b.set.gitpublish, custody: custody}
+			}
 		}
 		// A push that names a session run fetches its commit from the folder the
 		// sessions module recorded for that run. Without sessions, such a push is
@@ -3166,9 +3171,12 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 	if b.set.approvalBridge != nil {
 		b.set.approvalBridge.UseLocalProposer(b.set.gov.EngineApprovals())
 		b.set.approvalBridge.UseHandler(b.apiSrv.Handler())
+		// The approval reads say until when the gate reuses an approved grant.
+		b.set.gov.UseGrantReuseWindow(b.set.approvalBridge.ReuseWindow)
 		// A ship (commit, push and pull request of a worktree session in one action)
-		// commits through the sessions module and asks the tenant's approval policy
-		// before its push. Without either, the ship answers authority_unavailable.
+		// commits through the sessions module, and every publication asks the
+		// tenant's approval policy before it reaches the host. Without the policy's
+		// door, every publication answers authority_unavailable.
 		if b.set.gitpublish != nil && b.set.sessions != nil {
 			b.set.gitpublish.UseSessionWork(b.set.sessions)
 			b.set.gitpublish.UseShipGate(shipGate{policy: b.set.gov.EngineApprovals(), bridge: b.set.approvalBridge})
@@ -3506,6 +3514,10 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	// Who may use which provider profile and AI tool: the source-scoping bindings, asked at
 	// every launch and read of a profile. With none stored, every profile stays open.
 	b.set.sessionDependencies.ProfileAccess = profileAccess{scopes: b.set.sourceScopeResolver}
+	// Who may run which model: the model grants, asked at every launch and resume.
+	if b.set.models != nil {
+		b.set.sessionDependencies.ModelAccess = sessionModelAccess{models: b.set.models}
+	}
 	// What a department carries, assigned by the same bindings: the instructions its Claude launches
 	// are given and the template a launch that names none starts from. With none stored, a launch
 	// is what it always was.
@@ -3516,6 +3528,7 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	b.set.sessionDependencies.LimitResets = b.agentTools.LimitResetsAt
 	// An account shows the 5-hour and weekly usage its own tool reports.
 	b.set.sessionDependencies.AccountUsage = b.agentTools.AccountUsage
+	b.set.sessionDependencies.AccountPlan = b.agentTools.AccountPlan
 	b.set.sessionDependencies.ProviderApprovalPrincipal = func(c context.Context, tenant model.TenantID, runRef string) (auth.Principal, string, error) {
 		p, scope, err := b.sessionHooks.ResolveRun(c, tenant, runRef)
 		return p, scope.SessionRef, err

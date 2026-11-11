@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURE_VIEWS } from '@/features/registry'
 import census from '@/features/route-census.json'
 import i18n from '@/lib/i18n'
+import { usePreferencesStore } from '@/stores/preferences'
 import { useTenantStore } from '@/stores/tenant'
 import { SourceDiffError } from './source-diff-api'
 import type { GitHostDiff, GitHostDiffQuery } from './source-diff-model'
@@ -69,8 +70,8 @@ const resources = {
   addedLine: 'Added, new line {{line}}.',
   removedLine: 'Removed, old line {{line}}.',
   contextLine: 'Context, line {{line}}.',
-  diffLabel: 'Unified diff of {{path}}',
-  diffLabelRich: 'Unified diff of <path />',
+  diffLabel: 'Diff of {{path}}',
+  diffLabelRich: 'Diff of <path />',
   status: {
     added: 'Added',
     modified: 'Modified',
@@ -274,10 +275,10 @@ describe('source diff view', () => {
   it('renders the rich diff caption through PathText', async () => {
     renderView(async () => diff())
     const region = await screen.findByRole('region', {
-      name: 'Unified diff of ingest/queue.py',
+      name: 'Diff of ingest/queue.py',
     })
     const caption = region.querySelector('caption')!
-    expect(caption).toHaveTextContent('Unified diff of ingest/queue.py')
+    expect(caption).toHaveTextContent('Diff of ingest/queue.py')
     expect(caption.querySelector('[data-slot="path-text"]')).not.toBeNull()
   })
 
@@ -338,6 +339,58 @@ describe('source diff view', () => {
     ).toHaveTextContent('Renamed')
     await user.click(screen.getByRole('button', { name: 'Copy notes/now.txt' }))
     expect(write).toHaveBeenCalledWith('notes/now.txt')
+  })
+
+  it('says Reviewed on the row of a file marked reviewed in its diff', async () => {
+    usePreferencesStore.setState({ reviewed: [] })
+    const user = userEvent.setup()
+    renderView(async () =>
+      diff({ files: [file({}), file({ path: 'docs/notes.txt' })] }),
+    )
+    const queue = await screen.findByRole('option', { name: /queue.py/ })
+    const notes = screen.getByRole('option', { name: /notes.txt/ })
+    expect(within(queue).queryByText('Reviewed')).toBeNull()
+
+    await user.click(queue)
+    await user.click(screen.getByLabelText('Reviewed'))
+
+    expect(within(queue).getByText('Reviewed')).toBeInTheDocument()
+    expect(within(notes).queryByText('Reviewed')).toBeNull()
+  })
+
+  it('keeps a reviewed mark to the host, repository and refs it was made in', async () => {
+    usePreferencesStore.setState({ reviewed: [] })
+    const user = userEvent.setup()
+    const view = render(<></>)
+    const show = (where: GitHostDiffQuery) => {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <SourceDiffView
+            query={where}
+            onChange={vi.fn()}
+            reader={async () => diff()}
+          />
+        </QueryClientProvider>,
+      )
+    }
+    show(query)
+    await user.click(await screen.findByLabelText('Reviewed'))
+    const option = screen.getByRole('option', { name: /queue.py/ })
+    expect(option).toHaveTextContent('Reviewed')
+
+    show({ ...query, repository: 'acme/api' })
+
+    const again = await screen.findByRole('option', { name: /queue.py/ })
+    expect(again).not.toHaveTextContent('Reviewed')
+    expect(screen.getByLabelText('Reviewed')).not.toBeChecked()
+    show({ ...query, host: 'gitlab' })
+
+    const elsewhere = await screen.findByRole('option', { name: /queue.py/ })
+    expect(elsewhere).not.toHaveTextContent('Reviewed')
+    expect(screen.getByLabelText('Reviewed')).not.toBeChecked()
   })
 
   it('marks a truncated file partial and does not call the count a total', async () => {
@@ -750,11 +803,11 @@ describe('source diff view', () => {
       diff({ files: [file({ hunks: [lines.join('\n') + '\n'] })] }),
     )
     const region = await screen.findByRole('region', { name: /queue.py/ })
-    expect(within(region).getByText('LINE-0001')).toBeInTheDocument()
+    expect(within(region).getAllByText('LINE-0001')).toHaveLength(2)
     expect(within(region).queryByText('LINE-0201')).not.toBeInTheDocument()
     region.focus()
     await user.keyboard('{PageDown}')
-    expect(within(region).getByText('LINE-0201')).toBeInTheDocument()
+    expect(within(region).getAllByText('LINE-0201')).toHaveLength(2)
   })
 })
 

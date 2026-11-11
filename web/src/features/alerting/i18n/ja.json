@@ -78,6 +78,7 @@
     "colActions": "操作",
     "enabled": "有効",
     "disabled": "無効",
+    "any": "すべて",
     "bulk": {
       "enable": "選択したルートを有効化",
       "disable": "選択したルートを無効化"

@@ -70,8 +70,7 @@
     },
     "signIn": {
       "title": "Inicia sesión en ella",
-      "body": "Usa tu suscripción de Claude o de ChatGPT. El inicio de sesión se queda en este servidor, donde la herramienta lo guarda.",
-      "waiting": "Primero instala una herramienta."
+      "body": "Usa tu suscripción de Claude o de ChatGPT. El inicio de sesión se queda en este servidor, donde la herramienta lo guarda."
     },
     "start": {
       "title": "Inicia una sesión",
@@ -84,19 +83,39 @@
     "notReady": "{{tool}} todavía no puede empezar.",
     "folder": "Carpeta",
     "folderHint": "Una carpeta de este servidor.",
+    "folderHintGiven": "La ruta de una carpeta ya registrada en este servidor. Las nuevas las registra un administrador.",
     "folderChoose": "Elige una carpeta",
     "folderNew": "Una carpeta nueva para esta sesión",
     "folderTyped": "Otra carpeta…",
     "readingFolder": "Leyendo la carpeta de la última sesión…",
     "prompt": "Primer mensaje (opcional)",
     "promptPlaceholder": "¿Qué debe hacer primero?",
+    "documents": "Documentos",
+    "attachDocument": "Adjuntar documento",
+    "removeDocument": "Quitar {{name}}",
+    "savingDocument": "Guardando {{name}} en la carpeta ({{n}} de {{total}})…",
+    "documentFailed": "{{name}} no se guardó en la carpeta ({{reason}}).",
+    "documentsNeedFolder": "Puedes adjuntar documentos al trabajo en una de tus carpetas, en su checkout actual.",
+    "documentsMessage": "Documentos que adjunté, guardados en la carpeta:",
+    "documentsAdded": "Se añade a tu primer mensaje:",
+    "documentsKept": "Ya en la carpeta: {{paths}}.",
+    "documentsReadOnly": "Esta carpeta es de solo lectura: puedes adjuntar documentos al trabajo en una carpeta en la que la sesión pueda escribir.",
+    "documentsWaiting": "Iniciar espera a los documentos adjuntos: elige una carpeta que pueda guardarlos, o quítalos.",
+    "documentWaiting": "{{size}} · en espera",
+    "documentsNeedWords": "Escribe unas palabras sobre qué hacer con los documentos: la sesión toma el nombre de lo que escribas.",
+    "moreHeldDocuments": "Empieza aquí para conservar los documentos adjuntos, o quítalos para abrir más opciones.",
+    "moreHeldFolder": "Empieza aquí para conservar la carpeta que escribiste, o elígela en la lista de carpetas para abrir más opciones.",
+    "documentTooLarge": "{{name}} supera el límite de esta carpeta de {{size}} por archivo y no se adjuntó.",
+    "documentAttachedTwice": "{{name}} ya está adjunto.",
     "more": "Más opciones",
     "permission": "Qué puede hacer el agente",
     "start": "Iniciar",
     "starting": "Iniciando…",
+    "startSession": "Empezar sesión",
     "needTool": "Primero instala una herramienta e inicia sesión en ella.",
     "dialogTitle": "Nueva sesión",
     "dialogDescription": "Elige una herramienta y di qué hacer.",
+    "keyToStart": "<key/> para iniciar",
     "advanced": "Opciones avanzadas de inicio",
     "secrets": "Secretos como variables de entorno",
     "secretsHint": "La sesión lee cada secreto elegido del almacén desde la variable que indiques. El valor nunca se muestra, se registra ni se escribe en la carpeta.",
@@ -111,6 +130,7 @@
     "credentialsManage": "Gestionar credenciales administradas",
     "listUnavailable": "El motor no respondió a la lista de secretos. Por ahora no se puede elegir nada.",
     "openTools": "Abrir Herramientas de IA",
+    "askAdmin": "Pida a un administrador que la deje lista.",
     "model": "Modelo",
     "providerDefault": "Predeterminado ({{model}})",
     "nativeDefault": "Predeterminado de {{tool}}",
@@ -123,14 +143,22 @@
     "profileNeedsKey": "Falta una clave",
     "foldersUnreadable": "No se pudieron leer las carpetas registradas. Escriba la ruta de una carpeta de este servidor.",
     "folderPermission": "Se inicia como {{name}}, el permiso predeterminado de esta carpeta.",
-    "autoAsks": "{{tool}} no tiene modo automático: preguntará antes de cada acción."
+    "autoAsks": "{{tool}} no tiene modo automático: preguntará antes de cada acción.",
+    "worktreeCheckout": "Checkout actual",
+    "worktreeNew": "Nuevo worktree",
+    "worktreeFrom": "Empezar desde",
+    "worktreeFromHint": "Rama o commit (opcional)",
+    "worktreeNewHint": "La sesión trabaja en una rama propia, en una carpeta aparte. El checkout no cambia.",
+    "worktreeLegend": "Copia de trabajo"
   },
   "composer": {
     "toolPill": "Herramienta y cuenta: {{value}}",
     "modelPill": "Modelo: {{value}}",
     "effortPill": "Esfuerzo: {{value}}",
     "folderPill": "Carpeta: {{value}}",
-    "moreOptions": "Más opciones"
+    "moreOptions": "Más opciones",
+    "accessPill": "Qué puede hacer el agente: {{value}}",
+    "worktreePill": "Copia de trabajo: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Carpetas registradas: {{count}} cargadas; hay más.",
@@ -154,6 +182,14 @@
     "cli": "Usar la línea de comandos de olivares",
     "cliHint": "En este servidor, el comando olivares ya está instalado. Desde otro equipo, instálalo con:"
   },
+  "passkeyOffer": {
+    "body": "La próxima vez, inicia sesión con una passkey: tu huella, tu cara o el bloqueo de pantalla en lugar de una contraseña.",
+    "add": "Añadir una passkey",
+    "notNow": "Ahora no",
+    "added": "Passkey añadida. Úsala para iniciar sesión la próxima vez.",
+    "failed": "No se ha añadido la passkey. Inténtalo de nuevo o añade una más tarde en Ajustes.",
+    "unknown": "No se ha podido confirmar la passkey. Puede que se haya añadido: mira en Ajustes antes de añadir otra."
+  },
   "permissionSummary": {
     "readOnly": "Lee y planifica. Se rechaza cualquier cambio.",
     "ask": "Pregunta antes de cada acción que no sea una lectura.",
@@ -165,6 +201,10 @@
   "bring": {
     "title": "Traer tus carpetas",
     "body": "Carpetas en las que tus herramientas ya trabajaron, leídas de los registros propios de cada herramienta sobre rutas de proyecto y fechas. No se registra nada hasta que confirmes.",
+    "offer_one": "{{count}} carpeta en la que ya trabajaron tus herramientas.",
+    "offer_many": "{{count}} carpetas en las que ya trabajaron tus herramientas.",
+    "offer_other": "{{count}} carpetas en las que ya trabajaron tus herramientas.",
+    "review": "Revisar",
     "error": "No se pudieron buscar las carpetas de tus herramientas.",
     "unreadable": "No se pudieron leer los registros de {{tool}}. Añade las carpetas a mano.",
     "cols": {

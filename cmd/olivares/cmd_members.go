@@ -61,6 +61,9 @@ func newMembersCmd() *cobra.Command {
 	flags.addPersistent(root)
 	client := bootstrapClient{flags: flags, surface: "members"}
 	root.AddCommand(membersListCmd(client), membersGrantCmd(client), membersInvitesCmd(client))
+	if thisEdition.memberCommands != nil {
+		root.AddCommand(thisEdition.memberCommands(client)...)
+	}
 	return root
 }
 

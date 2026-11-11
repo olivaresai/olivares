@@ -6,6 +6,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api/errors'
 import { useClientSettings } from '@/features/settings/preferences'
 import { useTenantStore } from '@/stores/tenant'
 import { SecondFactorPanel } from '@/features/identity/totp-login'
@@ -317,4 +318,49 @@ it('keeps the requested page through the second-factor challenge', async () => {
       replace: true,
     }),
   )
+})
+
+// The code step as drawn: it takes the place of the form inside the same sheet,
+// with one filled button; the other ways out are flat buttons, and a refused
+// code is a notice in the sheet.
+describe('the second-factor step as drawn', () => {
+  const sheetOf = (node: Element) => node.closest('[data-slot="auth-sheet"]')
+
+  it('keeps one filled button in the sheet; the other ways are flat', async () => {
+    auth.login.mockResolvedValue(challenge)
+    await submitPassword()
+    const verify = await screen.findByRole('button', {
+      name: 'Verify and sign in',
+    })
+    const sheet = sheetOf(verify)
+    expect(sheet).not.toBeNull()
+    const filled = sheet!.querySelectorAll('.bg-accent')
+    expect(filled).toHaveLength(1)
+    expect(filled[0]).toBe(verify)
+    for (const name of ['Use a recovery code', 'Back to sign-in']) {
+      const other = screen.getByRole('button', { name })
+      expect(sheet).toContainElement(other)
+      expect(other).not.toHaveClass('bg-accent')
+    }
+  })
+
+  it('says a refused code in a notice inside the sheet', async () => {
+    auth.login.mockResolvedValue(challenge)
+    totp.challenge.mockRejectedValue(
+      new ApiError(401, 'unauthorized', 'auth: TOTP verification failed'),
+    )
+    const user = userEvent.setup()
+    await submitPassword()
+    await user.type(
+      await screen.findByLabelText(/Authenticator code/i),
+      '000000',
+    )
+    await user.click(screen.getByRole('button', { name: 'Verify and sign in' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('That code did not verify.')
+    expect(alert).toHaveAttribute('data-slot', 'notice')
+    expect(alert).toHaveAttribute('data-tone', 'bad')
+    expect(sheetOf(alert)).not.toBeNull()
+    expect(auth.adoptSession).not.toHaveBeenCalled()
+  })
 })

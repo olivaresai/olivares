@@ -51,7 +51,10 @@ type subscriber struct {
 	// liveRef is the B2 exact-row filter (the row's opaque id). "" = none. With
 	// both empty the subscriber receives every session in the tenant.
 	liveRef string
-	ch      chan liveDTO
+	// runRef is the managed row of one run, before the console knows its live_ref:
+	// a fresh session's row is proven only once the tool reports its id. "" = none.
+	runRef string
+	ch     chan liveDTO
 }
 
 func newBroker() *broker { return &broker{subs: make(map[int]subscriber)} }
@@ -59,11 +62,11 @@ func newBroker() *broker { return &broker{subs: make(map[int]subscriber)} }
 // subscribe registers a client for a tenant (and optional session ref) and
 // returns its delivery channel plus an idempotent unsubscribe.
 func (b *broker) subscribe(tenant model.TenantID, ref string) (<-chan liveDTO, func()) {
-	return b.subscribeTo(tenant, ref, "")
+	return b.subscribeTo(tenant, ref, "", "")
 }
 
-// subscribeTo is subscribe with the B2 exact-row filter.
-func (b *broker) subscribeTo(tenant model.TenantID, ref, liveRef string) (<-chan liveDTO, func()) {
+// subscribeTo is subscribe with the B2 exact-row filter and the run filter.
+func (b *broker) subscribeTo(tenant model.TenantID, ref, liveRef, runRef string) (<-chan liveDTO, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
@@ -74,7 +77,7 @@ func (b *broker) subscribeTo(tenant model.TenantID, ref, liveRef string) (<-chan
 	id := b.next
 	b.next++
 	ch := make(chan liveDTO, 16)
-	b.subs[id] = subscriber{tenant: tenant, ref: ref, liveRef: liveRef, ch: ch}
+	b.subs[id] = subscriber{tenant: tenant, ref: ref, liveRef: liveRef, runRef: runRef, ch: ch}
 	return ch, func() { b.unsubscribe(id) }
 }
 
@@ -100,6 +103,9 @@ func (b *broker) publish(s liveSnapshot) {
 			continue // tenant isolation: never deliver another tenant's operation
 		}
 		if sub.liveRef != "" && sub.liveRef != s.dto.LiveRef {
+			continue
+		}
+		if sub.runRef != "" && sub.runRef != s.dto.RunRef {
 			continue
 		}
 		if sub.ref != "" && (sub.ref != s.dto.SessionRef || s.dto.Attribution != attributionLegacy) {
@@ -161,13 +167,35 @@ func (m *Module) handleStream(w http.ResponseWriter, r *http.Request, mc api.Mod
 		}
 		liveRef = id.String()
 	}
+	// One run's managed row, asked by the rule GET /runs/{ref} asks: sessions:run:read
+	// on the run's stored id and workspace. A caller who may not read the run is
+	// answered as an absent run and subscribes nothing.
+	runRef := r.URL.Query().Get("run_ref")
+	if runRef != "" {
+		var rec model.Record
+		err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+			repo, err := sc.Ext(runKind)
+			if err != nil {
+				return err
+			}
+			rec, err = findRunRec(r.Context(), repo, runRef)
+			return err
+		})
+		if err == nil && !runReadable(r.Context(), mc, rec) {
+			err = notFoundErr()
+		}
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no") // ask intermediaries not to buffer
-	m.auditStreamOpen(r, mc, ref, liveRef)
+	m.auditStreamOpen(r, mc, ref, liveRef, runRef)
 
-	ch, cancel := m.broker.subscribeTo(mc.Tenant, ref, liveRef)
+	ch, cancel := m.broker.subscribeTo(mc.Tenant, ref, liveRef, runRef)
 	defer cancel()
 
 	if writeFrame(rc, w, ": connected\n\n") != nil {
@@ -217,13 +245,13 @@ func writeFrame(rc *http.ResponseController, w io.Writer, frame string) error {
 // auditStreamOpen records that a principal opened a live stream — a privileged
 // read of live operation (docs/SECURITY-HARDENING.md). It is best-effort: a failed audit logs
 // but does not deny the stream (the per-request RBAC check already gated access).
-func (m *Module) auditStreamOpen(r *http.Request, mc api.ModuleContext, ref, liveRef string) {
+func (m *Module) auditStreamOpen(r *http.Request, mc api.ModuleContext, ref, liveRef, runRef string) {
 	target := model.ID("")
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		_, e := sc.Audit().Append(r.Context(), model.AuditDraft{
 			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
 			Action: "sessions.stream.open", TargetKind: liveKind, TargetID: target,
-			Meta: streamMeta(ref, liveRef),
+			Meta: streamMeta(ref, liveRef, runRef),
 		})
 		return e
 	})
@@ -233,8 +261,8 @@ func (m *Module) auditStreamOpen(r *http.Request, mc api.ModuleContext, ref, liv
 }
 
 // streamMeta builds the non-sensitive audit meta for a stream open.
-func streamMeta(ref, liveRef string) map[string]any {
-	if ref == "" && liveRef == "" {
+func streamMeta(ref, liveRef, runRef string) map[string]any {
+	if ref == "" && liveRef == "" && runRef == "" {
 		return map[string]any{"scope": "all"}
 	}
 	meta := map[string]any{}
@@ -243,6 +271,9 @@ func streamMeta(ref, liveRef string) map[string]any {
 	}
 	if liveRef != "" {
 		meta["live_ref"] = liveRef
+	}
+	if runRef != "" {
+		meta["run_ref"] = runRef
 	}
 	return meta
 }

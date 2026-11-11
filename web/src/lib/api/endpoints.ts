@@ -22,7 +22,6 @@ import type {
   AuditVerifyResponse,
   CreateOrgRequest,
   CreateUserRequest,
-  GrantMembershipRequest,
   IssueTokenRequest,
   IssueTokenResponse,
   ListResponse,
@@ -190,11 +189,6 @@ export const iamApi = {
     http.post<IssueTokenResponse>('/v1/tokens', req),
   revokeToken: (id: string) =>
     http.delete<void>(`/v1/tokens/${encodeURIComponent(id)}`),
-  grantMembership: (req: GrantMembershipRequest) =>
-    http.post<{ id: string; user_id: string; tenant: string; role: string }>(
-      '/v1/memberships',
-      req,
-    ),
 }
 
 /** Tenant/org provisioning (superadmin) — powers the org switcher. */

@@ -22,6 +22,9 @@
     "name": "Name",
     "kind": "Art",
     "key": "Schlüssel",
+    "usedBy": "Verwendet von",
+    "usedByUnread": "Welche Profile welchen Schlüssel verwenden, konnte nicht gelesen werden.",
+    "usedByPartial": "Einige Profile wurden nicht gelesen: Ein Schlüssel kann mehr Profile haben als angezeigt.",
     "state": "Zustand",
     "connection": "Verbindung",
     "actions": "Aktionen"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "Aktiv",
-    "revoked": "Widerrufen"
+    "revoked": "Widerrufen",
+    "disabled": "Deaktiviert"
   },
   "probe": {
     "never": "Nicht getestet",
@@ -70,7 +74,9 @@
     "testing": "Wird getestet…",
     "rotate": "Schlüssel wechseln",
     "revoke": "Widerrufen",
-    "details": "Details"
+    "details": "Details",
+    "disable": "Deaktivieren",
+    "enable": "Aktivieren"
   },
   "create": {
     "title": "Anbieter hinzufügen",
@@ -171,5 +177,9 @@
   "section": {
     "title": "API-Schlüssel",
     "add": "API-Schlüssel hinzufügen"
+  },
+  "stateChange": {
+    "disabled": "Anbieter deaktiviert. Gebundene Profile verweigern neue Starts, bis er wieder aktiviert ist.",
+    "active": "Anbieter aktiviert."
   }
 }

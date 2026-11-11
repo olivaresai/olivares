@@ -70,8 +70,7 @@
     },
     "signIn": {
       "title": "Le connecter",
-      "body": "Utilisez votre abonnement Claude ou ChatGPT. La connexion reste sur ce serveur, là où l’outil la conserve.",
-      "waiting": "Installez d’abord un outil."
+      "body": "Utilisez votre abonnement Claude ou ChatGPT. La connexion reste sur ce serveur, là où l’outil la conserve."
     },
     "start": {
       "title": "Démarrer une session",
@@ -84,19 +83,39 @@
     "notReady": "{{tool}} ne peut pas encore démarrer.",
     "folder": "Dossier",
     "folderHint": "Un dossier sur ce serveur.",
+    "folderHintGiven": "Le chemin d’un dossier déjà enregistré sur ce serveur. Un administrateur enregistre les nouveaux.",
     "folderChoose": "Choisir un dossier",
     "folderNew": "Un nouveau dossier pour cette session",
     "folderTyped": "Un autre dossier…",
     "readingFolder": "Lecture du dossier de la dernière session…",
     "prompt": "Premier message (facultatif)",
     "promptPlaceholder": "Que doit-il faire en premier ?",
+    "documents": "Documents",
+    "attachDocument": "Joindre un document",
+    "removeDocument": "Retirer {{name}}",
+    "savingDocument": "Enregistrement de {{name}} dans le dossier ({{n}} sur {{total}})…",
+    "documentFailed": "{{name}} n’a pas été enregistré dans le dossier ({{reason}}).",
+    "documentsNeedFolder": "Des documents peuvent être joints au travail dans l’un de vos dossiers, dans son checkout actuel.",
+    "documentsMessage": "Documents que j’ai joints, enregistrés dans le dossier :",
+    "documentsAdded": "Ajouté à votre premier message :",
+    "documentsKept": "Déjà dans le dossier : {{paths}}.",
+    "documentsReadOnly": "Ce dossier est en lecture seule : des documents peuvent être joints au travail dans un dossier où la session peut écrire.",
+    "documentsWaiting": "Démarrer attend les documents joints : choisissez un dossier qui peut les recevoir, ou retirez-les.",
+    "documentWaiting": "{{size}} · en attente",
+    "documentsNeedWords": "Écrivez quelques mots sur ce qu’il faut faire des documents : la session porte le nom de ce que vous écrivez.",
+    "moreHeldDocuments": "Démarrez ici pour garder les documents joints, ou retirez-les pour ouvrir plus d’options.",
+    "moreHeldFolder": "Démarrez ici pour garder le dossier saisi, ou choisissez-le dans la liste des dossiers pour ouvrir plus d’options.",
+    "documentTooLarge": "{{name}} dépasse la limite de ce dossier de {{size}} par fichier et n’a pas été joint.",
+    "documentAttachedTwice": "{{name}} est déjà joint.",
     "more": "Plus d’options",
     "permission": "Ce que l’agent peut faire",
     "start": "Démarrer",
     "starting": "Démarrage…",
+    "startSession": "Démarrer la session",
     "needTool": "Installez d’abord un outil et connectez-le.",
     "dialogTitle": "Nouvelle session",
     "dialogDescription": "Choisissez un outil et dites quoi faire.",
+    "keyToStart": "<key/> pour démarrer",
     "advanced": "Options de lancement avancées",
     "secrets": "Secrets en variables d’environnement",
     "secretsHint": "La session lit chaque secret du coffre choisi depuis la variable que vous indiquez. La valeur n’est jamais affichée, journalisée ni écrite dans le dossier.",
@@ -111,6 +130,7 @@
     "credentialsManage": "Gérer les identifiants gérés",
     "listUnavailable": "Le moteur n'a pas répondu à la liste des secrets. Rien ne peut être choisi pour l'instant.",
     "openTools": "Ouvrir Outils d’IA",
+    "askAdmin": "Demandez à un administrateur de le préparer.",
     "model": "Modèle",
     "providerDefault": "Par défaut ({{model}})",
     "nativeDefault": "Par défaut de {{tool}}",
@@ -123,14 +143,22 @@
     "profileNeedsKey": "Clé requise",
     "foldersUnreadable": "Les dossiers enregistrés n'ont pas pu être lus. Saisissez le chemin d'un dossier de ce serveur.",
     "folderPermission": "Démarre en {{name}}, la valeur par défaut de ce dossier.",
-    "autoAsks": "{{tool}} n’a pas de mode automatique : il demandera avant chaque action."
+    "autoAsks": "{{tool}} n’a pas de mode automatique : il demandera avant chaque action.",
+    "worktreeCheckout": "Checkout actuel",
+    "worktreeNew": "Nouveau worktree",
+    "worktreeFrom": "Partir de",
+    "worktreeFromHint": "Branche ou commit (facultatif)",
+    "worktreeNewHint": "La session travaille sur une branche à elle, dans un dossier séparé. Le checkout reste tel quel.",
+    "worktreeLegend": "Copie de travail"
   },
   "composer": {
     "toolPill": "Outil et compte : {{value}}",
     "modelPill": "Modèle : {{value}}",
     "effortPill": "Effort : {{value}}",
     "folderPill": "Dossier : {{value}}",
-    "moreOptions": "Plus d’options"
+    "moreOptions": "Plus d’options",
+    "accessPill": "Ce que l’agent peut faire : {{value}}",
+    "worktreePill": "Copie de travail : {{value}}"
   },
   "lists": {
     "foldersTruncated": "Dossiers enregistrés : {{count}} chargés ; il y en a d’autres.",
@@ -154,6 +182,14 @@
     "cli": "Utiliser la ligne de commande olivares",
     "cliHint": "Sur ce serveur, la commande olivares est déjà installée. Depuis un autre ordinateur, installez-la avec :"
   },
+  "passkeyOffer": {
+    "body": "La prochaine fois, connectez-vous avec une clé d’accès : votre empreinte, votre visage ou le verrouillage de l’écran au lieu d’un mot de passe.",
+    "add": "Ajouter une clé d’accès",
+    "notNow": "Pas maintenant",
+    "added": "Clé d’accès ajoutée. Utilisez-la pour vous connecter la prochaine fois.",
+    "failed": "La clé d’accès n’a pas été ajoutée. Réessayez, ou ajoutez-en une plus tard dans les Paramètres.",
+    "unknown": "La clé d’accès n’a pas pu être confirmée. Elle a peut-être été ajoutée : vérifiez dans les Paramètres avant d’en ajouter une autre."
+  },
   "permissionSummary": {
     "readOnly": "Lit et planifie. Toute modification est refusée.",
     "ask": "Demande avant chaque action qui n’est pas une lecture.",
@@ -165,6 +201,10 @@
   "bring": {
     "title": "Importer vos dossiers",
     "body": "Les dossiers où vos outils ont déjà travaillé, lus dans les propres enregistrements des outils (chemins de projet et dates). Rien n'est enregistré avant votre confirmation.",
+    "offer_one": "{{count}} dossier dans lequel vos outils ont déjà travaillé.",
+    "offer_many": "{{count}} dossiers dans lesquels vos outils ont déjà travaillé.",
+    "offer_other": "{{count}} dossiers dans lesquels vos outils ont déjà travaillé.",
+    "review": "Examiner",
     "error": "Impossible de rechercher les dossiers de vos outils.",
     "unreadable": "Les enregistrements de {{tool}} n'ont pas pu être lus. Ajoutez plutôt les dossiers à la main.",
     "cols": {

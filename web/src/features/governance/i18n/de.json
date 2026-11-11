@@ -144,6 +144,10 @@
     "expiredAt": "Abgelaufen {{time}}",
     "approveOnce": "Einmal genehmigen",
     "approveForSession": "Für diese Sitzung genehmigen",
+    "allowances": "Berechtigungen dieser Sitzung",
+    "revokeAllowance": "Widerrufen",
+    "sessionPolicy": "Die Richtlinie erfordert die Prüfung jeder Anfrage.",
+    "allowancesError": "Sitzungsberechtigungen konnten nicht gelesen oder geändert werden.",
     "approving": "Wird genehmigt…",
     "deny": "Ablehnen",
     "noMatch": "Keine Anfrage passt zur Suche",
@@ -154,7 +158,9 @@
     "approved": "Genehmigt",
     "rejected": "Abgelehnt",
     "canceled": "Storniert",
-    "expired": "Abgelaufen"
+    "expired": "Abgelaufen",
+    "approvedNotUsed": "Genehmigt, nicht verwendet",
+    "approvedUsed": "Genehmigt, verwendet"
   },
   "decide": {
     "rejectTitle": "Diese Anfrage ablehnen?",
@@ -195,10 +201,11 @@
     "reasonHint": "Kontext für die Prüfer (optional).",
     "requiredApprovals": "Erforderliche Genehmigungen",
     "requiredApprovalsHint": "Wird ignoriert, wenn eine passende Genehmigungsrichtlinie gilt — die Richtlinie ist maßgeblich.",
-    "expiresInSeconds": "Läuft ab in (Sekunden)",
-    "escalateInSeconds": "Eskaliert in (Sekunden)",
     "submit": "Anfrage einreichen",
-    "created": "Genehmigungsanfrage eröffnet"
+    "created": "Genehmigungsanfrage eröffnet",
+    "expiresIn": "Läuft ab in",
+    "escalateIn": "Eskaliert in",
+    "subjectFold": "Worauf es sich bezieht (optional)"
   },
   "detail": {
     "title": "Genehmigungsanfrage",
@@ -226,9 +233,12 @@
     "reenableNeedsAdmins": "Zwei andere Administratorkonten müssen dies genehmigen. Legen Sie sie unter Identität & Zugriff an oder mit `olivares users create`.",
     "openIdentity": "Identität öffnen",
     "cannotDecideOwn": "Sie können Ihre eigene Anfrage nicht genehmigen. Ein anderer Administrator muss entscheiden.",
-    "requesterCannotApprove": "Wer die Anfrage gestellt hat, kann sie nicht selbst genehmigen.",
+    "ownRequest": "Sie können Ihre eigene Anfrage nicht genehmigen.",
     "launchedBy": "Gestartet von",
-    "decidedByYou": "Sie haben diese Anfrage genehmigt. Sie wartet auf eine weitere genehmigende Person."
+    "decidedByYou": "Sie haben diese Anfrage genehmigt. Sie wartet auf eine weitere genehmigende Person.",
+    "whoDecides": "Wer entscheiden kann: {{names}}.",
+    "nobodyDecides": "Niemand sonst kann über diese Anfrage entscheiden.",
+    "someoneWithRights": "jemand mit Genehmigungsrechten"
   },
   "policies": {
     "title": "Richtlinien",
@@ -239,6 +249,23 @@
     "enabled": "Aktiviert",
     "rules": "Regeln",
     "newPolicy": "Neue Richtlinie",
+    "roles": {
+      "title": "Rollen",
+      "role": "Rolle",
+      "can": "Was sie darf",
+      "people": "Personen",
+      "kind": "Typ",
+      "builtIn": "Integriert",
+      "custom": "Eigene",
+      "from": "Basiert auf {{role}}",
+      "empty": "Hier stehen die integrierten Rollen, jede mit dem, was sie darf.",
+      "does": {
+        "owner": "Alle Berechtigungen innerhalb des Tenants",
+        "admin": "Das Obige, plus Tenant-IAM — Benutzer, Mitgliedschaften, Tokens, Einstellungen",
+        "editor": "Das Obige, plus operative Daten schreiben",
+        "viewer": "Operative Daten und den Audit-Trail lesen"
+      }
+    },
     "empty": "Keine Richtlinien",
     "emptyHint": "Verfassen Sie eine ABAC-Verweigerungsregel oder einen Genehmigungsschwellenwert, um passende Aktionen zu steuern.",
     "kindAbac": "ABAC",
@@ -276,23 +303,20 @@
     "denyImplicit": "Verweigern (implizit)",
     "requiredApprovals": "Erforderliche Genehmigungen",
     "requiredApprovalsHint": "0 bis 64. Leer oder 0 verwendet den Standard der Engine, der bei kritischen Aktionen höher sein kann.",
-    "expiresInSeconds": "Läuft ab in (Sekunden)",
-    "expiresInSecondsHint": "0–31536000 (0 = nie).",
-    "escalateInSeconds": "Eskaliert in (Sekunden)",
-    "escalateInSecondsHint": "0–31536000 (0 = nie).",
     "countError": "Geben Sie eine ganze Zahl von 0 bis {{max}} ein.",
     "matchAction": "Aktion abgleichen",
     "matchActionHint": "Leer = passt auf jede Aktion.",
     "matchSubjectKind": "Gegenstandsart abgleichen",
     "matchSubjectKindHint": "Leer = passt auf jede Gegenstandsart.",
-    "needsBusiness": "Eine Risikostufe oder eine Anzahl Genehmigungen, die vom Standard der Aktion abweicht, erfordert Business. Schalten Sie diese Richtlinie aus, um sie gespeichert zu lassen.",
     "create": "Richtlinie erstellen",
     "save": "Änderungen speichern",
     "confirmCreateBody": "Eine aktivierte ABAC-Richtlinie schränkt den Zugriff sofort weiter ein; eine aktivierte Genehmigungsrichtlinie beginnt, für passende Aktionen menschliche Genehmigungen zu verlangen. Wird sofort wirksam.",
     "confirmUpdateBody": "Sofern aktiviert, wird die Änderung sofort auf dem Autorisierungspfad / Genehmigungsablauf wirksam. Die Richtlinienart kann nicht geändert werden.",
     "created": "Richtlinie erstellt",
     "updated": "Richtlinie aktualisiert",
-    "credentialWarning": "Das sieht nach einem Anmeldedaten-Wert aus. Richtlinienregeln tragen ausschließlich Referenzen und Selektoren — niemals ein Geheimnis."
+    "credentialWarning": "Das sieht nach einem Anmeldedaten-Wert aus. Richtlinienregeln tragen ausschließlich Referenzen und Selektoren — niemals ein Geheimnis.",
+    "expiresIn": "Läuft ab in",
+    "escalateIn": "Eskaliert in"
   },
   "policyRemove": {
     "title": "Diese Richtlinie löschen?",
@@ -671,6 +695,14 @@
     "askedByForSession": "{{name}} für eine neue Sitzung",
     "askedByThroughSession": "{{name}} über die eigene Sitzung",
     "tool": "Werkzeug",
+    "touches": "Betrifft",
+    "changeClass": {
+      "docs_only": "Nur Dokumentation",
+      "code": "Code",
+      "sensitive": "Sensible Dateien"
+    },
+    "lapses": "<when />; danach kann niemand sie genehmigen, und sie wird nicht ausgeführt.",
+    "lapsed": "Abgelaufen <when />: niemand kann sie genehmigen, und sie wird nicht ausgeführt.",
     "willRun": "Was ausgeführt wird",
     "noReview": "Diese Anfrage enthält nicht, was ausgeführt wird.",
     "commandUnknown": "Befehl wird für dieses Werkzeug noch nicht angezeigt",
@@ -732,5 +764,15 @@
       "editor": "Bearbeiter",
       "owner": "Eigentümer"
     }
+  },
+  "durations": {
+    "none": "Kein Limit",
+    "h1": "1 Stunde",
+    "h4": "4 Stunden",
+    "h8": "8 Stunden",
+    "h24": "24 Stunden",
+    "d7": "7 Tage",
+    "d30": "30 Tage",
+    "seconds": "{{value}} Sekunden"
   }
 }

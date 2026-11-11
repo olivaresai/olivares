@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils'
 
 /**
  * Label — the form-row caption. Built on Radix Label so clicking it focuses its
- * control and `htmlFor` association is correct. Dims with a disabled `peer` so the
+ * control and `htmlFor` association is correct. A Field sets it in bold, as a field's
+ * caption; beside a checkbox or a switch it stays at 500. Dims with a disabled `peer` so the
  * caption visually tracks the control state. `select-none` keeps double-click on a
  * field label from selecting text instead of focusing the input.
  */
@@ -20,7 +21,7 @@ export function Label({
       data-slot="label"
       className={cn(
         'text-body font-medium text-foreground select-none',
-        'peer-disabled:pointer-events-none peer-disabled:opacity-50',
+        'peer-disabled:pointer-events-none peer-disabled:opacity-45',
         className,
       )}
       {...props}

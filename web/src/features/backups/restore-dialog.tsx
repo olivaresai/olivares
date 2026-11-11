@@ -27,6 +27,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
 import {
+  reportEditionRefusal,
   useFailedActionReporter,
   usePrivilegedMutation,
 } from '@/lib/hooks/use-privileged-mutation'
@@ -89,6 +90,7 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
         report(err)
         return
       }
+      if (reportEditionRefusal(err)) return
       if (err instanceof ApiError && err.isForbidden) {
         toast.warning(t('restore.notAuthorized'))
         return

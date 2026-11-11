@@ -69,14 +69,14 @@ export function CodeLine({
         data-slot="code-line"
         data-inline="true"
         className={cn(
-          'inline-flex max-w-full items-center gap-0.5 rounded-[5px] border border-line bg-surface py-px ps-1.5 align-middle',
+          'inline-flex max-w-full items-center gap-0.5 rounded-[5px] bg-muted py-px ps-1.5 align-middle',
           className,
         )}
         {...props}
       >
         <code
           tabIndex={0}
-          className="min-w-0 overflow-x-auto font-mono text-mono-s whitespace-pre text-text outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          className="min-w-0 overflow-x-auto font-mono text-mono whitespace-pre text-text outline-none focus-visible:ring-2 focus-visible:ring-focus"
         >
           {command}
         </code>
@@ -97,7 +97,8 @@ export function CodeLine({
           {label ?? t('ui.codeLine.label')}
         </span>
       )}
-      <div className="flex min-w-0 items-start gap-2 rounded-card border border-line bg-frame py-2 ps-3.5 pe-1.5">
+      {/* A well: recessed below the surface, with an inner edge and no outline. */}
+      <div className="flex min-w-0 items-start gap-2 rounded-ctl bg-[var(--well)] py-2 ps-3.5 pe-1.5 shadow-[var(--shadow-well)]">
         <span
           data-slot="code-line-prompt"
           aria-hidden="true"

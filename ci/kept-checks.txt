@@ -37,6 +37,7 @@ lint:ci-history-depth:selftest
 lint:ci-inner-clocks
 lint:ci-inner-clocks:selftest
 lint:ci-ports
+lint:ci-resource-witness:selftest
 lint:ci-secrets-cap
 lint:ci-sibling-legs
 lint:ci-sibling-legs:selftest

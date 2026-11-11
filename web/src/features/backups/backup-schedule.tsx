@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { withInlineCommands } from '@/components/ui/inline-commands'
 import { Field } from '@/components/ui/field'
@@ -105,12 +106,20 @@ function ProtectionStatus({ data }: { data: DRSchedule }) {
 }
 
 export function BackupProtectionStatus() {
+  const { t } = useTranslation('backups')
   const q = useQuery({
     queryKey: drKeys.schedule(),
     queryFn: () => drApi.getSchedule(),
     refetchInterval: 60_000,
   })
-  return q.data ? <ProtectionStatus data={q.data} /> : null
+  if (q.data) return <ProtectionStatus data={q.data} />
+  return q.error ? (
+    <QueryErrorState
+      error={q.error}
+      retry={() => void q.refetch()}
+      title={t('schedule.loadFailed')}
+    />
+  ) : null
 }
 
 /** Best-effort human preview of a 5-field cron expression. Covers the common
@@ -217,8 +226,18 @@ export function BackupSchedule() {
     if (!dirty) setDirty(true)
   }
 
-  if (scheduleQ.isLoading) {
-    return (
+  // Never a form seeded from nothing: its Save would write the defaults over
+  // the real schedule (copies off, offsite target and restore gate cleared).
+  // Until the first answer: its failure, or the wait (a first read paused
+  // offline is neither loading nor failed).
+  if (!data) {
+    return scheduleQ.error ? (
+      <QueryErrorState
+        error={scheduleQ.error}
+        retry={() => void scheduleQ.refetch()}
+        title={t('schedule.loadFailed')}
+      />
+    ) : (
       <div className="flex items-center gap-2 p-6 text-muted-foreground">
         <Spinner size="sm" />
         {t('schedule.loading')}

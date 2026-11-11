@@ -61,8 +61,9 @@ const ASK = '/v1/m/models/ask'
 const APPROVALS = '/v1/m/governance/approvals'
 
 export const askKeys = {
-  view: ['ask', 'view'] as const,
-  approval: (id: string) => ['ask', 'approval', id] as const,
+  view: (tenant: string | null) => ['ask', tenant, 'view'] as const,
+  approval: (tenant: string | null, id: string) =>
+    ['ask', tenant, 'approval', id] as const,
 }
 
 export const askApi = {

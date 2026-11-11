@@ -35,7 +35,7 @@
     "sumsAbsent": "기록된 의존성 합계 없음",
     "vcsAvailable": "Go 툴체인이 VCS 설정을 스탬프했습니다",
     "vcsUnavailable": "VCS 스탬프 없음",
-    "selfHashHint": "자체 SHA256은 실행 파일의 스트림 해시이며 첫 읽기 시 한 번 계산됩니다. 향후 서명된 checksums.txt와 오프라인에서 비교하십시오 — 브라우저는 서명을 검증하지 않으며 해시만으로는 출처가 아니라 동일성만 증명합니다.",
+    "selfHashHint": "자체 SHA256은 실행 중인 실행 파일의 해시이며 첫 읽기 시 한 번 계산됩니다. 정확히 이 바이트를 가리킬 뿐, 출처를 증명하지는 않습니다. 릴리스를 확인하려면 아래의 “직접 확인하기”를 사용하십시오. 그곳에서 확인하는 아카이브로 설치했다면, 그 아카이브 안의 olivares 파일에 대한 sha256sum이 이 값과 같습니다.",
     "published": "게시됨",
     "notPublished": "게시되지 않음",
     "verifierAvailable": "네이티브 검증기가 컴파일되어 있음(core/secure/modelsign)",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "선언됨."
     }
+  },
+  "check": {
+    "title": "직접 확인하기",
+    "description": "콘솔을 거치지 않고 터미널에서 같은 확인을 합니다.",
+    "download": "<release>{{version}} 릴리스 페이지</release>에서 checksums.txt, checksums.txt.sig, checksums.txt.pem과 설치에 사용한 아카이브 또는 패키지를 내려받은 뒤, 그 폴더에서 다음을 실행하세요.",
+    "provenance": "아카이브와 함께 <release>{{version}} 릴리스 페이지</release>에서 multiple.intoto.jsonl을 내려받은 뒤, 그 폴더에서 다음을 실행하세요.",
+    "passes": "“Verified OK” 다음에 각 파일 옆에 OK가 표시되면, 내려받은 파일은 Olivares AI 릴리스 워크플로가 {{version}}에 서명한 파일입니다.",
+    "notRelease": "이 빌드는 서명된 릴리스가 아니므로 대조할 릴리스 서명이 없습니다.",
+    "business": "Olivares AI Business는 Business 채널의 안내에 따라 확인합니다."
   },
   "status": {
     "declared": "선언됨",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "릴리스 아티팩트",
     "description": "릴리스에 포함되는 항목과 각 아티팩트의 신뢰 설정 방식입니다. 키리스(Fulcio/Rekor)와 키 기반(에어갭) 서명은 모두 1급이며 어느 쪽도 정규가 아닙니다.",
-    "identityNote": "키리스 서명 신원(선언됨): OIDC 발급자 {{issuer}} · cosign 인증서 신원 {{regexp}}",
+    "identityNote": "키리스 서명 신원(선언됨): OIDC 발급자 {{issuer}} · cosign 인증서 신원 <identity />",
     "columns": {
       "artifact": "아티팩트",
       "producedBy": "생성 주체",

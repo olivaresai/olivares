@@ -41,6 +41,36 @@ type sessionGit struct {
 type runGitStatus struct {
 	gitpublish.LocalStatus
 	Writable bool `json:"writable"`
+	// Head is the commit and tree HEAD holds, which a publication of the folder names;
+	// absent while the branch has no commit.
+	Head *runGitHead `json:"head,omitempty"`
+}
+
+type runGitHead struct {
+	Commit string `json:"commit"`
+	Tree   string `json:"tree"`
+}
+
+// head reads HEAD's commit and tree through the same read-only confined Git; nil, nil
+// when the branch has no commit yet.
+func (g sessionGit) head(ctx context.Context) (*runGitHead, error) {
+	commit, err := g.exec(ctx, []string{"rev-parse", "--verify", "--quiet", "HEAD^{commit}"}, "", nil)
+	var exit *gitpublish.LocalCommandExit
+	if errors.As(err, &exit) && exit.Code == 1 {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	tree, err := g.exec(ctx, []string{"rev-parse", "--verify", "HEAD^{tree}"}, "", nil)
+	if err != nil {
+		return nil, err
+	}
+	h := &runGitHead{Commit: strings.TrimSpace(commit), Tree: strings.TrimSpace(tree)}
+	if !validGitObjectID(h.Commit) || !validGitObjectID(h.Tree) {
+		return nil, conflictErr("git did not name the commit and tree of HEAD")
+	}
+	return h, nil
 }
 
 func (g sessionGit) writable() bool {
@@ -60,7 +90,11 @@ func (g sessionGit) status(ctx context.Context) (runGitStatus, error) {
 		}
 		s.Files = files
 	}
-	return runGitStatus{LocalStatus: s, Writable: g.writable()}, err
+	if err != nil {
+		return runGitStatus{LocalStatus: s, Writable: g.writable()}, err
+	}
+	head, err := reader.head(ctx)
+	return runGitStatus{LocalStatus: s, Writable: g.writable(), Head: head}, err
 }
 func (g sessionGit) stage(ctx context.Context, paths []string, unstage bool) error {
 	if !g.writable() {
@@ -105,10 +139,14 @@ func (g sessionGit) initialize(ctx context.Context) error {
 	return err
 }
 
+// errFolderNotGit is 404 as it always was, with its own code: the console tells it from a
+// missing session.
+var errFolderNotGit = &codedRunErr{&runErr{http.StatusNotFound, "this session folder is not a Git repository"}, "not_a_git_repository"}
+
 func (g sessionGit) exec(ctx context.Context, args []string, input string, identity []string) (string, error) {
 	layout, ok := gitlayout.Read(g.dir)
 	if !ok {
-		return "", &runErr{http.StatusNotFound, "this session folder is not a Git repository"}
+		return "", errFolderNotGit
 	}
 	return g.run(ctx, []string{"--git-dir=" + layout.GitDir, "--work-tree=" + g.dir, "--literal-pathspecs"},
 		[]EnvVar{{"GIT_COMMON_DIR", layout.CommonDir}}, args, input, identity)
@@ -235,7 +273,7 @@ func (m *Module) openRunGit(ctx context.Context, tenant model.TenantID, runRef s
 	}
 	// A changed registration must never grant access to yesterday's folder.
 	if ws != nil && rec.String(colRunWorktreeBranch) == "" && resolvedPath(dir) != ws.rootReal {
-		return g, nil, nil, &runErr{http.StatusConflict, "this session folder no longer matches its workspace"}
+		return g, nil, nil, &codedRunErr{&runErr{http.StatusConflict, "this session folder no longer matches its workspace"}, "folder_mismatch"}
 	}
 	if ws != nil && rec.String(colRunWorktreeBranch) != "" {
 		linked, linkedOK := gitlayout.Read(dir)

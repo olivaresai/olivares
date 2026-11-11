@@ -100,6 +100,58 @@ func TestRBACCatalogWireShape(t *testing.T) {
 	}
 }
 
+// TestRBACCatalogBuiltinRolePermissions: the catalog says what each built-in role HOLDS,
+// so the console can show a role's permissions instead of its bare name. Every listed
+// permission must be one the engine's own RoleGrants confers, and the tier lines the
+// engine draws (privileged reads from editor up, module verbs by tier, core admin verbs
+// for owner only) must show on the wire.
+func TestRBACCatalogBuiltinRolePermissions(t *testing.T) {
+	t.Cleanup(auth.ResetModuleCatalog)
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+
+	r := h.do("GET", "/v1/m/governance/rbac/catalog", admin, nil, tenantHdr(tenant))
+	if r.code != http.StatusOK {
+		t.Fatalf("catalog = %d %s", r.code, r.raw)
+	}
+	byRole, ok := r.body["builtin_role_permissions"].(map[string]any)
+	if !ok {
+		t.Fatalf("catalog has no builtin_role_permissions object: %s", r.raw)
+	}
+	held := map[string]map[string]bool{}
+	for _, role := range []string{auth.RoleViewer, auth.RoleEditor, auth.RoleAdmin, auth.RoleOwner} {
+		held[role] = strSet(byRole[role])
+		if len(held[role]) == 0 {
+			t.Fatalf("builtin_role_permissions[%s] is empty: %s", role, r.raw)
+		}
+		for p := range held[role] {
+			if !auth.RoleGrants(role, auth.Permission(p)) {
+				t.Errorf("%s is listed for %s but the engine does not grant it", p, role)
+			}
+		}
+	}
+	for _, c := range []struct {
+		role, perm string
+		want       bool
+	}{
+		{auth.RoleViewer, "audit:read", true},
+		{auth.RoleViewer, "authz:read", false}, // privileged read: editor and up
+		{auth.RoleEditor, "authz:read", true},
+		{auth.RoleViewer, permApprovalRead, true},
+		{auth.RoleViewer, permNHIWrite, false},
+		{auth.RoleEditor, permNHIWrite, true},
+		{auth.RoleEditor, permNHIAdmin, false},
+		{auth.RoleAdmin, permNHIAdmin, true},
+		{auth.RoleAdmin, "agent:admin", false},
+		{auth.RoleOwner, "agent:admin", true},
+	} {
+		if held[c.role][c.perm] != c.want {
+			t.Errorf("builtin_role_permissions[%s] has %s = %v, want %v", c.role, c.perm, held[c.role][c.perm], c.want)
+		}
+	}
+}
+
 // TestCustomRoleWithModulePermsOverHTTP is the operator story end to end: authoring a role
 // that carries module permissions and omits one on purpose, and being refused one that no
 // module declares.

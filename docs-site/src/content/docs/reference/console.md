@@ -81,15 +81,15 @@ permission it requires and the reference page its in-product help link opens.
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Resources | `/estate` | What you have set up, and how its parts depend on each other, work items included. | `sessions:run:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
+| Resources | `/estate` | What you have set up, and how its parts depend on each other, work items included. | `tenant:admin` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Inventory | `/inventory` | Agents, MCP servers and models that connectors have observed, and when each was last seen. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
-| Workspace | `/workspace` | Agents, sessions, resources and activity scoped to one workspace | `tenant:read` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
+| Workspace | `/workspace` | Agents, sessions, resources and activity scoped to one workspace | `sessions:workspace:read` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
 
 ### AI
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| AI tools | `/agent-tools` | See the accounts and API keys sessions run as; installing and signing in the tools is for deployment administrators | `sessions:account:read` | [how-to/add-a-provider](/how-to/add-a-provider/) |
+| AI tools | `/agent-tools` | See the accounts sessions run as; installing and signing in the tools is for deployment administrators | `sessions:account:read` | [how-to/add-a-provider](/how-to/add-a-provider/) |
 | Operate sessions | `/agentops` | Start sessions and follow what each one does, including the ones Olivares finds | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/how-to/run-claude-code-with-olivares/) |
 | Model operations | `/model-operations` | Owned models, admission and deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
 | Models | `/models` | Models, routing and governance | `models:catalog:read` | [reference/modules/x-models](/reference/modules/x-models/) |
@@ -99,7 +99,6 @@ permission it requires and the reference page its in-product help link opens.
 | Provider profiles | `/provider-profiles` | Register and administer the provider homes sessions launch under, and read their configuration on demand | `sessions:profile:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Providers | `/providers` | Register the API keys and endpoints sessions launch with; test, rotate and revoke them | `sessions:provider:read` | [how-to/add-a-provider](/how-to/add-a-provider/) |
 | Rate limits | `/rate-limits` | Anthropic rate-limit inventory and its availability (read-only reference) | `models:ratelimits:read` | [reference/modules/x-models](/reference/modules/x-models/) |
-| Reach | `/reach` | See which destinations each tool can reach, and which are waiting for approval. | `accessmap:graph:read` | [reference/modules/iii-access-map](/reference/modules/iii-access-map/) |
 | Sandbox | `/sandbox` | Isolated agent testing and replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/reference/modules/xvii-sandbox/) |
 | Sessions | `/sessions` | Start sessions and follow what each one does, including the ones Olivares finds | `sessions:live:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Voice | `/voice` | Voice and realtime sessions | `voice:session:read` | [reference/modules/xvi-voice](/reference/modules/xvi-voice/) |
@@ -140,13 +139,12 @@ permission it requires and the reference page its in-product help link opens.
 | Access map | `/access-map` | What each agent reads and writes (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/reference/modules/iii-access-map/) |
 | Policy export | `/agentcore-export` | Plan, review and apply the projection of this tenant's governance rules onto AWS AgentCore as Cedar policies; planning writes nothing | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Managed policy | `/claude-policy` | Managed policy, hooks, MCP, sandbox and policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/how-to/connectors/claude-code-hooks-pep/) |
-| Identity | `/identity` | SSO, SCIM and the identities your agents use | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
+| Identity | `/identity` | SSO, SCIM and the identities your agents use | `user:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Inference proxy | `/inference-proxy` | Proxy gates, egress DLP rules and device approvals | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/reference/modules/inferenceproxy/) |
-| Kill switch | `/killswitch` | Emergency stop, dual-control recovery and guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/how-to/cookbook/kill-switch-drill/) |
+| Kill switch | `/killswitch` | Emergency stop, dual-control recovery and guardian containment | `governance:killswitch:admin` | [how-to/cookbook/kill-switch-drill](/how-to/cookbook/kill-switch-drill/) |
 | Permissions | `/permissions` | Identity, roles and approvals | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Routine policies | `/routine-policies` | Cadence floors, concurrency caps, approval requirements, cron allowlists and blocked environments for Claude Code routines | `governance:routine:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Security | `/security` | Guardrails, forensics and anomalies | `security:finding:read` | [reference/modules/ix-security](/reference/modules/ix-security/) |
-| Vault | `/vault` | Your passwords, notes and authenticator codes | `tenant:read` | [reference/console](/reference/console/) |
 
 ### Delivery
 
@@ -161,14 +159,15 @@ permission it requires and the reference page its in-product help link opens.
 | Adoption | `/adoption` | Productivity, acceptance & model mix | `adoption:metrics:read` | [reference/modules/claudeadoption](/reference/modules/claudeadoption/) |
 | Supply chain | `/attestation` | Release attestation — SLSA, SBOM, VEX and Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/how-to/verify-a-release/) |
 | Ledger | `/audit` | Tamper-evident evidence ledger | `audit:read` | [reference/modules/ix-security](/reference/modules/ix-security/) |
-| Dashboards | `/dashboards` | Executive KPIs and reporting | any signed-in user | [reference/modules/xxi-executive-dashboards](/reference/modules/xxi-executive-dashboards/) |
+| Dashboards | `/dashboards` | Executive KPIs and reporting | `tenant:admin` | [reference/modules/xxi-executive-dashboards](/reference/modules/xxi-executive-dashboards/) |
 | Evals | `/evals` | Quality, evals and regression | `evals:run:read` | [reference/modules/xii-evals](/reference/modules/xii-evals/) |
 | Health | `/health` | Agent and MCP uptime and SLAs | `health:status:read` | [reference/modules/xxii-health](/reference/modules/xxii-health/) |
 | Observability | `/observability` | Ingestion health by standard and trace drill-down | `health:status:read` | [reference/modules/observability](/reference/modules/observability/) |
-| Operations | `/operations` | The host, its disks, the live sessions and their usage, over 24 hours, 7 or 30 days. | `sessions:run:read` | [reference/console](/reference/console/) |
+| Operations | `/operations` | The host, its disks, the live sessions and their usage, over 24 hours, 7 or 30 days. | `health:status:read` | [reference/console](/reference/console/) |
+| Reach | `/reach` | See which destinations each tool can reach, and which are waiting for approval. | `accessmap:graph:read` | [reference/modules/iii-access-map](/reference/modules/iii-access-map/) |
 | Retention | `/retention` | How long each class of record is kept, the sweep that applies it and its sealed certificates | `compliance:retention:read` | [reference/modules/xiii-compliance](/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Consumption against each stored limit. Reserved capacity counts toward the limit. | `finops:budget:read` | [reference/modules/xi-finops](/reference/modules/xi-finops/) |
-| Usage | `/usage` | Each account's official 5-hour and weekly limits, nearest first, and today's tokens and cost. | `sessions:run:read` | [reference/console](/reference/console/) |
+| Usage | `/usage` | Each account's official 5-hour and weekly limits, nearest first, and today's tokens and cost. | `sessions:account:read` | [reference/console](/reference/console/) |
 
 ### System & settings
 
@@ -181,6 +180,7 @@ permission it requires and the reference page its in-product help link opens.
 | Logs | `/logs` | The live engine log stream, with level and module filters, search and pause | `system:admin` | [how-to/troubleshooting](/how-to/troubleshooting/) |
 | Setup | `/onboarding` | Step-by-step deployment configuration | `system:admin` | [start/quickstart](/start/quickstart/) |
 | Updates | `/updates` | The version this engine runs, the newest signed release in its channel, and one action to install it | `system:admin` | [how-to/upgrade-and-rollback](/how-to/upgrade-and-rollback/) |
+| Vault | `/vault` | Your passwords, notes and authenticator codes | `tenant:read` | [reference/console](/reference/console/) |
 
 ### Sign-in, setup and account
 

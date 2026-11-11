@@ -363,6 +363,32 @@ func TestManagedStopReadinessFollowsTheRunDescriptor(t *testing.T) {
 	}
 }
 
+// TestManagedStopRefusesAnotherPersonsOwnedLogin: a run on a person's own login is stopped
+// by that person only. An administrator and a colleague who pass all three questions are
+// refused with no journal row; the owner stops it.
+func TestManagedStopRefusesAnotherPersonsOwnedLogin(t *testing.T) {
+	for _, be := range managedStopBackends(t) {
+		t.Run(be.name, func(t *testing.T) {
+			f := newManagedStopFixture(t, be.config(t))
+			owner := f.operator("owner@w2.test", auth.RoleEditor, true, 2*time.Minute)
+			admin := f.operator("admin@w2.test", auth.RoleAdmin, true, 2*time.Minute)
+			colleague := f.operator("colleague@w2.test", auth.RoleEditor, true, 2*time.Minute)
+			dto, lr := f.launch("thread-owned")
+			setProfileOwner(t, f.m, f.tenant, f.profile.Ref, owner.UserID.String())
+
+			for who, p := range map[string]auth.Principal{"administrator": admin, "colleague": colleague} {
+				opID := "owned-" + who
+				res, err := f.call(f.request(p, dto, lr.launchID, opID))
+				f.refuseWithNoJournalRow(res, err, opID, ManagedStopForbidden)
+			}
+			res, err := f.call(f.request(owner, dto, lr.launchID, "owned-owner"))
+			if err != nil || res.Outcome != ManagedStopStopped {
+				t.Fatalf("owner: outcome = %q (%s), %v; want stopped", res.Outcome, res.Detail, err)
+			}
+		})
+	}
+}
+
 // TestManagedStopLawfulPositive is the whole path: three questions, one claim, a
 // real process ended, and a recorded settlement.
 func TestManagedStopLawfulPositive(t *testing.T) {

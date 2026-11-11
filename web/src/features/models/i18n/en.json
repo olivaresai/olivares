@@ -347,6 +347,8 @@
     "installModel": "Install a model",
     "addProvider": "Add a provider",
     "sourceFailed": "{{source}} could not be read. The other sources are still shown.",
+    "providerFailed": "{{source}} did not list its models: run <0>Test connection</0> on Providers.",
+    "providerFailedAlone": "{{source}} did not list its models.",
     "sources": {
       "tools": "The tools' model lists",
       "ollama": "Ollama",

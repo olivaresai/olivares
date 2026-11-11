@@ -161,9 +161,11 @@ export function LaunchReadinessPanel({
         <ReadinessNotice tone="warning">
           {err instanceof ApiError && err.status === 401
             ? t('readiness.unauthenticated')
-            : err instanceof ApiError && err.status === 403
+            : err instanceof ApiError && err.isForbidden
               ? t('readiness.forbidden')
-              : t('readiness.notFound')}
+              : err instanceof ApiError && err.isEditionRefusal
+                ? err.message
+                : t('readiness.notFound')}
         </ReadinessNotice>
       )}
 

@@ -5,6 +5,12 @@
   },
   "title": "Limites de débit",
   "description": "Limites de débit de votre organisation et de vos espaces de travail. Lecture seule.",
+  "profiles": {
+    "title": "Limites de chaque profil",
+    "description": "Ce que l’outil de chaque profil lui permet d’utiliser, et quand cela se réinitialise. L’outil les indique ; Olivares ne les fixe pas.",
+    "none": "Aucun outil de profil n’indique de limite en vigueur pour l’instant.",
+    "truncated": "Certains profils ne sont pas affichés."
+  },
   "caveats": {
     "keepInSync": "Les passerelles/proxys doivent rester synchronisés : ces limites constituent l’inventaire qu’une passerelle ou un proxy en amont doit refléter. Elles ne sont pas appliquées ici, et leur modification s’effectue chez le fournisseur, non dans cette console.",
     "managedAgents": "Les Managed Agents ne sont PAS couverts par l’API Rate Limits. Leurs limites constituent une lacune documentée, et non une valeur nulle — aucune ligne Managed-Agents n’est affichée car l’API n’en signale aucune."

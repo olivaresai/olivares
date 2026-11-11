@@ -85,7 +85,12 @@ describe('collectSecretUsage', () => {
         name: 'nightly',
         secret_env: [{ env: 'API', secret: 'env/api' }],
       },
-      { run_ref: 'run_2', secret_env: [{ env: 'API', secret: 'env/api' }] },
+      // A run nobody named is called by the title the engine gave it.
+      {
+        run_ref: 'run_2',
+        title: 'Rotate the key',
+        secret_env: [{ env: 'API', secret: 'env/api' }],
+      },
       // Two runs may share a name; each is its own use.
       {
         run_ref: 'run_3',
@@ -111,7 +116,7 @@ describe('collectSecretUsage', () => {
     ])
     expect(usage.store.get('env/api')).toEqual([
       { kind: 'session', label: 'nightly', id: 'run_1' },
-      { kind: 'session', label: 'run_2', id: 'run_2' },
+      { kind: 'session', label: 'Rotate the key', id: 'run_2' },
       { kind: 'session', label: 'nightly', id: 'run_3' },
     ])
     // A literal setting is not a reference; another backend is external.

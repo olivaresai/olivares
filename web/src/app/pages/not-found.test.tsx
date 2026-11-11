@@ -32,11 +32,16 @@ describe('a bookmarked page this edition does not include', () => {
     async (path) => {
       await renderAt(path.replace(/\$\w+/g, 'x1'))
       expect(
-        screen.getByRole('heading', { name: 'Part of Business' }),
+        screen.getByRole('heading', {
+          name: 'This page is part of Olivares AI Business',
+        }),
       ).toBeInTheDocument()
       expect(
-        screen.getByText(/part of Olivares AI Business/),
+        screen.getByText(/Your data and your pages stay the same/),
       ).toBeInTheDocument()
+      expect(
+        screen.getByRole('link', { name: 'View editions' }),
+      ).toHaveAttribute('href', '/settings?section=edition')
       const link = screen.getByRole('link', { name: 'About Business' })
       expect(link).toHaveAttribute('href', 'https://olivares.ai/business')
       expect(link).toHaveAttribute('target', '_blank')
@@ -45,11 +50,10 @@ describe('a bookmarked page this edition does not include', () => {
     },
   )
 
-  it('sends its one primary action to the start page and keeps About Business quiet', async () => {
+  it('offers View editions as its one act, never as a failure, and keeps About Business quiet', async () => {
     await renderAt('/deploy')
-    expect(
-      screen.getByRole('link', { name: 'Go to the start page' }),
-    ).toHaveAttribute('href', '/')
+    expect(screen.getByRole('status')).toHaveTextContent('View editions')
+    expect(screen.queryByRole('alert')).toBeNull()
     expect(
       screen.getByRole('link', { name: 'About Business' }).className,
     ).not.toMatch(/accent/)
@@ -60,7 +64,9 @@ describe('a bookmarked page this edition does not include', () => {
     async (path) => {
       await renderAt(path)
       expect(
-        screen.getByRole('heading', { name: 'Part of Business' }),
+        screen.getByRole('heading', {
+          name: 'This page is part of Olivares AI Business',
+        }),
       ).toBeInTheDocument()
     },
   )

@@ -21,7 +21,7 @@ affiche l’adresse e-mail, le forfait, les fenêtres d’utilisation et les mod
 l’outil expose. Les valeurs manquantes restent indisponibles, et les actualisations
 échouées sont marquées comme périmées.
 
-**Clés d’API** dans **Outils** (`/agent-tools`) contient les clés d’API et les
+**Fournisseurs** (`/providers`, dans **Outils**) contient les clés d’API et les
 points de terminaison de modèles locaux. Ajoutez et testez le fournisseur à cet
 endroit, puis utilisez-le depuis Nouvelle session. Une clé de fournisseur et un
 abonnement à un outil sont deux façons différentes de se connecter. Ollama nécessite
@@ -49,7 +49,7 @@ saisissez-le avant d’appuyer sur **Démarrer**.
 Un outil qui utilise une clé de fournisseur emploie son modèle enregistré ou vous
 laisse sélectionner un modèle renvoyé par le test de connexion. Si le modèle est
 requis mais que le test n’en a renvoyé aucun, testez d’abord la connexion sous
-**Clés d’API** dans **Outils**. Claude Code peut utiliser son modèle par défaut natif.
+**Fournisseurs**. Claude Code peut utiliser son modèle par défaut natif.
 
 Pour l’installation Compose du README, exécutez la CLI à l’intérieur du conteneur du
 moteur. Elle y trouve le moteur local et son certificat. Connectez-vous avec le compte
@@ -57,7 +57,7 @@ administrateur Olivares que vous avez créé pendant la configuration, et non av
 abonnement à l’outil.
 
 Lorsque vous utilisez une clé de fournisseur avec un outil qui exige un modèle, comme
-Codex, enregistrez un modèle par défaut sous **Clés d’API** dans **Outils** avant
+Codex, enregistrez un modèle par défaut sous **Fournisseurs** avant
 d’exécuter `session start` ci-dessous. Si ni le fournisseur ni le profil de l’outil
 n’a de modèle configuré, ajoutez `--model <tested-model-id>` à la commande
 `session start`, en remplaçant l’espace réservé par un identifiant de modèle renvoyé

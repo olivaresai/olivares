@@ -78,6 +78,7 @@
     "colActions": "작업",
     "enabled": "활성화됨",
     "disabled": "비활성화됨",
+    "any": "모두",
     "bulk": {
       "enable": "선택 항목 활성화",
       "disable": "선택 항목 비활성화"

@@ -73,6 +73,14 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc Mod
 	if s.edition != "" {
 		info["edition"] = s.edition
 	}
+	// The edition the live license entitles, beside the build's: a Community build holding an
+	// Engineer or Business license offers the step to the licensed build. Absent for a product
+	// this build does not know.
+	if lic.LicensedEdition != "" {
+		info["licensed_edition"] = lic.LicensedEdition
+	}
+	// Where each placed capability lives (the engine's route-gate table), so the console keeps no copy.
+	info["placement"] = editionPlacement
 	// The pin of the certificate this engine serves, so the console can print the full
 	// `olivares login --server <address> --pin-sha256 <pin>` line for a self-signed
 	// engine. It is public by nature: every TLS client receives the certificate.
@@ -99,8 +107,9 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc Mod
 	if s.previewsHidden {
 		info["previews_hidden"] = true
 	}
-	// No invitation mailer: invite mode answers 409 invite_delivery_unavailable, so
-	// the console offers the initial password only. Absent when invitations are mailed.
+	// No invitation mailer: invite mode answers 409 invite_delivery_unavailable unless
+	// it asks for delivery "link", so the console shows the link on the screen. Absent
+	// when invitations are mailed.
 	if s.inviteSender == nil {
 		info["invite_delivery_unavailable"] = true
 	}
@@ -622,8 +631,18 @@ func (s *Server) handleGrantMembership(w http.ResponseWriter, r *http.Request, m
 		s.badRequest(w, r, "valid tenant required")
 		return
 	}
+	userID, err := model.ParseID(in.UserID)
+	if err != nil || userID.IsZero() {
+		s.badRequest(w, r, "valid user_id required")
+		return
+	}
 	if !s.allow(r.Context(), p, "membership:write", tenant) {
 		s.writeError(w, r, forbiddenFor("membership:write", false))
+		return
+	}
+	// A person's role is authority: a signed-in administrator meets the deployment's
+	// administrative step-up first. An API token keeps the grant it was issued with.
+	if p.Kind == auth.KindUser && !s.requireStepUp(w, r, p) {
 		return
 	}
 	// an OPTIONAL workspace confinement, validated in the GRANTED tenant.
@@ -631,7 +650,7 @@ func (s *Server) handleGrantMembership(w http.ResponseWriter, r *http.Request, m
 	if !ok {
 		return
 	}
-	m, err := s.authr.GrantMembership(r.Context(), p, model.ID(in.UserID), tenant, in.Role, workspaceID)
+	m, err := s.authr.GrantMembership(r.Context(), p, userID, tenant, in.Role, workspaceID)
 	if errors.Is(err, auth.ErrConsentRequired) {
 		writeConsentRequired(w)
 		return

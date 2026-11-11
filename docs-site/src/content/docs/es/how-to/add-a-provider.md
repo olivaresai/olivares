@@ -28,8 +28,8 @@ las nombran por separado.
 
 ### Desde la consola
 
-1. Abre **Herramientas** en la barra superior y busca **Claves de API**.
-2. Elige **Añadir una clave de API**. Mientras no haya ninguna clave registrada, el botón dice **Añade tu primer proveedor**.
+1. Abre **Herramientas** en la barra superior y elige **Proveedores**.
+2. Elige **Añadir una clave de API** en la cabecera de la página.
 3. Elige el proveedor, ponle un nombre que reconozcas en un selector y pega la clave.
    Deja el endpoint vacío salvo que apuntes a tu propio gateway; un proveedor
    `openai_compatible` exige uno, porque no hay ningún endpoint oficial que suponer.

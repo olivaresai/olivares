@@ -571,9 +571,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colApproveCount, Kind: model.KindInt},
 			{Name: colRejectCount, Kind: model.KindInt},
 			{Name: colReason, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose, rendered only: approvals.go:94")},
-			{Name: colApprovalReview, Kind: model.KindJSON, Nullable: true, Principal: model.Nested(ApprovalReview{}, model.ClassEvidence,
+			{Name: colApprovalReview, Kind: model.KindJSON, Nullable: true, Principal: model.Nested(approvalReviewRecord{}, model.ClassEvidence,
 				model.Leaf("tool", model.None("a reviewed tool's display name, never resolved to a principal: approval_review.go:51")),
-				model.Leaf("text", model.None("bounded masked display facts, never execution or authority input: approval_review.go:51")))},
+				model.Leaf("text", model.None("bounded masked display facts, never execution or authority input: approval_review.go:51")),
+				model.Leaf("session_allowance_key", model.None("engine-derived action digest bound to the session process fence, never a principal; compared only with the request's key: approval_service.go:426")))},
 			{Name: colPolicyRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the matched approval policy, rendered only: approvals.go:94")},
 			// The class of the change a publication proposes and the paths that
 			// decided it: set once at the request, matched against approval

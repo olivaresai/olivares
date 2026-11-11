@@ -106,6 +106,28 @@ describe('CodeLine', () => {
     expect(chip).toHaveAttribute('tabindex', '0')
   })
 
+  it('sits in a well: the block is recessed with an inner edge, the inline chip a text tint, no outline', () => {
+    const { container, unmount } = render(<CodeLine command="olivares up" />)
+    const well = container.querySelector('[data-slot="code-line"] > div')!
+    expect(well).toContainElement(screen.getByText('olivares up'))
+    expect(well).toHaveClass(
+      'rounded-ctl',
+      'bg-[var(--well)]',
+      'shadow-[var(--shadow-well)]',
+    )
+    expect(well.className).not.toMatch(/\bborder\b|bg-frame/)
+    unmount()
+    const { container: inline } = render(
+      <CodeLine inline command="olivares up" />,
+    )
+    const chip = inline.querySelector('[data-slot="code-line"]')!
+    expect(chip).toHaveClass('rounded-[5px]', 'bg-muted')
+    expect(chip.className).not.toMatch(/\bborder\b|bg-surface/)
+    // Inline code is 13 px, the size of the code it sits beside.
+    expect(screen.getByText('olivares up')).toHaveClass('text-mono')
+    expect(screen.getByText('olivares up')).not.toHaveClass('text-mono-s')
+  })
+
   it('refuses an empty command: a missing command is a parity gap, not a blank line', () => {
     const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     expect(() => render(<CodeLine command=" " />)).toThrow(/command/)

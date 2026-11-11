@@ -171,3 +171,9 @@ func (*Module) SpendLimitUpsert(context.Context, model.TenantID, SpendLimitSpec,
 
 func addBudgetForecast(context.Context, store.Scope, budgetSpec, time.Time, time.Time, bool, aggResult, int64, *budgetStatusDTO) {
 }
+
+// userGroupBudgetMembers: group budgets are a Business feature, and Community can author none,
+// so there is no group to resolve at ingest.
+func (*Module) userGroupBudgetMembers(context.Context, model.TenantID) map[string]groupMemberRefs {
+	return nil
+}

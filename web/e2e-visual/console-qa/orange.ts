@@ -279,6 +279,8 @@ export function orangeScan(): OrangeReport {
   )) {
     const role = el.getAttribute('role') || ''
     if (role === 'switch' || role === 'checkbox' || role === 'radio') continue
+    // A suggested action that cannot act keeps its orange at 45 %: not a second offer.
+    if (el.matches(':disabled, [aria-disabled=true]')) continue
     const c = getComputedStyle(el)
     if (c.display === 'none' || c.visibility === 'hidden') continue
     const r = el.getBoundingClientRect()

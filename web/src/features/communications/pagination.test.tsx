@@ -56,10 +56,8 @@ describe('catalog pagination', () => {
       <ChannelCatalog
         scope={scopeOf()}
         canChannelRead
-        canChannelWrite={false}
         onOpenChannel={() => {}}
         onOpenById={() => {}}
-        onCreate={() => {}}
       />
     ))
     expect(await screen.findByText('One')).toBeInTheDocument()

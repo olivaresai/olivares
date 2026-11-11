@@ -7,9 +7,9 @@ import { cn } from '@/lib/utils'
 
 /**
  * Popover — the anchored floating panel over Radix Popover, for richer transient
- * content than a tooltip (forms, filters, detail). Flat `bg-elevated` card with a
- * strong hairline, `rounded-lg`, `shadow-lg`; default `w-72`. Subtle fade keyed off
- * data-state. Radix supplies positioning, focus management, outside-click and ARIA.
+ * content than a tooltip (forms, filters, detail). As direction A2 draws an overlay: the
+ * highest surface (`bg-raised`), the pop shadow with a hairline inside it and no outline,
+ * `rounded-card`; default `w-72`. Subtle fade keyed off data-state. Radix supplies positioning, focus management, outside-click and ARIA.
  */
 
 export const Popover = PopoverPrimitive.Root
@@ -29,9 +29,9 @@ export function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          'z-50 w-72 bg-elevated border border-border-strong rounded-lg shadow-lg p-3',
+          'z-50 w-72 rounded-card border-0 bg-raised p-3 shadow-[var(--shadow-pop),inset_0_0_0_1px_var(--line)]',
           'text-body text-foreground outline-none',
-          'transition-opacity duration-150 ease-out',
+          'transition-opacity duration-[var(--duration-panel)] ease-out',
           'data-[state=open]:opacity-100 data-[state=closed]:opacity-0',
           className,
         )}

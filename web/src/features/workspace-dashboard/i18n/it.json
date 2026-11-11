@@ -18,6 +18,8 @@
   "noAgentsHint": "Gli agenti compaiono qui man mano che vengono rilevati in questo workspace.",
   "noGroups": "Ancora nessun gruppo di agenti in questo workspace.",
   "noGroupsHint": "I gruppi di agenti compaiono qui una volta definiti per questo workspace.",
+  "agentsFailed": "Non è stato possibile leggere gli agenti di questo workspace.",
+  "groupsFailed": "Non è stato possibile leggere i gruppi di agenti di questo workspace.",
   "viewAll": "Vedi tutto",
   "defaultBadge": "Predefinito",
   "created": "Creato",
@@ -62,5 +64,25 @@
     "statusFailed": "Impossibile verificare se questa cartella è disponibile via SFTP."
   },
   "showMore": "Mostra altro",
-  "agentsCut": "Non tutti gli agenti sono mostrati."
+  "agentsCut": "Non tutti gli agenti sono mostrati.",
+  "files": {
+    "title": "Area di lavoro",
+    "folders": "Cartelle",
+    "overview": "Panoramica",
+    "backToFiles": "File",
+    "addFolder": "Aggiungi cartella",
+    "emptyTitle": "Ancora nessuna cartella",
+    "emptyDescription": "Aggiungi una cartella e le sessioni lavoreranno al suo interno, entro i suoi limiti.",
+    "noAccessTitle": "Non puoi aprire questa cartella",
+    "noAccessDescription": "È stata rimossa o il tuo ruolo non la include. Chiedi l'accesso a un amministratore.",
+    "showFolders": "Mostra le mie cartelle",
+    "loading": "Lettura delle cartelle…",
+    "loadFailed": "Impossibile caricare le cartelle.",
+    "details": "Wiki e trasferimento file",
+    "worktreeCount": "Worktree: {{n}}",
+    "worktreeHint": "Registra questo worktree come cartella per esplorarlo.",
+    "gitCut": "Non tutti i file modificati sono segnati: Git ha elencato solo una parte delle modifiche.",
+    "clean": "Nessuna modifica non confermata",
+    "changes": "Modifiche non confermate: {{n}}"
+  }
 }

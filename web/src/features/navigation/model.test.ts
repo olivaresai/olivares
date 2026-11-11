@@ -53,8 +53,6 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   providerAccounts: ['ai', 'environments'],
   'agent-tools': ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],
-  // Added after the ratification: the Reach view sits here until the Tools area lands.
-  reach: ['ai', 'environments'],
   models: ['ai', 'models'],
   modelOps: ['ai', 'models'],
   voice: ['ai', 'execution'],
@@ -77,7 +75,8 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   accessMap: ['security-identity', 'access'],
   permissions: ['security-identity', 'access'],
   identity: ['security-identity', 'access'],
-  vault: ['security-identity', 'access'],
+  // A person's own vault: a page of Settings > You, under the Settings utility's section.
+  vault: ['system', 'preferences'],
   claudePolicy: ['security-identity', 'policy'],
   routinePolicies: ['security-identity', 'policy'],
   inferenceProxy: ['security-identity', 'policy'],
@@ -93,6 +92,8 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   evals: ['observation', 'audit-recordings'],
   retention: ['observation', 'audit-recordings'],
   attestation: ['observation', 'audit-recordings'],
+  // What one identity can reach: a page of Audit, an administrator place.
+  reach: ['observation', 'audit-recordings'],
   console: ['system', 'administration'],
   sourceDiff: ['system', 'administration'],
   onboarding: ['system', 'maintenance'],
@@ -318,8 +319,8 @@ describe('visibility is the union of authorized leaves', () => {
     expect(visibleAreas(allow).map((a) => a.id)).toEqual(
       NAV_AREAS.map((a) => a.id),
     )
-    // /dashboards carries no permission, so Observability alone survives an empty set.
-    expect(visibleAreas(deny).map((a) => a.id)).toEqual(['observation'])
+    // Every leaf asks for a permission, so an empty set opens no area.
+    expect(visibleAreas(deny).map((a) => a.id)).toEqual([])
     // A principal holding ONLY the binding read: the AI area appears, with that one door.
     // The permission-only adapter: these cases are about the AREA algebra, not about
     // where a view's answer comes from. Production builds its gate in
@@ -327,11 +328,8 @@ describe('visibility is the union of authorized leaves', () => {
     const bindingOnly = permissionGate(
       (p: string) => p === 'sessions:profile-binding:read',
     )
-    // AI through that one door, Observability through the unpermissioned /dashboards.
-    expect(visibleAreas(bindingOnly).map((a) => a.id)).toEqual([
-      'ai',
-      'observation',
-    ])
+    // AI through that one door, and nothing else.
+    expect(visibleAreas(bindingOnly).map((a) => a.id)).toEqual(['ai'])
     expect(authorizedSections('ai', bindingOnly)).toEqual([
       {
         sectionId: 'environments',
@@ -353,12 +351,7 @@ describe('visibility is the union of authorized leaves', () => {
   // opens on the account read tier. A door is listed only to a principal who cannot open
   // Tools, under the tier it keeps.
   it('folds the API key, profile, binding and account pages into Tools', () => {
-    const folded = [
-      'providers',
-      'providerProfiles',
-      'providerBindings',
-      'providerAccounts',
-    ]
+    const folded = ['providerProfiles', 'providerBindings', 'providerAccounts']
     const leaves = (gate: typeof allow) =>
       authorizedSections('ai', gate).flatMap((s) => s.views.map((v) => v.id))
     expect(leaves(allow)).toContain('agent-tools')
@@ -410,12 +403,15 @@ describe('visibility is the union of authorized leaves', () => {
     expect(found('agentops')[0]).toBe('sessions')
   })
 
-  it('treats an unpermissioned leaf as open to every signed-in principal', () => {
-    // /dashboards has no permission: Observability is visible even to a principal
-    // whose set is otherwise empty.
-    expect(isAreaVisible('observation', deny)).toBe(true)
+  it("opens the organization's /dashboards rollup on the administrator's gate, never on the tenant read", () => {
+    // A member reads only their own work, and an editor keeps the tenant read for its own
+    // pages: the rollup of the organization's reads is the administrator's.
+    expect(isAreaVisible('observation', deny)).toBe(false)
+    const tenantOnly = permissionGate((p: string) => p === 'tenant:read')
+    expect(isAreaVisible('observation', tenantOnly)).toBe(false)
+    const adminOnly = permissionGate((p: string) => p === 'tenant:admin')
     expect(
-      authorizedSections('observation', deny).flatMap((s) =>
+      authorizedSections('observation', adminOnly).flatMap((s) =>
         s.views.map((v) => v.id),
       ),
     ).toEqual(['dashboards'])

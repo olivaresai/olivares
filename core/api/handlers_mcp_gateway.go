@@ -63,7 +63,7 @@ func (s *Server) handleMCPGateway(w http.ResponseWriter, r *http.Request, mc Mod
 		s.writeError(w, r, fmt.Errorf("%w: %w", auth.ErrMCPGatewayUnavailable, err))
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out.Redacted())
 }
 
 // handlePutMCPGatewayServer Add or update a tenant upstream with sealed credential references and public inbound trust. New servers and edited configurations are enabled only by an explicit administrator write after a successful current connection test; discovery grants no tool authority.
@@ -87,7 +87,7 @@ func (s *Server) handlePutMCPGatewayServer(w http.ResponseWriter, r *http.Reques
 	if r.Method == http.MethodPost {
 		status = http.StatusCreated
 	}
-	writeJSON(w, status, out)
+	writeJSON(w, status, out.Redacted())
 }
 
 // handleDeleteMCPGatewayServer Remove a tenant upstream after checking the current configuration version. New requests are refused; its independently managed sealed credential is preserved.
@@ -106,7 +106,7 @@ func (s *Server) handleDeleteMCPGatewayServer(w http.ResponseWriter, r *http.Req
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out.Redacted())
 }
 
 // handleTestMCPGatewayServer Initialize an upstream and list its tools within bounded connection and catalog limits. No tools are called; the verdict is audited, and failed tests disable forwarding.
@@ -125,7 +125,7 @@ func (s *Server) handleTestMCPGatewayServer(w http.ResponseWriter, r *http.Reque
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out.Redacted())
 }
 
 // handleMCPGatewaySessionTools Set the tenant’s default-off session MCP switch after checking its current configuration version. Enabling preserves independently authenticated session purposes, workspace grants and process fencing; it confers no additional authority.
@@ -145,5 +145,5 @@ func (s *Server) handleMCPGatewaySessionTools(w http.ResponseWriter, r *http.Req
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out.Redacted())
 }

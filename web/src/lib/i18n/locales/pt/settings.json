@@ -53,6 +53,13 @@
   "general": {
     "title": "Geral",
     "scope": "As suas próprias preferências. Acompanham a sua conta em todos os espaços de trabalho desta instalação.",
+    "groups": {
+      "appearance": "Aspeto",
+      "language": "Idioma e região",
+      "start": "Ao abrir a consola",
+      "sessions": "Sessões",
+      "editor": "Editor de código"
+    },
     "theme": "Tema",
     "themeHint": "Segue o sistema, a menos que escolha claro, escuro ou preto.",
     "density": "Densidade",
@@ -65,14 +72,20 @@
     "clock12": "12 horas",
     "startPage": "Página inicial",
     "startPageHint": "O que abre quando inicia sessão. Predefinição: Sessões.",
-    "confirmStop": "Confirmar antes de parar uma sessão",
-    "confirmStopHint": "Perguntar uma vez antes de Parar terminar uma sessão que ainda está em curso.",
+    "confirmStop": "Confirmar antes de terminar uma sessão",
+    "confirmStopHint": "Perguntar uma vez antes de «Terminar a sessão» fechar uma sessão.",
     "editor": "Editor para ligações de ficheiros",
     "editorHint": "Qual o editor que as ligações «Abrir em» iniciam neste computador. Predefinição: VS Code.",
     "editorSsh": "Anfitrião SSH para o editor",
     "editorSshHint": "Como o editor acede às pastas de sessão noutra máquina, como user@host ou user@host:port. Vazio utiliza o endereço a partir do qual esta consola é servida, e nenhum SSH quando este é o próprio computador.",
     "reduceMotion": "Reduzir movimento",
-    "reduceMotionHint": "Substitui o movimento por desvanecimentos. Ativo quando o seu sistema o pede."
+    "reduceMotionHint": "Substitui o movimento por desvanecimentos. Ativo quando o seu sistema o pede.",
+    "sendKey": "Tecla de envio",
+    "sendKeyHint": "A tecla que envia a mensagem numa sessão. Com a segunda opção, Enter muda de linha.",
+    "sendWhileRunning": "Enquanto a ferramenta trabalha",
+    "sendWhileRunningHint": "O que a tecla de envio faz durante uma intervenção. Se Enter envia, Ctrl+Enter faz a outra.",
+    "sendQueue": "Pôr em fila",
+    "sendSteer": "Orientar a intervenção"
   },
   "sessionNotifications": {
     "title": "Notificações de sessão",
@@ -84,6 +97,12 @@
     "finished": "A intervenção terminou.",
     "ended": "A sessão terminou.",
     "failed": "A sessão parou com um erro.",
+    "inApp": {
+      "needsYou": "{{name}} precisa de si",
+      "finished": "{{name}} terminou a intervenção",
+      "failed": "{{name}} parou com um erro"
+    },
+    "open": "Abrir",
     "pushOn": "Chega também a este dispositivo com o separador fechado.",
     "pushUnavailable": "Apenas enquanto um separador estiver aberto: não foi possível registar este dispositivo para push.",
     "installHint": "As notificações precisam da aplicação no Ecrã principal: toque em Partilhar e depois em Adicionar ao ecrã principal."
@@ -93,14 +112,14 @@
     "scope": "As teclas a que esta instalação responde. São iguais para todos."
   },
   "edition": {
-    "scope": "A edição desta compilação, a sua licença e o que o Business acrescenta.",
+    "scope": "A edição desta compilação, a sua licença e o que o Olivares AI Business acrescenta.",
     "label": "Edição",
     "unknown": "Não comunicada por este motor",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "O Business acrescenta",
+    "businessAdds": "O Olivares AI Business acrescenta",
     "summary": {
       "Session cockpit and fleet deployment.": "Cockpit de sessões e implementação em frota.",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Partilha de sessões em direto com acesso de convidado nominativo e com prazo de validade, e propostas de mensagens aprovadas pelo proprietário.",
@@ -111,11 +130,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "O Enterprise inclui tudo o que o Business oferece, mais os termos acordados num contrato e as capacidades que deles dependem."
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "Edição {{edition}}",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "Mostrar emblema da edição",
       "loadError": "Não foi possível carregar a preferência do emblema.",
       "saveError": "Não foi possível guardar a preferência do emblema. Tente novamente."
@@ -138,9 +159,9 @@
     "email": "E-mail"
   },
   "stopConfirm": {
-    "title": "Parar esta sessão?",
-    "description": "Parar termina uma sessão que ainda está em curso.",
-    "confirm": "Parar a sessão"
+    "title": "Terminar esta sessão?",
+    "description": "A sessão fecha-se, mesmo que ainda esteja em curso.",
+    "confirm": "Terminar a sessão"
   },
   "modules": {
     "title": "Módulos",
@@ -149,6 +170,9 @@
     "apply_many": "Aplicar {{count}} de alterações",
     "apply_other": "Aplicar {{count}} alterações",
     "applied": "Seleção de módulos guardada.",
+    "appliedNow": "Aplicado. Nenhuma sessão foi parada.",
+    "savedForNextStart": "Guardado. Aplica-se no próximo arranque do motor; nenhuma sessão em execução foi parada.",
+    "notSaved": "Não foi possível guardar a seleção de módulos. Nada mudou.",
     "restarting": "A reiniciar o motor…",
     "restartWarning": {
       "title": "Reiniciar o motor?",
@@ -305,6 +329,8 @@
   },
   "tracing": {
     "description": "Exporte traços e métricas para o seu coletor. As alterações aplicam-se sem reiniciar o motor.",
+    "export": "Exportação",
+    "advanced": "Avançado",
     "enabled": "Ativar rastreio",
     "endpoint": "Ponto de acesso do coletor",
     "protocol": "Protocolo",
@@ -317,10 +343,16 @@
     "inactive": "O rastreio está desativado.",
     "apply": "Aplicar",
     "saved": "Definições de rastreio guardadas.",
-    "businessRequired": "A entrega para SIEM e a exportação de telemetria externa exigem Business. As definições guardadas são preservadas; a Community não as envia."
+    "businessRequired": "A entrega para SIEM e a exportação de telemetria externa exigem Olivares AI Business. As definições guardadas são preservadas; a Olivares AI Community não as envia."
   },
   "signIn": {
     "methods": "Métodos de início de sessão",
+    "ssoName": "Início de sessão único",
+    "available": "Disponível",
+    "required": "Obrigatório",
+    "blocked": "Bloqueada",
+    "notSetUp": "Não configurado",
+    "sessionGroup": "Sessão",
     "password": "Palavra-passe",
     "sso": "Início de sessão único: {{providers}}",
     "noSso": "Nenhum fornecedor de início de sessão único está disponível na página de início de sessão.",
@@ -340,7 +372,9 @@
     "minutes": "Parar após minutos em inatividade",
     "description": "Desativado por predefinição. Liberte memória parando sessões terminadas que já não estão abertas. Retomar mantém a pasta e a conversa.",
     "hint": "Use 0 para desativar ou 6–10080 minutos. A janela de inatividade começa após cinco minutos sem saída. As sessões com aprovações, com sessões filhas ou pares em execução, ou com uma mensagem mais recente, continuam em execução.",
-    "saved": "Definição de memória da sessão guardada."
+    "saved": "Definição de memória da sessão guardada.",
+    "group": "Parada por inatividade",
+    "stop": "Parar sessões inativas"
   },
   "updates": {
     "title": "Atualizações",

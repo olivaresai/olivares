@@ -98,7 +98,7 @@ const COMPLIANCE = /\bcompliance\b/i
 /** The workspace word for the de rules, not a path segment such as the literal "/workspace" hint. */
 const DE_WORKSPACE = /(?<!\/)\bworkspaces?\b(?!\/)/i
 /** The tool word, not a scope literal ("tools:call") or a path segment. */
-const TOOL = /(?<!\/)\btools?\b(?![:\/])/i
+const TOOL = /(?<!\/)\btools?\b(?![:/])/i
 const APPROVAL = /\bapprovals?\b/i
 /** A German informal form: du, dich, dir, dein..., euch, euer... (Sie is the console's form). */
 const DU_FORM = /\b(?:du|dich|dir|dein\w*|euch|euer\w*)\b/i

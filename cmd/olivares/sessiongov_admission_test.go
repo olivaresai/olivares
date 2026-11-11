@@ -8,10 +8,14 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/finops"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
@@ -182,5 +186,46 @@ func TestGateCriticalLaunch_AConsumeErrorIsDeniedAsAnOutageNotAsAVerdict(t *test
 	if dec.DeniedStatus != http.StatusServiceUnavailable {
 		t.Errorf("DeniedStatus = %d, want 503: the consume returned an error, which says "+
 			"nothing usable about the approval's state", dec.DeniedStatus)
+	}
+}
+
+// A launch carries who asked and their directory groups, so a group budget binds it, and
+// the admission key covers them in any order.
+func TestLaunchAdmissionCarriesActorAndGroups(t *testing.T) {
+	intent := sessions.LaunchIntent{RunRef: "run-a", Actor: "user:u1", UserGroupRefs: []string{"g2", "g1"}}
+	got := launchAdmission(intent)
+	if got.ActorRef != "user:u1" || !slices.Equal(got.Groups, []string{"g1", "g2"}) || !slices.Equal(got.Dims.UserGroupRefs, []string{"g1", "g2"}) {
+		t.Fatalf("admission = %+v, want the actor and groups", got)
+	}
+	reordered := launchAdmission(sessions.LaunchIntent{RunRef: "run-a", Actor: "user:u1", UserGroupRefs: []string{"g1", "g2"}})
+	if reordered.IdempotencyKey != got.IdempotencyKey {
+		t.Fatalf("the key must not depend on group order: %q vs %q", got.IdempotencyKey, reordered.IdempotencyKey)
+	}
+	otherActor := launchAdmission(sessions.LaunchIntent{RunRef: "run-a", Actor: "user:u2", UserGroupRefs: []string{"g1", "g2"}})
+	otherGroups := launchAdmission(sessions.LaunchIntent{RunRef: "run-a", Actor: "user:u1", UserGroupRefs: []string{"g1"}})
+	if otherActor.IdempotencyKey == got.IdempotencyKey || otherGroups.IdempotencyKey == got.IdempotencyKey {
+		t.Fatal("a different actor or group set must ask a new question under its own key")
+	}
+}
+
+// A person's session spend is credited to that person, and a budget that blocks tells
+// them what to do next.
+func TestSessionCostActorAndBudgetRefusalWording(t *testing.T) {
+	id := model.NewID()
+	person := auth.Principal{Kind: auth.KindUser, UserID: id}
+	if got := sessionCostActor("", person); got != "user:"+id.String() {
+		t.Fatalf("a person's session = %q, want the launching user", got)
+	}
+	if got := sessionCostActor("agent-1", person); got != "agent-1" {
+		t.Fatalf("an agent's session = %q, want the agent", got)
+	}
+	msg := launchBudgetRefusal(finops.Reservation{Action: "block", BudgetName: "Engineering"})
+	for _, want := range []string{`"Engineering"`, "used up", "ask an admin", "exception"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("refusal %q must say %q", msg, want)
+		}
+	}
+	if got := launchBudgetRefusal(finops.Reservation{Action: "throttle"}); got != "session budget throttled" {
+		t.Fatalf("throttle refusal = %q, must stay as it was", got)
 	}
 }

@@ -59,7 +59,7 @@ func TestCrosswalkFromCard(t *testing.T) {
 		SupportedInterfaces: []AgentInterface{
 			{URL: "https://agent.example.com/a2a"},
 		},
-		Skills: []agentSkill{
+		Skills: []AgentSkill{
 			{Name: "code-review"},
 			{Name: "testing"},
 		},

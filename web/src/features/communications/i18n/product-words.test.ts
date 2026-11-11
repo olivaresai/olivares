@@ -7,7 +7,10 @@
 // The English locale is the contract; every other locale must say the same thing in its
 // own product words, so each one carries the same ban in its own terms.
 import { describe, expect, it } from 'vitest'
-import { de, en, es, fr, it as itLocale, ja, ko, ru, zh } from './index'
+import sandboxEn from '@/features/sandbox/i18n/en.json'
+import voiceEn from '@/features/voice/i18n/en.json'
+import workEn from '@/features/work/i18n/en.json'
+import { de, en, es, fr, it as itLocale, ja, ko, pt, ru, uk, zh } from './index'
 
 /** The engine words, per locale. A locale-specific word that also has an ordinary
  * meaning (Spanish and French "principal", Chinese and Korean "subject", French "debit")
@@ -57,4 +60,53 @@ describe('communications copy', () => {
       expect(hits).toEqual([])
     })
   }
+})
+
+/** Every locale but the English contract. */
+const OTHER_LOCALES = { de, es, fr, it: itLocale, ja, ko, pt, ru, uk, zh }
+
+/** The word each language's administration line says «never» with. */
+const NEVER: Record<keyof typeof OTHER_LOCALES, string> = {
+  de: 'nie',
+  es: 'nunca',
+  fr: 'jamais',
+  it: 'mai',
+  ja: '決して',
+  ko: '절대',
+  pt: 'nunca',
+  ru: 'никогда',
+  uk: 'ніколи',
+  zh: '绝不',
+}
+
+/** The line under a page's title: what the page is for, in plain words. */
+const PAGE_LINES: [string, string][] = [
+  ['work', workEn.subtitle],
+  ['voice', voiceEn.description],
+  ['sandbox', sandboxEn.description],
+  ...Object.entries(en.doors).map(([door, words]): [string, string] => [
+    `communications ${door}`,
+    words.description,
+  ]),
+]
+
+describe('each page of work and channels says its job in one line', () => {
+  it.each(PAGE_LINES)('%s: one short sentence in plain words', (_, line) => {
+    expect(line.length).toBeLessThanOrEqual(80)
+    expect(line).toMatch(/^[^.!?]+\.$/)
+    expect(line).not.toMatch(/\bengine\b|\bkernel\b|selected workspace/i)
+  })
+
+  it('administration says that it never opens the messages', () => {
+    expect(en.doors.administration.description).toMatch(/never lets you read/)
+  })
+
+  it.each(Object.entries(OTHER_LOCALES))(
+    '%s: administration says it in its own words',
+    (code, locale) => {
+      const line = locale.doors.administration.description
+      expect(line).toContain(NEVER[code as keyof typeof NEVER])
+      expect(line).not.toBe(en.doors.administration.description)
+    },
+  )
 })

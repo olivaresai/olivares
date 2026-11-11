@@ -105,6 +105,8 @@ type patchProviderRecordRequest struct {
 	BaseURL      *string `json:"base_url"`
 	APIKey       *string `json:"api_key"`
 	DefaultModel *string `json:"default_model"`
+	// State is "active" or "disabled"; a revoked provider stays revoked.
+	State *string `json:"state"`
 }
 
 func toProviderRecordDTO(r ProviderRecord) providerRecordDTO {
@@ -190,8 +192,16 @@ func (m *Module) handlePatchProviderRecord(w http.ResponseWriter, r *http.Reques
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if body.DisplayName == nil && body.BaseURL == nil && body.APIKey == nil && body.DefaultModel == nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("nothing to change: provide display_name, base_url, api_key and/or default_model"))
+	if body.DisplayName == nil && body.BaseURL == nil && body.APIKey == nil && body.DefaultModel == nil && body.State == nil {
+		writeJSON(w, http.StatusBadRequest, errorBody("nothing to change: provide display_name, base_url, api_key, default_model and/or state"))
+		return
+	}
+	if body.State != nil && (mc.Admission == nil || !mc.Admission(r.Context(), auth.Request{
+		Principal: mc.Principal, Tenant: mc.Tenant,
+		Permission: permProviderAdmin, Resource: auth.ResourceFor(permProviderAdmin),
+	})) {
+		// Disabling stops every bound session as revoking does, so it needs the same right.
+		writeJSON(w, http.StatusForbidden, errorBody("disabling or enabling a provider needs "+string(permProviderAdmin)))
 		return
 	}
 	if body.BaseURL != nil || body.APIKey != nil {
@@ -209,8 +219,8 @@ func (m *Module) handlePatchProviderRecord(w http.ResponseWriter, r *http.Reques
 	}
 	rec, err := m.PatchProviderRecord(r.Context(), mc.Tenant, ref, ProviderRecordPatch{
 		DisplayName: body.DisplayName, BaseURL: body.BaseURL, APIKey: body.APIKey,
-		DefaultModel: body.DefaultModel,
-		Actor:        mc.Principal,
+		DefaultModel: body.DefaultModel, State: body.State,
+		Actor: mc.Principal,
 	})
 	if err != nil {
 		writeRunErr(w, err)

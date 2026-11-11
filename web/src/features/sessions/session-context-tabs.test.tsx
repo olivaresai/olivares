@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SIDE PANE HAS TABS: Changes, Files, Terminal, Preview, Details, Activity (Claude Code and
+// THE SIDE PANE HAS TABS: Changes, Files, Preview, Details, Activity (Claude Code and
 // Codex), then whatever a build registers.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
@@ -12,11 +12,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient, renderIntel } from '@/test/intel'
 import type { RunDTO } from '@/features/agentops/types'
 import type { SessionPanelExtension } from '@/features/panels'
+import { useClientSettings } from '@/features/settings/preferences'
+import { ApiError } from '@/lib/api/errors'
+import { preferenceStorage } from '@/lib/preference-storage'
 import { mergeSessions } from './provenance'
 import type { LiveDTO } from './types'
 import { SessionContextPane } from './session-context-pane'
 import type { SessionResolution } from './use-session-resolution'
 import { sessionsApi } from './api'
+import { useTerminalDrawer } from './terminal-drawer'
 import './i18n'
 import '@/features/agentops/i18n'
 
@@ -43,6 +47,8 @@ const ops = vi.hoisted(() => ({
   gitStatus: vi.fn(),
   previewPorts: vi.fn(),
   activity: vi.fn(),
+  listFiles: vi.fn(),
+  readFile: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -72,11 +78,14 @@ vi.mock('@/features/agentops/workspace-browser', () => ({
     )
   },
 }))
-// The terminal has its own tests; here it only has to be the thing the Terminal tab shows.
-vi.mock('./session-terminal', () => ({
-  SessionTerminal: ({ workspaceRef }: { workspaceRef: string }) => (
-    <div data-testid="terminal-tab">{workspaceRef}</div>
-  ),
+// The folder's terminal: a script's Run types its command there.
+const terminal = vi.hoisted(() => ({ run: vi.fn(), folder: '' }))
+vi.mock('./session-terminal', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./session-terminal')>()),
+  useTerminalGroup: (folder: string) => {
+    terminal.folder = folder
+    return { tenant: 'tnt-demo', run: terminal.run }
+  },
 }))
 vi.mock('./session-changes', () => ({
   SessionChanges: () => <div data-testid="changes-block" />,
@@ -137,6 +146,16 @@ const RUN: RunDTO = {
   provider_profile_ref: 'ppf_team',
 }
 
+// A file at the top of the session's folder, as the engine lists it.
+const topFile = (name: string) => ({
+  name,
+  path: name,
+  type: 'file',
+  size: 40,
+  mode: '-rw-r--r--',
+  mtime: '2026-11-10T00:00:00Z',
+})
+
 // The profile a quick start resolves for a key: not an account, so it has no name.
 const UNNAMED_PROFILE = {
   profile_ref: 'ppf_team',
@@ -176,6 +195,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   registered.panels = []
   auth.can = () => true
+  ops.listFiles.mockResolvedValue({ path: '', entries: [], has_more: false })
+  useClientSettings.setState({ projectScripts: {} })
   ops.listWorkspaces.mockResolvedValue({
     items: [
       {
@@ -220,16 +241,10 @@ const tabs = () =>
     .map((r) => r.textContent)
 
 describe('the side pane tabs', () => {
-  it('shows Context, Changes, Files, Preview and Terminal, and nothing else when no build registers a panel', async () => {
+  it('shows Context, Changes, Files and Preview, and nothing else when no build registers a panel', async () => {
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
     // Context is the one in front: the scope and the references, not the changes.
     expect(screen.getByTestId('context-details')).toBeInTheDocument()
     expect(screen.queryByTestId('changes-block')).toBeNull()
@@ -267,13 +282,7 @@ describe('the side pane tabs', () => {
     registered.panels = undefined
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
   })
 
   it('shows a registered panel after the pane’s own, and renders it for the session on screen', async () => {
@@ -290,16 +299,9 @@ describe('the side pane tabs', () => {
     ]
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-      'Files',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details', 'Files'])
     const radios = screen.getAllByRole('radio')
-    await user.click(radios[5]!)
+    await user.click(radios[4]!)
     expect(await screen.findByTestId('git-panel')).toHaveTextContent(
       'git for run-1',
     )
@@ -319,13 +321,7 @@ describe('the side pane tabs', () => {
     auth.can = (p) => p !== 'admin.shell'
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
   })
 
   it('Changes shows what the session changed, and moves the scope out of the way', async () => {
@@ -387,71 +383,6 @@ describe('the side pane tabs', () => {
     )
     await user.click(screen.getByRole('radio', { name: 'Details' }))
     expect(screen.queryByRole('heading', { name: 'Git' })).toBeNull()
-  })
-
-  it('Terminal opens in the session’s own folder', async () => {
-    renderPane({ panel: 'terminal' })
-    expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
-      'ws-main',
-    )
-  })
-
-  it('keeps the tab bar out of the part that scrolls, and lets the tab fill the height under it', async () => {
-    renderPane({ panel: 'terminal' })
-    const terminal = await screen.findByTestId('terminal-tab')
-    const body = screen.getByTestId('session-pane-body')
-    // The tab is a flex child of a body that fills the pane and scrolls on its own...
-    expect(body).toContainElement(terminal)
-    expect(body).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto')
-    // ...and the bar is not in it, so switching tabs never moves the bar.
-    const bar = document.querySelector('[data-slot="pane-tabs"]')
-    expect(bar).not.toBeNull()
-    expect(body).not.toContainElement(bar as HTMLElement)
-  })
-
-  it('offers no Terminal to a person without the right to write the folder', async () => {
-    auth.can = (p) => p !== 'sessions:workspace:write'
-    renderPane()
-    await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
-  })
-
-  it('opens the Terminal of the registered worktree, never the original checkout', async () => {
-    ops.listWorkspaces.mockResolvedValue({
-      items: [
-        {
-          workspace_ref: 'ws-worktree',
-          root_path: '/worktrees/a',
-          state: 'active',
-          mount_mode: 'rw',
-        },
-      ],
-      has_more: false,
-    })
-    renderPane({
-      panel: 'terminal',
-      resolution: resolution([
-        {
-          ...RUN,
-          workspace_path: '/worktrees/a',
-          worktree_branch: 'session/a',
-        },
-      ]),
-    })
-    expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
-      'ws-worktree',
-    )
-  })
-
-  it('hides folder panes and opens Details for a folderless terminal link', async () => {
-    renderPane({
-      panel: 'terminal',
-      resolution: resolution([{ ...RUN, workspace_ref: undefined }]),
-    })
-    expect(await screen.findByTestId('context-details')).toBeInTheDocument()
-    for (const name of ['Changes', 'Files', 'Terminal'])
-      expect(screen.queryByRole('radio', { name })).toBeNull()
-    expect(screen.queryByTestId('terminal-tab')).toBeNull()
   })
 
   it('Files opens the workspace browser on the session’s own folder', async () => {
@@ -537,7 +468,7 @@ describe('the side pane tabs', () => {
     await screen.findByTestId('session-context')
     const radios = screen.getAllByRole('radio')
     for (let round = 0; round < 2; round++) {
-      await user.click(radios[5]!)
+      await user.click(radios[4]!)
       await user.click(await screen.findByTestId('counter'))
       expect(screen.getByTestId('counter')).toHaveTextContent('run-1 1')
       await user.click(radios[0]!)
@@ -560,7 +491,7 @@ describe('the side pane tabs', () => {
       },
     ]
     renderPane()
-    await user.click((await screen.findAllByRole('radio'))[5]!)
+    await user.click((await screen.findAllByRole('radio'))[4]!)
     await waitFor(() => expect(seen).toBeDefined())
     expect(seen).toEqual({
       ref: 'run-1',
@@ -593,7 +524,6 @@ describe('the side pane tabs', () => {
       expect(tabs()).toEqual([
         'Changes',
         'Files',
-        'Terminal',
         'Preview',
         'Details',
         'Activity',
@@ -627,17 +557,284 @@ describe('the side pane tabs', () => {
       resolution: resolution([{ ...RUN, provider_driver: 'opencode' }]),
     })
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
     expect(ops.activity).not.toHaveBeenCalled()
   })
 
-  it('ignores a registrant that takes the id of Context, Activity, Changes, Files, Preview or Terminal', async () => {
+  it('Details lists the scripts the folder declares and runs one in the session terminal', async () => {
+    const user = userEvent.setup()
+    ops.listFiles.mockResolvedValue({
+      path: '',
+      entries: [topFile('package.json'), topFile('README.md')],
+      has_more: false,
+    })
+    ops.readFile.mockResolvedValue({
+      path: 'package.json',
+      size: 40,
+      encoding: 'utf-8',
+      content: JSON.stringify({ scripts: { dev: 'vite' } }),
+    })
+    renderPane({ onPanel: () => {}, panel: 'context' })
+    const scripts = await screen.findByTestId('context-scripts')
+    expect(await within(scripts).findByText("npm run -- 'dev'")).toBeVisible()
+    // No Taskfile and no makefile at the top: none is asked for, so none answers 404.
+    expect(ops.readFile.mock.calls.map((call) => call[1])).toEqual([
+      'package.json',
+    ])
+    await user.click(within(scripts).getByRole('button', { name: 'Run dev' }))
+    expect(terminal.run).toHaveBeenCalledTimes(1)
+    expect(terminal.run.mock.calls[0][0]).toBe("npm run -- 'dev'")
+    expect(useTerminalDrawer.getState().open['run-1']).toBe(true)
+  })
+
+  it('Details keeps a script a person adds to the folder, and refuses one with hidden characters', async () => {
+    const user = userEvent.setup()
+    renderPane({ onPanel: () => {}, panel: 'context' })
+    const scripts = await screen.findByTestId('context-scripts')
+    expect(
+      await within(scripts).findByText(/declares no scripts/),
+    ).toBeVisible()
+    await user.click(
+      within(scripts).getByRole('button', { name: 'Add script' }),
+    )
+    await user.type(within(scripts).getByLabelText('Name'), 'lint')
+    const command = within(scripts).getByLabelText('Command')
+    await user.type(command, 'pnpm lint\u200b')
+    expect(within(scripts).getByRole('alert')).toHaveTextContent(
+      /hidden characters/,
+    )
+    expect(within(scripts).getByRole('button', { name: 'Add' })).toBeDisabled()
+    await user.clear(command)
+    await user.type(command, 'pnpm lint')
+    await user.click(within(scripts).getByRole('button', { name: 'Add' }))
+    expect(
+      within(scripts).getByRole('button', { name: 'Run lint' }),
+    ).toBeVisible()
+    expect(useClientSettings.getState().projectScripts['ws-main']).toEqual([
+      { name: 'lint', command: 'pnpm lint' },
+    ])
+    await user.click(
+      within(scripts).getByRole('button', { name: 'Remove lint' }),
+    )
+    expect(
+      within(scripts).queryByRole('button', { name: 'Run lint' }),
+    ).toBeNull()
+  })
+
+  it('Details adds a script while the settings fit the size the server keeps, and past it says to remove one', async () => {
+    const user = userEvent.setup()
+    // The console keeps the settings under 16000 bytes; the server takes 16384.
+    const bound = 16_000
+    const saved = () => {
+      const value = preferenceStorage.getItem('olivares.settings') ?? ''
+      return new TextEncoder().encode(value).length
+    }
+    const lint = { name: 'lint', command: 'pnpm lint' }
+    // One long script already kept: exactly `lint` still fits after it.
+    useClientSettings.setState({
+      projectScripts: { 'ws-main': [{ name: 'big', command: '' }] },
+    })
+    const room = bound - saved() - (JSON.stringify(lint).length + 1)
+    const big = { name: 'big', command: 'x'.repeat(room) }
+    useClientSettings.setState({ projectScripts: { 'ws-main': [big] } })
+    renderPane({ onPanel: () => {}, panel: 'context' })
+    const scripts = await screen.findByTestId('context-scripts')
+    await user.click(
+      await within(scripts).findByRole('button', { name: 'Add script' }),
+    )
+    await user.type(within(scripts).getByLabelText('Name'), 'lint')
+    const command = within(scripts).getByLabelText('Command')
+    await user.type(command, 'pnpm lint2')
+    expect(within(scripts).getByRole('alert')).toHaveTextContent(
+      'No more scripts fit: remove one.',
+    )
+    expect(within(scripts).getByRole('button', { name: 'Add' })).toBeDisabled()
+    await user.type(command, '{Backspace}')
+    expect(within(scripts).queryByRole('alert')).toBeNull()
+    await user.click(within(scripts).getByRole('button', { name: 'Add' }))
+    expect(useClientSettings.getState().projectScripts['ws-main']).toEqual([
+      big,
+      lint,
+    ])
+    expect(saved()).toBe(bound)
+    // Full: the form says so at once, until a script is removed.
+    await user.click(
+      within(scripts).getByRole('button', { name: 'Add script' }),
+    )
+    expect(within(scripts).getByRole('alert')).toHaveTextContent(
+      'No more scripts fit: remove one.',
+    )
+    await user.click(
+      within(scripts).getByRole('button', { name: 'Remove big' }),
+    )
+    expect(within(scripts).queryByRole('alert')).toBeNull()
+  })
+
+  it('Details keeps a script added on a project for its next session, which runs it in its own worktree', async () => {
+    const user = userEvent.setup()
+    // The first session works in the project's folder and adds a script.
+    const first = renderPane({ onPanel: () => {}, panel: 'context' })
+    let scripts = await screen.findByTestId('context-scripts')
+    await user.click(
+      within(scripts).getByRole('button', { name: 'Add script' }),
+    )
+    await user.type(within(scripts).getByLabelText('Name'), 'lint')
+    await user.type(within(scripts).getByLabelText('Command'), 'pnpm lint')
+    await user.click(within(scripts).getByRole('button', { name: 'Add' }))
+    first.unmount()
+    // The next works in its own worktree, a folder registered on its own.
+    ops.listWorkspaces.mockResolvedValue({
+      items: [
+        {
+          workspace_ref: 'ws-worktree',
+          root_path: '/worktrees/b',
+          state: 'active',
+          mount_mode: 'rw',
+        },
+      ],
+      has_more: false,
+    })
+    const second: RunDTO = {
+      ...RUN,
+      run_ref: 'run-2',
+      live_ref: 'lr-b',
+      workspace_path: '/worktrees/b',
+      worktree_branch: 'session/b',
+    }
+    const live: LiveDTO = {
+      ...LIVE,
+      session_ref: 'sess-b',
+      live_ref: 'lr-b',
+      run_ref: 'run-2',
+    }
+    renderPane({
+      onPanel: () => {},
+      panel: 'context',
+      resolution: {
+        ...resolution([second]),
+        target: { liveRef: 'lr-b' },
+        live,
+        session: mergeSessions([live], [second])[0]!,
+      },
+    })
+    scripts = await screen.findByTestId('context-scripts')
+    await user.click(
+      await within(scripts).findByRole('button', { name: 'Run lint' }),
+    )
+    expect(terminal.folder).toBe('ws-worktree')
+    expect(terminal.run.mock.calls[0][0]).toBe('pnpm lint')
+    expect(useTerminalDrawer.getState().open['run-2']).toBe(true)
+    // What it adds is the project's too, under the one folder.
+    await user.click(
+      within(scripts).getByRole('button', { name: 'Add script' }),
+    )
+    await user.type(within(scripts).getByLabelText('Name'), 'test')
+    await user.type(within(scripts).getByLabelText('Command'), 'pnpm test')
+    await user.click(within(scripts).getByRole('button', { name: 'Add' }))
+    expect(useClientSettings.getState().projectScripts).toEqual({
+      'ws-main': [
+        { name: 'lint', command: 'pnpm lint' },
+        { name: 'test', command: 'pnpm test' },
+      ],
+    })
+  })
+
+  it('Details lists the agents the session spawned, each with its state and one-line result, and their total', async () => {
+    ops.activity.mockResolvedValue({
+      driver: 'claude',
+      transcript: 'read',
+      context_tokens: 0,
+      compactions: [],
+      agents: [
+        {
+          tool_use_id: 't1',
+          description: 'Find the callers',
+          state: 'completed',
+          tokens: 1200,
+          summary: 'Three callers, all in core.',
+        },
+        { tool_use_id: 't2', description: 'Write the test', state: 'running' },
+      ],
+      tasks: [],
+      files: [],
+      todos: [],
+      skills: [],
+      mcp_servers: [],
+    })
+    renderPane({
+      resolution: resolution([{ ...RUN, provider_driver: 'claude' }]),
+      onPanel: () => {},
+      panel: 'context',
+    })
+    const agents = await screen.findByTestId('context-subagents')
+    const rows = within(agents).getAllByTestId('context-subagent')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent('Find the callers')
+    expect(rows[0]).toHaveTextContent('Three callers, all in core.')
+    expect(rows[1]).toHaveTextContent('Write the test')
+    expect(
+      within(agents).getByText('1 finished · Σ 1,200 tokens'),
+    ).toBeVisible()
+  })
+
+  it('Details says when the agents could not be read, and Retry reads them again', async () => {
+    const user = userEvent.setup()
+    const read = {
+      driver: 'claude',
+      transcript: 'read',
+      context_tokens: 0,
+      compactions: [],
+      agents: [
+        {
+          tool_use_id: 't1',
+          description: 'Find the callers',
+          state: 'completed',
+        },
+      ],
+      tasks: [],
+      files: [],
+      todos: [],
+      skills: [],
+      mcp_servers: [],
+    }
+    ops.activity.mockRejectedValueOnce(new ApiError(503, 'unavailable', 'x'))
+    ops.activity.mockResolvedValueOnce(read)
+    renderPane({
+      resolution: resolution([{ ...RUN, provider_driver: 'claude' }]),
+      onPanel: () => {},
+      panel: 'context',
+    })
+    const group = await screen.findByTestId('context-subagents')
+    expect(within(group).getByRole('alert')).toHaveTextContent(
+      'The activity could not be read.',
+    )
+    await user.click(within(group).getByRole('button', { name: 'Retry' }))
+    expect(await screen.findAllByTestId('context-subagent')).toHaveLength(1)
+    const agents = screen.getByTestId('context-subagents')
+    expect(within(agents).queryByRole('alert')).toBeNull()
+  })
+
+  it('Details leaves the agents out when the engine does not show the activity', async () => {
+    const user = userEvent.setup()
+    const refusal = new ApiError(409, 'conflict', 'it was given vault secrets')
+    // From a failed read, so the refusal is seen to take the group away.
+    ops.activity.mockRejectedValueOnce(new ApiError(503, 'unavailable', 'x'))
+    ops.activity.mockRejectedValueOnce(refusal)
+    renderPane({
+      resolution: resolution([{ ...RUN, provider_driver: 'claude' }]),
+      onPanel: () => {},
+      panel: 'context',
+    })
+    const group = await screen.findByTestId('context-subagents')
+    await user.click(within(group).getByRole('button', { name: 'Retry' }))
+    // The Activity tab says why; Details shows neither the group nor an error.
+    await waitFor(() =>
+      expect(screen.queryByTestId('context-subagents')).toBeNull(),
+    )
+    expect(ops.activity).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores a registrant that takes the id of Context, Activity, Changes, Files, Preview or the retired Terminal tab', async () => {
     registered.panels = [
       'context',
       'activity',
@@ -653,13 +850,7 @@ describe('the side pane tabs', () => {
     }))
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Changes',
-      'Files',
-      'Terminal',
-      'Preview',
-      'Details',
-    ])
+    expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
     expect(screen.queryByText('takeover')).toBeNull()
   })
 })
@@ -686,23 +877,20 @@ describe('the side pane tabs at the pane’s own width', () => {
   }
 
   it('shows the tabs that fit and puts the rest under More, never squeezed', async () => {
-    layout(272)
+    layout(240)
     try {
       const user = userEvent.setup()
       renderPane()
       await screen.findByTestId('session-context')
-      // 72 + 72 + 56 px of tabs and 28 px of More fit in 272; Terminal would not.
+      // 72 + 56 + 72 px of tabs and 28 px of More fit in 240; Preview would not.
       expect(tabs()).toEqual(['Changes', 'Files', 'Details'])
       await user.click(screen.getByRole('button', { name: 'More panels' }))
       const hidden = screen.getAllByRole('menuitemradio')
-      expect(hidden.map((i) => i.textContent)).toEqual(['Terminal', 'Preview'])
+      expect(hidden.map((i) => i.textContent)).toEqual(['Preview'])
       await user.click(hidden[0]!)
       // The tab in front always shows, in the strip.
-      expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
-        'ws-main',
-      )
-      expect(tabs()).toContain('Terminal')
-      expect(screen.getByRole('radio', { name: 'Terminal' })).toBeChecked()
+      expect(tabs()).toContain('Preview')
+      expect(screen.getByRole('radio', { name: 'Preview' })).toBeChecked()
     } finally {
       vi.restoreAllMocks()
     }
@@ -713,13 +901,7 @@ describe('the side pane tabs at the pane’s own width', () => {
     try {
       renderPane()
       await screen.findByTestId('session-context')
-      expect(tabs()).toEqual([
-        'Changes',
-        'Files',
-        'Terminal',
-        'Preview',
-        'Details',
-      ])
+      expect(tabs()).toEqual(['Changes', 'Files', 'Preview', 'Details'])
       expect(screen.queryByRole('button', { name: 'More panels' })).toBeNull()
     } finally {
       vi.restoreAllMocks()

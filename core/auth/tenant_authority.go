@@ -136,6 +136,11 @@ func (a *Authenticator) scopedOffboard(ctx context.Context, as store.AuthScope, 
 	if err := removeTenantGroupRows(ctx, as, user, t); err != nil {
 		return model.TenantExclusion{}, err
 	}
+	// The membership is gone, so a suspension of it is too: a person added again
+	// later starts as a new member, never still suspended.
+	if err := liftSuspension(ctx, as, user, t); err != nil {
+		return model.TenantExclusion{}, err
+	}
 	if err := revokeTenantTokens(ctx, as, actor, user, t); err != nil {
 		return model.TenantExclusion{}, err
 	}
@@ -224,14 +229,15 @@ const (
 // it cannot repair the tenant ledger.
 // Upgrade trigger: an outbox row written inside the offboard transaction.
 func (a *Authenticator) recordLeaver(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID, cause string) {
-	err := a.appendLeaver(context.WithoutCancel(ctx), actor, tenant, user, cause)
+	err := a.appendTenantEvent(context.WithoutCancel(ctx), actor, tenant, leaverAction, user, map[string]any{"cause": cause})
 	if err != nil {
 		a.log.Error("auth: leaver not recorded on the tenant ledger; membership.offboard is on the system chain",
 			"tenant", tenant.String(), "user", user.String(), "cause", cause, "err", err)
 	}
 }
 
-func (a *Authenticator) appendLeaver(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID, cause string) error {
+// appendTenantEvent appends one act on an account to the tenant's own chain.
+func (a *Authenticator) appendTenantEvent(ctx context.Context, actor Principal, tenant model.TenantID, action string, user model.ID, meta map[string]any) error {
 	// Fail closed on an unattributable principal, as metaAudit does.
 	subject, err := actor.AttributableActor()
 	if err != nil {
@@ -240,8 +246,8 @@ func (a *Authenticator) appendLeaver(ctx context.Context, actor Principal, tenan
 	return a.st.Mutate(ctx, tenant, func(sc store.Scope) error {
 		_, err := sc.Audit().Append(ctx, model.AuditDraft{
 			Actor: subject, ActorKind: actor.ActorKind(),
-			Action: leaverAction, TargetKind: "core.user", TargetID: user,
-			Meta: map[string]any{"cause": cause},
+			Action: action, TargetKind: "core.user", TargetID: user,
+			Meta: meta,
 		})
 		return err
 	})

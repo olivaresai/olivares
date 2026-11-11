@@ -6,7 +6,7 @@ import { ArrowLeft, PanelRight, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useRouter, type AnyRouter } from '@tanstack/react-router'
 import { WorkComposer } from '@/components/layout/work-composer'
 import { COMPOSER_INPUT_ID } from '@/components/layout/work-composer-id'
 import { Button } from '@/components/ui/button'
@@ -27,18 +27,30 @@ import {
 } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { StateBlock } from '@/components/ui/state-block'
+import { usePreferencesStore } from '@/stores/preferences'
 import type { ConversationItem } from './conversation-frames'
 import {
   hostIsolationUnavailable,
   operatorName,
   runTitle,
   primaryRun,
+  sessionPlace,
   sessionShortId,
+  sessionFolder,
   type UnifiedSession,
 } from './provenance'
 import {
   addressOf,
   SESSION_PARAM,
+  SHOW_PARAM,
   WORK_PANES,
   type EvidenceBlock,
   type SessionAddress,
@@ -51,9 +63,14 @@ import { useSessionMenu } from './session-menu'
 import { isPinnable, isPinned, preferenceStorageKey } from './session-pins'
 import { useAuth } from '@/lib/auth/context'
 import { IconTip } from './icon-tip'
-import { FILTER_FROM, filterSessions } from './session-filter'
-import { groupOf, inSection } from './session-groups'
+import { filterSessions, sessionFolders } from './session-filter'
+import { groupOf, groupSessions, inSection, railOrder } from './session-groups'
 import { SessionStrip } from './session-strip'
+import {
+  TerminalDrawer,
+  TerminalHost,
+  useTerminalDrawer,
+} from './terminal-drawer'
 import { SessionNarrative } from './session-narrative'
 import { BESIDE_PANE, CONTEXT_PANE, LIST_PANE } from './surface-resize'
 import { useAutoTitle } from './use-auto-title'
@@ -90,7 +107,9 @@ export interface WorkSurfaceProps {
   onRetry?: () => void
   /** The side pane's tab was chosen (`?panel=`). */
   onPanel?: (panel: string) => void
-  /** The 48 px head of the list column: name, count, New session and the views menu. */
+  /** The page's heading and verbs (name, count, New session, the views menu). Always the
+   * root's first child: it reaches the shell's header from every state of this surface and
+   * stays mounted across them, so the focus it restores is not taken again. */
   listHeader?: React.ReactNode
   /** The foot of the list: what it does not show, and Load more. */
   listFooter?: React.ReactNode
@@ -254,6 +273,14 @@ export function WorkSurface({
     queryFn: ({ signal }) => agentOpsApi.changes(run!.run_ref, { signal }),
     enabled: !!run,
   })
+  // An address that names the terminal (`?panel=terminal`, a link kept from the side tab it
+  // used to be) opens the drawer.
+  const wantsTerminal = address.panel === 'terminal' && !!run?.workspace_ref
+  const terminalRun = run?.run_ref
+  useEffect(() => {
+    if (wantsTerminal && terminalRun)
+      useTerminalDrawer.getState().setOpen(terminalRun, true)
+  }, [wantsTerminal, terminalRun])
   const changedRun = changes.data?.files.length ? run?.run_ref : undefined
   const [seenChangedRun, setSeenChangedRun] = useState<string>()
   if (seenChangedRun !== changedRun) {
@@ -434,20 +461,40 @@ export function WorkSurface({
         command !== 'surface.terminal'
       )
         return
+      if (command === 'shell.panel') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (e.repeat) return
+        const next = !(detailsBeside || sheetOpen)
+        setContextOpen(next)
+        if (!besideFits) {
+          if (next) openSheet(document.activeElement)
+          else closeSheet()
+        }
+        return
+      }
+      // The terminal is the drawer under the conversation, not a tab of the side pane.
+      if (
+        command === 'surface.terminal' &&
+        run?.workspace_ref &&
+        can('sessions:workspace:write')
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (!e.repeat) useTerminalDrawer.getState().toggle(run.run_ref)
+        return
+      }
       const panel =
-        command === 'surface.terminal'
-          ? 'terminal'
-          : command === 'surface.changes'
-            ? 'changes'
-            : command === 'surface.preview'
-              ? 'preview'
-              : null
+        command === 'surface.changes'
+          ? 'changes'
+          : command === 'surface.preview'
+            ? 'preview'
+            : null
       if (
         panel &&
         onPanel &&
         run &&
-        (panel === 'preview' || run.workspace_ref) &&
-        (panel !== 'terminal' || can('sessions:workspace:write'))
+        (panel === 'preview' || run.workspace_ref)
       ) {
         e.preventDefault()
         e.stopPropagation()
@@ -490,18 +537,87 @@ export function WorkSurface({
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // THE FILTER FIELD appears when the list is long enough to need it, and narrows what the
-  // rows show: by name, tool or folder, in this browser, with no request.
+  // THE FILTER FIELD narrows what the rows show: by name, tool or folder, in this browser,
+  // with no request.
   const [query, setQuery] = useState('')
-  const showFilter = sessions.length > FILTER_FROM
+  // THE FOLDER FILTER is the person's choice and the console remembers it. A stored folder
+  // with no session left in it filters nothing: the list is never empty for a stale choice.
+  const storedFolder = usePreferencesStore((s) => s.sessionsFolder)
+  const setStoredFolder = usePreferencesStore((s) => s.setSessionsFolder)
+  const folders = useMemo(() => sessionFolders(sessions), [sessions])
+  const folder =
+    storedFolder && folders.includes(storedFolder) ? storedFolder : null
+  // Clear filters empties all three, the strip's section in the address too, and the
+  // field takes the keyboard back. Outside a router (a view on its own) there is none.
+  const router = useRouter({ warn: false }) as AnyRouter | undefined
+  const filterField = useRef<HTMLInputElement>(null)
+  const clearFilters = () => {
+    setQuery('')
+    setStoredFolder(null)
+    if (show)
+      void router?.navigate({
+        to: '.',
+        search: ((prev: Record<string, unknown>) => ({
+          ...prev,
+          [SHOW_PARAM]: undefined,
+        })) as never,
+        hash: true,
+      })
+    filterField.current?.focus()
+  }
   // The strip's need you and running links narrow the list to their section first. A
   // section that empties has no strip part to clear it: the whole list is back.
   const shown = useMemo(() => {
-    const section = show ? sessions.filter((s) => inSection(s, show)) : []
-    const inShow = section.length > 0 ? section : sessions
-    return showFilter ? filterSessions(inShow, query, t('untitled')) : inShow
-  }, [show, showFilter, sessions, query, t])
-  const noMatch = showFilter && query.trim() !== '' && shown.length === 0
+    const inFolder = folder
+      ? sessions.filter((s) => sessionFolder(s) === folder)
+      : sessions
+    const section = show ? inFolder.filter((s) => inSection(s, show)) : []
+    return filterSessions(
+      section.length > 0 ? section : inFolder,
+      query,
+      t('untitled'),
+    )
+  }, [show, folder, sessions, query, t])
+  const noMatch = query.trim() !== '' && shown.length === 0
+  // THE NEXT AND PREVIOUS SESSION, in the order the list draws them. Never while typing:
+  // on a Mac, Option+Shift+Up and Down extend a selection to the paragraph's edge in a
+  // field. An open dialog owns the keyboard. It stops at the ends, as the arrows in the
+  // list do, and needs a session open: in the list itself the arrows and `j`/`k` walk the
+  // rows.
+  const workingFolded = usePreferencesStore((s) => s.workingFolded)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        e.defaultPrevented ||
+        e.isComposing ||
+        isTypingTarget(e.target) ||
+        modalIsOpen() ||
+        document.querySelector('[role="menu"][data-state="open"]') ||
+        !resolution.target
+      )
+        return
+      const command = resolveBinding(KEYBINDINGS, e, { workSurface: true })
+      if (
+        command !== 'surface.nextSession' &&
+        command !== 'surface.previousSession'
+      )
+        return
+      e.preventDefault()
+      if (e.repeat) return
+      const order = railOrder(
+        groupSessions(shown, pinned),
+        false,
+        false,
+        !workingFolded,
+      )
+      const at = order.findIndex((s) => addressOf(s) === selected)
+      if (at === -1) return
+      const next = order[command === 'surface.nextSession' ? at + 1 : at - 1]
+      if (next) onOpen(next)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [shown, pinned, workingFolded, selected, onOpen, resolution.target])
   const farHits = useFarSessionHits(query, noMatch)
   const railSection = useRef<HTMLElement>(null)
   const menu = useSessionMenu(resolution.grants, (address) => {
@@ -548,7 +664,7 @@ export function WorkSurface({
           : COMPOSER_INPUT_ID
         : undefined
     return (
-      <>
+      <TerminalHost run={beside ? undefined : currentRun}>
         <SessionNarrative
           resolution={current}
           composerId={composerId}
@@ -608,11 +724,12 @@ export function WorkSurface({
               title:
                 operatorName(current.session) ??
                 runTitle(current.session) ??
+                sessionPlace(current.session) ??
                 sessionShortId(current.session),
             }}
           />
         ) : null}
-      </>
+      </TerminalHost>
     )
   }
 
@@ -631,10 +748,7 @@ export function WorkSurface({
     />
   )
 
-  // THE FIRST SCREEN IS THE WORK SCREEN. A person who can start a session has the same three
-  // regions as with one open, the composer in the middle; on a phone, the composer under the
-  // list's header, or above the list when sessions are listed. No region says "Select a
-  // session" or offers a New session of its own (26.10.1 review).
+  // A new session uses the work region; the sidebar already holds the work list.
   if (
     !loading &&
     emptyAction &&
@@ -642,121 +756,66 @@ export function WorkSurface({
   )
     return (
       <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
         data-testid="work-surface"
-        style={surfaceVars}
-        className="flex min-h-0 min-w-0 flex-1 flex-col [--ctx-w:304px] [--list-w:292px] max-[1350px]:[--ctx-w:280px] max-[1350px]:[--list-w:264px] min-[761px]:grid min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)] min-[1120px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]"
       >
-        <section
-          id={paneId('rail')}
-          aria-label={t('surface.pane.rail')}
-          className={cn(
-            'flex min-h-0 min-w-0 shrink-0 flex-col border-line min-[761px]:border-r',
-            sessions.length > 0 &&
-              'max-[760px]:order-last max-[760px]:flex-1 max-[760px]:shrink max-[760px]:border-t',
-          )}
-        >
-          {listHeader}
-          <div
-            className={cn(
-              'min-h-0 flex-1 overflow-y-auto',
-              sessions.length === 0
-                ? 'hidden place-items-center min-[761px]:grid'
-                : 'block',
-            )}
-          >
-            {rail}
-          </div>
-          {listFooter}
-        </section>
-        <section
-          id={paneId('narrative')}
-          aria-label={t('surface.pane.narrative')}
-          className={cn(
-            'min-h-0 min-w-0 flex-1 overflow-y-auto',
-            sessions.length > 0 && 'max-[760px]:flex-none',
-          )}
-        >
-          {emptyAction}
-        </section>
-        <section
-          id={paneId('context')}
-          aria-label={t('surface.pane.context')}
-          className="hidden min-h-0 min-w-0 overflow-y-auto border-l border-line p-4 text-body text-text-2 min-[1120px]:block"
-        >
-          {t('activity.empty')}
-        </section>
+        {listHeader}
+        {emptyAction}
       </div>
     )
 
-  // NOTHING TO LIST IS ONE FACT. For a person who cannot start a session, the rail's empty
-  // state is the whole surface.
-  if (!loading && sessions.length === 0 && !resolution.target)
+  // The list is a destination of its own, never a second column beside the thread.
+  if (!resolution.target || address.pane === 'rail')
     return (
       <div
         className="flex min-h-0 min-w-0 flex-1 flex-col"
         data-testid="work-surface"
       >
-        <section
-          id={paneId('rail')}
-          aria-label={t('surface.pane.rail')}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          {listHeader}
-          <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto">
-            {rail}
-          </div>
-          {listFooter}
-        </section>
-      </div>
-    )
-
-  return (
-    <div
-      className="flex min-h-0 min-w-0 flex-1 flex-col"
-      data-testid="work-surface"
-    >
-      <div
-        ref={surfaceGrid}
-        data-context={detailsBeside ? 'open' : 'closed'}
-        style={surfaceVars}
-        className={cn(
-          // The list is 292 px wide and Details 304 px, 264 and 280 px at 1350 px and below
-          // (the regression design); the conversation takes the rest. A row's title is cut with an
-          // ellipsis and its whole text is on the row's hover.
-          // A person can drag either edge (--list-w, --ctx-w are then set inline); each
-          // pane stops at 35% of the surface, so a width stored on a wide screen never
-          // squeezes the thread on a narrow one.
-          'relative grid min-h-0 flex-1 [--ctx-w:304px] [--list-w:292px] max-[1350px]:[--ctx-w:280px] max-[1350px]:[--list-w:264px]',
-          // ONE column template: a media-prefixed one beside another would outrank it.
-          detailsBeside
-            ? 'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]'
-            : 'min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)]',
-        )}
-      >
+        {listHeader}
         <section
           ref={railSection}
           id={paneId('rail')}
           aria-label={t('surface.pane.rail')}
-          className={cn(
-            'flex min-h-0 min-w-0 flex-col border-line min-[761px]:border-r',
-            // The list stays beside whatever is in front from 761 px: the thread or the
-            // thread beside it.
-            address.pane !== 'rail' && 'hidden min-[761px]:flex',
-          )}
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
         >
-          {listHeader}
           {strip ? <SessionStrip {...strip} show={show} /> : null}
-          {showFilter ? (
-            <div className="shrink-0 px-3 pb-2">
+          {sessions.length > 0 ? (
+            <div className="flex shrink-0 items-center gap-2 px-3 pb-2">
               <Input
+                ref={filterField}
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('list.filter')}
                 aria-label={t('list.filter')}
                 data-testid="rail-filter"
-                className="h-8"
+                className="min-w-0 flex-1"
               />
+              {folders.length > 1 ? (
+                <Select
+                  value={folder ? `folder:${folder}` : 'all'}
+                  onValueChange={(value) =>
+                    setStoredFolder(
+                      value === 'all' ? null : value.slice('folder:'.length),
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    aria-label={t('list.folderFilter')}
+                    className="w-auto max-w-[40%] shrink-0"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t('list.allFolders')}</SelectItem>
+                    {folders.map((name) => (
+                      <SelectItem key={name} value={`folder:${name}`}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
             </div>
           ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -776,13 +835,21 @@ export function WorkSurface({
                 ))}
               </ul>
             ) : noMatch ? (
-              <p
-                role="status"
+              <StateBlock
+                state="filtered"
+                size="panel"
                 data-testid="rail-no-match"
-                className="px-3 py-2 text-caption text-text-3"
-              >
-                {t('list.noMatch')}
-              </p>
+                title={t('list.noMatch')}
+                filters={[
+                  query.trim(),
+                  folder,
+                  show ? t(`list.group.${show}`) : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                hiddenCount={sessions.length}
+                onClear={clearFilters}
+              />
             ) : (
               rail
             )}
@@ -790,24 +857,34 @@ export function WorkSurface({
           {listFooter}
           {menu.dialogs}
         </section>
-        {/* Where the list ends: below 761 px the list is a screen of its own; from there it
-            stays beside whatever is in front, so its edge does too. */}
-        <PaneResizeHandle
-          pane={LIST_PANE}
-          container={surfaceGrid}
-          target={railSection}
-          grow={1}
-          label={t('surface.resize.rail')}
-          style={{ left: 'min(var(--list-w), 35%)' }}
-          className="-translate-x-1/2 max-[760px]:hidden"
-        />
+      </div>
+    )
 
-        <div
-          className={cn(
-            'flex min-h-0 min-w-0 flex-col overflow-clip',
-            address.pane === 'rail' && 'hidden min-[761px]:flex',
-          )}
-        >
+  return (
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      data-testid="work-surface"
+    >
+      {listHeader}
+      <div
+        ref={surfaceGrid}
+        data-context={detailsBeside ? 'open' : 'closed'}
+        style={surfaceVars}
+        className={cn(
+          // The list is 292 px wide and Details 304 px, 264 and 280 px at 1350 px and below
+          // (the regression design); the conversation takes the rest. A row's title is cut with an
+          // ellipsis and its whole text is on the row's hover.
+          // A person can drag either edge (--list-w, --ctx-w are then set inline); each
+          // pane stops at 35% of the surface, so a width stored on a wide screen never
+          // squeezes the thread on a narrow one.
+          'relative grid min-h-0 flex-1 [--ctx-w:304px] [--list-w:292px] max-[1350px]:[--ctx-w:280px] max-[1350px]:[--list-w:264px]',
+          // ONE column template: a media-prefixed one beside another would outrank it.
+          detailsBeside
+            ? 'grid-cols-[minmax(0,1fr)_min(var(--ctx-w),35%)]'
+            : 'grid-cols-1',
+        )}
+      >
+        <div className={cn('flex min-h-0 min-w-0 flex-col overflow-clip')}>
           {/* A phone shows one pane: the strip is above the conversation too, and its
               filters bring the list in front. */}
           {strip ? (
@@ -885,7 +962,6 @@ export function WorkSurface({
                 // such question.
                 split &&
                   'outline-none focus-within:ring-1 focus-within:ring-focus focus-within:ring-inset',
-                address.pane === 'rail' && 'hidden min-[761px]:flex',
                 split &&
                   address.pane === 'beside' &&
                   'hidden min-[1280px]:flex',
@@ -960,6 +1036,16 @@ export function WorkSurface({
             </section>
           </>
         ) : null}
+      </div>
+      {/* Under the whole surface, Details included: the terminal keeps the width.
+          It is the current session's, so it hides with that session's column. */}
+      <div
+        className={cn(
+          'contents',
+          split && address.pane === 'beside' && 'max-[1279px]:hidden',
+        )}
+      >
+        <TerminalDrawer run={primaryRun(resolution.session.runs)} />
       </div>
       <Sheet
         open={sheetOpen}

@@ -97,9 +97,9 @@
   },
   "sso": {
     "title": "Single Sign-on (OIDC / SAML)",
-    "description": "Single Sign-on wird von einem Superadmin unter Identitätsanbieter eingerichtet. Dieses Panel prüft die exakte Redirect-URI und zeigt den Verbindungsstatus.",
+    "description": "Single Sign-On richtet ein Superadmin ein. Dieses Panel prüft die exakte Redirect-URI und zeigt den Verbindungsstatus.",
     "notConfigured": "Nicht konfiguriert",
-    "notConfiguredHint": "Es ist kein Identitätsanbieter konfiguriert, daher liefern Föderationsanfragen 501 zurück. Ein Superadmin richtet ihn unter Identitätsanbieter ein.",
+    "notConfiguredHint": "Es ist kein Identitätsanbieter konfiguriert, daher meldet sich niemand per Single Sign-on an.",
     "seamWhat": "Die Zusammenfassung des SSO-Verbindungsstatus",
     "protocol": "Protokoll",
     "state": "Verbindung",
@@ -110,14 +110,13 @@
     "redirectCheckHint": "Fügen Sie die in Ihrem Identitätsanbieter konfigurierte Redirect-/ACS-URI ein. Sie muss exakt mit dem obigen Wert übereinstimmen (RFC 9700).",
     "redirectMatch": "Exakte Übereinstimmung — diese Redirect-URI ist gültig.",
     "redirectMismatch": "Stimmt nicht exakt überein. Der IdP muss die obige Redirect-URI zeichengenau verwenden.",
-    "configure": "Identitätsanbieter öffnen",
     "testLogin": "Test-Anmeldung starten"
   },
   "scim": {
     "title": "SCIM 2.0-Provisionierung",
     "description": "Eingehende Provisionierung von Benutzern und Gruppen. Schreibgeschützter Status des Dienstanbieters, der synchronisierten Benutzer und der Austritts-Nachweise.",
     "seamWhat": "Die SCIM-Dienstanbieter-Konfiguration",
-    "businessOnly": "Der eingehende SCIM-Server erfordert Business. Entfernen Sie eine Person unter Personen aus der Organisation.",
+    "businessOnly": "Der eingehende SCIM-Server erfordert Olivares AI Business. Entfernen Sie eine Person unter Personen aus der Organisation.",
     "patch": "PATCH",
     "filter": "Filter",
     "filterMax": "Unterstützt (max. {{n}})",

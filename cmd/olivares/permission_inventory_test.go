@@ -6,6 +6,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -94,5 +96,41 @@ func TestPermissionInventoryUsesNativeComposition(t *testing.T) {
 	t.Logf("native census: %d modules, %d declared permissions, %d mounted routes", len(inv.Modules), len(inv.Declared), count)
 	if count != len(mounted) {
 		t.Errorf("native census has %d routes, engine OpenAPI has %d", len(mounted), count)
+	}
+}
+
+// Every module read this binary serves is classified in the published role fixture:
+// "ao" when it is a tenant-wide governance or administration read (the administrator's
+// set), "eao" when it is privileged, "veao" when every person may read it because it
+// is their own or harmless. A new module read with no entry fails here, so nobody adds
+// a tenant-wide read that a viewer gets by the read tier without deciding it.
+func TestEveryServedModuleReadIsClassified(t *testing.T) {
+	raw, err := os.ReadFile("../../core/auth/testdata/builtin-role-permissions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var classified map[string]string
+	if err := json.Unmarshal(raw, &classified); err != nil {
+		t.Fatal(err)
+	}
+	out, _, err := execRoot(t, "openapi", "--permission-inventory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inv struct {
+		Declared map[string]struct {
+			Forms []string `json:"forms"`
+		} `json:"declared"`
+	}
+	if err := json.Unmarshal([]byte(out), &inv); err != nil {
+		t.Fatal(err)
+	}
+	for perm, d := range inv.Declared {
+		module := slices.ContainsFunc(d.Forms, func(f string) bool {
+			return strings.HasPrefix(f, "module:") || strings.HasPrefix(f, "route:")
+		})
+		if _, ok := classified[perm]; module && strings.HasSuffix(perm, ":read") && !ok {
+			t.Errorf("%s is served and unclassified: add it to core/auth/testdata/builtin-role-permissions.json (and to adminReadPerms when it is tenant-wide)", perm)
+		}
 	}
 }

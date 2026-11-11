@@ -35,7 +35,7 @@
     "sumsAbsent": "未记录依赖项校验和",
     "vcsAvailable": "由 Go 工具链戳记的 VCS 设置",
     "vcsUnavailable": "无 VCS 戳记",
-    "selfHashHint": "self-SHA256 是运行中可执行文件的流式哈希，在首次读取时计算一次。请将其离线与未来已签名的 checksums.txt 进行比对——浏览器从不验证签名，且仅凭哈希只能证明身份，而非溯源。",
+    "selfHashHint": "self-SHA256 是运行中可执行文件的哈希，在首次读取时计算一次：它标识的正是这些字节，但不能证明其来源。要检查某个版本，请使用下方的“自行检查”；如果您是从其检查的归档安装的，该归档中 olivares 文件的 sha256sum 会得到相同的值。",
     "published": "已发布",
     "notPublished": "未发布",
     "verifierAvailable": "已编译内置原生验证器（core/secure/modelsign）",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "已声明。"
     }
+  },
+  "check": {
+    "title": "自行检查",
+    "description": "不经过控制台，在终端中完成同样的检查。",
+    "download": "从<release>{{version}} 版本页面</release>下载 checksums.txt、checksums.txt.sig、checksums.txt.pem 以及您安装时使用的归档或软件包，然后在它们所在的文件夹中运行：",
+    "provenance": "连同归档一起，从<release>{{version}} 版本页面</release>下载 multiple.intoto.jsonl，然后在它们所在的文件夹中运行：",
+    "passes": "如果先输出“Verified OK”，随后每个文件旁显示 OK，则您下载的文件就是 Olivares AI 发布工作流为 {{version}} 签名的文件。",
+    "notRelease": "此构建不是已签名的版本，因此没有可供核对的版本签名。",
+    "business": "Olivares AI Business 请按照 Business 渠道的说明进行检查。"
   },
   "status": {
     "declared": "已声明",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "发布制品",
     "description": "发布版本附带的内容，以及每个制品如何建立信任。无密钥（Fulcio/Rekor）和基于密钥（隔离网络）的签名均为一等公民——两者均非唯一规范。",
-    "identityNote": "无密钥签名身份（声明）：OIDC 颁发者 {{issuer}} · cosign 证书身份 {{regexp}}",
+    "identityNote": "无密钥签名身份（声明）：OIDC 颁发者 {{issuer}} · cosign 证书身份 <identity />",
     "columns": {
       "artifact": "制品",
       "producedBy": "产出方",

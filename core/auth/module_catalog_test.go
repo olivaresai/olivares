@@ -153,7 +153,8 @@ func TestSplitIsLastColonNotMiddleSegment(t *testing.T) {
 func TestRoleResourcePermsCarriesModulePermsByRoleGrants(t *testing.T) {
 	withModulePerms(t,
 		"compliance:risk:read", "compliance:risk:write", "compliance:risk:admin",
-		"adoption:developer:read", // a PRIVILEGED read: editor and up, never viewer
+		"security:observed:read",  // a PRIVILEGED read: editor and up, never viewer
+		"adoption:developer:read", // an administrator's read: admin and up
 	)
 
 	cases := []struct {
@@ -169,8 +170,11 @@ func TestRoleResourcePermsCarriesModulePermsByRoleGrants(t *testing.T) {
 		{auth.RoleAdmin, "compliance:risk:admin", true},
 		{auth.RoleOwner, "compliance:risk:admin", true},
 		// privilegedReadPerms must keep biting through the projection.
-		{auth.RoleViewer, "adoption:developer:read", false},
-		{auth.RoleEditor, "adoption:developer:read", true},
+		{auth.RoleViewer, "security:observed:read", false},
+		{auth.RoleEditor, "security:observed:read", true},
+		// adminReadPerms bite through the projection too.
+		{auth.RoleEditor, "adoption:developer:read", false},
+		{auth.RoleAdmin, "adoption:developer:read", true},
 	}
 	for _, c := range cases {
 		if got := has(auth.RoleResourcePerms(c.role), c.perm); got != c.want {

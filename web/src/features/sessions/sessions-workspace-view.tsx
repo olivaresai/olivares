@@ -31,6 +31,7 @@ import {
 } from '@/features/agentops/auth-boundary'
 import { ProfilesPanel } from '@/features/agentops/profiles-panel'
 import { WorkStart } from '@/features/first-hour/first-hour'
+import { PasskeyOffer } from '@/features/first-hour/passkey-offer'
 import { useNewSession } from '@/components/layout/new-session'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { profileName, type RunState } from '@/features/agentops/types'
@@ -45,7 +46,6 @@ import { useUrlState, useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import { useMinuteClock } from '@/components/layout/use-session-rail'
 import { dayCost, dayIsFloorOf } from '@/features/home/now-sessions'
 import { useViewAccess } from '@/features/navigation/authorization'
-import { viewById } from '@/features/navigation/model'
 import { placePages } from '@/features/navigation/places'
 import { NamesUnreadNotice, useUrlStateNotice } from '@/features/shared'
 import type { Notice } from '@/lib/notify'
@@ -90,6 +90,7 @@ import {
 } from './session-groups'
 import { useModelName } from '@/features/agentops/model-choices'
 import { sessionModelRef } from './session-usage'
+import { useUsagePath } from './session-meter'
 import { useSessionPins } from './use-session-pins'
 import { useSessionResolution } from './use-session-resolution'
 import {
@@ -116,9 +117,10 @@ const ALL = '__all__'
  * this list must not conflate them:
  *
  *  · REFUSED — the engine said "not you" for THIS read: 403, including the assurance
- *    403 `step_up_required` (errors.ts:77), and 401. The half's admission is gone NOW,
- *    so nothing it returned earlier may keep being painted: rows, stream overrides,
- *    origin labels, counts and the row-backed open target all leave with it.
+ *    403 `step_up_required` (errors.ts:77) and an edition refusal, and 401. The half's
+ *    admission is gone NOW, so nothing it returned earlier may keep being painted: rows,
+ *    stream overrides, origin labels, counts and the row-backed open target all leave
+ *    with it.
  *  · BROKE — a 5xx, a network failure, a 404. Admission was never withdrawn; the read
  *    failed. The last answer stays on screen under the "could not be read" notice, and
  *    the OTHER half is not touched. Calling this a permission denial would teach the
@@ -129,7 +131,11 @@ const ALL = '__all__'
  */
 function esRechazo(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false
-  return error.isStepUpRequired || error.isForbidden || error.isUnauthenticated
+  return (
+    error.isStepUpRequired ||
+    error.isForbiddenOrEdition ||
+    error.isUnauthenticated
+  )
 }
 
 /**
@@ -1174,11 +1180,11 @@ function Inner({
   // runs, and today's cost, from the rows already loaded and the rules the list and Now
   // use. Without the run half, what runs and what it cost are not known, so they are left
   // out; the cost is what today's sessions reported, a session that reported none left out
-  // of it, and it is not said while a page cut may hide one of today's sessions.
+  // of it, and it is not said while a page cut may hide one of today's sessions. Money
+  // is told only where Usage opens for the person: a member sees none.
   const now = useMinuteClock()
-  const { navigable, listed } = useViewAccess()
-  const usageView = viewById('usage')
-  const usagePath = usageView && navigable(usageView) ? usageView.path : null
+  const { listed } = useViewAccess()
+  const usagePath = useUsagePath()
   const strip = useMemo(() => {
     const floor = dayIsFloorOf(
       liveAdmitted ? liveQuery.data : undefined,
@@ -1189,7 +1195,7 @@ function Inner({
     return {
       needYou: sessions.filter((s) => inSection(s, 'attention')).length,
       running: originUnknown ? null : counts.running,
-      costMicroUsd: today?.costMicroUsd ?? null,
+      costMicroUsd: usagePath ? (today?.costMicroUsd ?? null) : null,
       usagePath,
     }
   }, [
@@ -1223,7 +1229,7 @@ function Inner({
   // becomes the "origin not read" column and the notice above, which is the honest
   // reading — half the picture, said out loud, beats an error page over data we have.
 
-  const columns = useMemo<TableColumn<UnifiedSession>[]>(
+  const allColumns = useMemo<TableColumn<UnifiedSession>[]>(
     () => [
       {
         id: 'session',
@@ -1478,6 +1484,11 @@ function Inner({
       },
     ],
     [t, lang, originUnknown, phone, profileNameByRef],
+  )
+  // A member sees no money: the cost column is for a person Usage opens for.
+  const columns = useMemo(
+    () => allColumns.filter((column) => usagePath || column.id !== 'cost'),
+    [allColumns, usagePath],
   )
 
   /**
@@ -1943,6 +1954,9 @@ function Inner({
     <TooltipProvider delayDuration={300}>
       {importDialog}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="shrink-0 px-4 pt-3 empty:hidden sm:px-6">
+          <PasskeyOffer />
+        </div>
         <Tabs
           value={tab}
           onValueChange={setTab}

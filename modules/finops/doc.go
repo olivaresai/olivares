@@ -55,8 +55,9 @@
 //     its accounting is separate, later work. Coverage scales with attribution quality: unattributed
 //     spend is under-counted, which is the safe direction for this approximation
 //     because it never creates a false deny. Group checks fail open by default with
-//     a per-budget fail_closed opt-in. The detective ingest/finding path for
-//     group budgets and any local-counter degradation mode remain follow-up work.
+//     a per-budget fail_closed opt-in. A user_group budget raises the same threshold
+//     alerts at ingest once its members are resolved (userGroupBudgetMembers); agent_group
+//     budgets and any local-counter degradation mode remain follow-up work.
 //     PROD ACTIVATION: both group dimensions are prod-active. agent_group reads agent
 //     groups from the business store.Scope. user_group membership lives in the AUTH
 //     partition (system tenant), which the least-privilege ModuleData withholds by

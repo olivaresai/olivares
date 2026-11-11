@@ -225,15 +225,14 @@ func (s *Server) currentKnowledgeStatus(ctx context.Context) KnowledgeStatus {
 // same signals as /readyz (store ping, leader status) and enriches with the
 // connector fleet aggregate when available. No sensitive data is exposed.
 func (s *Server) handlePublicStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
-	writeJSON(w, http.StatusOK, s.publicStatusProjection(r.Context(), true))
+	writeJSON(w, http.StatusOK, s.publicStatusProjection(r.Context()))
 }
 
 // publicStatusProjection builds the public, non-sensitive status value without
 // an HTTP loopback. The support-bundle endpoint calls this same function so its
-// status section cannot drift from GET /status — but with observe=false, so a
-// diagnostic capture is side-effect-free and can never consume a degraded
-// ingest delta the next real /status poll should report (adversarial review m3).
-func (s *Server) publicStatusProjection(ctx context.Context, observe bool) publicStatusResponse {
+// status section cannot drift from GET /status. No read consumes a degraded
+// ingest signal (noteIngestLoss): every reader sees it for the same hold.
+func (s *Server) publicStatusProjection(ctx context.Context) publicStatusResponse {
 	now := s.clock.Now()
 
 	components := make([]componentStatusDTO, 0, 5)
@@ -324,7 +323,7 @@ func (s *Server) publicStatusProjection(ctx context.Context, observe bool) publi
 	// the coarse status; subscriber/module names stay on the privileged console
 	// route. Embedders without the optional provider retain the historical
 	// store-mirror fallback because there is no more truthful signal available.
-	ingestStatus := s.currentIngestStatus(storeStatus, observe)
+	ingestStatus := s.currentIngestStatus(storeStatus)
 	overallWorst = worst(overallWorst, ingestStatus)
 	components = append(components, componentStatusDTO{Name: "ingest", Status: ingestStatus})
 
@@ -368,25 +367,21 @@ func (s *Server) publicStatusProjection(ctx context.Context, observe bool) publi
 	}
 }
 
-// currentIngestStatus observes one serialized bus snapshot. Cumulative loss and
-// backpressure counters are degraded only when they INCREASED since the previous
-// observation; a historical non-zero counter is not a permanent incident.
-// Independently, a queue at or above 80% capacity is degraded immediately.
-// observe=false computes the same verdict WITHOUT advancing the delta
-// baseline (side-effect-free peek for diagnostic captures).
-func (s *Server) currentIngestStatus(storeStatus string, observe bool) string {
+// ingestLossHold is how long ingest stays degraded after the bus last lost or
+// blocked an event. It outlasts the console's 30 s poll many times over, so every
+// poll inside it reports the loss, however many readers poll.
+const ingestLossHold = 5 * time.Minute
+
+// currentIngestStatus is the ingest verdict of one bus snapshot. It is degraded
+// while a loss or backpressure increase is held (noteIngestLoss), or while a
+// queue is at or above 80% capacity. A historical non-zero counter alone is not
+// a permanent incident: it ages out after ingestLossHold.
+func (s *Server) currentIngestStatus(storeStatus string) string {
 	if s.busStats == nil {
 		return storeStatus
 	}
-
-	s.busStatusMu.Lock()
-	defer s.busStatusMu.Unlock()
-
 	current := s.busStats.BusStats()
-	degraded := false
-	if s.busHasLastStats {
-		degraded = busLossIncreased(s.busLastStats, current)
-	}
+	degraded := s.noteIngestLoss(current)
 	if !degraded {
 		for _, subscriber := range current.Subscribers {
 			if subscriber.Capacity > 0 &&
@@ -396,15 +391,26 @@ func (s *Server) currentIngestStatus(storeStatus string, observe bool) string {
 			}
 		}
 	}
-	if observe {
-		s.busLastStats = cloneBusStats(current)
-		s.busLastObservedAt = s.clock.Now().Time()
-		s.busHasLastStats = true
-	}
 	if degraded {
 		return statusDegraded
 	}
 	return statusOperational
+}
+
+// noteIngestLoss is the ONE place that advances the ingest-loss baseline. It
+// compares the snapshot with the previous one and stamps the time of an
+// increase; it never clears that stamp, so no read consumes the signal: it
+// reports whether a loss was seen within ingestLossHold.
+func (s *Server) noteIngestLoss(current eventbus.Stats) bool {
+	s.busStatusMu.Lock()
+	defer s.busStatusMu.Unlock()
+	now := s.clock.Now().Time()
+	if s.busHasLastStats && busLossIncreased(s.busLastStats, current) {
+		s.busLossAt = now
+	}
+	s.busLastStats = cloneBusStats(current)
+	s.busHasLastStats = true
+	return !s.busLossAt.IsZero() && now.Sub(s.busLossAt) < ingestLossHold
 }
 
 func busLossIncreased(previous, current eventbus.Stats) bool {

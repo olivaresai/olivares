@@ -111,7 +111,7 @@ func (p *proxy) serveConnect(w http.ResponseWriter, r *http.Request, forward htt
 		},
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, inner *http.Request) {
 			if inner.Method == http.MethodConnect {
-				http.Error(w, "session destination denied", http.StatusForbidden)
+				http.Error(w, destinationDeniedMessage, http.StatusForbidden)
 				return
 			}
 			if !inner.URL.IsAbs() {

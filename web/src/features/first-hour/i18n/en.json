@@ -70,8 +70,7 @@
     },
     "signIn": {
       "title": "Sign it in",
-      "body": "Use your Claude or ChatGPT subscription. The login stays on this server, where the tool keeps it.",
-      "waiting": "Install a tool first."
+      "body": "Use your Claude or ChatGPT subscription. The login stays on this server, where the tool keeps it."
     },
     "start": {
       "title": "Start a session",
@@ -84,19 +83,39 @@
     "notReady": "{{tool}} cannot start yet.",
     "folder": "Folder",
     "folderHint": "A folder on this server.",
+    "folderHintGiven": "The path of a folder already registered on this server. An administrator registers new ones.",
     "folderChoose": "Choose a folder",
     "folderNew": "A new folder for this session",
     "folderTyped": "Another folder…",
     "readingFolder": "Reading the last session's folder…",
     "prompt": "First message (optional)",
     "promptPlaceholder": "What should it do first?",
+    "documents": "Documents",
+    "attachDocument": "Attach document",
+    "removeDocument": "Remove {{name}}",
+    "savingDocument": "Saving {{name}} in the folder ({{n}} of {{total}})…",
+    "documentFailed": "{{name}} was not saved in the folder ({{reason}}).",
+    "documentsNeedFolder": "Documents can be attached to work in one of your folders, in its current checkout.",
+    "documentsMessage": "Documents I attached, saved in the folder:",
+    "documentsAdded": "Added to your first message:",
+    "documentsKept": "Already in the folder: {{paths}}.",
+    "documentsReadOnly": "This folder is read-only: documents can be attached to work in a folder the session can write in.",
+    "documentsWaiting": "Start waits for the attached documents: choose a folder that can take them, or remove them.",
+    "documentWaiting": "{{size}} · waiting",
+    "documentsNeedWords": "Write a few words about what to do with the documents: the session is named by what you write.",
+    "moreHeldDocuments": "Start here to keep the attached documents, or remove them to open more options.",
+    "moreHeldFolder": "Start here to keep the folder you typed, or pick it from the folder list to open more options.",
+    "documentTooLarge": "{{name}} is over this folder's limit of {{size}} per file and was not attached.",
+    "documentAttachedTwice": "{{name}} is already attached.",
     "more": "More options",
     "permission": "What the agent may do",
     "start": "Start",
     "starting": "Starting…",
+    "startSession": "Start session",
     "needTool": "Install and sign in a tool first.",
     "dialogTitle": "New session",
     "dialogDescription": "Choose a tool and say what to do.",
+    "keyToStart": "<key/> to start",
     "advanced": "Advanced launch options",
     "secrets": "Secrets as environment variables",
     "secretsHint": "The session reads each chosen vault secret from the variable you name. The value is never shown, logged or written to the folder.",
@@ -111,6 +130,7 @@
     "credentialsManage": "Manage managed credentials",
     "listUnavailable": "The engine did not answer the secrets list. Nothing can be chosen for now.",
     "openTools": "Open AI tools",
+    "askAdmin": "Ask an administrator to get it ready.",
     "model": "Model",
     "providerDefault": "Default ({{model}})",
     "nativeDefault": "{{tool}} default",
@@ -123,14 +143,22 @@
     "profileNeedsKey": "Needs a key",
     "foldersUnreadable": "The registered folders could not be read. Type the path of a folder on this server.",
     "folderPermission": "Starts as {{name}}, this folder's default.",
-    "autoAsks": "{{tool}} has no automatic mode: it will ask before each action."
+    "autoAsks": "{{tool}} has no automatic mode: it will ask before each action.",
+    "worktreeCheckout": "Current checkout",
+    "worktreeNew": "New worktree",
+    "worktreeFrom": "Start from",
+    "worktreeFromHint": "Branch or commit (optional)",
+    "worktreeNewHint": "The session works on a branch of its own in a separate folder. Your checkout stays as it is.",
+    "worktreeLegend": "Working copy"
   },
   "composer": {
     "toolPill": "Tool and account: {{value}}",
     "modelPill": "Model: {{value}}",
     "effortPill": "Effort: {{value}}",
     "folderPill": "Folder: {{value}}",
-    "moreOptions": "More options"
+    "moreOptions": "More options",
+    "accessPill": "What the agent may do: {{value}}",
+    "worktreePill": "Working copy: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Registered folders: {{count}} loaded; there are more.",
@@ -154,6 +182,14 @@
     "cli": "Use the olivares command line",
     "cliHint": "On this server, the olivares command is already installed. From another computer, install it with:"
   },
+  "passkeyOffer": {
+    "body": "Sign in next time with a passkey: your fingerprint, face or screen lock instead of a password.",
+    "add": "Add a passkey",
+    "notNow": "Not now",
+    "added": "Passkey added. Use it to sign in next time.",
+    "failed": "The passkey was not added. Try again, or add one later in Settings.",
+    "unknown": "The passkey could not be confirmed. It may have been added: look in Settings before adding another."
+  },
   "permissionSummary": {
     "readOnly": "Reads and plans. Every change is refused.",
     "ask": "Asks before every action that is not a read.",
@@ -165,6 +201,9 @@
   "bring": {
     "title": "Bring your folders",
     "body": "Folders your tools already worked in, read from the tools' own records of project paths and dates. Nothing is registered until you confirm.",
+    "offer_one": "{{count}} folder your tools already worked in.",
+    "offer_other": "{{count}} folders your tools already worked in.",
+    "review": "Review",
     "error": "Could not look for your tools' folders.",
     "unreadable": "{{tool}}'s records could not be read. Add folders by hand instead.",
     "cols": {

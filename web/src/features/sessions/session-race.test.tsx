@@ -2,13 +2,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ allowed: true, calls: [] as string[] }))
+const state = vi.hoisted(() => ({
+  allowed: true,
+  usage: true,
+  calls: [] as string[],
+}))
+// Usage opens with its own read; every other permission follows `allowed`.
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => state.allowed }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (permission: string) =>
+      permission === 'sessions:account:read' ? state.usage : state.allowed,
+  }),
 }))
 vi.mock('@/features/agentops/auth-boundary', () => ({
   useAuthBoundary: () => ({ epoch: 1, tenant: 't1' }),
@@ -63,6 +72,7 @@ function mount() {
 beforeEach(() => {
   vi.resetAllMocks()
   state.allowed = true
+  state.usage = true
   state.calls = []
   useTenantStore.getState().setActiveTenant('t1')
   vi.mocked(agentOpsApi.getRun).mockImplementation(
@@ -82,12 +92,53 @@ beforeEach(() => {
 })
 
 describe('SessionRace', () => {
-  it('shows each diff and its measured cost, preserving unknown cost', async () => {
+  it('shows a person Usage opens for each diff and its measured cost, preserving unknown cost', async () => {
     mount()
     expect(await screen.findByText('diff ' + refs[0])).toBeInTheDocument()
     expect(screen.getByText('diff ' + refs[1])).toBeInTheDocument()
     expect(screen.getByText('$0.25')).toBeInTheDocument()
     expect(screen.getByText('cost not reported')).toBeInTheDocument()
+  })
+
+  it('tells a person Usage does not open for no cost, nor that none was reported', async () => {
+    // A member sees no money; the first choice reported $0.25, the second none.
+    state.usage = false
+    mount()
+    expect(await screen.findByText('diff ' + refs[0])).toBeInTheDocument()
+    const choices = screen.getAllByTestId('race-choice')
+    expect(choices).toHaveLength(2)
+    for (const choice of choices) {
+      expect(choice).not.toHaveTextContent('$')
+      expect(choice).not.toHaveTextContent('cost not reported')
+      // Nor the estimate's note on an empty line where the cost was.
+      expect(within(choice).queryByTitle(/an estimate/i)).toBeNull()
+      expect(
+        within(choice).getByRole('button', { name: 'Keep this one' }),
+      ).toBeInTheDocument()
+    }
+    expect(screen.getByText('diff ' + refs[1])).toBeInTheDocument()
+  })
+
+  it('asks a person Usage opens for to review each branch and its cost', async () => {
+    mount()
+    expect(await screen.findByText('diff ' + refs[0])).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Review each branch and its cost. Commit any edits you want to keep before choosing.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('names no cost in the hint to a person Usage does not open for', async () => {
+    state.usage = false
+    mount()
+    expect(await screen.findByText('diff ' + refs[0])).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Review each branch. Commit any edits you want to keep before choosing.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('session-race')).not.toHaveTextContent(/cost/i)
   })
 
   it('confirms the discard, stops all, merges the choice, then discards only the loser', async () => {

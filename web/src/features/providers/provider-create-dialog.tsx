@@ -355,7 +355,7 @@ export function ProviderCreateDialog({
               href={preset.key_url || preset.docs_url}
               target="_blank"
               rel="noreferrer noopener"
-              className="inline-flex items-center gap-1 self-start text-caption text-accent-text underline-offset-2 hover:underline"
+              className="inline-flex items-center gap-1 self-start text-caption text-foreground underline underline-offset-2"
             >
               <ExternalLink aria-hidden className="size-3.5" />
               {t(preset.key_url ? 'create.keyLink' : 'create.docsLink', {

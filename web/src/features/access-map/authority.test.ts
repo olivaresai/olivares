@@ -184,7 +184,7 @@ describe('classifyAuthority — what an absent permit does and does not mean', (
       // one, and a parameter the destination ignores is a link that pretends to lead
       // somewhere — the defect this whole change removes.
       search: { tab: 'inventory' },
-      permission: 'governance:identity:read',
+      permission: 'user:read',
     })
   })
 

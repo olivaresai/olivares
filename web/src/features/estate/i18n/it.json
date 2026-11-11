@@ -17,7 +17,7 @@
   "openOwner": "Apri {{resource}}",
   "sharedScope": "Cartelle, connettori, server MCP e policy sono risorse dell'organizzazione; non viene dedotto alcun legame con un workspace.",
   "more": "Visualizzati: {{count}}. Ne sono disponibili altri.",
-  "unavailable": "Impossibile caricare questa famiglia di risorse. Aggiorna per riprovare.",
+  "unavailable": "Impossibile caricare questa famiglia di risorse.",
   "off": "Questo modulo è disattivato.",
   "startSession": "Avvia sessione",
   "workflows": "Apri le automazioni",
@@ -54,5 +54,18 @@
   },
   "nextPage": "Pagina successiva",
   "firstPage": "Prima pagina",
-  "noDependencies": "Nessuna dipendenza visibile."
+  "noDependencies": "Nessuna dipendenza visibile.",
+  "groups": {
+    "workspace": "Workspace",
+    "folder": "Cartelle",
+    "session": "Sessioni",
+    "work": "Work item",
+    "connector": "Connettori",
+    "mcp": "Server MCP",
+    "policy": "Policy"
+  },
+  "noResources": {
+    "title": "Nessuna risorsa configurata",
+    "description": "Workspace, cartelle, sessioni, connettori, server MCP e policy compaiono qui dopo la configurazione."
+  }
 }

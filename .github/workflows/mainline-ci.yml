@@ -2212,9 +2212,9 @@ jobs:
       # numbers and this matrix to the spec, so Go's timeout (a goroutine dump naming the package)
       # retains its own goroutine dump while the step bounds the whole shard.
       #
-      # Sampled host resources are recorded on EXIT/TERM when the shell and log transport remain
-      # available. These samples are host memory use, not process RSS, and can miss intervening
-      # peaks; SIGKILL or host loss can prevent a report, and missing evidence is not a zero
+      # The job's cgroup v2 figures (CPU used, memory peak, OOM events) are recorded on EXIT/TERM
+      # when the shell and log transport remain available. They are the cgroup's, not per
+      # process; SIGKILL or host loss can prevent a report, and missing evidence is not a zero
       # reading.
       #
       # The log carries the shard in its name, because .github/actions/pr-failure-report titles

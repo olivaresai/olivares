@@ -463,12 +463,9 @@ describe('the first-hour launch', () => {
     })
     expect(ops.createRun.mock.calls[0][0].credentials).toBeUndefined()
   })
-  it.each([
-    ['grok', 'Grok Build'],
-    ['opencode', 'OpenCode'],
-  ] as const)(
+  it.each(['grok', 'opencode'] as const)(
     'starts %s on its resolved profile with the chosen preset',
-    async (driver, name) => {
+    async (driver) => {
       ops.createRun.mockResolvedValue({
         run_ref: 'run_3',
         provider_driver: driver,
@@ -483,7 +480,7 @@ describe('the first-hour launch', () => {
       expect(ops.createRun.mock.calls[0][0]).toEqual(
         expect.objectContaining({
           permission_mode: 'plan',
-          name: `${name} in app`,
+          name: '',
         }),
       )
       expect(ops.createRun.mock.calls[0][0].template_id).toBeUndefined()
@@ -645,46 +642,64 @@ describe('the same choices from either New session form', () => {
     })
     const [quick, advanced] = ops.createRun.mock.calls.map((c) => c[0])
     expect(advanced).toEqual(quick)
-    expect(quick).toMatchObject({ name: 'Run the tests' })
+    expect(quick).toMatchObject({ name: '' })
     expect(ops.input).toHaveBeenCalledTimes(2)
     expect(ops.input.mock.calls[1][1]).toBe(ops.input.mock.calls[0][1])
   })
 })
 
-// The engine refuses a session name with a control, invisible or blank character, and a
-// name taken from the first message or the folder is one the person never typed: a
-// pasted prompt with a zero-width space must not make the launch a 400.
-describe('the name a launch derives', () => {
-  it('leaves out the characters the engine refuses in a name', async () => {
-    await startSession({
-      driver: 'claude',
-      folder: '/home/fran/app',
-      permission: 'ask',
-      prompt:
-        'Fix the\u200b bug \u2800in\u0007 the\u202e app\ufe0f \u200b to run',
+//: the engine refuses a name another session holds (409), the rule for a name a
+// person chose. A launch the person did not name sends none: the engine titles the
+// session from its first message, so the same first words, or the same tool and folder
+// with no message, start a second session instead of a 409.
+describe('a launch the person did not name', () => {
+  beforeEach(() => {
+    const held = new Set<string>()
+    ops.createRun.mockImplementation(async (body: { name: string }) => {
+      if (body.name && held.has(body.name))
+        throw new ApiError(
+          409,
+          'conflict',
+          `Another session is already named "${body.name}".`,
+        )
+      held.add(body.name)
+      return { run_ref: `run_${held.size}`, provider_driver: 'claude' }
     })
-    expect(ops.createRun.mock.calls[0][0]).toMatchObject({
-      name: 'Fix the bug in the app to run',
+  })
+
+  it.each(['Fix the failing test in billing', ''])(
+    'starts twice with the same first message %j',
+    async (prompt) => {
+      const quick = {
+        driver: 'claude',
+        folder: '/home/fran/app',
+        permission: 'ask',
+        prompt,
+      } as const
+      await startSession(quick)
+      await expect(startSession(quick)).resolves.toMatchObject({
+        run_ref: expect.any(String),
+      })
+      expect(ops.createRun.mock.calls.map((c) => c[0].name)).toEqual(['', ''])
+    },
+  )
+
+  it('still sends the name a person typed', async () => {
+    await launch({
+      run: {
+        name: '  deploy-api ',
+        transport: 'stream-json',
+        permission_mode: 'default',
+        effort: '',
+        model: '',
+        workspace_ref: '',
+        isolation: 'native',
+        env_allow: [],
+        provider_profile_ref: 'ppf_new',
+      },
+      message: 'Run the tests',
     })
-    await startSession({
-      driver: 'claude',
-      folder: '/home/fran/a\u200bpp',
-      permission: 'ask',
-      prompt: '',
-    })
-    expect(ops.createRun.mock.calls[1][0]).toMatchObject({
-      name: expect.stringMatching(/ in app$/),
-    })
-    // A long folder name keeps the whole name within the engine's 200 characters.
-    await startSession({
-      driver: 'claude',
-      folder: `/home/fran/${'n'.repeat(250)}`,
-      permission: 'ask',
-      prompt: '',
-    })
-    expect(
-      Array.from(ops.createRun.mock.calls[2][0].name as string).length,
-    ).toBeLessThanOrEqual(200)
+    expect(ops.createRun.mock.calls[0][0].name).toBe('deploy-api')
   })
 })
 

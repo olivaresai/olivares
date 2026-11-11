@@ -18,8 +18,6 @@
     "search": "搜索条目……",
     "name": "名称",
     "kind": "类型",
-    "slug": "标识串",
-    "version": "版本",
     "status": "状态",
     "owner": "负责人",
     "signing": "签名",

@@ -21,7 +21,7 @@ Kontoübersicht zeigt E-Mail, Tarif, Nutzungszeiträume und Modelle, die das Wer
 meldet. Fehlende Werte bleiben nicht verfügbar, und fehlgeschlagene Aktualisierungen
 werden als veraltet markiert.
 
-**API-Schlüssel** auf **Werkzeuge** (`/agent-tools`) enthält API-Schlüssel und
+**Anbieter** (`/providers`, unter **Werkzeuge**) enthält API-Schlüssel und
 Endpunkte für lokale Modelle. Fügen Sie den Anbieter dort hinzu und testen Sie ihn;
 danach verwenden Sie ihn über **Neue Sitzung**. Ein Anbieterschlüssel und ein
 Werkzeug-Abonnement sind unterschiedliche Wege, sich zu verbinden. Ollama benötigt
@@ -49,7 +49,7 @@ oder geben Sie die Nachricht ein, bevor Sie **Starten** drücken.
 Ein Werkzeug, das einen Anbieterschlüssel verwendet, nutzt sein gespeichertes Modell
 oder lässt Sie ein Modell wählen, das der Verbindungstest zurückgegeben hat. Wird ein
 Modell benötigt, hat der Test aber noch keines zurückgegeben, testen Sie zuerst die
-Verbindung unter **API-Schlüssel** auf **Werkzeuge**. Claude Code kann sein natives
+Verbindung unter **Anbieter**. Claude Code kann sein natives
 Standardmodell verwenden.
 
 Für die README-Compose-Installation führen Sie die CLI im Engine-Container aus. Dort
@@ -58,7 +58,7 @@ Olivares-Administratorkonto an, das Sie bei der Einrichtung angelegt haben, nich
 mit Ihrem Werkzeug-Abonnement.
 
 Wenn Sie einen Anbieterschlüssel mit einem Werkzeug verwenden, das ein Modell
-verlangt, etwa Codex, speichern Sie unter **API-Schlüssel** auf **Werkzeuge** ein
+verlangt, etwa Codex, speichern Sie unter **Anbieter** ein
 Standardmodell, bevor Sie `session start` unten ausführen. Wenn weder der Anbieter
 noch das Profil des Werkzeugs ein konfiguriertes Modell hat, hängen Sie
 `--model <tested-model-id>` an den Befehl `session start` an und ersetzen den
@@ -121,7 +121,7 @@ Turn-Ergebnis, bevor Sie ihn als beendet betrachten.
 Für ein vorhandenes konfiguriertes Werkzeug-Home lässt der Reiter **Anbieterprofile**
 unter **Sitzungen** (`/sessions?tab=profiles`) einen Administrator ein Profil
 registrieren und die Startbereitschaft prüfen. Profil und Quellenbindungen eines
-benannten Kontos stehen außerdem in dessen Detailansicht unter **Werkzeuge**. Die
+benannten Kontos stehen außerdem in dessen Detailansicht unter **KI-Werkzeuge**. Die
 Homes müssen auf dem Ausführungshost existieren. Verwenden Sie **Weitere Optionen →
 Erweiterte Startoptionen** im Dialog **Neue Sitzung**, um dieses Profil auszuwählen.
 Binary-Überschreibungen wählen ein ausführbares Programm; andernfalls versucht die

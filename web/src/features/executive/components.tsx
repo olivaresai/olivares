@@ -72,7 +72,7 @@ export function DrillLink({
     <Link
       // The feature registry IS the route table, so these paths are always valid.
       to={to as never}
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-caption font-medium text-accent-text outline-none transition-colors hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-ring print:hidden [&_svg]:size-3.5"
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-caption font-medium text-foreground underline underline-offset-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring print:hidden [&_svg]:size-3.5"
     >
       {children}
       <ArrowRight />

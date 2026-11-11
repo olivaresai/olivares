@@ -2,20 +2,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Usage & cost: the account nearest its limit leads, then today's sessions, tokens
-// and cost. Each section reads only what the principal may read, and a figure nobody
-// reported is left out, never shown as zero.
+// Usage & cost: what a chosen window cost and used, by tool and by profile, then the
+// account nearest its limit, then today's sessions, tokens and cost. Each section reads
+// only what the principal may read, money shows only to a person Usage opens for, and a
+// figure nobody reported is left out, never shown as zero.
 import type { ComponentProps } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderSnapshot } from '@/features/agent-tools/api'
 import type { ProviderAccountDTO } from '@/features/agentops/types'
 import type { TodaysCost } from '@/features/home/now-sessions'
-import { renderIntel, screen, within } from '@/test/intel'
+import type { UsageRow } from '@/features/models/types'
+import { downloadBlob } from '@/lib/api/download'
+import {
+  cleanup,
+  fireEvent,
+  renderIntel,
+  screen,
+  userEvent,
+  within,
+} from '@/test/intel'
 import { UsageView } from './usage-view'
 
 const state = vi.hoisted(() => ({
   // An organization admin: may read the accounts, is no system administrator.
   canAccounts: true,
+  // May read the runs' totals (`sessions:run:read`), which the Spend section reads.
+  readsRuns: false,
+  // Usage does not open for this person: money and the word for it are left out.
+  noMoney: false,
   hidden: [] as string[],
   profiles: {
     isPending: false,
@@ -54,14 +68,33 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     isSuperadmin: false,
+    activeTenant: 't1',
     can: (permission: string) =>
-      permission === 'sessions:account:read' && state.canAccounts,
+      (permission === 'sessions:account:read' && state.canAccounts) ||
+      (permission === 'sessions:run:read' && state.readsRuns),
   }),
 }))
 vi.mock('@/features/navigation/authorization', () => ({
   useViewAccess: () => ({
     listed: (v: { id: string }) => !state.hidden.includes(v.id),
+    navigable: (v: { id: string }) => !(state.noMoney && v.id === 'usage'),
   }),
+}))
+// The runs' totals (`GET /v1/m/sessions/usage`), answered per group from `byGroup`.
+const usageMock = vi.hoisted(() => vi.fn())
+vi.mock('@/features/models/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/models/api')>()
+  return {
+    ...actual,
+    modelsApi: {
+      ...actual.modelsApi,
+      usage: (...a: unknown[]) => usageMock(...a),
+    },
+  }
+})
+vi.mock('@/lib/api/download', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  downloadBlob: vi.fn(),
 }))
 vi.mock('@/features/agent-tools/use-profiles', () => ({
   useProfileList: () => state.profiles,
@@ -126,6 +159,8 @@ function window(
 
 afterEach(() => {
   state.canAccounts = true
+  state.readsRuns = false
+  state.noMoney = false
   state.hidden = []
   state.profiles = {
     isPending: false,
@@ -186,6 +221,27 @@ describe('UsageView', () => {
     expect(
       within(rows[0]!).getByRole('link', { name: 'Details of team' }),
     ).toHaveAttribute('href', '/agent-tools')
+    // One trailing control per row, the one that opens it; the way to the
+    // account's tool is inside what the row opens, not a second control.
+    const link = within(rows[0]!).getByRole('link', { name: 'Details of team' })
+    expect(link.closest('details')).toBe(rows[0]!.querySelector('details'))
+    // The shared button's own small size: 44 px tall at phone width.
+    expect(link).toHaveClass('max-md:min-h-11')
+  })
+
+  it('offers Details only to a person who may open the AI tools', () => {
+    state.profiles.data.accounts = [
+      account({
+        account_ref: 'acc-team',
+        name: 'team',
+        usage: [window('seven_day', 98)],
+      }),
+    ]
+    state.hidden = ['agent-tools']
+    renderIntel(<UsageView />)
+    const accounts = screen.getByRole('region', { name: 'Accounts' })
+    expect(accounts).toHaveTextContent('98% of the week')
+    expect(within(accounts).queryByRole('link', { name: /Details/ })).toBeNull()
   })
 
   it("keeps the server user's own login for a system administrator, beside the accounts", () => {
@@ -296,6 +352,33 @@ describe('UsageView', () => {
     expect(screen.queryByText(/reported no/)).not.toBeInTheDocument()
   })
 
+  it('tells money only to a person Usage opens for: no $ and not the word cost for anyone else', () => {
+    state.today = {
+      sessions: 2,
+      costMicroUsd: 0,
+      unpriced: 0,
+      inputTokens: 10,
+      outputTokens: 10,
+      tokensUnreported: 0,
+    }
+    // With the read: today's cost, a free day included, and the page says it tells cost.
+    renderIntel(<UsageView />)
+    expect(screen.getByTestId('usage-today')).toHaveTextContent(
+      '2 sessions · 10 input · 10 output · $0.00',
+    )
+    expect(document.body).toHaveTextContent(/cost/)
+    cleanup()
+
+    // Without it (a member): the sessions and tokens, no money and not the word.
+    state.noMoney = true
+    renderIntel(<UsageView />)
+    expect(screen.getByTestId('usage-today')).toHaveTextContent(
+      /^2 sessions · 10 input · 10 output$/,
+    )
+    expect(document.body).not.toHaveTextContent('$')
+    expect(document.body).not.toHaveTextContent(/cost/i)
+  })
+
   it('leaves the tokens out while a session reported none', () => {
     state.today = {
       sessions: 3,
@@ -324,6 +407,10 @@ describe('UsageView', () => {
     expect(screen.getByRole('link', { name: 'View sessions' })).toHaveAttribute(
       'href',
       '/sessions',
+    )
+    // The shared button's own small size: 44 px tall at phone width.
+    expect(screen.getByRole('link', { name: 'View sessions' })).toHaveClass(
+      'max-md:min-h-11',
     )
     state.hidden = ['sessions']
     renderIntel(<UsageView />)
@@ -398,5 +485,278 @@ describe('UsageView', () => {
     ).toBeInTheDocument()
     expect(screen.getByTestId('lanes-stub')).toHaveTextContent('1 sessions')
     expect(screen.queryByRole('region', { name: 'Accounts' })).toBeNull()
+  })
+})
+
+const usageRow = (over: Partial<UsageRow>): UsageRow => ({
+  runs: 0,
+  input_tokens: null,
+  output_tokens: null,
+  cost_micro_usd: null,
+  runs_without_tokens: 0,
+  runs_without_cost: 0,
+  ...over,
+})
+
+// What the engine answers for the window, per day: by tool, and by profile (`account`).
+// Codex reported tokens and no cost.
+const byGroup: Record<'tool' | 'account', UsageRow[]> = {
+  tool: [
+    usageRow({
+      key: 'claude',
+      day: '2026-11-10',
+      runs: 3,
+      input_tokens: 3000,
+      output_tokens: 300,
+      cost_micro_usd: 2_000_000,
+    }),
+    usageRow({
+      key: 'codex',
+      day: '2026-11-10',
+      runs: 2,
+      input_tokens: 1000,
+      output_tokens: 100,
+      runs_without_cost: 2,
+    }),
+    usageRow({
+      key: 'claude',
+      day: '2026-11-11',
+      runs: 1,
+      input_tokens: 500,
+      output_tokens: 50,
+      cost_micro_usd: 1_000_000,
+    }),
+  ],
+  account: [
+    usageRow({
+      key: 'p-team',
+      day: '2026-11-10',
+      runs: 3,
+      input_tokens: 3000,
+      output_tokens: 300,
+      cost_micro_usd: 2_000_000,
+    }),
+    usageRow({
+      key: 'p-cx',
+      day: '2026-11-10',
+      runs: 2,
+      input_tokens: 1000,
+      output_tokens: 100,
+      runs_without_cost: 2,
+    }),
+    usageRow({
+      key: 'p-team',
+      day: '2026-11-11',
+      runs: 1,
+      input_tokens: 500,
+      output_tokens: 50,
+      cost_micro_usd: 1_000_000,
+    }),
+  ],
+}
+
+const read = (group: 'tool' | 'account', since: string, until: string) => ({
+  group_by: group,
+  since,
+  until,
+  bucket: 'day',
+})
+
+describe('UsageView spend', () => {
+  beforeEach(() => {
+    // Only the clock: the window is whole UTC days ending today.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-11T10:00:00Z'))
+    state.readsRuns = true
+    state.profiles.data.accounts = [
+      account({ account_ref: 'p-team', name: 'team' }),
+      account({ account_ref: 'p-cx', name: 'cx-main', driver: 'codex' }),
+    ]
+    usageMock.mockImplementation((q: { group_by: 'tool' | 'account' }) =>
+      Promise.resolve({ group_by: q.group_by, items: byGroup[q.group_by] }),
+    )
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    usageMock.mockReset()
+    vi.mocked(downloadBlob).mockClear()
+  })
+
+  it('tells a person Usage opens for what the last 14 days cost, used and ran, by profile', async () => {
+    renderIntel(<UsageView />)
+    const spend = await screen.findByRole('region', { name: 'Spend' })
+    const totals = await within(spend).findByRole('group', { name: 'Totals' })
+    expect(totals).toHaveTextContent('Spend$3.00')
+    // Codex reported no cost: $3.00 is what was reported, and it says so.
+    expect(totals).toHaveTextContent('Runs with no cost reported: 2')
+    expect(totals).toHaveTextContent('Runs6')
+    expect(totals).toHaveTextContent('Input tokens4,500')
+    expect(totals).toHaveTextContent('Output tokens450')
+    expect(usageMock).toHaveBeenCalledWith(
+      read('tool', '2026-10-29T00:00:00Z', '2026-11-12T00:00:00Z'),
+    )
+    expect(usageMock).toHaveBeenCalledWith(
+      read('account', '2026-10-29T00:00:00Z', '2026-11-12T00:00:00Z'),
+    )
+    const team = within(spend).getByRole('row', { name: /^team/ })
+    expect(within(team).getByText('Claude Code')).toBeInTheDocument()
+    expect(within(team).getByText('$3.00')).toBeInTheDocument()
+    expect(
+      within(spend).getByRole('columnheader', { name: 'Spend' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows a person Usage does not open for the runs and tokens, and no money anywhere', async () => {
+    state.noMoney = true
+    state.today = {
+      sessions: 2,
+      costMicroUsd: 420_000,
+      unpriced: 0,
+      inputTokens: 10,
+      outputTokens: 10,
+      tokensUnreported: 0,
+    }
+    const user = userEvent.setup()
+    renderIntel(<UsageView />)
+    const spend = await screen.findByRole('region', { name: 'Runs and tokens' })
+    const totals = await within(spend).findByRole('group', { name: 'Totals' })
+    expect(totals).toHaveTextContent('Input tokens4,500')
+    expect(within(spend).getByRole('row', { name: /^team/ })).toBeVisible()
+    expect(
+      within(spend).queryByRole('columnheader', { name: 'Spend' }),
+    ).toBeNull()
+    expect(screen.getByTestId('usage-today')).toHaveTextContent(
+      /^2 sessions · 10 input · 10 output$/,
+    )
+    expect(document.body).not.toHaveTextContent('$')
+    expect(document.body).not.toHaveTextContent(/cost|spend/i)
+
+    await user.click(within(spend).getByRole('button', { name: 'Export' }))
+    const [file] = vi.mocked(downloadBlob).mock.calls[0]!
+    expect(await file.text()).not.toMatch(/cost|\$/)
+  })
+
+  it('filters the figures, the profiles and the limits by tool and by profile', async () => {
+    state.profiles.data.accounts = [
+      account({
+        account_ref: 'p-team',
+        name: 'team',
+        usage: [window('seven_day', 40)],
+      }),
+      account({
+        account_ref: 'p-cx',
+        name: 'cx-main',
+        driver: 'codex',
+        usage: [window('seven_day', 70)],
+      }),
+      account({
+        account_ref: 'p-cx2',
+        name: 'cx-spare',
+        driver: 'codex',
+        usage: [window('seven_day', 10)],
+      }),
+    ]
+    // The account rows only: each row also lists its own windows as list items.
+    const limits = () =>
+      within(screen.getByRole('region', { name: 'Accounts' }))
+        .getAllByRole('listitem')
+        .filter((r) => r.hasAttribute('data-account'))
+        .map((r) => r.getAttribute('data-account'))
+    const user = userEvent.setup()
+    renderIntel(<UsageView />)
+    const spend = await screen.findByRole('region', { name: 'Spend' })
+    await within(spend).findByRole('row', { name: /^team/ })
+    expect(limits()).toEqual(['p-cx', 'p-team', 'p-cx2'])
+
+    await user.click(within(spend).getByRole('combobox', { name: 'Tool' }))
+    await user.click(screen.getByRole('option', { name: 'Codex' }))
+    const totals = within(spend).getByRole('group', { name: 'Totals' })
+    expect(totals).toHaveTextContent('Runs2')
+    expect(totals).toHaveTextContent('Input tokens1,000')
+    expect(within(spend).queryByRole('row', { name: /^team/ })).toBeNull()
+    expect(within(spend).getByRole('row', { name: /^cx-main/ })).toBeVisible()
+    expect(limits()).toEqual(['p-cx', 'p-cx2'])
+
+    await user.click(within(spend).getByRole('combobox', { name: 'Profile' }))
+    await user.click(screen.getByRole('option', { name: 'cx-main' }))
+    expect(limits()).toEqual(['p-cx'])
+    expect(
+      within(spend).getByRole('group', { name: 'Totals' }),
+    ).toHaveTextContent('Runs2')
+  })
+
+  it('asks for 7 or 30 days or a chosen range, and refuses one that ends before it starts', async () => {
+    const user = userEvent.setup()
+    renderIntel(<UsageView />)
+    const spend = await screen.findByRole('region', { name: 'Spend' })
+    await within(spend).findByRole('group', { name: 'Totals' })
+
+    await user.click(within(spend).getByRole('radio', { name: '30 days' }))
+    expect(usageMock).toHaveBeenCalledWith(
+      read('tool', '2026-10-13T00:00:00Z', '2026-11-12T00:00:00Z'),
+    )
+    await user.click(within(spend).getByRole('radio', { name: '7 days' }))
+    expect(usageMock).toHaveBeenCalledWith(
+      read('tool', '2026-11-05T00:00:00Z', '2026-11-12T00:00:00Z'),
+    )
+
+    // A chosen range starts from the window on screen.
+    await user.click(within(spend).getByRole('radio', { name: 'Custom' }))
+    const first = within(spend).getByLabelText('First day')
+    const last = within(spend).getByLabelText('Last day')
+    expect(first).toHaveValue('2026-11-05')
+    expect(last).toHaveValue('2026-11-11')
+    fireEvent.change(first, { target: { value: '2026-11-01' } })
+    fireEvent.change(last, { target: { value: '2026-11-03' } })
+    expect(usageMock).toHaveBeenCalledWith(
+      read('tool', '2026-11-01T00:00:00Z', '2026-11-04T00:00:00Z'),
+    )
+
+    fireEvent.change(first, { target: { value: '2026-11-08' } })
+    expect(within(spend).getByRole('alert')).toHaveTextContent(
+      'The first day must be on or before the last.',
+    )
+    expect(usageMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ since: '2026-11-08T00:00:00Z' }),
+    )
+  })
+
+  it('refuses a chosen range of more than 366 days: no read goes out and the message shows', async () => {
+    const user = userEvent.setup()
+    renderIntel(<UsageView />)
+    const spend = await screen.findByRole('region', { name: 'Spend' })
+    await within(spend).findByRole('group', { name: 'Totals' })
+    await user.click(within(spend).getByRole('radio', { name: 'Custom' }))
+    const first = within(spend).getByLabelText('First day')
+    const last = within(spend).getByLabelText('Last day')
+    // The pickers offer no day the rule refuses.
+    expect(first).toHaveAttribute('min', '2025-11-11')
+    expect(first).toHaveAttribute('max', '2026-11-11')
+    expect(last).toHaveAttribute('min', '2026-10-29')
+    expect(last).toHaveAttribute('max', '2027-10-29')
+
+    fireEvent.change(first, { target: { value: '1970-01-01' } })
+    expect(within(spend).getByRole('alert')).toHaveTextContent(
+      'A range holds at most 366 days.',
+    )
+    expect(usageMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ since: '1970-01-01T00:00:00Z' }),
+    )
+  })
+
+  it('exports the rows shown as a CSV file named by its window', async () => {
+    const user = userEvent.setup()
+    renderIntel(<UsageView />)
+    const spend = await screen.findByRole('region', { name: 'Spend' })
+    await within(spend).findByRole('group', { name: 'Totals' })
+    await user.click(within(spend).getByRole('button', { name: 'Export' }))
+    const [file, name] = vi.mocked(downloadBlob).mock.calls[0]!
+    expect(name).toBe('usage-2026-10-29-2026-11-11.csv')
+    expect(await file.text()).toBe(
+      'day,tool,runs,input_tokens,output_tokens,runs_without_tokens,cost_usd,runs_without_cost\r\n' +
+        '2026-11-10,Claude Code,3,3000,300,0,2,0\r\n' +
+        '2026-11-10,Codex,2,1000,100,0,,2\r\n' +
+        '2026-11-11,Claude Code,1,500,50,0,1,0\r\n',
+    )
   })
 })

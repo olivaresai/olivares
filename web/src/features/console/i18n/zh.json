@@ -4,7 +4,6 @@
   "tabs": {
     "people": "人员",
     "agents": "智能体",
-    "sso": "身份提供商",
     "scopes": "工作区",
     "roles": "角色",
     "secrets": "密钥",
@@ -116,7 +115,7 @@
   "people": {
     "title": "用户",
     "caption": "向此组织添加成员：由你设置密码，或通过邮件邀请。",
-    "onboard": "入驻用户",
+    "onboard": "邀请",
     "pendingTitle": "待处理的邀请",
     "pendingCaption": "等待接受的邀请。一次性链接用于设置密码并激活账户。",
     "noInvites": "没有待处理的邀请。",
@@ -131,6 +130,9 @@
     "resend": "重新发送",
     "resent": "邀请已重新发送。",
     "resendFailed": "邀请未能送达。",
+    "newLink": "新链接",
+    "newLinkTitle": "新的邀请链接",
+    "newLinkNote": "之前创建的链接已失效。",
     "inviteFirst": "邀请第一位用户"
   },
   "members": {
@@ -143,10 +145,30 @@
     "groups": "组",
     "status": "状态",
     "action": "操作",
-    "ssoOnly": "仅 SSO",
+    "ssoOnly": "单点登录",
+    "signIn": "登录方式",
+    "password": "密码",
     "externalManagedNotice": "由 IdP 预置的账户在本地启用或禁用后，可能会被身份提供商再次协调回来。",
     "idpManagedConfirm": "此账户由 IdP 预置。IdP 可能会在下一次同步时重新协调 active 状态。",
     "noGroups": "无组",
+    "roleOf": "{{email}} 的角色",
+    "roleChanged": "已更改 {{email}} 的角色。",
+    "ownRoleReason": "这是你自己的角色，需由其他管理员或所有者更改。",
+    "ownRoleReasonOwner": "这是你自己的角色，需由其他所有者更改。",
+    "lastOwnerReason": "整个组织唯一的所有者保留此角色。请先将其他人设为所有者。",
+    "confinedRoleReason": "此人在某个工作区内工作，因此暂时无法在此更改其角色。",
+    "roleChangeTitle": "将 {{name}} 的角色从 {{from}} 改为 {{to}}？",
+    "roleChangeConfirm": "更改角色",
+    "roleGains": {
+      "owner": "所有者可以做管理员能做的一切，并可更改或移除其他所有者。",
+      "admin": "管理员可以添加和移除成员、更改其角色，并更改此组织的设置。",
+      "editor": "编辑者可以启动会话，并使用工具和文件夹工作。"
+    },
+    "roleLoses": {
+      "admin": "此人将无法再更改或移除所有者。",
+      "editor": "此人将无法再管理成员或此组织的设置。",
+      "viewer": "此人将无法再启动会话或更改任何内容。"
+    },
     "disable": "移除",
     "disableTitle": "从组织中移除",
     "disableBody": "将把 {{email}} 从此组织中移除：其在此处的成员资格、群组记录、令牌和会话。账户本身及其所属的其他组织不受影响。",
@@ -156,7 +178,8 @@
     "statuses": {
       "active": "活动",
       "inactive": "非活动",
-      "error": "错误"
+      "error": "错误",
+      "suspended": "已停用"
     },
     "roles": {
       "viewer": "查看者",
@@ -172,7 +195,25 @@
     "endSessionsFor": "结束 {{email}} 的登录？",
     "endSessionsBody": "{{email}} 的所有活动登录在此组织中都将失效。其在其他组织的登录、API 令牌和账户不会更改。",
     "sessionsEnded": "已结束对此组织的访问",
-    "totpResetDone": "TOTP 因子已重置。"
+    "totpResetDone": "TOTP 因子已重置。",
+    "search": "搜索成员",
+    "filterLabel": "按状态筛选",
+    "filterAll": "所有状态",
+    "noMatch": "没有匹配的成员",
+    "noMatchHint": "请更改搜索词或状态筛选。",
+    "bulkLabel": "对所选成员的操作",
+    "selected": "已选择：{{n}}",
+    "selectAll": "选择显示的所有成员",
+    "selectRow": "选择 {{email}}",
+    "suspend": "停用",
+    "reactivate": "恢复",
+    "suspendTitle": "停用访问",
+    "suspendBody": "{{email}} 将立即无法登录此组织，也无法使用 API 令牌。其角色和群组保持不变，你可以随时恢复。",
+    "suspendBodyMany": "{{n}} 位成员将立即无法登录此组织，也无法使用 API 令牌。其角色和群组保持不变，你可以随时恢复。",
+    "suspendFor": "停用 {{email}}",
+    "reactivateFor": "恢复 {{email}}",
+    "suspendedToast": "已停用：{{n}}",
+    "reactivatedToast": "已恢复：{{n}}"
   },
   "superadmins": {
     "title": "安装管理员",
@@ -190,7 +231,7 @@
     "disableBody": "{{email}} 将被登出，其会话和 API 令牌将被吊销。账户不会被删除，可以重新启用。必须保留另一个活动的超级管理员。"
   },
   "onboard": {
-    "title": "入驻用户",
+    "title": "邀请成员",
     "body": "在此组织中创建账户。你授予的角色不能高于你自己的角色。",
     "displayName": "显示名称",
     "displayNameHint": "在控制台中显示的可读标签。",
@@ -199,14 +240,20 @@
     "mode": "他们的登录方式",
     "modePassword": "设置初始密码",
     "modeInvite": "发送电子邮件邀请",
-    "inviteUnavailable": "此服务器无法通过电子邮件发送邀请，请设置初始密码。",
+    "modeLink": "创建邀请链接",
+    "inviteUnavailable": "此服务器无法发送邮件，请自行发送链接。",
     "password": "初始密码",
     "passwordHint": "至少 8 个字符。用户之后可以更改。",
-    "submit": "入驻",
+    "submit": "添加成员",
+    "submitInvite": "创建邀请",
     "created": "用户已入驻。",
     "inviteCreatedTitle": "邀请已创建",
     "inviteSentBody": "已向 {{email}} 发送邀请。链接只发送到该地址；如未收到，请从邀请列表重新发送。",
     "inviteFailedBody": "已为 {{email}} 创建邀请，但邮件未能送达。请从邀请列表重新发送。",
+    "inviteLinkFor": "发给 {{email}} 的邀请。",
+    "inviteLinkLabel": "邀请链接",
+    "inviteLinkBody": "请将此链接发送给对方。链接于 {{date}} 过期，只能使用一次。对方用它设置自己的密码。",
+    "copyLink": "复制链接",
     "consentRequiredTitle": "需要同意",
     "consentRequiredBody": "{{email}} 已有账户。未做任何更改：只有在账户持有人同意后，该账户才会加入此组织。",
     "consentRequiredToast": "需要同意：未做任何更改。",
@@ -313,7 +360,7 @@
       "sessions": "该密钥将从存储中移除。接收它的会话会继续运行，但在你重新创建之前无法恢复，引用它的模板也无法启动。"
     },
     "sessionCaption": "会话可以作为环境变量接收的密钥。名称以 env/ 开头。值不会再次显示。",
-    "credentialCaption": "会话可通过引擎的助手使用的托管凭据（Business）。名称以 credential/ 开头。值永远不会再次显示。",
+    "credentialCaption": "会话可通过引擎的助手使用的托管凭据（Olivares AI Business）。名称以 credential/ 开头。值永远不会再次显示。",
     "colValue": "值",
     "colChanged": "上次更改",
     "colReference": "引用",
@@ -935,7 +982,7 @@
   "activation": {
     "title": "Business 激活",
     "caption": "启用您的版本包含的模块。具有安全默认值的控制项将被激活；需要密钥或策略审查的控制项将被暂存，供您填写并提升。",
-    "unavailable": "激活功能在 Business 版中可用。",
+    "unavailable": "激活功能在 Olivares AI Business 版中可用。",
     "enablePreset": "启用预设",
     "addon": "模块",
     "state": "状态",
@@ -1179,7 +1226,7 @@
   "mcpGateway": {
     "title": "MCP 网关",
     "caption": "管理此组织的 MCP 服务器和会话工具。测试用于发现工具；执行工具需要明确的策略。",
-    "add": "添加服务器",
+    "add": "添加 MCP 服务器",
     "configure": "配置",
     "test": "测试连接",
     "enable": "启用",
@@ -1302,7 +1349,7 @@
     "command": "命令",
     "commandHint": "在本机启动服务器的程序，例如 npx。它随每个会话一起在会话的文件夹中运行。",
     "args": "参数",
-    "argsHint": "每行一个，例如 -y 和 @modelcontextprotocol/server-everything。",
+    "argsHint": "每行一个，例如 -y 和 @modelcontextprotocol/server-everything。不要用于密钥。",
     "env": "环境变量",
     "envHint": "每行一个：NAME=值。不要用于密钥。",
     "envSecrets": "密钥环境变量",
@@ -1341,6 +1388,8 @@
     "egressHosts": "允许的主机",
     "egressHostsHint": "该命令只能访问这些 HTTPS 主机，每行一个：host 或 host:port。留空则沿用会话的网络。",
     "egressHostsInvalid": "请将每个主机写成 host 或 host:port，使用小写，不带 https://，最多 16 个。",
+    "inSessionFolder": "在会话的文件夹中",
+    "reachesOnly": "只访问 {{hosts}}",
     "starters": {
       "filesystem": {
         "summary": "读写会话文件夹中的文件。",

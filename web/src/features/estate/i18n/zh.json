@@ -17,7 +17,7 @@
   "openOwner": "打开{{resource}}",
   "sharedScope": "文件夹、连接器、MCP 服务器和策略属于组织资源；不推断工作区绑定。",
   "more": "正在显示 {{count}} 项。还有更多。",
-  "unavailable": "无法加载此类资源。请刷新重试。",
+  "unavailable": "无法加载此类资源。",
   "off": "此模块已关闭。",
   "startSession": "启动会话",
   "workflows": "打开自动化",
@@ -54,5 +54,18 @@
   },
   "nextPage": "下一页",
   "firstPage": "第一页",
-  "noDependencies": "没有可见的依赖关系。"
+  "noDependencies": "没有可见的依赖关系。",
+  "groups": {
+    "workspace": "工作区",
+    "folder": "文件夹",
+    "session": "会话",
+    "work": "工作项",
+    "connector": "连接器",
+    "mcp": "MCP 服务器",
+    "policy": "策略"
+  },
+  "noResources": {
+    "title": "尚未配置资源",
+    "description": "配置完成后，工作区、文件夹、会话、连接器、MCP 服务器和策略会显示在这里。"
+  }
 }

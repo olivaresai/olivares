@@ -252,6 +252,31 @@ describe('session folders on the Workspace page', () => {
     expect(screen.queryByText(/No session folders yet/)).toBeNull()
   })
 
+  it('offers Retry on a failed read, as the small page inside its section', async () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    const list = vi
+      .spyOn(agentOpsApi, 'listWorkspaces')
+      .mockRejectedValue(new Error('offline'))
+    show()
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveClass('py-8')
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+  })
+
+  it('reads as skeleton rows with a status for a screen reader', () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockReturnValue(
+      new Promise(() => {}),
+    )
+    show()
+    const loading = document.querySelector(
+      '[data-slot="state-block"][data-state="loading"]',
+    )
+    expect(loading).toHaveAttribute('role', 'status')
+    expect(loading).toHaveTextContent('Reading session folders…')
+  })
+
   // THE MUTATION: drop the gate. A principal who cannot read folders, or an install with the
   // sessions module off, would send a read the engine refuses and see an error panel.
   describe.each([

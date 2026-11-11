@@ -302,6 +302,27 @@ func (m *Module) ReviewRules(ctx context.Context, tenant model.TenantID, credent
 	return out, nil
 }
 
+// WorkspaceTargets lists the tenant's targets in workspace. No route serves it
+// and it takes no caller: the composition root uses it to grant a confined
+// session of that workspace its approved push remotes.
+func (m *Module) WorkspaceTargets(ctx context.Context, tenant model.TenantID, workspace model.ID) ([]Target, error) {
+	if !m.wired() {
+		return nil, errUnavailable
+	}
+	var targets []Target
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		recs, err := listAll(ctx, sc, kindTarget, eq("workspace_id", workspace.String()))
+		for _, rec := range recs {
+			targets = append(targets, targetFrom(rec))
+		}
+		return err
+	})
+	if err != nil {
+		return nil, storeError(err)
+	}
+	return targets, nil
+}
+
 func (m *Module) targetReviewRules(ctx context.Context, tenant model.TenantID, tg Target) []ReviewRule {
 	rows := make([]ReviewRule, 0, len(tg.MergeBases))
 	for _, base := range tg.MergeBases {

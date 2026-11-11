@@ -7,12 +7,23 @@
 // worktree. A dialog opened without a start is the dialog it always was: ticking the
 // worktree sends no start.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// The one permission a case takes away.
+const denied = vi.hoisted(() => ({ permission: '' }))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (permission: string) => permission !== denied.permission,
+  }),
 }))
 vi.mock('./api', async (orig) => {
   const real = (await orig()) as Record<string, unknown>
@@ -42,6 +53,7 @@ vi.mock('@/components/ui/toaster', () => ({
 }))
 
 import { templatesApi } from '@/features/workspace-templates/api'
+import { ApiError } from '@/lib/api/errors'
 import { agentOpsApi } from './api'
 import { fixtureReadiness } from './launch-readiness.fixture'
 import { RunCreateDialog } from './run-create-dialog'
@@ -93,8 +105,11 @@ async function chooseFolder(user: ReturnType<typeof userEvent.setup>) {
 const worktreeBox = () =>
   screen.getByRole('checkbox', { name: 'Work in a new git worktree' })
 
+const folderPicker = () => screen.getByRole('combobox', { name: 'Folder' })
+
 beforeEach(() => {
   vi.clearAllMocks()
+  denied.permission = ''
   vi.mocked(agentOpsApi.listWorkspaces).mockResolvedValue({
     items: [
       {
@@ -204,6 +219,7 @@ describe('RunCreateDialog — opened for the work a handoff names', () => {
     expect(postedBody().workspace_ref).toBe('folder-a')
     expect(postedBody().worktree).toBe(true)
     expect(postedBody().worktree_from).toBe(SHA)
+    expect(postedBody()).not.toHaveProperty('from_checkpoint')
   })
 
   it('sends neither when the person unticks the worktree', async () => {
@@ -229,6 +245,7 @@ describe('RunCreateDialog — opened for the work a handoff names', () => {
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
     expect(postedBody().worktree).toBe(true)
     expect(postedBody()).not.toHaveProperty('worktree_from')
+    expect(postedBody()).not.toHaveProperty('from_checkpoint')
   })
 
   it('clears an ordinary worktree choice when its folder is cleared', async () => {
@@ -253,4 +270,372 @@ describe('RunCreateDialog — opened for the work a handoff names', () => {
     expect(postedBody().workspace_ref).toBe('')
     expect(postedBody()).not.toHaveProperty('worktree')
   })
+})
+
+// Edit from here, with the files as they were at the message: the new session starts in a
+// worktree of its own made from that message's checkpoint. The worktree stays on, since the
+// engine refuses those files without one; each refusal about the files is said in the
+// person's words, by its code, with the folder as it is now as the way on.
+describe('RunCreateDialog — opened for the files of a message', () => {
+  const locked =
+    'On, because the new session starts from the files as they were at a message, in a copy of its own.'
+  const fromNow = 'Start from the folder as it is now'
+  const folderLocked =
+    'Set to the folder the message was sent in, because its files come only from there.'
+  const notKept = 'The files of this message are no longer kept.'
+  const notTaken = 'The files of this message could not be taken.'
+  const notGit =
+    "This folder is not a Git repository, so the new session cannot have a copy of its own with this message's files."
+  const notYet =
+    "This server cannot start a session from a message's files yet."
+  const unlisted =
+    'The folder this message was sent in is not in your list of folders, so a copy with its files cannot be made here.'
+  const onOpenChange = vi.fn()
+
+  const from = { run: 'run_1', turn: 2 }
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const dialog = (open: boolean) => (
+    <QueryClientProvider client={qc}>
+      <RunCreateDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        initialMessage="the edited words"
+        initialWorkspaceRef="folder-a"
+        initialFromCheckpoint={from}
+      />
+    </QueryClientProvider>
+  )
+
+  function openForMessage() {
+    qc.clear()
+    return render(dialog(true))
+  }
+
+  const createCalls = () => vi.mocked(agentOpsApi.createRun).mock.calls
+
+  async function start(user: ReturnType<typeof userEvent.setup>) {
+    const sent = createCalls().length
+    const button = screen.getByRole('button', { name: 'Start' })
+    await waitFor(() => expect(button).toBeEnabled())
+    await user.click(button)
+    await waitFor(() => expect(createCalls()).toHaveLength(sent + 1))
+    return createCalls()[sent][0] as unknown as Record<string, unknown>
+  }
+
+  it('keeps the worktree on and locked, and says why', async () => {
+    openForMessage()
+    await screen.findByText('Local requirements checked')
+    expect(worktreeBox()).toBeChecked()
+    expect(worktreeBox()).toBeDisabled()
+    expect(worktreeBox()).toHaveAccessibleDescription(
+      expect.stringContaining(locked),
+    )
+  })
+
+  it('sends exactly the worktree and the turn of that message', async () => {
+    const user = userEvent.setup()
+    openForMessage()
+    await screen.findByText('Local requirements checked')
+    const body = await start(user)
+    expect(body).toMatchObject({ workspace_ref: 'folder-a', worktree: true })
+    expect(body.from_checkpoint).toEqual({ run: 'run_1', turn: 2 })
+    expect(body).not.toHaveProperty('worktree_from')
+  })
+
+  it('keeps the folder of the message while its files are asked for', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.createRun).mockRejectedValueOnce(
+      new ApiError(
+        404,
+        'checkpoint_not_found',
+        'this session has no such turn',
+      ),
+    )
+    openForMessage()
+    await screen.findByText('Local requirements checked')
+    expect(folderPicker()).toBeDisabled()
+    await user.click(folderPicker())
+    expect(
+      screen.queryByRole('option', { name: 'Default (My files)' }),
+    ).toBeNull()
+    expect(folderPicker()).toHaveTextContent('Project folder')
+    // Leaving the files of the message frees the folder.
+    await start(user)
+    await user.click(await screen.findByRole('button', { name: fromNow }))
+    expect(folderPicker()).toBeEnabled()
+    await user.click(folderPicker())
+    await user.click(
+      await screen.findByRole('option', { name: 'Default (My files)' }),
+    )
+    const body = await start(user)
+    expect(body.workspace_ref).toBe('')
+    expect(body).not.toHaveProperty('from_checkpoint')
+  })
+
+  it('says why the folder cannot be changed, and only while it cannot', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.createRun).mockRejectedValueOnce(
+      new ApiError(
+        404,
+        'checkpoint_not_found',
+        'this session has no such turn',
+      ),
+    )
+    openForMessage()
+    await screen.findByText('Local requirements checked')
+    expect(folderPicker()).toHaveAccessibleDescription(folderLocked)
+    expect(screen.getByText(folderLocked)).toBeInTheDocument()
+    await start(user)
+    await user.click(await screen.findByRole('button', { name: fromNow }))
+    expect(folderPicker()).not.toHaveAccessibleDescription(folderLocked)
+    expect(screen.queryByText(folderLocked)).toBeNull()
+  })
+
+  it('asks for the files of the message again when the same request opens again', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.createRun).mockRejectedValueOnce(
+      new ApiError(
+        404,
+        'checkpoint_not_found',
+        'this session has no such turn',
+      ),
+    )
+    const view = openForMessage()
+    await screen.findByText('Local requirements checked')
+    await start(user)
+    await user.click(await screen.findByRole('button', { name: fromNow }))
+    expect(worktreeBox()).not.toBeChecked()
+    view.rerender(dialog(false))
+    view.rerender(dialog(true))
+    await screen.findByText('Local requirements checked')
+    expect(worktreeBox()).toBeChecked()
+    expect(worktreeBox()).toBeDisabled()
+    const body = await start(user)
+    expect(body).toMatchObject({ worktree: true, from_checkpoint: from })
+  })
+
+  it('puts the folder of the message back when the same request opens again', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.createRun).mockRejectedValueOnce(
+      new ApiError(
+        404,
+        'checkpoint_not_found',
+        'this session has no such turn',
+      ),
+    )
+    const view = openForMessage()
+    await screen.findByText('Local requirements checked')
+    await start(user)
+    await user.click(await screen.findByRole('button', { name: fromNow }))
+    await user.click(folderPicker())
+    await user.click(
+      await screen.findByRole('option', { name: 'Default (My files)' }),
+    )
+    view.rerender(dialog(false))
+    view.rerender(dialog(true))
+    await screen.findByText('Local requirements checked')
+    expect(folderPicker()).toBeDisabled()
+    expect(folderPicker()).toHaveTextContent('Project folder')
+    const body = await start(user)
+    expect(body).toMatchObject({
+      workspace_ref: 'folder-a',
+      worktree: true,
+      from_checkpoint: from,
+    })
+  })
+
+  it.each([
+    // Archived since, or past the list's end.
+    ['is not in the list', ''],
+    // Without the right to list folders, the list is never read.
+    ['cannot be listed for the person', 'sessions:workspace:read'],
+  ])(
+    'says why Start waits when the folder of the message %s, and starts from the folder as it is now',
+    async (_case, permission) => {
+      const user = userEvent.setup()
+      denied.permission = permission
+      vi.mocked(agentOpsApi.listWorkspaces).mockResolvedValue({
+        items: [],
+        has_more: false,
+      })
+      openForMessage()
+      await screen.findByText('Local requirements checked')
+      const button = screen.getByRole('button', { name: 'Start' })
+      await waitFor(() =>
+        expect(button).toHaveAccessibleDescription(
+          expect.stringContaining(unlisted),
+        ),
+      )
+      expect(button).toBeDisabled()
+      await user.click(screen.getByRole('button', { name: fromNow }))
+      expect(screen.queryByText(unlisted)).toBeNull()
+      expect(folderPicker()).toBeEnabled()
+      expect(worktreeBox()).not.toBeChecked()
+      expect(worktreeBox()).toBeEnabled()
+      const body = await start(user)
+      expect(body.workspace_ref).toBe('folder-a')
+      expect(body).not.toHaveProperty('worktree')
+      expect(body).not.toHaveProperty('from_checkpoint')
+    },
+  )
+
+  // Until the folders are read, the folder of the message is not known to be listed:
+  // Start says so, and asks for no folder the person cannot choose.
+  it('says the folders are being read while Start waits for them', async () => {
+    vi.mocked(agentOpsApi.listWorkspaces).mockImplementation(
+      () => new Promise(() => {}),
+    )
+    openForMessage()
+    const button = await screen.findByRole('button', { name: 'Start' })
+    await waitFor(() =>
+      expect(button).toHaveAccessibleDescription(
+        expect.stringContaining('Reading your folders…'),
+      ),
+    )
+    expect(button).toBeDisabled()
+    expect(button).not.toHaveAccessibleDescription(
+      expect.stringContaining('Choose a repository folder for the worktree.'),
+    )
+    expect(button).not.toHaveAccessibleDescription(
+      expect.stringContaining(unlisted),
+    )
+  })
+
+  // A list of folders that could not be read says nothing of the folder of the message:
+  // Start says the folders could not be read, with Retry, and starts once a read answers.
+  it('says the folders could not be read, with Retry, and never that the folder is not listed', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.listWorkspaces).mockRejectedValueOnce(
+      new ApiError(500, 'module_error', 'could not list the folders'),
+    )
+    openForMessage()
+    const button = await screen.findByRole('button', { name: 'Start' })
+    await waitFor(() =>
+      expect(button).toHaveAccessibleDescription(
+        expect.stringContaining('Your folders could not be read'),
+      ),
+    )
+    expect(button).toBeDisabled()
+    expect(button).not.toHaveAccessibleDescription(
+      expect.stringContaining(unlisted),
+    )
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await start(user)).toMatchObject({
+      workspace_ref: 'folder-a',
+      worktree: true,
+      from_checkpoint: from,
+    })
+  })
+
+  // Starting from the folder as it is now needs no list of folders: beside Retry, it is the
+  // one step that is true while the list cannot be read.
+  it('offers the folder as it is now beside Retry when the folders could not be read', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.listWorkspaces).mockRejectedValue(
+      new ApiError(500, 'module_error', 'could not list the folders'),
+    )
+    openForMessage()
+    const button = await screen.findByRole('button', { name: 'Start' })
+    await waitFor(() =>
+      expect(button).toHaveAccessibleDescription(
+        expect.stringContaining('Your folders could not be read'),
+      ),
+    )
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: fromNow }))
+    const body = await start(user)
+    expect(body.workspace_ref).toBe('folder-a')
+    expect(body).not.toHaveProperty('worktree')
+    expect(body).not.toHaveProperty('from_checkpoint')
+  })
+
+  it('starts nothing on Cancel', async () => {
+    const user = userEvent.setup()
+    openForMessage()
+    await screen.findByText('Local requirements checked')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(agentOpsApi.createRun).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['checkpoint_not_found', 404, 'this session has no such turn', notKept],
+    [
+      'checkpoint_files_gone',
+      500,
+      'the files of that message are no longer kept',
+      notTaken,
+    ],
+    [
+      'not_a_git_repository',
+      422,
+      'A worktree needs a git repository, and /project is not one: run git init there, or start without a worktree.',
+      notGit,
+    ],
+    // An engine before the field refuses it as an unknown one.
+    [
+      'module_error',
+      400,
+      'invalid request body: unknown field "from_checkpoint"',
+      notYet,
+    ],
+  ])(
+    "says %s (%i) in the person's words, and the folder as it is now asks for neither",
+    async (code, status, message, sentence) => {
+      const user = userEvent.setup()
+      vi.mocked(agentOpsApi.createRun).mockRejectedValueOnce(
+        new ApiError(status, code, message),
+      )
+      openForMessage()
+      await screen.findByText('Local requirements checked')
+      await start(user)
+      const alert = (await screen.findByText(sentence)).closest(
+        '[role="alert"]',
+      ) as HTMLElement
+      expect(alert).not.toBeNull()
+      expect(alert).not.toHaveTextContent(message)
+      await user.click(within(alert).getByRole('button', { name: fromNow }))
+      expect(screen.queryByText(sentence)).toBeNull()
+      expect(worktreeBox()).not.toBeChecked()
+      expect(worktreeBox()).toBeEnabled()
+      const body = await start(user)
+      expect(body.workspace_ref).toBe('folder-a')
+      expect(body).not.toHaveProperty('worktree')
+      expect(body).not.toHaveProperty('from_checkpoint')
+    },
+  )
+
+  it.each([
+    [500, 'the fork could not take the files of that message: disk full'],
+    [404, 'session not found'],
+    // A 400 is the server not knowing the field only when it names that field.
+    [400, 'invalid request body: invalid value for field "message"'],
+    [400, 'invalid request body: unknown field "effort"'],
+    [
+      400,
+      'invalid request body: invalid value for field "from_checkpoint.turn"',
+    ],
+    [
+      422,
+      'from_checkpoint names a session of another folder: fork it in its own folder',
+    ],
+  ])(
+    'says any other refusal (%i) as New session says it',
+    async (status, message) => {
+      const user = userEvent.setup()
+      vi.mocked(agentOpsApi.createRun).mockRejectedValueOnce(
+        new ApiError(status, 'module_error', message),
+      )
+      openForMessage()
+      await screen.findByText('Local requirements checked')
+      await start(user)
+      const alert = (await screen.findByText(message)).closest(
+        '[role="alert"]',
+      ) as HTMLElement
+      expect(alert).not.toBeNull()
+      for (const sentence of [notKept, notTaken, notGit, notYet])
+        expect(alert).not.toHaveTextContent(sentence)
+      expect(within(alert).queryByRole('button', { name: fromNow })).toBeNull()
+    },
+  )
 })

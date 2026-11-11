@@ -2,29 +2,28 @@
   "doors": {
     "catalog": {
       "title": "Communications",
-      "description": "Channels of the selected workspace you may read now, the direct notices sent through them and your inbox. The engine decides each read and each action."
+      "description": "Messages between people and sessions, and the channels that carry them."
     },
     "inbox": {
       "title": "Communications inbox",
-      "description": "Messages addressed to you in the selected workspace: open and acknowledge each one."
+      "description": "Messages sent to you: open each one and acknowledge it."
     },
     "new": {
       "title": "New channel",
-      "description": "Create a channel and choose who may use it from the start. Nobody gets access by implication, and the receipt is not a lasting list of who may read it later."
+      "description": "Create a channel and choose who may use it."
     },
     "administration": {
       "title": "Channel administration",
-      "description": "The channels you may administer in the selected workspace: configuration and grant history. Each change applies only to the version you read. Administering a channel neither needs nor gives the right to read its content."
+      "description": "Manage channels and their access; this never lets you read their messages."
     },
     "handoffs": {
       "title": "Handoffs",
-      "description": "Offers of work addressed to you in the selected workspace. The list shows no offer content; opening one reads its context, and the engine decides each accept or reject."
+      "description": "Work others offer to hand over to you: read it, then accept or reject."
     }
   },
   "tabs": {
     "channels": "Channels",
     "inbox": "Inbox",
-    "create": "New channel",
     "administration": "Administration",
     "handoffs": "Handoffs"
   },

@@ -90,7 +90,11 @@ tu SIEM. No puedes hacer un cambio gobernado que el ledger olvide en silencio.
 
 ## Notas
 
-En las solicitudes de permisos de Codex compatibles, **Aprobar para esta sesión** concede el permiso revisado para la sesión actual. **Aprobar una vez** mantiene su comportamiento de uso único. La misma elección está disponible en la conversación y en la cola de aprobaciones. Los clientes de la API pueden enviar `{"decision":"approve","scope":"session"}` cuando la solicitud informa `session_scope_allowed: true`. Las demás solicitudes rechazan este alcance con HTTP 400 y no registran ninguna decisión. El rastro de decisiones y el evento de auditoría conservan el alcance; cuando varias personas deben aprobar, una decisión de uso único mantiene la concesión de uso único.
+**Aprobar para esta sesión** permite el mismo comando, o la misma herramienta y ruta, durante esta sesión. Una acción diferente o una sesión nueva vuelve a pedir permiso. **Aprobar una vez** conserva el uso único. Los permisos aparecen en el panel Contexto de la sesión, donde un administrador puede revocarlos. Las políticas de aprobación coincidentes exigen revisar cada solicitud y ocultan esta opción.
+
+Para Edit y Write también debe coincidir toda la entrada efectiva, incluido el contenido. Estos permisos no tienen un límite de tiempo independiente: terminan al revocarlos, al detener la sesión o al cambiar su proceso. MultiEdit no ofrece permisos de sesión.
+
+La API acepta `{"decision":"approve","scope":"session"}` solo si la solicitud indica `session_scope_allowed: true`. Se auditan cada decisión, reutilización y revocación. El proveedor recibe permisos de un solo uso para mantener vigentes las revocaciones y las comprobaciones de políticas.
 
 - `escalate_in_seconds` notifica al equipo de SoD si una petición queda sin
   decidir — úsalo para acciones críticas en producción.

@@ -12,21 +12,24 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
+import { CommandKeys } from '@/components/layout/command-keys'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { withInlineCommands } from '@/components/ui/inline-commands'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { StatusBadge } from '@/components/data/badges'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import { currentLanguage } from '@/lib/i18n'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import {
+  ariaKeys,
   isTypingTarget,
   modalIsOpen,
   navLeader,
   resolveBinding,
 } from '@/lib/keybindings/model'
+import { useCommandKeys } from '@/lib/keybindings/effective'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { RelTimeLabel } from '@/features/shared'
 import { useObjectActionsStore } from '@/stores/object-actions'
@@ -36,6 +39,7 @@ import {
   ApprovalPreview,
   approvalCommandUnknown,
 } from './approval-preview'
+import { ApprovalStatusWord } from './approval-queue'
 import { DenyDialog, useDecision, useMayDecide } from './decision-dialog'
 import './i18n'
 import { canDecideOnRequest } from './types'
@@ -143,6 +147,9 @@ export function ApprovalDetailPanel({
     },
     [decide],
   )
+  // The keys that decide, as the person has them: the buttons announce them.
+  const approveKeys = ariaKeys(useCommandKeys('approvals.approve'))
+  const denyKeys = ariaKeys(useCommandKeys('approvals.deny'))
 
   useEffect(() => {
     if (!mayDecide) return
@@ -191,9 +198,6 @@ export function ApprovalDetailPanel({
     return () => useObjectActionsStore.getState().set(null)
   }, [mayDecide, objectLabel, approveRequest, t])
 
-  const requesterIsPerson =
-    !!detail?.requested_by?.startsWith('user:') && !detail.launched_by
-
   return (
     <aside
       aria-label={t('preview.requestSummary')}
@@ -225,7 +229,7 @@ export function ApprovalDetailPanel({
         <>
           {!isPending || detail.escalated ? (
             <div className="flex flex-wrap items-center gap-1.5">
-              <StatusBadge status={detail.status} />
+              <ApprovalStatusWord approval={detail} />
               {detail.escalated && (
                 <Badge variant="warning" title={t('approvals.escalatedHint')}>
                   {t('approvals.escalatedBadge')}
@@ -242,15 +246,19 @@ export function ApprovalDetailPanel({
               {t('detail.decidedByYou')}
             </p>
           ) : isPending &&
+            !mayDecide &&
             detail.action !== REENABLE_ACTION &&
             detail.requested_by === principal?.actor ? (
             <p className="text-body text-text-2" role="status">
-              {t('detail.cannotDecideOwn')}
+              {/* The engine names who else decides, below, when it can. */}
+              {detail.deciders
+                ? t('detail.ownRequest')
+                : t('detail.cannotDecideOwn')}
             </p>
-          ) : isPending && requesterIsPerson ? (
-            <p className="text-caption text-text-2">
-              {t('detail.requesterCannotApprove')}
-            </p>
+          ) : null}
+
+          {isPending && !mayDecide ? (
+            <Deciders people={detail.deciders} />
           ) : null}
 
           {/* acceptance: the requester of an estate re-enable cannot decide it, and the panel
@@ -271,7 +279,7 @@ export function ApprovalDetailPanel({
               {withInlineCommands(t('detail.reenableNeedsAdmins'))}{' '}
               <AppLink
                 href="/identity"
-                className="text-accent-text underline underline-offset-2"
+                className="text-foreground underline underline-offset-2"
               >
                 {t('detail.openIdentity')}
               </AppLink>
@@ -285,7 +293,7 @@ export function ApprovalDetailPanel({
                   variant="primary"
                   size="sm"
                   disabled={deciding}
-                  aria-keyshortcuts="A"
+                  aria-keyshortcuts={approveKeys}
                   onClick={() => approveRequest()}
                 >
                   {/* Disabled only while its decision is sent, and it says so. */}
@@ -297,8 +305,16 @@ export function ApprovalDetailPanel({
                   {deciding && !approvingSession
                     ? t('approvals.approving')
                     : t('approvals.approveOnce')}
+                  <CommandKeys command="approvals.approve" />
                 </Button>
               )}
+              {mayDecide &&
+              !detail?.session_scope_allowed &&
+              detail?.policy_ref ? (
+                <p className="text-caption text-text-2">
+                  {t('approvals.sessionPolicy')}
+                </p>
+              ) : null}
               {mayDecide && detail?.session_scope_allowed && (
                 <Button
                   variant="secondary"
@@ -320,10 +336,11 @@ export function ApprovalDetailPanel({
                 <Button
                   variant="destructive"
                   size="sm"
-                  aria-keyshortcuts="D"
+                  aria-keyshortcuts={denyKeys}
                   onClick={() => setDenyOpen(true)}
                 >
                   {t('approvals.deny')}
+                  <CommandKeys command="approvals.deny" />
                 </Button>
               )}
               {canWrite && (
@@ -384,6 +401,22 @@ export function ApprovalDetailPanel({
         />
       )}
     </aside>
+  )
+}
+
+/** Who may still decide a request this person may not, as the engine lists them. Absent
+ * is unknown and says nothing; empty is nobody else. */
+function Deciders({ people }: { people: ApprovalDTO['deciders'] }) {
+  const { t } = useTranslation('governance')
+  if (!people) return null
+  if (people.length === 0)
+    return <p className="text-body text-text-2">{t('detail.nobodyDecides')}</p>
+  const list = new Intl.ListFormat(currentLanguage(), { type: 'conjunction' })
+  const names = list.format(
+    people.map((p) => p.display_name || t('detail.someoneWithRights')),
+  )
+  return (
+    <p className="text-body text-text-2">{t('detail.whoDecides', { names })}</p>
   )
 }
 
@@ -503,6 +536,7 @@ function DecisionTrail({
   if (items.length === 0)
     return (
       <EmptyState
+        size="panel"
         description={t('detail.trailEmptyHint')}
         title={t('detail.trailEmpty')}
       />

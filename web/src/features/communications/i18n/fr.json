@@ -2,29 +2,28 @@
   "doors": {
     "catalog": {
       "title": "Communications",
-      "description": "Les canaux de l’espace de travail sélectionné que vous pouvez lire maintenant, les avis directs envoyés par eux et votre boîte de réception. Le moteur décide de chaque lecture et de chaque action."
+      "description": "Les messages entre personnes et sessions, et les canaux qui les portent."
     },
     "inbox": {
       "title": "Boîte de réception des communications",
-      "description": "Les messages qui vous sont adressés dans l’espace de travail sélectionné : ouvrez et accusez réception de chacun."
+      "description": "Les messages qui vous sont envoyés : ouvrez chacun et accusez-en réception."
     },
     "new": {
       "title": "Nouveau canal",
-      "description": "Créez un canal et choisissez dès le départ qui peut l’utiliser. Personne n’obtient d’accès implicite, et le reçu n’est pas une liste durable de qui pourra le lire plus tard."
+      "description": "Créer un canal et choisir qui peut l’utiliser."
     },
     "administration": {
       "title": "Administration des canaux",
-      "description": "Les canaux que vous pouvez administrer dans l’espace de travail sélectionné : configuration et historique des droits. Chaque modification ne s’applique qu’à la version lue. Administrer un canal n’exige ni n’accorde le droit de lire son contenu."
+      "description": "Gérer les canaux et leurs accès ; cela ne permet jamais de lire leurs messages."
     },
     "handoffs": {
       "title": "Transferts",
-      "description": "Les offres de travail qui vous sont adressées dans l’espace de travail sélectionné. La liste n’affiche pas le contenu des offres ; en ouvrir une lit son contexte, et le moteur décide de chaque acceptation ou refus."
+      "description": "Le travail que d’autres vous proposent de reprendre : lisez-le, puis acceptez ou refusez."
     }
   },
   "tabs": {
     "channels": "Canaux",
     "inbox": "Boîte de réception",
-    "create": "Nouveau canal",
     "administration": "Administration",
     "handoffs": "Transferts"
   },

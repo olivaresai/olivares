@@ -20,6 +20,7 @@ import { toast } from '@/components/ui/toaster'
 const auth = vi.hoisted(() => ({
   tenant: 'tenant',
   search: {} as Record<string, string>,
+  navigate: vi.fn(),
 }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
@@ -32,6 +33,7 @@ vi.mock('@tanstack/react-router', async (original) => ({
   ...(await original<typeof import('@tanstack/react-router')>()),
   useRouterState: ({ select }: { select: (state: unknown) => unknown }) =>
     select({ location: { pathname: '/sessions', search: auth.search } }),
+  useNavigate: () => auth.navigate,
 }))
 
 let client: QueryClient
@@ -55,6 +57,7 @@ const run = {
 beforeEach(() => {
   auth.tenant = 'tenant'
   auth.search = {}
+  auth.navigate.mockReset()
   hidden = true
   state = 'running'
   activity = undefined
@@ -104,6 +107,15 @@ beforeEach(() => {
         })
       if (path === '/v1/m/sessions/live')
         return Response.json({ items: [], has_more: false })
+      // The shell's own read: the navigation asks it which edition is held here.
+      if (path === '/v1/server-info')
+        return Response.json({
+          version: 'v-test-notifications',
+          engine: 'sqlite',
+          setup_required: false,
+          edition: 'community',
+          license: { status: 'none', licensee: '' },
+        })
       throw new Error(`Unexpected read: ${path}`)
     }),
   )
@@ -427,3 +439,86 @@ it.each(['denied', 'default'])(
     expect(document.title).toBe('(1) Olivares')
   },
 )
+
+/** The console's own notice: a toast, its words and its one action. */
+function consoleNotices() {
+  return vi.spyOn(toast, 'message').mockReturnValue(0)
+}
+type NoticeAction = { label: string; onClick: () => void }
+
+it('tells the console when another session needs you, and opens it', async () => {
+  hidden = false
+  // The person is reading another session: this one is not on screen.
+  auth.search = { session: 'run:another' }
+  const message = consoleNotices()
+  await mount()
+  state = 'waiting_approval'
+  await refresh()
+  expect(notify).not.toHaveBeenCalled()
+  expect(message).toHaveBeenCalledTimes(1)
+  const [text, options] = message.mock.calls[0]
+  expect(text).toBe('Review changes needs you')
+  const action = options?.action as NoticeAction
+  expect(action.label).toBe('Open')
+  act(() => action.onClick())
+  expect(auth.navigate).toHaveBeenCalledExactlyOnceWith({
+    to: '/sessions',
+    search: { session: 'run:run-one' },
+  })
+  await refresh()
+  expect(message).toHaveBeenCalledTimes(1)
+})
+
+it('tells the console without the browser opt-in or its permission', async () => {
+  useClientSettings.setState({ sessionNotificationsFor: null })
+  vi.stubGlobal(
+    'Notification',
+    Object.assign(vi.fn(), {
+      permission: 'default',
+      requestPermission: vi.fn(),
+    }),
+  )
+  hidden = false
+  const message = consoleNotices()
+  await mount()
+  state = 'waiting_approval'
+  await refresh()
+  expect(Notification).not.toHaveBeenCalled()
+  expect(message).toHaveBeenCalledTimes(1)
+  expect(message.mock.calls[0][0]).toBe('Review changes needs you')
+})
+
+it('keeps Finished in the console when it is off for the browser', async () => {
+  useClientSettings.setState({
+    notificationEvents: { needsYou: true, finished: false, failed: true },
+  })
+  hidden = false
+  const message = consoleNotices()
+  await turnEndsWith(new Date(Date.now() - 20_000).toISOString(), 'finished')
+  expect(notify).not.toHaveBeenCalled()
+  expect(message).toHaveBeenCalledTimes(1)
+  expect(message.mock.calls[0][0]).toBe('Review changes finished its turn')
+})
+
+it('keeps Finished out of the console when it is off there', async () => {
+  useClientSettings.setState({
+    inAppEvents: { needsYou: true, finished: false, failed: true },
+  })
+  hidden = false
+  const message = consoleNotices()
+  await turnEndsWith(new Date(Date.now() - 20_000).toISOString(), 'finished')
+  expect(message).not.toHaveBeenCalled()
+})
+
+it('keeps the browser told of Finished when it is off in the console', async () => {
+  useClientSettings.setState({
+    inAppEvents: { needsYou: true, finished: false, failed: true },
+  })
+  const message = consoleNotices()
+  await turnEndsWith(new Date(Date.now() - 20_000).toISOString(), 'finished')
+  expect(notify).toHaveBeenCalledExactlyOnceWith(
+    'Review changes',
+    expect.objectContaining({ body: 'The turn finished.' }),
+  )
+  expect(message).not.toHaveBeenCalled()
+})

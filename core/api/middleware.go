@@ -174,6 +174,18 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			r = r.WithContext(auth.WithSessionClientKind(r.Context(), model.SessionClientBrowser))
 		}
 		p, err := s.authr.Authenticate(r.Context(), token)
+		if err != nil && s.drSvc != nil && s.drSvc.restartRequired.Load() {
+			// restoreMaintenance admitted this request just before the restore
+			// began, and the restore drained the store under it. The failed
+			// lookup says nothing about the credential, and a 401 would sign the
+			// console out mid-restore: answer as for every later request, the
+			// receipt for the restore administrator, else the 503. The flag is
+			// set before the drain and only restart clears it.
+			s.restoreMaintenance(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				s.writeError(w, r, auth.ErrUnauthenticated)
+			})).ServeHTTP(w, r)
+			return
+		}
 		if errors.Is(err, store.ErrStoreUnavailable) {
 			// The credential could not be checked, which says nothing about it.
 			// A 401 tells the client to sign in again (the console drops its
@@ -356,6 +368,14 @@ func (s *Server) editionRoutes(next http.Handler) http.Handler {
 			rctx := chi.NewRouteContext()
 			if s.mux.Match(rctx, method, routePath) {
 				if err := s.editionRouteGate(method, canonicalRoutePattern(rctx.RoutePattern())); err != nil {
+					var placed *EditionRequiredError
+					if errors.As(err, &placed) {
+						body := ErrorBody("edition_required", placed.Error())
+						body["error"].(map[string]string)["edition"] = placed.Edition
+						body["error"].(map[string]string)["capability"] = placed.Capability
+						WriteJSON(w, http.StatusForbidden, body)
+						return
+					}
 					// The same body a module route gives its add-on refusal.
 					status, body, _ := StoreErrorBody(err)
 					WriteJSON(w, status, body)

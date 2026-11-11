@@ -5,8 +5,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen, userEvent, waitFor, within } from '@/test/intel'
 import './i18n'
 
+const auth = vi.hoisted(() => ({ usage: true }))
+// Usage opens with its own read; every other permission is held.
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (permission: string) =>
+      permission === 'sessions:account:read' ? auth.usage : true,
+  }),
 }))
 const timelineById = vi.hoisted(() => vi.fn())
 vi.mock('./api', async (original) => {
@@ -390,6 +396,49 @@ describe("SessionEvidence puts the session's work on screen", () => {
     expect(
       await screen.findByTestId('evidence-toggle-activity'),
     ).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
+describe('SessionEvidence tells a cost event only where Usage opens', () => {
+  afterEach(() => {
+    auth.usage = true
+  })
+  const page = {
+    items: [
+      {
+        at: '2026-10-15T21:21:00Z',
+        kind: 'tool',
+        tool_ref: 'Read',
+        resource_ref: 'src/main.go',
+      },
+      { at: '2026-10-15T21:22:00Z', kind: 'cost', resource_ref: 'openai/gpt' },
+    ],
+    has_more: false,
+  }
+
+  it('counts the resource of a cost event for a person Usage opens for', async () => {
+    timelineById.mockResolvedValue(page)
+    renderIntel(<SessionEvidence liveRef="lr-1" onExpand={() => {}} />)
+    expect(
+      await screen.findByTestId('evidence-toggle-resources'),
+    ).toHaveTextContent(/^Resources touched\s*2$/)
+    expect(screen.getByTitle('openai/gpt')).toBeInTheDocument()
+  })
+
+  it('neither lists nor counts a cost event for a person Usage does not open for', async () => {
+    auth.usage = false
+    timelineById.mockResolvedValue(page)
+    renderIntel(<SessionEvidence liveRef="lr-1" onExpand={() => {}} />)
+    expect(
+      await screen.findByTestId('evidence-toggle-resources'),
+    ).toHaveTextContent(/^Resources touched\s*1$/)
+    expect(screen.queryByTitle('openai/gpt')).toBeNull()
+    // The tool row says its resource too: the resource is looked for in its own block.
+    const block = document.getElementById('evidence-resources') as HTMLElement
+    expect(within(block).getByTitle('src/main.go')).toBeInTheDocument()
+    expect(screen.getByTestId('session-evidence')).not.toHaveTextContent(
+      /cost/i,
+    )
   })
 })
 

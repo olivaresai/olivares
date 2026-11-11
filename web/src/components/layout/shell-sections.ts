@@ -15,11 +15,14 @@ export interface ShellSection extends GatedSection {
   /** The registry view that holds the section. */
   view: string
   search: Readonly<Record<string, string>>
+  /** The search that opens the view's other sections: the view's own page in the row. */
+  others: Readonly<Record<string, string>>
 }
 
 export const APPROVALS_SECTION: ShellSection = {
-  key: 'rules',
+  key: 'approvals',
   view: 'permissions',
   search: { tab: 'approvals' },
+  others: { tab: 'policies' },
   requires: 'governance:approval:read',
 }

@@ -16,9 +16,9 @@ test('provider dialog explains each kind and captures its missing fields', async
     )
     localStorage.setItem('olivares.theme', 'light')
   })
-  // /providers opens the Tools place, whose install side a superadmin reads: the engine
-  // always sends `pins`, `inventory` and readiness `tools`, and the catch-all would throw
-  // into the error boundary.
+  // /providers is the Providers page; the engine still answers the install-side reads a
+  // superadmin's console makes (`pins`, `inventory`, readiness `tools`) wherever they
+  // come from, and the catch-all would throw into the error boundary.
   const toolsPlace: Record<string, unknown> = {
     '/v1/m/agenttools/pins': { pins: [] },
     '/v1/m/sessions/provider-profiles/readiness': { tools: [] },
@@ -60,7 +60,10 @@ test('provider dialog explains each kind and captures its missing fields', async
     await route.fulfill({ json: body })
   })
   await page.goto('/providers')
-  await page.getByRole('button', { name: 'Add your first provider' }).click()
+  // The Providers page offers its verb once, in its header, even on an empty list.
+  await page
+    .getByRole('button', { name: 'Add an API key', exact: true })
+    .click()
   const dialog = page.getByRole('dialog', { name: 'Add a provider' })
   for (const kind of [
     'anthropic',

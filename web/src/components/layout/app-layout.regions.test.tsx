@@ -114,15 +114,16 @@ vi.mock('./sidebar', () => ({
   NavigationDrawer: ({ open }: { open: boolean }) => (
     <div data-testid="drawer" data-open={String(open)} />
   ),
+  PhoneNavigation: ({ onMore }: { onMore: () => void }) => (
+    <nav data-slot="phone-navigation">
+      <button type="button" onClick={onMore}>
+        More
+      </button>
+    </nav>
+  ),
 }))
 vi.mock('./topbar', () => ({
-  Topbar: ({ onMenu }: { onMenu: () => void }) => (
-    <header data-slot="topbar">
-      <button type="button" onClick={onMenu}>
-        Open navigation
-      </button>
-    </header>
-  ),
+  Topbar: () => <header data-slot="topbar" />,
 }))
 vi.mock('./status-bar', () => ({
   StatusBar: () => <footer data-slot="status-bar" />,
@@ -356,7 +357,7 @@ describe('one left navigation', () => {
     }
   })
 
-  it("opens the drawer from the top bar's menu button", () => {
+  it("opens the drawer from the phone bar's More: the top bar has no menu button", () => {
     // Below 761 px: the column is hidden and the drawer is the navigation.
     vi.stubGlobal(
       'matchMedia',
@@ -371,7 +372,7 @@ describe('one left navigation', () => {
     try {
       renderLayout()
       expect(screen.getByTestId('drawer')).toHaveAttribute('data-open', 'false')
-      fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }))
+      fireEvent.click(screen.getByRole('button', { name: 'More' }))
       expect(screen.getByTestId('drawer')).toHaveAttribute('data-open', 'true')
     } finally {
       vi.unstubAllGlobals()

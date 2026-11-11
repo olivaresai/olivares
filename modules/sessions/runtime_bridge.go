@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -71,7 +72,33 @@ func (m *Module) bridge(lr *liveRun) {
 	ctx := context.Background() // a fresh ctx: the per-run ctx governs the PROCESS, not these DB writes
 	sequenceExhausted := false
 	replayWithheld := false
-	for frame := range lr.proc.Output() {
+	// Partial text is a replaceable snapshot, bounded like ordinary output.
+	// Keep it local to this pump: no timer goroutine can publish after a final frame.
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	var partial strings.Builder
+	var envelope claudePartial
+	dirty := false
+	output := lr.proc.Output()
+	for {
+		var frame OutputFrame
+		select {
+		case <-ticker.C:
+			if dirty {
+				envelope.Event.Delta.Text = partial.String()
+				data, err := json.Marshal(envelope)
+				if err == nil {
+					lr.ring.publishDelta(data, m.now())
+				}
+				dirty = false
+			}
+			continue
+		case f, ok := <-output:
+			if !ok {
+				goto drained
+			}
+			frame = f
+		}
 		at := m.now()
 		lr.noteIdleActivity(at)
 		if codex, ok := lr.session.(*codexSession); ok && frame.Stream == streamStdout {
@@ -103,6 +130,30 @@ func (m *Module) bridge(lr *liveRun) {
 		// are withheld before the ring (the attach stream), the recorder and the
 		// frame parser see the line (session_secret_env.go).
 		frame.Data = lr.redact.apply(frame.Data)
+		if frame.Stream == streamStdout && lr.transport == TransportStreamJSON &&
+			(lr.driver == nil || lr.driver.Key() == providerDriverClaude) {
+			var event claudePartial
+			if json.Unmarshal(frame.Data, &event) == nil && event.Type == "stream_event" {
+				// Per-frame masking cannot hide a secret split across text deltas. Such
+				// runs preview nothing; the redacted final frame still follows normally.
+				if lr.redact == nil && event.Event.Type == "content_block_delta" && event.Event.Delta.Type == "text_delta" {
+					if envelope.Parent != event.Parent || envelope.Event.Index != event.Event.Index {
+						partial.Reset()
+					}
+					envelope = event
+					if partial.Len()+len(event.Event.Delta.Text) <= defaultRingBytes {
+						partial.WriteString(event.Event.Delta.Text)
+						dirty = true
+					}
+				} else if event.Event.Type == "content_block_start" || event.Event.Type == "message_start" {
+					partial.Reset()
+					dirty = false
+				}
+				continue
+			}
+			partial.Reset()
+			dirty = false
+		}
 		// Cursor CLI's one-time login link is withheld the same way.
 		if lr.driver != nil && lr.driver.Key() == providerDriverCursor {
 			frame.Data = withholdCursorLoginLink(frame.Data)
@@ -146,6 +197,7 @@ func (m *Module) bridge(lr *liveRun) {
 			m.onStdout(ctx, lr, frame.Data, at)
 		}
 	}
+drained:
 	// The owned child is gone: fail every in-flight protocol waiter now, so a
 	// handshake or a turn returns an error instead of hanging on a dead process.
 	if err := m.endSessionCalls(lr, ""); err != nil {
@@ -237,11 +289,16 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 		// window that exists to keep its writes out of the way. It is safe to run
 		// here precisely because it touches NO row: it resolves an in-memory waiter
 		// and dispatches a protocol reply, and every durable consequence still goes
-		// through the deferral below.
+		// through the deferral below. Only a frame that ended a turn then settles that
+		// turn's row, after the correlation and with a bounded write (finishRunTurn):
+		// no handshake or transaction waits on this reader.
 		turn := lr.session.ActiveTurn()
+		durableTurn := lr.durableTurn(false)
 		lr.session.Deliver(OutputFrame{Stream: streamStdout, Data: data})
 		if turn != "" && lr.session.ActiveTurn() != turn {
 			lr.setDriverTurnEnded(true)
+			lr.forgetDurableTurn(durableTurn)
+			m.finishRunTurn(lr, driverTurnOutcome(data), durableTurn, false)
 			m.finishSessionCalls(lr, turn)
 			turnEnded = true
 		}
@@ -249,6 +306,16 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 		// The read result ends the turn for a refusal before its calls are cancelled,
 		// which can wait on their owners: no refusal may act on it meanwhile.
 		lr.endCredentialRefusal()
+		state := "completed"
+		if frame.Subtype != "success" || bool(frame.IsError) {
+			state = "failed"
+		}
+		lr.mu.Lock()
+		if lr.turnInterrupted {
+			state = "interrupted"
+		}
+		lr.mu.Unlock()
+		m.finishRunTurn(lr, state, lr.durableTurn(true), false)
 		m.finishSessionCalls(lr, "")
 		turnEnded = true
 	} else if ok && frame.refusedCredential() {
@@ -549,6 +616,16 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		ctx, lr.tenant, lr.runRef, lr.launchID,
 	) == nil
 	if currentIncarnation {
+		// Turns still open here got no result: a process that ends on its own leaves
+		// them failed; a requested stop leaves them interrupted, an engine stop cut.
+		turnState := "failed"
+		if requested {
+			turnState = "interrupted"
+		}
+		if requestedReason == engineStoppedReason {
+			turnState = "cut"
+		}
+		m.finishRunTurn(lr, turnState, "", true)
 		m.releaseLaunchClaim(ctx, lr.tenant, lr.claim)
 	}
 	// The bearer is useful only while this exact supervised process is live.
@@ -766,4 +843,18 @@ func outputWasIncomplete(proc Process, waitErr error) bool {
 		return reporter.OutputIncomplete()
 	}
 	return false
+}
+
+// claudePartial retains the routing of a text block, including subagent replies.
+type claudePartial struct {
+	Type   string `json:"type"`
+	Parent string `json:"parent_tool_use_id,omitempty"`
+	Event  struct {
+		Type  string `json:"type"`
+		Index int    `json:"index"`
+		Delta struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"delta"`
+	} `json:"event"`
 }

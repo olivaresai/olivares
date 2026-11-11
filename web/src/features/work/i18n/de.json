@@ -3,6 +3,7 @@
     "draftNotice": "Diese Einheit ist im Entwurf, ihre Kriterien können also noch korrigiert werden. Der Kriteriumsschlüssel ist dauerhafte Identität und wird nie neu vergeben.",
     "lockedNotice": "Diese Einheit hat den Entwurf verlassen, Kriterien können daher nicht mehr bearbeitet, sondern nur noch bewertet werden. Der Kriteriumsschlüssel ist dauerhafte Identität.",
     "none": "Keine Abnahmekriterien.",
+    "noneBody": "Hier stehen die Prüfungen, die sagen, wann diese Einheit erledigt ist, sobald sie festgelegt sind.",
     "required": "Erforderlich",
     "state": {
       "pending": "Ausstehend",
@@ -143,20 +144,21 @@
     "empty": {
       "effective": {
         "title": "Keine Entscheidung in Kraft",
-        "body": "Keine Entscheidung ist gültig."
+        "body": "Hier stehen die Entscheidungen zu Arbeitseinheiten, solange sie in Kraft sind."
       },
       "revoked": {
         "title": "Keine widerrufenen Entscheidungen",
-        "body": "Keine Entscheidung wurde widerrufen."
+        "body": "Eine Entscheidung erscheint hier, sobald sie widerrufen ist."
       },
       "history": {
         "title": "Keine Entscheidungen verzeichnet",
-        "body": "Hier wurde noch nichts entschieden."
+        "body": "Hier steht jede Entscheidung, die zu Arbeitseinheiten verzeichnet wurde."
       }
     }
   },
   "dependencies": {
-    "none": "Keine Abhängigkeiten."
+    "none": "Keine Abhängigkeiten.",
+    "noneBody": "Hier stehen die Arbeitseinheiten, auf die diese wartet; sie kann beginnen, sobald jede davon erledigt ist."
   },
   "detail": {
     "subtitle": "{{kind}} · Version {{version}}",
@@ -164,8 +166,12 @@
     "owner": "Zuständig",
     "provenance": "Herkunft",
     "priority": "Priorität",
+    "waitsOn": "Wartet auf",
+    "waitsOnDependencies": "Arbeitseinheiten, von denen es abhängt und die noch nicht erledigt sind",
     "blocked": "Blockierung",
     "terminal": "Ergebnis",
+    "due": "Fällig",
+    "ended": "Beendet",
     "etag": "Versionskennzeichen",
     "tabs": {
       "overview": "Übersicht",
@@ -176,7 +182,8 @@
     }
   },
   "events": {
-    "none": "Für diese Einheit sind keine Ereignisse verzeichnet."
+    "none": "Für diese Einheit sind keine Ereignisse verzeichnet.",
+    "noneBody": "Jede Änderung dieser Einheit wird hier verzeichnet, sobald sie geschieht."
   },
   "filters": {
     "status": "Status",
@@ -215,12 +222,10 @@
     "unknown": "Konnte nicht nachsehen",
     "reason": "Grund",
     "ttl": "TTL (Sekunden)",
-    "noWrite": "Ihre Rolle kann dieses Lease nicht ändern.",
     "noAdmin": "Übernehmen, Widerrufen und Neusetzen erfordern Lease-Admin.",
+    "heldBy": "Die Sitzung {{holder}} hält dieses Element; die Sitzung selbst nimmt, erneuert und gibt das Lease frei.",
+    "vacant": "Keine Sitzung hält dieses Element; eine Sitzung nimmt, erneuert und gibt das Lease selbst frei.",
     "actions": {
-      "acquire": "Übernehmen",
-      "renew": "Erneuern",
-      "release": "Freigeben",
       "takeover": "Lease übernehmen",
       "revoke": "Widerrufen",
       "clockRebase": "Uhr neu setzen"
@@ -246,7 +251,7 @@
     "error": "Stream unterbrochen",
     "unavailableBody": "Die angezeigte Liste kann veraltet sein, und nichts anderes wird Sie darauf hinweisen. Aktualisieren Sie, um den Speicher direkt zu lesen."
   },
-  "subtitle": "Arbeit, die Sitzungen und Personen teilen: Einheiten, Verantwortliche, Abhängigkeiten, Abnahmekriterien und Entscheidungen. Jede Änderung wird angezeigt, bevor sie angewendet wird.",
+  "subtitle": "Arbeitseinheiten verfolgen: wer sie verantwortet, worauf sie warten und wann sie erledigt sind.",
   "tabs": {
     "items": "Arbeitseinheiten",
     "decisions": "Entscheidungen"
@@ -262,7 +267,7 @@
     "item.cancel": "Abbrechen",
     "item.archive": "Archivieren",
     "noWrite": "Ihre Rolle kann dieses Element nicht ändern.",
-    "noAdmin": "Ihre Rolle kann Elemente weder als fehlgeschlagen markieren noch archivieren."
+    "noAdmin": "Ihre Rolle kann Elemente nicht archivieren."
   },
   "truncation": {
     "label": "{{n}} Zeilen geladen; es gibt mehr",

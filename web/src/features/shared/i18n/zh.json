@@ -53,5 +53,17 @@
     "same": "与 HEAD 没有差异。",
     "view": "视图",
     "unavailable": "无法与 HEAD 比较。"
+  },
+  "diff": {
+    "layout": "差异视图",
+    "unified": "统一",
+    "split": "并排",
+    "wrap": "自动换行",
+    "whitespace": "忽略空白更改",
+    "maximize": "最大化",
+    "restore": "恢复大小",
+    "reviewed": "已审阅",
+    "working": "工作树",
+    "branch": "分支"
   }
 }

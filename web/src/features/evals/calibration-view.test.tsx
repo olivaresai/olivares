@@ -8,7 +8,7 @@
 // (`modules/evals/calibration.go:224-249`) distingue con cuidado lo que no se ha podido medir.
 // Fundirlo convierte una incertidumbre en un veredicto, en la pantalla donde eso cuesta más.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen, userEvent } from '@/test/intel'
+import { renderIntel, screen, userEvent, waitFor } from '@/test/intel'
 import '@/features/_intel'
 import { ApiError } from '@/lib/api/errors'
 import './i18n'
@@ -20,6 +20,14 @@ vi.mock('@tanstack/react-router', async () =>
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))
+
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
 const reportsMock = vi.fn()
 const itemsMock = vi.fn()
@@ -281,5 +289,64 @@ describe('la calibración del juez', () => {
       await screen.findByRole('button', { name: /Run calibration/i }),
     )
     expect(await screen.findByText(/cannot be simulated/i)).toBeInTheDocument()
+  })
+})
+
+// A RUN THE ENGINE REFUSES BY EDITION is the calm edition line, never its sentence in red;
+// any other failure, a role's refusal too, says the engine's sentence as it always did.
+describe('a calibration run that fails', () => {
+  async function run() {
+    const user = userEvent.setup()
+    await abrirCalibracion(user)
+    await user.click(
+      await screen.findByRole('button', { name: /Run calibration/i }),
+    )
+  }
+
+  it('refused by edition: the edition line, calm', async () => {
+    toast.info.mockClear()
+    toast.error.mockClear()
+    runMock.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'business',
+        capability: 'evals',
+      }),
+    )
+    await run()
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = renderIntel(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent('is part of Olivares AI Business.')
+    expect(container.textContent).not.toMatch(/raw: 403|edition_required/)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('any other failure: the engine’s sentence', async () => {
+    toast.info.mockClear()
+    toast.error.mockClear()
+    runMock.mockRejectedValue(
+      new ApiError(500, 'internal', 'the judge timed out'),
+    )
+    await run()
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('the judge timed out'),
+    )
+    expect(toast.info).not.toHaveBeenCalled()
+  })
+
+  it('a role’s refusal: the engine’s sentence, never the role toast', async () => {
+    toast.info.mockClear()
+    toast.error.mockClear()
+    toast.warning.mockClear()
+    runMock.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'policy p-7 refuses calibration runs'),
+    )
+    await run()
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'policy p-7 refuses calibration runs',
+      ),
+    )
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
   })
 })

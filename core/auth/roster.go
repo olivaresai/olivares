@@ -31,6 +31,9 @@ type RosterMember struct {
 	// Groups are the display names of the tenant directory groups the user belongs
 	// to (SCIM-provisioned rosters). Empty when the user is in no group.
 	Groups []string
+	// Suspended is true while the tenant has suspended the member (a suspension
+	// exclusion in force): the membership stays, the access is refused.
+	Suspended bool
 }
 
 // TenantRoster returns the active member roster of tenant: every user with a
@@ -80,6 +83,19 @@ func (a *Authenticator) TenantRoster(ctx context.Context, tenant model.TenantID)
 			}
 			if !m.WorkspaceID.IsZero() {
 				out[pos].WorkspaceIDs = append(out[pos].WorkspaceIDs, m.WorkspaceID)
+			}
+		}
+		// A suspension is an exclusion of its own kind: the member stays listed, marked.
+		suspensions, err := drainList(ctx, as.TenantExclusions().List, model.Query{Filters: []model.Filter{
+			{Column: "target_tenant_id", Op: model.OpEq, Value: tenant.String()},
+			{Column: "kind", Op: model.OpEq, Value: string(model.ExclusionSuspend)},
+		}})
+		if err != nil {
+			return err
+		}
+		for _, x := range suspensions {
+			if pos, ok := idx[x.UserID]; ok {
+				out[pos].Suspended = true
 			}
 		}
 		// Attach directory groups: invert each group's member set into user->groups.

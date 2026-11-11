@@ -13,6 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import type { ApprovalDTO } from '@/features/governance/types'
+import { useClientSettings } from '@/features/settings/preferences'
+import { setKeyOverride } from '@/lib/keybindings/effective'
 import { ConversationApproval } from './conversation-approval'
 import './i18n'
 import '@/features/governance/i18n'
@@ -129,7 +131,7 @@ describe('ConversationApproval — the request, answered where it is read', () =
     const user = userEvent.setup()
     wrap(<ConversationApproval run={RUN} />)
     await user.click(
-      await screen.findByRole('button', { name: 'Approve for this session' }),
+      await screen.findByRole('button', { name: 'Allow for this session' }),
     )
     expect(api.decide).toHaveBeenCalledWith(APPROVAL.id, {
       decision: 'approve',
@@ -199,6 +201,16 @@ describe('ConversationApproval — the request, answered where it is read', () =
       )
     },
   )
+
+  it('offers one filled accent action while it waits: Approve once', async () => {
+    wrap(<ConversationApproval run={RUN} />)
+    const card = await screen.findByRole('region', { name: 'Approval needed' })
+    await within(card).findByRole('button', { name: 'Approve once' })
+    const filled = within(card)
+      .getAllByRole('button')
+      .filter((b) => b.className.split(/\s+/).includes('bg-accent'))
+    expect(filled.map((b) => b.textContent)).toEqual(['Approve once'])
+  })
 
   it('says when the reach is unknown', async () => {
     wrap(<ConversationApproval run={{ ...RUN, reaches: undefined }} />)
@@ -295,6 +307,26 @@ describe('ConversationApproval — the request, answered where it is read', () =
     expect(api.decide).toHaveBeenCalledTimes(1)
   })
 
+  // Ctrl+A in a field selects its words: whatever keys a person tries to give the
+  // request's approval in Settings › Keyboard, that one never approves.
+  it('never approves on Ctrl+A in a field, even after a person tried to give it those keys', async () => {
+    const user = userEvent.setup()
+    api.decide.mockResolvedValue({ ...APPROVAL, status: 'approved' })
+    setKeyOverride('surface.approve|workSurface', 'Mod+a')
+    wrap(
+      <>
+        <textarea aria-label="composer" />
+        <ConversationApproval run={RUN} />
+      </>,
+    )
+    await screen.findByRole('button', { name: 'Approve once' })
+    act(() => observed(1))
+    await user.click(screen.getByRole('textbox', { name: 'composer' }))
+    await user.keyboard('{Control>}a{/Control}')
+    expect(api.decide).not.toHaveBeenCalled()
+    useClientSettings.setState({ keyOverrides: {} })
+  })
+
   it('says a person who already approved that it waits for another approver', async () => {
     api.getApproval.mockResolvedValue({ ...APPROVAL, required_approvals: 2 })
     api.listDecisions.mockResolvedValue({
@@ -330,6 +362,18 @@ describe('ConversationApproval — the request, answered where it is read', () =
     wrap(<ConversationApproval run={RUN} />)
     expect(screen.queryByRole('region', { name: 'Approval needed' })).toBeNull()
     expect(api.getApproval).not.toHaveBeenCalled()
+  })
+
+  it('stands in the flow as an amber card on the card radius', async () => {
+    wrap(<ConversationApproval run={RUN} />)
+    const card = await screen.findByRole('region', { name: 'Approval needed' })
+    expect(card.className.split(/\s+/)).toEqual(
+      expect.arrayContaining([
+        'bg-warn-soft',
+        'border-warn/60',
+        'rounded-card',
+      ]),
+    )
   })
 })
 

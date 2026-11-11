@@ -29,7 +29,7 @@
 //    would be the worse duplicate of the two. The page is bounded and SAYS SO when it
 //    fills: a count taken from a truncated page is a floor, and it is labelled as one.
 import { QueryErrorState } from '@/components/layout/query-error-state'
-import { AlertTriangle, ChevronDown, Coins, Plug, Wrench } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Plug, Wrench } from 'lucide-react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useId, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -48,6 +48,7 @@ import {
 } from './evidence-split'
 import { RefChip } from './ref-chip'
 import { EVIDENCE_BLOCKS, type EvidenceBlock } from './session-address'
+import { useUsagePath } from './session-meter'
 import type { TimelineDTO } from './types'
 import './i18n'
 
@@ -60,10 +61,10 @@ const bounded = (signal: AbortSignal) => ({
   signal: AbortSignal.any([signal, AbortSignal.timeout(EVIDENCE_READ_MS)]),
 })
 
+// A row is a check or a turn (evidence-split.ts): never a cost event.
 const KIND_ICON = {
   tool: Wrench,
   mcp: Plug,
-  cost: Coins,
   finding: AlertTriangle,
 } as const
 
@@ -286,6 +287,8 @@ export function SessionEvidence({
   const { t } = useTranslation('sessions')
   const { activeTenant, can } = useAuth()
   const canRead = can('sessions:live:read')
+  // A cost event is told, and counted, only where Usage opens for the person.
+  const tellsCost = useUsagePath() !== null
   const ref = liveRef || sessionRef || ''
 
   const query = useQuery({
@@ -338,8 +341,9 @@ export function SessionEvidence({
     const items = [...(query.data?.items ?? []), ...echoed.items].sort(
       (a, b) => Date.parse(b.at) - Date.parse(a.at),
     )
-    return splitEvidence(items, (query.data?.has_more ?? false) || echoed.more)
-  }, [query.data, echoed])
+    const told = tellsCost ? items : items.filter((e) => e.kind !== 'cost')
+    return splitEvidence(told, (query.data?.has_more ?? false) || echoed.more)
+  }, [query.data, echoed, tellsCost])
   const checkGroups = useMemo(() => groupEntries(split.checks), [split.checks])
   const turnGroups = useMemo(
     () => groupEntries(split.activity),

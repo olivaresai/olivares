@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
-import { isLiveRun } from '@/features/sessions/provenance'
+import { isLiveRun, runLabel } from '@/features/sessions/provenance'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { useTenantStore } from '@/stores/tenant'
@@ -237,16 +237,20 @@ export function PassageNotes({
                   onChange={(e) => setTarget(e.target.value)}
                   className="min-w-0 max-w-full rounded-ctl border border-ctl-border bg-surface px-2 py-1 text-body text-text"
                 >
-                  {live.map((r) => (
-                    <option key={r.run_ref} value={r.run_ref}>
-                      {[
-                        r.name || r.run_ref.slice(0, 8),
-                        r.provider_driver ? toolName(r.provider_driver) : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </option>
-                  ))}
+                  {live.map((r) => {
+                    // The tool, unless the label already is "tool · folder".
+                    const label = runLabel(r)
+                    const tool = r.provider_driver
+                      ? toolName(r.provider_driver)
+                      : null
+                    return (
+                      <option key={r.run_ref} value={r.run_ref}>
+                        {tool && !label.split(' · ').includes(tool)
+                          ? `${label} · ${tool}`
+                          : label}
+                      </option>
+                    )
+                  })}
                 </select>
               </label>
               <Button

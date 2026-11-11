@@ -1,9 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { lazy } from 'react'
 import { KeySquare } from 'lucide-react'
-import { toolsRoom } from '@/features/agent-tools/views'
+import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
+
+const ProvidersPage = lazy(() =>
+  import('./providers-page').then((m) => ({ default: m.ProvidersPage })),
+)
 
 export const VIEWS = [
   {
@@ -31,9 +36,8 @@ export const VIEWS = [
       { permission: 'sessions:provider:admin' },
       { permission: 'sessions:profile:write' },
     ],
-    // A door into Tools, where the API keys are listed beside the accounts.
-    // `?add=<kind>&returnTo=` (the setup wizard's "Add an API key") still opens the form.
-    doorTo: 'agent-tools',
-    element: toolsRoom,
+    // The Providers page keeps the setup wizard's published add-key address.
+    // Profiles and accounts stay under AI tools; the API keys are this page.
+    element: lazyView(ProvidersPage),
   },
 ] satisfies ViewEntry[]

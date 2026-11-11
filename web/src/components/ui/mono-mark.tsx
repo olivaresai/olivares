@@ -7,8 +7,8 @@ import { VENDOR_MARKS } from './vendor-marks'
 
 /**
  * MonoMark — the mark of a tool, a provider, a workspace or an account. A `vendor` with a
- * mark of its own (./vendor-marks: Claude, Gemini, Ollama, OpenCode, Cursor, GitHub,
- * GitLab) is drawn as that mark; everything else is its letters in a rounded square, drawn
+ * mark of its own (./vendor-marks: Claude, OpenAI, Grok, Gemini, Ollama, OpenCode, Cursor,
+ * GitHub, GitLab) is drawn as that mark; everything else is its letters in a rounded square, drawn
  * in the interface face. It stands beside the name it marks, so by default it is decoration
  * (`aria-hidden`); `labelled` makes it an image named by `name` for the rare place it
  * stands alone.
@@ -106,6 +106,7 @@ export function MonoMark({
           viewBox="0 0 24 24"
           aria-hidden="true"
           focusable="false"
+          fillRule="evenodd"
           className="size-[80%]"
           fill={mark.mono ? 'currentColor' : (color ?? 'currentColor')}
         >

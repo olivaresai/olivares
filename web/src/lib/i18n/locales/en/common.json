@@ -1,9 +1,26 @@
 {
   "edition": {
     "viewPolicy": "View policy",
-    "editingRequiresBusiness": "Editing custom policies, roles and grants requires Business.",
+    "editingRequiresBusiness": "Editing custom policies, roles and grants requires Olivares AI Business.",
     "disablePolicy": "Disable policy",
-    "disablePolicyDescription": "The authored policy stops applying. Its history and other enforced policies are preserved."
+    "disablePolicyDescription": "The authored policy stops applying. Its history and other enforced policies are preserved.",
+    "note": {
+      "line": "{{capability}} is part of {{edition}}. Add a license in <0>Settings > Edition</0>, or see <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "This is part of {{edition}}. Add a license in <0>Settings > Edition</0>, or see <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} is part of {{edition}}. Ask an administrator.",
+      "lineUnnamedAsk": "This is part of {{edition}}. Ask an administrator.",
+      "readsBelow": "What is already stored stays readable and exportable.",
+      "tag": "Part of {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skills",
+      "sso": "Single sign-on",
+      "approvalTiers": "Changing an action's risk tier or approval count",
+      "evals": "Evals",
+      "eventing": "Webhooks",
+      "notify": "Alerting",
+      "claude-policy": "Managed policy"
+    }
   },
   "errors": {
     "generic": "Something went wrong"
@@ -101,25 +118,18 @@
     "noTargetReason": "Needs an organization to run in.",
     "noTargetHelp": "Select an organization, then try again.",
     "goTo": "Go to",
-    "recentSessions": "Recent sessions",
+    "recentSessions": "Sessions",
     "settingsGroup": "Settings",
     "scope": "in {{name}}",
     "footerMove": "move",
     "footerOpen": "open",
+    "footerClose": "close",
     "footerCommands": "commands only",
     "objectActions": "For {{name}}",
     "footerPeople": "people",
     "footerSessions": "sessions",
     "peopleHint": "Type a name.",
     "ask": "Ask Olivares…"
-  },
-  "hintBar": {
-    "move": "move",
-    "open": "open",
-    "approve": "approve",
-    "deny": "deny",
-    "launcher": "launcher",
-    "command": "command"
   },
   "permissionWords": {
     "read": "read access",
@@ -218,6 +228,7 @@
   "notifications": {
     "title": "Recent activity",
     "empty": "No recent activity.",
+    "auditOnly": "Recent activity is shown to people who can read the audit ledger.",
     "viewAll": "View all in the audit ledger",
     "events": {
       "auditCheckpoint": "Audit checkpoint created",
@@ -275,6 +286,8 @@
       "policyUpdated_you": "You updated a policy",
       "policyDeleted_you": "You deleted a policy"
     },
+    "unread": "Unread",
+    "markAllRead": "Mark all as read",
     "actors": {
       "you": "You",
       "member": "A member",
@@ -302,6 +315,15 @@
     "showHelp": "Show this help"
   },
   "keys": {
+    "refused": {
+      "unknownRow": "This command has no keys to change.",
+      "notAChord": "Press a key, alone or with {{mod}}, Alt or Shift.",
+      "needsModifier": "Hold {{mod}} or Alt with the key: here one key alone could act while you type, or decide a request.",
+      "needsAltOrShift": "Hold Alt, or {{mod}} and Shift, with the key: {{keys}} is pressed while typing too, and here it would decide a request.",
+      "taken": "{{keys}} already does {{command}}. Choose other keys, or change that command first.",
+      "leader": "{{keys}} followed by a letter opens a page listed under Go to. Choose other keys.",
+      "tooLarge": "Your saved settings are full. Reset a key you changed or remove a script you added, then try again."
+    },
     "group": {
       "general": "General",
       "launcher": "Starting a session",
@@ -323,15 +345,19 @@
       "launcher": {
         "focus": "Go to the launcher",
         "start": "Start the session",
-        "startBackground": "Start it and stay here"
+        "startBackground": "Start it and stay here",
+        "stash": "Set the draft aside, or bring it back"
       },
       "surface": {
         "openBeside": "Open beside",
         "closeBeside": "Close session beside",
         "focusBeside": "Move focus between sessions",
+        "nextSession": "Open the next session",
+        "previousSession": "Open the previous session",
         "nextPane": "Next pane",
         "previousPane": "Previous pane",
         "approve": "Approve the request in the conversation once",
+        "cite": "Cite the selected words in the composer",
         "terminal": "Terminal",
         "changes": "Changes",
         "preview": "Preview",
@@ -372,6 +398,20 @@
       },
       "ask": {
         "open": "Ask Olivares"
+      },
+      "shell.sidebar": "Toggle sidebar",
+      "shell.panel": "Toggle side panel",
+      "terminal": {
+        "new": "New terminal",
+        "close": "Close terminal",
+        "previous": "Previous terminal",
+        "next": "Next terminal",
+        "search": "Search the terminal",
+        "links": "Open a link on screen",
+        "copy": "Copy the selection",
+        "selectAll": "Select all output",
+        "scrollTop": "Scroll to the top",
+        "scrollBottom": "Scroll to the end"
       }
     },
     "when": {
@@ -379,10 +419,13 @@
       "outsideList": "outside a list",
       "launcherFocused": "in the launcher field",
       "workSurface": "on the sessions screen",
+      "sourceDiff": "in the source diff",
       "sessionHistory": "when a previous session is available",
       "paletteRecent": "in palette results with an empty query",
       "approvalQueue": "in the approvals queue",
-      "accessMap": "on the access map"
+      "accessMap": "on the access map",
+      "terminalFocused": "in a terminal",
+      "replySelection": "with words selected in a reply"
     },
     "precedence": "When two rows share keys, the last one that applies wins.",
     "problems_one": "{{count}} binding could not be read and does not fire: {{commands}}",
@@ -438,6 +481,7 @@
     "copy": {
       "message": "Copy message",
       "code": "Copy code",
+      "detail": "Copy detail",
       "copied": "Copied",
       "failed": "Could not copy. Select the text and copy it.",
       "value": "Copy {{value}}"

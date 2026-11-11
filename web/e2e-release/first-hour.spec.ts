@@ -198,8 +198,8 @@ test('release container: a fresh administrator reaches a first answer and the co
       await stage(`02-provider-${tool.key}`, async () => {
         const name = `First-hour ${tool.name} stub`
         await page.goto(stepHref(PROVIDERS))
-        // API keys live on Tools: the first key is added from the empty list, every later
-        // one from the section's own button (docs: add-a-provider).
+        // API keys live on Providers: its header adds the first key and every later one;
+        // a bare key list offers it from its empty state (docs: add-a-provider).
         await page
           .getByRole('button', {
             name: /^(Add your first provider|Add an API key)$/,
@@ -302,7 +302,9 @@ test('release container: a fresh administrator reaches a first answer and the co
           .getByRole('option', { name: 'Supervised', exact: true })
           .click()
         await capture(`new-session-${tool.key}-filled`)
-        await dialog.getByRole('button', { name: 'Start', exact: true }).click()
+        await dialog
+          .getByRole('button', { name: 'Start session', exact: true })
+          .click()
         // The launch retries the first message for up to 15 s while the tool starts.
         await expect(dialog).toBeHidden({ timeout: 30_000 })
         await page.waitForURL(/[?&]session=run(:|%3A)/)
@@ -331,16 +333,18 @@ test('release container: a fresh administrator reaches a first answer and the co
         // approved command's own output, and after the resume, supplies them.
         const conversation = page.getByTestId('session-conversation')
         await expect(conversation).toContainText(ANSWER, { timeout: 90_000 })
-        await page.getByRole('button', { name: 'Stop', exact: true }).click()
         await page
-          .getByRole('dialog', { name: 'Stop this session?', exact: true })
-          .getByRole('button', { name: 'Stop the session', exact: true })
+          .getByRole('button', { name: 'End session', exact: true })
+          .click()
+        await page
+          .getByRole('dialog', { name: 'End this session?', exact: true })
+          .getByRole('button', { name: 'End the session', exact: true })
           .click()
         await page
           .getByRole('button', { name: 'Resume', exact: true })
           .click({ timeout: 30_000 })
         await expect(
-          page.getByRole('button', { name: 'Stop', exact: true }),
+          page.getByRole('button', { name: 'End session', exact: true }),
         ).toBeVisible({ timeout: 60_000 })
         await page
           .getByTestId('launcher-input')

@@ -97,9 +97,9 @@
   },
   "sso": {
     "title": "单点登录（OIDC / SAML）",
-    "description": "单点登录由超级管理员在“身份提供商”中设置。本面板校验精确的重定向 URI 并显示连接状态。",
+    "description": "单点登录由超级管理员设置。本面板校验精确的重定向 URI 并显示连接状态。",
     "notConfigured": "未配置",
-    "notConfiguredHint": "未配置任何身份提供商，因此联合身份请求返回 501。超级管理员可在“身份提供商”中设置。",
+    "notConfiguredHint": "未配置任何身份提供商，因此没有人通过单点登录进行登录。",
     "seamWhat": "SSO 连接状态摘要",
     "protocol": "协议",
     "state": "连接",
@@ -110,14 +110,13 @@
     "redirectCheckHint": "粘贴在您的身份提供商中配置的重定向/ACS URI。它必须与上方的值完全一致（RFC 9700）。",
     "redirectMatch": "完全匹配——此重定向 URI 有效。",
     "redirectMismatch": "不完全匹配。IdP 必须逐字符使用上方的重定向 URI。",
-    "configure": "打开“身份提供商”",
     "testLogin": "发起一次测试登录"
   },
   "scim": {
     "title": "SCIM 2.0 预配",
     "description": "用户与组的入站预配。以只读方式呈现服务提供商状态、已同步的用户以及离职证据。",
     "seamWhat": "SCIM 服务提供商配置",
-    "businessOnly": "入站 SCIM 服务器需要 Business。要将某人移出组织，请使用“人员”。",
+    "businessOnly": "入站 SCIM 服务器需要 Olivares AI Business。要将某人移出组织，请使用“人员”。",
     "patch": "PATCH",
     "filter": "筛选",
     "filterMax": "支持（最多 {{n}}）",

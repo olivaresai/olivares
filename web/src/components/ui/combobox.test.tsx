@@ -74,8 +74,9 @@ describe('Combobox (APG filterable combobox)', () => {
     expect(btn).toHaveTextContent('Select a region')
     expect(btn).toHaveAttribute('aria-expanded', 'false')
     expect(btn).toHaveAttribute('aria-haspopup', 'listbox')
-    // WCAG 2.5.8 target size: the design-system trigger is h-8 (32px).
-    expect(btn).toHaveClass('h-8')
+    // WCAG 2.5.8 target size: the trigger is the density token's height (34 px, 30 px
+    // compact), as high as the buttons beside it, and 44 px on a phone.
+    expect(btn).toHaveClass('h-[var(--density-control)]', 'max-md:min-h-11')
     // The combobox role belongs to cmdk's input, which only exists once open.
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
@@ -123,6 +124,15 @@ describe('Combobox (APG filterable combobox)', () => {
     expect(
       within(listbox).getByText('AP South').closest('[role="option"]'),
     ).toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('its options are 44 px high on a phone', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+    await user.click(trigger())
+    const listbox = await screen.findByRole('listbox')
+    for (const option of within(listbox).getAllByRole('option'))
+      expect(option).toHaveClass('max-md:min-h-11')
   })
 
   it('filters options as you type (matches label and keywords)', async () => {
