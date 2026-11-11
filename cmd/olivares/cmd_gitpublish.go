@@ -197,6 +197,15 @@ func gitpublishRequest(cmd *cobra.Command, c datalaneClient, method, path string
 	return raw, resp.StatusCode, nil
 }
 
+// gitpublishAwaitsApproval reports a 202 that the approval policy holds (the ship's
+// awaiting_approval answer), not a dispatched publication with an unconfirmed outcome.
+func gitpublishAwaitsApproval(raw []byte) bool {
+	var body struct {
+		State string `json:"state"`
+	}
+	return json.Unmarshal(raw, &body) == nil && body.State == "awaiting_approval"
+}
+
 // gitpublishReceipt renders the answer to an effect request (push, pull
 // request, merge, reconcile, abandon) and carries the three-honest-endings
 // contract. The body renders BEFORE any exit so nothing a caller parses is
@@ -210,6 +219,13 @@ func gitpublishReceipt(cmd *cobra.Command, raw []byte, status int, recovery stri
 		raw = []byte("null")
 	}
 	switch {
+	case status == http.StatusAccepted && gitpublishAwaitsApproval(raw):
+		// Held by the tenant's approval policy: nothing reached the host yet.
+		fmt.Fprintln(cmd.ErrOrStderr(), "waiting for approval by a person the approval policy names; nothing was published yet. Send the same operation again once it is approved.")
+		if err := renderStatusOut(cmd, json.RawMessage(raw)); err != nil {
+			return exitcode.Or(exitcode.Degraded, err)
+		}
+		return exitcode.New(exitcode.Degraded, errors.New("publication waiting for approval"))
 	case status == http.StatusAccepted:
 		// The note goes to stderr BEFORE the render and whatever happens to
 		// the render, the classification keeps naming the family's ending: a

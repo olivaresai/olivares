@@ -258,26 +258,35 @@ func (g sessionProviderPolicy) verdict(ctx context.Context, tenant model.TenantI
 	if !sessionRunAdmitted(ctx, g.authz, p, tenant, "sessions:run:write", run, scope.WorkspaceID).Allow {
 		return refuse("launcher's current authority does not permit this provider action")
 	}
-	mode, kind, resource := "unknown", "provider.tool", req.Kind
+	mode, kind, resource, action := "unknown", "provider.tool", req.Kind, ""
 	switch req.Kind {
 	case "command_execution", "legacy_exec_command":
 		if !req.FactsComplete || strings.TrimSpace(req.CommandLine) == "" {
 			return refuse("provider did not supply the complete command for policy review")
 		}
-		kind, resource = "shell", req.CommandLine
+		kind, resource, action = "shell", req.CommandLine, hookpep.ActionCommand
 	case "file_change", "legacy_apply_patch":
 		if !req.FactsComplete || len(req.FilePaths) == 0 {
 			return refuse("provider did not supply the complete file paths for policy review")
 		}
-		mode, kind, resource = "write", "file", strings.Join(req.FilePaths, "\n")
+		mode, kind, resource, action = "write", "file", strings.Join(req.FilePaths, "\n"), hookpep.ActionWrite
 	case "permissions", "mcp_elicitation", "tool_call_permission":
-		// An ACP read or search that names the files it reads is a read, as Claude Code's
-		// reads are: the live policy decides it as one, and every preset allows reads
-		//. One that names no file (a web search, a tool's own query) is not.
-		// A request that also carries a command is not a read, whatever its kind says.
-		if req.Kind == "tool_call_permission" && (req.ToolKind == "read" || req.ToolKind == "search") &&
-			req.FactsComplete && len(req.FilePaths) > 0 && strings.TrimSpace(req.CommandLine) == "" {
-			mode, kind, resource = "read", "file", strings.Join(req.FilePaths, "\n")
+		// An ACP tool call that names what it touches is what it names, as Claude Code's
+		// tools are: a read or search of named files is a read, an edit of named files is
+		// a write, and an execute that names its command is a command. The live policy
+		// and the preset decide it as one. One that names nothing (a web search, a tool's
+		// own query) is another tool, and a read or edit that also carries a command is
+		// neither.
+		if req.Kind == "tool_call_permission" && req.FactsComplete {
+			command := strings.TrimSpace(req.CommandLine)
+			switch {
+			case (req.ToolKind == "read" || req.ToolKind == "search") && len(req.FilePaths) > 0 && command == "":
+				mode, kind, resource, action = "read", "file", strings.Join(req.FilePaths, "\n"), hookpep.ActionRead
+			case req.ToolKind == "edit" && len(req.FilePaths) > 0 && command == "":
+				mode, kind, resource, action = "write", "file", strings.Join(req.FilePaths, "\n"), hookpep.ActionWrite
+			case req.ToolKind == "execute" && command != "":
+				kind, resource, action = "shell", req.CommandLine, hookpep.ActionCommand
+			}
 		}
 	default:
 		return refuse("provider approval surface is unknown")
@@ -328,13 +337,13 @@ func (g sessionProviderPolicy) verdict(ctx context.Context, tenant model.TenantI
 	}
 	preset := claude.DecisionAllow
 	if scope.Preset != sessions.PresetNone {
-		preset, err = hookpep.SessionPresetDecision(scope.Preset, mode)
+		preset, err = hookpep.SessionPresetDecision(scope.Preset, action)
 		if err != nil {
 			return refuse("session permission preset is unavailable")
 		}
 	}
 	if preset == claude.DecisionDeny {
-		return refuse("read-only session does not permit this action")
+		return refuse("session permission does not permit this action")
 	}
 	policy, err := g.approvals.ReviewPolicy(ctx, tenant, "sessions.provider.approval", "session_run")
 	if err != nil {

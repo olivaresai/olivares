@@ -97,9 +97,9 @@
   },
   "sso": {
     "title": "Single sign-on (OIDC / SAML)",
-    "description": "L'accesso singolo viene configurato da un superadmin in Identity provider. Questo pannello verifica l'URI di reindirizzamento esatto e mostra lo stato della connessione.",
+    "description": "Il single sign-on viene configurato da un superadmin. Questo pannello verifica l'URI di reindirizzamento esatto e mostra lo stato della connessione.",
     "notConfigured": "Non configurato",
-    "notConfiguredHint": "Nessun identity provider è configurato, quindi le richieste di federazione restituiscono 501. Un superadmin ne configura uno in Identity provider.",
+    "notConfiguredHint": "Nessun identity provider è configurato, quindi nessuno accede con il single sign-on.",
     "seamWhat": "Il riepilogo dello stato della connessione SSO",
     "protocol": "Protocollo",
     "state": "Connessione",
@@ -110,14 +110,13 @@
     "redirectCheckHint": "Incolla l'URI di reindirizzamento/ACS configurato nel tuo identity provider. Deve coincidere esattamente con il valore qui sopra (RFC 9700).",
     "redirectMatch": "Corrispondenza esatta: questo URI di reindirizzamento è valido.",
     "redirectMismatch": "Non corrisponde esattamente. L'IdP deve usare l'URI di reindirizzamento qui sopra, carattere per carattere.",
-    "configure": "Apri Identity provider",
     "testLogin": "Avvia un accesso di prova"
   },
   "scim": {
     "title": "Provisioning SCIM 2.0",
     "description": "Provisioning in ingresso di utenti e gruppi. Stato in sola lettura del service provider, degli utenti sincronizzati e delle evidenze di uscita.",
     "seamWhat": "La configurazione del service provider SCIM",
-    "businessOnly": "Il server SCIM in ingresso richiede Business. Rimuovi una persona dall'organizzazione in Persone.",
+    "businessOnly": "Il server SCIM in ingresso richiede Olivares AI Business. Rimuovi una persona dall'organizzazione in Persone.",
     "patch": "PATCH",
     "filter": "Filtro",
     "filterMax": "Supportato (max {{n}})",

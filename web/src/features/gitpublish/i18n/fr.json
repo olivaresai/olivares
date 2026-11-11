@@ -95,7 +95,8 @@
     "title": "Publier",
     "hint": "Pousser le commit de cette session via la cible de publication de son espace de travail. Le moteur récupère le commit dans le dossier de la session.",
     "publish": "Publier",
-    "publishTo": "Publier dans {{prefix}}"
+    "publishTo": "Publier dans {{prefix}}",
+    "targetName": "{{repository}}, sous {{prefix}}"
   },
   "fields": {
     "ref": "Réf. de branche",
@@ -178,6 +179,7 @@
     "link_not_allowed": "Le lien doit pointer vers une pull request du dépôt approuvé.",
     "host_credential_refused": "L’hôte Git a refusé l’identifiant de la liaison ou sa portée. Rien n’a été envoyé.",
     "host_unavailable": "L’hôte Git est injoignable. Rien n’a été envoyé.",
+    "identity_mismatch": "Cette modification ne peut être publiée qu’avec la liaison d’identifiant pour laquelle elle a été préparée, et cette cible en utilise une autre. Rien n’a été envoyé.",
     "intent_settled": "Le résultat de l’intention est déjà définitif ; elle ne peut donc pas être abandonnée.",
     "invalid_request": "La demande est incomplète ou mal formée. Vérifiez les noms de branche et les ID de commit.",
     "lookup_incomplete": "L’état actuel de l’hôte n’a pas pu être lu entièrement ; rien n’a donc été envoyé.",
@@ -191,6 +193,8 @@
     "repository_outside_binding": "Le dépôt n’appartient pas aux propriétaires qu’autorise la liaison d’identifiant.",
     "runtime_credential_refused": "L’identifiant de runtime d’une session ne peut pas publier. Agissez avec votre propre identifiant.",
     "scoped_grant_required": "Cette action nécessite un octroi à portée limitée sur cette cible.",
+    "secret_detected": "Le commit contient ce qui ressemble à un identifiant secret, donc rien n’a été envoyé. Retirez-le du commit, puis refaites la demande.",
+    "secret_scan_unavailable": "La présence d’identifiants dans le commit n’a pas pu être vérifiée ; rien n’a donc été publié.",
     "separation_of_duty": "Vous avez lancé la session à l’origine de cette modification. Demandez à une autre personne de la vérifier et de la fusionner.",
     "session_source_refused": "L’exécution de session n’est pas dans l’espace de travail de cette cible, ou son dossier n’est pas un dépôt dont le moteur peut récupérer le commit.",
     "session_source_unavailable": "Le dossier de la session n’a pas pu être lu à temps. Rien n’a été poussé.",
@@ -200,6 +204,7 @@
     "target_changed": "La cible a changé après l’admission de la demande. Rien n’a été envoyé.",
     "target_in_use": "Une intention en cours d’envoi, incertaine ou abandonnée détient encore cette cible.",
     "unresolved_intent": "Une intention non résolue détient déjà cette branche, cette pull request ou cette fusion.",
+    "unknown_effect": "L’intention enregistre une action que cette version du moteur ne connaît pas ; elle ne peut donc pas être réconciliée.",
     "unsupported_requirement": "L’hôte ne peut pas honorer cette exigence, par exemple une fusion par rebase sur GitLab.",
     "version_conflict": "La cible a changé depuis que vous l’avez ouverte. Rouvrez-la pour voir la version actuelle.",
     "workflow_change_refused": "Le commit modifie des fichiers de workflow CI, que cette cible refuse de publier.",
@@ -215,6 +220,38 @@
     "title": "Intentions",
     "empty": "Aucune intention de publication n’est enregistrée pour cette cible.",
     "open": "Ouvrir l’intention {{id}}"
+  },
+  "publications": {
+    "title": "Publications",
+    "description": "Ce qu’Olivares AI a publié sur ces cibles et ce qui attend une approbation, les plus récents d’abord. L’état d’une pull request est celui qu’Olivares AI a vu ; son lien montre celui d’aujourd’hui.",
+    "show": "Afficher",
+    "all": "Tout",
+    "approval": "Approbation",
+    "session": "Session",
+    "approved": "Approuvée",
+    "notAsked": "Non demandée",
+    "approvedUnused": "Approuvée, non utilisée",
+    "heldPush": "{{state}} : le push vers {{target}}",
+    "heldPullRequest": "{{state}} : la pull request vers {{target}}",
+    "cut": "Seules les {{n}} approbations les plus anciennes ont été lues. Toutes sont dans Approbations.",
+    "openSession": "Ouvrir la session",
+    "openSessionOf": "Ouvrir la session qui a publié {{branch}} sur {{target}}",
+    "aSession": "Une session",
+    "empty": "Rien n’a encore été publié ici",
+    "emptyNext": "Publiez depuis le panneau Modifications d’une session, ou depuis une cible ici.",
+    "readFailed": "Ce qui a été publié sur {{target}} n’a pas pu être lu",
+    "heldReadFailed": "Ce qui attend une approbation n’a pas pu être lu",
+    "heldHidden": "Ce qui attend l’approbation d’une autre personne est listé pour les personnes qui peuvent lire les approbations."
+  },
+  "pullRequests": {
+    "title": "Pull requests",
+    "pullRequest": "Pull request",
+    "branch": "Branche",
+    "opened": "A été ouverte",
+    "merged": "Fusionnée",
+    "link": "#{{number}} {{title}}",
+    "empty": "Aucune pull request n’a encore été ouverte ici",
+    "emptyNext": "Ouvrez-en une depuis le panneau Modifications d’une session, ou depuis une cible ici."
   },
   "intent": {
     "title": "Intention {{id}}",

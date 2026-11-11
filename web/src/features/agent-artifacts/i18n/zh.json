@@ -34,6 +34,7 @@
       "class": "类别",
       "name": "名称",
       "version": "版本",
+      "fingerprint": "指纹",
       "provenance": "来源",
       "posture": "已记录的扫描结果",
       "issues": "问题数",

@@ -5,17 +5,21 @@ import type { ComponentProps, ElementType } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Card — the panel primitive. A flat `surface` plate with a single hairline border
- * and the calm `shadow-sm` token (in dark mode that token resolves to border+inset
- * depth, so no extra treatment is needed). Compose Header / Title / Description /
- * Content / Footer; the header lays out a left title block and right-aligned actions
- * via `justify-between`, so dropping a Button as the last header child just works.
+ * Card — the panel primitive. A `surface` plate one step above the page with the card
+ * shadow and no outline (the shadow carries its own contact edge in both themes). Its
+ * border paints nothing, so a caller's warm edge (`border-warning/50`) still shows. The
+ * header is parted from the content by space alone; the footer keeps its hairline. It
+ * names itself `data-slot="card"`, so what sits inside (a table) can lie flat. Compose
+ * Header / Title / Description / Content / Footer; the header lays out a left title block
+ * and right-aligned actions via `justify-between`, so dropping a Button as the last header
+ * child just works.
  */
 export function Card({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
+      data-slot="card"
       className={cn(
-        'bg-surface border border-border rounded-lg shadow-sm',
+        'rounded-card border border-transparent bg-surface shadow-[var(--shadow-card)]',
         className,
       )}
       {...props}
@@ -26,10 +30,8 @@ export function Card({ className, ...props }: ComponentProps<'div'>) {
 export function CardHeader({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn(
-        'flex items-start justify-between gap-3 p-4 border-b border-border',
-        className,
-      )}
+      data-slot="card-header"
+      className={cn('flex items-start justify-between gap-3 p-4', className)}
       {...props}
     />
   )
@@ -59,8 +61,15 @@ export function CardDescription({ className, ...props }: ComponentProps<'p'>) {
   )
 }
 
+/** Under a header the content starts at the header's padding rather than adding its own,
+ *  so a header alone, or one over a flush table, keeps the space below it. */
 export function CardContent({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('p-4', className)} {...props} />
+  return (
+    <div
+      className={cn('p-4 [[data-slot=card-header]+&]:pt-0', className)}
+      {...props}
+    />
+  )
 }
 
 export function CardFooter({ className, ...props }: ComponentProps<'div'>) {

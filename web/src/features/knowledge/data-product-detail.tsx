@@ -534,11 +534,13 @@ function DetailBody({
         ) : activeContractError instanceof ApiError &&
           activeContractError.status === 404 ? (
           <EmptyState
+            size="panel"
             title={t('dataProducts.contract.noContract')}
             description={t('dataProducts.contract.noContractHint')}
           />
         ) : (
           <EmptyState
+            size="panel"
             title={t('dataProducts.contract.undetermined')}
             description={t('dataProducts.contract.undeterminedHint')}
           />

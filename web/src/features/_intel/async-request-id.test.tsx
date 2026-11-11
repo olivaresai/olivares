@@ -62,4 +62,17 @@ describe('AsyncSection — el request id llega a la pantalla', () => {
     await screen.findByRole('alert')
     expect(screen.queryByText(/Request ID|ID de petición/i)).toBeNull()
   })
+
+  it('draws the failure small: a section is a pane, not a page', async () => {
+    renderIntel(
+      <AsyncSection
+        query={failing(new ApiError(500, 'internal_error', 'boom'))}
+      >
+        {() => <div>nunca</div>}
+      </AsyncSection>,
+    )
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveClass('py-8')
+    expect(alert).not.toHaveClass('pt-26')
+  })
 })

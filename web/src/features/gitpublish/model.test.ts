@@ -9,12 +9,15 @@ import { LANGUAGE_CODES } from '@/lib/i18n'
 import {
   REFUSAL_CODES,
   actionAuthority,
+  approvalTarget,
   intentActions,
   isKnownRefusal,
   newOperationId,
   outcomeOf,
   reconcileAction,
   refusalKey,
+  safePullRequestUrl,
+  sourceSession,
 } from './model'
 import type { PublicationIntent } from './types'
 
@@ -218,6 +221,11 @@ describe('the refusal vocabulary', () => {
     expect(refusalKey('future_refusal')).toBe('refusals.unknown')
   })
 
+  it('describes a commit refused for a detected credential', () => {
+    // A 403 of the push and pull-request routes (publish.go), not an authority refusal.
+    expect(refusalKey('secret_detected')).toBe('refusals.secret_detected')
+  })
+
   it('names every code the engine module refuses with', () => {
     // A code added to the module without console copy reads as "a code this console does
     // not describe" (the session_source_* codes of the session-run push did).
@@ -234,5 +242,59 @@ describe('the refusal vocabulary', () => {
     )
     expect(engine.size).toBeGreaterThan(20)
     expect([...engine].filter((c) => !isKnownRefusal(c))).toEqual([])
+  })
+})
+
+describe('a pull request’s link', () => {
+  const page = 'github.com/acme/widgets/pull/7'
+
+  it('is a plain https page, and nothing else', () => {
+    expect(safePullRequestUrl(`https://${page}`)).toBe(`https://${page}`)
+    expect(safePullRequestUrl('javascript:alert(1)')).toBeNull()
+  })
+
+  // Built here, so no credential-shaped literal sits in the source.
+  it.each([
+    { carries: 'a user and password', userinfo: ['user', 'pw'].join(':') },
+    { carries: 'a user name', userinfo: 'token' },
+    { carries: 'a password', userinfo: ':pw' },
+  ])('is no link when it carries $carries', ({ userinfo }) => {
+    expect(safePullRequestUrl(`https://${userinfo}@${page}`)).toBeNull()
+  })
+})
+
+describe('the session a publication came from', () => {
+  const proposal = { session_run: 'run-1', approval_id: 'ap-1' }
+
+  it('is the intent’s own session run', () => {
+    expect(sourceSession(intent({ session_run: 'run-2', proposal }))).toBe(
+      'run-2',
+    )
+  })
+
+  it('is the approved proposal’s session where the engine sends only that', () => {
+    expect(sourceSession(intent({ proposal }))).toBe('run-1')
+  })
+
+  it('is nothing where neither names one', () => {
+    expect(sourceSession(intent())).toBeUndefined()
+  })
+})
+
+describe('the target a held publication waits on', () => {
+  // The engine stores the target's id with the plan the approval is bound to.
+  const plan = `#plan=${'9f'.repeat(32)}`
+
+  it('is the subject before the plan', () => {
+    expect(approvalTarget(`tg-1${plan}`)).toBe('tg-1')
+  })
+
+  it('is the whole subject where no plan is bound to it', () => {
+    expect(approvalTarget('tg-1')).toBe('tg-1')
+  })
+
+  it('keeps a # of the target’s own, and cuts only at the last plan', () => {
+    expect(approvalTarget(`tg#1${plan}`)).toBe('tg#1')
+    expect(approvalTarget(`tg#plan=1${plan}`)).toBe('tg#plan=1')
   })
 })

@@ -35,7 +35,7 @@
     "sumsAbsent": "aucune somme de dépendance enregistrée",
     "vcsAvailable": "Paramètres VCS marqués par la chaîne d’outils Go",
     "vcsUnavailable": "Aucune empreinte VCS",
-    "selfHashHint": "L’auto-SHA256 est un hachage en flux de l’exécutable en cours d’exécution, calculé une seule fois à la première lecture. Comparez-le HORS LIGNE à un futur checksums.txt signé — le navigateur ne vérifie jamais de signatures, et un hachage seul prouve l’identité, non la provenance.",
+    "selfHashHint": "L’auto-SHA256 est un hachage de l’exécutable en cours d’exécution, calculé une seule fois à la première lecture : il désigne exactement ces octets et ne prouve pas leur provenance. Pour vérifier une version, utilisez « Vérifiez par vous-même » plus bas ; si vous avez installé depuis l’archive qu’elle vérifie, sha256sum du fichier olivares contenu dans cette archive donne cette même valeur.",
     "published": "Publié",
     "notPublished": "Non publié",
     "verifierAvailable": "Vérificateur natif compilé (core/secure/modelsign)",
@@ -43,6 +43,15 @@
     "pipelineStatus": {
       "declared": "Déclaré."
     }
+  },
+  "check": {
+    "title": "Vérifiez par vous-même",
+    "description": "La même vérification depuis un terminal, sans passer par la console.",
+    "download": "Depuis la <release>page de la version {{version}}</release>, téléchargez checksums.txt, checksums.txt.sig, checksums.txt.pem et l’archive ou le paquet que vous avez installé. Exécutez ensuite ceci dans leur dossier :",
+    "provenance": "Avec l’archive, téléchargez multiple.intoto.jsonl depuis la <release>page de la version {{version}}</release>, puis exécutez ceci dans leur dossier :",
+    "passes": "S’il affiche « Verified OK », puis OK à côté de chaque fichier, les fichiers téléchargés sont ceux que le workflow de publication d’Olivares AI a signés pour {{version}}.",
+    "notRelease": "Cette build n’est pas une version signée : il n’existe donc aucune signature de version avec laquelle la vérifier.",
+    "business": "Olivares AI Business se vérifie avec les instructions du canal Business."
   },
   "status": {
     "declared": "Déclaré",
@@ -66,7 +75,7 @@
   "artifacts": {
     "title": "Artefacts de version",
     "description": "Ce qui est livré avec une version et la manière dont la confiance de chaque artefact est établie. La signature sans clé (Fulcio/Rekor) et la signature basée sur une clé (air-gap) sont toutes deux de premier rang — aucune n’est canonique.",
-    "identityNote": "Identité de signature sans clé (déclarée) : émetteur OIDC {{issuer}} · identité du certificat cosign {{regexp}}",
+    "identityNote": "Identité de signature sans clé (déclarée) : émetteur OIDC {{issuer}} · identité du certificat cosign <identity />",
     "columns": {
       "artifact": "Artefact",
       "producedBy": "Produit par",

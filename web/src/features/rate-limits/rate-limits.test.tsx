@@ -18,6 +18,8 @@ vi.mock('@tanstack/react-router', () => ({
     <a href={to}>{children}</a>
   ),
 }))
+import { agentOpsApi } from '@/features/agentops/api'
+import type { ProviderAccountDTO } from '@/features/agentops/types'
 import { rateLimitsApi } from './api'
 import {
   IngestUnavailableNotice,
@@ -50,6 +52,18 @@ vi.mock('@/lib/auth/context', () => ({
     can: (p: string) => (auth.allow ? auth.allow.has(p) : true),
   }),
 }))
+
+// Every view test reads the profiles the person may read; none here unless a case says.
+beforeEach(() => {
+  vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
+  vi.spyOn(agentOpsApi, 'listProfiles').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -328,4 +342,120 @@ it('removes the cost link when FinOps is switched off while keeping the proxy', 
     screen.queryByRole('link', { name: /spend|finops|budgets|cost/i }),
   ).toBeNull()
   expect(screen.getByRole('link', { name: /inference proxy/i })).toBeVisible()
+})
+
+// What each profile's tool lets it use, and when that resets: the windows the account read
+// carries. A failed read is said, never «no limits»; without the account tier, nothing.
+describe('the limits of each profile', () => {
+  const claudeB: ProviderAccountDTO = {
+    account_ref: 'ppf_b',
+    name: 'claude-b',
+    driver: 'claude',
+    environment_ref: 'xenv_1',
+    state: 'active',
+    home_mode: 'managed',
+    home_generation: 1,
+    home_relative: '',
+    isolation_level: 'shared',
+    auth_source: 'provider_account_home',
+    identity: '',
+    identity_source: 'none',
+    created_at: '2026-10-01T10:00:00Z',
+    updated_at: '2026-10-01T10:00:00Z',
+    usage: [
+      {
+        window: 'five_hour',
+        label: '5-hour',
+        utilization: 40,
+        resets_at: '2099-01-01T10:00:00Z',
+        observed_at: '2026-10-01T10:00:00Z',
+      },
+    ],
+  }
+
+  beforeEach(() => {
+    vi.spyOn(rateLimitsApi, 'findings').mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    vi.spyOn(rateLimitsApi, 'inventory').mockResolvedValue(
+      inventoryUnavailableFixture,
+    )
+  })
+
+  it('names each profile with what its tool limits and when that resets', async () => {
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [claudeB],
+      has_more: false,
+    })
+    renderIntel(<RateLimitsView />)
+    const name = await screen.findByText('claude-b')
+    const row = name.closest('[data-slot="boxed-list-row"]') as HTMLElement
+    expect(within(row).getByText('5-hour 40%')).toBeInTheDocument()
+    expect(within(row).getByText(/^Resets /)).toBeInTheDocument()
+  })
+
+  it('calls each profile what AI tools calls it: its label', async () => {
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [{ ...claudeB, display_name: 'Work Claude' }],
+      has_more: false,
+    })
+    renderIntel(<RateLimitsView />)
+    const name = await screen.findByText('Work Claude')
+    const row = name.closest('[data-slot="boxed-list-row"]') as HTMLElement
+    expect(within(row).getByText('5-hour 40%')).toBeInTheDocument()
+    expect(within(row).queryByText('claude-b')).toBeNull()
+  })
+
+  it('leaves out a profile whose windows have all reset: it has no figure now', async () => {
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [
+        {
+          ...claudeB,
+          usage: [
+            {
+              window: 'five_hour',
+              label: '5-hour',
+              utilization: 40,
+              resets_at: '2000-01-01T10:00:00Z',
+              observed_at: '2000-01-01T05:00:00Z',
+            },
+          ],
+        },
+      ],
+      has_more: false,
+    })
+    renderIntel(<RateLimitsView />)
+    expect(
+      await screen.findByText(
+        "No profile's tool reports a limit in force now.",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('claude-b')).toBeNull()
+  })
+
+  it('says the read failed, never that no profile has a limit', async () => {
+    vi.mocked(agentOpsApi.listAccounts).mockRejectedValue(new Error('down'))
+    renderIntel(<RateLimitsView />)
+    expect(
+      await screen.findByRole('button', { name: /retry/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText("No profile's tool reports a limit in force now."),
+    ).toBeNull()
+  })
+
+  it('is not shown, and reads no account, to a reader who cannot read them', async () => {
+    auth.allow = new Set(['models:ratelimits:read'])
+    try {
+      renderIntel(<RateLimitsView />)
+      await screen.findByText(/Inventory unavailable/i)
+      expect(
+        screen.queryByRole('heading', { name: 'Limits of each profile' }),
+      ).toBeNull()
+      expect(agentOpsApi.listAccounts).not.toHaveBeenCalled()
+    } finally {
+      auth.allow = null
+    }
+  })
 })

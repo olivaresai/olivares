@@ -8,9 +8,11 @@
 // LIE. Without a workspace selected it must request no workspace content, and without a summary
 // it must say it does not know instead of printing a zero.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
+import { ApiError } from '@/lib/api/errors'
 import { useModulesStore } from '@/stores/modules'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -177,6 +179,54 @@ describe('WorkspaceDashboardView', () => {
       expect(screen.getAllByText('—').length).toBeGreaterThan(0),
     )
     expect(screen.queryByText('0')).not.toBeInTheDocument()
+  })
+
+  it('says a list is loading as skeleton rows, never an empty table', () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    agentsMock.mockReturnValue(new Promise(() => {}))
+    groupsMock.mockReturnValue(new Promise(() => {}))
+    show()
+    for (const name of ['Agents in workspace', 'Agent groups']) {
+      const section = screen
+        .getByRole('heading', { name })
+        .closest('section') as HTMLElement
+      const block = section.querySelector(
+        '[data-slot="state-block"][data-state="loading"]',
+      )
+      expect(block).toHaveAttribute('role', 'status')
+      expect(block).toHaveTextContent('Loading…')
+    }
+    expect(screen.queryByRole('table')).toBeNull()
+  })
+
+  it('says the agents could not be read, with Retry, instead of an empty table', async () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    agentsMock.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    show()
+    const failure = await screen.findByText(
+      'The agents of this workspace could not be read.',
+    )
+    const state = failure.closest('[role="alert"]') as HTMLElement
+    // Inside its section: the small page.
+    expect(state).toHaveClass('py-8')
+    expect(screen.queryByText('No agents in this workspace yet.')).toBeNull()
+    expect(screen.queryByRole('table')).toBeNull()
+    await userEvent.click(within(state).getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(agentsMock).toHaveBeenCalledTimes(2))
+  })
+
+  it('says the agent groups could not be read, with Retry', async () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    groupsMock.mockRejectedValue(new ApiError(503, 'unavailable', 'down'))
+    show()
+    const failure = await screen.findByText(
+      'The agent groups of this workspace could not be read.',
+    )
+    const state = failure.closest('[role="alert"]') as HTMLElement
+    expect(within(state).getByRole('button', { name: 'Retry' })).toBeVisible()
+    expect(
+      screen.queryByText('No agent groups in this workspace yet.'),
+    ).toBeNull()
   })
 
   it('ends the agents preview with Show more when has_more is true', async () => {

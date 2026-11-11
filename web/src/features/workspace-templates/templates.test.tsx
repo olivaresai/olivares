@@ -130,9 +130,96 @@ describe('TemplatesView', () => {
     await user.click(summary)
     expect(fold).toHaveAttribute('open')
   })
+
+  it('teaches what a template is and offers the primary when the person has none', async () => {
+    api.list.mockResolvedValue({ items: [builtinTemplate], has_more: false })
+    wrap(<TemplatesView />)
+
+    expect(
+      await screen.findByText('You have no templates yet'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'A template is a reusable starting point for new sessions.',
+      ),
+    ).toBeInTheDocument()
+    // No heading over an empty group, and the built-ins stay reachable below it.
+    expect(screen.queryByRole('heading', { name: 'Your templates' })).toBeNull()
+    expect(
+      screen.getByText('Built-in templates (1)').closest('details'),
+    ).not.toHaveAttribute('open')
+    expect(
+      screen.getAllByRole('button', { name: 'New template' }),
+    ).toHaveLength(2)
+  })
+
+  it('announces loading while the list is read', () => {
+    api.list.mockReturnValue(new Promise(() => {}))
+    wrap(<TemplatesView />)
+
+    expect(screen.getByRole('status')).toHaveAttribute('data-state', 'loading')
+  })
+
+  it('a failed read says so in the pane and offers Retry', async () => {
+    api.list.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    wrap(<TemplatesView />)
+
+    expect(
+      await screen.findByText('Could not load templates'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+    expect(screen.queryByText('boom')).toBeNull()
+  })
+
+  it('a refused read names the page and who can grant it, without Retry', async () => {
+    api.list.mockRejectedValue(new ApiError(403, 'forbidden', 'no'))
+    wrap(<TemplatesView />)
+
+    expect(
+      await screen.findByText('You do not have access to Templates.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/administrator/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+  })
 })
 
 describe('TemplateCard', () => {
+  it('reads the model and the first line of the instructions on one helper line', () => {
+    wrap(
+      <TemplateCard
+        template={{
+          ...customTemplate,
+          body: {
+            settings: {
+              model: 'claude-opus',
+              custom_instructions: 'Run the tests first.\nThen fix one bug.',
+            },
+          },
+        }}
+        onEdit={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText('claude-opus · Run the tests first.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(customTemplate.description)).toBeNull()
+    expect(screen.queryByText(/Then fix one bug/)).toBeNull()
+  })
+
+  it('falls back to the description when the template has no instructions', () => {
+    wrap(
+      <TemplateCard
+        template={customTemplate}
+        onEdit={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(customTemplate.description)).toBeInTheDocument()
+  })
+
   it('says Built-in once for a built-in', () => {
     wrap(
       <TemplateCard
@@ -434,13 +521,13 @@ describe('TemplateEditor', () => {
       'Connectors',
     ])
       expect(screen.getByLabelText(label)).not.toBeVisible()
-    // Sentence-case titles, and every closed section says what it holds even when empty.
+    // Sentence-case titles of one noun, and every closed section says what it holds even when empty.
     for (const [title, held] of [
       ['Hooks', 'None'],
-      ['Agent settings', 'Defaults'],
+      ['Settings', 'Defaults'],
       ['Secrets', 'None'],
       ['Connectors', 'None'],
-      ['Governance policies', 'Defaults'],
+      ['Policies', 'Defaults'],
     ])
       expect(screen.getByText(title).closest('summary')).toHaveTextContent(
         `${title}${held}`,
@@ -455,9 +542,9 @@ describe('TemplateEditor', () => {
     expect(secrets).toHaveTextContent('1 variable')
     expect(secrets).not.toHaveTextContent('env/github')
 
-    await user.click(screen.getByText('Governance policies'))
+    await user.click(screen.getByText('Policies'))
     await user.type(duration, '0')
-    await user.click(screen.getByText('Governance policies'))
+    await user.click(screen.getByText('Policies'))
     expect(duration).not.toBeVisible()
     await user.type(screen.getByLabelText(/^Name/), 'Short')
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -466,9 +553,9 @@ describe('TemplateEditor', () => {
     expect(api.create).not.toHaveBeenCalled()
   })
 
-  // The closed Agent settings summary never hides a mode that asks less than default behind
+  // The closed Settings summary never hides a mode that asks less than default behind
   // the model name; the mode reads as the tool takes it, in every locale.
-  it('the closed agent settings summary names a mode above default beside the model', () => {
+  it('the closed settings summary names a mode above default beside the model', () => {
     wrap(
       <TemplateEditor
         open={true}
@@ -481,9 +568,9 @@ describe('TemplateEditor', () => {
         }}
       />,
     )
-    expect(
-      screen.getByText('Agent settings').closest('summary'),
-    ).toHaveTextContent('Agent settingsModel: x · bypassPermissions')
+    expect(screen.getByText('Settings').closest('summary')).toHaveTextContent(
+      'SettingsModel: x · bypassPermissions',
+    )
   })
 
   // A tool allowlist with no stated mode launches as dontAsk (the server derives it,
@@ -502,9 +589,9 @@ describe('TemplateEditor', () => {
         }}
       />,
     )
-    expect(
-      screen.getByText('Agent settings').closest('summary'),
-    ).toHaveTextContent('Agent settingsModel: x · dontAsk')
+    expect(screen.getByText('Settings').closest('summary')).toHaveTextContent(
+      'SettingsModel: x · dontAsk',
+    )
     expect(screen.getByLabelText('Permission mode')).toHaveTextContent(
       'dontAsk',
     )

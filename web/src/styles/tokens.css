@@ -2,7 +2,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /*
- * Olivares AI console — design tokens (the website's B2 system).
+ * Olivares AI console — design tokens (direction A2).
  *
  * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/console/*.tokens.json
  * (DTCG 2025.10). Regenerate with `pnpm tokens`; `pnpm tokens:check` guards drift in CI.
@@ -10,53 +10,62 @@
  * (.dark.black, dark on true black), the Tailwind 4
  * @theme inline mapping, density (comfortable by default, compact by attribute) and
  * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
- * Each theme holds the palette — four neutrals, three text tones, the single brand
- * orange #f08000 by role, status colors with soft fills, four tool data colours, nine
- * account accent colours and two neutral shadows — and the role names the components use, each resolved from the
+ * Each theme holds the palette — four neutrals with a well, a pane and the hover, selection
+ * and pressed layers, three text tones, the single brand orange #f08000 by role, status
+ * colors with soft fills, the inverse surface of a toast, four tool data colours, nine
+ * account accent colours and neutral shadows — and the role names the components use, each resolved from the
  * palette. scripts/check-brand-parity.mjs pins the subset the website shares to this
  * file. Every text token is at least 4.5:1 and
  * every control boundary, focus ring and selection border at least 3:1 on every surface
- * of its theme (src/styles/tokens.test.ts measures the 750 pairs).
+ * of its theme (src/styles/tokens.test.ts measures the 825 pairs).
  */
 
 :root {
   /* Palette — neutrals — LIGHT */
-  --frame: #f2f2f1;
+  --frame: #ecebe9;
   --canvas: #fafaf9;
   --surface: #ffffff;
   --raised: #ffffff;
-  --hover: rgba(40, 40, 43, 0.04);
-  --active: #f1f1ef;
-  --line: #e6e6e4;
-  --line-strong: #d6d6d3;
-  --ctl-border: #8f8a83;
-  --scrim: rgba(28, 28, 31, 0.28);
+  --well: #f0efed;
+  --pane: #f6f6f4;
+  --hover: rgba(40, 40, 43, 0.045);
+  --active: rgba(40, 40, 43, 0.075);
+  --pressed: rgba(40, 40, 43, 0.15);
+  --line: rgba(40, 40, 43, 0.09);
+  --line-strong: rgba(40, 40, 43, 0.16);
+  --ctl-border: #85807a;
+  --scrim: rgba(28, 28, 31, 0.32);
 
   /* Palette — text — LIGHT */
   --text: #28282b;
-  --text-2: #5c564e;
-  --text-3: #635d54;
+  --text-2: #4a4540;
+  --text-3: #6b665f;
 
   /* Palette — the brand orange, by role — LIGHT */
   --accent: #f08000;
   --on-accent: #1a1206;
-  --accent-text: #a84f00;
-  --accent-soft: rgba(240, 128, 0, 0.12);
+  --accent-text: #954600;
+  --accent-soft: #fdeddb;
   --accent-line: rgba(194, 96, 0, 0.45);
   --accent-border: #c26000;
-  --focus: #a84f00;
+  --focus: #984700;
 
   /* Palette — status and diff — LIGHT */
-  --ok: #2f6b2c;
-  --ok-soft: rgba(47, 107, 44, 0.09);
-  --warn: #665c00;
-  --warn-soft: rgba(102, 92, 0, 0.09);
-  --bad: #b0201b;
-  --bad-soft: rgba(176, 32, 27, 0.08);
-  --info: #1e5a86;
-  --info-soft: rgba(30, 90, 134, 0.08);
-  --diff-add: rgba(47, 107, 44, 0.1);
-  --diff-del: rgba(176, 32, 27, 0.09);
+  --ok: #146a3a;
+  --ok-soft: #e8f0eb;
+  --warn: #7a5600;
+  --warn-soft: #f1ede3;
+  --bad: #ae241c;
+  --bad-soft: #f8ebeb;
+  --info: #1759a8;
+  --info-soft: #eaf0f7;
+  --diff-add: rgba(20, 106, 58, 0.12);
+  --diff-del: rgba(174, 36, 28, 0.1);
+
+  /* Palette — inverse (the toast) — LIGHT */
+  --inverse: #28282b;
+  --on-inverse: #fafaf9;
+  --inverse-accent: #ffa257;
 
   /* Palette — tool data colours — LIGHT */
   --tool-claude: #2a78d6;
@@ -77,38 +86,44 @@
 
   /* Palette — depth — LIGHT */
   --shadow-raised:
-    0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22);
+    0 0 0 1px rgba(28, 28, 31, 0.05), 0 1px 2px rgba(28, 28, 31, 0.06),
+    0 12px 32px -14px rgba(28, 28, 31, 0.18);
   --shadow-pop:
-    0 2px 6px -2px rgba(28, 28, 31, 0.1),
-    0 24px 48px -24px rgba(28, 28, 31, 0.3);
-  --shadow-card: none;
+    0 0 0 1px rgba(28, 28, 31, 0.06), 0 4px 14px -4px rgba(28, 28, 31, 0.14),
+    0 28px 56px -20px rgba(28, 28, 31, 0.32);
+  --shadow-card:
+    0 0 0 1px rgba(28, 28, 31, 0.07), 0 1px 2px rgba(28, 28, 31, 0.06),
+    0 3px 8px -2px rgba(28, 28, 31, 0.07);
+  --shadow-well:
+    inset 0 1px 2px rgba(28, 28, 31, 0.1),
+    inset 0 0 0 1px rgba(28, 28, 31, 0.05);
 
   /* Roles — surfaces and text */
   --background: #fafaf9;
   --elevated: #ffffff;
-  --overlay: rgba(28, 28, 31, 0.28);
-  --muted: #f1f1ef;
-  --muted-foreground: #5c564e;
+  --overlay: rgba(28, 28, 31, 0.32);
+  --muted: rgba(40, 40, 43, 0.075);
+  --muted-foreground: #4a4540;
   --foreground: #28282b;
-  --border: #e6e6e4;
-  --border-strong: #d6d6d3;
-  --ring: #a84f00;
+  --border: rgba(40, 40, 43, 0.09);
+  --border-strong: rgba(40, 40, 43, 0.16);
+  --ring: #984700;
 
   /* Roles — the orange */
   --accent-foreground: #1a1206;
   --accent-hover: #df6d00;
   --accent-active: #cc6a00;
-  --accent-soft-foreground: #a84f00;
+  --accent-soft-foreground: #954600;
 
   /* Roles — status */
-  --success: #2f6b2c;
-  --warning: #665c00;
-  --danger: #b0201b;
-  --danger-solid: #b0201b;
+  --success: #146a3a;
+  --warning: #7a5600;
+  --danger: #ae241c;
+  --danger-solid: #ae241c;
   --danger-solid-foreground: #fff8f0;
-  --success-soft: rgba(47, 107, 44, 0.09);
-  --warning-soft: rgba(102, 92, 0, 0.09);
-  --danger-soft: rgba(176, 32, 27, 0.08);
+  --success-soft: #e8f0eb;
+  --warning-soft: #f1ede3;
+  --danger-soft: #f8ebeb;
 
   /* Roles — access-graph confidence (a cool axis apart from status) */
   --confidence-attributed: #0a7c77;
@@ -119,10 +134,11 @@
   --elev-sm: none;
   --elev-md: none;
   --elev-lg:
-    0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22);
+    0 0 0 1px rgba(28, 28, 31, 0.05), 0 1px 2px rgba(28, 28, 31, 0.06),
+    0 12px 32px -14px rgba(28, 28, 31, 0.18);
   --elev-xl:
-    0 2px 6px -2px rgba(28, 28, 31, 0.1),
-    0 24px 48px -24px rgba(28, 28, 31, 0.3);
+    0 0 0 1px rgba(28, 28, 31, 0.06), 0 4px 14px -4px rgba(28, 28, 31, 0.14),
+    0 28px 56px -20px rgba(28, 28, 31, 0.32);
 
   /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
   --accent-strong: #c26000;
@@ -138,40 +154,48 @@
   /* Palette — neutrals — DARK */
   --frame: #1b1b1e;
   --canvas: #28282b;
-  --surface: #343434;
-  --raised: #343434;
-  --hover: rgba(255, 255, 255, 0.05);
-  --active: #38383b;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
-  --ctl-border: #8a8783;
-  --scrim: rgba(0, 0, 0, 0.5);
+  --surface: #343437;
+  --raised: #38383c;
+  --well: #202023;
+  --pane: #242427;
+  --hover: rgba(255, 255, 255, 0.0525);
+  --active: rgba(255, 255, 255, 0.075);
+  --pressed: rgba(255, 255, 255, 0.16);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --ctl-border: #8f8c88;
+  --scrim: rgba(0, 0, 0, 0.55);
 
   /* Palette — text — DARK */
   --text: #fafaf9;
-  --text-2: #b4aeaa;
-  --text-3: #b4aea5;
+  --text-2: #cfcac5;
+  --text-3: #aaa59f;
 
   /* Palette — the brand orange, by role — DARK */
   --accent: #f08000;
   --on-accent: #1a1206;
-  --accent-text: #ff9b3d;
-  --accent-soft: #3c3127;
+  --accent-text: #ffb277;
+  --accent-soft: #52402e;
   --accent-line: rgba(240, 128, 0, 0.42);
-  --accent-border: #ff9b3d;
+  --accent-border: #ffa257;
   --focus: #f08000;
 
   /* Palette — status and diff — DARK */
-  --ok: #9cc79c;
-  --ok-soft: #343836;
-  --warn: #d9b45c;
-  --warn-soft: #3a3630;
-  --bad: #eb9999;
-  --bad-soft: #3c3336;
-  --info: #9db9cf;
-  --info-soft: #34363b;
-  --diff-add: #343836;
-  --diff-del: #3c3336;
+  --ok: #86dfa0;
+  --ok-soft: #3f4c46;
+  --warn: #f2d04f;
+  --warn-soft: #4f4a3a;
+  --bad: #ffaead;
+  --bad-soft: #504346;
+  --info: #9ec7f7;
+  --info-soft: #424851;
+  --diff-add: rgba(134, 223, 160, 0.14);
+  --diff-del: rgba(255, 161, 161, 0.14);
+
+  /* Palette — inverse (the toast) — DARK */
+  --inverse: #fafaf9;
+  --on-inverse: #28282b;
+  --inverse-accent: #984700;
 
   /* Palette — tool data colours — DARK */
   --tool-claude: #3987e5;
@@ -192,37 +216,43 @@
 
   /* Palette — depth — DARK */
   --shadow-raised:
-    0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
   --shadow-pop:
-    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
-  --shadow-card: none;
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85);
+  --shadow-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 0 0 1px rgba(0, 0, 6, 0.22),
+    0 1px 2px rgba(0, 0, 6, 0.24), 0 3px 8px -2px rgba(0, 0, 6, 0.3);
+  --shadow-well:
+    inset 0 1px 2px rgba(0, 0, 0, 0.42), inset 0 0 0 1px rgba(0, 0, 0, 0.2);
 
   /* Roles — surfaces and text */
   --background: #28282b;
-  --elevated: #343434;
-  --overlay: rgba(0, 0, 0, 0.5);
-  --muted: #38383b;
-  --muted-foreground: #b4aeaa;
+  --elevated: #38383c;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --muted: rgba(255, 255, 255, 0.075);
+  --muted-foreground: #cfcac5;
   --foreground: #fafaf9;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
   --ring: #f08000;
 
   /* Roles — the orange */
   --accent-foreground: #1a1206;
   --accent-hover: #df6d00;
   --accent-active: #d87000;
-  --accent-soft-foreground: #ff9b3d;
+  --accent-soft-foreground: #ffb277;
 
   /* Roles — status */
-  --success: #9cc79c;
-  --warning: #d9b45c;
-  --danger: #eb9999;
+  --success: #86dfa0;
+  --warning: #f2d04f;
+  --danger: #ffaead;
   --danger-solid: #c5362f;
   --danger-solid-foreground: #fff1ef;
-  --success-soft: #343836;
-  --warning-soft: #3a3630;
-  --danger-soft: #3c3336;
+  --success-soft: #3f4c46;
+  --warning-soft: #4f4a3a;
+  --danger-soft: #504346;
 
   /* Roles — access-graph confidence (a cool axis apart from status) */
   --confidence-attributed: #5be0d8;
@@ -232,12 +262,15 @@
   --elev-xs: none;
   --elev-sm: none;
   --elev-md: none;
-  --elev-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+  --elev-lg:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
   --elev-xl:
-    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85);
 
   /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
-  --accent-strong: #ff9b3d;
+  --accent-strong: #ffa257;
 }
 
 .dark.black {
@@ -246,11 +279,14 @@
   --canvas: #000000;
   --surface: #0a0a0a;
   --raised: #111111;
-  --hover: rgba(255, 255, 255, 0.05);
+  --well: #000000;
+  --pane: #050505;
+  --hover: rgba(255, 255, 255, 0.0525);
   --active: #141414;
+  --pressed: rgba(255, 255, 255, 0.1);
   --line: #1f1f1f;
   --line-strong: #262626;
-  --ctl-border: #8a8783;
+  --ctl-border: #8f8c88;
   --scrim: rgba(0, 0, 0, 0.7);
 
   /* Palette — text — BLACK */
@@ -261,23 +297,28 @@
   /* Palette — the brand orange, by role — BLACK */
   --accent: #f08000;
   --on-accent: #1a1206;
-  --accent-text: #ff9b3d;
+  --accent-text: #ffb277;
   --accent-soft: #1f150a;
   --accent-line: rgba(240, 128, 0, 0.42);
-  --accent-border: #ff9b3d;
+  --accent-border: #ffa257;
   --focus: #f08000;
 
   /* Palette — status and diff — BLACK */
-  --ok: #9cc79c;
+  --ok: #86dfa0;
   --ok-soft: #0d1a10;
-  --warn: #d9b45c;
+  --warn: #f2d04f;
   --warn-soft: #1a160b;
-  --bad: #eb9999;
+  --bad: #ffaead;
   --bad-soft: #1d0e10;
-  --info: #9db9cf;
+  --info: #9ec7f7;
   --info-soft: #0c141c;
   --diff-add: #0d1a10;
   --diff-del: #1d0e10;
+
+  /* Palette — inverse (the toast) — BLACK */
+  --inverse: #fafaf9;
+  --on-inverse: #111111;
+  --inverse-accent: #984700;
 
   /* Palette — tool data colours — BLACK */
   --tool-claude: #3987e5;
@@ -298,10 +339,15 @@
 
   /* Palette — depth — BLACK */
   --shadow-raised:
-    0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
   --shadow-pop:
-    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
-  --shadow-card: none;
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85);
+  --shadow-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 0 0 1px rgba(0, 0, 6, 0.22),
+    0 1px 2px rgba(0, 0, 6, 0.24), 0 3px 8px -2px rgba(0, 0, 6, 0.3);
+  --shadow-well: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 
   /* Roles — surfaces and text */
   --background: #000000;
@@ -318,12 +364,12 @@
   --accent-foreground: #1a1206;
   --accent-hover: #df6d00;
   --accent-active: #d87000;
-  --accent-soft-foreground: #ff9b3d;
+  --accent-soft-foreground: #ffb277;
 
   /* Roles — status */
-  --success: #9cc79c;
-  --warning: #d9b45c;
-  --danger: #eb9999;
+  --success: #86dfa0;
+  --warning: #f2d04f;
+  --danger: #ffaead;
   --danger-solid: #c5362f;
   --danger-solid-foreground: #fff1ef;
   --success-soft: #0d1a10;
@@ -338,12 +384,15 @@
   --elev-xs: none;
   --elev-sm: none;
   --elev-md: none;
-  --elev-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+  --elev-lg:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
   --elev-xl:
-    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85);
 
   /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
-  --accent-strong: #ff9b3d;
+  --accent-strong: #ffa257;
 }
 
 @theme inline {
@@ -352,8 +401,11 @@
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-raised: var(--raised);
+  --color-well: var(--well);
+  --color-pane: var(--pane);
   --color-hover: var(--hover);
   --color-active: var(--active);
+  --color-pressed: var(--pressed);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
   --color-ctl-border: var(--ctl-border);
@@ -378,6 +430,9 @@
   --color-info-soft: var(--info-soft);
   --color-diff-add: var(--diff-add);
   --color-diff-del: var(--diff-del);
+  --color-inverse: var(--inverse);
+  --color-on-inverse: var(--on-inverse);
+  --color-inverse-accent: var(--inverse-accent);
   --color-tool-claude: var(--tool-claude);
   --color-tool-codex: var(--tool-codex);
   --color-tool-opencode: var(--tool-opencode);
@@ -435,21 +490,22 @@
 
   /* Typography — self-hosted in src/styles/fonts.css */
   --font-sans:
-    'Inter', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC',
-    'PingFang SC', 'Microsoft YaHei', 'Yu Gothic', sans-serif;
+    'Adwaita Sans', 'Inter', system-ui, -apple-system, 'Segoe UI',
+    'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', 'Yu Gothic',
+    sans-serif;
   --font-mono:
-    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Adwaita Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
     'Liberation Mono', monospace;
-  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-display: 'Adwaita Sans', 'Inter', system-ui, sans-serif;
 
   /* Radii — controls, cards, panels */
-  --radius-ctl: 0.4375rem;
-  --radius-card: 0.625rem;
-  --radius-panel: 0.875rem;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.4375rem;
-  --radius-lg: 0.625rem;
-  --radius-xl: 0.875rem;
+  --radius-ctl: 0.5625rem;
+  --radius-card: 0.75rem;
+  --radius-panel: 0.9375rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5625rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 0.9375rem;
 
   /* Elevation (theme-switched via --elev-*) */
   --shadow-xs: var(--elev-xs);
@@ -459,41 +515,41 @@
   --shadow-xl: var(--elev-xl);
 
   /* Motion — one easing curve, no bounce */
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --default-transition-duration: var(--duration-fast);
-  --default-transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --default-transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
   /* Type ladder — size + leading + tracking + weight per step */
   --text-hero: 2.25rem;
   --text-hero--line-height: 2.5rem;
   --text-hero--letter-spacing: -0.03em;
-  --text-hero--font-weight: 600;
+  --text-hero--font-weight: 800;
   --text-display-lg: 2.25rem;
   --text-display-lg--line-height: 2.5rem;
   --text-display-lg--letter-spacing: -0.03em;
-  --text-display-lg--font-weight: 600;
+  --text-display-lg--font-weight: 800;
   --text-display: 1.625rem;
-  --text-display--line-height: 1.875rem;
-  --text-display--letter-spacing: -0.02em;
-  --text-display--font-weight: 600;
+  --text-display--line-height: 2rem;
+  --text-display--letter-spacing: -0.022em;
+  --text-display--font-weight: 800;
   --text-title: 1.625rem;
-  --text-title--line-height: 1.875rem;
-  --text-title--letter-spacing: -0.02em;
-  --text-title--font-weight: 600;
+  --text-title--line-height: 2rem;
+  --text-title--letter-spacing: -0.022em;
+  --text-title--font-weight: 800;
   --text-heading: 1.0625rem;
   --text-heading--line-height: 1.375rem;
   --text-heading--letter-spacing: -0.01em;
-  --text-heading--font-weight: 600;
-  --text-body-l: 0.875rem;
-  --text-body-l--line-height: 1.375rem;
+  --text-heading--font-weight: 700;
+  --text-body-l: 0.9375rem;
+  --text-body-l--line-height: 1.5rem;
   --text-body: 0.875rem;
   --text-body--line-height: 1.25rem;
   --text-caption: 0.8125rem;
   --text-caption--line-height: 1.125rem;
   --text-overline: 0.75rem;
   --text-overline--line-height: 1rem;
-  --text-overline--font-weight: 500;
+  --text-overline--font-weight: 700;
   --text-mono: 0.8125rem;
   --text-mono--line-height: 1.25rem;
   --text-mono-s: 0.75rem;
@@ -514,42 +570,50 @@
 
 [data-trust-chrome] {
   /* Palette — neutrals — TRUST CHROME, LIGHT */
-  --frame: #f2f2f1;
+  --frame: #ecebe9;
   --canvas: #fafaf9;
   --surface: #ffffff;
   --raised: #ffffff;
-  --hover: rgba(40, 40, 43, 0.04);
-  --active: #f1f1ef;
-  --line: #e6e6e4;
-  --line-strong: #d6d6d3;
-  --ctl-border: #8f8a83;
-  --scrim: rgba(28, 28, 31, 0.28);
+  --well: #f0efed;
+  --pane: #f6f6f4;
+  --hover: rgba(40, 40, 43, 0.045);
+  --active: rgba(40, 40, 43, 0.075);
+  --pressed: rgba(40, 40, 43, 0.15);
+  --line: rgba(40, 40, 43, 0.09);
+  --line-strong: rgba(40, 40, 43, 0.16);
+  --ctl-border: #85807a;
+  --scrim: rgba(28, 28, 31, 0.32);
 
   /* Palette — text — TRUST CHROME, LIGHT */
   --text: #28282b;
-  --text-2: #5c564e;
-  --text-3: #635d54;
+  --text-2: #4a4540;
+  --text-3: #6b665f;
 
   /* Palette — the brand orange, by role — TRUST CHROME, LIGHT */
   --accent: #f08000;
   --on-accent: #1a1206;
-  --accent-text: #a84f00;
-  --accent-soft: rgba(240, 128, 0, 0.12);
+  --accent-text: #954600;
+  --accent-soft: #fdeddb;
   --accent-line: rgba(194, 96, 0, 0.45);
   --accent-border: #c26000;
-  --focus: #a84f00;
+  --focus: #984700;
 
   /* Palette — status and diff — TRUST CHROME, LIGHT */
-  --ok: #2f6b2c;
-  --ok-soft: rgba(47, 107, 44, 0.09);
-  --warn: #665c00;
-  --warn-soft: rgba(102, 92, 0, 0.09);
-  --bad: #b0201b;
-  --bad-soft: rgba(176, 32, 27, 0.08);
-  --info: #1e5a86;
-  --info-soft: rgba(30, 90, 134, 0.08);
-  --diff-add: rgba(47, 107, 44, 0.1);
-  --diff-del: rgba(176, 32, 27, 0.09);
+  --ok: #146a3a;
+  --ok-soft: #e8f0eb;
+  --warn: #7a5600;
+  --warn-soft: #f1ede3;
+  --bad: #ae241c;
+  --bad-soft: #f8ebeb;
+  --info: #1759a8;
+  --info-soft: #eaf0f7;
+  --diff-add: rgba(20, 106, 58, 0.12);
+  --diff-del: rgba(174, 36, 28, 0.1);
+
+  /* Palette — inverse (the toast) — TRUST CHROME, LIGHT */
+  --inverse: #28282b;
+  --on-inverse: #fafaf9;
+  --inverse-accent: #ffa257;
 
   /* Palette — tool data colours — TRUST CHROME, LIGHT */
   --tool-claude: #2a78d6;
@@ -570,38 +634,44 @@
 
   /* Palette — depth — TRUST CHROME, LIGHT */
   --shadow-raised:
-    0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22);
+    0 0 0 1px rgba(28, 28, 31, 0.05), 0 1px 2px rgba(28, 28, 31, 0.06),
+    0 12px 32px -14px rgba(28, 28, 31, 0.18);
   --shadow-pop:
-    0 2px 6px -2px rgba(28, 28, 31, 0.1),
-    0 24px 48px -24px rgba(28, 28, 31, 0.3);
-  --shadow-card: none;
+    0 0 0 1px rgba(28, 28, 31, 0.06), 0 4px 14px -4px rgba(28, 28, 31, 0.14),
+    0 28px 56px -20px rgba(28, 28, 31, 0.32);
+  --shadow-card:
+    0 0 0 1px rgba(28, 28, 31, 0.07), 0 1px 2px rgba(28, 28, 31, 0.06),
+    0 3px 8px -2px rgba(28, 28, 31, 0.07);
+  --shadow-well:
+    inset 0 1px 2px rgba(28, 28, 31, 0.1),
+    inset 0 0 0 1px rgba(28, 28, 31, 0.05);
 
   /* Roles — surfaces and text */
   --background: #fafaf9;
   --elevated: #ffffff;
-  --overlay: rgba(28, 28, 31, 0.28);
-  --muted: #f1f1ef;
-  --muted-foreground: #5c564e;
+  --overlay: rgba(28, 28, 31, 0.32);
+  --muted: rgba(40, 40, 43, 0.075);
+  --muted-foreground: #4a4540;
   --foreground: #28282b;
-  --border: #e6e6e4;
-  --border-strong: #d6d6d3;
-  --ring: #a84f00;
+  --border: rgba(40, 40, 43, 0.09);
+  --border-strong: rgba(40, 40, 43, 0.16);
+  --ring: #984700;
 
   /* Roles — the orange */
   --accent-foreground: #1a1206;
   --accent-hover: #df6d00;
   --accent-active: #cc6a00;
-  --accent-soft-foreground: #a84f00;
+  --accent-soft-foreground: #954600;
 
   /* Roles — status */
-  --success: #2f6b2c;
-  --warning: #665c00;
-  --danger: #b0201b;
-  --danger-solid: #b0201b;
+  --success: #146a3a;
+  --warning: #7a5600;
+  --danger: #ae241c;
+  --danger-solid: #ae241c;
   --danger-solid-foreground: #fff8f0;
-  --success-soft: rgba(47, 107, 44, 0.09);
-  --warning-soft: rgba(102, 92, 0, 0.09);
-  --danger-soft: rgba(176, 32, 27, 0.08);
+  --success-soft: #e8f0eb;
+  --warning-soft: #f1ede3;
+  --danger-soft: #f8ebeb;
 
   /* Roles — access-graph confidence (a cool axis apart from status) */
   --confidence-attributed: #0a7c77;
@@ -612,10 +682,11 @@
   --elev-sm: none;
   --elev-md: none;
   --elev-lg:
-    0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22);
+    0 0 0 1px rgba(28, 28, 31, 0.05), 0 1px 2px rgba(28, 28, 31, 0.06),
+    0 12px 32px -14px rgba(28, 28, 31, 0.18);
   --elev-xl:
-    0 2px 6px -2px rgba(28, 28, 31, 0.1),
-    0 24px 48px -24px rgba(28, 28, 31, 0.3);
+    0 0 0 1px rgba(28, 28, 31, 0.06), 0 4px 14px -4px rgba(28, 28, 31, 0.14),
+    0 28px 56px -20px rgba(28, 28, 31, 0.32);
 
   /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
   --accent-strong: #c26000;
@@ -631,40 +702,48 @@
   /* Palette — neutrals — TRUST CHROME, DARK */
   --frame: #1b1b1e;
   --canvas: #28282b;
-  --surface: #343434;
-  --raised: #343434;
-  --hover: rgba(255, 255, 255, 0.05);
-  --active: #38383b;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
-  --ctl-border: #8a8783;
-  --scrim: rgba(0, 0, 0, 0.5);
+  --surface: #343437;
+  --raised: #38383c;
+  --well: #202023;
+  --pane: #242427;
+  --hover: rgba(255, 255, 255, 0.0525);
+  --active: rgba(255, 255, 255, 0.075);
+  --pressed: rgba(255, 255, 255, 0.16);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --ctl-border: #8f8c88;
+  --scrim: rgba(0, 0, 0, 0.55);
 
   /* Palette — text — TRUST CHROME, DARK */
   --text: #fafaf9;
-  --text-2: #b4aeaa;
-  --text-3: #b4aea5;
+  --text-2: #cfcac5;
+  --text-3: #aaa59f;
 
   /* Palette — the brand orange, by role — TRUST CHROME, DARK */
   --accent: #f08000;
   --on-accent: #1a1206;
-  --accent-text: #ff9b3d;
-  --accent-soft: #3c3127;
+  --accent-text: #ffb277;
+  --accent-soft: #52402e;
   --accent-line: rgba(240, 128, 0, 0.42);
-  --accent-border: #ff9b3d;
+  --accent-border: #ffa257;
   --focus: #f08000;
 
   /* Palette — status and diff — TRUST CHROME, DARK */
-  --ok: #9cc79c;
-  --ok-soft: #343836;
-  --warn: #d9b45c;
-  --warn-soft: #3a3630;
-  --bad: #eb9999;
-  --bad-soft: #3c3336;
-  --info: #9db9cf;
-  --info-soft: #34363b;
-  --diff-add: #343836;
-  --diff-del: #3c3336;
+  --ok: #86dfa0;
+  --ok-soft: #3f4c46;
+  --warn: #f2d04f;
+  --warn-soft: #4f4a3a;
+  --bad: #ffaead;
+  --bad-soft: #504346;
+  --info: #9ec7f7;
+  --info-soft: #424851;
+  --diff-add: rgba(134, 223, 160, 0.14);
+  --diff-del: rgba(255, 161, 161, 0.14);
+
+  /* Palette — inverse (the toast) — TRUST CHROME, DARK */
+  --inverse: #fafaf9;
+  --on-inverse: #28282b;
+  --inverse-accent: #984700;
 
   /* Palette — tool data colours — TRUST CHROME, DARK */
   --tool-claude: #3987e5;
@@ -685,37 +764,43 @@
 
   /* Palette — depth — TRUST CHROME, DARK */
   --shadow-raised:
-    0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
   --shadow-pop:
-    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
-  --shadow-card: none;
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85);
+  --shadow-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 0 0 1px rgba(0, 0, 6, 0.22),
+    0 1px 2px rgba(0, 0, 6, 0.24), 0 3px 8px -2px rgba(0, 0, 6, 0.3);
+  --shadow-well:
+    inset 0 1px 2px rgba(0, 0, 0, 0.42), inset 0 0 0 1px rgba(0, 0, 0, 0.2);
 
   /* Roles — surfaces and text */
   --background: #28282b;
-  --elevated: #343434;
-  --overlay: rgba(0, 0, 0, 0.5);
-  --muted: #38383b;
-  --muted-foreground: #b4aeaa;
+  --elevated: #38383c;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --muted: rgba(255, 255, 255, 0.075);
+  --muted-foreground: #cfcac5;
   --foreground: #fafaf9;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
   --ring: #f08000;
 
   /* Roles — the orange */
   --accent-foreground: #1a1206;
   --accent-hover: #df6d00;
   --accent-active: #d87000;
-  --accent-soft-foreground: #ff9b3d;
+  --accent-soft-foreground: #ffb277;
 
   /* Roles — status */
-  --success: #9cc79c;
-  --warning: #d9b45c;
-  --danger: #eb9999;
+  --success: #86dfa0;
+  --warning: #f2d04f;
+  --danger: #ffaead;
   --danger-solid: #c5362f;
   --danger-solid-foreground: #fff1ef;
-  --success-soft: #343836;
-  --warning-soft: #3a3630;
-  --danger-soft: #3c3336;
+  --success-soft: #3f4c46;
+  --warning-soft: #4f4a3a;
+  --danger-soft: #504346;
 
   /* Roles — access-graph confidence (a cool axis apart from status) */
   --confidence-attributed: #5be0d8;
@@ -725,12 +810,15 @@
   --elev-xs: none;
   --elev-sm: none;
   --elev-md: none;
-  --elev-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+  --elev-lg:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
   --elev-xl:
-    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85);
 
   /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
-  --accent-strong: #ff9b3d;
+  --accent-strong: #ffa257;
 }
 
 .dark.black [data-trust-chrome] {
@@ -739,11 +827,14 @@
   --canvas: #000000;
   --surface: #0a0a0a;
   --raised: #111111;
-  --hover: rgba(255, 255, 255, 0.05);
+  --well: #000000;
+  --pane: #050505;
+  --hover: rgba(255, 255, 255, 0.0525);
   --active: #141414;
+  --pressed: rgba(255, 255, 255, 0.1);
   --line: #1f1f1f;
   --line-strong: #262626;
-  --ctl-border: #8a8783;
+  --ctl-border: #8f8c88;
   --scrim: rgba(0, 0, 0, 0.7);
 
   /* Palette — text — TRUST CHROME, BLACK */
@@ -754,23 +845,28 @@
   /* Palette — the brand orange, by role — TRUST CHROME, BLACK */
   --accent: #f08000;
   --on-accent: #1a1206;
-  --accent-text: #ff9b3d;
+  --accent-text: #ffb277;
   --accent-soft: #1f150a;
   --accent-line: rgba(240, 128, 0, 0.42);
-  --accent-border: #ff9b3d;
+  --accent-border: #ffa257;
   --focus: #f08000;
 
   /* Palette — status and diff — TRUST CHROME, BLACK */
-  --ok: #9cc79c;
+  --ok: #86dfa0;
   --ok-soft: #0d1a10;
-  --warn: #d9b45c;
+  --warn: #f2d04f;
   --warn-soft: #1a160b;
-  --bad: #eb9999;
+  --bad: #ffaead;
   --bad-soft: #1d0e10;
-  --info: #9db9cf;
+  --info: #9ec7f7;
   --info-soft: #0c141c;
   --diff-add: #0d1a10;
   --diff-del: #1d0e10;
+
+  /* Palette — inverse (the toast) — TRUST CHROME, BLACK */
+  --inverse: #fafaf9;
+  --on-inverse: #111111;
+  --inverse-accent: #984700;
 
   /* Palette — tool data colours — TRUST CHROME, BLACK */
   --tool-claude: #3987e5;
@@ -791,10 +887,15 @@
 
   /* Palette — depth — TRUST CHROME, BLACK */
   --shadow-raised:
-    0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
   --shadow-pop:
-    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
-  --shadow-card: none;
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85);
+  --shadow-card:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 0 0 1px rgba(0, 0, 6, 0.22),
+    0 1px 2px rgba(0, 0, 6, 0.24), 0 3px 8px -2px rgba(0, 0, 6, 0.3);
+  --shadow-well: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 
   /* Roles — surfaces and text */
   --background: #000000;
@@ -811,12 +912,12 @@
   --accent-foreground: #1a1206;
   --accent-hover: #df6d00;
   --accent-active: #d87000;
-  --accent-soft-foreground: #ff9b3d;
+  --accent-soft-foreground: #ffb277;
 
   /* Roles — status */
-  --success: #9cc79c;
-  --warning: #d9b45c;
-  --danger: #eb9999;
+  --success: #86dfa0;
+  --warning: #f2d04f;
+  --danger: #ffaead;
   --danger-solid: #c5362f;
   --danger-solid-foreground: #fff1ef;
   --success-soft: #0d1a10;
@@ -831,35 +932,38 @@
   --elev-xs: none;
   --elev-sm: none;
   --elev-md: none;
-  --elev-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+  --elev-lg:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.26), 0 16px 40px -16px rgba(0, 0, 0, 0.65);
   --elev-xl:
-    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 20px -6px rgba(0, 0, 0, 0.5), 0 32px 72px -24px rgba(0, 0, 0, 0.85);
 
   /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
-  --accent-strong: #ff9b3d;
+  --accent-strong: #ffa257;
 }
 
 :root,
 [data-density='comfortable'] {
   /* Density — comfortable (the default) */
-  --density-row-list: 3.25rem;
+  --density-row-list: 3.5rem;
   --density-row-table: 2.75rem;
-  --density-control: 2rem;
+  --density-control: 2.125rem;
 }
 
 [data-density='compact'] {
   /* Density — compact (spacing only; type does not change) */
-  --density-row-list: 2.5rem;
+  --density-row-list: 2.75rem;
   --density-row-table: 2.25rem;
-  --density-control: 1.75rem;
+  --density-control: 1.875rem;
 }
 
 :root {
   /* Motion — durations and entrance distance */
-  --duration-fast: 120ms;
-  --duration-panel: 180ms;
-  --duration-sheet: 240ms;
-  --motion-shift: 0.375rem;
+  --duration-fast: 160ms;
+  --duration-panel: 200ms;
+  --duration-sheet: 250ms;
+  --motion-shift: 0.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

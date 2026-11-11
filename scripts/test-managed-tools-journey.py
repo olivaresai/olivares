@@ -66,6 +66,22 @@ class ManagedToolsJourneyTest(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     journey.install(api, 'opencode', '1')
 
+    def test_failed_install_names_the_job_error_and_last_progress_line(self) -> None:
+        for outcome, expected in (
+            ({'state': 'failed', 'error': 'GET https://example.invalid/opencode.tgz: HTTP 504',
+              'progress': 'downloading\nretry 2 of 3\n'},
+             ('state=failed', 'HTTP 504', 'retry 2 of 3')),
+            ({'state': 'succeeded', 'audit_error': 'ledger failure'},
+             ('audit_error=ledger failure',)),
+        ):
+            with self.subTest(outcome=outcome):
+                api = unittest.mock.Mock()
+                api.call.side_effect = [dict(digest='abc', executable=self.executable), outcome]
+                with self.assertRaises(RuntimeError) as raised:
+                    journey.install(api, 'opencode', '1')
+                for text in expected:
+                    self.assertIn(text, str(raised.exception))
+
     def test_install_waits_for_real_job_and_returns_plan_path(self) -> None:
         api = unittest.mock.Mock()
         api.call.side_effect = [dict(digest='abc', executable=self.executable),

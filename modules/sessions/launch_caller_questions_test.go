@@ -8,9 +8,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -431,4 +433,113 @@ func TestLaunchCallerQuestionsRetainTheirAnswers(t *testing.T) {
 			}
 		}
 	}
+}
+
+// fakeModelAccess answers from the models the caller was assigned; governed false is a tenant
+// with no model grants at all.
+type fakeModelAccess struct {
+	mu       sync.Mutex
+	governed bool
+	assigned map[string]bool
+	asked    []string
+}
+
+func (f *fakeModelAccess) MayRunModel(_ context.Context, _ model.TenantID, _ auth.Principal, modelRef string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.asked = append(f.asked, modelRef)
+	return !f.governed || f.assigned[modelRef], nil
+}
+
+func (f *fakeModelAccess) withdraw(modelRef string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.assigned, modelRef)
+}
+
+func (f *fakeModelAccess) lastAsked(t *testing.T) string {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.asked) == 0 {
+		t.Fatal("the launch never asked about its model")
+	}
+	return f.asked[len(f.asked)-1]
+}
+
+// A model assignment decides the launch and the resume, on the exact model the session
+// would run. No assignment at all changes nothing.
+func TestModelAssignmentDecidesTheLaunchAndTheResume(t *testing.T) {
+	t.Parallel()
+	const opus, sonnet = "claude-opus-5-5", "claude-sonnet-5-5"
+	harness := func(t *testing.T, access *fakeModelAccess) (*Module, model.TenantID, *fakeRunner) {
+		t.Helper()
+		m, tenant, fr, _ := callerQuestionsHarness(t, nil)
+		m.rt.ModelAccess = access
+		return m, tenant, fr
+	}
+
+	t.Run("a tenant with no grants launches as before", func(t *testing.T) {
+		access := &fakeModelAccess{}
+		m, tenant, fr := harness(t, access)
+		requireStatus(t, postRun(t, m, tenant, map[string]any{}), http.StatusCreated)
+		if launchCount(fr) != 1 {
+			t.Fatalf("launches = %d, want 1", launchCount(fr))
+		}
+	})
+
+	t.Run("an alias is asked as the exact model, and an unassigned one is refused", func(t *testing.T) {
+		access := &fakeModelAccess{governed: true, assigned: map[string]bool{sonnet: true}}
+		m, tenant, fr := harness(t, access)
+		w := postRun(t, m, tenant, map[string]any{"model": "opus"})
+		requireStatus(t, w, http.StatusForbidden)
+		if got, want := access.lastAsked(t), opus; got != want {
+			t.Fatalf("asked about %q, want %q", got, want)
+		}
+		if !bytes.Contains(w.Body.Bytes(), []byte("this model is not assigned to you")) {
+			t.Fatalf("the refusal must say why: %s", w.Body.String())
+		}
+		if launchCount(fr) != 0 {
+			t.Fatal("a refused launch started a child")
+		}
+	})
+
+	t.Run("the extended-context variant of an assigned model is that model", func(t *testing.T) {
+		access := &fakeModelAccess{governed: true, assigned: map[string]bool{sonnet: true}}
+		m, tenant, _ := harness(t, access)
+		requireStatus(t, postRun(t, m, tenant, map[string]any{"model": "sonnet[1m]"}), http.StatusCreated)
+		if got := access.lastAsked(t); got != sonnet {
+			t.Fatalf("asked about %q, want %q", got, sonnet)
+		}
+	})
+
+	t.Run("a withdrawn assignment stops the resume", func(t *testing.T) {
+		access := &fakeModelAccess{governed: true, assigned: map[string]bool{sonnet: true}}
+		m, tenant, _ := harness(t, access)
+		ref := stoppedRun(t, m, tenant, CreateRunParams{Model: sonnet})
+		access.withdraw(sonnet)
+		w := postResume(t, m, tenant, ref)
+		requireStatus(t, w, http.StatusForbidden)
+		if !bytes.Contains(w.Body.Bytes(), []byte("this model is not assigned to you")) {
+			t.Fatalf("the refusal must say why: %s", w.Body.String())
+		}
+	})
+
+	t.Run("a confined caller must name a model", func(t *testing.T) {
+		access := &fakeModelAccess{governed: true, assigned: map[string]bool{sonnet: true}}
+		m, tenant, runner, _, _, _, prof := boundHarness(t)
+		m.rt.ModelAccess = access
+		_, err := m.createRun(t.Context(), tenant, CreateRunParams{
+			Transport: TransportStreamJSON, Isolation: IsolationNative,
+			Actor: "user:d19", ActorKind: model.ActorUser, ProviderProfileRef: prof.Ref,
+			asks: m.principalAsks(t.Context(), tenant, auth.Principal{UserID: model.NewID()}),
+		})
+		var re *runErr
+		if !errors.As(err, &re) || re.status != http.StatusForbidden || !strings.Contains(re.msg, "choose a model") {
+			t.Fatalf("launch with no model = %v, want 403 asking for a model", err)
+		}
+		if launchCount(runner) != 0 {
+			t.Fatal("a refused launch started a child")
+		}
+	})
 }

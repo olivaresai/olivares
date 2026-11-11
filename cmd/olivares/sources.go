@@ -114,6 +114,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/vertex"
 	"github.com/olivaresai/olivares/connectors/xai"
 	"github.com/olivaresai/olivares/core/runtime"
+	conversion "github.com/olivaresai/olivares/core/runtime/documents"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/sdk"
 )
@@ -154,6 +155,8 @@ const defaultRosterSyncInterval = 15 * time.Minute
 // by OLIVARES_SOURCES_CONFIG. It is the single CB-1 wiring input for sources AND
 // identity roster providers.
 type sourcesConfig struct {
+	// DocumentOCR is an optional administrator-configured OCR endpoint.
+	DocumentOCR conversion.OCRConfig `json:"document_ocr,omitempty"`
 	// Sources are observation source connectors registered with the runtime.
 	Sources []sourceSpec `json:"sources"`
 	// Identity are identity connectors whose roster snapshot feeds governance

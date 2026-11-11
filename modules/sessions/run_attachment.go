@@ -211,7 +211,7 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var markdown []byte
-	if conversion.Supports("document." + ext) {
+	if m.supportsDocument("document." + ext) {
 		markdown, err = m.documentMarkdown(r.Context(), "document."+ext, data)
 		if errors.Is(err, conversion.ErrBusy) {
 			w.Header().Set("Retry-After", "2")
@@ -227,7 +227,7 @@ func (m *Module) handleRunAttachmentUpload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	// The declared type is a claim; the bytes decide. A file renamed to .png is not one.
-	if !conversion.Supports("document."+ext) && http.DetectContentType(data) != body.MediaType {
+	if conversion.IsImage("document."+ext) && http.DetectContentType(data) != body.MediaType {
 		writeJSON(w, http.StatusUnsupportedMediaType, errorBody("the file is not a "+strings.ToUpper(ext)+" image"))
 		return
 	}

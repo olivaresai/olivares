@@ -22,6 +22,9 @@
     "name": "Nombre",
     "kind": "Tipo",
     "key": "Clave",
+    "usedBy": "La usan",
+    "usedByUnread": "No se pudo leer qué perfiles usan cada clave.",
+    "usedByPartial": "Algunos perfiles no se leyeron: una clave puede tener más usuarios de los que se muestran.",
     "state": "Estado",
     "connection": "Conexión",
     "actions": "Acciones"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "Activo",
-    "revoked": "Revocado"
+    "revoked": "Revocado",
+    "disabled": "Desactivado"
   },
   "probe": {
     "never": "Sin probar",
@@ -70,7 +74,9 @@
     "testing": "Probando…",
     "rotate": "Rotar clave",
     "revoke": "Revocar",
-    "details": "Detalles"
+    "details": "Detalles",
+    "disable": "Desactivar",
+    "enable": "Activar"
   },
   "create": {
     "title": "Añadir un proveedor",
@@ -171,5 +177,9 @@
   "section": {
     "title": "Claves de API",
     "add": "Añadir una clave de API"
+  },
+  "stateChange": {
+    "disabled": "Proveedor desactivado. Los perfiles vinculados rechazan nuevas sesiones hasta que se vuelva a activar.",
+    "active": "Proveedor activado."
   }
 }

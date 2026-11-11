@@ -33,6 +33,7 @@
     "communicationsHandoffs": "ハンドオフ",
     "console": "管理",
     "sourceDiff": "ソースの差分",
+    "approvals": "承認",
     "permissions": "権限",
     "identity": "アイデンティティ",
     "vault": "ボールト",
@@ -155,7 +156,7 @@
     "updates": "このエンジンが実行しているバージョン、チャンネルの最新の署名付きリリース、そしてインストールする操作です",
     "logs": "エンジンのライブログストリーム。レベルとモジュールのフィルター、検索、一時停止",
     "sourceDiff": "接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します",
-    "agent-tools": "セッションが使うアカウントと APIキーを確認します。ツールのインストールとサインインはデプロイ管理者のみです",
+    "agent-tools": "セッションが使うアカウントを確認します。ツールのインストールとサインインはデプロイ管理者のみです",
     "storedBudgets": "保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。",
     "usage": "各アカウントの公式の 5 時間と週の上限（上限に近い順）と、今日のトークンとコスト。",
     "operations": "ホスト、そのディスク、稼働中のセッションとその使用量を、24 時間、7 日間、30 日間で表示します。"
@@ -344,9 +345,13 @@
     "startWithChoice": "この選択で新しいセッションを開始",
     "newWithOtherAccess": "別のアクセスで新しいセッション…",
     "askPlaceholder": "何でも質問できます。@ でコンテキスト、/ でコマンドとスキル",
+    "messagePlaceholder": "{{title}} へのメッセージ… @ ファイル · / コマンド",
     "modelPicker": "モデル: {{value}}",
-    "effortPicker": "推論レベル: {{value}}",
+    "modelEffortPicker": "モデル: {{model}}、推論レベル {{effort}}",
     "accessPicker": "アクセス: {{value}}",
+    "moreActions": "その他の操作",
+    "moreActionsStashed": "その他の操作（退避した下書きあり）",
+    "contextAction": "コンテキストと圧縮…",
     "accessKeeps": "この会話の次のターンからアクセスが変わります。",
     "queue": {
       "title": "待機中のメッセージ",
@@ -370,18 +375,31 @@
       "placeholder": "Enter でこのターンの後に送るメッセージとして待機させます",
       "placeholderSteer": "Enter でこのターンの後に待機、Ctrl+Enter で今すぐ割り込ませます",
       "discarded": "次のメッセージが待機中のまま、セッションが解放されました:",
-      "copy": "コピー"
-    }
+      "copy": "コピー",
+      "placeholderQueueKey": "{{key}} でこのターンの後に待機",
+      "placeholderSteerKey": "{{key}} で今すぐ割り込ませます"
+    },
+    "stash": "この下書きを退避",
+    "stashRestore": "退避した下書きを戻す",
+    "stashGone": "このセッションに保存されていないため、戻せませんでした: {{names}}",
+    "stashTooLarge": "この下書きは大きすぎて退避できません。上限は {{limit}} です。下書きはここに残ります。",
+    "stashNotKept": "この下書きを退避できませんでした。このブラウザーは訪問の間に何も保存しません。下書きはこのタブにだけ残ります。",
+    "stashNoRoom": "この下書きを退避できませんでした。このブラウザーに保存する空きがもうありません。何も削除されておらず、下書きはここに残ります。",
+    "stashDropped": "退避しました。空きを作るため、古いものから削除しました: {{words}}",
+    "stashTaken": "退避した下書きはもうありません。別のタブで戻されたか、1日が過ぎました。",
+    "plan": "プラン",
+    "planHint": "まずプラン: ツールは読み取りとプランの提案だけを行い、何も変更しません。次のメッセージから適用されます。"
   },
   "shell": {
     "more": "その他",
     "searchCommands": "検索とコマンド",
     "search": "検索",
+    "searchGo": "検索または移動…",
     "stopAll": "すべて停止",
     "workspaceCount": "ワークスペース: {{count}}",
     "rail": {
       "title": "セッション",
-      "all": "すべて",
+      "seeAll_other": "{{count}} 件のセッションをすべて表示",
       "groups": {
         "needsYou": "対応が必要",
         "working": "実行中",
@@ -431,13 +449,14 @@
     "killswitch": {
       "estateStopped": "すべてのエージェントを停止中",
       "estateBody": "2 つのユーザーアカウントが再開を承認するまで、エージェントは操作できません。",
-      "agentStops": "{{count}} 件のエージェント停止がアクティブ",
-      "agentStops_other": "{{count}} 件のエージェント停止がアクティブ",
+      "agentStops": "{{count}} 個のエージェント停止中",
+      "agentStops_other": "{{count}} 個のエージェント停止中",
       "none": "停止しているものはありません。セッションとエージェントは通常どおり動作しています。"
     },
     "status": {
       "label": "ステータス",
       "running_other": "開いているセッション {{count}} 件",
+      "needYou_other": "対応が必要 {{count}} 件",
       "usage": "{{tool}} の使用量",
       "fiveHour": "5時間",
       "week": "週",
@@ -448,7 +467,6 @@
     },
     "collapse": "ナビゲーションを折りたたむ",
     "expand": "ナビゲーションを展開",
-    "openNavigation": "ナビゲーションを開く",
     "closeNavigation": "ナビゲーションを閉じる"
   },
   "places": {
@@ -467,13 +485,20 @@
   "readOnlyNotice": "このページは閲覧できますが、変更はできません。変更できるのは組織の管理者です。",
   "business": {
     "sessions": "セッションの記録、自動化、オーケストレーション",
+    "providerAssignment": "人や部門に割り当てるプロバイダー",
+    "limitAssignment": "他の人や部門に設定する利用上限",
     "people": "ディレクトリ、部門、委任管理",
     "rules": "カスタムのポリシー、ロール、付与",
     "usage": "チームとプロジェクト別のコスト",
+    "usageBudgets": "警告し、セッションを減速またはブロックする予算",
     "securityCompliance": "コンプライアンスのフレームワークと証跡",
     "securityRedTeam": "レッドチームの実行と採点",
     "operationsDeploy": "エージェントを他のホストへデプロイ",
     "operationsResidency": "データレジデンシーとテナント",
-    "retentionSchedules": "保持スケジュールは Olivares Business でのみ適用されます。このエディションは保存するだけで、何もパージしません。"
+    "retentionSchedules": "保持スケジュールは Olivares AI Business でのみ適用されます。このエディションは保存するだけで、何もパージしません。"
+  },
+  "groups": {
+    "control": "ガバナンス",
+    "admin": "管理"
   }
 }

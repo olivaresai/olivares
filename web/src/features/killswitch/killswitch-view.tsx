@@ -1,14 +1,33 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from '@tanstack/react-query'
 import { ListTruncationBadge } from '@/features/_intel'
-import { CircleCheck, Download, OctagonAlert, OctagonX } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import {
+  Ban,
+  Download,
+  Inbox,
+  OctagonAlert,
+  OctagonX,
+  Power,
+  ScrollText,
+  Square,
+  Users,
+} from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Badge } from '@/components/ui/badge'
+import { BoxedList, BoxedListRow } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Notice } from '@/components/ui/notice'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
@@ -21,11 +40,12 @@ import { toast } from '@/components/ui/toaster'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { useAuth } from '@/lib/auth/context'
+import { cn } from '@/lib/utils'
 import { RelTime } from '@/features/shared/rel-time'
 import { killswitchApi, killswitchKeys } from './api'
 import { WRAP_HEADER } from './columns'
 import { StopScopeCell, StopSourceCell, StopStateBadge } from './components'
-import { StopAgentMenu, StopAllAction } from './engage-card'
+import { StopAgentAction, StopAllAction } from './engage-card'
 import { downloadEvidencePack, evidenceFilename } from './evidence'
 import { GuardianSection } from './guardian'
 import { LiveRunsSection } from './live-runs'
@@ -43,14 +63,14 @@ const KILLSWITCH_PAGE = 1000
 const KILLSWITCH_POLL_MS = 12_000
 
 /**
- * KillswitchView (registry id 'killswitch') is the estate emergency-stop console:
- * the live stop posture, ONE "Stop all agents" verb (deliberately cheap server-side;
- * a single-agent stop sits under More), the live session list that flips to Stopped,
- * the dual-control re-enable loop, the forced post-review, the downloadable
- * incident evidence pack and the guardian containment rules. The web is a thin
- * client — every gate decision, floor and sentinel lives in the engine
- * (modules/governance/killswitch.go); this view renders DTOs and dispatches
- * privileged, audited, confirmed operations.
+ * KillswitchView (registry id 'killswitch') is the estate emergency-stop console: the
+ * state block (is anything stopped, with Stop one agent and Stop all agents beside it;
+ * stopping is deliberately cheap server-side), what stopping every agent does and who
+ * starts it again, the live session list that flips to Stopped, the history with the
+ * dual-control re-enable loop, the forced post-review and the downloadable incident
+ * evidence pack, and the guardian containment rules. The web is a thin client — every
+ * gate decision, floor and sentinel lives in the engine (modules/governance/killswitch.go);
+ * this view renders DTOs and dispatches privileged, audited, confirmed operations.
  */
 export default function KillswitchView() {
   const { t } = useTranslation(['killswitch', 'common'])
@@ -66,22 +86,40 @@ export default function KillswitchView() {
   })
 
   return (
-    <div className="flex flex-col gap-5 pb-10">
-      <PageHeader
-        title={t('title')}
-        description={t(canAdmin ? 'subtitle' : 'subtitleNoStop')}
-        icon={OctagonAlert}
-        actions={canAdmin ? <StopAgentMenu /> : undefined}
-        primaryAction={
+    <div className="flex flex-col gap-6 pb-10">
+      {/* The tab names the page: its heading stays for assistive technology, and the
+          stops sit in the state block rather than in a header verb. */}
+      <PageHeader title={t('title')} titleHidden />
+
+      <StopState
+        query={stateQ}
+        actions={
           canAdmin ? (
-            <StopAllAction estateStopped={!!stateQ.data?.estate_stopped} />
+            <>
+              <StopAgentAction />
+              {/* A failed read closes nothing: an emergency stop never waits
+                  on a read, and a stop already on answers 409. */}
+              <StopAllAction
+                estateStopped={!stateQ.isError && !!stateQ.data?.estate_stopped}
+              />
+            </>
           ) : undefined
         }
       />
 
-      {stateQ.data && <StateBanner state={stateQ.data} />}
+      <StopEffects />
 
-      {canRuns && <LiveRunsSection active={stateQ.data?.active ?? []} />}
+      <Notice icon={<Users />}>
+        {t(canAdmin ? 'subtitle' : 'subtitleNoStop')}
+      </Notice>
+
+      {/* The stop state says which sessions a stop ended: a failed read marks
+          none, and the state block above says it failed, with Retry. */}
+      {canRuns && (
+        <LiveRunsSection
+          active={(!stateQ.isError && stateQ.data?.active) || []}
+        />
+      )}
 
       <StopsSection canAdmin={canAdmin} />
 
@@ -90,60 +128,147 @@ export default function KillswitchView() {
   )
 }
 
-/** The live posture banner — what an operator checks first in an incident. An
- *  estate stop is loud (danger); agent stops are a warning; the calm green line
- *  answers "is anything stopped?" at a glance. */
-function StateBanner({ state }: { state: KillSwitchStateDTO }) {
-  const { t } = useTranslation('killswitch')
-  const estateStop = state.active.find((s) => s.scope_kind === 'estate')
-  const agentStops = state.active.filter((s) => s.scope_kind === 'agent')
-
-  if (state.estate_stopped && estateStop) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col gap-1.5 rounded-lg border border-danger-line bg-danger-soft p-4"
-      >
-        <p className="flex items-center gap-2 font-semibold text-danger">
-          <OctagonX className="size-4 shrink-0" aria-hidden />
-          {t('banner.estateTitle')}
-        </p>
-        <p className="text-body text-foreground">{t('banner.estateBody')}</p>
-        <p className="text-caption text-muted-foreground">
-          {t('banner.engagedBy')}{' '}
-          <span className="font-mono">{estateStop.engaged_by || '—'}</span>
-          {' · '}
-          <RelTime ts={estateStop.engaged_at} />
-          {estateStop.reason ? ` · ${estateStop.reason}` : ''}
-          {' · '}
-          {t('banner.revoked', { count: estateStop.revoked_approvals })}
-        </p>
-      </div>
-    )
-  }
-
-  if (agentStops.length > 0) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col gap-1.5 rounded-lg border border-warning-line bg-warning-soft p-4"
-      >
-        <p className="flex items-center gap-2 font-medium text-warning">
-          <OctagonAlert className="size-4 shrink-0" aria-hidden />
-          {t('banner.agentCount', { count: agentStops.length })}
-        </p>
-        <p className="text-caption text-muted-foreground">
-          {t('banner.agentBody')}
-        </p>
-      </div>
-    )
-  }
+/** The state block: whether anything is stopped, in one title and one sentence, with the
+ *  stops beside it. A stop is an alert, its colour on the icon and its words in the title;
+ *  the calm state answers "is anything stopped?" at a glance. A read that failed, the
+ *  first or a later poll, says so in place of the last answer: a stale "Nothing is
+ *  stopped" is the one sentence this page must never show. The stops stay offered while
+ *  the state cannot be read: an emergency stop never waits on a read. */
+function StopState({
+  query,
+  actions,
+}: {
+  query: UseQueryResult<KillSwitchStateDTO>
+  actions?: ReactNode
+}) {
+  const { t } = useTranslation(['killswitch', 'common'])
+  const state = query.isError ? undefined : query.data
+  const estateStop = state?.estate_stopped
+    ? state.active.find((s) => s.scope_kind === 'estate')
+    : undefined
+  const agentStops =
+    state?.active.filter((s) => s.scope_kind === 'agent').length ?? 0
+  const Icon = estateStop ? OctagonX : agentStops > 0 ? OctagonAlert : Power
+  const tone = !state
+    ? 'text-muted-foreground'
+    : estateStop
+      ? 'text-danger'
+      : agentStops > 0
+        ? 'text-warning'
+        : 'text-success'
 
   return (
-    <p className="flex items-center gap-2 text-body text-muted-foreground">
-      <CircleCheck className="size-4 shrink-0 text-success" aria-hidden />
-      {t('banner.none')}
-    </p>
+    <Card role="region" aria-labelledby="ks-state-title">
+      <CardContent>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div
+            aria-hidden
+            className="flex size-12 shrink-0 items-center justify-center rounded-card bg-muted"
+          >
+            <Icon className={cn('size-6', tone)} />
+          </div>
+          <div
+            role={estateStop || agentStops > 0 ? 'alert' : undefined}
+            className="min-w-0 flex-1"
+          >
+            {state ? (
+              <>
+                <h2
+                  id="ks-state-title"
+                  className="font-display text-title text-foreground"
+                >
+                  {estateStop
+                    ? t('banner.estateTitle')
+                    : agentStops > 0
+                      ? t('banner.agentCount', { count: agentStops })
+                      : t('banner.noneTitle')}
+                </h2>
+                <p className="mt-1 text-body text-muted-foreground">
+                  {estateStop
+                    ? t('banner.estateBody')
+                    : agentStops > 0
+                      ? t('banner.agentBody')
+                      : t('banner.noneBody')}
+                </p>
+                {estateStop ? (
+                  <p className="mt-1 text-caption text-muted-foreground">
+                    {t('banner.engagedBy')}{' '}
+                    <span className="font-mono">
+                      {estateStop.engaged_by || '—'}
+                    </span>
+                    {' · '}
+                    <RelTime ts={estateStop.engaged_at} />
+                    {estateStop.reason ? ` · ${estateStop.reason}` : ''}
+                    {' · '}
+                    {t('banner.revoked', {
+                      count: estateStop.revoked_approvals,
+                    })}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <h2 id="ks-state-title" className="sr-only">
+                  {t('title')}
+                </h2>
+                {query.isError ? (
+                  <QueryErrorState
+                    error={query.error}
+                    retry={() => void query.refetch()}
+                  />
+                ) : (
+                  <p role="status" className="text-body text-muted-foreground">
+                    {t('common:states.loading')}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          {actions ? (
+            <div className="flex flex-wrap items-center gap-2">{actions}</div>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** What stopping every agent does, in the engine's order: said before anyone stops. */
+const EFFECTS = [
+  { key: 'sessions', icon: Square },
+  { key: 'actions', icon: Ban },
+  { key: 'approvals', icon: Inbox },
+  { key: 'ledger', icon: ScrollText },
+] as const
+
+function StopEffects() {
+  const { t } = useTranslation('killswitch')
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 id="ks-effects-title" className="text-heading">
+        {t('effects.title')}
+      </h2>
+      <BoxedList role="list" aria-labelledby="ks-effects-title">
+        {EFFECTS.map(({ key, icon: Icon }) => (
+          <BoxedListRow key={key} role="listitem">
+            <span
+              aria-hidden
+              className="flex size-8 shrink-0 items-center justify-center rounded-card bg-muted text-muted-foreground"
+            >
+              <Icon className="size-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-body font-medium text-foreground">
+                {t(`effects.${key}`)}
+              </span>
+              <span className="block text-caption text-muted-foreground">
+                {t(`effects.${key}Hint`)}
+              </span>
+            </span>
+          </BoxedListRow>
+        ))}
+      </BoxedList>
+    </section>
   )
 }
 

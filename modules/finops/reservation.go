@@ -533,7 +533,7 @@ func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims 
 			continue
 		}
 		spec, enforcing := specs[p.ID]
-		if !enforcing || (spec.Dimension != "workspace" && !spec.matches(attr)) {
+		if !enforcing || spec.exempts(attr.Actor) || (spec.Dimension != "workspace" && !spec.matches(attr)) {
 			continue // alert-only never denies; non-matching budgets don't apply
 		}
 		pStart, hasLower := periodStart(spec.Period, now)

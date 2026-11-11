@@ -8,7 +8,11 @@
 // where it is read: the answer goes to the session as the person's next message, the same
 // request the reply field sends (same permission, same audit), so there is no second way
 // to talk to a session.
-import { useIsMutating, useMutation } from '@tanstack/react-query'
+import {
+  useIsMutating,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   Check,
   Circle,
@@ -21,14 +25,16 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
 import { sendTurn } from '@/features/agentops/session-turn'
-import type { RunDTO } from '@/features/agentops/types'
+import { BUILD_MODE, PLAN_MODE, type RunDTO } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import type { ToolCard, ToolQuestion } from './conversation-frames'
 import { MarkdownText } from './markdown-text'
+import { sessionsKeys } from './api'
 import { sentPlace, sentTurnsPartition, useSentTurns } from './sent-turns'
 import type { useConversationTasks } from './use-conversation-tasks'
 import './i18n'
@@ -73,6 +79,40 @@ function CardFrame({
   )
 }
 
+/**
+ * ONE SEND FROM THE THREAD, for an answer and a notice's Continue: the line goes as the
+ * person's next message, in the composer's turn queue and through the send every
+ * conversation surface uses, and is kept as theirs (a slash command is answered by the
+ * tool, not shown as a message). A refusal is the composer's: the reason in a toast.
+ */
+export function useThreadSend(
+  run: RunDTO,
+  failed: string,
+  onSent: (text: string) => void,
+) {
+  const { activeTenant: tenant } = useAuth()
+  const turnQueue = ['session-turn', tenant, run.run_ref]
+  const sendsInQueue = useIsMutating({ mutationKey: turnQueue })
+  const send = useMutation({
+    mutationKey: turnQueue,
+    mutationFn: async (text: string) => {
+      const partition = sentTurnsPartition()
+      const place = sentPlace(run.run_ref, text)
+      await sendTurn(run, text)
+      return { partition, place }
+    },
+    retry: false,
+    onSuccess: ({ partition, place }, text) => {
+      onSent(text)
+      if (text.trim() && !text.trimStart().startsWith('/'))
+        useSentTurns.getState().note(partition, run.run_ref, { text, ...place })
+    },
+    onError: (error: unknown) =>
+      toast.error(launchFailureMessage(error, failed)),
+  })
+  return { send, sendsInQueue }
+}
+
 function QuestionBody({
   questions,
   run,
@@ -88,28 +128,11 @@ function QuestionBody({
     questions.map(() => []),
   )
   const [sent, setSent] = useState<string | null>(null)
-  const { activeTenant: tenant } = useAuth()
-  const turnQueue = ['session-turn', tenant, run.run_ref]
-  const sendsInQueue = useIsMutating({ mutationKey: turnQueue })
-  const send = useMutation({
-    mutationKey: turnQueue,
-    mutationFn: async (text: string) => {
-      const partition = sentTurnsPartition()
-      const place = sentPlace(run.run_ref, text)
-      await sendTurn(run, text)
-      return { partition, place }
-    },
-    retry: false,
-    onSuccess: ({ partition, place }, text) => {
-      setSent(text)
-      if (text.trim() && !text.trimStart().startsWith('/'))
-        useSentTurns.getState().note(partition, run.run_ref, { text, ...place })
-    },
-    onError: (error: unknown) =>
-      toast.error(
-        launchFailureMessage(error, t('conversation.card.sendFailed')),
-      ),
-  })
+  const { send, sendsInQueue } = useThreadSend(
+    run,
+    t('conversation.card.sendFailed'),
+    setSent,
+  )
   const choose = (q: number, label: string) =>
     setPicked((prev) =>
       prev.map((own, i) => {
@@ -215,6 +238,57 @@ function QuestionBody({
   )
 }
 
+/** Implement: a plan proposed under plan mode is carried out in the same session. The
+ * session is resumed for building, then told to go; the plan stays the one it read. */
+function ImplementPlan({
+  run,
+  answerable,
+}: {
+  run: RunDTO
+  answerable: boolean
+}) {
+  const { t } = useTranslation('sessions')
+  const { activeTenant: tenant } = useAuth()
+  const turnQueue = ['session-turn', tenant, run.run_ref]
+  const sendsInQueue = useIsMutating({ mutationKey: turnQueue })
+  const qc = useQueryClient()
+  const implement = useMutation({
+    mutationKey: turnQueue,
+    mutationFn: async () => {
+      const text = t('conversation.card.implementText')
+      const partition = sentTurnsPartition()
+      const place = sentPlace(run.run_ref, text)
+      await sendTurn(await agentOpsApi.resume(run.run_ref, BUILD_MODE), text)
+      return { partition, place, text }
+    },
+    retry: false,
+    onSuccess: ({ partition, place, text }) => {
+      useSentTurns.getState().note(partition, run.run_ref, { text, ...place })
+      // The session now runs under the build mode: the screens that name it read again.
+      void qc.invalidateQueries({ queryKey: agentOpsKeys.all(tenant) })
+      void qc.invalidateQueries({ queryKey: sessionsKeys.all(tenant) })
+    },
+    onError: (error: unknown) =>
+      toast.error(
+        launchFailureMessage(error, t('conversation.card.sendFailed')),
+      ),
+  })
+  if (!answerable || run.permission_mode !== PLAN_MODE) return null
+  return (
+    <div>
+      <Button
+        size="sm"
+        disabled={
+          implement.isPending || implement.isSuccess || sendsInQueue > 0
+        }
+        onClick={() => implement.mutate()}
+      >
+        {t('conversation.card.implement')}
+      </Button>
+    </div>
+  )
+}
+
 /** The card a question, plan or todo call is. `answerable`: the session is live, the
  * person may write to it, and nothing was said after the question. */
 export function ConversationCard({
@@ -249,6 +323,7 @@ export function ConversationCard({
         testid="conversation-card-plan"
       >
         <MarkdownText text={card.plan} />
+        <ImplementPlan run={run} answerable={answerable} />
       </CardFrame>
     )
   const done = card.todos.filter((x) => x.status === 'completed').length

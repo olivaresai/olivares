@@ -43,6 +43,7 @@ import {
 import { useAuth } from '@/lib/auth/context'
 import { isGlobalAccount } from '@/lib/auth/rbac'
 import type { ViewGate } from '@/features/navigation/model'
+import { useViewOpens } from '@/features/navigation/places'
 import { moduleEnabled, useModulesStore } from '@/stores/modules'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -110,6 +111,8 @@ function stateOfObservation(access: CapabilityAccess): ViewAccessState {
  */
 export function useViewAccess(): ViewAccess {
   const { can, principal, activeTenant, confinedWorkspace } = useAuth()
+  // A view placed above the edition held here leaves the navigation (places.ts).
+  const opens = useViewOpens()
   const modulesOff = useModulesStore((s) => s.off)
   const workspace = useWorkspaceStore((s) => s.activeWorkspace)
   // The declared surface question of the one capability view, or null when this tree has
@@ -183,12 +186,14 @@ export function useViewAccess(): ViewAccess {
     // that permission's; the view's own module is already asked above.
     const navigable: ViewGate = (view, section) =>
       state(view) !== 'denied' &&
+      opens(view) &&
       moduleEnabled(modulesOff, view.permission, view.id) &&
       (!section ||
         (can(section.requires) && moduleEnabled(modulesOff, section.requires)))
     return { state, navigable, listed: navigable }
   }, [
     can,
+    opens,
     observation.access,
     modulesOff,
     consoleWorkspace,

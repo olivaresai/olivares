@@ -35,10 +35,10 @@ import { ScrollEdgeHints } from './scroll-edges'
 import { useScrollEdges } from '@/lib/hooks/use-scroll-edges'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { EmptyState } from '@/components/ui/empty-state'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StateBlock } from '@/components/ui/state-block'
 import { isEvidenceUnavailable } from '@/lib/api/errors'
 import { DENSITY_ROW, usePreferencesStore } from '@/stores/preferences'
 
@@ -285,6 +285,7 @@ export function DataTable<TData extends RowData>({
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   const gridId = useId()
   const stateId = `${gridId}-state`
   const controlledSelectedIds = selectedIds ?? EMPTY_SELECTED_IDS
@@ -395,9 +396,20 @@ export function DataTable<TData extends RowData>({
     data.length === 0 ? (
       empty
     ) : (
-      <EmptyState
-        description={t('states.noResultsHint')}
+      // Nothing about the product is empty here: no mark, the search that hides the
+      // rows, how many it hides, and the way back.
+      <StateBlock
+        state="filtered"
+        size="panel"
         title={t('states.noResults')}
+        filters={<q>{globalFilter}</q>}
+        hiddenCount={data.length}
+        onClear={() => {
+          setGlobalFilter('')
+          onSearchChange?.('')
+          // The pressed button leaves; the keyboard goes back to the search.
+          searchRef.current?.focus()
+        }}
       />
     )
   ) : null
@@ -718,11 +730,11 @@ export function DataTable<TData extends RowData>({
       aria-rowindex={dataRowIndex + 2}
       aria-selected={selectable ? controlledSelectedIds.has(row.id) : undefined}
       className={cn(
-        'border-b border-l-2 border-l-transparent border-border transition-colors last:border-b-0 hover:bg-surface',
-        clickable && 'cursor-pointer',
+        'border-b border-border transition-colors last:border-b-0 hover:bg-hover',
+        clickable && 'cursor-pointer active:bg-[var(--pressed)]',
         ((selectable && controlledSelectedIds.has(row.id)) ||
           (nav && active?.r === dataRowIndex)) &&
-          'border-l-accent bg-surface',
+          'bg-active hover:bg-active',
         rowClassName?.(row.original, dataRowIndex),
       )}
       onClick={
@@ -758,7 +770,7 @@ export function DataTable<TData extends RowData>({
               //    A cell that genuinely wants two lines opts out in its own `cell`
               //    renderer (`whitespace-normal`), which is where that decision is
               //    legible. The default is the common case.
-              'px-3 align-middle whitespace-nowrap outline-none',
+              'px-4 align-middle whitespace-nowrap outline-none',
               rowH,
               // A CELL THAT HOLDS A CONTROL SPENDS NO PADDING ON IT — the same rule
               // `StaticTable` carries, for the same measurement. The row is 36 px and
@@ -768,8 +780,9 @@ export function DataTable<TData extends RowData>({
               // 40.5 → 36 with the text cells untouched, which is what says the padding
               // is the part with no work to do.
               'has-[button]:py-0 has-[a]:py-0 has-[input]:py-0 has-[select]:py-0',
-              isActive &&
-                'bg-surface ring-2 ring-ring ring-offset-2 ring-offset-background',
+              // The focused cell's ring sits inside it, so it keeps the cell's shape and
+              // never covers the neighbor.
+              isActive && 'ring-2 ring-focus ring-inset',
               (cell.column.columnDef.meta as { className?: string } | undefined)
                 ?.className,
             )}
@@ -796,6 +809,7 @@ export function DataTable<TData extends RowData>({
             <div className="relative max-w-xs flex-1">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
+                ref={searchRef}
                 value={globalFilter}
                 onChange={(e) => {
                   const value = e.target.value
@@ -812,7 +826,8 @@ export function DataTable<TData extends RowData>({
         </div>
       )}
 
-      <div className="relative overflow-hidden rounded-lg border border-border bg-surface">
+      {/* A raised frame on the page; inside a card, which already lifts, the table lies flat. */}
+      <div className="relative overflow-hidden rounded-card bg-surface shadow-[var(--shadow-card)] [[data-slot=card]_&]:shadow-none">
         <ScrollEdgeHints edges={scrollEdges} />
         <div
           ref={scrollRef}
@@ -897,7 +912,12 @@ export function DataTable<TData extends RowData>({
                           // header that wraps makes the header row taller than the
                           // density it declares, and `scroll-pt-*` reserves the density,
                           // so a focused cell scrolled to the top went under it.
-                          'bg-muted px-3 text-left align-middle text-caption font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase',
+                          //
+                          // A2: a caption heading at 12/700 on a tint mixed INTO the surface,
+                          // so the sticky strip stays opaque over the rows scrolling under it;
+                          // the sorted column takes the primary ink.
+                          'bg-[color-mix(in_srgb,var(--text)_4%,var(--surface))] px-4 text-left align-middle text-overline tracking-normal whitespace-nowrap text-muted-foreground',
+                          'aria-[sort=ascending]:text-text aria-[sort=descending]:text-text',
                           headH,
                           sticky && 'sticky top-0 z-10',
                           (
@@ -921,20 +941,17 @@ export function DataTable<TData extends RowData>({
                           <button
                             type="button"
                             onClick={header.column.getToggleSortingHandler()}
-                            className="inline-flex min-h-6 items-center gap-1 rounded-sm uppercase outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                            className="inline-flex min-h-6 items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             {flexRender(
                               header.column.columnDef.header,
                               header.getContext(),
                             )}
                             {sorted === 'asc' ? (
-                              <ArrowUp
-                                className="size-3 text-accent-text"
-                                aria-hidden="true"
-                              />
+                              <ArrowUp className="size-3" aria-hidden="true" />
                             ) : sorted === 'desc' ? (
                               <ArrowDown
-                                className="size-3 text-accent-text"
+                                className="size-3"
                                 aria-hidden="true"
                               />
                             ) : (
@@ -1024,7 +1041,7 @@ function SkeletonRows({
       {Array.from({ length: rows }).map((_, r) => (
         <tr key={r} className="border-b border-border last:border-0">
           {Array.from({ length: cols }).map((__, c) => (
-            <td key={c} className={cn('px-3 align-middle', rowH)}>
+            <td key={c} className={cn('px-4 align-middle', rowH)}>
               <Skeleton className="h-3.5 w-[60%]" />
             </td>
           ))}
@@ -1054,6 +1071,7 @@ function TableError({
     <QueryErrorState
       error={error}
       retry={onRetry}
+      size="panel"
       title={unknown ? unavailableTitle : undefined}
       description={unknown ? unavailableDescription : undefined}
     />

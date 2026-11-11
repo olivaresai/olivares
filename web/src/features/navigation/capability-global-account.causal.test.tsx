@@ -93,6 +93,15 @@ function mounted() {
     actor: 'user:0192f2c0-eeee-7000-8000-00000000000a',
     superadmin: auth.superadmin,
   })
+  // The shell's server-info read has answered before any route renders: the route gate
+  // and the navigation take the edition held here from it, and it asks no question.
+  client.setQueryData(queryKeys.serverInfo, {
+    version: 'v-test-global-account',
+    engine: 'sqlite',
+    setup_required: false,
+    edition: 'community',
+    license: { status: 'none', licensee: '' },
+  })
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   )

@@ -17,21 +17,23 @@ import (
 func TestSessionPresetDecisionPerPreset(t *testing.T) {
 	allow, ask, deny := claude.DecisionAllow, claude.DecisionAsk, claude.DecisionDeny
 	for _, tc := range []struct {
-		preset                string
-		read, write, anything string
+		preset                      string
+		read, write, command, other string
 	}{
-		{sessions.PresetReadOnly, allow, deny, deny},
-		{sessions.PresetAsk, allow, ask, ask},
-		{sessions.PresetEditsOnly, allow, allow, ask},
-		{sessions.PresetEditsAndCommands, allow, allow, allow},
+		{sessions.PresetReadOnly, allow, deny, deny, deny},
+		{sessions.PresetAsk, allow, ask, ask, ask},
+		{sessions.PresetEditsOnly, allow, allow, ask, ask},
+		// "Other tools are refused" holds for every tool, not only for Claude Code's
+		// dontAsk allowlist.
+		{sessions.PresetEditsAndCommands, allow, allow, allow, deny},
 		// Auto adds nothing: the tool's own reviewed automatic mode decides, and the live
 		// policy, the kill switch and the audit still apply above this table. Without this
 		// case every Auto tool call on Claude Code would be refused as an unknown preset.
-		{sessions.PresetAuto, allow, allow, allow},
-		{sessions.PresetFull, allow, allow, allow},
-		{sessions.PresetCustom, allow, allow, allow},
+		{sessions.PresetAuto, allow, allow, allow, allow},
+		{sessions.PresetFull, allow, allow, allow, allow},
+		{sessions.PresetCustom, allow, allow, allow, allow},
 	} {
-		for mode, want := range map[string]string{"read": tc.read, "write": tc.write, "exec": tc.anything} {
+		for mode, want := range map[string]string{ActionRead: tc.read, ActionWrite: tc.write, ActionCommand: tc.command, "unknown": tc.other} {
 			got, err := SessionPresetDecision(tc.preset, mode)
 			if err != nil || got != want {
 				t.Errorf("SessionPresetDecision(%q, %q) = %q, %v; want %q", tc.preset, mode, got, err, want)

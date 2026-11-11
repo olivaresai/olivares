@@ -275,6 +275,16 @@ func (b *Bridge) Cred(tenant model.TenantID) (ServiceCred, bool) {
 	return c, ok
 }
 
+// ReuseWindow is how long after its decision gateOnce reuses an approved grant of
+// tenant (withinGrant over the tenant's ExpiresIn); zero when the tenant has no gate.
+func (b *Bridge) ReuseWindow(tenant model.TenantID) time.Duration {
+	cred, ok := b.Cred(tenant)
+	if !ok || cred.ExpiresIn <= 0 {
+		return 0
+	}
+	return time.Duration(cred.ExpiresIn) * time.Second
+}
+
 // ProviderCred returns the approval windows for a provider permission prompt. Those
 // prompts propose as the session principal through the local service and never use
 // a service token, so the outbound tenant list does not gate them.

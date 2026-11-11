@@ -42,18 +42,22 @@ export const PERMISSION_MODES: PermissionMode[] = [
   'bypassPermissions',
 ]
 
+/** Plan first: the tool reads and proposes, and changes nothing. */
+export const PLAN_MODE: PermissionMode = 'plan'
+/** The mode a session builds in: the engine's "Edits and commands" choice, a template
+ * over `dontAsk`. Plan first returns to it, and a plan is implemented under it. */
+export const BUILD_MODE: PermissionMode = 'dontAsk'
+
 /** `--effort` levels (GA set). `ultracode` is a session-orchestration mode, NOT an
  * effort value, so it is deliberately absent (matches the backend validation). */
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export const EFFORT_LEVELS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-/** A permission mode is CRITICAL (drives the HITL + recording floor) when it removes
- * the per-tool prompt. Used to warn before launch — the backend is the source of truth. */
-export const CRITICAL_PERMISSION_MODES: PermissionMode[] = [
-  'dontAsk',
-  'bypassPermissions',
-]
+/** The mode the engine asks a second person to approve before a launch runs it: dontAsk,
+ * unless under a built-in template with an allowlist (the launch checks that). Full and
+ * Auto are an administrator's own choice and need none (isCriticalLaunch, cmd/olivares). */
+export const CRITICAL_PERMISSION_MODES: PermissionMode[] = ['dontAsk']
 
 /** The answer of POST and DELETE /runs/{ref}/pin: the signed-in person's pin state. */
 export interface RunPinDTO {
@@ -257,6 +261,9 @@ export interface RunDTO {
   resume_cancelled?: boolean
   resume_at?: string
   limit?: RunLimit
+  /** The last turn ended on a provider error that is not a limit, such as a refused
+   * request. The run stays open; absent again after a later turn succeeds. */
+  turn_failed?: boolean
   /** What this session's turns metered, summed over its launches. ABSENT means the
    * tool reported nothing, which is unknown, never zero; a cost is the tool's own
    * figure or the list price of a turn it did not price: an estimate. */
@@ -370,6 +377,9 @@ export interface ProviderProfileDTO {
   }[]
   /** The hosts a confined session may reach beside its provider. */
   session_egress_hosts?: string[]
+  /** Claude Code only: the token count its sessions compact at. Absent is the tool's
+   * own default. */
+  auto_compact_window?: number
   created_at?: string
   updated_at?: string
   retired_at?: string
@@ -561,6 +571,8 @@ export interface PatchProfileRequest {
   provider_record_ref?: string
   /** Omitted preserves the grant; explicit null revokes its session authority. */
   session_work_grant?: SessionWorkGrantRequest | null
+  /** Claude Code's auto-compact window in tokens (100000 to 1000000); 0 withdraws it. */
+  auto_compact_window?: number
 }
 
 /** One source→profile binding (GET /provider-source-bindings): ONE configured source,
@@ -623,9 +635,14 @@ export interface ProviderAccountDTO {
   identity: string
   identity_source: 'none' | (string & {})
   last_login_at?: string
+  /** The plan the account's tool last reported, raw (`max`, `promax`). Absent is unknown. */
+  plan?: string
   /** The windows the account's tool last reported (Claude Code and Codex): `five_hour`,
    * `seven_day`, `seven_day:<model>` or a name of the tool's own. Absent is unknown. */
   usage?: ProviderAccountUsage[]
+  /** Claude Code only: the token count its sessions compact at. Absent is the tool's
+   * own default. */
+  auto_compact_window?: number
   created_at: string
   updated_at: string
 }
@@ -872,6 +889,10 @@ export interface CreateRunRequest {
    * workspace's repository instead of its current commit (the work a handoff names).
    * Sent only when a handoff's start was chosen. */
   worktree_from?: string
+  /** With `worktree`: start the worktree with the files a turn of another of the person's
+   * sessions in the same folder held when it began (`turn` is the checkpoint's `seq`).
+   * Typed here until the engine publishes it. */
+  from_checkpoint?: { run: string; turn: number }
   /** The page of a GitHub issue or pull request to start from. It implies `worktree` and
    * names the branch after the item; the launch reads the item first (see
    * `agentOpsApi.sourceItem`) and sends its title and body as the first message. */
@@ -914,13 +935,26 @@ export interface SecretEnvRef {
 }
 
 /** A shell the person opened in a folder: its id and what the server holds it to. */
+/** The caller's own open terminals in a folder, oldest first. */
+export interface TerminalListDTO {
+  items: {
+    terminal: string
+    confinement: string
+    started_at: string
+    /** The shell's name, such as bash. */
+    shell?: string
+  }[]
+}
+
 export interface TerminalDTO {
   terminal: string
   /** How the shell is confined; the server refuses to start one it cannot confine. */
   confinement: string
-  /** Seconds without input or output before the shell ends. */
+  /** The shell's name, such as bash. */
+  shell?: string
+  /** Always 0: a shell has no idle limit. Kept for clients that read it. */
   idle_seconds: number
-  /** Seconds a closed browser tab may take to come back to the same shell. */
+  /** Always 0: a shell stays for the person to come back to. Kept for clients that read it. */
   reconnect_seconds: number
 }
 
@@ -1027,6 +1061,8 @@ export interface FileReadResponse {
   truncated?: boolean
   sensitivity?: SensitivityHit[]
   sha256?: string
+  /** The version a save sends back as If-Match; an engine without versions sends none. */
+  etag?: string
 }
 
 /** A confirmed write (PUT .../files/raw). Content is anchored by hash, never echoed. */
@@ -1037,6 +1073,8 @@ export interface WriteResponse {
   created: boolean
   /** The DLP labels a read of the same bytes shows (classes, never the matched values). */
   sensitivity?: SensitivityHit[]
+  /** The version this write made, for the next save's If-Match; an engine without versions sends none. */
+  etag?: string
 }
 
 // --- Attach stream frames (GET /runs/{ref}/attach, SSE) --------------------------
@@ -1119,19 +1157,25 @@ export interface RunCheckpointDTO {
   /** The message that started the turn; `clipped` when it is only the start of it. */
   prompt: string
   clipped: boolean
+  /** The id of the accepted input that began the turn; the message that is that input
+   * carries the same. Absent from an engine that does not name it. */
+  input_id?: string
   at: string
   /** The newest turn until the next starts: its files are the changes so far. */
   open: boolean
-  files: { path: string; status: WorktreeDiffStatus }[]
+  files: WorktreeDiffFileDTO[]
   truncated: boolean
 }
 
 /** GET /v1/m/sessions/runs/{ref}/checkpoints: the session's turns, oldest first.
- * `available` is false, with a `reason`, when its folder cannot be checkpointed. */
+ * `available` is false, with a `reason`, when its folder cannot be checkpointed.
+ * `files` is what the folder differs by now from the start of the first turn. */
 export interface RunCheckpointsDTO {
   available: boolean
   reason?: string
   turns: RunCheckpointDTO[]
+  files: WorktreeDiffFileDTO[]
+  truncated: boolean
 }
 
 /** POST /v1/m/sessions/runs/{ref}/checkpoints/{seq}/rewind: what was put back. */
@@ -1152,14 +1196,27 @@ export interface RunChangedFileDTO {
 
 export type WorktreeDiffStatus = 'added' | 'modified' | 'deleted'
 
+/** One changed path between two trees; `added` and `removed` count its lines and are
+ * absent for a binary file (and for a turn kept before the engine counted them). */
+export interface WorktreeDiffFileDTO {
+  path: string
+  status: WorktreeDiffStatus
+  added?: number
+  removed?: number
+}
+
 /** GET /v1/m/sessions/runs/{ref}/diff: the paths the session's worktree branch changed
  * since it left the workspace's current commit (committed work only). `base` and `head`
- * are full commit ids. */
+ * are full commit ids. For a session that works in its Git folder directly the answer
+ * has `working_tree: true`: `base` is the folder's last commit, `head` is "", the other
+ * side is the folder as it is now, and `branch` is "" when that commit is detached. */
 export interface RunWorktreeDiffDTO {
   branch: string
   base: string
   head: string
-  files: { path: string; status: WorktreeDiffStatus }[]
+  /** Absent for a session's own worktree branch. */
+  working_tree?: boolean
+  files: WorktreeDiffFileDTO[]
   truncated: boolean
 }
 

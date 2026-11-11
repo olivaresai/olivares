@@ -37,7 +37,7 @@
     "workspaces": "Espacios de trabajo",
     "deploy": "Despliegue y actualizaciones",
     "signIn": "Inicio de sesión",
-    "setup": "Configuración inicial",
+    "setup": "Puesta en marcha",
     "edition": "Edición",
     "modules": "Módulos",
     "about": "Acerca de",
@@ -53,6 +53,13 @@
   "general": {
     "title": "General",
     "scope": "Tus preferencias. Te siguen a cada espacio de trabajo de esta instalación.",
+    "groups": {
+      "appearance": "Apariencia",
+      "language": "Idioma y región",
+      "start": "Al abrir la consola",
+      "sessions": "Sesiones",
+      "editor": "Editor de código"
+    },
     "theme": "Tema",
     "themeHint": "Sigue el sistema, salvo que elijas claro, oscuro o negro.",
     "density": "Densidad",
@@ -65,14 +72,20 @@
     "clock12": "12 horas",
     "startPage": "Página de inicio",
     "startPageHint": "Qué se abre al iniciar sesión. Predeterminado: Sesiones.",
-    "confirmStop": "Confirmar antes de detener una sesión",
-    "confirmStopHint": "Preguntar una vez antes de que Detener acabe una sesión que sigue trabajando.",
+    "confirmStop": "Confirmar antes de terminar una sesión",
+    "confirmStopHint": "Preguntar una vez antes de que «Terminar la sesión» cierre una sesión.",
     "editor": "Editor para enlaces de archivo",
     "editorHint": "Qué editor abren los enlaces «Abrir en» en este equipo. Predeterminado: VS Code.",
     "editorSsh": "Host SSH del editor",
     "editorSshHint": "Cómo llega el editor a las carpetas de sesión de otra máquina, como usuario@host o usuario@host:puerto. Vacío: la dirección desde la que se sirve esta consola; sin SSH si es este equipo.",
     "reduceMotion": "Reducir movimiento",
-    "reduceMotionHint": "Sustituye el movimiento por fundidos. Activo cuando el sistema lo pide."
+    "reduceMotionHint": "Sustituye el movimiento por fundidos. Activo cuando el sistema lo pide.",
+    "sendKey": "Tecla de envío",
+    "sendKeyHint": "La tecla que envía el mensaje en una sesión. Con la segunda opción, Entrar hace un salto de línea.",
+    "sendWhileRunning": "Mientras la herramienta trabaja",
+    "sendWhileRunningHint": "Qué hace la tecla de envío mientras un turno está en marcha. Si Entrar envía, Ctrl+Entrar hace lo otro.",
+    "sendQueue": "Ponerlo en cola",
+    "sendSteer": "Redirigir el turno"
   },
   "sessionNotifications": {
     "title": "Notificaciones de sesiones",
@@ -84,6 +97,12 @@
     "finished": "El turno ha terminado.",
     "ended": "La sesión ha terminado.",
     "failed": "La sesión se detuvo con un error.",
+    "inApp": {
+      "needsYou": "{{name}} te necesita",
+      "finished": "{{name}} terminó su turno",
+      "failed": "{{name}} se detuvo con un error"
+    },
+    "open": "Abrir",
     "pushOn": "También llega a este dispositivo con la pestaña cerrada.",
     "pushUnavailable": "Solo mientras haya una pestaña abierta: este dispositivo no pudo registrarse para push.",
     "installHint": "Las notificaciones requieren la app en la pantalla de inicio: toque Compartir y después «Añadir a pantalla de inicio»."
@@ -93,14 +112,14 @@
     "scope": "Las teclas que responde esta instalación. Son las mismas para todos."
   },
   "edition": {
-    "scope": "La edición de esta compilación, su licencia y lo que añade Business.",
+    "scope": "La edición de esta compilación, su licencia y lo que añade Olivares AI Business.",
     "label": "Edición",
     "unknown": "Este motor no la indica",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business añade",
+    "businessAdds": "Olivares AI Business añade",
     "summary": {
       "Session cockpit and fleet deployment.": "Cabina de sesiones y despliegue en flota.",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Compartición de sesiones en directo con acceso de invitados nominativo y con caducidad, y propuestas de mensajes que aprueba el propietario.",
@@ -111,11 +130,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise incluye todo lo de Business, más los términos acordados en un contrato y las capacidades que dependen de ellos."
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "Edición {{edition}}",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "Mostrar la insignia de edición",
       "loadError": "No se ha podido cargar la preferencia de la insignia.",
       "saveError": "No se ha podido guardar la preferencia de la insignia. Inténtalo de nuevo."
@@ -138,9 +159,9 @@
     "email": "Correo electrónico"
   },
   "stopConfirm": {
-    "title": "¿Detener esta sesión?",
-    "description": "Detener acaba una sesión que sigue trabajando.",
-    "confirm": "Detener la sesión"
+    "title": "¿Terminar esta sesión?",
+    "description": "La sesión se cierra, aunque siga trabajando.",
+    "confirm": "Terminar la sesión"
   },
   "modules": {
     "title": "Módulos",
@@ -149,6 +170,9 @@
     "apply_many": "Aplicar {{count}} cambios",
     "apply_other": "Aplicar {{count}} cambios",
     "applied": "Selección de módulos guardada.",
+    "appliedNow": "Aplicado. No se detuvo ninguna sesión.",
+    "savedForNextStart": "Guardado. Se aplica la próxima vez que arranque el motor; no se detuvo ninguna sesión en curso.",
+    "notSaved": "No se pudo guardar la selección de módulos. No ha cambiado nada.",
     "restarting": "Reiniciando el motor…",
     "restartWarning": {
       "title": "¿Reiniciar el motor?",
@@ -305,6 +329,8 @@
   },
   "tracing": {
     "description": "Exporta trazas y métricas a tu colector. Los cambios se aplican sin reiniciar el motor.",
+    "export": "Exportación",
+    "advanced": "Avanzado",
     "enabled": "Activar trazas",
     "endpoint": "Dirección del colector",
     "protocol": "Protocolo",
@@ -317,10 +343,16 @@
     "inactive": "Las trazas están desactivadas.",
     "apply": "Aplicar",
     "saved": "Configuración de trazas guardada.",
-    "businessRequired": "El envío SIEM y la exportación externa de telemetría requieren Business. Se conservan los ajustes; Community no envía los datos."
+    "businessRequired": "El envío SIEM y la exportación externa de telemetría requieren Olivares AI Business. Se conservan los ajustes; Olivares AI Community no envía los datos."
   },
   "signIn": {
     "methods": "Métodos de acceso",
+    "ssoName": "Inicio de sesión único",
+    "available": "Disponible",
+    "required": "Obligatorio",
+    "blocked": "Bloqueada",
+    "notSetUp": "Sin configurar",
+    "sessionGroup": "Sesión",
     "password": "Contraseña",
     "sso": "Inicio de sesión único: {{providers}}",
     "noSso": "No hay ningún proveedor de inicio de sesión único disponible en la página de acceso.",
@@ -340,7 +372,9 @@
     "minutes": "Detener tras minutos en inactividad",
     "description": "Desactivado por defecto. Libera memoria deteniendo sesiones terminadas que ya no están abiertas. Reanudar conserva la carpeta y la conversación.",
     "hint": "Usa 0 para desactivar o entre 6 y 10080 minutos. La inactividad comienza tras cinco minutos sin salida. Las sesiones con aprobaciones, procesos secundarios o sesiones vinculadas en ejecución, o un mensaje nuevo, siguen funcionando.",
-    "saved": "Ajuste de memoria de sesiones guardado."
+    "saved": "Ajuste de memoria de sesiones guardado.",
+    "group": "Detención por inactividad",
+    "stop": "Detener sesiones inactivas"
   },
   "updates": {
     "title": "Actualizaciones",

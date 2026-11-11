@@ -126,7 +126,7 @@ export const governanceApi = {
   deletePolicy: (id: string) =>
     http.delete<void>(`${BASE}/policies/${encodeURIComponent(id)}`),
 
-  // --- shared vaults (Business; Community answers 501 business_required) -----
+  // --- shared vaults (Business; Community refuses them by edition, 501) ---------
   // Response envelopes match handleListVaults and handleListVaultShares.
   listVaults: () => http.get<{ vaults: SharedVaultDTO[] }>(`${BASE}/vaults`),
   createVault: (input: SharedVaultInput) =>

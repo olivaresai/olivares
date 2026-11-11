@@ -169,6 +169,15 @@ func (s *Server) auditListInto(w http.ResponseWriter, r *http.Request, p auth.Pr
 		s.badRequest(w, r, "tool and folder filter a tenant's ledger; the system ledger records no sessions")
 		return
 	}
+	switch r.URL.Query().Get("order") {
+	case "", "asc":
+	case "desc":
+		s.auditNewestFirst(w, r, p, tenant, queryInt64(r, "from", 0), limit, filters)
+		return
+	default:
+		s.badRequest(w, r, "order must be asc or desc")
+		return
+	}
 	if filtered {
 		s.auditFilteredListInto(w, r, p, tenant, from, limit, filters)
 		return
@@ -199,6 +208,87 @@ func (s *Server) auditListInto(w http.ResponseWriter, r *http.Request, p auth.Pr
 		return appendAudit(r.Context(), sc, p, "audit.read", "core.audit_event", "")
 	})
 	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// auditNewestFirst answers ?order=desc: the filtered list's envelope and filters, read
+// BACKWARDS from ?from (default: the head), newest first. next_from is one below the
+// last returned match while a page is full, and absent once the scan reached seq 1.
+// The read is recorded like every ledger read. A store without
+// store.FilteredReverseWalker answers 501 audit_filter_unavailable, after a forward
+// probe so a principal the ledger denies keeps that denial.
+func (s *Server) auditNewestFirst(
+	w http.ResponseWriter,
+	r *http.Request,
+	p auth.Principal,
+	tenant model.TenantID,
+	from int64,
+	limit int,
+	filters auditFilters,
+) {
+	out := auditListResponse{Items: []AuditEventDTO{}}
+	rerr := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
+		rw, ok := sc.Audit().(store.FilteredReverseWalker)
+		if !ok {
+			if err := sc.Audit().Walk(r.Context(), 1, func(model.AuditEvent) error { return errStopWalk }); err != nil && !errors.Is(err, errStopWalk) {
+				return err
+			}
+			return store.ErrAuditFilterUnavailable
+		}
+		top := from
+		if top <= 0 {
+			head, err := auditHeadSeq(r.Context(), sc)
+			if err != nil {
+				return err
+			}
+			top = head
+		}
+		var page []model.AuditEvent
+		err := rw.WalkFilteredDesc(r.Context(), top, filters.storeFilter(), func(ev model.AuditEvent) error {
+			page = append(page, ev)
+			if len(page) > limit {
+				return errStopWalk
+			}
+			return nil
+		})
+		if err != nil && !errors.Is(err, errStopWalk) {
+			return err
+		}
+		if len(page) > limit {
+			page = page[:limit]
+			out.HasMore = true
+			out.NextFrom = page[len(page)-1].Seq - 1
+		} else {
+			out.ScanComplete = true
+		}
+		for _, ev := range page {
+			out.Items = append(out.Items, toAuditDTO(ev))
+		}
+		return nil
+	})
+	if rerr != nil {
+		s.writeError(w, r, rerr)
+		return
+	}
+	meta := map[string]any{
+		"filters": filters.meta(),
+		"from":    from,
+		"limit":   limit,
+		"order":   "desc",
+	}
+	if err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
+		// The head is read BEFORE this request's own audit.read joins the chain, as on
+		// every other ledger read.
+		head, herr := auditHeadSeq(r.Context(), sc)
+		if herr != nil {
+			return herr
+		}
+		out.HeadSeq = head
+		return appendAuditWithMeta(r.Context(), sc, p, "audit.read", "core.audit_event", "", meta)
+	}); err != nil {
 		s.writeError(w, r, err)
 		return
 	}

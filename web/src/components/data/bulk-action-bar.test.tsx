@@ -9,15 +9,18 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  info: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast }))
 
+import { ApiError } from '@/lib/api/errors'
 import { BulkActionBar } from './bulk-action-bar'
 
 beforeEach(() => {
   toast.success.mockReset()
   toast.error.mockReset()
   toast.warning.mockReset()
+  toast.info.mockReset()
 })
 
 describe('BulkActionBar', () => {
@@ -88,6 +91,42 @@ describe('BulkActionBar', () => {
     expect(toast.error).toHaveBeenCalledWith('Something went wrong.', {
       description: '1 succeeded, 1 failed',
     })
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  // Every failure a refusal, one by role and one by edition: each says its own words,
+  // and the role's toast keeps the summary of what ran.
+  it('keeps the summary when role and edition refusals are mixed', async () => {
+    const run = vi
+      .fn<(id: string) => Promise<void>>()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new ApiError(403, 'forbidden', 'no'))
+      .mockRejectedValueOnce(
+        new ApiError(403, 'edition_required', 'no', 'r', {
+          edition: 'business',
+        }),
+      )
+    const user = userEvent.setup()
+
+    render(
+      <BulkActionBar
+        selectedIds={['item-1', 'item-2', 'item-3']}
+        onClear={vi.fn()}
+        actions={[{ id: 'enable', label: 'Enable selected', run }]}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Enable selected' }))
+
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(3))
+    await waitFor(() =>
+      expect(toast.warning).toHaveBeenCalledWith(
+        "Not authorized — your role can't perform this action.",
+        { description: '1 succeeded, 2 failed' },
+      ),
+    )
+    expect(toast.info).toHaveBeenCalledTimes(1)
+    expect(toast.error).not.toHaveBeenCalled()
     expect(toast.success).not.toHaveBeenCalled()
   })
 

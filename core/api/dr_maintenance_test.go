@@ -5,12 +5,20 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/internal/store/sqlstore"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 func TestRestoreMaintenanceNeverAdvisesRestartDuringKeyRecovery(t *testing.T) {
@@ -174,6 +182,49 @@ func TestRestoreMaintenancePreservesLivenessWithoutReadiness(t *testing.T) {
 				if rec.Code != want {
 					t.Fatalf("%s status=%d, want %d", path, rec.Code, want)
 				}
+			}
+		})
+	}
+}
+
+// A request that restoreMaintenance admitted just before the restore began reaches
+// authenticate with the store already drained. The failed lookup says nothing about the
+// credential: the restore administrator gets the receipt and every other caller the
+// restore_restart_required 503, never the 401 that signs the console out mid-restore.
+func TestAuthenticateAfterRestoreBeganAnswersMaintenanceNotUnauthenticated(t *testing.T) {
+	ctx := context.Background()
+	st, err := sqlstore.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: filepath.Join(t.TempDir(), "olivares.db")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	svc := newDRService(DRConfig{})
+	s := &Server{authr: auth.NewAuthenticator(st, nil), drSvc: svc, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	job := svc.jobs.create(drJobRestore, "test")
+	admin := auth.PrefixToken + "_selector_admin"
+	apply := httptest.NewRequest(http.MethodPost, "/v1/console/dr/restore/test/apply", nil)
+	apply.Header.Set("Authorization", "Bearer "+admin)
+	s.rememberRestoreReceipt(job.ID, apply, "user:test")
+	svc.beginMaintenance(job.ID)
+	if err := st.(interface{ QuiesceForSQLiteRestore(context.Context) error }).QuiesceForSQLiteRestore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	h := s.authenticate(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("closed store was reached") }))
+	for _, tc := range []struct {
+		name, credential string
+		code             int
+		body             string
+	}{
+		{"administrator", admin, http.StatusOK, job.ID},
+		{"other credential", auth.PrefixToken + "_selector_other", http.StatusServiceUnavailable, "restore_restart_required"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v1/console/dr/jobs", nil)
+			req.Header.Set("Authorization", "Bearer "+tc.credential)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.body) {
+				t.Fatalf("status=%d body=%s, want %d containing %q", rec.Code, rec.Body.String(), tc.code, tc.body)
 			}
 		})
 	}

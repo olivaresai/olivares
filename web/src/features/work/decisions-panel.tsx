@@ -181,6 +181,7 @@ export function DecisionsPanel({ workItemId }: { workItemId?: string }) {
         {(page) =>
           page.items.length === 0 ? (
             <EmptyState
+              size="panel"
               icon={<Gavel />}
               title={t(`decisions.empty.${view}.title`)}
               description={t(`decisions.empty.${view}.body`)}

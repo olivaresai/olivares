@@ -4,7 +4,7 @@
     "hint": "Questo elenco della sandbox ha un limite. Vengono mostrate solo le righe caricate."
   },
   "title": "Sandbox di test",
-  "description": "Esecuzioni isolate ed effimere su risorse simulate — simulazioni di scenario, riesecuzioni deterministiche e confronti pre/post-deploy. Gli output sono sintetici; nessun testo reale del target viene mai conservato.",
+  "description": "Riproduci scenari su strumenti simulati e confronta le esecuzioni prima di un deploy.",
   "tabs": {
     "runs": "Esecuzioni",
     "comparisons": "Confronti",

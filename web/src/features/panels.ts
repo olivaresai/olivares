@@ -9,7 +9,11 @@ import type {
   GroupDTO,
   SourceScopeSourceType,
 } from './console/api'
-import type { PdpPublishResult, PdpRollbackResult } from './claude-policy/types'
+import type {
+  PdpPolicyTest,
+  PdpPublishResult,
+  PdpRollbackResult,
+} from './claude-policy/types'
 import type { StepUpAttempt } from '@/stores/step-up'
 import { useAuth } from '@/lib/auth/context'
 import type { FeatureCapability, FeatureView } from './registry'
@@ -154,7 +158,11 @@ export interface AuthorizationForms {
   readonly RolePresets?: ComponentType<{ canAdmin: boolean }>
 }
 export interface CedarPolicyAuthoring {
-  readonly publish: (source: string, note?: string) => Promise<PdpPublishResult>
+  readonly publish: (
+    source: string,
+    note?: string,
+    tests?: readonly PdpPolicyTest[],
+  ) => Promise<PdpPublishResult>
   readonly rollback: (revision: number) => Promise<PdpRollbackResult>
 }
 
@@ -251,6 +259,8 @@ export interface PanelExtensions {
   readonly licenseCards: readonly PanelExtension[]
   /** Console › Scopes: cards below the workspaces. */
   readonly scopesCards: readonly PanelExtension[]
+  /** Console › People: more ways to add people, beside Onboard user. */
+  readonly peopleActions?: readonly PanelExtension[]
   /**
    * Console › Roles › Groups: actions after Map role on a group row the console may change,
    * given that group and every listed group. The default console has none.

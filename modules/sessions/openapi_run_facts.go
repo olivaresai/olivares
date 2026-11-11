@@ -22,6 +22,19 @@ func sessionsRunFactsResponses(method, pattern string) (map[string]any, bool) {
 	run := sessionsRunWithFactsSchema()
 	responses := api.GenericModuleResponses()
 	if pattern == "/runs/{ref}" {
+		run["properties"].(map[string]any)["last_turn"] = oas.Obj(
+			"type", "object", "additionalProperties", false,
+			"required", oas.Enum("ordinal", "command_id", "state", "source", "started_at"),
+			"properties", oas.Obj(
+				"ordinal", oas.Obj("type", "integer", "format", "int64"),
+				"command_id", sessionsClosureNullable(oas.Obj("type", "string")),
+				"state", oas.Obj("type", "string", "enum", oas.Enum("open", "completed", "interrupted", "failed", "cut")),
+				"source", oas.Obj("type", "string"),
+				"started_at", sessionsTimestampSchema(),
+				"ended_at", sessionsTimestampSchema(),
+			),
+		)
+
 		responses["200"] = oas.JSONRespSchema("the run, with the six facts a console shows about a session", run)
 		return responses, true
 	}

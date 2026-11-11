@@ -10,6 +10,37 @@
     "unavailableDescription": "会话读取没有响应。上方的数字不受影响。",
     "untitled": "未命名会话"
   },
+  "accounts": {
+    "title": "你的账户",
+    "loading": "正在读取你的账户…",
+    "none": "你还没有自己的 {{tool}} 账户。你启动的会话使用你自己的账户，其他人无法使用。",
+    "create": "创建我的账户",
+    "createFailed": "无法创建你的账户。",
+    "createExists": "你已经有自己的 {{tool}} 账户，因此无法再新建一个。如果无法使用它，请联系管理员。",
+    "createForbidden": "你的角色不允许你新建自己的账户。请联系管理员。",
+    "createNotAssigned": "{{tool}} 未分配给你，因此无法为它新建你自己的账户。请联系部门管理员。",
+    "createUnavailable": "此服务器上不提供自己的账户。",
+    "signInWaits": "未登录。此服务器尚不支持登录你自己的账户。",
+    "signedIn": "已登录为 {{identity}}",
+    "disabled": "已被管理员停用。",
+    "retired": "已停用。请向管理员申请一个你可以使用的账户：暂时还不能新建你自己的账户。",
+    "limit": "{{label}}：已使用 {{percent}}%",
+    "unavailableTitle": "无法读取你的账户",
+    "unavailableDescription": "在读取之前，无法知道你是否有自己的账户。"
+  },
+  "folders": {
+    "title": "您的文件夹",
+    "start": "开始",
+    "startIn": "在 {{folder}} 中开始",
+    "canWork": "可以工作",
+    "readOnly": "只读",
+    "showAll": "显示全部文件夹（{{total}}）",
+    "loading": "正在加载您的文件夹",
+    "emptyTitle": "您还没有文件夹",
+    "emptyDescription": "管理员授予您某个文件夹的访问权限后，它会显示在这里。",
+    "unavailableTitle": "无法加载您的文件夹",
+    "unavailableDescription": "下方的会话不受影响。"
+  },
   "empty": {
     "title": "暂无可显示内容",
     "description": "您的角色未被授予对任何资产域模块的读取权限。请向管理员申请读取授权以查看概览。"

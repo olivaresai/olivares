@@ -558,8 +558,8 @@ test('keyboard reaches the work list, detail tabs and labelled lease actions', a
   await page.keyboard.press('Enter')
   await expect(sheet.locator('[data-slot="work-lease"]')).toBeVisible()
   await expect(
-    sheet.getByRole('button', { name: 'Acquire' }),
-  ).toHaveAccessibleName('Acquire')
+    sheet.getByRole('button', { name: 'Take over' }),
+  ).toHaveAccessibleName('Take over')
   await expect(
     sheet.getByRole('tab', { name: 'Overview' }),
   ).toHaveAccessibleName('Overview')

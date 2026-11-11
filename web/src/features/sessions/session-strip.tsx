@@ -8,7 +8,8 @@
 // a second press shows the whole list again); the cost opens Usage. A part with nothing to
 // say is left out, and with nothing at all there is no strip. The cost is what today's
 // sessions reported; one that reported none is left out of it, never counted as $0, and
-// with none reported there is no cost part.
+// with none reported there is no cost part. It is told only where Usage opens for the
+// person (`usagePath`): money follows the capability, whatever cost a caller hands in.
 // Overview shows the same strip with what failed today, its filters opening Sessions.
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
@@ -43,7 +44,7 @@ export function SessionStrip({
   failed?: number | null
   /** What today's sessions reported they cost; null when none did, and 0 is left out. */
   costMicroUsd: number | null
-  /** The Usage page when the person may open it; else the cost is plain text. */
+  /** The Usage page where it opens for the person (`useUsagePath`); null, no cost. */
   usagePath: string | null
   /** Another page's strip (Overview): need you and running open this list narrowed to
    *  their section; null, the person may not open it and they are plain text. */
@@ -114,9 +115,7 @@ export function SessionStrip({
       <Link to={usagePath as never} className={PART}>
         {cost}
       </Link>
-    ) : (
-      cost
-    ),
+    ) : null,
   ].filter(Boolean)
   if (parts.length === 0) return null
 

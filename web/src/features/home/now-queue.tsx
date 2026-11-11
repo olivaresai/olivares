@@ -28,7 +28,6 @@ import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
-import { readableAction } from '@/components/layout/bell-events'
 import { AccountBadge } from '@/features/agent-tools/account-marks'
 import {
   railGroups,
@@ -151,16 +150,23 @@ export function useFlaggedRequest(
     (id: string) => setSettled((s) => new Set(s).add(id)),
     [],
   )
-  // Separation of duties decides the flag as it decides the buttons: the requester
-  // cannot decide their own, and a token has no stable user id. Asked on every render,
-  // so a role or a sign-in that changes takes the card with it.
+  // Only an open request is decided. Who may decide it is the engine's answer
+  // (`may_decide`, the field the bell and the ask panel read); an engine that sends none
+  // leaves it to the role and the separation of duties: the requester cannot decide
+  // their own, and a token has no stable user id. Asked of the current answer on every
+  // render, so a role, a sign-in or a re-read request that changes takes the card.
   const mayDecide = (a: ApprovalDTO) =>
     !settled.has(a.id) &&
-    can(APPROVAL_DECIDE) &&
-    canDecideOnRequest(a.requested_by, principal?.actor, principal?.kind)
-  // A request of another workspace is never this one's.
+    a.status === 'pending' &&
+    (a.may_decide ??
+      (can(APPROVAL_DECIDE) &&
+        canDecideOnRequest(a.requested_by, principal?.actor, principal?.kind)))
+  // A request of another workspace is never this one's. The held request is asked as
+  // the current answer has it; one that answer no longer holds, as it was.
+  const fresh =
+    held && (approvals?.find((a) => a.id === held.approval.id) ?? held.approval)
   const kept =
-    held && held.tenant === activeTenant && mayDecide(held.approval)
+    held && held.tenant === activeTenant && fresh && mayDecide(fresh)
       ? held.approval
       : null
   if (approvals && !kept) {
@@ -229,16 +235,12 @@ function FlaggedCard({
   }, [decidedByMe, onSettled])
   const toolCall = approval.subject_kind?.endsWith('.tool')
   // A request a person raised leads with their own words (the queue's rule,
-  // ApprovalRequestCell): the card then names itself by them, and its kind ("Db migrate")
-  // heads it only when they wrote none.
+  // ApprovalRequestCell): the card then names itself by them. With none, it is called a
+  // request: an action name made readable ("Db migrate") is still a record's name.
   const words = !toolCall && !!approval.reason
   const head =
     [approval.review?.tool, session.name].filter(Boolean).join(' · ') ||
-    (words
-      ? ''
-      : !toolCall && approval.action
-        ? readableAction(approval.action)
-        : t('governance:preview.requestSummary'))
+    (words ? '' : t('governance:preview.requestSummary'))
   const headingId = `now-flagged-${approval.id}`
   return (
     <article

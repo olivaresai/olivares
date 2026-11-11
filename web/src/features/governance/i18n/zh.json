@@ -143,6 +143,10 @@
     "expiredAt": "已过期 {{time}}",
     "approveOnce": "仅批准这一次",
     "approveForSession": "在本次会话中始终批准",
+    "allowances": "本次会话的授权",
+    "revokeAllowance": "撤销",
+    "sessionPolicy": "策略要求审核每个请求。",
+    "allowancesError": "无法读取或更新会话授权。",
     "approving": "正在批准…",
     "deny": "拒绝",
     "noMatch": "没有与搜索匹配的请求",
@@ -153,7 +157,9 @@
     "approved": "已批准",
     "rejected": "已拒绝",
     "canceled": "已取消",
-    "expired": "已过期"
+    "expired": "已过期",
+    "approvedNotUsed": "已批准，未使用",
+    "approvedUsed": "已批准，已使用"
   },
   "decide": {
     "rejectTitle": "拒绝此请求？",
@@ -194,10 +200,11 @@
     "reasonHint": "供审查者参考的上下文（可选）。",
     "requiredApprovals": "所需审批数",
     "requiredApprovalsHint": "若有匹配的审批策略适用，则忽略此值 —— 以策略为准。",
-    "expiresInSeconds": "到期时间（秒）",
-    "escalateInSeconds": "升级时间（秒）",
     "submit": "提交请求",
-    "created": "审批请求已发起"
+    "created": "审批请求已发起",
+    "expiresIn": "到期时间",
+    "escalateIn": "升级时间",
+    "subjectFold": "适用对象（可选）"
   },
   "detail": {
     "title": "审批请求",
@@ -225,9 +232,12 @@
     "reenableNeedsAdmins": "需要另外两个管理员账户批准。请在“身份与访问”中创建，或使用 `olivares users create`。",
     "openIdentity": "打开“身份”",
     "cannotDecideOwn": "您不能审批自己的请求。必须由另一位管理员决定。",
-    "requesterCannotApprove": "提出请求的人不能批准自己的请求。",
+    "ownRequest": "您不能审批自己的请求。",
     "launchedBy": "启动者",
-    "decidedByYou": "您已批准此请求。它正在等待另一位审批人。"
+    "decidedByYou": "您已批准此请求。它正在等待另一位审批人。",
+    "whoDecides": "可以决定的人：{{names}}。",
+    "nobodyDecides": "没有其他人可以决定此请求。",
+    "someoneWithRights": "拥有审批权限的人"
   },
   "policies": {
     "title": "策略",
@@ -238,6 +248,23 @@
     "enabled": "已启用",
     "rules": "规则",
     "newPolicy": "新建策略",
+    "roles": {
+      "title": "角色",
+      "role": "角色",
+      "can": "可以做什么",
+      "people": "人数",
+      "kind": "类型",
+      "builtIn": "内置",
+      "custom": "自定义",
+      "from": "基于{{role}}",
+      "empty": "这里显示内置角色，以及每个角色可以做什么。",
+      "does": {
+        "owner": "租户内的全部权限",
+        "admin": "以上，外加租户 IAM——用户、成员资格、token、设置",
+        "editor": "以上，外加写入运营数据",
+        "viewer": "读取运营数据和审计轨迹"
+      }
+    },
     "empty": "暂无策略",
     "emptyHint": "编写一条 ABAC 拒绝规则或一个审批阈值，以治理匹配的操作。",
     "kindAbac": "ABAC",
@@ -274,23 +301,20 @@
     "denyImplicit": "拒绝（隐含）",
     "requiredApprovals": "所需审批数",
     "requiredApprovalsHint": "0–64。留空或 0 使用引擎默认值，关键操作的默认值可能更高。",
-    "expiresInSeconds": "到期时间（秒）",
-    "expiresInSecondsHint": "0–31536000（0 = 永不）。",
-    "escalateInSeconds": "升级时间（秒）",
-    "escalateInSecondsHint": "0–31536000（0 = 永不）。",
     "countError": "请输入 0 到 {{max}} 之间的整数。",
     "matchAction": "匹配操作",
     "matchActionHint": "留空 = 匹配任意操作。",
     "matchSubjectKind": "匹配对象类别",
     "matchSubjectKindHint": "留空 = 匹配任意对象类别。",
-    "needsBusiness": "将风险等级或批准数量设为与该操作默认值不同的值需要 Business。关闭此策略即可保留已保存的内容。",
     "create": "创建策略",
     "save": "保存更改",
     "confirmCreateBody": "已启用的 ABAC 策略会立即进一步限制访问；已启用的审批策略会开始对匹配的操作要求人工审批。立即生效。",
     "confirmUpdateBody": "若已启用，更改将在授权路径／审批流程上立即生效。策略类别无法更改。",
     "created": "策略已创建",
     "updated": "策略已更新",
-    "credentialWarning": "这看起来像是一个凭据值。策略规则只承载引用和选择器 —— 绝不承载密钥。"
+    "credentialWarning": "这看起来像是一个凭据值。策略规则只承载引用和选择器 —— 绝不承载密钥。",
+    "expiresIn": "到期时间",
+    "escalateIn": "升级时间"
   },
   "policyRemove": {
     "title": "删除此策略？",
@@ -668,6 +692,14 @@
     "askedByForSession": "{{name}}（新会话）",
     "askedByThroughSession": "{{name}}（其会话）",
     "tool": "工具",
+    "touches": "涉及",
+    "changeClass": {
+      "docs_only": "仅文档",
+      "code": "代码",
+      "sensitive": "敏感文件"
+    },
+    "lapses": "<when />到期；之后任何人都无法批准，也不会运行。",
+    "lapsed": "已于<when />到期；任何人都无法批准，也不会运行。",
     "willRun": "将要运行的内容",
     "noReview": "此请求未包含将要运行的内容。",
     "commandUnknown": "此工具暂不显示命令",
@@ -729,5 +761,15 @@
       "editor": "编辑者",
       "owner": "所有者"
     }
+  },
+  "durations": {
+    "none": "不限",
+    "h1": "1小时",
+    "h4": "4小时",
+    "h8": "8小时",
+    "h24": "24小时",
+    "d7": "7天",
+    "d30": "30天",
+    "seconds": "{{value}} 秒"
   }
 }

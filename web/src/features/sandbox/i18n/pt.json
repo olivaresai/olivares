@@ -4,7 +4,7 @@
     "hint": "Esta lista de sandbox tem um limite. Só são apresentadas as linhas carregadas."
   },
   "title": "Sandbox de testes",
-  "description": "Execuções isoladas e efémeras contra recursos simulados — simulações de cenários, reproduções determinísticas e comparações antes/depois da implementação. As saídas são sintéticas; nunca é guardado texto real de um alvo.",
+  "description": "Reproduza cenários com ferramentas simuladas e compare execuções antes de uma implementação.",
   "tabs": {
     "runs": "Execuções",
     "comparisons": "Comparações",

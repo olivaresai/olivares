@@ -17,7 +17,7 @@
   "openOwner": "Abrir {{resource}}",
   "sharedScope": "As pastas, os conectores, os servidores MCP e as políticas são recursos da organização; não é inferida nenhuma associação a espaços de trabalho.",
   "more": "A mostrar {{count}}. Há mais disponíveis.",
-  "unavailable": "Não foi possível carregar esta família de recursos. Atualize para tentar novamente.",
+  "unavailable": "Não foi possível carregar esta família de recursos.",
   "off": "Este módulo está desativado.",
   "startSession": "Iniciar sessão",
   "workflows": "Abrir automações",
@@ -54,5 +54,18 @@
   },
   "nextPage": "Página seguinte",
   "firstPage": "Primeira página",
-  "noDependencies": "Sem dependências visíveis."
+  "noDependencies": "Sem dependências visíveis.",
+  "groups": {
+    "workspace": "Espaços de trabalho",
+    "folder": "Pastas",
+    "session": "Sessões",
+    "work": "Itens de trabalho",
+    "connector": "Conectores",
+    "mcp": "Servidores MCP",
+    "policy": "Políticas"
+  },
+  "noResources": {
+    "title": "Ainda não há recursos configurados",
+    "description": "Espaços de trabalho, pastas, sessões, conectores, servidores MCP e políticas aparecem aqui depois de configurados."
+  }
 }

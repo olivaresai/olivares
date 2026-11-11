@@ -15,10 +15,10 @@
 // ⛔ THE LIST IS LIVE, AND SAYS NOTHING WHEN IT IS. There is no Refresh and no "Live"
 //    chip: a chip that says Live next to a button that says Refresh disagree with each
 //    other. A failed stream is the one thing worth a line, and it is a quiet one.
-import { ArrowLeft, ChevronDown, MoreHorizontal, Plus } from 'lucide-react'
+import { ArrowLeft, MoreHorizontal, Plus } from 'lucide-react'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { PagesMenu } from '@/components/layout/destination-sections'
+import { ShellHeaderContent } from '@/components/ui/page-actions'
 import { Button } from '@/components/ui/button'
 import type { PageLink } from '@/features/navigation/places'
 import {
@@ -62,7 +62,6 @@ export function SessionsListHeader({
   onView,
   streamFailed,
   focusMenu = false,
-  pages = [],
 }: {
   /**
    * The pages of the Sessions place this person may open (placePages). The work surface
@@ -94,81 +93,67 @@ export function SessionsListHeader({
   }, [focusMenu])
   return (
     <div data-slot="list-header" className="shrink-0">
-      <div className="flex h-12 items-center gap-2 px-3">
+      <div className="flex items-center gap-2 px-3 has-[h1]:h-12">
         {/* The menu button's hover fill reaches 4 px past the name on each side; the
           margin that keeps the name on the list's edge sits on the heading, not on the
           button, whose `max-w-full` would otherwise cut its own text by those 8 px. */}
-        <h1
-          title={t('sessions:title')}
-          className={cn(
-            'min-w-0 truncate text-body font-semibold text-text',
-            pages.length > 1 && '-mx-1',
-          )}
-        >
-          {pages.length > 1 ? (
-            <PagesMenu pages={pages} currentId="sessions">
-              <button
-                type="button"
-                className="inline-flex max-w-full items-center gap-1 rounded-ctl px-1 outline-none transition-colors duration-fast hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus data-[state=open]:bg-hover"
-              >
-                <span className="truncate">{t('sessions:title')}</span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className="size-3.5 shrink-0 text-text-3"
-                />
-              </button>
-            </PagesMenu>
-          ) : (
-            t('sessions:title')
-          )}
-        </h1>
-        <SessionsCount count={count} label={countLabel} />
-        <span className="ml-auto flex items-center gap-0.5">
-          {onNew ? (
-            <IconTip label={t('sessions:launch')}>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t('sessions:launch')}
-                data-testid="sessions-new"
-                onClick={onNew}
-              >
-                <Plus />
-              </Button>
-            </IconTip>
-          ) : null}
-          {views.length > 0 || onImport ? (
-            <DropdownMenu>
-              <IconTip label={t('sessions:list.more')}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    ref={menuRef}
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t('sessions:list.more')}
-                    data-testid="sessions-list-menu"
-                  >
-                    <MoreHorizontal />
-                  </Button>
-                </DropdownMenuTrigger>
+        <ShellHeaderContent part="title">
+          <h1
+            title={t('sessions:title')}
+            className="min-w-0 truncate text-body font-semibold text-text"
+          >
+            {t('sessions:title')}
+          </h1>
+          <SessionsCount count={count} label={countLabel} />
+        </ShellHeaderContent>
+        <ShellHeaderContent part="actions">
+          <span className="ml-auto flex items-center gap-0.5">
+            {onNew ? (
+              <IconTip label={t('sessions:launch')}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('sessions:launch')}
+                  data-testid="sessions-new"
+                  onClick={onNew}
+                >
+                  <Plus />
+                </Button>
               </IconTip>
-              <DropdownMenuContent align="end">
-                {onImport ? (
-                  <DropdownMenuItem onSelect={onImport}>
-                    {t('sessions:import.title')}
-                  </DropdownMenuItem>
-                ) : null}
-                {views.map((view) => (
-                  <DropdownMenuItem key={view} onSelect={() => onView(view)}>
-                    {view === 'table'
-                      ? t('sessions:list.showTable')
-                      : t(`sessions:tabs.${view}`)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </span>
+            ) : null}
+            {views.length > 0 || onImport ? (
+              <DropdownMenu>
+                <IconTip label={t('sessions:list.more')}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      ref={menuRef}
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t('sessions:list.more')}
+                      data-testid="sessions-list-menu"
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </IconTip>
+                <DropdownMenuContent align="end">
+                  {onImport ? (
+                    <DropdownMenuItem onSelect={onImport}>
+                      {t('sessions:import.title')}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {views.map((view) => (
+                    <DropdownMenuItem key={view} onSelect={() => onView(view)}>
+                      {view === 'table'
+                        ? t('sessions:list.showTable')
+                        : t(`sessions:tabs.${view}`)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </span>
+        </ShellHeaderContent>
       </div>
       {streamFailed ? (
         <p

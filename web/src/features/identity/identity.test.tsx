@@ -6,6 +6,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ADMIN_READS } from '@/features/navigation/admin-reads.fixture'
 import { ApiError } from '@/lib/api/errors'
 import { useSessionStore } from '@/stores/session'
 import './i18n'
@@ -52,8 +53,20 @@ const { api, mockNavigate, authState } = vi.hoisted(() => ({
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => mockNavigate }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 // The SCIM server is Business: these cases are the Business console, which asks for it.
+// The navigation and the route gate read the edition held here from the same answer.
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useCommunityBuild: () => false,
+  useServerInfo: () => ({
+    isSuccess: true,
+    data: {
+      version: 'v-test-identity',
+      engine: 'sqlite',
+      setup_required: false,
+      edition: 'business',
+      licensed_edition: 'business',
+      license: { status: 'valid', licensee: 'Identity fixture' },
+    },
+  }),
 }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -112,6 +125,7 @@ function wrap(ui: ReactElement, qc?: QueryClient) {
 
 beforeEach(() => {
   authState.principal = null
+  authState.can = () => true
   useSessionStore.setState({ credentialGeneration: 0 })
   api.ssoStatus.mockRejectedValue(
     new ApiError(501, 'sso_not_configured', 'SSO not configured'),
@@ -174,38 +188,23 @@ describe('ADM-IDN-01 — SSO config', () => {
     expect(screen.getByText(/exact match/i)).toBeInTheDocument()
   })
 
-  // One place sets SSO up: the Identity provider tab has the form and applies it without a restart.
-  // This tab used to list OLIVARES_* variables and say there is no write API, which sent an
-  // administrator to the engine's environment for something the console does.
-  it('names no environment variable and points an administrator to the Identity provider form', async () => {
-    const user = userEvent.setup()
+  // One place sets SSO up: an administrator's Single sign-on section holds the form, which
+  // applies without a restart, above this state. This tab used to list OLIVARES_* variables
+  // and say there is no write API, which sent an administrator to the engine's environment
+  // for something the console does; then it sent them to a second section of another name.
+  it('names no environment variable and opens no second door to the setting', async () => {
     wrap(<FederationTab />)
     await screen.findByText('Not configured')
 
     expect(screen.queryByText(/OLIVARES_/)).not.toBeInTheDocument()
     expect(screen.queryByText(/write API|restart/i)).not.toBeInTheDocument()
-
-    await user.click(
-      screen.getByRole('button', { name: /open identity provider/i }),
-    )
-    expect(mockNavigate).toHaveBeenCalledWith({
-      to: '/identity',
-      search: { tab: 'sso' },
-    })
-  })
-
-  it('offers no way to the Identity provider tab to someone who may not administer', async () => {
-    const can = authState.can
-    authState.can = () => false
-    try {
-      wrap(<FederationTab />)
-      await screen.findByText('Not configured')
-      expect(
-        screen.queryByRole('button', { name: /open identity provider/i }),
-      ).not.toBeInTheDocument()
-    } finally {
-      authState.can = can
-    }
+    expect(
+      screen.queryByText(/set up under Identity provider/),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /open identity provider/i }),
+    ).not.toBeInTheDocument()
+    expect(mockNavigate).not.toHaveBeenCalled()
   })
 
   // El estado se dice en el idioma del operador, NO con el nombre del símbolo Go.
@@ -214,13 +213,38 @@ describe('ADM-IDN-01 — SSO config', () => {
   // (core/api/errors_honestseam_test.go:48). El símbolo lo añadían los siete
   // catálogos, y este caso lo CERTIFICABA. Lo accionable ya vive en el hint
   // contiguo: devuelve 501, define las variables y reinicia.
+  // And no «501»: a status code is not a sentence, and the hint no longer sends anyone to a
+  // setup the engine refuses by edition (core/api/edition_routes.go, sso).
   it("says the state in the operator's language, not with a Go symbol name", async () => {
     wrap(<FederationTab />)
     expect(await screen.findByText('Not configured')).toBeInTheDocument()
     expect(screen.queryByText(/ErrSSONotConfigured/)).not.toBeInTheDocument()
     expect(
-      await screen.findByText(/federation requests return 501/i),
+      await screen.findByText(
+        'No identity provider is configured, so no one signs in through single sign-on.',
+      ),
     ).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/\b501\b/)
+  })
+
+  it('says the edition line when the SSO read is refused by edition', async () => {
+    api.ssoStatus.mockReset()
+    api.ssoStatus.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'business',
+        capability: 'sso',
+      }),
+    )
+    wrap(<FederationTab />)
+    expect(
+      await screen.findByText(
+        /Single sign-on is part of Olivares AI Business\./,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Not configured')).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(
+      /\b501\b|\b403\b|edition_required|raw:/,
+    )
   })
 
   it('shows a retryable error when the SSO posture read genuinely fails', async () => {
@@ -231,7 +255,7 @@ describe('ADM-IDN-01 — SSO config', () => {
     wrap(<FederationTab />)
 
     const heading = await screen.findByText('Single sign-on (OIDC / SAML)')
-    const card = heading.closest('.rounded-lg') as HTMLElement
+    const card = heading.closest('[data-slot="card"]') as HTMLElement
     expect(
       await within(card).findByText('Something went wrong'),
     ).toBeInTheDocument()
@@ -338,6 +362,35 @@ describe('ADM-IDN-02 — NHI roster', () => {
         search: { focus: 'apikey_abc123' },
       }),
     )
+  })
+
+  it("offers an editor no access map from the roster: the map's read is for administrators", async () => {
+    authState.can = (p) => !ADMIN_READS.has(p)
+    const user = userEvent.setup()
+    api.identities.mockResolvedValue({
+      items: [
+        {
+          id: 'i1',
+          ref: 'apikey_abc123',
+          name: 'ci-key',
+          kind: 'api_key',
+          source: 'anthropic',
+          principal_type: 'nhi',
+          disabled: false,
+        },
+      ],
+      has_more: false,
+    })
+    wrap(<NhiRosterTab />)
+    await user.click(await screen.findByText('apikey_abc123'))
+    const sheet = await screen.findByRole('dialog')
+    // The identity itself is still told; only the door to the map is gone.
+    expect(
+      within(sheet).getByText(/converges by its external ID/i),
+    ).toBeInTheDocument()
+    expect(
+      within(sheet).queryByRole('button', { name: /view in access map/i }),
+    ).toBeNull()
   })
 
   it('offers every identity kind Community produces in the kind filter', async () => {
@@ -663,7 +716,7 @@ describe('Local privileged login (fail-closed)', () => {
     wrap(<PrivilegedLoginTab />)
 
     const heading = await screen.findByText('Registered passkeys')
-    const card = heading.closest('.rounded-lg') as HTMLElement
+    const card = heading.closest('[data-slot="card"]') as HTMLElement
     expect(
       await within(card).findByText('Something went wrong'),
     ).toBeInTheDocument()

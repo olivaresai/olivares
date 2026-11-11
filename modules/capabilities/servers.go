@@ -13,6 +13,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -146,7 +147,7 @@ func (m *Module) handleListServers(w http.ResponseWriter, r *http.Request, mc ap
 		for _, s := range servers {
 			d := serverDTO{
 				ID: s.ID.String(), Name: s.Name, Transport: s.Transport,
-				Endpoint: s.Endpoint, Version: s.Version, Status: string(s.Status),
+				Endpoint: secret.RedactValue(s.Endpoint), Version: s.Version, Status: string(s.Status),
 				Connection: connFromHealth(healthByName[s.Name]),
 				ToolCount:  toolsByServer[s.ID.String()],
 			}
@@ -185,7 +186,7 @@ func (m *Module) handleGetServer(w http.ResponseWriter, r *http.Request, mc api.
 		found = true
 		out.serverDTO = serverDTO{
 			ID: s.ID.String(), Name: s.Name, Transport: s.Transport,
-			Endpoint: s.Endpoint, Version: s.Version, Status: string(s.Status),
+			Endpoint: secret.RedactValue(s.Endpoint), Version: s.Version, Status: string(s.Status),
 		}
 		out.Tools, out.Skills = []toolDTO{}, []skillDTO{}
 		out.Resources, out.Consumers = []string{}, []wiringPeerDTO{}
@@ -223,7 +224,7 @@ func (m *Module) handleGetServer(w http.ResponseWriter, r *http.Request, mc api.
 		if cfg, ok, err := m.lookupConfig(r.Context(), sc, s.Name); err != nil {
 			return err
 		} else if ok {
-			d := toConfigDTO(cfg)
+			d := toConfigDTO(cfg).redacted()
 			out.Config = &d
 			out.HasConfig = true
 			out.ConfigRev = cfg.Int(colRevision)

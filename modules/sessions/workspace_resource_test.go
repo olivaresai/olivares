@@ -203,7 +203,7 @@ func TestWorkspaceResourceHTTP(t *testing.T) {
 	// Canonical Read forbids reach current/HEAD reads, metadata and listings.
 	forbid := fmt.Sprintf(`forbid(principal in User::"%s", action == Action::"resource:read", resource in Resource::"%s");`, principal.UserID, id)
 	testsupport.SeedCedar(t, f.st, tenant, permit+forbid, f.gov)
-	for _, path := range []string{base, base + "/files", base + "/files/stat?path=hello.txt", base + "/files/raw?path=hello.txt", base + "/files/raw?path=hello.txt&rev=HEAD"} {
+	for _, path := range []string{base, base + "/files", base + "/files/stat?path=hello.txt", base + "/files/search?q=hello", base + "/files/raw?path=hello.txt", base + "/files/raw?path=hello.txt&rev=HEAD"} {
 		check("GET", path, 403)
 	}
 	listed := f.do("GET", "/v1/m/sessions/workspaces", token, tenantHdr(tenant))

@@ -46,6 +46,10 @@ func toRosterMemberDTO(m auth.RosterMember) rosterMemberDTO {
 		SSOOnly: m.User.PasswordHash == "",
 		Role:    m.Role,
 	}
+	// A tenant's suspension of the member shows as the status, over the account's own.
+	if m.Suspended {
+		d.Status = "suspended"
+	}
 	for _, wsID := range m.WorkspaceIDs {
 		d.WorkspaceIDs = append(d.WorkspaceIDs, wsID.String())
 	}
@@ -132,6 +136,30 @@ func filterRosterToWorkspace(roster []auth.RosterMember, ws model.ID) []auth.Ros
 		}
 	}
 	return out
+}
+
+// handleSetMemberSuspended suspends (POST .../suspend) or reactivates (POST
+// .../reactivate) one member of the resolved tenant. It is the Business department
+// surface (MemberSuspender): the Community build answers 501 departments_unavailable.
+// Suspending is reversible and keeps the membership, the role and the group places;
+// it needs the same administrative step-up as removing a member, and an API token
+// is governed by its role alone.
+func (s *Server) handleSetMemberSuspended(suspended bool) func(http.ResponseWriter, *http.Request, ModuleContext) {
+	return func(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+		suspender, ok := s.departments.(MemberSuspender)
+		if !ok {
+			s.writeError(w, r, ErrDepartmentsUnavailable)
+			return
+		}
+		if mc.Principal.Kind == auth.KindUser && !s.requireStepUp(w, r, mc.Principal) {
+			return
+		}
+		if err := suspender.SetMemberSuspended(r.Context(), mc.Principal, mc.Tenant, model.ID(chi.URLParam(r, "id")), suspended); err != nil {
+			s.writeError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // handleRemoveMember takes a member out of the resolved tenant: a scoped offboard

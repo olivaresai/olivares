@@ -282,6 +282,20 @@
       "noPolicyBadge": "aucune politique sélectionnée",
       "noPolicyBody": "Le magasin ne sélectionne aucune révision Cedar : rien n'est donc en vigueur depuis ici. Ce n'est pas un échec — c'est un locataire qui n'a pas encore publié de politique.",
       "grantsExpired": "Ce processus a dépassé sa borne d'obsolescence hors ligne : les octrois POSITIFS de la politique sont donc dégradés en abstention. Ses règles d'interdiction restent appliquées. La politique EST bien chargée ici — ce qui a expiré, c'est la confiance accordée à ses octrois."
+    },
+    "person": "Personne",
+    "personHint": "Tester en tant que cette personne, avec son rôle et ses groupes.",
+    "personNone": "N'importe qui (aucune personne)",
+    "policyTests": {
+      "title": "Tests de la politique",
+      "sub": "Chaque publication doit les respecter. Une publication qui en casse un est refusée et le nomme.",
+      "name": "Nom du test",
+      "expect": "Attendu",
+      "allow": "Doit être autorisé",
+      "deny": "Doit être refusé",
+      "add": "Ajouter comme test",
+      "empty": "Aucun test pour l'instant. Préparez la requête d'exemple, nommez-la et ajoutez-la.",
+      "remove": "Retirer {{name}}"
     }
   },
   "dist": {

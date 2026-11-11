@@ -1,9 +1,55 @@
 {
   "title": "用量",
-  "subtitle": "官方的 5 小时和每周限额，与今天的令牌和费用并列显示。",
+  "subtitle": "所选日期内会话的用量和费用，与每个账户的 5 小时和每周限额并列显示。",
+  "subtitleNoCost": "所选日期内会话的用量，与每个账户的 5 小时和每周限额并列显示。",
   "tabs": {
     "accounts": "账户",
     "timeline": "时间线"
+  },
+  "spend": {
+    "heading": "支出",
+    "headingNoCost": "运行次数和 token",
+    "range": {
+      "label": "时间范围",
+      "d7": "7 天",
+      "d14": "14 天",
+      "d30": "30 天",
+      "custom": "自定义",
+      "from": "第一天",
+      "to": "最后一天",
+      "invalid": "第一天必须早于或等于最后一天。时间范围最多 {{days}} 天。"
+    },
+    "tool": "工具",
+    "allTools": "全部工具",
+    "profile": "配置文件",
+    "allProfiles": "全部配置文件",
+    "export": "导出",
+    "totals": "合计",
+    "cost": "支出",
+    "runs": "运行次数",
+    "input": "输入 token",
+    "output": "输出 token",
+    "costUnreported": "未报告费用的运行：{{runs}}",
+    "tokensUnreported": "未报告 token 的运行：{{runs}}",
+    "empty": {
+      "title": "这些天没有运行",
+      "description": "选择更多天数或开始一个会话：其用量会显示在这里。"
+    },
+    "chart": {
+      "cost": "每日支出",
+      "tokens": "每日 token",
+      "day": "日期",
+      "summary": "{{title}}，{{from}} 至 {{to}}：共 {{total}}。",
+      "unpriced": "未报告费用的运行不在图表中。"
+    },
+    "profiles": {
+      "heading": "按配置文件",
+      "profile": "配置文件",
+      "input": "输入",
+      "output": "输出",
+      "none": "无配置文件",
+      "unnamed": "未命名的配置文件"
+    }
   },
   "accounts": {
     "heading": "账户",
@@ -11,7 +57,8 @@
     "error": "无法读取账户的限额。",
     "empty": "还没有账户报告其限额。",
     "details": "详情",
-    "detailsFor": "{{account}} 的详情"
+    "detailsFor": "{{account}} 的详情",
+    "emptyChosen": "此工具或配置文件的账户尚未报告其限额。"
   },
   "today": {
     "heading": "今天",

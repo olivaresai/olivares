@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { EmptyState } from '@/components/ui/empty-state'
+import { PathText } from '@/components/ui/path-text'
 import { useAuth } from '@/lib/auth/context'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { skillsApi, skillsKeys } from './api'
@@ -77,7 +78,7 @@ export function SkillCatalog({
         row.original.pack ? (
           <button
             type="button"
-            className="break-words font-medium text-accent-text underline underline-offset-4"
+            className="break-words font-medium text-foreground underline underline-offset-4"
             onClick={() => onOpen(row.original.pack!.id, row.original.name)}
           >
             {row.original.name}
@@ -123,7 +124,7 @@ export function SkillCatalog({
         row.original.pack ? (
           <button
             type="button"
-            className="text-accent-text underline underline-offset-4"
+            className="text-foreground underline underline-offset-4"
             onClick={(event) => {
               event.stopPropagation()
               onOpen(row.original.pack!.id)
@@ -132,7 +133,7 @@ export function SkillCatalog({
             {row.original.pack?.name}
           </button>
         ) : (
-          <span className="break-all">{row.original.path}</span>
+          <PathText value={row.original.path ?? ''} wrap />
         ),
     },
     {

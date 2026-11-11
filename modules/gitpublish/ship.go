@@ -41,7 +41,6 @@ const (
 	// shipOpMax leaves room for the effect suffix inside the 128 characters an operation id has.
 	shipOpMax       = 100
 	shipMessageMax  = 8192
-	shipGateAction  = "gitpublish.push"
 	shipGateSubject = "gitpublish.target"
 )
 
@@ -121,37 +120,27 @@ func (m *Module) Ship(ctx context.Context, c Caller, in ShipInput) (ShipResult, 
 	if len(read.paths) == 0 {
 		return res, refuse("nothing_to_ship", http.StatusConflict)
 	}
-	lease, seen, priorProposal, err := m.shipLease(ctx, c, tg.ID, push.OperationID, read.tip)
+	lease, priorProposal, err := m.shipLease(ctx, c, tg.ID, push.OperationID, read.tip)
 	if err != nil {
 		return res, err
 	}
 	push.ExpectedOld, push.Proposal = lease, priorProposal
-	reason := fmt.Sprintf("Push commit %s to %s on publication target %s, then open a pull request into %s.", push.Commit, push.Ref, tg.ID, in.Base)
-	if len(read.secrets) > 0 {
-		reason += " Detected secret.credential in " + read.secrets[0] + "."
+	if e := push.check(); e != nil {
+		return res, e
 	}
-	// A ship the module has already pushed for is a retry: it replays that
-	// push's receipt and needs no second approval for it.
-	if !seen {
-		decision, err := m.opts.Gate.Authorize(ctx, c.Tenant, GateRequest{Action: shipGateAction, SubjectKind: shipGateSubject, SubjectRef: tg.ID.String(),
-			PlanHash: shipPlan(push), RequestedBy: c.Principal.Actor(), ConsumerID: in.OperationID,
-			Reason: reason, RequireApproval: len(read.secrets) > 0})
-		switch {
-		case err != nil:
-			return res, refuse("approval_unavailable", http.StatusServiceUnavailable)
-		case decision.State == GatePending:
-			res.State, res.Approval = ShipAwaitingApproval, decision.Ref
-			return res, nil
-		case decision.State != GateGranted:
-			return res, refuse("approval_denied", http.StatusForbidden)
-		}
-		if decision.Ref != "" {
-			push.Proposal = Proposal{SessionRun: in.SessionRun, Workspace: tg.Workspace, Approval: decision.Ref}
-		}
-	}
-	pushed, err := m.Push(ctx, c, push)
+	// The push asks the approval policy for the whole ship, under the ship's
+	// operation id. A ship the module has already pushed for is a retry: it
+	// replays that push's receipt and is not asked again.
+	ps := pushSpec(push)
+	ps.ship = in.OperationID
+	ps.reason = fmt.Sprintf("Push commit %s to %s on publication target %s, then open a pull request into %s.", push.Commit, push.Ref, tg.ID, in.Base)
+	pushed, err := m.publish(ctx, c, ps)
 	if err != nil {
 		return res, err
+	}
+	if pushed.Answer == ShipAwaitingApproval {
+		res.State, res.Approval = ShipAwaitingApproval, pushed.Approval
+		return res, nil
 	}
 	res.Push, res.State = &pushed, ShipIncomplete
 	if !landed(pushed) {
@@ -161,8 +150,17 @@ func (m *Module) Ship(ctx context.Context, c Caller, in ShipInput) (ShipResult, 
 		res.State = ShipShipped
 		return res, nil
 	}
-	pull, err := m.OpenPullRequest(ctx, c, PullRequestInput{Target: tg.ID, OperationID: in.OperationID + ":pr", HeadRef: branch, Base: in.Base,
-		Commit: head.Commit, Title: in.Title, Body: in.Body, Draft: in.Draft, Proposal: pushed.Intent.Proposal})
+	pr := PullRequestInput{Target: tg.ID, OperationID: in.OperationID + ":pr", HeadRef: branch, Base: in.Base,
+		Commit: head.Commit, Title: in.Title, Body: in.Body, Draft: in.Draft, Proposal: pushed.Intent.Proposal, SessionRun: in.SessionRun}
+	var pull Receipt
+	if e := pr.check(); e != nil {
+		err = e
+	} else {
+		// The ship was approved as one decision, at its push.
+		prs := pullRequestSpec(pr)
+		prs.approved = true
+		pull, err = m.publish(ctx, c, prs)
+	}
 	var refused *Error
 	if errors.As(err, &refused) {
 		res.PullRequestError = refused.Code
@@ -209,8 +207,8 @@ func (m *Module) shipPreflight(ctx context.Context, c Caller, in *ShipInput) (Ta
 			return Target{}, false, refuse("base_not_allowed", http.StatusUnprocessableEntity)
 		}
 	}
-	if m.opts.Sessions == nil {
-		return Target{}, false, refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	if _, e := m.runPublisher(actx, c, tg, in.SessionRun); e != nil {
+		return Target{}, false, e
 	}
 	if _, err := m.opts.Sessions.ReadRunWorkspacePath(actx, c.Tenant, tg.Workspace, in.SessionRun); errors.Is(err, store.ErrNotFound) {
 		return Target{}, false, refuse("session_source_refused", http.StatusUnprocessableEntity)
@@ -220,25 +218,26 @@ func (m *Module) shipPreflight(ctx context.Context, c Caller, in *ShipInput) (Ta
 	return tg, withPR, nil
 }
 
-// shipLease is the lease of the ship's push, and whether the module has seen a
-// push under this operation id. Such a ship keeps the lease it pushed with, so
-// its retry is the same request and replays its receipt, even though the host's
-// tip has moved to the commit that push made. A new ship leases the tip it just read.
-func (m *Module) shipLease(ctx context.Context, c Caller, target model.ID, op, tip string) (string, bool, Proposal, error) {
+// shipLease is the lease of the ship's push and the proposal of a push the
+// module has seen under this operation id. Such a ship keeps the lease it
+// pushed with, so its retry is the same request and replays its receipt, even
+// though the host's tip has moved to the commit that push made. A new ship
+// leases the tip it just read.
+func (m *Module) shipLease(ctx context.Context, c Caller, target model.ID, op, tip string) (string, Proposal, error) {
 	actx, cancel := m.admissionContext(ctx)
 	defer cancel()
-	lease, seen := tip, false
+	lease := tip
 	var proposal Proposal
 	if err := m.data.View(actx, c.Tenant, func(sc store.Scope) error {
 		prior, found, err := findByOperation(actx, sc, target, effectPush, op)
 		if found {
-			lease, seen, proposal = prior.Requested.ExpectedOld, true, prior.Proposal
+			lease, proposal = prior.Requested.ExpectedOld, prior.Proposal
 		}
 		return err
 	}); err != nil {
-		return "", false, Proposal{}, storeError(err)
+		return "", Proposal{}, storeError(err)
 	}
-	return lease, seen, proposal, nil
+	return lease, proposal, nil
 }
 
 // commitError names why the folder could not be committed.
@@ -259,12 +258,51 @@ func commitError(err error) error {
 // landed reports a receipt whose effect is on the host.
 func landed(r Receipt) bool { return r.Answer == StateApplied || r.Answer == StateAdopted }
 
-// shipPlan binds an approval to the exact push: the target, ref, commit and
-// tree. The lease is the host's moving tip and the pull request's text is not
-// what a person reviews here, so neither is in it.
+// shipPlan binds an approval to the exact push: the target, ref, expected old
+// tip (the lease), commit and tree, so an approval is for one push over one tip.
+// The pull request's text is not what a person reviews here, so it is not in it.
 func shipPlan(p PushInput) string {
-	sum := sha256.Sum256([]byte("olivares.gitpublish.ship.v1\x00" + p.Target.String() + "\x00" + p.Ref + "\x00" + p.Commit + "\x00" + p.Tree))
+	sum := sha256.Sum256([]byte("olivares.gitpublish.ship.v2\x00" + p.Target.String() + "\x00" + p.Ref + "\x00" + p.ExpectedOld + "\x00" + p.Commit + "\x00" + p.Tree))
 	return hex.EncodeToString(sum[:])
+}
+
+// approve asks the tenant's approval policy for one publication: the one door
+// every publishing route passes, a ship's push included. A detected credential
+// (secrets, a ship's only) requires a person even without a policy. Pending and
+// granted are answered as the decision; anything else refuses.
+func (m *Module) approve(ctx context.Context, c Caller, tg Target, s spec, secrets []string) (GateDecision, *Error) {
+	if m.opts.Gate == nil {
+		return GateDecision{}, errUnavailable
+	}
+	consumer, reason := s.op, s.reason
+	if s.ship != "" {
+		consumer = s.ship
+	}
+	if reason == "" {
+		reason = fmt.Sprintf("Publish %s on publication target %s.", strings.ReplaceAll(s.effect, "_", " "), tg.ID)
+	}
+	if len(secrets) > 0 {
+		reason += " Detected secret.credential in " + secrets[0] + "."
+	}
+	decision, err := m.opts.Gate.Authorize(ctx, c.Tenant, GateRequest{Action: "gitpublish." + s.effect, SubjectKind: shipGateSubject, SubjectRef: tg.ID.String(),
+		PlanHash: planOf(c.Tenant, s), RequestedBy: c.Principal.Actor(), ConsumerID: consumer, Reason: reason, RequireApproval: len(secrets) > 0})
+	switch {
+	case err != nil:
+		return GateDecision{}, refuse("approval_unavailable", http.StatusServiceUnavailable)
+	case decision.State == GatePending, decision.State == GateGranted:
+		return decision, nil
+	}
+	return GateDecision{}, refuse("approval_denied", http.StatusForbidden)
+}
+
+// planOf binds an approval to the exact publication: a push's as shipPlan,
+// any other effect's by its request, with no operation id or subject.
+func planOf(tenant model.TenantID, s spec) string {
+	if s.effect == effectPush {
+		return shipPlan(PushInput{Target: s.target, Ref: s.req.Ref, ExpectedOld: s.req.ExpectedOld, Commit: s.req.Commit, Tree: s.req.Tree})
+	}
+	s.op = ""
+	return digestOf(tenant, s, Subject{})
 }
 
 // changeLinker names a pull request's page on the host, for the target's

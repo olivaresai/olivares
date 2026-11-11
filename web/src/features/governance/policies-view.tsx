@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,9 @@ import { PolicyEditorDialog } from './policy-editor'
 import './i18n'
 import type { AbacSpec, PolicyDTO } from './types'
 import { PagePrimaryAction } from '@/components/ui/page-actions'
+import { consoleApi, consoleKeys } from '@/features/console/api'
+import { ApiError } from '@/lib/api/errors'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 
 /**
  * PoliciesView lists governance policies (ABAC deny + approval rules) and hosts the
@@ -138,6 +141,8 @@ export function PoliciesView() {
           </Button>
         </PagePrimaryAction>
       )}
+      {can('governance:rbac:read') && <RolesTable />}
+
       <p className="text-caption text-muted-foreground">
         {t('policies.caption')}
       </p>
@@ -193,5 +198,139 @@ export function PoliciesView() {
         />
       )}
     </div>
+  )
+}
+
+interface RoleRow {
+  id: string
+  name: string
+  does: string
+  /** Members who hold it; absent where nobody counted them (a custom role). */
+  people?: number
+  builtIn: boolean
+}
+
+/**
+ * RolesTable lists the engine's built-in roles (GET /rbac/catalog, in its order),
+ * each with the line the product's documentation gives it, how many people hold
+ * it, then the organization's own roles. The count needs the people read: a
+ * person without it sees the rest. A failed people or custom-roles read keeps
+ * the rows and says so below them; an edition without custom roles shows the
+ * built-in ones, and the page's closed Business row («Custom policies, roles and
+ * grants», businessRows) names what it adds.
+ */
+function RolesTable() {
+  const { t } = useTranslation(['governance', 'auth'])
+  const { activeTenant, can } = useAuth()
+  const headingId = useId()
+  const countPeople = can('user:read')
+  const catalog = useQuery({
+    queryKey: consoleKeys.rbacCatalog(),
+    queryFn: () => consoleApi.rbacCatalog(),
+    staleTime: 5 * 60_000,
+  })
+  const members = useQuery({
+    queryKey: consoleKeys.members(activeTenant),
+    queryFn: () => consoleApi.listMembers(),
+    enabled: countPeople,
+    staleTime: 60_000,
+  })
+  const custom = useQuery({
+    queryKey: consoleKeys.roles(activeTenant),
+    queryFn: () => consoleApi.listRoles(),
+  })
+  // An edition without custom roles refuses their read: the built-in ones stand.
+  const customError =
+    custom.error instanceof ApiError && custom.error.isEditionRefusal
+      ? null
+      : custom.error
+  const sideError = members.error ?? customError
+  // A partial page of people would undercount: no number then.
+  const people = members.data?.has_more ? undefined : members.data?.items
+  const rows: RoleRow[] = [
+    ...(catalog.data?.builtin_roles ?? []).map((role) => ({
+      id: role,
+      // A role the console has no words for yet shows its name and no line. The
+      // lines quote docs-site/src/content/docs/how-to/govern-and-approve.md (and
+      // its de, es, fr, ja, ru and zh copies); never a list of permissions.
+      name: t(`auth:roles.${role}`, { defaultValue: role }),
+      does: t(`policies.roles.does.${role}`, { defaultValue: '' }),
+      people: people?.filter((m) => m.role === role).length,
+      builtIn: true,
+    })),
+    ...(custom.data?.items ?? []).map((role) => ({
+      id: `custom:${role.name}`,
+      name: role.display_name || role.name,
+      does:
+        role.description ||
+        (role.base_role
+          ? t('policies.roles.from', {
+              role: t(`auth:roles.${role.base_role}`),
+            })
+          : ''),
+      builtIn: false,
+    })),
+  ]
+  const columns: TableColumn<RoleRow, unknown>[] = [
+    {
+      accessorKey: 'name',
+      header: t('policies.roles.role'),
+      cell: ({ row }) => (
+        <span className="font-medium text-foreground">{row.original.name}</span>
+      ),
+    },
+    { accessorKey: 'does', header: t('policies.roles.can') },
+    ...(countPeople
+      ? [
+          {
+            accessorKey: 'people',
+            header: t('policies.roles.people'),
+            cell: ({ row }) => row.original.people ?? '—',
+          } as TableColumn<RoleRow, unknown>,
+        ]
+      : []),
+    {
+      accessorKey: 'builtIn',
+      header: t('policies.roles.kind'),
+      cell: ({ row }) => (
+        <Badge variant={row.original.builtIn ? 'neutral' : 'info'}>
+          {row.original.builtIn
+            ? t('policies.roles.builtIn')
+            : t('policies.roles.custom')}
+        </Badge>
+      ),
+    },
+  ]
+
+  return (
+    <section aria-labelledby={headingId} className="flex flex-col gap-2">
+      <h2 id={headingId} className="text-body font-medium text-foreground">
+        {t('policies.roles.title')}
+      </h2>
+      <DataTable
+        columns={columns}
+        data={rows}
+        isLoading={catalog.isLoading || members.isLoading || custom.isLoading}
+        error={catalog.error}
+        onRetry={() => catalog.refetch()}
+        getRowId={(r) => r.id}
+        label={t('policies.roles.title')}
+        empty={
+          <EmptyState
+            title={t('policies.roles.title')}
+            description={t('policies.roles.empty')}
+          />
+        }
+      />
+      {sideError && !catalog.error ? (
+        <QueryErrorState
+          error={sideError}
+          retry={() => {
+            void members.refetch()
+            void custom.refetch()
+          }}
+        />
+      ) : null}
+    </section>
   )
 }

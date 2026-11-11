@@ -8,17 +8,19 @@ import { act, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLAG_ARM_MS } from '@/features/governance/approval-preview'
 import type { ApprovalDTO } from '@/features/governance/types'
+import { ADMIN_READS } from '@/features/navigation/admin-reads.fixture'
 import { ApiError } from '@/lib/api/errors'
 
 const { identity } = vi.hoisted(() => ({
   identity: {
     activeTenant: 't1',
     principal: { kind: 'user', user_id: 'u-self' },
+    can: (_p: string): boolean => true,
   },
 }))
 
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ ...identity, isSuperadmin: true, can: () => true }),
+  useAuth: () => ({ ...identity, isSuperadmin: true }),
 }))
 
 vi.mock('@/features/console/api', () => ({
@@ -114,11 +116,22 @@ vi.mock('@/features/governance/api', async (importOriginal) => {
 })
 
 // The sessions list's Needs you group: none waits unless a test says so.
-vi.mock('./use-session-rail', () => ({
+// Whether the approvals page opens is the real rule.
+vi.mock('./use-session-rail', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./use-session-rail')>()),
   useSessionRail: () => ({ groups: [] }),
 }))
 
 import { NotificationBell } from './notification-bell'
+import { preferenceStorage } from '@/lib/preference-storage'
+import { useModulesStore } from '@/stores/modules'
+
+// The read mark lives in the person's server-kept preferences.
+const READ_KEY = 'olivares.notifications.lastSeen'
+
+// What the bell says where it may not read the ledger: who sees recent activity.
+const AUDIT_ONLY =
+  'Recent activity is shown to people who can read the audit ledger.'
 
 const shown = () => ledger.filter((e) => e.action !== 'audit.read')
 const labelOf = (event: { action: string }) =>
@@ -139,12 +152,17 @@ const mount = () =>
 beforeEach(() => {
   identity.activeTenant = 't1'
   identity.principal = { kind: 'user', user_id: 'u-self' }
+  identity.can = () => true
   recentMock.mockClear()
   listMock.mockClear()
   approvalsMock.mockReset()
   approvalsMock.mockResolvedValue({ items: [], has_more: false })
   decideMock.mockReset()
   resetLedger()
+  // A read mark one test leaves is the next test's: each starts with none.
+  preferenceStorage.clear()
+  // Every module runs unless a test turns one off.
+  useModulesStore.getState().setOff([])
 })
 
 describe('NotificationBell', () => {
@@ -266,6 +284,129 @@ describe('NotificationBell', () => {
     expect(screen.queryAllByText(/^Event \d+$/)).toHaveLength(0)
   })
 
+  it('tells each unread event in words and clears them with "Mark all as read"', async () => {
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include internal records' }),
+    )
+    await screen.findByText(labelOf(shown().at(-1)!))
+    // Nothing was marked yet: every event is unread, and a screen reader hears it.
+    expect(screen.getAllByText('Unread')).toHaveLength(10)
+    await user.click(screen.getByRole('button', { name: 'Mark all as read' }))
+    expect(screen.queryAllByText('Unread')).toHaveLength(0)
+    // The mark is the person's, per organization, up to the newest event read.
+    expect(JSON.parse(preferenceStorage.getItem(READ_KEY) ?? '{}')).toEqual({
+      t1: shown().at(-1)!.occurred_at,
+    })
+  })
+
+  it('tells as unread only what happened after the mark', async () => {
+    preferenceStorage.setItem(
+      READ_KEY,
+      JSON.stringify({ t1: shown().at(-2)!.occurred_at }),
+    )
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include internal records' }),
+    )
+    await screen.findByText(labelOf(shown().at(-1)!))
+    expect(screen.getAllByText('Unread')).toHaveLength(1)
+  })
+
+  it('tells every event as unread when the mark cannot be read', async () => {
+    preferenceStorage.setItem(READ_KEY, JSON.stringify({ t1: 'x' }))
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include internal records' }),
+    )
+    await screen.findByText(labelOf(shown().at(-1)!))
+    expect(screen.getAllByText('Unread')).toHaveLength(10)
+  })
+
+  it('opens on its panel and names the list before "Mark all as read"', async () => {
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    // The bell opens on the panel, never on a control: a second Enter changes nothing.
+    // The panel carries the bell's name, so a screen reader says what opened.
+    expect(
+      screen.getByRole('dialog', { name: 'Recent activity' }),
+    ).toHaveFocus()
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Include internal records' }),
+    )
+    const mark = await screen.findByRole('button', { name: 'Mark all as read' })
+    const heading = screen.getByRole('heading', { name: 'Recent activity' })
+    // Heading navigation lands on the list's name, then reaches its action.
+    expect(
+      heading.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('opens on its panel when a request waits, never on its Approve', async () => {
+    approvalsMock.mockResolvedValue({
+      items: [
+        {
+          id: 'apr-1',
+          status: 'pending',
+          action: 'killswitch.release',
+          reason: 'Release the kill switch',
+          required_approvals: 1,
+          approve_count: 0,
+          reject_count: 0,
+          escalated: false,
+          may_decide: true,
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    mount()
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Recent activity, Needs you',
+      }),
+    )
+    // Approve is the panel's first control: a second Enter must not reach it.
+    expect(
+      screen.getByRole('dialog', { name: 'Recent activity, Needs you' }),
+    ).toHaveFocus()
+    expect(
+      screen.getByRole('button', { name: 'Approve once' }),
+    ).not.toHaveFocus()
+  })
+
+  it('gives focus back to the bell on Escape', async () => {
+    const user = userEvent.setup()
+    mount()
+    const bell = screen.getByRole('button', { name: 'Recent activity' })
+    await user.click(bell)
+    expect(screen.getByRole('dialog')).toHaveFocus()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(bell).toHaveFocus())
+  })
+
+  it('keeps "Include internal records" under the title while the list is empty', async () => {
+    recentMock.mockResolvedValueOnce({ items: [], head_seq: 0 })
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    await screen.findByText(/no recent activity/i)
+    // Across both columns, with or without "Mark all as read" beside the title:
+    // the header does not move when events arrive.
+    const filter = screen.getByRole('checkbox', {
+      name: 'Include internal records',
+    })
+    expect(filter.closest('label')).toHaveClass('col-span-2')
+  })
+
   it('tells events as sentences, hides routine ones and links an approval to its request', async () => {
     const at = (m: number) =>
       new Date(Date.UTC(2026, 9, 1, 12, m, 0)).toISOString()
@@ -383,6 +524,11 @@ describe('NotificationBell', () => {
     ).toBeTruthy()
     expect(screen.getByText('Release the kill switch')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Deny' })).toBeVisible()
+    const details = screen.getByRole('link', { name: 'Details' })
+    expect(details).toHaveAttribute(
+      'href',
+      '/permissions?tab=approvals&approval=apr-1',
+    )
     // Every request keeps its actions in reach: Needs you is no scroller of its own
     // (a fourth request's buttons hid under one); the popover scrolls as a whole.
     expect(screen.getByRole('region', { name: 'Needs you' })).not.toHaveClass(
@@ -407,11 +553,195 @@ describe('NotificationBell', () => {
     ).toBeInTheDocument()
   })
 
+  it('links an event only where its page opens for this person', async () => {
+    // This person reads the ledger, not the approvals or the sessions page.
+    identity.can = (p) =>
+      p !== 'governance:identity:read' && p !== 'sessions:live:read'
+    recentMock.mockResolvedValueOnce({
+      head_seq: 2,
+      items: [
+        {
+          ...ledger[1]!,
+          id: 'asked',
+          actor: 'user:u-ada',
+          action: 'governance.approval.create',
+          target_kind: 'governance.approval',
+          target_id: 'apr-1',
+        },
+        { ...ledger[0]!, id: 'failed', action: 'sessions.run.failed' },
+      ],
+    })
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    const asked = await screen.findByText('Ada requested approval')
+    expect(asked.closest('a')).toBeNull()
+    const failed = screen.getByText('A session failed to start')
+    expect(failed.closest('a')).toBeNull()
+  })
+
+  it('links no event to a page whose module is off', async () => {
+    // The governance module is off here: its approvals page does not open.
+    useModulesStore.getState().setOff(['governance'])
+    recentMock.mockResolvedValueOnce({
+      head_seq: 1,
+      items: [
+        {
+          ...ledger[0]!,
+          id: 'asked',
+          actor: 'user:u-ada',
+          action: 'governance.approval.create',
+          target_kind: 'governance.approval',
+          target_id: 'apr-1',
+        },
+      ],
+    })
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    const asked = await screen.findByText('Ada requested approval')
+    expect(asked.closest('a')).toBeNull()
+  })
+
+  it('links a session event to the sessions page where it opens', async () => {
+    recentMock.mockResolvedValueOnce({
+      head_seq: 1,
+      items: [{ ...ledger[0]!, id: 'failed', action: 'sessions.run.failed' }],
+    })
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    const failed = await screen.findByText('A session failed to start')
+    expect(failed.closest('a')).toHaveAttribute('href', '/sessions')
+  })
+
+  it("offers a request's details only where the approvals page opens", async () => {
+    // This person may decide the request, but the approvals page is not theirs.
+    identity.can = (p) => p !== 'governance:identity:read'
+    approvalsMock.mockResolvedValue({
+      items: [
+        {
+          id: 'apr-1',
+          status: 'pending',
+          action: 'killswitch.release',
+          reason: 'Release the kill switch',
+          required_approvals: 1,
+          approve_count: 0,
+          reject_count: 0,
+          escalated: false,
+          may_decide: true,
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    mount()
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Recent activity, Needs you',
+      }),
+    )
+    // The request and its decision stay; no door to a page that refuses them.
+    expect(screen.getByText('Release the kill switch')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Details' })).toBeNull()
+  })
+
+  it('marks what needs the person with the accent dot', async () => {
+    approvalsMock.mockResolvedValue({
+      items: [
+        {
+          id: 'apr-1',
+          status: 'pending',
+          action: 'killswitch.release',
+          reason: 'Release the kill switch',
+          required_approvals: 1,
+          approve_count: 0,
+          reject_count: 0,
+          escalated: false,
+          may_decide: true,
+        },
+      ],
+      has_more: false,
+    })
+    mount()
+    const bell = await screen.findByRole('button', {
+      name: 'Recent activity, Needs you',
+    })
+    // Direction A2 draws the dot in the accent tone, not the warning tone.
+    expect(bell.querySelector('.rounded-full')).toHaveClass('bg-accent-strong')
+  })
+
   it('links "view all" to the audit ledger', async () => {
     const user = userEvent.setup()
     mount()
     await user.click(screen.getByRole('button'))
     const link = await screen.findByRole('link', { name: /view all/i })
     expect(link).toHaveAttribute('href', '/audit')
+  })
+
+  it('asks nothing of the ledger for a member and says who sees recent activity', async () => {
+    // A member holds no audit:read: the engine refuses them the recent read.
+    identity.can = () => false
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    expect(await screen.findByText(AUDIT_ONLY)).toBeVisible()
+    expect(recentMock).not.toHaveBeenCalled()
+    expect(screen.queryByText(/no recent activity/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
+    // Nothing waits for this person: the bell carries no dot.
+    expect(
+      screen.getByRole('button', { name: 'Recent activity' }),
+    ).toBeInTheDocument()
+  })
+
+  it('says who sees recent activity when the engine refuses the read', async () => {
+    // The console thought this person could read (permissions changed, a stale session).
+    recentMock.mockRejectedValueOnce(
+      new ApiError(403, 'forbidden', 'You may not read the audit ledger'),
+    )
+    const user = userEvent.setup()
+    mount()
+    await user.click(screen.getByRole('button', { name: 'Recent activity' }))
+    expect(await screen.findByText(AUDIT_ONLY)).toBeVisible()
+    expect(recentMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/no recent activity/i)).toBeNull()
+  })
+
+  it('shows an editor the request they may decide, reads no ledger and offers no "view all"', async () => {
+    // An editor holds none of the administrator's reads: the ledger is not theirs.
+    identity.can = (p) => !ADMIN_READS.has(p)
+    approvalsMock.mockResolvedValue({
+      items: [
+        {
+          id: 'apr-2',
+          status: 'pending',
+          action: 'killswitch.release',
+          reason: 'Release the kill switch',
+          required_approvals: 1,
+          approve_count: 0,
+          reject_count: 0,
+          escalated: false,
+          may_decide: true,
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    mount()
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Recent activity, Needs you',
+      }),
+    )
+    expect(screen.getByText('Release the kill switch')).toBeVisible()
+    expect(await screen.findByText(AUDIT_ONLY)).toBeVisible()
+    expect(recentMock).not.toHaveBeenCalled()
+    expect(screen.queryByText(/no recent activity/i)).toBeNull()
+    expect(
+      screen.queryByRole('checkbox', { name: 'Include internal records' }),
+    ).toBeNull()
+    expect(screen.queryByRole('link', { name: /view all/i })).toBeNull()
   })
 })

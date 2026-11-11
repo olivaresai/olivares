@@ -139,6 +139,7 @@
   },
   "query": {
     "title": "Recuperación gobernada",
+    "tryTitle": "Probar una consulta",
     "body": "Ejecuta una recuperación gobernada contra «{{name}}» como el agente indicado. Los resultados se filtran por la autorización, ACL y residencia de esa identidad, y esta consulta se registra en la trazabilidad (origen → respuesta).",
     "queryLabel": "Consulta",
     "queryHint": "La consulta de recuperación — se hashea para la trazabilidad, nunca se almacena como texto.",

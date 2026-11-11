@@ -1,6 +1,6 @@
 {
   "title": "Voz y tiempo real",
-  "description": "Sesiones de voz y tiempo real gobernadas en todo el parque. La consola muestra solo referencias y agregados, nunca audio, texto de transcripción, prompts ni PII.",
+  "description": "Sesiones de voz y las políticas que permiten abrirlas.",
   "tabs": {
     "sessions": "Sesiones",
     "policies": "Políticas",

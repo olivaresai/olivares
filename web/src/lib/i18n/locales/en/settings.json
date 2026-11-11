@@ -53,6 +53,13 @@
   "general": {
     "title": "General",
     "scope": "Your own preferences. They follow you to every workspace on this installation.",
+    "groups": {
+      "appearance": "Appearance",
+      "language": "Language and region",
+      "start": "When the console opens",
+      "sessions": "Sessions",
+      "editor": "Code editor"
+    },
     "theme": "Theme",
     "themeHint": "Follows the system unless you choose light, dark or black.",
     "density": "Density",
@@ -65,14 +72,20 @@
     "clock12": "12-hour",
     "startPage": "Start page",
     "startPageHint": "What opens when you sign in. Default: Sessions.",
-    "confirmStop": "Confirm before stopping a session",
-    "confirmStopHint": "Ask once before Stop ends a session that is still working.",
+    "confirmStop": "Confirm before ending a session",
+    "confirmStopHint": "Ask once before “End session” closes a session.",
     "editor": "Editor for file links",
     "editorHint": "Which editor the “Open in” links start on this computer. Default: VS Code.",
     "editorSsh": "SSH host for the editor",
     "editorSshHint": "How the editor reaches session folders on another machine, as user@host or user@host:port. Empty uses the address this console is served from, and no SSH when that is this computer.",
     "reduceMotion": "Reduce motion",
-    "reduceMotionHint": "Replace movement with fades. On when your system asks for it."
+    "reduceMotionHint": "Replace movement with fades. On when your system asks for it.",
+    "sendKey": "Send key",
+    "sendKeyHint": "The key that sends your message in a session. With the second choice, Enter breaks a line.",
+    "sendWhileRunning": "While the tool works",
+    "sendWhileRunningHint": "What the send key does while a turn is running. When Enter sends, Ctrl+Enter does the other.",
+    "sendQueue": "Queue it",
+    "sendSteer": "Steer the turn"
   },
   "sessionNotifications": {
     "title": "Session notifications",
@@ -84,6 +97,12 @@
     "finished": "The turn finished.",
     "ended": "The session ended.",
     "failed": "The session stopped with an error.",
+    "inApp": {
+      "needsYou": "{{name}} needs you",
+      "finished": "{{name}} finished its turn",
+      "failed": "{{name}} stopped with an error"
+    },
+    "open": "Open",
     "pushOn": "Also reaches this device with the tab closed.",
     "pushUnavailable": "Only while a tab is open: this device could not be registered for push.",
     "installHint": "Notifications need the app on the Home Screen: tap Share, then Add to Home Screen."
@@ -93,14 +112,14 @@
     "scope": "The keys this installation answers. They are the same for everyone."
   },
   "edition": {
-    "scope": "The edition of this build, its license, and what Business adds.",
+    "scope": "The edition of this build, its license, and what Olivares AI Business adds.",
     "label": "Edition",
     "unknown": "Not reported by this engine",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business adds",
+    "businessAdds": "Olivares AI Business adds",
     "summary": {
       "Session cockpit and fleet deployment.": "Session cockpit and fleet deployment.",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Live session sharing with named, expiring guest access and owner-approved message proposals.",
@@ -111,11 +130,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them."
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "{{edition}} edition",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "Show edition badge",
       "loadError": "Could not load the badge preference.",
       "saveError": "Could not save the badge preference. Try again."
@@ -138,9 +159,9 @@
     "email": "Email"
   },
   "stopConfirm": {
-    "title": "Stop this session?",
-    "description": "Stop ends a session that is still working.",
-    "confirm": "Stop the session"
+    "title": "End this session?",
+    "description": "The session closes, even if it is still working.",
+    "confirm": "End the session"
   },
   "modules": {
     "title": "Modules",
@@ -148,6 +169,9 @@
     "apply_one": "Apply 1 change",
     "apply_other": "Apply {{count}} changes",
     "applied": "Module selection saved.",
+    "appliedNow": "Applied. No session was stopped.",
+    "savedForNextStart": "Saved. It applies the next time the engine starts; no running session was stopped.",
+    "notSaved": "The module selection could not be saved. Nothing changed.",
     "restarting": "Restarting the engine…",
     "restartWarning": {
       "title": "Restart the engine?",
@@ -302,6 +326,8 @@
   },
   "tracing": {
     "description": "Export traces and metrics to your collector. Changes apply without restarting the engine.",
+    "export": "Export",
+    "advanced": "Advanced",
     "enabled": "Enable tracing",
     "endpoint": "Collector endpoint",
     "protocol": "Protocol",
@@ -314,10 +340,16 @@
     "inactive": "Tracing is off.",
     "apply": "Apply",
     "saved": "Tracing settings saved.",
-    "businessRequired": "SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them."
+    "businessRequired": "SIEM delivery and external telemetry export require Olivares AI Business. Stored settings are preserved; Olivares AI Community does not send them."
   },
   "signIn": {
     "methods": "Sign-in methods",
+    "ssoName": "Single sign-on",
+    "available": "Available",
+    "required": "Required",
+    "blocked": "Blocked",
+    "notSetUp": "Not set up",
+    "sessionGroup": "Session",
     "password": "Password",
     "sso": "Single sign-on: {{providers}}",
     "noSso": "No single sign-on provider is available on the sign-in page.",
@@ -336,7 +368,9 @@
     "minutes": "Stop after minutes in idle",
     "description": "Off by default. Free memory by stopping finished sessions that are no longer open. Resume keeps the folder and conversation.",
     "hint": "Use 0 to turn off, or 6–10080 minutes. The idle window begins after five minutes without output. Sessions with approvals, running children or peers, or a newer message stay running.",
-    "saved": "Session memory setting saved."
+    "saved": "Session memory setting saved.",
+    "group": "Idle stop",
+    "stop": "Stop idle sessions"
   },
   "updates": {
     "title": "Updates",

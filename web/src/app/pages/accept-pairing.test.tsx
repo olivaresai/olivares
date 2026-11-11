@@ -74,3 +74,34 @@ it('refuses a page without a pairing fragment', () => {
   ).toBeDisabled()
   expect(screen.getByRole('alert')).toBeInTheDocument()
 })
+
+// The page as drawn, like sign-in: the lockup, then ONE sheet holding the
+// title, the line under it and the one filled button; a refused or missing
+// link is a notice inside that sheet.
+const sheetOf = (node: Element) => node.closest('[data-slot="auth-sheet"]')
+
+it('holds the one h1 and its one filled button in one sheet', () => {
+  show()
+  const headings = screen.getAllByRole('heading', { level: 1 })
+  expect(headings).toHaveLength(1)
+  expect(document.querySelectorAll('[data-slot="auth-sheet"]')).toHaveLength(1)
+  const sheet = sheetOf(headings[0])
+  expect(sheet).not.toBeNull()
+  const pair = screen.getByRole('button', { name: 'Pair this device' })
+  const filled = sheet!.querySelectorAll('.bg-accent')
+  expect(filled).toHaveLength(1)
+  expect(filled[0]).toBe(pair)
+  expect(pair).toHaveClass('w-full')
+})
+
+it('says a missing link in a notice inside the sheet', () => {
+  window.history.replaceState(null, '', '/pair')
+  show()
+  const alert = screen.getByRole('alert')
+  expect(alert).toHaveTextContent(
+    'This link is missing, expired, or already used.',
+  )
+  expect(alert).toHaveAttribute('data-slot', 'notice')
+  expect(alert).toHaveAttribute('data-tone', 'bad')
+  expect(sheetOf(alert)).not.toBeNull()
+})

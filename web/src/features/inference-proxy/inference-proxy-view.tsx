@@ -53,6 +53,7 @@ import { useAuth } from '@/lib/auth/context'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { ApiError } from '@/lib/api/errors'
 import {
+  reportEditionRefusal,
   useFailedActionReporter,
   usePrivilegedMutation,
 } from '@/lib/hooks/use-privileged-mutation'
@@ -510,6 +511,11 @@ function DLPSection() {
         report(e)
         return
       }
+      // An edition is not a role: the edition line, and the confirm closes as for one.
+      if (reportEditionRefusal(e)) {
+        setDeleting(null)
+        return
+      }
       if (e instanceof ApiError && e.isForbidden) {
         toast.warning(t('common:privileged.notAuthorizedToast'))
         setDeleting(null)
@@ -542,6 +548,7 @@ function DLPSection() {
         />
         {!canRead ? (
           <EmptyState
+            size="panel"
             description={t('dlp.noReadHint')}
             title={t('dlp.noRead')}
           />
@@ -557,6 +564,7 @@ function DLPSection() {
           />
         ) : (rulesQ.data?.items.length ?? 0) === 0 ? (
           <EmptyState
+            size="panel"
             title={t('dlp.empty')}
             description={t('dlp.emptyHint')}
             // "Add a rule to allow or deny a classification on egress" — the same
@@ -833,6 +841,7 @@ function DeviceSection() {
         report(e)
         return
       }
+      if (reportEditionRefusal(e)) return
       if (e instanceof ApiError && e.isForbidden) {
         toast.warning(t('common:privileged.notAuthorizedToast'))
         return

@@ -113,3 +113,46 @@ func TestTargetReadUnknownHost(t *testing.T) {
 		})
 	}
 }
+
+// A target read names the repository it publishes to (owner/name, or the path
+// of a plain Git remote) for every reader, so the Push panel can say where a
+// push goes. It is read without creating the server repository; a repository
+// no longer approved is simply not named.
+func TestTargetReadNamesItsRepository(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		approved bool
+		want     any
+	}{{"approved", true, "acme/widgets"}, {"revoked", false, nil}} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newScopeHarnessOn(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"})
+			h.custody.repoName = "acme/widgets"
+			if !tc.approved {
+				h.custody.mu.Lock()
+				delete(h.custody.approved, h.target.RepositoryBinding)
+				h.custody.mu.Unlock()
+			}
+			h.authz.deny[h.ws] = auth.ErrRouteDenied
+			resolvedBefore := h.custody.repositoryBindings() // creating the target resolved it once
+			for _, pattern := range []string{"/targets", "/targets/{id}"} {
+				rec := readTargetRoute(t, h, pattern, h.user())
+				if rec.Code != http.StatusOK {
+					t.Fatalf("%s: %d %s", pattern, rec.Code, rec.Body.String())
+				}
+				var body map[string]any
+				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+					t.Fatal(err)
+				}
+				if pattern == "/targets" {
+					body = body["items"].([]any)[0].(map[string]any)
+				}
+				if body["repository"] != tc.want {
+					t.Errorf("%s repository = %v; want %v", pattern, body["repository"], tc.want)
+				}
+			}
+			if n := h.custody.repositoryBindings() - resolvedBefore; n != 0 {
+				t.Errorf("a target read resolved the server repository %d times", n)
+			}
+		})
+	}
+}

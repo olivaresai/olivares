@@ -10,6 +10,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { buttonVariants } from '@/components/ui/button'
 import i18n from '@/lib/i18n'
 import { DictateButton } from './dictate-button'
 import { joinDictation } from './join'
@@ -77,6 +78,17 @@ describe('DictateButton', () => {
     render(<DictateButton onText={vi.fn()} />)
     expect(button()).toHaveAttribute('aria-pressed', 'false')
     expect(status()).toHaveTextContent('')
+  })
+
+  it('is a flat picker of the shared small size, as the composer draws it', () => {
+    render(<DictateButton onText={vi.fn()} />)
+    const base = buttonVariants({ variant: 'ghost', size: 'base' }).split(' ')
+    const small = buttonVariants({ variant: 'ghost', size: 'sm' })
+      .split(' ')
+      .filter((c) => !base.includes(c))
+    const cls = button().className.split(/\s+/)
+    expect(cls).toEqual(expect.arrayContaining(small))
+    expect(cls).not.toContain('rounded-full')
   })
 
   it('loads the model before it opens the microphone, and says so', async () => {

@@ -47,6 +47,7 @@
   "schedule": {
     "updated": "备份计划已更新",
     "loading": "正在加载计划...",
+    "loadFailed": "无法加载备份计划。",
     "title": "自动备份计划",
     "description": "配置定期备份。计划由引擎执行；口令短语从实例密钥派生。",
     "enableAria": "启用自动备份",
@@ -118,6 +119,7 @@
   },
   "pending": {
     "title": "等待批准的恢复（双人控制）",
+    "loadFailed": "无法加载等待批准的恢复。",
     "requestedByPrefix": "请求者",
     "approveRestore": "批准并恢复",
     "approved": "恢复已批准",

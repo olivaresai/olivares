@@ -37,6 +37,7 @@ import (
 // the live handles keyed by tenant|run_ref).
 type runtimeState struct {
 	DocumentConverter func(context.Context, string, []byte) ([]byte, error)
+	DocumentOCR       func() bool
 	limitResumeCancel context.CancelFunc
 	limitResumeWG     sync.WaitGroup
 	// toolMu holds launch selection through live registration against release removal.
@@ -345,6 +346,9 @@ const defaultRuntimeIdleWindow = 5 * time.Minute
 
 // liveRun is a process Olivares currently supervises.
 type liveRun struct {
+	durableTurns    []model.ID
+	unsettledTurns  map[model.ID]string // outcome whose store write failed, written again at process end
+	admittedTurn    model.ID            // a checked input's row, committed with its admission (admitRunTurn)
 	costCapMicroUSD int64
 	costSpent       int64
 	costOverflowed  bool
@@ -729,6 +733,11 @@ type CreateRunParams struct {
 	// at the workspace's HEAD, as before, and omitempty keeps every existing launch's
 	// dispatch digest unchanged. Meaningful only with Worktree.
 	WorktreeFrom string `json:"worktree_from,omitempty"`
+	// FromCheckpoint starts that worktree with the files a turn of another session of the
+	// caller's found: «Edit from here» on a session in its own worktree (run_checkpoints.go,
+	// forkCheckpoint). Meaningful only with Worktree; omitempty keeps every other launch's
+	// dispatch digest unchanged.
+	FromCheckpoint *RunCheckpointRef `json:"from_checkpoint,omitempty"`
 	// WorktreeBranch is the branch this module made for the run's worktree. It is
 	// SERVER-SET only and, like WorkspaceDir, is not part of the semantic request
 	// the digest pins (runtime_worktree.go).
@@ -866,9 +875,12 @@ type CreateRunParams struct {
 	profilePrograms    []string
 	profileRegistries  []SessionRegistry
 	profileEgressHosts []string
-	registryTokens     []EnvVar
-	registryDetail     string
-	egressDetail       string
+	// profileAutoCompactWindow is the profile's declared Claude Code auto-compact window
+	// (tokens, 0 = none), re-read on every launch and resume; it is not persisted.
+	profileAutoCompactWindow int
+	registryTokens           []EnvVar
+	registryDetail           string
+	egressDetail             string
 
 	// --- The provider-profile plane (provider_profile.go). ---
 	//
@@ -900,7 +912,7 @@ func launchIntentFor(ctx context.Context, action LaunchAction, runRef string, p 
 	intent := LaunchIntent{
 		Action: action, RunRef: runRef, Transport: p.Transport,
 		PermissionMode: p.PermissionMode, Model: p.Model, RunOn: p.RunOn, WorkspaceRef: p.WorkspaceRef,
-		Actor: p.Actor, ActorKind: p.ActorKind, RecordRequested: p.RecordRequested,
+		Actor: p.Actor, ActorKind: p.ActorKind, UserGroupRefs: p.asks.userGroups, RecordRequested: p.RecordRequested,
 		Holder: lease.Holder, Fence: lease.Fence, ClaimSID: lease.SID,
 		TemplateRef: p.TemplateID, TemplateVersion: p.TemplateVersion, TemplateBuiltin: p.TemplateBuiltin,
 		AllowedTools: append([]string(nil), p.AllowedTools...),
@@ -1233,6 +1245,9 @@ func (m *Module) createRunInternal(
 	if err := m.resolveProviderDefaultModel(ctx, tenant, &p); err != nil {
 		return runDTO{}, err
 	}
+	if err := p.asks.refuseModel(p.Model); err != nil {
+		return runDTO{}, err
+	}
 	// Formalize workspace_ref → governed host path/mount BEFORE the gates so the
 	// CRITICAL determination can read the workspace's classification/mount
 	// posture. A non-empty ref that is not a registered workspace fails deny-closed.
@@ -1298,6 +1313,15 @@ func (m *Module) createRunInternal(
 	// empty directory behind: os.Remove only succeeds on an empty one, so a child
 	// that wrote something keeps its bytes.
 	rowCommitted := false
+	var fork forkSource
+	if p.FromCheckpoint != nil {
+		if !p.Worktree {
+			return runDTO{}, worktreeRefusal("from_checkpoint starts a new worktree: ask for one with worktree")
+		}
+		if fork, err = m.forkCheckpoint(ctx, tenant, p); err != nil {
+			return runDTO{}, err
+		}
+	}
 	if p.Worktree {
 		if err := workspaceSetupStartError(ws, p.NoSetup); err != nil {
 			return runDTO{}, err
@@ -1315,6 +1339,11 @@ func (m *Module) createRunInternal(
 				m.discardRunWorktree(ctx, ws.rootReal, dir, branch)
 			}
 		}()
+		if fork.dir != "" {
+			if err := m.placeForkCheckpoint(ctx, tenant, fork, dir); err != nil {
+				return runDTO{}, err
+			}
+		}
 	} else if ws == nil {
 		dir, derr := m.prepareRunWorkspaceDir(runRef)
 		if derr != nil {
@@ -2376,6 +2405,10 @@ func (m *Module) resumeRunLocked(ctx context.Context, tenant model.TenantID, run
 		if _, err := m.sendTextInputLoaded(ctx, tenant, runRef, limitResumeMessage, nil, updated); err != nil {
 			return dto, err
 		}
+	} else if _, engine := engineResumeFrom(ctx); engine {
+		if err := m.continueCutTurn(ctx, wctx, tenant, runRef, actor, actorKind, updated); err != nil {
+			return dto, err
+		}
 	}
 	return dto, nil
 }
@@ -2781,21 +2814,6 @@ func (m *Module) sendTextInputLoaded(
 	images []turnImage,
 	rec model.Record,
 ) (bool, error) {
-	// The folder as it is before the tool sees the message is the turn's checkpoint
-	// (run_checkpoints.go); the turn is kept once the tool took the message.
-	keep := m.beginCheckpoint(ctx, tenant, runRef, text, rec)
-	attempted, err := m.deliverTextInput(ctx, tenant, runRef, text, images, rec)
-	keep(attempted && err == nil)
-	return attempted, err
-}
-
-func (m *Module) deliverTextInput(
-	ctx context.Context,
-	tenant model.TenantID,
-	runRef, text string,
-	images []turnImage,
-	rec model.Record,
-) (bool, error) {
 	if _, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); !scheduled {
 		if err := m.cancelLimitResumeForInput(ctx, tenant, runRef); err != nil {
 			return false, err
@@ -2814,11 +2832,15 @@ func (m *Module) deliverTextInput(
 			return attempted, err
 		}
 	}
+	// Raw Claude turns take their checkpoint in sendInputAdmitted; drivers take it here.
+	keep := m.beginCheckpoint(ctx, tenant, runRef, text, rec)
 	lr, err := m.textInputLive(tenant, runRef, rec)
 	if err != nil {
 		return false, err
 	}
-	return m.driverInputImages(ctx, lr, text, images)
+	attempted, err := m.driverInputImages(ctx, lr, text, images)
+	keep(attempted && err == nil)
+	return attempted, err
 }
 
 // claudeTextTurn is text as the one user-message line a Claude Code stream-json
@@ -3029,6 +3051,9 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef, a
 		}
 		// A deleted session leaves no pin or mark rows behind — same transaction as
 		// the delete itself.
+		if err := dropRunRows(ctx, sc, runTurnKind, runRef); err != nil {
+			return err
+		}
 		return dropPersonalRunState(ctx, sc, runRef)
 	})
 	if err != nil {
@@ -3109,7 +3134,7 @@ func (m *Module) sendInputLoaded(ctx context.Context, tenant model.TenantID, run
 	if err := m.assertRunAuthority(ctx, lr); err != nil {
 		return false, err
 	}
-	return m.sendInputAdmitted(ctx, lr, line, lr.launchID, lr.claim.SID)
+	return m.sendInputAdmitted(ctx, lr, line, lr.launchID, lr.claim.SID, rec)
 }
 
 func (m *Module) rawInputLive(tenant model.TenantID, runRef string, line []byte, rec model.Record) (*liveRun, error) {
@@ -3145,25 +3170,40 @@ func (m *Module) rawInputLive(tenant model.TenantID, runRef string, line []byte,
 }
 
 // sendInputAdmitted is only the I/O half, after a known successful authority
-// transaction under the run lock. It neither authorizes nor opens a transaction.
-func (m *Module) sendInputAdmitted(ctx context.Context, lr *liveRun, line []byte, launch model.ID, sid string) (bool, error) {
+// transaction under the run lock. It does not authorize; a user message's turn row
+// commits before the write: with a checked admission, or in a transaction of its own.
+func (m *Module) sendInputAdmitted(ctx context.Context, lr *liveRun, line []byte, launch model.ID, sid string, rec model.Record) (bool, error) {
 	if err := m.runtimeInputLiveCurrent(ctx, lr, launch, sid); err != nil {
 		return false, err
 	}
 	delivered, attempted := false, false
 	if frame, ok := parseStreamJSON(line); ok && frame.Type == "user" {
+		keep := m.beginCheckpoint(ctx, lr.tenant, lr.runRef, inputLineText(line), rec)
+		defer func() { keep(delivered) }()
 		if err := lr.beginSessionTurn(ctx); err != nil {
 			return false, err
 		}
+		var durableTurn model.ID
 		defer func() {
 			if !delivered {
 				m.withdrawSessionInput(lr, attempted)
+				// An undelivered frame leaves the queue: a successor admitted behind a
+				// running turn must not take this one's result. The row stays open for
+				// the process-end pass (a half-written frame breaks stdin).
+				lr.forgetDurableTurn(durableTurn)
 			}
 		}()
 		if err := m.runtimeInputLiveCurrent(ctx, lr, launch, sid); err != nil {
 			return false, err
 		}
+		var err error
+		if durableTurn, err = m.openRunTurn(ctx, lr, "", "stream-json"); err != nil {
+			return false, err
+		}
 	}
+	// From here a failed write is uncertain, so the row stays open, and the attempted
+	// withdrawal keeps the turn gate shut (beginSessionTurn): no successor row opens
+	// until the provider's result or the process end settles this one.
 	attempted = true
 	wasInterrupted := false
 	if frame, ok := parseStreamJSON(line); ok && frame.Type == "user" {
@@ -4452,6 +4492,11 @@ func (m *Module) reconcileTerminal(ctx context.Context, tenant model.TenantID, r
 		if err := m.revokeStoredRuntimeCredentials(ctx, tenant, rec); err != nil {
 			return runDTO{}, err
 		}
+		// Closing the turns is not authority for the terminal state: a broken turn
+		// table must not leave the run orphaned after its credentials are revoked.
+		if err := m.closeRunTurns(ctx, tenant, runRef, rec.String(colRuntimeLaunchID), "cut", "", true); err != nil {
+			m.warnf("sessions: orphaned run's turns could not be closed", "run_ref", runRef, "err", redactErr(err))
+		}
 		// HONEST: we cannot confirm the underlying process actually terminated (the
 		// handle is gone, e.g. after a non-graceful runtime restart — the process may
 		// have reparented to init and kept running). We move to the terminal `stopped`
@@ -4589,6 +4634,9 @@ func (m *Module) stopAllRuns(ctx context.Context) error {
 			lr.stopRequested, lr.stopReason = true, engineStoppedReason
 		}
 		lr.mu.Unlock()
+		if err := m.settleRunTurns(ctx, lr, "cut", "", true); err != nil {
+			shutdownErrs = append(shutdownErrs, err)
+		}
 		lr.stopDeadline()
 		m.stopRuntimeCredentialHeartbeat(lr)
 		// Once a bearer has crossed LaunchSpec, process termination precedes both

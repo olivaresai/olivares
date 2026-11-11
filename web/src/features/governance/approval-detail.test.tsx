@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ApprovalDTO } from './types'
@@ -31,6 +31,8 @@ vi.mock('./api', async (importOriginal) => {
 })
 
 import { ApprovalDetailPanel } from './approval-detail'
+import { useClientSettings } from '@/features/settings/preferences'
+import { setKeyOverride } from '@/lib/keybindings/effective'
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -75,7 +77,7 @@ describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
     api.decide.mockReturnValue(new Promise(() => {}))
     openPanel({ ...toolApproval, session_scope_allowed: true })
     await user.click(
-      await screen.findByRole('button', { name: 'Approve for this session' }),
+      await screen.findByRole('button', { name: 'Allow for this session' }),
     )
     expect(api.decide).toHaveBeenCalledWith(toolApproval.id, {
       decision: 'approve',
@@ -84,11 +86,42 @@ describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
     expect(screen.getByRole('button', { name: 'Approving…' })).toBeDisabled()
   })
 
+  // A key hint sits where the key acts: A and D decide the open request, so the two
+  // buttons they press draw them. The names stay the buttons' words.
+  it('draws A on Approve once and D on Deny, the keys that press them', async () => {
+    openPanel(toolApproval)
+    const approve = await screen.findByRole('button', { name: 'Approve once' })
+    const deny = screen.getByRole('button', { name: 'Deny' })
+    expect(
+      within(approve).getByText('A', { selector: 'kbd' }),
+    ).toBeInTheDocument()
+    expect(within(deny).getByText('D', { selector: 'kbd' })).toBeInTheDocument()
+  })
+
+  // The buttons announce the keys that press them: a person's own, once edited.
+  it("announces the keys that press Approve once and Deny, a person's own after an edit", async () => {
+    openPanel(toolApproval)
+    const approve = await screen.findByRole('button', { name: 'Approve once' })
+    const deny = screen.getByRole('button', { name: 'Deny' })
+    expect(approve).toHaveAttribute('aria-keyshortcuts', 'A')
+    expect(deny).toHaveAttribute('aria-keyshortcuts', 'D')
+    act(() => {
+      setKeyOverride('approvals.approve|approvalQueue', 'Alt+y')
+      setKeyOverride('approvals.deny|approvalQueue', 'Mod+Shift+x')
+    })
+    expect(approve).toHaveAttribute('aria-keyshortcuts', 'Alt+Y')
+    expect(deny).toHaveAttribute(
+      'aria-keyshortcuts',
+      'Control+Shift+X Meta+Shift+X',
+    )
+    useClientSettings.setState({ keyOverrides: {} })
+  })
+
   it('does not offer session approval on an ordinary request', async () => {
     openPanel(toolApproval)
     await screen.findByRole('button', { name: 'Approve once' })
     expect(
-      screen.queryByRole('button', { name: 'Approve for this session' }),
+      screen.queryByRole('button', { name: 'Allow for this session' }),
     ).toBeNull()
   })
 

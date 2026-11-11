@@ -472,4 +472,25 @@ describe('shipping a session', () => {
       screen.queryByRole('link', { name: 'Pull request #9' }),
     ).not.toBeInTheDocument()
   })
+
+  it('drops only Publish where the Git panel pushes, and keeps the pull request links', async () => {
+    vi.spyOn(gitpublishApi, 'intents').mockResolvedValue({
+      items: [
+        applied({
+          id: 'in-2',
+          effect: 'pull_request',
+          requested: { head_ref: BRANCH, base: 'main', commit: SHA },
+          observed: { present: true, number: 7, merged: false, url: PR_URL },
+        }),
+      ],
+    })
+    renderIntel(<SessionPublish run={run} gitPanel />)
+    expect(
+      await screen.findByRole('button', { name: 'Ship' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull()
+    expect(
+      await screen.findByRole('link', { name: 'Pull request #7' }),
+    ).toHaveAttribute('href', PR_URL)
+  })
 })

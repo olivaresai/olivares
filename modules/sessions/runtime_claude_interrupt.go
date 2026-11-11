@@ -39,6 +39,7 @@ func (m *Module) interruptClaudeTurn(ctx context.Context, lr *liveRun) (bool, er
 	if err != nil {
 		return false, err
 	}
+	durableTurn := lr.durableTurn(false)
 	cursor := lr.ring.cursorNow()
 	// Read the turn count after the authority and call-cancellation waits: a queued
 	// successor can start during them, and the frame then interrupts that turn.
@@ -52,6 +53,7 @@ func (m *Module) interruptClaudeTurn(ctx context.Context, lr *liveRun) (bool, er
 	err = errors.Join(callErr, m.awaitClaudeControlResponse(ctx, lr.ring, cursor, id))
 	if err == nil {
 		lr.confirmTurnInterrupted(turnAtInterrupt)
+		m.finishRunTurn(lr, "interrupted", durableTurn, false)
 	}
 	return true, err
 }

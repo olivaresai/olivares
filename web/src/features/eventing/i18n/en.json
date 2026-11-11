@@ -37,6 +37,17 @@
     "rotateAuth": "Rotate auth",
     "testSuccess": "Test delivery succeeded",
     "testFailed": "Test delivery failed",
+    "testSent": "Sent a signed test event (eventing.test) to {{name}}.",
+    "testAnswer": {
+      "http": "It answered HTTP {{code}}.",
+      "timeout": "It did not answer in time.",
+      "network": "It could not be reached."
+    },
+    "testNotSent": {
+      "endpoint_invalid": "Nothing was sent: the endpoint address of {{name}} is not valid.",
+      "egress": "Nothing was sent: the egress policy keeps events for {{name}} from leaving ({{outcome}}).",
+      "other": "Nothing was sent to {{name}} ({{outcome}})."
+    },
     "deleted": "Subscription deleted",
     "rotated": "Secret rotated",
     "authRotated": "Auth credential rotated",
@@ -96,7 +107,7 @@
       "maxAttempts": "Max attempts must be 0 or between 1 and 20.",
       "initialInterval": "Initial interval must be 0 or between 5 and 3600 seconds."
     },
-    "businessRequired": "SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them."
+    "businessRequired": "SIEM delivery and external telemetry export require Olivares AI Business. Stored settings are preserved; Olivares AI Community does not send them."
   },
   "secret": {
     "title": "Subscription secret",

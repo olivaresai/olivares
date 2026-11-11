@@ -86,7 +86,8 @@ export function SubscriptionCard({
   const { t } = useTranslation('eventing')
   const [confirmDelete, setConfirmDelete] = useState(false)
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 shadow-sm">
+    // A row of the destinations' boxed list: the list draws the box.
+    <div className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">

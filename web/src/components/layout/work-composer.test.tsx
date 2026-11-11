@@ -1,13 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, createTestQueryClient } from '@/test/intel'
 import {
+  STASH_MAX_BYTES,
   clearSessionDrafts,
+  readSessionDraft,
   sessionDraftKey,
+  stashDraft,
   writeSessionDraft,
 } from '@/lib/session-drafts'
 
@@ -33,6 +36,12 @@ const api = vi.hoisted(() => ({
   getRun: vi.fn(),
   profileModels: vi.fn(),
   activity: vi.fn(),
+  interrupt: vi.fn(),
+  queue: vi.fn(),
+  queueAdd: vi.fn(),
+  uploadAttachment: vi.fn(),
+  attachmentImage: vi.fn(),
+  inputWithAttachments: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
@@ -58,8 +67,22 @@ vi.mock('@/features/workspace-templates/api', async (importOriginal) => ({
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock('@/components/ui/toaster', () => ({ toast: toasts }))
 
+// jsdom cannot record, so the composer draws no Dictate there; a test that needs the
+// microphone gives the browser one.
+const mic = vi.hoisted(() => ({
+  canCapture: vi.fn(() => false),
+  startCapture: vi.fn(),
+}))
+vi.mock('@/features/dictation/capture', () => mic)
+
+import { buttonVariants } from '@/components/ui/button'
+import { stubViewportWidth } from '@/test/viewport'
 import { ApiError } from '@/lib/api/errors'
 import { sentTurnsOf, useSentTurns } from '@/features/sessions/sent-turns'
+import {
+  CLIENT_SETTING_DEFAULTS,
+  useClientSettings,
+} from '@/features/settings/preferences'
 import { ScopeLine, WorkComposer } from './work-composer'
 import { COMPOSER_INPUT_ID } from './work-composer-id'
 import type { RunDTO } from '@/features/agentops/types'
@@ -113,6 +136,8 @@ beforeEach(() => {
   api.input.mockResolvedValue({ accepted: true })
   api.inputText.mockResolvedValue({ accepted: true })
   api.activity.mockResolvedValue(ACTIVITY)
+  // Before the queue existed the call threw; a mock answering nothing would be read as data.
+  api.queue.mockRejectedValue(new Error('no queue'))
   api.profileModels.mockResolvedValue({
     profile_ref: 'ppf_team',
     driver: 'claude',
@@ -138,6 +163,16 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.restoreAllMocks())
+
+/** The browser's shared storage is full; the tab's own still takes the unsent draft. */
+function fillSharedStorage() {
+  const write = Storage.prototype.setItem
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation((name, value) => {
+    if (name.startsWith('olivares.stash.'))
+      throw new DOMException('Storage full', 'QuotaExceededError')
+    write.call(sessionStorage, name, value)
+  })
+}
 
 const RUNNING: RunDTO = {
   run_ref: 'run_live',
@@ -334,10 +369,10 @@ describe('WorkComposer tab drafts', () => {
     view.rerender(composer({ ...RUNNING, run_ref: 'run_other' }))
     view.rerender(composer())
     // The remounted field must not offer the pending message as a new draft.
-    expect(field()).toBeDisabled()
+    expect(field()).toHaveAttribute('readonly')
     expect(screen.getByTestId('composer-send')).toBeDisabled()
     await act(async () => finish({ accepted: true }))
-    await waitFor(() => expect(field()).toBeEnabled())
+    await waitFor(() => expect(field()).not.toHaveAttribute('readonly'))
     expect(api.input).toHaveBeenCalledOnce()
     expect(field()).toHaveValue('')
   })
@@ -483,7 +518,7 @@ describe('WorkComposer tab drafts', () => {
       )
     })
     await act(async () => finish({ accepted: true }))
-    await waitFor(() => expect(field()).toBeEnabled())
+    await waitFor(() => expect(field()).not.toHaveAttribute('readonly'))
     expect(field()).toHaveValue('Dictated afterwards')
   })
 
@@ -499,18 +534,6 @@ describe('WorkComposer tab drafts', () => {
     auth.principal = { kind: 'user', actor: 'user:alice', user_id: 'alice' }
     view.rerender(composer())
     expect(field()).toHaveValue('Private draft')
-  })
-})
-
-describe('WorkComposer — the pickers keep their words on a narrow screen', () => {
-  // Measured on the built console at 390 px: the footer was one row, so the model and
-  // access pickers shrank to "Cla…" and "d…" (320 px: a bare chevron) before the
-  // attach and send buttons gave way. The row wraps instead: the buttons move below.
-  it('lets the footer wrap rather than cut the pickers', async () => {
-    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
-    const footer = (await screen.findByTestId('composer-tool-model'))
-      .parentElement as HTMLElement
-    expect(footer.className.split(/\s+/)).toContain('flex-wrap')
   })
 })
 
@@ -706,8 +729,16 @@ describe('ScopeLine — the scope of the next action', () => {
   })
 })
 
+/** The classes a size of the shared button adds, whatever values the tokens give it. */
+function sizeClasses(size: 'sm' | 'icon') {
+  const base = buttonVariants({ variant: 'ghost', size: 'base' }).split(' ')
+  return buttonVariants({ variant: 'ghost', size })
+    .split(' ')
+    .filter((c) => !base.includes(c))
+}
+
 describe('WorkComposer layout and disclosure', () => {
-  it('is a raised card of 14 px radius and a 1 px line, in the transcript column', async () => {
+  it('is a raised card of the panel radius with a boundary anyone can see and its focus ring on it, in the transcript column', async () => {
     renderIntel(
       <WorkComposer
         frame="docked"
@@ -719,13 +750,17 @@ describe('WorkComposer layout and disclosure', () => {
     const cls = box.className.split(/\s+/)
     expect(cls).toEqual(
       expect.arrayContaining([
-        'rounded-[14px]',
+        'rounded-panel',
         'border',
-        'border-line',
-        'bg-raised',
+        'border-ctl-border',
+        'bg-surface',
+        'hover:border-text-2',
+        'focus-within:border-focus',
+        'focus-within:-outline-offset-2',
       ]),
     )
-    expect(box.parentElement!.className).toContain('max-w-[760px]')
+    // The column of the conversation and the composer, as the drawing has it.
+    expect(box.parentElement!.className).toContain('max-w-[780px]')
     expect(box.getAttribute('title') ?? '').toMatch(/Organization|Workspace/)
     expect(screen.getByTestId('composer-advanced')).toBeInTheDocument()
     expect(screen.getByTestId('composer-send')).toBeInTheDocument()
@@ -748,7 +783,7 @@ describe('WorkComposer layout and disclosure', () => {
     expect(field).toHaveAttribute('rows', '2')
     expect(field).toHaveAttribute(
       'placeholder',
-      'Ask anything, @ for context, / for commands and skills',
+      'Message calc-review… @ files · / commands',
     )
     expect(field.className).toContain('max-h-48')
     expect(field.className).toContain('resize-none')
@@ -769,11 +804,11 @@ describe('WorkComposer layout and disclosure', () => {
       />,
     )
     const chip = await screen.findByTestId('composer-tool-model')
-    // Three pickers: the model on its own, the effort on the next.
-    expect(chip).toHaveTextContent(/^Stub Model$/)
-    expect(screen.getByTestId('composer-effort')).toHaveTextContent(/^High$/)
+    // One picker for the model and its effort, as the drawing has it.
+    expect(chip).toHaveTextContent(/^Stub Model · High$/)
+    expect(screen.queryByTestId('composer-effort')).toBeNull()
     expect(chip.tagName).toBe('BUTTON')
-    expect(chip).toHaveAccessibleName('Model: Stub Model')
+    expect(chip).toHaveAccessibleName('Model: Stub Model, effort High')
   })
 
   // the regression: "claude-opus-5-5" was cut to "clau…" in the composer. It now says
@@ -793,17 +828,22 @@ describe('WorkComposer layout and disclosure', () => {
       />,
     )
     const chip = await screen.findByTestId('composer-tool-model')
-    expect(chip.textContent).toBe('Claude Opus 5.5')
+    expect(chip.textContent).toBe('Claude Opus 5.5 · High')
     expect(chip.getAttribute('title')).toContain('claude-opus-5-5')
   })
 
-  it('Send is a 32 px round icon button: orange only with text, a quiet ghost otherwise', async () => {
+  it('Send is the shared round icon button, 34 px and 44 px on a phone: orange only with text, a quiet ghost otherwise', async () => {
     const user = userEvent.setup()
     renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
     const send = await screen.findByTestId('composer-send')
     expect(send).toHaveAccessibleName('Send')
     expect(send.className).toContain('rounded-full')
-    expect(send.className).toContain('size-8')
+    expect(send).toHaveClass('size-[var(--density-control)]', 'max-md:size-11')
+    // Its size is the shared icon button's, on a phone too: it sets none of its own.
+    const sized = (c: string) => /^(max-[^:]+:)?(size|h|w)-/.test(c)
+    expect(send.className.split(/\s+/).filter(sized).sort()).toEqual(
+      sizeClasses('icon').filter(sized).sort(),
+    )
     expect(send.className).not.toContain('bg-accent ')
     expect(send).toBeDisabled()
     await user.type(screen.getByTestId('launcher-input'), 'hello')
@@ -893,6 +933,75 @@ describe('WorkComposer — attached session input', () => {
         undefined,
       ),
     )
+  })
+
+  it('keeps focus in the field while a message is sent, so the next keystrokes land', async () => {
+    let finish!: (value: { accepted: boolean }) => void
+    api.input.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const field = document.getElementById(COMPOSER_INPUT_ID)!
+    expect(field).toHaveFocus()
+    await user.keyboard('First turn{Enter}')
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    // The pending message stays in the field, locked but not disabled.
+    expect(field).toHaveFocus()
+    expect(field).toHaveAttribute('readonly')
+    expect(field).toBeEnabled()
+    await act(async () => finish({ accepted: true }))
+    await waitFor(() => expect(field).toHaveValue(''))
+    expect(field).not.toHaveAttribute('readonly')
+    await user.keyboard('Next turn')
+    expect(field).toHaveValue('Next turn')
+  })
+
+  it('keeps focus in the field when an approval card arrives while the person types', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(
+      <WorkComposer attached={{ run: RUNNING, group: 'active' }} />,
+    )
+    expect(document.getElementById(COMPOSER_INPUT_ID)).toHaveFocus()
+    await user.keyboard('borra')
+    view.rerender(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, pending_approval_ref: 'apr_typing' },
+          group: 'active',
+        }}
+      />,
+    )
+    const field = document.getElementById(COMPOSER_INPUT_ID)!
+    expect(field).toHaveFocus()
+    await user.keyboard('dor')
+    expect(field).toHaveValue('borrador')
+  })
+
+  it('does not take focus from another control when an approval card arrives', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(
+      <>
+        <button type="button">Elsewhere</button>
+        <WorkComposer attached={{ run: RUNNING, group: 'active' }} />
+      </>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Elsewhere' }))
+    view.rerender(
+      <>
+        <button type="button">Elsewhere</button>
+        <WorkComposer
+          attached={{
+            run: { ...RUNNING, pending_approval_ref: 'apr_elsewhere' },
+            group: 'active',
+          }}
+        />
+      </>,
+    )
+    expect(screen.getByRole('button', { name: 'Elsewhere' })).toHaveFocus()
   })
 
   it('keeps two composers and their submitted turns separate', async () => {
@@ -1291,11 +1400,7 @@ describe('WorkComposer — model and effort', () => {
         />,
         { queryClient: qc },
       )
-      await user.click(
-        await screen.findByTestId(
-          persisted ? 'composer-effort' : 'composer-tool-model',
-        ),
-      )
+      await user.click(await screen.findByTestId('composer-tool-model'))
       await user.click(await screen.findByLabelText('Service tier'))
       await user.click(screen.getByRole('option', { name: 'priority' }))
       await user.click(screen.getByLabelText('Effort'))
@@ -1539,11 +1644,32 @@ describe('WorkComposer — model and effort', () => {
     expect(api.inputText).not.toHaveBeenCalled()
   })
 
+  it('holds the longest model and effort of the catalog whole, with no cap of its own', async () => {
+    renderIntel(
+      <WorkComposer
+        attached={{
+          ...ATTACHED,
+          run: { ...ATTACHED.run, model_ref: 'haiku-5-5' },
+        }}
+      />,
+    )
+    const chip = await screen.findByTestId('composer-tool-model')
+    await waitFor(() =>
+      expect(chip).toHaveTextContent(/^Claude Haiku 5\.5 · Medium$/),
+    )
+    // As wide as its words need within the bar: the pickers' shared 192 px cap
+    // cut «Claude Sonnet 5.5 · Medium» on a desktop.
+    expect(chip.className.split(/\s+/)).toContain('max-w-none')
+    expect(chip.className.split(/\s+/)).not.toContain('max-w-48')
+  })
+
   it("lists the tool's models and the session's effort levels from the message bar", async () => {
     const user = userEvent.setup()
     renderIntel(<WorkComposer attached={ATTACHED} />)
     const chip = await screen.findByTestId('composer-tool-model')
-    await waitFor(() => expect(chip).toHaveTextContent(/^Claude Opus 5\.5$/))
+    await waitFor(() =>
+      expect(chip).toHaveTextContent(/^Claude Opus 5\.5 · Medium$/),
+    )
     await user.click(chip)
     expect(await screen.findByText('Claude Haiku 5.5')).toBeInTheDocument()
     expect(api.profileModels).toHaveBeenCalledWith(
@@ -1716,11 +1842,11 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
       />,
     )
     expect(screen.getByTestId('composer-tool-model')).toHaveTextContent(
-      /^Claude Code default$/,
+      /^Claude Code default · High$/,
     )
     expect(screen.queryByTestId('composer-access')).toBeNull()
     expect(screen.queryByText('Access not reported')).toBeNull()
-    await user.click(screen.getByTestId('composer-effort'))
+    await user.click(screen.getByTestId('composer-tool-model'))
     expect(await screen.findByTestId('work-scope-line')).toBeVisible()
     await user.keyboard('{Escape}')
 
@@ -1743,28 +1869,29 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
     }
     rerender(<WorkComposer attached={attached} />)
     expect(await screen.findByTestId('composer-tool-model')).toHaveTextContent(
-      /^Claude Opus 5\.5$/,
+      /^Claude Opus 5\.5 · High$/,
     )
     expect(screen.getByTestId('composer-access')).toHaveTextContent(
       /^Supervised$/,
     )
   })
 
-  it('says the model, the effort and the access each on its own picker', async () => {
+  it('says the model and its effort on one picker, and the access on its own', async () => {
+    const user = userEvent.setup()
     renderIntel(<WorkComposer attached={attached} />)
-    expect(await screen.findByTestId('composer-tool-model')).toHaveTextContent(
-      /^Claude Opus 5\.5$/,
-    )
-    expect(screen.getByTestId('composer-effort')).toHaveTextContent(/^High$/)
+    const model = await screen.findByTestId('composer-tool-model')
+    expect(model).toHaveTextContent(/^Claude Opus 5\.5 · High$/)
+    expect(model).toHaveAccessibleName('Model: Claude Opus 5.5, effort High')
+    expect(screen.queryByTestId('composer-effort')).toBeNull()
     expect(screen.getByTestId('composer-access')).toHaveTextContent(
       /^Supervised$/,
     )
-    for (const id of [
-      'composer-tool-model',
-      'composer-effort',
-      'composer-access',
-    ])
+    for (const id of ['composer-tool-model', 'composer-access'])
       expect(screen.getByTestId(id).tagName).toBe('BUTTON')
+    // One menu: the models and, inside it, the effort of the chosen model.
+    await user.click(model)
+    expect(await screen.findByRole('listbox')).toBeInTheDocument()
+    expect(screen.getByLabelText('Effort')).toBeEnabled()
   })
 
   it.each([
@@ -1799,24 +1926,31 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
     )
   })
 
-  it('cuts a long picker word with an ellipsis and keeps its chevron, in a narrow column', async () => {
+  it('cuts the access words with an ellipsis, never the model’s, each picker keeping its chevron, in a narrow column', async () => {
     renderIntel(<WorkComposer attached={attached} />)
-    for (const id of [
-      'composer-tool-model',
-      'composer-effort',
-      'composer-access',
-    ]) {
+    for (const id of ['composer-tool-model', 'composer-access']) {
       const picker = await screen.findByTestId(id)
-      const words = picker.querySelector('span')
-      expect(words?.className.split(/\s+/)).toContain('truncate')
-      // The access is a label with a lock in front, not a picker: no chevron after it.
-      if (id !== 'composer-access')
-        expect(picker.lastElementChild?.tagName.toLowerCase()).toBe('svg')
+      // Every picker ends in its chevron; the access has its shield in front.
+      expect(picker.lastElementChild?.tagName.toLowerCase()).toBe('svg')
     }
-    // The effort is one short word: the model and the access give way before it.
-    expect(screen.getByTestId('composer-effort').className).toContain(
-      'shrink-0',
+    const access = screen.getByTestId('composer-access')
+    expect(access.querySelector('span')?.className.split(/\s+/)).toContain(
+      'truncate',
     )
+    // The model's words show whole or not at all: where the row leaves less room
+    // than they need, they wrap below the tool's mark, out of sight, the effort
+    // first, and the mark stands alone. Never «…».
+    const model = screen.getByTestId('composer-tool-model')
+    const name = within(model).getByText('Claude Opus 5.5')
+    const line = name.parentElement as HTMLElement
+    expect(line.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['h-5', 'flex-wrap', 'overflow-hidden']),
+    )
+    expect(line.firstElementChild).toBe(within(model).getByTestId('tool-mark'))
+    for (const words of [name, within(model).getByText('· High')])
+      expect(words.className.split(/\s+/)).toContain('whitespace-nowrap')
+    expect(model.querySelector('.truncate')).toBeNull()
+    expect(model).toHaveAccessibleName('Model: Claude Opus 5.5, effort High')
   })
 
   it('applies access to the next turn in the same session', async () => {
@@ -1941,8 +2075,238 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
     renderIntel(<WorkComposer attached={attached} />)
     expect(await screen.findByTestId('launcher-input')).toHaveAttribute(
       'placeholder',
-      'Ask anything, @ for context, / for commands and skills',
+      'Message calc-review… @ files · / commands',
     )
+  })
+
+  // The drawing at 390 px: one row. The access picker is its shield alone, the pickers
+  // drop their chevrons, and the model's words go whole, the effort first, where the
+  // row has no room for them, its mark staying.
+  it('keeps the footer to one row on a phone, the access picker its shield alone with its name', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={attached} />)
+    const model = await screen.findByTestId('composer-tool-model')
+    expect(model.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['max-[760px]:basis-0', 'max-[760px]:grow']),
+    )
+    // The safety for a long locale: the row may still wrap, never cut a word.
+    expect(
+      (model.parentElement as HTMLElement).className.split(/\s+/),
+    ).toContain('flex-wrap')
+    // The drawing shows the effort's word on a phone too, while there is room; the
+    // picker is never narrower than its mark, and its name still says the words.
+    const effort = within(model).getByText('· High')
+    expect(effort.className).not.toMatch(/max-\[760px\]:hidden/)
+    expect(model.className.split(/\s+/)).toContain('max-[760px]:min-w-11')
+    expect(model).toHaveAccessibleName('Model: Claude Opus 5.5, effort High')
+    const access = screen.getByTestId('composer-access')
+    expect(access).toHaveAccessibleName('Access: Supervised')
+    const [shield, words] = Array.from(access.children)
+    expect(shield.tagName.toLowerCase()).toBe('svg')
+    expect(shield.getAttribute('class') ?? '').not.toMatch(/max-\[760px\]:/)
+    expect(words).toHaveTextContent('Supervised')
+    expect(words.className.split(/\s+/)).toContain('max-[760px]:hidden')
+    for (const picker of [model, access])
+      expect(picker.lastElementChild?.getAttribute('class')).toContain(
+        'max-[760px]:hidden',
+      )
+    // The effort is chosen in the model's menu.
+    await user.click(model)
+    expect(await screen.findByLabelText('Effort')).toBeInTheDocument()
+  })
+
+  it('lays the bar out as attach, the pickers, then send at the end, the pickers 44 px high on a phone', async () => {
+    renderIntel(<WorkComposer attached={attached} />)
+    const bar = [
+      screen.getByRole('button', { name: 'Attach a file' }),
+      await screen.findByTestId('composer-tool-model'),
+      screen.getByTestId('composer-access'),
+      screen.getByTestId('composer-send'),
+    ]
+    bar.reduce((before, after) => {
+      expect(before.compareDocumentPosition(after)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      )
+      return after
+    })
+    for (const picker of bar.slice(1, 3))
+      expect(picker.className.split(/\s+/)).toEqual(
+        expect.arrayContaining(['h-7.5', 'px-2.25', 'max-[760px]:min-h-11']),
+      )
+    // Attach is a flat picker of the shared small size, as the drawing has it.
+    const attach = bar[0].className.split(/\s+/)
+    expect(attach).toEqual(expect.arrayContaining(sizeClasses('sm')))
+    expect(attach).not.toContain('rounded-full')
+  })
+})
+
+// The drawing at 390 px: attach, the model, the access, dictate, then More actions
+// and Send at the end. Context, setting a draft aside and Plan share the menu.
+describe('WorkComposer — one row on a phone', () => {
+  beforeEach(() => stubViewportWidth(390))
+  afterEach(() => {
+    stubViewportWidth(1440)
+    mic.canCapture.mockReturnValue(false)
+  })
+  const field = () => screen.getByRole('textbox', { name: 'Session turn' })
+
+  it('holds Context and setting a draft aside in one menu before Send, each by keyboard', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const more = await screen.findByRole('button', { name: 'More actions' })
+    expect(screen.queryByRole('button', { name: 'Context' })).toBeNull()
+    expect(screen.queryByTestId('composer-stash')).toBeNull()
+    expect(screen.queryByTestId('composer-more-dot')).toBeNull()
+    expect(
+      more.compareDocumentPosition(screen.getByTestId('composer-send')),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+
+    // An empty field with nothing set aside has nothing to set aside or bring back.
+    more.focus()
+    await user.keyboard('{Enter}')
+    expect(
+      await screen.findByRole('menuitem', { name: /^Set this draft aside/ }),
+    ).toHaveAttribute('aria-disabled', 'true')
+    await user.keyboard('{Escape}')
+
+    // Set aside, from the menu by keyboard, its chord beside its name.
+    await user.type(field(), 'half a thought')
+    more.focus()
+    await user.keyboard('{Enter}')
+    const menu = await screen.findByRole('menu')
+    const setAside = within(menu).getByRole('menuitem', {
+      name: /^Set this draft aside/,
+    })
+    expect(setAside).toHaveTextContent('Ctrl+S')
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(field()).toHaveValue('')
+    // Something set aside: the button says so, and a dot shows it.
+    expect(
+      await screen.findByRole('button', {
+        name: 'More actions, with a draft set aside',
+      }),
+    ).toBe(more)
+    expect(within(more).getByTestId('composer-more-dot')).toBeInTheDocument()
+    // In the accent's ink, which holds 3:1 on the card; the plain accent does not.
+    expect(
+      within(more).getByTestId('composer-more-dot').className.split(/\s+/),
+    ).toContain('bg-accent-text')
+
+    // Brought back the same way.
+    more.focus()
+    await user.keyboard('{Enter}')
+    expect(
+      await screen.findByRole('menuitem', {
+        name: /^Bring back the draft set aside/,
+      }),
+    ).toHaveTextContent('Ctrl+S')
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(field()).toHaveValue('half a thought')
+
+    // Context opens its panel from the menu; Escape comes back to the button.
+    more.focus()
+    await user.keyboard('{Enter}')
+    expect(
+      await screen.findByRole('menuitem', { name: 'Context and compacting…' }),
+    ).toBeVisible()
+    await user.keyboard('{Enter}')
+    const panel = await screen.findByRole('dialog', { name: 'Context' })
+    await waitFor(() =>
+      expect(panel).toContainElement(document.activeElement as HTMLElement),
+    )
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Context' })).toBeNull(),
+    )
+    await waitFor(() => expect(more).toHaveFocus())
+  })
+
+  it('shows how full the context is beside Context in the menu', async () => {
+    api.activity.mockResolvedValue({
+      context_tokens: 20000,
+      context_window: 200000,
+      context_percent: 10,
+    })
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    await user.click(
+      await screen.findByRole('button', { name: 'More actions' }),
+    )
+    const context = await screen.findByRole('menuitem', {
+      name: /^Context and compacting…/,
+    })
+    expect(await within(context).findByText('10%')).toBeVisible()
+  })
+
+  it('lays the row out as the drawing: attach, the model, the access, dictate, then More actions and Send', async () => {
+    // A browser that can record, as the drawing's phone is: Dictate is in the row.
+    mic.canCapture.mockReturnValue(true)
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const row = [
+      screen.getByRole('button', { name: 'Attach a file' }),
+      await screen.findByTestId('composer-tool-model'),
+      screen.getByTestId('composer-access'),
+      screen.getByTestId('composer-dictate'),
+      screen.getByRole('button', { name: 'More actions' }),
+      screen.getByTestId('composer-send'),
+    ]
+    row.reduce((before, after) => {
+      expect(before.compareDocumentPosition(after)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      )
+      return after
+    })
+    // Plan off changes nothing Send does: it waits in the menu.
+    expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull()
+  })
+
+  it('holds Plan in More actions while it is off, and shows it pressed in the row while it is on', async () => {
+    api.resume.mockResolvedValue({ ...RUNNING, permission_mode: 'plan' })
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const more = await screen.findByRole('button', { name: 'More actions' })
+    await user.click(more)
+    const off = await screen.findByRole('menuitemcheckbox', { name: 'Plan' })
+    expect(off).toHaveAttribute('aria-checked', 'false')
+    await user.click(off)
+
+    // On, it changes what Send does, so the row shows it, pressed, before the menu.
+    const plan = await screen.findByRole('button', { name: 'Plan' })
+    expect(plan).toHaveAttribute('aria-pressed', 'true')
+    expect(plan.compareDocumentPosition(more)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+    await user.click(more)
+    expect(
+      await screen.findByRole('menuitemcheckbox', { name: 'Plan' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+
+    // A message sent now goes under the plan mode.
+    await user.type(field(), 'add a flag{Enter}')
+    await waitFor(() =>
+      expect(api.resume).toHaveBeenCalledWith('run_live', 'plan'),
+    )
+  })
+
+  it('turns Plan off from the row and gives focus to More actions, where Plan waits', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const more = await screen.findByRole('button', { name: 'More actions' })
+    await user.click(more)
+    await user.click(
+      await screen.findByRole('menuitemcheckbox', { name: 'Plan' }),
+    )
+    const plan = await screen.findByRole('button', { name: 'Plan' })
+    plan.focus()
+    await user.keyboard('{Enter}')
+    expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull()
+    expect(more).toHaveFocus()
+    await user.click(more)
+    expect(
+      await screen.findByRole('menuitemcheckbox', { name: 'Plan' }),
+    ).toHaveAttribute('aria-checked', 'false')
   })
 })
 
@@ -2021,5 +2385,406 @@ describe('typed approval feedback', () => {
     ).not.toBeInTheDocument()
     expect(screen.getByTestId('composer-send')).toBeDisabled()
     expect(screen.getByTestId('launcher-input')).toBeEnabled()
+  })
+})
+
+// The composer spec (rows 2 to 5 and 7 of the Composer area): recall, a Stop in the
+// composer, a stashed draft, plan first, and the person's choice of send key.
+describe('WorkComposer: the composer spec', () => {
+  const composer = (run = RUNNING) => (
+    <WorkComposer attached={{ run, group: 'active' }} />
+  )
+  const field = () => screen.getByRole('textbox', { name: 'Session turn' })
+
+  beforeEach(() => {
+    useClientSettings.setState({ ...CLIENT_SETTING_DEFAULTS })
+  })
+
+  it('recalls the last sent prompt with ArrowUp in the empty composer, and steps back to empty with ArrowDown', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'Look up the readme')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(field()).toHaveValue(''))
+    await user.click(field())
+    await user.keyboard('{ArrowUp}')
+    expect(field()).toHaveValue('Look up the readme')
+    await user.keyboard('{ArrowDown}')
+    expect(field()).toHaveValue('')
+  })
+
+  it('offers Stop in the composer while a turn runs, and not when the session is idle', async () => {
+    api.interrupt.mockResolvedValue({})
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.click(screen.getByRole('button', { name: 'Interrupt turn' }))
+    await waitFor(() =>
+      expect(api.interrupt).toHaveBeenCalledWith('run_live', undefined),
+    )
+    view.rerender(composer({ ...RUNNING, state: 'idle' }))
+    expect(
+      screen.queryByRole('button', { name: 'Interrupt turn' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('stashes the draft with Ctrl+S and restores it with Ctrl+S in the empty composer', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'half written')
+    await user.keyboard('{Control>}s{/Control}')
+    expect(field()).toHaveValue('')
+    await user.keyboard('{Control>}s{/Control}')
+    expect(field()).toHaveValue('half written')
+  })
+
+  it('keeps the images with a stashed draft and brings them back with it', async () => {
+    api.uploadAttachment.mockResolvedValue({ id: 'att_1' })
+    api.inputWithAttachments.mockResolvedValue({ accepted: true })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    const png = new File([new Uint8Array([0x89, 0x50])], 'shot.png', {
+      type: 'image/png',
+    })
+    fireEvent.paste(field(), {
+      clipboardData: { files: [png], types: ['Files'] },
+    })
+    await screen.findByTestId('attachment-tray')
+    await user.type(field(), 'see this')
+    await user.keyboard('{Control>}s{/Control}')
+    await waitFor(() =>
+      expect(screen.queryByTestId('attachment-tray')).not.toBeInTheDocument(),
+    )
+    expect(field()).toHaveValue('')
+    await user.keyboard('{Control>}s{/Control}')
+    expect(await screen.findByTestId('attachment-tray')).toBeVisible()
+    expect(field()).toHaveValue('see this')
+    await user.keyboard('{Enter}')
+    await waitFor(() =>
+      expect(api.inputWithAttachments).toHaveBeenCalledWith(
+        'run_live',
+        'see this',
+        ['att_1'],
+      ),
+    )
+  })
+
+  // A draft set aside with an image, then the page reloaded and its words and image
+  // asked back.
+  const pastePng = () =>
+    fireEvent.paste(field(), {
+      clipboardData: {
+        files: [
+          new File([new Uint8Array([0x89, 0x50])], 'shot.png', {
+            type: 'image/png',
+          }),
+        ],
+        types: ['Files'],
+      },
+    })
+  const storedPng = () =>
+    new Blob([new Uint8Array([0x89, 0x50])], { type: 'image/png' })
+
+  it('brings back a draft set aside, words and image, after a reload', async () => {
+    api.uploadAttachment.mockResolvedValue({ id: 'att_1' })
+    api.attachmentImage.mockResolvedValue(storedPng())
+    api.inputWithAttachments.mockResolvedValue({ accepted: true })
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    pastePng()
+    await screen.findByRole('img', { name: 'shot.png' })
+    await user.type(field(), 'see this')
+    await user.click(
+      screen.getByRole('button', { name: 'Set this draft aside' }),
+    )
+    expect(field()).toHaveValue('')
+    view.unmount()
+    // A reload: the page's memory starts again, the tab keeps its storage.
+    vi.resetModules()
+    const { WorkComposer: Reloaded } = await import('./work-composer')
+    renderIntel(<Reloaded attached={{ run: RUNNING, group: 'active' }} />)
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Bring back the draft set aside',
+      }),
+    )
+    expect(field()).toHaveValue('see this')
+    expect(await screen.findByRole('img', { name: 'shot.png' })).toBeVisible()
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() =>
+      expect(api.inputWithAttachments).toHaveBeenCalledWith(
+        'run_live',
+        'see this',
+        ['att_1'],
+      ),
+    )
+  })
+
+  it('leaves the file stored with the session when its draft is set aside, and brings it back from there', async () => {
+    api.uploadAttachment.mockResolvedValue({ id: 'att_1' })
+    api.attachmentImage.mockResolvedValue(storedPng())
+    const user = userEvent.setup()
+    renderIntel(composer())
+    pastePng()
+    await screen.findByRole('img', { name: 'shot.png' })
+    await user.type(field(), 'see this')
+    await user.keyboard('{Control>}s{/Control}')
+    await waitFor(() =>
+      expect(screen.queryByTestId('attachment-tray')).not.toBeInTheDocument(),
+    )
+    await user.keyboard('{Control>}s{/Control}')
+    // The engine's own copy, by the id it was stored under: nothing set aside removed
+    // it, and nothing stores it a second time.
+    await waitFor(() =>
+      expect(api.attachmentImage).toHaveBeenCalledWith('run_live', 'att_1'),
+    )
+    expect(await screen.findByRole('img', { name: 'shot.png' })).toBeVisible()
+    expect(api.uploadAttachment).toHaveBeenCalledOnce()
+  })
+
+  it('says beside the words brought back that a file set aside is no longer stored with the session', async () => {
+    api.uploadAttachment.mockResolvedValue({ id: 'att_1' })
+    api.attachmentImage.mockRejectedValue(
+      new ApiError(404, 'not_found', 'attachment not found'),
+    )
+    const user = userEvent.setup()
+    renderIntel(composer())
+    pastePng()
+    await screen.findByRole('img', { name: 'shot.png' })
+    await user.type(field(), 'see this')
+    await user.keyboard('{Control>}s{/Control}')
+    await user.keyboard('{Control>}s{/Control}')
+    expect(field()).toHaveValue('see this')
+    expect(
+      await screen.findByText(
+        'No longer stored with this session, so not brought back: shot.png',
+      ),
+    ).toBeVisible()
+    expect(screen.queryByTestId('attachment-tray')).not.toBeInTheDocument()
+  })
+
+  // What happens to a draft set aside is said in one sentence, in a status region that
+  // is there from the start.
+  const said = () => screen.getByTestId('stash-status')
+  const aliceKey = () => sessionDraftKey('tnt-demo', auth.principal, 'run_live')
+
+  // A draft that cannot be set aside is refused aloud, with its true cause.
+  const refused = (sentence: string) =>
+    expect(screen.getByText(sentence)).toHaveAttribute('role', 'alert')
+
+  it('says so when a draft cannot be set aside, keeps it in the field, and still saves it', async () => {
+    fillSharedStorage()
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'keep me')
+    await user.click(
+      screen.getByRole('button', { name: 'Set this draft aside' }),
+    )
+    expect(field()).toHaveValue('keep me')
+    refused(
+      'Could not set this draft aside: this browser has no room left to keep it. Nothing was dropped, and it stays here.',
+    )
+    vi.mocked(Storage.prototype.setItem).mockRestore()
+    await user.type(field(), ' and more')
+    expect(readSessionDraft(aliceKey())).toBe('keep me and more')
+  })
+
+  it('says a draft is too large to set aside, and names the limit', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    const large = 'z'.repeat(STASH_MAX_BYTES)
+    fireEvent.change(field(), { target: { value: large } })
+    await user.click(
+      screen.getByRole('button', { name: 'Set this draft aside' }),
+    )
+    expect(field()).toHaveValue(large)
+    refused(
+      'This draft is too large to set aside: the limit is 512 KiB. It stays here.',
+    )
+  })
+
+  it('says a browser that keeps nothing between visits cannot set a draft aside', async () => {
+    vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+      throw new DOMException('Storage disabled', 'SecurityError')
+    })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'keep me')
+    await user.click(
+      screen.getByRole('button', { name: 'Set this draft aside' }),
+    )
+    expect(field()).toHaveValue('keep me')
+    refused(
+      'Could not set this draft aside: this browser keeps nothing between visits. It stays only in this tab.',
+    )
+  })
+
+  it('says which draft set aside was dropped to make room', async () => {
+    for (let n = 1; n <= 20; n++)
+      stashDraft(aliceKey(), { text: `Draft number ${n}`, attachments: [] })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'The newest one')
+    await user.keyboard('{Control>}s{/Control}')
+    expect(field()).toHaveValue('')
+    expect(said()).toHaveTextContent(
+      'Set aside. Dropped to make room, oldest first: Draft number 1',
+    )
+  })
+
+  it('says so when another tab already brought the draft set aside back', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'only once')
+    await user.keyboard('{Control>}s{/Control}')
+    // The other tab took it; its storage event has not reached this one yet.
+    for (const name of Object.keys(localStorage))
+      if (name.startsWith('olivares.stash.')) localStorage.removeItem(name)
+    await user.keyboard('{Control>}s{/Control}')
+    expect(field()).toHaveValue('')
+    expect(said()).toHaveTextContent(
+      'The draft set aside is no longer here: another tab brought it back, or a day went by.',
+    )
+  })
+
+  it('counts the drafts set aside when they change, not at every key', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'first words')
+    await user.keyboard('{Control>}s{/Control}')
+    // Counted again when one is set aside: the field offers it back.
+    expect(
+      await screen.findByRole('button', {
+        name: 'Bring back the draft set aside',
+      }),
+    ).toBeVisible()
+    const read = vi.spyOn(Storage.prototype, 'getItem')
+    await user.type(field(), 'a few more words')
+    const asideReads = read.mock.calls.filter(([name]) =>
+      name.startsWith('olivares.stash.'),
+    )
+    expect(asideReads).toEqual([])
+  })
+
+  it('says nothing when the chord finds an empty field and nothing set aside', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    const region = await screen.findByTestId('stash-status')
+    await user.click(field())
+    await user.keyboard('{Control>}s{/Control}')
+    expect(field()).toHaveValue('')
+    expect(region).toBeEmptyDOMElement()
+  })
+
+  it('offers a draft another tab set aside, without a reload', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await screen.findByTestId('stash-status')
+    expect(
+      screen.queryByRole('button', { name: 'Bring back the draft set aside' }),
+    ).not.toBeInTheDocument()
+    // Another tab: its own page memory, the browser's shared storage.
+    vi.resetModules()
+    const otherTab = await import('@/lib/session-drafts')
+    otherTab.stashDraft(aliceKey(), {
+      text: 'From the other tab',
+      attachments: [],
+    })
+    const stored = Object.keys(localStorage).find((name) =>
+      name.startsWith('olivares.stash.'),
+    )
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: stored }))
+    })
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Bring back the draft set aside',
+      }),
+    )
+    expect(field()).toHaveValue('From the other tab')
+  })
+
+  it('says which files were not brought back once they are read, even if the person typed meanwhile', async () => {
+    api.uploadAttachment.mockResolvedValue({ id: 'att_1' })
+    let refuse: (error: unknown) => void = () => {}
+    const reading = new Promise<Blob>((_, reject) => {
+      refuse = reject
+    })
+    api.attachmentImage.mockReturnValue(reading)
+    const user = userEvent.setup()
+    renderIntel(composer())
+    const region = await screen.findByTestId('stash-status')
+    expect(region).toHaveAttribute('role', 'status')
+    expect(region).toBeEmptyDOMElement()
+    pastePng()
+    await screen.findByRole('img', { name: 'shot.png' })
+    await user.type(field(), 'see this')
+    await user.keyboard('{Control>}s{/Control}')
+    await user.keyboard('{Control>}s{/Control}')
+    await user.type(field(), ' and that')
+    await act(async () => {
+      refuse(new ApiError(404, 'not_found', 'attachment not found'))
+    })
+    // The same region, there all along, now says it.
+    expect(said()).toBe(region)
+    expect(region).toHaveTextContent(
+      'No longer stored with this session, so not brought back: shot.png',
+    )
+  })
+
+  it('plans first: Plan hands the next message to the tool under its plan mode, and Plan again goes back', async () => {
+    api.resume.mockResolvedValue({ ...RUNNING, permission_mode: 'plan' })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    const plan = screen.getByRole('button', { name: 'Plan' })
+    expect(plan).toHaveAttribute('aria-pressed', 'false')
+    await user.click(plan)
+    expect(plan).toHaveAttribute('aria-pressed', 'true')
+    await user.type(field(), 'add a flag{Enter}')
+    await waitFor(() =>
+      expect(api.resume).toHaveBeenCalledWith('run_live', 'plan'),
+    )
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+  })
+
+  it('sends with Ctrl+Enter only when the person chose it, and Enter then breaks a line', async () => {
+    useClientSettings.setState({ sendKey: 'modEnter' })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'first line{Enter}second')
+    expect(field()).toHaveValue('first line\nsecond')
+    expect(api.input).not.toHaveBeenCalled()
+    await user.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+  })
+
+  it('names the keys the person chose in the field while the tool works', async () => {
+    api.queue.mockResolvedValue({ items: [], hold: 'turn', can_steer: true })
+    useClientSettings.setState({ sendKey: 'modEnter' })
+    renderIntel(composer())
+    await waitFor(() =>
+      expect(field()).toHaveAttribute(
+        'placeholder',
+        'Ctrl+Enter queues a message for after this turn',
+      ),
+    )
+  })
+
+  it('steers on Enter, and queues on Ctrl+Enter, when the person chose to steer', async () => {
+    api.queue.mockResolvedValue({
+      items: [],
+      hold: 'turn',
+      can_steer: true,
+    })
+    api.queueAdd.mockResolvedValue({ id: 'q1', text: 'later' })
+    useClientSettings.setState({ sendWhileRunning: 'steer' })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'now{Enter}')
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    expect(api.queueAdd).not.toHaveBeenCalled()
+    await user.type(field(), 'later{Control>}{Enter}{/Control}')
+    await waitFor(() =>
+      expect(api.queueAdd).toHaveBeenCalledWith('run_live', 'later'),
+    )
   })
 })

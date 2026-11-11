@@ -497,6 +497,10 @@ const (
 	ExclusionOffboard ExclusionKind = "offboard"
 	// ExclusionSession excludes one account-scope session from the tenant.
 	ExclusionSession ExclusionKind = "session"
+	// ExclusionSuspend excludes the account from the tenant while its membership,
+	// role and group places stay: the authorizer refuses its sessions and tokens
+	// there at once, and deleting the row restores them as they were.
+	ExclusionSuspend ExclusionKind = "suspend"
 )
 
 // RetirementState is where the retirement of an account from a tenant stands.
@@ -528,7 +532,7 @@ type TenantExclusion struct {
 	TargetTenantID TenantID
 	// SessionID names the one excluded session, for ExclusionSession.
 	SessionID ID
-	// Kind is ExclusionOffboard or ExclusionSession.
+	// Kind is ExclusionOffboard, ExclusionSession or ExclusionSuspend.
 	Kind ExclusionKind
 	// CreatedBy is the actor that wrote the exclusion.
 	CreatedBy string

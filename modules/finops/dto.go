@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
@@ -274,6 +275,8 @@ func toAlertDTO(rec model.Record, tenant model.TenantID) alertDTO {
 
 // spendBucketDTO is one row of a spend breakdown (per dimension value or per day).
 type spendBucketDTO struct {
+	// Label is the display name when Key is an id the reader cannot use (a directory group).
+	Label        string `json:"label,omitempty"`
 	Key          string `json:"key"`
 	CostMicroUSD int64  `json:"cost_micro_usd"`
 	InputTokens  int64  `json:"input_tokens"`
@@ -468,6 +471,13 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		// the tree tests and a client may be reading.
 		writeJSON(w, http.StatusConflict, errorBody("version conflict"))
 	default:
+		// A fenced write's refusal for a named account (a budget's exempt actor, a
+		// user-scoped spend limit) answers 409 with its stable code, as the other
+		// fenced modules do; the store mapping has no module sentence for it.
+		if code, ok := auth.FenceRefusalCode(err); ok {
+			writeJSON(w, http.StatusConflict, api.ErrorBody(code, err.Error()))
+			return
+		}
 		status, body, _ := api.StoreErrorBody(err)
 		writeJSON(w, status, body)
 	}
@@ -499,6 +509,22 @@ func specBool(m map[string]any, k string) bool {
 		return b
 	}
 	return false
+}
+
+func specStrings(m map[string]any, k string) []string {
+	switch v := m[k].(type) {
+	case []string:
+		return v
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 func specFloats(m map[string]any, k string) []float64 {

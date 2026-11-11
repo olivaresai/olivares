@@ -285,6 +285,9 @@ func (s *MCPGatewayStore) mutate(ctx context.Context, actor Principal, tenant mo
 
 func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant model.TenantID, version int64, id string, in MCPGatewayServerInput) (MCPGatewaySnapshot, error) {
 	in = in.WithDefaults()
+	if err := refuseNamedCredentials(in); err != nil {
+		return MCPGatewaySnapshot{}, err
+	}
 	if err := validateMCPGatewayServer(in); err != nil {
 		return MCPGatewaySnapshot{}, err
 	}
@@ -327,6 +330,9 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 			assignment["pin"] = in.Pin
 		}
 		if create {
+			if err := keepRedacted(&in, MCPGatewayServerInput{}); err != nil {
+				return err
+			}
 			if len(cfg.Servers) >= 32 {
 				return fmt.Errorf("%w: at most 32 servers", ErrMCPGatewayInvalid)
 			}
@@ -340,6 +346,9 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 			old := cfg.Servers[i]
 			if old.ID != id {
 				continue
+			}
+			if err := keepRedacted(&in, old.MCPGatewayServerInput); err != nil {
+				return err
 			}
 			// Clients that do not know assignments (an older console form) keep
 			// them; only an explicit list, even empty, changes them.

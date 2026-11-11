@@ -114,11 +114,19 @@ describe('SessionStrip', () => {
     expect(nav).toHaveTextContent(/^5 working$/)
   })
 
-  it('says the cost as text when the person may not open Usage', async () => {
-    await renderStrip({ needYou: 0, running: 0, usagePath: null })
+  it('tells a person who may not open Usage no cost, and keeps the other parts', async () => {
+    await renderStrip({ usagePath: null })
     const nav = await screen.findByRole('navigation')
-    expect(nav).toHaveTextContent(/^\$14\.00 today$/)
-    expect(screen.queryByRole('link')).toBeNull()
+    expect(nav).toHaveTextContent(/^2 need you · 5 working$/)
+    expect(nav).not.toHaveTextContent('$')
+    const links = screen.getAllByRole('link')
+    expect(links.map((a) => a.textContent)).toEqual(['2 need you', '5 working'])
+  })
+
+  it('is absent for a person who may not open Usage when the cost is all it would say', async () => {
+    await renderStrip({ needYou: 0, running: 0, usagePath: null })
+    expect(screen.queryByRole('navigation')).toBeNull()
+    expect(document.body).not.toHaveTextContent('$')
   })
 
   it('is absent with nothing to say: no one waiting, nothing running, no known cost', async () => {

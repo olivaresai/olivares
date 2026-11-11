@@ -36,7 +36,9 @@
     "menu": "Действия для {{label}}",
     "copyPassword": "Скопировать пароль {{label}}",
     "copyNote": "Скопировать заметку {{label}}",
-    "copyCode": "Скопировать код {{label}}"
+    "copyCode": "Скопировать код {{label}}",
+    "changed": "Изменено",
+    "actions": "Действия"
   },
   "delete": {
     "title": "Удалить {{label}}?",

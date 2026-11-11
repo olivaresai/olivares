@@ -200,33 +200,43 @@ test('first hour: the setup wizard asks only for what the first session needs', 
     timeout: 30_000,
   })
   await expect(conversation).toContainText(ollama.toolDone)
-  await page.getByRole('button', { name: 'Stop', exact: true }).click()
+  await page.getByRole('button', { name: 'End session', exact: true }).click()
   await page
-    .getByRole('dialog', { name: 'Stop this session?', exact: true })
-    .getByRole('button', { name: 'Stop the session', exact: true })
+    .getByRole('dialog', { name: 'End this session?', exact: true })
+    .getByRole('button', { name: 'End the session', exact: true })
     .click()
   await page.getByRole('button', { name: 'Resume', exact: true }).click()
   await expect(
-    page.getByRole('button', { name: 'Stop', exact: true }),
+    page.getByRole('button', { name: 'End session', exact: true }),
   ).toBeVisible({ timeout: 30_000 })
   await expect(conversation).toContainText(ollama.toolDone)
   expect(unwalked(JOURNEYS.sessions, visited)).toEqual([])
 
   // PROVIDER KEYS: the key the wizard added, the profile sessions launch with, and the
-  // accounts a tool signs in with instead. The API key, profile and account pages are
-  // doors into AI tools: the Tools place shows the key, the row of its place offers
-  // none of the doors, and each door still opens Tools at its own address.
+  // accounts a tool signs in with instead. Tools opens on AI tools and the row of its
+  // place offers none of these pages; the API key page is Providers, beside AI tools,
+  // and shows the key; the profile and account pages are doors into AI tools, each at
+  // its own address.
   visited.splice(0)
   await nav.getByRole('link', { name: 'Tools', exact: true }).click()
-  await expect(page.getByRole('main')).toContainText(ollama.endpoint)
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'AI tools', exact: true }),
+  ).toBeVisible()
   const areas = page.locator('[data-slot="destination-sections"]')
   for (const name of ['Providers', 'Provider profiles', 'Provider accounts'])
     await expect(areas.getByRole('link', { name, exact: true })).toHaveCount(0)
   for (const step of JOURNEYS.providerKeys) {
     await page.goto(stepHref(step))
-    await expect(
-      page.getByRole('heading', { name: 'Accounts and API keys' }),
-    ).toBeVisible()
+    if (step.view === 'providers') {
+      await expect(page.getByRole('main')).toContainText(ollama.endpoint)
+      await expect(
+        page.getByRole('heading', { name: 'API keys', exact: true }),
+      ).toBeVisible()
+    } else {
+      await expect(
+        page.getByRole('heading', { name: 'Accounts', exact: true }),
+      ).toBeVisible()
+    }
   }
   expect(unwalked(JOURNEYS.providerKeys, visited)).toEqual([])
   expect(refused).toEqual([])

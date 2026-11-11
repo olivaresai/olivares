@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { PublicStatusResponse } from './types'
 import './i18n'
 
@@ -155,6 +157,42 @@ describe('StatusPage', () => {
     // A green verdict with no evidence behind it is the one thing a status page
     // must never print.
     expect(screen.queryByText(/all systems operational/i)).toBeNull()
+  })
+
+  it('shows the status as one card in the public shell, under the product mark', async () => {
+    mockPublicStatus.mockResolvedValue(operationalResponse)
+    const { StatusPage } = await import('./status-page')
+    render(
+      <Wrapper>
+        <StatusPage />
+      </Wrapper>,
+    )
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /status/i }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(
+      screen.getAllByRole('img', { name: 'Olivares AI' }).length,
+    ).toBeGreaterThan(0)
+    expect(document.querySelector('a[href="#main-content"]')).toHaveTextContent(
+      'Skip to content',
+    )
+  })
+
+  it('draws Refresh with the shared button at its small size, with no restyle', async () => {
+    mockPublicStatus.mockResolvedValue(operationalResponse)
+    const { StatusPage } = await import('./status-page')
+    render(
+      <Wrapper>
+        <StatusPage />
+      </Wrapper>,
+    )
+
+    const refresh = await screen.findByRole('button', { name: 'Refresh' })
+    expect(refresh.className).toBe(
+      cn(buttonVariants({ variant: 'ghost', size: 'sm' })),
+    )
   })
 
   it('renders component rows', async () => {

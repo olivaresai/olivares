@@ -348,7 +348,12 @@ vi.mock('./api', async (importOriginal) => {
   return { ...actual, observabilityApi: api }
 })
 
-vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: vi.fn(),
+  resolveNotice: vi.fn(),
+  noticeSeen: () => false,
+  rememberNotice: vi.fn(),
+}))
 import { notify } from '@/lib/notify'
 import { ObservabilityView } from './observability-view'
 

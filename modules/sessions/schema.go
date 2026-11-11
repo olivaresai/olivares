@@ -252,6 +252,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	if err := m.registerRunQueueSchema(reg); err != nil {
 		return err
 	}
+	if err := m.registerRunTurnSchema(reg); err != nil {
+		return err
+	}
 	// SG-00: the canonical session identity and its provider aliases.
 	if err := m.registerIdentitySchema(reg); err != nil {
 		return err

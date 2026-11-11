@@ -439,6 +439,7 @@ function VersionsSection({
         />
       ) : versions.length === 0 ? (
         <EmptyState
+          size="panel"
           title={t('versions.empty')}
           description={t('versions.emptyHint')}
         />

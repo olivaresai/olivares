@@ -31,6 +31,10 @@ type streamJSONFrame struct {
 	// the provider's HTTP status: metadata about the call, never its content.
 	Error       string `json:"error"`
 	ErrorStatus int    `json:"error_status"`
+	// IsError marks a result the provider ended in an error (an API failure, a usage
+	// limit) under the subtype "success": a flag about the turn, never its content.
+	// Read leniently: a malformed flag must not cost the frame that ends the turn.
+	IsError lenientBool `json:"is_error"`
 	// PermissionMode is the tool's own mode, on the init frame and on the
 	// system/status frame Claude Code sends when the mode changes: a word about the
 	// session, not its content.
@@ -104,4 +108,16 @@ func (f streamJSONFrame) toolMode() string {
 		return ""
 	}
 	return toolModeValue(f.PermissionMode)
+}
+
+// lenientBool reads a JSON boolean and ignores any other value, as the limit reader
+// does (runtime_limit.go), so one malformed field does not reject its whole frame.
+type lenientBool bool
+
+func (b *lenientBool) UnmarshalJSON(data []byte) error {
+	var v bool
+	if json.Unmarshal(data, &v) == nil {
+		*b = lenientBool(v)
+	}
+	return nil
 }

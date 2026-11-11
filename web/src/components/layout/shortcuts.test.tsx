@@ -38,6 +38,8 @@ vi.mock('@/lib/auth/context', () => ({
 import { GlobalShortcuts, NAV_SHORTCUTS } from './shortcuts'
 import { modKeyName } from '@/lib/keybindings/model'
 import { FEATURE_VIEWS } from '@/features/registry'
+import { useClientSettings } from '@/features/settings/preferences'
+import { setKeyOverride } from '@/lib/keybindings/effective'
 import { useSessionStore } from '@/stores/session'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -461,18 +463,19 @@ describe('previous opened session', () => {
   })
 })
 
-describe('GlobalShortcuts — list movement', () => {
-  function gridFixture(): { keys: () => string[]; remove: () => void } {
-    const grid = document.createElement('table')
-    grid.setAttribute('data-test-fixture', '')
-    grid.setAttribute('role', 'grid')
-    grid.tabIndex = 0
-    document.body.appendChild(grid)
-    const seen: string[] = []
-    grid.addEventListener('keydown', (e) => seen.push((e as KeyboardEvent).key))
-    return { keys: () => seen, remove: () => grid.remove() }
-  }
+// A list the shell moves: it records the arrows the shell sends it.
+function gridFixture(): { keys: () => string[]; remove: () => void } {
+  const grid = document.createElement('table')
+  grid.setAttribute('data-test-fixture', '')
+  grid.setAttribute('role', 'grid')
+  grid.tabIndex = 0
+  document.body.appendChild(grid)
+  const seen: string[] = []
+  grid.addEventListener('keydown', (e) => seen.push((e as KeyboardEvent).key))
+  return { keys: () => seen, remove: () => grid.remove() }
+}
 
+describe('GlobalShortcuts — list movement', () => {
   it('moves the first grid on j and k, from anywhere outside a list', () => {
     const fixture = gridFixture()
     renderIntel(<GlobalShortcuts />)
@@ -537,11 +540,83 @@ describe('GlobalShortcuts — list movement', () => {
 })
 
 describe('GlobalShortcuts — the page grows with the table', () => {
+  it('names the command and the context of every row in words, never as a key', () => {
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: '?' })
+    const rows = screen.getAllByTestId(/^keybinding-(?!problems$)/)
+    expect(rows.length).toBeGreaterThan(30)
+    for (const row of rows)
+      expect(row.textContent).not.toMatch(/keys\.(command|when)\./)
+    expect(
+      screen.getByTestId('keybinding-sourceDiff.nextFile'),
+    ).toHaveTextContent('in the source diff')
+  })
+
   it('prints the list rows with their keys and context', () => {
     renderIntel(<GlobalShortcuts />)
     fireEvent.keyDown(window, { key: '?' })
     expect(screen.getByTestId('keybinding-list.next')).toHaveTextContent(
       'outside a list',
     )
+  })
+})
+
+// Settings › Keyboard edits a row; the key that fires and the key the help prints are
+// the same edited one.
+describe("GlobalShortcuts — the person's own keys", () => {
+  afterEach(() => useClientSettings.setState({ keyOverrides: {} }))
+
+  it('opens the palette on the keys the person chose, and the help prints them', async () => {
+    const { useCommandStore } = await import('@/stores/command')
+    useCommandStore.setState({ open: false })
+    setKeyOverride('palette.open|', 'Mod+p')
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+    expect(useCommandStore.getState().open).toBe(false)
+    fireEvent.keyDown(window, { key: 'p', ctrlKey: true })
+    expect(useCommandStore.getState().open).toBe(true)
+
+    act(() => useCommandStore.setState({ open: false }))
+    fireEvent.keyDown(window, { key: '?' })
+    const row = screen.getByTestId('keybinding-palette.open')
+    expect(
+      within(row)
+        .getAllByText(/./, { selector: 'kbd' })
+        .map((kbd) => kbd.textContent),
+    ).toEqual(['Ctrl', 'p'])
+  })
+
+  it('starts a session on the keys the person chose, and never on a capital N', () => {
+    renderIntel(<GlobalShortcuts />)
+    // Shift is part of a letter's keys: Shift+N is not `n`.
+    fireEvent.keyDown(window, { key: 'N', shiftKey: true })
+    expect(navigateMock).not.toHaveBeenCalled()
+    act(() => {
+      setKeyOverride('session.new|outsideField', 'Alt+n')
+    })
+    fireEvent.keyDown(window, { key: 'n' })
+    expect(navigateMock).not.toHaveBeenCalled()
+    fireEvent.keyDown(window, { key: 'n', altKey: true })
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/sessions' })
+  })
+
+  it('moves the list down on the keys the person chose, Shift included', () => {
+    setKeyOverride('list.next|outsideList', 'Shift+j')
+    const fixture = gridFixture()
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'j' })
+    expect(fixture.keys()).toEqual([])
+    fireEvent.keyDown(window, { key: 'J', shiftKey: true })
+    expect(fixture.keys()).toEqual(['ArrowDown'])
+  })
+
+  it('moves the list up on the keys the person chose, a modifier included', () => {
+    setKeyOverride('list.previous|outsideList', 'Alt+k')
+    const fixture = gridFixture()
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'k' })
+    expect(fixture.keys()).toEqual([])
+    fireEvent.keyDown(window, { key: 'k', altKey: true })
+    expect(fixture.keys()).toEqual(['ArrowUp'])
   })
 })

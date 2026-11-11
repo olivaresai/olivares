@@ -41,6 +41,15 @@ const { api, authState } = vi.hoisted(() => ({
   },
 }))
 
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+  message: vi.fn(),
+}))
+vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
+
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
@@ -354,7 +363,7 @@ describe('EventingView sink profile (E3b)', () => {
     const dialog = await screen.findByRole('dialog')
     expect(
       within(dialog).queryByText(
-        'SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them.',
+        'SIEM delivery and external telemetry export require Olivares AI Business. Stored settings are preserved; Olivares AI Community does not send them.',
       ) !== null,
     ).toBe(!PANEL_EXTENSIONS.operationsExportAvailable)
     await user.click(
@@ -667,5 +676,118 @@ describe('EventingView — one orange control on an empty subscription list', ()
       .getAllByRole('button', { name: 'New subscription' })
       .find((button) => button !== inEmpty)
     expect(inHeader?.className).toContain('bg-accent')
+  })
+})
+
+describe('EventingView test delivery and secret', () => {
+  it('says what the test sent and that the receiver answered 200', async () => {
+    api.testSubscription.mockResolvedValue({
+      delivered: true,
+      outcome: 'http_200',
+    })
+    const user = userEvent.setup()
+    wrap(<EventingView />)
+
+    await user.click(await screen.findByRole('button', { name: 'Test' }))
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('Test delivery succeeded', {
+        description:
+          'Sent a signed test event (eventing.test) to siem-hook. It answered HTTP 200.',
+      }),
+    )
+  })
+
+  it.each([
+    ['http_503', 'It answered HTTP 503.'],
+    ['timeout', 'It did not answer in time.'],
+    ['network', 'It could not be reached.'],
+  ])(
+    'says what answered a test that was sent and not delivered (%s)',
+    async (outcome, answer) => {
+      api.testSubscription.mockResolvedValue({ delivered: false, outcome })
+      const sent = 'Sent a signed test event (eventing.test) to siem-hook.'
+      const user = userEvent.setup()
+      wrap(<EventingView />)
+
+      await user.click(await screen.findByRole('button', { name: 'Test' }))
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Test delivery failed', {
+          description: `${sent} ${answer}`,
+        }),
+      )
+    },
+  )
+
+  it.each([
+    [
+      'endpoint_invalid',
+      'Nothing was sent: the endpoint address of siem-hook is not valid.',
+    ],
+    [
+      'egress_port_denied',
+      'Nothing was sent: the egress policy keeps events for siem-hook from leaving (egress_port_denied).',
+    ],
+    [
+      'secret_unavailable',
+      'Nothing was sent to siem-hook (secret_unavailable).',
+    ],
+  ])(
+    'says nothing was sent, and why, when the test never left (%s)',
+    async (outcome, description) => {
+      api.testSubscription.mockResolvedValue({ delivered: false, outcome })
+      const user = userEvent.setup()
+      wrap(<EventingView />)
+
+      await user.click(await screen.findByRole('button', { name: 'Test' }))
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Test delivery failed', {
+          description,
+        }),
+      )
+    },
+  )
+
+  it('shows a rotated secret once, then only its fingerprint', async () => {
+    api.rotateSecret.mockResolvedValue({ secret: 'whsec-full-secret-42' })
+    const user = userEvent.setup()
+    wrap(<EventingView />)
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Actions for siem-hook' }),
+    )
+    await user.click(screen.getByRole('menuitem', { name: 'Rotate secret' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('whsec-full-secret-42')).toBeVisible()
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }))
+
+    await waitFor(() =>
+      expect(screen.queryByText('whsec-full-secret-42')).toBeNull(),
+    )
+    expect(screen.getByText('abc123def456')).toBeInTheDocument()
+  })
+})
+
+describe('EventingView destinations', () => {
+  it('lists the webhooks as one boxed list, one row each', async () => {
+    api.subscriptions.mockResolvedValue({
+      items: [sub, { ...sub, id: 's2', name: 'billing-hook' }],
+      has_more: false,
+    })
+    wrap(<EventingView />)
+
+    const list = await screen.findByRole('list', {
+      name: 'Webhook subscriptions',
+    })
+    expect(list).toHaveAttribute('data-slot', 'boxed-list')
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows.map((row) => row.dataset.slot)).toEqual([
+      'boxed-list-row',
+      'boxed-list-row',
+    ])
+    expect(within(rows[0]!).getByText('siem-hook')).toBeInTheDocument()
+    expect(within(rows[1]!).getByText('billing-hook')).toBeInTheDocument()
+    expect(
+      within(rows[0]!).getByRole('button', { name: 'Test' }),
+    ).toBeInTheDocument()
   })
 })

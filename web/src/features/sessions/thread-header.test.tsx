@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE THREAD HEADER IS ONE 48 px LINE. The state as a dot, the name, the folder tag, the
-// tool and model, the usage; on the right Interrupt (only while a turn runs), Stop, Context
-// and a `⋯` menu. The badges and the working folder's path are the Context pane's.
+// THE THREAD HEADER IS ONE 48 px BAR, A WINDOW TITLE: the name over one quiet line of its
+// facts (folder, branch, tool, model); on the right the state in words, the cost, Interrupt
+// (only while a turn runs), Stop, Context and a `⋯` menu. The badges and the working
+// folder's path are the Context pane's.
 import {
   act,
   cleanup,
@@ -22,6 +23,7 @@ import {
   type AccountMark,
 } from '@/features/agent-tools/account-marks'
 import type { ProviderAccountDTO, RunDTO } from '@/features/agentops/types'
+import { viewById } from '@/features/navigation/model'
 import { useClientSettings } from '@/features/settings/preferences'
 import { mergeSessions } from './provenance'
 import type { LiveDTO } from './types'
@@ -190,6 +192,10 @@ function renderThread(r: RunDTO = run(), props = {}) {
 const header = () =>
   document.querySelector('[data-slot="thread-header"]') as HTMLElement
 
+/** Whether `b` comes after `a` in the page. */
+const follows = (a: Node, b: Node) =>
+  !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+
 function openMenu() {
   act(() => {
     fireEvent.keyDown(screen.getByTestId('narrative-menu'), { key: 'Enter' })
@@ -234,6 +240,47 @@ describe('thread header — one line', () => {
     expect(within(h).getByTestId('thread-tool').textContent).toBe('Codex')
   })
 
+  // A2's window title: line one is the name; line two says where it works and with what,
+  // quietly, a dot between the facts. The state is a word beside the actions on it.
+  it('heads the thread with its name over one quiet line of facts', async () => {
+    renderThread(run({ worktree_branch: 'review/calc' }))
+    const h = header()
+    const name = within(h).getByRole('heading', { level: 2 })
+    const folder = await within(h).findByTestId('narrative-folder')
+    const facts = folder.parentElement!
+    expect(facts).toHaveAttribute('data-slot', 'thread-facts')
+    const title = h.querySelector('[data-slot="thread-title"]')!
+    expect(title).toContainElement(name)
+    expect(title).toContainElement(facts)
+    expect(title.className.split(/\s+/)).toContain('flex-col')
+    expect(facts.className).toContain("[&>*+*]:before:content-['·']")
+    // In the drawing's order: folder, branch, tool, model.
+    const branch = within(facts).getByTestId('thread-branch')
+    const tool = within(facts).getByTestId('thread-tool')
+    const model = within(facts).getByTestId('thread-model')
+    expect(follows(folder, branch)).toBe(true)
+    expect(follows(branch, tool)).toBe(true)
+    expect(follows(tool, model)).toBe(true)
+  })
+
+  it('says the state in words, with its mark, beside the actions', () => {
+    renderThread()
+    const h = header()
+    const state = within(h).getByTestId('rail-row-state')
+    expect(state).toHaveTextContent(/^Working/)
+    // On the controls' side: after the name, before Stop.
+    const name = within(h).getByRole('heading', { level: 2 })
+    const stop = within(h).getByRole('button', { name: 'Stop' })
+    expect(follows(name, state)).toBe(true)
+    expect(follows(state, stop)).toBe(true)
+    // A narrow pane keeps the dot alone, named by the word.
+    expect(state.parentElement!.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['hidden', '@min-[40rem]/thread:inline-flex']),
+    )
+    const dot = within(h).getByRole('img', { name: 'Working' })
+    expect(dot.className).toContain('@min-[40rem]/thread:hidden')
+  })
+
   it('heads a session that has no name with the title the engine cut, and a name wins', () => {
     renderThread(run({ name: undefined, title: 'Plan the migration' }))
     expect(
@@ -244,6 +291,17 @@ describe('thread header — one line', () => {
     expect(
       within(header()).getByRole('heading', { level: 2 }),
     ).toHaveTextContent('calc-review')
+  })
+
+  //: a launch the person did not name sends no name, and until its first message
+  // gives it a title the heading read the tail of its reference in the monospaced face.
+  it('heads a session with no name and no title with its tool and folder, not its reference', () => {
+    renderThread(run({ name: undefined, title: undefined }))
+    const title = within(header()).getByRole('heading', { level: 2 })
+    expect(title).toHaveTextContent('Codex · demo')
+    expect(title.className).not.toContain('font-mono')
+    // The reference stays on the hover.
+    expect(title.getAttribute('title')).toContain('sess-a')
   })
 
   it('names the account the session runs under with its dot and short label, in the header and the Context pane', () => {
@@ -292,7 +350,7 @@ describe('thread header — one line', () => {
     ).toBeNull()
   })
 
-  it.each(['Interrupt turn', 'Stop'])(
+  it.each(['Stop', 'End session'])(
     'names the %s icon button and shows its name as a tooltip on hover',
     async (name) => {
       const user = userEvent.setup()
@@ -322,7 +380,7 @@ describe('thread header — one line', () => {
 
   it('keeps Stop quiet: a ghost icon whose glyph is the danger tone, tinted on hover', () => {
     renderThread()
-    const stop = within(header()).getByRole('button', { name: 'Stop' })
+    const stop = within(header()).getByRole('button', { name: 'End session' })
     const cls = stop.className.split(/\s+/)
     expect(cls).toContain('text-bad')
     expect(cls).toContain('hover:bg-bad-soft')
@@ -335,7 +393,7 @@ describe('thread header — one line', () => {
     // A work-bound run without a usable fence: Interrupt is shown, and waits for a refresh.
     renderThread(run({ work_item_id: 'work-a', work_lease_fence: 0 }))
     const button = within(header()).getByRole('button', {
-      name: 'Interrupt turn',
+      name: 'Stop',
     })
     expect(button).toBeDisabled()
     const tip = button.closest('[data-slot="disabled-tip"]') as HTMLElement
@@ -349,10 +407,10 @@ describe('thread header — one line', () => {
 
   it('offers Interrupt only while a turn runs', () => {
     renderThread(run({ state: 'idle' }))
+    expect(within(header()).queryByRole('button', { name: 'Stop' })).toBeNull()
     expect(
-      within(header()).queryByRole('button', { name: 'Interrupt turn' }),
-    ).toBeNull()
-    expect(within(header()).getByRole('button', { name: 'Stop' })).toBeTruthy()
+      within(header()).getByRole('button', { name: 'End session' }),
+    ).toBeTruthy()
   })
 })
 
@@ -360,11 +418,13 @@ describe('thread header — Stop keeps the confirm setting', () => {
   it('asks first when the setting says so, and stops on confirm', async () => {
     const user = userEvent.setup()
     renderThread()
-    await user.click(within(header()).getByRole('button', { name: 'Stop' }))
+    await user.click(
+      within(header()).getByRole('button', { name: 'End session' }),
+    )
     expect(ops.stop).not.toHaveBeenCalled()
     const dialog = await screen.findByRole('dialog')
     await user.click(
-      within(dialog).getByRole('button', { name: 'Stop the session' }),
+      within(dialog).getByRole('button', { name: 'End the session' }),
     )
     await waitFor(() =>
       expect(ops.stop).toHaveBeenCalledWith('run-1', undefined),
@@ -375,7 +435,9 @@ describe('thread header — Stop keeps the confirm setting', () => {
     const user = userEvent.setup()
     useClientSettings.setState({ confirmStop: false })
     renderThread()
-    await user.click(within(header()).getByRole('button', { name: 'Stop' }))
+    await user.click(
+      within(header()).getByRole('button', { name: 'End session' }),
+    )
     await waitFor(() =>
       expect(ops.stop).toHaveBeenCalledWith('run-1', undefined),
     )
@@ -414,14 +476,16 @@ describe('thread header — the ⋯ menu', () => {
     await waitFor(() => expect(toasts.success).toHaveBeenCalledTimes(1))
   })
 
-  it('holds Full controls, Copy reference and In a terminal', async () => {
+  it('holds Full controls, Copy reference, Open in the editor and In a terminal', async () => {
     const { onOpenDetail } = renderThread()
+    expect(within(header()).queryByRole('link', { name: /Open in/ })).toBeNull()
     openMenu()
     const items = await screen.findAllByRole('menuitem')
     expect(items.map((i) => i.textContent)).toEqual(
       expect.arrayContaining([
         'Full controls',
         'Copy reference',
+        'Open in VS Code',
         'In a terminal',
       ]),
     )
@@ -561,7 +625,44 @@ describe('thread header — the ⋯ menu', () => {
 // claude-opus-5-5 · high" and nothing said which session each was. The header names the
 // session, then its tool; the model and the effort are said once, by the composer.
 describe('thread header — the session, then its tool', () => {
-  it('names the session first and its tool after it, with no model or effort', () => {
+  it('says the branch, the model and what the session spent', () => {
+    renderThread(
+      run({ worktree_branch: 'review/calc', cost_micro_usd: 1_840_000 }),
+    )
+    const h = header()
+    expect(within(h).getByTestId('thread-branch')).toHaveTextContent(
+      'review/calc',
+    )
+    // A fact of the quiet line under the name, in the machine face, as drawn.
+    expect(within(h).getByTestId('thread-branch').className).toContain(
+      'font-mono',
+    )
+    // The branch is the path text: cut in its middle, its end kept.
+    const name = within(h)
+      .getByTestId('thread-branch')
+      .querySelector('[data-slot="path-text"]')
+    expect(name).toHaveTextContent('review/calc')
+    // A row beside its icon, never cut at its own end: the path text shrinks and
+    // keeps the end of a long branch in view.
+    const branch = within(h).getByTestId('thread-branch')
+    expect(branch).toHaveClass('flex', 'min-w-0')
+    expect(branch).not.toHaveClass('truncate')
+    expect(within(h).getByTestId('thread-model')).toHaveTextContent(
+      'Stub Model',
+    )
+    expect(within(h).getByTestId('thread-cost')).toHaveTextContent('$1.84')
+  })
+
+  it('says no amount where the Usage place does not open for the person', () => {
+    // A member sees no money: the cost shows where Usage opens, by its permission.
+    const usage = viewById('usage')!.permission!
+    auth.can = (permission) => permission !== usage
+    renderThread(run({ cost_micro_usd: 1_840_000 }))
+    expect(within(header()).queryByTestId('thread-cost')).toBeNull()
+    expect(header()).not.toHaveTextContent('$')
+  })
+
+  it('names the session first and its tool after it, with no effort', () => {
     renderThread(run({ effort: 'high' }))
     const h = header()
     const title = within(h).getByRole('heading', { level: 2 })
@@ -571,7 +672,6 @@ describe('thread header — the session, then its tool', () => {
     expect(
       title.compareDocumentPosition(tool) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
-    expect(h).not.toHaveTextContent('stub-model')
     expect(h).not.toHaveTextContent(/\bhigh\b/i)
   })
 })
@@ -580,19 +680,24 @@ describe('thread header — the session, then its tool', () => {
 // wide, the tool and the folder could not shrink, and the session's name was squeezed to
 // nothing while the controls were cut. The header measures its own pane, not the window.
 describe('thread header — in a narrow pane', () => {
-  it('keeps the name and gives way with the tool and the folder first', async () => {
+  it('keeps the name on its own line and gives way with the model, then the tool', async () => {
     renderThread(run({ effort: 'high' }))
     const h = header()
     expect(h.className).toContain('@container/thread')
-    expect(within(h).getByTestId('thread-tool').className).toMatch(
+    const tool = within(h).getByTestId('thread-tool')
+    expect(tool.className).toMatch(
       /\bmin-w-0\b.*\btruncate\b|\btruncate\b.*\bmin-w-0\b/,
     )
-    expect(within(h).getByTestId('thread-tool').className).toContain(
-      '@min-[26rem]/thread:inline',
+    expect(tool.parentElement!.className).toContain(
+      '@min-[26rem]/thread:inline-flex',
     )
-    expect(
-      (await within(h).findByTestId('narrative-folder')).className,
-    ).toContain('@min-[40rem]/thread:inline-block')
+    expect(within(h).getByTestId('thread-model').className).toContain(
+      '@min-[48rem]/thread:inline',
+    )
+    // The folder is the first fact: it stays, and is cut before it pushes anything.
+    const folder = await within(h).findByTestId('narrative-folder')
+    expect(folder.className).not.toContain('hidden')
+    expect(folder.className).toContain('truncate')
     // Nothing in the header follows the window's width any more.
     expect(h.innerHTML).not.toMatch(/min-\[(761|1100)px\]/)
   })
@@ -708,8 +813,9 @@ describe('thread header — the usage of the session account', () => {
 
   // THE TITLE IS THE ONE THING THE HEADER MUST LET A PERSON READ: the account's
   // quota is the status bar's and the tokens are Details', not the header's, and the title
-  // keeps 16 characters before it gives way. jsdom has no layout, so this pins the arrangement.
-  it('keeps the account quota and the raw token totals out of the header and the title 16 characters wide', async () => {
+  // takes the room the actions leave and is cut there, with no width of its own to push
+  // under them at 390 px. jsdom has no layout, so this pins the arrangement.
+  it('keeps the account quota and the raw token totals out of the header and cuts the title where the actions begin', async () => {
     vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
       items: [account(41)],
       has_more: false,
@@ -724,8 +830,13 @@ describe('thread header — the usage of the session account', () => {
     expect(header()).not.toHaveTextContent(/Weekly|5-hour|tokens/)
     expect(within(header()).queryByText(/limit reached/)).toBeNull()
     const title = within(header()).getByRole('heading', { level: 2 })
-    expect(title.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['min-w-[16ch]', 'truncate']),
+    const classes = title.className.split(/\s+/)
+    expect(classes).toContain('truncate')
+    expect(classes.filter((name) => name.startsWith('min-w-'))).toEqual([])
+    // Its block shrinks to the room left, so the cut is inside it.
+    expect(title.closest('[data-slot="thread-title"]')).toHaveClass(
+      'min-w-0',
+      'flex-1',
     )
   })
 

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -2785,69 +2784,6 @@ func guardEditionSealEligible(edge guardManifestEdge, source guardBootstrapRecei
 	return source.CompletedV7
 }
 
-// guardBootstrapReceiptVariants enumerates complete receipt histories, never individual
-// receipt options. A later edge can therefore link its seal to the real terminal claim of
-// a fresh completion, direct completion, v9 completion or prior transition without
-// synthesizing an old bootstrap receipt that was not terminal on that path.
-//
-// The enumeration follows LINEAGES: one seal per crossed edge, in the order the edges
-// were crossed. Two lineages between the same endpoints therefore produce different
-// receipt sets, because each seal binds its own exact From/To pair and its predecessor's
-// terminal receipt id.
-func guardBootstrapReceiptVariants(current guardManifest) ([]guardBootstrapReceiptVariant, error) {
-	graph, err := guardEditionGraphFor(current)
-	if err != nil {
-		return nil, err
-	}
-	return guardBootstrapVariantsForNode(graph, current.CodeEpoch)
-}
-
-func guardBootstrapVariantsForNode(graph guardEditionGraph, epoch int64) ([]guardBootstrapReceiptVariant, error) {
-	node, ok := graph.node(epoch)
-	if !ok {
-		return nil, fmt.Errorf("%w: edition %d is not in this graph", ErrGuardManifestNoEdge, epoch)
-	}
-	variants, err := guardBootstrapVariantsAtNode(node)
-	if err != nil {
-		return nil, err
-	}
-	empty, err := emptyRetainedDigest()
-	if err != nil {
-		return nil, err
-	}
-	for _, parent := range graph.parentEpochs(epoch) {
-		edge, eerr := graph.edge(parent, epoch)
-		if eerr != nil {
-			return nil, eerr
-		}
-		sources, serr := guardBootstrapVariantsForNode(graph, parent)
-		if serr != nil {
-			return nil, serr
-		}
-		parentNode, _ := graph.node(parent)
-		for _, source := range sources {
-			if !guardEditionSealEligible(edge, source) {
-				continue
-			}
-			seal, sealErr := guardEditionTransitionSeal(edge, 0, empty, source.TerminalReceiptID)
-			if sealErr != nil {
-				return nil, sealErr
-			}
-			variants = append(variants, guardBootstrapReceiptVariant{
-				State:             guardEditionReceiptsSealed,
-				Receipts:          append(append([]guardReceipt(nil), source.Receipts...), seal),
-				Path:              source.Path + guardEditionPath(">") + guardEditionPath(strconv.FormatInt(epoch, 10)),
-				CompletedV7:       true,
-				CompletedV9:       source.CompletedV9 || node.Membership.has(guardDeltaAccessEvidence),
-				TerminalReceiptID: seal.ReceiptID,
-				Epoch:             epoch,
-			})
-			_ = parentNode
-		}
-	}
-	return variants, nil
-}
-
 func classifyGuardBootstrapReceiptVariant(
 	ctx context.Context,
 	q guardEditionQuerier,
@@ -2871,7 +2807,10 @@ func classifyGuardBootstrapReceiptVariant(
 	if err != nil {
 		return guardBootstrapReceiptVariant{}, nil, err
 	}
-	variants, err := guardBootstrapVariantsForNode(graph, current.CodeEpoch)
+	// One memo serves the current edition and every predecessor walk below: each parent's
+	// variants are compiled once, not once per lineage that reaches it.
+	boot := guardBootVariants{graph: graph, variantsByEpoch: make(map[int64][]guardBootstrapReceiptVariant)}
+	variants, err := boot.variants(current.CodeEpoch)
 	if err != nil {
 		return guardBootstrapReceiptVariant{}, nil, err
 	}
@@ -2892,7 +2831,7 @@ func classifyGuardBootstrapReceiptVariant(
 		if eerr != nil {
 			return guardBootstrapReceiptVariant{}, nil, eerr
 		}
-		sources, serr := guardBootstrapVariantsForNode(graph, parent)
+		sources, serr := boot.variants(parent)
 		if serr != nil {
 			return guardBootstrapReceiptVariant{}, nil, serr
 		}

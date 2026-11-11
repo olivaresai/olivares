@@ -70,8 +70,7 @@
     },
     "signIn": {
       "title": "Iniciar sessão",
-      "body": "Use a sua subscrição do Claude ou do ChatGPT. A sessão iniciada fica neste servidor, onde a ferramenta a guarda.",
-      "waiting": "Instale primeiro uma ferramenta."
+      "body": "Use a sua subscrição do Claude ou do ChatGPT. A sessão iniciada fica neste servidor, onde a ferramenta a guarda."
     },
     "start": {
       "title": "Iniciar uma sessão",
@@ -84,19 +83,39 @@
     "notReady": "{{tool}} ainda não pode arrancar.",
     "folder": "Pasta",
     "folderHint": "Uma pasta neste servidor.",
+    "folderHintGiven": "O caminho de uma pasta já registada neste servidor. As novas são registadas por um administrador.",
     "folderChoose": "Escolha uma pasta",
     "folderNew": "Uma pasta nova para esta sessão",
     "folderTyped": "Outra pasta…",
     "readingFolder": "A ler a pasta da última sessão…",
     "prompt": "Primeira mensagem (opcional)",
     "promptPlaceholder": "O que deve fazer primeiro?",
+    "documents": "Documentos",
+    "attachDocument": "Anexar documento",
+    "removeDocument": "Remover {{name}}",
+    "savingDocument": "A guardar {{name}} na pasta ({{n}} de {{total}})…",
+    "documentFailed": "{{name}} não foi guardado na pasta ({{reason}}).",
+    "documentsNeedFolder": "Pode anexar documentos ao trabalho numa das suas pastas, no checkout atual.",
+    "documentsMessage": "Documentos que anexei, guardados na pasta:",
+    "documentsAdded": "Adicionado à sua primeira mensagem:",
+    "documentsKept": "Já na pasta: {{paths}}.",
+    "documentsReadOnly": "Esta pasta é só de leitura: pode anexar documentos ao trabalho numa pasta em que a sessão possa escrever.",
+    "documentsWaiting": "Iniciar aguarda os documentos anexados: escolha uma pasta que os possa receber, ou remova-os.",
+    "documentWaiting": "{{size}} · em espera",
+    "documentsNeedWords": "Escreva algumas palavras sobre o que fazer com os documentos: a sessão recebe o nome do que escrever.",
+    "moreHeldDocuments": "Inicie aqui para manter os documentos anexados, ou remova-os para abrir mais opções.",
+    "moreHeldFolder": "Inicie aqui para manter a pasta que escreveu, ou escolha-a na lista de pastas para abrir mais opções.",
+    "documentTooLarge": "{{name}} excede o limite desta pasta de {{size}} por ficheiro e não foi anexado.",
+    "documentAttachedTwice": "{{name}} já está anexado.",
     "more": "Mais opções",
     "permission": "O que o agente pode fazer",
     "start": "Iniciar",
     "starting": "A iniciar…",
+    "startSession": "Iniciar a sessão",
     "needTool": "Instale primeiro uma ferramenta e inicie sessão nela.",
     "dialogTitle": "Nova sessão",
     "dialogDescription": "Escolha uma ferramenta e diga o que fazer.",
+    "keyToStart": "<key/> para iniciar",
     "advanced": "Opções de arranque avançadas",
     "secrets": "Segredos como variáveis de ambiente",
     "secretsHint": "A sessão lê cada segredo do cofre escolhido a partir da variável que indicar. O valor nunca é mostrado, registado nem escrito na pasta.",
@@ -111,6 +130,7 @@
     "credentialsManage": "Gerir credenciais geridas",
     "listUnavailable": "O motor não respondeu à lista de segredos. Por agora não é possível escolher nada.",
     "openTools": "Abrir ferramentas de IA",
+    "askAdmin": "Peça a um administrador que a prepare.",
     "model": "Modelo",
     "providerDefault": "Predefinição ({{model}})",
     "nativeDefault": "Predefinição de {{tool}}",
@@ -123,14 +143,22 @@
     "profileNeedsKey": "Precisa de uma chave",
     "foldersUnreadable": "Não foi possível ler as pastas registadas. Escreva o caminho de uma pasta neste servidor.",
     "folderPermission": "Arranca como {{name}}, a predefinição desta pasta.",
-    "autoAsks": "{{tool}} não tem modo automático: vai perguntar antes de cada ação."
+    "autoAsks": "{{tool}} não tem modo automático: vai perguntar antes de cada ação.",
+    "worktreeCheckout": "Checkout atual",
+    "worktreeNew": "Novo worktree",
+    "worktreeFrom": "Começar em",
+    "worktreeFromHint": "Ramo ou commit (opcional)",
+    "worktreeNewHint": "A sessão trabalha num ramo próprio, numa pasta separada. O checkout fica como está.",
+    "worktreeLegend": "Cópia de trabalho"
   },
   "composer": {
     "toolPill": "Ferramenta e conta: {{value}}",
     "modelPill": "Modelo: {{value}}",
     "effortPill": "Esforço: {{value}}",
     "folderPill": "Pasta: {{value}}",
-    "moreOptions": "Mais opções"
+    "moreOptions": "Mais opções",
+    "accessPill": "O que o agente pode fazer: {{value}}",
+    "worktreePill": "Cópia de trabalho: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Pastas registadas: {{count}} carregadas; existem mais.",
@@ -154,6 +182,14 @@
     "cli": "Usar a linha de comandos olivares",
     "cliHint": "Neste servidor, o comando olivares já está instalado. A partir de outro computador, instale-o com:"
   },
+  "passkeyOffer": {
+    "body": "Da próxima vez, inicie sessão com uma chave de acesso: a sua impressão digital, o rosto ou o bloqueio do ecrã em vez de uma palavra-passe.",
+    "add": "Adicionar uma chave de acesso",
+    "notNow": "Agora não",
+    "added": "Chave de acesso adicionada. Utilize-a para iniciar sessão da próxima vez.",
+    "failed": "A chave de acesso não foi adicionada. Tente novamente ou adicione uma mais tarde nas Definições.",
+    "unknown": "Não foi possível confirmar a chave de acesso. Pode ter sido adicionada: veja nas Definições antes de adicionar outra."
+  },
   "permissionSummary": {
     "readOnly": "Lê e planeia. Qualquer alteração é recusada.",
     "ask": "Pergunta antes de qualquer ação que não seja uma leitura.",
@@ -165,6 +201,10 @@
   "bring": {
     "title": "Traga as suas pastas",
     "body": "Pastas em que as suas ferramentas já trabalharam, lidas dos registos próprios das ferramentas sobre caminhos de projetos e datas. Nada é registado até confirmar.",
+    "offer_one": "{{count}} pasta em que as suas ferramentas já trabalharam.",
+    "offer_many": "{{count}} pastas em que as suas ferramentas já trabalharam.",
+    "offer_other": "{{count}} pastas em que as suas ferramentas já trabalharam.",
+    "review": "Rever",
     "error": "Não foi possível procurar as pastas das suas ferramentas.",
     "unreadable": "Não foi possível ler os registos de {{tool}}. Adicione as pastas manualmente.",
     "cols": {

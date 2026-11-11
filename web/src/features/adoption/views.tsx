@@ -26,6 +26,9 @@ export const VIEWS = [
     // Team/org adoption views are viewer-read; the per-developer drill-down is gated
     // deny-closed inside the view (adoption:developer:read).
     permission: 'adoption:metrics:read',
+    // Usage per person and department is Olivares AI Business (COURSE.md, Editions):
+    // below it the view leaves the navigation and its address says the edition line.
+    minEdition: 'business',
     element: lazyView(AdoptionView),
   },
 ] satisfies ViewEntry[]

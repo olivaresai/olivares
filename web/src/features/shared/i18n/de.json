@@ -55,5 +55,17 @@
     "same": "Keine Unterschiede zu HEAD.",
     "view": "Ansicht",
     "unavailable": "Der Vergleich mit HEAD war nicht möglich."
+  },
+  "diff": {
+    "layout": "Diff-Ansicht",
+    "unified": "Vereinigt",
+    "split": "Geteilt",
+    "wrap": "Zeilenumbruch",
+    "whitespace": "Leerraum ignorieren",
+    "maximize": "Maximieren",
+    "restore": "Größe wiederherstellen",
+    "reviewed": "Geprüft",
+    "working": "Arbeitsverzeichnis",
+    "branch": "Branch"
   }
 }

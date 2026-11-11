@@ -10,10 +10,11 @@ import { cn } from '@/lib/utils'
 
 /**
  * Sheet — a side drawer built on Radix Dialog (same focus trap / Escape / ARIA as
- * Dialog, just edge-anchored). Right side by default. Flat `bg-elevated` panel with
- * a single strong hairline on the inner edge; slides in via translate keyed off
- * data-state (≤220ms ease-out). Mirrors Dialog's Header/Footer/Title/Description and
- * carries the same built-in top-right X close.
+ * Dialog, just edge-anchored). Right side by default. Drawn as direction A2 draws a
+ * dialog: the highest surface (`bg-raised`) with the pop shadow and a hairline on the inner
+ * edge, a heading title, a small round close and the answers on their own band; slides in
+ * via translate keyed off data-state at the sheet duration token. Mirrors Dialog's
+ * Header/Footer/Title/Description.
  */
 
 export const Sheet = DialogPrimitive.Root
@@ -29,7 +30,7 @@ function SheetOverlay({
     <DialogPrimitive.Overlay
       className={cn(
         'fixed inset-0 z-50 bg-overlay',
-        'transition-opacity duration-200 ease-out',
+        'transition-opacity duration-[var(--duration-panel)] ease-out',
         'data-[state=open]:opacity-100 data-[state=closed]:opacity-0',
         className,
       )}
@@ -40,18 +41,20 @@ function SheetOverlay({
 
 const sheetVariants = cva(
   cn(
-    'fixed z-50 flex flex-col gap-4 bg-elevated shadow-xl p-6',
-    'transition-transform duration-200 ease-out',
+    'fixed z-50 flex flex-col gap-4 bg-raised shadow-pop p-6',
+    // The answers' band reaches the sheet's foot when nothing but the close follows it.
+    'has-[>[data-slot=sheet-footer]:last-child]:pb-0 has-[>[data-slot=sheet-footer]+[data-slot=sheet-close]:last-child]:pb-0',
+    'transition-transform duration-[var(--duration-sheet)] ease-out',
   ),
   {
     variants: {
       side: {
         right:
-          'inset-y-0 right-0 h-full w-full max-w-sm border-l border-border-strong data-[state=closed]:translate-x-full data-[state=open]:translate-x-0',
-        left: 'inset-y-0 left-0 h-full w-full max-w-sm border-r border-border-strong data-[state=closed]:-translate-x-full data-[state=open]:translate-x-0',
-        top: 'inset-x-0 top-0 w-full border-b border-border-strong data-[state=closed]:-translate-y-full data-[state=open]:translate-y-0',
+          'inset-y-0 right-0 h-full w-full max-w-sm border-l border-line data-[state=closed]:translate-x-full data-[state=open]:translate-x-0',
+        left: 'inset-y-0 left-0 h-full w-full max-w-sm border-r border-line data-[state=closed]:-translate-x-full data-[state=open]:translate-x-0',
+        top: 'inset-x-0 top-0 w-full border-b border-line data-[state=closed]:-translate-y-full data-[state=open]:translate-y-0',
         bottom:
-          'inset-x-0 bottom-0 w-full border-t border-border-strong data-[state=closed]:translate-y-full data-[state=open]:translate-y-0',
+          'inset-x-0 bottom-0 w-full border-t border-line data-[state=closed]:translate-y-full data-[state=open]:translate-y-0',
       },
     },
     defaultVariants: { side: 'right' },
@@ -84,13 +87,15 @@ export function SheetContent({
         {children}
         {!hideClose && (
           <DialogPrimitive.Close
+            data-slot="sheet-close"
             className={cn(
-              'absolute right-4 top-4 inline-flex size-7 items-center justify-center rounded-md',
-              'text-muted-foreground transition-colors duration-100 ease-out outline-none',
-              'hover:bg-muted hover:text-foreground',
-              'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              'disabled:pointer-events-none disabled:opacity-50',
-              '[&_svg]:size-4 [&_svg]:shrink-0',
+              // A small round close, as in a GNOME dialog, with a 44 px hit area.
+              'absolute right-4 top-4 inline-flex size-7 items-center justify-center rounded-full',
+              "bg-active text-text-2 transition-colors ease-out outline-none after:absolute after:-inset-2 after:content-['']",
+              'hover:bg-[var(--pressed)] hover:text-text',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+              'disabled:pointer-events-none disabled:opacity-45',
+              '[&_svg]:size-3.5 [&_svg]:shrink-0',
             )}
           >
             <X />
@@ -120,8 +125,10 @@ export function SheetFooter({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
+      data-slot="sheet-footer"
       className={cn(
-        'mt-auto flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
+        // The answers sit on their own band behind a hairline, at the bottom of the sheet.
+        '-mx-6 mt-auto flex flex-col-reverse gap-2 border-t border-line bg-frame/30 px-6 py-3.5 *:min-w-22 sm:flex-row sm:justify-end',
         className,
       )}
       {...props}

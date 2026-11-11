@@ -82,7 +82,6 @@ const validLicense = {
   managed_externally: false,
   licensee: 'Acme Corp',
   plan: 'commercial',
-  max_users: 50,
   expires_at: '2027-01-01T00:00:00Z',
   seat_limit: 50,
   seat_limited: true,
@@ -388,7 +387,6 @@ describe('LicenseTab', () => {
       status: 'none',
       source: 'none',
       managed_externally: false,
-      max_users: 0,
       seat_limit: 0,
       seat_limited: false,
       active_users: 1,
@@ -416,7 +414,6 @@ describe('LicenseTab', () => {
       status: 'none',
       source: 'none',
       managed_externally: false,
-      max_users: 0,
       seat_limit: 0,
       seat_limited: false,
       active_users: 1,
@@ -458,9 +455,9 @@ describe('LicenseTab', () => {
 
   it('never renders a seat quota, even when the DTO still carries one', async () => {
     // The engine reports unlimited, but a legacy/enterprise payload may still carry
-    // seat_limit/max_users on the wire. The panel must ignore both: rendering a
+    // seat_limit on the wire. The panel must ignore it: rendering a
     // limit nothing enforces is exactly the dishonesty B10 removed.
-    api.getLicense.mockResolvedValue(validLicense) // seat_limit 50, max_users 50
+    api.getLicense.mockResolvedValue(validLicense) // seat_limit 50
     wrap(<LicenseTab />)
     expect(await screen.findByText('Acme Corp')).toBeInTheDocument()
     expect(screen.queryByText('12 / 50')).not.toBeInTheDocument()
@@ -1051,7 +1048,9 @@ it('includes the commercial badge in Edition and license', async () => {
   badgeFixture.edition = 'business'
   api.getLicense.mockResolvedValue(validLicense)
   wrap(<LicenseTab />)
-  expect(await screen.findByLabelText('Business edition')).toBeInTheDocument()
+  expect(
+    await screen.findByLabelText('Olivares AI Business'),
+  ).toBeInTheDocument()
 })
 
 afterEach(() => {

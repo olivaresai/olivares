@@ -22,6 +22,9 @@
     "name": "名称",
     "kind": "类型",
     "key": "密钥",
+    "usedBy": "使用者",
+    "usedByUnread": "无法读取使用各密钥的配置文件。",
+    "usedByPartial": "部分配置文件未读取：某个密钥的使用者可能多于所示。",
     "state": "状态",
     "connection": "连接",
     "actions": "操作"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "有效",
-    "revoked": "已吊销"
+    "revoked": "已吊销",
+    "disabled": "已禁用"
   },
   "probe": {
     "never": "未测试",
@@ -70,7 +74,9 @@
     "testing": "测试中…",
     "rotate": "更换密钥",
     "revoke": "吊销",
-    "details": "详情"
+    "details": "详情",
+    "disable": "禁用",
+    "enable": "启用"
   },
   "create": {
     "title": "添加提供商",
@@ -171,5 +177,9 @@
   "section": {
     "title": "API 密钥",
     "add": "添加 API 密钥"
+  },
+  "stateChange": {
+    "disabled": "提供商已禁用。在重新启用之前，绑定的配置文件将拒绝新的启动。",
+    "active": "提供商已启用。"
   }
 }

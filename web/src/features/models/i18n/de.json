@@ -347,6 +347,8 @@
     "installModel": "Modell installieren",
     "addProvider": "Anbieter hinzufügen",
     "sourceFailed": "{{source}} konnte nicht gelesen werden. Die anderen Quellen werden weiterhin angezeigt.",
+    "providerFailed": "{{source}} hat seine Modelle nicht aufgelistet: nutzen Sie <0>Verbindung testen</0> unter Anbieter.",
+    "providerFailedAlone": "{{source}} hat seine Modelle nicht aufgelistet.",
     "sources": {
       "tools": "Die Modelllisten der Werkzeuge",
       "ollama": "Ollama",

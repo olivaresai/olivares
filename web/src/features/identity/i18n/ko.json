@@ -97,9 +97,9 @@
   },
   "sso": {
     "title": "싱글 사인온(OIDC / SAML)",
-    "description": "싱글 사인온은 슈퍼 관리자가 ID 프로바이더에서 설정합니다. 이 패널은 정확한 리디렉트 URI를 확인하고 연결 상태를 표시합니다.",
+    "description": "싱글 사인온은 슈퍼 관리자가 설정합니다. 이 패널은 정확한 리디렉트 URI를 확인하고 연결 상태를 표시합니다.",
     "notConfigured": "구성되지 않음",
-    "notConfiguredHint": "ID 프로바이더가 구성되지 않아 연동 요청이 501을 반환합니다. 슈퍼 관리자가 ID 프로바이더에서 설정합니다.",
+    "notConfiguredHint": "ID 프로바이더가 구성되지 않아 싱글 사인온으로 로그인하는 사람이 없습니다.",
     "seamWhat": "SSO 연결 상태 요약",
     "protocol": "프로토콜",
     "state": "연결",
@@ -110,14 +110,13 @@
     "redirectCheckHint": "ID 프로바이더에 구성된 리디렉트/ACS URI를 붙여 넣으십시오. 위 값과 정확히 일치해야 합니다(RFC 9700).",
     "redirectMatch": "정확히 일치합니다 — 이 리디렉트 URI는 유효합니다.",
     "redirectMismatch": "정확히 일치하지 않습니다. IdP는 위 리디렉트 URI를 문자 단위로 그대로 사용해야 합니다.",
-    "configure": "ID 프로바이더 열기",
     "testLogin": "테스트 로그인 시작"
   },
   "scim": {
     "title": "SCIM 2.0 프로비저닝",
     "description": "사용자 및 그룹의 인바운드 프로비저닝입니다. 서비스 프로바이더, 동기화된 사용자 및 퇴사 증거의 읽기 전용 상태입니다.",
     "seamWhat": "SCIM 서비스 프로바이더 구성",
-    "businessOnly": "인바운드 SCIM 서버에는 Business가 필요합니다. People에서 조직에서 사람을 제거하십시오.",
+    "businessOnly": "인바운드 SCIM 서버에는 Olivares AI Business가 필요합니다. People에서 조직에서 사람을 제거하십시오.",
     "patch": "PATCH",
     "filter": "필터",
     "filterMax": "지원됨(최대 {{n}})",

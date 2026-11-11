@@ -15,7 +15,8 @@
   "groups": {
     "yours": "Vos modèles",
     "builtin": "Modèles intégrés ({{n}})",
-    "yoursEmpty": "Aucun pour l'instant. Un modèle est un point de départ réutilisable pour les nouvelles sessions."
+    "emptyTitle": "Vous n'avez encore aucun modèle",
+    "emptyDescription": "Un modèle est un point de départ réutilisable pour les nouvelles sessions."
   },
   "editor": {
     "nameLabel": "Nom",
@@ -25,11 +26,11 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "Commandes exécutées avant/après les outils et les sessions.",
-      "settings": "Paramètres de l'agent",
+      "settings": "Paramètres",
       "settingsHint": "Mode de permission, niveau d'effort, modèle et instructions personnalisées.",
       "connectors": "Connecteurs",
       "connectorsHint": "Identifiants des connecteurs à associer lors de l'application de ce modèle.",
-      "policies": "Politiques de gouvernance",
+      "policies": "Politiques",
       "policiesHint": "Mode DLP, limites de durée de session, outils autorisés et enregistrement E/S.",
       "secrets": "Secrets",
       "secretsHint": "Secrets du coffre que les sessions de ce modèle reçoivent en variables d’environnement.",

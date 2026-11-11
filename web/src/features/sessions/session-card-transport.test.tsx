@@ -259,7 +259,7 @@ describe('SessionCard lifecycle — real client, intercepted transport', () => {
     )
     renderCard()
 
-    await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    await user.click(await screen.findByRole('button', { name: 'End session' }))
 
     await waitFor(() => expect(sent.filter(lifecycle)).toHaveLength(1))
     expect(sent.filter(lifecycle)[0]).toEqual({
@@ -319,7 +319,7 @@ describe('SessionCard lifecycle — real client, intercepted transport', () => {
 
     expect(await screen.findByRole('button', { name: 'Resume' })).toBeTruthy()
     expect(
-      screen.queryByRole('button', { name: 'Stop' }),
+      screen.queryByRole('button', { name: 'End session' }),
     ).not.toBeInTheDocument()
   })
 
@@ -340,14 +340,16 @@ describe('SessionCard lifecycle — real client, intercepted transport', () => {
     )
     renderCard()
 
-    await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    await user.click(await screen.findByRole('button', { name: 'End session' }))
 
     await waitFor(() =>
       expect(shown).toContain('the run is claimed by another holder'),
     )
     // The row must still be what the engine last said it was: a refused stop leaves a
     // RUNNING run, so Stop is still the offered control and Resume never appears.
-    expect(await screen.findByRole('button', { name: 'Stop' })).toBeEnabled()
+    expect(
+      await screen.findByRole('button', { name: 'End session' }),
+    ).toBeEnabled()
     expect(
       screen.queryByRole('button', { name: 'Resume' }),
     ).not.toBeInTheDocument()
@@ -367,7 +369,7 @@ describe('SessionCard lifecycle — real client, intercepted transport', () => {
     })
     renderCard()
 
-    const stop = await screen.findByRole('button', { name: 'Stop' })
+    const stop = await screen.findByRole('button', { name: 'End session' })
     await user.click(stop)
     await waitFor(() => expect(stop).toBeDisabled())
     await user.click(stop)

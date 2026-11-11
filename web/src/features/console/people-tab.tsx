@@ -6,6 +6,9 @@ import { useQuery } from '@tanstack/react-query'
 
 import { currentLanguage } from '@/lib/i18n'
 import {
+  Check,
+  Copy,
+  Link2,
   MoreHorizontal,
   Plus,
   Send,
@@ -45,12 +48,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { MonoMark } from '@/components/ui/mono-mark'
 import { Spinner } from '@/components/ui/spinner'
+import { useCopy } from '@/components/ui/use-copy'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { ListTruncationBadge } from '@/features/_intel'
+import { BUSINESS_BUILD } from '@/features/business-build'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { useOfferedPanels } from '@/features/panels'
 import { ApiError } from '@/lib/api/errors'
 import { isEngineEmail } from '@/lib/email'
 import { useAuth } from '@/lib/auth/context'
+import { roleRank } from '@/lib/auth/rbac'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import {
@@ -69,6 +78,18 @@ import { StaticTable } from '@/components/data/static-table'
 
 const ROLES = ['viewer', 'editor', 'admin', 'owner'] as const
 
+/** A pending invitation's new link, shown once. */
+type NewLink = { email: string; token: string; expiresAt: string }
+
+/** A role change waiting for its confirmation. */
+type RoleChange = { member: RosterMemberDTO; role: string }
+
+/** The roles this caller may give a member, or why the role is read only. */
+type RoleControl = { choices?: readonly string[]; refusal?: string }
+
+/** The id of a member's role control, where a closed question returns focus. */
+const roleControlId = (userId: string) => `member-role-${userId}`
+
 export function PeopleTab({
   inviteRequested = false,
   onInviteHandled,
@@ -79,13 +100,25 @@ export function PeopleTab({
   onInviteHandled?: () => void
 } = {}) {
   const { t } = useTranslation(['console', 'common'])
-  const { activeTenant, can, principal } = useAuth()
+  const {
+    activeTenant,
+    activeRole,
+    can,
+    confinedWorkspace,
+    isSuperadmin,
+    principal,
+  } = useAuth()
   const canOnboard = can('membership:write')
+  // The engine grants no role above the caller's own (a superadmin's is the highest).
+  const roleCeiling = roleRank(
+    isSuperadmin ? 'owner' : (activeRole ?? undefined),
+  )
   const canReadMembers = can('user:read')
   const canManageMembers = can('user:write')
   // The internal-superadmin lifecycle is global and remains superadmin-only.
   const canReadSupers = can('user:read', { tenant: null })
   const canManageSupers = can('user:write', { tenant: null })
+  const addActions = useOfferedPanels(PANEL_EXTENSIONS.peopleActions ?? [])
   const [onboardButtonOpen, setOnboardButtonOpen] = useState(false)
   const onboardOpen = onboardButtonOpen || (inviteRequested && canOnboard)
   const setOnboardOpen = (open: boolean) => {
@@ -93,8 +126,18 @@ export function PeopleTab({
     if (!open) onInviteHandled?.()
   }
   const [revoke, setRevoke] = useState<InviteDTO | null>(null)
+  const [newLink, setNewLink] = useState<NewLink | null>(null)
   const [toggle, setToggle] = useState<OnboardedUser | null>(null)
   const [memberToggle, setMemberToggle] = useState<RosterMemberDTO | null>(null)
+  // The roster as the person narrows it, and the people a bulk action is about.
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'active' | 'suspended'
+  >('all')
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [suspendTargets, setSuspendTargets] = useState<
+    RosterMemberDTO[] | null
+  >(null)
 
   const invites = useQuery({
     queryKey: consoleKeys.invites(activeTenant),
@@ -121,14 +164,28 @@ export function PeopleTab({
     onDone: () => setRevoke(null),
   })
 
-  // A resend mails the invitee a new link; the console never sees it.
-  const resendMutation = usePrivilegedMutation<string, InviteHandle>({
-    mutationFn: (id) => consoleApi.resendInvite(id),
+  // No invitation mailer (server-info): a mailed resend would only answer 409, so the
+  // invitation gets a new link shown here once instead.
+  const invitesOff = useServerInfo().data?.invite_delivery_unavailable === true
+  // A resend gives the invitation a new secret; the old link stops working.
+  const resendMutation = usePrivilegedMutation<InviteDTO, InviteHandle>({
+    mutationFn: (inv) =>
+      consoleApi.resendInvite(inv.id, invitesOff ? 'link' : undefined),
     invalidateKeys: () => [consoleKeys.invites(activeTenant)],
     successMessage: (data) =>
-      data.delivery === 'sent'
-        ? t('console:people.resent')
-        : t('console:people.resendFailed'),
+      data.delivery === 'link'
+        ? t('console:people.newLinkTitle')
+        : data.delivery === 'sent'
+          ? t('console:people.resent')
+          : t('console:people.resendFailed'),
+    onDone: (data, inv) => {
+      if (data.delivery === 'link' && data.token)
+        setNewLink({
+          email: inv.email,
+          token: data.token,
+          expiresAt: data.expires_at,
+        })
+    },
   })
 
   // A tenant can only remove a member. Nothing here re-activates an account:
@@ -138,6 +195,41 @@ export function PeopleTab({
     invalidateKeys: () => [consoleKeys.members(activeTenant)],
     successMessage: t('console:members.disabled'),
     onDone: () => setMemberToggle(null),
+  })
+
+  const [roleChange, setRoleChange] = useState<RoleChange | null>(null)
+  const roleMutation = usePrivilegedMutation<RoleChange, unknown>({
+    mutationFn: ({ member, role }) =>
+      consoleApi.changeMemberRole({
+        user_id: member.user_id,
+        tenant: activeTenant ?? '',
+        role,
+      }),
+    invalidateKeys: () => [consoleKeys.members(activeTenant)],
+    successMessage: (_data, vars) =>
+      t('console:members.roleChanged', { email: vars.member.email }),
+    onDone: () => setRoleChange(null),
+  })
+
+  // Suspending keeps the person: their sessions and tokens stop at once and their role
+  // and groups stay (Business). Reactivating restores them as they were.
+  const suspendMutation = usePrivilegedMutation<
+    { members: RosterMemberDTO[]; suspend: boolean },
+    unknown
+  >({
+    mutationFn: async ({ members: targets, suspend }) => {
+      for (const m of targets)
+        await consoleApi.setMemberSuspended(m.user_id, suspend)
+    },
+    invalidateKeys: () => [consoleKeys.members(activeTenant)],
+    successMessage: (_data, vars) =>
+      vars.suspend
+        ? t('console:members.suspendedToast', { n: vars.members.length })
+        : t('console:members.reactivatedToast', { n: vars.members.length }),
+    onDone: () => {
+      setSuspendTargets(null)
+      setSelected(new Set())
+    },
   })
 
   // the lost-device reset of a member's TOTP factor. The confirm dialog is
@@ -175,14 +267,64 @@ export function PeopleTab({
     onDone: () => setToggle(null),
   })
 
-  // No invitation mailer (server-info): a resend would only answer 409.
-  const invitesOff = useServerInfo().data?.invite_delivery_unavailable === true
   const items = invites.data?.items ?? []
   const roster = members.data?.items ?? []
-  const activeOwners = roster.filter(
-    (m) => m.role === 'owner' && m.status === 'active',
-  ).length
+  // Directory groups are Business data: a roster without any has no Groups column.
+  const showGroups = roster.some((m) => (m.groups?.length ?? 0) > 0)
+  // The engine's last-owner question: does another owner who runs the organization
+  // remain, active and over the whole organization? An owner confined to a workspace
+  // cannot run it.
+  const leavesAnOwner = (m: RosterMemberDTO) =>
+    m.role !== 'owner' ||
+    roster.some(
+      (o) =>
+        o.user_id !== m.user_id &&
+        o.role === 'owner' &&
+        o.status === 'active' &&
+        !o.workspace_ids?.length,
+    )
   const supers = superadmins.data?.items ?? []
+  const needle = search.trim().toLowerCase()
+  const shown = roster.filter(
+    (m) =>
+      (statusFilter === 'all' ||
+        (statusFilter === 'suspended'
+          ? m.status === 'suspended'
+          : m.status === 'active')) &&
+      (needle === '' ||
+        m.email.toLowerCase().includes(needle) ||
+        (m.display_name ?? '').toLowerCase().includes(needle)),
+  )
+  // Suspend and reactivate are the Business department surface; Community has none.
+  const canSuspend = BUSINESS_BUILD && canManageMembers
+  const mayBeSuspended = (m: RosterMemberDTO) =>
+    m.status === 'active' &&
+    m.user_id !== principal?.user_id &&
+    leavesAnOwner(m)
+  const picked = roster.filter((m) => selected.has(m.user_id))
+  const pickedToSuspend = picked.filter(mayBeSuspended)
+  const pickedToReactivate = picked.filter((m) => m.status === 'suspended')
+  // A role is a control only where its change cannot lock anyone out. Your own role and
+  // the last owner who runs the organization are read, with the reason; so is a member
+  // who works within a workspace, because the route also rewrites that confinement. A
+  // caller confined to a workspace may grant only there: no control for them.
+  const mayChangeRoles = canOnboard && !!activeTenant && !confinedWorkspace
+  const roleControl = (m: RosterMemberDTO): RoleControl => {
+    if (!mayChangeRoles || roleRank(m.role) > roleCeiling) return {}
+    if (m.user_id === principal?.user_id) {
+      return {
+        refusal:
+          m.role === 'owner'
+            ? t('console:members.ownRoleReasonOwner')
+            : t('console:members.ownRoleReason'),
+      }
+    }
+    if (m.workspace_ids?.length)
+      return { refusal: t('console:members.confinedRoleReason') }
+    if (!leavesAnOwner(m))
+      return { refusal: t('console:members.lastOwnerReason') }
+    return { choices: ROLES.filter((r) => roleRank(r) <= roleCeiling) }
+  }
 
   return (
     <div className="flex flex-col gap-6 pt-4">
@@ -196,96 +338,18 @@ export function PeopleTab({
               {t('console:people.caption')}
             </p>
           </div>
-          {canOnboard && (
-            <Button onClick={() => setOnboardOpen(true)}>
-              <UserPlus />
-              {t('console:people.onboard')}
-            </Button>
-          )}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div>
-          <h3 className="text-body font-semibold text-foreground">
-            {t('console:members.title')}
-          </h3>
-          <p className="max-w-2xl text-body text-muted-foreground">
-            {t('console:members.caption')}
-          </p>
-          {roster.some((member) => member.sso_only || member.external_id) ? (
-            <p className="mt-1 max-w-2xl text-caption text-muted-foreground">
-              {t('console:members.externalManagedNotice')}
-            </p>
-          ) : null}
-        </div>
-        <ListTruncationBadge
-          query={members}
-          label={t('intel:notices.listTruncated', {
-            n: members.data?.items?.length ?? 0,
-          })}
-          hint={t('intel:notices.listTruncatedHint')}
-          className="px-0 pt-0 pb-3"
-          filas={members.data?.items?.length ?? 0}
-        />
-        {!canReadMembers ? (
-          <ForbiddenState
-            icon={<ShieldOff />}
-            title={t('console:members.readOnlyNotice')}
-          />
-        ) : members.isLoading ? (
-          <div className="flex justify-center py-8">
-            <Spinner />
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {addActions.map(({ id, Component }) => (
+              <Component key={id} />
+            ))}
+            {canOnboard && (
+              <Button onClick={() => setOnboardOpen(true)}>
+                <UserPlus />
+                {t('console:people.onboard')}
+              </Button>
+            )}
           </div>
-        ) : members.isError ? (
-          <QueryErrorState
-            error={members.error}
-            retry={() => void members.refetch()}
-          />
-        ) : roster.length === 0 ? (
-          <EmptyState
-            icon={<Users />}
-            title={t('console:members.none')}
-            description={t('console:members.noneHint')}
-          />
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <XScroll>
-              <StaticTable>
-                <thead>
-                  <tr>
-                    <th>{t('console:members.user')}</th>
-                    <th>{t('console:people.role')}</th>
-                    <th>{t('console:members.groups')}</th>
-                    <th>{t('console:members.status')}</th>
-                    <th className="text-right">
-                      {t('console:members.action')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roster.map((member) => (
-                    <RosterMemberRow
-                      key={member.user_id}
-                      member={member}
-                      canManage={canManageMembers}
-                      // Never offered on your own row or on the organization's only
-                      // active owner: either would lock the organization out.
-                      canRemove={
-                        member.user_id !== principal?.user_id &&
-                        !(member.role === 'owner' && activeOwners <= 1)
-                      }
-                      onToggle={setMemberToggle}
-                      onResetTOTP={setTotpResetTarget}
-                      canEndSessions={member.user_id !== principal?.user_id}
-                      onEndSessions={setSessionsTarget}
-                    />
-                  ))}
-                </tbody>
-              </StaticTable>
-            </XScroll>
-          </div>
-        )}
+        </div>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -317,11 +381,11 @@ export function PeopleTab({
           />
         ) : items.length === 0 ? (
           /* ⛔ THE SENTENCE SAID "Invite someone to add the first one" AND OFFERED NO
-             WAY TO. The control exists, at the top of a page with the whole user
-             table between it and this panel, so from here it is an instruction
-             about somewhere else. The action opens the same dialog, under the same
-             right, and its name says which invitation it makes — two controls with
-             one accessible name is how the last attempt at this broke 17 tests. */
+             WAY TO. Invite stands just above, at the top of the page, yet an empty
+             panel carries its own next step instead of pointing at another control.
+             The action opens the same dialog, under the same right, and its name
+             says which invitation it makes — two controls with one accessible name
+             is how the last attempt at this broke 17 tests. */
           <EmptyState
             description={t('console:people.noInvitesHint')}
             title={t('console:people.noInvites')}
@@ -369,11 +433,13 @@ export function PeopleTab({
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={invitesOff || resendMutation.isPending}
-                              onClick={() => resendMutation.mutate(inv.id)}
+                              disabled={resendMutation.isPending}
+                              onClick={() => resendMutation.mutate(inv)}
                             >
-                              <Send />
-                              {t('console:people.resend')}
+                              {invitesOff ? <Link2 /> : <Send />}
+                              {invitesOff
+                                ? t('console:people.newLink')
+                                : t('console:people.resend')}
                             </Button>
                             <Button
                               variant="ghost"
@@ -392,6 +458,226 @@ export function PeopleTab({
               </StaticTable>
             </XScroll>
           </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h3 className="text-body font-semibold text-foreground">
+            {t('console:members.title')}
+          </h3>
+          <p className="max-w-2xl text-body text-muted-foreground">
+            {t('console:members.caption')}
+          </p>
+          {roster.some((member) => member.sso_only || member.external_id) ? (
+            <p className="mt-1 max-w-2xl text-caption text-muted-foreground">
+              {t('console:members.externalManagedNotice')}
+            </p>
+          ) : null}
+        </div>
+        <ListTruncationBadge
+          query={members}
+          label={t('intel:notices.listTruncated', {
+            n: members.data?.items?.length ?? 0,
+          })}
+          hint={t('intel:notices.listTruncatedHint')}
+          className="px-0 pt-0 pb-3"
+          filas={members.data?.items?.length ?? 0}
+        />
+        {!canReadMembers ? (
+          <ForbiddenState
+            icon={<ShieldOff />}
+            title={t('console:members.readOnlyNotice')}
+          />
+        ) : members.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Spinner />
+          </div>
+        ) : members.isError ? (
+          <QueryErrorState
+            error={members.error}
+            retry={() => void members.refetch()}
+          />
+        ) : roster.length === 0 ? (
+          <EmptyState
+            icon={<Users />}
+            title={t('console:members.none')}
+            description={t('console:members.noneHint')}
+          />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="search"
+                className="w-64"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('console:members.search')}
+                aria-label={t('console:members.search')}
+              />
+              <Select
+                value={statusFilter}
+                onValueChange={(v) =>
+                  setStatusFilter(v as 'all' | 'active' | 'suspended')
+                }
+              >
+                <SelectTrigger
+                  className="w-44"
+                  aria-label={t('console:members.filterLabel')}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {t('console:members.filterAll')}
+                  </SelectItem>
+                  <SelectItem value="active">
+                    {t('console:members.statuses.active')}
+                  </SelectItem>
+                  {BUSINESS_BUILD ? (
+                    <SelectItem value="suspended">
+                      {t('console:members.statuses.suspended')}
+                    </SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
+              {canSuspend && picked.length > 0 ? (
+                <div
+                  className="ml-auto flex flex-wrap items-center gap-2"
+                  role="group"
+                  aria-label={t('console:members.bulkLabel')}
+                >
+                  <span className="text-caption text-muted-foreground">
+                    {t('console:members.selected', { n: picked.length })}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pickedToSuspend.length === 0}
+                    onClick={() => setSuspendTargets(pickedToSuspend)}
+                  >
+                    {t('console:members.suspend')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      pickedToReactivate.length === 0 ||
+                      suspendMutation.isPending
+                    }
+                    onClick={() =>
+                      suspendMutation.mutate({
+                        members: pickedToReactivate,
+                        suspend: false,
+                      })
+                    }
+                  >
+                    {t('console:members.reactivate')}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+            {shown.length === 0 ? (
+              <EmptyState
+                icon={<Users />}
+                title={t('console:members.noMatch')}
+                description={t('console:members.noMatchHint')}
+              />
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-border">
+                <XScroll>
+                  <StaticTable>
+                    <thead>
+                      <tr>
+                        {canSuspend ? (
+                          <th className="w-10">
+                            <input
+                              type="checkbox"
+                              aria-label={t('console:members.selectAll')}
+                              checked={
+                                shown.length > 0 &&
+                                shown.every((m) => selected.has(m.user_id))
+                              }
+                              onChange={(e) =>
+                                setSelected(
+                                  e.target.checked
+                                    ? new Set(shown.map((m) => m.user_id))
+                                    : new Set(),
+                                )
+                              }
+                            />
+                          </th>
+                        ) : null}
+                        <th>{t('console:members.user')}</th>
+                        <th>{t('console:people.role')}</th>
+                        <th>{t('console:members.signIn')}</th>
+                        {showGroups ? (
+                          <th>{t('console:members.groups')}</th>
+                        ) : null}
+                        <th>{t('console:members.status')}</th>
+                        <th className="text-right">
+                          {t('console:members.action')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shown.map((member) => (
+                        <RosterMemberRow
+                          key={member.user_id}
+                          member={member}
+                          canManage={canManageMembers}
+                          showGroups={showGroups}
+                          showSelect={canSuspend}
+                          selected={selected.has(member.user_id)}
+                          onSelect={(on) =>
+                            setSelected((prev) => {
+                              const next = new Set(prev)
+                              if (on) next.add(member.user_id)
+                              else next.delete(member.user_id)
+                              return next
+                            })
+                          }
+                          onSuspend={
+                            canSuspend && mayBeSuspended(member)
+                              ? () => setSuspendTargets([member])
+                              : undefined
+                          }
+                          onReactivate={
+                            canSuspend && member.status === 'suspended'
+                              ? () =>
+                                  suspendMutation.mutate({
+                                    members: [member],
+                                    suspend: false,
+                                  })
+                              : undefined
+                          }
+                          // Offered only where the engine accepts the removal: not your
+                          // own row, not a role above yours, not from a caller confined
+                          // to a workspace, and never the last owner who runs the
+                          // organization.
+                          canRemove={
+                            member.user_id !== principal?.user_id &&
+                            !confinedWorkspace &&
+                            roleRank(member.role) <= roleCeiling &&
+                            leavesAnOwner(member)
+                          }
+                          onToggle={setMemberToggle}
+                          onResetTOTP={setTotpResetTarget}
+                          canEndSessions={member.user_id !== principal?.user_id}
+                          onEndSessions={setSessionsTarget}
+                          roleControl={roleControl(member)}
+                          rolePending={roleMutation.isPending}
+                          onRoleChange={(role) =>
+                            setRoleChange({ member, role })
+                          }
+                        />
+                      ))}
+                    </tbody>
+                  </StaticTable>
+                </XScroll>
+              </div>
+            )}
+          </>
         )}
       </section>
 
@@ -482,16 +768,65 @@ export function PeopleTab({
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
           {onboardOpen && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
-              <OnboardForm
-                initialMode={
-                  inviteRequested && !onboardButtonOpen ? 'invite' : 'password'
-                }
-                onClose={() => setOnboardOpen(false)}
-              />
+              <OnboardForm onClose={() => setOnboardOpen(false)} />
             </RequireAssurance>
           )}
         </DialogContent>
       </Dialog>
+
+      {suspendTargets ? (
+        <RequireAssurance minAal={AAL.HARDWARE} action="console">
+          <ConfirmDialog
+            open
+            onOpenChange={(open) => !open && setSuspendTargets(null)}
+            title={t('console:members.suspendTitle')}
+            description={
+              suspendTargets.length === 1
+                ? t('console:members.suspendBody', {
+                    email: suspendTargets[0]?.email,
+                  })
+                : t('console:members.suspendBodyMany', {
+                    n: suspendTargets.length,
+                  })
+            }
+            confirmLabel={t('console:members.suspend')}
+            tone="danger"
+            pending={suspendMutation.isPending}
+            onConfirm={() =>
+              suspendMutation.mutate({ members: suspendTargets, suspend: true })
+            }
+          />
+        </RequireAssurance>
+      ) : null}
+
+      {roleChange ? (
+        <RequireAssurance minAal={AAL.HARDWARE} action="console">
+          <ConfirmDialog
+            open
+            onOpenChange={(open) => !open && setRoleChange(null)}
+            title={t('console:members.roleChangeTitle', {
+              name: roleChange.member.display_name || roleChange.member.email,
+              from: t(`console:members.roles.${roleChange.member.role}`),
+              to: t(`console:members.roles.${roleChange.role}`),
+            })}
+            description={
+              roleRank(roleChange.role) > roleRank(roleChange.member.role)
+                ? t(`console:members.roleGains.${roleChange.role}`)
+                : t(`console:members.roleLoses.${roleChange.role}`)
+            }
+            confirmLabel={t('console:members.roleChangeConfirm')}
+            pending={roleMutation.isPending}
+            onConfirm={() => roleMutation.mutate(roleChange)}
+            onCloseAutoFocus={(event) => {
+              // Back to the row's control that asked.
+              event.preventDefault()
+              document
+                .getElementById(roleControlId(roleChange.member.user_id))
+                ?.focus()
+            }}
+          />
+        </RequireAssurance>
+      ) : null}
 
       {memberToggle ? (
         <RequireAssurance minAal={AAL.HARDWARE} action="console">
@@ -568,6 +903,24 @@ export function PeopleTab({
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={newLink !== null}
+        onOpenChange={(o) => !o && setNewLink(null)}
+      >
+        <DialogContent className="max-w-lg">
+          {newLink && (
+            <InviteLinkPanel
+              title={t('console:people.newLinkTitle')}
+              email={newLink.email}
+              token={newLink.token}
+              expiresAt={newLink.expiresAt}
+              replaced
+              onClose={() => setNewLink(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={revoke !== null}
         onOpenChange={(o) => !o && setRevoke(null)}
@@ -592,80 +945,151 @@ function RosterMemberRow({
   onResetTOTP,
   canEndSessions,
   onEndSessions,
+  showGroups,
+  showSelect,
+  selected,
+  onSelect,
+  onSuspend,
+  onReactivate,
+  roleControl = {},
+  rolePending = false,
+  onRoleChange,
 }: {
   member: RosterMemberDTO
   canManage: boolean
-  /** False on your own row and on the only active owner. */
+  /** False wherever the engine would refuse the removal (PeopleTab decides). */
   canRemove: boolean
   onToggle: (member: RosterMemberDTO) => void
   onResetTOTP: (member: RosterMemberDTO) => void
   canEndSessions: boolean
   onEndSessions: (member: RosterMemberDTO) => void
+  /** Whether the table has a Groups column (directory groups, Business). */
+  showGroups: boolean
+  /** Business: the row's checkbox for a bulk action. */
+  showSelect?: boolean
+  selected?: boolean
+  onSelect?: (on: boolean) => void
+  /** Business: set when the member may be suspended / reactivated. */
+  onSuspend?: () => void
+  onReactivate?: () => void
+  /** The roles this caller may give, or why the role is read only. */
+  roleControl?: RoleControl
+  rolePending?: boolean
+  onRoleChange?: (role: string) => void
 }) {
   const { t } = useTranslation(['console', 'common'])
   const active = member.status === 'active'
   const canEnd = canManage && active && canEndSessions
   const canReset = canManage && !member.sso_only
   const canDrop = canManage && canRemove
+  const hasMenu = canEnd || canReset || canDrop || !!onSuspend || !!onReactivate
   const displayName =
     member.display_name && member.display_name !== member.email
       ? member.display_name
       : undefined
   return (
     <tr>
+      {showSelect ? (
+        <td className="w-10">
+          <input
+            type="checkbox"
+            aria-label={t('console:members.selectRow', { email: member.email })}
+            checked={!!selected}
+            onChange={(e) => onSelect?.(e.target.checked)}
+          />
+        </td>
+      ) : null}
       <td>
-        {/* ONE LINE, name › detail › meta. The member cell stacked the address over
-            the display name over an SSO badge, three rows of one line each, and the
-            row measured 61 px against the 36 px table budget while every other
-            column held one word. The address is the element that never gives way;
-            the display name truncates before it and keeps its full value on
-            `title`; the badge is meta and comes last. */}
+        {/* The person as CONCEPT §4.15 draws them: their mark, then the name over the
+            address (the address alone when there is no other name). How they sign in
+            is its own column, no longer a badge in this cell. */}
         <div className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-            {member.email}
-          </span>
-          {displayName ? (
+          <MonoMark name={displayName ?? member.email} />
+          <div className="flex min-w-0 flex-col">
+            {displayName ? (
+              <span
+                className="truncate font-medium text-foreground"
+                title={displayName}
+              >
+                {displayName}
+              </span>
+            ) : null}
             <span
-              className="min-w-0 shrink truncate text-caption text-muted-foreground"
-              title={displayName}
+              className={
+                displayName
+                  ? 'truncate text-caption text-muted-foreground'
+                  : 'truncate font-medium text-foreground'
+              }
             >
-              {displayName}
+              {member.email}
             </span>
-          ) : null}
-          {member.sso_only ? (
-            <Badge variant="info" className="shrink-0">
-              {t('console:members.ssoOnly')}
-            </Badge>
-          ) : null}
+          </div>
         </div>
       </td>
       <td>
-        <Badge variant="neutral">
-          {t(`console:members.roles.${member.role}`, member.role)}
-        </Badge>
-      </td>
-      <td>
-        {member.groups?.length ? (
-          <div className="flex flex-wrap gap-1">
-            {member.groups.map((group) => (
-              <Badge key={group} variant="outline">
-                {group}
-              </Badge>
-            ))}
-          </div>
+        {roleControl.choices ? (
+          <Select
+            value={member.role}
+            onValueChange={onRoleChange}
+            disabled={rolePending}
+          >
+            <SelectTrigger
+              id={roleControlId(member.user_id)}
+              className="w-36"
+              aria-label={t('console:members.roleOf', { email: member.email })}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {roleControl.choices.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {t(`console:members.roles.${role}`, role)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ) : (
-          <span className="text-muted-foreground">
-            {t('console:members.noGroups')}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="neutral">
+              {t(`console:members.roles.${member.role}`, member.role)}
+            </Badge>
+            {roleControl.refusal ? (
+              <span className="text-caption text-muted-foreground">
+                {roleControl.refusal}
+              </span>
+            ) : null}
+          </div>
         )}
       </td>
+      <td className="text-muted-foreground">
+        {member.sso_only
+          ? t('console:members.ssoOnly')
+          : t('console:members.password')}
+      </td>
+      {showGroups ? (
+        <td>
+          {member.groups?.length ? (
+            <div className="flex flex-wrap gap-1">
+              {member.groups.map((group) => (
+                <Badge key={group} variant="outline">
+                  {group}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">
+              {t('console:members.noGroups')}
+            </span>
+          )}
+        </td>
+      ) : null}
       <td>
         <Badge variant={memberStatusVariant(member.status)}>
           {t(`console:members.statuses.${member.status}`, member.status)}
         </Badge>
       </td>
       <td className="text-right">
-        {canEnd || canReset || canDrop ? (
+        {hasMenu ? (
           <div className="flex items-center justify-end gap-2">
             {/* An account the deployment suspended cannot be re-activated by an
                 organization; removing it is the one thing this organization can do. */}
@@ -689,6 +1113,26 @@ function RosterMemberRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {onSuspend ? (
+                  <DropdownMenuItem
+                    onSelect={onSuspend}
+                    aria-label={t('console:members.suspendFor', {
+                      email: member.email,
+                    })}
+                  >
+                    {t('console:members.suspend')}
+                  </DropdownMenuItem>
+                ) : null}
+                {onReactivate ? (
+                  <DropdownMenuItem
+                    onSelect={onReactivate}
+                    aria-label={t('console:members.reactivateFor', {
+                      email: member.email,
+                    })}
+                  >
+                    {t('console:members.reactivate')}
+                  </DropdownMenuItem>
+                ) : null}
                 {canEnd ? (
                   <DropdownMenuItem
                     onSelect={() => onEndSessions(member)}
@@ -734,27 +1178,22 @@ function RosterMemberRow({
 
 function memberStatusVariant(status: RosterMemberDTO['status']) {
   if (status === 'active') return 'success'
+  if (status === 'suspended') return 'warning'
   if (status === 'error') return 'danger'
   return 'neutral'
 }
 
-function OnboardForm({
-  onClose,
-  initialMode = 'password',
-}: {
-  onClose: () => void
-  initialMode?: 'password' | 'invite'
-}) {
+function OnboardForm({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant } = useAuth()
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState('editor')
-  const [chosenMode, setMode] = useState<'password' | 'invite'>(initialMode)
-  // No invitation mailer (server-info): the engine answers invite mode 409, so the
-  // form offers the initial password only and says why.
+  // An invitation is the one step: the person chooses their own password.
+  const [mode, setMode] = useState<'password' | 'invite'>('invite')
+  // No invitation mailer (server-info): the engine would answer a mailed invitation 409,
+  // so it hands the invitation's secret to this session once, as a link to send.
   const invitesOff = useServerInfo().data?.invite_delivery_unavailable === true
-  const mode = invitesOff ? 'password' : chosenMode
   const [password, setPassword] = useState('')
   const [invite, setInvite] = useState<OnboardResult['invite'] | null>(null)
   const [consent, setConsent] = useState(false)
@@ -771,6 +1210,7 @@ function OnboardForm({
         role,
         mode,
         password: mode === 'password' ? password : undefined,
+        delivery: mode === 'invite' && invitesOff ? 'link' : undefined,
       })
     },
     // A 409 too: invite mode the engine cannot mail, when server-info had not said so yet.
@@ -793,10 +1233,12 @@ function OnboardForm({
     successMessage: (data) =>
       isConsentRequired(data)
         ? t('console:onboard.consentRequiredToast')
-        : t('console:onboard.created'),
+        : data.invite
+          ? t('console:onboard.inviteCreatedTitle')
+          : t('console:onboard.created'),
     onDone: (data) => {
       // An existing account is never added here: it joins only by its holder's
-      // consent. An invitation is mailed to the invitee; its link never comes back.
+      // consent. An invitation is mailed to the invitee, or its link shown here once.
       if (isConsentRequired(data)) setConsent(true)
       else if (data.invite) setInvite(data.invite)
       else onClose()
@@ -822,6 +1264,20 @@ function OnboardForm({
           <Button onClick={onClose}>{t('console:onboard.done')}</Button>
         </DialogFooter>
       </>
+    )
+  }
+
+  // Without its secret a link would look right and never work: the answer then reads
+  // as an invitation that could not be delivered.
+  if (invite?.delivery === 'link' && invite.token) {
+    return (
+      <InviteLinkPanel
+        title={t('console:onboard.inviteCreatedTitle')}
+        email={email}
+        token={invite.token}
+        expiresAt={invite.expires_at}
+        onClose={onClose}
+      />
     )
   }
 
@@ -914,11 +1370,13 @@ function OnboardForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="invite">
+                {invitesOff
+                  ? t('console:onboard.modeLink')
+                  : t('console:onboard.modeInvite')}
+              </SelectItem>
               <SelectItem value="password">
                 {t('console:onboard.modePassword')}
-              </SelectItem>
-              <SelectItem value="invite" disabled={invitesOff}>
-                {t('console:onboard.modeInvite')}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -959,7 +1417,70 @@ function OnboardForm({
           disabled={!valid || mutation.isPending}
         >
           {mutation.isPending ? <Spinner size="sm" aria-hidden /> : <Plus />}
-          {t('console:onboard.submit')}
+          {mode === 'invite'
+            ? t('console:onboard.submitInvite')
+            : t('console:onboard.submit')}
+        </Button>
+      </DialogFooter>
+    </>
+  )
+}
+
+// InviteLinkPanel shows an invitation's link the one time the engine hands its secret
+// to this session. No list or read shows it again: a lost link is replaced by a new
+// one from the pending invitation, which voids the old one.
+function InviteLinkPanel({
+  title,
+  email,
+  token,
+  expiresAt,
+  replaced = false,
+  onClose,
+}: {
+  title: string
+  email: string
+  token: string
+  expiresAt: string
+  /** A new link for a pending invitation: the one made before stops working. */
+  replaced?: boolean
+  onClose: () => void
+}) {
+  const { t } = useTranslation(['console', 'common'])
+  const { state, copy } = useCopy()
+  const fragment = encodeURIComponent(token)
+  const link = `${window.location.origin}/accept-invite#token=${fragment}`
+  const expires = new Date(expiresAt).toLocaleDateString(currentLanguage())
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>
+          {t('console:onboard.inviteLinkFor', { email })}
+          {replaced ? ` ${t('console:people.newLinkNote')}` : null}
+        </DialogDescription>
+      </DialogHeader>
+      <Field
+        label={t('console:onboard.inviteLinkLabel')}
+        htmlFor="ob-invite-link"
+        description={t('console:onboard.inviteLinkBody', { date: expires })}
+      >
+        <Input
+          id="ob-invite-link"
+          value={link}
+          readOnly
+          mono
+          onFocus={(e) => e.currentTarget.select()}
+        />
+      </Field>
+      <DialogFooter>
+        <Button variant="secondary" onClick={() => void copy(link)}>
+          {state === 'copied' ? <Check /> : <Copy />}
+          {state === 'copied'
+            ? t('common:actions.copied')
+            : t('console:onboard.copyLink')}
+        </Button>
+        <Button variant="primary" onClick={onClose}>
+          {t('console:onboard.done')}
         </Button>
       </DialogFooter>
     </>

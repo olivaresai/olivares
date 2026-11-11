@@ -31,7 +31,9 @@ func sessionsGitDocumentation(method, pattern string) (api.ModuleOperationDocume
 			"branch", oas.Obj("type", "string", "description", "Current local branch; empty for detached HEAD."),
 			"branches", oas.Obj("type", "array", "maxItems", 200, "items", oas.Obj("type", "string")),
 			"files", oas.Obj("type", "array", "maxItems", 200, "items", file),
-			"truncated", oas.Obj("type", "boolean"), "writable", oas.Obj("type", "boolean")))
+			"truncated", oas.Obj("type", "boolean"), "writable", oas.Obj("type", "boolean"),
+			"head", oas.Obj("type", "object", "required", []string{"commit", "tree"}, "description", "The commit and tree HEAD holds, which a publication of this folder names; absent while the branch has no commit.",
+				"properties", oas.Obj("commit", oas.Obj("type", "string"), "tree", oas.Obj("type", "string")))))
 		responses["200"] = oas.JSONRespSchema("Confined local Git status and folder write policy", schema)
 	} else {
 		responses["200"] = oas.JSONRespSchema("Local Git operation completed", oas.Obj("type", "object", "required", []string{"ok"}, "properties", oas.Obj("ok", oas.Obj("type", "boolean"))))

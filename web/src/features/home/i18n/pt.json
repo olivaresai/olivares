@@ -10,6 +10,37 @@
     "unavailableDescription": "A leitura das sessões não obteve resposta. Os valores do parque acima não são afetados.",
     "untitled": "Sessão sem título"
   },
+  "accounts": {
+    "title": "As suas contas",
+    "loading": "A ler as suas contas…",
+    "none": "Ainda não tem uma conta sua de {{tool}}. As sessões que inicia trabalham com a sua própria conta, e mais ninguém a pode usar.",
+    "create": "Criar a minha conta",
+    "createFailed": "Não foi possível criar a sua conta.",
+    "createExists": "Já tem uma conta sua de {{tool}}, por isso não é possível criar outra. Peça ajuda a um administrador se não a puder usar.",
+    "createForbidden": "A sua função não lhe permite criar uma conta sua. Peça ajuda a um administrador.",
+    "createNotAssigned": "{{tool}} não lhe está atribuído, por isso não é possível criar uma conta sua para ele. Peça ajuda a um administrador do departamento.",
+    "createUnavailable": "As contas próprias não estão disponíveis neste servidor.",
+    "signInWaits": "Sem sessão iniciada. Iniciar sessão na sua própria conta ainda não está disponível neste servidor.",
+    "signedIn": "Sessão iniciada como {{identity}}",
+    "disabled": "Desativada por um administrador.",
+    "retired": "Retirada. Peça a um administrador uma conta que possa usar: ainda não é possível criar outra conta sua.",
+    "limit": "{{label}}: {{percent}}% usado",
+    "unavailableTitle": "Não foi possível ler as suas contas",
+    "unavailableDescription": "Não se sabe se tem uma conta sua até serem lidas."
+  },
+  "folders": {
+    "title": "As suas pastas",
+    "start": "Começar",
+    "startIn": "Começar em {{folder}}",
+    "canWork": "Pode trabalhar",
+    "readOnly": "Só de leitura",
+    "showAll": "Mostrar todas as pastas ({{total}})",
+    "loading": "A carregar as suas pastas",
+    "emptyTitle": "Ainda não tem pastas",
+    "emptyDescription": "Quando o seu administrador lhe der acesso a uma pasta, ela aparecerá aqui.",
+    "unavailableTitle": "Não foi possível carregar as suas pastas",
+    "unavailableDescription": "As suas sessões abaixo não são afetadas."
+  },
   "empty": {
     "title": "Ainda nada para mostrar",
     "description": "A sua função não concede acesso de leitura a nenhum módulo do parque. Peça a um administrador acesso de leitura para ver a visão geral."

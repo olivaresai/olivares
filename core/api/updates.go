@@ -64,7 +64,7 @@ type UpdateStatusDTO struct {
 // EditionSwitchDTO is the one next step from a Community build to the licensed build, for the
 // way this installation was installed.
 type EditionSwitchDTO struct {
-	// To is the edition the license entitles: business or enterprise (one licensed build).
+	// To is the edition the license entitles: engineer, business or enterprise (one licensed build).
 	To string `json:"to"`
 	// Install is how this engine was installed: binary, container, package or kubernetes.
 	Install string `json:"install"`

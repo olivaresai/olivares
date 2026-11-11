@@ -154,8 +154,12 @@ func (m *Module) handleGetCheck(w http.ResponseWriter, r *http.Request, mc api.M
 		if err != nil {
 			return err
 		}
-		dto = toStatusDTO(rec)
-		return nil
+		evRepo, err := sc.Ext(eventKind)
+		if err != nil {
+			return err
+		}
+		dto, err = m.withFailures7d(r.Context(), evRepo, toStatusDTO(rec))
+		return err
 	})
 	if err != nil {
 		writeStoreError(w, err)

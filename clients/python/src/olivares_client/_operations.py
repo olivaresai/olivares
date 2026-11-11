@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "a855622fc791662fa87bd870bf01787355fcb78e030669f911bb43980592f3b3"
+SPEC_HASH = "427df11472506739f2f418b364f604ef38bf157d4836992e900cd2ee3488755c"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -1130,6 +1130,13 @@ class OperationsMixin:
         """
         return self._do("PUT", "/v1/console/dr/schedule", "/v1/console/dr/schedule", body=body, query=query, headers=headers, tenant=tenant)
 
+    def get_v1_console_edition_summary(self, *, tenant=None, headers=None, **query):
+        """GET /v1/console/edition/summary — Which modules placed in a higher edition than the running one are running, by the edition each needs; changes nothing.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/edition/summary", "/v1/console/edition/summary", query=query, headers=headers, tenant=tenant)
+
     def post_v1_console_errors(self, body=None, *, tenant=None, headers=None, **query):
         """POST /v1/console/errors — Report a console render error from a person's browser session; the engine logs it, shortened to its limits, only when telemetry is enabled.
 
@@ -1529,6 +1536,34 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/groups", "/v1/groups", query=query, headers=headers, tenant=tenant)
 
+    def post_v1_groups(self, body=None, *, tenant=None, headers=None, **query):
+        """POST /v1/groups — Create a group of the operator's own (provisioned_by "operator"), for people a directory does not know; the Business edition (501 departments_unavailable in Community; 409 when the name is in use)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/groups", "/v1/groups", body=body, query=query, headers=headers, tenant=tenant)
+
+    def delete_v1_groups_by_id(self, id, *, tenant=None, headers=None, **query):
+        """DELETE /v1/groups/{id} — Remove a group of the operator's own with its roster; its members keep their accounts and roles; a directory group is refused (403 group_origin_read_only); the Business edition (501 departments_unavailable in Community)
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/groups/{id}", "/v1/groups/" + quote(str(id), safe=""), query=query, headers=headers, tenant=tenant)
+
+    def put_v1_groups_by_id_members_by_user_id(self, id, user_id, body=None, *, tenant=None, headers=None, **query):
+        """PUT /v1/groups/{id}/members/{user_id} — Add a person of the tenant to a group of the operator's own; idempotent; the Business edition (501 departments_unavailable in Community)
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/groups/{id}/members/{user_id}", "/v1/groups/" + quote(str(id), safe="") + "/members/" + quote(str(user_id), safe=""), body=body, query=query, headers=headers, tenant=tenant)
+
+    def delete_v1_groups_by_id_members_by_user_id(self, id, user_id, *, tenant=None, headers=None, **query):
+        """DELETE /v1/groups/{id}/members/{user_id} — Take a person out of a group of the operator's own; idempotent; the Business edition (501 departments_unavailable in Community)
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/groups/{id}/members/{user_id}", "/v1/groups/" + quote(str(id), safe="") + "/members/" + quote(str(user_id), safe=""), query=query, headers=headers, tenant=tenant)
+
     def put_v1_groups_by_id_parent(self, id, body=None, *, tenant=None, headers=None, **query):
         """PUT /v1/groups/{id}/parent — Nest (or, with an empty parent_id, un-nest) a group under another group of the same tenant; a member of the child is then also a member of the parent for authorization (409 on a cycle)
 
@@ -1572,7 +1607,7 @@ class OperationsMixin:
         return self._do("DELETE", "/v1/invites/{id}", "/v1/invites/" + quote(str(id), safe=""), query=query, headers=headers, tenant=tenant)
 
     def post_v1_invites_by_id_resend(self, id, body=None, *, tenant=None, headers=None, **query):
-        """POST /v1/invites/{id}/resend — Rotate a pending invitation's secret and mail the new link to the invitee (409 invite_delivery_unavailable without a mailer)
+        """POST /v1/invites/{id}/resend — Rotate a pending invitation's secret, voiding the old link, and mail the new link to the invitee or, with delivery=link, return its token once (409 invite_delivery_unavailable without a mailer and without delivery=link)
 
         Stability: stable.
         """
@@ -1592,6 +1627,20 @@ class OperationsMixin:
         """
         return self._do("DELETE", "/v1/members/{id}", "/v1/members/" + quote(str(id), safe=""), query=query, headers=headers, tenant=tenant)
 
+    def post_v1_members_by_id_reactivate(self, id, body=None, *, tenant=None, headers=None, **query):
+        """POST /v1/members/{id}/reactivate — Reactivate a suspended member of the resolved tenant: access returns as it was; a signed-in person also needs the administrative step-up; the Business edition (501 departments_unavailable in Community)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/members/{id}/reactivate", "/v1/members/" + quote(str(id), safe="") + "/reactivate", body=body, query=query, headers=headers, tenant=tenant)
+
+    def post_v1_members_by_id_suspend(self, id, body=None, *, tenant=None, headers=None, **query):
+        """POST /v1/members/{id}/suspend — Suspend a member of the resolved tenant: their sessions and tokens stop at once, while the membership, role and group places stay; reversible with reactivate; a signed-in person also needs the administrative step-up; the Business edition (501 departments_unavailable in Community)
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/members/{id}/suspend", "/v1/members/" + quote(str(id), safe="") + "/suspend", body=body, query=query, headers=headers, tenant=tenant)
+
     def post_v1_memberships(self, body=None, *, tenant=None, headers=None, **query):
         """POST /v1/memberships — Grant a user a role in a tenant.
 
@@ -1600,7 +1649,7 @@ class OperationsMixin:
         return self._do("POST", "/v1/memberships", "/v1/memberships", body=body, query=query, headers=headers, tenant=tenant)
 
     def post_v1_onboard(self, body=None, *, tenant=None, headers=None, **query):
-        """POST /v1/onboard — Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token)
+        """POST /v1/onboard — Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token, or returns it once with delivery link)
 
         Stability: stable.
         """
@@ -4001,7 +4050,7 @@ class OperationsMixin:
         return self._do("DELETE", "/v1/m/governance/agents/{agentID}/identity", "/v1/m/governance/agents/" + quote(str(agentid), safe="") + "/identity", query=query, headers=headers, tenant=tenant)
 
     def get_v1_m_governance_approvals(self, *, tenant=None, headers=None, **query):
-        """GET /v1/m/governance/approvals — Filters by the same effective status used by every decision.
+        """GET /v1/m/governance/approvals — Filters by the same effective status used by every decision, and by whether a grant was spent (consumed=true or false).
 
         Stability: beta.
         """
@@ -4701,7 +4750,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/health/dependencies", "/v1/m/health/dependencies", query=query, headers=headers, tenant=tenant)
 
     def get_v1_m_health_events(self, *, tenant=None, headers=None, **query):
-        """GET /v1/m/health/events — Lists the append-only reliability transition ledger, optionally filtered by ?subject_kind and ?subject_ref.
+        """GET /v1/m/health/events — Lists the append-only reliability transition ledger, optionally filtered by ?subject_kind and ?subject_ref: oldest first, or newest first with ?order=desc.
 
         Stability: beta.
         """
@@ -7198,7 +7247,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/sessions/runs/{ref}", "/v1/m/sessions/runs/" + quote(str(ref), safe=""), query=query, headers=headers, tenant=tenant)
 
     def delete_v1_m_sessions_runs_by_ref(self, ref, *, tenant=None, headers=None, **query):
-        """DELETE /v1/m/sessions/runs/{ref} — sessions module route (requires sessions:run:admin)
+        """DELETE /v1/m/sessions/runs/{ref} — sessions module route (requires sessions:run:write)
 
         Stability: beta.
         """
@@ -7282,7 +7331,7 @@ class OperationsMixin:
         return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/checkpoints/{seq}/rewind", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/checkpoints/" + quote(str(seq), safe="") + "/rewind", body=body, query=query, headers=headers, tenant=tenant)
 
     def post_v1_m_sessions_runs_by_ref_cleanup(self, ref, body=None, *, tenant=None, headers=None, **query):
-        """POST /v1/m/sessions/runs/{ref}/cleanup — sessions module route (requires sessions:run:admin)
+        """POST /v1/m/sessions/runs/{ref}/cleanup — sessions module route (requires sessions:run:write)
 
         Stability: beta.
         """
@@ -7427,6 +7476,13 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do_json_required("PUT", "/v1/m/sessions/runs/{ref}/name", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/name", body=body, query=query, headers=headers, tenant=tenant)
+
+    def get_v1_m_sessions_runs_by_ref_outputs(self, ref, *, tenant=None, headers=None, **query):
+        """GET /v1/m/sessions/runs/{ref}/outputs — Lists the files the session made or changed in its folder since it started, each with its name, size and modification time, newest first, leaving out the Markdown copies the engine writes beside a document it converts for a message.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/runs/{ref}/outputs", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/outputs", query=query, headers=headers, tenant=tenant)
 
     def put_v1_m_sessions_runs_by_ref_peers(self, ref, body, *, tenant=None, headers=None, **query):
         """PUT /v1/m/sessions/runs/{ref}/peers — Stores one operator choice on the existing run row.
@@ -7911,6 +7967,13 @@ class OperationsMixin:
         """
         return self._do("PUT", "/v1/m/sessions/workspaces/{ref}/files/raw", "/v1/m/sessions/workspaces/" + quote(str(ref), safe="") + "/files/raw", body=body, raw_request_content_type="application/octet-stream", query=query, headers=headers, tenant=tenant)
 
+    def get_v1_m_sessions_workspaces_by_ref_files_search(self, ref, *, tenant=None, headers=None, **query):
+        """GET /v1/m/sessions/workspaces/{ref}/files/search — sessions module route (requires sessions:workspace:read)
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/workspaces/{ref}/files/search", "/v1/m/sessions/workspaces/" + quote(str(ref), safe="") + "/files/search", query=query, headers=headers, tenant=tenant)
+
     def get_v1_m_sessions_workspaces_by_ref_files_stat(self, ref, *, tenant=None, headers=None, **query):
         """GET /v1/m/sessions/workspaces/{ref}/files/stat — sessions module route (requires sessions:workspace:read)
 
@@ -7960,6 +8023,13 @@ class OperationsMixin:
         """
         return self._do("POST", "/v1/m/sessions/workspaces/{ref}/sftp", "/v1/m/sessions/workspaces/" + quote(str(ref), safe="") + "/sftp", query=query, headers=headers, tenant=tenant)
 
+    def get_v1_m_sessions_workspaces_by_ref_terminals(self, ref, *, tenant=None, headers=None, **query):
+        """GET /v1/m/sessions/workspaces/{ref}/terminals — Lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/workspaces/{ref}/terminals", "/v1/m/sessions/workspaces/" + quote(str(ref), safe="") + "/terminals", query=query, headers=headers, tenant=tenant)
+
     def post_v1_m_sessions_workspaces_by_ref_terminals(self, ref, body=None, *, tenant=None, headers=None, **query):
         """POST /v1/m/sessions/workspaces/{ref}/terminals — Opens a shell in the folder, confined as a session in that folder is, and answers with the terminal's id.
 
@@ -7989,7 +8059,7 @@ class OperationsMixin:
         return self._do_json_required("POST", "/v1/m/sessions/workspaces/{ref}/terminals/{tid}/size", "/v1/m/sessions/workspaces/" + quote(str(ref), safe="") + "/terminals/" + quote(str(tid), safe="") + "/size", body=body, query=query, headers=headers, tenant=tenant)
 
     def get_v1_m_sessions_workspaces_by_ref_terminals_by_tid_stream(self, ref, tid, *, tenant=None, headers=None, **query):
-        """GET /v1/m/sessions/workspaces/{ref}/terminals/{tid}/stream — Serves the shell's output as server-sent events: "out" frames carry a chunk and the offset it starts at, "exit" ends the stream.
+        """GET /v1/m/sessions/workspaces/{ref}/terminals/{tid}/stream — Serves the shell's output as server-sent events: a "replay" frame with {"end":<offset>} comes first when kept output is due, "out" frames carry a chunk and the offset it starts at (those before end are history, not live output), "exit" ends the stream.
 
         Stability: beta.
         """

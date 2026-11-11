@@ -30,6 +30,9 @@ const policyKindBudget = "budget"
 // declares none: half, four-fifths and the full limit.
 var defaultThresholds = []float64{0.5, 0.8, 1.0}
 
+// maxExemptActors bounds one budget's standing exceptions.
+const maxExemptActors = 200
+
 // validDimensions are the named spend dimensions accepted by the module. Most are
 // read-model columns; user_group and agent_group are budget-only preventive scopes
 // fanned out through actor/agent_ref because the read-model has no group columns.
@@ -94,6 +97,9 @@ type budgetSpec struct {
 	// workspaceRefs is the live department scope, resolved in the caller's tenant
 	// read. It is never serialized into a policy.
 	workspaceRefs []string
+	// memberRefs are the group's members for a user_group budget, resolved before the
+	// ingest transaction (userGroupBudgetMembers). Never serialized into a policy.
+	memberRefs    []string
 	Dimension     string    `json:"dimension"`
 	Key           string    `json:"key,omitempty"`
 	LimitMicroUSD int64     `json:"limit_micro_usd"`
@@ -107,6 +113,9 @@ type budgetSpec struct {
 	Action           string `json:"action,omitempty"`
 	ReservedMicroUSD int64  `json:"reserved_micro_usd,omitempty"`
 	FailClosed       bool   `json:"fail_closed,omitempty"`
+	// ExemptActors are the people (`user:<id>`) a user_group budget does not stop: an
+	// admin's standing exception. Their spend still counts and alerts still fire.
+	ExemptActors []string `json:"exempt_actors,omitempty"`
 }
 
 // validate normalizes and checks a budget spec, returning a message on a problem.
@@ -130,7 +139,31 @@ func (s *budgetSpec) validate() string {
 	if s.ReservedMicroUSD < 0 {
 		return "reserved_micro_usd must not be negative"
 	}
+	if len(s.ExemptActors) > 0 && s.Dimension != "user_group" {
+		return "exempt_actors applies only to a user_group budget"
+	}
+	if len(s.ExemptActors) > maxExemptActors {
+		return fmt.Sprintf("exempt_actors holds at most %d people", maxExemptActors)
+	}
+	for _, actor := range s.ExemptActors {
+		id, ok := strings.CutPrefix(actor, "user:")
+		if !ok {
+			return "exempt_actors entries must be user:<id>"
+		}
+		if _, err := model.ParseID(id); err != nil {
+			return "exempt_actors entries must be user:<id>"
+		}
+	}
 	return ""
+}
+
+// userActorForms are the two forms a member's spend row can carry: the principal's actor
+// (user:<id>), which the engine writes, and the bare id an operator may have ingested.
+func userActorForms(ref string) []string { return []string{ref, "user:" + ref} }
+
+// exempts reports whether this budget has a standing exception for the actor.
+func (s budgetSpec) exempts(actor string) bool {
+	return actor != "" && contains(s.ExemptActors, actor)
 }
 
 // fillDefaults applies the defaults without rejecting (used on the evaluation
@@ -173,6 +206,9 @@ func (s budgetSpec) toSpecMap() map[string]any {
 	if s.FailClosed {
 		out["fail_closed"] = true
 	}
+	if len(s.ExemptActors) > 0 {
+		out["exempt_actors"] = s.ExemptActors
+	}
 	return out
 }
 
@@ -187,6 +223,7 @@ func parseBudgetSpec(spec map[string]any) budgetSpec {
 		Action:           specString(spec, "action"),
 		ReservedMicroUSD: specInt64(spec, "reserved_micro_usd"),
 		FailClosed:       specBool(spec, "fail_closed"),
+		ExemptActors:     specStrings(spec, "exempt_actors"),
 	}
 }
 
@@ -216,7 +253,7 @@ func (s budgetSpec) matches(attr attribution) bool {
 	case "actor":
 		return attr.Actor == s.Key
 	case "user_group":
-		return contains(attr.UserGroupRefs, s.Key)
+		return contains(attr.UserGroupRefs, s.Key) || contains(s.memberRefs, attr.Actor)
 	case "service_tier":
 		return attr.ServiceTier == s.Key
 	case "context_window":
@@ -245,6 +282,9 @@ func (s budgetSpec) sampleFilters() []model.Filter {
 	}
 	if s.Dimension == "workspace" && len(s.workspaceRefs) > 1 {
 		return []model.Filter{{Column: colWorkspaceRef, Op: model.OpIn, Value: s.workspaceRefs}}
+	}
+	if s.Dimension == "user_group" && len(s.memberRefs) > 0 {
+		return []model.Filter{{Column: colActor, Op: model.OpIn, Value: s.memberRefs}}
 	}
 	col := dimensionColumn(s.Dimension)
 	if col == "" {
@@ -386,6 +426,12 @@ func (m *Module) evaluateBudgetsLocked(ctx context.Context, sc store.Scope, attr
 		spec.fillDefaults()
 		if err := spec.resolveWorkspace(ctx, sc); err != nil {
 			return nil, nil, err
+		}
+		if refs, ok := attr.userGroupMembers[spec.Key]; ok && spec.Dimension == "user_group" && !refs.truncated {
+			for _, ref := range refs.refs {
+				spec.memberRefs = append(spec.memberRefs, userActorForms(ref)...)
+			}
+			sort.Strings(spec.memberRefs) // the strict predicate check requires sorted refs
 		}
 		if !spec.matches(attr) {
 			continue

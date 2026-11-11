@@ -57,6 +57,8 @@ not in it.
 | `business_required` | Available in Olivares Business: https://olivares.ai/pricing |
 | `caep_requires_business` | Available in Olivares Business: https://olivares.ai/pricing |
 | `cannot_remove_self` | Ask another administrator to remove your account. |
+| `checkpoint_files_gone` |  |
+| `checkpoint_not_found` |  |
 | `commit_outcome_unknown` |  |
 | `commit_refused` |  |
 | `compliance_views_unavailable` |  |
@@ -70,14 +72,17 @@ not in it.
 | `cross_tenant_admin_pool_not_configured` |  |
 | `departments_unavailable` | Available in Olivares Business: https://olivares.ai/pricing |
 | `diff_too_large` |  |
+| `diff_unreadable` |  |
 | `dispatch_deadline_passed` |  |
 | `domain_claimed` | Remove the domain from the other identity provider first, or use another domain. |
 | `domain_claimed_elsewhere` |  |
 | `dr_unavailable` |  |
+| `edition_required` | Add a license in Settings > Edition, or see https://olivares.ai/pricing |
 | `entity_authorization_unavailable` |  |
 | `exposure_requires_step_up` | Confirm with a passkey or security key, or with your authenticator code when the message asks for it. Enroll either under Settings › Sign-in and security. |
 | `exposure_unavailable` |  |
 | `field_not_accepted` |  |
+| `folder_mismatch` |  |
 | `forbidden` |  |
 | `git_host_diff_unavailable` |  |
 | `git_host_forbidden` |  |
@@ -85,6 +90,7 @@ not in it.
 | `group_cycle` | Choose a parent group that is not inside this group. |
 | `group_origin_adopted` |  |
 | `group_origin_read_only` |  |
+| `head_unreadable` |  |
 | `host_credential_refused` |  |
 | `host_metrics_unavailable` |  |
 | `host_unavailable` |  |
@@ -131,6 +137,7 @@ not in it.
 | `no_commit` |  |
 | `no_webauthn_credential` | Register a passkey under Settings › Sign-in and security. |
 | `node_unavailable` |  |
+| `not_a_git_repository` |  |
 | `not_forgotten` |  |
 | `not_found` |  |
 | `not_leader` |  |
@@ -209,6 +216,7 @@ not in it.
 | `subject_erased` |  |
 | `subject_erasing` |  |
 | `subject_mismatch` |  |
+| `subject_retired` |  |
 | `subject_retirement_active` |  |
 | `target_authority_unavailable` |  |
 | `target_changed` |  |
@@ -247,6 +255,7 @@ not in it.
 | `webauthn_verification_failed` |  |
 | `workflow_change_refused` |  |
 | `workspace_confined` | Ask an administrator for access to that workspace. |
+| `workspace_confined_account_writer` | Ask an administrator to create the account. |
 | `workspace_contents_unavailable` |  |
 | `workspace_cycle` | Choose a parent that is not inside this department. |
 

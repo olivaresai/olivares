@@ -26,8 +26,8 @@ import (
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
-// Approval lifecycle states. pending is the only non-terminal state; the other
-// four are terminal (no transition leaves them).
+// Approval lifecycle states. Only a session allowance can move from approved
+// to canceled, when its requester or an administrator revokes it.
 const (
 	statusPending  = "pending"
 	statusApproved = "approved"
@@ -56,8 +56,9 @@ const maxDecisionRetries = 6
 // lower their own approval bar; only when no policy matches do the request's own
 // values (or the default of one approval) apply.
 type createApprovalRequest struct {
-	// Set only by the engine for a provider method that can grant session scope.
+	// Set only by the engine for a reviewable session tool request.
 	SessionScopeAllowed bool            `json:"-"`
+	SessionAllowanceKey string          `json:"-"`
 	SessionRef          string          `json:"session_ref,omitempty"`
 	SubjectKind         string          `json:"subject_kind"`
 	SubjectRef          string          `json:"subject_ref"`
@@ -129,6 +130,24 @@ type approvalDTO struct {
 	// touches, when an approval policy asked for it.
 	ChangeClass string   `json:"change_class,omitempty"`
 	ChangePaths []string `json:"change_paths,omitempty"`
+	// SpendableUntil is when the ship gate stops reusing an approved, unspent grant:
+	// decided_at plus the gate's reuse window. Absent on any other request and when
+	// no gate window is wired.
+	SpendableUntil string `json:"spendable_until,omitempty"`
+}
+
+// withSpendableUntil sets SpendableUntil on an approved, unspent grant of tenant.
+func (m *Module) withSpendableUntil(dto approvalDTO, tenant model.TenantID) approvalDTO {
+	if m.grantReuseWindow == nil || dto.Status != statusApproved || dto.Consumed {
+		return dto
+	}
+	window := m.grantReuseWindow(tenant)
+	decided, err := model.ParseTimestamp(dto.DecidedAt)
+	if window <= 0 || err != nil {
+		return dto
+	}
+	dto.SpendableUntil = model.NewTimestamp(decided.Time().Add(window)).String()
+	return dto
 }
 
 func toApprovalDTO(rec model.Record, now model.Timestamp, tier ActionRiskTier) approvalDTO {
@@ -274,7 +293,7 @@ func (m *Module) handleCreateApproval(w http.ResponseWriter, r *http.Request, mc
 // IS operator-tunable per the two-human quorum of a re-enable is not).
 // The caller emits approval.requested AFTER its transaction commits.
 func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, actorKind, userID string, in createApprovalRequest, minRequired int64, now model.Timestamp, capacity ...int64) (approvalDTO, error) {
-	if in.SessionScopeAllowed && (in.Action != "sessions.provider.approval" || in.SubjectKind != "session_run" || in.SessionRef == "") {
+	if in.SessionScopeAllowed && (in.SessionRef == "" || !(in.Action == "sessions.provider.approval" && in.SubjectKind == "session_run" || in.Action == "claude.tool.use" && in.SubjectKind == "claude.tool")) {
 		return approvalDTO{}, errors.New("session scope requires a provider permission request bound to a session")
 	}
 	// A matching approval policy selects threshold + windows; session launches
@@ -330,13 +349,13 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 		rec[colChangeClass], rec[colChangePaths] = in.ChangeClass, string(encoded)
 	}
 	if in.Review != nil {
-		encoded, err := json.Marshal(in.Review)
+		encoded, err := json.Marshal(approvalReviewRecord{ApprovalReview: *in.Review, SessionAllowanceKey: in.SessionAllowanceKey})
 		if err != nil {
 			return approvalDTO{}, err
 		}
 		rec[colApprovalReview] = string(encoded)
 	}
-	if in.SessionScopeAllowed {
+	if in.SessionScopeAllowed && !matched {
 		rec[colSessionScopeAllowed] = true
 	}
 	if expiresIn > 0 {
@@ -462,13 +481,24 @@ func liveRiskTier(pols []model.Policy, rec model.Record) ActionRiskTier {
 	return resolveRiskTier(spec, matched, rec.String(colAction))
 }
 
-// handleListApprovals filters by the same effective status used by every decision.
+// handleListApprovals filters by the same effective status used by every decision, and by whether a grant was spent (consumed=true or false).
 // Lazy expiry is skipped before the matching page and its continuation are formed.
 func (m *Module) handleListApprovals(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	q := listQuery(w, r)
 	status := r.URL.Query().Get("status")
 	if v := r.URL.Query().Get("action"); v != "" {
 		q.Filters = append(q.Filters, eq(colAction, v))
+	}
+	if values, ok := r.URL.Query()["consumed"]; ok {
+		switch {
+		case len(values) == 1 && values[0] == "false":
+			q.Filters = append(q.Filters, model.Filter{Column: colConsumedBy, Op: model.OpIsNull})
+		case len(values) == 1 && values[0] == "true":
+			q.Filters = append(q.Filters, model.Filter{Column: colConsumedBy, Op: model.OpNotNull})
+		default:
+			writeJSON(w, http.StatusBadRequest, errorBody("consumed must be true or false"))
+			return
+		}
 	}
 	now := m.clock.Now()
 	reader := m.newApprovalReader(r.Context(), mc)
@@ -492,7 +522,7 @@ func (m *Module) handleListApprovals(w http.ResponseWriter, r *http.Request, mc 
 			if err != nil {
 				return err
 			}
-			item, err := reader.view(r.Context(), sc, rec, now, toApprovalDTO(rec, now, liveRiskTier(pols, rec)))
+			item, err := reader.view(r.Context(), sc, rec, now, m.withSpendableUntil(toApprovalDTO(rec, now, liveRiskTier(pols, rec)), mc.Tenant))
 			if err != nil {
 				return err
 			}
@@ -535,7 +565,7 @@ func (m *Module) handleGetApproval(w http.ResponseWriter, r *http.Request, mc ap
 			return err
 		}
 		found = true
-		out, err = reader.view(r.Context(), sc, rec, now, toApprovalDTO(rec, now, liveRiskTier(pols, rec)))
+		out, err = reader.view(r.Context(), sc, rec, now, m.withSpendableUntil(toApprovalDTO(rec, now, liveRiskTier(pols, rec)), mc.Tenant))
 		return err
 	})
 	if err != nil {
@@ -961,9 +991,8 @@ func (m *Module) handleCancel(w http.ResponseWriter, r *http.Request, mc api.Mod
 	writeJSON(w, http.StatusOK, out)
 }
 
-// cancelApproval is the shared REST and in-process pending-only transition.
-// A terminal request returns its unchanged verdict and a conflict, without an
-// audit of a cancellation or a second resolution event.
+// cancelApproval withdraws a pending request or revokes an approved session allowance.
+// Other terminal decisions remain immutable.
 func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.ModuleContext, id model.ID) (Approval, error) {
 	if id.IsZero() {
 		return Approval{}, approvalDecisionError{Status: http.StatusBadRequest, Message: "invalid id"}
@@ -990,7 +1019,14 @@ func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.M
 			return err
 		}
 		out = toApprovalDTO(rec, now, liveRiskTier(pols, rec))
-		if out.Status != statusPending {
+		sessionGrant := false
+		if out.Status == statusApproved && rec.Bool(colSessionScopeAllowed) {
+			sessionGrant, err = sessionDecisionsAllow(ctx, sc, id)
+			if err != nil {
+				return err
+			}
+		}
+		if out.Status != statusPending && !sessionGrant {
 			return approvalDecisionError{Status: http.StatusConflict, Message: "approval is " + out.Status + "; it cannot be canceled"}
 		}
 		rec[colStatus] = statusCanceled
@@ -1004,9 +1040,13 @@ func (m *Module) cancelApproval(ctx context.Context, data approvalData, mc api.M
 		if mc.Principal.SessionIdentity != "" {
 			actor, kind = "session:"+mc.Principal.SessionIdentity, model.ActorAgent
 		}
+		var meta map[string]any
+		if sessionGrant {
+			meta = map[string]any{"scope": "session"}
+		}
 		_, err = sc.Audit().Append(ctx, model.AuditDraft{
 			Actor: actor, ActorKind: kind, Action: "governance.approval.cancel",
-			TargetKind: approvalKind, TargetID: id,
+			TargetKind: approvalKind, TargetID: id, Meta: meta,
 		})
 		return err
 	})
@@ -1326,6 +1366,13 @@ func canCancel(mc api.ModuleContext, rec model.Record, tenantAdmin bool) bool {
 		return true
 	}
 	return tenantAdmin
+}
+
+// UseGrantReuseWindow tells the approval reads how long after its decision the ship
+// gate reuses an approved grant, per tenant (the composition root binds the approval
+// bridge's window).
+func (m *Module) UseGrantReuseWindow(f func(model.TenantID) time.Duration) {
+	m.grantReuseWindow = f
 }
 
 // UseApprovalCapacity bounds session quorums by the deployment's available humans.

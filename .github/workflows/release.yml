@@ -287,7 +287,7 @@ jobs:
         run: test "$(git rev-parse --is-shallow-repository)" = false
       # syft on PATH for goreleaser's `sboms`; cosign for `signs`/`docker_signs`.
       - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         with:
           # Pin cosign v2.6.4 for the signature/certificate outputs and flags checked by
           # scripts/check-cosign-contract.sh. A v3 bundle migration must update signers
@@ -1089,7 +1089,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         with:
           # Use the same cosign pin and signing contract as the build job.
           cosign-release: 'v2.6.4'
@@ -1236,7 +1236,7 @@ jobs:
         if: steps.cfg.outputs.enabled == 'true'
         with:
           persist-credentials: false
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         with:
           # Use the same cosign pin and signing contract as the build job.
           cosign-release: 'v2.6.4'
@@ -1321,7 +1321,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         with:
           cosign-release: 'v2.6.4'
       - name: assert the cosign binary is the reviewed artifact
@@ -1384,7 +1384,7 @@ jobs:
         with:
           go-version-file: go.work
           cache: ${{ runner.environment == 'github-hosted' }}
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: ./.github/actions/install-cosign
         with:
           # Use the same cosign pin and signing contract as the build job.
           cosign-release: 'v2.6.4'

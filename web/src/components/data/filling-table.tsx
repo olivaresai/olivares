@@ -34,7 +34,7 @@ export function TableRegion({
     <div
       data-slot="table-region"
       className={cn(
-        'overflow-hidden rounded-lg border border-border',
+        'overflow-hidden rounded-card bg-surface shadow-[var(--shadow-card)]',
         fill && 'flex min-h-[calc(100svh-8rem)] flex-col',
         className,
       )}

@@ -101,9 +101,11 @@ func newFinOpsSpendCmd(c modelstackClient) *cobra.Command {
 			Use:     "ls",
 			Short:   "Show the spend series for a window",
 			Long:    "Show observed spend over the window, optionally grouped by a dimension.",
-			Example: `  olivares finops spend ls --dimension provider --since 2026-08-01T00:00:00Z`,
+			Example: `  olivares finops spend ls --dimension workspace --since 2026-10-01T00:00:00Z --until 2026-11-01T00:00:00Z --format csv > spend.csv`,
 			Target:  modelstackTarget{Collection: "/spend"},
-			Filters: finopsWindowAndDimension(),
+			Filters: append(finopsWindowAndDimension(),
+				modelstackFilterSpec{Flag: "format", Query: "format", Usage: "csv to export the rows instead of listing them"}),
+			Raw: true,
 		}),
 		newModelstackGetCmd(c, modelstackGetSpec{
 			Use:     "summary",

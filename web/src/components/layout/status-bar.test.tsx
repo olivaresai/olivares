@@ -15,12 +15,16 @@ import { createTestQueryClient, renderIntel, screen } from '@/test/intel'
 
 const state = vi.hoisted(() => ({
   version: '1.0' as string | undefined,
+  /** The build the engine reports (server-info `edition`). */
+  edition: 'community' as string | undefined,
   engineError: false,
   usagePercent: 58,
   /** Whether the Claude login that reports its use is the tool's default. */
   claudeDefault: true,
   refreshing: false,
   live: 0,
+  /** Open sessions waiting for the person. */
+  needsYou: 0,
   /** What the list shows; null: the same sessions as `live`. */
   open: null as number | null,
   /** What Stop all would end, idle ones too; null: the same sessions as `live`. */
@@ -53,7 +57,9 @@ vi.mock('@/features/extensions', async (importOriginal) => {
 
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({
-    data: state.engineError ? undefined : { version: state.version },
+    data: state.engineError
+      ? undefined
+      : { version: state.version, edition: state.edition, engine: 'sqlite' },
     isError: state.engineError,
   }),
 }))
@@ -88,7 +94,7 @@ vi.mock('@/lib/auth/context', () => ({
 vi.mock('./use-session-rail', () => ({
   useSessionRail: () => ({
     sessionCounts: {
-      needsYou: 0,
+      needsYou: state.needsYou,
       live: state.live,
       active: state.live,
       running: state.running ?? state.live,
@@ -175,11 +181,13 @@ beforeEach(() => {
 afterEach(() => {
   Object.assign(state, {
     version: '1.0',
+    edition: 'community',
     engineError: false,
     usagePercent: 58,
     claudeDefault: true,
     refreshing: false,
     live: 0,
+    needsYou: 0,
     open: null,
     running: null,
     estate: false,
@@ -201,7 +209,26 @@ describe('the status bar says how things stand', () => {
     // The server reports 1.0, and the bar still says nothing of it.
     renderIntel(<StatusBar />)
     expect(within(bar()).queryByTestId('deployment-identity')).toBeNull()
-    expect(bar()).not.toHaveTextContent(/Olivares|Version|1\.0/)
+    expect(bar()).not.toHaveTextContent(/Version|1\.0/)
+  })
+
+  it('is signed with the mark and the edition, at the quiet 12 px step', () => {
+    const { rerender } = renderIntel(<StatusBar />)
+    expect(bar()).toHaveClass('text-[12px]', 'text-text-3')
+    // The store the engine runs on, by its product name, then the signature.
+    expect(within(bar()).getByText('SQLite')).toBeVisible()
+    const signature = within(bar()).getByText('Olivares AI Community')
+    // The mark is decoration beside the name it signs.
+    expect(
+      signature.parentElement?.querySelector('svg[aria-hidden="true"]'),
+    ).not.toBeNull()
+    state.edition = 'enterprise'
+    rerender(<StatusBar />)
+    expect(within(bar()).getByText('Olivares AI Business')).toBeVisible()
+    // An engine that names no edition: the product's name alone, never a guess.
+    state.edition = undefined
+    rerender(<StatusBar />)
+    expect(within(bar()).getByText('Olivares AI')).toBeVisible()
   })
 
   //: the bar is on every screen, so an item an edition registers here must not be
@@ -242,6 +269,28 @@ describe('the status bar says how things stand', () => {
     // Open, not running: the count includes idle sessions, which are not working.
     expect(within(bar()).getByText('3 sessions open')).toBeVisible()
     expect(bar()).not.toHaveTextContent(/running/)
+    expect(bar()).not.toHaveTextContent(/need/)
+  })
+
+  // The line's links draw the focus outline 2 px out: nothing between them and the bar may
+  // clip it above or below (the left group only gives way sideways).
+  it('clips no focus ring above or below its links', () => {
+    state.live = 3
+    renderIntel(<StatusBar />)
+    const link = within(bar()).getByRole('link', { name: '3 sessions open' })
+    let box = link.parentElement
+    while (box && box !== bar()) {
+      expect(box).not.toHaveClass('overflow-hidden')
+      box = box.parentElement
+    }
+  })
+
+  it('says beside the open sessions how many need the person', () => {
+    state.live = 7
+    state.needsYou = 2
+    renderIntel(<StatusBar />)
+    expect(within(bar()).getByText('7 sessions open')).toBeVisible()
+    expect(within(bar()).getByText('2 need you')).toHaveClass('text-warn')
   })
 
   it('counts the sessions the list shows, while Stop all still stops an archived one that runs', () => {
@@ -262,7 +311,7 @@ describe('the status bar says how things stand', () => {
     state.agentStops = 2
     rerender(<StatusBar />)
     expect(within(bar()).getByTestId('killswitch-status')).toHaveTextContent(
-      '2 agent stops active',
+      '2 agents stopped',
     )
     state.estate = true
     rerender(<StatusBar />)
@@ -292,6 +341,9 @@ describe('the status bar says how things stand', () => {
     })
     expect(usage).toHaveTextContent('58% 5h')
     expect(usage).toHaveTextContent('41% wk')
+    // The tool is its mark (the group's name says it), each window a figure and a meter.
+    expect(within(usage).getByTestId('tool-mark')).toBeInTheDocument()
+    expect(usage.querySelectorAll('[data-slot="meter"]')).toHaveLength(2)
     // A model-scoped window is the tool's detail, not the bar's.
     expect(usage).not.toHaveTextContent('12%')
     // A tool that reported nothing has no usage: never 0%.

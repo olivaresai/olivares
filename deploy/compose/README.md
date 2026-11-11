@@ -296,6 +296,31 @@ After uninstalling the stack (`down`), unload the profile with
 `sudo apparmor_parser -R /etc/apparmor.d/olivares-sessions`, then remove that file.
 Other containers using this profile must be stopped first.
 
+## Session confinement on Docker Desktop
+
+Docker Desktop runs the engine in a Linux VM, so the engine's kernel is Docker's, not the Mac's.
+Landlock, user namespaces and AppArmor reach a session only as that kernel offers them, and a Mac has
+no host AppArmor to load a profile into: the install blocks look for it and skip that step.
+
+Ask the running engine what it found:
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml exec olivares olivares doctor
+```
+
+- `session-confinement` `ok`, `landlock (ABI n)`: sessions run confined to their folder, as on Linux.
+- `session-confinement` `fail`, `Landlock is disabled at boot…` or `this Linux kernel has no Landlock…`:
+  the stack is still healthy (`up --wait` passes) and the console and the API answer. Starting a session
+  answers HTTP 502, `this server cannot confine sessions … the session was not started`: a session never
+  runs unconfined. A tool's sign-in, status read and probe run with the engine user's rights inside the
+  container, and the engine log says so at start (`agent tools: … run UNCONFINED`). The Mac has nothing to
+  change: sessions start once a Docker Desktop release enables Landlock in its kernel.
+
+Measured on a Linux host by taking Landlock away from this stack with a seccomp profile that answers its
+three calls with `ENOSYS` (a kernel without it), `EOPNOTSUPP` (disabled at boot) or `EPERM` (a Docker
+profile that does not allow them): in each case the stack was healthy, `doctor` failed and the session
+start was refused. Docker Desktop's own kernel is not measured here.
+
 ## Work on a host project folder
 
 The base file has one project mount at `/project`, read-write: the host folder whose
@@ -327,12 +352,41 @@ engine's data out of its reach.
   file in the tree, including `.env` files and keys, and 65532 is the usual non-root user
   of minimal images, so other containers share it. Files a session creates belong to
   UID 65532 on the host.
+- **macOS (Docker Desktop).** Use a folder under a path Docker Desktop shares: `/Users`, `/Volumes`,
+  `/private`, `/tmp` and `/var/folders` by default, others in Settings → Resources → File sharing. A Mac
+  has no `setfacl`, and whether UID 65532 may write depends on Docker Desktop's file sharing, so test it
+  once, with the folder you will use, before the first session:
+
+  ```sh
+  docker run --rm --user 65532:65532 -v "$OLIVARES_PROJECT_DIR:/project" --entrypoint touch \
+    "$(docker compose -f deploy/compose/docker-compose.yml config --images)" /project/.olivares-write-test &&
+    rm "$OLIVARES_PROJECT_DIR/.olivares-write-test"
+  ```
+
+  `Permission denied` means a session in `/project` can read the folder and cannot change it. Do not
+  widen the folder's permissions to fix that.
 - **SELinux hosts (Fedora, RHEL).** Access from the container may be refused until the
   folder is relabelled for containers. That relabels the whole tree, so it is your decision.
   This path is not measured here.
 - **Changing the folder.** `/project` is the registered session folder, so pointing
   `OLIVARES_PROJECT_DIR` elsewhere and running `up` again moves every session folder
   registered at `/project` to the new host folder. The data volume is untouched.
+
+## Reach a model server on the host
+
+A model server on the host (Ollama, LM Studio, vLLM, llama.cpp) is not at `127.0.0.1` for an engine in a
+container: that address is the container itself. Docker Desktop names the host `host.docker.internal`,
+but the engine takes a plain-http endpoint only at `localhost`, a loopback address or a literal private
+IP address, never at another name. Ask Docker for the address behind the name and give the provider that
+address (`http://<address>:11434` for Ollama, under **API keys** on **Tools**):
+
+```sh
+docker run --rm --add-host host.docker.internal:host-gateway --entrypoint getent \
+  "$(docker compose -f deploy/compose/docker-compose.yml config --images)" hosts host.docker.internal
+```
+
+Run it again if the connection test starts failing after a Docker Desktop update. On Linux the same
+command prints the Docker bridge's address, and the server has to listen on it.
 
 ## Postgres (multi-tenant)
 

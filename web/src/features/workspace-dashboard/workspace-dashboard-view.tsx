@@ -7,9 +7,11 @@ import { ArrowRight, Bot, Boxes, FolderOpen, Layers, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { StaticTable } from '@/components/data/static-table'
 import { XScroll } from '@/components/data/scroll-edges'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { StateBlock } from '@/components/ui/state-block'
 import {
   IntelPage,
   ListTruncationBadge,
@@ -241,8 +243,18 @@ function WorkspaceDashboard({
             </Button>
           )}
         </div>
-        {agentsQ.data?.items.length === 0 ? (
+        {agentsQ.isPending ? (
+          <StateBlock state="loading" rows={3} />
+        ) : agentsQ.isError ? (
+          <QueryErrorState
+            size="panel"
+            error={agentsQ.error}
+            retry={() => void agentsQ.refetch()}
+            title={t('workspaceDashboard:agentsFailed')}
+          />
+        ) : agentsQ.data.items.length === 0 ? (
           <EmptyState
+            size="panel"
             title={t('workspaceDashboard:noAgents')}
             description={t('workspaceDashboard:noAgentsHint')}
             action={
@@ -312,8 +324,18 @@ function WorkspaceDashboard({
             </Link>
           </Button>
         </div>
-        {groupsQ.data?.items.length === 0 ? (
+        {groupsQ.isPending ? (
+          <StateBlock state="loading" rows={3} />
+        ) : groupsQ.isError ? (
+          <QueryErrorState
+            size="panel"
+            error={groupsQ.error}
+            retry={() => void groupsQ.refetch()}
+            title={t('workspaceDashboard:groupsFailed')}
+          />
+        ) : groupsQ.data.items.length === 0 ? (
           <EmptyState
+            size="panel"
             title={t('workspaceDashboard:noGroups')}
             description={t('workspaceDashboard:noGroupsHint')}
             action={

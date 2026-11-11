@@ -34,6 +34,7 @@ type fakeSessions struct {
 	err       error
 	asked     int
 	tenant    model.TenantID
+	launcher  model.ID // the run's launcher; zero for a run no person launched
 }
 
 func (s *fakeSessions) ReadRunWorkspacePath(_ context.Context, tenant model.TenantID, workspace model.ID, run string) (string, error) {
@@ -46,6 +47,19 @@ func (s *fakeSessions) ReadRunWorkspacePath(_ context.Context, tenant model.Tena
 		return "", store.ErrNotFound
 	}
 	return s.dir, nil
+}
+
+// ReadRunLauncher answers the run's launcher through the same confined lookup.
+func (s *fakeSessions) ReadRunLauncher(_ context.Context, tenant model.TenantID, workspace model.ID, run string) (model.ID, error) {
+	s.asked++
+	s.tenant = tenant
+	if s.err != nil {
+		return "", s.err
+	}
+	if workspace != s.workspace || run != s.run {
+		return "", store.ErrNotFound
+	}
+	return s.launcher, nil
 }
 
 func sessionHarness(t *testing.T) (*harness, *fakeSessions) {
@@ -180,8 +194,9 @@ func TestPushRouteAcceptsASessionRunAndNeverAPath(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"state":"applied"`) {
 		t.Fatalf("push with a session run: %d %s", rec.Code, rec.Body.String())
 	}
-	if raw := rec.Body.String(); strings.Contains(raw, "/srv/work") || strings.Contains(raw, runOne) {
-		t.Fatalf("the receipt carries the session folder or run: %s", raw)
+	// The receipt names the session by the run the caller sent, never by its folder.
+	if raw := rec.Body.String(); strings.Contains(raw, "/srv/work") || !strings.Contains(raw, `"session_run":"`+runOne+`"`) {
+		t.Fatalf("the receipt carries the session folder, or does not name its run: %s", raw)
 	}
 	body["operation_id"], body["session_run"] = "op-path", "/srv/work/run-1"
 	if rec := call(push, h.user(), http.MethodPost, h.target.ID.String(), body); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_request") {

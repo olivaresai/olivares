@@ -116,7 +116,7 @@
     },
     "truncated": "Caricati {{n}} budget; ce ne sono altri",
     "truncatedHint": "Ci sono più budget di quelli mostrati; questa pagina legge le righe per id. Un tetto che non compare qui non dimostra che la spesa sia senza limite: potrebbe semplicemente trovarsi oltre questa pagina.",
-    "storedEmptyHint": "I budget creati in Business restano leggibili e rimovibili qui."
+    "storedEmptyHint": "I budget creati in Olivares AI Business restano leggibili e rimovibili qui."
   },
   "cache": {
     "title": "Efficienza della prompt cache",

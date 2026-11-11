@@ -45,6 +45,12 @@ type harness struct {
 
 func newHarness(t *testing.T, m *Module) *harness {
 	t.Helper()
+	return newHarnessWithPolicy(t, m, nil)
+}
+
+// newHarnessWithPolicy is newHarness with a deny overlay on the authorizer.
+func newHarnessWithPolicy(t *testing.T, m *Module, policy auth.PolicyEvaluator) *harness {
+	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	st, err := openStore(ctx, m)
@@ -65,7 +71,7 @@ func newHarness(t *testing.T, m *Module) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	authorizer := auth.NewAuthorizer(nil)
+	authorizer := auth.NewAuthorizer(policy)
 	WithWorkAuthorizer(authorizer)(m)
 	srv, err := api.New(api.Options{
 		Store: st, Authenticator: auth.NewAuthenticator(st, nil), Authorizer: authorizer,

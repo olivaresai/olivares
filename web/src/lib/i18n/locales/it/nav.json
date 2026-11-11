@@ -33,6 +33,7 @@
     "communicationsHandoffs": "Passaggi di consegne",
     "console": "Amministrazione",
     "sourceDiff": "Diff dei sorgenti",
+    "approvals": "Approvazioni",
     "permissions": "Permessi",
     "identity": "Identità",
     "vault": "Cassaforte",
@@ -119,7 +120,7 @@
     "agentops": "Avvia sessioni e segui che cosa fa ciascuna, comprese quelle che Olivares trova",
     "agentArtifacts": "Skill, estensioni MCP e file di istruzioni: registro, postura e BOM della supply chain",
     "models": "Modelli, instradamento e governance",
-    "agent-tools": "Vedi gli account e le chiavi API con cui girano le sessioni; installare gli strumenti ed eseguirne l'accesso spetta agli amministratori del deployment",
+    "agent-tools": "Vedi gli account con cui girano le sessioni; installare gli strumenti ed eseguirne l'accesso spetta agli amministratori del deployment",
     "modelOps": "Modelli di proprietà, ammissione e deployment",
     "finops": "Costo dei token, budget e spesa",
     "adoption": "Produttività, accettazione e mix di modelli",
@@ -344,9 +345,13 @@
     "startWithChoice": "Avvia una nuova sessione con questa scelta",
     "newWithOtherAccess": "Nuova sessione con un altro accesso…",
     "askPlaceholder": "Chiedi qualsiasi cosa, @ per il contesto, / per comandi e skill",
+    "messagePlaceholder": "Messaggio per {{title}}… @ file · / comandi",
     "modelPicker": "Modello: {{value}}",
-    "effortPicker": "Impegno: {{value}}",
+    "modelEffortPicker": "Modello: {{model}}, impegno {{effort}}",
     "accessPicker": "Accesso: {{value}}",
+    "moreActions": "Altre azioni",
+    "moreActionsStashed": "Altre azioni, con una bozza messa da parte",
+    "contextAction": "Contesto e compattazione…",
     "accessKeeps": "L’accesso cambia al prossimo turno di questa conversazione.",
     "queue": {
       "title": "Messaggi in coda",
@@ -370,18 +375,33 @@
       "placeholder": "Invio mette un messaggio in coda per dopo questo turno",
       "placeholderSteer": "Invio lo mette in coda per dopo questo turno, Ctrl+Invio lo reindirizza ora",
       "discarded": "La sessione è stata rilasciata con questi messaggi ancora in coda:",
-      "copy": "Copia"
-    }
+      "copy": "Copia",
+      "placeholderQueueKey": "{{key}} mette un messaggio in coda per dopo questo turno",
+      "placeholderSteerKey": "{{key}} lo reindirizza ora"
+    },
+    "stash": "Metti da parte questa bozza",
+    "stashRestore": "Ripristina la bozza messa da parte",
+    "stashGone": "Non più salvato in questa sessione, quindi non ripristinato: {{names}}",
+    "stashTooLarge": "Questa bozza è troppo grande per metterla da parte: il limite è {{limit}}. Resta qui.",
+    "stashNotKept": "Impossibile mettere da parte questa bozza: questo browser non conserva nulla tra una visita e l’altra. Resta solo in questa scheda.",
+    "stashNoRoom": "Impossibile mettere da parte questa bozza: questo browser non ha più spazio per conservarla. Non è stato tolto nulla, e resta qui.",
+    "stashDropped": "Messa da parte. Per fare spazio è stata tolta la più vecchia: {{words}}",
+    "stashTaken": "La bozza messa da parte non c’è più: un’altra scheda l’ha ripristinata, oppure è passato un giorno.",
+    "plan": "Piano",
+    "planHint": "Prima il piano: lo strumento legge e propone un piano, senza modificare nulla. Vale dal prossimo messaggio."
   },
   "shell": {
     "more": "Altro",
     "searchCommands": "Cerca e comandi",
     "search": "Cerca",
+    "searchGo": "Cerca o vai a…",
     "stopAll": "Ferma tutto",
     "workspaceCount": "Workspace: {{count}}",
     "rail": {
       "title": "Sessioni",
-      "all": "Tutte",
+      "seeAll_one": "Vedi {{count}} sessione",
+      "seeAll_many": "Vedi tutte le {{count}} sessioni",
+      "seeAll_other": "Vedi tutte le {{count}} sessioni",
       "groups": {
         "needsYou": "Ti aspetta",
         "working": "In corso",
@@ -431,10 +451,10 @@
     "killswitch": {
       "estateStopped": "TUTTI GLI AGENTI SONO FERMI",
       "estateBody": "Gli agenti non possono agire finché due account utente non approvano la ripartenza.",
-      "agentStops": "{{count}} arresto di agenti attivo",
-      "agentStops_one": "{{count}} arresto di agenti attivo",
-      "agentStops_many": "{{count}} arresti di agenti attivi",
-      "agentStops_other": "{{count}} arresti di agenti attivi",
+      "agentStops": "{{count}} agent arrestati",
+      "agentStops_one": "{{count}} agent arrestato",
+      "agentStops_many": "{{count}} agent arrestati",
+      "agentStops_other": "{{count}} agent arrestati",
       "none": "Nulla è fermo. Sessioni e agenti funzionano normalmente."
     },
     "status": {
@@ -442,6 +462,9 @@
       "running_one": "{{count}} sessione aperta",
       "running_many": "{{count}} sessioni aperte",
       "running_other": "{{count}} sessioni aperte",
+      "needYou_one": "{{count}} ti aspetta",
+      "needYou_many": "{{count}} ti aspettano",
+      "needYou_other": "{{count}} ti aspettano",
       "usage": "Utilizzo di {{tool}}",
       "fiveHour": "5 h",
       "week": "sett.",
@@ -452,7 +475,6 @@
     },
     "collapse": "Comprimi la navigazione",
     "expand": "Espandi la navigazione",
-    "openNavigation": "Apri la navigazione",
     "closeNavigation": "Chiudi la navigazione"
   },
   "places": {
@@ -471,13 +493,20 @@
   "readOnlyNotice": "Puoi leggere questa pagina ma non modificarla. Può farlo un amministratore dell'organizzazione.",
   "business": {
     "sessions": "Registrazioni, automazioni e orchestrazione delle sessioni",
+    "providerAssignment": "Provider assegnati a persone e reparti",
+    "limitAssignment": "Limiti di utilizzo impostati per altre persone e reparti",
     "people": "Directory, reparti e amministrazione delegata",
     "rules": "Criteri, ruoli e concessioni personalizzati",
     "usage": "Costi per team e progetto",
+    "usageBudgets": "Budget che avvisano, rallentano o bloccano le sessioni",
     "securityCompliance": "Framework di compliance ed evidenze",
     "securityRedTeam": "Esecuzioni e punteggi del red team",
     "operationsDeploy": "Distribuire agenti su altri host",
     "operationsResidency": "Residenza dei dati e tenant",
-    "retentionSchedules": "Le pianificazioni vengono applicate solo in Olivares Business: questa edizione le conserva e non elimina nulla."
+    "retentionSchedules": "Le pianificazioni vengono applicate solo in Olivares AI Business: questa edizione le conserva e non elimina nulla."
+  },
+  "groups": {
+    "control": "Governance",
+    "admin": "Amministrazione"
   }
 }

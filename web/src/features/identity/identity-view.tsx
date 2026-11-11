@@ -49,12 +49,14 @@ export default function IdentityView() {
   const { can } = useAuth()
   const admin = can(ADMIN_PERMISSION)
   const panels = useOfferedPanels(PANEL_EXTENSIONS.identityTabs)
+  // One setting, one name: an administrator's Single sign-on ('sso') holds the set-up form
+  // and the live state ('federation') that everyone else sees alone.
   const groups = GROUPS.map((g) => ({
     id: g.id,
     tabs: [
       ...panels.filter((p) => p.group === g.id).map((p) => p.id),
       ...g.tabs,
-    ].filter((k) => admin || !ADMIN_TABS.has(k)),
+    ].filter((k) => (admin ? k !== 'federation' : !ADMIN_TABS.has(k))),
   })).filter((g) => g.tabs.length > 0)
   for (const panel of panels) {
     if (!groups.some((g) => g.id === panel.group)) {
@@ -66,10 +68,14 @@ export default function IdentityView() {
   }
   const available = groups.flatMap((g) => g.tabs)
   // The people tab is first where the principal may administer; otherwise the sign-in
-  // federation tab. An unknown or no longer offered `?tab=` falls back to it.
-  const [selectedTab, setTab] = useTabParam(available, {
+  // federation tab. An unknown or no longer offered `?tab=` falls back to it. The state's
+  // published link (`?tab=federation`) lands an administrator on Single sign-on.
+  const linkable = admin ? [...available, 'federation'] : available
+  const [requestedTab, setTab] = useTabParam(linkable, {
     fallback: available.includes('people') ? 'people' : 'federation',
   })
+  const selectedTab =
+    admin && requestedTab === 'federation' ? 'sso' : requestedTab
   // A vertical section list beside the work at `lg` (Up/Down move between sections), a
   // scrolling strip below it (Left/Right): the orientation decides the arrow keys.
   const wide = useMinWidth(1024)
@@ -90,7 +96,7 @@ export default function IdentityView() {
       : key === 'roles'
         ? t('console:tabs.roles')
         : key === 'sso'
-          ? t('console:tabs.sso')
+          ? t('identity:tabs.federation')
           : key === 'apiKeys'
             ? t('console:tabs.apiKeys')
             : t(`identity:tabs.${key}`))
@@ -151,7 +157,10 @@ export default function IdentityView() {
                 <RolesTab />
               </TabsContent>
               <TabsContent value="sso" className="pt-0">
-                <SSOTab />
+                <div className="flex flex-col gap-6">
+                  <SSOTab />
+                  <FederationTab />
+                </div>
               </TabsContent>
               <TabsContent value="apiKeys" className="pt-0">
                 <ApiKeysTab />

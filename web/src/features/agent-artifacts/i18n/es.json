@@ -34,6 +34,7 @@
       "class": "Clase",
       "name": "Nombre",
       "version": "Versión",
+      "fingerprint": "Huella",
       "provenance": "Procedencia",
       "posture": "Resultado de escaneo consignado",
       "issues": "Incidencias",

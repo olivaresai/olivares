@@ -12,6 +12,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
+import { ApiError } from '@/lib/api/errors'
 import './i18n'
 
 vi.mock('@tanstack/react-router', () => ({
@@ -32,7 +33,17 @@ vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: (p: string) => permisos(p) }),
 }))
 
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
+
 const dlpMock = vi.fn()
+const setDlpMock = vi.fn()
+const deleteDlpMock = vi.fn()
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   const lista = () => Promise.resolve({ items: [], has_more: false })
@@ -41,6 +52,8 @@ vi.mock('./api', async (importOriginal) => {
     knowledgeApi: {
       ...actual.knowledgeApi,
       dlpRules: (...a: unknown[]) => dlpMock(...a),
+      setDlpRules: (...a: unknown[]) => setDlpMock(...a),
+      deleteDlpRule: (...a: unknown[]) => deleteDlpMock(...a),
       listKbs: lista,
       listLineage: lista,
       listPrompts: lista,
@@ -69,6 +82,9 @@ async function abrirDlp(user: ReturnType<typeof userEvent.setup>) {
 beforeEach(() => {
   permisos = () => true
   dlpMock.mockReset().mockResolvedValue({ items: [] })
+  setDlpMock.mockReset().mockResolvedValue({})
+  deleteDlpMock.mockReset().mockResolvedValue({})
+  vi.clearAllMocks()
 })
 
 describe('las reglas DLP', () => {
@@ -199,5 +215,74 @@ describe('las reglas DLP', () => {
     expect(
       screen.queryByRole('button', { name: /Delete the rule/i }),
     ).toBeNull()
+  })
+})
+
+// A WRITE THAT FAILS IS SAID: a refusal by edition is the calm edition line, never the
+// engine's sentence in red; any other failure, a role's refusal too, says the engine's
+// sentence as the panel's other writes do. Before, saving and deleting a rule said nothing.
+describe('a DLP write that fails', () => {
+  it('saving refused by edition says the edition line, calm', async () => {
+    setDlpMock.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'req-1', {
+        edition: 'engineer',
+        capability: 'knowledge',
+      }),
+    )
+    const user = userEvent.setup()
+    await abrirDlp(user)
+    await user.click(
+      await screen.findByRole('button', { name: /New DLP rule/i }),
+    )
+    await user.type(await screen.findByLabelText(/^Class$/i), 'pii')
+    await user.click(screen.getByRole('button', { name: /^Save$/i }))
+
+    await waitFor(() => expect(toast.info).toHaveBeenCalledOnce())
+    const { container } = render(<>{toast.info.mock.calls[0][0]}</>)
+    expect(container).toHaveTextContent(
+      'Knowledge is part of Olivares AI Engineer.',
+    )
+    expect(container.textContent).not.toMatch(/raw: 403|edition_required/)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('a delete that fails says the engine’s sentence', async () => {
+    dlpMock.mockResolvedValue({
+      items: [{ id: 'r1', class: 'pii', action: 'deny', created_by: 'a@b' }],
+    })
+    deleteDlpMock.mockRejectedValue(
+      new ApiError(500, 'internal', 'the rule store is unavailable'),
+    )
+    const user = userEvent.setup()
+    await abrirDlp(user)
+    await user.click(
+      await screen.findByRole('button', { name: /Delete the rule/i }),
+    )
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('the rule store is unavailable'),
+    )
+    expect(toast.info).not.toHaveBeenCalled()
+  })
+
+  it('a save refused by a role says the engine’s sentence, never the role toast', async () => {
+    setDlpMock.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'policy p-7 refuses DLP changes'),
+    )
+    const user = userEvent.setup()
+    await abrirDlp(user)
+    await user.click(
+      await screen.findByRole('button', { name: /New DLP rule/i }),
+    )
+    await user.type(await screen.findByLabelText(/^Class$/i), 'pii')
+    await user.click(screen.getByRole('button', { name: /^Save$/i }))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'policy p-7 refuses DLP changes',
+      ),
+    )
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
   })
 })

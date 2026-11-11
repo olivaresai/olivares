@@ -102,6 +102,8 @@ type editionPorts struct {
 	departmentService func(store.Store, *auth.Authenticator) api.DepartmentService
 	// nil adds no department verbs (`tree`, `set-parent`, `place`) to `olivares workspaces`.
 	workspaceCommands func(bootstrapClient) []*cobra.Command
+	// nil adds no `suspend` and `reactivate` verbs to `olivares members`.
+	memberCommands func(bootstrapClient) []*cobra.Command
 
 	// Inference, hooks and MCP gates.
 	// nil leaves req.Tools not enforced, exactly as before the add-on (observe-only).

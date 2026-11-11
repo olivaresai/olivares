@@ -11,10 +11,12 @@ import (
 	"github.com/olivaresai/olivares/modules/gitpublish"
 )
 
-// shipGate is the approval policy's door before a ship's push. The tenant's own
-// approval policies decide whether a person must review the push: with none
-// that matches the governed action "gitpublish.push" on a publication target,
-// the ship is granted; with one, the push waits for a decision of another
+// shipGate is the approval policy's door before every publication: a ship's
+// push and each push, pull request, merge and issue comment. The tenant's own
+// approval policies decide whether a person must review it: with none that
+// matches the governed action ("gitpublish.push", "gitpublish.pull_request",
+// "gitpublish.merge" or "gitpublish.issue_comment") on a publication target,
+// the publication is granted; with one, the push waits for a decision of another
 // person (separation of duty is the approval service's, as for every approval)
 // and an approved grant is spent once, under the ship's operation id, so a
 // retry of the same ship re-obtains it and no other ship can use it.

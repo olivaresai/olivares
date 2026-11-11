@@ -445,7 +445,8 @@ describe('CommandMenu', () => {
     await user.click(screen.getByRole('option', { name: /New alert route/ }))
     expect(useCommandStore.getState().pendingAction).toBeNull()
     expect(navigateMock).not.toHaveBeenCalled()
-    // The pages and the non-mutating commands stay reachable.
+    // The pages and the non-mutating commands stay reachable: every page with nothing
+    // typed, and the commands under `>`, where the verbs stay listed and disabled.
     await user.clear(screen.getByRole('combobox'))
     const whole = optionValues()
     for (const entry of [
@@ -454,12 +455,18 @@ describe('CommandMenu', () => {
       ...(FEATURE_VIEWS.some((v) => v.id === 'orchestration')
         ? ['view:orchestration ']
         : []),
+    ])
+      expect(whole.some((v) => v.startsWith(entry))).toBe(true)
+    await user.type(screen.getByRole('combobox'), '>')
+    const commands = optionValues()
+    for (const entry of [
       'theme:light ',
       'theme:dark ',
       'theme:black ',
       'signout ',
+      'action:alerting:createRoute ',
     ])
-      expect(whole.some((v) => v.startsWith(entry))).toBe(true)
+      expect(commands.some((v) => v.startsWith(entry))).toBe(true)
     const runnable = screen
       .getAllByRole('option')
       .filter(

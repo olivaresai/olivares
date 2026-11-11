@@ -182,7 +182,14 @@ function Row({
 
 // --- 2. SLSA provenance ------------------------------------------------------
 
-export function SlsaPanel({ slsa }: { slsa: SlsaProvenance }) {
+export function SlsaPanel({
+  slsa,
+  verify,
+}: {
+  slsa: SlsaProvenance
+  /** The check of the installed release, or why there is none. */
+  verify?: React.ReactNode
+}) {
   const { t } = useTranslation('attestation')
   return (
     <div className="flex flex-col gap-3">
@@ -210,9 +217,7 @@ export function SlsaPanel({ slsa }: { slsa: SlsaProvenance }) {
             })}
           </Badge>
         </Row>
-        <Row label={t('slsa.verifyCommand')} mono>
-          {slsa.verify_command}
-        </Row>
+        {verify ? <Row label={t('slsa.verifyCommand')}>{verify}</Row> : null}
       </dl>
       <CaveatNotice tone="info">{t('slsa.honesty')}</CaveatNotice>
     </div>

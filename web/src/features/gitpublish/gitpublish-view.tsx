@@ -18,6 +18,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { gitpublishApi, gitpublishKeys } from './api'
 import { IntentSheet } from './intent-sheet'
 import { actionAuthority } from './model'
+import { Publications } from './publications'
 import { TargetFormDialog } from './target-form'
 import { TargetSheet } from './target-sheet'
 import './i18n'
@@ -144,6 +145,9 @@ export function GitPublicationView() {
           }
         </AsyncSection>
       </SectionCard>
+      {targets.data?.items.length ? (
+        <Publications targets={targets.data.items} />
+      ) : null}
 
       {targetId ? (
         <TargetSheet

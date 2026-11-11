@@ -82,7 +82,7 @@ vi.mock('@/features/console/use-edition-badge', () => ({
 it('shows the commercial badge in the search header outside the result list', async () => {
   useCommandStore.getState().setOpen(true)
   renderIntel(<CommandMenu />)
-  const badge = await screen.findByLabelText('Enterprise edition')
+  const badge = await screen.findByLabelText('Olivares AI Enterprise')
   expect(badge.closest('[cmdk-input-wrapper]')).not.toBeNull()
   expect(badge.closest('[role="listbox"]')).toBeNull()
 })

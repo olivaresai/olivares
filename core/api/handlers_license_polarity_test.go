@@ -6,9 +6,11 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -105,5 +107,17 @@ func TestAddonRefusalIsA403NotA500(t *testing.T) {
 	// into a catch-all that hides real faults.
 	if code, _ := api.StatusForTest(errors.New("a genuine internal fault")); code != http.StatusInternalServerError {
 		t.Fatalf("an unrelated error mapped to %d, want 500 — the new arm must not swallow faults", code)
+	}
+}
+
+// No edition limits the number of users (2026-11-10): the licence status the console reads
+// carries no user count at all, so nothing can render one as a limit or as "unlimited".
+func TestLicenseStatusCarriesNoUserCount(t *testing.T) {
+	body, err := json.Marshal(api.LicenseStatus{Status: "valid", Licensee: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), `"max_users"`) {
+		t.Errorf("LicenseStatus JSON carries max_users: %s", body)
 	}
 }

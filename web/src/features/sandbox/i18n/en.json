@@ -4,7 +4,7 @@
     "hint": "This sandbox list is capped. Only the loaded rows are shown."
   },
   "title": "Testing sandbox",
-  "description": "Isolated, ephemeral runs against mocked resources — scenario sims, deterministic replays and pre/post-deploy comparisons. Outputs are synthetic; no real target text is ever stored.",
+  "description": "Replay scenarios against mocked tools and compare runs before a deploy.",
   "tabs": {
     "runs": "Runs",
     "comparisons": "Comparisons",

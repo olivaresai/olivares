@@ -2,16 +2,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import {
   Handshake,
   Inbox,
   KeyRound,
   MailPlus,
   MessagesSquare,
+  Plus,
 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { WorkspaceRequiredState } from '@/features/shared'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -43,6 +46,7 @@ import { InboxTable } from './inbox-table'
 import { MessageSheet } from './message-sheet'
 import type { Me } from './subject-picker'
 import type { Channel, ChannelAccess, ChannelCatalogItem } from './types'
+import { TAB_PAGES } from './views'
 import './i18n'
 
 /** Which door opened this view. The five routes mount ONE room; the entrance only
@@ -97,6 +101,7 @@ function Inner({
   scope: CommunicationsScope
 }) {
   const { t } = useTranslation('communications')
+  const navigate = useNavigate()
   const { can, principal, activeTenant } = useAuth()
   const queryClient = useQueryClient()
   const preflight = useCapabilityPreflight()
@@ -169,11 +174,24 @@ function Inner({
             ? 'administration'
             : 'channels'
   const firstPermitted = order.find((x) => tabPermitted[x]) ?? null
+  /** Where Cancel leaves the form for: the first list this person may read. */
+  const firstList = order.find((x) => x !== 'create' && tabPermitted[x])
   const [tab, setTab] = useState<Tab>(() =>
     tabPermitted[wanted] ? wanted : (firstPermitted ?? 'channels'),
   )
   // A tab whose permission is gone right now is neither shown nor left selected.
   const effective: Tab | null = tabPermitted[tab] ? tab : firstPermitted
+  /** Cancel goes to a list; from /communications/new, to the list's page. */
+  const cancelCreate = (list: Tab) =>
+    entrance === 'new'
+      ? void navigate({ to: TAB_PAGES[list] as '/' })
+      : setTab(list)
+  /** New channel leaves once pressed, so the form takes the keyboard. */
+  const [focusForm, setFocusForm] = useState(false)
+  const openCreate = () => {
+    setFocusForm(true)
+    setTab('create')
+  }
 
   const [url, patchUrl] = useUrlState(URL_KEYS)
   const urlChannel =
@@ -340,6 +358,14 @@ function Inner({
       icon={Icon}
       title={t(`doors.${door}.title`)}
       description={t(`doors.${door}.description`)}
+      primaryAction={
+        scope.workspace && canChannelWrite && effective !== 'create' ? (
+          <Button variant="primary" size="sm" onClick={openCreate}>
+            <Plus className="size-4" aria-hidden="true" />
+            {t('actions.newChannel')}
+          </Button>
+        ) : null
+      }
     >
       {!scope.workspace ? (
         <WorkspaceRequiredState
@@ -359,38 +385,35 @@ function Inner({
           </div>
           {effective === null ? null : (
             <Tabs value={effective} onValueChange={(v) => setTab(v as Tab)}>
-              <TabsList>
-                {canChannelRead ? (
-                  <TabsTrigger value="channels">
-                    {t('tabs.channels')}
-                  </TabsTrigger>
-                ) : null}
-                {canDeliveryRead ? (
-                  <TabsTrigger value="inbox">{t('tabs.inbox')}</TabsTrigger>
-                ) : null}
-                {canDeliveryRead ? (
-                  <TabsTrigger value="handoffs">
-                    {t('tabs.handoffs')}
-                  </TabsTrigger>
-                ) : null}
-                {canChannelWrite ? (
-                  <TabsTrigger value="create">{t('tabs.create')}</TabsTrigger>
-                ) : null}
-                {administrationReachable ? (
-                  <TabsTrigger value="administration">
-                    {t('tabs.administration')}
-                  </TabsTrigger>
-                ) : null}
-              </TabsList>
+              {effective !== 'create' ? (
+                <TabsList>
+                  {canChannelRead ? (
+                    <TabsTrigger value="channels">
+                      {t('tabs.channels')}
+                    </TabsTrigger>
+                  ) : null}
+                  {canDeliveryRead ? (
+                    <TabsTrigger value="inbox">{t('tabs.inbox')}</TabsTrigger>
+                  ) : null}
+                  {canDeliveryRead ? (
+                    <TabsTrigger value="handoffs">
+                      {t('tabs.handoffs')}
+                    </TabsTrigger>
+                  ) : null}
+                  {administrationReachable ? (
+                    <TabsTrigger value="administration">
+                      {t('tabs.administration')}
+                    </TabsTrigger>
+                  ) : null}
+                </TabsList>
+              ) : null}
               {canChannelRead ? (
                 <TabsContent value="channels" className="mt-4">
                   <ChannelCatalog
                     scope={scope}
                     canChannelRead={canChannelRead}
-                    canChannelWrite={canChannelWrite}
                     onOpenChannel={openChannel}
                     onOpenById={openChannelById}
-                    onCreate={() => setTab('create')}
                   />
                 </TabsContent>
               ) : null}
@@ -423,6 +446,17 @@ function Inner({
                   <SectionCard
                     title={t('create.title')}
                     description={t('create.description')}
+                    actions={
+                      firstList ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => cancelCreate(firstList)}
+                        >
+                          {t('actions.cancel')}
+                        </Button>
+                      ) : null
+                    }
                   >
                     <ChannelCreateForm
                       scope={scope}
@@ -432,6 +466,7 @@ function Inner({
                       canAgentRead={canAgentRead}
                       me={me}
                       onCheckCatalog={canChannelRead ? checkCatalog : undefined}
+                      autoFocus={focusForm}
                     />
                   </SectionCard>
                 </TabsContent>

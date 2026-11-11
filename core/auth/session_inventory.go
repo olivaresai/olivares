@@ -108,7 +108,8 @@ func (a *Authenticator) RevokeSessionsInTenant(ctx context.Context, actor Princi
 	if _, err := a.SCIMGetMember(ctx, tenant, userID); err != nil {
 		return err
 	}
-	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+	var meta map[string]any
+	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
 			return err
 		}
@@ -165,11 +166,26 @@ func (a *Authenticator) RevokeSessionsInTenant(ctx context.Context, actor Princi
 		if err := excludeAccountSessions(ctx, as, actor, userID, tenant); err != nil {
 			return err
 		}
+		meta = map[string]any{"tenant": tenant.String(), "revoked": revoked, "excluded": excluded}
 		_, err = as.Audit().Append(ctx, model.AuditDraft{
 			Actor: actor.Actor(), ActorKind: actor.ActorKind(),
-			Action: "auth.sessions.admin_revoke", TargetKind: "core.user", TargetID: userID,
-			Meta: map[string]any{"tenant": tenant.String(), "revoked": revoked, "excluded": excluded},
+			Action: sessionsAdminRevokeAction, TargetKind: "core.user", TargetID: userID,
+			Meta: meta,
 		})
 		return err
 	})
+	if err != nil {
+		return err
+	}
+	// The revocation has committed on the system chain, which the organization's
+	// administrators cannot read: the act goes on the tenant's own chain too, as a
+	// leaver does (recordLeaver). A failure there is logged; the system chain keeps
+	// the record, and a repeated revocation appends it again.
+	if err := a.appendTenantEvent(context.WithoutCancel(ctx), actor, tenant, sessionsAdminRevokeAction, userID, meta); err != nil {
+		a.log.Error("auth: session revocation not recorded on the tenant ledger; it is on the system chain",
+			"tenant", tenant.String(), "user", userID.String(), "err", err)
+	}
+	return nil
 }
+
+const sessionsAdminRevokeAction = "auth.sessions.admin_revoke"

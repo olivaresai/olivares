@@ -21,6 +21,7 @@ import { killswitchApi, killswitchKeys } from '@/features/killswitch/api'
 import { useAuth } from '@/lib/auth/context'
 import { COST_VIEW } from '@/features/registry'
 import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import { cn } from '@/lib/utils'
 import type { RunDTO } from './types'
 import './i18n'
@@ -48,6 +49,8 @@ export function GovernancePanel({
   const isRemote = run.transport === 'remote-control'
 
   const canKill = can('governance:killswitch:read')
+  // The stop's state is read on canKill; its page opens only for whom the page's gate lets in.
+  const killPage = viewById('killswitch')
   const ksQuery = useQuery({
     queryKey: killswitchKeys.state(activeTenant),
     queryFn: () => killswitchApi.state(),
@@ -131,7 +134,7 @@ export function GovernancePanel({
           label={t('gov.killSwitch')}
           tone={kill.tone}
           action={
-            canKill ? (
+            killPage && access.navigable(killPage) ? (
               <DeepLink to="/killswitch" label={t('gov.viewKillswitch')} />
             ) : undefined
           }
@@ -161,7 +164,7 @@ export function GovernancePanel({
               <button
                 type="button"
                 onClick={onViewEvidence}
-                className="inline-flex items-center gap-1 text-caption font-medium text-accent-text hover:underline"
+                className="inline-flex items-center gap-1 text-caption font-medium text-foreground underline underline-offset-2"
               >
                 <ScrollText className="size-3" />
                 {t('gov.viewEvidence')}
@@ -257,7 +260,7 @@ function DeepLink({ to, label }: { to: string; label: string }) {
   return (
     <Link
       to={to as never}
-      className="inline-flex items-center gap-1 text-caption font-medium text-accent-text hover:underline"
+      className="inline-flex items-center gap-1 text-caption font-medium text-foreground underline underline-offset-2"
     >
       <ExternalLink className="size-3" />
       {label}

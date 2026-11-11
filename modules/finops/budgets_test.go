@@ -6,9 +6,14 @@ package finops
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
@@ -461,5 +466,189 @@ func TestCheckBudgetEnforcingBudgetBeyondFirstPageBlocks(t *testing.T) {
 	}
 	if chk.Action != "block" {
 		t.Fatalf("action = %q, want block; %+v", chk.Action, chk)
+	}
+}
+
+// A member's spend is recorded under the actor form the engine writes, user:<id>, so the
+// group's total must count it there as well as under a bare id.
+func TestUserGroupBudgetCountsMemberSpendUnderPrincipalActor(t *testing.T) {
+	m, st, tenant, _ := newFin(t)
+	now := m.clock.Now().Time()
+	u1 := createCanonicalUser(t, st, "member one").ID
+	group := createUserGroup(t, st, tenant, "engineering", u1)
+	createBudget(t, st, tenant, "group-cap", budgetSpec{
+		Dimension: "user_group", Key: group.ID.String(), Period: "monthly", LimitMicroUSD: 1000, Action: "block",
+	})
+	c := mkCost("anthropic", "claude-opus-4-8", "", 10, 5, 1150, now)
+	c.Actor = "user:" + u1.String()
+	m.ingest(t, tenant, c)
+
+	chk, err := m.CheckBudget(context.Background(), tenant, SpendDims{UserGroupRefs: []string{group.ID.String()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chk.Allowed || chk.SpendMicroUSD != 1150 {
+		t.Fatalf("a member's spend under user:<id> must count against the group: %+v", chk)
+	}
+}
+
+// raceStanding returns the standing of the accounts it is asked about and, on its
+// first read only, runs between: the removal that completes after the writer read the
+// standing and before it pinned it.
+type raceStanding struct {
+	auth.StandingReader
+	between func()
+}
+
+func (r *raceStanding) Standing(ctx context.Context, tenant model.TenantID, users []model.ID) (map[model.ID]auth.Standing, error) {
+	out, err := r.StandingReader.Standing(ctx, tenant, users)
+	if r.between != nil {
+		r.between()
+		r.between = nil
+	}
+	return out, err
+}
+
+// A group budget never exempts an account whose removal from the organization
+// completed: the write answers 409 subject_retired and stores nothing, whether the
+// form named an account already retired or the removal finished between the
+// writer's standing read and its retry, and re-admitting the account revives no
+// exemption.
+func TestUserGroupBudgetRefusesARetiredExemptActor(t *testing.T) {
+	m, st, tenant, _ := newFin(t)
+	ctx := context.Background()
+	a := auth.NewAuthenticator(st, nil)
+	actor := auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), CredID: model.NewID(), Superadmin: true}
+	member := func(t *testing.T, name string) model.ID {
+		t.Helper()
+		var id model.ID
+		if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+			u, err := as.Users().Create(ctx, model.User{
+				Email: "finops-" + model.NewID().String() + "@example.test", DisplayName: name, Status: model.StatusActive,
+				CredentialCustody: model.CustodyTenant, CustodyTenantID: tenant,
+			})
+			if err != nil {
+				return err
+			}
+			id = u.ID
+			_, err = as.Memberships().Create(ctx, model.Membership{UserID: u.ID, TargetTenantID: tenant, Role: auth.RoleViewer})
+			return err
+		}); err != nil {
+			t.Fatalf("create member %s: %v", name, err)
+		}
+		return id
+	}
+	// retire removes the account from the tenant and completes the retirement, as the
+	// retirement pump does once every module step ran clean.
+	retire := func(t *testing.T, user model.ID) {
+		t.Helper()
+		if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+			rec, err := a.OffboardFromTenant(ctx, as, actor, user, tenant, "test")
+			if err != nil {
+				return err
+			}
+			rec.RetirementState = model.RetirementRetired
+			_, err = as.TenantExclusions().Update(ctx, rec)
+			return err
+		}); err != nil {
+			t.Fatalf("retire %s: %v", user, err)
+		}
+	}
+	write := func(user model.ID) error {
+		spec := budgetSpec{
+			Dimension: "user_group", Key: model.NewID().String(), Period: "monthly", LimitMicroUSD: 1000, Action: "block",
+			ExemptActors: []string{"user:" + user.String()},
+		}
+		return m.fencedMutate(ctx, tenant, budgetSubjects(spec), func(sc store.Scope) error {
+			_, err := sc.Policies().Create(ctx, model.Policy{Name: "group-cap", Kind: policyKindBudget, Enabled: true, Spec: spec.toSpecMap()})
+			return err
+		})
+	}
+	// naming reads the stored policies that name user, as the retirement step does.
+	naming := func(t *testing.T, user model.ID) []string {
+		t.Helper()
+		var blocking []string
+		if err := st.View(ctx, tenant, func(sc store.Scope) error {
+			var err error
+			blocking, _, err = policiesNaming(ctx, sc, user)
+			return err
+		}); err != nil {
+			t.Fatalf("read policies naming %s: %v", user, err)
+		}
+		return blocking
+	}
+	refused := func(t *testing.T, user model.ID, err error) {
+		t.Helper()
+		if !errors.Is(err, auth.ErrSubjectRetired) {
+			t.Fatalf("budget exempting the retired account = %v, want %v", err, auth.ErrSubjectRetired)
+		}
+		rec := httptest.NewRecorder()
+		writeStoreError(rec, err)
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"subject_retired"`) {
+			t.Fatalf("answered %d %s, want 409 subject_retired", rec.Code, rec.Body.String())
+		}
+		if got := naming(t, user); len(got) != 0 {
+			t.Fatalf("stored policies naming the account = %v, want none", got)
+		}
+	}
+
+	t.Run("an account already retired", func(t *testing.T) {
+		user := member(t, "retired before the form")
+		retire(t, user)
+		m.UseStanding(a)
+		refused(t, user, write(user))
+	})
+
+	t.Run("a removal that completes before the retry", func(t *testing.T) {
+		user := member(t, "retired while the write waits")
+		m.UseStanding(&raceStanding{StandingReader: a, between: func() { retire(t, user) }})
+		refused(t, user, write(user))
+
+		// The tenant re-admits the account it created: nothing it stored before revives.
+		if _, err := a.GrantMembership(ctx, actor, user, tenant, auth.RoleViewer, ""); err != nil {
+			t.Fatalf("re-admit: %v", err)
+		}
+		if got := naming(t, user); len(got) != 0 {
+			t.Fatalf("policies naming the re-admitted account = %v, want none", got)
+		}
+	})
+}
+
+// An exception lets one named person continue at admission; everyone else in the group
+// stays blocked.
+func TestUserGroupBudgetExemptActorContinues(t *testing.T) {
+	m, st, tenant, _ := newFin(t)
+	now := m.clock.Now().Time()
+	u1 := createCanonicalUser(t, st, "member one").ID
+	u2 := createCanonicalUser(t, st, "member two").ID
+	group := createUserGroup(t, st, tenant, "engineering", u1, u2)
+	exempt, other := "user:"+u1.String(), "user:"+u2.String()
+	m.UseStanding(auth.NewAuthenticator(st, nil))
+	createFencedBudget(t, m, tenant, "group-cap", budgetSpec{
+		Dimension: "user_group", Key: group.ID.String(), Period: "monthly", LimitMicroUSD: 1000, Action: "block",
+		ExemptActors: []string{exempt},
+	})
+	c := mkCost("anthropic", "claude-opus-4-8", "", 10, 5, 1150, now)
+	c.Actor = other
+	m.ingest(t, tenant, c)
+	groups := []string{group.ID.String()}
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		actor string
+		want  bool
+	}{{exempt, true}, {other, false}} {
+		res, err := m.Reserve(ctx, tenant, AdmissionRequest{Scope: AdmissionScopeSessionLaunch, Dims: SpendDims{UserGroupRefs: groups}, ActorRef: tc.actor, EstimateMicroUSD: 1, IdempotencyKey: t.Name() + tc.actor, Unreachable: UnreachableDeny})
+		if err != nil || res.Allowed != tc.want {
+			t.Fatalf("ReserveBudget(%s) = %+v, %v; want allowed=%v", tc.actor, res, err, tc.want)
+		}
+	}
+	bad := budgetSpec{Dimension: "workspace", Key: "x", Period: "monthly", LimitMicroUSD: 1, ExemptActors: []string{exempt}}
+	if msg := bad.validate(); msg == "" {
+		t.Fatal("an exception on a budget that is not a group budget must be refused")
+	}
+	bad = budgetSpec{Dimension: "user_group", Key: "x", Period: "monthly", LimitMicroUSD: 1, ExemptActors: []string{"not-a-person"}}
+	if msg := bad.validate(); msg == "" {
+		t.Fatal("an exception that does not name a person must be refused")
 	}
 }

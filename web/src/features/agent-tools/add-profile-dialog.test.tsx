@@ -328,7 +328,9 @@ describe('Add profile', () => {
     mount()
     const user = userEvent.setup()
     const dialog = await openAdd(user)
-    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
+    )
     await waitFor(() =>
       expect(agentOpsApi.createAccount).toHaveBeenCalledWith(
         {
@@ -339,8 +341,11 @@ describe('Add profile', () => {
         expect.objectContaining({ tenant: 't1' }),
       ),
     )
-    // The same dialog is now the sign-in of the new profile.
+    // The same dialog is now the sign-in of the new profile, and says where it is kept.
     const step = await screen.findByRole('dialog', { name: 'Sign in claude' })
+    expect(
+      within(step).getByText('Its own folder, made by Olivares'),
+    ).toBeInTheDocument()
     await waitFor(() => expect(signIn.start).toHaveBeenCalledTimes(1))
     expect(signIn.start.mock.calls[0].slice(0, 3)).toEqual([
       'claude',
@@ -356,6 +361,17 @@ describe('Add profile', () => {
     expect(
       within(step).getByText('olivares tool login claude --account claude'),
     ).toBeInTheDocument()
+    // As the concept draws it: the other ways fold under «Other ways», and the step's
+    // one primary is Continue (the sign-in page is a link, not a second primary).
+    expect(
+      within(step).getByText('Other ways').closest('details'),
+    ).not.toHaveAttribute('open')
+    const primaries = within(step)
+      .getAllByRole('button')
+      .filter((button) => /\bbg-accent\b/.test(button.className))
+    expect(primaries.map((button) => button.textContent)).toEqual(['Continue'])
+    // No second way out beside the dialog's own close and the step's Cancel.
+    expect(within(step).queryByRole('button', { name: 'Not now' })).toBeNull()
   })
 
   it('closes when the tool says the profile is signed in', async () => {
@@ -368,7 +384,9 @@ describe('Add profile', () => {
     mount()
     const user = userEvent.setup()
     const dialog = await openAdd(user)
-    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
+    )
     await screen.findByRole('dialog', { name: 'Sign in claude' })
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), {
       timeout: 4000,
@@ -385,7 +403,9 @@ describe('Add profile', () => {
     mount()
     const user = userEvent.setup()
     const dialog = await openAdd(user)
-    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
+    )
     await screen.findByRole('dialog', { name: 'Sign in claude-e' })
     expect(make).toHaveBeenCalledTimes(2)
     // The second request names nothing: the engine picks, and its pick wins.
@@ -402,7 +422,9 @@ describe('Add profile', () => {
     const name = within(dialog).getByRole('textbox', { name: 'Name' })
     await user.clear(name)
     await user.type(name, 'work')
-    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
+    )
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'That account name is taken.',
     )
@@ -417,7 +439,7 @@ describe('Add profile', () => {
     await user.clear(name)
     await user.type(name, 'Work Claude')
     expect(
-      within(dialog).getByRole('button', { name: 'Create' }),
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
     ).toBeDisabled()
     expect(
       within(dialog).getByText(
@@ -427,7 +449,7 @@ describe('Add profile', () => {
     await user.clear(name)
     await user.type(name, 'claude-b')
     expect(
-      within(dialog).getByRole('button', { name: 'Create' }),
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
     ).toBeDisabled()
     expect(
       within(dialog).getByText('That name is already taken.'),
@@ -448,7 +470,9 @@ describe('Add profile', () => {
       ),
     ).toBeVisible()
     // The account route still works: no orphan account is left by a half-allowed key.
-    expect(within(dialog).getByRole('button', { name: 'Create' })).toBeEnabled()
+    expect(
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
+    ).toBeEnabled()
   })
 
   it('ties the name problem to the field it is about', async () => {
@@ -514,7 +538,9 @@ describe('Add profile', () => {
     const user = userEvent.setup()
     mount()
     const dialog = await openAdd(user)
-    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
+    )
     const step = await screen.findByRole('dialog', { name: 'Sign in claude' })
     expect(
       await within(step).findByText(
@@ -569,7 +595,9 @@ describe('Add profile', () => {
     mount()
     const user = userEvent.setup()
     const dialog = await openAdd(user)
-    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
+    )
     await screen.findByRole('dialog', { name: 'Sign in claude' })
     expect(screen.queryByText('Sign in from the shell')).toBeNull()
   })
@@ -586,7 +614,9 @@ describe('Add profile', () => {
     mount()
     const user = userEvent.setup()
     const dialog = await openAdd(user)
-    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Create and sign in' }),
+    )
     const step = await screen.findByRole('dialog', { name: 'Sign in claude' })
     expect(
       within(step).getByText('Sign in from the shell: claude'),

@@ -38,7 +38,11 @@ import type {
 } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
-import { clearSessionDrafts } from '@/lib/session-drafts'
+import {
+  clearExpiredStashes,
+  clearSessionDrafts,
+  keepSessionDraftsOf,
+} from '@/lib/session-drafts'
 import { observeStepUpContext } from '@/stores/step-up'
 import { can as rbacCan, confinedWorkspaceIn, roleInTenant } from './rbac'
 
@@ -161,6 +165,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [signedOut, queryClient])
 
   const principal = token ? (whoami.data ?? null) : null
+  // Drafts set aside a day ago are nobody's to read: gone as the console loads.
+  useEffect(clearExpiredStashes, [])
+  // Drafts are their writer's: once a person is signed in on this tab, what another
+  // person left in its drafts, histories and drafts set aside goes (sign-out clears all).
+  const draftKind = principal?.kind
+  const draftActor = principal?.actor
+  const draftUser = principal?.user_id
+  useEffect(() => {
+    if (draftKind && draftActor && draftUser)
+      keepSessionDraftsOf({
+        kind: draftKind,
+        actor: draftActor,
+        user_id: draftUser,
+      })
+  }, [draftKind, draftActor, draftUser])
   // Memoize so the array identity is stable per principal (keeps the tenant effect
   // and the context value from recomputing every render).
   const grants = useMemo(() => principal?.grants ?? [], [principal])

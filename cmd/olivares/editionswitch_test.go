@@ -249,13 +249,11 @@ func TestCommercialEditionReadsTheLiveLicense(t *testing.T) {
 		d    api.LicenseDisplayInfo
 		want string
 	}{
-		{"none", api.LicenseDisplayInfo{Status: "none"}, ""},
-		{"expired", api.LicenseDisplayInfo{Status: "expired", SupportProfile: "business"}, ""},
-		{"invalid", api.LicenseDisplayInfo{Status: "invalid"}, ""},
-		{"valid business", api.LicenseDisplayInfo{Status: "valid", SupportProfile: "business"}, "business"},
-		{"valid enterprise by plan", api.LicenseDisplayInfo{Status: "valid", Plan: "Enterprise"}, "enterprise"},
-		{"valid, plan not named", api.LicenseDisplayInfo{Status: "valid", Plan: "pro"}, "business"},
-		{"perpetual", api.LicenseDisplayInfo{Status: "perpetual"}, "business"},
+		{"none or lapsed", api.LicenseDisplayInfo{Status: "expired", LicensedEdition: "community"}, ""},
+		{"unknown product", api.LicenseDisplayInfo{Status: "valid"}, ""},
+		{"engineer", api.LicenseDisplayInfo{Status: "valid", LicensedEdition: "engineer"}, "engineer"},
+		{"business", api.LicenseDisplayInfo{Status: "valid", LicensedEdition: "business"}, "business"},
+		{"enterprise", api.LicenseDisplayInfo{Status: "valid", LicensedEdition: "enterprise"}, "enterprise"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := commercialEdition(tc.d); got != tc.want {
@@ -385,7 +383,7 @@ func TestEveryPrintedStepIsAnUpgradeTheFlagsAccept(t *testing.T) {
 
 func TestEditionSwitchNoteNamesTheEditionAndOnlyAnExistingCommand(t *testing.T) {
 	ent := editionSwitchNote(withEdition(editionSwitchStep(installBinary, false), "enterprise"))
-	if !strings.Contains(ent, "Enterprise edition") || strings.Contains(ent, "Business edition") {
+	if !strings.Contains(ent, "Olivares AI Enterprise") || strings.Contains(ent, "Olivares AI Business") {
 		t.Errorf("an Enterprise license must be named Enterprise:\n%s", ent)
 	}
 	pod := editionSwitchNote(withEdition(editionSwitchStep(installKubernetes, false), "business"))

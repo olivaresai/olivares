@@ -18,11 +18,12 @@ import (
 
 // Community is the zero value of editionPorts plus its real behaviors. A port filled
 // here is a behavior Community has, or one that announces an absent Business capability
-// (sessionDecoys names a set key at boot); a behavior dropped here would leave a caller
+// (sessionDecoys names a set key at boot; routeGate answers 403 edition_required for a
+// capability placed above Community); a behavior dropped here would leave a caller
 // with a nil it never handled.
 func TestCommunityEditionIsTheZeroValuePlusItsBehaviors(t *testing.T) {
 	want := []string{"name", "seatPolicy", "upstreamCredentialProvider", "durableBus",
-		"moduleRegistrars", "circuitBreakerDeclarations", "sessionDecoys"}
+		"moduleRegistrars", "circuitBreakerDeclarations", "sessionDecoys", "routeGate"}
 	ports := reflect.ValueOf(editionPortsForBuild())
 	var filled []string
 	for i := range ports.NumField() {

@@ -2,14 +2,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
+import { ADMIN_READS } from '@/features/navigation/admin-reads.fixture'
 import type { LiveDTO } from './types'
 
-const featureViews = vi.hoisted(() => [{ id: 'accessMap', hideInNav: true }])
+const featureViews = vi.hoisted(() => [
+  {
+    id: 'accessMap',
+    path: '/access-map',
+    permission: 'accessmap:graph:read',
+    hideInNav: true,
+  },
+  // Money is told only where the Usage place opens for the person.
+  {
+    id: 'usage',
+    hideInNav: false,
+    path: '/usage',
+    permission: 'sessions:account:read',
+  },
+])
 vi.mock('@/features/registry', () => ({ FEATURE_VIEWS: featureViews }))
 
 const perms = new Set<string>()
@@ -27,12 +42,25 @@ vi.mock('@tanstack/react-router', () => ({
   useRouter: () => undefined,
 }))
 
+// Every subscription the card asks for, so a test can read its filter and send a frame.
+interface StreamAsk {
+  enabled?: boolean
+  query?: Record<string, string>
+  onSnapshot: (snap: LiveDTO) => void
+}
+const streams = vi.hoisted(() => [] as StreamAsk[])
 vi.mock('@/features/shared', async () => {
   const actual =
     await vi.importActual<typeof import('@/features/shared')>(
       '@/features/shared',
     )
-  return { ...actual, useLiveStream: () => ({ status: 'open' }) }
+  return {
+    ...actual,
+    useLiveStream: (ask: StreamAsk) => {
+      streams.push(ask)
+      return { status: 'open' }
+    },
+  }
 })
 
 vi.mock('@/features/agentops/live-console', () => ({
@@ -200,12 +228,26 @@ describe('SessionCard — offered routes', () => {
     ).toHaveAttribute('href', '/inventory')
   })
 
-  it('offers the access map when the edition view is available', async () => {
+  it('offers the access map to an administrator when the edition view is available', async () => {
     featureViews[0]!.hideInNav = false
+    for (const p of ADMIN_READS) perms.add(p)
     renderCard({ sessionRef: 'sess-ours' })
     expect(
       await screen.findByRole('link', { name: 'Access map' }),
     ).toHaveAttribute('href', '/access-map')
+  })
+
+  it("offers an editor no access map: its read is the administrator's", async () => {
+    // The card's own reads and none of the administrator's: an editor, for this door.
+    featureViews[0]!.hideInNav = false
+    renderCard({ sessionRef: 'sess-ours' })
+    expect(await screen.findByText('Launched')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Access map' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Discovered resources' }),
+    ).toHaveAttribute('href', '/inventory')
   })
 })
 
@@ -397,6 +439,29 @@ describe('SessionCard — provenance comes from the engine', () => {
     ).not.toMatch(/font-mono/)
   })
 
+  it('names an unnamed, untitled run by its tool and folder, with no short reference', async () => {
+    const ref = '0190abcd-1234-7abc-8def-0123456789ab'
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [
+        run,
+        {
+          ...run,
+          run_ref: ref,
+          name: '',
+          provider_driver: 'claude',
+          workspace_path: '/srv/work/app',
+        },
+      ],
+      has_more: false,
+    })
+    renderCard({ sessionRef: 'sess-ours' })
+    const line = await screen.findByRole('button', {
+      name: /^Claude Code · app/,
+    })
+    expect(line).not.toHaveTextContent('Untitled session')
+    expect(line).not.toHaveTextContent('0190abcd')
+  })
+
   it('resolves the observed half from a run when opened from the operate side', async () => {
     renderCard({ runRef: 'run-1' })
     await waitFor(() =>
@@ -410,7 +475,9 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     perms.add('sessions:run:write')
     renderCard({ sessionRef: 'sess-ours' })
     expect(await screen.findByText('Full control')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'End session' }),
+    ).toBeInTheDocument()
   })
 
   it('says LIFECYCLE ONLY for a relayed run, and why its I/O cannot be shown', async () => {
@@ -435,7 +502,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     renderCard({ sessionRef: 'sess-found' })
     expect(await screen.findByText('Observe only')).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Stop' }),
+      screen.queryByRole('button', { name: 'End session' }),
     ).not.toBeInTheDocument()
     // …and it explains that this is the PLANE's limit, not the caller's.
     expect(
@@ -449,7 +516,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     renderCard({ sessionRef: 'sess-ours' })
     expect(await screen.findByText('Full control')).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Stop' }),
+      screen.queryByRole('button', { name: 'End session' }),
     ).not.toBeInTheDocument()
     expect(
       screen.getAllByText(/your role does not include it/i).length,
@@ -481,9 +548,26 @@ describe('SessionCard — control is what can be done, not what fits', () => {
   })
 
   it('shows the observed telemetry the two screens never showed together', async () => {
+    // The person may open Usage: the cost is theirs to read.
+    perms.add('sessions:account:read')
     renderCard({ sessionRef: 'sess-ours' })
     expect(await screen.findByText('$0.042')).toBeInTheDocument()
     expect(screen.getByText('timeline')).toBeInTheDocument()
+  })
+
+  it('shows a member the observed telemetry and no cost', async () => {
+    // A member sees no money, only the limits of their own accounts.
+    renderCard({ sessionRef: 'sess-ours' })
+    const input = await screen.findByText('Input tokens')
+    expect(input.closest('div')).toHaveTextContent('1,200')
+    expect(screen.getByText('Output tokens').closest('div')).toHaveTextContent(
+      '800',
+    )
+    expect(document.querySelector('[data-elapsed]')).not.toBeNull()
+    expect(screen.getByText('timeline')).toBeInTheDocument()
+    expect(screen.queryByText('Cost')).toBeNull()
+    expect(document.querySelector('[data-cost]')).toBeNull()
+    expect(screen.queryByText('$0.042')).toBeNull()
   })
 
   it('says nothing was observed when the engine ANSWERS 404', async () => {
@@ -516,10 +600,10 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     perms.add('sessions:run:write')
     renderCard({ sessionRef: 'sess-ours' })
 
-    await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    await user.click(await screen.findByRole('button', { name: 'End session' }))
     // Stop asks first, as the person's setting says by default.
     await user.click(
-      await screen.findByRole('button', { name: 'Stop the session' }),
+      await screen.findByRole('button', { name: 'End the session' }),
     )
 
     // The fence argument is now always passed: none for a run with no work stamp
@@ -545,10 +629,10 @@ describe('SessionCard — control is what can be done, not what fits', () => {
       work_lease_state: 'ended',
     })
     const view = renderCard({ sessionRef: 'sess-ours' })
-    await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    await user.click(await screen.findByRole('button', { name: 'End session' }))
     // Stop asks first, as the person's setting says by default.
     await user.click(
-      await screen.findByRole('button', { name: 'Stop the session' }),
+      await screen.findByRole('button', { name: 'End the session' }),
     )
     await waitFor(() => expect(agentOpsApi.stop).toHaveBeenCalledTimes(1))
     expect(vi.mocked(agentOpsApi.stop).mock.calls[0]).toEqual([
@@ -563,10 +647,10 @@ describe('SessionCard — control is what can be done, not what fits', () => {
       work_lease_state: 'active',
     })
     renderCard({ sessionRef: 'sess-ours' })
-    await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    await user.click(await screen.findByRole('button', { name: 'End session' }))
     // Stop asks first, as the person's setting says by default.
     await user.click(
-      await screen.findByRole('button', { name: 'Stop the session' }),
+      await screen.findByRole('button', { name: 'End the session' }),
     )
     await waitFor(() =>
       expect(agentOpsApi.stop).toHaveBeenCalledWith('run-1', 7),
@@ -813,6 +897,29 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
     })
   })
 
+  it('opened from a profiled run whose row is not proven yet, listens by run_ref and reads the run on its frame', async () => {
+    // A fresh session: the run is open before the tool has said its id, so it has no
+    // live_ref. The approval frame must reach the page now, not after the next poll.
+    vi.mocked(agentOpsApi.getRun).mockResolvedValue({
+      ...profiledRun,
+      live_ref: undefined,
+    })
+    renderCard({ runRef: 'run-a' })
+    await waitFor(() =>
+      expect(streams.at(-1)).toMatchObject({
+        enabled: true,
+        query: { run_ref: 'run-a' },
+      }),
+    )
+    const reads = vi.mocked(agentOpsApi.getRun).mock.calls.length
+    act(() => streams.at(-1)!.onSnapshot(managedLive))
+    await waitFor(() =>
+      expect(vi.mocked(agentOpsApi.getRun).mock.calls.length).toBeGreaterThan(
+        reads,
+      ),
+    )
+  })
+
   it('says DISCOVERED for an observed row that copies a run id: no process is proven for it', async () => {
     vi.mocked(sessionsApi.liveById).mockResolvedValue(observedLive)
     vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
@@ -871,6 +978,31 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
     expect(onNavigate).toHaveBeenCalledWith({ liveRef: 'lr-observed-a' })
   })
 
+  it('tells a related row its cost only where Usage opens, and the rest of it to anyone', async () => {
+    vi.mocked(sessionsApi.liveById).mockResolvedValue(managedLive)
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [profiledRun],
+      has_more: false,
+    })
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [managedLive, observedLive],
+      has_more: false,
+    })
+    perms.add('sessions:account:read')
+    const { unmount } = renderCard({ liveRef: 'lr-managed-a' })
+    const related = await screen.findByTestId('related-observations')
+    expect(within(related).getByText('$0.042')).toBeInTheDocument()
+    unmount()
+    // A member sees no money, only the limits of their own accounts.
+    perms.delete('sessions:account:read')
+    renderCard({ liveRef: 'lr-managed-a' })
+    const member = await screen.findByTestId('related-observations')
+    expect(member).not.toHaveTextContent('$')
+    expect(within(member).getAllByRole('listitem')).toHaveLength(1)
+    expect(within(member).getByText('psb_1')).toBeInTheDocument()
+    expect(member).toHaveTextContent('77 / 11')
+  })
+
   it('a profiled run whose id is not proven yet has no observed half — and borrows none', async () => {
     vi.mocked(agentOpsApi.getRun).mockResolvedValue({
       ...profiledRun,
@@ -907,6 +1039,8 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
   })
 
   it('extrapolates elapsed seconds only while active, from its last event', async () => {
+    // The person may open Usage: the cost is theirs to read.
+    perms.add('sessions:account:read')
     vi.mocked(sessionsApi.liveOne).mockResolvedValue({
       ...live,
       last_event_at: new Date(Date.now() - 61_000).toISOString(),

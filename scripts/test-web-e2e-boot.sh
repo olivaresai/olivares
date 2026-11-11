@@ -6,8 +6,9 @@
 # test-web-e2e-boot.sh — battery for scripts/lib/engine-boot.sh.
 #
 # It sources the SUBJECT ITSELF and drives it with fake engines: a stranger already on the
-# port, a binary that dies on start, one that never answers, one healthy but tokenless, and
-# one that works. No pnpm, no web bundle, no Go build, no real engine — which is the whole
+# port, a binary that dies on start, one that never answers, one healthy but tokenless, one
+# whose token line arrives after /healthz answers, and one that works; and it runs
+# console-first-use.sh twice at once on stand-ins. No pnpm, no web bundle, no Go build, no real engine — which is the whole
 # point, because inline in web-e2e.sh these paths could not be reached in under ten minutes
 # and so were never reached at all.
 #
@@ -125,11 +126,28 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(s): s.send_response(200); s.end_headers(); s.wfile.write(b'ok')
     def log_message(s,*a): pass
 http.server.HTTPServer(('127.0.0.1', int('\${port}')), H).serve_forever()" ;;
+late)     exec python3 -c "
+import http.server,sys,threading
+def token(): print('one-time setup token: olst_TESTTOKEN42', flush=True)
+class H(http.server.BaseHTTPRequestHandler):
+    told = False
+    def do_GET(s):
+        s.send_response(200); s.end_headers(); s.wfile.write(b'ok')
+        if not H.told: H.told = True; threading.Timer(1, token).start()
+    def log_message(s,*a): pass
+http.server.HTTPServer(('127.0.0.1', int('\${port}')), H).serve_forever()" ;;
 good)     echo "one-time setup token: olst_TESTTOKEN42"
           exec python3 -c "
 import http.server,sys
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(s): s.send_response(200); s.end_headers(); s.wfile.write(b'ok')
+    def log_message(s,*a): pass
+http.server.HTTPServer(('127.0.0.1', int('\${port}')), H).serve_forever()" ;;
+own)      token="olst_OWN\$\$"; echo "one-time setup token: \${token}"
+          exec python3 -c "
+import http.server,sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(s): s.send_response(200); s.end_headers(); s.wfile.write(b'\${token}')
     def log_message(s,*a): pass
 http.server.HTTPServer(('127.0.0.1', int('\${port}')), H).serve_forever()" ;;
 esac
@@ -347,6 +365,23 @@ check "a real token problem still says so"        1 "could not read the one-time
 check "and now that message can be trusted"       1 "The engine IS ours and IS healthy"       "${rc}" "${out}"
 while read -r p _rest; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done <"$PF"
 
+# --- 5b. the token line arrives after /healthz answers ---------------------------------
+# A /healthz answer does not mean the token line is in the log yet: on CI the port answered
+# while our engine's log still held no setup banner, and one read of the log at that moment
+# reported "a real token problem" for an engine that had not printed its token yet. This
+# stand-in writes its token line one second after it first answers /healthz.
+P=$((BASE_PORT + 12))
+fake_engine "${WORK}/bin-late" late
+PF="${WORK}/pids.$RANDOM"; : >"$PF"
+out="$(boot_engine_at "${WORK}/bin-late" "${P}" "${WORK}/d5b" "$PF" 2>&1)"
+rc=$?
+if [ "${rc}" = "0" ] && [ "${out}" = "olst_TESTTOKEN42" ]; then
+	ok "the token line arrives after /healthz answers, and the helper waits for it"
+else
+	no "the token line arrives after /healthz answers, and the helper gave up" "rc=${rc} out=[${out}]"
+fi
+while read -r p _rest; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done <"$PF"
+
 # --- 6. the happy path, because a gate tested in one direction is half a gate ----------
 P=$((BASE_PORT + 10))
 fake_engine "${WORK}/bin-ok" good
@@ -387,6 +422,40 @@ else
 	no "the recorded identity is missing or wrong" "got '${recorded_start}', /proc says '$(engine_proc_starttime "${recorded_pid}")'"
 fi
 while read -r p _rest; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done <"$PF"
+
+# --- 7. two runs of console-first-use.sh on one runner never share a port ---------------
+# The CI job ran on one fixed port, so two runs on one runner met there: one run's
+# pre-flight refused the other's engine, or its engine died on bind. This runs the real
+# script twice at the same moment. Each stand-in engine answers /healthz with its own
+# token; the stand-in pnpm records the base URL it was handed and who answers it.
+fake_engine "${WORK}/bin-own" own
+mkdir -p "${WORK}/pw"
+cat >"${WORK}/pw/pnpm" <<'EOF'
+#!/usr/bin/env bash
+# a stand-in for `pnpm exec playwright test`: who answers the URL this run was handed?
+printf '%s %s %s\n' "${PLAYWRIGHT_BASE_URL}" "${PLAYWRIGHT_SETUP_TOKEN}" \
+	"$(curl -sf "${PLAYWRIGHT_BASE_URL}/healthz")" >>"${FIRST_USE_SEEN}"
+sleep 2 # the journey's run: the other run boots while this engine holds its port
+EOF
+chmod +x "${WORK}/pw/pnpm"
+SEEN="${WORK}/first-use-seen.txt"; : >"${SEEN}"
+RUNS=()
+for run in a b; do
+	env -u E2E_PORT FIRST_USE_SEEN="${SEEN}" OLIVARES_BIN="${WORK}/bin-own" PATH="${WORK}/pw:${PATH}" \
+		bash "${ROOT}/scripts/console-first-use.sh" >"${WORK}/first-use-${run}.log" 2>&1 &
+	RUNS+=($!)
+	KIDS+=($!)
+done
+rcs=""
+for p in "${RUNS[@]}"; do wait "${p}"; rcs="${rcs}$? "; done
+urls="$(awk '{print $1}' "${SEEN}" | sort -u | wc -l)"
+theirs="$(awk '$2 != $3' "${SEEN}" | wc -l)"
+if [ "${rcs}" = "0 0 " ] && [ "$(wc -l <"${SEEN}")" = "2" ] && [ "${urls}" = "2" ] && [ "${theirs}" = "0" ]; then
+	ok "two runs of console-first-use.sh at once take two ports, each answered by its own engine"
+else
+	no "two runs of console-first-use.sh at once collide on a port" \
+		"rc=[${rcs}] seen=[$(tr '\n' '|' <"${SEEN}")] $(grep -h -m1 -E 'ERROR' "${WORK}"/first-use-*.log)"
+fi
 
 echo
 echo "engine-boot battery: ${PASS} passed, ${FAIL} failed"

@@ -163,6 +163,8 @@ export function HealthView() {
   // sustituía por la acusación. Se separa el aseguramiento ANTES de derivar el rol.
   const stepUp = error instanceof ApiError && error.isStepUpRequired
   const forbidden = !stepUp && error instanceof ApiError && error.isForbidden
+  // Refused by edition, the summary leaves as for a role: the edition line in its place.
+  const byEdition = error instanceof ApiError && error.isEditionRefusal
 
   const onPickSubject = (s: StatusDTO) => {
     setSelected(s)
@@ -226,6 +228,8 @@ export function HealthView() {
           title={t('forbidden.title')}
           description={t('forbidden.description')}
         />
+      ) : byEdition ? (
+        <QueryErrorState error={error} />
       ) : (
         <>
           {/* Stat tiles */}

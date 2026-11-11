@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -50,6 +51,10 @@ type worktreeDiffFile struct {
 	Path string `json:"path"`
 	// Status is added, modified or deleted, from the base to the branch tip.
 	Status string `json:"status"`
+	// Added and Removed are the lines git counts for the file between the two trees;
+	// both are absent for a binary file.
+	Added   *int `json:"added,omitempty"`
+	Removed *int `json:"removed,omitempty"`
 }
 
 type runWorktreeDiffDTO struct {
@@ -59,6 +64,10 @@ type runWorktreeDiffDTO struct {
 	Base  string             `json:"base"`
 	Head  string             `json:"head"`
 	Files []worktreeDiffFile `json:"files"`
+	// WorkingTree is true for a session that works in its Git folder itself, with no
+	// worktree of its own: Base is the folder's HEAD, Head is empty and the files are
+	// what the working tree changed against HEAD, untracked files included.
+	WorkingTree bool `json:"working_tree,omitempty"`
 	// Truncated is true when the branch changed more paths than are listed.
 	Truncated bool `json:"truncated"`
 }
@@ -90,6 +99,11 @@ func (c worktreeCompare) inScope(p string) bool {
 	return underAllowedSubpath(c.ws.rootReal, c.ws.allowSubpaths, filepath.Join(c.ws.rootReal, filepath.FromSlash(p)))
 }
 
+// errNoOwnWorktree is the answer for a session with no worktree of its own, which the
+// diff routes then answer from its Git folder (folderDiff); a session that does not run
+// Git natively keeps it.
+var errNoOwnWorktree = &runErr{http.StatusNotFound, "this session has no worktree of its own to compare"}
+
 func (m *Module) worktreeDiffRange(ctx context.Context, tenant model.TenantID, runRef string) (worktreeCompare, error) {
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
@@ -97,7 +111,7 @@ func (m *Module) worktreeDiffRange(ctx context.Context, tenant model.TenantID, r
 	}
 	branch := rec.String(colRunWorktreeBranch)
 	if branch == "" {
-		return worktreeCompare{}, &runErr{http.StatusNotFound, "this session has no worktree of its own to compare"}
+		return worktreeCompare{}, errNoOwnWorktree
 	}
 	ws, err := m.resolveWorkspace(ctx, tenant, rec.String(colWorkspaceRef))
 	if err != nil {
@@ -147,6 +161,15 @@ func worktreeStatusWord(letter string) string {
 // the workspace's current commit. Nothing is executed in the session's folder.
 func (m *Module) handleRunWorktreeDiff(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	cmp, err := m.worktreeDiffRange(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	if errors.Is(err, errNoOwnWorktree) {
+		dto, ferr := m.folderDiff(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+		if ferr != nil {
+			writeRunErr(w, ferr)
+			return
+		}
+		writeJSON(w, http.StatusOK, dto)
+		return
+	}
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -162,7 +185,61 @@ func (m *Module) handleRunWorktreeDiff(w http.ResponseWriter, r *http.Request, m
 	}
 	dto := runWorktreeDiffDTO{Branch: cmp.branch, Base: cmp.base, Head: cmp.head}
 	dto.Files, dto.Truncated = worktreeDiffFiles(out, cmp.inScope)
+	if err := worktreeLineCounts(r.Context(), cmp.repo(), cmp.base, cmp.head, dto.Files); err != nil {
+		writeRunErr(w, conflictErr("git could not count the changed lines of branch "+cmp.branch+": "+err.Error()))
+		return
+	}
 	writeJSON(w, http.StatusOK, dto)
+}
+
+// worktreeLineCounts sets on files, by path, the lines `diff-tree --numstat` counts
+// between the trees a and b: added TAB removed TAB path NUL, repeated, with - for both
+// counts of a binary file, which keeps neither.
+//
+// ponytail: numstat output past the cap of gitRun is cut, and the files whose record
+// was cut keep no counts, as a binary file does. Upgrade trigger: a listing that counts
+// fewer files than it lists; then read numstat for the listed paths only.
+func worktreeLineCounts(ctx context.Context, repo, a, b string, files []worktreeDiffFile) error {
+	if len(files) == 0 {
+		return nil
+	}
+	out, err := gitOK(ctx, repo, "diff-tree", "-r", "-z", "--numstat", "--no-renames", a, b)
+	if err != nil {
+		return err
+	}
+	return applyLineCounts(out, files)
+}
+
+// applyLineCounts sets the counts git's `--numstat -z` output gives on files, by path.
+func applyLineCounts(out string, files []worktreeDiffFile) error {
+	records := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+	if len(out) >= worktreeGitOutputLimit {
+		records = records[:len(records)-1]
+	}
+	type count struct{ added, removed int }
+	counts := make(map[string]count, len(records))
+	for _, rec := range records {
+		added, rest, ok1 := strings.Cut(rec, "\t")
+		removed, file, ok2 := strings.Cut(rest, "\t")
+		if !ok1 || !ok2 {
+			return errors.New("git printed a line count it does not document: " + strconv.Quote(rec))
+		}
+		if added == "-" && removed == "-" {
+			continue
+		}
+		na, errA := strconv.Atoi(added)
+		nr, errR := strconv.Atoi(removed)
+		if errA != nil || errR != nil || na < 0 || nr < 0 {
+			return errors.New("git printed a line count it does not document: " + strconv.Quote(rec))
+		}
+		counts[file] = count{na, nr}
+	}
+	for i := range files {
+		if c, ok := counts[files[i].Path]; ok {
+			files[i].Added, files[i].Removed = &c.added, &c.removed
+		}
+	}
+	return nil
 }
 
 // worktreeDiffFiles reads what `diff-tree -r -z --name-status` printed: status NUL path
@@ -265,6 +342,15 @@ func (m *Module) handleRunWorktreeDiffFile(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	cmp, err := m.worktreeDiffRange(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	if errors.Is(err, errNoOwnWorktree) {
+		dto, ferr := m.folderDiffFile(r.Context(), mc, chi.URLParam(r, "ref"), file)
+		if ferr != nil {
+			writeRunErr(w, ferr)
+			return
+		}
+		writeJSON(w, http.StatusOK, dto)
+		return
+	}
 	if err != nil {
 		writeRunErr(w, err)
 		return

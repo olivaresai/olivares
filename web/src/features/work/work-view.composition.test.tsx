@@ -5,10 +5,16 @@ import { act } from 'react'
 import { renderIntel, screen, waitFor, within } from '@/test/intel'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { formatDateTime } from '@/lib/format'
+
+const DUE = '2026-11-20T09:00:00Z'
+const ENDED = '2026-11-18T16:30:00Z'
 
 const api = vi.hoisted(() => ({
   listWorkItems: vi.fn(),
   getWorkItem: vi.fn(),
+  listDependencies: vi.fn(),
+  listWorkEvents: vi.fn(),
 }))
 const comms = vi.hoisted(() => ({ offerHandoff: vi.fn() }))
 // The offer host is real; only the transport under it is replaced, so this file
@@ -205,6 +211,102 @@ describe('WorkView composition — the handoff offer entry', () => {
     expect(within(offer).getByText('user:admin')).toBeVisible()
   })
 
+  it("an item's empty tabs say what will be listed there", async () => {
+    const none = { items: [], has_more: false }
+    api.listDependencies.mockResolvedValue(none)
+    api.listWorkEvents.mockResolvedValue(none)
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    const sheet = await screen.findByRole('dialog')
+    const said = {
+      Acceptance: 'The checks that say this item is done are listed here',
+      Dependencies: 'Work items this one waits on are listed here',
+      Events: 'Each change to this item is recorded here',
+    }
+    for (const [tab, line] of Object.entries(said)) {
+      await user.click(within(sheet).getByRole('tab', { name: tab }))
+      expect(
+        await within(sheet).findByText(new RegExp(`^${line}`)),
+      ).toBeVisible()
+    }
+  })
+
+  it('says what an item waits on and when it is due', async () => {
+    const waiting = { ...item, dependency_blocked: true, due_at: DUE }
+    api.getWorkItem.mockResolvedValue({
+      snapshot: { item: waiting, acceptance: [], dependencies: [] },
+      etag: '"v3"',
+    })
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    const sheet = await screen.findByRole('dialog')
+    expect(await within(sheet).findByText('Waits on')).toBeVisible()
+    expect(
+      within(sheet).getByText('Work items it depends on that are not done yet'),
+    ).toBeVisible()
+    const due = within(sheet).getByText('Due')
+    expect(due.nextElementSibling).toHaveTextContent(formatDateTime(DUE))
+    expect(within(sheet).queryByText('Ended')).toBeNull()
+  })
+
+  it('says when an item that is done ended', async () => {
+    const done = {
+      ...item,
+      status: 'completed' as const,
+      due_at: DUE,
+      terminal_at: ENDED,
+    }
+    api.getWorkItem.mockResolvedValue({
+      snapshot: { item: done, acceptance: [], dependencies: [] },
+      etag: '"v3"',
+    })
+    const user = userEvent.setup()
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    const sheet = await screen.findByRole('dialog')
+    const ended = await within(sheet).findByText('Ended')
+    expect(ended.nextElementSibling).toHaveTextContent(formatDateTime(ENDED))
+    expect(within(sheet).queryByText('Waits on')).toBeNull()
+    expect(within(sheet).queryByText('Due')).toBeNull()
+  })
+
+  it('offers Fail to a person who may change the item, and Archive only to admin with it', async () => {
+    // Fail's route is the transitions route (sessions:work:write); the engine
+    // then admits admin or the item's owner, and says no to anyone else.
+    auth.can = (p: string) => p === 'sessions:work:write'
+    const user = userEvent.setup()
+    const { unmount } = renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    expect(await screen.findByRole('button', { name: 'Fail' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+    expect(screen.getByText('Your role cannot archive items.')).toBeVisible()
+    unmount()
+
+    // Admin alone never reaches the route, which asks for write first.
+    auth.can = (p: string) => p === 'sessions:work:admin'
+    renderIntel(<WorkView />)
+    await user.click(
+      await screen.findByRole('button', { name: /composition work item/i }),
+    )
+    await screen.findByRole('dialog')
+    expect(
+      await screen.findByText(/Your role cannot change this item/),
+    ).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Fail' })).toBeNull()
+  })
+
   it('the offer action is INDEPENDENT of the WorkItem transition permission', async () => {
     // A principal who may send on a channel but may NOT transition work.
     auth.can = (p: string) => p === 'sessions:message-send:write'
@@ -214,14 +316,16 @@ describe('WorkView composition — the handoff offer entry', () => {
       await screen.findByRole('button', { name: /composition work item/i }),
     )
     await screen.findByRole('dialog')
-    expect(screen.getByRole('button', { name: 'Mark ready' })).toBeDisabled()
-    expect(screen.getByText(/Your role cannot change this item/)).toBeVisible()
     expect(
       await screen.findByRole('button', { name: 'Offer handoff' }),
     ).toBeEnabled()
+    // A verb the person may not use is absent, not offered and refused.
+    for (const name of ['Mark ready', 'Complete', 'Fail', 'Archive'])
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    expect(screen.getByText(/Your role cannot change this item/)).toBeVisible()
   })
 
-  it('without message-send:write the offer entry is disabled with the reason, while the transitions remain', async () => {
+  it('without message-send:write the offer entry is absent with the reason, while the transitions remain', async () => {
     auth.can = (p: string) => p !== 'sessions:message-send:write'
     const user = userEvent.setup()
     renderIntel(<WorkView />)
@@ -229,14 +333,12 @@ describe('WorkView composition — the handoff offer entry', () => {
       await screen.findByRole('button', { name: /composition work item/i }),
     )
     await screen.findByRole('dialog')
-    expect(
-      await screen.findByRole('button', { name: 'Offer handoff' }),
-    ).toBeDisabled()
-    expect(screen.getByText(/Your role cannot offer a handoff/)).toBeVisible()
     // POSITIVE CONTROL: the neighbouring work permission is untouched.
     expect(
       await screen.findByRole('button', { name: 'Mark ready' }),
     ).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Offer handoff' })).toBeNull()
+    expect(screen.getByText(/Your role cannot offer a handoff/)).toBeVisible()
   })
 
   it('reopening the SAME item is a NEW editor action: the host reads again rather than reusing the previous draft', async () => {

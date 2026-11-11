@@ -35,17 +35,46 @@ import './i18n'
 /** While the agent works the list follows it; a finished session does not change. */
 const WORKING_REFRESH_MS = 5_000
 
-interface RewindRequest {
+export interface RewindRequest {
   seq: number
   to: 'start' | 'end'
   /** The message to offer again; absent for an undo, and when only part of it is kept. */
   prompt?: string
 }
 
+/**
+ * The folder put back as it was before a turn (`start`) or as the rewind found it (`end`):
+ * one privileged act, and what the folder holds is read again afterwards. Only the Turns
+ * list's Rewind and Undo go through it: "Edit from here" puts no folder back, its new
+ * session starts from a message's files in a worktree of its own.
+ */
+export function useRewindRun(
+  run: RunDTO,
+  onDone: (done: RunRewindDTO, request: RewindRequest) => void,
+) {
+  const { t } = useTranslation('sessions')
+  const { activeTenant } = useAuth()
+  const boundary = useAuthBoundary()
+  return usePrivilegedMutation<RewindRequest, RunRewindDTO>({
+    mutationFn: ({ seq, to }, authority) =>
+      agentOpsApi.rewindRun(run.run_ref, seq, to, authority),
+    // What the folder holds changed, so the files and the Git status read it again.
+    invalidateKeys: [
+      agentOpsKeys.runCheckpoints(activeTenant, run.run_ref),
+      agentOpsKeys.runChanges(activeTenant, run.run_ref),
+      agentOpsKeys.runGit(activeTenant, boundary.epoch, run.run_ref),
+    ],
+    successMessage: (done) =>
+      t(done.to === 'start' ? 'checkpoints.rewound' : 'checkpoints.undone', {
+        n: done.files.length,
+      }),
+    onDone,
+  })
+}
+
 export function TurnCheckpoints({ run }: { run: RunDTO }) {
   const { t } = useTranslation('sessions')
   const { activeTenant, principal, can } = useAuth()
-  const boundary = useAuthBoundary()
   const canWrite = can('sessions:run:write')
   const working = run.state === 'running' || run.state === 'idle'
   const [target, setTarget] = useState<RunCheckpointDTO | null>(null)
@@ -61,28 +90,14 @@ export function TurnCheckpoints({ run }: { run: RunDTO }) {
   const turns = checkpoints.data?.available ? checkpoints.data.turns : []
   const newest = turns.at(-1)?.seq
   const draftKey = sessionDraftKey(activeTenant, principal, run.run_ref)
-  const rewind = usePrivilegedMutation<RewindRequest, RunRewindDTO>({
-    mutationFn: ({ seq, to }, authority) =>
-      agentOpsApi.rewindRun(run.run_ref, seq, to, authority),
-    // What the folder holds changed, so the files and the Git status read it again.
-    invalidateKeys: [
-      key,
-      agentOpsKeys.runChanges(activeTenant, run.run_ref),
-      agentOpsKeys.runGit(activeTenant, boundary.epoch, run.run_ref),
-    ],
-    successMessage: (done) =>
-      t(done.to === 'start' ? 'checkpoints.rewound' : 'checkpoints.undone', {
-        n: done.files.length,
-      }),
-    onDone: (_done, { to, prompt }) => {
-      setTarget(null)
-      setUndoSeq(to === 'start' ? (newest ?? null) : null)
-      // The message goes after what the person already typed, as a quote does.
-      if (to === 'start' && prompt) {
-        const draft = readSessionDraft(draftKey)
-        writeSessionDraft(draftKey, draft ? `${draft}\n\n${prompt}` : prompt)
-      }
-    },
+  const rewind = useRewindRun(run, (_done, { to, prompt }) => {
+    setTarget(null)
+    setUndoSeq(to === 'start' ? (newest ?? null) : null)
+    // The message goes after what the person already typed, as a quote does.
+    if (to === 'start' && prompt) {
+      const draft = readSessionDraft(draftKey)
+      writeSessionDraft(draftKey, draft ? `${draft}\n\n${prompt}` : prompt)
+    }
   })
 
   if (turns.length === 0) return null

@@ -14,6 +14,11 @@
 //   · the communication plane is no module a switch turns on: only the sentence.
 import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  STATE_ACTIONS,
+  STATE_SENTENCE,
+  STATE_TITLE,
+} from '@/components/ui/empty-state'
 import { viewDescription, viewLabel } from '@/features/navigation/model'
 import type { FeatureView } from '@/features/registry'
 import { useAuth } from '@/lib/auth/context'
@@ -46,27 +51,28 @@ export function ModuleOffPage({
       data-slot="module-not-enabled"
       className="flex min-h-[60vh] items-center justify-center"
     >
-      <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+      <div className="flex max-w-[480px] flex-col items-center gap-2 px-6 text-center">
         {Icon ? (
-          <Icon aria-hidden strokeWidth={1.5} className="size-8 text-text-3" />
+          // The view's icon, as a state page draws it: 72 px, quiet, a 2.6 px stroke.
+          <Icon
+            aria-hidden
+            strokeWidth={0.875}
+            className="mb-[18px] size-18 shrink-0 text-text-3"
+          />
         ) : null}
-        <h1 className={cn('text-title text-text', titleHidden && 'sr-only')}>
+        <h1 className={cn(STATE_TITLE, titleHidden && 'sr-only')}>
           {viewLabel(t, view.id)}
         </h1>
-        <p className="text-body text-text-2">{description}</p>
-        <div className="mt-2 flex flex-col items-center gap-2">
+        <p className={STATE_SENTENCE}>{description}</p>
+        <div className={cn(STATE_ACTIONS, 'flex-col')}>
           {module === 'communication' || !module ? (
-            <p className="text-body text-text-2">
-              {t('settings:modules.notSetUp')}
-            </p>
+            <p className={STATE_SENTENCE}>{t('settings:modules.notSetUp')}</p>
           ) : isSuperadmin ? (
             <Suspense fallback={null}>
               <TurnOnPage module={module} />
             </Suspense>
           ) : (
-            <p className="text-body text-text-2">
-              {t('settings:modules.askAdmin')}
-            </p>
+            <p className={STATE_SENTENCE}>{t('settings:modules.askAdmin')}</p>
           )}
         </div>
       </div>

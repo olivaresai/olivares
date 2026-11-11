@@ -34,6 +34,7 @@
       "class": "Class",
       "name": "Name",
       "version": "Version",
+      "fingerprint": "Fingerprint",
       "provenance": "Provenance",
       "posture": "Recorded scan result",
       "issues": "Issues",

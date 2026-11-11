@@ -1,9 +1,26 @@
 {
   "edition": {
     "viewPolicy": "查看策略",
-    "editingRequiresBusiness": "编辑自定义策略、角色和授权需要 Business。",
+    "editingRequiresBusiness": "编辑自定义策略、角色和授权需要 Olivares AI Business。",
     "disablePolicy": "禁用策略",
-    "disablePolicyDescription": "编写的策略将停止生效。其历史记录和其他正在执行的策略将保留。"
+    "disablePolicyDescription": "编写的策略将停止生效。其历史记录和其他正在执行的策略将保留。",
+    "note": {
+      "line": "{{capability}} 属于 {{edition}}。请在<0>设置 > 版本</0>中添加许可证，或访问 <1>olivares.ai/pricing</1>。",
+      "lineUnnamed": "此功能属于 {{edition}}。请在<0>设置 > 版本</0>中添加许可证，或访问 <1>olivares.ai/pricing</1>。",
+      "lineAsk": "{{capability}} 属于 {{edition}}。请联系管理员。",
+      "lineUnnamedAsk": "此功能属于 {{edition}}。请联系管理员。",
+      "readsBelow": "已保存的数据仍可读取和导出。",
+      "tag": "属于 {{edition}}"
+    },
+    "capabilities": {
+      "skills": "技能",
+      "sso": "单点登录",
+      "approvalTiers": "更改操作的风险等级或审批数量",
+      "evals": "评估",
+      "eventing": "Webhook",
+      "notify": "告警",
+      "claude-policy": "托管策略"
+    }
   },
   "errors": {
     "generic": "出现错误"
@@ -101,25 +118,18 @@
     "noTargetReason": "需要一个可在其中运行的组织。",
     "noTargetHelp": "请选择组织，然后重试。",
     "goTo": "前往",
-    "recentSessions": "最近的会话",
+    "recentSessions": "会话",
     "settingsGroup": "设置",
     "scope": "在 {{name}} 中",
     "footerMove": "移动",
     "footerOpen": "打开",
+    "footerClose": "关闭",
     "footerCommands": "仅命令",
     "objectActions": "针对 {{name}}",
     "footerPeople": "人员",
     "footerSessions": "会话",
     "peopleHint": "请输入姓名。",
     "ask": "询问 Olivares…"
-  },
-  "hintBar": {
-    "move": "移动",
-    "open": "打开",
-    "approve": "批准",
-    "deny": "拒绝",
-    "launcher": "启动栏",
-    "command": "命令"
   },
   "permissionWords": {
     "read": "读取权限",
@@ -218,6 +228,7 @@
   "notifications": {
     "title": "最近活动",
     "empty": "没有最近的活动。",
+    "auditOnly": "最近活动仅向可以读取审计账本的人显示。",
     "viewAll": "在审计账本中查看全部",
     "events": {
       "auditCheckpoint": "已创建审计检查点",
@@ -275,6 +286,8 @@
       "policyUpdated_you": "您更新了策略",
       "policyDeleted_you": "您删除了策略"
     },
+    "unread": "未读",
+    "markAllRead": "全部标为已读",
     "actors": {
       "you": "你",
       "member": "一名成员",
@@ -302,6 +315,15 @@
     "showHelp": "显示此帮助"
   },
   "keys": {
+    "refused": {
+      "unknownRow": "此命令没有可更改的按键。",
+      "notAChord": "请按一个键，可单独按下，也可与 {{mod}}、Alt 或 Shift 组合。",
+      "needsModifier": "请按住 {{mod}} 或 Alt 再按该键：在这里，单个按键可能会在输入时触发，或决定一个请求。",
+      "needsAltOrShift": "请按住 Alt，或 {{mod}} 和 Shift，再按该键：输入时也会按到 {{keys}}，在这里它会决定一个请求。",
+      "taken": "{{keys}} 已用于“{{command}}”。请选择其他按键，或先更改那个命令。",
+      "leader": "按 {{keys}} 再按一个字母会打开“前往”中的页面。请选择其他按键。",
+      "tooLarge": "已保存的设置已满。请重置一个已更改的按键，或移除一个已添加的脚本，然后重试。"
+    },
     "group": {
       "general": "通用",
       "launcher": "启动会话",
@@ -323,15 +345,19 @@
       "launcher": {
         "focus": "跳到启动栏",
         "start": "启动会话",
-        "startBackground": "启动并留在此处"
+        "startBackground": "启动并留在此处",
+        "stash": "暂存草稿，或恢复暂存的草稿"
       },
       "surface": {
         "openBeside": "在旁边打开",
         "closeBeside": "关闭旁边的会话",
         "focusBeside": "在会话之间移动焦点",
+        "nextSession": "打开下一个会话",
+        "previousSession": "打开上一个会话",
         "nextPane": "下一个面板",
         "previousPane": "上一个面板",
         "approve": "批准对话中的请求一次",
+        "cite": "将所选文字引用到输入框",
         "terminal": "终端",
         "changes": "变更",
         "preview": "预览",
@@ -372,6 +398,20 @@
       },
       "ask": {
         "open": "询问 Olivares"
+      },
+      "shell.sidebar": "切换侧边栏",
+      "shell.panel": "切换侧面板",
+      "terminal": {
+        "new": "新建终端",
+        "close": "关闭终端",
+        "previous": "上一个终端",
+        "next": "下一个终端",
+        "search": "在终端中搜索",
+        "links": "打开屏幕上的链接",
+        "copy": "复制所选内容",
+        "selectAll": "选择全部输出",
+        "scrollTop": "滚动到顶部",
+        "scrollBottom": "滚动到末尾"
       }
     },
     "when": {
@@ -379,10 +419,13 @@
       "outsideList": "不在列表中",
       "launcherFocused": "在启动输入框中",
       "workSurface": "在会话页面",
+      "sourceDiff": "在源差异中",
       "sessionHistory": "有上一个会话时",
       "paletteRecent": "在查询为空的命令面板结果中",
       "approvalQueue": "在审批队列中",
-      "accessMap": "在访问映射中"
+      "accessMap": "在访问映射中",
+      "terminalFocused": "在终端中",
+      "replySelection": "在回复中选中文字时"
     },
     "precedence": "当两行使用相同按键时，以最后一条适用的为准。",
     "problems_other": "有 {{count}} 个按键绑定无法读取，不会生效：{{commands}}"
@@ -436,6 +479,7 @@
     "copy": {
       "message": "复制消息",
       "code": "复制代码",
+      "detail": "复制详情",
       "copied": "已复制",
       "failed": "无法复制。请选中文本后复制。",
       "value": "复制 {{value}}"

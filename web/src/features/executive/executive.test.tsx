@@ -166,3 +166,33 @@ it('does not fetch Business compliance assessments in Community', async () => {
   expect(screen.queryByText('Compliance')).not.toBeInTheDocument()
   expect(summary).not.toHaveBeenCalled()
 })
+
+it('describes the overview without money, in words true with the read or without it', async () => {
+  auth.value = { activeTenant: 't1', can: () => false }
+  const { ExecutiveView } = await import('./executive-view')
+  const empty = renderIntel(<ExecutiveView />)
+  expect(screen.getByText('No executive KPIs available')).toBeInTheDocument()
+  expect(document.body).not.toHaveTextContent(/\$|cost|spend/i)
+  empty.unmount()
+
+  panels.complianceView = () => null
+  auth.value = {
+    activeTenant: 't1',
+    can: (p) => p === 'compliance:framework:read',
+  }
+  const { complianceApi } = await import('@/features/compliance/api')
+  vi.spyOn(complianceApi, 'summary').mockResolvedValue(complianceSummary)
+  vi.spyOn(complianceApi, 'risk').mockResolvedValue(complianceRiskFixture)
+  renderIntel(<ExecutiveView />)
+  expect(
+    await screen.findAllByText(
+      'Usage, risk and compliance at a glance — drill down to the operational view for the detail.',
+    ),
+  ).not.toHaveLength(0)
+  expect(
+    screen.getAllByText(
+      'Risk, compliance and reliability reflect the current state; the range applies to figures over time.',
+    ),
+  ).not.toHaveLength(0)
+  expect(screen.queryByText(/^Cost range$/)).toBeNull()
+})

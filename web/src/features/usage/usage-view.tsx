@@ -2,17 +2,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// USAGE & COST, ONE CLICK FROM THE SIDEBAR: each account's share of the week and of
+// USAGE & COST, ONE CLICK FROM THE SIDEBAR: what the runs of a chosen window used, by
+// tool and by profile (spend-section.tsx), then each account's share of the week and of
 // five hours, the account nearest its limit first, its row opening every window its tool
 // reports with when each resets (the one place window names are shown), then what today's
-// sessions used. Both are reads the console already makes (the account list AI tools
-// shows, and Now's recent sessions, on the same cache keys), so this page never says a
-// number AI tools or Now does not. A read this principal may not make is not made, and a
-// figure nobody reported is left out, never shown as 0. The Timeline tab holds the last-hour
-// lanes that were on Now.
+// sessions used. Each is a read the console already makes (the runs' totals Models › Usage
+// shows, the account list AI tools shows, and Now's recent sessions, on the same cache
+// keys), so this page never says a number another page does not. A tool or profile chosen
+// narrows the spend and the limits alike. A read this principal may not make is not made,
+// a figure nobody reported is left out, never shown as 0, and money, and the word for it,
+// show only to a person Usage opens for. The Timeline tab holds the last-hour lanes that
+// were on Now.
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useBackgroundProviders } from '@/features/agent-tools/use-background-providers'
@@ -29,6 +34,7 @@ import { onSwimlane, WINDOW_MS } from '@/features/home/swimlane-model'
 import { useRecentSessions } from '@/features/home/use-recent-sessions'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { viewById } from '@/features/navigation/model'
+import { useUsagePath } from '@/features/sessions/session-meter'
 import { useAuth } from '@/lib/auth/context'
 import { formatMicroUsd, formatTokens } from '@/lib/format'
 import { useTabParam } from '@/lib/hooks/use-tab-param'
@@ -38,12 +44,11 @@ import {
   defaultLoginRows,
   type UsageRow,
 } from './accounts'
+import { SpendSection, type SpendFilter } from './spend-section'
 import './i18n'
 
 const ROW =
   'flex min-w-0 items-center gap-3 border-t border-line py-3 first:border-t-0'
-const LINK =
-  'inline-flex h-8 shrink-0 items-center rounded-ctl border border-line px-3 text-caption font-medium text-text outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus'
 
 /** The tabs of Usage: the accounts and today (the lead), then the last hour (`?tab=timeline`). */
 const USAGE_TABS = ['accounts', 'timeline'] as const
@@ -55,16 +60,27 @@ export function UsageView() {
   const [tab, setTab] = useTabParam(
     canSessions ? USAGE_TABS : USAGE_TABS.slice(0, 1),
   )
+  const [filter, setFilter] = useState<SpendFilter>({
+    tool: null,
+    profile: null,
+  })
+  // Money follows the capability: the one question the Sessions page asks.
+  const money = useUsagePath() !== null
   const accounts = (
     <>
-      <Accounts />
-      <Today />
+      <SpendSection money={money} filter={filter} onFilter={setFilter} />
+      <Accounts filter={filter} />
+      <Today money={money} />
     </>
   )
   return (
     <div className="flex flex-col gap-6">
       {/* The top bar already says Usage; the place's lead page does not say it twice. */}
-      <PageHeader title={t('title')} titleHidden description={t('subtitle')} />
+      <PageHeader
+        title={t('title')}
+        titleHidden
+        description={t(money ? 'subtitle' : 'subtitleNoCost')}
+      />
       {canSessions ? (
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
@@ -125,7 +141,7 @@ function Timeline() {
   )
 }
 
-function Accounts() {
+function Accounts({ filter }: { filter: SpendFilter }) {
   const { t } = useTranslation('usage')
   const { can } = useAuth()
   const accounts = useProfileList()
@@ -136,10 +152,16 @@ function Accounts() {
   if (!can('sessions:account:read')) return null
   const tools = viewById('agent-tools')
   const details = tools && listed(tools) ? tools.path : null
-  const rows = accountsNearestLimit([
+  // A tool or profile chosen above narrows the limits too.
+  const chosen = (a: UsageRow) =>
+    (!filter.tool || a.driver === filter.tool) &&
+    (!filter.profile || a.account_ref === filter.profile)
+  const all = [
     ...defaultLoginRows(providers.data?.providers ?? []),
     ...(accounts.data?.accounts ?? []),
-  ])
+  ]
+  const rows = accountsNearestLimit(all.filter(chosen))
+  const narrowed = !!(filter.tool || filter.profile)
   return (
     <section aria-labelledby="usage-accounts" className="flex flex-col gap-2">
       <h2 id="usage-accounts" className="text-body font-semibold">
@@ -154,7 +176,9 @@ function Accounts() {
           {t('accounts.error')}
         </p>
       ) : rows.length === 0 ? (
-        <p className="text-caption text-text-2">{t('accounts.empty')}</p>
+        <p className="text-caption text-text-2">
+          {t(narrowed ? 'accounts.emptyChosen' : 'accounts.empty')}
+        </p>
       ) : (
         <ul className="flex flex-col">
           {rows.map((row) => (
@@ -199,21 +223,26 @@ function AccountRow({
           />
         </summary>
         <UsageWindows usage={account.usage} className="mt-2" />
+        {/* One trailing control per row, the chevron that opens it; the way to
+            the account's tool waits inside. */}
+        {details ? (
+          <div className="mt-2">
+            <Button asChild variant="secondary" size="sm">
+              <Link
+                to={details as never}
+                aria-label={t('accounts.detailsFor', { account: name })}
+              >
+                {t('accounts.details')}
+              </Link>
+            </Button>
+          </div>
+        ) : null}
       </details>
-      {details ? (
-        <Link
-          to={details as never}
-          className={LINK}
-          aria-label={t('accounts.detailsFor', { account: name })}
-        >
-          {t('accounts.details')}
-        </Link>
-      ) : null}
     </li>
   )
 }
 
-function Today() {
+function Today({ money }: { money: boolean }) {
   const { t } = useTranslation('usage')
   const {
     canSessions,
@@ -249,7 +278,7 @@ function Today() {
           output: formatTokens(today.outputTokens),
         }),
       )
-    if (today.unpriced === 0 && today.costMicroUsd != null)
+    if (money && today.unpriced === 0 && today.costMicroUsd != null)
       facts.push(formatMicroUsd(today.costMicroUsd))
   }
   return (
@@ -275,9 +304,11 @@ function Today() {
             ) : null}
           </div>
           {sessionsView && listed(sessionsView) ? (
-            <Link to={sessionsView.path as never} className={LINK}>
-              {t('today.viewSessions')}
-            </Link>
+            <Button asChild variant="secondary" size="sm">
+              <Link to={sessionsView.path as never}>
+                {t('today.viewSessions')}
+              </Link>
+            </Button>
           ) : null}
         </div>
       )}

@@ -1,6 +1,6 @@
 {
   "title": "Sprache & Echtzeit",
-  "description": "Gesteuerte Sprach- und Echtzeit-Sitzungen über den gesamten Bestand. Die Konsole zeigt ausschließlich Referenzen und Aggregate — niemals Audio, Transkriptionstext, Prompts oder PII.",
+  "description": "Sprachsitzungen und die Richtlinien, die ihr Öffnen erlauben.",
   "tabs": {
     "sessions": "Sitzungen",
     "policies": "Richtlinien",

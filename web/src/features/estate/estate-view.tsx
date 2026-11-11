@@ -1,11 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import {
+  Folder,
+  Layers,
+  ListChecks,
+  type LucideIcon,
+  Plug,
+  Server,
+  Shapes,
+  Shield,
+  SquareTerminal,
+} from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AppLink } from '@/components/ui/app-link'
 import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { QueryErrorState } from '@/components/layout/query-error-state'
+import { BoxedList, BoxedListRow } from '@/components/ui/boxed-list'
+import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
+import { StateBlock } from '@/components/ui/state-block'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/field'
@@ -16,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { sameContext, useCapabilityPreflight } from '@/lib/auth/capabilities'
 import { moduleEnabled, moduleOn, useModulesStore } from '@/stores/modules'
@@ -48,6 +64,25 @@ const permissions: Record<EstateFamily, string> = {
 
 // Radix gives no item an empty value, so "all" is this stand-in; the filter state stays ''.
 const ALL = '__all__'
+
+const FAMILY_ICON: Record<EstateFamily, LucideIcon> = {
+  workspace: Layers,
+  folder: Folder,
+  session: SquareTerminal,
+  work: ListChecks,
+  connector: Plug,
+  mcp: Server,
+  policy: Shield,
+}
+
+/** Where a resource sits, by the names already read; never a raw reference. */
+function placeOf(node: EstateNode, nodes: EstateNode[]): string {
+  const named = (kind: EstateFamily, ref?: string) =>
+    ref ? nodes.find((n) => n.kind === kind && n.ref === ref)?.label : undefined
+  return [named('folder', node.folderRef), named('workspace', node.workspaceId)]
+    .filter(Boolean)
+    .join(' · ')
+}
 
 export default function EstateView() {
   const auth = useAuth()
@@ -168,6 +203,11 @@ function EstateContent({
         .includes(search.toLocaleLowerCase()),
   )
   const busy = queries.some((query) => query.isFetching)
+  const allFailed = queries.length > 0 && queries.every((query) => query.error)
+  // The owner pages help only a read that failed, not a refused one.
+  const refused = queries.some(
+    ({ error }) => error instanceof ApiError && error.isForbidden,
+  )
   const refresh = () => {
     for (const query of queries) void query.refetch()
   }
@@ -230,7 +270,6 @@ function EstateContent({
         primaryAction={
           canStartSession && (
             <Button
-              variant="primary"
               onClick={(event) => {
                 offered.current = true
                 useNewSessionDialog
@@ -298,101 +337,185 @@ function EstateContent({
       {workspace && canReadContents && (
         <WorkspaceContents tenant={tenant} workspaceId={workspace} />
       )}
-      {busy && <p role="status">{t('loading')}</p>}
-      {queries.map((query, index) =>
-        query.error || query.data?.hasMore || cursors[families[index]!] ? (
-          <div
-            key={families[index]}
-            role={query.error ? 'alert' : 'status'}
-            className="flex flex-wrap items-center gap-2 text-caption text-text-2"
-          >
-            <span>
-              {t('kinds.' + families[index])}
-              {query.error
-                ? `: ${t('unavailable')}`
-                : query.data?.hasMore
-                  ? `: ${t('more', { count: query.data.nodes.length })}`
-                  : ''}
-            </span>
-            {!query.error &&
-              query.data?.hasMore &&
-              query.data.cursor &&
-              query.data.cursor !== cursors[families[index]!] && (
-                <Button
-                  size="sm"
-                  disabled={query.isFetching}
-                  onClick={() => {
-                    setSelected(null)
-                    setCursors((before) => ({
-                      ...before,
-                      [families[index]!]: query.data!.cursor,
-                    }))
-                  }}
-                >
-                  {t('nextPage')}
-                </Button>
-              )}
-            {cursors[families[index]!] && (
-              <Button
-                size="sm"
-                onClick={() => {
-                  setSelected(null)
-                  setCursors((before) => ({
-                    ...before,
-                    [families[index]!]: undefined,
-                  }))
-                }}
-              >
-                {t('firstPage')}
-              </Button>
-            )}
-            {ownerFamilies.includes(families[index]!) && (
-              <Button asChild size="sm">
-                <AppLink href={estateOwnerPaths[families[index]!]}>
-                  {t('openOwner', {
-                    resource: t('kinds.' + families[index]),
-                  })}
-                </AppLink>
-              </Button>
-            )}
-          </div>
-        ) : null,
+      {busy && nodes.length > 0 && (
+        <p role="status" className="sr-only">
+          {t('loading')}
+        </p>
       )}
-      <ul
-        className="divide-y divide-line rounded-panel border border-line"
-        aria-busy={busy}
-      >
-        {visible.map((node) => (
-          <li key={estateNodeKey(tenant, node)}>
-            <button
-              onClick={(event) => {
-                opener.current = event.currentTarget
-                setSelected(node)
-              }}
-              className="flex min-h-14 w-full items-center gap-4 px-3 py-3 text-left outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block text-body font-medium break-words">
-                  {node.label}
-                </span>
-                <span className="block text-caption text-text-2">
-                  {t('kinds.' + node.kind)}
-                </span>
-              </span>
-              <span className="shrink-0 text-caption text-text-2">
-                <EstateStatus node={node} />
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {!busy &&
-        queries.some((query) => query.isSuccess) &&
-        visible.length === 0 && (
-          <p role="status" className="text-body text-text-2">
-            {t('empty')}
-          </p>
-        )}
+      {allFailed ? (
+        <>
+          <QueryErrorState error={queries[0]?.error} retry={refresh} />
+          {!refused && (
+            <div className="flex flex-wrap gap-2">
+              {ownerFamilies.map((family) => (
+                <Button key={family} asChild size="sm">
+                  <AppLink href={estateOwnerPaths[family]}>
+                    {t('openOwner', { resource: t('kinds.' + family) })}
+                  </AppLink>
+                </Button>
+              ))}
+            </div>
+          )}
+        </>
+      ) : busy && nodes.length === 0 ? (
+        <StateBlock state="loading" label={t('loading')} />
+      ) : nodes.length === 0 && queries.every((query) => query.isSuccess) ? (
+        <EmptyState
+          icon={<Shapes />}
+          title={t('noResources.title')}
+          description={t('noResources.description')}
+        />
+      ) : nodes.length > 0 && visible.length === 0 ? (
+        <StateBlock
+          state="filtered"
+          title={t('empty')}
+          filters={[
+            search,
+            nodes.find((n) => n.kind === 'workspace' && n.ref === workspace)
+              ?.label,
+            kind && t('kinds.' + kind),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          hiddenCount={nodes.length}
+          onClear={() => {
+            setSearch('')
+            setWorkspace('')
+            setKind('')
+          }}
+        />
+      ) : (
+        <div
+          className="grid items-start gap-x-4 gap-y-6 lg:grid-cols-2"
+          aria-busy={busy}
+        >
+          {families.map((family, index) => {
+            if (kind && kind !== family) return null
+            const query = queries[index]!
+            const rows = visible.filter((node) => node.kind === family)
+            const note = query.error || query.data?.hasMore || cursors[family]
+            if (rows.length === 0 && !note) return null
+            const Icon = FAMILY_ICON[family]
+            const heading = `estate-group-${family}`
+            return (
+              <section
+                key={family}
+                aria-labelledby={heading}
+                className="min-w-0 space-y-2"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2
+                    id={heading}
+                    className="text-body font-semibold text-text"
+                  >
+                    {t('groups.' + family)}
+                  </h2>
+                  {!query.error && (
+                    <span className="text-caption text-text-2 tabular-nums">
+                      {rows.length}
+                    </span>
+                  )}
+                </div>
+                {query.error && (
+                  <QueryErrorState
+                    error={query.error}
+                    description={t('unavailable')}
+                    retry={() => void query.refetch()}
+                  />
+                )}
+                {note ? (
+                  <div
+                    role="status"
+                    className="flex flex-wrap items-center gap-2 text-caption text-text-2"
+                  >
+                    <span>
+                      {!query.error && query.data?.hasMore
+                        ? t('more', { count: query.data.nodes.length })
+                        : ''}
+                    </span>
+                    {!query.error &&
+                      query.data?.hasMore &&
+                      query.data.cursor &&
+                      query.data.cursor !== cursors[family] && (
+                        <Button
+                          size="sm"
+                          disabled={query.isFetching}
+                          onClick={() => {
+                            setSelected(null)
+                            setCursors((before) => ({
+                              ...before,
+                              [family]: query.data!.cursor,
+                            }))
+                          }}
+                        >
+                          {t('nextPage')}
+                        </Button>
+                      )}
+                    {cursors[family] && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelected(null)
+                          setCursors((before) => ({
+                            ...before,
+                            [family]: undefined,
+                          }))
+                        }}
+                      >
+                        {t('firstPage')}
+                      </Button>
+                    )}
+                    {ownerFamilies.includes(family) && (
+                      <Button asChild size="sm">
+                        <AppLink href={estateOwnerPaths[family]}>
+                          {t('openOwner', {
+                            resource: t('kinds.' + family),
+                          })}
+                        </AppLink>
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
+                {rows.length > 0 && (
+                  <BoxedList role="list">
+                    {rows.map((node) => (
+                      <BoxedListRow
+                        key={estateNodeKey(tenant, node)}
+                        role="listitem"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="flex size-8 shrink-0 items-center justify-center rounded-ctl bg-hover text-text-2 [&_svg]:size-4"
+                        >
+                          <Icon />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              opener.current = event.currentTarget
+                              setSelected(node)
+                            }}
+                            className="flex w-full items-center rounded-sm text-start text-body font-medium break-words text-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus max-md:min-h-11"
+                          >
+                            {node.label}
+                          </button>
+                          <span className="block truncate text-caption text-text-2">
+                            {placeOf(node, nodes) || t('kinds.' + node.kind)}
+                          </span>
+                        </span>
+                        <span className="shrink-0">
+                          <EstateStatus node={node} />
+                        </span>
+                      </BoxedListRow>
+                    ))}
+                  </BoxedList>
+                )}
+              </section>
+            )
+          })}
+        </div>
+      )}
       {inspected && (
         <EstateInspector
           key={estateNodeKey(tenant, inspected)}

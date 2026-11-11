@@ -186,7 +186,7 @@ export function AuthorityLink({
       target="_blank"
       rel="noreferrer noopener"
       className={cn(
-        'font-mono text-caption text-accent-text underline-offset-2 hover:underline break-all',
+        'font-mono text-caption text-foreground underline underline-offset-2 break-all',
         className,
       )}
     >

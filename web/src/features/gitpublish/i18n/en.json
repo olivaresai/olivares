@@ -95,7 +95,8 @@
     "title": "Publish",
     "hint": "Push this session’s commit through the publication target of its workspace. The engine fetches the commit from the session’s folder.",
     "publish": "Publish",
-    "publishTo": "Publish to {{prefix}}"
+    "publishTo": "Publish to {{prefix}}",
+    "targetName": "{{repository}}, under {{prefix}}"
   },
   "fields": {
     "ref": "Branch ref",
@@ -178,6 +179,7 @@
     "link_not_allowed": "The pull request link must point to a pull request of the approved repository.",
     "host_credential_refused": "The Git host refused the binding’s credential or its scope. Nothing was dispatched.",
     "host_unavailable": "The Git host could not be reached. Nothing was dispatched.",
+    "identity_mismatch": "This change may be published only with the credential binding it was prepared for, and this target uses another. Nothing was dispatched.",
     "intent_settled": "The intent is already settled, so it cannot be abandoned.",
     "invalid_request": "The request is incomplete or malformed. Check the branch names and commit IDs.",
     "lookup_incomplete": "The host’s current state could not be read completely, so nothing was dispatched.",
@@ -191,6 +193,8 @@
     "repository_outside_binding": "The repository is outside the owners the credential binding allows.",
     "runtime_credential_refused": "A session’s runtime credential cannot publish. Act with your own credential.",
     "scoped_grant_required": "This action needs a scoped grant on this target.",
+    "secret_detected": "The commit contains what looks like a credential, so nothing was sent. Remove it from the commit, then make the request again.",
+    "secret_scan_unavailable": "The commit could not be checked for credentials, so nothing was published.",
     "separation_of_duty": "You launched the session that authored this change. Ask another person to review and merge it.",
     "session_source_refused": "The session run is not in this target’s workspace, or its folder is not a repository the engine can fetch from.",
     "session_source_unavailable": "The session’s folder could not be read in time. Nothing was pushed.",
@@ -200,6 +204,7 @@
     "target_changed": "The target changed after the request was admitted. Nothing was dispatched.",
     "target_in_use": "A dispatching, uncertain or abandoned intent still holds this target.",
     "unresolved_intent": "An unresolved intent already holds this branch, pull request or merge.",
+    "unknown_effect": "The intent records an action this version of the engine does not know, so it cannot be reconciled.",
     "unsupported_requirement": "The host cannot honour this requirement, for example a rebase merge on GitLab.",
     "version_conflict": "The target changed since you opened it. Reopen it to see the current version.",
     "workflow_change_refused": "The commit changes CI workflow files, which this target refuses to publish.",
@@ -215,6 +220,38 @@
     "title": "Intents",
     "empty": "No publication intents are recorded for this target.",
     "open": "Open intent {{id}}"
+  },
+  "publications": {
+    "title": "Publications",
+    "description": "What Olivares AI published on these targets, and what waits for approval, newest first. A pull request’s state is what Olivares AI saw; its link shows it today.",
+    "show": "Show",
+    "all": "All",
+    "approval": "Approval",
+    "session": "Session",
+    "approved": "Approved",
+    "notAsked": "Not asked",
+    "approvedUnused": "Approved, not used",
+    "heldPush": "{{state}}: the push to {{target}}",
+    "heldPullRequest": "{{state}}: the pull request to {{target}}",
+    "cut": "Only the oldest {{n}} approvals were read. Approvals lists them all.",
+    "openSession": "Open the session",
+    "openSessionOf": "Open the session that published {{branch}} to {{target}}",
+    "aSession": "A session",
+    "empty": "Nothing was published here yet",
+    "emptyNext": "Publish from a session’s Changes panel, or from a target here.",
+    "readFailed": "What was published to {{target}} could not be read",
+    "heldReadFailed": "What waits for approval could not be read",
+    "heldHidden": "What waits for another person’s approval is listed for people who can read approvals."
+  },
+  "pullRequests": {
+    "title": "Pull requests",
+    "pullRequest": "Pull request",
+    "branch": "Branch",
+    "opened": "Opened",
+    "merged": "Merged",
+    "link": "#{{number}} {{title}}",
+    "empty": "No pull request was opened here yet",
+    "emptyNext": "Open one from a session’s Changes panel, or from a target here."
   },
   "intent": {
     "title": "Intent {{id}}",

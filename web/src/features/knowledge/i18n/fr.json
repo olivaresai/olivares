@@ -139,6 +139,7 @@
   },
   "query": {
     "title": "Récupération gouvernée",
+    "tryTitle": "Essayer une requête",
     "body": "Exécute une récupération gouvernée sur « {{name}} » au nom de l’agent indiqué. Les résultats sont filtrés selon l’habilitation, l’ACL et la résidence de cette identité, et cette requête est consignée dans la traçabilité (origine → réponse).",
     "queryLabel": "Requête",
     "queryHint": "La requête de récupération — elle est hachée pour la traçabilité, jamais stockée en texte.",

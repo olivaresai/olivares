@@ -183,12 +183,19 @@ describe('PeopleTab', () => {
     const user = userEvent.setup()
     wrap(<PeopleTab />)
 
+    // The dialog opens on an invitation; a password is one choice away.
+    await user.click(await screen.findByRole('button', { name: 'Invite' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByLabelText('How they sign in'))
     await user.click(
-      await screen.findByRole('button', { name: /onboard user/i }),
+      await screen.findByRole('option', { name: 'Set an initial password' }),
     )
-    await user.type(screen.getByLabelText(/email/i), 'new@acme.io')
-    await user.type(screen.getByLabelText(/initial password/i), 'newuserpass1')
-    await user.click(screen.getByRole('button', { name: /^onboard$/i }))
+    await user.type(within(dialog).getByLabelText(/^Email/), 'new@acme.io')
+    await user.type(
+      within(dialog).getByLabelText(/^Initial password/),
+      'newuserpass1',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Add person' }))
 
     await waitFor(() =>
       expect(api.onboard).toHaveBeenCalledWith(
@@ -614,7 +621,9 @@ describe('RolesTab', () => {
     })
     wrap(<RolesTab />)
     expect(await screen.findAllByText('auditor')).not.toHaveLength(0)
-    expect(screen.getByText(/editing.*requires business/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/editing.*requires Olivares AI Business\./i),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', {
         name: /new role|new grant|new permission-group|edit role/i,

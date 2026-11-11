@@ -20,7 +20,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
   healthy: 'ok',
   running: 'ok',
   working: 'ok',
-  'needs-you': 'warn',
+  'needs-you': 'need',
   ok: 'ok',
   enabled: 'ok',
   approved: 'ok',

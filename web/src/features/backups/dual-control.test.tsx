@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  QueryClient,
+  QueryClientProvider,
+  onlineManager,
+} from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
@@ -36,8 +40,9 @@ vi.mock('@/lib/hooks/use-privileged-mutation', () => ({
   }),
 }))
 
+import { ApiError } from '@/lib/api/errors'
 import { drKeys } from './api'
-import { BackupSchedule } from './backup-schedule'
+import { BackupProtectionStatus, BackupSchedule } from './backup-schedule'
 import { PendingRestores } from './pending-restores'
 
 function wrap(ui: ReactElement) {
@@ -374,5 +379,100 @@ describe('BackupSchedule dual-control toggle', () => {
     wrap(<BackupSchedule />)
     await screen.findByLabelText(/require dual-control for restore/i)
     expect(screen.queryByText(/removal requested/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('Backups: a read that failed', () => {
+  it('says the schedule could not be read and offers no form that would save over it', async () => {
+    api.getSchedule.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    const user = userEvent.setup()
+    wrap(<BackupSchedule />)
+
+    expect(
+      await screen.findByText('Could not load the backup schedule.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /save schedule/i })).toBeNull()
+    expect(screen.queryByText('Disabled')).toBeNull()
+    expect(screen.queryByLabelText(/offsite bucket/i)).toBeNull()
+    await user.click(screen.getByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(api.getSchedule).toHaveBeenCalledTimes(2))
+  })
+
+  it('draws no form while the first read waits for the network', async () => {
+    onlineManager.setOnline(false)
+    try {
+      api.getSchedule.mockResolvedValue({
+        enabled: true,
+        cron: '0 2 * * *',
+        retain_days: 30,
+      })
+      wrap(<BackupSchedule />)
+
+      expect(await screen.findByText('Loading schedule...')).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /save schedule/i }),
+      ).toBeNull()
+      expect(screen.queryByText('Disabled')).toBeNull()
+      expect(api.getSchedule).not.toHaveBeenCalled()
+    } finally {
+      onlineManager.setOnline(true)
+    }
+  })
+
+  it('keeps the real schedule, and saves it, when a refresh after a good read fails', async () => {
+    const saved = { enabled: true, cron: '0 2 * * *', retain_days: 30 }
+    api.getSchedule.mockResolvedValue(saved)
+    api.updateSchedule.mockResolvedValue(saved)
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <BackupSchedule />
+      </QueryClientProvider>,
+    )
+    const retain = await screen.findByLabelText(/retention/i)
+    api.getSchedule.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    await act(async () => {
+      await qc.refetchQueries({ queryKey: drKeys.schedule() })
+    })
+
+    expect(screen.getByLabelText(/cron expression/i)).toHaveValue('0 2 * * *')
+    await userEvent.clear(retain)
+    await userEvent.type(retain, '14')
+    await userEvent.click(
+      screen.getByRole('button', { name: /save schedule/i }),
+    )
+    await waitFor(() =>
+      expect(api.updateSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enabled: true,
+          cron: '0 2 * * *',
+          retain_days: 14,
+        }),
+      ),
+    )
+  })
+
+  it('says the protection status could not be read instead of showing nothing', async () => {
+    api.getSchedule.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    wrap(<BackupProtectionStatus />)
+
+    expect(
+      await screen.findByText('Could not load the backup schedule.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+  })
+
+  it('says the restores awaiting approval could not be read instead of hiding them', async () => {
+    api.listPendingRestores.mockRejectedValue(
+      new ApiError(500, 'internal', 'boom'),
+    )
+    wrap(<PendingRestores />)
+
+    expect(
+      await screen.findByText('Could not load the restores awaiting approval.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
   })
 })

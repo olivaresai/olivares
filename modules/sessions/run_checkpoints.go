@@ -25,6 +25,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -103,6 +104,10 @@ type runCheckpointsDTO struct {
 	Available bool               `json:"available"`
 	Reason    string             `json:"reason,omitempty"`
 	Turns     []runCheckpointDTO `json:"turns"`
+	// Files is what the folder differs by now from the start of the first turn: the whole
+	// session's changes, not the union of its turns'. Truncated as for a turn.
+	Files     []worktreeDiffFile `json:"files"`
+	Truncated bool               `json:"truncated"`
 }
 
 type runRewindRequest struct {
@@ -212,6 +217,9 @@ func checkpointDiff(ctx context.Context, repo, a, b string) ([]worktreeDiffFile,
 		return nil, false, err
 	}
 	files, truncated := worktreeDiffFiles(out, nil)
+	if err := worktreeLineCounts(ctx, repo, a, b, files); err != nil {
+		return nil, false, err
+	}
 	return files, truncated, nil
 }
 
@@ -379,7 +387,7 @@ func (m *Module) handleRunCheckpoints(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	folder := rec.String(colRunWorkspacePath)
-	out := runCheckpointsDTO{Turns: []runCheckpointDTO{}}
+	out := runCheckpointsDTO{Turns: []runCheckpointDTO{}, Files: []worktreeDiffFile{}}
 	if out.Reason, err = m.checkpointUnavailable(mc.Tenant, ref, folder); err != nil {
 		writeRunErr(w, err)
 		return
@@ -401,16 +409,26 @@ func (m *Module) handleRunCheckpoints(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's turns"))
 		return
 	}
+	if len(turns) == 0 {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	// The folder now: the open turn's end and the whole session's.
+	repo := filepath.Join(dir, checkpointRepoDir)
+	now, err := checkpointSnapshot(r.Context(), repo, folder)
+	if err == nil {
+		out.Files, out.Truncated, err = checkpointDiff(r.Context(), repo, turns[0].Start, now)
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's folder"))
+		return
+	}
 	for i, t := range turns {
 		dto := runCheckpointDTO{Seq: t.Seq, Prompt: t.Prompt, Clipped: t.Clipped, At: t.At, Files: t.Files, Truncated: t.Truncated}
 		if t.End == "" {
 			// The newest turn: its files are what the folder differs by now.
 			dto.Open = i == len(turns)-1
-			repo := filepath.Join(dir, checkpointRepoDir)
-			now, err := checkpointSnapshot(r.Context(), repo, folder)
-			if err == nil {
-				dto.Files, dto.Truncated, err = checkpointDiff(r.Context(), repo, t.Start, now)
-			}
+			dto.Files, dto.Truncated, err = checkpointDiff(r.Context(), repo, t.Start, now)
 			if err != nil {
 				writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's folder"))
 				return
@@ -631,4 +649,140 @@ func placeCheckpointFile(root *os.Root, staged, rel string) error {
 		return err
 	}
 	return dst.Close()
+}
+
+// readTurnFile reads a snapshot through the existing bounded blob reader. Only turn
+// numbers and sides are accepted, never a caller-supplied object id or repository.
+func (m *Module) readTurnFile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, run runDTO) {
+	seq, err := strconv.Atoi(r.URL.Query().Get("turn"))
+	side := r.URL.Query().Get("side")
+	file := r.URL.Query().Get("path")
+	if err != nil || seq < 1 || (side != "start" && side != "end" && side != "current") || !isRepoRelativePath(file) || r.URL.Query().Get("rev") != "" {
+		writeJSON(w, http.StatusBadRequest, errorBody("a positive turn, start, end or current side, and relative file path are required"))
+		return
+	}
+	ref := chi.URLParam(r, "ref")
+	dir, err := m.checkpointRunDir(mc.Tenant, ref)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorBody("turn checkpoints are unavailable"))
+		return
+	}
+	release, err := m.rt.lockRunContext(r.Context(), checkpointLockKey(mc.Tenant, ref))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	defer release()
+	turns, err := readCheckpointTurns(dir)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's turns"))
+		return
+	}
+	for _, turn := range turns {
+		if turn.Seq != seq {
+			continue
+		}
+		tree := turn.Start
+		repo := filepath.Join(dir, checkpointRepoDir)
+		if side != "start" {
+			tree = turn.End
+			if tree == "" || side == "current" {
+				tree, err = checkpointSnapshot(r.Context(), repo, run.WorkspacePath)
+			}
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's folder"))
+			return
+		}
+		text, _, binary, truncated, err := worktreeBlobAt(r.Context(), repo, tree, file, changesMaxFileSize)
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		// An absent side is empty: additions and deletions can still be compared.
+		writeJSON(w, http.StatusOK, runChangedFileDTO{Path: file, Size: int64(len(text)), Text: text, Binary: binary, Truncated: truncated})
+		return
+	}
+	writeJSON(w, http.StatusNotFound, errorBody("no such turn in this session"))
+}
+
+// RunCheckpointRef names one turn of a session: a fork starts with the files that turn found.
+type RunCheckpointRef struct {
+	Run  string `json:"run"`
+	Turn int    `json:"turn"`
+}
+
+// forkSource is where a fork's files come from: the source session's checkpoint directory and
+// the tree its folder held when the named turn began.
+type forkSource struct {
+	tenant   model.TenantID
+	run, dir string
+	tree     string
+}
+
+// forkCheckpoint resolves from_checkpoint before anything is made. The source must be the
+// caller's own session in the same folder, and the turn one it checkpointed; anything else
+// answers as a missing session does, so a fork tells nothing about another person's work.
+func (m *Module) forkCheckpoint(ctx context.Context, tenant model.TenantID, p CreateRunParams) (forkSource, error) {
+	from := *p.FromCheckpoint
+	rec, err := m.loadRun(ctx, tenant, from.Run)
+	if err != nil {
+		return forkSource{}, notFoundErr()
+	}
+	caller := auth.PersonRefFromActor(p.Actor).User
+	if id := p.queuedCredential.UserID; !id.IsZero() {
+		caller = id.String()
+	}
+	if caller == "" || runLauncher(rec).User != caller {
+		return forkSource{}, notFoundErr()
+	}
+	if rec.String(colWorkspaceRef) != p.WorkspaceRef {
+		return forkSource{}, worktreeRefusal("from_checkpoint names a session of another folder: fork it in its own folder")
+	}
+	dir, err := m.checkpointRunDir(tenant, from.Run)
+	if err != nil {
+		return forkSource{}, &codedRunErr{&runErr{http.StatusNotFound, "this session has no such turn"}, "checkpoint_not_found"}
+	}
+	turns, err := readCheckpointTurns(dir)
+	if err != nil {
+		return forkSource{}, err
+	}
+	i := slices.IndexFunc(turns, func(t checkpointTurn) bool { return t.Seq == from.Turn })
+	if i < 0 || !validGitObjectID(turns[i].Start) {
+		return forkSource{}, &codedRunErr{&runErr{http.StatusNotFound, "this session has no such turn"}, "checkpoint_not_found"}
+	}
+	// The turn is listed but its files must still be in the engine's repository.
+	if _, err := gitOK(ctx, dir, "--git-dir="+filepath.Join(dir, checkpointRepoDir), "cat-file", "-e", turns[i].Start+"^{tree}"); err != nil {
+		return forkSource{}, &codedRunErr{&runErr{http.StatusInternalServerError, "the files of that message are no longer kept"}, "checkpoint_files_gone"}
+	}
+	return forkSource{tenant: tenant, run: from.Run, dir: dir, tree: turns[i].Start}, nil
+}
+
+// placeForkCheckpoint makes folder, the fork's new worktree, hold what the source's folder held
+// when the turn began: the rewind of run_checkpoints.go aimed at another folder. The source's
+// checkpoint lock is held, since its repository's index is the cache both use.
+func (m *Module) placeForkCheckpoint(ctx context.Context, tenant model.TenantID, src forkSource, folder string) error {
+	release, err := m.rt.lockRunContext(ctx, checkpointLockKey(tenant, src.run))
+	if err != nil {
+		return err
+	}
+	defer release()
+	repo := filepath.Join(src.dir, checkpointRepoDir)
+	now, err := checkpointSnapshot(ctx, repo, folder)
+	if err == nil {
+		var files []worktreeDiffFile
+		var truncated bool
+		files, truncated, err = checkpointDiff(ctx, repo, now, src.tree)
+		switch {
+		case err != nil:
+		case truncated:
+			return &runErr{http.StatusUnprocessableEntity, "too many files differ to start a fork from this message"}
+		default:
+			err = restoreCheckpoint(ctx, src.dir, repo, folder, src.tree, files)
+		}
+	}
+	if err != nil {
+		return &runErr{http.StatusInternalServerError, "the fork could not take the files of that message: " + gitMessage(err.Error())}
+	}
+	return nil
 }

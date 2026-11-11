@@ -49,7 +49,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
+import {
+  reportEditionRefusal,
+  useFailedActionReporter,
+} from '@/lib/hooks/use-privileged-mutation'
 import {
   Select,
   SelectContent,
@@ -230,6 +233,7 @@ export function AgentCoreExportView() {
         report(err, () => applyRef.current?.(vars))
         return
       }
+      if (reportEditionRefusal(err)) return
       if (err instanceof ApiError && err.isForbidden) {
         // ⛔ A 403 ON THIS ROUTE IS USUALLY *NOT* "YOU LACK THE PERMISSION".
         // Found by the Codex contrast (C2.2). The export gate answers 403

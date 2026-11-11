@@ -59,8 +59,9 @@ launch.
   own run without it under Full, because Olivares confines them from outside.
 - **Tools other than Claude Code** take their approvals from Olivares. When one
   of them asks to do something, Olivares answers by the permission: a refusal
-  under Read only, a question to a person where the permission says to ask, and
-  otherwise the decision of your live policy. So a native `ask` in a cell, as for
+  under Read only, and under Edit files and run commands for anything that is
+  not a read, a file edit or a command; a question to a person where the
+  permission says to ask; and otherwise the decision of your live policy. So a native `ask` in a cell, as for
   Auto-accept edits or Full on Codex, does not mean you are asked: Olivares
   answers it.
 - **Codex's sandbox** is the one the table shows on a host where Codex can run

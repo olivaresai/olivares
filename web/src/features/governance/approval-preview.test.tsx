@@ -370,6 +370,28 @@ describe('Approvals: what will run, before Approve', () => {
     ).toBeInTheDocument()
   })
 
+  it('names a session with no name and no title by its tool and folder, never "Untitled session"', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [
+        {
+          run_ref: 'run-4',
+          provider_driver: 'claude',
+          workspace_path: '/srv/app',
+          workspace_ref: 'ws-1',
+          state: 'running',
+          pending_approval_ref: 'apr-1',
+        } as never,
+      ],
+      has_more: false,
+    })
+    serve([hookRequest])
+    wrap(<GovernanceView />)
+    expect(
+      await screen.findByText('Bash · Claude Code · app'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Untitled session/)).toBeNull()
+  })
+
   // #502: a launch held for its approval names it in approval_ref, not pending_approval_ref.
   it('the session and folder come from the launch held for this request', async () => {
     vi.mocked(sessionsApi.live).mockResolvedValue({
@@ -662,5 +684,113 @@ describe('the "does not include what will run" note', () => {
       await user.keyboard('{Escape}')
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     }
+  })
+})
+
+// The selected request says what the change touches, each file as a path, and
+// when the request lapses and what happens then, in words (CONCEPT §4.17).
+describe('the request says what it touches and when it lapses', () => {
+  const publication: ApprovalDTO = {
+    ...hookRequest,
+    id: 'apr-docs',
+    action: 'gitpublish.push',
+    subject_kind: 'gitpublish.target',
+    reason: 'Push the docs branch',
+    review: undefined,
+    change_class: 'docs_only',
+    change_paths: [
+      'README.md',
+      'docs/approvals.md',
+      'docs/es/a-folder-name-long-enough-to-be-cut/approvals.md',
+    ],
+  }
+  /** The value beside a label of the request's list. */
+  const valueOf = (label: string) =>
+    within(
+      screen.getByText(label, { selector: 'dt' }).parentElement as HTMLElement,
+    ).getByRole('definition')
+
+  beforeEach(() => {
+    vi.spyOn(consoleApi, 'listMembers').mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+  })
+
+  it('names the class of the change and each file it touches as a path', async () => {
+    wrap(<ApprovalPreview approval={publication} />)
+    const touches = valueOf('Touches')
+    expect(within(touches).getByText('Documentation only')).toBeVisible()
+    for (const path of publication.change_paths!) {
+      const value = within(touches).getByTitle(path)
+      expect(value.closest('[data-slot="path-text"]')).not.toBeNull()
+    }
+    await screen.findByText('Fix the build')
+  })
+
+  it('says a change to sensitive files is one', async () => {
+    wrap(
+      <ApprovalPreview
+        approval={{
+          ...publication,
+          change_class: 'sensitive',
+          change_paths: ['.github/workflows/release.yml'],
+        }}
+      />,
+    )
+    const touches = valueOf('Touches')
+    expect(within(touches).getByText('Sensitive files')).toBeVisible()
+    expect(
+      within(touches).getByTitle('.github/workflows/release.yml'),
+    ).toBeVisible()
+    await screen.findByText('Fix the build')
+  })
+
+  it('says nothing of what it touches where the engine recorded nothing', async () => {
+    wrap(<ApprovalPreview approval={hookRequest} />)
+    await screen.findByText('Fix the build')
+    expect(screen.queryByText('Touches')).toBeNull()
+  })
+
+  it('says when an open request lapses and that it then does not run', async () => {
+    const expiresAt = new Date(Date.now() + 58 * 60_000).toISOString()
+    wrap(
+      <ApprovalPreview approval={{ ...hookRequest, expires_at: expiresAt }} />,
+    )
+    const expires = valueOf('Expires')
+    expect(expires).toHaveTextContent(
+      /^in 5\d minutes; then nobody can approve it and it does not run\.$/,
+    )
+    expect(within(expires).getByText(/^in 5\d minutes$/)).toHaveAttribute(
+      'datetime',
+      expiresAt,
+    )
+    await screen.findByText('Fix the build')
+  })
+
+  it('says an open request has lapsed once its time is past, never what happens next', async () => {
+    const expiresAt = new Date(Date.now() - 60_000).toISOString()
+    wrap(
+      <ApprovalPreview approval={{ ...hookRequest, expires_at: expiresAt }} />,
+    )
+    expect(valueOf('Expires')).toHaveTextContent(
+      /^Lapsed 1 minute ago: nobody can approve it, and it does not run\.$/,
+    )
+    await screen.findByText('Fix the build')
+  })
+
+  it('says no expiry on a request that is no longer open, nor on one without a limit', async () => {
+    const expiresAt = new Date(Date.now() + 58 * 60_000).toISOString()
+    const { unmount } = wrap(
+      <ApprovalPreview
+        approval={{ ...hookRequest, status: 'approved', expires_at: expiresAt }}
+      />,
+    )
+    await screen.findByText('Fix the build')
+    expect(screen.queryByText('Expires')).toBeNull()
+    unmount()
+    wrap(<ApprovalPreview approval={hookRequest} />)
+    await screen.findByText('Fix the build')
+    expect(screen.queryByText('Expires')).toBeNull()
   })
 })

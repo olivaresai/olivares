@@ -92,7 +92,7 @@ func (m *Module) ResolveProviderCredential(ctx context.Context, tenant model.Ten
 		return nil, err
 	}
 	if rec.State != ProviderRecordActive {
-		return nil, ErrProviderRecordRevoked
+		return nil, providerRecordUnusable(rec.State)
 	}
 	if !rec.pinHolds(version) || service != modelprovider.ServiceDeepSeek || rec.Service != service ||
 		rec.Kind != ProviderKindOpenAICompatible || rec.BaseURL != modelprovider.DeepSeekBaseURL || endpoint != modelprovider.DeepSeekChatURL {

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -107,6 +108,34 @@ func listChanges(root *os.Root, since time.Time) ([]changedFile, bool, error) {
 	return files, truncated, nil
 }
 
+// runOutputsDTO is what a session made: blueprint API 9's outputs.
+type runOutputsDTO struct {
+	Files     []runOutput `json:"files"`
+	Truncated bool        `json:"truncated"`
+}
+
+// runOutput is one file a session made or changed, by its path in the folder.
+type runOutput struct {
+	Name       string `json:"name"`
+	Size       int64  `json:"size"`
+	ModifiedAt string `json:"modified_at"`
+}
+
+// documentCopyName is the name of the Markdown copy the engine writes beside a document it
+// converts for a message (convertDocumentMention): <source>.<rand.Text()>.md.
+var documentCopyName = regexp.MustCompile(`^(.+)\.[A-Z2-7]{26}\.md$`)
+
+// isDocumentCopy reports whether rel is such a copy: its name has that shape and its source
+// is a file beside it.
+func isDocumentCopy(root *os.Root, rel string) bool {
+	m := documentCopyName.FindStringSubmatch(path.Base(rel))
+	if m == nil {
+		return false
+	}
+	info, err := root.Lstat(path.Join(path.Dir(rel), m[1]))
+	return err == nil && info.Mode().IsRegular()
+}
+
 // readChangedFile returns one file of root as text, bounded.
 func readChangedFile(root *os.Root, rel string) (runChangedFileDTO, error) {
 	clean, err := cleanFolderPath(rel)
@@ -192,17 +221,8 @@ func (m *Module) handleRunChanges(w http.ResponseWriter, r *http.Request, mc api
 		return
 	}
 	defer root.Close()
-	since := dto.StartedAt
-	if since == "" {
-		since = dto.CreatedAt
-	}
-	start, perr := time.Parse(time.RFC3339, since)
-	if perr != nil {
-		start = time.Time{}
-	} else {
-		out.Since = since
-		start = start.Add(-changesSlack)
-	}
+	start, since := runChangesSince(dto)
+	out.Since = since
 	files, truncated, err := listChanges(root, start)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's folder"))
@@ -212,9 +232,52 @@ func (m *Module) handleRunChanges(w http.ResponseWriter, r *http.Request, mc api
 	writeJSON(w, http.StatusOK, out)
 }
 
+// runChangesSince is when the run's changes start: its start, or its creation, less the
+// slack; zero, with since empty, when neither can be read.
+func runChangesSince(dto runDTO) (start time.Time, since string) {
+	since = dto.StartedAt
+	if since == "" {
+		since = dto.CreatedAt
+	}
+	start, err := time.Parse(time.RFC3339, since)
+	if err != nil {
+		return time.Time{}, ""
+	}
+	return start.Add(-changesSlack), since
+}
+
+// handleRunOutputs lists the files the session made or changed in its folder since it started, each with its name, size and modification time, newest first, leaving out the Markdown copies the engine writes beside a document it converts for a message. Nothing is executed in the folder.
+func (m *Module) handleRunOutputs(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	dto, root, err := m.runRoot(r, mc)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	out := runOutputsDTO{Files: []runOutput{}}
+	if root == nil {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	defer root.Close()
+	start, _ := runChangesSince(dto)
+	files, truncated, err := listChanges(root, start)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorBody("could not read the session's folder"))
+		return
+	}
+	for _, f := range files {
+		if !isDocumentCopy(root, f.Path) {
+			out.Files = append(out.Files, runOutput{Name: f.Path, Size: f.Size, ModifiedAt: f.ModifiedAt})
+		}
+	}
+	out.Truncated = truncated
+	writeJSON(w, http.StatusOK, out)
+}
+
 // handleRunChangedFile returns the current text of one file in the run's folder, or with
 // rev=HEAD the text git HEAD holds for it (?path=, relative to the folder; at most 256 KiB;
 // 404 when the folder has no readable git history or HEAD has no such file).
+// With turn and side=start|end|current, reads that turn snapshot instead of the live file.
 func (m *Module) handleRunChangedFile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	read := readChangedFile
 	switch rev := r.URL.Query().Get("rev"); rev {
@@ -225,7 +288,7 @@ func (m *Module) handleRunChangedFile(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusBadRequest, errorBody("rev must be HEAD"))
 		return
 	}
-	_, root, err := m.runRoot(r, mc)
+	dto, root, err := m.runRoot(r, mc)
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -235,6 +298,10 @@ func (m *Module) handleRunChangedFile(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	defer root.Close()
+	if r.URL.Query().Has("turn") {
+		m.readTurnFile(w, r, mc, dto)
+		return
+	}
 	out, err := read(root, r.URL.Query().Get("path"))
 	switch {
 	case errors.Is(err, fs.ErrInvalid):

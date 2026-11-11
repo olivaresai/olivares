@@ -36,7 +36,9 @@
     "menu": "{{label}} 작업",
     "copyPassword": "{{label}}의 비밀번호 복사",
     "copyNote": "{{label}}의 메모 복사",
-    "copyCode": "{{label}}의 코드 복사"
+    "copyCode": "{{label}}의 코드 복사",
+    "changed": "변경",
+    "actions": "작업"
   },
   "delete": {
     "title": "{{label}}을(를) 삭제하시겠습니까?",

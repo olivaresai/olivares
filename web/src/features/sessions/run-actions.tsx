@@ -11,6 +11,7 @@ import {
   CirclePause,
   Disc3,
   Play,
+  Power,
   Square,
   Trash2,
 } from 'lucide-react'
@@ -36,7 +37,9 @@ import { MoveSessionDialog } from './session-move'
 import './i18n'
 
 /**
- * Interrupt, as an icon. A disabled one keeps its reason reachable by keyboard: the
+ * The thread's Stop: it stops the turn in progress and keeps the session, so the next
+ * message just sends. Ending the session is a different control. A disabled one keeps its
+ * reason reachable by keyboard: the
  * button cannot take focus, so a focusable span around it carries the tooltip.
  */
 function InterruptIcon({
@@ -60,7 +63,7 @@ function InterruptIcon({
       onClick={onClick}
       disabled={disabled}
     >
-      <CirclePause />
+      <Square />
     </Button>
   )
   if (disabled)
@@ -187,7 +190,7 @@ export function RunActions({
       <div className="flex items-center gap-0.5" data-slot="thread-actions">
         {allow('interrupt') && turn.offered && (
           <InterruptIcon
-            label={tOps('live.interrupt')}
+            label={t('card.actions.stop')}
             hint={tOps('live.interruptHint')}
             fenceUnavailable={
               turn.fenceUnavailable
@@ -199,18 +202,19 @@ export function RunActions({
           />
         )}
         {allow('stop') && (
-          <IconTip label={t('card.actions.stop')}>
-            {/* STOP IS QUIET UNTIL IT IS MEANT: a ghost icon whose glyph is the danger
-                tone, tinted on hover. The loud, filled version belongs to the confirm. */}
+          <IconTip label={t('card.actions.end')}>
+            {/* ENDING THE SESSION IS QUIET UNTIL IT IS MEANT: a ghost icon whose glyph is the
+                danger tone, tinted on hover, named for what it does. The visible Stop above
+                only stops the turn. The loud, filled version belongs to the confirm. */}
             <Button
               variant="ghost"
               size="icon"
-              aria-label={t('card.actions.stop')}
+              aria-label={t('card.actions.end')}
               className="text-bad hover:bg-bad-soft hover:text-bad"
               onClick={() => (confirmStop ? setConfirm('stop') : stop.mutate())}
               disabled={stop.isPending}
             >
-              <Square />
+              <Power />
             </Button>
           </IconTip>
         )}
@@ -281,8 +285,8 @@ export function RunActions({
           onClick={() => (confirmStop ? setConfirm('stop') : stop.mutate())}
           disabled={stop.isPending}
         >
-          <Square className="size-3.5" />
-          {t('card.actions.stop')}
+          <Power className="size-3.5" />
+          {t('card.actions.end')}
         </Button>
       )}
       {allow('resume') && (

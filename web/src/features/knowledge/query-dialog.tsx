@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { ScrollText, Search } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { EditionRefusalNote } from '@/components/layout/query-error-state'
 import { Badge } from '@/components/ui/badge'
 import { IntelNotice } from '@/features/_intel'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -15,6 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  editionRefusal,
+  type EditionRefusal,
+} from '@/components/ui/edition-note'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -63,7 +69,46 @@ export function QueryDialog({ open, onOpenChange, kb }: QueryDialogProps) {
   )
 }
 
-function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
+/**
+ * «Try a query» beside the knowledge bases: the same governed, recorded retrieval as a
+ * knowledge base's own Query, on the one chosen here.
+ */
+export function QueryPanel({ kbs }: { kbs: KbDTO[] }) {
+  const { t } = useTranslation('knowledge')
+  const titleId = useId()
+  const [chosen, setChosen] = useState('')
+  const kb = kbs.find((k) => k.id === chosen) ?? kbs[0]
+  if (!kb) return null
+  return (
+    <Card role="region" aria-labelledby={titleId}>
+      <CardHeader>
+        <CardTitle id={titleId}>{t('query.tryTitle')}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {kbs.length > 1 && (
+          <Field label={t('kbs.name')} htmlFor="qp-kb">
+            <Select value={kb.id} onValueChange={setChosen}>
+              <SelectTrigger id="qp-kb">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {kbs.map((k) => (
+                  <SelectItem key={k.id} value={k.id}>
+                    {k.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+        <QueryForm key={kb.id} kb={kb} />
+      </CardContent>
+    </Card>
+  )
+}
+
+/** The form; with `onClose` it is the dialog's, without it the panel's. */
+function QueryForm({ kb, onClose }: { kb: KbDTO; onClose?: () => void }) {
   const { t } = useTranslation(['knowledge', 'common', 'shared'])
   const { activeTenant } = useAuth()
 
@@ -73,11 +118,15 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
   const [topK, setTopK] = useState('10')
   const [result, setResult] = useState<QueryResponse | null>(null)
   const [deniedReason, setDeniedReason] = useState<string | null>(null)
+  // A retrieval the edition does not hold: its line stays where it was asked.
+  const [refused, setRefused] = useState<EditionRefusal | null>(null)
   const [modeFilter, setModeFilter] = useState<NormalizedSourceMode | 'all'>(
     'all',
   )
 
   const valid = query.trim().length > 0
+  // The dialog keeps its field ids; the panel beside the list has its own.
+  const id = onClose ? 'q' : 'qp'
   const visibleResults =
     result?.results.filter(
       (r) =>
@@ -100,6 +149,7 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
     if (!valid || mutation.isPending) return
     setResult(null)
     setDeniedReason(null)
+    setRefused(null)
     const parsedTopK = Number.parseInt(topK, 10)
     const input: QueryInput = {
       query: query.trim(),
@@ -119,6 +169,11 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
         // salida. Decirle al operador que le han denegado algo que sólo tiene que confirmar
         // es peor que no decir nada: le hace abandonar una acción que sí puede completar.
         if (err instanceof ApiError && err.isStepUpRequired) return
+        const refusal = editionRefusal(err)
+        if (refusal) {
+          setRefused(refusal)
+          return
+        }
         // 403 = governance/residency denial — show the reason, not a red error.
         if (err instanceof ApiError && err.isForbidden) {
           setDeniedReason(err.message)
@@ -127,49 +182,71 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
     })
   }
 
+  // Secondary in the panel: the page's one orange control is its own primary.
+  const runButton = (
+    <Button
+      variant={onClose ? 'primary' : 'secondary'}
+      onClick={run}
+      disabled={!valid || mutation.isPending}
+    >
+      {mutation.isPending ? (
+        <Spinner size="sm" aria-hidden />
+      ) : (
+        <Search aria-hidden />
+      )}
+      {t('query.run')}
+    </Button>
+  )
+
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>{t('query.title')}</DialogTitle>
-        <DialogDescription>
+      {onClose ? (
+        <DialogHeader>
+          <DialogTitle>{t('query.title')}</DialogTitle>
+          <DialogDescription>
+            {t('query.body', { name: kb.name })}
+          </DialogDescription>
+        </DialogHeader>
+      ) : (
+        <p className="text-caption text-muted-foreground">
           {t('query.body', { name: kb.name })}
-        </DialogDescription>
-      </DialogHeader>
+        </p>
+      )}
 
       <div className="flex flex-col gap-4">
         <Field
           label={t('query.queryLabel')}
-          htmlFor="q-query"
+          htmlFor={`${id}-query`}
           description={t('query.queryHint')}
           required
         >
           <Textarea
-            id="q-query"
+            id={`${id}-query`}
             value={query}
             rows={2}
             onChange={(e) => setQuery(e.target.value)}
           />
         </Field>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label={t('common.agentRef')} htmlFor="q-agent">
+        <div className={onClose ? 'grid gap-4 sm:grid-cols-3' : 'grid gap-4'}>
+          <Field label={t('common.agentRef')} htmlFor={`${id}-agent`}>
             <Input
-              id="q-agent"
+              id={`${id}-agent`}
               value={agentRef}
               onChange={(e) => setAgentRef(e.target.value)}
               mono
             />
           </Field>
-          <Field label={t('query.sessionRef')} htmlFor="q-session">
+          <Field label={t('query.sessionRef')} htmlFor={`${id}-session`}>
             <Input
-              id="q-session"
+              id={`${id}-session`}
               value={sessionRef}
               onChange={(e) => setSessionRef(e.target.value)}
               mono
             />
           </Field>
-          <Field label={t('query.topK')} htmlFor="q-topk">
+          <Field label={t('query.topK')} htmlFor={`${id}-topk`}>
             <Input
-              id="q-topk"
+              id={`${id}-topk`}
               type="number"
               min={1}
               max={100}
@@ -180,6 +257,7 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
           </Field>
         </div>
 
+        {refused && <EditionRefusalNote refusal={refused} />}
         {deniedReason && (
           <div
             role="alert"
@@ -340,27 +418,20 @@ function QueryForm({ kb, onClose }: { kb: KbDTO; onClose: () => void }) {
         {t('common:privileged.auditedNotice')}
       </p>
 
-      <DialogFooter>
-        <Button
-          variant="secondary"
-          onClick={onClose}
-          disabled={mutation.isPending}
-        >
-          {t('common:actions.close')}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={run}
-          disabled={!valid || mutation.isPending}
-        >
-          {mutation.isPending ? (
-            <Spinner size="sm" aria-hidden />
-          ) : (
-            <Search aria-hidden />
-          )}
-          {t('query.run')}
-        </Button>
-      </DialogFooter>
+      {onClose ? (
+        <DialogFooter>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={mutation.isPending}
+          >
+            {t('common:actions.close')}
+          </Button>
+          {runButton}
+        </DialogFooter>
+      ) : (
+        <div className="flex justify-end">{runButton}</div>
+      )}
     </>
   )
 }

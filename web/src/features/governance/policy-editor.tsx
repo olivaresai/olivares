@@ -13,6 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  editionRefusal,
+  type EditionRefusal,
+} from '@/components/ui/edition-note'
+import { EditionRefusalNote } from '@/components/layout/query-error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,11 +30,11 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
-import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { looksLikeCredential } from '@/lib/credentials'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { governanceApi, governanceKeys } from './api'
+import { DurationSelect } from './duration-select'
 import './i18n'
 import { ABAC_PRINCIPAL_KINDS, ABAC_VERBS, POLICY_KINDS } from './types'
 import type {
@@ -42,7 +47,6 @@ import type {
 } from './types'
 
 const MAX_APPROVALS = 64
-const MAX_SECONDS = 31536000
 
 /** A count field holds nothing (the engine default) or a whole number from 0 to max. */
 function countInRange(value: string, max: number): boolean {
@@ -126,7 +130,7 @@ function PolicyForm({
   const [kind, setKind] = useState<PolicyKind>(policy?.kind ?? 'abac')
   const [enabled, setEnabled] = useState(policy?.enabled ?? true)
   // The server refused a risk tier or an approval count other than the action's default: Community keeps that in Business.
-  const [needsBusiness, setNeedsBusiness] = useState(false)
+  const [refusal, setRefusal] = useState<EditionRefusal | null>(null)
 
   // ABAC draft rules.
   const [rules, setRules] = useState<DraftRule[]>(() =>
@@ -175,10 +179,7 @@ function PolicyForm({
       ))
 
   const requiredOk = countInRange(requiredApprovals, MAX_APPROVALS)
-  const expiresOk = countInRange(expiresIn, MAX_SECONDS)
-  const escalateOk = countInRange(escalateIn, MAX_SECONDS)
-  const approvalValid =
-    kind !== 'approval' || (requiredOk && expiresOk && escalateOk)
+  const approvalValid = kind !== 'approval' || requiredOk
 
   const valid =
     name.trim().length > 0 && !ruleWarn && rulesValid && approvalValid
@@ -197,13 +198,9 @@ function PolicyForm({
       : t('policyEditor.created'),
     onDone: onClose,
     onError: (err) => {
-      if (
-        !(err instanceof ApiError) ||
-        err.status !== 501 ||
-        err.code !== 'business_required'
-      )
-        return false
-      setNeedsBusiness(true)
+      const edition = editionRefusal(err, 'approvalTiers')
+      if (!edition) return false
+      setRefusal(edition)
       return true
     },
   })
@@ -240,7 +237,7 @@ function PolicyForm({
 
   function submit() {
     if (!valid) return
-    setNeedsBusiness(false)
+    setRefusal(null)
     const payload: PolicyInput = {
       name: name.trim(),
       kind,
@@ -515,38 +512,21 @@ function PolicyForm({
                   mono
                 />
               </Field>
-              <Field
-                label={t('policyEditor.expiresInSeconds')}
-                htmlFor="pol-expires"
-                error={
-                  !expiresOk &&
-                  t('policyEditor.countError', { max: MAX_SECONDS })
-                }
-                description={t('policyEditor.expiresInSecondsHint')}
-              >
-                <Input
+              <Field label={t('policyEditor.expiresIn')} htmlFor="pol-expires">
+                <DurationSelect
                   id="pol-expires"
-                  inputMode="numeric"
                   value={expiresIn}
-                  onChange={(e) => setExpiresIn(e.target.value)}
-                  mono
+                  onChange={setExpiresIn}
                 />
               </Field>
               <Field
-                label={t('policyEditor.escalateInSeconds')}
+                label={t('policyEditor.escalateIn')}
                 htmlFor="pol-escalate"
-                error={
-                  !escalateOk &&
-                  t('policyEditor.countError', { max: MAX_SECONDS })
-                }
-                description={t('policyEditor.escalateInSecondsHint')}
               >
-                <Input
+                <DurationSelect
                   id="pol-escalate"
-                  inputMode="numeric"
                   value={escalateIn}
-                  onChange={(e) => setEscalateIn(e.target.value)}
-                  mono
+                  onChange={setEscalateIn}
                 />
               </Field>
             </div>
@@ -580,11 +560,7 @@ function PolicyForm({
         )}
       </div>
 
-      {needsBusiness && (
-        <p role="alert" className="text-caption text-danger">
-          {t('policyEditor.needsBusiness')}
-        </p>
-      )}
+      {refusal && <EditionRefusalNote refusal={refusal} readsBelow />}
 
       <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />

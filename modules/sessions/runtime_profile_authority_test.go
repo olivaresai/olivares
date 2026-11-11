@@ -119,7 +119,7 @@ func TestProfileAuthority_StaleBridgeCannotPublish(t *testing.T) {
 		t.Fatal(err)
 	}
 	runBefore := runRecord(t, st, tenant, dto.RunRef)
-	ch, unsubscribe := m.broker.subscribeTo(tenant, "", before.String(model.ColID))
+	ch, unsubscribe := m.broker.subscribeTo(tenant, "", before.String(model.ColID), "")
 	defer unsubscribe()
 	m.onStdout(ctx, old, []byte(`{"type":"assistant"}`), m.now().Add(10*time.Minute))
 	var after model.Record

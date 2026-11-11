@@ -3,8 +3,9 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // ONE TOOLS PLACE. Which sign-in or key a session runs as was one idea on seven
-// screens. The API key, account, profile and binding pages are now doors into Tools: each
-// keeps its url and its own read tier, and mounts the same room.
+// screens. The account, profile and binding pages are now doors into AI tools: each keeps
+// its url and its own read tier, and mounts the same room. The API key page is the
+// Providers page beside it: one page per concept, never one screen under two names.
 import type { ReactElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { FEATURE_VIEWS, type FeatureView } from '@/features/registry'
@@ -27,8 +28,16 @@ describe('the Tools place', () => {
     expect(tools.permission).toBe('sessions:account:read')
   })
 
+  it('/providers is the Providers page beside AI tools, under its own read tier', () => {
+    const tab = viewAt('/providers')
+    expect(tab.permission).toBe('sessions:provider:read')
+    // A tab beside AI tools, not a door: navigation lists it with the room open.
+    expect(tab.doorTo).toBeUndefined()
+    // Its own page: the keys, not the tools and profiles under a second name.
+    expect(room(tab)).not.toBe(room(tools))
+  })
+
   it.each([
-    ['/providers', 'sessions:provider:read'],
     ['/provider-accounts', 'sessions:account:read'],
     ['/provider-profiles', 'sessions:profile:read'],
     ['/provider-bindings', 'sessions:profile-binding:read'],

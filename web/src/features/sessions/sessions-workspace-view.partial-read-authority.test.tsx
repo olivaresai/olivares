@@ -208,7 +208,12 @@ vi.mock('@/features/agentops/api', async (importOriginal) => ({
 
 import { SessionsWorkspaceView } from './sessions-workspace-view'
 
-vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+vi.mock('@/lib/notify', () => ({
+  notify: vi.fn(),
+  resolveNotice: vi.fn(),
+  noticeSeen: () => false,
+  rememberNotice: vi.fn(),
+}))
 import { notify } from '@/lib/notify'
 
 // What the page has told: a half that could not be loaded is a toast, not a strip.
@@ -295,6 +300,14 @@ const STEP_UP = new ApiError(
   'step_up_required',
   'run list needs step-up',
   'spr-req-run-stepup',
+)
+/** The same read refused because the edition held here does not hold it. */
+const EDITION_REFUSED = new ApiError(
+  403,
+  'edition_required',
+  'live list needs a higher edition',
+  'spr-req-live-edition',
+  { edition: 'business' },
 )
 const LIVE_5XX = new ApiError(
   500,
@@ -735,6 +748,41 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
         'spr-auth/live-403/healthy-run-row-action',
       )
       .toHaveTextContent('run:spr-run-only')
+  })
+
+  // An edition answer withdraws the half's admission exactly as a role answer does: what
+  // the half returned before must not stay painted under the failure notice.
+  it('success then live 403 refused by edition: its rows leave, the runs stay', async () => {
+    renderView()
+    await rowFor(LIVE_ONLY_AT, 'spr-auth/live-edition/setup-live-row')
+    await rowFor(RUN_ONLY_AT, 'spr-auth/live-edition/setup-run-row')
+    await streamOpen('spr-auth/live-edition/setup-stream-open')
+
+    harness.live.mockRejectedValue(EDITION_REFUSED)
+    await refreshReads()
+    await waitFor(() => {
+      expect(
+        toldNotice('sessions.live-lookup-failed')?.message,
+        'spr-auth/live-edition/setup-live-error-notice',
+      ).toMatch(/started outside Olivares could not be loaded/i)
+    })
+
+    expect(
+      rows.gone(
+        LIVE_ONLY_AT,
+        'spr-auth/live-edition/refused-live-row-excluded',
+        { alsoPainted: RUN_ONLY_AT },
+      ),
+      'spr-auth/live-edition/refused-live-row-excluded',
+    ).toBeNull()
+    expect(
+      harness.stream.enabled,
+      'spr-auth/live-edition/stream-retired-with-the-refusal',
+    ).toBe(false)
+    expect(
+      tileValue('Sessions'),
+      'spr-auth/live-edition/total-count-healthy-only',
+    ).toBe('1')
   })
 
   it('success then run step-up: refused run leaves, live stays, and origin counts say NOT READ', async () => {

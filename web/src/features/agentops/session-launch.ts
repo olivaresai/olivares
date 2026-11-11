@@ -5,7 +5,7 @@
 // SESSION LAUNCH, ONE MODULE for both New session forms. The quick form names a tool, a
 // folder and a permission choice; the advanced dialog names the profile and every field
 // of the run. Either way this module resolves what the form did not choose (the profile,
-// the folder record, the permission template), names the session, launches it under the
+// the folder record, the permission template), launches the session under the
 // form's authority, as the signed-in user or as an agent, and sends its first message.
 import { http } from '@/lib/api'
 import type { RequestOptions } from '@/lib/api/client'
@@ -19,7 +19,7 @@ import { agentOpsApi } from './api'
 import { launchRunAsAgent } from './launch-agent-api'
 import { stoppedAtStartReason } from './launch-readiness'
 import { sessionTurnBody } from './session-turn'
-import { toolName, type SessionTool } from './engine-tools'
+import type { SessionTool } from './engine-tools'
 import {
   DEFAULT_DLP_MODE,
   type CreateRunRequest,
@@ -116,6 +116,12 @@ export interface QuickLaunch {
   /** The profile the person chose when the tool has several: it is the session's, and the
    * engine's rule for the default login is not asked. Absent means that rule. */
   profileRef?: string
+  /** A git worktree and branch of the session's own, made from the folder. Absent works in
+   * the folder's current checkout. */
+  worktree?: boolean
+  /** With `worktree`: the commit id or local branch it starts at. Absent starts at the
+   * folder's current commit. */
+  worktreeFrom?: string
 }
 
 /** One launch from either form, with the first message ('' sends none). The quick form
@@ -139,7 +145,6 @@ export async function launchSession(
   // A start from an issue or pull request page reads the item first, so a page the
   // engine cannot read leaves no session behind; its title and body lead the message.
   let message = launch.message
-  let named = launch.message
   if (run.source_url) {
     const item = await agentOpsApi.sourceItem(
       run.workspace_ref,
@@ -147,17 +152,13 @@ export async function launchSession(
       authority,
     )
     message = sourceItemMessage(item, launch.message)
-    named = item.title
   }
   const chosenModel = model?.trim()
   const body: CreateRunRequest = {
     ...run,
-    // A session is listed by its own name, else by what it was asked first, else (the
-    // quick form) by its tool and folder.
-    name:
-      run.name.trim() ||
-      promptName(named) ||
-      ('quick' in launch ? toolFolderName(launch.quick) : ''),
+    // Only a name the person typed: the engine refuses one another session holds,
+    // and titles a session it was not given a name for from its first message.
+    name: run.name.trim(),
     // acceptance: no model chosen, so none is sent and the engine resolves it.
     ...(chosenModel ? { model: chosenModel } : {}),
   }
@@ -186,28 +187,6 @@ function sourceItemMessage(item: SourceItemDTO, typed: string): string {
  * approval_required, read by its code, never by its sentence. */
 export function needsApproval(err: unknown): boolean {
   return err instanceof ApiError && err.code === 'approval_required'
-}
-
-/** A session's name from what it was asked first, so the sidebar and Home can list it
- * by name; '' when nothing was asked. */
-function promptName(message: string): string {
-  const prompt = plainName(message)
-  return prompt.length > 60 ? `${prompt.slice(0, 59)}…` : prompt
-}
-
-/** What the engine refuses in a session's name: control, format (zero-width, direction
- * overrides) and separator characters, the ones Unicode ignores by default, and the
- * braille blank. A name the person did not type leaves them out; one they typed is
- * sent as it is and the engine's refusal is shown. */
-const HIDDEN_IN_NAME =
-  /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]/gu
-
-function plainName(text: string): string {
-  return text
-    .replace(/\s+/g, ' ')
-    .replace(HIDDEN_IN_NAME, '')
-    .replace(/ {2,}/g, ' ')
-    .trim()
 }
 
 /** The quick form's run: the resolved profile, the folder record and the permission. */
@@ -240,19 +219,13 @@ async function quickRun(
     ...(template_id ? { template_id } : {}),
     ...(quick.secretEnv?.length ? { secret_env: quick.secretEnv } : {}),
     ...(quick.credentials?.length ? { credentials: quick.credentials } : {}),
+    ...(quick.worktree
+      ? {
+          worktree: true,
+          ...(quick.worktreeFrom ? { worktree_from: quick.worktreeFrom } : {}),
+        }
+      : {}),
   }
-}
-
-/** A quick session with no first message is named by its tool and folder. */
-function toolFolderName(quick: QuickLaunch): string {
-  const tool = toolName(quick.driver)
-  // At most 100 characters of the folder, so the name stays within the engine's 200.
-  const folder = Array.from(
-    plainName(quick.folder.trim().split('/').filter(Boolean).pop() ?? ''),
-  )
-    .slice(0, 100)
-    .join('')
-  return folder ? `${tool} in ${folder}` : tool
 }
 
 interface TemplateItem {
@@ -413,7 +386,8 @@ async function sendWhenApproved(
         // A passing network or server error is read again, for a while; a run this
         // sign-in can no longer read never runs for it.
         const forbidden =
-          err instanceof ApiError && (err.status === 403 || err.status === 404)
+          err instanceof ApiError &&
+          (err.isForbiddenOrEdition || err.isNotFound)
         if (forbidden || ++failures >= APPROVAL_READ_FAILURES)
           return settle(reason(err))
         continue

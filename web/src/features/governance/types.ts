@@ -250,7 +250,7 @@ export interface CreateApprovalRequest {
 /** One approval request — the APPROVAL QUEUE row. */
 export interface ApprovalDTO {
   id: string
-  /** The native provider method accepts a grant bounded to this session. */
+  /** The engine permits a session allowance for this exact action and target. */
   session_scope_allowed?: boolean
   /** The session the request belongs to (canonical id), when the engine names one. */
   session_ref?: string
@@ -270,6 +270,8 @@ export interface ApprovalDTO {
   launched_by?: string
   /** EFFECTIVE status: pending|approved|rejected|canceled|expired. */
   status: ApprovalStatus
+  /** The risk tier the engine derives at read: low, medium, high or critical. */
+  risk_tier?: string
   required_approvals: number
   approve_count: number
   reject_count: number
@@ -290,6 +292,17 @@ export interface ApprovalDTO {
    * False on a resolved request; it does not promise the decision succeeds (a step-up or
    * a policy can still refuse it), so the decision route decides. */
   may_decide?: boolean
+  /** The people who may still decide an open request, never its requester and never
+   * anyone who decided it. Absent where the server cannot say (a reader who may not read
+   * people, a resolved request): absent is unknown, empty is nobody else. */
+  deciders?: { user_id: string; display_name?: string }[]
+  /** Set once the approved grant was spent by the caller it was for. */
+  consumed?: boolean
+  /** What the publication this request is for touches, where an approval policy asked:
+   * the class of the change and the paths that decided it (the sensitive ones, the code,
+   * or every file of a documentation-only change). Absent on any other request. */
+  change_class?: 'docs_only' | 'code' | 'sensitive' | (string & {})
+  change_paths?: string[]
 }
 
 /** A decision verb. */

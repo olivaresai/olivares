@@ -27,7 +27,7 @@ import (
 
 // Permission tiers for the OPERATE surface (verb-namespaced so roles grant by
 // tier). Listing and output are separate; stopping grants no input authority.
-// Admin covers destructive cleanup/delete.
+// Admin also permits cleanup/delete of sessions started by another person.
 const (
 	permRunRead   auth.Permission = "sessions:run:read"
 	permRunWrite  auth.Permission = "sessions:run:write"
@@ -43,6 +43,7 @@ func runtimePermissions() []auth.Permission {
 
 // runtimeRoutes mounts the operate endpoints under /v1/m/sessions/.
 func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
+	reg = ownedRunRoutes{RouteRegistrar: reg, m: m}
 	reg.Handle("GET", "/git-attribution-settings", permRunRead, m.handleGitAttributionSettings)
 	reg.Handle("PUT", "/git-attribution-settings", permRunAdmin, m.handleGitAttributionSettings)
 	// run_ref is a tenant-unique public reference, not the run row's primary ID.
@@ -73,6 +74,8 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// What the session changed in its folder (run_changes.go): read-only, nothing executed.
 	reg.HandleEntity("GET", "/runs/{ref}/changes", permRunOutput, outputEntity, m.handleRunChanges)
 	reg.HandleEntity("GET", "/runs/{ref}/changes/file", permRunOutput, outputEntity, m.handleRunChangedFile)
+	// What the session made, without the engine's own copies (blueprint API 9).
+	reg.HandleEntity("GET", "/runs/{ref}/outputs", permRunOutput, outputEntity, m.handleRunOutputs)
 	// What each turn changed, and the folder put back as it was before one
 	// (run_checkpoints.go): snapshots of the engine's own, nothing executed in the folder.
 	reg.HandleEntity("GET", "/runs/{ref}/checkpoints", permRunOutput, outputEntity, m.handleRunCheckpoints)
@@ -156,8 +159,8 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("DELETE", "/runs/{ref}/archive", permRunWrite, runEntity, m.handleUnarchiveRun)
 	// A browser preview sends the person's requests into the session's app.
 	reg.HandleEntity("POST", "/runs/{ref}/preview", permRunWrite, runEntity, m.handleOpenRunPreview)
-	reg.HandleEntity("POST", "/runs/{ref}/cleanup", permRunAdmin, runEntity, m.handleCleanupRun)
-	reg.HandleEntity("DELETE", "/runs/{ref}", permRunAdmin, runEntity, m.handleDeleteRun)
+	reg.HandleEntity("POST", "/runs/{ref}/cleanup", permRunWrite, runEntity, m.handleCleanupRun)
+	reg.HandleEntity("DELETE", "/runs/{ref}", permRunWrite, runEntity, m.handleDeleteRun)
 }
 
 func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -238,6 +241,7 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		Worktree:       body.Worktree,
 		NoSetup:        body.NoSetup,
 		WorktreeFrom:   body.WorktreeFrom,
+		FromCheckpoint: body.FromCheckpoint,
 		SourceURL:      body.SourceURL,
 		TemplateID:     body.TemplateID,
 		Isolation:      Isolation(body.Isolation),
@@ -288,6 +292,8 @@ func (m *Module) callerQuestions(ctx context.Context, mc api.ModuleContext) call
 		runUnrestricted: sync.OnceValue(func() bool { return m.mayRunUnrestricted(ctx, mc) }),
 		secretEnv:       sync.OnceValue(func() bool { return m.mayUseSecretEnv(ctx, mc) }),
 		profileAccess:   m.askProfileAccess(ctx, mc.Tenant, mc.Principal),
+		modelAccess:     m.askModelAccess(ctx, mc.Tenant, mc.Principal),
+		userGroups:      mc.Principal.GroupsIn(mc.Tenant),
 		standing:        m.askStanding(ctx, mc.Tenant, mc.Principal),
 		workspaceRights: m.askWorkspaceRights(ctx, mc.Tenant, mc.Principal, func(q auth.Request) bool { return mc.Admission != nil && mc.Admission(ctx, q) }),
 	}
@@ -323,6 +329,8 @@ func (m *Module) principalAsks(ctx context.Context, tenant model.TenantID, p aut
 		runUnrestricted: func() bool { return m.principalMayRunUnrestricted(ctx, tenant, p) },
 		secretEnv:       func() bool { return m.principalMayUseSecretEnv(ctx, tenant, p) },
 		profileAccess:   m.askProfileAccess(ctx, tenant, p),
+		modelAccess:     m.askModelAccess(ctx, tenant, p),
+		userGroups:      p.GroupsIn(tenant),
 		standing:        m.askStanding(ctx, tenant, p),
 		workspaceRights: m.askWorkspaceRights(ctx, tenant, p, func(q auth.Request) bool {
 			return m.WorkAuthorizer != nil && m.WorkAuthorizer.Authorize(ctx, q).Allow
@@ -594,6 +602,10 @@ func (m *Module) handleGetRun(w http.ResponseWriter, r *http.Request, mc api.Mod
 			return err
 		}
 		dto = m.toRunDTO(rec)
+		dto.LastTurn, err = lastRunTurn(r.Context(), sc, ref)
+		if err != nil {
+			return err
+		}
 		pins, err := ownRunPinAts(r.Context(), sc, mc.Principal.Actor())
 		if err != nil {
 			return err
@@ -675,6 +687,30 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 			return
 		}
 	}
+	commandID, ok := parseCommandID(body.CommandID)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, errorBody("command_id must be a UUID in its canonical lower-case form"))
+		return
+	}
+	if commandID != "" {
+		// The input the id names: everything the caller sent but the id and the fence.
+		named := body
+		named.CommandID, named.WorkLeaseFence = "", nil
+		if len(named.Message) > 0 {
+			named.Message = json.RawMessage(compactJSON(named.Message))
+		}
+		input, err := json.Marshal(named)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
+			return
+		}
+		command := newRunCommand(mc.Principal.Actor(), commandID, input)
+		if err := m.commandSeen(r.Context(), mc.Tenant, ref, command); err != nil {
+			writeInputErr(w, err, commandID)
+			return
+		}
+		r = r.WithContext(withRunCommand(r.Context(), command))
+	}
 	if len(body.Attachments) > 0 {
 		m.handleRunInputWithImages(w, r, mc, ref, body)
 		return
@@ -704,12 +740,12 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 			err = m.sendTextInput(r.Context(), mc.Tenant, ref, body.Text)
 		}
 		if err != nil {
-			writeRuntimeControlErr(w, err)
+			writeInputErr(w, err, body.CommandID)
 			return
 		}
 		m.auditReviewComment(r, mc, ref, body.ReviewComment)
 		m.titleFromFirstInput(r.Context(), mc, ref, body.Text)
-		writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
+		writeJSON(w, http.StatusAccepted, inputReceipt(body.CommandID))
 		return
 	}
 	line := []byte(body.Line)
@@ -727,12 +763,12 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 		err = m.sendInput(r.Context(), mc.Tenant, ref, line)
 	}
 	if err != nil {
-		writeRuntimeControlErr(w, err)
+		writeInputErr(w, err, body.CommandID)
 		return
 	}
 	m.auditReviewComment(r, mc, ref, body.ReviewComment)
 	m.titleFromFirstInput(r.Context(), mc, ref, inputLineText(line))
-	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
+	writeJSON(w, http.StatusAccepted, inputReceipt(body.CommandID))
 }
 
 // handleInterruptRun cancels the active provider turn of a live session and keeps its owned process running; it is the non-terminal control, /stop remains the terminal one, and the optional body decides which control plane answers — absent, it is the legacy interrupt of a non-work run; with a positive work_lease_fence, it is the fenced control this work-bound run's input and stop already use.
@@ -951,7 +987,25 @@ func (m *Module) handleHandoffRun(w http.ResponseWriter, r *http.Request, mc api
 	writeJSON(w, http.StatusCreated, dto)
 }
 
+// loadRunForRemoval preserves administration of other runs while letting a person
+// remove their own. The route has already checked workspace access and profile ownership.
+func (m *Module) loadRunForRemoval(r *http.Request, mc api.ModuleContext) (model.Record, error) {
+	rec, err := m.loadRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	if err != nil {
+		return nil, err
+	}
+	if runLauncher(rec).Compare(auth.PersonRefOf(mc.Principal)) != auth.PersonSame &&
+		!mc.Admits(r.Context(), permRunAdmin, mc.Resource) {
+		return nil, forbiddenErr("only the session's owner or a session administrator may remove it")
+	}
+	return rec, nil
+}
+
 func (m *Module) handleCleanupRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if _, err := m.loadRunForRemoval(r, mc); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	// The body is optional and as forgiving as the endpoint always was: the route has
 	// taken any body and ignored it, so a body that does not parse, or carries other
 	// fields, is simply no confirmation. Only an explicit discard_worktree: true is one.
@@ -975,6 +1029,19 @@ func (m *Module) handleCleanupRun(w http.ResponseWriter, r *http.Request, mc api
 }
 
 func (m *Module) handleDeleteRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	rec, err := m.loadRunForRemoval(r, mc)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	if rec.String(colState) != stateCleaned {
+		// Reuse cleanup's process, credential and worktree safeguards. Unfinished
+		// work still requires explicit discard confirmation through /cleanup.
+		if _, err := m.cleanupRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind()); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
 	if err := m.deleteRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind()); err != nil {
 		writeRunErr(w, err)
 		return
@@ -1106,6 +1173,7 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	ctx := r.Context()
+	var deltaVersion uint64
 	for {
 		wake := lr.ring.wait() // snapshot BEFORE reading (no lost wake-up)
 		rd := lr.ring.readFrom(cursor)
@@ -1141,6 +1209,12 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 			_ = writeSSE(rc, w, "page", attachPage{Type: "page", Earlier: rd.earlier})
 			return
 		}
+		if rd.delta != nil && rd.deltaVersion != deltaVersion {
+			if writeSSE(rc, w, "delta", rd.delta) != nil {
+				return
+			}
+		}
+		deltaVersion = rd.deltaVersion
 		cursor = rd.next
 		if rd.closed {
 			_ = writeSSE(rc, w, "end", map[string]any{"type": "end"})
@@ -1267,11 +1341,11 @@ func (m *Module) handleRunInputWithImages(w http.ResponseWriter, r *http.Request
 		sendErr = m.sendImageInput(r.Context(), mc.Tenant, ref, text, images)
 	}
 	if err := sendErr; err != nil {
-		writeRuntimeControlErr(w, err)
+		writeInputErr(w, err, body.CommandID)
 		return
 	}
 	m.titleFromFirstInput(r.Context(), mc, ref, body.Text)
-	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
+	writeJSON(w, http.StatusAccepted, inputReceipt(body.CommandID))
 }
 
 func (m *Module) appendRunReadAudit(r *http.Request, mc api.ModuleContext, ref, action string) error {
@@ -1369,6 +1443,16 @@ func writeRunErr(w http.ResponseWriter, err error) {
 // writeRuntimeControlErr preserves both error vocabularies crossed by the K2
 // adapter: authority/fencing failures are WorkErrors, while a process effect
 // can still return the established runErr taxonomy.
+// writeInputErr answers a send that turned out to be the retry of an accepted command
+// with that command's receipt, and anything else as the control error it is.
+func writeInputErr(w http.ResponseWriter, err error, commandID string) {
+	if commandID != "" && errors.Is(err, errCommandDuplicate) {
+		writeJSON(w, http.StatusAccepted, inputReceipt(commandID))
+		return
+	}
+	writeRuntimeControlErr(w, err)
+}
+
 func writeRuntimeControlErr(w http.ResponseWriter, err error) {
 	if asWorkError(err) != nil {
 		writeWorkError(w, err)

@@ -4,7 +4,7 @@ description: "運用者が estate をどうガバナンスするか: アイデ�
 ---
 
 :::note[Business]
-監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、台帳の検証（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、その読み取り、`olivares dr backup` を引き続き利用できます。証拠の操作は HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、台帳の検証（`GET /v1/audit/verify`、`olivares audit tree verify`, `olivares audit tree prove`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、その読み取り、`olivares dr backup` を引き続き利用できます。証拠の操作は HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
 :::
 
 このページは、少なくとも1つのソースを接続し、これから estate を **ガバナンス** する必要のある
@@ -40,9 +40,9 @@ API の他の部分と同じ認可コアの上に乗っており、**完全に�
 
 | ロール | 何ができるか |
 |---|---|
-| `viewer` | 運用データと監査証跡を読む |
+| `viewer` | 運用データを読む |
 | `editor` | 上記に加え、運用データの書き込み |
-| `admin` | 上記に加え、テナント IAM ── ユーザー、メンバーシップ、トークン、設定 |
+| `admin` | 上記に加え、テナント IAM ── ユーザー、メンバーシップ、トークン、設定 ── と、監査証跡、ルール、セキュリティの検出事項、支出 |
 | `owner` | テナント内のすべての権限 |
 
 モジュールは自身の名前空間付き権限（`<namespace>:<resource>:<verb>`）を宣言し、ロールには
@@ -171,7 +171,7 @@ attested で、監査され、発行されたトークンを決して永続化�
 
 ```bash
 # Pull the signed, hash-chained ledger for offline re-verification.
-# Requires a token whose role can read the audit trail (viewer and up).
+# Requires a token whose role can read the audit trail (admin and up).
 curl -fsS "https://localhost:8443/v1/audit/export?format=cef" \
   -H "Authorization: Bearer $OLVK_TOKEN" \
   -H "X-Olivares-Tenant: $TENANT" >> /var/log/olivares/audit.cef

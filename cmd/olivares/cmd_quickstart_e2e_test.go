@@ -247,8 +247,11 @@ func TestQuickstartInvalidConfigurationCreatesNoLog(t *testing.T) {
 // blank-line defect fully present.
 func TestQuickstartByArgvSecondRunSaysTheTokenIsGone(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "data")
-	listen := fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t))
-	grpc := fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t))
+	// Port 0: the kernel assigns a free port at bind. A port picked here and reused for
+	// both runs stays free for the whole first run, and any other process on the host
+	// can take it before the second run binds (CI: "bind: address already in use").
+	// Neither run's output names the address, so nothing here needs it in advance.
+	listen, grpc := "127.0.0.1:0", "127.0.0.1:0"
 
 	first := runQuickstart(t, setupTokenShape,
 		"--data-dir", dataDir, "--listen", listen, "--grpc-listen", grpc, "--quiet")

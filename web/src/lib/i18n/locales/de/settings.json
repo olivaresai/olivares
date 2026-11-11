@@ -53,6 +53,13 @@
   "general": {
     "title": "Allgemein",
     "scope": "Ihre eigenen Einstellungen. Sie gelten in jedem Arbeitsbereich dieser Installation.",
+    "groups": {
+      "appearance": "Darstellung",
+      "language": "Sprache und Region",
+      "start": "Beim Öffnen der Konsole",
+      "sessions": "Sitzungen",
+      "editor": "Code-Editor"
+    },
     "theme": "Thema",
     "themeHint": "Folgt dem System, außer Sie wählen Hell, Dunkel oder Schwarz.",
     "density": "Dichte",
@@ -66,13 +73,19 @@
     "startPage": "Startseite",
     "startPageHint": "Was sich nach der Anmeldung öffnet. Standard: Sitzungen.",
     "confirmStop": "Vor dem Beenden einer Sitzung bestätigen",
-    "confirmStopHint": "Einmal fragen, bevor Stopp eine noch laufende Sitzung beendet.",
+    "confirmStopHint": "Einmal fragen, bevor „Sitzung beenden“ eine Sitzung schließt.",
     "editor": "Editor für Dateilinks",
     "editorHint": "Welchen Editor die Links „Öffnen in“ auf diesem Computer starten. Standard: VS Code.",
     "editorSsh": "SSH-Host für den Editor",
     "editorSshHint": "Wie der Editor Sitzungsordner auf einem anderen Rechner erreicht, als user@host oder user@host:port. Leer: die Adresse, unter der diese Konsole läuft; auf diesem Computer ohne SSH.",
     "reduceMotion": "Bewegung reduzieren",
-    "reduceMotionHint": "Ersetzt Bewegung durch Überblendungen. An, wenn das System es verlangt."
+    "reduceMotionHint": "Ersetzt Bewegung durch Überblendungen. An, wenn das System es verlangt.",
+    "sendKey": "Sendetaste",
+    "sendKeyHint": "Die Taste, die eine Nachricht in einer Sitzung sendet. Bei der zweiten Wahl bricht die Eingabetaste die Zeile um.",
+    "sendWhileRunning": "Solange das Werkzeug arbeitet",
+    "sendWhileRunningHint": "Was die Sendetaste während eines laufenden Durchgangs tut. Sendet die Eingabetaste, macht Strg+Eingabe das andere.",
+    "sendQueue": "In die Warteschlange",
+    "sendSteer": "Durchgang umlenken"
   },
   "sessionNotifications": {
     "title": "Sitzungsbenachrichtigungen",
@@ -84,6 +97,12 @@
     "finished": "Der Durchgang ist abgeschlossen.",
     "ended": "Die Sitzung ist beendet.",
     "failed": "Die Sitzung wurde mit einem Fehler beendet.",
+    "inApp": {
+      "needsYou": "{{name}} braucht Ihre Entscheidung",
+      "finished": "{{name}} hat den Durchgang abgeschlossen",
+      "failed": "{{name}} wurde mit einem Fehler beendet"
+    },
+    "open": "Öffnen",
     "pushOn": "Erreicht dieses Gerät auch bei geschlossenem Tab.",
     "pushUnavailable": "Nur solange ein Tab offen ist: Dieses Gerät konnte nicht für Push registriert werden.",
     "installHint": "Benachrichtigungen setzen die App auf dem Home-Bildschirm voraus: „Teilen“ und dann „Zum Home-Bildschirm“ tippen."
@@ -93,14 +112,14 @@
     "scope": "Die Tasten, die diese Installation beantwortet. Sie gelten für alle gleich."
   },
   "edition": {
-    "scope": "Die Edition dieses Builds, ihre Lizenz und was Business hinzufügt.",
+    "scope": "Die Edition dieses Builds, ihre Lizenz und was Olivares AI Business hinzufügt.",
     "label": "Edition",
     "unknown": "Von dieser Engine nicht gemeldet",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Business fügt hinzu",
+    "businessAdds": "Olivares AI Business fügt hinzu",
     "summary": {
       "Session cockpit and fleet deployment.": "Sitzungs-Cockpit und Flottenbereitstellung.",
       "Live session sharing with named, expiring guest access and owner-approved message proposals.": "Live-Freigabe von Sitzungen mit namentlichem, ablaufendem Gastzugang und vom Eigentümer genehmigten Nachrichtenvorschlägen.",
@@ -111,11 +130,13 @@
       "Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.": "Enterprise umfasst alles aus Business sowie vertraglich vereinbarte Bedingungen und die Funktionen, die davon abhängen."
     },
     "badge": {
+      "engineer": "Engineer",
       "business": "Business",
       "enterprise": "Enterprise",
+      "engineerShort": "Eng",
       "businessShort": "Biz",
       "enterpriseShort": "Ent",
-      "accessibleName": "Edition {{edition}}",
+      "accessibleName": "Olivares AI {{edition}}",
       "show": "Editionskennzeichnung anzeigen",
       "loadError": "Die Einstellung für die Editionskennzeichnung konnte nicht geladen werden.",
       "saveError": "Die Einstellung für die Editionskennzeichnung konnte nicht gespeichert werden. Versuchen Sie es erneut."
@@ -139,7 +160,7 @@
   },
   "stopConfirm": {
     "title": "Diese Sitzung beenden?",
-    "description": "Beenden schließt eine Sitzung, die noch arbeitet.",
+    "description": "Die Sitzung wird geschlossen, auch wenn sie noch arbeitet.",
     "confirm": "Sitzung beenden"
   },
   "modules": {
@@ -148,6 +169,9 @@
     "apply_one": "{{count}} Änderung anwenden",
     "apply_other": "{{count}} Änderungen anwenden",
     "applied": "Modulauswahl gespeichert.",
+    "appliedNow": "Übernommen. Keine Sitzung wurde beendet.",
+    "savedForNextStart": "Gespeichert. Die Änderung gilt beim nächsten Start der Engine; keine laufende Sitzung wurde beendet.",
+    "notSaved": "Die Modulauswahl konnte nicht gespeichert werden. Es hat sich nichts geändert.",
     "restarting": "Engine wird neu gestartet…",
     "restartWarning": {
       "title": "Engine neu starten?",
@@ -302,6 +326,8 @@
   },
   "tracing": {
     "description": "Traces und Metriken an Ihren Collector senden. Änderungen werden ohne Neustart angewendet.",
+    "export": "Export",
+    "advanced": "Erweitert",
     "enabled": "Tracing aktivieren",
     "endpoint": "Collector-Adresse",
     "protocol": "Protokoll",
@@ -314,10 +340,16 @@
     "inactive": "Tracing ist deaktiviert.",
     "apply": "Anwenden",
     "saved": "Tracing-Einstellungen gespeichert.",
-    "businessRequired": "SIEM-Versand und externer Telemetrieexport benötigen Business. Einstellungen bleiben erhalten; Community sendet die Daten nicht."
+    "businessRequired": "SIEM-Versand und externer Telemetrieexport benötigen Olivares AI Business. Einstellungen bleiben erhalten; Olivares AI Community sendet die Daten nicht."
   },
   "signIn": {
     "methods": "Anmeldemethoden",
+    "ssoName": "Single Sign-on",
+    "available": "Verfügbar",
+    "required": "Erforderlich",
+    "blocked": "Gesperrt",
+    "notSetUp": "Nicht eingerichtet",
+    "sessionGroup": "Sitzung",
     "password": "Passwort",
     "sso": "Single Sign-on: {{providers}}",
     "noSso": "Auf der Anmeldeseite ist kein Single-Sign-on-Anbieter verfügbar.",
@@ -336,7 +368,9 @@
     "minutes": "Nach Minuten im Leerlauf stoppen",
     "description": "Standardmäßig aus. Gibt Speicher frei, indem abgeschlossene, nicht mehr geöffnete Sitzungen gestoppt werden. Fortsetzen behält Ordner und Gespräch.",
     "hint": "0 schaltet aus, sonst 6–10080 Minuten. Der Leerlauf beginnt nach fünf Minuten ohne Ausgabe. Sitzungen mit Genehmigungen, laufenden Unterprozessen oder verknüpften Sitzungen oder einer neuen Nachricht laufen weiter.",
-    "saved": "Sitzungsspeicher-Einstellung gespeichert."
+    "saved": "Sitzungsspeicher-Einstellung gespeichert.",
+    "group": "Stopp bei Leerlauf",
+    "stop": "Sitzungen im Leerlauf stoppen"
   },
   "updates": {
     "title": "Updates",

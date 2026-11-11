@@ -3,18 +3,19 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { Download } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { PageSecondaryActions } from '@/components/ui/page-actions'
 import { NamedRef, RelTimeLabel, useSessionNames } from '@/features/shared'
+import { downloadBlob } from '@/lib/api/download'
 import { useAuth } from '@/lib/auth/context'
-import { formatInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { inventoryApi, inventoryKeys } from './api'
-import { Box, ENTITY_ICON } from './entity-icons'
+import { Box, Boxes, ENTITY_ICON } from './entity-icons'
 import { InvStatus } from './status'
 import type { CatalogEntry } from './types'
 
@@ -63,6 +64,10 @@ export function CatalogTable({
     () => query.data?.pages.flatMap((p) => p.items) ?? [],
     [query.data],
   )
+  // The engine has no catalog export, so this saves the rows already read, and only
+  // when they are every row of the current filters.
+  const complete =
+    !query.isLoading && !query.error && !query.hasNextPage && rows.length > 0
 
   const columns = useMemo<TableColumn<CatalogEntry>[]>(
     () => [
@@ -113,46 +118,18 @@ export function CatalogTable({
         accessorKey: 'kind',
         header: t('cols.kind'),
         cell: ({ getValue }) => (
-          <Badge variant="outline">
+          <span className="text-muted-foreground">
             {t(`kinds.${getValue<string>()}`, {
               defaultValue: getValue<string>(),
             })}
-          </Badge>
+          </span>
         ),
       },
       {
-        accessorKey: 'status',
-        header: t('cols.status'),
-        cell: ({ getValue }) => <InvStatus status={getValue<string>()} />,
-      },
-      {
-        id: 'signals',
-        accessorFn: (e) => e.signal_sources.join(','),
-        header: t('cols.signals'),
-        enableSorting: false,
-        cell: ({ row }) => {
-          const sources = row.original.signal_sources
-          if (sources.length === 0) {
-            return <span className="text-muted-foreground">—</span>
-          }
-          return (
-            <div className="flex items-center gap-1" title={sources.join(', ')}>
-              {sources.slice(0, 2).map((s) => (
-                <Badge key={s} variant="neutral" className="font-mono">
-                  {s}
-                </Badge>
-              ))}
-              {sources.length > 2 && (
-                <Badge variant="outline">+{sources.length - 2}</Badge>
-              )}
-            </div>
-          )
-        },
-      },
-      {
-        id: 'hosts',
-        accessorFn: (e) => e.hosts?.length ?? 0,
-        header: t('cols.hosts'),
+        // Signal sources are shown in the detail sheet and stay searchable here.
+        id: 'where',
+        accessorFn: (e) => [...(e.hosts ?? []), ...e.signal_sources].join(' '),
+        header: t('cols.where'),
         cell: ({ row }) => {
           const hosts = row.original.hosts ?? []
           if (hosts.length === 0)
@@ -167,52 +144,77 @@ export function CatalogTable({
         },
       },
       {
+        accessorKey: 'status',
+        header: t('cols.status'),
+        cell: ({ getValue }) => <InvStatus status={getValue<string>()} />,
+      },
+      {
         accessorKey: 'last_seen',
         header: t('cols.lastSeen'),
         cell: ({ getValue }) => <RelTimeLabel ts={getValue<string>()} />,
-      },
-      {
-        accessorKey: 'occurrence_count',
-        header: t('cols.occurrences'),
-        cell: ({ getValue }) => (
-          <span className="font-mono tabular-nums text-muted-foreground">
-            {formatInt(getValue<number>())}
-          </span>
-        ),
       },
     ],
     [t, tShared, sessionNames],
   )
 
   return (
-    <DataTable
-      columns={columns}
-      data={rows}
-      isLoading={query.isLoading}
-      error={query.error}
-      onRetry={() => void query.refetch()}
-      getRowId={(r) => `${r.kind}:${r.entity_id}`}
-      onRowClick={onSelect}
-      searchable
-      searchPlaceholder={t('searchPlaceholder')}
-      stickyHeader
-      hasMore={query.hasNextPage}
-      onLoadMore={() => void query.fetchNextPage()}
-      isFetchingMore={query.isFetchingNextPage}
-      empty={
-        <EmptyState
-          title={t('empty.catalog.title')}
-          description={t('empty.catalog.description')}
-          action={
-            <Button asChild size="sm">
-              <Link to={'/capabilities' as never}>
-                {t('empty.catalog.action')}
-              </Link>
-            </Button>
-          }
-        />
-      }
-    />
+    <>
+      {complete && (
+        <PageSecondaryActions>
+          <Button
+            size="sm"
+            onClick={() =>
+              downloadBlob(
+                new Blob([JSON.stringify(rows, null, 2)], {
+                  type: 'application/json',
+                }),
+                'inventory.json',
+              )
+            }
+          >
+            <Download aria-hidden="true" />
+            {t('export')}
+          </Button>
+        </PageSecondaryActions>
+      )}
+      <DataTable
+        columns={columns}
+        data={rows}
+        isLoading={query.isLoading}
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        getRowId={(r) => `${r.kind}:${r.entity_id}`}
+        onRowClick={onSelect}
+        searchable
+        searchPlaceholder={t('searchPlaceholder')}
+        stickyHeader
+        hasMore={query.hasNextPage}
+        onLoadMore={() => void query.fetchNextPage()}
+        isFetchingMore={query.isFetchingNextPage}
+        empty={
+          kind || status ? (
+            <EmptyState
+              quiet
+              title={t('empty.filtered.title')}
+              description={t('empty.filtered.description')}
+            />
+          ) : (
+            <EmptyState
+              icon={<Boxes />}
+              title={t('empty.catalog.title')}
+              description={t('empty.catalog.description')}
+              action={
+                <Button asChild size="sm">
+                  <Link to={'/capabilities' as never}>
+                    {t('empty.catalog.action')}
+                  </Link>
+                </Button>
+              }
+            />
+          )
+        }
+      />
+    </>
   )
 }
 

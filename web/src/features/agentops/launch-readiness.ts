@@ -48,7 +48,7 @@ export function isProfileChangedError(err: unknown): boolean {
 /** 401/403/404 must never keep a previous observation on screen or on submit. */
 export function readinessObservationIsUnusable(err: unknown): boolean {
   if (!isApiError(err)) return false
-  return err.status === 401 || err.status === 403 || err.status === 404
+  return err.isUnauthenticated || err.isForbiddenOrEdition || err.isNotFound
 }
 
 /**

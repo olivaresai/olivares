@@ -18,8 +18,6 @@
     "search": "エントリを検索…",
     "name": "名前",
     "kind": "種別",
-    "slug": "スラッグ",
-    "version": "バージョン",
     "status": "ステータス",
     "owner": "オーナー",
     "signing": "署名",

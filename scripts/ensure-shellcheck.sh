@@ -87,9 +87,17 @@ done
 dest="$(elegir_destino)" || exit 2
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-if ! command curl -sS -L -o "$tmp/sc.tar.xz" "$URL" 2>/dev/null; then
-	echo "ensure-shellcheck: COULD NOT LOOK: shellcheck v${VER} is unavailable and could not be downloaded." >&2
-	exit 2
+if ! command curl -fsSL --retry 3 -o "$tmp/sc.tar.xz" "$URL" 2>/dev/null; then
+	# github.com's release-download front answered 504 for hours on 2026-11-08 and 2026-11-09 while the release
+	# API served the same asset. Only the source changes: the pinned hashes below still decide what is installed.
+	api="https://api.github.com/repos/koalaman/shellcheck/releases/tags/v${VER}"
+	echo "ensure-shellcheck: $URL could not be downloaded; fetching the same asset through $api" >&2
+	asset="$(command curl -fsSL --retry 3 "$api" |
+		jq -er --arg name "${URL##*/}" '.assets[] | select(.name == $name) | .url')" &&
+		command curl -fsSL --retry 3 -H 'Accept: application/octet-stream' -o "$tmp/sc.tar.xz" "$asset" || {
+		echo "ensure-shellcheck: COULD NOT LOOK: shellcheck v${VER} is unavailable and could not be downloaded." >&2
+		exit 2
+	}
 fi
 if [ "$(huella "$tmp/sc.tar.xz")" != "$TARBALL_SHA" ]; then
 	echo "ensure-shellcheck: COULD NOT LOOK: the downloaded tarball does NOT match the pinned hash." >&2

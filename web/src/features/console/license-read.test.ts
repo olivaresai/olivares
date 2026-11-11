@@ -12,7 +12,6 @@ describe('classifyLicenseRead — failed refresh is not current success', () => 
     status: 'valid',
     source: 'data_dir',
     managed_externally: false,
-    max_users: 0,
     seat_limit: 0,
     seat_limited: false,
     active_users: 1,

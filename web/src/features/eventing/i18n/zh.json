@@ -37,6 +37,17 @@
     "rotateAuth": "轮换认证",
     "testSuccess": "测试投递成功",
     "testFailed": "测试投递失败",
+    "testSent": "已向 {{name}} 发送一个已签名的测试事件 (eventing.test)。",
+    "testAnswer": {
+      "http": "对方以 HTTP {{code}} 应答。",
+      "timeout": "对方未在时限内应答。",
+      "network": "无法连接到对方。"
+    },
+    "testNotSent": {
+      "endpoint_invalid": "未发送任何内容：{{name}} 的端点地址无效。",
+      "egress": "未发送任何内容：出站策略不允许发往 {{name}} 的事件离开 ({{outcome}})。",
+      "other": "未向 {{name}} 发送任何内容 ({{outcome}})。"
+    },
     "deleted": "订阅已删除",
     "rotated": "密钥已轮换",
     "authRotated": "认证凭据已轮换",
@@ -96,7 +107,7 @@
       "maxAttempts": "最大尝试次数必须为 0 或介于 1 到 20 之间。",
       "initialInterval": "初始间隔必须为 0 或介于 5 到 3600 秒之间。"
     },
-    "businessRequired": "SIEM 推送和外部遥测导出需要 Business。设置会保留；Community 不会发送数据。"
+    "businessRequired": "SIEM 推送和外部遥测导出需要 Olivares AI Business。设置会保留；Olivares AI Community 不会发送数据。"
   },
   "secret": {
     "title": "订阅密钥",

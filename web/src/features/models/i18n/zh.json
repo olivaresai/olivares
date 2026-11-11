@@ -346,6 +346,8 @@
     "installModel": "安装模型",
     "addProvider": "添加提供商",
     "sourceFailed": "无法读取{{source}}。其他来源仍会显示。",
+    "providerFailed": "{{source}} 未列出其模型：请在提供商中运行<0>测试连接</0>。",
+    "providerFailedAlone": "{{source}} 未列出其模型。",
     "sources": {
       "tools": "工具的模型列表",
       "ollama": "Ollama",

@@ -88,13 +88,18 @@ silently forgets.
 
 ## Notes
 
-For supported Codex permission requests, **Approve for this session** grants the
-reviewed permission for the current session. **Approve once** keeps its single-use
-behavior. The same choice is available in the conversation and the approval queue.
-API clients can send `{"decision":"approve","scope":"session"}` when the request
-reports `session_scope_allowed: true`. Other requests reject this scope with HTTP
-400 and record no decision. The decision trail and audit event retain the scope;
-when several people must approve, a single-use decision keeps the grant single-use.
+**Allow for this session** allows the same command, or the same tool and target
+path, for the rest of this session. A different action or a new session asks
+again. **Approve once** remains single-use. Session allowances appear in the
+session's Context pane, where an administrator can revoke each one. Matching
+approval policies require review every time and hide the session option.
+
+For Edit and Write, the entire effective tool input must also match, including the content. These allowances have no separate time limit: they end when revoked, when the session stops, or when its process changes. MultiEdit does not offer session allowances.
+
+API clients can send `{"decision":"approve","scope":"session"}` only when the
+request reports `session_scope_allowed: true`. Every decision, reuse and
+revocation is audited. Providers receive single-use replies so revocation and
+live policy checks remain effective.
 
 - `escalate_in_seconds` notifies the SoD team if a request sits undecided —
   use it for production-critical actions.

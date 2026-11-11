@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { create } from 'zustand'
+import type { FromCheckpoint } from '@/features/agentops/run-create-dialog'
+import type { PermissionChoice } from '@/features/agentops/session-launch'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 
@@ -13,7 +15,14 @@ export interface AdvancedLaunch {
   message?: string
   workspaceRef?: string
   templateId?: string
+  /** A new worktree the New session form chose: at the folder's current commit unless
+   * `worktreeFrom` names a start. */
+  worktree?: boolean
   worktreeFrom?: string
+  /** What the agent may do, as the New session form shows it. */
+  permission?: PermissionChoice
+  /** With a new worktree, the files of a message it starts with (Edit from here). */
+  fromCheckpoint?: FromCheckpoint
   driver?: string
   profileRef?: string
   model?: string

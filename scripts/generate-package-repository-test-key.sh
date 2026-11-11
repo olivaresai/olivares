@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# TEST-ONLY key-set generator for DIST-24-06 batteries. The production renderer
+# TEST-ONLY key-set generator for package qualification. The production renderer
 # never calls this helper and rejects its descriptor unless the same explicit
 # test-only latch is present.
 set -euo pipefail
@@ -39,7 +39,7 @@ key_epoch="${OLIVARES_PACKAGE_REPO_TEST_KEY_EPOCH:-1704067200}"
 }
 gpg --batch --yes --pinentry-mode loopback --passphrase '' \
 	--faked-system-time "${key_epoch}!" --quick-generate-key \
-	'Olivares DIST-24-06 TEST ONLY <dist24-06-test@invalid.olivares.ai>' rsa2048 sign 0 \
+	'Olivares AI qualification TEST ONLY <qualification-test@invalid.olivares.ai>' rsa2048 sign 0 \
 	>/dev/null 2>&1
 fingerprint="$(gpg --batch --with-colons --list-secret-keys 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}')"
 [[ "$fingerprint" =~ ^[0-9A-F]{40}$ ]] || {

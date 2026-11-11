@@ -282,6 +282,20 @@
       "noPolicyBadge": "nessuna policy selezionata",
       "noPolicyBody": "Lo store non seleziona alcuna revisione Cedar, quindi da qui non c'è nulla in vigore. Non è un errore: è un tenant che non ha ancora pubblicato una policy.",
       "grantsExpired": "Questo processo ha superato il limite di obsolescenza offline, quindi le concessioni POSITIVE della policy sono degradate ad astensione. Le sue regole forbid restano applicate. La policy È caricata qui: ciò che è scaduto è la fiducia nelle sue concessioni."
+    },
+    "person": "Persona",
+    "personHint": "Prova come questa persona, con il suo ruolo e i suoi gruppi.",
+    "personNone": "Chiunque (nessuna persona)",
+    "policyTests": {
+      "title": "Test della policy",
+      "sub": "Ogni pubblicazione deve rispettarli. Una pubblicazione che ne viola uno viene rifiutata e lo nomina.",
+      "name": "Nome del test",
+      "expect": "Atteso",
+      "allow": "Deve essere consentito",
+      "deny": "Deve essere negato",
+      "add": "Aggiungi come test",
+      "empty": "Ancora nessun test. Prepara la richiesta di esempio, assegnale un nome e aggiungila.",
+      "remove": "Rimuovi {{name}}"
     }
   },
   "dist": {

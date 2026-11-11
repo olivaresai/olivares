@@ -11,7 +11,6 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
-import { cn } from '@/lib/utils'
 import { canCapture, startCapture, type Capture } from './capture'
 import { loadRecognizer, transcribe } from './recognizer'
 import './i18n'
@@ -177,12 +176,9 @@ export function DictateButton({
         ref={button}
         type="button"
         variant={listening ? 'secondary' : 'ghost'}
-        size="icon"
-        // 32 px to the eye like Send beside it; the ::after ring makes the target 44 px.
-        className={cn(
-          "relative rounded-full after:absolute after:-inset-1.5 after:rounded-full after:content-['']",
-          listening && 'text-danger',
-        )}
+        // Flat like the composer's pickers, of the shared small size.
+        size="sm"
+        className={listening ? 'text-danger' : undefined}
         aria-label={t('dictate')}
         aria-pressed={listening}
         aria-busy={busy}

@@ -1,9 +1,55 @@
 {
   "title": "Usage",
-  "subtitle": "Official 5-hour and weekly limits beside today's tokens and cost.",
+  "subtitle": "What sessions used and cost over the days you choose, beside each account's 5-hour and weekly limits.",
+  "subtitleNoCost": "What sessions used over the days you choose, beside each account's 5-hour and weekly limits.",
   "tabs": {
     "accounts": "Accounts",
     "timeline": "Timeline"
+  },
+  "spend": {
+    "heading": "Spend",
+    "headingNoCost": "Runs and tokens",
+    "range": {
+      "label": "Time range",
+      "d7": "7 days",
+      "d14": "14 days",
+      "d30": "30 days",
+      "custom": "Custom",
+      "from": "First day",
+      "to": "Last day",
+      "invalid": "The first day must be on or before the last. A range holds at most {{days}} days."
+    },
+    "tool": "Tool",
+    "allTools": "All tools",
+    "profile": "Profile",
+    "allProfiles": "All profiles",
+    "export": "Export",
+    "totals": "Totals",
+    "cost": "Spend",
+    "runs": "Runs",
+    "input": "Input tokens",
+    "output": "Output tokens",
+    "costUnreported": "Runs with no cost reported: {{runs}}",
+    "tokensUnreported": "Runs with no tokens reported: {{runs}}",
+    "empty": {
+      "title": "Nothing ran in these days",
+      "description": "Choose more days, or start a session: what it uses appears here."
+    },
+    "chart": {
+      "cost": "Daily spend",
+      "tokens": "Daily tokens",
+      "day": "Day",
+      "summary": "{{title}} from {{from}} to {{to}}: {{total}} in all.",
+      "unpriced": "Runs that reported no cost are not in the chart."
+    },
+    "profiles": {
+      "heading": "By profile",
+      "profile": "Profile",
+      "input": "Input",
+      "output": "Output",
+      "none": "No profile",
+      "unnamed": "Unnamed profile"
+    }
   },
   "accounts": {
     "heading": "Accounts",
@@ -11,7 +57,8 @@
     "error": "The accounts' limits could not be read.",
     "empty": "No account has reported its limits yet.",
     "details": "Details",
-    "detailsFor": "Details of {{account}}"
+    "detailsFor": "Details of {{account}}",
+    "emptyChosen": "No account of this tool or profile has reported its limits yet."
   },
   "today": {
     "heading": "Today",

@@ -3,6 +3,7 @@
     "draftNotice": "Cette unité est en brouillon ; ses critères peuvent donc encore être corrigés. La clé du critère est une identité permanente et n'est jamais réattribuée.",
     "lockedNotice": "Cette unité a quitté le brouillon ; les critères ne peuvent donc plus être modifiés, seulement évalués. La clé du critère est une identité permanente.",
     "none": "Aucun critère d'acceptation.",
+    "noneBody": "Les vérifications qui disent quand cette unité est terminée s'affichent ici une fois définies.",
     "required": "Obligatoire",
     "state": {
       "pending": "En attente",
@@ -143,20 +144,21 @@
     "empty": {
       "effective": {
         "title": "Aucune décision en vigueur",
-        "body": "Aucune décision n'est en vigueur."
+        "body": "Les décisions enregistrées sur les unités de travail s'affichent ici tant qu'elles sont en vigueur."
       },
       "revoked": {
         "title": "Aucune décision révoquée",
-        "body": "Aucune décision n'a été révoquée."
+        "body": "Une décision apparaît ici dès qu'elle est révoquée."
       },
       "history": {
         "title": "Aucune décision enregistrée",
-        "body": "Rien n'a encore été décidé ici."
+        "body": "Chaque décision enregistrée sur les unités de travail s'affiche ici."
       }
     }
   },
   "dependencies": {
-    "none": "Aucune dépendance."
+    "none": "Aucune dépendance.",
+    "noneBody": "Les unités de travail que celle-ci attend s'affichent ici ; elle peut commencer quand chacune est terminée."
   },
   "detail": {
     "subtitle": "{{kind}} · version {{version}}",
@@ -164,8 +166,12 @@
     "owner": "Responsable",
     "provenance": "Provenance",
     "priority": "Priorité",
+    "waitsOn": "Attend",
+    "waitsOnDependencies": "Des unités de travail dont il dépend et qui ne sont pas encore terminées",
     "blocked": "Blocage",
     "terminal": "Issue",
+    "due": "Échéance",
+    "ended": "Terminé le",
     "etag": "Étiquette de version",
     "tabs": {
       "overview": "Aperçu",
@@ -176,7 +182,8 @@
     }
   },
   "events": {
-    "none": "Aucun événement enregistré pour cette unité."
+    "none": "Aucun événement enregistré pour cette unité.",
+    "noneBody": "Chaque modification de cette unité est enregistrée ici dès qu'elle a lieu."
   },
   "filters": {
     "status": "Statut",
@@ -215,12 +222,10 @@
     "unknown": "Impossible de regarder",
     "reason": "Motif",
     "ttl": "TTL (secondes)",
-    "noWrite": "Votre rôle ne peut pas modifier ce bail.",
     "noAdmin": "Reprendre, révoquer et rebaser exigent lease admin.",
+    "heldBy": "La session {{holder}} détient cet élément ; la session elle-même prend, renouvelle et libère le bail.",
+    "vacant": "Aucune session ne détient cet élément ; une session prend, renouvelle et libère elle-même le bail.",
     "actions": {
-      "acquire": "Acquérir",
-      "renew": "Renouveler",
-      "release": "Libérer",
       "takeover": "Reprendre",
       "revoke": "Révoquer",
       "clockRebase": "Rebaser l'horloge"
@@ -246,7 +251,7 @@
     "error": "Flux interrompu",
     "unavailableBody": "La liste affichée peut être obsolète, et rien d'autre ne vous en avertira. Actualisez pour lire directement le magasin."
   },
-  "subtitle": "Le travail que partagent les sessions et les personnes : unités, responsables, dépendances, critères d'acceptation et décisions. Chaque modification est affichée avant d'être appliquée.",
+  "subtitle": "Suivre les unités de travail : qui en est responsable, ce qu’elles attendent et quand elles sont terminées.",
   "tabs": {
     "items": "Unités de travail",
     "decisions": "Décisions"
@@ -262,7 +267,7 @@
     "item.cancel": "Annuler",
     "item.archive": "Archiver",
     "noWrite": "Votre rôle ne peut pas modifier cet élément.",
-    "noAdmin": "Votre rôle ne peut ni marquer des éléments en échec ni les archiver."
+    "noAdmin": "Votre rôle ne peut pas archiver des éléments."
   },
   "truncation": {
     "label": "{{n}} lignes chargées ; il y en a d'autres",

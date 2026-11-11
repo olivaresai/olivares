@@ -87,7 +87,9 @@ describe('SCIM card on a Community server', () => {
     mount(<FederationTab />)
 
     expect(
-      await screen.findByText(/inbound SCIM server requires Business/i),
+      await screen.findByText(
+        /inbound SCIM server requires Olivares AI Business/i,
+      ),
     ).toBeInTheDocument()
     expect(api.scimServiceProviderConfig).not.toHaveBeenCalled()
     expect(api.scimUsers).not.toHaveBeenCalled()
@@ -101,7 +103,7 @@ describe('SCIM card on a Community server', () => {
     expect(api.scimServiceProviderConfig).not.toHaveBeenCalled()
     expect(api.scimUsers).not.toHaveBeenCalled()
     expect(
-      screen.queryByText(/inbound SCIM server requires Business/i),
+      screen.queryByText(/inbound SCIM server requires Olivares AI Business/i),
     ).not.toBeInTheDocument()
     // Users are not read yet, so the table is loading: "No users" would say they were read and none exist.
     expect(screen.queryByText('No users synchronized')).not.toBeInTheDocument()
@@ -111,7 +113,9 @@ describe('SCIM card on a Community server', () => {
     mount(<FederationTab />)
 
     expect(
-      await screen.findByText(/inbound SCIM server requires Business/i),
+      await screen.findByText(
+        /inbound SCIM server requires Olivares AI Business/i,
+      ),
     ).toBeInTheDocument()
     // The two "backend pending" seams and the inbound-groups promise are gone.
     expect(
@@ -133,7 +137,7 @@ describe('SCIM card on a Community server', () => {
 
     expect(await screen.findByText('usr_1')).toBeInTheDocument()
     expect(
-      screen.queryByText(/inbound SCIM server requires Business/i),
+      screen.queryByText(/inbound SCIM server requires Olivares AI Business/i),
     ).not.toBeInTheDocument()
   })
 })

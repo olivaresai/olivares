@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { Fragment, useEffect, type ReactNode } from 'react'
+import { BoxedList, BoxedListRow } from '@/components/ui/boxed-list'
+import { Fragment, useEffect } from 'react'
 import { SystemAdminOnly } from '@/components/layout/system-admin-only'
 import { AppLink } from '@/components/ui/app-link'
 import { useTranslation } from 'react-i18next'
@@ -20,6 +21,7 @@ import { Segmented } from '@/components/ui/segmented'
 import { EditionBadgeSetting } from '@/features/console/edition-badge-setting'
 import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/lib/auth/context'
+import { editionName } from '@/lib/edition'
 import { EDITOR_IDS, EDITORS, type EditorId } from '@/lib/editor-links'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import {
@@ -28,8 +30,8 @@ import {
   type LanguageCode,
   currentLanguage,
 } from '@/lib/i18n'
-import { isTypingTarget } from '@/lib/keybindings/model'
-import { KEYBINDINGS } from '@/lib/keybindings/table'
+import { chordHint, chordKeys, isTypingTarget } from '@/lib/keybindings/model'
+import { COMMAND_GROUP, KEY_GROUPS, KEYBINDINGS } from '@/lib/keybindings/table'
 import { SignInSettings } from '@/features/settings/sign-in-settings'
 import { LimitResumePreference } from '@/features/sessions/limit-resume-preference'
 import { SessionNotificationSetting } from '@/features/settings/session-notification-setting'
@@ -43,7 +45,6 @@ import {
   SETTINGS_SECTIONS,
   settingsSections,
   type SettingsSection,
-  type SettingsSectionId,
 } from '@/features/settings/sections'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { ReportSigningSettings } from '@/features/settings/report-signing-settings'
@@ -59,6 +60,8 @@ import {
   START_PAGE_IDS,
   useClientSettings,
   type ClockFormat,
+  type SendKey,
+  type SendWhileRunning,
   type StartPageId,
 } from '@/features/settings/preferences'
 import { usePreferencesStore, type Density } from '@/stores/preferences'
@@ -73,18 +76,21 @@ import { NotificationEventSettings } from '@/features/settings/notification-even
 
 const THEMES = ['system', 'light', 'dark', 'black'] as const
 
-/** Samples of the three frames. A child cannot escape `.dark` variable inheritance. */
+/**
+ * Samples of the three frames. A child cannot escape `.dark` variable inheritance. A bar is
+ * line-strong over the frame in every theme.
+ */
 const PREVIEW = {
   light: {
-    frame: '#f2f2f1',
+    frame: '#ecebe9',
     canvas: '#fafaf9',
-    bar: '#d6d6d3',
+    bar: '#cdcccb',
     accent: '#f08000',
   },
   dark: {
     frame: '#1b1b1e',
     canvas: '#28282b',
-    bar: '#343434',
+    bar: '#39393b',
     accent: '#f08000',
   },
   black: {
@@ -152,6 +158,19 @@ function PreviewPane({ tone }: { tone: keyof typeof PREVIEW }) {
   )
 }
 
+/**
+ * General's titled groups, by the key of each row. A row no group names (a
+ * search result from another section) shows in an untitled list after them.
+ */
+const GENERAL_GROUPS: [string, string[]][] = [
+  ['appearance', ['theme', 'density', 'motion']],
+  ['language', ['language', 'time']],
+  ['start', ['start']],
+  ['sessions', ['sendKey', 'sendWhileRunning', 'confirm', 'usage-reset']],
+  ['editor', ['editor', 'editorSsh']],
+]
+const GROUPED_KEYS = GENERAL_GROUPS.flatMap(([, keys]) => keys)
+
 function RestoreAll() {
   const { t } = useTranslation('settings')
   const setTheme = useThemeStore((s) => s.setTheme)
@@ -188,6 +207,10 @@ export function SettingsPage() {
   const startPage = useClientSettings((s) => s.startPage)
   const setStartPage = useClientSettings((s) => s.setStartPage)
   const confirmStop = useClientSettings((s) => s.confirmStop)
+  const sendKey = useClientSettings((s) => s.sendKey)
+  const setSendKey = useClientSettings((s) => s.setSendKey)
+  const sendWhileRunning = useClientSettings((s) => s.sendWhileRunning)
+  const setSendWhileRunning = useClientSettings((s) => s.setSendWhileRunning)
   const setConfirmStop = useClientSettings((s) => s.setConfirmStop)
   const editor = useClientSettings((s) => s.editor)
   const setEditor = useClientSettings((s) => s.setEditor)
@@ -195,7 +218,7 @@ export function SettingsPage() {
   const setEditorSsh = useClientSettings((s) => s.setEditorSsh)
   // `add` and `returnTo` belong to the AI tools room (the setup wizard's "Add an API key"):
   // owned here only so that leaving a section can clear them.
-  const [url, patchUrl] = useUrlState(['section', 'q', 'add', 'returnTo'])
+  const [url] = useUrlState(['section', 'q', 'add', 'returnTo'])
   // A page this installation does not run, or this principal may not open, is neither a
   // section nor offered as a start page: the same gate the sidebar uses.
   const { navigable, state } = useViewAccess()
@@ -217,25 +240,7 @@ export function SettingsPage() {
   const query = url.q ?? ''
   // The wizard's address stays behind when the hosted room goes away (another section, or a
   // search in its place), or the add-a-key form would reopen when the room mounts again.
-  const wizardAddress = { add: undefined, returnTo: undefined }
-  const setQuery = (q: string) => patchUrl({ q, ...wizardAddress })
   // A section is a place, not a filter: Back returns to the one before it, inside Settings.
-  const setSection = (section: SettingsSectionId) =>
-    patchUrl({ section, q: undefined, ...wizardAddress }, { history: 'push' })
-  const sectionButton = (id: SettingsSectionId) => {
-    const entry = offered.find((s) => s.id === id)
-    if (!entry) return null
-    const Icon = entry.icon
-    return (
-      <NavButton
-        current={section === id && !withheld && query.trim().length === 0}
-        onClick={() => setSection(id)}
-        icon={<Icon aria-hidden className="size-3.5" />}
-      >
-        {t(`nav.${id}`)}
-      </NavButton>
-    )
-  }
   const linked = (id: string) => {
     const view = viewById(id)
     return view && navigable(view) ? view : undefined
@@ -279,6 +284,10 @@ export function SettingsPage() {
   const timeHint = t('general.timeHint', { zone })
   const startName = t('general.startPage')
   const startHint = t('general.startPageHint')
+  const sendKeyName = t('general.sendKey')
+  const sendKeyHint = t('general.sendKeyHint')
+  const sendRunName = t('general.sendWhileRunning')
+  const sendRunHint = t('general.sendWhileRunningHint')
   const confirmName = t('general.confirmStop')
   const confirmHint = t('general.confirmStopHint')
   const editorName = t('general.editor')
@@ -450,6 +459,50 @@ export function SettingsPage() {
         }
       />
     ) : null,
+    rowMatches(sendKeyName, sendKeyHint) ? (
+      <Row
+        key="sendKey"
+        name={sendKeyName}
+        description={sendKeyHint}
+        changed={sendKey !== CLIENT_SETTING_DEFAULTS.sendKey}
+        onReset={() => setSendKey(CLIENT_SETTING_DEFAULTS.sendKey)}
+        control={
+          <Segmented<SendKey>
+            aria-label={sendKeyName}
+            size="sm"
+            value={sendKey}
+            onValueChange={setSendKey}
+            options={[
+              { value: 'enter', label: 'Enter' },
+              { value: 'modEnter', label: chordHint('Mod+Enter') },
+            ]}
+          />
+        }
+      />
+    ) : null,
+    rowMatches(sendRunName, sendRunHint) ? (
+      <Row
+        key="sendWhileRunning"
+        name={sendRunName}
+        description={sendRunHint}
+        changed={sendWhileRunning !== CLIENT_SETTING_DEFAULTS.sendWhileRunning}
+        onReset={() =>
+          setSendWhileRunning(CLIENT_SETTING_DEFAULTS.sendWhileRunning)
+        }
+        control={
+          <Segmented<SendWhileRunning>
+            aria-label={sendRunName}
+            size="sm"
+            value={sendWhileRunning}
+            onValueChange={setSendWhileRunning}
+            options={[
+              { value: 'queue', label: t('general.sendQueue') },
+              { value: 'steer', label: t('general.sendSteer') },
+            ]}
+          />
+        }
+      />
+    ) : null,
     rowMatches(confirmName, confirmHint) ? (
       <Row
         key="confirm"
@@ -580,6 +633,16 @@ export function SettingsPage() {
       </div>
     ) : null,
   ].filter(Boolean)
+  const groups = [
+    ...GENERAL_GROUPS.map(([group, keys]) => ({
+      group,
+      rows: generalRows.filter((row) => keys.includes(row?.key ?? '')),
+    })),
+    {
+      group: '',
+      rows: generalRows.filter((row) => !GROUPED_KEYS.includes(row?.key ?? '')),
+    },
+  ].filter(({ rows }) => rows.length > 0)
 
   const showGeneral = q.length > 0 || (section === 'general' && !withheld)
   const editionLabel = t('nav.edition')
@@ -592,43 +655,7 @@ export function SettingsPage() {
       ))
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)]">
-        <nav
-          aria-label={t('nav.sections')}
-          className="flex flex-col gap-0.5 border-b border-line p-2.5 md:border-r md:border-b-0"
-        >
-          <label className="mb-2 flex h-8 items-center gap-2 rounded-ctl border border-ctl-border bg-canvas px-2 has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus">
-            <span className="sr-only">{t('search')}</span>
-            <input
-              id="settings-search"
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('search')}
-              className="w-full bg-transparent text-caption text-text outline-none placeholder:text-text-3"
-            />
-            <Kbd>/</Kbd>
-          </label>
-          <NavGroup label={t('groups.you')}>
-            {sectionButton('general')}
-            {sectionButton('newSessions')}
-            {sectionButton('notifications')}
-            {sectionButton('keyboard')}
-          </NavGroup>
-          <NavGroup label={t('groups.work')}>
-            {sectionButton('permissions')}
-          </NavGroup>
-          <NavGroup label={t('groups.installation')}>
-            {sectionButton('signIn')}
-            {sectionButton('setup')}
-            {sectionButton('edition')}
-            {sectionButton('modules')}
-            {sectionButton('sessionIdle')}
-            {sectionButton('tracing')}
-            {sectionButton('signing')}
-            {sectionButton('about')}
-          </NavGroup>
-        </nav>
+      <div className="grid min-h-0 flex-1 grid-cols-1">
         <div className="min-w-0 overflow-auto">
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-2 px-7 py-6">
             {q.length === 0 && withheld ? (
@@ -645,14 +672,32 @@ export function SettingsPage() {
                   actions={<RestoreAll />}
                 />
                 {generalRows.length > 0 || showLicenseResult ? (
-                  <div className="flex flex-col">{generalRows}</div>
+                  groups.map(({ group, rows }) =>
+                    group ? (
+                      <section
+                        key={group}
+                        aria-labelledby={`general-${group}`}
+                        className="flex flex-col gap-2"
+                      >
+                        <h2
+                          id={`general-${group}`}
+                          className="text-body-l font-semibold text-text"
+                        >
+                          {t(`general.groups.${group}`)}
+                        </h2>
+                        <BoxedList>{rows}</BoxedList>
+                      </section>
+                    ) : (
+                      <BoxedList key="other">{rows}</BoxedList>
+                    ),
+                  )
                 ) : (
                   <p className="text-body text-text-2">{t('noMatches')}</p>
                 )}
                 {showLicenseResult ? (
                   <AppLink
                     href="/settings?section=edition"
-                    className="text-body font-medium text-accent-text hover:underline"
+                    className="text-body font-medium text-foreground underline underline-offset-2"
                   >
                     {editionLabel}
                   </AppLink>
@@ -771,45 +816,6 @@ export function SettingsPage() {
   )
 }
 
-function NavGroup({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col">
-      <p className="px-2.5 pt-3 pb-1 text-caption font-medium text-text-3">
-        {label}
-      </p>
-      {children}
-    </div>
-  )
-}
-
-function NavButton({
-  current,
-  onClick,
-  icon,
-  children,
-}: {
-  current: boolean
-  onClick: () => void
-  icon: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      aria-current={current ? 'page' : undefined}
-      onClick={onClick}
-      className={
-        current
-          ? 'flex h-8 items-center gap-2.5 rounded-[7px] bg-active px-2.5 text-start text-caption font-medium text-text'
-          : 'flex h-8 items-center gap-2.5 rounded-[7px] px-2.5 text-start text-caption font-medium text-text-2 hover:bg-hover hover:text-text'
-      }
-    >
-      {icon}
-      {children}
-    </button>
-  )
-}
-
 function KeyboardList() {
   const { t } = useTranslation(['settings', 'common'])
   const commands = new Map<string, { command: string; keys: string[] }>()
@@ -825,26 +831,54 @@ function KeyboardList() {
         title={t('keyboard.title')}
         description={t('keyboard.scope')}
       />
-      <ul className="flex flex-col divide-y divide-line">
-        {[...commands].map(([id, rule]) => (
-          <li
-            key={id}
-            className="flex items-center justify-between gap-3 py-2 text-body"
+      {KEY_GROUPS.map((group) => {
+        // Grouped and printed as the shortcut help does: one cap per key.
+        const rows = [...commands].filter(
+          ([, rule]) => COMMAND_GROUP[rule.command] === group,
+        )
+        if (rows.length === 0) return null
+        return (
+          <section
+            key={group}
+            aria-labelledby={`keys-${group}`}
+            className="flex flex-col gap-2"
           >
-            <span className="min-w-0 truncate">
-              {t(`common:keys.command.${rule.command}`)}
-            </span>
-            <span className="flex shrink-0 gap-2">
-              {rule.keys.map((keys, index) => (
-                <Fragment key={keys}>
-                  {index > 0 ? <span className="text-text-3">/</span> : null}
-                  <Kbd>{keys}</Kbd>
-                </Fragment>
+            <h2
+              id={`keys-${group}`}
+              className="text-body-l font-semibold text-text"
+            >
+              {t(`common:keys.group.${group}`)}
+            </h2>
+            <BoxedList role="list">
+              {rows.map(([id, rule]) => (
+                <BoxedListRow
+                  key={id}
+                  role="listitem"
+                  className="justify-between"
+                >
+                  <span className="min-w-0 truncate text-body">
+                    {t(`common:keys.command.${rule.command}`)}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {rule.keys.map((keys, index) => (
+                      <Fragment key={keys}>
+                        {index > 0 ? (
+                          <span className="text-text-3">/</span>
+                        ) : null}
+                        <span className="flex gap-1">
+                          {chordKeys(keys).map((token) => (
+                            <Kbd key={token}>{token}</Kbd>
+                          ))}
+                        </span>
+                      </Fragment>
+                    ))}
+                  </span>
+                </BoxedListRow>
               ))}
-            </span>
-          </li>
-        ))}
-      </ul>
+            </BoxedList>
+          </section>
+        )
+      })}
     </>
   )
 }
@@ -864,10 +898,7 @@ function Edition({
 }) {
   const { t } = useTranslation('settings')
   const summary = useEditionSummary()
-  const name =
-    edition === 'community' || edition === 'enterprise'
-      ? t(`edition.editions.${edition}`)
-      : (edition ?? t('edition.unknown'))
+  const name = editionName(edition, t) ?? edition ?? t('edition.unknown')
   return (
     <>
       {!superadmin ? (

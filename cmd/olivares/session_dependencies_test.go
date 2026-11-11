@@ -121,7 +121,7 @@ func TestSessionsDependencySetFromRealBoot(t *testing.T) {
 			"ProtocolBindingReconciler", "CommunicationSealer", "CommunicationDirectoryResolver",
 			"CommunicationAudienceAttestor", "CommunicationGrantClosure", "CommunicationReadAuthorizer",
 			"CommunicationOperationAuthorizer", "CommunicationGuardData", "CommunicationStoreReadiness",
-			"CommunicationPumpReadiness", "CursorKeyring", "Runner", "GitRead", "Creds", "Classifier",
+			"CommunicationPumpReadiness", "CursorKeyring", "Runner", "GitRead", "ApprovedRemotes", "Creds", "Classifier",
 			"ProgramResolver", "ProviderVault", "ProviderProbe", "HostTools", "Tracer", "ApprovalRecoveryTenants",
 		}
 		for _, name := range optional {

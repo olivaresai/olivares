@@ -35,7 +35,7 @@ export function RunningRing({ className }: { className?: string }) {
 
 const TONE: Record<Status, StatusTone> = {
   working: 'ok',
-  'needs-you': 'warn',
+  'needs-you': 'need',
   done: 'ok',
   failed: 'bad',
   paused: 'neutral',

@@ -663,7 +663,9 @@ func strictAttemptPolicy(p model.Policy) (budgetSpec, storedSpendLimitSpec, Dige
 		return bad()
 	}
 	for name := range p.Spec {
-		if !contains(fields, name) {
+		// exempt_actors is a group budget's standing exception: this cut applies none, which
+		// only ever denies more, and leaves it out of the digest of the money it binds.
+		if !contains(fields, name) && !(p.Kind == policyKindBudget && name == "exempt_actors") {
 			return bad()
 		}
 	}

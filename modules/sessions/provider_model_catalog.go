@@ -105,7 +105,7 @@ func (m *Module) profileCatalogContext(ctx context.Context, tenant model.TenantI
 	if prof.ProviderRecordRef != "" {
 		rec, err = m.GetProviderRecord(ctx, tenant, prof.ProviderRecordRef)
 		if err == nil && rec.State != ProviderRecordActive {
-			err = ErrProviderRecordRevoked
+			err = providerRecordUnusable(rec.State)
 		}
 		revision += "/" + strconv.FormatInt(rec.Version, 10)
 	} else {

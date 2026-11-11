@@ -36,7 +36,9 @@
     "menu": "{{label}}の操作",
     "copyPassword": "{{label}}のパスワードをコピー",
     "copyNote": "{{label}}のメモをコピー",
-    "copyCode": "{{label}}のコードをコピー"
+    "copyCode": "{{label}}のコードをコピー",
+    "changed": "更新日時",
+    "actions": "操作"
   },
   "delete": {
     "title": "{{label}}を削除しますか？",

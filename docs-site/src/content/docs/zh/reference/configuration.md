@@ -4,7 +4,7 @@ description: "Olivares AI control plane 经过验证的配置接口面：serve �
 ---
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、账本验证（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、账本读取和 `olivares dr backup`；证据操作返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、账本验证（`GET /v1/audit/verify`、`olivares audit tree verify`, `olivares audit tree prove`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、账本读取和 `olivares dr backup`；证据操作返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
 :::
 
 从 0.1 起，由 KMS 密封的签名密钥和配置文件（CMEK）需要 Business 二进制文件。由运维人员提供的签名密钥和 `keys status` 仍属于 Community。托管声明 BYOK（`OLIVARES_KEY_CUSTODY=byok`）与 HYOK（`OLIVARES_LEDGER_CUSTODY=hyok`）、主机外的检查点签名（`OLIVARES_LEDGER_SIGNER`）以及 `olivares audit key-transition` 需要 Business 二进制文件；Community 会以退出码 9 拒绝它们。Community 会在打开存储或创建密钥之前拒绝已配置 CMEK 的安装。请使用 Business 和客户的 KMS 执行 `dr backup` 和 `keys unseal`；恢复不需要有效许可证。

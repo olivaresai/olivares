@@ -653,7 +653,9 @@ function FailurePanel({
             ? t('apply.conflictIdempotencyBody')
             : failure === 'conflict-domain'
               ? t('apply.conflictDomainBody')
-              : t('apply.otherBody')
+              : failure === 'forbidden'
+                ? t('errors:forbidden.nextStep')
+                : t('apply.otherBody')
 
   return (
     <div
@@ -662,7 +664,9 @@ function FailurePanel({
     >
       <div className="flex items-center gap-2 font-medium">
         <ShieldAlert aria-hidden className="size-4 shrink-0" />
-        {t(`apply.failure.${failure}`)}
+        {failure === 'forbidden'
+          ? t('errors:forbidden.title')
+          : t(`apply.failure.${failure}`)}
       </div>
       {dependencyReason ?? (
         <p className="text-danger">

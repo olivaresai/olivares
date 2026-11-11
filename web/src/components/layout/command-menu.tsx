@@ -64,6 +64,7 @@ import {
   NAV_SEQUENCES,
   PALETTE_RECENT_COMMANDS,
 } from '@/lib/keybindings/table'
+import { keysFor, useKeybindings } from '@/lib/keybindings/effective'
 import { askApi, askKeys as askQueryKeys } from '@/features/ask/ask'
 import { useAskStore } from '@/stores/ask'
 import { useCommandStore } from '@/stores/command'
@@ -179,7 +180,7 @@ export function CommandMenu() {
       title={t('common:commandPalette.placeholder')}
       description={t('common:commandPalette.navigation')}
       shouldFilter={false}
-      className="top-[88px] w-[min(660px,calc(100%-2rem))] max-w-none sm:top-[88px] sm:max-w-[660px]"
+      className="top-[88px] w-[min(640px,calc(100%-2rem))] max-w-none sm:top-[88px] sm:max-w-[640px]"
       onCloseAutoFocus={(e) => {
         const el = useCommandStore.getState().opener
         if (el && el.isConnected) {
@@ -218,8 +219,9 @@ function PaletteBody() {
   const setOpen = useCommandStore((s) => s.setOpen)
   // Ask is the models module's: its view is not read while that module is off.
   const modelsOn = useModuleOn('models')
+  const { activeTenant, can, logout, isSuperadmin } = useAuth()
   const askView = useQuery({
-    queryKey: askQueryKeys.view,
+    queryKey: askQueryKeys.view(activeTenant),
     queryFn: ({ signal }) => askApi.view(signal),
     enabled: modelsOn,
   })
@@ -236,7 +238,6 @@ function PaletteBody() {
         '[data-testid="work-rail"] [aria-selected="true"][data-address]',
       )
       ?.getAttribute('data-address')
-  const { activeTenant, can, logout, isSuperadmin } = useAuth()
   const { navigable, listed } = useViewAccess()
   // The verbs' own authority, which is NOT the view's (see features/navigation/command-actions).
   const { authorized: mayRun, capture } = useCommandActionAuthority()
@@ -247,6 +248,10 @@ function PaletteBody() {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const { scope: paletteScope, text: matchQuery } = matchQueryOf(query)
+  // OPENED, NOT YET TYPED: the next step, not every verb the palette knows. The
+  // selected object's actions, starting work, then every place; themes, sign out,
+  // importing and a page's own verbs are one word away, or all of them under `>`.
+  const browsing = paletteScope === 'all' && matchQuery === ''
   // The selected object's actions, listed first by the palette when it opens with an
   // empty query. The surface that owns the object registers them here.
   const objectActions = useObjectActionsStore((s) => s.current)
@@ -513,7 +518,7 @@ function PaletteBody() {
         const label = t(`nav:commandActions.${v.id}.${action.id}`, {
           defaultValue: '',
         })
-        if (!label || !shows(label)) return null
+        if (!label || browsing || !shows(label)) return null
         const blocked = refusal(action.permission)
         return (
           <CommandItem
@@ -570,7 +575,8 @@ function PaletteBody() {
    * have to invent the one field that must be chosen.
    */
   const importSessionLabel = t('sessions:import.title')
-  const showImportSession = shows(`${importSessionLabel} Claude Code`)
+  const showImportSession =
+    !browsing && shows(`${importSessionLabel} Claude Code`)
   const importBlocked =
     refusal('sessions:run:write') ||
     refusal('sessions:account:read') ||
@@ -579,26 +585,28 @@ function PaletteBody() {
   const showStartSession = shows(startSessionLabel)
   const startBlocked = refusal('sessions:run:write')
   const sessionsPath = viewById('sessions')?.path
-  const startKeys = chordKeys(
-    KEYBINDINGS.find((rule) => rule.command === 'session.new')?.keys ?? '',
-  ).map((part) => (part.length === 1 ? part.toUpperCase() : part))
+  // The keys a command fires on now: the person's own from Settings › Keyboard.
+  const bindings = useKeybindings()
+  const keysOf = (command: string) =>
+    chordKeys(keysFor(bindings, command)).map((part) =>
+      part.length === 1 ? part.toUpperCase() : part,
+    )
+  const startKeys = keysOf('session.new')
 
   const askLabel = t('common:commandPalette.ask')
   // With no model chosen by an administrator, Ask is off and the entry does not appear.
   const showAsk = askView.data?.enabled === true && shows(askLabel)
   const askBlocked = refusal('models:ask:write')
-  const askKeys = chordKeys(
-    KEYBINDINGS.find((rule) => rule.command === 'ask.open')?.keys ?? '',
-  ).map((part) => (part.length === 1 ? part.toUpperCase() : part))
+  const askKeys = keysOf('ask.open')
   const lightLabel = t('common:theme.light')
   const darkLabel = t('common:theme.dark')
   const blackLabel = t('common:theme.black')
   const signOutLabel = t('auth:account.signOut')
   const themeLabel = t('common:theme.label')
-  const showLight = shows(`${themeLabel} ${lightLabel}`)
-  const showDark = shows(`${themeLabel} ${darkLabel}`)
-  const showBlack = shows(`${themeLabel} ${blackLabel}`)
-  const showSignOut = shows(signOutLabel)
+  const showLight = !browsing && shows(`${themeLabel} ${lightLabel}`)
+  const showDark = !browsing && shows(`${themeLabel} ${darkLabel}`)
+  const showBlack = !browsing && shows(`${themeLabel} ${blackLabel}`)
+  const showSignOut = !browsing && shows(signOutLabel)
   // Actions ARE the commands: they stay for `>` and leave for the people and sessions
   // scopes, which own the list.
   const anyAction =
@@ -648,7 +656,7 @@ function PaletteBody() {
           placeholder={t('common:commandPalette.placeholder')}
           value={query}
           onValueChange={setQuery}
-          className={workspaceName ? 'pr-40' : 'pr-14'}
+          className={workspaceName ? 'pr-32' : undefined}
           leading={<EditionBadge compact />}
         />
         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center gap-2">
@@ -657,7 +665,6 @@ function PaletteBody() {
               {t('common:commandPalette.scope', { name: workspaceName })}
             </span>
           ) : null}
-          <Kbd>Esc</Kbd>
         </span>
       </div>
       <CommandList
@@ -727,9 +734,16 @@ function PaletteBody() {
                 }}
               >
                 <Play />
-                <span>{importSessionLabel}</span>
-                <span className="text-caption text-muted-foreground">
-                  Claude Code
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate" data-slot="palette-name">
+                    {markMatch(importSessionLabel, matchQuery)}
+                  </span>
+                  <span
+                    className="truncate text-caption leading-4 text-muted-foreground"
+                    data-slot="palette-context"
+                  >
+                    Claude Code
+                  </span>
                 </span>
               </CommandItem>
             ) : null}
@@ -807,7 +821,7 @@ function PaletteBody() {
                 }}
               >
                 <Columns2 aria-hidden="true" />
-                <span className="truncate">
+                <span className="min-w-0 flex-1 truncate">
                   {openBesideLabel} · {row.title ?? row.reference}
                 </span>
               </CommandItem>
@@ -877,6 +891,12 @@ function PaletteBody() {
           </CommandGroup>
         ) : null}
 
+        {settingsHits.length > 0 ? (
+          <CommandGroup heading={t('common:commandPalette.settingsGroup')}>
+            {settingsHits.map(renderNav)}
+          </CommandGroup>
+        ) : null}
+
         {recentSessions.length > 0 ? (
           <CommandGroup heading={t('common:commandPalette.recentSessions')}>
             {recentSessions.map((row, index) => {
@@ -900,17 +920,11 @@ function PaletteBody() {
                     </span>
                   </span>
                   {query === '' && index < PALETTE_RECENT_COMMANDS.length ? (
-                    <KeyHint keys={[String(index + 1)]} />
+                    <KeyHint keys={keysOf(PALETTE_RECENT_COMMANDS[index])} />
                   ) : null}
                 </CommandItem>
               )
             })}
-          </CommandGroup>
-        ) : null}
-
-        {settingsHits.length > 0 ? (
-          <CommandGroup heading={t('common:commandPalette.settingsGroup')}>
-            {settingsHits.map(renderNav)}
           </CommandGroup>
         ) : null}
 
@@ -987,7 +1001,7 @@ function PaletteBody() {
       ) : null}
       <div
         data-slot="palette-footer"
-        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-2 text-caption text-muted-foreground"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line bg-frame/30 px-[18px] py-2.5 text-caption text-muted-foreground"
       >
         <span className="inline-flex items-center gap-1">
           <Kbd>↑</Kbd>
@@ -997,6 +1011,10 @@ function PaletteBody() {
         <span className="inline-flex items-center gap-1">
           <Kbd>↵</Kbd>
           {t('common:commandPalette.footerOpen')}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Kbd>Esc</Kbd>
+          {t('common:commandPalette.footerClose')}
         </span>
         <span className="ml-auto inline-flex items-center gap-1">
           <Kbd>&gt;</Kbd>

@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // A SESSION'S STATE AS ONE DOT. The list row and the thread header say the state with a
-// 6 px dot and carry the state's WORD as the dot's name, so colour never says it alone.
+// 8 px dot and carry the state's WORD as the dot's name, so colour never says it alone.
 // The tone is `groupOf`'s answer (attention, active, settled) and nothing else, plus one
 // refinement the group cannot make: a failed run is red where "needs you" is amber. The
 // words are the existing state words (the run's own, else the observed one), so a state
@@ -51,7 +51,7 @@ export function StateDot({
       aria-label={word}
       title={word}
       data-tone={display.tone}
-      className={cn('inline-flex size-1.5 shrink-0 items-center', className)}
+      className={cn('inline-flex size-2 shrink-0 items-center', className)}
     >
       <StatusDot tone={TONE[display.tone]} />
     </span>

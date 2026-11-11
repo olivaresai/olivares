@@ -79,17 +79,17 @@ describe('the scroll buttons sit beside the strip, never over a tab', () => {
     )
   })
 
-  it('a scroll button sits outside the segmented track, so the track still reads as one control', () => {
+  it('a scroll button sits outside the tab strip, so the strip still reads as one control', () => {
     render(<Strip />)
     const list = screen.getByRole('tablist')
     overflowing(list, 0)
     const end = document.querySelector<HTMLElement>(
       '[data-slot="tabs-scroll-button"]',
     )
-    // The 1.0 strip is a segmented control (one muted track), not an underlined row: the
-    // button's wrapper is a sibling of the track, never inside it and never ruled.
+    // The strip is flat tabs with no track, not an underlined row: the button's wrapper
+    // is a sibling of the strip, never inside it and never ruled.
     expect(list.contains(end)).toBe(false)
     expect(end?.parentElement).not.toHaveClass('border-b')
-    expect(list).toHaveClass('rounded-ctl', 'bg-hover')
+    expect(list).toHaveClass('rounded-ctl', 'bg-transparent')
   })
 })

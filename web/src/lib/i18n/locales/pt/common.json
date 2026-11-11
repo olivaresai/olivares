@@ -1,9 +1,26 @@
 {
   "edition": {
     "viewPolicy": "Ver política",
-    "editingRequiresBusiness": "Editar políticas personalizadas, funções e concessões requer Business.",
+    "editingRequiresBusiness": "Editar políticas personalizadas, funções e concessões requer Olivares AI Business.",
     "disablePolicy": "Desativar política",
-    "disablePolicyDescription": "A política criada deixa de ser aplicada. O seu histórico e as restantes políticas impostas são preservados."
+    "disablePolicyDescription": "A política criada deixa de ser aplicada. O seu histórico e as restantes políticas impostas são preservados.",
+    "note": {
+      "line": "{{capability}} faz parte de {{edition}}. Adicione uma licença em <0>Definições > Edição</0> ou consulte <1>olivares.ai/pricing</1>.",
+      "lineUnnamed": "Isto faz parte de {{edition}}. Adicione uma licença em <0>Definições > Edição</0> ou consulte <1>olivares.ai/pricing</1>.",
+      "lineAsk": "{{capability}} faz parte de {{edition}}. Pergunte a um administrador.",
+      "lineUnnamedAsk": "Isto faz parte de {{edition}}. Pergunte a um administrador.",
+      "readsBelow": "O que já está guardado continua legível e exportável.",
+      "tag": "Parte de {{edition}}"
+    },
+    "capabilities": {
+      "skills": "Skills",
+      "sso": "Início de sessão único",
+      "approvalTiers": "Alterar o nível de risco ou o número de aprovações de uma ação",
+      "evals": "Avaliações",
+      "eventing": "Webhooks",
+      "notify": "Alertas",
+      "claude-policy": "Política gerida"
+    }
   },
   "errors": {
     "generic": "Algo correu mal"
@@ -101,25 +118,18 @@
     "noTargetReason": "Precisa de uma organização para ser executada.",
     "noTargetHelp": "Selecione uma organização e tente novamente.",
     "goTo": "Ir para",
-    "recentSessions": "Sessões recentes",
+    "recentSessions": "Sessões",
     "settingsGroup": "Definições",
     "scope": "em {{name}}",
     "footerMove": "mover",
     "footerOpen": "abrir",
+    "footerClose": "fechar",
     "footerCommands": "só comandos",
     "objectActions": "Para {{name}}",
     "footerPeople": "pessoas",
     "footerSessions": "sessões",
     "peopleHint": "Escreva um nome.",
     "ask": "Perguntar ao Olivares…"
-  },
-  "hintBar": {
-    "move": "mover",
-    "open": "abrir",
-    "approve": "aprovar",
-    "deny": "negar",
-    "launcher": "lançador",
-    "command": "comando"
   },
   "permissionWords": {
     "read": "acesso de leitura",
@@ -218,6 +228,7 @@
   "notifications": {
     "title": "Atividade recente",
     "empty": "Sem atividade recente.",
+    "auditOnly": "A atividade recente é mostrada a quem pode ler o registo de auditoria.",
     "viewAll": "Ver tudo no registo de auditoria",
     "events": {
       "auditCheckpoint": "Ponto de verificação de auditoria criado",
@@ -275,6 +286,8 @@
       "policyUpdated_you": "Atualizou uma política",
       "policyDeleted_you": "Eliminou uma política"
     },
+    "unread": "Não lido",
+    "markAllRead": "Marcar tudo como lido",
     "actors": {
       "you": "Você",
       "member": "Um membro",
@@ -302,6 +315,15 @@
     "showHelp": "Mostrar esta ajuda"
   },
   "keys": {
+    "refused": {
+      "unknownRow": "Este comando não tem teclas para alterar.",
+      "notAChord": "Prima uma tecla, sozinha ou com {{mod}}, Alt ou Shift.",
+      "needsModifier": "Mantenha {{mod}} ou Alt premido com a tecla: aqui uma só tecla poderia agir enquanto escreve ou decidir um pedido.",
+      "needsAltOrShift": "Mantenha Alt, ou {{mod}} e Shift, premido com a tecla: {{keys}} também se prime ao escrever, e aqui decidiria um pedido.",
+      "taken": "{{keys}} já faz {{command}}. Escolha outras teclas ou altere primeiro esse comando.",
+      "leader": "{{keys}} seguida de uma letra abre uma página de Ir para. Escolha outras teclas.",
+      "tooLarge": "As suas definições guardadas estão cheias. Reponha uma tecla que alterou ou remova um script que adicionou e tente novamente."
+    },
     "group": {
       "general": "Geral",
       "launcher": "Iniciar uma sessão",
@@ -323,15 +345,19 @@
       "launcher": {
         "focus": "Ir para o lançador",
         "start": "Iniciar a sessão",
-        "startBackground": "Iniciar e ficar aqui"
+        "startBackground": "Iniciar e ficar aqui",
+        "stash": "Pôr o rascunho de lado ou recuperá-lo"
       },
       "surface": {
         "openBeside": "Abrir ao lado",
         "closeBeside": "Fechar a sessão ao lado",
         "focusBeside": "Mudar o foco entre sessões",
+        "nextSession": "Abrir a sessão seguinte",
+        "previousSession": "Abrir a sessão anterior",
         "nextPane": "Painel seguinte",
         "previousPane": "Painel anterior",
         "approve": "Aprovar uma vez o pedido na conversa",
+        "cite": "Citar as palavras selecionadas no campo de mensagem",
         "terminal": "Terminal",
         "changes": "Alterações",
         "preview": "Pré-visualização",
@@ -372,6 +398,20 @@
       },
       "ask": {
         "open": "Perguntar ao Olivares"
+      },
+      "shell.sidebar": "Alternar barra lateral",
+      "shell.panel": "Alternar painel lateral",
+      "terminal": {
+        "new": "Novo terminal",
+        "close": "Fechar terminal",
+        "previous": "Terminal anterior",
+        "next": "Terminal seguinte",
+        "search": "Pesquisar no terminal",
+        "links": "Abrir um link no ecrã",
+        "copy": "Copiar a seleção",
+        "selectAll": "Selecionar toda a saída",
+        "scrollTop": "Ir para o início",
+        "scrollBottom": "Ir para o fim"
       }
     },
     "when": {
@@ -379,10 +419,13 @@
       "outsideList": "fora de uma lista",
       "launcherFocused": "no campo do lançador",
       "workSurface": "no ecrã de sessões",
+      "sourceDiff": "nas diferenças de origem",
       "sessionHistory": "quando existe uma sessão anterior",
       "paletteRecent": "nos resultados da paleta com a pesquisa vazia",
       "approvalQueue": "na fila de aprovações",
-      "accessMap": "no mapa de acessos"
+      "accessMap": "no mapa de acessos",
+      "terminalFocused": "num terminal",
+      "replySelection": "com palavras selecionadas numa resposta"
     },
     "precedence": "Quando duas linhas partilham teclas, prevalece a última que se aplica.",
     "problems_one": "{{count}} atalho não pôde ser lido e não é acionado: {{commands}}",
@@ -440,6 +483,7 @@
     "copy": {
       "message": "Copiar mensagem",
       "code": "Copiar código",
+      "detail": "Copiar detalhe",
       "copied": "Copiado",
       "failed": "Não foi possível copiar. Selecione o texto e copie-o.",
       "value": "Copiar {{value}}"

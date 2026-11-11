@@ -43,9 +43,12 @@ func TestRoleResourcePerms(t *testing.T) {
 	if !has(viewer, "agent:read") || has(viewer, "agent:write") {
 		t.Errorf("viewer resource perms wrong: %v", viewer)
 	}
-	// The ledger read is tenant-grantable; tenant settings remain outside the catalog.
-	if !has(viewer, "audit:read") || has(viewer, "tenant:read") {
-		t.Errorf("viewer must expose audit, but not tenant settings in RoleResourcePerms: %v", viewer)
+	// The ledger read is tenant-grantable from admin up; tenant settings remain outside the catalog.
+	if has(viewer, "audit:read") || has(viewer, "tenant:read") {
+		t.Errorf("viewer must expose neither audit nor tenant settings in RoleResourcePerms: %v", viewer)
+	}
+	if !has(auth.RoleResourcePerms(auth.RoleAdmin), "audit:read") {
+		t.Error("admin must keep audit:read in RoleResourcePerms (it delegates it)")
 	}
 
 	admin := auth.RoleResourcePerms(auth.RoleAdmin)

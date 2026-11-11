@@ -3,6 +3,7 @@
     "draftNotice": "Esta unidad está en borrador, así que sus criterios todavía se pueden corregir. La clave del criterio es identidad permanente y nunca se reasigna.",
     "lockedNotice": "Esta unidad ha salido de borrador, así que los criterios ya no se pueden editar: solo evaluar. La clave del criterio es identidad permanente.",
     "none": "Sin criterios de aceptación.",
+    "noneBody": "Aquí aparecen las comprobaciones que dicen cuándo esta unidad está terminada, una vez fijadas.",
     "required": "Obligatorio",
     "state": {
       "pending": "Pendiente",
@@ -143,20 +144,21 @@
     "empty": {
       "effective": {
         "title": "Ninguna decisión vigente",
-        "body": "No hay ninguna decisión en vigor."
+        "body": "Aquí aparecen las decisiones registradas sobre unidades de trabajo mientras están vigentes."
       },
       "revoked": {
         "title": "Ninguna decisión revocada",
-        "body": "No se ha revocado ninguna decisión."
+        "body": "Una decisión pasa aquí cuando se revoca."
       },
       "history": {
         "title": "Sin decisiones registradas",
-        "body": "Todavía no se ha decidido nada aquí."
+        "body": "Aquí aparece cada decisión registrada sobre unidades de trabajo."
       }
     }
   },
   "dependencies": {
-    "none": "Sin dependencias."
+    "none": "Sin dependencias.",
+    "noneBody": "Aquí aparecen las unidades de trabajo que esta espera; puede empezar cuando cada una esté terminada."
   },
   "detail": {
     "subtitle": "{{kind}} · versión {{version}}",
@@ -164,8 +166,12 @@
     "owner": "Propietario",
     "provenance": "Procedencia",
     "priority": "Prioridad",
+    "waitsOn": "Espera a",
+    "waitsOnDependencies": "Unidades de trabajo de las que depende y que aún no han terminado",
     "blocked": "Bloqueo",
     "terminal": "Desenlace",
+    "due": "Vence",
+    "ended": "Terminó",
     "etag": "Etiqueta de versión",
     "tabs": {
       "overview": "Resumen",
@@ -176,7 +182,8 @@
     }
   },
   "events": {
-    "none": "No hay eventos registrados para esta unidad."
+    "none": "No hay eventos registrados para esta unidad.",
+    "noneBody": "Cada cambio de esta unidad se registra aquí en cuanto ocurre."
   },
   "filters": {
     "status": "Estado",
@@ -215,12 +222,10 @@
     "unknown": "No se ha podido mirar",
     "reason": "Motivo",
     "ttl": "TTL (segundos)",
-    "noWrite": "Tu rol no puede cambiar este lease.",
     "noAdmin": "Arrebatar, revocar y re-basar exigen lease admin.",
+    "heldBy": "La sesión {{holder}} tiene este ítem; la propia sesión toma, renueva y libera el lease.",
+    "vacant": "Ninguna sesión tiene este ítem; la propia sesión toma, renueva y libera el lease.",
     "actions": {
-      "acquire": "Adquirir",
-      "renew": "Renovar",
-      "release": "Soltar",
       "takeover": "Arrebatar",
       "revoke": "Revocar",
       "clockRebase": "Re-basar el reloj"
@@ -246,7 +251,7 @@
     "error": "Flujo interrumpido",
     "unavailableBody": "La lista en pantalla puede estar desactualizada y nada más te lo va a advertir. Actualiza para leer el almacén directamente."
   },
-  "subtitle": "Trabajo que comparten las sesiones y las personas: unidades, responsables, dependencias, criterios de aceptación y decisiones. Cada cambio se muestra antes de aplicarse.",
+  "subtitle": "Sigue las unidades de trabajo: quién se encarga de cada una, de qué depende y cuándo está hecha.",
   "tabs": {
     "items": "Unidades de trabajo",
     "decisions": "Decisiones"
@@ -262,7 +267,7 @@
     "item.cancel": "Cancelar",
     "item.archive": "Archivar",
     "noWrite": "Tu rol no puede cambiar este ítem.",
-    "noAdmin": "Tu rol no puede marcar ítems como fallidos ni archivarlos."
+    "noAdmin": "Tu rol no puede archivar ítems."
   },
   "truncation": {
     "label": "Cargadas {{n}} filas; hay más",

@@ -95,7 +95,8 @@
     "title": "Publicar",
     "hint": "Faça push do commit desta sessão através do destino de publicação do respetivo espaço de trabalho. O motor obtém o commit da pasta da sessão.",
     "publish": "Publicar",
-    "publishTo": "Publicar em {{prefix}}"
+    "publishTo": "Publicar em {{prefix}}",
+    "targetName": "{{repository}}, em {{prefix}}"
   },
   "fields": {
     "ref": "Ref da ramificação",
@@ -178,6 +179,7 @@
     "link_not_allowed": "A ligação do pull request tem de apontar para um pull request do repositório aprovado.",
     "host_credential_refused": "O host Git recusou a credencial do vínculo ou o seu âmbito. Nada foi enviado.",
     "host_unavailable": "Não foi possível contactar o host Git. Nada foi enviado.",
+    "identity_mismatch": "Esta alteração só pode ser publicada com o vínculo de credencial para o qual foi preparada, e este destino usa outro. Nada foi enviado.",
     "intent_settled": "A intenção já está concluída, pelo que não pode ser abandonada.",
     "invalid_request": "O pedido está incompleto ou malformado. Verifique os nomes das ramificações e os IDs dos commits.",
     "lookup_incomplete": "O estado atual do host não pôde ser lido por completo, pelo que nada foi enviado.",
@@ -191,6 +193,8 @@
     "repository_outside_binding": "O repositório está fora dos proprietários que o vínculo de credencial permite.",
     "runtime_credential_refused": "A credencial de execução de uma sessão não pode publicar. Atue com a sua própria credencial.",
     "scoped_grant_required": "Esta ação precisa de uma concessão com âmbito neste destino.",
+    "secret_detected": "O commit contém algo que parece uma credencial, por isso nada foi enviado. Retire-o do commit e faça o pedido novamente.",
+    "secret_scan_unavailable": "Não foi possível verificar se o commit contém credenciais, pelo que nada foi publicado.",
     "separation_of_duty": "Iniciou a sessão que criou esta alteração. Peça a outra pessoa que a reveja e faça merge.",
     "session_source_refused": "A execução da sessão não está no espaço de trabalho deste destino, ou a sua pasta não é um repositório de onde o motor possa obter dados.",
     "session_source_unavailable": "Não foi possível ler a pasta da sessão a tempo. Nada foi enviado por push.",
@@ -200,6 +204,7 @@
     "target_changed": "O destino mudou depois de o pedido ser admitido. Nada foi enviado.",
     "target_in_use": "Uma intenção em envio, incerta ou abandonada ainda mantém este destino.",
     "unresolved_intent": "Uma intenção por resolver já mantém esta ramificação, este pull request ou este merge.",
+    "unknown_effect": "A intenção regista uma ação que esta versão do motor não conhece, pelo que não pode ser reconciliada.",
     "unsupported_requirement": "O host não consegue cumprir este requisito, por exemplo um merge com rebase no GitLab.",
     "version_conflict": "O destino mudou desde que o abriu. Volte a abri-lo para ver a versão atual.",
     "workflow_change_refused": "O commit altera ficheiros de fluxo de trabalho de CI, que este destino se recusa a publicar.",
@@ -215,6 +220,38 @@
     "title": "Intenções",
     "empty": "Não há intenções de publicação registadas para este destino.",
     "open": "Abrir intenção {{id}}"
+  },
+  "publications": {
+    "title": "Publicações",
+    "description": "O que o Olivares AI publicou nestes destinos e o que aguarda aprovação, os mais recentes primeiro. O estado de um pull request é o que o Olivares AI viu; o link mostra o de hoje.",
+    "show": "Mostrar",
+    "all": "Tudo",
+    "approval": "Aprovação",
+    "session": "Sessão",
+    "approved": "Aprovada",
+    "notAsked": "Não pedida",
+    "approvedUnused": "Aprovada, não usada",
+    "heldPush": "{{state}}: o push para {{target}}",
+    "heldPullRequest": "{{state}}: o pull request para {{target}}",
+    "cut": "Só foram lidas as {{n}} aprovações mais antigas. Todas estão em Aprovações.",
+    "openSession": "Abrir a sessão",
+    "openSessionOf": "Abrir a sessão que publicou {{branch}} em {{target}}",
+    "aSession": "Uma sessão",
+    "empty": "Ainda nada foi publicado aqui",
+    "emptyNext": "Publique no painel Alterações de uma sessão ou num destino aqui.",
+    "readFailed": "Não foi possível ler o que foi publicado em {{target}}",
+    "heldReadFailed": "Não foi possível ler o que aguarda aprovação",
+    "heldHidden": "O que aguarda a aprovação de outra pessoa é listado para quem pode ler aprovações."
+  },
+  "pullRequests": {
+    "title": "Pull requests",
+    "pullRequest": "Pull request",
+    "branch": "Branch",
+    "opened": "Foi aberto",
+    "merged": "Integrado",
+    "link": "#{{number}} {{title}}",
+    "empty": "Ainda não foi aberto nenhum pull request aqui",
+    "emptyNext": "Abra um no painel Alterações de uma sessão ou num destino aqui."
   },
   "intent": {
     "title": "Intenção {{id}}",

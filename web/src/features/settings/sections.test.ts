@@ -17,9 +17,27 @@ import {
 // The sections that host another page of the console, and the page each hosts.
 const HOSTED = [['setup', 'onboarding']] as const
 
+const SECTION_NAMES = import.meta.glob<{ nav: Record<string, string> }>(
+  '@/lib/i18n/locales/*/settings.json',
+  { eager: true, import: 'default' },
+)
+const PAGE_NAMES = import.meta.glob<{ items: Record<string, string> }>(
+  '@/lib/i18n/locales/*/nav.json',
+  { eager: true, import: 'default' },
+)
+
 describe('settings sections that host a page', () => {
   beforeAll(async () => {
     await i18n.changeLanguage('en')
+  })
+
+  // One page, one name: the Settings list, the palette and the page agree.
+  it.each(HOSTED)('names %s as the page %s, in every language', (id, view) => {
+    expect(Object.keys(SECTION_NAMES).length).toBeGreaterThanOrEqual(11)
+    for (const [file, bundle] of Object.entries(SECTION_NAMES)) {
+      const page = PAGE_NAMES[file.replace(/settings\.json$/, 'nav.json')]
+      expect(bundle.nav[id], file).toBe(page?.items[view])
+    }
   })
 
   it.each(HOSTED)(

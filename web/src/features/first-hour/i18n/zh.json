@@ -70,8 +70,7 @@
     },
     "signIn": {
       "title": "登录工具",
-      "body": "使用你的 Claude 或 ChatGPT 订阅。登录信息保留在此服务器上工具存放它的位置。",
-      "waiting": "请先安装一个工具。"
+      "body": "使用你的 Claude 或 ChatGPT 订阅。登录信息保留在此服务器上工具存放它的位置。"
     },
     "start": {
       "title": "启动会话",
@@ -84,19 +83,39 @@
     "notReady": "{{tool}} 尚无法启动。",
     "folder": "文件夹",
     "folderHint": "此服务器上的一个文件夹。",
+    "folderHintGiven": "此服务器上已登记的文件夹的路径。新文件夹由管理员登记。",
     "folderChoose": "选择文件夹",
     "folderNew": "为此会话新建的文件夹",
     "folderTyped": "其他文件夹…",
     "readingFolder": "正在读取上次会话的文件夹…",
     "prompt": "第一条消息（可选）",
     "promptPlaceholder": "它应该先做什么？",
+    "documents": "文档",
+    "attachDocument": "附加文档",
+    "removeDocument": "移除 {{name}}",
+    "savingDocument": "正在将 {{name}} 保存到文件夹（第 {{n}} 个，共 {{total}} 个）…",
+    "documentFailed": "{{name}} 未保存到文件夹（{{reason}}）。",
+    "documentsNeedFolder": "在你的某个文件夹的当前检出中工作时，可以附加文档。",
+    "documentsMessage": "我附加的文档，已保存在文件夹中：",
+    "documentsAdded": "将添加到你的第一条消息：",
+    "documentsKept": "已在文件夹中：{{paths}}。",
+    "documentsReadOnly": "此文件夹为只读：在会话可以写入的文件夹中工作时，可以附加文档。",
+    "documentsWaiting": "启动正在等待已附加的文档：请选择可以保存它们的文件夹，或移除这些文档。",
+    "documentWaiting": "{{size}} · 等待中",
+    "documentsNeedWords": "请简单写下要对这些文档做什么：会话将以你写的内容命名。",
+    "moreHeldDocuments": "在此启动以保留附加的文档，或移除它们以打开更多选项。",
+    "moreHeldFolder": "在此启动以保留你输入的文件夹，或从文件夹列表中选择它以打开更多选项。",
+    "documentTooLarge": "{{name}} 超过此文件夹每个文件 {{size}} 的上限，未附加。",
+    "documentAttachedTwice": "{{name}} 已附加。",
     "more": "更多选项",
     "permission": "智能体可以做什么",
     "start": "启动",
     "starting": "正在启动…",
+    "startSession": "启动会话",
     "needTool": "请先安装并登录一个工具。",
     "dialogTitle": "新建会话",
     "dialogDescription": "选择一个工具并说明要做什么。",
+    "keyToStart": "按 <key/> 启动",
     "advanced": "高级启动选项",
     "secrets": "作为环境变量的密钥",
     "secretsHint": "会话从你指定的变量中读取所选的保管库密钥。该值不会被显示、记录或写入文件夹。",
@@ -111,6 +130,7 @@
     "credentialsManage": "管理托管凭据",
     "listUnavailable": "引擎未返回密钥列表。目前无法选择任何内容。",
     "openTools": "打开 AI 工具",
+    "askAdmin": "请让管理员将其准备就绪。",
     "model": "模型",
     "providerDefault": "默认（{{model}}）",
     "nativeDefault": "{{tool}} 默认",
@@ -123,14 +143,22 @@
     "profileNeedsKey": "需要密钥",
     "foldersUnreadable": "无法读取已登记的文件夹。请输入此服务器上某个文件夹的路径。",
     "folderPermission": "将以“{{name}}”启动，这是此文件夹的默认权限。",
-    "autoAsks": "{{tool}} 没有自动模式：每次操作前都会询问。"
+    "autoAsks": "{{tool}} 没有自动模式：每次操作前都会询问。",
+    "worktreeCheckout": "当前检出",
+    "worktreeNew": "新建工作树",
+    "worktreeFrom": "起点",
+    "worktreeFromHint": "分支或提交（可选）",
+    "worktreeNewHint": "会话在单独文件夹的专属分支上工作，当前检出保持不变。",
+    "worktreeLegend": "工作副本"
   },
   "composer": {
     "toolPill": "工具和账户：{{value}}",
     "modelPill": "模型：{{value}}",
     "effortPill": "推理强度：{{value}}",
     "folderPill": "文件夹：{{value}}",
-    "moreOptions": "更多选项"
+    "moreOptions": "更多选项",
+    "accessPill": "智能体可以做什么：{{value}}",
+    "worktreePill": "工作副本：{{value}}"
   },
   "lists": {
     "foldersTruncated": "已注册文件夹：已加载 {{count}} 个；还有更多。",
@@ -154,6 +182,14 @@
     "cli": "使用 olivares 命令行",
     "cliHint": "此服务器上已安装 olivares 命令。在其他计算机上，可用以下命令安装："
   },
+  "passkeyOffer": {
+    "body": "下次可用通行密钥登录：用指纹、面容或屏幕锁代替密码。",
+    "add": "添加通行密钥",
+    "notNow": "以后再说",
+    "added": "已添加通行密钥。下次可用它登录。",
+    "failed": "未能添加通行密钥。请重试，或稍后在设置中添加。",
+    "unknown": "无法确认通行密钥。它可能已添加：请先在设置中查看，再添加另一个。"
+  },
   "permissionSummary": {
     "readOnly": "只读取和规划。所有更改都会被拒绝。",
     "ask": "每次执行非读取操作前都会询问。",
@@ -165,6 +201,8 @@
   "bring": {
     "title": "导入你的文件夹",
     "body": "你的工具已经工作过的文件夹，读取自各工具自身记录的项目路径和日期。在你确认之前不会注册任何内容。",
+    "offer_other": "你的工具已经在 {{count}} 个文件夹中工作过。",
+    "review": "查看",
     "error": "无法查找你的工具使用过的文件夹。",
     "unreadable": "无法读取 {{tool}} 的记录。请改为手动添加文件夹。",
     "cols": {

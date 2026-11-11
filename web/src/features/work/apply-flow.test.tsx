@@ -118,6 +118,27 @@ describe('ApplyFlow keeps plan and apply as two ordered wire requests', () => {
     expect(await screen.findByRole('button', { name: 'Apply' })).toBeEnabled()
   })
 
+  it("says in the console's own words that a role does not allow the change", async () => {
+    // A verb the console offers can still be refused by the engine: Take over
+    // from lease admin without work admin is one. The refusal reads as one.
+    const refused = new ApiError(
+      403,
+      'forbidden',
+      'forbidden',
+      undefined,
+      {},
+      { verdict: 'ROTO', code: 'forbidden' },
+    )
+    wire.planWork.mockRejectedValueOnce(refused)
+    show()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Not authorized')
+    expect(alert).toHaveTextContent(
+      'Your roles or a group policy do not allow it.',
+    )
+  })
+
   it('keeps result metadata in closed Details and available after opening it', async () => {
     const user = userEvent.setup()
     show()

@@ -47,6 +47,7 @@
   "schedule": {
     "updated": "Pianificazione dei backup aggiornata",
     "loading": "Caricamento della pianificazione...",
+    "loadFailed": "Impossibile caricare la pianificazione dei backup.",
     "title": "Pianificazione dei backup automatici",
     "description": "Configura i backup ricorrenti. L'engine esegue la pianificazione; la passphrase è derivata dal segreto dell'istanza.",
     "enableAria": "Abilita i backup automatici",
@@ -118,6 +119,7 @@
   },
   "pending": {
     "title": "Ripristini in attesa di approvazione (doppio controllo)",
+    "loadFailed": "Impossibile caricare i ripristini in attesa di approvazione.",
     "requestedByPrefix": "Richiesto da",
     "approveRestore": "Approva e ripristina",
     "approved": "Ripristino approvato",

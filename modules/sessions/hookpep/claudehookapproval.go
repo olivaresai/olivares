@@ -7,6 +7,7 @@ package hookpep
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -213,16 +214,38 @@ func (d *Decider) gateViaSessionApproval(ctx context.Context, tenant model.Tenan
 	defer cancel()
 	consumer := NewSingleUseConsumerID()
 	var reviewed claude.HookDecisionResult // the reply the recheck settles on
+	// Match the same command or read path; mutations also bind the full
+	// effective input. Governance binds the session and its process fence.
+	input := in.RewriteBase()
+	if planned.UpdatedInput != nil {
+		input = planned.UpdatedInput
+	}
+	target := ""
+	switch in.Tool {
+	case "Bash":
+		target, _ = input["command"].(string)
+	case "Read":
+		target, _ = input["file_path"].(string)
+	case "Edit", "Write":
+		target = hex.EncodeToString(reviewedInput[:])
+	}
+	allowance := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s", in.SessionID, in.Tool, target)))
+	allowanceKey := ""
+	if target != "" {
+		allowanceKey = hex.EncodeToString(allowance[:])
+	}
 	a, err := effectgate.Hold(waitCtx, d.Approvals, effectgate.HeldEffect{
 		Tenant: tenant, Principal: p,
 		Request: governance.ApprovalRequest{
 			SessionRef: p.SessionIdentity, Action: ActionCapability, SubjectKind: "claude.tool",
-			SubjectRef:       d.SubjectRef(in.SessionID, in.PlanHash+":"+consumer),
-			Reason:           facts.reason,
-			ReasonMasks:      facts.reasonMasks,
-			Review:           facts.review,
-			ReviewMasks:      facts.reviewMasks,
-			ExpiresInSeconds: int64(sessions.ApprovalWait / time.Second),
+			SubjectRef:          d.SubjectRef(in.SessionID, in.PlanHash+":"+consumer),
+			Reason:              facts.reason,
+			ReasonMasks:         facts.reasonMasks,
+			Review:              facts.review,
+			SessionScopeAllowed: allowanceKey != "" && !disp.perRequestReview,
+			SessionAllowanceKey: allowanceKey,
+			ReviewMasks:         facts.reviewMasks,
+			ExpiresInSeconds:    int64(sessions.ApprovalWait / time.Second),
 		},
 		Consumer: consumer, PolicyVersion: version, Wait: d.ApprovalWait, Log: d.Log,
 		Recheck: func(ctx context.Context) error {

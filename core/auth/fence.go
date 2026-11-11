@@ -91,6 +91,12 @@ func fenceSubjects(ctx context.Context, r StandingReader, tenant model.TenantID,
 		if err := s.Refusal(); err != nil && refuse {
 			return nil, err
 		}
+		// A completed removal refuses too: a grant stored for a retired account,
+		// whether the form named it or its removal finished before this retry,
+		// would apply again to the account re-admitted later.
+		if refuse && s.Retirement == model.RetirementRetired {
+			return nil, ErrSubjectRetired
+		}
 		if !s.Exists {
 			continue
 		}
@@ -227,6 +233,8 @@ func FenceRefusalCode(err error) (string, bool) {
 		return "subject_erasing", true
 	case errors.Is(err, ErrSubjectErased):
 		return "subject_erased", true
+	case errors.Is(err, ErrSubjectRetired):
+		return "subject_retired", true
 	case errors.Is(err, ErrTooManySubjects):
 		return "too_many_subjects", true
 	}

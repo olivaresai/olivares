@@ -54,7 +54,12 @@ import { createPortal } from 'react-dom'
  *    filter row keeps filters only" ships with exceptions in it — and a gate with
  *    exceptions is worth much less than a gate without.
  */
-type Hosts = { primary: HTMLElement; secondary: HTMLElement } | null
+type Hosts = {
+  primary: HTMLElement
+  secondary: HTMLElement
+  title: HTMLElement | null
+  actions: HTMLElement | null
+} | null
 
 const HostContext = createContext<Hosts>(null)
 
@@ -71,9 +76,17 @@ function detachedHost(name: string): HTMLElement {
  * Owns the two host elements for one page. Mounted by `AppLayout` around the routed
  * content, and by `renderIntel`, so a test tree has the same DOM as the console.
  */
-export function PageActionsProvider({ children }: { children: ReactNode }) {
+export function PageActionsProvider({
+  children,
+  shell = false,
+}: {
+  children: ReactNode
+  shell?: boolean
+}) {
   const [hosts] = useState<Hosts>(() => ({
     primary: detachedHost('data-page-primary-action'),
+    title: shell ? detachedHost('data-shell-title') : null,
+    actions: shell ? detachedHost('data-shell-actions') : null,
     secondary: detachedHost('data-page-secondary-actions'),
   }))
   return <HostContext.Provider value={hosts}>{children}</HostContext.Provider>
@@ -130,4 +143,48 @@ export function PageSecondaryActions({ children }: { children: ReactNode }) {
   const hosts = useContext(HostContext)
   if (!hosts) return <>{children}</>
   return createPortal(children, hosts.secondary)
+}
+
+/** The page declares its heading and controls; the shell owns their only visible row. */
+export function ShellHeaderContent({
+  part,
+  children,
+}: {
+  part: 'title' | 'actions'
+  children: ReactNode
+}) {
+  const hosts = useContext(HostContext)
+  const host = hosts?.[part]
+  return host ? createPortal(children, host) : <>{children}</>
+}
+export function ShellHeaderSlot({
+  part,
+  fallback,
+}: {
+  part: 'title' | 'actions'
+  fallback?: ReactNode
+}) {
+  const hosts = useContext(HostContext)
+  // The title is the bar's one bold line: 15 px, 17 px and heavier on a phone. A secondary
+  // button is flat inside the bar: no fill at rest, the hover and pressed layers on use; a
+  // pressed or selected toggle keeps its fill.
+  return (
+    <div
+      data-slot={part === 'title' ? 'topbar-title' : 'topbar-actions'}
+      className={
+        part === 'title'
+          ? 'flex min-w-0 items-center gap-2 truncate text-body-l font-bold max-[760px]:text-heading max-[760px]:font-extrabold [&:has(h1:not(.sr-only))>[data-fallback]]:hidden [&_h1]:truncate [&_h1]:font-sans [&_h1]:text-body-l [&_h1]:font-bold max-[760px]:[&_h1]:text-heading max-[760px]:[&_h1]:font-extrabold'
+          : 'flex min-w-0 items-center gap-1.5 [&_button.bg-active:not([aria-pressed=true],[data-state=on])]:bg-transparent [&_button.bg-active:not([aria-pressed=true],[data-state=on]):hover]:bg-hover [&_button.bg-active:not([aria-pressed=true],[data-state=on]):active]:bg-[var(--pressed)]'
+      }
+    >
+      <span data-fallback>{fallback}</span>
+      <span
+        className="contents"
+        ref={(el) => {
+          const host = hosts?.[part]
+          if (el && host && host.parentNode !== el) el.appendChild(host)
+        }}
+      />
+    </div>
+  )
 }

@@ -3,8 +3,9 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // LLAMA.CPP AND VLLM ON THIS SERVER. Like Ollama, the engine runs them as its own services:
-// each row says whether the program is installed, starts it on a model the person names (the
-// endpoint is added to the signed-in organization's Providers once it answers) and stops it.
+// each installed one gets a row that starts it on a model the person names (the endpoint is
+// added to the signed-in organization's Providers once it answers) and stops it. One that is
+// not installed is named in the page's one Not installed line, never a card of its own.
 // The state, endpoint and models are the engine's (GET /v1/m/agenttools/model-servers).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
@@ -25,7 +26,7 @@ import './i18n'
 const STATUS_KEY = ['agent-tools', 'model-servers'] as const
 
 /** The program the engine looks for on its PATH, by server kind (modelServerSpecs). */
-const PROGRAMS: Record<string, string> = {
+export const PROGRAMS: Record<string, string> = {
   'llama-cpp': 'llama-server',
   vllm: 'vllm',
 }
@@ -36,17 +37,30 @@ function message(err: unknown): string {
     : String(err)
 }
 
-export function ModelServers() {
-  const qc = useQueryClient()
-  const tenant = useTenantStore((s) => s.activeTenant)
-  const status = useQuery({
+const isBusy = (server: ModelServerStatus) =>
+  server.state === 'running' || server.state === 'starting'
+
+/** One read of the servers, for their rows and the Not installed line. */
+export function useModelServers(enabled = true) {
+  return useQuery({
     queryKey: STATUS_KEY,
     queryFn: ({ signal }) => agentToolsApi.modelServers(signal),
+    enabled,
     refetchInterval: (query) =>
       query.state.data?.servers.some((s) => s.state === 'starting')
         ? 1000
         : false,
   })
+}
+
+/** Neither installed nor running: the Not installed line names it. */
+export const notInstalled = (server: ModelServerStatus) =>
+  !server.installed && !isBusy(server)
+
+export function ModelServers() {
+  const qc = useQueryClient()
+  const tenant = useTenantStore((s) => s.activeTenant)
+  const status = useModelServers()
   const readinessChanged = useCallback(
     () =>
       Promise.all([
@@ -79,14 +93,16 @@ export function ModelServers() {
   if (!status.data) return null
   return (
     <>
-      {status.data.servers.map((server) => (
-        <ModelServerRow
-          key={server.kind}
-          server={server}
-          tenant={tenant}
-          onChanged={() => void refresh()}
-        />
-      ))}
+      {status.data.servers
+        .filter((server) => !notInstalled(server))
+        .map((server) => (
+          <ModelServerRow
+            key={server.kind}
+            server={server}
+            tenant={tenant}
+            onChanged={() => void refresh()}
+          />
+        ))}
     </>
   )
 }
@@ -144,24 +160,15 @@ function ModelServerRow({
           </Button>
         ) : null}
       </div>
-      {!server.installed && !busy ? (
-        <p className="text-caption text-muted-foreground">
-          {t('modelServers.notInstalled', {
-            name: server.name,
-            program: PROGRAMS[server.kind] ?? server.kind,
-          })}
-        </p>
-      ) : (
-        <span className="text-body text-foreground">
-          {state === 'running'
-            ? t('modelServers.running', { endpoint: server.endpoint })
-            : state === 'starting'
-              ? t('modelServers.starting', { model: server.model ?? '' })
-              : state === 'failed'
-                ? t('modelServers.failed')
-                : t('modelServers.stopped')}
-        </span>
-      )}
+      <span className="text-body text-foreground">
+        {state === 'running'
+          ? t('modelServers.running', { endpoint: server.endpoint })
+          : state === 'starting'
+            ? t('modelServers.starting', { model: server.model ?? '' })
+            : state === 'failed'
+              ? t('modelServers.failed')
+              : t('modelServers.stopped')}
+      </span>
       {server.message ? (
         <p
           className="break-words text-caption text-muted-foreground"
@@ -220,7 +227,7 @@ function ModelServerRow({
           </Field>
           <Button
             type="submit"
-            variant="primary"
+            variant="secondary"
             size="sm"
             disabled={!ref || !tenant || start.isPending}
           >

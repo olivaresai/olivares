@@ -23,7 +23,10 @@ export function withInlineCommands(
     i % 2 === 1 && part.trim() !== '' ? (
       // A command with a <placeholder> does not run as written: it is shown, not copied.
       kind === 'code' || PLACEHOLDER.test(part) ? (
-        <code key={i} className="font-mono text-mono-s break-words">
+        <code
+          key={i}
+          className="rounded-[5px] bg-muted px-[5px] py-px font-mono text-mono break-words"
+        >
           {part}
         </code>
       ) : (

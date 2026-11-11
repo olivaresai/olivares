@@ -1,7 +1,7 @@
 {
   "title": "Visión ejecutiva",
-  "description": "Coste, uso, riesgo y cumplimiento de un vistazo; baja a la vista operativa para el detalle.",
-  "asOfNote": "Riesgo, cumplimiento y fiabilidad reflejan el estado actual; el coste abarca el rango seleccionado.",
+  "description": "Uso, riesgo y cumplimiento de un vistazo; baja a la vista operativa para el detalle.",
+  "asOfNote": "Riesgo, cumplimiento y fiabilidad reflejan el estado actual; el rango se aplica a las cifras a lo largo del tiempo.",
   "range": {
     "label": "Rango",
     "7d": "Últimos 7 días",
@@ -19,12 +19,12 @@
     "generatedLabel": "Generado",
     "tenant": "Organización",
     "allOrgs": "Todas las organizaciones",
-    "range": "Rango de coste",
+    "range": "Rango",
     "footer": "Olivares AI — solo KPIs agregados; sin cargas útiles ni secretos."
   },
   "empty": {
     "title": "No hay KPIs ejecutivos disponibles",
-    "description": "No tienes acceso de lectura a ninguna de las fuentes de coste, riesgo, cumplimiento o fiabilidad de esta organización."
+    "description": "No tienes acceso de lectura a ninguna de las fuentes que lee este resumen para esta organización."
   },
   "restricted": {
     "label": "Restringido",

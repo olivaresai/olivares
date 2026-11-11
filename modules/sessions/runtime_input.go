@@ -304,6 +304,9 @@ func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRe
 	if err := validateRuntimeInputTarget(request.Target); err != nil {
 		return refused, err
 	}
+	if err := m.refuseAnotherPersonsInput(ctx, request); err != nil {
+		return refused, err
+	}
 	request.Raw = bytes.Clone(request.Raw)
 	if request.Target.Work != nil {
 		work := *request.Target.Work
@@ -515,6 +518,9 @@ func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request Runtime
 	if err := validateRuntimeInputTarget(request.Target); err != nil {
 		return refused, err
 	}
+	if err := m.refuseAnotherPersonsInput(ctx, request); err != nil {
+		return refused, err
+	}
 	switch request.Mode {
 	case RuntimeInputText:
 		if len(request.Raw) != 0 || strings.TrimSpace(request.Text) == "" || !boundedText(request.Text, 1, maxWorkTextInputBytes) {
@@ -614,8 +620,23 @@ func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request Runtime
 		if err := assertFence(claimFenceState(claim), fenceToken{Holder: admitted.claim.Holder, Fence: admitted.claim.Fence}, deadline); err != nil {
 			return err
 		}
-		return m.runtimeInputLiveCurrent(ctx, admitted, request.Target.ExpectedLaunch, request.Target.ExpectedSID)
+		if err := m.runtimeInputLiveCurrent(ctx, admitted, request.Target.ExpectedLaunch, request.Target.ExpectedSID); err != nil {
+			return err
+		}
+		// The turn this input starts commits with its admission: one transaction, and
+		// nothing written between it and the send.
+		return m.admitRunTurn(ctx, sc, admitted, request.Mode, request.Raw)
 	})
+	if admitted != nil {
+		// A rolled-back admission wrote no row. A row that may have committed and that
+		// no send took up is settled, never left open.
+		if err != nil && !errors.Is(err, store.ErrCommitOutcomeUnknown) {
+			admitted.mu.Lock()
+			admitted.admittedTurn = ""
+			admitted.mu.Unlock()
+		}
+		defer m.releaseAdmittedTurn(admitted)
+	}
 	if err != nil {
 		if errors.Is(err, store.ErrCommitOutcomeUnknown) {
 			return RuntimeInputResult{Outcome: RuntimeInputUnknown}, errors.Join(ErrRuntimeInputUnknown, store.ErrCommitOutcomeUnknown)
@@ -647,7 +668,7 @@ func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request Runtime
 	if request.Mode == RuntimeInputText {
 		attempted, err = m.driverInputAdmitted(ctx, live, request.Text, request.Target.ExpectedLaunch, request.Target.ExpectedSID)
 	} else {
-		attempted, err = m.sendInputAdmitted(ctx, live, request.Raw, request.Target.ExpectedLaunch, request.Target.ExpectedSID)
+		attempted, err = m.sendInputAdmitted(ctx, live, request.Raw, request.Target.ExpectedLaunch, request.Target.ExpectedSID, rec)
 	}
 	if attempted && err == nil {
 		err = runtimeInputDeadline(ctx, deadline)

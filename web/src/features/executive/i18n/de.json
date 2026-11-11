@@ -1,7 +1,7 @@
 {
   "title": "Führungsübersicht",
-  "description": "Kosten, Nutzung, Risiko und Compliance auf einen Blick — für die Details zur operativen Ansicht wechseln.",
-  "asOfNote": "Risiko, Compliance und Zuverlässigkeit spiegeln den aktuellen Zustand wider; die Kosten umfassen den ausgewählten Zeitraum.",
+  "description": "Nutzung, Risiko und Compliance auf einen Blick — für die Details zur operativen Ansicht wechseln.",
+  "asOfNote": "Risiko, Compliance und Zuverlässigkeit spiegeln den aktuellen Zustand wider; der Zeitraum gilt für Werte im Zeitverlauf.",
   "range": {
     "label": "Zeitraum",
     "7d": "Letzte 7 Tage",
@@ -19,12 +19,12 @@
     "generatedLabel": "Erstellt",
     "tenant": "Organisation",
     "allOrgs": "Alle Organisationen",
-    "range": "Kostenzeitraum",
+    "range": "Zeitraum",
     "footer": "Olivares AI — ausschließlich aggregierte KPIs; keine Nutzdaten oder Geheimnisse."
   },
   "empty": {
     "title": "Keine Führungs-KPIs verfügbar",
-    "description": "Sie haben keinen Lesezugriff auf die Quellen für Kosten, Risiko, Compliance oder Zuverlässigkeit dieser Organisation."
+    "description": "Sie haben keinen Lesezugriff auf die Quellen, die diese Übersicht für diese Organisation liest."
   },
   "restricted": {
     "label": "Eingeschränkt",

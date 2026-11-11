@@ -3,6 +3,7 @@
     "draftNotice": "This item is in draft, so its criteria can still be corrected. The criterion key is permanent identity and is never reassigned.",
     "lockedNotice": "This item has left draft, so criteria can no longer be edited — only evaluated. The criterion key is permanent identity.",
     "none": "No acceptance criteria.",
+    "noneBody": "The checks that say this item is done are listed here once they are set.",
     "required": "Required",
     "state": {
       "pending": "Pending",
@@ -143,20 +144,21 @@
     "empty": {
       "effective": {
         "title": "No decisions in force",
-        "body": "No decision is in force."
+        "body": "Decisions recorded on work items are listed here while they are in force."
       },
       "revoked": {
         "title": "No revoked decisions",
-        "body": "No decision has been revoked."
+        "body": "A decision moves here once it is revoked."
       },
       "history": {
         "title": "No decisions recorded",
-        "body": "Nothing has been decided here yet."
+        "body": "Every decision recorded on work items is listed here."
       }
     }
   },
   "dependencies": {
-    "none": "No dependencies."
+    "none": "No dependencies.",
+    "noneBody": "Work items this one waits on are listed here; it can start once each of them is done."
   },
   "detail": {
     "subtitle": "{{kind}} · version {{version}}",
@@ -164,8 +166,12 @@
     "owner": "Owner",
     "provenance": "Provenance",
     "priority": "Priority",
+    "waitsOn": "Waits on",
+    "waitsOnDependencies": "Work items it depends on that are not done yet",
     "blocked": "Blocked",
     "terminal": "Outcome",
+    "due": "Due",
+    "ended": "Ended",
     "etag": "Version tag",
     "tabs": {
       "overview": "Overview",
@@ -176,7 +182,8 @@
     }
   },
   "events": {
-    "none": "No events recorded for this item."
+    "none": "No events recorded for this item.",
+    "noneBody": "Each change to this item is recorded here as it happens."
   },
   "filters": {
     "status": "Status",
@@ -215,12 +222,10 @@
     "unknown": "Could not look",
     "reason": "Reason",
     "ttl": "TTL (seconds)",
-    "noWrite": "Your role cannot change this lease.",
     "noAdmin": "Taking over, revoking and rebasing need lease admin.",
+    "heldBy": "Session {{holder}} holds this item; the session takes, renews and releases the lease itself.",
+    "vacant": "No session holds this item; a session takes, renews and releases the lease itself.",
     "actions": {
-      "acquire": "Acquire",
-      "renew": "Renew",
-      "release": "Release",
       "takeover": "Take over",
       "revoke": "Revoke",
       "clockRebase": "Rebase clock"
@@ -246,7 +251,7 @@
     "error": "Stream interrupted",
     "unavailableBody": "The list on screen may be out of date, and nothing else will tell you so. Refresh to read the store directly."
   },
-  "subtitle": "Work that sessions and people share: items, owners, dependencies, acceptance criteria and decisions. Each change is shown before it is applied.",
+  "subtitle": "Track work items: who owns each, what it waits on and when it is done.",
   "tabs": {
     "items": "Work items",
     "decisions": "Decisions"
@@ -262,7 +267,7 @@
     "item.cancel": "Cancel",
     "item.archive": "Archive",
     "noWrite": "Your role cannot change this item.",
-    "noAdmin": "Your role cannot fail or archive items."
+    "noAdmin": "Your role cannot archive items."
   },
   "truncation": {
     "label": "Loaded {{n}} rows; there are more",

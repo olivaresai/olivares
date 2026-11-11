@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { ForbiddenState } from '@/components/ui/error-state'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -382,6 +383,11 @@ export function RoutinePoliciesView() {
   if (esNegativaDeRol(listQ.error) || esNegativaDeRol(postureQ.error)) {
     return <ForbiddenState data-testid="routine-forbidden" />
   }
+  // The edition answers, not the role: its line, never a page of failures.
+  const byEdition = [listQ.error, postureQ.error].find(
+    (e) => e instanceof ApiError && e.isEditionRefusal,
+  )
+  if (byEdition) return <QueryErrorState error={byEdition} />
 
   return (
     <div className="flex flex-col gap-5 pb-10">

@@ -202,15 +202,18 @@ describe('IdentityView — the URL follows a manual tab change', () => {
 })
 
 describe('IdentityView — Identities & access (console remake slice 3)', () => {
-  it('for an administrator, adds people, roles, identity providers and API keys and opens People', () => {
+  it('for an administrator, adds people, roles, single sign-on and API keys and opens People', () => {
     auth.admin = true
     renderAt('')
     expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
     // The section list names its sections and nothing else: no group label above them.
     expect(screen.getByRole('tablist').textContent).toBe(tabs.join(''))
-    for (const name of ['People', 'Roles', 'Identity provider', 'API keys'])
+    for (const name of ['People', 'Roles', 'Single sign-on', 'API keys'])
       expect(tabs).toContain(name)
+    // One setting, one name: its form and its live state are one section.
+    expect(tabs.filter((name) => name === 'Single sign-on')).toHaveLength(1)
+    expect(tabs).not.toContain('Identity provider')
     // The identity sections are all still there, after people and roles.
     expect(tabs.indexOf('People')).toBe(0)
     expect(tabs).toContain('Identity inventory')
@@ -224,6 +227,17 @@ describe('IdentityView — Identities & access (console remake slice 3)', () => 
     expect(
       screen.queryByText(/PeopleTab|RolesTab|SSOTab|ApiKeysTab/),
     ).toBeNull()
+  })
+
+  it('for an administrator, Single sign-on holds the setting and its state, and its old link lands there', () => {
+    auth.admin = true
+    renderAt('?tab=federation')
+    expect(screen.getByRole('tab', { name: 'Single sign-on' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByText('SSOTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('FederationTab mounted')).toBeInTheDocument()
   })
 
   it('opens an administration section by deep link, and ignores it without the permission', () => {

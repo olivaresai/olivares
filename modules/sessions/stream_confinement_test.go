@@ -623,6 +623,60 @@ func (d *streamFailingData) View(context.Context, func(store.Scope) error) error
 	return d.err
 }
 
+// TestRunStreamAsksTheRunReadRule: a run_ref subscription carries only that run's managed
+// row, and asks the rule GET /runs/{ref} asks. A colleague whose run read an authored policy
+// denies is answered as that read answers them, and subscribes nothing.
+func TestRunStreamAsksTheRunReadRule(t *testing.T) {
+	f := newStreamConfinementFixture(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"})
+	admin := f.adminLogin()
+	tenant := f.createOrg(admin, "run-stream")
+	colleague := f.member(t, admin, tenant, "colleague@run-stream.test", "")
+	var ws model.ID
+	if err := f.st.View(t.Context(), tenant, func(sc store.Scope) error {
+		w, err := sc.DefaultWorkspace(t.Context())
+		ws = w.ID
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	seedRunIn(t, f.st, tenant, "run-ours", ws)
+	reader := streamConnected(t, f.get(t, "stream?run_ref=run-ours", colleague, tenant))
+	f.m.broker.publish(liveSnapshot{tenant: tenant, dto: liveDTO{LiveRef: "row-theirs", RunRef: "run-theirs", CurrentResource: "s0-their-run"}})
+	f.m.broker.publish(liveSnapshot{tenant: tenant, dto: liveDTO{LiveRef: "row-ours", RunRef: "run-ours", CurrentResource: "s0-our-run"}})
+	if dto := streamSession(t, reader); dto.CurrentResource != "s0-our-run" {
+		t.Fatalf("run_ref stream carried %q first, want s0-our-run", dto.CurrentResource)
+	}
+
+	policy := f.doJSON("POST", "/v1/m/governance/policies", admin, map[string]any{
+		"name": "deny-run-read", "kind": "abac", "enabled": true,
+		"spec": map[string]any{"rules": []any{map[string]any{"deny": true, "permission": "sessions:run:read"}}},
+	}, tenantHdr(tenant))
+	if policy.code != http.StatusCreated {
+		t.Fatalf("deny policy = %d %s", policy.code, policy.raw)
+	}
+	read := f.do("GET", "/v1/m/sessions/runs/run-ours", colleague, tenantHdr(tenant))
+	if read.code == http.StatusOK {
+		t.Fatalf("the run read is still allowed: %s", read.raw)
+	}
+	before, active := streamBrokerCounts(f.m)
+	denied := f.get(t, "stream?run_ref=run-ours", colleague, tenant)
+	absent := f.get(t, "stream?run_ref=run-absent", colleague, tenant)
+	deniedBody, _ := io.ReadAll(denied.Body)
+	absentBody, _ := io.ReadAll(absent.Body)
+	// A refused run reads as an absent one: the answer never says the run exists.
+	if denied.StatusCode != read.code || absent.StatusCode != read.code || string(deniedBody) != string(absentBody) {
+		t.Fatalf("denied=%d %s absent=%d %s, want both %d and alike", denied.StatusCode, deniedBody, absent.StatusCode, absentBody, read.code)
+	}
+	if strings.Contains(denied.Header.Get("Content-Type"), "event-stream") {
+		t.Fatalf("a refused run_ref stream sent SSE headers: %v", denied.Header)
+	}
+	if next, n := streamBrokerCounts(f.m); next != before || n != active {
+		t.Fatal("a refused run_ref stream subscribed")
+	}
+	// Live read itself is untouched: the refusal is the run's, not the stream's.
+	streamConnected(t, f.get(t, "stream", colleague, tenant))
+}
+
 func TestSessionsStreamSelectorStoreFailure(t *testing.T) {
 	m := New()
 	data := &streamFailingData{err: errors.New("fixture store unavailable")}

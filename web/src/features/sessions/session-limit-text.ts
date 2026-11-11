@@ -5,6 +5,7 @@
 // What the session header says about a limit (session-limit.tsx).
 import type { TFunction } from 'i18next'
 import type { RunLimit } from '@/features/agentops/types'
+import './i18n'
 
 /** "Out of quota until 15:45", with the day when the reset is not today. */
 export function limitSentence(

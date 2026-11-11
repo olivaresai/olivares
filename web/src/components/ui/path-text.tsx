@@ -12,7 +12,13 @@ const pathTextVariants = cva(
   'group/path inline-flex min-w-0 max-w-full items-center gap-1 align-bottom',
   {
     variants: {
-      tone: { default: 'text-text', muted: 'text-text-2' },
+      // `inherit`: the surrounding text colour, for a path in a sentence of another
+      // surface (a toast on the inverse surface); the default is unchanged.
+      tone: {
+        default: 'text-text',
+        muted: 'text-text-2',
+        inherit: 'text-inherit',
+      },
       size: { base: 'text-mono', small: 'text-mono-s' },
     },
     defaultVariants: { tone: 'default', size: 'base' },

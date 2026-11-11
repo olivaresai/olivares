@@ -314,3 +314,22 @@ func TestFastForwardMergeSettlesWithSourceSHA(t *testing.T) {
 		t.Fatalf("merge replay: err=%v writes=%d", err, h.host.merges)
 	}
 }
+
+// The intents a target lists, and one intent, are published with their fields, the session
+// each came from and an approved proposal's included (dev row 7): before, both answered
+// a bare object and the list's target_id was not declared.
+func TestIntentReadsPublishTheirFields(t *testing.T) {
+	for _, pattern := range []string{"/intents", "/intents/{id}"} {
+		doc, ok := (&Module{}).OperationDocumentation(http.MethodGet, pattern)
+		raw, _ := json.Marshal(doc)
+		for _, field := range []string{`"session_run"`, `"proposal"`, `"approval_id"`, `"operation_id"`, `"observed"`} {
+			if !ok || doc.BodyKind != api.ModuleOperationBodyless || !strings.Contains(string(raw), field) {
+				t.Errorf("GET %s documentation lacks %s: %s", pattern, field, raw)
+			}
+		}
+	}
+	doc, _ := (&Module{}).OperationDocumentation(http.MethodGet, "/intents")
+	if len(doc.Parameters) != 1 || doc.Parameters[0]["name"] != "target_id" || doc.Parameters[0]["required"] != true {
+		t.Errorf("GET /intents declares %v, want the required target_id", doc.Parameters)
+	}
+}

@@ -14,6 +14,9 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // The session worktree's diff (K4.A2), over the real routes: a session opened at the
@@ -388,5 +391,138 @@ func TestWorktreeDiffRunsNoTransportCommandFromTheRepositoryConfig(t *testing.T)
 	}
 	if b, err := os.ReadFile(marker); err == nil {
 		t.Fatalf("the engine's git ran a command the repository config named:\n%s", b)
+	}
+}
+
+// TestFolderSessionDiffComparesHeadWithTheWorkingTree: a session that works in its Git
+// folder itself, with no worktree of its own, sees what it changed against the folder's
+// HEAD: a modified tracked file, a deleted one and an untracked new one, each file's two
+// sides through the workspace's own governed reads.
+func TestFolderSessionDiffComparesHeadWithTheWorkingTree(t *testing.T) {
+	if confine.Probe().Mode != confine.ModeLandlock {
+		t.Skip("Landlock unavailable")
+	}
+	repo := gitRepoFixture(t)
+	m := New(WithConfinement([]string{t.TempDir()}, true))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "folder-diff")
+	workspace, _ := launchTargetWorkspaces(t, m, tenant)
+	ws := registerTestWorkspace(t, m, tenant, repo)
+	seedLaunchTargetRun(t, m, tenant, workspace, "folder-run", nil, func(rec model.Record) {
+		rec[colRunWorkspacePath] = repo
+		rec[colWorkspaceRef] = ws
+		rec[colState] = stateStopped
+		rec[colPermissionMode] = "dontAsk"
+	})
+	fixtureWrite(t, repo, "README", "changed in session\n")
+	fixtureWrite(t, repo, "notes.txt", "new note\n")
+	fixtureWrite(t, repo, ".gitignore", ".env\n")
+	fixtureWrite(t, repo, ".env", "TOKEN=not-a-change\n")
+	if err := os.Remove(filepath.Join(repo, "sub", "inner.txt")); err != nil {
+		t.Fatal(err)
+	}
+	base := "/v1/m/sessions/runs/folder-run/diff"
+	got := h.do("GET", base, admin, tenantHdr(tenant))
+	if got.code != http.StatusOK || got.body["working_tree"] != true || got.body["head"] != "" || got.body["branch"] != "main" {
+		t.Fatalf("folder diff = %d %s, want 200 on branch main, working_tree true and no head commit", got.code, got.raw)
+	}
+	if b, _ := got.body["base"].(string); !validGitObjectID(b) {
+		t.Fatalf("base = %q, want HEAD's commit id", b)
+	}
+	status := map[string]string{}
+	for _, f := range got.body["files"].([]any) {
+		row := f.(map[string]any)
+		status[row["path"].(string)] = row["status"].(string)
+	}
+	if want := map[string]string{".gitignore": "added", "README": "modified", "notes.txt": "added", "sub/inner.txt": "deleted"}; fmt.Sprint(status) != fmt.Sprint(want) {
+		t.Fatalf("files = %v, want %v", status, want)
+	}
+	for file, want := range map[string][2]string{
+		"README":        {"base\n", "changed in session\n"},
+		"notes.txt":     {"", "new note\n"},
+		"sub/inner.txt": {"inner\n", ""},
+	} {
+		r := h.do("GET", base+"/file?path="+url.QueryEscape(file), admin, tenantHdr(tenant))
+		if r.code != http.StatusOK || r.body["original"] != want[0] || r.body["modified"] != want[1] || r.body["status"] != status[file] {
+			t.Errorf("%s = %d %s, want original %q and modified %q", file, r.code, r.raw, want[0], want[1])
+		}
+	}
+	// Only a listed change is read: not the repository's own files, an ignored file or
+	// an unchanged one.
+	for _, file := range []string{".git/config", ".env", "sub"} {
+		if r := h.do("GET", base+"/file?path="+url.QueryEscape(file), admin, tenantHdr(tenant)); r.code != http.StatusNotFound {
+			t.Errorf("%s = %d %s, want 404: it is not a change", file, r.code, r.raw)
+		}
+	}
+}
+
+// TestFolderSessionDiffNamesWhyItCannotCompare: a folder session's diff answers 409 with
+// a code that says why, so the console can say it: a repository with no commit yet
+// (no_commit), and a session folder that no longer matches its workspace
+// (folder_mismatch).
+func TestFolderSessionDiffNamesWhyItCannotCompare(t *testing.T) {
+	if confine.Probe().Mode != confine.ModeLandlock {
+		t.Skip("Landlock unavailable")
+	}
+	unborn, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	worktreeGitOut(t, unborn, "init", "-q", "-b", "main")
+	moved := gitRepoFixture(t)
+	m := New(WithConfinement([]string{t.TempDir()}, true))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "folder-diff-codes")
+	workspace, _ := launchTargetWorkspaces(t, m, tenant)
+	for run, folders := range map[string][2]string{
+		"unborn-run": {unborn, unborn},
+		"moved-run":  {moved, gitRepoFixture(t)},
+	} {
+		ws := registerTestWorkspace(t, m, tenant, folders[0])
+		seedLaunchTargetRun(t, m, tenant, workspace, run, nil, func(rec model.Record) {
+			rec[colRunWorkspacePath] = folders[1]
+			rec[colWorkspaceRef] = ws
+			rec[colState] = stateStopped
+			rec[colPermissionMode] = "dontAsk"
+		})
+	}
+	for run, want := range map[string]string{"unborn-run": "no_commit", "moved-run": "folder_mismatch"} {
+		r := h.do("GET", "/v1/m/sessions/runs/"+run+"/diff", admin, tenantHdr(tenant))
+		errBody, _ := r.body["error"].(map[string]any)
+		if r.code != http.StatusConflict || errBody["code"] != want {
+			t.Errorf("%s diff = %d %s, want 409 with code %s", run, r.code, r.raw, want)
+		}
+	}
+}
+
+// TestFolderSessionDiffSaysTheFolderIsNotAGitRepository: a folder session whose folder
+// is not a Git repository answers 404, as it always has, with its own code, so the
+// console tells it from a session that is not there.
+func TestFolderSessionDiffSaysTheFolderIsNotAGitRepository(t *testing.T) {
+	if confine.Probe().Mode != confine.ModeLandlock {
+		t.Skip("Landlock unavailable")
+	}
+	plain, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(WithConfinement([]string{t.TempDir()}, true))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "folder-diff-not-git")
+	workspace, _ := launchTargetWorkspaces(t, m, tenant)
+	ws := registerTestWorkspace(t, m, tenant, plain)
+	seedLaunchTargetRun(t, m, tenant, workspace, "plain-run", nil, func(rec model.Record) {
+		rec[colRunWorkspacePath] = plain
+		rec[colWorkspaceRef] = ws
+		rec[colState] = stateStopped
+		rec[colPermissionMode] = "dontAsk"
+	})
+	r := h.do("GET", "/v1/m/sessions/runs/plain-run/diff", admin, tenantHdr(tenant))
+	errBody, _ := r.body["error"].(map[string]any)
+	if r.code != http.StatusNotFound || errBody["code"] != "not_a_git_repository" {
+		t.Errorf("diff = %d %s, want 404 with code not_a_git_repository", r.code, r.raw)
 	}
 }

@@ -839,6 +839,7 @@ export type ApplyFailure =
   | 'plan-changed'
   | 'conflict-idempotency'
   | 'conflict-domain'
+  | 'forbidden'
   | 'unknown'
   | 'other'
 
@@ -857,6 +858,8 @@ export function classifyApplyFailure(err: unknown): ApplyFailure {
   if (code === 'version_mismatch') return 'conflict-version'
   if (code === 'version_required') return 'version-required'
   if (code === 'idempotency_key_reused') return 'conflict-idempotency'
+  // The engine's refusal of this command to this person's roles.
+  if (code === 'forbidden') return 'forbidden'
   if (err.status === 409) return 'conflict-domain'
   if (err.status === 412) return 'conflict-version'
   if (err.status === 428) return 'version-required'

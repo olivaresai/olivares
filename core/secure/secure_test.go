@@ -171,3 +171,31 @@ func TestEnsureTLSCert(t *testing.T) {
 		t.Fatalf("second ensure = (created=%v, fp=%q, %v)", created2, fp2, err)
 	}
 }
+
+// A read-only command loads the data-dir key and never creates one: a missing
+// file is an error and leaves nothing behind, the key LoadOrCreateSigningKey wrote
+// loads back unchanged, and the owner-only check still refuses a 0644 key.
+func TestLoadExistingSigningKeyNeverMints(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit-signing.key")
+	if _, err := LoadExistingSigningKey(path); err == nil {
+		t.Fatal("LoadExistingSigningKey on a missing file succeeded, want an error")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("LoadExistingSigningKey on a missing file left %s behind (stat err %v)", path, err)
+	}
+	minted, created, err := LoadOrCreateSigningKey(path)
+	if err != nil || !created {
+		t.Fatalf("LoadOrCreateSigningKey = created %v, err %v; want a new key", created, err)
+	}
+	loaded, err := LoadExistingSigningKey(path)
+	if err != nil || !loaded.Equal(minted) {
+		t.Fatalf("LoadExistingSigningKey = %v (equal %v), want the minted key", err, loaded.Equal(minted))
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadExistingSigningKey(path); err == nil {
+		t.Fatal("LoadExistingSigningKey read a 0644 key, want the owner-only refusal")
+	}
+}

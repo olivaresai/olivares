@@ -51,6 +51,10 @@ func (m *Module) UseAccountsRoot(root string) {
 // created on this node).
 func (m *Module) AccountsRoot() string { return m.accountsRoot }
 
+// accountCodeWriterConfined is the stable code of a create refused because the caller
+// is confined to one workspace: an account belongs to the tenant, not to a workspace.
+const accountCodeWriterConfined = "workspace_confined_account_writer"
+
 // CreateProviderAccountInput names an intention. A retry key is not authority.
 // Empty keeps the legacy one-request behavior; retrying clients must retain a key.
 type CreateProviderAccountInput struct {
@@ -63,7 +67,7 @@ type CreateProviderAccountInput struct {
 // of rollback: neither this path nor a later retry deletes any home.
 func (m *Module) CreateProviderAccount(ctx context.Context, actor auth.Principal, tenant model.TenantID, in CreateProviderAccountInput) (ProviderAccount, error) {
 	if _, confined := actor.ConfinedWorkspaceIn(tenant); confined {
-		return ProviderAccount{}, forbiddenErr("workspace confined account writer")
+		return ProviderAccount{}, &codedRunErr{forbiddenErr("workspace confined account writer"), accountCodeWriterConfined}
 	}
 	if m.Data == nil {
 		return ProviderAccount{}, errNoData

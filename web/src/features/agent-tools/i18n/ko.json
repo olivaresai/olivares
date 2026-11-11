@@ -1,7 +1,7 @@
 {
   "title": "AI 도구",
   "description": "이 서버의 세션이 실행하는 AI 도구를 설치하고 로그인합니다.",
-  "descriptionMember": "세션은 이 계정과 API 키로 실행됩니다. 도구 설치와 로그인은 시스템 관리자가 합니다.",
+  "descriptionMember": "세션은 이 계정으로 실행됩니다. API 키는 프로바이더에 있습니다. 도구 설치와 로그인은 시스템 관리자가 합니다.",
   "refresh": "새로 고침",
   "readOnly": "이 서버는 읽기 전용입니다. 설치가 비활성화되었습니다.",
   "notInstalled": "관리되는 설치 없음",
@@ -95,7 +95,7 @@
     "failed": "실행 중 아님: 중지되었습니다.",
     "start": "시작",
     "stop": "중지",
-    "notInstalled": "{{name}}이(가) 설치되어 있지 않습니다. Olivares는 이 서버의 PATH에서 {{program}}을(를) 찾습니다.",
+    "lookedFor": "Olivares는 이 서버의 PATH에서 {{program}}을(를) 찾습니다.",
     "hint": "엔드포인트는 시작할 때 지정한 조직의 프로바이더에 등록되어 있으므로 그 조직의 OpenCode 세션이 모델을 사용할 수 있습니다.",
     "model": "모델",
     "modelHintLlamaCpp": ".gguf 파일의 절대 경로 또는 사용자/저장소[:양자화] 형식의 Hugging Face 모델을 입력하십시오.",
@@ -134,7 +134,7 @@
     "accountChecking": "계정 · 확인 중…",
     "accountSigningIn": "계정 · 로그인 중…",
     "accountUnreadable": "계정 · 읽을 수 없음",
-    "keyDetail": "API 키 · {{name}} ({{hint}})",
+    "keyDetail": "API 키 · {{name}} · {{hint}}",
     "keyName": "API 키 · {{name}}",
     "keyNone": "API 키 · 선택 없음",
     "lastSignIn": "마지막 로그인 {{when}}",
@@ -158,7 +158,11 @@
     "default": "기본 로그인",
     "readFailed": "프로필을 읽을 수 없습니다.",
     "truncated": "일부 프로필이 표시되지 않습니다.",
-    "retry": "다시 시도"
+    "retry": "다시 시도",
+    "turnOff": "{{name}} 끄기",
+    "turnOn": "{{name}} 켜기",
+    "switchedOn": "{{name}}을(를) 켰습니다",
+    "switchedOff": "{{name}}을(를) 껐습니다"
   },
   "tool": {
     "menu": "{{name}} 옵션",
@@ -196,12 +200,12 @@
     "chooseKey": "키 선택",
     "addKey": "키 추가…",
     "create": "생성",
+    "createAndSignIn": "생성 후 로그인",
     "creating": "생성 중…",
     "created": "프로필 {{name}}이(가) 생성되었습니다",
     "failed": "프로필이 생성되지 않았습니다.",
     "bindFailed": "키를 설정할 수 없습니다.",
     "keyNotSet": "프로필이 생성되었지만 키가 설정되지 않았습니다: {{error}} 프로필을 열어 키를 선택하십시오.",
-    "notNow": "나중에",
     "close": "닫기",
     "keyNeedsAccess": "키 선택에는 프로필 변경 권한이 필요합니다."
   },
@@ -256,9 +260,35 @@
     "packagesHint": "각 도구의 새 세션이 사용하는 프로바이더 프로필({{profiles}})이 선언합니다. 프로필이 없는 도구는 아무것도 선언하지 않는 새 프로필을 받습니다."
   },
   "place": {
-    "title": "계정 및 API 키",
     "accounts": "계정",
     "allAccounts": "모든 계정: 세부 정보, 레이블, 바인딩",
-    "noAccess": "현재 역할로는 이 조직의 계정과 API 키를 읽을 수 없습니다."
+    "noAccess": "현재 역할로는 이 조직의 계정을 읽을 수 없습니다.",
+    "keysOnProviders": "API 키는 <0>프로바이더</0>에 있습니다.",
+    "keysAndReferencesOnProviders": "API 키와 그 참조는 <0>프로바이더</0>에 있습니다."
+  },
+  "runtime": {
+    "title": "런타임",
+    "autoCompact": "자동 압축 시점",
+    "autoCompactHint": "100,000~1,000,000 토큰에서 압축합니다. 비워 두면 Claude의 기본값을 사용합니다.",
+    "autoCompactPlaceholder": "예: 300000",
+    "autoCompactInvalid": "100000~1000000 사이의 정수를 입력하거나 비워 두세요.",
+    "saved": "런타임을 저장했습니다. 새 세션부터 적용됩니다."
+  },
+  "models": {
+    "title": "모델",
+    "note": "이 목록은 나에게만 보입니다. 숨긴 모델은 선택 목록에서 빠지지만 도구의 기본값과 직접 입력한 모델은 계속 사용할 수 있습니다.",
+    "filter": "모델 필터",
+    "disableAll": "모두 숨기기",
+    "enableAll": "모두 표시",
+    "addCustom": "사용자 지정 모델 추가",
+    "customPlaceholder": "모델 ID, 예: claude-opus-5-5",
+    "customInvalid": "모델 ID에는 공백이 없고 최대 200자입니다.",
+    "add": "추가",
+    "fast": "빠른 모드",
+    "up": "{{name}} 위로 이동",
+    "down": "{{name}} 아래로 이동",
+    "use": "{{name}} 표시",
+    "removeCustom": "{{name}} 제거",
+    "empty": "이 도구는 모델을 알려 주지 않습니다. 사용하는 모델을 추가하세요."
   }
 }

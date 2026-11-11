@@ -699,10 +699,40 @@ export function runTitle(s: UnifiedSession): string | null {
  * nothing is named by its tool alone.
  */
 export function sessionPlace(s: UnifiedSession): string | null {
-  const tool = sessionTool(s)
-  const folder = sessionFolder(s)
-  if (!tool) return folder
-  return folder ? `${tool} \u00b7 ${folder}` : tool
+  return placeOf(sessionTool(s), sessionFolder(s))
+}
+
+/** "tool · folder", either part alone, or null when neither is known. */
+function placeOf(tool: string | null, folder: string | null): string | null {
+  return [tool, folder].filter(Boolean).join(' \u00b7 ') || null
+}
+
+/**
+ * WHAT A PERSON READS FOR ONE RUN, where a screen holds a run and not a session: the name
+ * its operator typed, else the phrase the engine cut from its first message, else its tool
+ * and folder, else the distinguishing tail of its reference. Never the raw reference, never
+ * empty: a console launch with no typed name has no `name`, and every reader that fell
+ * back to `run_ref` painted an identifier where a name had been.
+ *
+ * A session's heading does not call this: its rungs read every run of the session, the
+ * observed row's tool and project, and the tail of the provider's session id, which one
+ * run does not carry.
+ */
+export function runLabel(run: RunDTO): string {
+  return runName(run) ?? refTail(run.run_ref)
+}
+
+/** `runLabel` without its last rung: the typed name, else the title, else its tool and
+ * folder, else `null`, for a reader that paints its own word and reference beside it. */
+export function runName(run: RunDTO): string | null {
+  return (
+    run.name?.trim() ||
+    run.title?.trim() ||
+    placeOf(
+      run.provider_driver ? toolName(run.provider_driver) : null,
+      runFolder(run),
+    )
+  )
 }
 
 /** The folder a session works in, by its name, or null when nothing named one. A launched

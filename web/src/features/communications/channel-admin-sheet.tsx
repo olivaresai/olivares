@@ -1119,6 +1119,7 @@ export function ChannelAdminSheet({
                       isFetchingMore={query.isFetchingNextPage}
                       empty={
                         <EmptyState
+                          size="panel"
                           title={t('grants.emptyTitle')}
                           description={t('grants.emptyBody')}
                         />

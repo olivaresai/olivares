@@ -17,7 +17,7 @@
   "openOwner": "{{resource}} 열기",
   "sharedScope": "폴더, 커넥터, MCP 서버 및 정책은 조직 리소스이며 Workspace 바인딩은 추론되지 않습니다.",
   "more": "{{count}}개 표시 중. 더 있습니다.",
-  "unavailable": "이 리소스 패밀리를 불러오지 못했습니다. 새로 고쳐 다시 시도하십시오.",
+  "unavailable": "이 리소스 패밀리를 불러오지 못했습니다.",
   "off": "이 모듈은 꺼져 있습니다.",
   "startSession": "세션 시작",
   "workflows": "자동화 열기",
@@ -54,5 +54,18 @@
   },
   "nextPage": "다음 페이지",
   "firstPage": "첫 페이지",
-  "noDependencies": "표시할 종속성이 없습니다."
+  "noDependencies": "표시할 종속성이 없습니다.",
+  "groups": {
+    "workspace": "Workspace",
+    "folder": "폴더",
+    "session": "세션",
+    "work": "작업 항목",
+    "connector": "커넥터",
+    "mcp": "MCP 서버",
+    "policy": "정책"
+  },
+  "noResources": {
+    "title": "아직 구성된 리소스가 없습니다",
+    "description": "Workspace, 폴더, 세션, 커넥터, MCP 서버, 정책은 설정하면 여기에 표시됩니다."
+  }
 }

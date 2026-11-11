@@ -2,15 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { Suspense, type ComponentType, type ReactNode } from 'react'
-import { Spinner } from '@/components/ui/spinner'
+import { StateBlock } from '@/components/ui/state-block'
 
-/** Calm centered spinner while a code-split view's chunk loads. */
+/** Skeleton rows while a code-split view's chunk loads. */
 function ViewLoading() {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center">
-      <Spinner />
-    </div>
-  )
+  return <StateBlock state="loading" rows={6} />
 }
 
 /** Wrap a lazily-loaded view in a Suspense boundary (the route tree renders the

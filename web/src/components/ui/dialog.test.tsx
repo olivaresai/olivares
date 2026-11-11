@@ -16,6 +16,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
   DialogTrigger,
 } from './dialog'
@@ -62,5 +63,41 @@ describe('Dialog — APG modal dialog', () => {
     )
     // Focus RETURNS to the invoking trigger (APG focus-return rule).
     await waitFor(() => expect(trigger).toHaveFocus())
+  })
+})
+
+describe('Dialog — as direction A2 draws it', () => {
+  it('is the highest surface with the pop shadow and no outline, a title at the heading step, a small round close and its answers on a band', () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>New session</DialogTitle>
+          <DialogDescription>Pick a tool.</DialogDescription>
+          <DialogFooter>
+            <button type="button">Start session</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>,
+    )
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveClass('bg-raised', 'rounded-panel', 'border-0')
+    expect(dialog.className).toContain('shadow-[var(--shadow-pop)')
+    // The band reaches the dialog's foot when only the close follows it.
+    expect(dialog.className).toContain(
+      'has-[>[data-slot=dialog-footer]+[data-slot=dialog-close]:last-child]:pb-0',
+    )
+    // The title's size lives once, in the step: never a raw size beside it.
+    const title = screen.getByText('New session')
+    expect(title).toHaveClass('text-heading')
+    expect(title.className).not.toMatch(/text-\[/)
+    const close = screen.getByRole('button', { name: 'Close' })
+    expect(close).toHaveClass('size-7', 'rounded-full', 'bg-active')
+    const start = screen.getByRole('button', { name: 'Start session' })
+    expect(start.parentElement).toHaveClass(
+      'border-t',
+      'border-line',
+      'bg-frame/30',
+      '-mx-6',
+    )
   })
 })

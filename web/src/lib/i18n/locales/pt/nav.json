@@ -33,6 +33,7 @@
     "communicationsHandoffs": "Transferências",
     "console": "Administração",
     "sourceDiff": "Diferenças de origem",
+    "approvals": "Aprovações",
     "permissions": "Permissões",
     "identity": "Identidade",
     "vault": "Cofre",
@@ -119,7 +120,7 @@
     "agentops": "Inicie sessões e acompanhe o que cada uma faz, incluindo as que o Olivares encontra",
     "agentArtifacts": "Skills, extensões MCP e ficheiros de instruções — registo, postura e BOM da cadeia de fornecimento",
     "models": "Modelos, encaminhamento e governação",
-    "agent-tools": "Veja as contas e chaves de API com que as sessões são executadas; instalar e iniciar sessão nas ferramentas é tarefa dos administradores da implementação",
+    "agent-tools": "Veja as contas com que as sessões são executadas; instalar e iniciar sessão nas ferramentas é tarefa dos administradores da implementação",
     "modelOps": "Modelos próprios, admissão e implementações",
     "finops": "Custo de tokens, orçamentos e despesa",
     "adoption": "Produtividade, aceitação e combinação de modelos",
@@ -344,9 +345,13 @@
     "startWithChoice": "Iniciar uma nova sessão com esta escolha",
     "newWithOtherAccess": "Nova sessão com outro acesso…",
     "askPlaceholder": "Pergunte o que quiser, @ para contexto, / para comandos e skills",
+    "messagePlaceholder": "Mensagem para {{title}}… @ ficheiros · / comandos",
     "modelPicker": "Modelo: {{value}}",
-    "effortPicker": "Esforço: {{value}}",
+    "modelEffortPicker": "Modelo: {{model}}, esforço {{effort}}",
     "accessPicker": "Acesso: {{value}}",
+    "moreActions": "Mais ações",
+    "moreActionsStashed": "Mais ações, com um rascunho posto de lado",
+    "contextAction": "Contexto e compactação…",
     "accessKeeps": "O acesso muda no próximo turno desta conversa.",
     "queue": {
       "title": "Mensagens em fila",
@@ -370,18 +375,33 @@
       "placeholder": "Enter põe uma mensagem em fila para depois desta intervenção",
       "placeholderSteer": "Enter põe em fila para depois desta intervenção, Ctrl+Enter orienta-a agora",
       "discarded": "A sessão foi libertada com estas mensagens ainda em fila:",
-      "copy": "Copiar"
-    }
+      "copy": "Copiar",
+      "placeholderQueueKey": "{{key}} põe uma mensagem em fila para depois desta intervenção",
+      "placeholderSteerKey": "{{key}} orienta-a agora"
+    },
+    "stash": "Pôr este rascunho de lado",
+    "stashRestore": "Recuperar o rascunho posto de lado",
+    "stashGone": "Já não está guardado nesta sessão, por isso não foi recuperado: {{names}}",
+    "stashTooLarge": "Este rascunho é demasiado grande para pôr de lado: o limite é {{limit}}. Fica aqui.",
+    "stashNotKept": "Não foi possível pôr este rascunho de lado: este navegador não guarda nada entre visitas. Fica só neste separador.",
+    "stashNoRoom": "Não foi possível pôr este rascunho de lado: este navegador já não tem espaço para o guardar. Nada foi retirado, e fica aqui.",
+    "stashDropped": "Posto de lado. Para abrir espaço, foi retirado o mais antigo: {{words}}",
+    "stashTaken": "O rascunho posto de lado já não está aqui: outro separador recuperou-o, ou passou um dia.",
+    "plan": "Plano",
+    "planHint": "Planear primeiro: a ferramenta lê e propõe um plano, sem alterar nada. Aplica-se a partir da próxima mensagem."
   },
   "shell": {
     "more": "Mais",
     "searchCommands": "Pesquisa e comandos",
     "search": "Pesquisar",
+    "searchGo": "Pesquisar ou ir para…",
     "stopAll": "Parar tudo",
     "workspaceCount": "Espaços de trabalho: {{count}}",
     "rail": {
       "title": "Sessões",
-      "all": "Todas",
+      "seeAll_one": "Ver {{count}} sessão",
+      "seeAll_many": "Ver todas as {{count}} de sessões",
+      "seeAll_other": "Ver todas as {{count}} sessões",
       "groups": {
         "needsYou": "Precisa de si",
         "working": "Em curso",
@@ -431,10 +451,10 @@
     "killswitch": {
       "estateStopped": "TODOS OS AGENTES PARADOS",
       "estateBody": "Os agentes não podem agir até que duas contas de utilizador aprovem o reinício.",
-      "agentStops": "{{count}} paragem de agente ativa",
-      "agentStops_one": "{{count}} paragem de agente ativa",
-      "agentStops_many": "{{count}} de paragens de agentes ativas",
-      "agentStops_other": "{{count}} paragens de agentes ativas",
+      "agentStops": "{{count}} agentes parados",
+      "agentStops_one": "{{count}} agente parado",
+      "agentStops_many": "{{count}} de agentes parados",
+      "agentStops_other": "{{count}} agentes parados",
       "none": "Nada está parado. As sessões e os agentes funcionam normalmente."
     },
     "status": {
@@ -442,6 +462,9 @@
       "running_one": "{{count}} sessão aberta",
       "running_many": "{{count}} de sessões abertas",
       "running_other": "{{count}} sessões abertas",
+      "needYou_one": "{{count}} precisa de si",
+      "needYou_many": "{{count}} precisam de si",
+      "needYou_other": "{{count}} precisam de si",
       "usage": "Utilização de {{tool}}",
       "fiveHour": "5 h",
       "week": "sem.",
@@ -452,7 +475,6 @@
     },
     "collapse": "Recolher navegação",
     "expand": "Expandir navegação",
-    "openNavigation": "Abrir navegação",
     "closeNavigation": "Fechar navegação"
   },
   "places": {
@@ -471,13 +493,20 @@
   "readOnlyNotice": "Pode ler esta página, mas não a alterar. Um administrador da organização pode.",
   "business": {
     "sessions": "Gravações, automatizações e orquestração de sessões",
+    "providerAssignment": "Fornecedores atribuídos a pessoas e departamentos",
+    "limitAssignment": "Limites de utilização definidos para outras pessoas e departamentos",
     "people": "Diretórios, departamentos e administração delegada",
     "rules": "Políticas, funções e concessões personalizadas",
     "usage": "Custo por equipa e projeto",
+    "usageBudgets": "Orçamentos que avisam, abrandam ou bloqueiam sessões",
     "securityCompliance": "Quadros de conformidade e evidências",
     "securityRedTeam": "Execuções e pontuação de red team",
     "operationsDeploy": "Implementar agentes noutros hosts",
     "operationsResidency": "Residência de dados e inquilinos",
-    "retentionSchedules": "Os calendários só são aplicados no Olivares Business: esta edição guarda-os e não expurga nada."
+    "retentionSchedules": "Os calendários só são aplicados no Olivares AI Business: esta edição guarda-os e não expurga nada."
+  },
+  "groups": {
+    "control": "Governação",
+    "admin": "Administração"
   }
 }

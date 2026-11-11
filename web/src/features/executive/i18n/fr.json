@@ -1,7 +1,7 @@
 {
   "title": "Vue d’ensemble pour la direction",
-  "description": "Coût, utilisation, risque et conformité en un coup d’œil — accédez à la vue opérationnelle pour le détail.",
-  "asOfNote": "Le risque, la conformité et la fiabilité reflètent l’état actuel ; le coût couvre la plage sélectionnée.",
+  "description": "Utilisation, risque et conformité en un coup d’œil — accédez à la vue opérationnelle pour le détail.",
+  "asOfNote": "Le risque, la conformité et la fiabilité reflètent l’état actuel ; la plage s’applique aux chiffres dans le temps.",
   "range": {
     "label": "Plage",
     "7d": "7 derniers jours",
@@ -19,12 +19,12 @@
     "generatedLabel": "Généré le",
     "tenant": "Organisation",
     "allOrgs": "Toutes les organisations",
-    "range": "Plage de coût",
+    "range": "Plage",
     "footer": "Olivares AI — KPI agrégés uniquement ; aucune charge utile ni aucun secret."
   },
   "empty": {
     "title": "Aucun KPI de direction disponible",
-    "description": "Vous n’avez accès en lecture à aucune des sources de coût, de risque, de conformité ou de fiabilité de cette organisation."
+    "description": "Vous n’avez accès en lecture à aucune des sources que lit cette vue d’ensemble pour cette organisation."
   },
   "restricted": {
     "label": "Restreint",

@@ -86,9 +86,9 @@ const (
 	colPRCredentialVersion = "credential_version"
 )
 
-// Record lifecycle states. There are two, and revoke is final for that id: a
-// credential that was withdrawn must keep reading as withdrawn in the history that
-// explains a launch it once authorized.
+// Record lifecycle states. Revoke is final for that id: a credential that was withdrawn
+// must keep reading as withdrawn in the history that explains a launch it once authorized.
+// Disabled is the reversible pause of an account an administrator means to keep.
 const (
 	// ProviderRecordActive may be bound and may authorize a launch.
 	ProviderRecordActive = "active"
@@ -96,6 +96,8 @@ const (
 	// rewritten: a profile that names a revoked record is refused BY NAME at launch,
 	// which is an answer an operator can act on, unlike a binding that vanished.
 	ProviderRecordRevoked = "revoked"
+	// ProviderRecordDisabled refuses every use, like revoked, until it is enabled again.
+	ProviderRecordDisabled = "disabled"
 )
 
 // The provider kinds. The set is CLOSED, unlike the driver key set, and the
@@ -154,7 +156,8 @@ var (
 	// ErrProviderNameTaken refuses a second active record with one name per kind.
 	ErrProviderNameTaken = &runErr{http.StatusConflict, "another active provider of this kind already uses this name"}
 	// ErrProviderRecordRevoked refuses any use of a revoked record.
-	ErrProviderRecordRevoked = &runErr{http.StatusConflict, "this provider is revoked; register another one and bind it"}
+	ErrProviderRecordRevoked  = &runErr{http.StatusConflict, "this provider is revoked; register another one and bind it"}
+	ErrProviderRecordDisabled = &runErr{http.StatusConflict, "this provider is disabled; an administrator can enable it again"}
 	// ErrProviderRecordChanged rejects publication after another record write.
 	ErrProviderRecordChanged = &runErr{http.StatusConflict, "the provider changed during this operation; read it again before retrying"}
 	// ErrNoProviderVault is the deny-closed answer when no sealing port is wired:
@@ -229,6 +232,8 @@ type ProviderRecordPatch struct {
 	// every binding keeps working and the next launch uses the new value.
 	APIKey       *string
 	DefaultModel *string
+	// State moves a record between active and disabled. A revoked record stays revoked.
+	State *string
 	// Actor is the authenticated caller, for the same reason it is on the create
 	// input: a rotation is a sealed write and a sealed write is attributed.
 	Actor auth.Principal
@@ -836,6 +841,9 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 	if err != nil {
 		return ProviderRecord{}, err
 	}
+	if p.State != nil && *p.State != ProviderRecordActive && *p.State != ProviderRecordDisabled {
+		return ProviderRecord{}, badRequest("state must be active or disabled")
+	}
 	if p.APIKey != nil {
 		rec, err := m.GetProviderRecord(ctx, tenant, ref)
 		if err != nil {
@@ -875,7 +883,7 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		if err != nil {
 			return ProviderRecord{}, err
 		}
-		if current.State != ProviderRecordActive {
+		if current.State == ProviderRecordRevoked {
 			return ProviderRecord{}, ErrProviderRecordRevoked
 		}
 		if p.BaseURL != nil {
@@ -910,6 +918,10 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		}
 		if p.APIKey != nil && rec.Int(model.ColVersion) != rotation.Version {
 			return ErrProviderRecordChanged
+		}
+		stateChanged := p.State != nil && *p.State != rec.String(colPRState)
+		if stateChanged {
+			rec[colPRState] = *p.State
 		}
 		resetProbe := p.APIKey != nil
 		if p.DefaultModel != nil {
@@ -957,7 +969,16 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		}
 		out = providerRecordFromRecord(updated)
 		if p.APIKey != nil {
-			return appendProviderRecordAudit(ctx, sc, p.Actor, "rotate", out)
+			if rerr := appendProviderRecordAudit(ctx, sc, p.Actor, "rotate", out); rerr != nil {
+				return rerr
+			}
+		}
+		if stateChanged {
+			verb := "enable"
+			if *p.State == ProviderRecordDisabled {
+				verb = "disable"
+			}
+			return appendProviderRecordAudit(ctx, sc, p.Actor, verb, out)
 		}
 		return nil
 	})
@@ -1055,7 +1076,7 @@ func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, 
 		return ProviderRecord{}, err
 	}
 	if rec.State != ProviderRecordActive {
-		return ProviderRecord{}, ErrProviderRecordRevoked
+		return ProviderRecord{}, providerRecordUnusable(rec.State)
 	}
 	started := m.now()
 	res, probeErr := m.probeProviderRecord(ctx, tenant, rec, deep...)
@@ -1221,6 +1242,15 @@ func appendProviderRecordAudit(ctx context.Context, sc store.Scope, actor auth.P
 		return errors.New("provider key change audit was not persisted")
 	}
 	return err
+}
+
+// providerRecordUnusable is the refusal of a record that is not active, naming which of the
+// two it is: only one of them can be undone.
+func providerRecordUnusable(state string) error {
+	if state == ProviderRecordDisabled {
+		return ErrProviderRecordDisabled
+	}
+	return ErrProviderRecordRevoked
 }
 
 func sameProviderDefaultModel(rec model.Record, expected *string) bool {

@@ -23,7 +23,7 @@ func (m *Module) ReadProviderModels(ctx context.Context, tenant model.TenantID, 
 		return nil, err
 	}
 	if rec.State != ProviderRecordActive {
-		return nil, ErrProviderRecordRevoked
+		return nil, providerRecordUnusable(rec.State)
 	}
 	if rec.SecretRef != expected.SecretRef || rec.BaseURL != expected.BaseURL {
 		return nil, ErrProviderRecordChanged

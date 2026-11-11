@@ -47,6 +47,7 @@
   "schedule": {
     "updated": "Planification des sauvegardes mise à jour",
     "loading": "Chargement de la planification...",
+    "loadFailed": "Impossible de charger la planification des sauvegardes.",
     "title": "Planification automatique des sauvegardes",
     "description": "Configurez des sauvegardes récurrentes. Le moteur exécute la planification ; la phrase secrète est dérivée du secret de l'instance.",
     "enableAria": "Activer les sauvegardes automatiques",
@@ -118,6 +119,7 @@
   },
   "pending": {
     "title": "Restaurations en attente d'approbation (double contrôle)",
+    "loadFailed": "Impossible de charger les restaurations en attente d'approbation.",
     "requestedByPrefix": "Demandée par",
     "approveRestore": "Approuver et restaurer",
     "approved": "Restauration approuvée",

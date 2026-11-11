@@ -157,6 +157,23 @@ describe('useSessionMarks — Undo (a notice for 5 seconds, no question first)',
     await waitFor(() => expect(api.unsnooze).toHaveBeenCalledWith('run-1'))
   })
 
+  it('names a session with no name and no title by its tool and folder', async () => {
+    api.snooze.mockResolvedValue({
+      run_ref: 'run-1',
+      snoozed_until: UNTIL,
+      done: false,
+    })
+    const { result } = renderHook(() => useSessionMarks(), { wrapper })
+    const unnamed = run({
+      name: undefined,
+      provider_driver: 'claude',
+      workspace_path: '/srv/work/app',
+    })
+    act(() => result.current.snooze({ runs: [unnamed] }, 3_600_000))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    expect(notice().text).toBe('Snoozed "Claude Code · app"')
+  })
+
   it('puts the previous snooze time back when there was one', async () => {
     api.snooze.mockResolvedValue({
       run_ref: 'run-1',

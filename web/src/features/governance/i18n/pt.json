@@ -145,6 +145,10 @@
     "expiredAt": "Expirou {{time}}",
     "approveOnce": "Aprovar uma vez",
     "approveForSession": "Aprovar para esta sessão",
+    "allowances": "Permissões desta sessão",
+    "revokeAllowance": "Revogar",
+    "sessionPolicy": "A política exige a revisão de cada pedido.",
+    "allowancesError": "Não foi possível ler ou atualizar as permissões da sessão.",
     "approving": "A aprovar…",
     "deny": "Negar",
     "noMatch": "Nenhum pedido corresponde à pesquisa",
@@ -155,7 +159,9 @@
     "approved": "Aprovado",
     "rejected": "Rejeitado",
     "canceled": "Cancelado",
-    "expired": "Expirado"
+    "expired": "Expirado",
+    "approvedNotUsed": "Aprovado, não usado",
+    "approvedUsed": "Aprovado, usado"
   },
   "decide": {
     "rejectTitle": "Negar este pedido?",
@@ -196,10 +202,11 @@
     "reasonHint": "Contexto para os revisores (opcional).",
     "requiredApprovals": "Aprovações necessárias",
     "requiredApprovalsHint": "Ignorado se se aplicar uma política de aprovação correspondente — a política é que vale.",
-    "expiresInSeconds": "Expira em (segundos)",
-    "escalateInSeconds": "Escala em (segundos)",
     "submit": "Enviar pedido",
-    "created": "Pedido de aprovação aberto"
+    "created": "Pedido de aprovação aberto",
+    "expiresIn": "Expira em",
+    "escalateIn": "Escala em",
+    "subjectFold": "A que se aplica (opcional)"
   },
   "detail": {
     "title": "Pedido de aprovação",
@@ -227,9 +234,12 @@
     "reenableNeedsAdmins": "Duas outras contas de administrador têm de aprovar isto. Crie-as em Identidade e acesso, ou com `olivares users create`.",
     "openIdentity": "Abrir Identidade",
     "cannotDecideOwn": "Não pode aprovar o seu próprio pedido. Outro administrador tem de decidir.",
-    "requesterCannotApprove": "Quem fez o pedido não pode aprovar o seu próprio pedido.",
+    "ownRequest": "Não pode aprovar o seu próprio pedido.",
     "launchedBy": "Iniciado por",
-    "decidedByYou": "Aprovou este pedido. Aguarda outro aprovador."
+    "decidedByYou": "Aprovou este pedido. Aguarda outro aprovador.",
+    "whoDecides": "Quem pode decidir: {{names}}.",
+    "nobodyDecides": "Mais ninguém pode decidir este pedido.",
+    "someoneWithRights": "alguém com permissão para aprovar"
   },
   "policies": {
     "title": "Políticas",
@@ -240,6 +250,23 @@
     "enabled": "Ativada",
     "rules": "Regras",
     "newPolicy": "Nova política",
+    "roles": {
+      "title": "Funções",
+      "role": "Função",
+      "can": "O que pode fazer",
+      "people": "Pessoas",
+      "kind": "Tipo",
+      "builtIn": "Incluída",
+      "custom": "Personalizada",
+      "from": "Baseada em {{role}}",
+      "empty": "As funções incluídas aparecem aqui, cada uma com o que pode fazer.",
+      "does": {
+        "owner": "Todas as permissões dentro do tenant",
+        "admin": "O acima, mais o IAM do tenant — utilizadores, membros, tokens, definições",
+        "editor": "O acima, mais escrever dados operacionais",
+        "viewer": "Ler dados operacionais e o registo de auditoria"
+      }
+    },
     "empty": "Sem políticas",
     "emptyHint": "Crie uma regra de negação ABAC ou um limiar de aprovação para governar as ações correspondentes.",
     "kindAbac": "ABAC",
@@ -278,23 +305,20 @@
     "denyImplicit": "Negar (implícito)",
     "requiredApprovals": "Aprovações necessárias",
     "requiredApprovalsHint": "0 a 64. Vazio ou 0 usa a predefinição do motor, que pode ser mais alta para ações críticas.",
-    "expiresInSeconds": "Expira em (segundos)",
-    "expiresInSecondsHint": "0–31536000 (0 = nunca).",
-    "escalateInSeconds": "Escala em (segundos)",
-    "escalateInSecondsHint": "0–31536000 (0 = nunca).",
     "countError": "Introduza um número inteiro de 0 a {{max}}.",
     "matchAction": "Ação correspondente",
     "matchActionHint": "Vazio = corresponde a qualquer ação.",
     "matchSubjectKind": "Tipo de alvo correspondente",
     "matchSubjectKindHint": "Vazio = corresponde a qualquer tipo de alvo.",
-    "needsBusiness": "Um nível de risco ou um número de aprovações diferente do predefinido da ação precisa do Business. Desative esta política para a manter guardada.",
     "create": "Criar política",
     "save": "Guardar alterações",
     "confirmCreateBody": "Uma política ABAC ativada restringe o acesso de imediato; uma política de aprovação ativada passa a exigir aprovações humanas para as ações correspondentes. Produz efeito de imediato.",
     "confirmUpdateBody": "Se estiver ativada, a alteração produz efeito de imediato no caminho de autorização / fluxo de aprovação. O tipo de política não pode ser alterado.",
     "created": "Política criada",
     "updated": "Política atualizada",
-    "credentialWarning": "Isto parece um valor de credencial. As regras de política só contêm referências e seletores — nunca um segredo."
+    "credentialWarning": "Isto parece um valor de credencial. As regras de política só contêm referências e seletores — nunca um segredo.",
+    "expiresIn": "Expira em",
+    "escalateIn": "Escala em"
   },
   "policyRemove": {
     "title": "Eliminar esta política?",
@@ -674,6 +698,14 @@
     "askedByForSession": "{{name}} para uma nova sessão",
     "askedByThroughSession": "{{name}} pela sua sessão",
     "tool": "Ferramenta",
+    "touches": "Afeta",
+    "changeClass": {
+      "docs_only": "Apenas documentação",
+      "code": "Código",
+      "sensitive": "Ficheiros sensíveis"
+    },
+    "lapses": "<when />; depois, ninguém o pode aprovar e não é executado.",
+    "lapsed": "Expirou <when />: ninguém o pode aprovar e não é executado.",
     "willRun": "O que vai ser executado",
     "noReview": "Este pedido não inclui o que vai ser executado.",
     "commandUnknown": "Comando ainda não apresentado para esta ferramenta",
@@ -735,5 +767,15 @@
       "editor": "Editor",
       "owner": "Proprietário"
     }
+  },
+  "durations": {
+    "none": "Sem limite",
+    "h1": "1 hora",
+    "h4": "4 horas",
+    "h8": "8 horas",
+    "h24": "24 horas",
+    "d7": "7 dias",
+    "d30": "30 dias",
+    "seconds": "{{value}} segundos"
   }
 }

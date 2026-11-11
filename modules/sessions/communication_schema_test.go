@@ -108,6 +108,7 @@ var personalStateDescriptorKinds = map[model.Kind]string{
 	"sessions.share":        "sessions_share",
 	"sessions.proposal":     "sessions_proposal",
 	runQueueKind:            runQueueTable,
+	runTurnKind:             "sessions_run_turn",
 }
 
 type communicationCapturedMigration struct {

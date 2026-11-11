@@ -55,6 +55,18 @@ func (a profileAccess) Limited(ctx context.Context, tenant model.TenantID, princ
 	return limited && err == nil, err
 }
 
+// sessionModelAccess is the sessions module's ModelAccess: the models module's grants, asked
+// for the session's model. The surface is empty because a session does not choose one: its
+// tool talks to whatever endpoint the provider names, and a surface-scoped grant stays with
+// the callers that know the surface.
+type sessionModelAccess struct{ models *models.Module }
+
+// MayRunModel reports whether the principal may run modelRef.
+func (a sessionModelAccess) MayRunModel(ctx context.Context, tenant model.TenantID, principal auth.Principal, modelRef string) (bool, error) {
+	verdict, err := a.models.EvaluateModelAccess(ctx, tenant, principal, "", "", modelRef, "")
+	return verdict.Allowed && err == nil, err
+}
+
 // modelsAccess is who may see a source in the models list: a provider key is judged by the
 // profiles that run on it (mayUseRecord, the sessions module's rule for the key's own routes),
 // a tool account or a tool's login by the assignment (mayUse). With no way to ask about a key

@@ -8,7 +8,8 @@ import { useQuery } from '@tanstack/react-query'
 import { killswitchApi, killswitchKeys } from '@/features/killswitch/api'
 import { useAuth } from '@/lib/auth/context'
 
-/** The kill switch page's permission (registry entry `killswitch`). */
+/** The stop's state: read by whoever needs to know why sessions stopped. The kill switch
+ * page itself asks for the admin verb (registry entry `killswitch`). */
 const KILLSWITCH_READ = 'governance:killswitch:read'
 /** An emergency state: read often enough that a stop shows within half a minute. */
 const STATE_POLL_MS = 30_000

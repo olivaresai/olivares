@@ -29,12 +29,20 @@ import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { RelTimeLabel } from '@/features/shared'
+import { hostOf, programName } from '@/features/console/mcp-gateway-api'
 import { ToolAnnotations } from './annotations'
 import { capabilitiesApi, capabilitiesKeys } from './api'
 import { ConfigEditorDialog } from './config-editor'
 import { RevisionsSheet } from './revisions'
 import './i18n'
 import type { ServerDetailDTO } from './types'
+
+/** Where a discovered server runs: a command server's program, any other
+ * transport's parsed host; else the dash, never a fragment of a token. */
+function endpointPlace({ transport, endpoint = '' }: ServerDetailDTO): string {
+  const place = transport === 'stdio' ? programName(endpoint) : hostOf(endpoint)
+  return place || '—'
+}
 
 const CONNECTION_VARIANT: Record<string, BadgeVariant> = {
   connected: 'success',
@@ -238,7 +246,7 @@ function DetailBody({
       {detail.endpoint && (
         <Section title={t('detail.endpoint')}>
           <code className="block truncate rounded-md border border-border bg-muted px-2 py-1 font-mono text-caption text-foreground">
-            {detail.endpoint}
+            {endpointPlace(detail)}
           </code>
         </Section>
       )}
@@ -309,6 +317,7 @@ function DetailBody({
           </KvList>
         ) : (
           <EmptyState
+            size="panel"
             title={t('detail.noConfig')}
             description={t('detail.noConfigHint')}
           />

@@ -148,14 +148,17 @@ func writeErr(w http.ResponseWriter, err error) {
 
 // Target DTO (CONTRACT-J10-S3 §3.3).
 type targetDTO struct {
-	ID                  string   `json:"id"`
-	WorkspaceID         string   `json:"workspace_id"`
-	Host                string   `json:"host,omitempty"`
-	CredentialBindingID string   `json:"credential_binding_id,omitempty"`
-	RepositoryBindingID string   `json:"repository_binding_id,omitempty"`
-	PushPrefix          string   `json:"push_prefix"`
-	MergeBases          []string `json:"merge_bases"`
-	Version             int64    `json:"version"`
+	ID                  string `json:"id"`
+	WorkspaceID         string `json:"workspace_id"`
+	Host                string `json:"host,omitempty"`
+	CredentialBindingID string `json:"credential_binding_id,omitempty"`
+	RepositoryBindingID string `json:"repository_binding_id,omitempty"`
+	// Repository is where a push goes, for every reader: owner/name, or the path
+	// of a plain Git remote. Absent when the repository is no longer approved.
+	Repository string   `json:"repository,omitempty"`
+	PushPrefix string   `json:"push_prefix"`
+	MergeBases []string `json:"merge_bases"`
+	Version    int64    `json:"version"`
 }
 
 func toTargetDTO(t Target, admin bool) targetDTO {
@@ -189,6 +192,13 @@ func (m *Module) targetReadDTO(ctx context.Context, tenant model.TenantID, t Tar
 	}
 	if kind, ok := gp.LookupTargetKind(binding.Host); ok {
 		d.Host = kind.Name()
+	}
+	if namer, ok := m.opts.Custody.(RepositoryNamer); ok {
+		name, err := namer.RepositoryName(ctx, tenant, t.Workspace, t.RepositoryBinding)
+		if err != nil && !errors.Is(err, ErrBindingNotApproved) {
+			return targetDTO{}, errUnavailable
+		}
+		d.Repository = name
 	}
 	return d, nil
 }
@@ -251,6 +261,8 @@ type intentDTO struct {
 	DispatchDeadline string          `json:"dispatch_deadline,omitempty"`
 	ReleaseFailure   string          `json:"release_failure,omitempty"`
 	Proposal         *proposalDTO    `json:"proposal,omitempty"`
+	// SessionRun is the session the publication came from, on every intent that has one.
+	SessionRun string `json:"session_run,omitempty"`
 }
 
 // proposalDTO names the session run whose approved request the intent
@@ -278,6 +290,7 @@ func toIntentDTO(in Intent, answer string) intentDTO {
 	if answer != in.State {
 		d.Answer = answer
 	}
+	d.SessionRun = in.SessionRun
 	if in.Proposal.SessionRun != "" {
 		d.Proposal = &proposalDTO{SessionRun: in.Proposal.SessionRun, ApprovalID: in.Proposal.Approval}
 	}
@@ -289,10 +302,15 @@ func toIntentDTO(in Intent, answer string) intentDTO {
 }
 
 // WriteReceipt maps a receipt, or its refusal, to its HTTP answer. The
-// session publish tool answers with it, as the routes do.
+// session publish tool answers with it, as the routes do. A publication waiting
+// for a person's approval answers 202 as a ship waiting for one does.
 func WriteReceipt(w http.ResponseWriter, r Receipt, err error) {
 	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	if r.Answer == ShipAwaitingApproval {
+		writeResponse(w, http.StatusAccepted, toShipDTO(ShipResult{State: ShipAwaitingApproval, Approval: r.Approval}))
 		return
 	}
 	status := http.StatusOK

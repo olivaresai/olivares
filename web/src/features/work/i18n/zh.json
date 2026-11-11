@@ -3,6 +3,7 @@
     "draftNotice": "该工作项处于草稿状态，验收标准仍可修正。标准键是永久标识，绝不会被重新分配。",
     "lockedNotice": "该工作项已离开草稿状态，验收标准不能再编辑，只能评估。标准键是永久标识。",
     "none": "没有验收标准。",
+    "noneBody": "说明该工作项何时完成的检查项设定后会显示在这里。",
     "required": "必需",
     "state": {
       "pending": "待定",
@@ -143,20 +144,21 @@
     "empty": {
       "effective": {
         "title": "没有生效中的决定",
-        "body": "没有生效的决定。"
+        "body": "针对工作项记录的决定在生效期间显示在这里。"
       },
       "revoked": {
         "title": "没有已撤销的决定",
-        "body": "没有被撤销的决定。"
+        "body": "决定被撤销后会移到这里。"
       },
       "history": {
         "title": "没有记录任何决定",
-        "body": "这里还没有做出任何决定。"
+        "body": "针对工作项记录的每个决定都显示在这里。"
       }
     }
   },
   "dependencies": {
-    "none": "没有依赖。"
+    "none": "没有依赖。",
+    "noneBody": "这里列出该工作项等待的工作项；它们都完成后，该工作项即可开始。"
   },
   "detail": {
     "subtitle": "{{kind}} · 版本 {{version}}",
@@ -164,8 +166,12 @@
     "owner": "负责人",
     "provenance": "来源",
     "priority": "优先级",
+    "waitsOn": "等待",
+    "waitsOnDependencies": "它依赖的、尚未完成的工作项",
     "blocked": "阻塞原因",
     "terminal": "结局",
+    "due": "截止时间",
+    "ended": "结束时间",
     "etag": "版本标记",
     "tabs": {
       "overview": "概览",
@@ -176,7 +182,8 @@
     }
   },
   "events": {
-    "none": "该工作项没有记录任何事件。"
+    "none": "该工作项没有记录任何事件。",
+    "noneBody": "该工作项的每次变更发生时都会记录在这里。"
   },
   "filters": {
     "status": "状态",
@@ -215,12 +222,10 @@
     "unknown": "无法查看",
     "reason": "原因",
     "ttl": "TTL（秒）",
-    "noWrite": "你的角色无法更改此租约。",
     "noAdmin": "接管、撤销与重设需要 lease admin 权限。",
+    "heldBy": "会话 {{holder}} 持有此条目；租约由会话自己获取、续期和释放。",
+    "vacant": "没有会话持有此条目；租约由会话自己获取、续期和释放。",
     "actions": {
-      "acquire": "获取",
-      "renew": "续期",
-      "release": "释放",
       "takeover": "接管",
       "revoke": "撤销",
       "clockRebase": "重设时钟"
@@ -246,7 +251,7 @@
     "error": "数据流中断",
     "unavailableBody": "屏幕上的列表可能已过时，而且不会有别的提示。请刷新以直接读取存储。"
   },
-  "subtitle": "会话与人员共享的工作：工作项、负责人、依赖关系、验收标准和决定。每项更改在应用前都会先显示。",
+  "subtitle": "跟踪工作项：谁负责、在等待什么、何时算完成。",
   "tabs": {
     "items": "工作项",
     "decisions": "决定"
@@ -262,7 +267,7 @@
     "item.cancel": "取消",
     "item.archive": "归档",
     "noWrite": "你的角色不能更改此工作项。",
-    "noAdmin": "你的角色不能将工作项标为失败或归档。"
+    "noAdmin": "你的角色不能归档工作项。"
   },
   "truncation": {
     "label": "已加载 {{n}} 行；还有更多",

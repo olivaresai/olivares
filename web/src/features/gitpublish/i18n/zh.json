@@ -95,7 +95,8 @@
     "title": "发布",
     "hint": "通过此会话所在工作区的发布目标推送其提交。引擎从会话文件夹获取该提交。",
     "publish": "发布",
-    "publishTo": "发布到 {{prefix}}"
+    "publishTo": "发布到 {{prefix}}",
+    "targetName": "{{repository}}，{{prefix}} 下"
   },
   "fields": {
     "ref": "分支引用",
@@ -178,6 +179,7 @@
     "link_not_allowed": "链接必须指向已批准仓库的拉取请求。",
     "host_credential_refused": "Git 主机拒绝了该绑定的凭据或其作用域。未派发任何内容。",
     "host_unavailable": "无法连接到 Git 主机。未派发任何内容。",
+    "identity_mismatch": "此更改只能通过其准备时所用的凭据绑定发布，而此目标使用的是另一个绑定。未派发任何内容。",
     "intent_settled": "该意图的结果已确定，因此无法放弃。",
     "invalid_request": "请求不完整或格式错误。请检查分支名称和提交 ID。",
     "lookup_incomplete": "无法完整读取主机的当前状态，因此未派发任何内容。",
@@ -191,6 +193,8 @@
     "repository_outside_binding": "该仓库不属于凭据绑定所允许的所有者。",
     "runtime_credential_refused": "会话的运行时凭据无法用于发布。请使用您自己的凭据操作。",
     "scoped_grant_required": "此操作需要针对此目标的作用域授权。",
+    "secret_detected": "该提交包含疑似凭据的内容，因此未发送任何内容。请将其从提交中移除，然后重新发起请求。",
+    "secret_scan_unavailable": "无法检查该提交是否包含凭据，因此未发布任何内容。",
     "separation_of_duty": "您启动的会话创建了此更改。请让另一人审查并合并。",
     "session_source_refused": "该会话运行不在此目标的工作区中，或其文件夹不是引擎可从中获取的仓库。",
     "session_source_unavailable": "未能及时读取会话文件夹。未推送任何内容。",
@@ -200,6 +204,7 @@
     "target_changed": "请求被受理后目标发生了变化。未派发任何内容。",
     "target_in_use": "仍有处于派发中、不确定或已放弃状态的意图持有此目标。",
     "unresolved_intent": "已有未解决的意图持有此分支、拉取请求或合并。",
+    "unknown_effect": "该意图记录了此版本引擎不认识的操作，因此无法核对。",
     "unsupported_requirement": "主机无法满足此要求，例如在 GitLab 上进行变基合并。",
     "version_conflict": "自您打开以来，目标已发生变化。请重新打开以查看当前版本。",
     "workflow_change_refused": "该提交修改了 CI 工作流文件，此目标拒绝发布此类提交。",
@@ -215,6 +220,38 @@
     "title": "意图",
     "empty": "此目标没有记录任何发布意图。",
     "open": "打开意图 {{id}}"
+  },
+  "publications": {
+    "title": "发布",
+    "description": "Olivares AI 在这些目标上发布的内容，以及等待批准的内容，最新的在前。拉取请求的状态是 Olivares AI 看到的；当前状态请打开链接查看。",
+    "show": "显示",
+    "all": "全部",
+    "approval": "批准",
+    "session": "会话",
+    "approved": "已批准",
+    "notAsked": "未请求",
+    "approvedUnused": "已批准，未使用",
+    "heldPush": "{{state}}：推送到 {{target}}",
+    "heldPullRequest": "{{state}}：向 {{target}} 提交的拉取请求",
+    "cut": "只读取了最早的 {{n}} 条审批。全部审批见“审批”。",
+    "openSession": "打开会话",
+    "openSessionOf": "打开会话：它将 {{branch}} 发布到了 {{target}}",
+    "aSession": "某个会话",
+    "empty": "这里还没有发布任何内容",
+    "emptyNext": "请在会话的更改面板中，或在这里的某个目标上发布。",
+    "readFailed": "无法读取发布到 {{target}} 的内容",
+    "heldReadFailed": "无法读取等待批准的内容",
+    "heldHidden": "等待其他成员批准的内容，仅对可以查看批准的成员列出。"
+  },
+  "pullRequests": {
+    "title": "拉取请求",
+    "pullRequest": "拉取请求",
+    "branch": "分支",
+    "opened": "已创建",
+    "merged": "已合并",
+    "link": "#{{number}} {{title}}",
+    "empty": "这里还没有创建过拉取请求",
+    "emptyNext": "请在会话的更改面板中，或在这里的某个目标上创建。"
   },
   "intent": {
     "title": "意图 {{id}}",

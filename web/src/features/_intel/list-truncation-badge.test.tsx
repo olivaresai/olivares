@@ -85,6 +85,18 @@ describe('ListTruncationBadge — las cuatro combinaciones', () => {
  *    `web/src` y no todos pasan un sobre con `items`, asi que exigirlo dentro habria apagado
  *    avisos ajenos EN SILENCIO. El tercer caso es el que vigila esa promesa.
  */
+// Partial data is one muted line under the toolbar, as the state set draws it: a fact about
+// the list, never a warning chip and never a banner. The line is a block of its own, not a
+// paragraph: a rich hint is the notice's paragraph, the first one a reader of it finds.
+it('says partial data in one muted line, not a warning chip', () => {
+  pinta({ data: { has_more: true }, error: null })
+  const line = screen.getByText(AVISO)
+  expect(line.tagName).toBe('DIV')
+  expect(line).toHaveClass('text-caption', 'text-text-3')
+  expect(line).not.toHaveClass('bg-warning-soft')
+  expect(line).not.toHaveClass('text-warning')
+})
+
 describe('ListTruncationBadge — la guarda de filas', () => {
   it('con filas 0 NO sale, aunque el motor diga que hay más', () => {
     render(

@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { GitBranch, RefreshCw } from 'lucide-react'
-import { useId, useState } from 'react'
+import { GitBranch, Minus, Plus, RefreshCw } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { BoxedList, BoxedListRow } from '@/components/ui/boxed-list'
 import { Button } from '@/components/ui/button'
+import { DisabledReason } from '@/components/ui/disabled-reason'
+import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Kbd } from '@/components/ui/kbd'
 import { PathText } from '@/components/ui/path-text'
+import { Textarea } from '@/components/ui/textarea'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import {
   useAuthBoundary,
@@ -20,18 +25,58 @@ import type {
 } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import { chordHint } from '@/lib/keybindings/model'
 import { currentControlFence } from '@/features/agentops/work-fence'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
+import { SessionPush, type GitStatus } from './session-push'
 import './i18n'
 
-/** The session folder's Git. `init` is the header's form: only an Initialize Git button,
- * shown where the folder is not a repository, with the panel's read and write path. */
+/** Where the Git panel sits: `panel` is the Changes pane's, which also pushes and opens the
+ * pull request; `lane` is a race session's, whose commit is merged into the session, never
+ * published; `init` is the header's, only an Initialize Git button where the folder is not
+ * a repository, with the panel's read and write path. */
+type GitVariant = 'panel' | 'lane' | 'init'
+
+/** The engine's 404 for a session folder that is not a Git repository, when it names it:
+ * a state no poll changes, so the status is not read again by itself. */
+const notRepository = (error: unknown) =>
+  error instanceof ApiError && error.code === 'not_a_git_repository'
+
+/** The session folder's Git status: one read that the panel, the header's button and the
+ * Changes pane share through its cache. `follow` re-reads it while the session works;
+ * `cached` only sees what another reader fetched, and asks for nothing itself. */
+export function useRunGit(
+  run: RunDTO | undefined,
+  epoch: number,
+  read: 'once' | 'follow' | 'cached',
+) {
+  const { activeTenant } = useAuth()
+  return useQuery({
+    queryKey: agentOpsKeys.runGit(activeTenant, epoch, run?.run_ref ?? ''),
+    queryFn: ({ signal }): Promise<GitStatus> =>
+      agentOpsApi.gitStatus(run!.run_ref, { signal }),
+    enabled:
+      read !== 'cached' &&
+      !!activeTenant &&
+      !!run?.workspace_path &&
+      run?.state !== 'cleaned',
+    refetchInterval: (query) =>
+      read === 'follow' &&
+      (run?.state === 'running' || run?.state === 'idle') &&
+      !notRepository(query.state.error)
+        ? 5_000
+        : false,
+    retry: false,
+  })
+}
+
+/** The session folder's Git, in one of its places (`GitVariant`). */
 export function SessionGit({
   run,
   variant = 'panel',
 }: {
   run: RunDTO
-  variant?: 'panel' | 'init'
+  variant?: GitVariant
 }) {
   const boundary = useAuthBoundary()
   // Discard a draft and pending UI when the run or authenticated actor changes.
@@ -52,7 +97,7 @@ function SessionGitPanel({
 }: {
   run: RunDTO
   boundary: AuthBoundary
-  variant: 'panel' | 'init'
+  variant: GitVariant
 }) {
   const { t } = useTranslation('sessions')
   const { activeTenant, can } = useAuth()
@@ -62,18 +107,33 @@ function SessionGitPanel({
   const [message, setMessage] = useState('')
   const [branchName, setBranchName] = useState('')
   const [creating, setCreating] = useState(false)
+  // The subject of the commit made here: the pull request's title starts from it.
+  const [subject, setSubject] = useState('')
   const key = agentOpsKeys.runGit(activeTenant, boundary.epoch, run.run_ref)
-  const status = useQuery({
-    queryKey: key,
-    queryFn: ({ signal }) => agentOpsApi.gitStatus(run.run_ref, { signal }),
-    enabled: !!activeTenant && !!run.workspace_path && run.state !== 'cleaned',
-    // The header's button reads once; the panel follows a live session.
-    refetchInterval:
-      variant === 'panel' && (run.state === 'running' || run.state === 'idle')
-        ? 5_000
-        : false,
-    retry: false,
-  })
+  // The header's button reads once; the panel and a race session's panel follow a live session.
+  const status = useRunGit(
+    run,
+    boundary.epoch,
+    variant === 'init' ? 'once' : 'follow',
+  )
+  // A turn that ends may have changed the folder: its Git status, and the uncommitted
+  // changes the Changes view lists, are read at once, not on the next poll. The engine
+  // shows a session that answered its turn as idle.
+  const turnState = useRef(run.state)
+  useEffect(() => {
+    const ended = turnState.current === 'running' && run.state !== 'running'
+    turnState.current = run.state
+    if (!ended) return
+    for (const queryKey of [
+      agentOpsKeys.runGit(activeTenant, boundary.epoch, run.run_ref),
+      agentOpsKeys.runWorktreeDiff(activeTenant, run.run_ref),
+    ])
+      void client.invalidateQueries(
+        { queryKey },
+        // The header and the panel both follow the turn: a read in flight is kept.
+        { cancelRefetch: false },
+      )
+  }, [run.state, run.run_ref, activeTenant, boundary.epoch, client])
   const mutation = useMutation({
     mutationKey: [...key, 'action'],
     mutationFn: async ({
@@ -110,7 +170,10 @@ function SessionGitPanel({
     },
     onSuccess: async (_answer, { action, body, attempt }) => {
       if (!attempt.current()) return
-      if (action === 'commit') setMessage('')
+      if (action === 'commit') {
+        setMessage('')
+        setSubject(body.message?.split('\n')[0] ?? '')
+      }
       if (action === 'branch' && body.create) {
         setBranchName('')
         setCreating(false)
@@ -148,8 +211,25 @@ function SessionGitPanel({
     ) : null
   if (variant === 'init') return initButton
   const data = status.data
-  const staged =
-    data?.files.some((f) => f.index !== ' ' && f.index !== '?') ?? false
+  const stagedFiles =
+    data?.files.filter((f) => f.index !== ' ' && f.index !== '?') ?? []
+  const staged = stagedFiles.length > 0
+  // Why Commit cannot run, the first that applies. What the panel already says (the person
+  // may not write, the status failed) describes it where it stands, said once. While a
+  // request runs it says Working… and needs no reason.
+  const saidAbove = !writable
+    ? `${id}-read-only`
+    : status.isError
+      ? `${id}-status`
+      : undefined
+  const commitReason =
+    mutation.isPending || saidAbove
+      ? undefined
+      : !staged
+        ? t('git.nothingStaged')
+        : !message.trim()
+          ? t('git.noMessage')
+          : undefined
   return (
     <section
       className="flex min-w-0 flex-col gap-2 py-2"
@@ -180,13 +260,19 @@ function SessionGitPanel({
       ) : null}
       {noRepository ? (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-caption text-muted-foreground">
-            {t('git.noRepository')}
+          <p id={`${id}-status`} className="text-caption text-muted-foreground">
+            {notRepository(status.error)
+              ? t('git.noRepositoryChanges')
+              : t('git.noRepository')}
           </p>
           {initButton}
         </div>
       ) : status.isError ? (
-        <p role="alert" className="text-caption text-destructive">
+        <p
+          id={`${id}-status`}
+          role="alert"
+          className="text-caption text-destructive"
+        >
           {status.error.message}
         </p>
       ) : null}
@@ -275,7 +361,10 @@ function SessionGitPanel({
             </form>
           ) : null}
           {!writable ? (
-            <p className="text-caption text-muted-foreground">
+            <p
+              id={`${id}-read-only`}
+              className="text-caption text-muted-foreground"
+            >
               {t('git.readOnly')}
             </p>
           ) : null}
@@ -284,48 +373,22 @@ function SessionGitPanel({
               {t('git.clean')}
             </p>
           ) : (
-            <ul className="max-h-60 overflow-y-auto">
-              {data.files.map((file) => (
-                <li
-                  key={file.path}
-                  className="flex min-w-0 items-center gap-1 border-b border-border py-1"
-                >
-                  <span
-                    className="shrink-0 font-mono text-caption"
-                    aria-label={t('git.fileStatus', {
-                      index: file.index,
-                      worktree: file.worktree,
-                    })}
-                  >
-                    {file.index}
-                    {file.worktree}
-                  </span>
-                  <PathText value={file.path} copy={false} className="flex-1" />
-                  {file.index !== ' ' && file.index !== '?' ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={disabled}
-                      aria-label={t('git.unstage', { path: file.path })}
-                      onClick={() => act('unstage', { paths: [file.path] })}
-                    >
-                      {t('git.unstageButton')}
-                    </Button>
-                  ) : null}
-                  {file.worktree !== ' ' ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={disabled}
-                      aria-label={t('git.stage', { path: file.path })}
-                      onClick={() => act('stage', { paths: [file.path] })}
-                    >
-                      {t('git.stageButton')}
-                    </Button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <>
+              <GitFiles
+                label={t('git.staged')}
+                files={stagedFiles}
+                action="unstage"
+                disabled={disabled}
+                onAct={(path) => act('unstage', { paths: [path] })}
+              />
+              <GitFiles
+                label={t('git.unstaged')}
+                files={data.files.filter((f) => f.worktree !== ' ')}
+                action="stage"
+                disabled={disabled}
+                onAct={(path) => act('stage', { paths: [path] })}
+              />
+            </>
           )}
           {data.truncated ? (
             <p className="text-caption text-muted-foreground">
@@ -340,30 +403,129 @@ function SessionGitPanel({
                 act('commit', { message })
             }}
           >
-            <label htmlFor={`${id}-message`} className="text-caption">
-              {t('git.commitMessage')}
-            </label>
-            <Input
-              id={`${id}-message`}
-              value={message}
-              maxLength={8192}
-              disabled={disabled}
-              onChange={(e) => setMessage(e.target.value)}
-            />
-            <p className="text-caption text-muted-foreground">
-              {t('git.commitHint')}
-            </p>
-            <Button
-              size="sm"
-              type="submit"
-              className="self-start"
-              disabled={disabled || !staged || !message.trim()}
+            <Field
+              label={t('git.commitMessage')}
+              htmlFor={`${id}-message`}
+              description={t('git.commitHint')}
             >
-              {mutation.isPending ? t('git.working') : t('git.commit')}
-            </Button>
+              <Textarea
+                value={message}
+                rows={2}
+                maxLength={8192}
+                disabled={disabled}
+                onChange={(e) => setMessage(e.target.value)}
+                aria-keyshortcuts="Control+Enter Meta+Enter"
+                // Enter starts a new line; Ctrl or ⌘ with Enter commits.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    e.currentTarget.form?.requestSubmit()
+                  }
+                }}
+              />
+            </Field>
+            <DisabledReason
+              mode="native"
+              disabled={!!commitReason}
+              reason={commitReason ?? t('git.commit')}
+            >
+              <Button
+                size="sm"
+                type="submit"
+                // While the folder has uncommitted changes, Commit is the next step.
+                variant={data.files.length ? 'primary' : 'secondary'}
+                className="self-start"
+                disabled={mutation.isPending || !!saidAbove}
+                aria-describedby={saidAbove}
+                aria-keyshortcuts="Control+Enter Meta+Enter"
+              >
+                {mutation.isPending ? t('git.working') : t('git.commit')}
+                {/* Drawn, not text: the button's name stays Commit (WCAG 2.5.3).
+                    A key inside a button takes the button's ink, and a disabled
+                    button fades as a whole: the chip dims with Commit. */}
+                <Kbd
+                  aria-hidden
+                  data-keys={chordHint('Mod+Enter')}
+                  className="before:content-[attr(data-keys)]"
+                />
+              </Button>
+            </DisabledReason>
           </form>
+          {variant === 'panel' ? (
+            <SessionPush
+              run={run}
+              status={data}
+              uncommitted={data.files.length > 0}
+              subject={subject}
+            />
+          ) : null}
         </>
       ) : null}
     </section>
+  )
+}
+
+/** One of the panel's two lists of the folder's files: what is staged, each with Unstage,
+ * or what is not, each with Stage. A file changed in both is in both; an empty list is not
+ * shown. */
+function GitFiles({
+  label,
+  files,
+  action,
+  disabled,
+  onAct,
+}: {
+  label: string
+  files: GitStatus['files']
+  action: 'stage' | 'unstage'
+  disabled: boolean
+  onAct: (path: string) => void
+}) {
+  const { t } = useTranslation('sessions')
+  const id = useId()
+  if (!files.length) return null
+  const Icon = action === 'stage' ? Plus : Minus
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <h4 id={id} className="text-caption font-medium">
+        {label}{' '}
+        <span className="font-normal text-muted-foreground tabular-nums">
+          {files.length}
+        </span>
+      </h4>
+      <BoxedList
+        role="list"
+        aria-labelledby={id}
+        className="max-h-60 overflow-y-auto"
+      >
+        {files.map((file) => (
+          <BoxedListRow key={file.path} role="listitem">
+            <span
+              className="shrink-0 font-mono text-caption"
+              aria-label={t('git.fileStatus', {
+                index: file.index,
+                worktree: file.worktree,
+              })}
+            >
+              {action === 'stage' ? file.worktree : file.index}
+            </span>
+            <PathText value={file.path} copy={false} className="flex-1" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={disabled}
+              aria-label={
+                action === 'stage'
+                  ? t('git.stage', { path: file.path })
+                  : t('git.unstage', { path: file.path })
+              }
+              onClick={() => onAct(file.path)}
+            >
+              <Icon aria-hidden="true" />
+            </Button>
+          </BoxedListRow>
+        ))}
+      </BoxedList>
+    </div>
   )
 }

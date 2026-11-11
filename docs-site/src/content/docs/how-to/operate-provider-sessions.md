@@ -19,7 +19,7 @@ account you want to use. The account snapshot shows the email, plan, usage
 windows and models the tool reports. Missing values stay unavailable, and
 failed refreshes are marked stale.
 
-**API keys** on **Tools** (`/agent-tools`) holds API keys and local-model
+**Providers** (`/providers`, under **Tools**) holds API keys and local-model
 endpoints. Add and test the provider there, then use it from New session. A provider key and a tool
 subscription are different ways to connect. Ollama needs a reachable endpoint
 and a model, with no API key. See [Add a provider](/how-to/add-a-provider/).
@@ -42,7 +42,7 @@ the conversation, or enter it before pressing **Start**.
 
 A tool using a provider key uses its saved model or lets you select a model
 returned by the connection test. If the model is required but the test has not
-returned any, test the connection under **API keys** on **Tools** first. Claude Code can use
+returned any, test the connection on **Providers** first. Claude Code can use
 its native default model.
 
 For the README Compose installation, run the CLI inside the engine container.
@@ -50,7 +50,7 @@ It finds the local engine and its certificate there. Sign in with the Olivares
 administrator account you created during setup, not your tool subscription.
 
 When using a provider key with a tool that requires a model, such as Codex,
-save a default under **API keys** on **Tools** before running `session start` below. If neither
+save a default on **Providers** before running `session start` below. If neither
 the provider nor the tool's profile has a configured model, append
 `--model <tested-model-id>` to the `session start` command, replacing the
 placeholder with a model ID returned
@@ -140,7 +140,7 @@ for open tabs and Settings says this device could not be registered.
 For an existing configured tool home, the **Provider profiles** tab of **Sessions**
 (`/sessions?tab=profiles`) lets an administrator register a profile and inspect
 launch readiness. A named account's profile and source bindings are also in its
-detail on **Tools**.
+detail on **AI tools**.
 The homes must exist on the execution host. Use **More options → Advanced launch
 options** in New session to select that profile. Binary overrides choose an
 executable; otherwise the engine tries the newest verified managed install,

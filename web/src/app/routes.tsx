@@ -15,6 +15,7 @@ import { lazy, Suspense } from 'react'
 import { useDocumentTitle } from '@/components/layout/document-title'
 import { RequirePermission } from '@/components/layout/require-permission'
 import { Spinner } from '@/components/ui/spinner'
+import { StateBlock } from '@/components/ui/state-block'
 import { FEATURE_VIEWS, ROUTE_ALIASES, TAB_ALIASES } from '@/features/registry'
 import { ANONYMOUS_VIEWS } from '@/features/anonymous-registry'
 import { MOVED_SECTIONS } from '@/features/settings/sections'
@@ -51,13 +52,9 @@ const StatusPage = lazy(() =>
  * RequirePermission so a deep-link is RBAC-checked, not just hidden in the nav.–
  * only edit the registry — never this file or the shell.
  */
-/** Calm centered spinner while a code-split view's chunk loads (features/lazy-view.tsx has its twin). */
+/** Skeleton rows while a code-split view's chunk loads (features/lazy-view.tsx has its twin). */
 function ViewLoading() {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center">
-      <Spinner />
-    </div>
-  )
+  return <StateBlock state="loading" rows={6} />
 }
 
 function ShellError({ error }: ErrorComponentProps) {

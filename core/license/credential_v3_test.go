@@ -328,3 +328,43 @@ func TestV3ActiveGrantsIsAFilterAndNotASummary(t *testing.T) {
 		t.Fatalf("before not_before nothing may be active, got %d", len(got))
 	}
 }
+
+// The edition is the live base grant's signed product, read once for every surface and gate: an
+// unknown product entitles nothing (inert, not rejected), and a lapsed or revoked licence is
+// Community. A flat licence keeps its rule: Business, Enterprise when its plan says so.
+func TestEditionFromBaseGrant(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	v3 := func(product string, paidThrough time.Time) Verified {
+		return Verified{Container: ContainerCredentialV3, Credential: Credential{Grants: []Grant{
+			{Kind: GrantKindBase, ProductID: product, Phase: PhaseTerm, PaidThrough: paidThrough},
+		}}}
+	}
+	flat := func(plan string, expires time.Time) Verified {
+		return Verified{Container: ContainerFlat, Claims: Claims{Plan: plan, ExpiresAt: expires}}
+	}
+	live, lapsed := now.Add(24*time.Hour), now.Add(-time.Hour)
+	for _, tc := range []struct {
+		name string
+		v    Verified
+		want string
+	}{
+		{"engineer", v3("self_hosted.engineer", live), EditionEngineer},
+		{"business", v3("self_hosted.business", live), EditionBusiness},
+		{"enterprise", v3("self_hosted.enterprise", live), EditionEnterprise},
+		{"lapsed engineer", v3("self_hosted.engineer", lapsed), EditionCommunity},
+		{"unknown product", v3("self_hosted.unknown", live), ""},
+		{"flat business", flat("", live), EditionBusiness},
+		{"flat enterprise", flat("enterprise", live), EditionEnterprise},
+		{"flat lapsed", flat("enterprise", lapsed), EditionCommunity},
+		{"no licence", Verified{}, EditionCommunity},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.v.Edition(tc.v.Status(now)); got != tc.want {
+				t.Fatalf("Edition = %q, want %q", got, tc.want)
+			}
+		})
+	}
+	if got := v3("self_hosted.business", live).Edition(StatusRevoked); got != EditionCommunity {
+		t.Fatalf("a revoked licence entitles %q, want community", got)
+	}
+}

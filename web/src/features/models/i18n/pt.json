@@ -348,6 +348,8 @@
     "installModel": "Instalar um modelo",
     "addProvider": "Adicionar um fornecedor",
     "sourceFailed": "Não foi possível ler {{source}}. As outras origens continuam a ser apresentadas.",
+    "providerFailed": "{{source}} não listou os seus modelos: use <0>Testar ligação</0> em Fornecedores.",
+    "providerFailedAlone": "{{source}} não listou os seus modelos.",
     "sources": {
       "tools": "As listas de modelos das ferramentas",
       "ollama": "Ollama",

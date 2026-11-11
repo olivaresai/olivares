@@ -4,7 +4,6 @@
   "tabs": {
     "people": "Personnes",
     "agents": "Agents",
-    "sso": "Fournisseur d’identité",
     "scopes": "Espaces de travail",
     "roles": "Rôles",
     "secrets": "Secrets",
@@ -116,7 +115,7 @@
   "people": {
     "title": "Utilisateurs",
     "caption": "Ajoutez une personne à cette organisation, avec un mot de passe que vous définissez ou une invitation par e-mail.",
-    "onboard": "Intégrer un utilisateur",
+    "onboard": "Inviter",
     "pendingTitle": "Invitations en attente",
     "pendingCaption": "Invitations en attente d'acceptation. Le lien à usage unique définit le mot de passe et active le compte.",
     "noInvites": "Aucune invitation en attente.",
@@ -131,6 +130,9 @@
     "resend": "Renvoyer",
     "resent": "Invitation renvoyée.",
     "resendFailed": "L'invitation n'a pas pu être remise.",
+    "newLink": "Nouveau lien",
+    "newLinkTitle": "Nouveau lien d'invitation",
+    "newLinkNote": "Le lien créé auparavant ne fonctionne plus.",
     "inviteFirst": "Inviter le premier utilisateur"
   },
   "members": {
@@ -143,10 +145,30 @@
     "groups": "Groupes",
     "status": "Statut",
     "action": "Action",
-    "ssoOnly": "SSO uniquement",
+    "ssoOnly": "Authentification unique",
+    "signIn": "Connexion",
+    "password": "Mot de passe",
     "externalManagedNotice": "Les comptes provisionnés par l'IdP peuvent être réconciliés à nouveau par le fournisseur d'identité après une activation ou désactivation locale.",
     "idpManagedConfirm": "Ce compte est provisionné par un IdP. L'IdP peut réconcilier l'état actif lors de sa prochaine synchronisation.",
     "noGroups": "Aucun groupe",
+    "roleOf": "Rôle de {{email}}",
+    "roleChanged": "Rôle modifié pour {{email}}.",
+    "ownRoleReason": "C’est votre propre rôle. Un autre administrateur ou un propriétaire peut le modifier.",
+    "ownRoleReasonOwner": "C’est votre propre rôle. Un autre propriétaire peut le modifier.",
+    "lastOwnerReason": "Le seul propriétaire de toute l’organisation garde ce rôle. Faites d’abord d’une autre personne un propriétaire.",
+    "confinedRoleReason": "Cette personne travaille dans un espace de travail : son rôle ne peut pas encore être modifié ici.",
+    "roleChangeTitle": "Changer le rôle de {{name}} de {{from}} à {{to}} ?",
+    "roleChangeConfirm": "Changer le rôle",
+    "roleGains": {
+      "owner": "Un propriétaire peut faire tout ce que fait un administrateur, et modifier ou retirer d’autres propriétaires.",
+      "admin": "Un administrateur peut ajouter et retirer des personnes, modifier leurs rôles et modifier les paramètres de cette organisation.",
+      "editor": "Un éditeur peut démarrer des sessions et travailler avec des outils et des dossiers."
+    },
+    "roleLoses": {
+      "admin": "Cette personne ne pourra plus modifier ni retirer de propriétaires.",
+      "editor": "Cette personne ne pourra plus gérer les personnes ni les paramètres de cette organisation.",
+      "viewer": "Cette personne ne pourra plus démarrer de sessions ni rien modifier."
+    },
     "disable": "Retirer",
     "disableTitle": "Retirer de l'organisation",
     "disableBody": "{{email}} sera retiré de cette organisation : son appartenance, ses lignes de groupe, ses jetons et ses sessions ici. Le compte lui-même et ses autres organisations ne changent pas.",
@@ -156,7 +178,8 @@
     "statuses": {
       "active": "Actif",
       "inactive": "Inactif",
-      "error": "Erreur"
+      "error": "Erreur",
+      "suspended": "Suspendu"
     },
     "roles": {
       "viewer": "Lecteur",
@@ -172,7 +195,25 @@
     "endSessionsFor": "Terminer les connexions pour {{email}} ?",
     "endSessionsBody": "Toutes les connexions actives de {{email}} cesseront de fonctionner dans cette organisation. Ses connexions à d'autres organisations, les jetons API et le compte ne sont pas modifiés.",
     "sessionsEnded": "L’accès à cette organisation a pris fin",
-    "totpResetDone": "Facteur TOTP réinitialisé."
+    "totpResetDone": "Facteur TOTP réinitialisé.",
+    "search": "Rechercher des personnes",
+    "filterLabel": "Filtrer par statut",
+    "filterAll": "Tous les statuts",
+    "noMatch": "Aucune correspondance",
+    "noMatchHint": "Modifiez la recherche ou le filtre de statut.",
+    "bulkLabel": "Actions pour les personnes sélectionnées",
+    "selected": "Sélectionnées : {{n}}",
+    "selectAll": "Sélectionner toutes les personnes affichées",
+    "selectRow": "Sélectionner {{email}}",
+    "suspend": "Suspendre",
+    "reactivate": "Réactiver",
+    "suspendTitle": "Suspendre l'accès",
+    "suspendBody": "{{email}} ne peut plus se connecter ni utiliser de jetons d'API dans cette organisation, dès maintenant. Son rôle et ses groupes sont conservés et vous pouvez le réactiver à tout moment.",
+    "suspendBodyMany": "{{n}} personnes ne peuvent plus se connecter ni utiliser de jetons d'API dans cette organisation, dès maintenant. Leurs rôles et leurs groupes sont conservés et vous pouvez les réactiver à tout moment.",
+    "suspendFor": "Suspendre {{email}}",
+    "reactivateFor": "Réactiver {{email}}",
+    "suspendedToast": "Suspendues : {{n}}",
+    "reactivatedToast": "Réactivées : {{n}}"
   },
   "superadmins": {
     "title": "Administrateurs de l’installation",
@@ -190,7 +231,7 @@
     "disableBody": "{{email}} sera déconnecté et ses sessions et jetons d'API seront révoqués. Le compte n'est pas supprimé et peut être réactivé. Un autre superadministrateur actif doit subsister."
   },
   "onboard": {
-    "title": "Intégrer un utilisateur",
+    "title": "Inviter une personne",
     "body": "Créez un compte dans cette organisation. Le rôle attribué ne peut jamais dépasser le vôtre.",
     "displayName": "Nom affiché",
     "displayNameHint": "Un libellé lisible affiché dans la console.",
@@ -199,14 +240,20 @@
     "mode": "Mode de connexion",
     "modePassword": "Définir un mot de passe initial",
     "modeInvite": "Envoyer une invitation par e-mail",
-    "inviteUnavailable": "Ce serveur ne peut pas envoyer d'invitations par e-mail : définissez un mot de passe initial.",
+    "modeLink": "Créer un lien d'invitation",
+    "inviteUnavailable": "Ce serveur ne peut pas envoyer d'e-mails : vous envoyez vous-même le lien.",
     "password": "Mot de passe initial",
     "passwordHint": "Au moins 8 caractères. L'utilisateur pourra le modifier ultérieurement.",
-    "submit": "Intégrer",
+    "submit": "Ajouter la personne",
+    "submitInvite": "Créer l'invitation",
     "created": "Utilisateur intégré.",
     "inviteCreatedTitle": "Invitation créée",
     "inviteSentBody": "Une invitation a été envoyée à {{email}}. Le lien n'est envoyé qu'à cette adresse ; s'il n'arrive pas, renvoyez-la depuis la liste des invitations.",
     "inviteFailedBody": "L'invitation pour {{email}} a été créée, mais le courriel n'a pas pu être remis. Renvoyez-la depuis la liste des invitations.",
+    "inviteLinkFor": "L'invitation pour {{email}}.",
+    "inviteLinkLabel": "Lien d'invitation",
+    "inviteLinkBody": "Envoyez-lui ce lien. Il expire le {{date}} et ne fonctionne qu'une seule fois. La personne s'en sert pour choisir son propre mot de passe.",
+    "copyLink": "Copier le lien",
     "consentRequiredTitle": "Consentement requis",
     "consentRequiredBody": "{{email}} a déjà un compte. Rien n'a été modifié : le compte ne rejoint cette organisation que si son titulaire y consent.",
     "consentRequiredToast": "Consentement requis : rien n'a été modifié.",
@@ -313,7 +360,7 @@
       "sessions": "Le secret est retiré du coffre. Une session qui le reçoit continue de s’exécuter, mais elle ne pourra pas être reprise, et un modèle de session qui le nomme ne pourra pas se lancer, jusqu’à ce que vous le recréiez."
     },
     "sessionCaption": "Secrets qu’une session peut recevoir en variables d’environnement. Les noms commencent par env/. Une valeur n’est plus jamais affichée.",
-    "credentialCaption": "Identifiants gérés qu'une session peut utiliser via les assistants du moteur (Business). Les noms commencent par credential/. Une valeur n'est jamais affichée à nouveau.",
+    "credentialCaption": "Identifiants gérés qu'une session peut utiliser via les assistants du moteur (Olivares AI Business). Les noms commencent par credential/. Une valeur n'est jamais affichée à nouveau.",
     "colValue": "Valeur",
     "colChanged": "Dernière modification",
     "colReference": "Référence",
@@ -939,7 +986,7 @@
   "activation": {
     "title": "Activation de Business",
     "caption": "Activez les modules inclus dans votre édition. Les contrôles avec une valeur par défaut sûre sont activés ; ceux qui nécessitent un secret ou une revue de politique sont préparés pour que vous les complétiez et les promouviez.",
-    "unavailable": "L'activation est disponible dans l'édition business.",
+    "unavailable": "L'activation est disponible dans Olivares AI Business.",
     "enablePreset": "Activer un preset",
     "addon": "Module",
     "state": "État",
@@ -1185,7 +1232,7 @@
   "mcpGateway": {
     "title": "Passerelle MCP",
     "caption": "Gérez les serveurs MCP et les outils de session de cette organisation. Les tests découvrent les outils ; leur exécution exige une politique explicite.",
-    "add": "Ajouter un serveur",
+    "add": "Ajouter un serveur MCP",
     "configure": "Configurer",
     "test": "Tester la connexion",
     "enable": "Activer",
@@ -1308,7 +1355,7 @@
     "command": "Commande",
     "commandHint": "Le programme qui démarre le serveur sur cette machine, par exemple npx. Il s’exécute avec chaque session, dans le dossier de la session.",
     "args": "Arguments",
-    "argsHint": "Un par ligne, par exemple -y et @modelcontextprotocol/server-everything.",
+    "argsHint": "Un par ligne, par exemple -y et @modelcontextprotocol/server-everything. Pas pour les secrets.",
     "env": "Environnement",
     "envHint": "Un par ligne : NOM=valeur. Pas pour les secrets.",
     "envSecrets": "Environnement secret",
@@ -1347,6 +1394,8 @@
     "egressHosts": "Hôtes autorisés",
     "egressHostsHint": "La commande n'atteint que ces hôtes HTTPS, un par ligne : hôte ou hôte:port. Laissez vide pour garder le réseau de la session.",
     "egressHostsInvalid": "Écrivez chaque hôte sous la forme hôte ou hôte:port, en minuscules et sans https://, 16 au maximum.",
+    "inSessionFolder": "Dans le dossier de la session",
+    "reachesOnly": "N'atteint que {{hosts}}",
     "starters": {
       "filesystem": {
         "summary": "Lit et écrit des fichiers dans le dossier de la session.",

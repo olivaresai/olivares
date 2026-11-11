@@ -139,6 +139,7 @@
   },
   "query": {
     "title": "Recupero governato",
+    "tryTitle": "Prova una query",
     "body": "Esegue un recupero governato su “{{name}}” come l'agente indicato. I risultati sono filtrati in base a nulla osta, ACL e residenza di quell'identità, e questa query viene registrata nel lineage (origine → risposta).",
     "queryLabel": "Query",
     "queryHint": "La query di recupero: ne viene calcolato l'hash per il lineage, non viene mai salvata come testo.",

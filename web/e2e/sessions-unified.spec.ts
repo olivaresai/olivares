@@ -61,7 +61,9 @@ test('Claude Code portal: setup → login → navigate → create form → works
   await expect(
     page.getByRole('heading', { name: 'Sessions', level: 1 }),
   ).toBeVisible()
-  await expect(page.getByText('No sessions yet')).toBeVisible()
+  // The first run has one thing on it, the composer: no empty state beside it.
+  await expect(page.getByTestId('work-start')).toBeVisible()
+  await expect(page.getByText('No sessions yet')).toHaveCount(0)
   // Source facets belong to the Table view, reached through the list's own menu.
   // An empty estate needs no fabricated session to reach or use that view.
   await expect(page.getByLabel('All sources')).toHaveCount(0)

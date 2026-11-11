@@ -7,6 +7,12 @@
     "7d": "7 天",
     "30d": "30 天"
   },
+  "status": {
+    "heading": "组件",
+    "healthy": "一切正常。",
+    "healthyConfigured": "已配置的部分一切正常。未配置：{{list}}。",
+    "attention": "需要处理：{{list}}。"
+  },
   "host": {
     "heading": "主机",
     "keeps24": "主机保留 24 小时的历史，因此图表显示最近 24 小时。",

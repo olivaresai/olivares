@@ -807,6 +807,17 @@ describe('WorkRail — nothing at all', () => {
     expect(screen.queryByText('No sessions yet')).toBeNull()
   })
 
+  it('says it is loading, with rows where the sessions will be, until the first read answers', () => {
+    const { unmount } = renderRail({ sessions: [], loading: true })
+    expect(screen.getByRole('status', { busy: true })).toHaveTextContent(
+      'Loading…',
+    )
+    unmount()
+
+    renderRail({ sessions: [working], loading: false })
+    expect(screen.queryByRole('status', { busy: true })).toBeNull()
+  })
+
   // A listbox owns options. While the first read is in flight it has none yet, and a
   // listbox with no option and no busy state is a broken ARIA tree (WCAG 1.3.1;
   // axe `aria-required-children`, critical). Busy is the true state of that moment.
@@ -1100,6 +1111,7 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
     // The mark is the engine's (GET /v1/m/sessions/tools), never a console guess:
     // Codex was C on AI tools and CO here.
     const codex = engineTools.tools.find((tool) => tool.key === 'codex')!
+    expect(codex.vendor).toBe('openai')
     rail(launched({ provider_driver: 'codex' }))
     const listed = screen.getByTestId('tool-mark')
     render(
@@ -1111,8 +1123,8 @@ describe('WorkRail — a row says its state in words, its place and its tool', (
       'tool-mark',
     )
     for (const mark of [listed, boxed]) {
-      expect(mark).toHaveTextContent(new RegExp(`^${codex.monogram}$`))
-      expect(mark).toHaveStyle({ backgroundColor: codex.color })
+      expect(mark).toHaveAttribute('data-vendor', codex.vendor)
+      expect(mark).not.toHaveTextContent(codex.monogram)
     }
   })
 

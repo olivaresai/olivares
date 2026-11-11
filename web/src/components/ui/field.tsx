@@ -9,13 +9,15 @@ import {
   useId,
   type ReactNode,
 } from 'react'
+import { CircleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
 
 /**
  * Field — the reusable form-row primitive compose with react-hook-form. It
- * stacks: Label (with a danger `*` when required) → control (children) → optional
- * muted description → optional danger error (role="alert"). It owns id wiring so the
+ * stacks: Label in bold (with a danger `*` when required) → control (children) → optional
+ * description in the second tone → optional error in the failure tone with its icon
+ * (role="alert"), so the error is never colour alone. It owns id wiring so the
  * control is correctly labelled and described:
  *  - if `htmlFor` is given it is used verbatim (the caller controls the control id);
  *  - otherwise a stable id is generated and exposed via `renderProps` so the control
@@ -64,7 +66,7 @@ export function FieldDescription({
   return (
     <p
       data-slot="field-description"
-      className={cn('text-caption text-muted-foreground', className)}
+      className={cn('text-caption text-text-2', className)}
       {...props}
     />
   )
@@ -80,10 +82,14 @@ export function FieldError({
     <p
       data-slot="field-error"
       role="alert"
-      className={cn('text-caption text-danger', className)}
+      className={cn(
+        'flex items-start gap-1.5 text-caption font-medium text-bad',
+        className,
+      )}
       {...props}
     >
-      {children}
+      <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">{children}</span>
     </p>
   )
 }
@@ -169,9 +175,9 @@ export function Field({
   }
 
   return (
-    <div data-slot="field" className={cn('flex flex-col gap-1.5', className)}>
+    <div data-slot="field" className={cn('flex flex-col gap-[7px]', className)}>
       {label != null && (
-        <Label id={labelId} htmlFor={controlId}>
+        <Label id={labelId} htmlFor={controlId} className="font-bold">
           {label}
           {required && (
             <span className="ml-0.5 text-danger" aria-hidden="true">

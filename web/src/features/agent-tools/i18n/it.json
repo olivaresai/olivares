@@ -1,7 +1,7 @@
 {
   "title": "Strumenti AI",
   "description": "Installa gli strumenti AI su cui girano le sessioni di questo server e fai accedere gli strumenti.",
-  "descriptionMember": "Le sessioni girano con questi account e chiavi API. Un amministratore di sistema installa gli strumenti e ne esegue l'accesso.",
+  "descriptionMember": "Le sessioni girano con questi account; le chiavi API sono in Provider. Un amministratore di sistema installa gli strumenti e ne esegue l'accesso.",
   "refresh": "Aggiorna",
   "readOnly": "Questo server è in sola lettura. L'installazione è disattivata.",
   "notInstalled": "Nessuna installazione gestita",
@@ -95,7 +95,7 @@
     "failed": "Non in esecuzione: si è fermato.",
     "start": "Avvia",
     "stop": "Ferma",
-    "notInstalled": "{{name}} non è installato. Olivares cerca {{program}} nel PATH di questo server.",
+    "lookedFor": "Olivares cerca {{program}} nel PATH di questo server.",
     "hint": "Il suo endpoint è tra i provider dell'organizzazione per cui è stato avviato, così le sessioni OpenCode di quell'organizzazione possono usarne i modelli.",
     "model": "Modello",
     "modelHintLlamaCpp": "Un percorso assoluto a un file .gguf, oppure un modello Hugging Face come utente/repo[:quantizzazione].",
@@ -134,7 +134,7 @@
     "accountChecking": "Account · controllo in corso…",
     "accountSigningIn": "Account · accesso in corso…",
     "accountUnreadable": "Account · non leggibile",
-    "keyDetail": "Chiave API · {{name}} ({{hint}})",
+    "keyDetail": "Chiave API · {{name}} · {{hint}}",
     "keyName": "Chiave API · {{name}}",
     "keyNone": "Chiave API · nessuna scelta",
     "lastSignIn": "Ultimo accesso {{when}}",
@@ -158,7 +158,11 @@
     "default": "Accesso predefinito",
     "readFailed": "Impossibile leggere i profili.",
     "truncated": "Alcuni profili non vengono mostrati.",
-    "retry": "Riprova"
+    "retry": "Riprova",
+    "turnOff": "Disattiva {{name}}",
+    "turnOn": "Attiva {{name}}",
+    "switchedOn": "{{name}} è attivo",
+    "switchedOff": "{{name}} è disattivato"
   },
   "tool": {
     "menu": "Opzioni per {{name}}",
@@ -196,12 +200,12 @@
     "chooseKey": "Scegli una chiave",
     "addKey": "Aggiungi una chiave…",
     "create": "Crea",
+    "createAndSignIn": "Crea e accedi",
     "creating": "Creazione in corso…",
     "created": "Profilo {{name}} creato",
     "failed": "Il profilo non è stato creato.",
     "bindFailed": "Non è stato possibile impostare la chiave.",
     "keyNotSet": "Il profilo è stato creato, ma la sua chiave non è stata impostata: {{error}} Apri il profilo per scegliere una chiave.",
-    "notNow": "Non ora",
     "close": "Chiudi",
     "keyNeedsAccess": "Per scegliere una chiave serve il permesso di modificare i profili."
   },
@@ -256,9 +260,35 @@
     "packagesHint": "Dichiarati dal profilo del provider che la nuova sessione di ogni strumento usa ({{profiles}}). Uno strumento senza profilo ne riceve uno nuovo che non dichiara nulla."
   },
   "place": {
-    "title": "Account e chiavi API",
     "accounts": "Account",
     "allAccounts": "Tutti gli account: dettagli, etichette e associazioni",
-    "noAccess": "Il tuo ruolo non può leggere gli account né le chiavi API di questa organizzazione."
+    "noAccess": "Il tuo ruolo non può leggere gli account di questa organizzazione.",
+    "keysOnProviders": "Le chiavi API sono in <0>Provider</0>.",
+    "keysAndReferencesOnProviders": "Le chiavi API e i loro riferimenti sono in <0>Provider</0>."
+  },
+  "runtime": {
+    "title": "Esecuzione",
+    "autoCompact": "Compatta automaticamente dopo",
+    "autoCompactHint": "Compatta dopo 100.000–1.000.000 di token. Lascia vuoto per usare il valore predefinito di Claude.",
+    "autoCompactPlaceholder": "es. 300000",
+    "autoCompactInvalid": "Inserisci un numero intero da 100000 a 1000000 oppure lascia vuoto.",
+    "saved": "Esecuzione salvata. Le nuove sessioni la usano."
+  },
+  "models": {
+    "title": "Modelli",
+    "note": "Solo tu vedi questo elenco. Un modello nascosto esce dai selettori; il predefinito dello strumento e un modello digitato funzionano comunque.",
+    "filter": "Filtra i modelli",
+    "disableAll": "Nascondi tutti",
+    "enableAll": "Mostra tutti",
+    "addCustom": "Aggiungi modello personalizzato",
+    "customPlaceholder": "ID modello, es. claude-opus-5-5",
+    "customInvalid": "Un ID modello non ha spazi e ha al massimo 200 caratteri.",
+    "add": "Aggiungi",
+    "fast": "Modalità veloce",
+    "up": "Sposta {{name}} su",
+    "down": "Sposta {{name}} giù",
+    "use": "Mostra {{name}}",
+    "removeCustom": "Rimuovi {{name}}",
+    "empty": "Questo strumento non segnala modelli. Aggiungi quelli che usi."
   }
 }

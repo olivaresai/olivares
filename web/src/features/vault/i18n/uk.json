@@ -36,7 +36,9 @@
     "menu": "Дії для {{label}}",
     "copyPassword": "Копіювати пароль для {{label}}",
     "copyNote": "Копіювати нотатку {{label}}",
-    "copyCode": "Копіювати код {{label}}"
+    "copyCode": "Копіювати код {{label}}",
+    "changed": "Змінено",
+    "actions": "Дії"
   },
   "delete": {
     "title": "Видалити {{label}}?",

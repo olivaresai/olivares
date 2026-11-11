@@ -31,12 +31,15 @@ import { useAuth } from '@/lib/auth/context'
 import { formatDateTime } from '@/lib/format'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { KeySelect } from './key-select'
+import { ProfileModels } from './profile-models'
 import { isProfileName } from './profile-names'
+import { ProfileRuntime } from './profile-runtime'
 import {
   StateChip,
   useProfileDetail,
   type ProfileRowModel,
 } from './profile-row'
+import { homeWords } from './profile-sign-in'
 import './i18n'
 
 type Method = 'account' | 'key'
@@ -290,6 +293,14 @@ export function ProfileSheet({
           {editable && can('sessions:profile:write') ? (
             <SignsInWith account={account} />
           ) : null}
+          {editable &&
+          account.driver === 'claude' &&
+          can('sessions:profile:write') ? (
+            <ProfileRuntime account={account} />
+          ) : null}
+          {editable && can('sessions:profile:read') ? (
+            <ProfileModels account={account} />
+          ) : null}
           <div className="flex flex-col gap-1">
             <p className="text-body text-text">{detail}</p>
             {model.off ? (
@@ -333,19 +344,9 @@ export function ProfileSheet({
                   <KvRow label={t('profiles.environment')} mono>
                     {account.environment_ref}
                   </KvRow>
-                  <KvRow label={t('profiles.home')}>
-                    {t(
-                      account.home_mode === 'adopted'
-                        ? 'profiles.homeAdopted'
-                        : 'profiles.homeManaged',
-                    )}
-                  </KvRow>
                 </>
-              ) : (
-                <KvRow label={t('profiles.home')}>
-                  {t('profiles.homeDefault')}
-                </KvRow>
-              )}
+              ) : null}
+              <KvRow label={t('profiles.home')}>{t(homeWords(account))}</KvRow>
             </KvList>
           </details>
         </div>

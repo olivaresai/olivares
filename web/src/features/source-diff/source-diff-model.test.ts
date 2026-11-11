@@ -188,3 +188,25 @@ describe('bounds and window', () => {
     expect(windowBounds(250, 200)).toEqual({ start: 50, end: 250 })
   })
 })
+
+it('ignores spacing-only hunks without changing line numbers or text', () => {
+  const hunks = ['@@ -4 +4 @@\n-const a = 1\n+const  a = 1\n']
+  expect(parseHunks(hunks, true)).toEqual([
+    { kind: 'hunk', text: '@@ -4 +4 @@' },
+    {
+      kind: 'context',
+      text: 'const  a = 1',
+      originalText: 'const a = 1',
+      oldLine: 4,
+      newLine: 4,
+      marker: ' ',
+    },
+  ])
+  expect(lineCount({ binary: false, truncated: false, hunks }, true)).toBeNull()
+  const mixed = [
+    '@@ -4,2 +4,2 @@\n-const a = 1\n-old()\n+const  a = 1\n+new()\n',
+  ]
+  expect(
+    lineCount({ binary: false, truncated: false, hunks: mixed }, true),
+  ).toEqual({ added: 1, removed: 1, partial: false })
+})

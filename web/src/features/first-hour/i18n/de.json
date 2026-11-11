@@ -70,8 +70,7 @@
     },
     "signIn": {
       "title": "Anmelden",
-      "body": "Verwenden Sie Ihr Claude- oder ChatGPT-Abonnement. Die Anmeldung bleibt auf diesem Server, wo das Werkzeug sie speichert.",
-      "waiting": "Installieren Sie zuerst ein Werkzeug."
+      "body": "Verwenden Sie Ihr Claude- oder ChatGPT-Abonnement. Die Anmeldung bleibt auf diesem Server, wo das Werkzeug sie speichert."
     },
     "start": {
       "title": "Eine Sitzung starten",
@@ -84,19 +83,39 @@
     "notReady": "{{tool}} kann noch nicht starten.",
     "folder": "Ordner",
     "folderHint": "Ein Ordner auf diesem Server.",
+    "folderHintGiven": "Der Pfad eines Ordners, der auf diesem Server bereits registriert ist. Neue Ordner registriert ein Administrator.",
     "folderChoose": "Ordner auswählen",
     "folderNew": "Ein neuer Ordner für diese Sitzung",
     "folderTyped": "Anderer Ordner …",
     "readingFolder": "Der Ordner der letzten Sitzung wird gelesen…",
     "prompt": "Erste Nachricht (optional)",
     "promptPlaceholder": "Was soll es zuerst tun?",
+    "documents": "Dokumente",
+    "attachDocument": "Dokument anhängen",
+    "removeDocument": "{{name}} entfernen",
+    "savingDocument": "{{name}} wird im Ordner gespeichert ({{n}} von {{total}})…",
+    "documentFailed": "{{name}} wurde nicht im Ordner gespeichert ({{reason}}).",
+    "documentsNeedFolder": "Dokumente lassen sich an Arbeit in einem Ihrer Ordner anhängen, im aktuellen Checkout.",
+    "documentsMessage": "Von mir angehängte Dokumente, im Ordner gespeichert:",
+    "documentsAdded": "Wird Ihrer ersten Nachricht hinzugefügt:",
+    "documentsKept": "Bereits im Ordner: {{paths}}.",
+    "documentsReadOnly": "Dieser Ordner ist schreibgeschützt: Dokumente lassen sich an Arbeit in einem Ordner anhängen, in den die Sitzung schreiben darf.",
+    "documentsWaiting": "Starten wartet auf die angehängten Dokumente: Wählen Sie einen Ordner, der sie aufnehmen kann, oder entfernen Sie sie.",
+    "documentWaiting": "{{size}} · wartet",
+    "documentsNeedWords": "Schreiben Sie in wenigen Worten, was mit den Dokumenten geschehen soll: Die Sitzung wird nach Ihrem Text benannt.",
+    "moreHeldDocuments": "Starten Sie hier, um die angehängten Dokumente zu behalten, oder entfernen Sie sie, um weitere Optionen zu öffnen.",
+    "moreHeldFolder": "Starten Sie hier, um den eingegebenen Ordner zu behalten, oder wählen Sie ihn aus der Ordnerliste, um weitere Optionen zu öffnen.",
+    "documentTooLarge": "{{name}} überschreitet die Grenze dieses Ordners von {{size}} pro Datei und wurde nicht angehängt.",
+    "documentAttachedTwice": "{{name}} ist bereits angehängt.",
     "more": "Weitere Optionen",
     "permission": "Was der Agent tun darf",
     "start": "Starten",
     "starting": "Wird gestartet…",
+    "startSession": "Sitzung starten",
     "needTool": "Installieren Sie zuerst ein Werkzeug und melden Sie es an.",
     "dialogTitle": "Neue Sitzung",
     "dialogDescription": "Wählen Sie ein Werkzeug und sagen Sie, was zu tun ist.",
+    "keyToStart": "<key/> zum Starten",
     "advanced": "Erweiterte Startoptionen",
     "secrets": "Geheimnisse als Umgebungsvariablen",
     "secretsHint": "Die Sitzung liest jedes gewählte Tresor-Geheimnis aus der Variablen, die Sie angeben. Der Wert wird nie angezeigt, protokolliert oder in den Ordner geschrieben.",
@@ -111,6 +130,7 @@
     "credentialsManage": "Verwaltete Zugangsdaten verwalten",
     "listUnavailable": "Die Engine hat die Secretliste nicht beantwortet. Vorerst kann nichts gewählt werden.",
     "openTools": "KI-Werkzeuge öffnen",
+    "askAdmin": "Bitten Sie einen Administrator, es einzurichten.",
     "model": "Modell",
     "providerDefault": "Standard ({{model}})",
     "nativeDefault": "Standard von {{tool}}",
@@ -123,14 +143,22 @@
     "profileNeedsKey": "Schlüssel fehlt",
     "foldersUnreadable": "Die registrierten Ordner konnten nicht gelesen werden. Geben Sie den Pfad eines Ordners auf diesem Server ein.",
     "folderPermission": "Startet als {{name}}, dem Standard dieses Ordners.",
-    "autoAsks": "{{tool}} hat keinen Automatikmodus: Es fragt vor jeder Aktion nach."
+    "autoAsks": "{{tool}} hat keinen Automatikmodus: Es fragt vor jeder Aktion nach.",
+    "worktreeCheckout": "Aktueller Checkout",
+    "worktreeNew": "Neuer Worktree",
+    "worktreeFrom": "Starten von",
+    "worktreeFromHint": "Branch oder Commit (optional)",
+    "worktreeNewHint": "Die Sitzung arbeitet auf einem eigenen Branch in einem separaten Ordner. Der Checkout bleibt unverändert.",
+    "worktreeLegend": "Arbeitskopie"
   },
   "composer": {
     "toolPill": "Werkzeug und Konto: {{value}}",
     "modelPill": "Modell: {{value}}",
     "effortPill": "Aufwand: {{value}}",
     "folderPill": "Ordner: {{value}}",
-    "moreOptions": "Weitere Optionen"
+    "moreOptions": "Weitere Optionen",
+    "accessPill": "Was der Agent tun darf: {{value}}",
+    "worktreePill": "Arbeitskopie: {{value}}"
   },
   "lists": {
     "foldersTruncated": "Registrierte Ordner: {{count}} geladen; es gibt weitere.",
@@ -154,6 +182,14 @@
     "cli": "Die olivares-Befehlszeile verwenden",
     "cliHint": "Auf diesem Server ist der Befehl olivares bereits installiert. Auf einem anderen Computer installieren Sie ihn mit:"
   },
+  "passkeyOffer": {
+    "body": "Melden Sie sich beim nächsten Mal mit einem Passkey an: mit Fingerabdruck, Gesicht oder Bildschirmsperre statt mit einem Passwort.",
+    "add": "Passkey hinzufügen",
+    "notNow": "Nicht jetzt",
+    "added": "Passkey hinzugefügt. Melden Sie sich beim nächsten Mal damit an.",
+    "failed": "Der Passkey wurde nicht hinzugefügt. Versuchen Sie es erneut oder fügen Sie später in den Einstellungen einen hinzu.",
+    "unknown": "Der Passkey konnte nicht bestätigt werden. Er wurde möglicherweise hinzugefügt: Sehen Sie in den Einstellungen nach, bevor Sie einen weiteren hinzufügen."
+  },
   "permissionSummary": {
     "readOnly": "Liest und plant. Jede Änderung wird abgelehnt.",
     "ask": "Fragt vor jeder Aktion nach, die kein Lesen ist.",
@@ -165,6 +201,9 @@
   "bring": {
     "title": "Ordner übernehmen",
     "body": "Ordner, in denen Ihre Werkzeuge schon gearbeitet haben, gelesen aus den eigenen Aufzeichnungen der Werkzeuge über Projektpfade und Daten. Nichts wird registriert, bevor Sie bestätigen.",
+    "offer_one": "{{count}} Ordner, in dem Ihre Werkzeuge bereits gearbeitet haben.",
+    "offer_other": "{{count}} Ordner, in denen Ihre Werkzeuge bereits gearbeitet haben.",
+    "review": "Prüfen",
     "error": "Die Ordner Ihrer Werkzeuge konnten nicht gesucht werden.",
     "unreadable": "Die Aufzeichnungen von {{tool}} konnten nicht gelesen werden. Fügen Sie Ordner stattdessen von Hand hinzu.",
     "cols": {

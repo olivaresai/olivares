@@ -713,11 +713,17 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 			return
 		}
 	}
-	f, err := os.Create(bundlePath)
+	// Keep incomplete output out of the backup list and final download path.
+	f, err := os.CreateTemp(backupDir, ".backup-*")
 	if err != nil {
 		fail(fmt.Errorf("create bundle: %w", err))
 		return
 	}
+
+	defer func() {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+	}()
 
 	if err := dr.WriteAuthenticatedBundle(f, dr.BundleInput{
 		Manifest:     manifest,
@@ -727,13 +733,16 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 		Trees:        trees,
 		NotIncluded:  notIncluded,
 	}, cipher); err != nil {
-		_ = f.Close()
-		_ = os.Remove(bundlePath)
 		fail(fmt.Errorf("write bundle: %w", err))
 		return
 	}
 	if err := f.Close(); err != nil {
 		fail(fmt.Errorf("close bundle: %w", err))
+		return
+	}
+
+	if err := os.Rename(f.Name(), bundlePath); err != nil {
+		fail(fmt.Errorf("publish bundle: %w", err))
 		return
 	}
 

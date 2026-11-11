@@ -104,6 +104,9 @@ func healthReportSchema() map[string]any {
 // OperationDocumentation publishes the request body each mutation's handler decodes.
 // A route this module has not classified stays unclassified.
 func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
+	if method == http.MethodGet && pattern == "/events" {
+		return api.ModuleOperationDocumentation{Parameters: healthEventsParameters()}, true
+	}
 	decl, ok := healthRequestBodyDeclarationFor(method, pattern)
 	if !ok {
 		return api.ModuleOperationDocumentation{}, false
@@ -119,4 +122,15 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 		// Undecided: published unclassified until the handler is read.
 	}
 	return doc, true
+}
+
+// healthEventsParameters publishes the reads of GET /events (handleListEvents).
+func healthEventsParameters() []map[string]any {
+	return []map[string]any{
+		oas.Param("subject_kind", "query", "Only the events of this subject kind (agent or mcp).", false, oas.Obj("type", "string")),
+		oas.Param("subject_ref", "query", "Only the events of this subject.", false, oas.Obj("type", "string")),
+		oas.Param("order", "query", "asc (default) lists the oldest event first; desc lists the newest first, by when each happened.", false, oas.Obj("type", "string", "enum", oas.Enum("asc", "desc"))),
+		oas.Param("limit", "query", "Page size; default 100, at most 1000.", false, oas.Obj("type", "integer", "minimum", 1, "maximum", 1000)),
+		oas.Param("cursor", "query", "Opaque cursor from the previous page of the same order.", false, oas.Obj("type", "string")),
+	}
 }

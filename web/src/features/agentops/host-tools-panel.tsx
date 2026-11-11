@@ -110,7 +110,7 @@ export function HostToolsPanel({
           ? t('hostTools.conflict')
           : err instanceof ApiError && err.status === 401
             ? t('hostTools.unauthenticated')
-            : err instanceof ApiError && err.status === 403
+            : err instanceof ApiError && err.isForbidden
               ? t('hostTools.forbidden')
               : err instanceof ApiError && err.status === 404
                 ? t('hostTools.notFound')

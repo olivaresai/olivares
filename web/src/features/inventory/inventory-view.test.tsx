@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -58,6 +58,9 @@ vi.mock('./api', () => ({
   },
 }))
 
+vi.mock('@/lib/api/download', () => ({ downloadBlob: vi.fn() }))
+
+import { downloadBlob } from '@/lib/api/download'
 import { inventoryApi } from './api'
 import { InventoryView } from './inventory-view'
 
@@ -112,6 +115,7 @@ function renderView() {
 
 beforeEach(() => {
   auth.denied = new Set()
+  vi.mocked(downloadBlob).mockClear()
   live.live.mockReset()
   live.live.mockResolvedValue({
     items: [
@@ -210,6 +214,105 @@ describe('InventoryView', () => {
     expect(vi.mocked(inventoryApi.entities)).toHaveBeenCalledWith(
       expect.objectContaining({ limit: expect.any(Number) }),
     )
+  })
+})
+
+/** The file contents a download received; jsdom's Blob has no `.text()`. */
+function blobText(blob: Blob): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.readAsText(blob)
+  })
+}
+
+describe('InventoryView — kind chips and the catalog table', () => {
+  it('filters by a kind chip, says which chip is pressed and counts each kind', async () => {
+    const user = userEvent.setup()
+    renderView()
+    const agent = await screen.findByRole('button', { name: 'Agent 3' })
+    expect(agent).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /^All kinds/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await user.click(agent)
+    expect(agent).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^All kinds/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    await waitFor(() =>
+      expect(vi.mocked(inventoryApi.entities)).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kind: 'agent' }),
+      ),
+    )
+  })
+
+  it('shows one table with where, state and last seen; signals stay in the sheet', async () => {
+    renderView()
+    const name = await screen.findByText('prod-orchestrator')
+    const row = name.closest('tr')!
+    for (const header of ['Name', 'Kind', 'Where', 'Status', 'Last seen'])
+      expect(
+        screen.getByRole('columnheader', { name: header }),
+      ).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Signals' })).toBeNull()
+    expect(within(row).getByText('host-1')).toBeInTheDocument()
+    expect(
+      within(row).getByText('Active').closest('[data-slot="status-chip"]'),
+    ).not.toBeNull()
+  })
+
+  it('exports every loaded row as JSON once the catalog is complete', async () => {
+    const user = userEvent.setup()
+    renderView()
+    await screen.findByText('prod-orchestrator')
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+    expect(downloadBlob).toHaveBeenCalledWith(
+      expect.any(Blob),
+      'inventory.json',
+    )
+    const [blob] = vi.mocked(downloadBlob).mock.calls[0]!
+    expect(JSON.parse(await blobText(blob))).toEqual(entries)
+  })
+
+  it('offers no export while more catalog pages remain unread', async () => {
+    vi.mocked(inventoryApi.entities).mockResolvedValue({
+      items: entries,
+      has_more: true,
+      cursor: 'c1',
+    })
+    renderView()
+    await screen.findByRole('button', { name: 'Load more' })
+    expect(screen.queryByRole('button', { name: 'Export' })).toBeNull()
+  })
+
+  it('says a filter matched nothing rather than claiming the catalog is empty', async () => {
+    vi.mocked(inventoryApi.entities).mockImplementation(async (params) =>
+      params?.kind
+        ? { items: [], has_more: false }
+        : { items: entries, has_more: false },
+    )
+    const user = userEvent.setup()
+    renderView()
+    await user.click(await screen.findByRole('button', { name: 'Model 1' }))
+    expect(
+      await screen.findByText('No entries match these filters'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No estate entities discovered yet')).toBeNull()
+  })
+
+  it('keeps the MCP servers link and the scope line, without a primary action', async () => {
+    renderView()
+    expect(
+      await screen.findByRole('link', {
+        name: 'Add and govern MCP servers in MCP & skills',
+      }),
+    ).toHaveAttribute('href', '/capabilities')
+    const scope = screen.getByText('Covers every workspace.')
+    expect(scope).toBeInTheDocument()
+    expect(scope.closest('[data-slot="state-banner"]')).toBeNull()
   })
 })
 

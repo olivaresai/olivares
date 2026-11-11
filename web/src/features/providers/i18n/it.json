@@ -22,6 +22,9 @@
     "name": "Nome",
     "kind": "Tipo",
     "key": "Chiave",
+    "usedBy": "Usata da",
+    "usedByUnread": "Non è stato possibile leggere quali profili usano ogni chiave.",
+    "usedByPartial": "Alcuni profili non sono stati letti: una chiave può essere usata da più profili di quelli mostrati.",
     "state": "Stato",
     "connection": "Connessione",
     "actions": "Azioni"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "Attivo",
-    "revoked": "Revocato"
+    "revoked": "Revocato",
+    "disabled": "Disattivato"
   },
   "probe": {
     "never": "Non testata",
@@ -70,7 +74,9 @@
     "testing": "Test in corso…",
     "rotate": "Ruota chiave",
     "revoke": "Revoca",
-    "details": "Dettagli"
+    "details": "Dettagli",
+    "disable": "Disattiva",
+    "enable": "Attiva"
   },
   "create": {
     "title": "Aggiungi un provider",
@@ -171,5 +177,9 @@
   "section": {
     "title": "Chiavi API",
     "add": "Aggiungi una chiave API"
+  },
+  "stateChange": {
+    "disabled": "Fornitore disattivato. I profili collegati rifiutano nuovi avvii finché non viene riattivato.",
+    "active": "Fornitore attivato."
   }
 }

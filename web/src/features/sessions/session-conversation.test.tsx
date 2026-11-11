@@ -16,8 +16,11 @@ import {
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
+import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
+import { viewById } from '@/features/navigation/model'
 import { SessionConversation } from './session-conversation'
 import { sentPlace, sentTurnsPartition, useSentTurns } from './sent-turns'
 import { useSessionStore } from '@/stores/session'
@@ -43,6 +46,8 @@ const onHistoryRef = vi.hoisted(() => ({
   current: null as ((lines: string[]) => void) | null,
 }))
 const messageRights = vi.hoisted(() => ({ writable: true }))
+// The one permission a case takes away, named by the view that asks for it.
+const deniedRight = vi.hoisted(() => ({ value: '' }))
 
 vi.mock('@/features/agentops/attach', () => ({
   useRunAttach: (opts: {
@@ -60,10 +65,36 @@ vi.mock('@/features/agentops/attach', () => ({
   },
 }))
 
+// Edit from here as a stand-in, only where a case names the turn it continues with: its
+// one button continues at once with the words «w» and that turn. Every other case gets the
+// real dialog.
+const editStandIn = vi.hoisted(() => ({
+  from: undefined as { run: string; turn: number } | undefined,
+}))
+vi.mock('./edit-from-here', async (orig) => {
+  const { createElement } = await import('react')
+  const real = await orig<typeof import('./edit-from-here')>()
+  return {
+    ...real,
+    EditFromHere: (props: Parameters<typeof real.EditFromHere>[0]) =>
+      editStandIn.from
+        ? createElement(
+            'button',
+            {
+              type: 'button',
+              onClick: () => props.onContinue('w', editStandIn.from),
+            },
+            'Continue as the stand-in',
+          )
+        : createElement(real.EditFromHere, props),
+  }
+})
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     can: (permission: string) =>
-      permission !== 'sessions:run:write' || messageRights.writable,
+      permission !== deniedRight.value &&
+      (permission !== 'sessions:run:write' || messageRights.writable),
     activeTenant: 'demo',
     principal: { kind: 'user', actor: 'alice', user_id: 'alice' },
   }),
@@ -106,6 +137,8 @@ function push(line: string, seq = 1, at?: string) {
 
 beforeEach(() => {
   messageRights.writable = true
+  deniedRight.value = ''
+  editStandIn.from = undefined
   attachStatus.value = 'open'
   onFrameRef.current = null
   useSentTurns.setState({ byRun: {}, seen: {}, said: {}, discarded: false })
@@ -303,6 +336,55 @@ describe('SessionConversation', () => {
     wrap({ state: 'failed', reason: 'provider temporarily unavailable' })
     expect(screen.getByText('No messages yet.')).toBeInTheDocument()
   })
+  it('asks an idle session with no turn yet for its first message', () => {
+    wrap({ state: 'idle' })
+    expect(screen.getByText('Write the first message')).toBeInTheDocument()
+    expect(screen.queryByText('Waiting for the session…')).toBeNull()
+  })
+  describe('the first message box', () => {
+    // The work surface's message box, as the composer draws it for this session.
+    const box = () => {
+      const field = document.createElement('textarea')
+      field.id = 'work-composer-input'
+      field.dataset.sessionDraftKey = sessionDraftKey(
+        'demo',
+        { kind: 'user', actor: 'alice', user_id: 'alice' },
+        'run_1',
+      )!
+      document.body.append(field)
+      return field
+    }
+    afterEach(() => document.getElementById('work-composer-input')?.remove())
+
+    it('takes the keyboard when the session waits for its first message', async () => {
+      const field = box()
+      wrap({ state: 'idle' })
+      await screen.findByText('Write the first message')
+      await waitFor(() => expect(field).toHaveFocus())
+    })
+
+    it('leaves the keyboard where the person has it', async () => {
+      const field = box()
+      const row = document.createElement('button')
+      document.body.append(row)
+      row.focus()
+      try {
+        wrap({ state: 'idle' })
+        await screen.findByText('Write the first message')
+        expect(row).toHaveFocus()
+        expect(field).not.toHaveFocus()
+      } finally {
+        row.remove()
+      }
+    })
+
+    it('does not take the keyboard while turns are on their way', async () => {
+      const field = box()
+      wrap({ state: 'running' })
+      await screen.findByText('Waiting for the session…')
+      expect(field).not.toHaveFocus()
+    })
+  })
   it('does not ask for a sentence after a host isolation refusal', () => {
     attachStatus.value = 'closed'
     wrap({
@@ -424,7 +506,7 @@ describe('SessionConversation', () => {
     expect(items.some((el) => el.getAttribute('data-kind') === 'tool')).toBe(
       true,
     )
-    expect(screen.getByText('Read')).toBeInTheDocument()
+    expect(screen.getByTitle('Read')).toHaveTextContent('Reading')
     expect(screen.queryByText(/tool_use/)).toBeNull()
     // The call reads as what it acts on, never as its JSON.
     expect(screen.queryByText(/file_path/)).toBeNull()
@@ -457,7 +539,7 @@ describe('SessionConversation', () => {
         1,
       )
     })
-    await screen.findByText('Read')
+    await screen.findByTitle('Read')
     const row = screen
       .getAllByTestId('conversation-item')
       .find((el) => el.getAttribute('data-kind') === 'tool')!
@@ -609,7 +691,7 @@ describe('SessionConversation', () => {
         1,
       )
     })
-    const row = (await screen.findByText('Bash')).closest('details')!
+    const row = (await screen.findByTitle('Bash')).closest('details')!
     expect(row.textContent).not.toContain('{"command"')
     await user.click(row.querySelector('summary')!)
     const full = row.querySelector('[data-slot="tool-command"]')
@@ -864,7 +946,7 @@ describe('SessionConversation', () => {
     expect(screen.queryByText(/api retry/i)).toBeNull()
   })
 
-  it('counts the retries of any other provider failure, with its status', async () => {
+  it('tells a provider failure in plain words with the retry count and what to do', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() => {
@@ -880,8 +962,11 @@ describe('SessionConversation', () => {
         )
     })
     expect(
-      await screen.findByText('Retrying (2): server_error (529)'),
+      await screen.findByText(
+        'The provider returned an error (529). Retrying, attempt 2. If it keeps failing, check the provider or its endpoint under Providers.',
+      ),
     ).toBeInTheDocument()
+    expect(screen.queryByText(/server_error/)).toBeNull()
   })
 
   // acceptance: 18 "Unrecognised frame" rows for one stderr dump; the failure read as quiet.
@@ -1152,6 +1237,168 @@ describe('SessionConversation', () => {
     expect(rows[0]).toBe(row)
   })
 
+  describe("a notice's Continue", () => {
+    const line = 'example.com:443 is now approved; try again'
+    const words = 'Olivares approved example.com:443 for this session.'
+    const notice = (extra: object = { continue: line }) =>
+      JSON.stringify({
+        type: 'olivares_notice',
+        code: 'destination_approved',
+        message: words,
+        ...extra,
+      })
+    // A Claude Code session takes a message as its user frame.
+    const asSent = (text: string) =>
+      JSON.stringify({ type: 'user', message: { role: 'user', content: text } })
+
+    it('sends the line the notice carries as the person, exactly and once', async () => {
+      let accept!: (value: { accepted: boolean }) => void
+      const sending = new Promise<{ accepted: boolean }>((resolve) => {
+        accept = resolve
+      })
+      const input = vi.spyOn(agentOpsApi, 'input').mockReturnValue(sending)
+      try {
+        const userEv = userEvent.setup()
+        wrap()
+        await screen.findByTestId('session-conversation')
+        act(() => push(notice(), 1))
+        const row = (await screen.findByText(words)).closest('li')!
+        // The act says what it sends before it sends it.
+        const go = within(row).getByRole('button', { name: 'Continue' })
+        expect(go).toHaveAccessibleDescription(line)
+        await userEv.dblClick(go)
+        await waitFor(() => expect(input).toHaveBeenCalledTimes(1))
+        expect(input).toHaveBeenCalledWith('run_1', asSent(line), undefined)
+        // While it is on its way the act is disabled; once sent, it is gone.
+        await waitFor(() => expect(go).toBeDisabled())
+        await act(async () => accept({ accepted: true }))
+        await waitFor(() =>
+          expect(
+            within(row).queryByRole('button', { name: 'Continue' }),
+          ).toBeNull(),
+        )
+        expect(input).toHaveBeenCalledTimes(1)
+      } finally {
+        input.mockRestore()
+      }
+    })
+
+    it("shows a refused send as the composer's refusal, and offers it again", async () => {
+      const input = vi
+        .spyOn(agentOpsApi, 'input')
+        .mockRejectedValue(new Error('The session is not running.'))
+      const refused = vi.spyOn(toast, 'error').mockReturnValue(0)
+      try {
+        const userEv = userEvent.setup()
+        wrap()
+        await screen.findByTestId('session-conversation')
+        act(() => push(notice(), 1))
+        const go = await screen.findByRole('button', { name: 'Continue' })
+        await userEv.click(go)
+        await waitFor(() =>
+          expect(refused).toHaveBeenCalledWith('The session is not running.'),
+        )
+        expect(go).toBeEnabled()
+      } finally {
+        input.mockRestore()
+        refused.mockRestore()
+      }
+    })
+
+    it('shows and sends the line as text, never as markup', async () => {
+      const raw = '<b>try</b> **again** [here](javascript:alert(1))'
+      const input = vi
+        .spyOn(agentOpsApi, 'input')
+        .mockResolvedValue({ accepted: true })
+      try {
+        const userEv = userEvent.setup()
+        wrap()
+        await screen.findByTestId('session-conversation')
+        act(() => push(notice({ continue: raw }), 1))
+        const go = await screen.findByRole('button', { name: 'Continue' })
+        const said = document.getElementById(
+          go.getAttribute('aria-describedby') ?? '',
+        )!
+        expect(said.textContent).toBe(raw)
+        expect(said.children).toHaveLength(0)
+        await userEv.click(go)
+        await waitFor(() =>
+          expect(input).toHaveBeenCalledWith('run_1', asSent(raw), undefined),
+        )
+      } finally {
+        input.mockRestore()
+      }
+    })
+
+    it('offers no Continue to a person who cannot write to the session', async () => {
+      messageRights.writable = false
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => push(notice(), 1))
+      await screen.findByText(words)
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    })
+
+    it('draws a notice without a line exactly as before: its words, no act', async () => {
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(notice({ continue: undefined }), 1)
+        push(notice({ continue: '  ' }), 2)
+      })
+      const rows = await screen.findAllByText(words)
+      expect(rows).toHaveLength(2)
+      for (const said of rows) {
+        const row = said.closest('li')!
+        expect(row.textContent).toBe(said.textContent)
+        expect(within(row).queryByRole('button')).toBeNull()
+      }
+    })
+
+    it('offers no Continue on a notice the person has written after', async () => {
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(notice(), 1)
+        push(asSent('do it another way'), 2)
+      })
+      await screen.findByText('do it another way')
+      expect(screen.getByText(words)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    })
+
+    it("gives the session's message box the keyboard once the line is sent", async () => {
+      // The work surface's message box, as the composer draws it for this session.
+      const field = document.createElement('textarea')
+      field.id = 'work-composer-input'
+      field.dataset.sessionDraftKey = sessionDraftKey(
+        'demo',
+        { kind: 'user', actor: 'alice', user_id: 'alice' },
+        'run_1',
+      )!
+      document.body.append(field)
+      const input = vi
+        .spyOn(agentOpsApi, 'input')
+        .mockResolvedValue({ accepted: true })
+      try {
+        const userEv = userEvent.setup()
+        wrap()
+        await screen.findByTestId('session-conversation')
+        act(() => push(notice(), 1))
+        await userEv.click(
+          await screen.findByRole('button', { name: 'Continue' }),
+        )
+        await waitFor(() =>
+          expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull(),
+        )
+        expect(field).toHaveFocus()
+      } finally {
+        input.mockRestore()
+        field.remove()
+      }
+    })
+  })
+
   // A Codex session read "Protocol frames: N" between every turn: handshakes, replies and
   // lifecycle notifications drew a row that told nothing.
   it('draws no row for protocol bookkeeping, and still shows a protocol error', async () => {
@@ -1248,15 +1495,15 @@ describe('SessionConversation — the thread reads as a thread', () => {
       .getAllByTestId('conversation-item')
       .filter((el) => el.getAttribute('data-kind') === kind)
 
-  it('keeps the column to 760 px, centered', async () => {
+  it('keeps the column to 780 px, centered, as the composer is', async () => {
     wrap()
     const log = await screen.findByRole('log')
     const column = log.firstElementChild as HTMLElement
-    expect(column.className).toContain('max-w-[760px]')
+    expect(column.className).toContain('max-w-[780px]')
     expect(column.className).toContain('mx-auto')
   })
 
-  it("paints the person's turn as a muted block of the column's width, with no YOU label", async () => {
+  it("paints the person's turn as a raised card at the end of the line, with no YOU label", async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() => push(user('What does calc.py do?'), 1))
@@ -1269,13 +1516,14 @@ describe('SessionConversation — the thread reads as a thread', () => {
     const cls = turn.className.split(/\s+/)
     expect(cls).toEqual(
       expect.arrayContaining([
-        'bg-muted',
-        'w-full',
-        'rounded-[12px]',
-        'px-4',
-        'py-3',
+        'bg-surface',
+        'shadow-[var(--shadow-card)]',
+        'rounded-panel',
+        'ms-auto',
+        'w-fit',
       ]),
     )
+    expect(cls).not.toContain('bg-muted')
     expect(screen.queryByText('You')).toBeNull()
     expect(screen.queryByText('YOU')).toBeNull()
   })
@@ -1311,9 +1559,36 @@ describe('SessionConversation — the thread reads as a thread', () => {
     const summary = row.querySelector('summary') as HTMLElement
     expect(summary.className).toContain('text-caption')
     expect(summary).toHaveTextContent('Read')
+    expect(summary.querySelector('[title="Read"]')).not.toBeNull()
+    // The verb in bold, its object quieter beside it.
+    expect(summary.querySelector('[title="Read"]')!.className).toContain(
+      'font-bold',
+    )
     const target = summary.querySelector('.font-mono') as HTMLElement
     expect(target).toHaveTextContent('calc.py')
     expect(summary.querySelector('svg.lucide-check')).not.toBeNull()
+  })
+
+  it('cuts a long command to one line on its row and keeps it whole inside the row', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    const command = `make test ${'ARGS=--verbose '.repeat(10)}`.trim()
+    act(() => {
+      push(toolUse('t1', 'Bash', { command }), 1)
+      push(toolResult('t1'), 2)
+    })
+    const [row] = await waitFor(() => {
+      const found = item('tool')
+      expect(found).toHaveLength(1)
+      return found
+    })
+    const target = row.querySelector('summary .font-mono') as HTMLElement
+    expect(target.textContent).toMatch(/…$/)
+    expect(target.textContent!.length).toBeLessThanOrEqual(96)
+    expect(target).toHaveAttribute('title', command)
+    expect(row.querySelector('[data-slot="tool-command"]')!.textContent).toBe(
+      command,
+    )
   })
 
   it('folds the calls between two replies into one closed row that keeps them one click away', async () => {
@@ -1375,6 +1650,9 @@ describe('SessionConversation — the thread reads as a thread', () => {
     const line = await screen.findByRole('button', {
       name: 'Ran 2 commands · 43s',
     })
+    // The work of a turn closes with a hairline either side of its line.
+    expect(line.className).toContain('before:h-px')
+    expect(line.className).toContain('after:h-px')
     expect(line).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByTestId('conversation-work')).toBeNull()
     expect(screen.queryByText(/Worked for/)).toBeNull()
@@ -1387,6 +1665,44 @@ describe('SessionConversation — the thread reads as a thread', () => {
     expect(opened).toBeVisible()
     expect(within(opened).getByText('12 in · 18 out')).toBeVisible()
     expect(within(opened).getAllByTestId('conversation-item')).toHaveLength(2)
+    // The calls read as one quiet group, not as loose lines.
+    expect(within(opened).getByRole('list').className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['rounded-card', 'bg-muted']),
+    )
+  })
+
+  it("lets the page's own find reach a folded turn's work, and opens the turn where it matched", async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(user('Run the tests'), 1)
+      push(toolUse('t1', 'Bash', { command: 'make test' }), 2)
+      push(toolResult('t1'), 3)
+      push(assistant('They pass.'), 4)
+      push(
+        JSON.stringify({
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'They pass.',
+          duration_ms: 4000,
+        }),
+        5,
+      )
+    })
+    const line = await screen.findByRole('button', {
+      name: 'Ran 1 command · 4s',
+    })
+    const folded = document.getElementById(
+      line.getAttribute('aria-controls') ?? '',
+    ) as HTMLElement
+    // Folded, but searchable: the browser's find looks inside and fires beforematch.
+    expect(folded).toHaveAttribute('hidden', 'until-found')
+    act(() => {
+      folded.dispatchEvent(new Event('beforematch'))
+    })
+    expect(line).toHaveAttribute('aria-expanded', 'true')
+    expect(folded).toBeVisible()
   })
 
   it("prices a turn by what it added to Claude Code's running total, in cents", async () => {
@@ -1422,6 +1738,42 @@ describe('SessionConversation — the thread reads as a thread', () => {
     expect(dividers[2]).toHaveTextContent('<$0.01')
   })
 
+  it('says no amount of a turn to a person for whom Usage does not open', async () => {
+    // A member sees no money: the cost shows where the Usage place opens.
+    deniedRight.value = viewById('usage')!.permission!
+    const userEv = userEvent.setup()
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() =>
+      push(
+        JSON.stringify({
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+          duration_ms: 8000,
+          total_cost_usd: 0.24,
+          usage: { input_tokens: 9, output_tokens: 921 },
+        }),
+        1,
+      ),
+    )
+    const [divider] = await waitFor(() => {
+      const found = item('result')
+      expect(found).toHaveLength(1)
+      return found
+    })
+    await userEv.click(divider!.querySelector('button') as HTMLElement)
+    // The time and the tokens stay, with no amount, no sign and no empty separator.
+    expect(within(divider!).getByText(/921 out/)).toHaveTextContent(
+      /^8s · 9 in · 921 out$/,
+    )
+    expect(divider).not.toHaveTextContent('$')
+    // Nor the word: no line, hover or name of the turn says «cost».
+    expect(divider).not.toHaveTextContent(/cost/i)
+    expect(divider!.innerHTML).not.toMatch(/cost/i)
+  })
+
   it('says "Answered" when no tool ran and no duration is known', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
@@ -1442,6 +1794,321 @@ describe('SessionConversation — the thread reads as a thread', () => {
       return found
     })
     expect(divider.querySelector('button')).toHaveTextContent(/^Answered$/)
+  })
+
+  it('says when a plain answer came, not how long the engine took, and offers one branch', async () => {
+    const userEv = userEvent.setup()
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() =>
+      push(
+        JSON.stringify({
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'done',
+          duration_ms: 75,
+        }),
+        1,
+        '2026-11-02T10:05:00Z',
+      ),
+    )
+    const [divider] = await waitFor(() => {
+      const found = item('result')
+      expect(found).toHaveLength(1)
+      return found
+    })
+    const line = divider.querySelector('button') as HTMLElement
+    expect(line).not.toHaveTextContent('75ms')
+    // A plain answer did no work: its line has no hairlines.
+    expect(line.className).not.toContain('before:h-px')
+    expect(line.querySelector('time')).toHaveAttribute(
+      'datetime',
+      '2026-11-02T10:05:00Z',
+    )
+    expect(
+      within(divider).getByRole('button', { name: 'Fork from here' }),
+    ).toBeInTheDocument()
+    // The engine's timing is one click away, in the details.
+    await userEv.click(line)
+    expect(divider).toHaveTextContent('75ms')
+  })
+
+  // EDIT FROM HERE IS THE FORK AT A SENT MESSAGE: the new session's first input is the
+  // conversation before the message, then the edited words, as Fork from here carries it.
+  describe('edit from here', () => {
+    const done = JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'done',
+      duration_ms: 75,
+    })
+    const editTo = async (
+      message: HTMLElement,
+      words: string,
+      choice?: string,
+    ) => {
+      const userEv = userEvent.setup()
+      await userEv.click(
+        within(message.closest('li')!).getByRole('button', {
+          name: 'Edit from here',
+        }),
+      )
+      const field = await screen.findByRole('textbox', { name: 'Message' })
+      await userEv.clear(field)
+      await userEv.type(field, words)
+      if (choice)
+        await userEv.click(await screen.findByRole('radio', { name: choice }))
+      await userEv.click(screen.getByRole('button', { name: 'Continue' }))
+    }
+    beforeEach(() => {
+      useNewSessionDialog.setState({ advanced: null })
+      vi.spyOn(agentOpsApi, 'runCheckpoints').mockResolvedValue({
+        available: false,
+        turns: [],
+        files: [],
+        truncated: false,
+      })
+    })
+    afterEach(() => vi.mocked(agentOpsApi.runCheckpoints).mockRestore())
+
+    it("is offered on the person's own messages only", async () => {
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(user('add a readme'), 1)
+        push(assistant('Added README.md.'), 2)
+        push(done, 3)
+      })
+      const [sent] = await waitFor(() => {
+        const found = item('operator')
+        expect(found).toHaveLength(1)
+        return found
+      })
+      expect(
+        within(sent!.closest('li')!).getByRole('button', {
+          name: 'Edit from here',
+        }),
+      ).toBeInTheDocument()
+      const [reply] = item('assistant')
+      expect(
+        within(reply!.closest('li')!).queryByRole('button', {
+          name: 'Edit from here',
+        }),
+      ).toBeNull()
+    })
+
+    it('forks with the turns before the message, then exactly the edited words', async () => {
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(user('add a readme'), 1)
+        push(assistant('Added README.md.'), 2)
+        push(done, 3)
+        push(user('fix the typo'), 4)
+        push(assistant('Fixed the typo.'), 5)
+        push(done, 6)
+      })
+      const sent = await waitFor(() => {
+        const found = item('operator')
+        expect(found).toHaveLength(2)
+        return found
+      })
+      await editTo(sent[1]!, 'fix the typo in the title')
+      const first = useNewSessionDialog.getState().advanced?.message ?? ''
+      const cut = first.lastIndexOf('\n\n')
+      expect(first.slice(cut + 2)).toBe('fix the typo in the title')
+      const context = first.slice(0, cut)
+      expect(context).toMatch(/^Context from session run_1 through turn /)
+      expect(context).toContain('[operator]\nadd a readme')
+      expect(context).toContain('[assistant]\nAdded README.md.')
+      expect(context).not.toContain('typo')
+    })
+
+    it('says so before editing when the fork cannot carry the turns before it', async () => {
+      const userEv = userEvent.setup()
+      const refused = vi.spyOn(toast, 'error').mockReturnValue(0)
+      try {
+        wrap()
+        await screen.findByTestId('session-conversation')
+        act(() => {
+          push(user('add a readme'), 1)
+          // More than a new session's first message can carry.
+          push(assistant('x'.repeat(300 * 1024)), 2)
+          push(done, 3)
+          push(user('fix the typo'), 4)
+        })
+        const sent = await waitFor(() => {
+          const found = item('operator')
+          expect(found).toHaveLength(2)
+          return found
+        })
+        await userEv.click(
+          within(sent[1]!.closest('li')!).getByRole('button', {
+            name: 'Edit from here',
+          }),
+        )
+        expect(refused).toHaveBeenCalledWith(
+          'Could not read complete context. Load earlier messages or choose a smaller turn, then try again.',
+        )
+        // Nothing to lose: no edit was started, and the folder was not touched.
+        expect(screen.queryByRole('textbox', { name: 'Message' })).toBeNull()
+        expect(agentOpsApi.runCheckpoints).not.toHaveBeenCalled()
+      } finally {
+        refused.mockRestore()
+      }
+    })
+
+    it('forks from the first message with exactly the edited words', async () => {
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(user('add a readme'), 1)
+        push(assistant('Added README.md.'), 2)
+        push(done, 3)
+      })
+      const [sent] = await waitFor(() => {
+        const found = item('operator')
+        expect(found).toHaveLength(1)
+        return found
+      })
+      await editTo(sent!, 'add a readme to the root')
+      expect(useNewSessionDialog.getState().advanced).toMatchObject({
+        open: true,
+        message: 'add a readme to the root',
+      })
+    })
+
+    it('puts no file back at any step: not on Continue, not when New session closes', async () => {
+      const rewind = vi.spyOn(agentOpsApi, 'rewindRun')
+      try {
+        // A session in a worktree of its own: the new one starts on the registered folder.
+        wrap({ workspace_ref: 'ws_1', worktree_branch: 'olivares/run_1' })
+        await screen.findByTestId('session-conversation')
+        act(() => {
+          push(user('add a readme'), 1)
+          push(assistant('Added README.md.'), 2)
+          push(done, 3)
+        })
+        const [sent] = await waitFor(() => {
+          const found = item('operator')
+          expect(found).toHaveLength(1)
+          return found
+        })
+        await editTo(sent!, 'add a readme to the root')
+        expect(useNewSessionDialog.getState().advanced).toMatchObject({
+          open: true,
+          workspaceRef: 'ws_1',
+          message: 'add a readme to the root',
+        })
+        // The folder as it is now: New session is asked for no message's files.
+        expect(
+          useNewSessionDialog.getState().advanced?.fromCheckpoint,
+        ).toBeUndefined()
+        act(() => useNewSessionDialog.getState().closeAdvanced())
+        expect(rewind).not.toHaveBeenCalled()
+      } finally {
+        rewind.mockRestore()
+      }
+    })
+
+    // THE HAND-OFF: the turn the dialog names goes to New session as it came, beside the
+    // edited words and the session's own folder.
+    it('hands New session the turn the dialog names, with the edited words', async () => {
+      editStandIn.from = { run: 'run_1', turn: 2 }
+      const userEv = userEvent.setup()
+      wrap({
+        workspace_ref: 'ws_1',
+        worktree_branch: 'olivares/run_1',
+        acts_for: { kind: 'user', user_id: 'alice' },
+      })
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(user('add a readme'), 1)
+        push(done, 2)
+        push(user('fix the typo'), 3)
+        push(done, 4)
+      })
+      const sent = await waitFor(() => {
+        const found = item('operator')
+        expect(found).toHaveLength(2)
+        return found
+      })
+      await userEv.click(
+        within(sent[1]!.closest('li')!).getByRole('button', {
+          name: 'Edit from here',
+        }),
+      )
+      await userEv.click(
+        screen.getByRole('button', { name: 'Continue as the stand-in' }),
+      )
+      const advanced = useNewSessionDialog.getState().advanced
+      expect(advanced?.open).toBe(true)
+      expect(advanced?.workspaceRef).toBe('ws_1')
+      expect(advanced?.fromCheckpoint?.run).toBe('run_1')
+      expect(advanced?.fromCheckpoint?.turn).toBe(2)
+      const message = advanced?.message ?? ''
+      expect(message.slice(message.lastIndexOf('\n\n') + 2)).toBe('w')
+    })
+
+    // TODAY A MESSAGE'S FILES ARE NEVER OFFERED: the engine names the turn a message began
+    // by the id of its accepted input, on the turn and on the message, and no message
+    // carries one yet. A kept turn with the message's very words names nothing.
+    it('offers only the fork with the edited words while no message carries an input id', async () => {
+      vi.mocked(agentOpsApi.runCheckpoints).mockResolvedValue({
+        available: true,
+        turns: [
+          {
+            seq: 1,
+            prompt: 'fix the typo',
+            clipped: false,
+            at: '2026-11-02T10:00:00Z',
+            open: false,
+            files: [],
+            truncated: false,
+            input_id: 'in_1',
+          },
+        ],
+        files: [],
+        truncated: false,
+      })
+      const userEv = userEvent.setup()
+      wrap({
+        workspace_ref: 'ws_1',
+        worktree_branch: 'olivares/run_1',
+        acts_for: { kind: 'user', user_id: 'alice' },
+      })
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(user('fix the typo'), 1)
+        push(done, 2)
+      })
+      const [sent] = await waitFor(() => {
+        const found = item('operator')
+        expect(found).toHaveLength(1)
+        return found
+      })
+      await userEv.click(
+        within(sent!.closest('li')!).getByRole('button', {
+          name: 'Edit from here',
+        }),
+      )
+      expect(
+        await screen.findByText(
+          'The files of this message were not kept, so the new session can only start from the folder as it is now.',
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('radio')).toBeNull()
+      expect(agentOpsApi.runCheckpoints).not.toHaveBeenCalled()
+      const field = screen.getByRole('textbox', { name: 'Message' })
+      await userEv.clear(field)
+      await userEv.type(field, 'fix the title')
+      await userEv.click(screen.getByRole('button', { name: 'Continue' }))
+      const advanced = useNewSessionDialog.getState().advanced
+      expect(advanced?.message?.endsWith('fix the title')).toBe(true)
+      expect(advanced?.fromCheckpoint).toBeUndefined()
+    })
   })
 
   it.each([
@@ -1925,9 +2592,9 @@ describe('SessionConversation — the message navigator', () => {
     )
   })
 
-  // The bar and the notices it carries read in the same 760 px column as the thread, the
+  // The bar and the notices it carries read in the same 780 px column as the thread, the
   // way the composer does, not across the whole pane.
-  it('keeps the message bar inside the 760 px conversation column', async () => {
+  it('keeps the message bar inside the 780 px conversation column', async () => {
     vi.spyOn(agentOpsApi, 'messages').mockResolvedValue({
       driver: 'claude',
       transcript: 'read',
@@ -1945,7 +2612,7 @@ describe('SessionConversation — the message navigator', () => {
       )
     })
     const bar = await screen.findByTestId('message-bar')
-    expect(bar).toHaveClass('mx-auto', 'w-full', 'max-w-[760px]')
+    expect(bar).toHaveClass('mx-auto', 'w-full', 'max-w-[780px]')
   })
 
   it('draws nothing when the session has no messages the engine can read', async () => {
@@ -2312,6 +2979,49 @@ describe('SessionConversation — copying a message', () => {
     writeSessionDraft(key, '')
   })
 
+  it('cites a selected passage: a toolbar by the selection puts the words in the composer as a quote', async () => {
+    const key = sessionDraftKey(
+      'demo',
+      { kind: 'user', actor: 'alice', user_id: 'alice' },
+      'run_1',
+    )!
+    writeSessionDraft(key, '')
+    wrap()
+    act(() => push(answered))
+    const range = document.createRange()
+    range.selectNodeContents(await screen.findByText('One'))
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    act(() => {
+      document.dispatchEvent(new Event('selectionchange'))
+    })
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Cite in composer' }),
+    )
+    expect(readSessionDraft(key)).toBe('> One\n\n')
+    window.getSelection()!.removeAllRanges()
+    writeSessionDraft(key, '')
+  })
+
+  it('offers no citing toolbar for words outside a reply', async () => {
+    wrap()
+    act(() => {
+      push(asked, 1)
+      push(answered, 2)
+    })
+    const range = document.createRange()
+    range.selectNodeContents(await screen.findByText('Look up the readme'))
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    act(() => {
+      document.dispatchEvent(new Event('selectionchange'))
+    })
+    expect(
+      screen.queryByRole('button', { name: 'Cite in composer' }),
+    ).not.toBeInTheDocument()
+    window.getSelection()!.removeAllRanges()
+  })
+
   it('does not quote a selection from outside the reply', async () => {
     const key = sessionDraftKey(
       'demo',
@@ -2375,8 +3085,15 @@ describe('SessionConversation — copying a message', () => {
       push(asked, 1)
       push(answered, 2)
     })
-    for (const words of ['Look up the readme', 'One', 'make test'])
+    for (const words of ['Look up the readme', 'One'])
       expect((await screen.findByText(words)).closest('button')).toBeNull()
+    // A coloured code block splits its words into spans: the block is still no button.
+    const block = (
+      await screen.findAllByText(
+        (_, el) => el?.tagName === 'CODE' && el.textContent === 'make test',
+      )
+    )[0]!
+    expect(block.closest('button')).toBeNull()
   })
 
   it('offers no Copy for a message without words, and paints no reply without words', async () => {
@@ -2611,14 +3328,18 @@ describe('SessionConversation — the work folds, one live line, nested subagent
     ) as HTMLElement
     const edit = within(work)
       .getAllByTestId('conversation-item')
-      .find((el) =>
-        el.querySelector('summary')?.textContent?.startsWith('Edit'),
-      )
+      .find((el) => el.querySelector('summary')?.textContent?.endsWith('+3−2'))
     expect(edit?.querySelector('summary')).toHaveTextContent(
-      /^Editnotes\.txt\+3−2$/,
+      /^Editednotes\.txt\+3−2$/,
     )
+    // Inside the tool group the row above already names the file and its +N −M: the
+    // excerpt is its lines only, on the mono step's 20 px line.
     const excerpt = within(work).getAllByTestId('conversation-diff')[1]
     expect(excerpt?.textContent).toBe('alpha-beta-gamma+delta+zeta+eta')
+    expect(excerpt?.className.split(/\s+/)).toContain('text-mono')
+    // A well, as code is: recessed, with no outline.
+    expect(excerpt?.className).toContain('bg-[var(--well)]')
+    expect(excerpt?.className).not.toContain('border-line')
   })
 
   it('shows one live line while a call runs, with its elapsed time, and no heartbeat rows', async () => {
@@ -2778,9 +3499,9 @@ describe('SessionConversation — the work row in its other states', () => {
     // Nothing runs yet: Escape is the composer's own.
     fireEvent.keyDown(composer, { key: 'Escape' })
     act(() => push(use('t1', 'Bash', { command: 'make test' }), 1))
-    expect(await screen.findByTestId('conversation-live')).toHaveTextContent(
-      'Esc to interrupt',
-    )
+    const live = await screen.findByTestId('conversation-live')
+    expect(live).toHaveTextContent('Esc twice to interrupt')
+    expect(live.querySelector('[data-slot="status-dot"]')).not.toBeNull()
     // Another pane's field, and an Escape a control already took, interrupt nothing.
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'other pane' }), {
       key: 'Escape',
@@ -2790,9 +3511,63 @@ describe('SessionConversation — the work row in its other states', () => {
     })
     fireEvent.keyDown(composer, { key: 'Escape' })
     expect(interrupt).not.toHaveBeenCalled()
+    // One Escape only arms it; the second, soon after, interrupts.
+    fireEvent.keyDown(composer, { key: 'Escape' })
+    expect(interrupt).not.toHaveBeenCalled()
     fireEvent.keyDown(composer, { key: 'Escape' })
     await waitFor(() => expect(interrupt).toHaveBeenCalledTimes(1))
     interrupt.mockRestore()
+  })
+
+  it('stops saying the turn works at its result even when the tool never shows the sent message', async () => {
+    useSentTurns
+      .getState()
+      .note(sentTurnsPartition(), 'run_1', { text: 'Say hi.' })
+    const qc = new QueryClient()
+    render(
+      <QueryClientProvider client={qc}>
+        <section data-focused="true">
+          <SessionConversation run={run} />
+        </section>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByTestId('conversation-working')).toBeTruthy()
+    act(() => push(JSON.stringify({ type: 'result', subtype: 'success' }), 1))
+    await waitFor(() =>
+      expect(screen.queryByTestId('conversation-working')).toBeNull(),
+    )
+  })
+
+  it('says the turn is working from a sent message until its result', async () => {
+    const qc = new QueryClient()
+    render(
+      <QueryClientProvider client={qc}>
+        <section data-focused="true">
+          <SessionConversation run={run} />
+          <textarea aria-label="composer" />
+        </section>
+      </QueryClientProvider>,
+    )
+    await screen.findByTestId('session-conversation')
+    expect(screen.queryByTestId('conversation-working')).toBeNull()
+    act(() =>
+      push(
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'hello' },
+        }),
+        1,
+      ),
+    )
+    const line = await screen.findByTestId('conversation-working')
+    expect(line).toHaveTextContent('Working')
+    expect(line).toHaveTextContent('Esc twice to interrupt')
+    // The state in words, with its dot.
+    expect(line.querySelector('[data-slot="status-dot"]')).not.toBeNull()
+    act(() => push(JSON.stringify({ type: 'result', subtype: 'success' }), 2))
+    await waitFor(() =>
+      expect(screen.queryByTestId('conversation-working')).toBeNull(),
+    )
   })
 
   it('names files only when it knows them, and a tool it cannot class as a tool', async () => {

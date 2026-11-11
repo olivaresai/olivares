@@ -482,28 +482,11 @@ func (s *sftpService) closeFolder(tenant model.TenantID, ref, reason string) {
 func (m *Module) sftpRights(cred *sftpCredential) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	ref, ok := cred.mc.Principal.Ref()
-	if !ok || !m.CommunicationAuthority.bound() {
-		return errSFTPRefused
-	}
-	current, err := m.CommunicationAuthority.resolver.ResolvePrincipalScope(ctx, ref, cred.mc.Tenant)
+	mc, err := m.currentFolderAccess(ctx, cred.mc, cred.folderRef)
 	if err != nil {
 		return err
 	}
-	mc := cred.mc
-	mc.Principal = current
-	if _, err := m.loadWorkspaceRec(ctx, mc.Tenant, cred.folderRef); err != nil {
-		return err
-	}
-	if err := m.authorizeWorkspaceRight(ctx, mc, permWsRead, auth.TrusteeRead, mc.Resource); err != nil {
-		return err
-	}
-	for _, right := range terminalRights {
-		if err := m.authorizeWorkspaceRight(ctx, mc, permWsWrite, right, mc.Resource); err != nil {
-			return err
-		}
-	}
-	return nil
+	return m.authorizeWorkspaceRight(ctx, mc, permWsRead, auth.TrusteeRead, mc.Resource)
 }
 
 // sftpSession is one open sftp-server for one person in one folder.

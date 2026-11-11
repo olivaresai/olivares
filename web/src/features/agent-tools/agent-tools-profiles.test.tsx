@@ -457,9 +457,88 @@ describe('AI tools: one boxed list per installed tool', () => {
     ).toBeInTheDocument()
     const third = await within(claude).findByTestId('profile-claude-c')
     expect(
-      within(third).getByText('API key · Local stub (sk-…7f2a)'),
+      within(third).getByText('API key · Local stub · sk-…7f2a'),
     ).toBeInTheDocument()
     expect(within(third).getByText('Ready')).toBeInTheDocument()
+  })
+
+  it('says which account a signed-in profile is signed in as, as its tool reports it', async () => {
+    signIn.status.mockImplementation(
+      (driver: string, _tenant: unknown, _signal: unknown, ref?: string) =>
+        Promise.resolve({
+          driver,
+          installed: true,
+          signed_in: ref !== 'ppf_b',
+          account: 'someone@example.test',
+        }),
+    )
+    mount()
+    const claude = await screen.findByTestId('tool-claude')
+    const row = await within(claude).findByTestId('profile-default')
+    expect(
+      await within(row).findByText(
+        'Account · signed in · someone@example.test',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('names the account on a signed-in named profile, none on a signed-out one, and keeps a cut line whole in its title', async () => {
+    signIn.status.mockImplementation(
+      (driver: string, _tenant: unknown, _signal: unknown, ref?: string) =>
+        Promise.resolve({
+          driver,
+          installed: true,
+          signed_in: ref !== 'ppf_b',
+          account: 'someone@example.test',
+        }),
+    )
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
+      page([account('ppf_b', 'claude-b'), account('ppf_d', 'claude-d')]),
+    )
+    mount()
+    const named = await screen.findByTestId('profile-claude-d')
+    const line = await within(named).findByText(
+      'Account · signed in · someone@example.test',
+    )
+    expect(line).toHaveAttribute(
+      'title',
+      'Account · signed in · someone@example.test',
+    )
+    const signedOut = await screen.findByTestId('profile-claude-b')
+    await within(signedOut).findByText('Account · not signed in')
+    expect(within(signedOut).queryByText(/someone@example\.test/)).toBeNull()
+  })
+
+  it('heads the page with Add profile, which asks which installed tool when there are several', async () => {
+    const user = userEvent.setup()
+    mount()
+    await screen.findByTestId('tool-codex')
+    await user.click(screen.getByRole('button', { name: 'Add profile' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Codex' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a profile' })
+    expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveValue(
+      'codex',
+    )
+  })
+
+  it('opens Add profile straight for the one installed tool', async () => {
+    api.providers.mockResolvedValue({
+      providers: [
+        snap('claude', { version: '2.1.295 (Claude Code)' }),
+        snap('codex', {
+          installed: false,
+          state: 'not_installed',
+          version: '',
+        }),
+      ],
+    })
+    const user = userEvent.setup()
+    mount()
+    await screen.findByTestId('tool-claude')
+    await user.click(screen.getByRole('button', { name: 'Add profile' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Add a profile' })
+    expect(within(dialog).getByText(/sign in to Claude Code/)).toBeVisible()
+    expect(screen.queryByRole('menuitem')).toBeNull()
   })
 
   it('shows the default login as the first profile of a tool that has no named one', async () => {
@@ -498,12 +577,66 @@ describe('AI tools: one boxed list per installed tool', () => {
     expect(
       await within(claude).findByTestId('profile-claude-b'),
     ).toHaveTextContent('17% of the week · 41% of 5 hours')
+    // As A2 draws it: the limit sits at the right of the row, beside its state, not
+    // under the name inside the button that opens the profile.
+    const row = within(claude).getByTestId('profile-claude-b')
+    const usage = within(row).getByTestId('account-usage')
+    expect(within(row).getAllByRole('button')[0].contains(usage)).toBe(false)
+    const state = within(row).getByRole('button', { name: /^Sign in/ })
+    expect(
+      usage.compareDocumentPosition(state) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
     expect(
       within(claude).getByTestId('profile-claude-c'),
     ).not.toHaveTextContent('%')
     expect(within(claude).getByTestId('profile-default')).not.toHaveTextContent(
       '%',
     )
+  })
+
+  it("names an account's plan after its sign-in, only while it is signed in", async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
+      page([
+        account('ppf_b', 'claude-b', { plan: 'max' }),
+        account('ppf_e', 'claude-e', { plan: 'max' }),
+        account('ppf_f', 'claude-f'),
+      ]),
+    )
+    mount()
+    const claude = await screen.findByTestId('tool-claude')
+    expect(
+      await within(claude).findByTestId('profile-claude-e'),
+    ).toHaveTextContent('Account · signed in · Claude Max')
+    // ppf_b is signed out here: a plan the tool reported before is not shown.
+    expect(
+      await within(claude).findByTestId('profile-claude-b'),
+    ).not.toHaveTextContent('max')
+    expect(within(claude).getByTestId('profile-claude-f')).toHaveTextContent(
+      'Account · signed in',
+    )
+  })
+
+  it("names an account's plan as its vendor does, never the raw token", async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
+      page([
+        account('ppf_e', 'claude-e', { plan: 'max' }),
+        account('ppf_x', 'codex-x', { driver: 'codex', plan: 'pro' }),
+        account('ppf_y', 'codex-y', { driver: 'codex', plan: 'promax' }),
+      ]),
+    )
+    mount()
+    const claude = await screen.findByTestId('tool-claude')
+    expect(
+      await within(claude).findByTestId('profile-claude-e'),
+    ).toHaveTextContent('Account · signed in · Claude Max')
+    const codex = await screen.findByTestId('tool-codex')
+    expect(
+      await within(codex).findByTestId('profile-codex-x'),
+    ).toHaveTextContent('Account · signed in · ChatGPT Pro')
+    // A plan no table names keeps the vendor and capitalizes the tool's value.
+    expect(
+      await within(codex).findByTestId('profile-codex-y'),
+    ).toHaveTextContent('Account · signed in · ChatGPT Promax')
   })
 
   it('tells the default login from the profile names the engine gives: the one without a name', async () => {
@@ -624,7 +757,7 @@ describe('AI tools: one boxed list per installed tool', () => {
     expect(read.mock.calls.length).toBeLessThanOrEqual(25)
   })
 
-  it('lists active profiles only, the same set the New session dialog counts', async () => {
+  it('lists active and switched-off profiles, never a removed one', async () => {
     vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
       page([
         account('ppf_b', 'claude-b'),
@@ -634,7 +767,11 @@ describe('AI tools: one boxed list per installed tool', () => {
     )
     mount()
     expect(await screen.findByTestId('profile-claude-b')).toBeInTheDocument()
-    expect(screen.queryByTestId('profile-claude-d')).toBeNull()
+    // A switched-off profile stays on the page, so it can be switched back on.
+    const off = await screen.findByTestId('profile-claude-d')
+    expect(
+      within(off).getByRole('switch', { name: 'Turn on claude-d' }),
+    ).not.toBeChecked()
     expect(screen.queryByTestId('profile-claude-r')).toBeNull()
   })
 
@@ -772,7 +909,7 @@ describe('AI tools: one boxed list per installed tool', () => {
       expect(within(box).getAllByTestId('profile-acme-agent')).toHaveLength(1),
     )
     expect(
-      await within(box).findByText('API key · Local stub (sk-…7f2a)'),
+      await within(box).findByText('API key · Local stub · sk-…7f2a'),
     ).toBeInTheDocument()
   })
 })

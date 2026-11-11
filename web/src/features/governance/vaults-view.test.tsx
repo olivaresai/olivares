@@ -48,7 +48,7 @@ describe('VaultsView', () => {
     expect(await screen.findByText('Finance')).toBeInTheDocument()
   })
 
-  it('shows the Business notice instead of a list when the deployment answers 501', async () => {
+  it('shows the edition line instead of a list when the deployment answers 501', async () => {
     api.listVaults.mockRejectedValue(
       new ApiError(501, 'business_required', 'shared vaults require Business'),
     )
@@ -56,8 +56,9 @@ describe('VaultsView', () => {
     wrap(<VaultsView />)
 
     expect(
-      await screen.findByText(/This edition does not include Shared vaults/i),
+      await screen.findByText(/This is part of Olivares AI Business\./),
     ).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/business_required|\b501\b/)
     expect(screen.queryByRole('button', { name: 'Create vault' })).toBeNull()
   })
 

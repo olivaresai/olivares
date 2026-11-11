@@ -34,6 +34,7 @@
       "class": "Klasse",
       "name": "Name",
       "version": "Version",
+      "fingerprint": "Fingerabdruck",
       "provenance": "Provenienz",
       "posture": "Erfasstes Scan-Ergebnis",
       "issues": "Befunde",

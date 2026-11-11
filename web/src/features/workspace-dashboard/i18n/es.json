@@ -18,6 +18,8 @@
   "noAgentsHint": "Los agentes aparecen aquí cuando se descubren en este espacio de trabajo.",
   "noGroups": "Aún no hay grupos de agentes en este espacio de trabajo.",
   "noGroupsHint": "Los grupos de agentes aparecen aquí cuando se definen para este espacio de trabajo.",
+  "agentsFailed": "No se pudieron leer los agentes de este espacio de trabajo.",
+  "groupsFailed": "No se pudieron leer los grupos de agentes de este espacio de trabajo.",
   "viewAll": "Ver todos",
   "defaultBadge": "Predeterminado",
   "created": "Creado",
@@ -62,5 +64,25 @@
     "statusFailed": "No se pudo comprobar si esta carpeta está disponible por SFTP."
   },
   "showMore": "Mostrar más",
-  "agentsCut": "No se muestran todos los agentes."
+  "agentsCut": "No se muestran todos los agentes.",
+  "files": {
+    "title": "Espacio de trabajo",
+    "folders": "Carpetas",
+    "overview": "Resumen",
+    "backToFiles": "Archivos",
+    "addFolder": "Añadir carpeta",
+    "emptyTitle": "Ninguna carpeta todavía",
+    "emptyDescription": "Añade una carpeta y las sesiones trabajarán dentro de ella, sin salir de sus límites.",
+    "noAccessTitle": "No puedes abrir esta carpeta",
+    "noAccessDescription": "Se ha eliminado o tu rol no la incluye. Pide acceso a un administrador.",
+    "showFolders": "Ver mis carpetas",
+    "loading": "Leyendo las carpetas…",
+    "loadFailed": "No se pudieron cargar las carpetas.",
+    "details": "Wiki y transferencia de archivos",
+    "worktreeCount": "Worktrees: {{n}}",
+    "worktreeHint": "Registra este worktree como carpeta para explorarlo.",
+    "gitCut": "No todos los ficheros cambiados están marcados: Git solo listó parte de los cambios.",
+    "clean": "Sin cambios sin confirmar",
+    "changes": "Cambios sin confirmar: {{n}}"
+  }
 }

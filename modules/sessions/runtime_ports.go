@@ -583,6 +583,9 @@ type LaunchIntent struct {
 	// actor + the budget identity + the HITL requester).
 	Actor     string
 	ActorKind string
+	// UserGroupRefs are the directory groups of the principal that requested the launch
+	// (nil for a token or a launch with no caller): a group budget scopes on them.
+	UserGroupRefs []string
 	// AgentRef is the agent dimension the kill-switch / budget scope on (the actor
 	// when it is an agent NHI; empty ⇒ only the estate graduation applies).
 	AgentRef string

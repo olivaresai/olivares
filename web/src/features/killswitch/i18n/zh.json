@@ -8,10 +8,22 @@
     "agentCount": "{{count}} 项智能体停止生效中",
     "agentCount_other": "{{count}} 项智能体停止生效中",
     "agentBody": "已停止的智能体无法执行操作：其工具调用、MCP 调用和其他操作都会被拒绝。",
-    "none": "没有任何停止。会话和智能体正常运行。",
+    "noneTitle": "没有任何停止",
+    "noneBody": "会话和智能体正常运行。",
     "engagedBy": "触发人",
     "revoked": "已取消 {{count}} 个待处理的审批请求",
     "revoked_other": "已取消 {{count}} 个待处理的审批请求"
+  },
+  "effects": {
+    "title": "全部停止时会发生什么",
+    "sessions": "打开的会话会结束",
+    "sessionsHint": "每个会话的进程会停止；其文件夹保持原样。",
+    "actions": "智能体的每个操作都会被拒绝",
+    "actionsHint": "工具调用、MCP、计划任务、语音、模型调用、部署和事件投递。",
+    "approvals": "待处理的审批请求会被取消",
+    "approvalsHint": "包括会话和智能体操作的请求。某人在会话之外提交的请求，以及关于控制本身的请求，仍保持待处理。",
+    "ledger": "这次停止会记录到审计账本",
+    "ledgerHint": "记录谁停止的、何时以及原因，供事后复核。"
   },
   "engage": {
     "agentRef": "智能体",
@@ -23,13 +35,13 @@
     "confirmBodyEstateNoRestart": "所有智能体会立即停止：未结束的会话终止，其操作被拒绝，这些会话以及智能体操作的待处理审批请求被取消；用户在会话之外提交的请求仍保持待处理，与控制本身相关的请求也一样。没有任何紧急途径可以绕过。",
     "confirmTitleAgent": "停止此智能体？",
     "confirmBodyAgent": "此智能体会立即停止：其操作被拒绝，其待处理的审批请求被取消。要重新启动它，必须有两个不同的用户账户批准，并且事后必须复核这次停止。",
+    "confirmBodyAgentNoRestart": "此智能体会立即停止：其操作被拒绝，其待处理的审批请求被取消。",
     "done": "紧急关停开关已触发",
     "doneBody": "停止 {{id}} 已生效。重新启用需要双人控制。",
     "alreadyStopped": "此范围已存在一项生效的停止",
     "restartNeedsAdmins": "重新启动需要另外两个管理员账户批准，并由其中一个在之后复核。",
     "stopsRunning_other": "{{count}} 个未结束的会话将停止。",
     "stopAll": "停止所有智能体",
-    "more": "更多",
     "stopOne": "停止一个智能体…",
     "stopAgent": "停止此智能体"
   },
@@ -44,7 +56,7 @@
     "status": "运行中 {{live}} 个，已结束 {{ended}} 个。"
   },
   "stops": {
-    "title": "停止记录",
+    "title": "历史记录",
     "caption": "每次停止：由谁发起、何时、涵盖范围、原因，以及如何结束和复核。每个操作在执行前都会检查这些停止。",
     "search": "搜索停止记录…",
     "label": "紧急关停开关停止记录",

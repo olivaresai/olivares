@@ -237,6 +237,14 @@ type FilteredWalker interface {
 	WalkFiltered(ctx context.Context, fromSeq int64, f AuditFilter, fn func(model.AuditEvent) error) error
 }
 
+// FilteredReverseWalker is the newest-first twin of FilteredWalker, another OPTIONAL
+// AuditLog capability: the same AuditFilter applied by the store, yielding the
+// matching events with seq <= toSeq in DESCENDING sequence order, so a filtered
+// list can page backwards from the head without reading the ledger forwards.
+type FilteredReverseWalker interface {
+	WalkFilteredDesc(ctx context.Context, toSeq int64, f AuditFilter, fn func(model.AuditEvent) error) error
+}
+
 // VerifiedAuditAnchorReader is an OPTIONAL, bounded audit capability for a
 // durable receipt that already names one exact sequence. It reads that event
 // and its immediate predecessor in one store snapshot, recomputes both

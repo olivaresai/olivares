@@ -547,6 +547,8 @@ func sessionsPatchProviderProfileSchema() map[string]any {
 		"session_programs", sessionsProfileProgramsSchema(),
 		"session_registries", sessionsProfileRegistriesSchema(),
 		"session_egress_hosts", sessionsProfileEgressHostsSchema(),
+		"auto_compact_window", sessionsClosureNullable(oas.Obj("type", "integer", "minimum", 0, "maximum", maxAutoCompactWindow,
+			"description", "Claude Code only: the token count its sessions compact at (CLAUDE_CODE_AUTO_COMPACT_WINDOW), 100000 to 1000000, or 0 to withdraw the declaration and use the tool's default. Re-read on every launch; a live session keeps the value it started with. Another tool's profile refuses a value with 422. Null or omission keeps it.")),
 	))
 }
 
@@ -625,6 +627,7 @@ func sessionsPatchProviderSchema() map[string]any {
 		"display_name", sessionsClosureOptionalString("An explicit string replaces the stored name; null/omission preserves it."),
 		"base_url", sessionsClosureOptionalString("An explicit string replaces the stored endpoint; null/omission preserves it."),
 		"default_model", sessionsClosureOptionalString("An explicit model replaces the saved default for fresh sessions; empty clears it, null/omission preserves it. Does not rotate credentials or change the last connection test."),
+		"state", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("active", "disabled"), "description", "disabled refuses every launch, test and model read of this provider until it is set back to active; the bindings stay. A revoked provider stays revoked. null/omission preserves it.")),
 		"api_key", sessionsClosureNullable(oas.Obj("type", "string", "minLength", 8, "description", "Rotates the credential in place: it reseals under the SAME reference, so every profile bound to this provider keeps working and the NEXT launch uses the new value — a session already running keeps the one it started with. The previous connection test is cleared, because a verdict measured on a credential that no longer exists is not evidence about the one replacing it.")),
 	))
 }

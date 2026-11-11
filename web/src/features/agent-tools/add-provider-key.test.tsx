@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// AI tools offers its next step in the first viewport: a person who may
-// add an API key finds "Add an API key" in the page's header, above the tools and the
-// accounts. It is the page's one way to add a key: the key list and the key
-// references do not offer a second and a third under other names.
+// Providers offers its next step in the first viewport: a person who may
+// add an API key finds "Add an API key" in the page's header, above the keys. It is
+// the page's one way to add a key: the key list and the key references do not offer a
+// second and a third under other names.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -24,7 +24,7 @@ vi.mock('@/lib/auth/context', () => ({
 import { agentOpsApi } from '@/features/agentops/api'
 import { modelsApi } from '@/features/models/api'
 import { providersApi } from '@/features/providers/api'
-import { AgentToolsView } from './agent-tools-view'
+import { ProvidersPage } from '@/features/providers/providers-page'
 
 vi.mock('@tanstack/react-router', async () =>
   (await import('@/test/fake-router')).fakeRouterModule(),
@@ -34,7 +34,7 @@ function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <AgentToolsView />
+      <ProvidersPage />
     </QueryClientProvider>,
   )
 }
@@ -51,18 +51,16 @@ beforeEach(() => {
   })
 })
 
-describe('Add an API key on AI tools', () => {
+describe('Add an API key on Providers', () => {
   it('is the page header action and opens the add form', async () => {
     auth.perms = new Set(['sessions:provider:read', 'sessions:provider:write'])
     const user = userEvent.setup()
     mount()
     const add = await screen.findByRole('button', { name: 'Add an API key' })
-    const accounts = await screen.findByRole('heading', {
-      name: 'Accounts and API keys',
-    })
-    // The first viewport: the action precedes the accounts and keys in reading order.
+    const keys = await screen.findByRole('heading', { name: 'API keys' })
+    // The first viewport: the action precedes the keys in reading order.
     expect(
-      add.compareDocumentPosition(accounts) & Node.DOCUMENT_POSITION_FOLLOWING,
+      add.compareDocumentPosition(keys) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     await user.click(add)
     expect(
@@ -105,12 +103,44 @@ describe('Add an API key on AI tools', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('is not offered to a reader who cannot add a key', async () => {
-    auth.perms = new Set(['sessions:provider:read'])
+  it('is not offered to a person who may write keys but not read them', () => {
+    auth.perms = new Set(['sessions:provider:write'])
     mount()
-    await screen.findByRole('heading', { name: 'Accounts and API keys' })
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Providers' }),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Add an API key' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('is not offered to a reader who cannot add a key', async () => {
+    auth.perms = new Set(['sessions:provider:read'])
+    mount()
+    await screen.findByRole('heading', { name: 'API keys' })
+    expect(
+      screen.queryByRole('button', { name: 'Add an API key' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('the Providers page', () => {
+  it('is headed Providers, as its tab names it, and its keys are the next level', async () => {
+    auth.perms = new Set(['sessions:provider:read'])
+    mount()
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Providers' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'API keys' }),
+    ).toBeInTheDocument()
+  })
+
+  it('holds the keys only: no tool, profile or account of AI tools', async () => {
+    auth.perms = new Set(['sessions:provider:read', 'sessions:account:read'])
+    mount()
+    await screen.findByRole('heading', { name: 'API keys' })
+    expect(screen.queryByRole('heading', { name: 'AI tools' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Accounts' })).toBeNull()
   })
 })

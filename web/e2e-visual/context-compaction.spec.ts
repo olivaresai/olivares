@@ -103,7 +103,9 @@ test('native compaction keeps the draft and refreshes the context meter', async 
   await composer.fill('Continue after compaction')
   await page.getByRole('button', { name: 'Context', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Compact now' })).toBeEnabled()
-  for (const width of [1280, 390]) {
+  // The phone first: there the panel points at the More actions menu, which
+  // holds Context; the steps after the captures read the desktop's button.
+  for (const width of [390, 1280]) {
     for (const theme of ['light', 'dark']) {
       await page.setViewportSize({ width, height: 900 })
       await page.evaluate(

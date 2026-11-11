@@ -4,7 +4,7 @@ description: "How an operator governs the estate: identity and permissions, the 
 ---
 
 :::note[Business]
-Audit export (`GET /v1/audit/export`, `olivares audit export`), ledger verification (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community keeps the signed ledger, its reads and `olivares dr backup`; evidence routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+Audit export (`GET /v1/audit/export`, `olivares audit export`), ledger verification (`GET /v1/audit/verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community keeps the signed ledger, its reads and `olivares dr backup`; evidence routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
 :::
 
 This page is for the operator who has connected at least one source and now needs
@@ -41,9 +41,9 @@ The built-in roles form a ladder of increasing capability:
 
 | Role | What it can do |
 |---|---|
-| `viewer` | read operational data and the audit trail |
+| `viewer` | read operational data |
 | `editor` | the above, plus write operational data |
-| `admin` | the above, plus tenant IAM — users, memberships, tokens, settings |
+| `admin` | the above, plus tenant IAM — users, memberships, tokens, settings — and the audit trail, rules, security findings and spend |
 | `owner` | all permissions within the tenant |
 
 A module declares its own namespaced permissions (`<namespace>:<resource>:<verb>`),
@@ -178,7 +178,7 @@ telemetry does not provide — the ledger is exposed as an **authenticated pull 
 
 ```bash
 # Pull the signed, hash-chained ledger for offline re-verification.
-# Requires a token whose role can read the audit trail (viewer and up).
+# Requires a token whose role can read the audit trail (admin and up).
 curl -fsS "https://localhost:8443/v1/audit/export?format=cef" \
   -H "Authorization: Bearer $OLVK_TOKEN" \
   -H "X-Olivares-Tenant: $TENANT" >> /var/log/olivares/audit.cef

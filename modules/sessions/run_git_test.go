@@ -247,6 +247,13 @@ func TestSessionGitHTTP(t *testing.T) {
 		t.Fatalf("status: %d %s", got.code, got.raw)
 	} else {
 		assertPublished(t, "Git status", statusOp, got)
+		// The commit and tree a publication of this folder names (gitpublish pushes).
+		head, _ := got.body["head"].(map[string]any)
+		commit, _ := head["commit"].(string)
+		tree, _ := head["tree"].(string)
+		if !validGitObjectID(commit) || !validGitObjectID(tree) || commit != strings.TrimSpace(worktreeGitOut(t, repo, "rev-parse", "HEAD")) {
+			t.Fatalf("status head = %v, want the folder's HEAD commit and tree", got.body["head"])
+		}
 	}
 	reader := h.viewerToken(admin, tenant, "git-reader@example.invalid")
 	if got := h.do("GET", base, reader, tenantHdr(tenant)); got.code != http.StatusForbidden {

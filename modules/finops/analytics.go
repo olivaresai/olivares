@@ -186,7 +186,11 @@ func aggregateGroupPeriod(ctx context.Context, sc store.Scope, log *slog.Logger,
 	}
 	total := aggResult{Truncated: members.truncated}
 	for _, ref := range members.refs {
-		part, err := aggregatePeriod(ctx, sc, []model.Filter{eq(col, ref)}, pStart, hasLower, pEnd, bounded)
+		filter := eq(col, ref)
+		if dimension == "user_group" {
+			filter = model.Filter{Column: col, Op: model.OpIn, Value: userActorForms(ref)}
+		}
+		part, err := aggregatePeriod(ctx, sc, []model.Filter{filter}, pStart, hasLower, pEnd, bounded)
 		if err != nil {
 			return aggResult{}, err
 		}

@@ -5,7 +5,20 @@
         "properties": {
           "error": {
             "properties": {
+              "capability": {
+                "description": "With code edition_required: the stable key of the capability, which a client translates.",
+                "type": "string"
+              },
               "code": {
+                "type": "string"
+              },
+              "edition": {
+                "description": "On an edition refusal (edition_required, business_required, addon_requires_license and the other codes that send a person to an edition): the lowest edition that holds the capability.",
+                "enum": [
+                  "engineer",
+                  "business",
+                  "enterprise"
+                ],
                 "type": "string"
               },
               "message": {
@@ -31300,6 +31313,15 @@
                   "enabled": {
                     "type": "boolean"
                   },
+                  "exempt_actors": {
+                    "description": "user_group budgets only: the people (user:\u003cid\u003e) the budget lets continue at its limit. Their spend still counts and its alerts still fire.",
+                    "items": {
+                      "pattern": "^user:",
+                      "type": "string"
+                    },
+                    "maxItems": 200,
+                    "type": "array"
+                  },
                   "fail_closed": {
                     "type": "boolean"
                   },
@@ -31770,6 +31792,15 @@
                   },
                   "enabled": {
                     "type": "boolean"
+                  },
+                  "exempt_actors": {
+                    "description": "user_group budgets only: the people (user:\u003cid\u003e) the budget lets continue at its limit. Their spend still counts and its alerts still fire.",
+                    "items": {
+                      "pattern": "^user:",
+                      "type": "string"
+                    },
+                    "maxItems": 200,
+                    "type": "array"
                   },
                   "fail_closed": {
                     "type": "boolean"
@@ -36594,6 +36625,15 @@
         "description": "Lists the publication intents of one target, named by ?target_id, with what each requested, what the host was last observed to hold and its current state.",
         "parameters": [
           {
+            "description": "The publication target whose intents are listed.",
+            "in": "query",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
             "in": "header",
             "name": "X-Olivares-Tenant",
@@ -36609,11 +36649,107 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "properties": {
+                          "acknowledged": {
+                            "description": "Whether the host acknowledged the request, its status and request id.",
+                            "type": "object"
+                          },
+                          "answer": {
+                            "description": "The host's answer, when there is one.",
+                            "type": "string"
+                          },
+                          "attempt": {
+                            "description": "The dispatch attempt.",
+                            "type": "integer"
+                          },
+                          "authorized_by": {
+                            "description": "Who authorized the publication.",
+                            "type": "string"
+                          },
+                          "content_match": {
+                            "description": "Whether the host's content matched the request.",
+                            "type": "boolean"
+                          },
+                          "dispatch_deadline": {
+                            "description": "When an undecided dispatch is settled, RFC 3339.",
+                            "type": "string"
+                          },
+                          "effect": {
+                            "description": "push, pull_request, merge or issue_comment.",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "The intent.",
+                            "type": "string"
+                          },
+                          "observed": {
+                            "description": "What the host was seen to hold: sha, head_sha, number, merged, merge_commit_sha, comment_url; url names a pull request's page.",
+                            "type": "object"
+                          },
+                          "operation_id": {
+                            "description": "The client's idempotency key.",
+                            "type": "string"
+                          },
+                          "proposal": {
+                            "description": "The approved session request the intent carries out.",
+                            "properties": {
+                              "approval_id": {
+                                "description": "The approval it spent.",
+                                "type": "string"
+                              },
+                              "session_run": {
+                                "description": "The session run that proposed it.",
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "reason": {
+                            "description": "Why the intent is where it is.",
+                            "type": "string"
+                          },
+                          "receipt": {
+                            "description": "What the engine recorded of the host's answer.",
+                            "type": "string"
+                          },
+                          "release_failure": {
+                            "description": "Why the target's lease could not be released.",
+                            "type": "string"
+                          },
+                          "requested": {
+                            "description": "What was asked: ref, expected_old, commit, tree, head_ref, base, number, method, title or state, by effect.",
+                            "type": "object"
+                          },
+                          "session_run": {
+                            "description": "The session the publication came from, on every intent that has one.",
+                            "type": "string"
+                          },
+                          "state": {
+                            "description": "Where the intent is: dispatching, applied, adopted, rejected, not_dispatched, uncertain or abandoned.",
+                            "type": "string"
+                          },
+                          "target_id": {
+                            "description": "The publication target.",
+                            "type": "string"
+                          },
+                          "target_version": {
+                            "description": "The target's version the intent was admitted under.",
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
                   "type": "object"
                 }
               }
             },
-            "description": "OK"
+            "description": "The target's intents."
           },
           "400": {
             "content": {
@@ -36643,7 +36779,7 @@
                 }
               }
             },
-            "description": "forbidden"
+            "description": "forbidden / step-up required"
           },
           "404": {
             "content": {
@@ -36663,9 +36799,9 @@
                 }
               }
             },
-            "description": "conflict / setup required"
+            "description": "conflict"
           },
-          "429": {
+          "503": {
             "content": {
               "application/json": {
                 "schema": {
@@ -36673,7 +36809,7 @@
                 }
               }
             },
-            "description": "rate limited"
+            "description": "required evidence or store unavailable"
           }
         },
         "security": [
@@ -36718,11 +36854,99 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "properties": {
+                    "acknowledged": {
+                      "description": "Whether the host acknowledged the request, its status and request id.",
+                      "type": "object"
+                    },
+                    "answer": {
+                      "description": "The host's answer, when there is one.",
+                      "type": "string"
+                    },
+                    "attempt": {
+                      "description": "The dispatch attempt.",
+                      "type": "integer"
+                    },
+                    "authorized_by": {
+                      "description": "Who authorized the publication.",
+                      "type": "string"
+                    },
+                    "content_match": {
+                      "description": "Whether the host's content matched the request.",
+                      "type": "boolean"
+                    },
+                    "dispatch_deadline": {
+                      "description": "When an undecided dispatch is settled, RFC 3339.",
+                      "type": "string"
+                    },
+                    "effect": {
+                      "description": "push, pull_request, merge or issue_comment.",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "The intent.",
+                      "type": "string"
+                    },
+                    "observed": {
+                      "description": "What the host was seen to hold: sha, head_sha, number, merged, merge_commit_sha, comment_url; url names a pull request's page.",
+                      "type": "object"
+                    },
+                    "operation_id": {
+                      "description": "The client's idempotency key.",
+                      "type": "string"
+                    },
+                    "proposal": {
+                      "description": "The approved session request the intent carries out.",
+                      "properties": {
+                        "approval_id": {
+                          "description": "The approval it spent.",
+                          "type": "string"
+                        },
+                        "session_run": {
+                          "description": "The session run that proposed it.",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "reason": {
+                      "description": "Why the intent is where it is.",
+                      "type": "string"
+                    },
+                    "receipt": {
+                      "description": "What the engine recorded of the host's answer.",
+                      "type": "string"
+                    },
+                    "release_failure": {
+                      "description": "Why the target's lease could not be released.",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "description": "What was asked: ref, expected_old, commit, tree, head_ref, base, number, method, title or state, by effect.",
+                      "type": "object"
+                    },
+                    "session_run": {
+                      "description": "The session the publication came from, on every intent that has one.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "Where the intent is: dispatching, applied, adopted, rejected, not_dispatched, uncertain or abandoned.",
+                      "type": "string"
+                    },
+                    "target_id": {
+                      "description": "The publication target.",
+                      "type": "string"
+                    },
+                    "target_version": {
+                      "description": "The target's version the intent was admitted under.",
+                      "type": "integer"
+                    }
+                  },
                   "type": "object"
                 }
               }
             },
-            "description": "OK"
+            "description": "The intent."
           },
           "400": {
             "content": {
@@ -36752,7 +36976,7 @@
                 }
               }
             },
-            "description": "forbidden"
+            "description": "forbidden / step-up required"
           },
           "404": {
             "content": {
@@ -36772,9 +36996,9 @@
                 }
               }
             },
-            "description": "conflict / setup required"
+            "description": "conflict"
           },
-          "429": {
+          "503": {
             "content": {
               "application/json": {
                 "schema": {
@@ -36782,7 +37006,7 @@
                 }
               }
             },
-            "description": "rate limited"
+            "description": "required evidence or store unavailable"
           }
         },
         "security": [
@@ -37847,6 +38071,26 @@
             },
             "description": "OK"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "approval_id": {
+                      "description": "The approval the publication waits for.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "awaiting_approval while a person the approval policy names has not decided.",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Held by the tenant's approval policy (state awaiting_approval, approval_id), as a ship is; nothing reached the host. Or, for a dispatched publication, an intent whose outcome on the host is not confirmed."
+          },
           "400": {
             "content": {
               "application/json": {
@@ -38010,6 +38254,26 @@
               }
             },
             "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "approval_id": {
+                      "description": "The approval the publication waits for.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "awaiting_approval while a person the approval policy names has not decided.",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Held by the tenant's approval policy (state awaiting_approval, approval_id), as a ship is; nothing reached the host. Or, for a dispatched publication, an intent whose outcome on the host is not confirmed."
           },
           "400": {
             "content": {
@@ -38176,6 +38440,26 @@
             },
             "description": "OK"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "approval_id": {
+                      "description": "The approval the publication waits for.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "awaiting_approval while a person the approval policy names has not decided.",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Held by the tenant's approval policy (state awaiting_approval, approval_id), as a ship is; nothing reached the host. Or, for a dispatched publication, an intent whose outcome on the host is not confirmed."
+          },
           "400": {
             "content": {
               "application/json": {
@@ -38339,6 +38623,26 @@
             },
             "description": "OK"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "approval_id": {
+                      "description": "The approval the publication waits for.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "awaiting_approval while a person the approval policy names has not decided.",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Held by the tenant's approval policy (state awaiting_approval, approval_id), as a ship is; nothing reached the host. Or, for a dispatched publication, an intent whose outcome on the host is not confirmed."
+          },
           "400": {
             "content": {
               "application/json": {
@@ -38499,6 +38803,26 @@
               }
             },
             "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "approval_id": {
+                      "description": "The approval the publication waits for.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "awaiting_approval while a person the approval policy names has not decided.",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Held by the tenant's approval policy (state awaiting_approval, approval_id), as a ship is; nothing reached the host. Or, for a dispatched publication, an intent whose outcome on the host is not confirmed."
           },
           "400": {
             "content": {
@@ -39840,7 +40164,7 @@
     },
     "/v1/m/governance/approvals": {
       "get": {
-        "description": "Filters by the same effective status used by every decision.",
+        "description": "Filters by the same effective status used by every decision, and by whether a grant was spent (consumed=true or false).",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -39933,7 +40257,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Filters by the same effective status used by every decision.",
+        "summary": "Filters by the same effective status used by every decision, and by whether a grant was spent (consumed=true or false).",
         "x-required-permission": "governance:approval:read",
         "x-stability": "beta"
       },
@@ -45755,6 +46079,17 @@
                                         "type": "null"
                                       }
                                     ]
+                                  },
+                                  "person": {
+                                    "anyOf": [
+                                      {
+                                        "description": "A person's user id or email: evaluates as that person with their stored role and groups in this tenant. Requires policy administration.",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
                                   }
                                 },
                                 "type": "object"
@@ -46023,6 +46358,17 @@
                                         "type": "null"
                                       }
                                     ]
+                                  },
+                                  "person": {
+                                    "anyOf": [
+                                      {
+                                        "description": "A person's user id or email: evaluates as that person with their stored role and groups in this tenant. Requires policy administration.",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
                                   }
                                 },
                                 "type": "object"
@@ -46264,6 +46610,174 @@
                     "description": "Must compile for the selected engine and is capped at 262144 bytes.",
                     "pattern": ".*\\S.*",
                     "type": "string"
+                  },
+                  "tests": {
+                    "description": "Cedar only. Replaces the stored tests; omit it to keep them. A publish that breaks a test is refused with its name.",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "expect": {
+                          "enum": [
+                            "allow",
+                            "deny"
+                          ],
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "Unique name a refusal quotes.",
+                          "pattern": ".*\\S.*",
+                          "type": "string"
+                        },
+                        "request": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "permission": {
+                              "anyOf": [
+                                {
+                                  "description": "Whitespace is trimmed before evaluation.",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "principal": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "anyOf": [
+                                        {
+                                          "description": "Optional credential identifier for the example principal.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "kind": {
+                                      "anyOf": [
+                                        {
+                                          "description": "After trimming, user remains user; every other value is evaluated as token.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "person": {
+                                      "anyOf": [
+                                        {
+                                          "description": "A person's user id or email: evaluates as that person with their stored role and groups in this tenant. Requires policy administration.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "resource": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "extra": {
+                                      "anyOf": [
+                                        {
+                                          "additionalProperties": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          },
+                                          "type": "object"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "id": {
+                                      "anyOf": [
+                                        {
+                                          "description": "Example resource identifier.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "kind": {
+                                      "anyOf": [
+                                        {
+                                          "description": "Example resource kind.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "sensitivity": {
+                                      "anyOf": [
+                                        {
+                                          "description": "Example sensitivity attribute.",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "tenant": {
+                              "anyOf": [
+                                {
+                                  "description": "A valid non-zero tenant overrides the authenticated tenant; invalid input falls back to it.",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "request",
+                        "expect"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 200,
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -53413,8 +53927,59 @@
     },
     "/v1/m/health/events": {
       "get": {
-        "description": "Lists the append-only reliability transition ledger, optionally filtered by ?subject_kind and ?subject_ref.",
+        "description": "Lists the append-only reliability transition ledger, optionally filtered by ?subject_kind and ?subject_ref: oldest first, or newest first with ?order=desc.",
         "parameters": [
+          {
+            "description": "Only the events of this subject kind (agent or mcp).",
+            "in": "query",
+            "name": "subject_kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the events of this subject.",
+            "in": "query",
+            "name": "subject_ref",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "asc (default) lists the oldest event first; desc lists the newest first, by when each happened.",
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size; default 100, at most 1000.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor from the previous page of the same order.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
             "in": "header",
@@ -53506,7 +54071,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Lists the append-only reliability transition ledger, optionally filtered by ?subject_kind and ?subject_ref.",
+        "summary": "Lists the append-only reliability transition ledger, optionally filtered by ?subject_kind and ?subject_ref: oldest first, or newest first with ?order=desc.",
         "x-required-permission": "health:status:read",
         "x-stability": "beta"
       }
@@ -106580,6 +107145,19 @@
                       }
                     ]
                   },
+                  "auto_compact_window": {
+                    "anyOf": [
+                      {
+                        "description": "Claude Code only: the token count its sessions compact at (CLAUDE_CODE_AUTO_COMPACT_WINDOW), 100000 to 1000000, or 0 to withdraw the declaration and use the tool's default. Re-read on every launch; a live session keeps the value it started with. Another tool's profile refuses a value with 422. Null or omission keeps it.",
+                        "maximum": 1000000,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "display_name": {
                     "anyOf": [
                       {
@@ -108942,6 +109520,21 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "state": {
+                    "anyOf": [
+                      {
+                        "description": "disabled refuses every launch, test and model read of this provider until it is set back to active; the bindings stay. A revoked provider stays revoked. null/omission preserves it.",
+                        "enum": [
+                          "active",
+                          "disabled"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "type": "object"
@@ -110591,9 +111184,9 @@
             "browserSession": []
           }
         ],
-        "summary": "sessions module route (requires sessions:run:admin)",
+        "summary": "sessions module route (requires sessions:run:write)",
         "x-olivares-request-body-disposition": "bodyless",
-        "x-required-permission": "sessions:run:admin",
+        "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
       },
       "get": {
@@ -110724,6 +111317,54 @@
                       },
                       "required": [
                         "micro_usd"
+                      ],
+                      "type": "object"
+                    },
+                    "last_turn": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "command_id": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "ended_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "ordinal": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "started_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "state": {
+                          "enum": [
+                            "open",
+                            "completed",
+                            "interrupted",
+                            "failed",
+                            "cut"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ordinal",
+                        "command_id",
+                        "state",
+                        "source",
+                        "started_at"
                       ],
                       "type": "object"
                     },
@@ -112147,9 +112788,50 @@
                       "description": "False when this session's folder cannot be checkpointed; reason says why.",
                       "type": "boolean"
                     },
+                    "files": {
+                      "description": "What the session's folder differs by now from the start of the first turn: the whole session's changes. Empty when there are no turns or the folder cannot be checkpointed.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "added": {
+                            "description": "Lines added between the two trees; absent for a binary file.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "path": {
+                            "description": "The file's path, relative to the session's folder.",
+                            "type": "string"
+                          },
+                          "removed": {
+                            "description": "Lines removed between the two trees; absent for a binary file.",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "status": {
+                            "description": "What the turn did to the file.",
+                            "enum": [
+                              "added",
+                              "modified",
+                              "deleted"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "status"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "reason": {
                       "description": "Why the folder cannot be checkpointed. Absent when it can.",
                       "type": "string"
+                    },
+                    "truncated": {
+                      "description": "True when the session changed more files than are listed.",
+                      "type": "boolean"
                     },
                     "turns": {
                       "description": "The session's turns, oldest first.",
@@ -112170,9 +112852,19 @@
                             "items": {
                               "additionalProperties": false,
                               "properties": {
+                                "added": {
+                                  "description": "Lines added between the two trees; absent for a binary file.",
+                                  "minimum": 0,
+                                  "type": "integer"
+                                },
                                 "path": {
                                   "description": "The file's path, relative to the session's folder.",
                                   "type": "string"
+                                },
+                                "removed": {
+                                  "description": "Lines removed between the two trees; absent for a binary file.",
+                                  "minimum": 0,
+                                  "type": "integer"
                                 },
                                 "status": {
                                   "description": "What the turn did to the file.",
@@ -112226,7 +112918,9 @@
                   },
                   "required": [
                     "available",
-                    "turns"
+                    "turns",
+                    "files",
+                    "truncated"
                   ],
                   "type": "object"
                 }
@@ -112635,9 +113329,9 @@
             "browserSession": []
           }
         ],
-        "summary": "sessions module route (requires sessions:run:admin)",
+        "summary": "sessions module route (requires sessions:run:write)",
         "x-olivares-request-body-disposition": "schema-published",
-        "x-required-permission": "sessions:run:admin",
+        "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
       }
     },
@@ -113498,6 +114192,22 @@
                       },
                       "maxItems": 200,
                       "type": "array"
+                    },
+                    "head": {
+                      "description": "The commit and tree HEAD holds, which a publication of this folder names; absent while the branch has no commit.",
+                      "properties": {
+                        "commit": {
+                          "type": "string"
+                        },
+                        "tree": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "commit",
+                        "tree"
+                      ],
+                      "type": "object"
                     },
                     "truncated": {
                       "type": "boolean"
@@ -114995,6 +115705,13 @@
                     "maxItems": 100,
                     "type": "array"
                   },
+                  "command_id": {
+                    "description": "Names this input so a retry runs the agent once: the same person sending the same input under the same id on this session gets the first receipt and nothing is sent again. The same id with another input is a 409. Canonical lower-case UUID; another person's id never matches yours.",
+                    "format": "uuid",
+                    "maxLength": 36,
+                    "minLength": 36,
+                    "type": "string"
+                  },
                   "line": {
                     "minLength": 1,
                     "type": "string"
@@ -115059,6 +115776,11 @@
                     "accepted": {
                       "description": "Always true; a non-2xx status is the only way this operation reports refusal.",
                       "type": "boolean"
+                    },
+                    "command_id": {
+                      "description": "The command_id the input was sent with, when it had one; a retry of that command gets this same receipt.",
+                      "format": "uuid",
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -115867,6 +116589,115 @@
         "summary": "Renames the run; an empty name clears it.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/outputs": {
+      "get": {
+        "description": "Lists the files the session made or changed in its folder since it started, each with its name, size and modification time, newest first, leaving out the Markdown copies the engine writes beside a document it converts for a message.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the files the session made or changed in its folder since it started, each with its name, size and modification time, newest first, leaving out the Markdown copies the engine writes beside a document it converts for a message.",
+        "x-required-permission": "sessions:output:read",
         "x-stability": "beta"
       }
     },
@@ -117471,6 +118302,11 @@
                     "accepted": {
                       "description": "Always true; a non-2xx status is the only way this operation reports refusal.",
                       "type": "boolean"
+                    },
+                    "command_id": {
+                      "description": "The command_id the input was sent with, when it had one; a retry of that command gets this same receipt.",
+                      "format": "uuid",
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -127984,6 +128820,211 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/workspaces/{ref}/files/search": {
+      "get": {
+        "description": "Finds the files of a workspace by name, or the lines of its text files by literal, case-insensitive content, under the same path, size and DLP limits as a single read; the response says when a bound cut the search short.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "What to look for, 1 to 200 characters after trimming. Literal and case-insensitive; a regular expression is not interpreted.",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "name finds files by name or path; content finds lines by their text.",
+            "in": "query",
+            "name": "in",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "enum": [
+                "name",
+                "content"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The most matches returned; a larger value is treated as the maximum.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "in": {
+                      "enum": [
+                        "name",
+                        "content"
+                      ],
+                      "type": "string"
+                    },
+                    "matches": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "column": {
+                            "description": "Content search only: 1-based position of the match within the line, in characters.",
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          "line": {
+                            "description": "Content search only: 1-based line of the match.",
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          "name": {
+                            "description": "The file's name.",
+                            "type": "string"
+                          },
+                          "path": {
+                            "description": "Workspace-relative path.",
+                            "type": "string"
+                          },
+                          "text": {
+                            "description": "Content search only: the matching line, cut to 240 characters around the match.",
+                            "maxLength": 240,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "query": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "description": "True when the limit, or a bound on files, bytes read, matches per file or time, left something unsearched or unreturned.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "query",
+                    "in",
+                    "matches",
+                    "truncated"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Matches, in rank order for a name search and in path then line order for a content search"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:workspace:read)",
+        "x-required-permission": "sessions:workspace:read",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/workspaces/{ref}/files/stat": {
       "get": {
         "description": "Returns the metadata of one workspace entry named by the path query parameter, without its content.",
@@ -128955,6 +129996,113 @@
       }
     },
     "/v1/m/sessions/workspaces/{ref}/terminals": {
+      "get": {
+        "description": "Lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the caller's own open terminals in the folder, oldest first, so a browser that lost the ids of its terminals (another browser, cleared site data) can reach them again and close them.",
+        "x-required-permission": "sessions:workspace:write",
+        "x-stability": "beta"
+      },
       "post": {
         "description": "Opens a shell in the folder, confined as a session in that folder is, and answers with the terminal's id.",
         "parameters": [
@@ -129494,7 +130642,7 @@
     },
     "/v1/m/sessions/workspaces/{ref}/terminals/{tid}/stream": {
       "get": {
-        "description": "Serves the shell's output as server-sent events: \"out\" frames carry a chunk and the offset it starts at, \"exit\" ends the stream. ?from=\u003coffset\u003e resumes after a dropped connection; the first frame says where the kept output really starts.",
+        "description": "Serves the shell's output as server-sent events: a \"replay\" frame with {\"end\":\u003coffset\u003e} comes first when kept output is due, \"out\" frames carry a chunk and the offset it starts at (those before end are history, not live output), \"exit\" ends the stream. ?from=\u003coffset\u003e resumes after a dropped connection; the first frame says where the kept output really starts.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -129605,7 +130753,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Serves the shell's output as server-sent events: \"out\" frames carry a chunk and the offset it starts at, \"exit\" ends the stream.",
+        "summary": "Serves the shell's output as server-sent events: a \"replay\" frame with {\"end\":\u003coffset\u003e} comes first when kept output is due, \"out\" frames carry a chunk and the offset it starts at (those before end are history, not live output), \"exit\" ends the stream.",
         "x-required-permission": "sessions:workspace:write",
         "x-stability": "beta"
       }

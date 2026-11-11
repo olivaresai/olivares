@@ -4,7 +4,7 @@ description: "Olivares AI コントロールプレーンの検証済み設定サ
 ---
 
 :::note[Business]
-監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、台帳の検証（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、その読み取り、`olivares dr backup` を引き続き利用できます。証拠の操作は HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、台帳の検証（`GET /v1/audit/verify`、`olivares audit tree verify`, `olivares audit tree prove`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、その読み取り、`olivares dr backup` を引き続き利用できます。証拠の操作は HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
 :::
 
 0.1 以降、KMS で封印した署名鍵と設定ファイル（CMEK）には Business バイナリが必要です。オペレーターが用意した署名鍵と `keys status` は Community に残ります。保管の宣言 BYOK（`OLIVARES_KEY_CUSTODY=byok`）と HYOK（`OLIVARES_LEDGER_CUSTODY=hyok`）、ホスト外でのチェックポイント署名（`OLIVARES_LEDGER_SIGNER`）、`olivares audit key-transition` には Business バイナリが必要で、Community は終了コード 9 で拒否します。Community は CMEK が設定された環境で、ストアを開く前や鍵を作成する前に処理を拒否します。`dr backup` と `keys unseal` には、お客様の KMS と Business を使用してください。復旧に有効なライセンスは不要です。

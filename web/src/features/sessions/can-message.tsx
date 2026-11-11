@@ -28,6 +28,7 @@ import {
   operatorName,
   runTitle,
   primaryRun,
+  sessionPlace,
   sessionShortId,
   type UnifiedSession,
 } from './provenance'
@@ -51,7 +52,9 @@ export function peerCandidates(
     const sid = s.live?.canonical_sid
     if (!run || !sid || sid === ownSid || !isLiveRun(run)) return []
     if (run.authz_workspace_id !== workspace) return []
-    return [{ sid, name: operatorName(s) ?? runTitle(s) ?? sessionShortId(s) }]
+    const name =
+      operatorName(s) ?? runTitle(s) ?? sessionPlace(s) ?? sessionShortId(s)
+    return [{ sid, name }]
   })
 }
 

@@ -45,6 +45,13 @@ function ratio(a: string, b: string): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
 }
 
+/** `color-mix(in srgb, a p, b)` of two opaque hex colours, as a hex colour. */
+function mix(a: string, b: string, p: number): string {
+  const ch = (hex: string, i: number) => parseInt(hex.slice(i, i + 2), 16)
+  const v = (i: number) => Math.round(ch(a, i) * p + ch(b, i) * (1 - p))
+  return '#' + [1, 3, 5].map((i) => v(i).toString(16).padStart(2, '0')).join('')
+}
+
 /** The opening tag of every raw <input>, <select> and <textarea> in the console sources. */
 function rawFormElements(): { where: string; tag: string }[] {
   const out: { where: string; tag: string }[] = []
@@ -156,29 +163,45 @@ describe('control boundaries use ctl-border', () => {
     expect(wrong).toEqual([])
   })
 
-  it('ctl-border holds 3:1 against every surface a control sits on, and under the switch thumb', () => {
+  it('ctl-border holds 3:1 against every surface a control sits on, and under the switch knob at rest and hovered', () => {
     const css = readFileSync(join(SRC, 'src/styles/tokens.css'), 'utf8')
-    for (const [name, t] of [
-      ['light', block(css, ':root')],
-      ['dark', block(css, '.dark')],
+    // The knob of a switch that is off is white: the surface in light, the inverse surface in
+    // dark and black (the black theme's text ink is grey, 2.9:1 on the track). Under the pointer
+    // the track darkens: 12 % of the text ink in light, 8 % of the frame in dark and black,
+    // as `color-mix(in srgb, …)` mixes them. The hovered track is still the control's boundary,
+    // so it keeps 3:1 against every surface too (12 % of the frame is 2.89:1 on a raised row).
+    for (const [name, t, knob, toward, part] of [
+      ['light', block(css, ':root'), 'surface', 'text', 0.12],
+      ['dark', block(css, '.dark'), 'inverse', 'frame', 0.08],
+      ['black', block(css, '.dark.black'), 'inverse', 'frame', 0.08],
     ] as const) {
-      for (const bg of ['background', 'surface', 'elevated', 'raised'])
+      const hovered = mix(t[toward], t['ctl-border'], part)
+      for (const bg of ['background', 'surface', 'elevated', 'raised']) {
         expect(
           ratio(t['ctl-border'], t[bg]),
           `${name}: ctl-border on ${bg}`,
         ).toBeGreaterThanOrEqual(3)
+        expect(
+          ratio(hovered, t[bg]),
+          `${name}: hovered switch track on ${bg}`,
+        ).toBeGreaterThanOrEqual(3)
+      }
       expect(
-        ratio(t.surface, t['ctl-border']),
-        `${name}: switch thumb on track`,
+        ratio(t[knob], t['ctl-border']),
+        `${name}: switch knob on track`,
+      ).toBeGreaterThanOrEqual(3)
+      expect(
+        ratio(t[knob], hovered),
+        `${name}: switch knob on the hovered track`,
       ).toBeGreaterThanOrEqual(3)
     }
   })
 
-  it('the checked checkbox (the ink fill) holds 3:1 on every surface, and under its glyph', () => {
-    //: checked and indeterminate alike fill the box with the foreground
-    // ink, not the action orange — state, not an action. WCAG 2.2 SC 1.4.11
-    // asks 3:1 for that boundary against what surrounds it, and for the check
-    // glyph on the fill, in both themes.
+  it('a checked checkbox and a switch that is on: an accent edge 3:1 on every surface, a graphite mark 3:1 on the orange', () => {
+    // Direction A2: checked, mixed and on are the orange, edged in accent-strong, and
+    // everything that sits on the orange is graphite (white on it is 2.7:1). WCAG 2.2
+    // SC 1.4.11 asks 3:1 for the edge against what surrounds it, and for the check glyph
+    // and the knob on the fill, in both themes.
     const css = readFileSync(join(SRC, 'src/styles/tokens.css'), 'utf8')
     for (const [name, t] of [
       ['light', block(css, ':root')],
@@ -186,32 +209,12 @@ describe('control boundaries use ctl-border', () => {
     ] as const) {
       for (const bg of ['background', 'surface', 'elevated', 'raised'])
         expect(
-          ratio(t.foreground, t[bg]),
-          `${name}: checked box on ${bg}`,
+          ratio(t['accent-strong'], t[bg]),
+          `${name}: accent edge on ${bg}`,
         ).toBeGreaterThanOrEqual(3)
       expect(
-        ratio(t.surface, t.foreground),
-        `${name}: check glyph on the ink fill`,
-      ).toBeGreaterThanOrEqual(3)
-    }
-  })
-
-  it('the checked switch track (the ink fill) holds 3:1 on every surface, and under its thumb', () => {
-    //: the checked track is the foreground ink, not the action orange. WCAG 2.2
-    // SC 1.4.11 asks 3:1 for the state it shows against what surrounds it, in both themes.
-    const css = readFileSync(join(SRC, 'src/styles/tokens.css'), 'utf8')
-    for (const [name, t] of [
-      ['light', block(css, ':root')],
-      ['dark', block(css, '.dark')],
-    ] as const) {
-      for (const bg of ['background', 'surface', 'elevated', 'raised'])
-        expect(
-          ratio(t.foreground, t[bg]),
-          `${name}: checked track on ${bg}`,
-        ).toBeGreaterThanOrEqual(3)
-      expect(
-        ratio(t.surface, t.foreground),
-        `${name}: switch thumb on checked track`,
+        ratio(t['on-accent'], t.accent),
+        `${name}: graphite mark on the orange`,
       ).toBeGreaterThanOrEqual(3)
     }
   })

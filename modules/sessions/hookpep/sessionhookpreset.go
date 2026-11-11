@@ -27,9 +27,15 @@ func restrictSessionHookPreset(ctx context.Context, p auth.Principal, tenant mod
 	if !ok || scope.TenantID != tenant || scope.SessionRef != p.SessionIdentity || scope.RunRef != p.SessionRunRef || scope.Fence != p.SessionFence || scope.WorkspaceID != p.SessionWorkspaceID {
 		return hookDisposition{}, auth.ErrUnauthenticated
 	}
-	preset, err := SessionPresetDecision(scope.Preset, in.Mode)
-	if err != nil {
-		return hookDisposition{}, err
+	// Under "Edit files and run commands" Claude Code's own dontAsk refuses every tool
+	// its allowlist does not name, and a hook allow does not skip that refusal; the
+	// tools it runs without a permission (its plan, a command's output) keep running.
+	preset := claude.DecisionAllow
+	if scope.Preset != sessions.PresetEditsAndCommands {
+		var err error
+		if preset, err = SessionPresetDecision(scope.Preset, in.Mode); err != nil {
+			return hookDisposition{}, err
+		}
 	}
 	if scope.Preset == sessions.PresetCustom {
 		original := in.RewriteBase()
@@ -67,24 +73,37 @@ func restrictSessionHookPreset(ctx context.Context, p auth.Principal, tenant mod
 	return disp, nil
 }
 
+// The kinds of action the permission summaries name. Any other action is another tool.
+const (
+	ActionRead    = "read"
+	ActionWrite   = "write"
+	ActionCommand = "command"
+)
+
 // SessionPresetDecision is the one preset table used by Claude hooks and native
-// provider approvals. Tool-specific custom-template matching stays with the
-// caller; an unknown preset never grants an action.
-func SessionPresetDecision(preset, mode string) (string, error) {
+// provider approvals, and it says what each permission's summary says. Claude hooks
+// pass the tool's mode (read, write or unknown) and leave "Edit files and run
+// commands" to Claude Code's dontAsk (restrictSessionHookPreset). An unknown preset
+// never grants an action.
+func SessionPresetDecision(preset, action string) (string, error) {
 	switch preset {
 	case sessions.PresetReadOnly:
-		if mode != "read" {
+		if action != ActionRead {
 			return claude.DecisionDeny, nil
 		}
 	case sessions.PresetAsk:
-		if mode != "read" {
+		if action != ActionRead {
 			return claude.DecisionAsk, nil
 		}
 	case sessions.PresetEditsOnly:
-		if mode != "read" && mode != "write" {
+		if action != ActionRead && action != ActionWrite {
 			return claude.DecisionAsk, nil
 		}
-	case sessions.PresetCustom, sessions.PresetEditsAndCommands, sessions.PresetAuto, sessions.PresetFull:
+	case sessions.PresetEditsAndCommands:
+		if action != ActionRead && action != ActionWrite && action != ActionCommand {
+			return claude.DecisionDeny, nil
+		}
+	case sessions.PresetCustom, sessions.PresetAuto, sessions.PresetFull:
 	default:
 		return "", auth.ErrUnauthenticated
 	}

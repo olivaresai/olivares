@@ -19,6 +19,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Archive,
   ArchiveRestore,
+  FileDown,
   Link,
   Pencil,
   Pin,
@@ -56,6 +57,7 @@ import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { toolName } from '@/features/agentops/engine-tools'
 import type { RunDTO } from '@/features/agentops/types'
+import { downloadBlob } from '@/lib/api/download'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import {
@@ -239,19 +241,37 @@ export function useSessionMenu(
       // A refused read reaches here as the clipboard's own error: the read's reason is
       // the one to say. An insecure context or a denied permission is said too, because
       // the value is not on screen to select instead.
-      .catch(async (err: unknown) => {
-        const cause = await read.then(
-          () => err,
-          (readErr: unknown) => readErr,
+      .catch((err: unknown) => void say(read, err))
+  }
+
+  const say = async (read: Promise<Copied>, err: unknown) => {
+    const cause = await read.then(
+      () => err,
+      (readErr: unknown) => readErr,
+    )
+    toast.error(
+      cause instanceof CopyRefused
+        ? t(cause.key)
+        : cause instanceof ApiError
+          ? cause.message
+          : t('rowActions.copyFailed'),
+    )
+  }
+
+  /** The text as a file the browser saves: the same read as Copy, written to a .md file
+   * through the console's one download helper. */
+  const save = (read: Promise<Copied>, name: string) => {
+    void read
+      .then((c) => {
+        downloadBlob(
+          new Blob([c.text], { type: 'text/markdown' }),
+          `${name.replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 60) || 'session'}.md`,
         )
-        toast.error(
-          cause instanceof CopyRefused
-            ? t(cause.key)
-            : cause instanceof ApiError
-              ? cause.message
-              : t('rowActions.copyFailed'),
-        )
+        if (c.unreadable > 0)
+          toast.warning(t('rowActions.copiedPartial', { n: c.unreadable }))
+        if (c.clipped > 0) toast.warning(t('rowActions.clipped'))
       })
+      .catch((err: unknown) => void say(read, err))
   }
 
   const text = (value: string): Promise<Copied> =>
@@ -361,6 +381,27 @@ export function useSessionMenu(
           >
             <ScrollText />
             {t('rowActions.copyTranscript')}
+          </DropdownMenuItem>
+        ) : null}
+        {run && grants.runRead ? (
+          <DropdownMenuItem
+            onSelect={() =>
+              save(
+                transcriptText(
+                  run,
+                  t('rowActions.you'),
+                  run.provider_driver
+                    ? toolName(run.provider_driver)
+                    : t('rowActions.assistant'),
+                  undefined,
+                  true,
+                ),
+                run.name || run.run_ref,
+              )
+            }
+          >
+            <FileDown />
+            {t('rowActions.exportMarkdown')}
           </DropdownMenuItem>
         ) : null}
         {run && grants.runAdmin ? (

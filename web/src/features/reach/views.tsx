@@ -6,9 +6,10 @@ import { Route } from 'lucide-react'
 import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
 
-// Beside the AI tools: what those tools reach, projected from the access map.
-// Placed in ai/environments next to agent-tools until the Tools area
-// lands; order 315 keeps the registry's step-of-ten spacing (320 is taken).
+// What one identity can reach, projected from the access map: a page of Audit, an
+// administrator place (navigation/places.ts), filed with Audit's pages so the palette and
+// the console reference place it there. Order 315 keeps the registry's step-of-ten
+// spacing (320 is taken).
 const ReachView = lazy(() => import('./reach-view'))
 
 export const VIEWS = [
@@ -18,8 +19,8 @@ export const VIEWS = [
     path: '/reach',
     navigation: {
       kind: 'feature',
-      areaId: 'ai',
-      sectionId: 'environments',
+      areaId: 'observation',
+      sectionId: 'audit-recordings',
     },
     helpHref: '/reference/modules/iii-access-map',
     icon: Route,

@@ -41,6 +41,8 @@ type fakeProc struct {
 	stopLeavesLive bool
 	// waitErr is returned by Wait, as a process whose outcome cannot be collected.
 	waitErr error
+	// sendErr is returned by Send before anything is recorded, as a stdin that refuses.
+	sendErr error
 }
 
 func (p *fakeProc) Send(_ context.Context, line []byte) error {
@@ -48,6 +50,9 @@ func (p *fakeProc) Send(_ context.Context, line []byte) error {
 	defer p.mu.Unlock()
 	if p.done {
 		return errors.New("closed")
+	}
+	if p.sendErr != nil {
+		return p.sendErr
 	}
 	p.sent = append(p.sent, append([]byte(nil), line...))
 	return nil
@@ -95,6 +100,10 @@ type fakeRunner struct {
 	mu        sync.Mutex
 	procs     []*fakeProc
 	specs     []LaunchSpec
+
+	// laterSendErr is the Send error of every process launched after the first, as a
+	// resumed child whose stdin refuses what the engine sends it.
+	laterSendErr error
 }
 
 func (r *fakeRunner) Launch(_ context.Context, spec LaunchSpec) (Process, error) {
@@ -110,6 +119,9 @@ func (r *fakeRunner) Launch(_ context.Context, spec LaunchSpec) (Process, error)
 		p.out <- OutputFrame{Stream: streamStdout, Data: []byte(`{"type":"system","subtype":"init","session_id":"` + r.initSID + `"}`)}
 	}
 	r.mu.Lock()
+	if len(r.procs) > 0 {
+		p.sendErr = r.laterSendErr
+	}
 	r.procs = append(r.procs, p)
 	r.mu.Unlock()
 	return p, nil

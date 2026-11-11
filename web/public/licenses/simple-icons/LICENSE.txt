@@ -1,8 +1,8 @@
-The vendor marks the console draws (web/src/components/ui/vendor-marks.ts: Claude,
-Google Gemini, Ollama, OpenCode, Cursor, GitHub and GitLab) are path data from Simple Icons 16.36.0
+The vendor marks the console draws (web/src/components/ui/vendor-marks.ts: GitHub
+and GitLab) are path data from Simple Icons 16.36.0
 (https://github.com/simple-icons/simple-icons/tree/16.36.0), each path unaltered,
 released under the CC0 1.0 Universal dedication below. Simple Icons states that CC0
-covers its data, not every icon in it; none of these seven names another licence.
+covers its data, not every icon in it; neither of these two names another licence.
 
 Every mark is a trademark of its owner. Its use names software that Olivares AI
 works with and implies no endorsement.

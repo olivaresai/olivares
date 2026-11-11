@@ -89,7 +89,16 @@ def install(api: API, driver: str, version: str) -> str:
         time.sleep(1)
         job = api.call('GET', TOOLS + '/jobs/' + job['id'])
     if job['state'] != 'succeeded' or job.get('error') or job.get('audit_error'):
-        raise RuntimeError(f'{driver}: managed install did not succeed cleanly')
+        # The job's own error and last progress line are the engine's diagnostics
+        # (a URL, an HTTP status); without them a red names no cause.
+        detail = [f"state={job['state']}"]
+        for key in ('error', 'audit_error'):
+            if job.get(key):
+                detail.append(f"{key}={' '.join(job[key].split())[:300]}")
+        progress = (job.get('progress') or '').strip().splitlines()
+        if progress:
+            detail.append('last progress: ' + progress[-1].strip()[:300])
+        raise RuntimeError(f'{driver}: managed install did not succeed cleanly ({"; ".join(detail)})')
     return plan['executable']
 
 

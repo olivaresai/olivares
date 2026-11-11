@@ -63,11 +63,20 @@ func (s *sessionCostSink) PublishSessionCost(
 		CacheReadTokens:       sample.CacheReadTokens,
 		CacheCreation5mTokens: sample.CacheCreationTokens,
 		WorkspaceRef:          sample.WorkspaceRef,
-		Actor:                 sample.AgentRef,
+		Actor:                 sessionCostActor(sample.AgentRef, principal),
 		Provenance:            sdkmodel.ProvenanceEstimated,
 		CostType:              "session_usage",
 	}
 	return s.sessions.RecordSessionObservation(ctx, principal, cs)
+}
+
+// sessionCostActor is the actor a session's spend is credited to: the agent identity it
+// runs as, or the person who launched it, whom a group budget counts.
+func sessionCostActor(agentRef string, principal auth.Principal) string {
+	if agentRef != "" {
+		return agentRef
+	}
+	return principal.Actor()
 }
 
 // sessionListPrice prices an operated session's turn that its tool metered in

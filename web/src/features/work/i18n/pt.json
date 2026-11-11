@@ -3,6 +3,7 @@
     "draftNotice": "Este item está em rascunho, por isso os seus critérios ainda podem ser corrigidos. A chave do critério é uma identidade permanente e nunca é reatribuída.",
     "lockedNotice": "Este item saiu do rascunho, por isso os critérios já não podem ser editados — apenas avaliados. A chave do critério é uma identidade permanente.",
     "none": "Sem critérios de aceitação.",
+    "noneBody": "As verificações que dizem quando este item está concluído aparecem aqui depois de definidas.",
     "required": "Obrigatório",
     "state": {
       "pending": "Pendente",
@@ -143,20 +144,21 @@
     "empty": {
       "effective": {
         "title": "Sem decisões em vigor",
-        "body": "Nenhuma decisão está em vigor."
+        "body": "As decisões registadas sobre itens de trabalho aparecem aqui enquanto estão em vigor."
       },
       "revoked": {
         "title": "Sem decisões revogadas",
-        "body": "Nenhuma decisão foi revogada."
+        "body": "Uma decisão passa para aqui quando é revogada."
       },
       "history": {
         "title": "Sem decisões registadas",
-        "body": "Ainda nada foi decidido aqui."
+        "body": "Cada decisão registada sobre itens de trabalho aparece aqui."
       }
     }
   },
   "dependencies": {
-    "none": "Sem dependências."
+    "none": "Sem dependências.",
+    "noneBody": "Os itens de trabalho que este aguarda aparecem aqui; pode começar quando cada um estiver concluído."
   },
   "detail": {
     "subtitle": "{{kind}} · versão {{version}}",
@@ -164,8 +166,12 @@
     "owner": "Responsável",
     "provenance": "Proveniência",
     "priority": "Prioridade",
+    "waitsOn": "Aguarda",
+    "waitsOnDependencies": "Itens de trabalho de que depende e que ainda não estão concluídos",
     "blocked": "Bloqueado",
     "terminal": "Resultado",
+    "due": "Prazo",
+    "ended": "Terminado",
     "etag": "Etiqueta de versão",
     "tabs": {
       "overview": "Resumo",
@@ -176,7 +182,8 @@
     }
   },
   "events": {
-    "none": "Nenhum evento registado para este item."
+    "none": "Nenhum evento registado para este item.",
+    "noneBody": "Cada alteração a este item é registada aqui assim que acontece."
   },
   "filters": {
     "status": "Estado",
@@ -215,12 +222,10 @@
     "unknown": "Não foi possível verificar",
     "reason": "Motivo",
     "ttl": "TTL (segundos)",
-    "noWrite": "A sua função não pode alterar esta concessão.",
     "noAdmin": "Assumir, revogar e reajustar exigem administração de concessões.",
+    "heldBy": "A sessão {{holder}} detém este item; é a própria sessão que obtém, renova e liberta a concessão.",
+    "vacant": "Nenhuma sessão detém este item; é a própria sessão que obtém, renova e liberta a concessão.",
     "actions": {
-      "acquire": "Adquirir",
-      "renew": "Renovar",
-      "release": "Libertar",
       "takeover": "Assumir",
       "revoke": "Revogar",
       "clockRebase": "Reajustar relógio"
@@ -246,7 +251,7 @@
     "error": "Transmissão interrompida",
     "unavailableBody": "A lista no ecrã pode estar desatualizada e mais nada o irá indicar. Atualize para ler diretamente o armazenamento."
   },
-  "subtitle": "Trabalho que as sessões e as pessoas partilham: itens, responsáveis, dependências, critérios de aceitação e decisões. Cada alteração é mostrada antes de ser aplicada.",
+  "subtitle": "Acompanhe os itens de trabalho: quem é responsável por cada um, do que dependem e quando estão concluídos.",
   "tabs": {
     "items": "Itens de trabalho",
     "decisions": "Decisões"
@@ -262,7 +267,7 @@
     "item.cancel": "Cancelar",
     "item.archive": "Arquivar",
     "noWrite": "A sua função não pode alterar este item.",
-    "noAdmin": "A sua função não pode marcar itens como falhados nem arquivá-los."
+    "noAdmin": "A sua função não pode arquivar itens."
   },
   "truncation": {
     "label": "Carregadas {{n}} linhas; há mais",

@@ -407,3 +407,86 @@ func TestProcRunnerScratchHomeIsTheDirectoryNamedHOME(t *testing.T) {
 		}
 	})
 }
+
+// Use the session launch spec and runner, not the file API: the kernel must
+// refuse writes even when the tool's own permission mode allows commands.
+func TestSessionReadOnlyWorkspaceConfinesWrites(t *testing.T) {
+	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
+		t.Skip("host cannot confine: " + state.Reason)
+	}
+	for _, tc := range []struct {
+		name, mode string
+		wired      bool
+	}{
+		{"read-only", mountRO, true},
+		{"read-write control", mountRW, true},
+		{"read-only without confinement", mountRO, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			folder := t.TempDir()
+			keep := filepath.Join(folder, "keep.txt")
+			if err := os.WriteFile(keep, []byte("keep\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var opts []Option
+			if tc.wired {
+				opts = append(opts, WithConfinement([]string{t.TempDir()}, false))
+			}
+			m, _, tenant, _ := newRuntimeHarness(t, opts...)
+			ws := mkWorkspace(t, m, tenant, CreateWorkspaceParams{RootPath: folder, MountMode: tc.mode})
+			resolved, err := m.resolveLaunchWorkspace(t.Context(), tenant, ws.WorkspaceRef)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(resolved.closeReadOnlyHandles)
+			// An overlapping profile home must not reopen the folder's write rights.
+			spec := m.childSpec(CreateRunParams{Isolation: IsolationNative, PermissionMode: "bypassPermissions", ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude, ConfigHome: folder}}, childDecision{ws: resolved})
+			spec.Program, spec.Args = "/bin/sh", []string{"-c", `
+cat keep.txt || exit 10
+if touch escrito-en-sesion.txt; then echo touch=allowed; else echo touch=denied; fi
+if echo changed >> keep.txt; then echo append=allowed; else echo append=denied; fi
+`}
+			proc, err := NewProcRunner().Launch(t.Context(), spec)
+			if !tc.wired && err != nil {
+				if !strings.Contains(err.Error(), "no session confinement policy") {
+					t.Fatalf("unexpected launch refusal: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out strings.Builder
+			for frame := range proc.Output() {
+				out.Write(frame.Data)
+				out.WriteByte('\n')
+			}
+			if code, err := proc.Wait(); err != nil || code != 0 {
+				t.Fatalf("exit=%d err=%v output=%s", code, err, out.String())
+			}
+			if !tc.wired {
+				t.Fatalf("read-only workspace launched without confinement: %s", out.String())
+			}
+			state, _ := confinementOf(proc)
+			if state.Mode != confine.ModeLandlock {
+				t.Fatalf("confinement=%v, want Landlock", state)
+			}
+			want, content := "denied", "keep\n"
+			if tc.mode == mountRW {
+				want, content = "allowed", "keep\nchanged\n"
+			}
+			for _, operation := range []string{"touch", "append"} {
+				if !strings.Contains(out.String(), operation+"="+want) {
+					t.Errorf("%s was not %s: %s", operation, want, out.String())
+				}
+			}
+			if _, err := os.Stat(filepath.Join(folder, "escrito-en-sesion.txt")); tc.mode == mountRO && !os.IsNotExist(err) || tc.mode == mountRW && err != nil {
+				t.Errorf("created file stat=%v for mount_mode=%s", err, tc.mode)
+			}
+			if b, err := os.ReadFile(keep); err != nil || string(b) != content {
+				t.Errorf("keep.txt=%q err=%v, want %q", b, err, content)
+			}
+			t.Logf("%s: %s", state.Mode, out.String())
+		})
+	}
+}

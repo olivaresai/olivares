@@ -71,7 +71,9 @@ export function NewSessionHost() {
               advanced.message,
               advanced.workspaceRef,
               advanced.templateId,
+              String(advanced.worktree),
               advanced.worktreeFrom,
+              advanced.permission,
               advanced.driver,
               advanced.profileRef,
               advanced.model,
@@ -79,6 +81,7 @@ export function NewSessionHost() {
               String(advanced.fastMode),
               advanced.serviceTier,
               advanced.runOn,
+              JSON.stringify(advanced.fromCheckpoint),
             ]
               .map((part) => part ?? '')
               .join('\n')}
@@ -87,7 +90,10 @@ export function NewSessionHost() {
             initialMessage={advanced.message}
             initialWorkspaceRef={advanced.workspaceRef}
             initialTemplateId={advanced.templateId}
+            initialWorktree={advanced.worktree}
             initialWorktreeFrom={advanced.worktreeFrom}
+            initialPermission={advanced.permission}
+            initialFromCheckpoint={advanced.fromCheckpoint}
             initialDriver={advanced.driver}
             initialProfileRef={advanced.profileRef}
             initialModel={advanced.model}

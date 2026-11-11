@@ -5,6 +5,12 @@
   },
   "title": "Ratenbegrenzungen",
   "description": "Ratenlimits Ihrer Organisation und Arbeitsbereiche. Schreibgeschützt.",
+  "profiles": {
+    "title": "Limits jedes Profils",
+    "description": "Was das Werkzeug jedes Profils ihm erlaubt und wann es zurückgesetzt wird. Das Werkzeug meldet sie; Olivares legt sie nicht fest.",
+    "none": "Derzeit meldet kein Werkzeug eines Profils ein geltendes Limit.",
+    "truncated": "Einige Profile werden nicht angezeigt."
+  },
   "caveats": {
     "keepInSync": "Gateways/Proxys müssen synchron gehalten werden: Diese Begrenzungen bilden das Inventar, das ein vorgelagertes Gateway oder ein Proxy spiegeln muss. Sie werden hier nicht durchgesetzt, und ihre Änderung erfolgt beim Anbieter, nicht in dieser Konsole.",
     "managedAgents": "Managed Agents werden NICHT von der Rate Limits API abgedeckt. Ihre Begrenzungen sind eine dokumentierte Lücke, kein Wert von null — es wird keine Zeile für Managed Agents angezeigt, weil die API keine meldet."

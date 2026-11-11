@@ -74,6 +74,15 @@ describe('ConfirmDialog (privileged-action gate)', () => {
     )
   })
 
+  it('answers on its own band: Cancel flat beside the one confirm', () => {
+    render(
+      <ConfirmDialog open onOpenChange={noop} title="X" onConfirm={noop} />,
+    )
+    const cancel = screen.getByRole('button', { name: /^cancel$/i })
+    expect(cancel).toHaveClass('bg-transparent')
+    expect(cancel.parentElement).toHaveClass('border-t', 'bg-frame/30')
+  })
+
   it('blocks confirm and cancel while pending', () => {
     render(
       <ConfirmDialog

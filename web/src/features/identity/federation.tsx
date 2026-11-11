@@ -17,7 +17,6 @@ import {
   QueryErrorState,
 } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
 import { CircleAlert, CircleCheck, ExternalLink } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -78,9 +77,7 @@ export function FederationTab() {
 
 function SsoSection() {
   const { t } = useTranslation(['identity', 'common'])
-  const { activeTenant, can } = useAuth()
-  const navigate = useNavigate()
-  const admin = can('tenant:admin')
+  const { activeTenant } = useAuth()
   const status = useQuery({
     queryKey: identityKeys.sso(activeTenant),
     queryFn: () => identityApi.ssoStatus(),
@@ -187,24 +184,8 @@ function SsoSection() {
           ) : null}
         </div>
 
-        {/* Set-up lives in the Identity provider tab, which only an administrator is offered. */}
-        {admin ? (
-          <div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                // Feature routes are not in the static route tree: loose cast, as nhi-roster does.
-                void navigate({
-                  to: '/identity',
-                  search: { tab: 'sso' },
-                } as never)
-              }
-            >
-              {t('sso.configure')}
-            </Button>
-          </div>
-        ) : null}
+        {/* The set-up form sits above this state in an administrator's Single sign-on
+            section (identity-view): no door from here to a section of another name. */}
         <div>
           <Button asChild variant="outline" size="sm">
             <a

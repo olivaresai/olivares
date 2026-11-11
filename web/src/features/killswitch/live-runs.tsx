@@ -7,7 +7,11 @@ import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import type { RunDTO } from '@/features/agentops/types'
-import { isLiveRun, LIVE_RUN_STATES } from '@/features/sessions/provenance'
+import {
+  isLiveRun,
+  LIVE_RUN_STATES,
+  runLabel,
+} from '@/features/sessions/provenance'
 import { RelTime } from '@/features/shared/rel-time'
 import { useAuth } from '@/lib/auth/context'
 import './i18n'
@@ -137,11 +141,9 @@ export function LiveRunsSection({ active }: { active: KillSwitchDTO[] }) {
             >
               <span
                 className="min-w-0 truncate"
-                title={run.name || run.run_ref}
+                title={`${runLabel(run)} · ${run.run_ref}`}
               >
-                {run.name || (
-                  <span className="font-mono text-caption">{run.run_ref}</span>
-                )}
+                {runLabel(run)}
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 <RelTime

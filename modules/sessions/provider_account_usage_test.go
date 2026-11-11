@@ -140,3 +140,49 @@ func TestProviderAccount_UsageIsNotAskedForADisabledAccount(t *testing.T) {
 		})
 	}
 }
+
+// The account read carries the plan its tool reported for that account ("max", "promax"),
+// raw as the tool gives it. An account the tool named no plan for carries no plan field,
+// and an account that is not active is never asked.
+func TestProviderAccount_PlanIsTheToolsReportAndAbsentWhenUnknown(t *testing.T) {
+	for _, be := range profileBackends(t) {
+		be := be
+		t.Run(be.name, func(t *testing.T) {
+			m, st := openProfileModule(t, be, nil)
+			tenant := ensureTenant(t, st, "plan-"+be.name)
+			a := newAcctAPI(m, st, tenant)
+			claude := acctProfiles(t, m, tenant, "claude", 3)
+			for i, name := range []string{"claude-main", "claude-spare", "claude-off"} {
+				if r := a.adopt(claude[i].Ref, name); r.code != http.StatusOK {
+					t.Fatalf("adopt %s = %d %s", name, r.code, r.raw)
+				}
+			}
+			disabled := ProfileDisabled
+			if _, err := m.PatchProfile(context.Background(), tenant, claude[2].Ref, ProfilePatch{State: &disabled}); err != nil {
+				t.Fatal(err)
+			}
+			m.rt.AccountPlan = func(_ context.Context, _ model.TenantID, driver, ref string, _ bool) string {
+				if ref == claude[2].Ref {
+					t.Error("the plan source was asked about a disabled account")
+				}
+				if driver == "claude" && ref == claude[0].Ref {
+					return "max"
+				}
+				return ""
+			}
+			if r := a.call(http.MethodGet, "/provider-accounts/"+claude[0].Ref, nil); r.code != http.StatusOK || r.body["plan"] != "max" {
+				t.Fatalf("get = %d %s, want plan max", r.code, r.raw)
+			}
+			if r := a.call(http.MethodGet, "/provider-accounts/"+claude[1].Ref, nil); r.code != http.StatusOK {
+				t.Fatalf("get of an account with no plan = %d %s", r.code, r.raw)
+			} else if _, has := r.body["plan"]; has {
+				t.Fatalf("an account the tool named no plan for carries one: %s", r.raw)
+			}
+			for _, item := range a.list("").items() {
+				if (item["name"] == "claude-main") != (item["plan"] == "max") {
+					t.Fatalf("list item %v: plan must be max for claude-main only", item)
+				}
+			}
+		})
+	}
+}

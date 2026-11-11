@@ -115,7 +115,6 @@ test.describe('keyboard object actions', () => {
     const session = await signIn(page)
     await fileRequestFromAnotherPerson(page, browser, session)
     await page.goto('/permissions?tab=approvals')
-    await expect(page.getByTestId('hint-bar')).toBeVisible()
 
     const flagged = page.locator('[data-approval-row][data-flagged="true"]')
     await expect(

@@ -301,70 +301,80 @@ MAX_RECORD_AGE_DAYS=45
 # and the record itself no longer changes between releases.
 # 2026-11-02 · the executor guide row left the record: the Deployment page was its only emitter and
 # its source now lives in the private overlay, so nothing in this tree emits it.
-EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
-https://docs.olivares.ai 200 2026-09-24
-https://docs.olivares.ai/cli 200 2026-09-24
-https://docs.olivares.ai/how-to/install-a-license/#3--community--business-in-place 200 2026-10-14
-https://docs.olivares.ai/reference/api-stability/ 200 2026-09-24
-https://docs.olivares.ai/reference/configuration/ 200 2026-09-24
-https://github.com/olivaresai/olivares 200 2026-09-24
-https://github.com/olivaresai/olivares#install 200 2026-10-14
-https://github.com/olivaresai/olivares.git 200 2026-09-24
-https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$ver 404 2026-10-08 sigstore-certificate-identity-not-a-location
-https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-24 sigstore-certificate-identity-not-a-location
-https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${RELEASE} 404 2026-10-31 sigstore-certificate-identity-not-a-location
-https://github.com/olivaresai/olivares/blob/main/docs/CLI-RECIPES-BY-OUTCOME.md 200 2026-11-06
-https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-09-24
-https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-09-24
-https://github.com/olivaresai/olivares/blob/main/INSTALL.md#installation-qualification 200 2026-10-14
-https://github.com/olivaresai/olivares/blob/main/INSTALL.md#operate-claude-code-co-deployment 200 2026-09-24
-https://github.com/olivaresai/olivares/blob/main/SECURITY.md 200 2026-09-24
-https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 200 2026-09-24
-https://github.com/olivaresai/olivares/blob/main/deploy/compose/README.md#work-on-a-host-project-folder 200 2026-10-14
-https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 200 2026-09-24
-https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 200 2026-09-24
-https://github.com/olivaresai/olivares/releases 200 2026-09-24
-https://github.com/olivaresai/olivares/releases/download/\$ver 404 2026-10-08 release-asset-base-not-a-location
-https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.apk 200 2026-10-15
-https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.deb 200 2026-10-15
-https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.rpm 200 2026-10-15
-https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt 200 2026-10-31
-https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt.sig 200 2026-10-31
-https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt.pem 200 2026-10-31
-https://github.com/olivaresai/olivares/releases/tag/\${RELEASE} 200 2026-10-14
-https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-09-24 drill-fixture-not-a-location
-https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-09-24
-https://licenses.olivares.ai 200 2026-09-24
-https://licenses.olivares.ai/apt/v1/ 400 2026-10-01 credential-audience-not-a-location
-https://licenses.olivares.ai/dnf/v1/ 400 2026-10-01 credential-audience-not-a-location
-https://licenses.olivares.ai/portal/downloads 200 2026-10-22
-https://olivares.ai 200 2026-09-24
-https://olivares.ai/compliance/assessment-plan/ 200 2026-09-24
-https://olivares.ai/compliance/capabilities 200 2026-09-24
-https://olivares.ai/compliance/frameworks/ 200 2026-09-24
-https://olivares.ai/docs 200 2026-09-24
-https://olivares.ai/docs/reference/api-stability 404 2026-09-24 apex-serves-no-docs-depth
-https://olivares.ai/ns/oscal 404 2026-09-24 namespace-identifier-not-a-location
-https://olivares.ai/pricing 200 2026-09-24
-https://olivares.ai/product 200 2026-09-24
-https://olivares.ai/solutions 200 2026-09-24
-https://olivares.ai/how-it-works 200 2026-09-24
-https://olivares.ai/architecture 200 2026-09-24
-https://olivares.ai/security 200 2026-09-24
-https://olivares.ai/trust 200 2026-09-24
-https://olivares.ai/compare 200 2026-09-24
-https://olivares.ai/demo 200 2026-09-24
-https://olivares.ai/changelog 200 2026-09-24
-https://olivares.ai/olivares/install.sh 200 2026-09-24
-https://olivares.ai/brand 200 2026-09-24
-https://olivares.ai/business 200 2026-10-22
-https://olivares.ai/press 200 2026-09-24
-https://olivares.ai/status 200 2026-09-24
-https://olivares.ai/roadmap 200 2026-09-24
-https://olivares.ai/updates 404 2026-09-24 release-blocker-no-producer-no-server
-https://packages.olivares.ai 404 2026-09-24 package-repository-awaits-authorized-publish
-https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$baseline 404 2026-10-07 sigstore-certificate-identity-not-a-location
-https://github.com/olivaresai/olivares/releases/download/\$baseline 404 2026-10-07 release-asset-base-not-a-location"
+# 2026-11-09 · every row re-measured with --probe (the 45-day limit passed). The seven ${RELEASE} rows
+# answered 404 in the probe because 0.10 is not published yet (public-release-0.10-pending); /ns/oscal
+# answered 200, so it carries no owner.
+# 2026-11-11 · the console's supply chain page (web/src/features/attestation/attestation.data.ts)
+# emits two: the release workflow URI, the prefix of the certificate identity its cosign command
+# pins at the installed tag (sigstore-certificate-identity-not-a-location: an identity, never a
+# page), and the release page of that tag as a ${tag} template, which resolves once the release
+# it names is public (public-release-0.10-pending). Both answered 404 in five of five probes.
+EMITTED_RECORD="https://alma.olivares.ai 200 2026-11-09
+https://docs.olivares.ai 200 2026-11-09
+https://docs.olivares.ai/cli 200 2026-11-09
+https://docs.olivares.ai/how-to/install-a-license/#3--community--business-in-place 200 2026-11-09
+https://docs.olivares.ai/reference/api-stability/ 200 2026-11-09
+https://docs.olivares.ai/reference/configuration/ 200 2026-11-09
+https://github.com/olivaresai/olivares 200 2026-11-09
+https://github.com/olivaresai/olivares#install 200 2026-11-09
+https://github.com/olivaresai/olivares.git 200 2026-11-09
+https://github.com/olivaresai/olivares/.github/workflows/release.yml 404 2026-11-11 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$ver 404 2026-11-09 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-11-09 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${RELEASE} 404 2026-11-09 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/blob/main/docs/CLI-RECIPES-BY-OUTCOME.md 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/INSTALL.md#installation-qualification 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/INSTALL.md#operate-claude-code-co-deployment 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/SECURITY.md 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/deploy/compose/README.md#work-on-a-host-project-folder 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 200 2026-11-09
+https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 200 2026-11-09
+https://github.com/olivaresai/olivares/releases 200 2026-11-09
+https://github.com/olivaresai/olivares/releases/download/\$ver 404 2026-11-09 release-asset-base-not-a-location
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.apk 404 2026-11-09 public-release-0.10-pending
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.deb 404 2026-11-09 public-release-0.10-pending
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.rpm 404 2026-11-09 public-release-0.10-pending
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt 404 2026-11-09 public-release-0.10-pending
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt.sig 404 2026-11-09 public-release-0.10-pending
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt.pem 404 2026-11-09 public-release-0.10-pending
+https://github.com/olivaresai/olivares/releases/tag/\${RELEASE} 404 2026-11-09 public-release-0.10-pending
+https://github.com/olivaresai/olivares/releases/tag/\${tag} 404 2026-11-11 public-release-0.10-pending
+https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-11-09 drill-fixture-not-a-location
+https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-11-09
+https://licenses.olivares.ai 200 2026-11-09
+https://licenses.olivares.ai/apt/v1/ 400 2026-11-09 credential-audience-not-a-location
+https://licenses.olivares.ai/dnf/v1/ 400 2026-11-09 credential-audience-not-a-location
+https://licenses.olivares.ai/portal/downloads 200 2026-11-09
+https://olivares.ai 200 2026-11-09
+https://olivares.ai/compliance/assessment-plan/ 200 2026-11-09
+https://olivares.ai/compliance/capabilities 200 2026-11-09
+https://olivares.ai/compliance/frameworks/ 200 2026-11-09
+https://olivares.ai/docs 200 2026-11-09
+https://olivares.ai/docs/reference/api-stability 404 2026-11-09 apex-serves-no-docs-depth
+https://olivares.ai/ns/oscal 200 2026-11-09
+https://olivares.ai/pricing 200 2026-11-09
+https://olivares.ai/product 200 2026-11-09
+https://olivares.ai/solutions 200 2026-11-09
+https://olivares.ai/how-it-works 200 2026-11-09
+https://olivares.ai/architecture 200 2026-11-09
+https://olivares.ai/security 200 2026-11-09
+https://olivares.ai/trust 200 2026-11-09
+https://olivares.ai/compare 200 2026-11-09
+https://olivares.ai/demo 200 2026-11-09
+https://olivares.ai/changelog 200 2026-11-09
+https://olivares.ai/olivares/install.sh 200 2026-11-09
+https://olivares.ai/brand 200 2026-11-09
+https://olivares.ai/business 200 2026-11-09
+https://olivares.ai/press 200 2026-11-09
+https://olivares.ai/status 200 2026-11-09
+https://olivares.ai/roadmap 200 2026-11-09
+https://olivares.ai/updates 404 2026-11-09 release-blocker-no-producer-no-server
+https://packages.olivares.ai 404 2026-11-09 package-repository-awaits-authorized-publish
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$baseline 404 2026-11-09 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/releases/download/\$baseline 404 2026-11-09 release-asset-base-not-a-location"
 
 EMU_SELFTEST=0
 [ "${1:-}" = "--selftest" ] && EMU_SELFTEST=1

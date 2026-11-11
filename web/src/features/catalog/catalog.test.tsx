@@ -160,6 +160,35 @@ describe('CatalogView — entries list', () => {
     expect(screen.getByText('Approved')).toBeInTheDocument()
   })
 
+  it('names each entry with its version and shows its summary, not its slug', async () => {
+    api.listEntries.mockResolvedValue({ items: [draftEntry], has_more: false })
+    wrap(<CatalogView />)
+    const row = (await screen.findByText('GitHub MCP')).closest('tr')!
+    expect(within(row).getByText('1.0.0')).toBeInTheDocument()
+    expect(within(row).getByText('A GitHub MCP server')).toBeInTheDocument()
+    // The slug is the entry's machine name: its detail shows it.
+    expect(within(row).queryByText('github-mcp')).toBeNull()
+    expect(
+      screen.getByRole('columnheader', { name: 'Summary' }),
+    ).toBeInTheDocument()
+  })
+
+  it('finds an entry by its slug, though the table does not show it', async () => {
+    api.listEntries.mockResolvedValue({
+      items: [draftEntry, approvedEntry],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap(<CatalogView />)
+    await screen.findByText('GitHub MCP')
+    await user.type(
+      screen.getByPlaceholderText('Search entries…'),
+      'github-mcp',
+    )
+    await waitFor(() => expect(screen.queryByText('Triage Agent')).toBeNull())
+    expect(screen.getByText('GitHub MCP')).toBeInTheDocument()
+  })
+
   it('hides the New entry button when the role cannot write entries', async () => {
     authState.can = (p) => p !== 'catalog:entry:write'
     api.listEntries.mockResolvedValue({ items: [draftEntry], has_more: false })

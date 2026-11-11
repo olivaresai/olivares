@@ -6,7 +6,13 @@ import { render, screen, within, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, it, expect, vi } from 'vitest'
+import {
+  PageActionsProvider,
+  PagePrimaryActionSlot,
+} from '@/components/ui/page-actions'
+import { buttonVariants } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/errors'
+import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 import './i18n'
 const toast = vi.hoisted(() => ({
@@ -108,7 +114,7 @@ describe('MCP console governance', () => {
     setup()
     expect(api.get).not.toHaveBeenCalled()
     expect(
-      screen.queryByRole('button', { name: 'Add server' }),
+      screen.queryByRole('button', { name: 'Add MCP server' }),
     ).not.toBeInTheDocument()
   })
   it('keeps file configuration read-only and explains ownership', async () => {
@@ -116,7 +122,7 @@ describe('MCP console governance', () => {
     setup()
     await screen.findByText('Operator file')
     for (const name of [
-      'Add server',
+      'Add MCP server',
       'Manage credentials',
       'Test connection',
       'Configure',
@@ -151,9 +157,37 @@ describe('MCP console governance', () => {
     setup()
     const row = await screen.findByRole('article', { name: 'Fixture MCP' })
     // One list of rows, not a grid of cards.
-    expect(row.closest('ul')).not.toBeNull()
+    expect(row.closest('[role="list"]')).not.toBeNull()
     expect(screen.queryByText('/session/mcp')).toBeNull()
     expect(screen.queryByText('Organization settings')).toBeNull()
+  })
+  it('a saved server shows where it runs, never its whole address or command line', async () => {
+    const saved = structuredClone(snapshot)
+    saved.servers[0]!.url = 'https://tools.test/mcp/fixture-path?team=fixture'
+    saved.servers.push(
+      Object.assign(structuredClone(snapshot.servers[0]!), {
+        id: 'fixture-command',
+        name: 'Fixture command',
+        transport: 'stdio',
+        url: '',
+        command: 'npx',
+        args: [
+          '-y',
+          '@modelcontextprotocol/server-everything',
+          '--label',
+          'x9',
+        ],
+      }),
+    )
+    api.get.mockResolvedValue(saved)
+    setup()
+    const remote = await screen.findByRole('article', { name: 'Fixture MCP' })
+    expect(within(remote).getByText('tools.test')).toBeInTheDocument()
+    expect(within(remote).queryByText(/fixture-path/)).toBeNull()
+    const local = screen.getByRole('article', { name: 'Fixture command' })
+    // Only the program: an argument, such as a flag's value, can be a token.
+    expect(within(local).getByText('npx')).toBeInTheDocument()
+    expect(within(local).queryByText(/x9|--label|server-everything/)).toBeNull()
   })
   it('shows state and every action; discovery cannot enable an untested server', async () => {
     setup()
@@ -179,7 +213,9 @@ describe('MCP console governance', () => {
   it('creates only reference input and saves disabled', async () => {
     const user = userEvent.setup()
     setup()
-    await user.click(await screen.findByRole('button', { name: 'Add server' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Add MCP server' }),
+    )
     const form = await screen.findByRole('dialog')
     await user.type(within(form).getByLabelText(/^Name/), 'New MCP')
     await user.type(
@@ -206,7 +242,9 @@ describe('MCP console governance', () => {
   it('offers only mcp/ secrets as the sign-in, never a personal vault or env name', async () => {
     const user = userEvent.setup()
     setup()
-    await user.click(await screen.findByRole('button', { name: 'Add server' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Add MCP server' }),
+    )
     const form = await screen.findByRole('dialog')
     await user.click(
       await within(form).findByRole('combobox', { name: /Sign-in/ }),
@@ -224,7 +262,9 @@ describe('MCP console governance', () => {
   it('names an empty server after its host and keeps caller settings under Advanced', async () => {
     const user = userEvent.setup()
     setup()
-    await user.click(await screen.findByRole('button', { name: 'Add server' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Add MCP server' }),
+    )
     const form = await screen.findByRole('dialog')
     expect(within(form).getByLabelText(/^Token issuer/)).not.toBeVisible()
     await user.type(
@@ -241,10 +281,30 @@ describe('MCP console governance', () => {
       ),
     )
   })
+  it('says the arguments, like the environment, are not for secrets', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(
+      await screen.findByRole('button', { name: 'Add MCP server' }),
+    )
+    const form = await screen.findByRole('dialog')
+    await user.click(
+      within(form).getByRole('combobox', { name: /how olivares reaches it/i }),
+    )
+    await user.click(
+      await screen.findByRole('option', { name: 'Command on this server' }),
+    )
+    for (const field of [/^Arguments/, /^Environment/])
+      expect(within(form).getByLabelText(field)).toHaveAccessibleDescription(
+        /Not for secrets\./,
+      )
+  })
   it('adds a server that runs as a command on this server', async () => {
     const user = userEvent.setup()
     setup()
-    await user.click(await screen.findByRole('button', { name: 'Add server' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Add MCP server' }),
+    )
     const form = await screen.findByRole('dialog')
     await user.click(
       within(form).getByRole('combobox', { name: /how olivares reaches it/i }),
@@ -266,7 +326,8 @@ describe('MCP console governance', () => {
       expect(api.put).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
-          name: 'server-everything',
+          // An empty name takes the program, never an argument.
+          name: 'npx',
           transport: 'stdio',
           url: '',
           command: 'npx',
@@ -279,6 +340,92 @@ describe('MCP console governance', () => {
       ),
     )
     expect(api.put.mock.calls.at(-1)![1]).not.toHaveProperty('credential_ref')
+  })
+  it('an empty name takes the program, never an argument that may be a token', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(
+      await screen.findByRole('button', { name: 'Add MCP server' }),
+    )
+    const form = await screen.findByRole('dialog')
+    await user.click(
+      within(form).getByRole('combobox', { name: /how olivares reaches it/i }),
+    )
+    await user.click(
+      await screen.findByRole('option', { name: 'Command on this server' }),
+    )
+    await user.type(
+      within(form).getByLabelText(/^Command/),
+      '/opt/mcp/fixture-server',
+    )
+    await user.type(
+      within(form).getByLabelText(/^Arguments/),
+      '--api-key{Enter}x9',
+    )
+    expect(within(form).getByLabelText(/^Name/)).toHaveAttribute(
+      'placeholder',
+      'fixture-server',
+    )
+    await user.click(within(form).getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ name: 'fixture-server' }),
+        undefined,
+        expect.anything(),
+      ),
+    )
+  })
+  // The engine keeps a command as one string and takes spaces in it, so a whole
+  // command line may be typed into Command: the name takes its program only.
+  for (const command of [
+    'tool --api-key k9',
+    '/usr/local/bin/tool --api-key k9',
+    '/usr/local/bin/tool\t--api-key k9',
+  ])
+    it(`an empty name sends the program of ${JSON.stringify(command)}`, async () => {
+      const user = userEvent.setup()
+      setup()
+      await user.click(
+        await screen.findByRole('button', { name: 'Add MCP server' }),
+      )
+      const form = await screen.findByRole('dialog')
+      await user.click(
+        within(form).getByRole('combobox', {
+          name: /how olivares reaches it/i,
+        }),
+      )
+      await user.click(
+        await screen.findByRole('option', { name: 'Command on this server' }),
+      )
+      await user.click(within(form).getByLabelText(/^Command/))
+      await user.paste(command)
+      expect(within(form).getByLabelText(/^Name/)).toHaveAttribute(
+        'placeholder',
+        'tool',
+      )
+      await user.click(within(form).getByRole('button', { name: 'Save' }))
+      await waitFor(() =>
+        expect(api.put).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ name: 'tool', command }),
+          undefined,
+          expect.anything(),
+        ),
+      )
+    })
+  it('a command typed whole shows only its program in the list', async () => {
+    const whole = structuredClone(snapshot)
+    Object.assign(whole.servers[0]!, {
+      transport: 'stdio',
+      url: '',
+      command: '/usr/local/bin/tool --api-key k9',
+    })
+    api.get.mockResolvedValue(whole)
+    setup()
+    const row = await screen.findByRole('article', { name: 'Fixture MCP' })
+    expect(within(row).getByText('tool')).toBeInTheDocument()
+    expect(within(row).queryByText(/k9|--api-key/)).toBeNull()
   })
   it('says why a test failed and what to do next', async () => {
     const failed = structuredClone(snapshot)
@@ -702,6 +849,81 @@ describe('MCP servers page headings', () => {
   })
 })
 
+describe('MCP servers as one boxed list', () => {
+  it('each server says one state in words, its tools and where it is confined', async () => {
+    const two = structuredClone(snapshot)
+    Object.assign(two.servers[0]!, {
+      enabled: true,
+      probe: { state: 'ok', tools: [{ name: 'hu_echo', fingerprint: 'f1' }] },
+    })
+    two.servers.push(
+      Object.assign(structuredClone(snapshot.servers[0]!), {
+        id: 'fixture-command',
+        name: 'Fixture command',
+        transport: 'stdio',
+        url: '',
+        command: 'npx',
+        egress_hosts: ['registry.npmjs.org'],
+      }),
+    )
+    api.get.mockResolvedValue(two)
+    setup()
+    const on = await screen.findByRole('article', { name: 'Fixture MCP' })
+    expect(within(on).getByText('Enabled')).toBeInTheDocument()
+    expect(within(on).queryByText('Connection verified')).toBeNull()
+    expect(within(on).getByText('Tools (1)')).toBeInTheDocument()
+    const off = screen.getByRole('article', { name: 'Fixture command' })
+    expect(within(off).getByText('Not tested')).toBeInTheDocument()
+    expect(within(off).queryByText('Disabled')).toBeNull()
+    expect(within(off).getByText("In the session's folder")).toBeInTheDocument()
+    expect(
+      within(off).getByText('Reaches only registry.npmjs.org'),
+    ).toBeInTheDocument()
+  })
+  it('Add MCP server is the page’s one primary, in the header’s slot', async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <PageActionsProvider>
+          <PagePrimaryActionSlot />
+          <MCPGatewayTab titled={false} />
+        </PageActionsProvider>
+      </QueryClientProvider>,
+    )
+    const add = await screen.findByRole('button', { name: 'Add MCP server' })
+    expect(add.closest('[data-page-primary-action]')).not.toBeNull()
+    // The shared primary variant, as the header draws it; no class typed here.
+    expect(add).toHaveClass(cn(buttonVariants({ variant: 'primary' })))
+  })
+  it('an enabled server that fails says both, in words', async () => {
+    const failing = structuredClone(snapshot)
+    Object.assign(failing.servers[0]!, {
+      enabled: true,
+      probe: { state: 'unreachable', tools: [] },
+    })
+    api.get.mockResolvedValue(failing)
+    setup()
+    const row = await screen.findByRole('article', { name: 'Fixture MCP' })
+    expect(within(row).getByText('Enabled')).toBeInTheDocument()
+    expect(within(row).getByText('Unreachable')).toBeInTheDocument()
+  })
+  it('lists one item per server', async () => {
+    const three = structuredClone(snapshot)
+    for (const id of ['fixture-two', 'fixture-three'])
+      three.servers.push({
+        ...structuredClone(snapshot.servers[0]!),
+        id,
+        name: id,
+      })
+    api.get.mockResolvedValue(three)
+    setup()
+    const first = await screen.findByRole('article', { name: 'Fixture MCP' })
+    const list = first.closest('[role="list"]') as HTMLElement
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3)
+  })
+})
 describe('MCP starter servers (K6.A11)', () => {
   it('lists each curated server with its license and source, and hides one already added', async () => {
     api.get.mockResolvedValue({

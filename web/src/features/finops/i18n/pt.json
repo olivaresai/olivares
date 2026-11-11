@@ -116,7 +116,7 @@
     },
     "truncated": "{{n}} orçamentos carregados; existem mais",
     "truncatedHint": "Existem mais orçamentos do que os apresentados; esta página obtém as linhas por id. Um teto que não esteja listado aqui não prova que a despesa não tem limite — pode simplesmente estar além desta página.",
-    "storedEmptyHint": "Os orçamentos criados no Business continuam a poder ser lidos e removidos aqui."
+    "storedEmptyHint": "Os orçamentos criados no Olivares AI Business continuam a poder ser lidos e removidos aqui."
   },
   "cache": {
     "title": "Eficiência da cache de prompts",

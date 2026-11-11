@@ -1,9 +1,55 @@
 {
   "title": "사용량",
-  "subtitle": "공식 5시간 및 주간 한도를 오늘의 토큰과 비용 옆에 표시합니다.",
+  "subtitle": "선택한 기간에 세션이 사용한 양과 비용을 각 계정의 5시간 및 주간 한도 옆에 표시합니다.",
+  "subtitleNoCost": "선택한 기간에 세션이 사용한 양을 각 계정의 5시간 및 주간 한도 옆에 표시합니다.",
   "tabs": {
     "accounts": "계정",
     "timeline": "타임라인"
+  },
+  "spend": {
+    "heading": "지출",
+    "headingNoCost": "실행 수와 토큰",
+    "range": {
+      "label": "기간",
+      "d7": "7일",
+      "d14": "14일",
+      "d30": "30일",
+      "custom": "사용자 지정",
+      "from": "첫날",
+      "to": "마지막 날",
+      "invalid": "첫날은 마지막 날과 같거나 그 이전이어야 합니다. 기간은 최대 {{days}}일입니다."
+    },
+    "tool": "도구",
+    "allTools": "모든 도구",
+    "profile": "프로필",
+    "allProfiles": "모든 프로필",
+    "export": "내보내기",
+    "totals": "합계",
+    "cost": "지출",
+    "runs": "실행 수",
+    "input": "입력 토큰",
+    "output": "출력 토큰",
+    "costUnreported": "비용을 보고하지 않은 실행: {{runs}}",
+    "tokensUnreported": "토큰을 보고하지 않은 실행: {{runs}}",
+    "empty": {
+      "title": "이 기간에 실행된 것이 없습니다",
+      "description": "기간을 늘리거나 세션을 시작하세요. 사용한 양이 여기에 표시됩니다."
+    },
+    "chart": {
+      "cost": "일별 지출",
+      "tokens": "일별 토큰",
+      "day": "날짜",
+      "summary": "{{title}}, {{from}}~{{to}}: 합계 {{total}}.",
+      "unpriced": "비용을 보고하지 않은 실행은 차트에 없습니다."
+    },
+    "profiles": {
+      "heading": "프로필별",
+      "profile": "프로필",
+      "input": "입력",
+      "output": "출력",
+      "none": "프로필 없음",
+      "unnamed": "이름 없는 프로필"
+    }
   },
   "accounts": {
     "heading": "계정",
@@ -11,7 +57,8 @@
     "error": "계정의 한도를 읽지 못했습니다.",
     "empty": "아직 한도를 보고한 계정이 없습니다.",
     "details": "세부 정보",
-    "detailsFor": "{{account}} 세부 정보"
+    "detailsFor": "{{account}} 세부 정보",
+    "emptyChosen": "이 도구나 프로필의 계정이 아직 한도를 보고하지 않았습니다."
   },
   "today": {
     "heading": "오늘",

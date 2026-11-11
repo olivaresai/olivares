@@ -212,6 +212,205 @@ describe('Approvals: the flag stays on the request that needs you', () => {
   })
 })
 
+// The engine answers who may decide a request (`may_decide`, `deciders`) and whether an
+// approved one was spent (`consumed`): the queue and the open request say what it says
+// and derive no right from a role.
+describe('Approvals: who may decide is what the engine says', () => {
+  const flaggedCount = () =>
+    screen
+      .getAllByRole('button')
+      .filter((b) => b.getAttribute('data-flagged') === 'true').length
+
+  it('flags and offers a request the engine says this person may decide, without the approver permission', async () => {
+    auth.can = (p) => p !== 'governance:approval:admin'
+    const theirs = { ...migration, may_decide: true }
+    api.listApprovals.mockResolvedValue({
+      items: [registry, theirs],
+      has_more: false,
+    })
+    api.getApproval.mockResolvedValue(theirs)
+    wrap(<GovernanceView />)
+    const panel = await screen.findByRole('complementary', { name: 'Request' })
+    expect(
+      await within(panel).findByRole('button', { name: 'Approve once' }),
+    ).toBeEnabled()
+    expect(rowOf('pnpm db:migrate')).toHaveAttribute('data-flagged', 'true')
+    expect(flaggedCount()).toBe(1)
+  })
+
+  it('neither flags nor offers a request the engine says this person may not decide', async () => {
+    const refused = { ...migration, may_decide: false }
+    api.listApprovals.mockResolvedValue({
+      items: [refused, { ...registry, may_decide: false }],
+      has_more: false,
+    })
+    api.getApproval.mockResolvedValue(refused)
+    wrap(<GovernanceView />)
+    const panel = await screen.findByRole('complementary', { name: 'Request' })
+    await within(panel).findByRole('button', { name: 'Cancel' })
+    expect(
+      within(panel).queryByRole('button', { name: 'Approve once' }),
+    ).toBeNull()
+    expect(within(panel).queryByRole('button', { name: 'Deny' })).toBeNull()
+    expect(flaggedCount()).toBe(0)
+  })
+
+  it('offers a request the person raised where the engine says they decide it, without saying they cannot', async () => {
+    const proposal = { ...own, may_decide: true }
+    api.listApprovals.mockResolvedValue({ items: [proposal], has_more: false })
+    api.getApproval.mockResolvedValue(proposal)
+    wrap(<GovernanceView />)
+    const panel = await screen.findByRole('complementary', { name: 'Request' })
+    expect(
+      await within(panel).findByRole('button', { name: 'Approve once' }),
+    ).toBeEnabled()
+    expect(
+      within(panel).queryByText(/cannot approve (your|their) own request/),
+    ).toBeNull()
+  })
+
+  it('names who may decide a request this person may not', async () => {
+    const waiting = {
+      ...registry,
+      may_decide: false,
+      deciders: [
+        { user_id: 'u-ana', display_name: 'Ana Ruiz' },
+        { user_id: 'u-luis', display_name: 'Luis Gil' },
+      ],
+    }
+    api.listApprovals.mockResolvedValue({ items: [waiting], has_more: false })
+    api.getApproval.mockResolvedValue(waiting)
+    wrap(<GovernanceView />)
+    const panel = await screen.findByRole('complementary', { name: 'Request' })
+    expect(
+      await within(panel).findByText(
+        'Who can decide it: Ana Ruiz and Luis Gil.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('says so when nobody else may decide it', async () => {
+    const alone = { ...own, may_decide: false, deciders: [] }
+    api.listApprovals.mockResolvedValue({ items: [alone], has_more: false })
+    api.getApproval.mockResolvedValue(alone)
+    wrap(<GovernanceView />)
+    const panel = await screen.findByRole('complementary', { name: 'Request' })
+    expect(
+      await within(panel).findByText('No one else can decide this request.'),
+    ).toBeInTheDocument()
+    expect(
+      within(panel).getByText('You cannot approve your own request.'),
+    ).toBeInTheDocument()
+    expect(within(panel).queryByText(/Another administrator/)).toBeNull()
+    expect(within(panel).queryByText(/Who can decide it/)).toBeNull()
+  })
+
+  it('says nothing of who decides where the engine does not say', async () => {
+    const unknown = { ...registry, may_decide: false }
+    api.listApprovals.mockResolvedValue({ items: [unknown], has_more: false })
+    api.getApproval.mockResolvedValue(unknown)
+    wrap(<GovernanceView />)
+    const panel = await screen.findByRole('complementary', { name: 'Request' })
+    await within(panel).findByRole('button', { name: 'Cancel' })
+    expect(within(panel).queryByText(/Who can decide it/)).toBeNull()
+    expect(within(panel).queryByText(/No one else can decide/)).toBeNull()
+  })
+
+  it('names a decider the engine sends without a name in neutral words, never as a member', async () => {
+    const waiting = {
+      ...registry,
+      may_decide: false,
+      deciders: [
+        { user_id: 'u-ana', display_name: 'Ana Ruiz' },
+        { user_id: 'u-root' },
+      ],
+    }
+    api.listApprovals.mockResolvedValue({ items: [waiting], has_more: false })
+    api.getApproval.mockResolvedValue(waiting)
+    wrap(<GovernanceView />)
+    const panel = await screen.findByRole('complementary', { name: 'Request' })
+    expect(
+      await within(panel).findByText(
+        'Who can decide it: Ana Ruiz and someone with approval rights.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('A and D do nothing on a request the engine says this person may not decide', async () => {
+    const user = userEvent.setup()
+    const refused = { ...migration, may_decide: false }
+    api.listApprovals.mockResolvedValue({ items: [refused], has_more: false })
+    api.getApproval.mockResolvedValue(refused)
+    wrap(<GovernanceView />)
+    const panel = await screen.findByRole('complementary', { name: 'Request' })
+    await within(panel).findByRole('button', { name: 'Cancel' })
+    await user.keyboard('a')
+    await user.keyboard('d')
+    expect(api.decide).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('says whether an approved request has been used, as the engine records it', async () => {
+    const items: ApprovalDTO[] = [
+      { ...registry, status: 'approved', approve_count: 1, consumed: false },
+      { ...migration, status: 'approved', approve_count: 1, consumed: true },
+    ]
+    api.listApprovals.mockResolvedValue({ items, has_more: false })
+    api.getApproval.mockImplementation((id: string) =>
+      Promise.resolve(items.find((a) => a.id === id)),
+    )
+    wrap(<GovernanceView />)
+    await screen.findAllByText('Approved, not used')
+    expect(
+      within(rowOf('Terraform needs the provider registry')).getByText(
+        'Approved, not used',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(rowOf('pnpm db:migrate')).getByText('Approved, used'),
+    ).toBeInTheDocument()
+  })
+})
+
+// The queue reads at a glance how risky each request is and how long it has waited,
+// from the engine's derived tier and the time the request was made.
+describe('Approvals: each row says its risk and how long it has waited', () => {
+  it('shows the risk tier the engine derived and the age of the request in its row', async () => {
+    const asked = '2026-11-11T10:00:00Z'
+    api.listApprovals.mockResolvedValue({
+      items: [
+        { ...migration, risk_tier: 'high', created_at: asked },
+        { ...registry, risk_tier: 'critical' },
+      ],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    await screen.findByText('Terraform needs the provider registry')
+    expect(
+      within(rowOf('pnpm db:migrate')).getByText('High'),
+    ).toBeInTheDocument()
+    expect(
+      within(rowOf('Terraform needs')).getByText('Critical'),
+    ).toBeInTheDocument()
+    expect(
+      rowOf('pnpm db:migrate').querySelector(`time[datetime="${asked}"]`),
+    ).not.toBeNull()
+  })
+
+  it('keeps the name its room at phone width: the right-hand group wraps under it', async () => {
+    api.listApprovals.mockResolvedValue({
+      items: [{ ...migration, risk_tier: 'high' }],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    await screen.findByText('High')
+    const row = rowOf('pnpm db:migrate')
+    const group = within(row).getByText('0 of 1').parentElement
+    expect(group).toHaveClass('ml-auto')
+    expect(group?.parentElement).toHaveClass('flex-wrap')
+  })
+})
+
 describe('Approvals: each request says what runs, what it reaches and the rule that asked', () => {
   it('shows the command, the rule and the reach in the row and in the open request', async () => {
     api.listApprovals.mockResolvedValue({
@@ -309,7 +508,7 @@ describe('Approvals: each request says what runs, what it reaches and the rule t
     expect(screen.queryByText('Network connect')).toBeNull()
   })
 
-  it('says the requester cannot approve their own request', async () => {
+  it('says nothing of whether the person who asked may decide, which only the engine knows', async () => {
     const user = userEvent.setup()
     api.listApprovals.mockResolvedValue({
       items: [migration, registry],
@@ -319,11 +518,10 @@ describe('Approvals: each request says what runs, what it reaches and the rule t
     await screen.findByText('Terraform needs the provider registry')
     await user.click(rowOf('Terraform needs the provider registry'))
     const panel = screen.getByRole('complementary', { name: 'Request' })
+    await within(panel).findByRole('button', { name: 'Approve once' })
     expect(
-      await within(panel).findByText(
-        'The person who asked cannot approve their own request.',
-      ),
-    ).toBeInTheDocument()
+      within(panel).queryByText(/cannot approve their own request/),
+    ).toBeNull()
   })
 })
 

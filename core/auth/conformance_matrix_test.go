@@ -108,8 +108,10 @@ func TestConformance_Boundaries(t *testing.T) {
 		// The system permission is NEVER held by any tenant role (only superadmin).
 		{"owner !system:admin", auth.RoleOwner, auth.PermSystemAdmin, false},
 		{"admin !system:admin", auth.RoleAdmin, auth.PermSystemAdmin, false},
-		// The evidence ledger is viewer-readable; IAM enumeration is not.
-		{"viewer audit:read", auth.RoleViewer, "audit:read", true},
+		// The evidence ledger is the administrator's read (ruling 33).
+		{"viewer !audit:read", auth.RoleViewer, "audit:read", false},
+		{"editor !audit:read", auth.RoleEditor, "audit:read", false},
+		{"admin audit:read", auth.RoleAdmin, "audit:read", true},
 	}
 	for _, c := range cases {
 		if got := az.Allowed(ctx, p(c.role), c.perm, cmTenantA); got != c.allow {

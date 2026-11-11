@@ -82,15 +82,18 @@ type errorBody struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 		Remedy  string `json:"remedy,omitempty"`
+		Edition string `json:"edition,omitempty"`
 	} `json:"error"`
 }
 
-// MarshalJSON writes the envelope with the code's remedy from errorRemedy, so every
-// site that builds one serves the same next step and none can supply its own text.
+// MarshalJSON writes the envelope with the code's remedy from errorRemedy and, for an edition
+// refusal, its edition from errorEdition, so every site that builds one serves the same next
+// step and none can supply its own text.
 func (b errorBody) MarshalJSON() ([]byte, error) {
 	type wire errorBody
 	w := wire(b)
 	w.Error.Remedy = errorRemedy[w.Error.Code]
+	w.Error.Edition = errorEdition[w.Error.Code]
 	return json.Marshal(w)
 }
 
@@ -448,6 +451,8 @@ func statusFor(err error) (int, string) {
 		return http.StatusConflict, "subject_erasing"
 	case errors.Is(err, auth.ErrSubjectErased):
 		return http.StatusConflict, "subject_erased"
+	case errors.Is(err, auth.ErrSubjectRetired):
+		return http.StatusConflict, "subject_retired"
 	case errors.Is(err, auth.ErrSessionScopeMismatch):
 		// A session scoped to one tenant cannot change the account's
 		// authenticators: they are account-wide.

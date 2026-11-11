@@ -89,7 +89,15 @@ command mkdir -p -- "$dest"
 tmp="$(command mktemp -d "$dest/.ensure-nfpm.XXXXXX")"
 trap 'rm -rf -- "$tmp"' EXIT
 if ! command curl -fsSL --retry 1 --connect-timeout 20 --max-time 100 -o "$tmp/$ASSET" "$URL"; then
-	refuse "no nfpm v$VER available and $URL could not be downloaded"
+	# github.com's release-download front answered 504 for hours on 2026-11-08 while the release API served
+	# the same asset. Only the source changes: the pinned digests below still decide what is installed.
+	api="https://api.github.com/repos/goreleaser/nfpm/releases/tags/v$VER"
+	printf '%s: note: %s could not be downloaded; fetching the same asset through %s\n' "$me" "$URL" "$api" >&2
+	asset="$(command curl -fsSL --retry 1 --connect-timeout 20 --max-time 60 "$api" |
+		jq -er --arg name "$ASSET" '.assets[] | select(.name == $name) | .url')" &&
+		command curl -fsSL --retry 1 --connect-timeout 20 --max-time 100 -H 'Accept: application/octet-stream' \
+			-o "$tmp/$ASSET" "$asset" ||
+		refuse "no nfpm v$VER available: neither $URL nor the release API could be downloaded"
 fi
 got="$(digest "$tmp/$ASSET")"
 if [[ "$got" != "$TARBALL_SHA" ]]; then

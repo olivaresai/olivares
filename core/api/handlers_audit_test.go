@@ -310,19 +310,33 @@ func TestAuditFilteredRoutesKeepRBACGuards(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "audit-rbac")
-	issued := h.do("POST", "/v1/tokens", admin, map[string]any{
-		"name": "audit-viewer", "tenant": tenant.String(), "role": auth.RoleViewer,
-	}, nil)
-	if issued.code != http.StatusCreated {
-		t.Fatalf("issue viewer token = %d %s", issued.code, issued.raw)
+	issue := func(role string) string {
+		t.Helper()
+		issued := h.do("POST", "/v1/tokens", admin, map[string]any{
+			"name": "audit-" + role, "tenant": tenant.String(), "role": role,
+		}, nil)
+		if issued.code != http.StatusCreated {
+			t.Fatalf("issue %s token = %d %s", role, issued.code, issued.raw)
+		}
+		return issued.body["token"].(string)
 	}
-	viewer := issued.body["token"].(string)
+	viewer := issue(auth.RoleViewer)
 
-	if r := h.do("GET", "/v1/audit?action=agent.", viewer, nil, nil); r.code != http.StatusOK {
-		t.Fatalf("viewer filtered tenant audit = %d %s", r.code, r.raw)
+	// Ruling 33: the audit record is an administrator's read; a viewer or editor is refused.
+	for _, tok := range []string{viewer, issue(auth.RoleEditor)} {
+		if r := h.do("GET", "/v1/audit?action=agent.", tok, nil, nil); r.code != http.StatusForbidden {
+			t.Fatalf("viewer/editor filtered tenant audit = %d %s, want 403", r.code, r.raw)
+		}
+		if r := h.do("GET", "/v1/audit/export?action=agent.", tok, nil, nil); r.code != http.StatusForbidden {
+			t.Fatalf("viewer/editor filtered tenant export = %d %s, want 403", r.code, r.raw)
+		}
 	}
-	if r := h.do("GET", "/v1/audit/export?action=agent.", viewer, nil, nil); r.code != auditExportStatus {
-		t.Fatalf("viewer filtered tenant export = %d %s", r.code, r.raw)
+	tenantAdmin := issue(auth.RoleAdmin)
+	if r := h.do("GET", "/v1/audit?action=agent.", tenantAdmin, nil, nil); r.code != http.StatusOK {
+		t.Fatalf("tenant admin filtered tenant audit = %d %s", r.code, r.raw)
+	}
+	if r := h.do("GET", "/v1/audit/export?action=agent.", tenantAdmin, nil, nil); r.code != auditExportStatus {
+		t.Fatalf("tenant admin filtered tenant export = %d %s", r.code, r.raw)
 	}
 	if r := h.do("GET", "/v1/audit?action=agent.", "", nil, tenantHdr(tenant)); r.code != http.StatusUnauthorized {
 		t.Fatalf("anonymous filtered tenant audit = %d, want 401", r.code)

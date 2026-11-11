@@ -78,6 +78,7 @@
     "colActions": "Acciones",
     "enabled": "Activada",
     "disabled": "Desactivada",
+    "any": "Cualquiera",
     "bulk": {
       "enable": "Activar las seleccionadas",
       "disable": "Desactivar las seleccionadas"

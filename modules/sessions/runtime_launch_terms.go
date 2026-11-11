@@ -19,9 +19,16 @@ import (
 // params set it, a no for an in-process launch, which has no caller to ask.
 type callerAsks struct {
 	runUnrestricted, secretEnv func() bool
-	// profileAccess asks whether the caller may use a tool and one profile of it
-	// (provider_profile_access.go). A launch with no caller to ask, a recovery, leaves it nil.
-	profileAccess func(profileRef, driver string) error
+	// profileAccess asks whether the caller may use a profile: its owner's, and its tool's and
+	// its own assignments (provider_profile_access.go). A launch with no caller to ask, a
+	// recovery, leaves it nil.
+	profileAccess func(ProviderProfile) error
+	// modelAccess asks whether the caller may run a model (provider_model_access.go). A launch
+	// with no caller to ask leaves it nil.
+	modelAccess func(chosen string) error
+	// userGroups are the caller's directory groups, for the budgets and the model grants that
+	// name a group. A launch with no caller to ask leaves it nil.
+	userGroups []string
 	// standing asks the departments of the caller (department_standards.go). A launch with no
 	// caller to ask, or a build with no assignments wired, leaves it nil: no standards.
 	standing func() (launchStanding, error)
@@ -29,6 +36,14 @@ type callerAsks struct {
 	// resume names, the rights its session will exercise there (workspace_api.go). A launch with
 	// no caller to ask leaves it nil.
 	workspaceRights func(ref string) error
+}
+
+// refuseModel is the model question for the model a launch or resume will run.
+func (a callerAsks) refuseModel(chosen string) error {
+	if a.modelAccess == nil {
+		return nil
+	}
+	return a.modelAccess(chosen)
 }
 
 // refuseWorkspace is the folder question for the workspace a launch or resume names.
@@ -86,7 +101,11 @@ func (m *Module) prepareLaunchTerms(ctx context.Context, tenant model.TenantID, 
 			// A resume runs under the profile it was launched under: a withdrawn assignment
 			// stops it too. (A new launch is asked in resolveLaunchProfileInto.)
 			if p.asks.profileAccess != nil {
-				if err := p.asks.profileAccess(p.ProviderHome.ProfileID, p.ProviderHome.Driver); err != nil {
+				prof, err := m.GetProfile(ctx, tenant, p.ProviderHome.ProfileID)
+				if err != nil {
+					return templateDTO{}, nil, err
+				}
+				if err := p.asks.profileAccess(prof); err != nil {
 					return templateDTO{}, nil, err
 				}
 			}
@@ -120,6 +139,13 @@ func (m *Module) prepareLaunchTerms(ctx context.Context, tenant model.TenantID, 
 	}
 	// Every launch, a resume and a queued one too, hands Claude Code the exact id.
 	resolveClaudeModelAlias(p)
+	// A resume runs its stored model, so a withdrawn assignment stops it here. A new launch is
+	// asked once the provider's default model is filled (createRun).
+	if p.resuming {
+		if err := p.asks.refuseModel(p.Model); err != nil {
+			return templateDTO{}, nil, err
+		}
+	}
 	if p.TimeoutSeconds > 0 && p.runDeadline.IsZero() {
 		p.runDeadline = m.now().Add(time.Duration(p.TimeoutSeconds * float64(time.Second)))
 	}

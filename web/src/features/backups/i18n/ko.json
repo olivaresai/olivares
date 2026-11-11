@@ -47,6 +47,7 @@
   "schedule": {
     "updated": "백업 일정이 업데이트되었습니다",
     "loading": "일정을 불러오는 중...",
+    "loadFailed": "백업 일정을 불러오지 못했습니다.",
     "title": "자동 백업 일정",
     "description": "반복 백업을 구성합니다. 엔진이 일정을 실행하며 암호는 인스턴스 비밀에서 파생됩니다.",
     "enableAria": "자동 백업 활성화",
@@ -118,6 +119,7 @@
   },
   "pending": {
     "title": "승인 대기 중인 복원(이중 통제)",
+    "loadFailed": "승인 대기 중인 복원을 불러오지 못했습니다.",
     "requestedByPrefix": "요청자",
     "approveRestore": "승인 및 복원",
     "approved": "복원 승인됨",

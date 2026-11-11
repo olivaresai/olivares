@@ -28,12 +28,12 @@ func TestFinopsRequestBodyContracts(t *testing.T) {
 	}{
 		{
 			method: http.MethodPost, pattern: "/budgets",
-			fields:   []string{"action", "currency", "dimension", "enabled", "fail_closed", "id", "key", "limit_micro_usd", "name", "period", "reserved_micro_usd", "thresholds"},
+			fields:   []string{"action", "currency", "dimension", "enabled", "exempt_actors", "fail_closed", "id", "key", "limit_micro_usd", "name", "period", "reserved_micro_usd", "thresholds"},
 			required: []string{"limit_micro_usd", "name"},
 		},
 		{
 			method: http.MethodPut, pattern: "/budgets/{id}",
-			fields:   []string{"action", "currency", "dimension", "enabled", "fail_closed", "id", "key", "limit_micro_usd", "name", "period", "reserved_micro_usd", "thresholds"},
+			fields:   []string{"action", "currency", "dimension", "enabled", "exempt_actors", "fail_closed", "id", "key", "limit_micro_usd", "name", "period", "reserved_micro_usd", "thresholds"},
 			required: []string{"limit_micro_usd", "name"},
 		},
 		{

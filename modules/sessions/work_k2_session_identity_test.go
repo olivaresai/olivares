@@ -223,11 +223,17 @@ type k2Fixture struct {
 
 func newK2Fixture(t *testing.T, name string) *k2Fixture {
 	t.Helper()
+	return newK2FixtureWithPolicy(t, name, nil)
+}
+
+// newK2FixtureWithPolicy is newK2Fixture with a deny overlay on the authorizer.
+func newK2FixtureWithPolicy(t *testing.T, name string, policy auth.PolicyEvaluator) *k2Fixture {
+	t.Helper()
 	resolver := newK2WorkIdentity()
-	h := newHarness(t, New(
+	h := newHarnessWithPolicy(t, New(
 		WithWorkIdentityResolver(resolver),
 		WithWorkContentGuard(allowWorkContent{}),
-	))
+	), policy)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, name)
 	workspace := workAPIWorkspace(t, h, tenant)

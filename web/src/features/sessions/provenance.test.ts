@@ -11,7 +11,9 @@ import {
   mergeSessions,
   primaryRun,
   runAwaitedApproval,
+  runLabel,
   runMatchesObserved,
+  runName,
   sessionLabel,
   sessionListName,
   sessionNaming,
@@ -1237,5 +1239,45 @@ describe('runWantsAPerson — a run interrupted after repeated policy denials', 
     ],
   ])('%s', (_name, patch, want) => {
     expect(runWantsAPerson(run(patch))).toBe(want)
+  })
+})
+
+describe('runLabel — what a person reads for one run', () => {
+  const ref = 'run-0190abcd-1234-7abc-8def-0123456789ab'
+
+  it('is the typed name, else the title, else tool and folder, else the reference tail', () => {
+    const titled = { name: ' Billing fix ', title: 'Fix the invoices' }
+    expect(runLabel(run(ref, titled))).toBe('Billing fix')
+    expect(runLabel(run(ref, { ...titled, name: ' ' }))).toBe(
+      'Fix the invoices',
+    )
+    const place = {
+      provider_driver: 'claude',
+      workspace_path: '/srv/work/billing-api',
+    }
+    expect(runLabel(run(ref, place))).toBe('Claude Code \u00b7 billing-api')
+    expect(runLabel(run(ref, { provider_driver: 'claude' }))).toBe(
+      'Claude Code',
+    )
+    // The folder Olivares made for the run is named by its id: not a place.
+    const bare = run(ref, { workspace_path: `/var/lib/olivares/runs/${ref}` })
+    expect(runLabel(bare)).toBe('\u20260123456789ab')
+  })
+})
+
+describe('runName — a run has a name whenever it has a title or a place', () => {
+  const ref = 'run-0190abcd-1234-7abc-8def-0123456789ab'
+
+  it('is null only with no name, no title, no tool and no folder', () => {
+    expect(runName(run(ref, { name: 'Billing fix' }))).toBe('Billing fix')
+    expect(runName(run(ref, { title: 'Fix the invoices' }))).toBe(
+      'Fix the invoices',
+    )
+    expect(runName(run(ref, { provider_driver: 'codex' }))).toBe('Codex')
+    expect(runName(run(ref, { workspace_path: '/srv/work/app' }))).toBe('app')
+    expect(runName(run(ref, { name: ' ', title: ' ' }))).toBeNull()
+    expect(
+      runName(run(ref, { workspace_path: `/var/lib/olivares/runs/${ref}` })),
+    ).toBeNull()
   })
 })

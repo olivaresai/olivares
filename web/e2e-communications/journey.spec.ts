@@ -425,7 +425,7 @@ test('A creates the channel from the New-channel door with explicit grants', asy
   await expect(page.getByText('Select a workspace')).toBeVisible()
   await selectWorkspace(page, 'Billing')
   await expect(
-    page.getByRole('tab', { name: 'New channel', selected: true }),
+    page.getByRole('button', { name: 'Create channel' }),
   ).toBeVisible()
   await page.getByLabel(/^Slug/).fill(channelSlug)
   await page.getByLabel(/^Name/).fill('K3 journey')

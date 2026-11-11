@@ -120,8 +120,11 @@ const PALETTE_NEUTRALS = [
   'canvas',
   'surface',
   'raised',
+  'well',
+  'pane',
   'hover',
   'active',
+  'pressed',
   'line',
   'line-strong',
   'ctl-border',
@@ -149,6 +152,8 @@ const PALETTE_STATUS = [
   'diff-add',
   'diff-del',
 ]
+// A toast: the opposite of the theme, its text and its action.
+const PALETTE_INVERSE = ['inverse', 'on-inverse', 'inverse-accent']
 // The four tool data colours: a fixed order that is the tool, never its rank.
 const PALETTE_TOOLS = [
   'tool-claude',
@@ -168,9 +173,14 @@ const PALETTE_ACCOUNTS = [
   'account-teal',
   'account-slate',
 ]
-// Depth: two neutral shadows for what floats, none for a panel. Plain variables, not
-// Tailwind colors. No glow, blur or halo token.
-const PALETTE_DEPTH = ['shadow-raised', 'shadow-pop', 'shadow-card']
+// Depth: neutral shadows for what floats, for cards and for the inner edge of a well. Plain
+// variables, not Tailwind colors. No glow, blur or halo token.
+const PALETTE_DEPTH = [
+  'shadow-raised',
+  'shadow-pop',
+  'shadow-card',
+  'shadow-well',
+]
 // The role names the components use, each an alias of a palette token or a measured value.
 const SURFACES = [
   'background',
@@ -303,6 +313,7 @@ const PALETTE = [
   { comment: 'Palette — text', names: PALETTE_TEXT },
   { comment: 'Palette — the brand orange, by role', names: PALETTE_ACCENT },
   { comment: 'Palette — status and diff', names: PALETTE_STATUS },
+  { comment: 'Palette — inverse (the toast)', names: PALETTE_INVERSE },
   { comment: 'Palette — tool data colours', names: PALETTE_TOOLS },
   { comment: 'Palette — account accent colours', names: PALETTE_ACCOUNTS },
   { comment: 'Palette — depth', names: PALETTE_DEPTH },
@@ -402,6 +413,7 @@ const themeColorNames = [
   ...PALETTE_TEXT,
   ...PALETTE_ACCENT,
   ...PALETTE_STATUS,
+  ...PALETTE_INVERSE,
   ...PALETTE_TOOLS,
   ...PALETTE_ACCOUNTS,
   ...SURFACES,
@@ -476,7 +488,7 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /*
- * Olivares AI console — design tokens (the website's B2 system).
+ * Olivares AI console — design tokens (direction A2).
  *
  * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/console/*.tokens.json
  * (DTCG 2025.10). Regenerate with \`pnpm tokens\`; \`pnpm tokens:check\` guards drift in CI.
@@ -484,13 +496,14 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
  * (.dark.black, dark on true black), the Tailwind 4
  * @theme inline mapping, density (comfortable by default, compact by attribute) and
  * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
- * Each theme holds the palette — four neutrals, three text tones, the single brand
- * orange #f08000 by role, status colors with soft fills, four tool data colours, nine
- * account accent colours and two neutral shadows — and the role names the components use, each resolved from the
+ * Each theme holds the palette — four neutrals with a well, a pane and the hover, selection
+ * and pressed layers, three text tones, the single brand orange #f08000 by role, status
+ * colors with soft fills, the inverse surface of a toast, four tool data colours, nine
+ * account accent colours and neutral shadows — and the role names the components use, each resolved from the
  * palette. scripts/check-brand-parity.mjs pins the subset the website shares to this
  * file. Every text token is at least 4.5:1 and
  * every control boundary, focus ring and selection border at least 3:1 on every surface
- * of its theme (src/styles/tokens.test.ts measures the 750 pairs).
+ * of its theme (src/styles/tokens.test.ts measures the 825 pairs).
  */
 `
 

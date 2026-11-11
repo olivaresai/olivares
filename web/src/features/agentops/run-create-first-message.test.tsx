@@ -182,7 +182,7 @@ describe('RunCreateDialog — a first message and Start', () => {
     // No model chosen, so none is sent, as from the quick form; the engine reads an
     // absent model as an empty one (modules/sessions/runtime_dto.go createRunRequest).
     expect(posted()).toEqual({
-      name: 'Fix the failing test',
+      name: '',
       transport: 'stream-json',
       permission_mode: 'default',
       effort: '',

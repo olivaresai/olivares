@@ -114,10 +114,20 @@ export default function CatalogView() {
 
   const entryColumns: TableColumn<EntryDTO, unknown>[] = [
     {
-      accessorKey: 'name',
+      // The entry by its name and version; its slug is in its detail, and the
+      // search still finds it by the slug.
+      id: 'name',
+      accessorFn: (r) => `${r.name} ${r.slug}`,
       header: t('entries.name'),
       cell: ({ row }) => (
-        <span className="font-medium text-foreground">{row.original.name}</span>
+        <span className="inline-flex items-baseline gap-2">
+          <span className="font-medium text-foreground">
+            {row.original.name}
+          </span>
+          <span className="font-mono text-caption text-muted-foreground">
+            {row.original.version}
+          </span>
+        </span>
       ),
     },
     {
@@ -130,20 +140,21 @@ export default function CatalogView() {
       ),
     },
     {
-      accessorKey: 'slug',
-      header: t('entries.slug'),
+      // What its author says it is for: the engine names no grants yet.
+      accessorKey: 'summary',
+      header: t('detail.summary'),
       cell: ({ row }) => (
-        <span className="font-mono text-caption text-muted-foreground">
-          {row.original.slug}
+        <span className="line-clamp-2 text-caption break-words whitespace-normal text-muted-foreground">
+          {row.original.summary || '—'}
         </span>
       ),
     },
     {
-      accessorKey: 'version',
-      header: t('entries.version'),
+      accessorKey: 'owner_ref',
+      header: t('entries.owner'),
       cell: ({ row }) => (
         <span className="font-mono text-caption text-muted-foreground">
-          {row.original.version}
+          {row.original.owner_ref || '—'}
         </span>
       ),
     },
@@ -156,15 +167,6 @@ export default function CatalogView() {
         ) : (
           '—'
         ),
-    },
-    {
-      accessorKey: 'owner_ref',
-      header: t('entries.owner'),
-      cell: ({ row }) => (
-        <span className="font-mono text-caption text-muted-foreground">
-          {row.original.owner_ref || '—'}
-        </span>
-      ),
     },
     {
       id: 'signing',

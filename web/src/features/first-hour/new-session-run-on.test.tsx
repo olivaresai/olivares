@@ -80,9 +80,12 @@ describe('the Run on node in the Advanced handover', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Advanced launch options' }),
     )
+    // No folder is registered here: the form's words and permission go with the node.
     expect(onAdvanced).toHaveBeenCalledExactlyOnceWith({
       driver: 'codex',
       runOn: 'node-remote',
+      message: '',
+      permission: 'editsAndCommands',
     })
   })
 

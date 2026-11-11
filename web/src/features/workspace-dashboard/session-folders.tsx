@@ -7,8 +7,10 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { XScroll } from '@/components/data/scroll-edges'
 import { StaticTable } from '@/components/data/static-table'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { PathText } from '@/components/ui/path-text'
+import { StateBlock } from '@/components/ui/state-block'
 import {
   Sheet,
   SheetContent,
@@ -27,6 +29,7 @@ import { TAB_PARAM } from '@/features/sessions/session-address'
 import { useAuth } from '@/lib/auth/context'
 import { useModuleOn } from '@/stores/modules'
 import { FolderConnect } from './folder-connect'
+import { folderName } from './folder-name'
 import './i18n'
 
 /** Enough to see what sessions use; Sessions lists them all. */
@@ -35,10 +38,6 @@ const FOLDERS = 20
 /** The door whose permission (sessions:run:read) the Workspaces tab needs; /sessions asks
  * for sessions:live:read and turns that tab away. */
 const FOLDERS_VIEW = viewById('agentops')
-
-/** The name a folder was registered under, else the last segment of its path. */
-const folderName = (w: { name?: string; root_path: string }) =>
-  w.name || w.root_path.split('/').filter(Boolean).pop() || w.root_path
 
 /**
  * The folders sessions work in, beside the organization workspace the page is about: a
@@ -151,13 +150,18 @@ function SessionFoldersList({
         className="h-9 w-full max-w-sm rounded-ctl border border-ctl-border bg-background px-3 text-body outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-focus"
       />
       {query.isError ? (
-        <p role="alert" className="text-body text-text-2">
-          {t('sessionFolders.unavailable')}
-        </p>
+        <QueryErrorState
+          size="panel"
+          error={query.error}
+          retry={() => void query.refetch()}
+          title={t('sessionFolders.unavailable')}
+        />
       ) : !query.data ? (
-        <p role="status" className="text-body text-text-2">
-          {t('sessionFolders.loading')}
-        </p>
+        <StateBlock
+          state="loading"
+          rows={3}
+          label={t('sessionFolders.loading')}
+        />
       ) : all.length === 0 ? (
         <p role="status" className="text-body text-text-2">
           {t('sessionFolders.empty')}
@@ -220,25 +224,41 @@ function SessionFoldersList({
             className="px-0 pt-0"
           />
         ))}
-      <Sheet
-        open={wiki !== null}
-        onOpenChange={(open) => !open && setWiki(null)}
-      >
-        <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-3xl">
-          {wiki && (
-            <>
-              <SheetHeader>
-                <SheetTitle>{folderName(wiki)}</SheetTitle>
-                <SheetDescription>
-                  <PathText value={wiki.root_path} copy={false} wrap />
-                </SheetDescription>
-              </SheetHeader>
-              <WorkspaceWiki workspace={wiki} />
-              <FolderConnect tenant={tenant} folderRef={wiki.workspace_ref} />
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+      <FolderDetailsSheet
+        tenant={tenant}
+        folder={wiki}
+        onClose={() => setWiki(null)}
+      />
     </section>
+  )
+}
+
+/** A folder's wiki and its SFTP and SCP access, in a sheet over the page. */
+export function FolderDetailsSheet({
+  tenant,
+  folder: wiki,
+  onClose,
+}: {
+  tenant: string
+  folder: WorkspaceDTO | null
+  onClose: () => void
+}) {
+  return (
+    <Sheet open={wiki !== null} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-3xl">
+        {wiki && (
+          <>
+            <SheetHeader>
+              <SheetTitle>{folderName(wiki)}</SheetTitle>
+              <SheetDescription>
+                <PathText value={wiki.root_path} copy={false} wrap />
+              </SheetDescription>
+            </SheetHeader>
+            <WorkspaceWiki workspace={wiki} />
+            <FolderConnect tenant={tenant} folderRef={wiki.workspace_ref} />
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   )
 }

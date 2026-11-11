@@ -5,7 +5,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { viewById } from '@/features/navigation/model'
-import { ErrorState } from '@/components/ui/error-state'
+import { ErrorState, errorDetail } from '@/components/ui/error-state'
 import {
   createBoundaryErrorId,
   isChunkLoadError,
@@ -54,6 +54,7 @@ export function RouteErrorPage({
         retry={retry}
         goToNow={() => navigate({ to: viewById('home')!.path })}
         errorId={errorId}
+        detail={errorDetail(error)}
       />
     </Container>
   )

@@ -4,9 +4,11 @@
 //
 // THE STATUS BAR: one thin row under the work that says how things stand, the
 // way the editors people already use do. Left to right: the engine (a dot and a word), the
-// sessions open, each tool's 5-hour and weekly use as the tool reported it, the agent
-// stops while one is active, what Business adds, then Stop all while a session works or waits
-// for a person. No version: Settings › About and the account menu carry it.
+// sessions open and how many of them need the person, each tool's 5-hour and weekly use as
+// the tool reported it (its mark, the figure and a small meter), the agent stops while one is
+// active, what Business adds, then Stop all while a session works or waits for a person, and
+// the signature: the mark and the edition. No version: Settings › About and the account menu
+// carry it.
 //
 // ⛔ STOP ALL IS A SAFETY CONTROL, NOT CHROME. It left the top bar, where it sat on every
 //    page whether anything ran or not; it shows here only while a session works or waits
@@ -34,6 +36,8 @@ import {
 } from '@/features/agent-tools/use-background-providers'
 import { engineToolsQuery } from '@/features/agentops/api'
 import { toolName } from '@/features/agentops/engine-tools'
+import { ToolMark } from '@/features/agentops/tool-mark'
+import { Meter } from '@/components/ui/meter'
 import { PanelSlot } from '@/components/ui/trust-chrome'
 import type * as EngageCard from '@/features/killswitch/engage-card'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
@@ -45,14 +49,17 @@ import {
 } from '@/features/navigation/command-actions'
 import { viewById } from '@/features/navigation/model'
 import { useAuth } from '@/lib/auth/context'
+import { editionName } from '@/lib/edition'
+import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { cn } from '@/lib/utils'
+import { BrandMark } from './brand'
 import { EngineStatus } from './engine-status'
 import { KillSwitchStatus } from './killswitch-status'
 import { useKillSwitchState } from './use-killswitch-state'
 import { useSessionRail } from './use-session-rail'
 
-/** The metadata step: counters and secondary facts, never content. */
-const META = 'text-metadata'
+/** The status line's step: 12 px, for machine state out of the way, never content. */
+const META = 'text-[12px]'
 
 const loadConfirm = () => import('@/features/killswitch/engage-card')
 
@@ -108,17 +115,21 @@ function ProviderUsage() {
           role="group"
           aria-label={t('shell.status.usage', { tool: toolName(tool.driver) })}
           title={toolName(tool.driver)}
-          className="flex shrink-0 items-center gap-1.5 tabular-nums max-[760px]:hidden"
+          className="flex shrink-0 items-center gap-2 tabular-nums max-[760px]:hidden"
         >
-          <span className="text-text-3">{toolName(tool.driver)}</span>
-          {tool.windows.map((w, i) => (
-            <span key={w.key} className={windowTone(w.percent)}>
-              {i > 0 ? (
-                <span aria-hidden className="mr-1.5 text-text-3">
-                  ·
-                </span>
-              ) : null}
+          {/* The group's name says the tool; its mark stands for it here. */}
+          <ToolMark driver={tool.driver} className="size-3.5 rounded-[4px]" />
+          {tool.windows.map((w) => (
+            <span
+              key={w.key}
+              className={cn('flex items-center gap-1.5', windowTone(w.percent))}
+            >
               {w.percent}% {t(`shell.status.${w.key}`)}
+              <Meter
+                value={w.percent}
+                warn={windowTone(w.percent) !== undefined}
+                className="w-6"
+              />
             </span>
           ))}
         </span>
@@ -142,7 +153,7 @@ function ToolsUnreadable() {
       type="button"
       title={tools.error.message}
       onClick={() => void tools.refetch()}
-      className="shrink-0 rounded-ctl text-bad outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+      className="shrink-0 rounded-ctl text-bad hover:text-text"
     >
       {t('shell.status.toolsUnreadable')}
     </button>
@@ -185,7 +196,7 @@ function StopAll({ active, running }: { active: number; running: number }) {
           }}
           className={cn(
             META,
-            'inline-flex h-5 shrink-0 items-center gap-1 rounded-ctl px-1.5 font-medium text-text-2 outline-none hover:bg-bad-soft hover:text-bad focus-visible:ring-2 focus-visible:ring-focus',
+            'inline-flex h-5 shrink-0 items-center gap-1 rounded-ctl px-1.5 font-medium text-text-2 hover:bg-bad-soft hover:text-bad',
           )}
         >
           <OctagonX aria-hidden className="size-3 text-bad" />
@@ -205,11 +216,42 @@ function StopAll({ active, running }: { active: number; running: number }) {
   )
 }
 
+/** The stores an engine runs on (server-info `engine`), by their product names. */
+const STORES: Record<string, string> = {
+  sqlite: 'SQLite',
+  postgres: 'PostgreSQL',
+}
+
+/** The store the engine runs on, then the line's signature: the mark and the product with
+ * its edition, as Settings names it (server-info `edition`); an engine that names none is
+ * signed with the product alone. */
+function Signature() {
+  const { t } = useTranslation(['common', 'settings'])
+  const info = useServerInfo().data
+  const edition = editionName(info?.edition, t)
+  const name = edition
+    ? `${t('common:app.name')} ${edition}`
+    : t('common:app.name')
+  return (
+    <>
+      {info?.engine ? (
+        <span className="shrink-0 max-[760px]:hidden">
+          {STORES[info.engine] ?? info.engine}
+        </span>
+      ) : null}
+      <span className="flex shrink-0 items-center gap-[7px] font-medium text-text-2 max-[760px]:hidden">
+        <BrandMark className="size-3.5 shrink-0 text-text" />
+        <span>{name}</span>
+      </span>
+    </>
+  )
+}
+
 export function StatusBar() {
   const { t } = useTranslation('nav')
   // The total the list shows; Stop all shows while one works or waits for a person, and
   // counts every session it would end, idle and archived too.
-  const { active, running, open } = useSessionRail().sessionCounts
+  const { active, running, open, needsYou } = useSessionRail().sessionCounts
   const additions = useOfferedPanels(PANEL_EXTENSIONS.statusBarItems ?? [])
   return (
     <footer
@@ -217,22 +259,32 @@ export function StatusBar() {
       data-slot="status-bar"
       className={cn(
         META,
-        'flex h-6 min-h-6 shrink-0 items-center gap-3 border-t border-line bg-canvas px-3 text-text-2 print:hidden',
+        'flex h-7 min-h-7 shrink-0 items-center gap-5 border-t border-line bg-canvas px-4 text-text-3 print:hidden',
       )}
     >
       {/* What can give way on a narrow screen is on the left; Stop all on the right
           never does. */}
-      <span className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+      <span className="flex min-w-0 flex-1 items-center gap-5 overflow-x-clip">
         <EngineStatus
           className={cn(META, 'flex-none gap-1.5 rounded-none p-0')}
         />
         {open ? (
-          <Link
-            to={'/sessions' as never}
-            className="shrink-0 rounded-ctl tabular-nums outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
-          >
-            {t('shell.status.running', { count: open })}
-          </Link>
+          <span className="flex shrink-0 items-center gap-1.5 tabular-nums max-[760px]:hidden">
+            <Link
+              to={'/sessions' as never}
+              className="rounded-ctl hover:text-text"
+            >
+              {t('shell.status.running', { count: open })}
+            </Link>
+            {needsYou ? (
+              <>
+                <span aria-hidden>·</span>
+                <span className="text-warn">
+                  {t('shell.status.needYou', { count: needsYou })}
+                </span>
+              </>
+            ) : null}
+          </span>
         ) : null}
         <ToolsUnreadable />
         <ProviderUsage />
@@ -243,8 +295,9 @@ export function StatusBar() {
           </PanelSlot>
         ))}
       </span>
-      <span className="flex shrink-0 items-center gap-3">
+      <span className="flex shrink-0 items-center gap-5">
         <StopAll active={active} running={running} />
+        <Signature />
       </span>
     </footer>
   )

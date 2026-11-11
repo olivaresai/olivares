@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import i18n, { i18nReady, LANGUAGE_CODES } from '@/lib/i18n'
 import { BUSINESS_ONLY_VIEW_IDS, FEATURE_VIEWS } from './registry'
+import { PLACES } from './navigation/places'
 
 await i18nReady
 
@@ -22,6 +23,9 @@ describe('edition navigation resources before lazy views load', () => {
           ...FEATURE_VIEWS.map(({ id }) => id),
           ...BUSINESS_ONLY_VIEW_IDS,
           'settings',
+          // A section a place opens on as a page of its own (Rules: Approvals) is
+          // labelled like the Settings utility: it mounts as its view's tab.
+          ...PLACES.flatMap((p) => (p.section ? [p.section.key] : [])),
         ]),
       ].sort(),
     )

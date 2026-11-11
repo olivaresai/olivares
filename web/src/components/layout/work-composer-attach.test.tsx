@@ -152,7 +152,7 @@ describe('WorkComposer attachments', () => {
     await waitFor(() => expect(toasts.error).toHaveBeenCalledTimes(1))
     expect(String(toasts.error.mock.calls[0][0])).toContain('notes.pdf')
     expect(String(toasts.error.mock.calls[0][0])).toContain(
-      'PNG, JPEG, WebP or GIF',
+      'this file format is not supported',
     )
     expect(api.uploadAttachment).not.toHaveBeenCalled()
     expect(screen.queryByTestId('attachment-tray')).toBeNull()
@@ -282,7 +282,7 @@ describe('WorkComposer attachments', () => {
     )
     await waitFor(() => expect(toasts.error).toHaveBeenCalledTimes(1))
     expect(String(toasts.error.mock.calls[0][0])).toContain(
-      `up to ${MAX_ATTACHMENTS} images`,
+      `up to ${MAX_ATTACHMENTS} files`,
     )
     // The uploads start once each file is read.
     await waitFor(() =>

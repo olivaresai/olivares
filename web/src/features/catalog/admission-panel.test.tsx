@@ -340,3 +340,31 @@ describe('AdmissionPanel — admit action (honest result branching)', () => {
     expect(api.admitEntry).not.toHaveBeenCalled()
   })
 })
+
+// A FAILED READ IS NEVER «NO VERDICT». The panel fell through to its empty state for any
+// failure other than the two 403s it named: an edition refusal now reaches the edition line,
+// and any other failure the one mapping, with Retry.
+describe('AdmissionPanel — a read that did not answer', () => {
+  it('refused by edition: the edition line, not an empty verdict', async () => {
+    api.listAdmissions.mockRejectedValue(
+      new ApiError(403, 'edition_required', 'raw: 403', 'r', {
+        edition: 'business',
+        capability: 'catalog',
+      }),
+    )
+    wrap(<AdmissionPanel entry={mcpEntry} />)
+    expect(
+      await screen.findByText(/is part of Olivares AI Business/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/no admission verdict/i)).not.toBeInTheDocument()
+  })
+
+  it('failed: the failure with Retry, not an empty verdict', async () => {
+    api.listAdmissions.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    wrap(<AdmissionPanel entry={mcpEntry} />)
+    expect(
+      await screen.findByRole('button', { name: /retry/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/no admission verdict/i)).not.toBeInTheDocument()
+  })
+})

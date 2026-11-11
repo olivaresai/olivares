@@ -16,7 +16,7 @@ export interface ChartTheme {
   text: string
   /** Quieter axis text. */
   mutedText: string
-  /** Gridlines + axis lines (hairline). */
+  /** Gridlines (hairline). */
   grid: string
   /** Brand copper — the one accented series / primary trend. */
   accent: string
@@ -30,6 +30,7 @@ export interface ChartTheme {
   slate: string
   surface: string
   elevated: string
+  /** The base line of an axis and the tooltip cursor: firmer than the grid. */
   border: string
   /** A distinguishable, on-brand categorical ramp for multi-series charts. */
   series: string[]
@@ -40,19 +41,19 @@ export interface ChartTheme {
 // instead of handing Recharts empty strings.
 export const FALLBACK: ChartTheme = {
   text: '#fafaf9',
-  mutedText: '#b4aeaa',
-  grid: 'rgba(255, 255, 255, 0.08)',
+  mutedText: '#cfcac5',
+  grid: 'rgba(255, 255, 255, 0.07)',
   accent: '#f08000',
-  success: '#9cc79c',
-  warning: '#d9b45c',
-  danger: '#eb9999',
-  info: '#9db9cf',
+  success: '#86dfa0',
+  warning: '#f2d04f',
+  danger: '#ffaead',
+  info: '#9ec7f7',
   teal: '#5be0d8',
   slate: '#9aa3b0',
-  surface: '#343434',
-  elevated: '#343434',
-  border: 'rgba(255, 255, 255, 0.08)',
-  series: ['#f08000', '#5be0d8', '#9db9cf', '#d9b45c', '#9cc79c', '#9c9ca3'],
+  surface: '#343437',
+  elevated: '#38383c',
+  border: 'rgba(255, 255, 255, 0.13)',
+  series: ['#f08000', '#5be0d8', '#9ec7f7', '#f2d04f', '#86dfa0', '#9c9ca3'],
 }
 
 function readVar(
@@ -88,7 +89,7 @@ function resolveTheme(): ChartTheme {
     slate,
     surface: readVar(s, '--surface', FALLBACK.surface),
     elevated: readVar(s, '--elevated', FALLBACK.elevated),
-    border: readVar(s, '--border', FALLBACK.border),
+    border: readVar(s, '--border-strong', FALLBACK.border),
     // Cool-leaning, on-brand, non-semantic ordering so categories don't read as
     // status. Copper leads (the highlighted bucket), then the cool/neutral hues.
     series: [accent, teal, info, warning, success, slate],

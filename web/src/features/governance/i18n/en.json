@@ -143,7 +143,11 @@
     "actorHint": "Audit actor handle — never an email address. Identity is resolved from the directory, not shown here.",
     "expiredAt": "Expired {{time}}",
     "approveOnce": "Approve once",
-    "approveForSession": "Approve for this session",
+    "approveForSession": "Allow for this session",
+    "allowances": "Session allowances",
+    "revokeAllowance": "Revoke",
+    "sessionPolicy": "Approval policy requires review for every request.",
+    "allowancesError": "Could not read or update session allowances.",
     "approving": "Approving…",
     "deny": "Deny",
     "noMatch": "No request matches the search",
@@ -154,7 +158,9 @@
     "approved": "Approved",
     "rejected": "Rejected",
     "canceled": "Canceled",
-    "expired": "Expired"
+    "expired": "Expired",
+    "approvedNotUsed": "Approved, not used",
+    "approvedUsed": "Approved, used"
   },
   "decide": {
     "rejectTitle": "Deny this request?",
@@ -195,10 +201,11 @@
     "reasonHint": "Context for the reviewers (optional).",
     "requiredApprovals": "Required approvals",
     "requiredApprovalsHint": "Ignored if a matching approval policy applies — the policy is authoritative.",
-    "expiresInSeconds": "Expires in (seconds)",
-    "escalateInSeconds": "Escalates in (seconds)",
     "submit": "Submit request",
-    "created": "Approval request opened"
+    "created": "Approval request opened",
+    "expiresIn": "Expires in",
+    "escalateIn": "Escalates in",
+    "subjectFold": "What it applies to (optional)"
   },
   "detail": {
     "title": "Approval request",
@@ -226,9 +233,12 @@
     "reenableNeedsAdmins": "Two other admin accounts must approve this. Create them in Identity & access, or with `olivares users create`.",
     "openIdentity": "Open Identity",
     "cannotDecideOwn": "You cannot approve your own request. Another administrator must decide.",
-    "requesterCannotApprove": "The person who asked cannot approve their own request.",
+    "ownRequest": "You cannot approve your own request.",
     "launchedBy": "Launched by",
-    "decidedByYou": "You approved this request. It waits for another approver."
+    "decidedByYou": "You approved this request. It waits for another approver.",
+    "whoDecides": "Who can decide it: {{names}}.",
+    "nobodyDecides": "No one else can decide this request.",
+    "someoneWithRights": "someone with approval rights"
   },
   "policies": {
     "title": "Policies",
@@ -239,6 +249,23 @@
     "enabled": "Enabled",
     "rules": "Rules",
     "newPolicy": "New policy",
+    "roles": {
+      "title": "Roles",
+      "role": "Role",
+      "can": "What it can do",
+      "people": "People",
+      "kind": "Type",
+      "builtIn": "Built-in",
+      "custom": "Custom",
+      "from": "Starts from {{role}}",
+      "empty": "The built-in roles show here, each with what it can do.",
+      "does": {
+        "owner": "All permissions within the tenant",
+        "admin": "The above, plus tenant IAM — users, memberships, tokens, settings",
+        "editor": "The above, plus write operational data",
+        "viewer": "Read operational data and the audit trail"
+      }
+    },
     "empty": "No policies",
     "emptyHint": "Author an ABAC deny rule or an approval threshold to govern matching actions.",
     "kindAbac": "ABAC",
@@ -276,23 +303,20 @@
     "denyImplicit": "Deny (implicit)",
     "requiredApprovals": "Required approvals",
     "requiredApprovalsHint": "0 to 64. Empty or 0 uses the engine default, which can be higher for critical actions.",
-    "expiresInSeconds": "Expires in (seconds)",
-    "expiresInSecondsHint": "0–31536000 (0 = never).",
-    "escalateInSeconds": "Escalates in (seconds)",
-    "escalateInSecondsHint": "0–31536000 (0 = never).",
     "countError": "Enter a whole number from 0 to {{max}}.",
     "matchAction": "Match action",
     "matchActionHint": "Empty = matches any action.",
     "matchSubjectKind": "Match subject kind",
     "matchSubjectKindHint": "Empty = matches any subject kind.",
-    "needsBusiness": "A risk tier or an approval count other than the action's default needs Business. Turn this policy off to keep it stored.",
     "create": "Create policy",
     "save": "Save changes",
     "confirmCreateBody": "An enabled ABAC policy further-restricts access immediately; an enabled approval policy starts requiring human approvals for matching actions. Takes effect immediately.",
     "confirmUpdateBody": "If enabled, the change takes effect immediately on the authorization path / approval flow. Policy kind cannot be changed.",
     "created": "Policy created",
     "updated": "Policy updated",
-    "credentialWarning": "That looks like a credential value. Policy rules carry references and selectors only — never a secret."
+    "credentialWarning": "That looks like a credential value. Policy rules carry references and selectors only — never a secret.",
+    "expiresIn": "Expires in",
+    "escalateIn": "Escalates in"
   },
   "policyRemove": {
     "title": "Delete this policy?",
@@ -671,6 +695,14 @@
     "askedByForSession": "{{name}} for a new session",
     "askedByThroughSession": "{{name}} through their session",
     "tool": "Tool",
+    "touches": "Touches",
+    "changeClass": {
+      "docs_only": "Documentation only",
+      "code": "Code",
+      "sensitive": "Sensitive files"
+    },
+    "lapses": "<when />; then nobody can approve it and it does not run.",
+    "lapsed": "Lapsed <when />: nobody can approve it, and it does not run.",
     "willRun": "What will run",
     "noReview": "This request does not include what will run.",
     "commandUnknown": "Command not shown for this tool yet",
@@ -732,5 +764,15 @@
       "editor": "Editor",
       "owner": "Owner"
     }
+  },
+  "durations": {
+    "none": "No limit",
+    "h1": "1 hour",
+    "h4": "4 hours",
+    "h8": "8 hours",
+    "h24": "24 hours",
+    "d7": "7 days",
+    "d30": "30 days",
+    "seconds": "{{value}} seconds"
   }
 }

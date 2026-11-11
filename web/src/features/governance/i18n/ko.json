@@ -143,6 +143,10 @@
     "expiredAt": "{{time}}에 만료됨",
     "approveOnce": "이번만 승인",
     "approveForSession": "이 세션 동안 승인",
+    "allowances": "이 세션의 권한",
+    "revokeAllowance": "취소",
+    "sessionPolicy": "정책에 따라 모든 요청을 검토해야 합니다.",
+    "allowancesError": "세션 권한을 읽거나 업데이트하지 못했습니다.",
     "approving": "승인 중…",
     "deny": "거부",
     "noMatch": "검색과 일치하는 요청이 없습니다",
@@ -153,7 +157,9 @@
     "approved": "승인됨",
     "rejected": "거부됨",
     "canceled": "취소됨",
-    "expired": "만료됨"
+    "expired": "만료됨",
+    "approvedNotUsed": "승인됨, 사용 안 됨",
+    "approvedUsed": "승인됨, 사용됨"
   },
   "decide": {
     "rejectTitle": "이 요청을 거부하시겠습니까?",
@@ -194,10 +200,11 @@
     "reasonHint": "검토자를 위한 컨텍스트(선택 사항).",
     "requiredApprovals": "필요한 승인 수",
     "requiredApprovalsHint": "일치하는 승인 정책이 적용되면 무시됩니다 — 정책이 우선입니다.",
-    "expiresInSeconds": "만료까지(초)",
-    "escalateInSeconds": "에스컬레이션까지(초)",
     "submit": "요청 제출",
-    "created": "승인 요청이 열렸습니다"
+    "created": "승인 요청이 열렸습니다",
+    "expiresIn": "만료까지",
+    "escalateIn": "에스컬레이션까지",
+    "subjectFold": "적용 대상(선택)"
   },
   "detail": {
     "title": "승인 요청",
@@ -225,9 +232,12 @@
     "reenableNeedsAdmins": "다른 관리자 계정 두 개가 이를 승인해야 합니다. ID 및 접근에서 만들거나 `olivares users create`로 만드십시오.",
     "openIdentity": "ID 열기",
     "cannotDecideOwn": "자신의 요청은 승인할 수 없습니다. 다른 관리자가 결정해야 합니다.",
-    "requesterCannotApprove": "요청한 사람은 자신의 요청을 승인할 수 없습니다.",
+    "ownRequest": "자신의 요청은 승인할 수 없습니다.",
     "launchedBy": "시작한 사람",
-    "decidedByYou": "이 요청을 승인했습니다. 다른 승인자를 기다리고 있습니다."
+    "decidedByYou": "이 요청을 승인했습니다. 다른 승인자를 기다리고 있습니다.",
+    "whoDecides": "결정할 수 있는 사람: {{names}}.",
+    "nobodyDecides": "이 요청을 결정할 수 있는 다른 사람이 없습니다.",
+    "someoneWithRights": "승인 권한이 있는 사람"
   },
   "policies": {
     "title": "정책",
@@ -238,6 +248,23 @@
     "enabled": "활성화됨",
     "rules": "규칙",
     "newPolicy": "새 정책",
+    "roles": {
+      "title": "역할",
+      "role": "역할",
+      "can": "할 수 있는 일",
+      "people": "인원",
+      "kind": "유형",
+      "builtIn": "기본 제공",
+      "custom": "사용자 지정",
+      "from": "{{role}} 기반",
+      "empty": "기본 제공 역할과 각 역할이 할 수 있는 일이 여기에 표시됩니다.",
+      "does": {
+        "owner": "테넌트 내의 모든 권한",
+        "admin": "위 권한에 더해 테넌트 IAM — 사용자, 멤버십, 토큰, 설정",
+        "editor": "위 권한에 더해 운영 데이터 쓰기",
+        "viewer": "운영 데이터와 감사 기록 읽기"
+      }
+    },
     "empty": "정책 없음",
     "emptyHint": "ABAC 거부 규칙 또는 승인 임계값을 작성하여 일치하는 작업을 거버넌스하십시오.",
     "kindAbac": "ABAC",
@@ -274,23 +301,20 @@
     "denyImplicit": "거부(암시적)",
     "requiredApprovals": "필요한 승인 수",
     "requiredApprovalsHint": "0에서 64까지입니다. 비어 있거나 0이면 엔진 기본값을 사용하며 심각한 작업에서는 더 높을 수 있습니다.",
-    "expiresInSeconds": "만료까지(초)",
-    "expiresInSecondsHint": "0–31536000(0 = 무기한).",
-    "escalateInSeconds": "에스컬레이션까지(초)",
-    "escalateInSecondsHint": "0–31536000(0 = 무기한).",
     "countError": "0에서 {{max}} 사이의 정수를 입력하십시오.",
     "matchAction": "작업 일치",
     "matchActionHint": "비어 있으면 모든 작업과 일치합니다.",
     "matchSubjectKind": "주체 종류 일치",
     "matchSubjectKindHint": "비어 있으면 모든 주체 종류와 일치합니다.",
-    "needsBusiness": "위험 등급 또는 작업 기본값이 아닌 승인 수는 Business가 필요합니다. 정책을 저장하려면 끄십시오.",
     "create": "정책 만들기",
     "save": "변경 사항 저장",
     "confirmCreateBody": "활성화된 ABAC 정책은 접근을 즉시 추가 제한하며 활성화된 승인 정책은 일치하는 작업에 인간 승인을 요구하기 시작합니다. 즉시 적용됩니다.",
     "confirmUpdateBody": "활성화된 경우 변경이 권한 경로 / 승인 흐름에 즉시 적용됩니다. 정책 종류는 변경할 수 없습니다.",
     "created": "정책이 생성되었습니다",
     "updated": "정책이 업데이트되었습니다",
-    "credentialWarning": "자격 증명 값처럼 보입니다. 정책 규칙은 참조와 선택자만 담으며 비밀은 절대 담지 않습니다."
+    "credentialWarning": "자격 증명 값처럼 보입니다. 정책 규칙은 참조와 선택자만 담으며 비밀은 절대 담지 않습니다.",
+    "expiresIn": "만료까지",
+    "escalateIn": "에스컬레이션까지"
   },
   "policyRemove": {
     "title": "이 정책을 삭제하시겠습니까?",
@@ -668,6 +692,14 @@
     "askedByForSession": "{{name}}이(가) 새 세션을 위해",
     "askedByThroughSession": "{{name}}의 세션",
     "tool": "도구",
+    "touches": "대상",
+    "changeClass": {
+      "docs_only": "문서만",
+      "code": "코드",
+      "sensitive": "민감한 파일"
+    },
+    "lapses": "<when /> 만료됩니다. 이후에는 아무도 승인할 수 없으며 실행되지 않습니다.",
+    "lapsed": "<when /> 만료되었습니다. 아무도 승인할 수 없으며 실행되지 않습니다.",
     "willRun": "실행될 내용",
     "noReview": "이 요청에는 실행될 내용이 포함되지 않습니다.",
     "commandUnknown": "이 도구의 명령은 아직 표시되지 않습니다",
@@ -729,5 +761,15 @@
       "editor": "편집자",
       "owner": "소유자"
     }
+  },
+  "durations": {
+    "none": "제한 없음",
+    "h1": "1시간",
+    "h4": "4시간",
+    "h8": "8시간",
+    "h24": "24시간",
+    "d7": "7일",
+    "d30": "30일",
+    "seconds": "{{value}}초"
   }
 }

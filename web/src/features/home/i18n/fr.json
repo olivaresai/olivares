@@ -10,6 +10,37 @@
     "unavailableDescription": "La lecture des sessions n’a pas répondu. Les chiffres ci-dessus ne sont pas affectés.",
     "untitled": "Session sans titre"
   },
+  "accounts": {
+    "title": "Vos comptes",
+    "loading": "Lecture de vos comptes…",
+    "none": "Vous n’avez pas encore de compte à vous pour {{tool}}. Les sessions que vous lancez travaillent avec votre propre compte, et personne d’autre ne peut l’utiliser.",
+    "create": "Créer mon compte",
+    "createFailed": "Votre compte n’a pas pu être créé.",
+    "createExists": "Vous avez déjà un compte à vous pour {{tool}}, donc un autre ne peut pas être créé. Demandez à un administrateur si vous ne pouvez pas l’utiliser.",
+    "createForbidden": "Votre rôle ne vous permet pas de créer un compte à vous. Demandez à un administrateur.",
+    "createNotAssigned": "{{tool}} ne vous est pas attribué : un compte à vous ne peut donc pas être créé pour cet outil. Demandez à un administrateur du département.",
+    "createUnavailable": "Les comptes à vous ne sont pas disponibles sur ce serveur.",
+    "signInWaits": "Non connecté. La connexion à votre propre compte n’est pas encore disponible sur ce serveur.",
+    "signedIn": "Connecté en tant que {{identity}}",
+    "disabled": "Désactivé par un administrateur.",
+    "retired": "Retiré. Demandez à un administrateur un compte que vous pouvez utiliser : un nouveau compte à vous ne peut pas encore être créé.",
+    "limit": "{{label}} : {{percent}} % utilisé",
+    "unavailableTitle": "Vos comptes n’ont pas pu être lus",
+    "unavailableDescription": "On ne sait pas si vous avez un compte à vous tant qu’ils ne sont pas lus."
+  },
+  "folders": {
+    "title": "Vos dossiers",
+    "start": "Commencer",
+    "startIn": "Commencer dans {{folder}}",
+    "canWork": "Vous pouvez travailler",
+    "readOnly": "Lecture seule",
+    "showAll": "Afficher tous les dossiers ({{total}})",
+    "loading": "Chargement de vos dossiers",
+    "emptyTitle": "Vous n’avez encore aucun dossier",
+    "emptyDescription": "Quand votre administrateur vous donnera accès à un dossier, il apparaîtra ici.",
+    "unavailableTitle": "Impossible de charger vos dossiers",
+    "unavailableDescription": "Vos sessions ci-dessous ne sont pas concernées."
+  },
   "empty": {
     "title": "Rien à afficher pour l’instant",
     "description": "Votre rôle n’accorde aucun accès en lecture à un module du parc. Demandez à un administrateur un octroi en lecture pour voir la vue d’ensemble."

@@ -11,7 +11,6 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -202,9 +201,9 @@ func (a *archive) read(abs, rel string, size int64) ([]byte, error) {
 	if size > a.ws.maxReadBytes {
 		return nil, &runErr{http.StatusRequestEntityTooLarge, rel + " exceeds the workspace size limit"}
 	}
-	f, err := os.Open(abs)
+	f, _, err := openRegularForRead(abs)
 	if err != nil {
-		return nil, mapFSErr(err)
+		return nil, err
 	}
 	defer func() { _ = f.Close() }()
 	// A file that grew since the stat is cut at the limit, then refused like a big one.

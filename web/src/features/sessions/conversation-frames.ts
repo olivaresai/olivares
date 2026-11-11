@@ -106,6 +106,9 @@ export interface ConversationItem {
   /** Init frame's tool count: `systemText` words the session-start line from it. */
   toolCount?: number
   systemKind?: string
+  /** The line a notice offers to send as the person's next message, as the engine wrote
+   * it (`continue`: a destination it approved, "try again"). Sent only on their press. */
+  continueWith?: string
   /** The message a reply belongs to: ACP `agent_message_chunk.messageId`, Claude Code
    * `message.id`. */
   messageId?: string
@@ -125,6 +128,10 @@ export interface ConversationItem {
   /** The images the person attached to this message, by the id the engine keeps them
    * under (operator rows only). */
   attachments?: { id: string; mediaType: string }[]
+  /** The engine's id of the accepted input this message is (operator rows only); the
+   * turn it began carries the same (`RunCheckpointDTO.input_id`). Absent until the
+   * engine names it. */
+  input_id?: string
   /** Every source line that built this item, in order. Never empty. */
   raw: string[]
 }
@@ -1264,6 +1271,7 @@ function foldLine(
   // renders its message, so a new code needs no console change.
   if (type === 'olivares_notice') {
     const message = asString(frame.message)
+    const next = asString(frame.continue)
     if (message)
       return [
         ...items,
@@ -1272,6 +1280,7 @@ function foldLine(
           id: nextId('system', items.length),
           summary: message,
           systemKind: 'notice',
+          ...(next ? { continueWith: next } : {}),
           raw: [trimmed],
         },
       ]
@@ -1430,6 +1439,7 @@ function foldLine(
         ...fields,
         ...(costUsd === undefined ? {} : { costUsd }),
         ...(model ? { model } : {}),
+        ...(at ? { at } : {}),
         raw: [trimmed],
       },
     ]
@@ -1449,8 +1459,9 @@ function foldLine(
         },
       ]
     }
+    const parent = asString(frame.parent_tool_use_id)
     const last = items[items.length - 1]
-    if (last?.kind === 'assistant') {
+    if (last?.kind === 'assistant' && last.parentToolId === parent) {
       const text = `${last.text ?? ''}${delta}`
       return [
         ...items.slice(0, -1),
@@ -1467,6 +1478,7 @@ function foldLine(
       {
         kind: 'assistant',
         id: nextId('assistant', items.length, asString(frame.uuid)),
+        ...(parent ? { subagent: true, parentToolId: parent } : {}),
         text: delta,
         summary: truncateSummary(delta),
         raw: [trimmed],

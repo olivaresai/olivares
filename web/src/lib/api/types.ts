@@ -93,9 +93,9 @@ export interface ServerInfo {
   /** A new installation. The console's navigation no longer reads it (it lists every page
    * the person may open); the field stays in the API. */
   previews_hidden?: boolean
-  /** No invitation mailer: onboarding in invite mode answers 409
-   * invite_delivery_unavailable, so the console offers the initial password only.
-   * Absent when invitations are mailed. */
+  /** No invitation mailer: a mailed invitation answers 409
+   * invite_delivery_unavailable, so the console asks for delivery "link" and shows
+   * the link once. Absent when invitations are mailed. */
   invite_delivery_unavailable?: boolean
   /** The SPKI SHA-256 pin of this engine's TLS certificate (CLX): what
    * `olivares login --pin-sha256` trusts. Absent on an engine that does not publish it. */
@@ -393,12 +393,6 @@ export interface IssueTokenResponse {
   token: string
   id: string
   name: string
-}
-
-export interface GrantMembershipRequest {
-  user_id: string
-  tenant: string
-  role: string
 }
 
 export interface CreateOrgRequest {

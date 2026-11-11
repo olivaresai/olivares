@@ -146,7 +146,7 @@ func validEffectiveConfigKey(key string) bool {
 }
 
 func (s *Server) addSupportStatus(ctx context.Context, assembler *supportbundle.Assembler) error {
-	raw, err := json.MarshalIndent(s.publicStatusProjection(ctx, false), "", "  ")
+	raw, err := json.MarshalIndent(s.publicStatusProjection(ctx), "", "  ")
 	if err != nil {
 		return fmt.Errorf("support bundle: marshal public status: %w", err)
 	}

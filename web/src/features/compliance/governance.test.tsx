@@ -43,12 +43,12 @@ vi.mock('@/lib/auth/context', () => ({
 /** The toaster is not mounted in these tests, so a toast never reaches the DOM.
  *  What matters here is that the WARNING tone was used rather than success — a
  *  completed_with_gaps erasure celebrated as clean is the defect. */
-const toastSpy = {
+const toastSpy = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
   info: vi.fn(),
-}
+}))
 vi.mock('@/components/ui/toaster', () => ({ toast: toastSpy }))
 
 vi.mock('./api', async () => {

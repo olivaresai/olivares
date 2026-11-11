@@ -144,9 +144,12 @@ type providerProfileDTO struct {
 	SessionPrograms    []string          `json:"session_programs,omitempty"`
 	SessionRegistries  []SessionRegistry `json:"session_registries,omitempty"`
 	SessionEgressHosts []string          `json:"session_egress_hosts,omitempty"`
-	CreatedAt          string            `json:"created_at,omitempty"`
-	UpdatedAt          string            `json:"updated_at,omitempty"`
-	RetiredAt          string            `json:"retired_at,omitempty"`
+	// AutoCompactWindow is the declared Claude Code auto-compact window in tokens;
+	// absent when the profile declares none and the tool compacts at its own default.
+	AutoCompactWindow int    `json:"auto_compact_window,omitempty"`
+	CreatedAt         string `json:"created_at,omitempty"`
+	UpdatedAt         string `json:"updated_at,omitempty"`
+	RetiredAt         string `json:"retired_at,omitempty"`
 }
 
 // providerProfileConfigurationDTO is the authorized configuration read: the
@@ -216,6 +219,9 @@ type patchProfileRequest struct {
 	SessionPrograms    *[]string          `json:"session_programs"`
 	SessionRegistries  *[]SessionRegistry `json:"session_registries"`
 	SessionEgressHosts *[]string          `json:"session_egress_hosts"`
+	// AutoCompactWindow declares Claude Code's auto-compact window in tokens (100000 to
+	// 1000000); 0 withdraws it and a missing or null field leaves it unchanged.
+	AutoCompactWindow *int `json:"auto_compact_window"`
 }
 
 type providerBindingDTO struct {
@@ -253,6 +259,7 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 		SessionPrograms:       p.SessionPrograms,
 		SessionRegistries:     p.SessionRegistries,
 		SessionEgressHosts:    p.SessionEgressHosts,
+		AutoCompactWindow:     p.AutoCompactWindow,
 		LocalEnvironment:      local,
 		ServerUserLogin:       usesServerUserLogin(p.Driver, p.AuthSource, p.ConfigHome, p.UserHome) && !m.serverLoginUsable(p.Tenant, p),
 		Operable: local && p.State == ProfileActive && m.driverOperable(p.Driver) &&
@@ -489,9 +496,9 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 	}
 	if body.MaxDataClass == nil && body.DisplayName == nil && body.State == nil && body.AuthSource == nil &&
 		body.ProviderRecordRef == nil && body.SessionTools == nil && body.SessionPermissionMode == nil && len(body.SessionWorkGrant) == 0 &&
-		body.SessionPrograms == nil && body.SessionRegistries == nil && body.SessionEgressHosts == nil {
+		body.SessionPrograms == nil && body.SessionRegistries == nil && body.SessionEgressHosts == nil && body.AutoCompactWindow == nil {
 		writeJSON(w, http.StatusBadRequest, errorBody(
-			"nothing to change: provide max_data_class, display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode, session_work_grant, session_programs, session_registries and/or session_egress_hosts"))
+			"nothing to change: provide max_data_class, display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode, session_work_grant, session_programs, session_registries, session_egress_hosts and/or auto_compact_window"))
 		return
 	}
 	if body.State != nil {
@@ -529,6 +536,7 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 		SessionPrograms:    body.SessionPrograms,
 		SessionRegistries:  body.SessionRegistries,
 		SessionEgressHosts: body.SessionEgressHosts,
+		AutoCompactWindow:  body.AutoCompactWindow,
 		MayUseSecretEnv: (body.SessionPrograms != nil || body.SessionRegistries != nil || body.SessionEgressHosts != nil) &&
 			m.mayUseSecretEnv(r.Context(), mc),
 	})

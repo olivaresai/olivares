@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 // workspace_fs.go is the SECURITY CORE of the governed file API: the jail that
@@ -108,6 +109,30 @@ func within(root, p string) bool {
 		!filepath.IsAbs(rel)
 }
 
+// openRegularForRead opens abs for a governed read. The open never blocks: a FIFO at the
+// name would otherwise wait for a writer forever and hold the request. The descriptor,
+// not the name, must be a regular file.
+func openRegularForRead(abs string) (*os.File, fs.FileInfo, error) {
+	f, err := os.OpenFile(abs, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, nil, mapFSErr(err)
+	}
+	info, err := f.Stat()
+	switch {
+	case err != nil:
+		err = mapFSErr(err)
+	case info.IsDir():
+		err = badRequest("path is a directory (use list)")
+	case !info.Mode().IsRegular():
+		err = badRequest("path is not a regular file (a pipe, device or socket) and cannot be read")
+	}
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, err
+	}
+	return f, info, nil
+}
+
 // deepestExistingAncestor walks up from abs's parent until an existing directory is
 // found, returning it (used to validate the create path of a not-yet-existing file).
 func deepestExistingAncestor(abs string) (string, error) {
@@ -124,6 +149,32 @@ func deepestExistingAncestor(abs string) (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// openWhereNamed opens rel below the workspace folder through root and keeps the
+// descriptor only when the kernel places it at rel itself. os.Root keeps an open inside
+// the folder but follows a link that stays inside it, at any name of the path, so a
+// folder the folder's writer swaps for a link to a subpath the workspace does not allow
+// would be opened. The check is on the descriptor the caller then reads, as an ACP write
+// does with openedPath. Off Linux the engine cannot ask, so a folder that allows only
+// some subpaths is not opened there, as an ACP file request is refused.
+func openWhereNamed(ws *resolvedWorkspace, root *os.Root, rel string, flag int) (*os.File, error) {
+	if !fileScopeSupported && len(ws.allowSubpaths) > 0 {
+		return nil, errors.ErrUnsupported
+	}
+	f, err := root.OpenFile(rel, flag, 0)
+	if err != nil || !fileScopeSupported {
+		return f, err
+	}
+	real, err := openedPath(f)
+	if err == nil && real != filepath.Join(ws.rootReal, filepath.FromSlash(rel)) {
+		err = fs.ErrInvalid
+	}
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return f, nil
 }
 
 // underAllowedSubpath reports whether the resolved real path lies within at least one

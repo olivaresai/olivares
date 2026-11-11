@@ -20,6 +20,7 @@
 //    `posture` is the WEAKEST value the engine saw across the producing connectors,
 //    `pep_provisioned` and `record_io` are stored on the run. A blank badge tells the
 //    truth where "enforced" by default would not (features/sessions/types.ts).
+import { SessionAllowances } from './conversation-approval'
 import { PanelSlot } from '@/components/ui/trust-chrome'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -58,12 +59,13 @@ import { PaneTabs } from './pane-tabs'
 import { SessionFacts } from './session-facts'
 import { SessionOverview } from './session-overview'
 import { RefChip } from './ref-chip'
-import { SessionBranchChanges } from './session-branch-changes'
 import { SessionChanges } from './session-changes'
-import { SessionGit } from './session-git'
+import { SessionGit, useRunGit } from './session-git'
+import { pushableHead } from './session-push'
 import { SessionActivity } from './session-activity'
+import { SessionScripts } from './session-scripts'
+import { SessionSubagents } from './session-subagents'
 import { SessionPreview } from './session-preview'
-import { SessionTerminal } from './session-terminal'
 import { sessionDisplayState } from './session-display-state'
 import type { SessionResolution } from './use-session-resolution'
 import './i18n'
@@ -131,6 +133,16 @@ export function SessionContextPane({
     enabled: canReadWorkspaces && !!activeTenant && !!run?.workspace_ref,
   })
   const workspace = canReadWorkspaces ? workspacesQuery.data : undefined
+  // Where a terminal of the session opens, as the drawer resolves it: its scripts run there.
+  const terminalFolder = useRunFolder({
+    run,
+    workspace,
+    canRead: canReadWorkspaces,
+    loading: false,
+    failed: false,
+    onRetry: () => {},
+  }).actual?.workspace_ref
+  const canRunScripts = can('sessions:workspace:write')
   const folderName = workspace?.name ?? null
   const workspaceId = run?.authz_workspace_id
   const canReadWorkspace = can('tenant:read')
@@ -186,6 +198,8 @@ export function SessionContextPane({
   const [localTab, setLocalTab] = useState<string>()
   // Activity is read from the tool's native record in its account home.
   const hasActivity = !!run && readsNativeRecord(run)
+  // What the Git panel read, never a read of its own: whether that panel pushes.
+  const git = useRunGit(run, boundary.epoch, 'cached')
   // The same read the Changes tab makes, shared through its cache.
   const changes = useQuery({
     queryKey: agentOpsKeys.runChanges(activeTenant, run?.run_ref ?? ''),
@@ -200,15 +214,16 @@ export function SessionContextPane({
       ? 'activity'
       : 'context'
   const options = [
-    ...(run?.workspace_ref
-      ? [
-          { value: 'changes', label: t('context.tabChanges') },
-          { value: 'files', label: t('context.tabFiles') },
-        ]
+    ...(run &&
+    (run.workspace_ref ||
+      run.workspace_path ||
+      run.worktree_branch ||
+      changes.data?.files.length ||
+      panel === 'changes')
+      ? [{ value: 'changes', label: t('context.tabChanges') }]
       : []),
-    // A shell in the folder. It writes to the folder, so it needs the right to.
-    ...(run?.workspace_ref && can('sessions:workspace:write')
-      ? [{ value: 'terminal', label: t('terminal.title') }]
+    ...(run?.workspace_ref
+      ? [{ value: 'files', label: t('context.tabFiles') }]
       : []),
     // The app the session serves on a local port. Only a launched session has one.
     ...(run ? [{ value: 'preview', label: t('preview.title') }] : []),
@@ -276,6 +291,19 @@ export function SessionContextPane({
           showMode={false}
         />
       ) : null}
+      <SessionAllowances
+        sessionRef={run?.canonical_sid ?? live?.canonical_sid}
+        active={!!run && ['running', 'idle', 'starting'].includes(run.state)}
+      />
+      {/* The folder's scripts and the agents the session spawned. */}
+      {run?.workspace_ref && canRunScripts && terminalFolder ? (
+        <SessionScripts
+          runRef={run.run_ref}
+          workspaceRef={terminalFolder}
+          projectRef={run.workspace_ref}
+        />
+      ) : null}
+      {run && hasActivity ? <SessionSubagents run={run} /> : null}
       {/* TECHNICAL DETAILS, last and closed: the references, the frames the conversation does
           not read and the selected line as the tool sent it. A line a person inspects opens it. */}
       <details
@@ -588,14 +616,20 @@ export function SessionContextPane({
       {/* What the session changed comes first: it is what a person reviews beside the
           conversation. The scope it ran under stays one click away. */}
       {run ? <SessionGit run={run} /> : null}
-      {run ? <SessionChanges run={run} /> : null}
+      {run ? <SessionChanges key={`changes:${run.run_ref}`} run={run} /> : null}
       {/* Then what a person does with them: publish the session's commit, when its
           workspace has a publication target. */}
-      {/* Keyed by run: another session is another decision, never this one's open dialog. */}
-      {run ? <SessionPublish key={run.run_ref} run={run} /> : null}
-      {/* A session in its own worktree also shows what its branch holds against where
-          it began: the work a handoff named, and what the session added to it. */}
-      {run?.worktree_branch ? <SessionBranchChanges run={run} /> : null}
+      {/* Keyed by run: another session is another decision, never this one's open dialog.
+          Once the folder's status names its HEAD, the Git panel above pushes and opens the
+          pull request on the target it serves, whose row here drops only Publish and keeps
+          Ship and its pull request links; every other target keeps its whole row. */}
+      {run ? (
+        <SessionPublish
+          key={run.run_ref}
+          run={run}
+          gitPanel={!!pushableHead(git.data)}
+        />
+      ) : null}
     </>
   )
   const filesBody = (
@@ -662,70 +696,9 @@ export function SessionContextPane({
         {!extension && tab === 'preview' && run ? (
           <SessionPreview key={run.run_ref} run={run} />
         ) : null}
-        {!extension && tab === 'terminal' && run ? (
-          <SessionTerminalTab
-            key={`${boundary.key}:${run.run_ref}`}
-            run={run}
-            workspace={workspace}
-            canRead={canReadWorkspaces}
-            loading={
-              workspacesQuery.isPending &&
-              workspacesQuery.fetchStatus !== 'idle'
-            }
-            failed={workspacesQuery.isError}
-            onRetry={() => void workspacesQuery.refetch()}
-          />
-        ) : null}
         {!extension && tab === 'context' ? contextBody : null}
       </div>
     </div>
-  )
-}
-
-/** The terminal of the folder the session works in: the same folder its Files tab browses. */
-function SessionTerminalTab({
-  run,
-  workspace,
-  canRead,
-  loading,
-  failed,
-  onRetry,
-}: {
-  run: RunDTO
-  workspace: WorkspaceDTO | undefined
-  canRead: boolean
-  loading: boolean
-  failed: boolean
-  onRetry: () => void
-}) {
-  const { t } = useTranslation('sessions')
-  const folder = useRunFolder({
-    run,
-    workspace,
-    canRead,
-    loading,
-    failed,
-    onRetry,
-  })
-  if (!run.workspace_ref)
-    return (
-      <p className="text-caption text-muted-foreground">
-        {t('terminal.noFolder')}
-      </p>
-    )
-  if (folder.loading)
-    return <Skeleton aria-busy="true" className="h-40 w-full" />
-  if (folder.failed || !folder.actual)
-    return (
-      <p className="text-caption text-muted-foreground">
-        {t('terminal.unavailable')}
-      </p>
-    )
-  return (
-    <SessionTerminal
-      key={folder.actual.workspace_ref}
-      workspaceRef={folder.actual.workspace_ref}
-    />
   )
 }
 
@@ -735,7 +708,7 @@ function SessionTerminalTab({
  * the worktree's own registration is resolved here. The DTO's root_path is never changed:
  * that would silently send writes to the old reference. Files and Terminal share this.
  */
-function useRunFolder({
+export function useRunFolder({
   run,
   workspace,
   canRead,

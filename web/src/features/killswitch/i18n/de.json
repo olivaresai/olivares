@@ -9,11 +9,23 @@
     "agentCount_one": "{{count}} Agent-Stopp aktiv",
     "agentCount_other": "{{count}} Agent-Stopps aktiv",
     "agentBody": "Die gestoppten Agenten können nicht handeln: Ihre Werkzeugaufrufe, MCP-Aufrufe und anderen Aktionen werden abgelehnt.",
-    "none": "Nichts ist gestoppt. Sitzungen und Agenten laufen normal.",
+    "noneTitle": "Nichts ist gestoppt",
+    "noneBody": "Sitzungen und Agenten laufen normal.",
     "engagedBy": "Ausgelöst von",
     "revoked": "{{count}} ausstehende Genehmigungsanfrage storniert",
     "revoked_one": "{{count}} ausstehende Genehmigungsanfrage storniert",
     "revoked_other": "{{count}} ausstehende Genehmigungsanfragen storniert"
+  },
+  "effects": {
+    "title": "Was beim Stoppen aller Agenten geschieht",
+    "sessions": "Offene Sitzungen enden",
+    "sessionsHint": "Der Prozess jeder Sitzung stoppt; ihr Ordner bleibt, wie er ist.",
+    "actions": "Jede Agentenaktion wird abgelehnt",
+    "actionsHint": "Werkzeugaufrufe, MCP, Zeitpläne, Sprache, Modellaufrufe, Bereitstellungen und Ereigniszustellung.",
+    "approvals": "Ausstehende Genehmigungsanfragen werden storniert",
+    "approvalsHint": "Die der Sitzungen und der Agentenaktionen. Anfragen, die eine Person außerhalb einer Sitzung gestellt hat, bleiben bestehen, ebenso Anfragen zu den Kontrollen selbst.",
+    "ledger": "Der Stopp wird im Audit-Hauptbuch aufgezeichnet",
+    "ledgerHint": "Wer gestoppt hat, wann und warum, für die spätere Prüfung."
   },
   "engage": {
     "agentRef": "Agent",
@@ -25,6 +37,7 @@
     "confirmBodyEstateNoRestart": "Alle Agenten stoppen sofort: Offene Sitzungen enden, ihre Aktionen werden abgelehnt, und die ausstehenden Genehmigungsanfragen dieser Sitzungen und von Agentenaktionen werden storniert; Anfragen, die eine Person außerhalb einer Sitzung gestellt hat, bleiben ausstehend, ebenso Anfragen zu den Kontrollen selbst. Es gibt keinen Notfallweg daran vorbei.",
     "confirmTitleAgent": "Diesen Agenten stoppen?",
     "confirmBodyAgent": "Dieser Agent stoppt sofort: Seine Aktionen werden abgelehnt und seine ausstehenden Genehmigungsanfragen storniert. Für den Neustart müssen zwei verschiedene Benutzerkonten zustimmen, und der Stopp muss danach geprüft werden.",
+    "confirmBodyAgentNoRestart": "Dieser Agent stoppt sofort: Seine Aktionen werden abgelehnt und seine ausstehenden Genehmigungsanfragen storniert.",
     "done": "Not-Aus ausgelöst",
     "doneBody": "Stopp {{id}} ist aktiv. Die Wiederfreigabe erfordert das Vier-Augen-Prinzip.",
     "alreadyStopped": "Für diesen Geltungsbereich besteht bereits ein aktiver Stopp",
@@ -32,7 +45,6 @@
     "stopsRunning_one": "{{count}} offene Sitzung wird beendet.",
     "stopsRunning_other": "{{count}} offene Sitzungen werden beendet.",
     "stopAll": "Alle Agenten stoppen",
-    "more": "Mehr",
     "stopOne": "Einen Agenten stoppen…",
     "stopAgent": "Diesen Agenten stoppen"
   },
@@ -47,7 +59,7 @@
     "status": "{{live}} laufend, {{ended}} beendet."
   },
   "stops": {
-    "title": "Stopps",
+    "title": "Verlauf",
     "caption": "Jeder Stopp: wer ihn ausgelöst hat, wann, was er umfasst, warum und wie er beendet und geprüft wurde. Jede Aktion prüft diese Stopps, bevor sie ausgeführt wird.",
     "search": "Stopps suchen…",
     "label": "Not-Aus-Stopps",

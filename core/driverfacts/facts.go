@@ -8,10 +8,13 @@
 package driverfacts
 
 import (
+	"fmt"
 	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
+
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -158,6 +161,13 @@ type Facts struct {
 	// NoPATHFallback: the program name is too generic to resolve by name (`agent`), so the
 	// tool runs only from a managed install or an executable the administrator pinned.
 	NoPATHFallback bool
+	// SupportedFrom and SupportedBelow bound the tool versions this engine release is
+	// known to work with: from the first, inclusive, up to the second, exclusive. Empty
+	// means no claim (Cursor CLI numbers its releases by date). Compatibility reads them.
+	// ponytail: the floor is the oldest release the engine's own measurements record and
+	// the ceiling is the next major, not a tested ceiling; upgrade trigger: a vendor release
+	// that breaks the protocol, which sets the ceiling below it.
+	SupportedFrom, SupportedBelow string
 }
 
 // openCodeHeadlessLogin is OpenCode's default login: its built-in ChatGPT device
@@ -185,6 +195,7 @@ var rows = []Facts{
 		BindingDescription: "Claude Code runs only on an Anthropic key",
 		Bindings:           []Binding{{"anthropic", EgressConfigured}},
 		EgressMeasured:     true,
+		SupportedFrom:      "2.1.275", SupportedBelow: "3.0.0",
 	},
 	{
 		Key: "codex", Name: "Codex", Program: "codex", Session: true,
@@ -202,6 +213,7 @@ var rows = []Facts{
 		Bindings:           []Binding{{"openai", EgressConfigured}, {"openai_compatible", EgressConfigured}, {"ollama", EgressConfigured}},
 		ResponsesOnly:      true,
 		EgressMeasured:     true,
+		SupportedFrom:      "0.162.1", SupportedBelow: "1.0.0",
 	},
 	{
 		Key: "grok", Name: "Grok Build", Program: "grok", Session: true,
@@ -218,6 +230,7 @@ var rows = []Facts{
 		OwnKind:      "xai", KeyPhrase: "an xAI key",
 		BindingDescription: "Grok Build runs only on an xAI key",
 		Bindings:           []Binding{{"xai", EgressConfigured}},
+		SupportedFrom:      "1.0.46", SupportedBelow: "2.0.0",
 	},
 	{
 		Key: "opencode", Name: "OpenCode", Program: "opencode", Session: true,
@@ -257,6 +270,7 @@ var rows = []Facts{
 		// and OpenCode's local server port were measured behind the session proxy on
 		// 1.19.4; a record-bound turn behind the proxy is not.
 		EgressMeasured: true,
+		SupportedFrom:  "1.18.34", SupportedBelow: "2.0.0",
 	},
 	// GEMINI_CLI_HOME names the home that holds .gemini, not .gemini itself.
 	{
@@ -273,6 +287,7 @@ var rows = []Facts{
 		BindingDescription: "Gemini CLI runs on a Gemini API key at Google's own address",
 		Bindings:           []Binding{{"gemini", EgressVendor}},
 		EgressMeasured:     true,
+		SupportedFrom:      "0.62.0", SupportedBelow: "1.0.0",
 	},
 	// Cursor CLI (cursor.com/docs/cli): `agent login` prints one link and waits for the
 	// browser; its credential is the account, so no provider kind binds it. CURSOR_CONFIG_DIR
@@ -310,6 +325,28 @@ func (f Facts) CanBind(kind, baseURL string) bool {
 		}
 	}
 	return false
+}
+
+// Compatibility states a tool version can have against the range this engine release declares.
+const (
+	CompatSupported   = "supported"
+	CompatUnsupported = "unsupported"
+)
+
+// Compatibility says whether version is inside the range this release supports, and for
+// an unsupported one gives the sentence a person reads, naming the range. It returns no
+// state when the row declares no range or the version has no semantic form. It only
+// informs: nothing refuses a launch because of it.
+func (f Facts) Compatibility(version string) (state, note string) {
+	v := "v" + strings.TrimPrefix(version, "v")
+	if f.SupportedFrom == "" || f.SupportedBelow == "" || !semver.IsValid(v) {
+		return "", ""
+	}
+	if semver.Compare(v, "v"+f.SupportedFrom) >= 0 && semver.Compare(v, "v"+f.SupportedBelow) < 0 {
+		return CompatSupported, ""
+	}
+	return CompatUnsupported, fmt.Sprintf("%s %s is outside what this release supports (%s up to, not including, %s); sessions still start on it but may fail. Install a supported version from AI tools.",
+		f.Name, version, f.SupportedFrom, f.SupportedBelow)
 }
 
 // LoginHost reports whether host is one the tool's own login names: the whole

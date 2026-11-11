@@ -3,6 +3,7 @@
     "draftNotice": "Questo elemento è in bozza, quindi i suoi criteri possono ancora essere corretti. La chiave del criterio è un'identità permanente e non viene mai riassegnata.",
     "lockedNotice": "Questo elemento ha lasciato la bozza, quindi i criteri non si possono più modificare, solo valutare. La chiave del criterio è un'identità permanente.",
     "none": "Nessun criterio di accettazione.",
+    "noneBody": "Qui compaiono i controlli che dicono quando questo elemento è concluso, una volta definiti.",
     "required": "Obbligatorio",
     "state": {
       "pending": "In sospeso",
@@ -143,20 +144,21 @@
     "empty": {
       "effective": {
         "title": "Nessuna decisione in vigore",
-        "body": "Nessuna decisione è in vigore."
+        "body": "Qui compaiono le decisioni registrate sugli elementi di lavoro finché sono in vigore."
       },
       "revoked": {
         "title": "Nessuna decisione revocata",
-        "body": "Nessuna decisione è stata revocata."
+        "body": "Una decisione compare qui appena viene revocata."
       },
       "history": {
         "title": "Nessuna decisione registrata",
-        "body": "Qui non è ancora stato deciso nulla."
+        "body": "Qui compare ogni decisione registrata sugli elementi di lavoro."
       }
     }
   },
   "dependencies": {
-    "none": "Nessuna dipendenza."
+    "none": "Nessuna dipendenza.",
+    "noneBody": "Qui compaiono gli elementi di lavoro che questo attende; può iniziare quando ciascuno è concluso."
   },
   "detail": {
     "subtitle": "{{kind}} · versione {{version}}",
@@ -164,8 +166,12 @@
     "owner": "Titolare",
     "provenance": "Provenienza",
     "priority": "Priorità",
+    "waitsOn": "In attesa di",
+    "waitsOnDependencies": "Elementi di lavoro da cui dipende e che non sono ancora conclusi",
     "blocked": "Bloccato",
     "terminal": "Esito",
+    "due": "Scadenza",
+    "ended": "Terminato",
     "etag": "Tag di versione",
     "tabs": {
       "overview": "Panoramica",
@@ -176,7 +182,8 @@
     }
   },
   "events": {
-    "none": "Nessun evento registrato per questo elemento."
+    "none": "Nessun evento registrato per questo elemento.",
+    "noneBody": "Ogni modifica di questo elemento viene registrata qui appena avviene."
   },
   "filters": {
     "status": "Stato",
@@ -215,12 +222,10 @@
     "unknown": "Impossibile verificare",
     "reason": "Motivo",
     "ttl": "TTL (secondi)",
-    "noWrite": "Il tuo ruolo non può modificare questo lease.",
     "noAdmin": "Per subentrare, revocare e reimpostare il clock serve l'amministrazione dei lease.",
+    "heldBy": "La sessione {{holder}} detiene questo elemento; è la sessione stessa a prendere, rinnovare e rilasciare il lease.",
+    "vacant": "Nessuna sessione detiene questo elemento; è la sessione stessa a prendere, rinnovare e rilasciare il lease.",
     "actions": {
-      "acquire": "Acquisisci",
-      "renew": "Rinnova",
-      "release": "Rilascia",
       "takeover": "Subentra",
       "revoke": "Revoca",
       "clockRebase": "Reimposta il clock"
@@ -246,7 +251,7 @@
     "error": "Stream interrotto",
     "unavailableBody": "L'elenco a schermo potrebbe non essere aggiornato e nient'altro te lo segnalerà. Aggiorna per leggere direttamente l'archivio."
   },
-  "subtitle": "Il lavoro condiviso da sessioni e persone: elementi, titolari, dipendenze, criteri di accettazione e decisioni. Ogni modifica viene mostrata prima di essere applicata.",
+  "subtitle": "Segui gli elementi di lavoro: chi ne è responsabile, da cosa dipendono e quando sono completati.",
   "tabs": {
     "items": "Elementi di lavoro",
     "decisions": "Decisioni"
@@ -262,7 +267,7 @@
     "item.cancel": "Annulla",
     "item.archive": "Archivia",
     "noWrite": "Il tuo ruolo non può modificare questo elemento.",
-    "noAdmin": "Il tuo ruolo non può segnare come non riusciti né archiviare gli elementi."
+    "noAdmin": "Il tuo ruolo non può archiviare gli elementi."
   },
   "truncation": {
     "label": "Caricate {{n}} righe; ce ne sono altre",

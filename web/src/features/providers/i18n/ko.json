@@ -22,6 +22,9 @@
     "name": "이름",
     "kind": "종류",
     "key": "키",
+    "usedBy": "사용 프로필",
+    "usedByUnread": "각 키를 사용하는 프로필을 읽을 수 없습니다.",
+    "usedByPartial": "일부 프로필을 읽지 못했습니다. 키를 표시된 것보다 더 많은 프로필이 사용할 수 있습니다.",
     "state": "상태",
     "connection": "연결",
     "actions": "작업"
@@ -44,7 +47,8 @@
   },
   "states": {
     "active": "활성",
-    "revoked": "철회됨"
+    "revoked": "철회됨",
+    "disabled": "비활성"
   },
   "probe": {
     "never": "테스트 안 됨",
@@ -70,7 +74,9 @@
     "testing": "테스트 중…",
     "rotate": "키 교체",
     "revoke": "철회",
-    "details": "세부 정보"
+    "details": "세부 정보",
+    "disable": "비활성화",
+    "enable": "활성화"
   },
   "create": {
     "title": "프로바이더 추가",
@@ -171,5 +177,9 @@
   "section": {
     "title": "API 키",
     "add": "API 키 추가"
+  },
+  "stateChange": {
+    "disabled": "프로바이더가 비활성화되었습니다. 다시 활성화할 때까지 연결된 프로필은 새 실행을 거부합니다.",
+    "active": "프로바이더가 활성화되었습니다."
   }
 }

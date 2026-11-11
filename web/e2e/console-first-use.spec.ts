@@ -74,6 +74,10 @@ test('first use: setup, choose model and folder, work, change model, stop', asyn
   await expect(
     start.getByRole('heading', { name: 'Start a session', exact: true }),
   ).toBeVisible()
+  // First run is one screen with one next step: no empty state beside the composer, and
+  // no second instruction to get a tool ready (the tool here is signed in on the server).
+  await expect(page.getByText('No sessions yet')).toHaveCount(0)
+  await expect(page.getByTestId('tool-claude')).toHaveCount(0)
   const headers = {
     Authorization: `Bearer ${await sessionToken(page)}`,
     'X-Olivares-Tenant': await consoleTenant(page),
@@ -134,14 +138,13 @@ test('first use: setup, choose model and folder, work, change model, stop', asyn
       .not.toMatch(
         /not reported|^Model$|tenant[-_]|run_|workspace_|\/sessions\/workspaces\//im,
       )
+    // The model and its effort are one picker, named for both.
     const model = composer.getByRole('button', {
-      name: 'Model: Claude Sonnet 5.5',
+      name: 'Model: Claude Sonnet 5.5, effort High',
       exact: true,
     })
     await expect(model).toBeEnabled()
-    await expect(
-      composer.getByRole('button', { name: 'Effort: High', exact: true }),
-    ).toBeVisible()
+    await expect(model).toHaveText('Claude Sonnet 5.5 · High')
     await expect(
       composer.getByRole('button', {
         name: 'Access: Edit files and run commands',
@@ -203,8 +206,11 @@ test('first use: setup, choose model and folder, work, change model, stop', asyn
   await expect(details.getByTestId('session-pane-body')).toContainText(
     'first-use file contents',
   )
-  await panel('Terminal')
-  await page.getByRole('button', { name: 'Open terminal', exact: true }).click()
+  // The terminal is the drawer under the session; opening it starts a shell.
+  await page
+    .getByTestId('terminal-drawer')
+    .getByRole('button', { name: 'Terminal', exact: true })
+    .click()
   const terminal = page.getByTestId('terminal-screen')
   await expect(terminal).toContainText('$', { timeout: 30_000 })
   await page.locator('.xterm-helper-textarea').focus()
@@ -216,29 +222,101 @@ test('first use: setup, choose model and folder, work, change model, stop', asyn
       timeout: 30_000,
     })
     .toContain(`first-use-pwd=${folder}`)
+
+  const width = async (testId: string) =>
+    Math.round((await page.getByTestId(testId).boundingBox())?.width ?? 0)
+  // Each step reads the count only after the size it set has reached the
+  // shell: its waiter starts before the window changes.
+  const sized = () => page.waitForResponse((r) => r.url().endsWith('/size'))
+
+  // At 1440 x 800 with Details open (the spec's 1440, where 120 columns
+  // leave a margin; at 1280 an 8 px cell leaves one): the drawer lies under
+  // the whole sheet, Details included, and keeps at least 120 columns. The
+  // window grows from 1280 x 720, so the drawer widens and a size call comes.
+  const narrowSized = sized()
+  await page.setViewportSize({ width: 1440, height: 800 })
+  await narrowSized
+  await expect(details).toBeVisible()
+  await page.locator('.xterm-helper-textarea').focus()
+  await page.keyboard.type(`clear; printf 'narrow=%s\\n' "$(tput cols)"`)
+  await page.keyboard.press('Enter')
+  await expect(terminal).toContainText(/narrow=\d+/, { timeout: 30_000 })
+  const narrow = Number(
+    /narrow=(\d+)/.exec((await terminal.textContent()) ?? '')![1],
+  )
+  console.log(
+    `At 1440 px, Details open: ${narrow} columns; drawer ${await width('terminal-drawer')} px`,
+  )
+  expect(narrow, 'cols at 1440 px, Details open').toBeGreaterThanOrEqual(120)
+
+  // J7.2: at 1600 px with Details open the shell has at least 120 columns, and a web
+  // address it prints opens in a new tab on a click. The drawer widens, so a
+  // size call comes.
+  const wideSized = sized()
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await wideSized
+  await expect(details).toBeVisible()
+  await page.locator('.xterm-helper-textarea').focus()
+  await page.keyboard.type(
+    `clear; printf 'https://example.invalid/j7\\nsize=%s,%s\\n' "$(tput lines)" "$(tput cols)"`,
+  )
+  await page.keyboard.press('Enter')
+  await expect(terminal).toContainText(/size=\d+,\d+/, { timeout: 30_000 })
+  const [rows, cols] = /size=(\d+),(\d+)/
+    .exec((await terminal.textContent()) ?? '')!
+    .slice(1)
+    .map(Number)
+  console.log(
+    `J7.2 at 1600 px: ${cols} columns, ${rows} rows; drawer ${await width('terminal-drawer')} px, details ${await width('session-context')} px`,
+  )
+  expect(cols, 'tput cols at 1600 px with Details open').toBeGreaterThanOrEqual(
+    120,
+  )
   await page
+    .context()
+    .route('https://example.invalid/**', (r) => r.fulfill({ body: 'j7' }))
+  const cells = (await page.locator('.xterm-screen').boundingBox())!
+  const at = {
+    x: cells.x + (cells.width / cols) * 5.5,
+    y: cells.y + (cells.height / rows) * 0.5,
+  }
+  await page.mouse.move(at.x, at.y)
+  const opened = page.context().waitForEvent('page')
+  await page.mouse.click(at.x, at.y)
+  const tab = await opened
+  await expect.poll(() => tab.url()).toBe('https://example.invalid/j7')
+  await tab.close()
+
+  await page
+    .getByRole('button', { name: 'Close Terminal 1', exact: true })
+    .click()
+  await page
+    .getByRole('dialog', { name: 'Close Terminal 1?', exact: true })
     .getByRole('button', { name: 'Close terminal', exact: true })
     .click()
 
   await composer
-    .getByRole('button', { name: 'Model: Claude Sonnet 5.5', exact: true })
+    .getByRole('button', {
+      name: 'Model: Claude Sonnet 5.5, effort High',
+      exact: true,
+    })
     .click()
   await page.getByRole('option', { name: /^Claude Opus 5\.5/ }).click()
   // A running session keeps its model; a changed choice offers a new session.
   await expect(page.getByText(/This session keeps/)).toBeVisible()
   await expect(page.getByTestId('composer-new-with-choice')).toBeVisible()
   await page.keyboard.press('Escape')
-  await page.locator('[data-slot="sidebar"] a[href="/sessions"]').click()
+  await page.locator('[data-slot="sidebar"] a[data-place="sessions"]').click()
   await openWorkingFold(page)
   const listed = page
     .getByTestId('rail-row')
     .filter({ hasText: 'Read hello.txt' })
   await expect(listed).toBeVisible()
   await listed.click()
-  await page.getByRole('button', { name: 'Stop', exact: true }).click()
+  await page.getByRole('button', { name: 'End session', exact: true }).click()
   await page
-    .getByRole('dialog', { name: 'Stop this session?', exact: true })
-    .getByRole('button', { name: 'Stop the session', exact: true })
+    .getByRole('dialog', { name: 'End this session?', exact: true })
+    .getByRole('button', { name: 'End the session', exact: true })
     .click()
   await expect(
     page.getByRole('button', { name: 'Resume', exact: true }),

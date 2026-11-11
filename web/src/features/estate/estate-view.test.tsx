@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api/errors'
 import { useModulesStore } from '@/stores/modules'
 import type { EstateFamily, EstatePage } from './types'
 import type { FeatureView } from '@/features/registry'
@@ -162,7 +163,17 @@ describe('estate list and inspector', () => {
     expect(await screen.findByRole('dialog')).not.toHaveTextContent(
       'Every other launch choice is under Advanced options.',
     )
-    await userEvent.click(await screen.findByRole('button', { name: 'Start' }))
+    await userEvent.click(
+      await screen.findByRole('combobox', { name: 'Folder' }),
+    )
+    await userEvent.click(
+      await screen.findByRole('option', {
+        name: 'A new folder for this session',
+      }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Start session' }),
+    )
     expect(wire.start).toHaveBeenCalledWith(
       {
         quick: {
@@ -185,7 +196,7 @@ describe('estate list and inspector', () => {
       }),
     )
     await userEvent.click(screen.getByRole('button', { name: 'Start session' }))
-    await screen.findByRole('button', { name: 'Start' })
+    await screen.findByRole('button', { name: 'Start session' })
     wire.allowed.delete('sessions:run:write')
     view.rerender(view.element())
     expect(
@@ -219,10 +230,15 @@ describe('estate list and inspector', () => {
     await screen.findByRole('dialog')
     wire.allowed.delete('sessions:run:write')
     view.rerender(view.element())
+    // The page's own door is withdrawn: no Start session outside the dialog, looked for
+    // behind the modal too, since the dialog's primary bears the same words.
+    const dialog = screen.getByRole('dialog')
     expect(
-      screen.queryByRole('button', { name: 'Start session' }),
-    ).not.toBeInTheDocument()
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
+      screen
+        .queryAllByRole('button', { name: 'Start session', hidden: true })
+        .filter((button) => !dialog.contains(button)),
+    ).toHaveLength(0)
+    expect(dialog).toBeInTheDocument()
   })
 
   it('retains a disconnected resource, searches it and opens its inspector by keyboard', async () => {
@@ -337,9 +353,124 @@ describe('estate list and inspector', () => {
     const row = (
       await screen.findByRole('button', { name: 'Next page' })
     ).closest('[role="status"]') as HTMLElement
-    expect(row).toHaveTextContent('Folder: Showing 1. More are available.')
+    expect(row).toHaveTextContent('Showing 1. More are available.')
     expect(row).not.toHaveTextContent(/native/i)
     expect(within(row).getByRole('link', { name: 'Open Folder' })).toBeVisible()
+  })
+
+  it('groups resources per kind, each row with its helper line and state as dot and word', async () => {
+    wire.read.mockImplementation(async (family: EstateFamily) =>
+      family === 'folder'
+        ? {
+            ...empty,
+            nodes: [
+              { kind: 'folder', ref: 'f1', label: 'Repo', status: 'active' },
+            ],
+          }
+        : family === 'session'
+          ? {
+              ...empty,
+              nodes: [
+                {
+                  kind: 'session',
+                  ref: 'r1',
+                  label: 'Docs run',
+                  status: 'running',
+                  folderRef: 'f1',
+                },
+              ],
+            }
+          : empty,
+    )
+    show()
+    const folders = await screen.findByRole('region', { name: 'Folders' })
+    expect(within(folders).getByText('1')).toBeInTheDocument()
+    const sessions = screen.getByRole('region', { name: 'Sessions' })
+    const row = within(sessions).getByRole('listitem')
+    // The name opens the resource, 44 px high on a phone, inside the row's own padding.
+    const name = within(row).getByRole('button', { name: 'Docs run' })
+    expect(name).toHaveClass('max-md:min-h-11')
+    // The helper names the folder, and the state is dot plus word.
+    expect(row).toHaveTextContent('Repo')
+    expect(row).toHaveTextContent('Working')
+    expect(row.querySelector('[data-slot="status-dot"]')).not.toBeNull()
+  })
+
+  it('names an empty estate once instead of an empty list per kind', async () => {
+    wire.read.mockResolvedValue(empty)
+    show()
+    expect(
+      await screen.findByText('No resources configured yet'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('region')).toBeNull()
+  })
+
+  it('says how many rows the filters hide and clears them', async () => {
+    const user = userEvent.setup()
+    show()
+    await screen.findByRole('button', { name: /Disconnected folder/ })
+    await user.type(screen.getByRole('searchbox'), 'missing')
+    expect(await screen.findByText('No resources match.')).toBeInTheDocument()
+    expect(
+      screen.getByText('1 item is hidden by the filters.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(
+      await screen.findByRole('button', { name: /Disconnected folder/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers Retry when no family can be read and reads them again', async () => {
+    const user = userEvent.setup()
+    wire.read.mockRejectedValue(new Error('fixture failure'))
+    show()
+    const alert = await screen.findByRole('alert')
+    const reads = wire.read.mock.calls.length
+    wire.read.mockImplementation(async (family: EstateFamily) =>
+      family === 'folder' ? page('Back again') : empty,
+    )
+    await user.click(within(alert).getByRole('button', { name: 'Retry' }))
+    expect(
+      await screen.findByRole('button', { name: /Back again/ }),
+    ).toBeInTheDocument()
+    expect(wire.read.mock.calls.length).toBeGreaterThan(reads)
+  })
+
+  it('shows a refused read as no access, never as a failure', async () => {
+    wire.read.mockRejectedValue(new ApiError(403, 'forbidden', 'denied'))
+    show()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeVisible()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  it('counts nothing beside a family that could not be read', async () => {
+    wire.read.mockImplementation(async (family: EstateFamily) => {
+      if (family === 'session') throw new Error('fixture failure')
+      return family === 'folder' ? page('Repo') : empty
+    })
+    show()
+    const group = await screen.findByRole('region', { name: 'Sessions' })
+    expect(within(group).getByRole('alert')).toBeVisible()
+    expect(
+      within(group).getByText('Could not load this resource family.'),
+    ).toBeVisible()
+    expect(within(group).queryByText('0')).toBeNull()
+  })
+
+  it('says a family refused by role is refused, with no Retry in it', async () => {
+    wire.read.mockImplementation(async (family: EstateFamily) => {
+      if (family === 'session') throw new ApiError(403, 'forbidden', 'denied')
+      return family === 'folder' ? page('Repo') : empty
+    })
+    show()
+    const group = await screen.findByRole('region', { name: 'Sessions' })
+    expect(
+      within(group).getByText('You do not have access to this.'),
+    ).toBeVisible()
+    expect(within(group).queryByRole('button', { name: 'Retry' })).toBeNull()
   })
 
   it('shows the selected workspace contents from the engine read, for admins only', async () => {

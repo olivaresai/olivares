@@ -10,12 +10,24 @@
     "agentCount_many": "{{count}} arrêts d’agent actifs",
     "agentCount_other": "{{count}} arrêts d’agent actifs",
     "agentBody": "Les agents arrêtés ne peuvent pas agir : leurs appels d'outils, leurs appels MCP et leurs autres actions sont refusés.",
-    "none": "Rien n'est arrêté. Les sessions et les agents fonctionnent normalement.",
+    "noneTitle": "Rien n'est arrêté",
+    "noneBody": "Les sessions et les agents fonctionnent normalement.",
     "engagedBy": "Activé par",
     "revoked": "{{count}} demande d'approbation en attente annulée",
     "revoked_one": "{{count}} demande d'approbation en attente annulée",
     "revoked_many": "{{count}} demandes d'approbation en attente annulées",
     "revoked_other": "{{count}} demandes d'approbation en attente annulées"
+  },
+  "effects": {
+    "title": "Ce qui se passe quand tout est arrêté",
+    "sessions": "Les sessions ouvertes se terminent",
+    "sessionsHint": "Le processus de chaque session s'arrête ; son dossier reste tel quel.",
+    "actions": "Chaque action des agents est refusée",
+    "actionsHint": "Appels d'outils, MCP, planifications, voix, appels de modèles, déploiements et livraison d'événements.",
+    "approvals": "Les demandes d'approbation en attente sont annulées",
+    "approvalsHint": "Celles des sessions et des actions d'agents. Les demandes qu'une personne a déposées hors d'une session restent en attente, comme celles qui portent sur les contrôles.",
+    "ledger": "L'arrêt est consigné dans le registre d'audit",
+    "ledgerHint": "Qui l'a arrêté, quand et pourquoi, pour la revue qui suit."
   },
   "engage": {
     "agentRef": "Agent",
@@ -27,6 +39,7 @@
     "confirmBodyEstateNoRestart": "Tous les agents s'arrêtent immédiatement : les sessions ouvertes se terminent, leurs actions sont refusées et les demandes d'approbation en attente de ces sessions et des actions d'agents sont annulées ; les demandes qu'une personne a déposées hors d'une session restent en attente, tout comme celles qui portent sur les contrôles eux-mêmes. Aucune voie d'urgence ne permet de l'éviter.",
     "confirmTitleAgent": "Arrêter cet agent ?",
     "confirmBodyAgent": "Cet agent s'arrête immédiatement : ses actions sont refusées et ses demandes d'approbation en attente sont annulées. Pour le redémarrer, deux comptes utilisateur différents doivent approuver, et l'arrêt doit être revu ensuite.",
+    "confirmBodyAgentNoRestart": "Cet agent s'arrête immédiatement : ses actions sont refusées et ses demandes d'approbation en attente sont annulées.",
     "done": "Coupe-circuit activé",
     "doneBody": "L’arrêt {{id}} est actif. La réactivation exige un double contrôle.",
     "alreadyStopped": "Un arrêt actif existe déjà pour ce périmètre",
@@ -35,7 +48,6 @@
     "stopsRunning_many": "{{count}} sessions ouvertes s’arrêtent.",
     "stopsRunning_other": "{{count}} sessions ouvertes s’arrêtent.",
     "stopAll": "Arrêter tous les agents",
-    "more": "Plus",
     "stopOne": "Arrêter un agent…",
     "stopAgent": "Arrêter cet agent"
   },
@@ -50,7 +62,7 @@
     "status": "{{live}} en cours, {{ended}} terminées."
   },
   "stops": {
-    "title": "Arrêts",
+    "title": "Historique",
     "caption": "Chaque arrêt : qui l'a lancé, quand, ce qu'il couvre, pourquoi, et comment il a été levé et revu. Chaque action vérifie ces arrêts avant de s'exécuter.",
     "search": "Rechercher des arrêts…",
     "label": "Arrêts du coupe-circuit",

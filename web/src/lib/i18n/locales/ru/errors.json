@@ -5,9 +5,10 @@
   },
   "businessOnly": {
     "title": "Входит в Business",
-    "description": "Эта страница входит в Olivares AI Business. В этой редакции её нет.",
-    "link": "О Business",
-    "start": "Перейти на стартовую страницу"
+    "heading": "Эта страница входит в Olivares AI Business",
+    "description": "Эта установка работает на Olivares AI Community. Ваши данные и страницы остаются прежними.",
+    "editions": "Посмотреть редакции",
+    "link": "О Business"
   },
   "forbidden": {
     "title": "Нет доступа",

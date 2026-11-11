@@ -118,7 +118,7 @@ it('shows each signed-in instance with its account, plan, share of the week and 
     true,
   )
   expect(
-    within(card).getByText('Authenticated as c***@example.com · max'),
+    within(card).getByText('Authenticated as c***@example.com · Claude Max'),
   ).toBeInTheDocument()
   expect(within(card).getByText('2.1.289 (Claude Code)')).toBeInTheDocument()
   expect(within(card).getByText('/home/op/.claude')).toBeInTheDocument()
@@ -166,7 +166,7 @@ it('keeps a stale snapshot and names the command that failed', async () => {
     ),
   ).toBeInTheDocument()
   expect(
-    within(card).getByText('Authenticated as c***@example.com · max'),
+    within(card).getByText('Authenticated as c***@example.com · Claude Max'),
   ).toBeInTheDocument()
 })
 
@@ -268,7 +268,7 @@ it('keeps readable login details when inventory fails, without offering installa
   await openOptions('Claude Code')
   const card = await screen.findByRole('article', { name: /claude code/i })
   expect(
-    within(card).getByText('Authenticated as c***@example.com · max'),
+    within(card).getByText('Authenticated as c***@example.com · Claude Max'),
   ).toBeVisible()
   expect(within(card).getByTestId('account-usage')).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Install' })).toBeNull()

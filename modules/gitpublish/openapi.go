@@ -172,6 +172,9 @@ func gitpublishIssueCommentSchema() map[string]any {
 // OperationDocumentation publishes the request body each mutation's handler decodes.
 // A route this module has not classified stays unclassified.
 func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
+	if method == http.MethodGet && (pattern == "/intents" || pattern == "/intents/{id}") {
+		return gitpublishIntentReads(pattern), true
+	}
 	decl, ok := gitpublishRequestBodyDeclarationFor(method, pattern)
 	if !ok {
 		return api.ModuleOperationDocumentation{}, false
@@ -184,5 +187,63 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 	case gitpublishBodyless:
 		doc.BodyKind = api.ModuleOperationBodyless
 	}
+	if gitpublishPublishes(method, pattern) {
+		doc.Responses = api.GenericModuleResponses()
+		doc.Responses["202"] = oas.JSONRespSchema("Held by the tenant's approval policy (state awaiting_approval, approval_id), as a ship is; nothing reached the host. Or, for a dispatched publication, an intent whose outcome on the host is not confirmed.",
+			oas.Obj("type", "object", "properties", oas.Obj(
+				"state", oas.Obj("type", "string", "description", "awaiting_approval while a person the approval policy names has not decided."),
+				"approval_id", oas.Obj("type", "string", "description", "The approval the publication waits for.")),
+			))
+	}
 	return doc, true
+}
+
+// gitpublishIntentReads publishes what the intent reads answer: a target's intents, and one.
+func gitpublishIntentReads(pattern string) api.ModuleOperationDocumentation {
+	str := func(d string) map[string]any { return oas.Obj("type", "string", "description", d) }
+	obj := func(d string) map[string]any { return oas.Obj("type", "object", "description", d) }
+	intent := oas.Obj("type", "object", "properties", oas.Obj(
+		"id", str("The intent."),
+		"target_id", str("The publication target."),
+		"target_version", oas.Obj("type", "integer", "description", "The target's version the intent was admitted under."),
+		"effect", str("push, pull_request, merge or issue_comment."),
+		"operation_id", str("The client's idempotency key."),
+		"attempt", oas.Obj("type", "integer", "description", "The dispatch attempt."),
+		"state", str("Where the intent is: dispatching, applied, adopted, rejected, not_dispatched, uncertain or abandoned."),
+		"answer", str("The host's answer, when there is one."),
+		"reason", str("Why the intent is where it is."),
+		"receipt", str("What the engine recorded of the host's answer."),
+		"requested", obj("What was asked: ref, expected_old, commit, tree, head_ref, base, number, method, title or state, by effect."),
+		"observed", obj("What the host was seen to hold: sha, head_sha, number, merged, merge_commit_sha, comment_url; url names a pull request's page."),
+		"content_match", oas.Obj("type", "boolean", "description", "Whether the host's content matched the request."),
+		"acknowledged", obj("Whether the host acknowledged the request, its status and request id."),
+		"authorized_by", str("Who authorized the publication."),
+		"dispatch_deadline", str("When an undecided dispatch is settled, RFC 3339."),
+		"release_failure", str("Why the target's lease could not be released."),
+		"proposal", oas.Obj("type", "object", "description", "The approved session request the intent carries out.", "properties", oas.Obj(
+			"session_run", str("The session run that proposed it."),
+			"approval_id", str("The approval it spent."))),
+		"session_run", str("The session the publication came from, on every intent that has one."),
+	))
+	doc := api.ModuleOperationDocumentation{BodyKind: api.ModuleOperationBodyless}
+	if pattern == "/intents/{id}" {
+		doc.SuccessResponses = map[string]any{"200": oas.JSONRespSchema("The intent.", intent)}
+		return doc
+	}
+	doc.Parameters = []map[string]any{{"name": "target_id", "in": "query", "required": true, "description": "The publication target whose intents are listed.", "schema": map[string]any{"type": "string"}}}
+	doc.SuccessResponses = map[string]any{"200": oas.JSONRespSchema("The target's intents.",
+		oas.Obj("type", "object", "properties", oas.Obj("items", oas.Obj("type", "array", "items", intent))))}
+	return doc
+}
+
+// gitpublishPublishes reports the routes that send commits or content to a host: each
+// one asks the tenant's approval policy and may answer 202 while it is held.
+func gitpublishPublishes(method, pattern string) bool {
+	switch method + " " + pattern {
+	case http.MethodPost + " /targets/{id}/pushes", http.MethodPost + " /targets/{id}/ships",
+		http.MethodPost + " /targets/{id}/pull-requests", http.MethodPost + " /targets/{id}/merges",
+		http.MethodPost + " /targets/{id}/issue-comments":
+		return true
+	}
+	return false
 }

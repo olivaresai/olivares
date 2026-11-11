@@ -3,6 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { LucideIcon } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
+import type { PaidEdition } from '@/components/ui/edition-note'
 import type {
   CapabilityAccess,
   NormalizedCapabilityQuestion,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react'
 import type { RouteAlias, TabAlias } from './route-census'
 import { FEATURE_EXTENSIONS } from './extensions'
+import { CONSOLE_ENTRIES, PLACED_MODULES } from './module-spec.gen'
 
 /**
  * THE VIEW-REGISTRATION CONTRACT.
@@ -525,6 +527,22 @@ export interface FeatureView {
     access: CapabilityAccess | null
     children: ReactNode
   }>
+  /**
+   * OPTIONAL: the lowest edition that holds this view, in the engine's order
+   * (license.EditionCovers). The shell honours it for any view that carries it, through
+   * editionCovers: where the edition held here does not hold it, the view leaves the
+   * navigation, an administrator finds it as a closed row on its place's page, and its
+   * address says the edition line in place of the view. Absent: it opens in every edition.
+   * The enterprise overlay sets it on its own views; a Community view whose capability is
+   * a higher edition's carries it too.
+   */
+  minEdition?: PaidEdition
+  /**
+   * OPTIONAL, with `minEdition`: what the view's module stores stays readable below that
+   * edition (module spec `reads_below`), so the view still opens there while its module
+   * runs; its writes are what the engine refuses.
+   */
+  readsBelow?: boolean
 }
 
 /**
@@ -602,12 +620,31 @@ const BUILTIN_VIEWS = Object.values(
   .flat()
   .sort((a, b) => a.order - b.order)
 
+/** The placement of each built-in view's module in the module spec (core/modulespec
+ * `edition`, `reads_below`): the route gate's own, so a view never copies it. */
+const SPEC_PLACEMENT = new Map(
+  Object.entries(CONSOLE_ENTRIES).flatMap(([module, views]) =>
+    Object.hasOwn(PLACED_MODULES, module)
+      ? views.map((id) => [id, PLACED_MODULES[module]] as const)
+      : [],
+  ),
+)
+
 // Consumers share these permission-bearing records. Seal both the registry and
 // each record before export so an alias cannot replace an authority declaration.
 // Edition views (./extensions) follow every built-in view, in the order the extension
 // lists them: an extension view carries no `order`, so none sorts among the built-ins.
+// A built-in view of a module the spec places takes its edition from the spec.
 export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
-  [...BUILTIN_VIEWS, ...FEATURE_EXTENSIONS].map((view) => Object.freeze(view)),
+  [
+    ...BUILTIN_VIEWS.map((view) => {
+      const placed = SPEC_PLACEMENT.get(view.id)
+      return placed
+        ? { minEdition: placed.edition, readsBelow: placed.readsBelow, ...view }
+        : view
+    }),
+    ...FEATURE_EXTENSIONS,
+  ].map((view) => Object.freeze(view)),
 )
 
 /** Cost navigation uses the installed edition's path and permission together. */

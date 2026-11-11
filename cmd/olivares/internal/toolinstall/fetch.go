@@ -47,43 +47,66 @@ type fetcher struct {
 	client *http.Client
 	// pause, when set, replaces transientRetryPause (tests).
 	pause time.Duration
+	// accept, when set, is the Accept header of every request (the release API's
+	// asset download answers with the file only for application/octet-stream).
+	accept string
 }
 
 func (f fetcher) get(ctx context.Context, u string) (*http.Response, error) {
 	return f.request(ctx, http.MethodGet, u)
 }
 
-// transientRetryPause is how long a request waits before its one second attempt.
-const transientRetryPause = time.Second
+// A GitHub incident lasts a couple of minutes, so a request that meets one waits it
+// out: transientRetries more attempts, the first after transientRetryPause and each
+// later wait twice the one before, up to transientRetryCap (1+2+4+8+16+5x30 s, about
+// three minutes in all). The caller's context still bounds the whole.
+const (
+	transientRetryPause = time.Second
+	transientRetryCap   = 30 * time.Second
+	transientRetries    = 10
+)
 
-// request makes one request, and asks once more after a short pause when the first
-// answer is one GitHub gives now and then (see transientFailure), so that one blip
-// does not fail an install. Any other answer, and a second failure, is returned as
-// it came; a second transport error also names the first attempt.
+// request makes one request, and asks again after a growing pause while the answer is
+// one GitHub gives now and then (see transientFailure), so that an incident of a few
+// minutes does not fail an install. Any other answer, and the last failure, is
+// returned as it came; a transport error also names the first attempt.
 func (f fetcher) request(ctx context.Context, method, u string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, u, nil)
 	if err != nil {
 		return nil, refuse(KindTransport, "build request for %s: %v", u, err)
 	}
 	req.Header.Set("User-Agent", userAgent)
+	if f.accept != "" {
+		req.Header.Set("Accept", f.accept)
+	}
 	resp, err := f.client.Do(req)
-	if first, again := transientFailure(resp, err); again && ctx.Err() == nil {
+	first, pause := "", f.retryPause()
+	for retry := 0; retry < transientRetries; retry++ {
+		answer, again := transientFailure(resp, err)
+		if !again || ctx.Err() != nil {
+			break
+		}
+		if first == "" {
+			first = answer
+		}
 		if err == nil {
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 			_ = resp.Body.Close()
 		}
-		pause := time.NewTimer(f.retryPause())
+		wait := time.NewTimer(pause)
 		select {
 		case <-ctx.Done():
-			pause.Stop()
-			resp, err = nil, fmt.Errorf("%w after %s", ctx.Err(), first)
-		case <-pause.C:
-			if resp, err = f.client.Do(req.Clone(ctx)); err != nil {
-				err = fmt.Errorf("%w (first attempt: %s)", err, first)
-			}
+			wait.Stop()
+			return nil, refuse(KindTransport, "%s %s: %v", method, u, fmt.Errorf("%w after %s", ctx.Err(), answer))
+		case <-wait.C:
 		}
+		pause = min(pause*2, transientRetryCap)
+		resp, err = f.client.Do(req.Clone(ctx))
 	}
 	if err != nil {
+		if first != "" {
+			err = fmt.Errorf("%w (first attempt: %s)", err, first)
+		}
 		return nil, refuse(KindTransport, "%s %s: %v", method, u, err)
 	}
 	return resp, nil

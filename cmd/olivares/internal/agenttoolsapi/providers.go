@@ -365,16 +365,8 @@ func (m *Module) LimitResetsAt(ctx context.Context, tenant model.TenantID, insta
 // the next read. Only Claude Code and Codex report plan windows; any other tool, an
 // account not signed in, and an answer the tool did not give return nil: unknown.
 func (m *Module) AccountUsage(ctx context.Context, tenant model.TenantID, driver, accountRef string, wait bool) []sessions.AccountUsage {
-	if driver != "claude" && driver != "codex" {
-		return nil
-	}
-	env, configDir, err := m.toolEnv(ctx, tenant, driver, accountRef)
-	if err != nil {
-		return nil
-	}
-	snap, _ := m.providerSnapshotRead(ctx, providerInstance{id: accountRef, driver: driver, configDir: configDir, env: env}, !wait)
-	// A refresh that failed keeps the last answer with its error: that is no report, so unknown.
-	if snap.State != stateReady || snap.Error != "" {
+	snap, ok := m.accountSnapshot(ctx, tenant, driver, accountRef, wait)
+	if !ok {
 		return nil
 	}
 	out := make([]sessions.AccountUsage, 0, len(snap.Limits))
@@ -385,4 +377,29 @@ func (m *Module) AccountUsage(ctx context.Context, tenant model.TenantID, driver
 		out = append(out, sessions.AccountUsage{Window: "credits", Label: "Credits", Credit: snap.Credits, ObservedAt: snap.CheckedAt})
 	}
 	return out
+}
+
+// AccountPlan is the plan (the tool's raw value: max, promax) its tool last reported for one
+// provider account's own home, from the same probe and cache as AccountUsage. Empty is unknown.
+func (m *Module) AccountPlan(ctx context.Context, tenant model.TenantID, driver, accountRef string, wait bool) string {
+	snap, ok := m.accountSnapshot(ctx, tenant, driver, accountRef, wait)
+	if !ok {
+		return ""
+	}
+	return snap.Plan
+}
+
+// accountSnapshot is the last good snapshot of one account's home, for the two tools that
+// report plan data. A refresh that failed keeps the last answer with its error: that is no
+// report, so unknown.
+func (m *Module) accountSnapshot(ctx context.Context, tenant model.TenantID, driver, accountRef string, wait bool) (ProviderSnapshot, bool) {
+	if driver != "claude" && driver != "codex" {
+		return ProviderSnapshot{}, false
+	}
+	env, configDir, err := m.toolEnv(ctx, tenant, driver, accountRef)
+	if err != nil {
+		return ProviderSnapshot{}, false
+	}
+	snap, _ := m.providerSnapshotRead(ctx, providerInstance{id: accountRef, driver: driver, configDir: configDir, env: env}, !wait)
+	return snap, snap.State == stateReady && snap.Error == ""
 }
